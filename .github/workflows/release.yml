@@ -184,7 +184,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=${{ matrix.licenses }}
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.containerfile }}
@@ -253,7 +253,7 @@ jobs:
             org.opencontainers.image.licenses=${{ matrix.licenses }}
       - id: rig-build
         if: matrix.cuda
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: containers/rig/Containerfile
