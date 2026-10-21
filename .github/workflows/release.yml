@@ -136,7 +136,7 @@ jobs:
       # arm64 images are built under emulation.
       - uses: docker/setup-qemu-action@v3
         if: contains(matrix.platforms, 'arm64')
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
         with:
           # On the host's network, the CUDA job's builder reaches the job's own registry.
           driver-opts: ${{ matrix.cuda && 'network=host' || '' }}
