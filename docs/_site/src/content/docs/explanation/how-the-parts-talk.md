@@ -30,7 +30,7 @@ Every channel between control and a rig is started by the rig's supervisor, on a
 | The harness's new events, in pages of up to 1,000, each signed by the harness | rig → control | every 60 seconds | `THERMITE_POLL_SECONDS` |
 | The supervisor's own figures | rig → control | every 60 seconds, with the events | `THERMITE_POLL_SECONDS` |
 | Commands waiting for the rig, each signed by control, and their outcomes | control → rig, then back | every 5 seconds | `THERMITE_COMMAND_POLL_SECONDS` |
-| Live lines: what the lanes, the planner, the judge and the advisors are doing | rig → control | every 3 seconds, when there are new lines | `THERMITE_LIVE_INTERVAL_MS` |
+| Live lines: what the lanes, the planner, the judge and the advisors are doing | rig → control | every 3 seconds, when there are new lines, from the supervisor's first report on | `THERMITE_LIVE_INTERVAL_MS` |
 | The agents' model route, and the MCP servers they may use | control → rig | every 30 seconds | `THERMITE_MODEL_ROUTE_POLL_SECONDS` |
 | The advisors' models | control → rig | at the start of each advisors' round | — |
 | Past research for each running run, from the knowledge base | control → rig | every 180 seconds | `THERMITE_KB_SYNC_SECONDS` |

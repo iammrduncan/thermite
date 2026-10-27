@@ -23,7 +23,7 @@ import { type UploadState, uploadExportsOnce } from "./export-upload.ts";
 import { type ExportState, exportOnce } from "./git-export.ts";
 import { harnessAdvisors } from "./harness-advisors.ts";
 import { emptyKbSyncState, type KbSyncState, syncKnowledgeOnce } from "./kb-sync.ts";
-import { type LiveRelayState, relayLiveOnce, supervisorLive } from "./live.ts";
+import { relayLive, supervisorLive } from "./live.ts";
 import { syncMcpServers } from "./mcp-sync.ts";
 import { ModelDownloads } from "./model-download.ts";
 import { syncModelRouteRound } from "./model-route.ts";
@@ -336,30 +336,19 @@ async function main(): Promise<void> {
   const advisingDone = advising();
 
   // The live view: the harness's live log (signed) and the supervisor's own lines, every few
-  // seconds. Independent of the 60 s report relay.
+  // seconds. Independent of the 60 s report relay, once that relay's first report went through.
   const liveMs = numberSetting(env, "THERMITE_LIVE_INTERVAL_MS", 3000, {
     unit: "ms",
     zeroMeans: "off",
   });
-  const living = async () => {
-    let liveState: LiveRelayState = { cursor: 0, ownCursor: 0 };
-    let failing = false;
-    while (!stopping && controlUrl && liveMs > 0) {
-      try {
-        liveState = await relayLiveOnce(
+  let reported = false;
+  const livingDone =
+    controlUrl && liveMs > 0
+      ? relayLive(
           { rig, harnessUrl, harnessToken, controlUrl, controlToken },
-          liveState,
-        );
-        failing = false;
-      } catch (err) {
-        if (!failing) log("supervisor", "live relay error", { error: String(err) });
-        failing = true;
-      }
-      const until = Date.now() + liveMs;
-      while (!stopping && Date.now() < until) await new Promise((r) => setTimeout(r, 250));
-    }
-  };
-  const livingDone = living();
+          { intervalMs: liveMs, stopped: () => stopping, reported: () => reported },
+        )
+      : Promise.resolve();
 
   // Commands on their own short interval: a pause or a message should not wait for the next
   // report. The report loop below leaves commands to this one.
@@ -477,6 +466,7 @@ async function main(): Promise<void> {
   while (!stopping) {
     try {
       const next = await relayOnce({ ...cfg, skipCommands: commandMs > 0 }, state);
+      reported = true;
       if (next.cursor !== state.cursor || next.ledgerId !== state.ledgerId) {
         save(statePath, next);
         log("supervisor", "reported", { cursor: next.cursor });

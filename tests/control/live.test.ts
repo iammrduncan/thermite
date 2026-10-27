@@ -4,7 +4,7 @@ import { createControlApi } from "../../src/control/api.ts";
 import { ControlStore } from "../../src/control/store.ts";
 import { runEntryHtml } from "../../src/control/ui/live.ts";
 import { createHarnessApi } from "../../src/harness/api.ts";
-import { relayLiveOnce, supervisorLive } from "../../src/supervisor/live.ts";
+import { relayLive, relayLiveOnce, supervisorLive } from "../../src/supervisor/live.ts";
 import { relayOnce } from "../../src/supervisor/relay.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 
@@ -107,6 +107,49 @@ describe("the live view", () => {
     const s = setup();
     s.env.service.live.append({ source: "judge", kind: "log", text: "x" });
     await assert.rejects(relayLiveOnce(s.cfg, { cursor: 0, ownCursor: 0 }), /409/);
+  });
+
+  test("the supervisor's live relay waits for the rig's first report, so a first start logs no refusal", async (t) => {
+    const s = setup();
+    s.env.service.live.append({ source: "judge", kind: "log", text: "first" });
+    const said: string[] = [];
+    t.mock.method(process.stdout, "write", (chunk: string) => said.push(chunk));
+    let reported = false;
+    let stopped = false;
+    const relaying = relayLive(s.cfg, {
+      intervalMs: 1,
+      pollMs: 1,
+      stopped: () => stopped,
+      reported: () => reported,
+    });
+    const sent = () => s.store.liveTail("rig-a", 10).some((e) => e.text === "first");
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(sent(), false);
+    await relayOnce(s.cfg, { cursor: 0 });
+    reported = true;
+    for (let i = 0; i < 500 && !sent(); i++) await new Promise((r) => setTimeout(r, 2));
+    stopped = true;
+    await relaying;
+    t.mock.restoreAll();
+    assert.equal(sent(), true);
+    assert.deepEqual(
+      said.filter((l) => l.includes("live relay error")),
+      [],
+    );
+  });
+
+  test("the live relay stops while it still waits for the first report", async () => {
+    const s = setup();
+    let stopped = false;
+    const relaying = relayLive(s.cfg, {
+      intervalMs: 1,
+      pollMs: 1,
+      stopped: () => stopped,
+      reported: () => false,
+    });
+    stopped = true;
+    await relaying;
+    assert.deepEqual(s.store.liveTail("rig-a", 10), []);
   });
 });
 

@@ -70,5 +70,33 @@ export async function relayLiveOnce(
   return { logId: batch.log_id, cursor: batch.next, ownCursor: own.next };
 }
 
+/**
+ * The relay's loop, a round every `intervalMs`. It starts once the rig's first report has gone
+ * through: control pins the rig's key on that report and refuses live lines until then, so a
+ * relay that started with the report relay would log a refusal on every first start. A rig whose
+ * key waits for the owner keeps saying so in the report relay's errors. A failure is logged once,
+ * until a round goes through again.
+ */
+export async function relayLive(
+  cfg: LiveRelayConfig,
+  opts: { intervalMs: number; stopped: () => boolean; reported: () => boolean; pollMs?: number },
+): Promise<void> {
+  const nap = () => new Promise((r) => setTimeout(r, opts.pollMs ?? 250));
+  while (!opts.stopped() && !opts.reported()) await nap();
+  let state: LiveRelayState = { cursor: 0, ownCursor: 0 };
+  let failing = false;
+  while (!opts.stopped()) {
+    try {
+      state = await relayLiveOnce(cfg, state);
+      failing = false;
+    } catch (err) {
+      if (!failing) log("supervisor", "live relay error", { error: String(err) });
+      failing = true;
+    }
+    const until = Date.now() + opts.intervalMs;
+    while (!opts.stopped() && Date.now() < until) await nap();
+  }
+}
+
 /** What control left out of the live view and was logged already. */
 const toldLeftOut = new Set<string>();
