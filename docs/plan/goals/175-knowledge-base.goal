@@ -78,7 +78,7 @@ Each green on its own, with its tests and docs in the same commit. In goal 172's
 - [ ] An agent in each program writes into its own slot over MCP, and an agent of another run finds the item; a write into another writer's slot is refused. Shown by the agents, Claude Code, Codex and steering acceptance checks.
 - [ ] A write made while control is away arrives once when control is back, shown by a test.
 - [ ] Continue, start fresh and a granted collection give the scopes above, shown by tests.
-- [ ] The question "which approaches failed to improve speed" finds the experiments that failed, ranked, with excerpts.
+- [ ] An agent finds a needle in the haystack by probing as agents do: an item planted among many like it is found within a few searches of the agent's own (other words, narrowing, reading what a search finds), at 30,000 and 100,000 items, measured.
 - [ ] Words answer while the vector index rebuilds, and say so; the spike's numbers are recorded here, at 30,000 and 100,000 items.
 - [ ] Nothing of the knowledge base is kept on a rig, and the old searches are gone.
 - [ ] Every page above matches the code, and CREDITS.md lists zvec-grep, zvec, the model and the PDF text extractor.
@@ -91,6 +91,7 @@ Each green on its own, with its tests and docs in the same commit. In goal 172's
 - 2026-10-27, owner, on question 5: a file has no size limit by default. The owner can set one in the knowledge base's settings on control.
 - 2026-10-29 17:40 UTC, owner (gate B): yes to downloading zvec-grep (npm's `@zvec/zvec-grep` 0.2.2 with its dependencies) and the model `potion-retrieval-32M` into a scratch folder for the spike only, "also think of some alternatives that may be better than zvec"; nothing goes into the repository or an image until the owner decides from the numbers. The PDF text extractor is `pdfjs-dist` (Mozilla's PDF.js, Apache-2.0, JavaScript only), pinned.
 - 2026-10-29 18:29 UTC, from goal 168's step 4 (control is the only writer of the `EVENTS` stream): a `kb_item` event reaches `EVENTS` inside the rig's signed report, and control's apply stores the item after its checks; the supervisor publishes only the item's file, on the `KB_FILES` stream. The item and the file meet on control by the file's SHA-256, whichever arrives first: control stores an item whose file has not arrived, and has the file once it does; neither waits for the other, and neither is lost. `KB_FILES` is a work-queue stream of 1 MiB chunks on each rig's own subjects, not NATS's object store: that API would need a rig's user to read, roll up and purge, and its client library is not installed; a chunk leaves the stream once control keeps its file, so each file is stored once, in control's state.
+- 2026-10-29 20:45 UTC, owner, on the spike's report: look up lightweight alternatives that don't have Thermite launching large vector stores before deciding to build search by meaning itself; and the goal's test question was a bad one: "agents typically would be asked that and they would probe the kb by different ways to search for the needle in the haystack... they wouldnt search that question typically to the kb." The Done-when line on that question is replaced by a needle-in-the-haystack test of an agent's own probing.
 
 ## Open questions
 
