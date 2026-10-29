@@ -54,7 +54,7 @@ import { modelPrefix, TYPES, usd } from "./shared.ts";
  * for each rig, model prices and MCP servers.
  */
 export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
-  const { cmdForm, csrf, mcpServers, opts, page, parts, store, views } = dash;
+  const { cmdForm, csrf, mcpServers, opts, page, parts, said, store, views } = dash;
 
   // ---------------------------------------------------------------- settings: model providers
   /** The types reached with an API key (a subscription is added differently). */
@@ -139,7 +139,7 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
     // So is what Save prices did (at=prices), in Model prices.
     const atPrices = c.req.query("at") === "prices";
     const ok = atMcp || atPrices ? undefined : c.req.query("ok");
-    const error = atMcp || atPrices ? undefined : c.req.query("error");
+    const error = atMcp || atPrices ? undefined : said(c);
     // Model prices (goal 075): one table under the providers, for every model not on a plan.
     const prices = modelPricesBlock({
       providers,
@@ -244,6 +244,7 @@ ${
 <label>${infoLabel("Name", "How it shows in Thermite, and how rigs and campaigns refer to it: for example my-litellm or github-deploy. Letters, digits, dots, dashes and underscores: capitals become lowercase and spaces become dashes.")}<input name="name" required maxlength="64" pattern="\\s*[A-Za-z0-9][A-Za-z0-9._ \\-]*\\s*" title="Letters, digits, dots, dashes, underscores and spaces" placeholder="for example my-litellm"></label>
 <label data-for="${models}">${infoLabel("Base URL", BASE_TIP)}<input name="base_url" maxlength="500" placeholder="https://…/v1 (Anthropic and OpenCode: empty for their own)"></label>
 <label data-for="${models}">${infoLabel("API key", "The provider's key. Control seals it at once and never shows it again. OpenCode: leave it empty for its free models.")}<input name="api_key" type="password" autocomplete="new-password" maxlength="4096" placeholder="never shown again"></label>
+<label data-for="gitkey gittoken" hidden>${infoLabel("Host", "The Git server this access is for, such as github.com: its name alone. Control and the rigs use the key or token only for repositories on this host, and refuse any other.")}<input name="host" maxlength="253" placeholder="github.com"></label>
 <label data-for="gittoken" hidden>${infoLabel("Token", "An access token for the Git host, read-only if the host allows. Control seals it at once and never shows it again.")}<input name="token" type="password" autocomplete="new-password" maxlength="4096" placeholder="never shown again"></label>
 <label data-for="gittoken" hidden>${infoLabel("User name", "The name the host expects with the token. GitHub takes x-access-token (the default); GitLab takes oauth2.")}<input name="username" maxlength="100" placeholder="x-access-token"></label>
 <label data-for="ssh" hidden>${infoLabel("Address", "The machine's host name or IP address, as control reaches it.")}<input name="address" maxlength="253" placeholder="gpu-box.example.com"></label>
@@ -334,7 +335,7 @@ ${note}
 <div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}${machineRows(t)}${clusterRows(t)}${cloudRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
 ${prices}
 <div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>
-${mcpSettingsBlocks(store, mcpServers, t, now, (k) => c.req.query(k))}
+${mcpSettingsBlocks(store, mcpServers, t, now, (k) => (k === "error" ? said(c) : c.req.query(k)))}
 <div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>
 <script src="/ui/assets/providers.js" defer></script>`,
       vs,
@@ -351,8 +352,12 @@ ${mcpSettingsBlocks(store, mcpServers, t, now, (k) => c.req.query(k))}
         const ssh = g.kind === "ssh";
         return `<details class="dq" data-k="git-${esc(g.name)}"><summary>
 <span class="dq-kind"><span class="kind g">Git access</span></span>
-<span class="dq-main"><span class="dq-head">${esc(g.name)} <span class="muted" style="font-weight:400">· ${ssh ? "SSH deploy key" : "HTTPS token"}</span></span><span class="dq-why">${ssh ? `fingerprint ${esc(g.fingerprint ?? "")}` : `token ${esc(g.hint)}${g.username ? ` · user ${esc(g.username)}` : ""}`}</span><span class="dq-sub"><span class="dq-where">${ssh ? "for ssh:// and git@host:path addresses" : "for https:// addresses"}</span><span class="dq-where">${users.length ? `used by ${users.map((x) => esc(x)).join(", ")}` : "no campaign uses it"}</span></span></span>
+<span class="dq-main"><span class="dq-head">${esc(g.name)} <span class="muted" style="font-weight:400">· ${ssh ? "SSH deploy key" : "HTTPS token"}</span></span><span class="dq-why">${ssh ? `fingerprint ${esc(g.fingerprint ?? "")}` : `token ${esc(g.hint)}${g.username ? ` · user ${esc(g.username)}` : ""}`}</span><span class="dq-sub"><span class="dq-where">${g.host ? `for ${esc(g.host)} only` : `<b class="bad">for no host yet</b>`}, ${ssh ? "with ssh:// and git@host:path addresses" : "with https:// addresses"}</span><span class="dq-where">${users.length ? `used by ${users.map((x) => esc(x)).join(", ")}` : "no campaign uses it"}</span></span></span>
 </summary><div class="dq-body">${
+          g.host
+            ? ""
+            : `<form method="post" action="/ui/settings/git/${gName}/host" class="form-grid" autocomplete="off"><input type="hidden" name="csrf" value="${t}"><label>${infoLabel("Host", "The Git server this access is for, such as github.com. Until it has one, control and the rigs use it nowhere: campaigns that name it can't start.")}<input name="host" required maxlength="253" placeholder="github.com"></label><div class="form-end"><button class="primary">Set the host</button></div></form>`
+        }${
           ssh && g.public_key
             ? `<div class="muted small" style="margin:0 0 4px">Add this public key to the repository (or the account) as a <b>read-only</b> deploy key. Its private half stays sealed in control.</div><pre class="json" style="white-space:pre-wrap;word-break:break-all">${esc(g.public_key)}</pre>`
             : ""

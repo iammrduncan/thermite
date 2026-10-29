@@ -84,7 +84,7 @@ export interface CampaignContextRequest {
 export type CampaignContextOutcome =
   | {
       /** saved: a new version; unchanged: the newest version has these settings already. */
-      state: "saved" | "unchanged";
+      state: "saved" | "unchanged" | "valid";
       campaign: string;
       version: number;
       sha: string;

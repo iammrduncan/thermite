@@ -406,8 +406,8 @@ describe("a RunPod rig's page", () => {
     );
     assert.equal(s.rigs.view("rp-test-1")?.op?.kind, "terminate");
     assert.match(
-      await s.post("/ui/rigs/rp-test-1/runpod/start"),
-      /error=a terminate of rp-test-1 is under way: wait until it ends/,
+      await s.page(await s.post("/ui/rigs/rp-test-1/runpod/start")),
+      /a terminate of rp-test-1 is under way: wait until it ends/,
     );
     assert.match(await s.post("/ui/rigs/rp-test-1/runpod/nope"), /error=No such action\./);
     assert.match(

@@ -3,6 +3,7 @@ import type { RigView } from "../../views/index.ts";
 import { stuckNeeds } from "../stuck.ts";
 import { controlDiskNeeds, diskNeeds, drainNeeds } from "./hold.ts";
 import { auditNeeds, promotionNeeds } from "./promotion.ts";
+import { proposalNeeds } from "./proposal.ts";
 import { conclusionNeeds, reviewNeeds } from "./review.ts";
 import { agentsNeeds, keyNeeds, resetNeeds, staleNeeds } from "./rig.ts";
 
@@ -13,6 +14,7 @@ export { cap, changeChips, evidence } from "./change.ts";
 export { decidedState } from "./decided.ts";
 export { championHeldOutBlock } from "./held-out.ts";
 export { outcome } from "./outcome.ts";
+export { proposalCard } from "./proposal.ts";
 export {
   attemptRows,
   baselineWords,
@@ -63,7 +65,8 @@ export interface Need {
     | "stale"
     | "stuck"
     | "disk"
-    | "drain";
+    | "drain"
+    | "proposal";
   rig: string;
   run?: string | undefined;
   attempt?: string | undefined;
@@ -128,6 +131,8 @@ export function needs(
   out.push(...resetNeeds(c, store, vs));
   // Control's own disk at its floor (goal 173).
   out.push(...controlDiskNeeds(c, store));
+  // The operator's changes to a campaign's settings that wait for the owner.
+  out.push(...proposalNeeds(c, store));
   const order = [
     "key",
     "reset",
@@ -139,6 +144,7 @@ export function needs(
     "blocked",
     "review",
     "conclusion",
+    "proposal",
     "stale",
   ];
   return out.sort(

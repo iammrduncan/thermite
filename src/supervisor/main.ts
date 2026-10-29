@@ -16,7 +16,7 @@ import { harnessClient } from "../common/api/harness.ts";
 import { buildInfo } from "../common/build-info.ts";
 import { busTrust, busUrl, natsBus } from "../common/bus/index.ts";
 import { GIB } from "../common/disk.ts";
-import { log, optionalSecretFromFile, requireEnv, secretFromFile } from "../common/env.ts";
+import { log, optionalSecretFromFile, redact, requireEnv, secretFromFile } from "../common/env.ts";
 import { Loops } from "../common/health.ts";
 import { startLogging } from "../common/log.ts";
 import { readNumber } from "../common/settings.ts";
@@ -27,7 +27,7 @@ import {
   REPORTS,
   type SupervisorFigures,
 } from "../core/api/control/rigs.ts";
-import { EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/supervisor.ts";
+import { COMMAND_CHECK, EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/supervisor.ts";
 import { untoldKinds } from "../core/kb.ts";
 import { rigInboxPrefix } from "../core/link/users.ts";
 import type { McpConnection, McpUnavailable, McpUse } from "../core/mcp.ts";
@@ -75,7 +75,7 @@ import {
 } from "./relay/index.ts";
 import { dailyReport } from "./report.ts";
 import { SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
-import { stageCommand } from "./staging.ts";
+import { stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
 import { startPullMode } from "./tunnel-pod.ts";
 
@@ -187,8 +187,9 @@ async function main(): Promise<void> {
     // Commands from the bus and from the poll over HTTP: each delivered once, one at a time.
     delivered: new Set<string>(),
     turn: oneAtATime(),
-    stage: (cmd: Parameters<typeof stageCommand>[1]) =>
-      stageCommand(
+    // Sources are fetched only for a command the harness found control signed for this rig.
+    stage: (cmd: Parameters<typeof stageSigned>[1]) =>
+      stageSigned(
         {
           rig,
           inboxDir,
@@ -204,6 +205,10 @@ async function main(): Promise<void> {
           floorBytes,
         },
         cmd,
+        async (c) => {
+          const r = await harness.call(COMMAND_CHECK, { body: c });
+          return r.ok ? undefined : (r.reason ?? "refused");
+        },
       ),
     onDelivered: (kind: string, accepted: boolean) => {
       if (kind === "wipe_state" && accepted) wipeRequested = true;
@@ -325,6 +330,12 @@ async function main(): Promise<void> {
   const { tell: tellAdvisors, retell } = harnessLink;
 
   // The supervisor's figures for control, its regular call: git sync, advisors, relay.
+  // An export's last failure, as control shows it: credentials a git or HTTP error echoed are
+  // taken out before it leaves the rig.
+  const exportErrorOf = (...errors: (string | undefined)[]) => {
+    const error = errors.find(Boolean);
+    return error ? redact(error).slice(0, FIGURE_TEXT_MAX) : null;
+  };
   const figures = (): z.input<typeof SupervisorFigures> => ({
     at: new Date().toISOString(),
     relay: { cursor: state.cursor },
@@ -347,9 +358,7 @@ async function main(): Promise<void> {
             ? uploadState.queue.length
             : 0),
       champions_waiting: championQueue.length,
-      last_error:
-        ((!remote && uploadState.lastError) || exportState.lastError)?.slice(0, FIGURE_TEXT_MAX) ??
-        null,
+      last_error: exportErrorOf(remote ? undefined : uploadState.lastError, exportState.lastError),
     },
     models: models.list(),
     advisors: advisors

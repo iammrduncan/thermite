@@ -153,6 +153,8 @@ function stoppedWords(p: RunpodRigView, now: number): string {
 /** The Run at work and Progress cells: the rig's running run, as of its last report. */
 function runCells(r: RigsListRow, st: StateKey, now: number): [string, string] {
   const u = r.u;
+  if (u?.unreadable)
+    return [`<span class="bad">Its events can't be read now</span>${sub(esc(u.unreadable))}`, ""];
   const atWork = u?.runs.filter((x) => x.status === "running") ?? [];
   const run = atWork[0];
   if (!u || !run) {

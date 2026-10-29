@@ -66,11 +66,13 @@ const registered = (r: Record<string, unknown>): RegisteredRun => ({
 export class RunRegistry extends StorePart {
   /**
    * The run a rig created by this name. A name used on more than one rig before goal 170, or
-   * again after a full reset, stands for the newest run of that name.
+   * again after a full reset, stands for the run control assigned, else the newest of that name.
    */
   created(run: string): RegisteredRun | undefined {
     const row = this.db
-      .prepare(`${CREATED} and run = ? order by created_at desc limit 1`)
+      .prepare(
+        `${CREATED} and run = ? order by (command is not null) desc, created_at desc limit 1`,
+      )
       .get(run) as Record<string, unknown> | undefined;
     return row ? registered(row) : undefined;
   }
@@ -156,23 +158,59 @@ export class RunRegistry extends StorePart {
       .run(a.run, a.rig, a.campaign, a.command, a.at);
   }
 
-  /** An event a rig reported: a run it created goes in the registry, with the rig's ledger. */
+  /**
+   * An event a rig reported: a run it created goes in the registry, with the rig's ledger, when
+   * control assigned that rig the run, or when no assignment uses its name (a rig check, a run
+   * started on the rig itself). An assigned run's campaign is its assignment's. A run control did
+   * not assign keeps the campaign its event names only when control knows no campaign of that
+   * name (none saved, none assigned); otherwise it is its own. A run whose name control assigned
+   * another rig is "refused", and the registry keeps nothing of it.
+   */
   registerRunCreated(
     rig: string,
     ledgerId: string,
     e: { kind: string; subject: string | null; body: unknown; at: string },
-  ): void {
-    if (e.kind !== "run_created" || !e.subject) return;
+  ): "taken" | "refused" | "none" {
+    if (e.kind !== "run_created" || !e.subject) return "none";
+    const run = e.subject;
+    const assigned = this.db
+      .prepare(
+        `select r.rig, r.ledger_id, c.status from run_registry r join command c on c.id = r.command
+         where r.run = ?`,
+      )
+      .all(run) as { rig: string; ledger_id: string | null; status: string }[];
+    const own = assigned.some((a) => a.rig === rig);
+    const elsewhere = assigned.some(
+      (a) =>
+        a.rig !== rig &&
+        (a.ledger_id !== null || a.status === "pending" || a.status === "delivered"),
+    );
+    if (!own && elsewhere) return "refused";
     const named = (e.body as { campaign?: unknown } | null)?.campaign;
-    const campaign = typeof named === "string" ? named : null;
-    const r = { run: e.subject, rig, campaign, ledgerId, at: e.at };
+    const claimed = typeof named === "string" && !this.knowsCampaign(named) ? named : null;
     this.db
       .prepare(
         `insert into run_registry (run, rig, campaign, ledger_id, created_at) values (?, ?, ?, ?, ?)
          on conflict (run, rig) do update set ledger_id = excluded.ledger_id,
-           created_at = excluded.created_at, campaign = coalesce(run_registry.campaign, excluded.campaign)`,
+           created_at = excluded.created_at,
+           campaign = case when run_registry.command is null then excluded.campaign
+             else run_registry.campaign end`,
       )
-      .run(r.run, r.rig, r.campaign, r.ledgerId, r.at);
+      .run(run, rig, own ? null : claimed, ledgerId, e.at);
+    return "taken";
+  }
+
+  /** Whether control has a campaign of this name: saved, or named by an assignment it signed. */
+  private knowsCampaign(campaign: string): boolean {
+    return (
+      this.db
+        .prepare(
+          `select 1 from campaign_version where campaign = ?
+           union all select 1 from run_registry where campaign = ? and command is not null
+           limit 1`,
+        )
+        .get(campaign, campaign) !== undefined
+    );
   }
 
   /**

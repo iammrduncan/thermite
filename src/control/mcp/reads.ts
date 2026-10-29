@@ -10,7 +10,14 @@ import {
   runQueue,
 } from "../run-lists.ts";
 import { modelUsage } from "../usage.ts";
-import { agentEvent, agentRun, currentChampion, leaderboard } from "../views/index.ts";
+import {
+  agentEvent,
+  agentRun,
+  currentChampion,
+  leaderboard,
+  readerRun,
+  withoutPromptText,
+} from "../views/index.ts";
 import type { ToolContext } from "./context.ts";
 
 /**
@@ -80,8 +87,11 @@ export function registerReads(tools: ToolContext): void {
     audited("get_run", async (a: RunDetailArgs & { run: string }) => {
       const found = (await run(a.run)).run;
       // The agent token reads held-out checks as their kinds alone, and no held-out cell's name,
-      // value, threshold or time limit (goal 082); the other tokens read the owner's view.
-      return runDetail(role === "agent" ? agentRun(found) : found, a);
+      // value, threshold or time limit (goal 082); the agent's and the reader's read no prompt's
+      // text; the owner and the operator read the owner's view.
+      const seen =
+        role === "agent" ? agentRun(found) : role === "reader" ? readerRun(found) : found;
+      return runDetail(seen, a);
     }),
   );
 
@@ -127,8 +137,10 @@ export function registerReads(tools: ToolContext): void {
     },
     audited("recent_events", (a: { rig: string; limit: number }) => {
       const recent = view(a.rig).recent.slice(0, a.limit);
-      // The agent token: a held-out check's kinds alone, and no held-out cell (goal 082).
-      return role === "agent" ? recent.map(agentEvent) : recent;
+      // The agent token: a held-out check's kinds alone, and no held-out cell (goal 082). The
+      // agent's and the reader's: no prompt's text.
+      if (role === "agent") return recent.map(agentEvent);
+      return role === "reader" ? recent.map(withoutPromptText) : recent;
     }),
   );
 

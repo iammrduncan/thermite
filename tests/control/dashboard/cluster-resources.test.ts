@@ -335,8 +335,8 @@ describe("a cluster rig's GPUs, CPUs and memory, changed from control (goal 118)
     assert.match(page, /Call the change off/);
     // An image update meanwhile is refused: the drain is the change's.
     assert.match(
-      await s.post("/ui/rigs/gpu-3/cluster/images", {}),
-      /error=gpu-3 is draining for a change to its GPUs, CPUs or memory/,
+      await s.page(await s.post("/ui/rigs/gpu-3/cluster/images", {})),
+      /gpu-3 is draining for a change to its GPUs, CPUs or memory/,
     );
     // Called off: back to work as it was.
     assert.match(

@@ -82,7 +82,7 @@ From now on, name every override file you use, each with its own `-f`, on every 
 `THERMITE_RESULTS_KNOWN_HOSTS` works only together with `THERMITE_RESULTS_KEY_FILE`. With the key file but no known hosts file, the supervisor trusts the first key the host shows and keeps it in its volume. With no key file, git uses plain SSH defaults, and a host it doesn't know fails. There is no setting for an HTTPS token.
 :::
 
-The deploy key has a second use: the supervisor also fetches a campaign's project or kit over SSH with it, and with the known hosts file, when their source names no [Git access](../campaigns/private-repository.md). If you add this key to a project's or kit's repository for that, give it read access only there. For private repositories, a Git access is the usual way.
+The deploy key is for the results repository alone: the supervisor fetches a campaign's project or kit whose source names no Git access with no key. For a private project or kit, add a [Git access](../campaigns/private-repository.md).
 
 ## 4. See that pushes work
 

@@ -70,9 +70,9 @@ Control files each run in one collection when it sees the run start, and puts ev
 | The run | Its collection |
 | --- | --- |
 | Control assigned it to that rig, with an `assign_campaign` command that was not refused, did not fail and did not expire | The campaign of control's newest such command for that run on that rig. The campaign that the rig's `run_created` event names does not change it |
-| Any other run, such as a rig check's smoke run | The campaign that its `run_created` event names, when control has issued no `assign_campaign` command for that campaign to any rig. Otherwise control files the run in no collection, and the knowledge base holds none of its items |
+| Any other run, such as a rig check's smoke run | The campaign that its `run_created` event names, when control knows no campaign of that name (it has issued no `assign_campaign` command for it to any rig, saved no version of it, and no grant names it) and has assigned no run of that name to another rig. Otherwise control files the run in no collection, and the knowledge base holds none of its items |
 
-So the campaign that a rig's own event names counts only for a campaign that control has not assigned to any rig.
+So the campaign that a rig's own event names counts only for a campaign that control does not know.
 
 ## Items
 

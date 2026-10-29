@@ -198,13 +198,19 @@ export class IssuedCommands extends StorePart {
   }
 
   /**
-   * Whether a rig was assigned a campaign that names this Git access in an import: the only
-   * rigs control hands it to.
+   * Whether a live assignment of the rig names this Git access in an import: the only rigs
+   * control hands it to, and only while it lasts. Live: pending or delivered, and its run not
+   * among the rig's `closed` runs.
    */
-  rigUsesGitAccess(rig: string, name: string): boolean {
-    const rows = this.db
-      .prepare("select signed from command where rig = ? and kind = 'assign_campaign'")
-      .all(rig) as { signed: string }[];
+  rigUsesGitAccess(rig: string, name: string, closed: ReadonlySet<string>): boolean {
+    const rows = (
+      this.db
+        .prepare(
+          `select run, signed from command where rig = ? and kind = 'assign_campaign'
+           and status in ('pending', 'delivered')`,
+        )
+        .all(rig) as { run: string | null; signed: string }[]
+    ).filter((r) => r.run === null || !closed.has(r.run));
     return rows.some((r) => {
       try {
         const imports = (
@@ -431,20 +437,22 @@ export class IssuedCommands extends StorePart {
   }
 
   /**
-   * The MCP servers each run control assigned a rig names (its own signed commands, never the rig's
-   * reports), by run.
+   * The MCP servers each live run control assigned a rig names (its own signed commands, never the
+   * rig's reports), by run. Live: its assignment pending or delivered, and the run not among the
+   * rig's `closed` runs.
    */
-  assignedMcpServers(rig: string): Map<string, McpUse[]> {
+  assignedMcpServers(rig: string, closed: ReadonlySet<string>): Map<string, McpUse[]> {
     const out = new Map<string, McpUse[]>();
     // Each assignment's MCP servers alone, as JSON, of those that name a run.
     for (const r of this.db
       .prepare(
         `select run, signed -> '$.envelope.payload.mcp_servers' as uses from command
          where rig = ? and kind = 'assign_campaign' and run is not null
-           and status not in ('failed', 'rejected', 'expired')
+           and status in ('pending', 'delivered')
          order by issued_at`,
       )
       .all(rig) as { run: string; uses: string | null }[]) {
+      if (closed.has(r.run)) continue;
       const uses = McpUses.safeParse(r.uses === null ? [] : JSON.parse(r.uses)).data ?? [];
       if (uses.length) out.set(r.run, uses);
     }

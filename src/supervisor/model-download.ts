@@ -1,4 +1,5 @@
 import { createHash, type Hash } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import {
   createReadStream,
   createWriteStream,
@@ -9,9 +10,11 @@ import {
   statfsSync,
   statSync,
 } from "node:fs";
+import { isIP } from "node:net";
 import { dirname } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { blockedAddress } from "../agents/tools/index.ts";
 import { gib } from "../common/disk.ts";
 import { redact } from "../common/env.ts";
 import { errorText } from "../common/errors.ts";
@@ -229,6 +232,34 @@ async function getFollowing(
   throw new Error(`${urlForMessages(start)}: more than 10 redirects`);
 }
 
+/** The addresses a host name has now (DNS), or the address it is. */
+async function addressesOf(host: string): Promise<string[]> {
+  if (isIP(host)) return [host];
+  return (await lookup(host, { all: true })).map((a) => a.address);
+}
+
+/**
+ * `inner`, for addresses on the internet only: each request, the first and each redirect's, is
+ * refused, in words, when its host has an address on a private, loopback, link-local or other
+ * special network (the research fetcher's list), as the name resolves just before it.
+ */
+export function publicFetch(
+  inner: typeof fetch = fetch,
+  resolve: (host: string) => Promise<string[]> = addressesOf,
+): typeof fetch {
+  return async (input, init) => {
+    const url = new URL(String(input instanceof Request ? input.url : input));
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+    const addresses = await resolve(host);
+    const blocked = addresses.find(blockedAddress);
+    if (!addresses.length || blocked)
+      throw new ModelDownloadError(
+        `${urlForMessages(url.toString())}: ${host} is on a private or local network (${blocked ?? "no address"}): a model file comes from the internet`,
+      );
+    return await inner(input, init);
+  };
+}
+
 /** Free bytes for an unprivileged user on the file system that holds `dir`. */
 export function freeBytes(dir: string): number {
   const s = statfsSync(dir);
@@ -256,6 +287,8 @@ export interface DownloadInput {
   hfToken?: string | undefined;
   downloads: ModelDownloads;
   fetchImpl?: typeof fetch | undefined;
+  /** Tests only: a file at a private or local address is fetched too. */
+  allowPrivate?: boolean | undefined;
   /** Free bytes where the file goes (tests give their own). */
   free?: ((dir: string) => number) | undefined;
   /** The free space the rig keeps where the file goes, in bytes (goal 173); none: 0. */
@@ -285,7 +318,8 @@ export async function downloadModel(input: DownloadInput): Promise<void> {
 }
 
 async function download(input: DownloadInput): Promise<void> {
-  const f = input.fetchImpl ?? fetch;
+  // Only from the internet, unless a test says so (publicFetch): never the rig's own network.
+  const f = input.fetchImpl ?? (input.allowPrivate ? fetch : publicFetch());
   const free = input.free ?? freeBytes;
   const part = `${input.target}.part`;
   mkdirSync(dirname(input.target), { recursive: true });

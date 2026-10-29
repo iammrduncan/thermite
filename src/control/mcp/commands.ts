@@ -45,6 +45,7 @@ export function registerCommands(tools: ToolContext): void {
             ttlMinutes: a.ttl_minutes,
             issuedBy: actor,
             owner: role === "owner",
+            agent: role === "agent",
           });
           return woke ? { id, woke } : { id };
         },

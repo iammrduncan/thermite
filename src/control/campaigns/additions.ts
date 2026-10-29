@@ -38,7 +38,7 @@ export type CampaignAdditionsBody = z.infer<typeof CampaignAdditionsBody>;
 
 export type CampaignAdditionsOutcome =
   | {
-      state: "saved" | "unchanged";
+      state: "saved" | "unchanged" | "valid";
       campaign: string;
       version: number;
       sha: string;
@@ -61,12 +61,13 @@ const same = (a: RoleAdditions | undefined, b: RoleAdditions | undefined) =>
  * Sets the owner's additions to a campaign's roles, or (none given) removes them: a new version of
  * its contract. Each call sets them anew: a role it leaves out has none in the new version. A role
  * the campaign's mode never runs, an unknown role and a text that is too long are refused in
- * words, by the contract's own check.
+ * words, by the contract's own check. With `check`, nothing is saved (proposals.ts).
  */
 export function setCampaignAdditions(
   store: ControlStore,
   req: { campaign: string; additions?: Record<string, string> | undefined },
   by: string,
+  check = false,
 ): CampaignAdditionsOutcome {
   const want = requestedAdditions(req.additions);
   const mode = String((campaignContract(store, req.campaign) as { mode?: unknown })?.mode ?? "");
@@ -87,6 +88,7 @@ export function setCampaignAdditions(
     by,
     action: "campaign_additions_set",
     audit: { roles: Object.keys(want ?? {}) },
+    check,
   });
   return out.state === "refused" ? out : { ...out, additions: want };
 }

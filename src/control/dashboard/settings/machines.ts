@@ -18,7 +18,7 @@ import { machineUrl } from "./shared.ts";
  * or decline it, and delete it.
  */
 export function machineRoutes(app: Hono, dash: Dashboard): void {
-  const { opts, parts, ssh, store } = dash;
+  const { noted, opts, parts, ssh, store } = dash;
 
   // ---------------------------------------------------------------- machines (Providers)
   /** Reads the machine's facts now (read-only), and keeps them or why it could not. */
@@ -88,7 +88,7 @@ export function machineRoutes(app: Hono, dash: Dashboard): void {
     const why = await checkMachine(m.name);
     return c.redirect(
       why
-        ? machineUrl("error", `Trusted "${m.name}"'s host key, but the check failed: ${why}`)
+        ? machineUrl("error", noted(`Trusted "${m.name}"'s host key, but the check failed: ${why}`))
         : machineUrl(
             "ok",
             `Trusted "${m.name}"'s host key and read the machine: see what it found below.`,
@@ -102,7 +102,9 @@ export function machineRoutes(app: Hono, dash: Dashboard): void {
       return c.redirect(machineUrl("error", "Trust the machine's host key first."), 303);
     const why = await checkMachine(name);
     return c.redirect(
-      why ? machineUrl("error", `"${name}": ${why}`) : machineUrl("ok", `Read "${name}" again.`),
+      why
+        ? machineUrl("error", noted(`"${name}": ${why}`))
+        : machineUrl("ok", `Read "${name}" again.`),
       303,
     );
   });

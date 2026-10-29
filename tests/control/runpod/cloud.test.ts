@@ -166,11 +166,13 @@ describe("RunPod in Providers", () => {
     const rp = fakeRunpod();
     const s = await control(rp.f);
     assert.match(
-      await s.post("/ui/settings/add", {
-        type: "runpod",
-        name: "runpod",
-        runpod_key: "wrong-key-000000",
-      }),
+      await s.page(
+        await s.post("/ui/settings/add", {
+          type: "runpod",
+          name: "runpod",
+          runpod_key: "wrong-key-000000",
+        }),
+      ),
       /Not added: RunPod refused the key/,
     );
     assert.equal(s.store.gpuClouds.get("runpod"), undefined);
@@ -214,7 +216,9 @@ describe("RunPod in Providers", () => {
 
     // A new key RunPod refuses leaves the old one in place.
     assert.match(
-      await s.post("/ui/settings/clouds/runpod/key", { runpod_key: "wrong-key-000000" }),
+      await s.page(
+        await s.post("/ui/settings/clouds/runpod/key", { runpod_key: "wrong-key-000000" }),
+      ),
       /Kept the old key: RunPod refused the key/,
     );
     assert.equal(s.secrets.open(s.store.gpuClouds.get("runpod")?.key_sealed ?? ""), KEY);
@@ -230,7 +234,9 @@ describe("RunPod in Providers", () => {
     // RunPod can't be reached: the last read stays, with why.
     const down = await control(fakeRunpod({ down: true }).f);
     assert.match(
-      await down.post("/ui/settings/add", { type: "runpod", name: "rp", runpod_key: KEY }),
+      await down.page(
+        await down.post("/ui/settings/add", { type: "runpod", name: "rp", runpod_key: KEY }),
+      ),
       /Not added: control could not reach RunPod/,
     );
 

@@ -59,3 +59,23 @@ test("one log: each line has its level, a part writes its level and above, and S
   );
   for (const l of process.listeners("SIGUSR2")) process.removeListener("SIGUSR2", l);
 });
+
+test("a line never holds a secret: every string field, at any depth, is redacted", (t) => {
+  const lines: string[] = [];
+  t.mock.method(process.stdout, "write", (chunk: string) => {
+    lines.push(chunk);
+    return true;
+  });
+  const secret = "s3cr3t-value-0123456789";
+  logError("test", `fetch failed: https://user:${secret}@host.example/repo`, {
+    error: `remote said: x-api-key: ${secret}`,
+    detail: { url: `https://host.example/cb?access_token=${secret}`, tries: 2 },
+    argv: ["git", "-c", `http.extraHeader=Authorization: Bearer ${secret}`],
+  });
+  t.mock.restoreAll();
+  assert.equal(lines.length, 1);
+  assert.ok(!lines[0]?.includes(secret), lines[0]);
+  const line = JSON.parse(lines[0] ?? "{}") as Record<string, unknown>;
+  assert.equal((line.detail as { tries: number }).tries, 2);
+  assert.equal(line.msg, "fetch failed: https://***@host.example/repo");
+});

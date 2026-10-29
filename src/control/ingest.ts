@@ -130,9 +130,11 @@ async function takeNow(
 /**
  * A report that passed control's checks, in the writer's turn: its ledger becomes the rig's
  * current one and the runs its events create join the run registry, in one transaction, before
- * the events go on the stream (the registry chooses their subjects); then the events after the
- * held cursor are published and applied; then the rig's row notes the report, its summary and its
- * time. A report refused for now keeps none of the row's note: the rig sends it again.
+ * the events go on the stream (the registry chooses their subjects); a run whose name control
+ * assigned another rig is not registered, and the audit log says so (`run_refused`). Then the
+ * events after the held cursor are published and applied; then the rig's row notes the report,
+ * its summary and its time. A report refused for now keeps none of the row's note: the rig sends
+ * it again.
  */
 export async function keepReport(
   store: ControlStore,
@@ -141,11 +143,20 @@ export async function keepReport(
   const writer = writerOf(store);
   if (!writer) return { later: NO_BUS };
   const now = new Date().toISOString();
+  const refused: string[] = [];
   store.tx(() => {
     store.reportedRigs.enterLedger(report.rig, report.ledger_id, now);
-    for (const e of report.events)
-      store.runRegistry.registerRunCreated(report.rig, report.ledger_id, currentEvent(e));
+    for (const e of report.events) {
+      const event = currentEvent(e);
+      const taken = store.runRegistry.registerRunCreated(report.rig, report.ledger_id, event);
+      if (taken === "refused" && event.subject) refused.push(event.subject);
+    }
   });
+  for (const run of refused) {
+    const what = { rig: report.rig, run, why: "control assigned this run's name to another rig" };
+    log("control", "a run control did not assign this rig is not registered", what, "warn");
+    store.auditLog.add("control", "run_refused", what);
+  }
   const written = await writer.publish(report);
   if ("later" in written) return written;
   store.reportedRigs.noteReport(report, new Date().toISOString());

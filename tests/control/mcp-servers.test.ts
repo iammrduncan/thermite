@@ -7,7 +7,9 @@ import { ControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { assigned } from "../helpers/assignments.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
+import { applied, controlStore } from "../helpers/control-store.ts";
 import { type FakeAuth, type FakeMcp, startFakeMcp } from "../helpers/fake-mcp.ts";
+import { report } from "../helpers/view-events.ts";
 
 /** Made-up secrets: each must reach only the fake server's headers, never a page, log or audit. */
 const KEY = "Bearer brainkeyforthetestsonly";
@@ -285,6 +287,34 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
     );
   });
 
+  test("an agent's token may not name MCP servers in an assignment; the owner's may", () => {
+    const { store, servers } = setup();
+    store.enrollments.setConfiguredRigs(["rig-a"]);
+    servers.put(
+      { name: "paper-search", url: "https://papers.example.com/mcp", auth: "none" },
+      "owner:test",
+    );
+    const uses = [{ name: "paper-search", agents: ["advisors"] }];
+    for (const payload of [
+      { contract, mcp_servers: uses },
+      // A research contract names them itself.
+      { contract: { ...contract, mcp_servers: uses } },
+    ])
+      assert.throws(
+        () =>
+          issueCommand(store, keys.privateKeyPem, {
+            rig: "rig-a",
+            kind: "assign_campaign",
+            payload: { run: "survey-2", contract_sha: "b".repeat(64), imports: [], ...payload },
+            issuedBy: "agent:mcp",
+            agent: true,
+          }),
+        /An agent's token may not name MCP servers in an assignment/,
+      );
+    assert.equal(store.commands.pending("rig-a").length, 0);
+    assert.ok(assign(store, { contract, mcp_servers: uses }).id);
+  });
+
   test("a research contract's servers go into its assignment, and a different list is refused", () => {
     const { store, servers } = setup();
     store.enrollments.setConfiguredRigs(["rig-a"]);
@@ -373,6 +403,29 @@ describe("what a rig gets", () => {
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
   });
 
+  test("a rig keeps a server only while a live run names it: not once the run closed, nor for an assignment that failed", async (t) => {
+    const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
+    const store = controlStore();
+    const servers = new McpServers(store, SecretBox.ephemeral());
+    servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
+    const uses = { mcp_servers: [{ name: "gbrain", agents: ["workers"] }] };
+    const given = async () => (await servers.forRig("rig-a")).servers.map((x) => x.name);
+    assigned(store, "rig-a", "pn-1", "pn", uses);
+    assert.deepEqual(await given(), ["gbrain"]);
+    // The run closes: its rig no longer gets the server.
+    await report(store, "rig-a", "ledger-a", [
+      { kind: "run_created", subject: "pn-1", body: { campaign: "pn", mode: "goal" } },
+      { kind: "run_status", subject: "pn-1", body: { status: "closed", reason: "done" } },
+    ]);
+    await applied(store);
+    assert.deepEqual(await given(), []);
+    // An assignment that failed gives nothing either.
+    assigned(store, "rig-a", "pn-2", "pn", uses);
+    assert.deepEqual(await given(), ["gbrain"]);
+    store.db.prepare("update command set status = 'failed' where id = ?").run("cmd-rig-a-pn-2");
+    assert.deepEqual(await given(), []);
+  });
+
   test("the owner's REST routes and the settings page never show a secret", async (t) => {
     const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
     const { store, app } = await api(t, fake);
@@ -439,7 +492,9 @@ describe("what a rig gets", () => {
     assert.equal(servers.get("notion")?.status, "ok");
     // A made-up state is refused.
     const forged = await app.request(`/v1/mcp-oauth/callback?state=made-up&code=${code}`);
-    assert.match(decodeURIComponent(forged.headers.get("location") ?? ""), /not known/);
+    const to = forged.headers.get("location") ?? "";
+    assert.match(to, /error=note-[0-9a-f]+&at=mcp/);
+    assert.match(await (await signIn(app)).page(to), /not known/);
   });
 });
 

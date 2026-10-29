@@ -31,6 +31,7 @@ import { Machines } from "./machines.ts";
 import { McpServerRows } from "./mcp-servers.ts";
 import { ModelAssignments } from "./models.ts";
 import { BusPositions } from "./positions.ts";
+import { CampaignProposals } from "./proposals.ts";
 import { ModelProviders } from "./providers.ts";
 import { RigRefusals } from "./refusals.ts";
 import type { IngestReport } from "./report.ts";
@@ -67,12 +68,13 @@ export type {
 export type { CommandRow, Decision } from "./commands.ts";
 export type { EventsMoved, StoredEvent } from "./events.ts";
 export type { RigExport } from "./exports.ts";
-export type { GitAccess } from "./git-access.ts";
+export { GIT_HOST, GIT_HOST_WORDS, type GitAccess } from "./git-access.ts";
 export type { JoinedRig } from "./joined.ts";
 export { OPEN_TRIAL_LINES } from "./live.ts";
 export type { Machine, MachineRig } from "./machines.ts";
 export type { McpServerRows } from "./mcp-servers.ts";
 export { AGENT_ROLES, type AgentRole, codexTakes, harnessOf } from "./models.ts";
+export type { CampaignProposal, ProposedField } from "./proposals.ts";
 export type { ModelProvider, ProviderModel } from "./providers.ts";
 export type { RigRefusal } from "./refusals.ts";
 export type { StoredRunpodRig, StoredRunpodTest } from "./runpod.ts";
@@ -119,6 +121,8 @@ export class ControlStore {
   readonly busKeys: BusKeys;
   readonly rigUpdates: RigUpdates;
   readonly mcpServers: McpServerRows;
+  /** Changes the operator proposes to a campaign's settings, for the owner to approve. */
+  readonly proposals: CampaignProposals;
   /** How far the store applied the bus's streams: the events stream's apply (control/events). */
   readonly busPositions: BusPositions;
   private knowledge: KnowledgeBase | undefined;
@@ -163,6 +167,7 @@ export class ControlStore {
     this.busKeys = new BusKeys(this, this.db);
     this.rigUpdates = new RigUpdates(this, this.db);
     this.mcpServers = new McpServerRows(this, this.db);
+    this.proposals = new CampaignProposals(this, this.db);
     this.busPositions = new BusPositions(this, this.db);
   }
 

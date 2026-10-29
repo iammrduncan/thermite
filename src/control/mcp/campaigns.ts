@@ -24,6 +24,8 @@ import {
   FOLDER_NAME_MAX,
   kbWritesDefaultWords,
   moveCampaign,
+  type ProposeOutcome,
+  proposeSetting,
   renameFolder,
   type ShelfOutcome,
   type StartRunBody,
@@ -115,7 +117,18 @@ export function registerRunStarts(tools: ToolContext): void {
  * navigation's folders. Every token but the agent's reads; the owner and an operator change them.
  */
 export function registerCampaignSettings(tools: ToolContext): void {
-  const { server, store, opts, actor, canCommand, audited } = tools;
+  const { server, store, opts, actor, role, canCommand, audited } = tools;
+  // The operator proposes the additions to a campaign's roles and which roles write in its
+  // collection; the owner approves on the campaign's page. The owner's own change is saved at once.
+  const proposing = role === "operator";
+  const PROPOSES =
+    " With the operator's token, the change is a proposal: control checks it as it would the owner's, keeps it, and saves nothing until the owner approves it on the campaign's page (Needs you lists it); it returns {campaign, proposal, state: \"proposed\", said}. A newer proposal of the same setting replaces one still waiting.";
+  const proposalAnswer = (out: ProposeOutcome) => {
+    if (out.state === "refused") throw new Error(out.error);
+    return out.state === "proposed"
+      ? { campaign: out.campaign, proposal: out.id, state: out.state, said: out.said }
+      : { campaign: out.campaign, state: out.state, said: out.said };
+  };
 
   // A campaign's own context settings for all its runs' agents (goal 070): the tokens that may
   // copy a campaign may set them. A new version of its contract.
@@ -152,12 +165,20 @@ export function registerCampaignSettings(tools: ToolContext): void {
       "set_campaign_kb_writes",
       {
         title: "Set which roles write in a campaign's collection",
-        description: `Sets which kinds of item each agent role may write, each in its own slot, in the campaign's collection of Thermite's knowledge base: kb_writes, by role (planner, worker, teacher, merged-by, auditor, review-panel, synthesizer, final-writer), each a list of kinds (note, decision, surprise, journal, finding, review, doc, reference, report, paper). A role with kinds gets the kb_write tool; every role gets kb_search and kb_read. A role left out, or given [], writes nothing. Left out: the default, ${kbWritesDefaultWords()}. Control saves a new version of the campaign's contract (its kb_writes), signed into each assignment; runs started from then take it, and a run keeps what it started with. Returns {campaign, version, contract_sha, kb_writes, said}. Refused in words: an unknown role or kind, a campaign with no saved version and no assignment, a rig check's campaign.`,
+        description: `Sets which kinds of item each agent role may write, each in its own slot, in the campaign's collection of Thermite's knowledge base: kb_writes, by role (planner, worker, teacher, merged-by, auditor, review-panel, synthesizer, final-writer), each a list of kinds (note, decision, surprise, journal, finding, review, doc, reference, report, paper). A role with kinds gets the kb_write tool; every role gets kb_search and kb_read. A role left out, or given [], writes nothing. Left out: the default, ${kbWritesDefaultWords()}. Control saves a new version of the campaign's contract (its kb_writes), signed into each assignment; runs started from then take it, and a run keeps what it started with. Returns {campaign, version, contract_sha, kb_writes, said}. Refused in words: an unknown role or kind, a campaign with no saved version and no assignment, a rig check's campaign.${proposing ? PROPOSES : ""}`,
         inputSchema: { campaign: z.string().min(1), ...campaignKbWritesFields },
       },
       audited(
         "set_campaign_kb_writes",
         (a: { campaign: string; kb_writes?: Record<string, string[]> }) => {
+          if (proposing)
+            return proposalAnswer(
+              proposeSetting(
+                store,
+                { campaign: a.campaign, field: "kb_writes", value: a.kb_writes as never },
+                actor,
+              ),
+            );
           const out = setCampaignKbWrites(
             store,
             { campaign: a.campaign, kb_writes: a.kb_writes as never },
@@ -173,7 +194,7 @@ export function registerCampaignSettings(tools: ToolContext): void {
       "set_campaign_additions",
       {
         title: "Add the owner's text to a campaign's roles",
-        description: `Sets the owner's additions to a campaign's agent roles: text added to a role's own instructions for this campaign's runs, without a change to Thermite's code. additions: each role's text, by the role's id (agent_roles lists the roles): worker, planner, teacher, merged-by, auditor or reviewer for a hill-climb or goal campaign; research-worker, research-planner, research-teacher, research-merged-by, research-reviewer, synthesizer or final-writer for a research campaign; each at most ${ROLE_ADDITION_MAX_CHARS} characters. Each prompt of the role carries its addition as a section of its own after the role's text, labelled as the owner's, with the contract's version; it adds to the role's text and replaces none of it, and the role's text comes first where the two differ. An addition never decides a measurement, a verdict or a promotion: code does. Each call sets them anew: a role left out, or an empty text, has none. Control saves a new version of the campaign's contract (its role_additions), signed into each assignment; runs started from then take it, and a run keeps what it started with. A rig's harness older than this change refuses a contract with role_additions. Returns {campaign, version, contract_sha, role_additions, said}. Refused in words: a role the campaign's mode never runs, an unknown role, a text too long, a campaign with no saved version and no assignment, a rig check's campaign.`,
+        description: `Sets the owner's additions to a campaign's agent roles: text added to a role's own instructions for this campaign's runs, without a change to Thermite's code. additions: each role's text, by the role's id (agent_roles lists the roles): worker, planner, teacher, merged-by, auditor or reviewer for a hill-climb or goal campaign; research-worker, research-planner, research-teacher, research-merged-by, research-reviewer, synthesizer or final-writer for a research campaign; each at most ${ROLE_ADDITION_MAX_CHARS} characters. Each prompt of the role carries its addition as a section of its own after the role's text, labelled as the owner's, with the contract's version; it adds to the role's text and replaces none of it, and the role's text comes first where the two differ. An addition never decides a measurement, a verdict or a promotion: code does. Each call sets them anew: a role left out, or an empty text, has none. Control saves a new version of the campaign's contract (its role_additions), signed into each assignment; runs started from then take it, and a run keeps what it started with. A rig's harness older than this change refuses a contract with role_additions. Returns {campaign, version, contract_sha, role_additions, said}. Refused in words: a role the campaign's mode never runs, an unknown role, a text too long, a campaign with no saved version and no assignment, a rig check's campaign.${proposing ? PROPOSES : ""}`,
         inputSchema: {
           campaign: z.string().min(1).describe("The campaign, as on its page"),
           ...campaignAdditionsFields,
@@ -182,6 +203,14 @@ export function registerCampaignSettings(tools: ToolContext): void {
       audited(
         "set_campaign_additions",
         (a: { campaign: string; additions?: Record<string, string> }) => {
+          if (proposing)
+            return proposalAnswer(
+              proposeSetting(
+                store,
+                { campaign: a.campaign, field: "role_additions", value: a.additions },
+                actor,
+              ),
+            );
           const out = setCampaignAdditions(
             store,
             { campaign: a.campaign, additions: a.additions },

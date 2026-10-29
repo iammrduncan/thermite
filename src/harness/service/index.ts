@@ -388,6 +388,11 @@ export class HarnessService {
     return this.commands.applyCommand(input, actor);
   }
 
+  /** A signed command checked, not applied (commands.ts). */
+  checkCommand(input: unknown): { ok: true } | { ok: false; reason: string } {
+    return this.commands.checkCommand(input);
+  }
+
   // ------------------------------------------------------------ assignment: service/assignment.ts
 
   assignLocal(input: assignment.LocalAssignment, by: string) {

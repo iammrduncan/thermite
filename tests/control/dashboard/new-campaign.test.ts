@@ -99,17 +99,28 @@ describe("the new-campaign page", () => {
     assert.match(script, /j\.files \+ " file" \+ \(j\.files === 1 \? "" : "s"\)/);
 
     // The project is looked up by control; the page then shows what it found.
-    const probe = await s.get(
-      `/ui/campaigns/new/probe?${new URLSearchParams({ url: "https://git.example.com/team/fastmat.git", ref: "main" })}`,
+    // A POST with the form's token: a lookup may unseal a Git access, so no link can start one.
+    const asLink = `/ui/campaigns/new/probe?${new URLSearchParams({ url: "https://git.example.com/team/fastmat.git" })}`;
+    assert.equal((await s.get(asLink)).status, 404);
+    assert.equal(
+      (await s.post("/ui/campaigns/new/probe", { url: "https://git.example.com/team/fastmat.git" }))
+        .status,
+      403,
     );
+    const probe = await s.post("/ui/campaigns/new/probe", {
+      csrf: s.csrf,
+      url: "https://git.example.com/team/fastmat.git",
+      ref: "main",
+    });
     assert.deepEqual(await probe.json(), {
       commit: C,
       files: 1532,
       suggest: ["src/**", "src/kernels/**"],
     });
-    const refused = await s.get(
-      `/ui/campaigns/new/probe?${new URLSearchParams({ url: "https://git.example.com/private.git" })}`,
-    );
+    const refused = await s.post("/ui/campaigns/new/probe", {
+      csrf: s.csrf,
+      url: "https://git.example.com/private.git",
+    });
     assert.equal(refused.status, 400);
     assert.match(((await refused.json()) as { error: string }).error, /without a key/);
 
@@ -416,7 +427,7 @@ describe("the new-campaign page", () => {
     assert.match(script, /folder: folder\(\)/);
     const mono = "https://git.example.com/team/mono.git";
     const probe = (folder: string) =>
-      s.get(`/ui/campaigns/new/probe?${new URLSearchParams({ url: mono, ref: "main", folder })}`);
+      s.post("/ui/campaigns/new/probe", { csrf: s.csrf, url: mono, ref: "main", folder });
     // The lookup reads the folder: its files, and paths to suggest from its own top.
     assert.deepEqual(await (await probe("examples/matmul-cpu/project")).json(), {
       commit: C,

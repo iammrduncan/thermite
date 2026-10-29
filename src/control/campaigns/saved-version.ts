@@ -12,8 +12,11 @@ import { RUN_FIELDS } from "./copy.ts";
 
 export type SavedVersion =
   | {
-      /** saved: a new version; unchanged: the newest version has these settings already. */
-      state: "saved" | "unchanged";
+      /**
+       * saved: a new version; unchanged: the newest version has these settings already; valid:
+       * checked only (`check`), it would be saved as this version.
+       */
+      state: "saved" | "unchanged" | "valid";
       campaign: string;
       version: number;
       sha: string;
@@ -23,7 +26,8 @@ export type SavedVersion =
 /**
  * Saves a new version of `campaign` whose `field` is `value` (undefined: the field is left out),
  * unless its newest saved version has it already (`same`). `what`: the settings in words, for a
- * rig check's refusal. The audit log records `action` with the version and `audit`.
+ * rig check's refusal. The audit log records `action` with the version and `audit`. With `check`,
+ * nothing is saved: the answer says whether it would be.
  */
 export function saveWithField(
   store: ControlStore,
@@ -36,6 +40,7 @@ export function saveWithField(
     by: string;
     action: string;
     audit: Record<string, unknown>;
+    check?: boolean | undefined;
   },
 ): SavedVersion {
   const refuse = (error: string, status: 400 | 404 | 409 = 409): SavedVersion => ({
@@ -74,6 +79,7 @@ export function saveWithField(
     return refuse(
       `The contract of ${campaign} is not valid, so control cannot save a new version: ${parsed.errors.join("; ")}`,
     );
+  if (o.check) return { state: "valid", campaign, version, sha: parsed.sha };
   const sources: CampaignSources = saved
     ? saved.sources
     : {

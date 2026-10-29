@@ -16,7 +16,7 @@ import { ApiError } from "../common/api/call.ts";
 import { controlClient } from "../common/api/control.ts";
 import { log } from "../common/env.ts";
 import { git as gitRun } from "../common/git.ts";
-import { type GitAuth, withGitAuth } from "../common/git-auth.ts";
+import { type GitAuth, gitHost, withGitAuth } from "../common/git-auth.ts";
 import { GIT_ACCESS, gitRepoPath } from "../core/api/control/rigs.ts";
 import type { SignedCommand } from "../core/commands.ts";
 import { sshCommand } from "./git-export.ts";
@@ -56,6 +56,11 @@ export interface StagingConfig {
   fetchImpl?: typeof fetch | undefined;
   /** The free space a model download leaves where it lands, in bytes (goal 173); none: 0. */
   floorBytes?: number | undefined;
+  /**
+   * Tests only: `file://` git sources, and model files at private or local addresses, are
+   * fetched. Otherwise they are refused, in words.
+   */
+  localSources?: boolean | undefined;
 }
 
 /** What staging says about a command: relay it, wait, or report that its content failed. */
@@ -65,10 +70,49 @@ function sshEnv(cfg: StagingConfig): Record<string, string> {
   return sshCommand(cfg.sshKeyFile, cfg.knownHostsFile);
 }
 
+/** SSH for a source that names no Git access: no key, no agent, so none is ever offered. */
+const NO_KEY_SSH =
+  "ssh -o BatchMode=yes -o PubkeyAuthentication=no -o IdentityAgent=none -o StrictHostKeyChecking=accept-new";
+
 const git = (repo: string, args: string[], env: Record<string, string> = {}) =>
   gitRun(["-C", repo, ...args], { env });
 
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+
+/** The kinds of command whose content the supervisor stages: it fetches something for them. */
+const STAGED_KINDS: readonly string[] = ["assign_campaign", "propagate"];
+/** Commands whose signature the harness has checked, by id: each is asked about once. */
+const checked = new Set<string>();
+/** At most this many are kept; past it, the set starts again. */
+const CHECKED_MAX = 1000;
+
+/**
+ * A command's content staged only once control's signature on it is checked: `check` asks the
+ * harness, which holds control's public key in every placement (the supervisor never chooses the
+ * key it trusts), and answers why it refused it, or nothing. A command it refuses is never staged:
+ * it goes on to the harness as it is, which refuses it again as it applies it, and its outcome
+ * says why. Kinds with no content are relayed as they are.
+ */
+export async function stageSigned(
+  cfg: StagingConfig,
+  cmd: SignedCommand,
+  check: (cmd: SignedCommand) => Promise<string | undefined>,
+): Promise<StageResult> {
+  if (!STAGED_KINDS.includes(cmd.envelope.kind)) return "ready";
+  if (!checked.has(cmd.envelope.id)) {
+    const refused = await check(cmd);
+    if (refused) {
+      log("supervisor", "a command's sources not staged: the harness refused it", {
+        command: cmd.envelope.id,
+        why: refused,
+      });
+      return "ready";
+    }
+    if (checked.size >= CHECKED_MAX) checked.clear();
+    checked.add(cmd.envelope.id);
+  }
+  return await stageCommand(cfg, cmd);
+}
 
 /**
  * Makes a command's content available in the inbox. "ready": relay it now. "wait": the content
@@ -178,6 +222,7 @@ async function stageSources(cfg: StagingConfig, cmd: SignedCommand): Promise<Sta
             hfToken: cfg.hfToken,
             downloads: cfg.models ?? new ModelDownloads(),
             fetchImpl: cfg.fetchImpl,
+            allowPrivate: cfg.localSources,
             floor: cfg.floorBytes,
           });
         else await bundleFromGit(cfg, imp, target);
@@ -231,6 +276,8 @@ async function bundleFromGit(
     "control" in imp.source
       ? `${cfg.controlUrl}${gitRepoPath(cfg.rig, imp.source.control)}`
       : imp.source.git;
+  if (!fromControl && /^file:/i.test(url) && !cfg.localSources)
+    throw new Error(`${imp.path}: a file:// source is refused: a source is a repository on a host`);
   const dir = cfg.sourcesDir ?? join(dirname(cfg.resultsRepo), "sources");
   const cache = join(dir, `${createHash("sha256").update(url).digest("hex").slice(0, 16)}.git`);
   if (!existsSync(join(cache, "HEAD"))) {
@@ -238,6 +285,7 @@ async function bundleFromGit(
     await git(cache, ["init", "--quiet", "--bare"]);
   }
   // Never git's ext:: or other command transports: a URL in a command only names a repository.
+  // A source that names no Git access is fetched with no key: never the results repository's.
   const env: Record<string, string> = fromControl
     ? {
         GIT_ALLOW_PROTOCOL: "http:https",
@@ -245,7 +293,10 @@ async function bundleFromGit(
         GIT_CONFIG_KEY_0: "http.extraHeader",
         GIT_CONFIG_VALUE_0: `Authorization: Bearer ${cfg.controlToken}`,
       }
-    : { ...sshEnv(cfg), GIT_ALLOW_PROTOCOL: "https:ssh:git:file" };
+    : {
+        GIT_SSH_COMMAND: NO_KEY_SSH,
+        GIT_ALLOW_PROTOCOL: cfg.localSources ? "https:ssh:git:file" : "https:ssh:git",
+      };
   const has = () =>
     git(cache, ["cat-file", "-e", `${imp.commit}^{commit}`]).then(
       () => true,
@@ -261,7 +312,13 @@ async function bundleFromGit(
   // A private repository: the Git access its campaign names, handed by control for this fetch.
   const access = "git" in imp.source ? imp.source.access : undefined;
   if (access) {
-    const auth = await gitAccessFromControl(cfg, access);
+    // Used only on the host control bound it to.
+    const { auth, host } = await gitAccessFromControl(cfg, access);
+    const from = gitHost(url);
+    if (from !== host)
+      throw new Error(
+        `Git access ${access} is for ${host} only, and ${imp.path} comes from ${from ?? "an address with no host"}`,
+      );
     await withGitAuth(auth, join(dirname(dir), "known_hosts", access), (g) =>
       fetchWith({ ...g.env, GIT_ALLOW_PROTOCOL: g.protocols }),
     );
@@ -291,8 +348,14 @@ function bundleMode(inboxDir: string): number {
   return statSync(inboxDir).mode & 0o004 ? 0o644 : 0o640;
 }
 
-/** Git access by name, from control: only for a campaign assigned to this rig that names it. */
-async function gitAccessFromControl(cfg: StagingConfig, name: string): Promise<GitAuth> {
+/**
+ * Git access by name, from control, with the host it is for: only while a live assignment of this
+ * rig names it.
+ */
+async function gitAccessFromControl(
+  cfg: StagingConfig,
+  name: string,
+): Promise<{ auth: GitAuth; host: string }> {
   if (!cfg.controlUrl || !cfg.controlToken)
     throw new Error(`Git access ${name}: this supervisor has no control to ask`);
   const control = controlClient({ url: cfg.controlUrl, token: cfg.controlToken, rig: cfg.rig });
@@ -300,7 +363,10 @@ async function gitAccessFromControl(cfg: StagingConfig, name: string): Promise<G
     const answered = err instanceof ApiError && err.status !== undefined;
     throw answered ? new Error(`Git access ${name}: control answered ${err.status}`) : err;
   });
-  if (g.kind === "ssh" && g.private_key) return { kind: "ssh", privateKey: g.private_key };
-  if (g.kind === "token" && g.token) return { kind: "token", token: g.token, username: g.username };
+  if (!g.host) throw new Error(`Git access ${name}: control's answer names no host`);
+  if (g.kind === "ssh" && g.private_key)
+    return { auth: { kind: "ssh", privateKey: g.private_key }, host: g.host };
+  if (g.kind === "token" && g.token)
+    return { auth: { kind: "token", token: g.token, username: g.username }, host: g.host };
   throw new Error(`Git access ${name}: control's answer has no key`);
 }

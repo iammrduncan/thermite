@@ -14,7 +14,7 @@ import { backTo, type Dashboard } from "./context.ts";
  * restart or reset a rig, the owner's choice at a drain's deadline).
  */
 export function actionRoutes(app: Hono, dash: Dashboard): void {
-  const { opts, parts, runOf, store } = dash;
+  const { noted, opts, parts, runOf, store } = dash;
 
   // ---------------------------------------------------------------- following an action (goal 080)
   // The page's script sends an action's form with fetch, asking for JSON, then follows it on these
@@ -138,7 +138,7 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
       try {
         await opts.runpodDriver.restart(rig, ["harness", "supervisor"], "owner:ui");
       } catch (err) {
-        return to("error", errorText(err));
+        return to("error", noted(errorText(err)));
       }
       return to("ok", "Restarting: the pod stops, then starts again.");
     }

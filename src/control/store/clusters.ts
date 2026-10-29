@@ -1,3 +1,4 @@
+import { redact } from "../../common/log.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
@@ -140,7 +141,7 @@ export class Clusters extends StorePart {
     else
       this.db
         .prepare("update cluster set checked_at = ?, check_error = ? where name = ?")
-        .run(new Date().toISOString(), r.error, name);
+        .run(new Date().toISOString(), redact(r.error), name);
   }
 
   delete(name: string, by: string): boolean {

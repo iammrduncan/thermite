@@ -262,7 +262,7 @@ describe("each command's run and campaign, in columns of their own", () => {
     twelve.db.close();
 
     const store = new ControlStore(path);
-    assert.equal(version(store), 14);
+    assert.equal(version(store), 16);
     const kept = store.db
       .prepare("select id, signed, run, campaign from command order by issued_at")
       .all() as { id: string; signed: string; run: string | null; campaign: string | null }[];
@@ -323,11 +323,13 @@ describe("each command's run and campaign, in columns of their own", () => {
     assert.deepEqual([...latest.keys()].sort(), ["blank", "matmul", "numbers", "sort-speed"]);
     for (const rig of ["rig-a", "rig-b", "rig-c"])
       assert.deepEqual(
-        store.commands.assignedMcpServers(rig),
+        store.commands.assignedMcpServers(rig, new Set()),
         byJson.assignedMcpServers(store, rig),
         rig,
       );
-    assert.deepEqual([...store.commands.assignedMcpServers("rig-a").keys()], ["mm-5"]);
+    assert.deepEqual([...store.commands.assignedMcpServers("rig-a", new Set()).keys()], ["mm-5"]);
+    // A closed run's servers are no longer handed.
+    assert.deepEqual([...store.commands.assignedMcpServers("rig-a", new Set(["mm-5"])).keys()], []);
     for (const campaign of ["sort-speed", "matmul", "numbers", "blank", "7", "none"])
       assert.deepEqual(
         store.commands.pendingStarts(campaign),

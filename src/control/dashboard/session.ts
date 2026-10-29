@@ -56,18 +56,20 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
 <button class="primary">Sign in</button></form></main></body></html>`,
     ),
   );
-  // Failed sign-ins in the last minute: past 20, sign-in waits (the token is random, so this
-  // only slows a guesser and keeps the log readable).
-  let failures: number[] = [];
+  // Failed sign-ins in the last minute, counted for each client apart: past 20, that client
+  // waits, and every other client still signs in (the token is random, so this only slows a
+  // guesser and keeps the log readable).
+  const failures = new SignInFailures();
   app.post("/ui/login", bodyLimit({ maxSize: 8 * 1024 }), async (c) => {
     const now = Date.now();
-    failures = failures.filter((t) => t > now - 60_000);
-    if (failures.length >= 20) return c.text("too many failed sign-ins; wait a minute", 429);
+    const client = clientOf(c);
+    if (failures.count(client, now) >= SIGN_IN_FAILURES)
+      return c.text("too many failed sign-ins; wait a minute", 429);
     const form = await c.req.parseBody();
     const token = String(form.token ?? "");
     if (!opts.admin.matches(token)) {
-      failures.push(now);
-      if (failures.length === 20) store.auditLog.add("control", "login_throttled", {});
+      if (failures.add(client, now) === SIGN_IN_FAILURES)
+        store.auditLog.add("control", "login_throttled", {});
       return c.redirect("/ui/login", 303);
     }
     const sid = randomBytes(24).toString("base64url");
@@ -106,4 +108,41 @@ export function sessionRoutes(app: Hono, dash: Dashboard): void {
       "cache-control": "no-cache",
     }),
   );
+}
+
+/** Failed sign-ins a client may make in a minute before it waits. */
+const SIGN_IN_FAILURES = 20;
+/** Clients whose failures are kept at once; past it, the one that failed longest ago is dropped. */
+const SIGN_IN_CLIENTS = 4096;
+
+/** The address a request came from, as its socket gives it; empty where there is no socket. */
+function clientOf(c: Ctx): string {
+  const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+  return env?.incoming?.socket?.remoteAddress ?? "";
+}
+
+/** Each client's failed sign-ins in the last minute. */
+class SignInFailures {
+  private readonly byClient = new Map<string, number[]>();
+
+  /** The client's failures in the minute before `now`. */
+  count(client: string, now: number): number {
+    const recent = (this.byClient.get(client) ?? []).filter((t) => t > now - 60_000);
+    if (recent.length > 0) this.byClient.set(client, recent);
+    else this.byClient.delete(client);
+    return recent.length;
+  }
+
+  /** Records a failure, and returns the client's failures in the last minute. */
+  add(client: string, now: number): number {
+    const recent = [...(this.byClient.get(client) ?? []), now];
+    // Kept in the order of each client's last failure, so the first is the oldest.
+    this.byClient.delete(client);
+    this.byClient.set(client, recent);
+    if (this.byClient.size > SIGN_IN_CLIENTS) {
+      const oldest = this.byClient.keys().next().value;
+      if (oldest !== undefined) this.byClient.delete(oldest);
+    }
+    return recent.filter((t) => t > now - 60_000).length;
+  }
 }

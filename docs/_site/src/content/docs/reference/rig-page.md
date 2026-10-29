@@ -48,6 +48,8 @@ A button that needs typed words stays off until the words are typed exactly. Con
 
 The first lines under the title say, in a few sentences: for a RunPod rig, its pod and what it has cost; whether it reports; that it drains, and what for, such as `rig-1 drains: it starts nothing new, and waits for 2 trials to end.`; what runs on it; what its judge does; a check that failed; a key that waits for you; for a RunPod rig, a connection to its pod that failed.
 
+When control can't read the rig's events now, the first lines say `Control can't read its events now.`, and a card under them says why in words, such as the event its view failed on. Until control can, the page shows no runs, checks or judge's jobs for the rig; the rest of it is from the rig's last report. This lasts until the rig's next full reset gives it a new ledger. Every other rig, and every other page, shows as before.
+
 A card after an action says what happened: its words in green, or **Not done.** and the reason. A button that sends a command to the rig, such as **Export**, **Run it** or **Pause**, says at once that the click took, and the page follows the command to its outcome with no refresh: see [Signed commands](signed-commands.md#on-the-dashboard). After **Save changes** on **Edit rig**, the green line here goes on with how the settings' command stands, such as `rig-1 took it at 03:41 UTC. This page shows the change when the rig next reports.`
 
 ## The reporting banner
@@ -246,7 +248,7 @@ A rig on RunPod has **History** in place of **Recent**, with filters: **All**, *
 
 Loading the page never reads RunPod: a read holds RunPod's stream open for up to 10 seconds, and the page's script loads the page again every few seconds while it follows a button. Control keeps each rig's last read in memory until it restarts, and a read over REST or MCP shows here too. Before the rig's first report, when control has no read of the log yet, the page's script presses **Read the log** once the page has opened; after the first report, the block waits for you to press it. After the first report, **Pod log** is in the left column, below **The judge's last jobs**.
 
-Before control shows a line, it takes out what looks like a credential: a URL's user and password, a bearer token, keys with a known prefix, such as `hf_`, `ghp_` or `rpa_`, which become `hf_***`, and the value of a `THERMITE_` or `RUNPOD_` variable whose name ends in `KEY`, `CODE`, `TOKEN`, `SECRET` or `PREFIX`, such as `THERMITE_STATE_SNAPSHOT_KEY=***`. It also takes out a terminal's colour codes, and cuts a line at 2,000 characters. A pod that is terminated has no **Pod log**: RunPod no longer has it.
+Before control shows a line, it takes out what looks like a credential: a URL's user and password, a bearer token, keys with a known prefix, such as `hf_`, `ghp_` or `rpa_`, which become `hf_***`, a query string's or a header's token or key (`access_token=***`, `x-api-key: ***`), and the value of a `THERMITE_` or `RUNPOD_` variable whose name ends in `KEY`, `CODE`, `TOKEN`, `SECRET` or `PREFIX`, such as `THERMITE_STATE_SNAPSHOT_KEY=***`. It also takes out a terminal's colour codes, and cuts a line at 2,000 characters. A pod that is terminated has no **Pod log**: RunPod no longer has it.
 
 ### Before its first report, and after its end
 

@@ -97,11 +97,14 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     opts.kits ? newCampaignPage(c) : c.text("This control keeps no kits.", 404),
   );
   // The project's head at a ref and its paths (not its contents), for the page's suggestions:
-  // a project in a folder of its repository gets that folder's paths.
-  app.get("/ui/campaigns/new/probe", async (c) => {
-    const url = c.req.query("url") ?? "";
-    const ref = c.req.query("ref") || "HEAD";
-    const folder = c.req.query("folder") || undefined;
+  // a project in a folder of its repository gets that folder's paths. A POST with the form's
+  // token, as it may unseal a Git access.
+  app.post("/ui/campaigns/new/probe", async (c) => {
+    const f = await c.req.parseBody();
+    const one = (k: string) => (typeof f[k] === "string" ? String(f[k]) : "");
+    const url = one("url");
+    const ref = one("ref") || "HEAD";
+    const folder = one("folder") || undefined;
     if (folder && !FolderSchema.safeParse(folder).success)
       return c.json(
         {
@@ -115,7 +118,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
         await (opts.probeRepo ?? probeRepository)(
           url,
           ref,
-          accessFor(c.req.query("access")),
+          accessFor(one("access") || undefined, url),
           folder,
         ),
       );
@@ -150,13 +153,16 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     return unpackKit(readFileSync(`${p}.name`, "utf8"), readFileSync(p));
   };
   // A kit in a repository: the MCP servers its kit.json names at that commit (goal 068), for
-  // the page to show beside Settings' servers. Control reads kit.json alone.
-  app.get("/ui/campaigns/new/kit-repo", async (c) => {
+  // the page to show beside Settings' servers. Control reads kit.json alone. A POST with the
+  // form's token, as it may unseal a Git access.
+  app.post("/ui/campaigns/new/kit-repo", async (c) => {
+    const f = await c.req.parseBody();
+    const one = (k: string) => (typeof f[k] === "string" ? String(f[k]) : "");
     try {
       const manifest = (await (opts.readKit ?? readKitManifest)(
-        c.req.query("url") ?? "",
-        c.req.query("commit") ?? "",
-        accessFor(c.req.query("access") || undefined),
+        one("url"),
+        one("commit"),
+        accessFor(one("access") || undefined, one("url")),
       )) as { name?: unknown; mcp_servers?: unknown };
       const uses = McpUses.safeParse(manifest?.mcp_servers ?? []);
       if (!uses.success)
@@ -208,7 +214,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
           await (opts.probeRepo ?? probeRepository)(
             project.url,
             project.ref || "HEAD",
-            accessFor((project as { access?: string }).access),
+            accessFor((project as { access?: string }).access, project.url),
             folder.success ? folder.data : undefined,
           )
         ).commit;

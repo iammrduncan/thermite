@@ -20,6 +20,22 @@ export interface GitEnv {
   protocols: string;
 }
 
+/**
+ * The host a git address names, in lowercase, without its user or port: `https://`, `ssh://` and
+ * `git://` addresses and `user@host:path`. Undefined for an address with no host (`file://`) or
+ * one that does not parse. A Git access is bound to one host (Settings), and is used only there.
+ */
+export function gitHost(url: string): string | undefined {
+  const scp = /^[\w.-]+@([\w.-]+):(?!\/\/)/.exec(url);
+  if (scp?.[1]) return scp[1].toLowerCase();
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Runs `fn` with the environment git needs for `auth`, then removes what it wrote. */
 export async function withGitAuth<T>(
   auth: GitAuth | undefined,

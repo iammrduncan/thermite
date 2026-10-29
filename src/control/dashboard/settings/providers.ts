@@ -10,7 +10,13 @@ import { probeRepository } from "../../repo-probe.ts";
 import { clearRigModel, giveRigModel } from "../../rigs/index.ts";
 import { readRunpod } from "../../runpod/index.ts";
 import { keyHint } from "../../secrets.ts";
-import { harnessOf, type ModelProvider, type ProviderType } from "../../store/index.ts";
+import {
+  GIT_HOST,
+  GIT_HOST_WORDS,
+  harnessOf,
+  type ModelProvider,
+  type ProviderType,
+} from "../../store/index.ts";
 import { PRICE_NUMBER, PRICE_WORDS } from "../../ui/usage.ts";
 import { setModelPrice } from "../../usage.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
@@ -23,7 +29,7 @@ import { machineUrl, newName, settingsHelpers, settingsUrl, TYPES } from "./shar
  * the rigs' harness and model.
  */
 export function providerRoutes(app: Hono, dash: Dashboard): void {
-  const { chatgpt, mcpServers, opts, parts, ssh, store } = dash;
+  const { chatgpt, mcpServers, noted, opts, parts, ssh, store } = dash;
   const { accessFor } = settingsHelpers(dash);
 
   // ---------------------------------------------------------------- settings: model providers
@@ -79,7 +85,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     try {
       contexts = await parts.kube.contextsOf(kubeconfig);
     } catch (err) {
-      return fail(errorText(err));
+      return fail(noted(errorText(err)));
     }
     const seen = await inspectKubeconfig(parts.kube, kubeconfig);
     if (seen.problems.length) return fail(`Not added: ${seen.problems.join("; ")}.`);
@@ -131,7 +137,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       });
       store.gpuClouds.setFacts(name, { facts });
     } catch (err) {
-      return fail(`Not added: ${errorText(err)}.`);
+      return fail(noted(`Not added: ${errorText(err)}.`));
     }
     return c.redirect(
       settingsUrl("ok", `"${name}" is added and read: see what control found below.`),
@@ -157,7 +163,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       try {
         pub = await ssh.publicKeyOf(privateKey);
       } catch (err) {
-        return fail(errorText(err));
+        return fail(noted(errorText(err)));
       }
     } else {
       const k = makeDeployKey(`thermite ${name}`);
@@ -198,6 +204,10 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!ACCESS_NAME.test(name))
       return fail("A Git access name is lowercase letters, digits, dots and dashes.");
     if (store.gitAccess.get(name)) return fail(`"${name}" exists already: delete it first.`);
+    const host = String(f.host ?? "")
+      .trim()
+      .toLowerCase();
+    if (!GIT_HOST.test(host)) return fail(GIT_HOST_WORDS);
     if (f.kind === "token") {
       const token = String(f.token ?? "").trim();
       if (!token || /\s/.test(token) || token.length > 4096)
@@ -211,6 +221,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         secret_sealed: opts.secrets.seal(token),
         hint: keyHint(token),
         username,
+        host,
         by: "owner:ui",
       });
       return c.redirect(
@@ -227,6 +238,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       secret_sealed: opts.secrets.seal(key.privateKey),
       hint: key.fingerprint.slice(-6),
       username: null,
+      host,
       by: "owner:ui",
     });
     return c.redirect(
@@ -238,6 +250,20 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     );
   };
   app.post("/ui/settings/git", async (c) => addGit(c, await c.req.parseBody()));
+  // The host a Git access is for, set by the owner: one that was made before accesses had one.
+  app.post("/ui/settings/git/:name/host", async (c) => {
+    const name = c.req.param("name");
+    const host = String((await c.req.parseBody()).host ?? "")
+      .trim()
+      .toLowerCase();
+    if (!GIT_HOST.test(host)) return c.redirect(settingsUrl("error", GIT_HOST_WORDS), 303);
+    return c.redirect(
+      store.gitAccess.setHost(name, host, "owner:ui")
+        ? settingsUrl("ok", `"${name}" is for ${host}: control uses it there, and nowhere else.`)
+        : settingsUrl("error", "No such Git access."),
+      303,
+    );
+  });
   // Reads a repository's branches with this access, as a rig would fetch it; nothing is kept.
   app.post("/ui/settings/git/:name/test", async (c) => {
     const name = c.req.param("name");
@@ -245,7 +271,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!store.gitAccess.get(name))
       return c.redirect(settingsUrl("error", "No such Git access."), 303);
     try {
-      const found = await (opts.probeRepo ?? probeRepository)(url, "HEAD", accessFor(name));
+      const found = await (opts.probeRepo ?? probeRepository)(url, "HEAD", accessFor(name, url));
       return c.redirect(
         settingsUrl(
           "ok",
@@ -255,7 +281,10 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       );
     } catch (err) {
       const why = errorText(err);
-      return c.redirect(settingsUrl("error", `"${name}" could not read ${url}: ${why}`), 303);
+      return c.redirect(
+        settingsUrl("error", noted(`"${name}" could not read ${url}: ${why}`)),
+        303,
+      );
     }
   });
   app.post("/ui/settings/git/:name/token", async (c) => {
@@ -298,7 +327,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   });
   app.post("/ui/settings/providers", async (c) => saveProvider(c, await c.req.parseBody()));
   // MCP servers: their block on Providers, and its routes.
-  mountMcpUi(app, { store, servers: mcpServers, publicUrl: parts.publicUrl });
+  mountMcpUi(app, { store, servers: mcpServers, publicUrl: parts.publicUrl, noted });
   /**
    * A Claude subscription added or its token replaced: the token sealed, the fixed model list, and
    * no call to Anthropic (only Claude Code may use the token).

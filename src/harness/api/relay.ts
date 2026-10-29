@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import {
+  COMMAND_CHECK,
   COMMANDS,
   EXPORTS_DONE,
   LIVE,
@@ -37,6 +38,10 @@ export function reportRoutes(app: Hono, { service, supervisor }: ApiContext): vo
     if (outcome.status === "rejected") return c.json(outcome, 403);
     return c.json(outcome);
   });
+  // Checked, not applied: what the supervisor asks before it fetches a command's sources.
+  app.post(COMMAND_CHECK.path, supervisor, limitOf(COMMAND_CHECK), async (c) =>
+    c.json(service.checkCommand(await c.req.json())),
+  );
 }
 
 /** The live log. */

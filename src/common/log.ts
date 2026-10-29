@@ -21,9 +21,50 @@ export function log(
   at: LogLevel = "info",
 ): void {
   if (LOG_LEVELS.indexOf(at) < LOG_LEVELS.indexOf(level)) return;
-  process.stdout.write(
-    `${JSON.stringify({ at: new Date().toISOString(), level: at, component, msg, ...fields })}\n`,
-  );
+  const line = { at: new Date().toISOString(), level: at, component, msg, ...fields };
+  process.stdout.write(`${JSON.stringify(line, withoutSecretsIn)}\n`);
+}
+
+/** Every string in a line, at any depth, as `redact` leaves it (without its length limit). */
+const withoutSecretsIn = (_key: string, value: unknown) =>
+  typeof value === "string" ? withoutSecrets(value) : value;
+
+/**
+ * A message with what could be a credential taken out, for logs and for words that leave a part:
+ * a URL's user and password, a bearer token, keys with a known prefix, a NATS key's seed, a
+ * query string's or a form's token, key, secret, password, signature or code (`token=…`,
+ * `access_token=…`, `api_key=…`), a credential header (`x-api-key: …`, `authorization: …`), and the
+ * value given to a Thermite or RunPod variable whose name ends in KEY, CODE, TOKEN, SECRET or PREFIX
+ * (`NAME=value`, or `"NAME":"value"` in JSON), such as a pod's snapshot key or enrollment code
+ * echoed back. At most 2,000 characters. This guards against an echoed URL, header or key, not
+ * against anything a message could hold. `log` applies it to every string of every line.
+ */
+export function redact(text: string): string {
+  return withoutSecrets(text).slice(0, 2000);
+}
+
+function withoutSecrets(text: string): string {
+  return text
+    .replace(/(\/\/)[^/\s@]+@/g, "$1***@")
+    .replace(/\b(Bearer\s+)\S+/gi, "$1***")
+    .replace(
+      /\b(sk-|rpa_|ghp_|gho_|ghs_|github_pat_|glpat-|hf_|xox[abp]-)[A-Za-z0-9_-]{6,}/g,
+      "$1***",
+    )
+    .replace(/\bS[UACNOPX][A-Z2-7]{56}\b/g, "S***")
+    .replace(
+      /\b((?:THERMITE|RUNPOD)_[A-Z0-9_]*(?:KEY|CODE|TOKEN|SECRET|PREFIX)(?:=\\?["']?|\\?["']\s*:\s*\\?["']))[^\s"'\\,;}&]+/g,
+      "$1***",
+    )
+    .replace(
+      /\b([a-z0-9_-]*(?:token|api[_-]?key|apikey|secret|password|passwd|signature)=)[^\s&"'#,;}]+/gi,
+      "$1***",
+    )
+    .replace(/([?&](?:code|sig|key)=)[^\s&"'#,;}]+/gi, "$1***")
+    .replace(
+      /\b((?:x-)?api-key|x-[a-z-]*token|private-token|(?:proxy-)?authorization)(["']?\s*:\s*["']?)(?:(?:bearer|basic|token)\s+)?[^\s,;"'}]+/gi,
+      "$1$2***",
+    );
 }
 
 /** Something went wrong, and the part goes on: a call refused, a retry, a fallback taken. */

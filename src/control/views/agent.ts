@@ -37,10 +37,31 @@ export function agentGoalChecks(g: GoalChecks | null): GoalChecks | null {
 }
 
 /**
+ * An `agent_prompt` event without its sections' text: each section's source, part, size and hash
+ * stay. The agent's and the reader's tokens read it so; the owner and the operator read the text
+ * (agent_prompts, REST's prompts). Every other event is as given.
+ */
+export function withoutPromptText(e: StoredEvent): StoredEvent {
+  if (e.kind !== "agent_prompt" || !Array.isArray(e.body.sections)) return e;
+  const sections = e.body.sections.map((s: unknown) => {
+    const { text: _text, cut: _cut, ...rest } = (s ?? {}) as Record<string, unknown>;
+    return rest;
+  });
+  return { ...e, body: { ...e.body, sections } };
+}
+
+/** A run as the reader's token sees it: its prompts' events without their text. */
+export function readerRun(r: RunView): RunView {
+  return { ...r, timeline: r.timeline.map(withoutPromptText) };
+}
+
+/**
  * An event as the agent token sees it: a `held_out_checked` event with its kinds alone, a
- * `goal_checks` event without its held-out cells. Every other event is as the rig reported it.
+ * `goal_checks` event without its held-out cells, an `agent_prompt` event without its text. Every
+ * other event is as the rig reported it.
  */
 export function agentEvent(e: StoredEvent): StoredEvent {
+  if (e.kind === "agent_prompt") return withoutPromptText(e);
   if (e.kind === "held_out_checked") {
     const b = e.body;
     const pass = b.pass === true;

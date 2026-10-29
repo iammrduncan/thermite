@@ -277,7 +277,10 @@ describe("a rig's page: its version", () => {
       /ok=The update of gpu-1 to 0\.1\.0 began\. Its steps show below as they happen\./,
     );
     // Another update waits for this one.
-    assert.match(await s.post("/ui/rigs/gpu-1/update"), /error=An update of gpu-1 is under way/);
+    assert.match(
+      await s.page(await s.post("/ui/rigs/gpu-1/update")),
+      /An update of gpu-1 is under way/,
+    );
     // The page's script follows the steps (goal 080): the banners name the route, whose state
     // changes with each step, final once the update ended. Its refusal comes in words.
     const follow = async () =>
@@ -575,8 +578,10 @@ describe("a rig's page: stale and offline", () => {
     assert.match(page, />Check the cluster</);
     assert.match(page, /data-confirm="retire wc-1"/);
     assert.match(page, /Offline: no report for 15 minutes\./);
+    // The cluster's own words stay on control: the address names them by an ID.
     const checked = await s.post("/ui/rigs/wc-1/check");
-    assert.match(checked, /error=cluster-1's API did not answer: .*connection refused/);
+    assert.match(checked, /error=note-[0-9a-f]+$/);
+    assert.match(await s.page(checked), /cluster-1's API did not answer: .*connection refused/);
     assert.match(
       await s.page("/ui/rigs/wc-1"),
       /Control checked the cluster 0s ago\. cluster-1's API did not answer/,

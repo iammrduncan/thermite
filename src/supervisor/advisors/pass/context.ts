@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { McpCaller } from "../../../agents/mcp/index.ts";
 import { type Prompt, promptRecord } from "../../../agents/prompt.ts";
 import { kbCall } from "../../../agents/tools/index.ts";
-import { log } from "../../../common/env.ts";
+import { log, redact } from "../../../common/env.ts";
 import { errorText } from "../../../common/errors.ts";
 import type { AdvisorRole } from "../../../core/agents.ts";
 import {
@@ -234,7 +234,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
    */
   const tryFailed = async (review: number, attempt: number, err: unknown) => {
     try {
-      const error = errorText(err).slice(0, TRY_ERROR_MAX) || "no answer";
+      const error = redact(errorText(err)).slice(0, TRY_ERROR_MAX) || "no answer";
       await harness.call(REVIEW_TRIES, {
         params: { id: review },
         body: { try: Math.max(1, attempt), error },
@@ -245,7 +245,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
   };
   const fail = (what: string, err: unknown, run?: string) => {
     s.errors++;
-    s.last_error = `${what}: ${errorText(err)}`.slice(0, 500);
+    s.last_error = redact(`${what}: ${errorText(err)}`).slice(0, 500);
     log("supervisor", "advisor error", { error: s.last_error }, "error");
     say(run, "status", `${clip(s.last_error, 400)}`);
   };

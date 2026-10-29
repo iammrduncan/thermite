@@ -58,6 +58,7 @@ import {
 } from "../../views/index.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { type CopyTry, campaignPanels } from "./panels.ts";
+import { proposalRoutes, proposalsBlock } from "./proposals.ts";
 import { runHelpers } from "./run/section.ts";
 import { campaignHelpers, headline, modeWords } from "./shared.ts";
 
@@ -68,6 +69,7 @@ import { campaignHelpers, headline, modeWords } from "./shared.ts";
  */
 export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, mcpServers, needs, opts, page, parts, store, views } = dash;
+  proposalRoutes(app, dash);
   const {
     archivedLine,
     campaignActions,
@@ -443,8 +445,8 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     // A refused grant shows in the Knowledge section, not as a run that did not start.
     const kbFailed = c.req.query("on") === "kb" ? c.req.query("error") : undefined;
     // So does what the Agents' context's Save did, in its own block.
-    // So do the owner's additions' (goal 166).
-    const onContext = c.req.query("on") === "context" || c.req.query("on") === "additions";
+    // So do the owner's additions' (goal 166), and a decision on a proposal.
+    const onContext = ["context", "additions", "proposals"].includes(c.req.query("on") ?? "");
     // Archive and Move to folder (on=shelf) say what they refused at the top of every page.
     const failed =
       kbFailed || onContext || c.req.query("on") === "shelf" ? undefined : c.req.query("error");
@@ -495,7 +497,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
           active: "campaigns",
           actions: buttons,
         },
-        `${note}${copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${brief()}${context()}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}${kbWritesSection(c, name)}${drawer}`,
+        `${note}${copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}${kbWritesSection(c, name)}${drawer}`,
         vs,
       );
     }
@@ -614,7 +616,7 @@ ${waitingRuns.map((w) => `<div class="kneed">${icon.warn}<span class="grow"><b>$
                     now,
                   )}</div>`
                 : ""
-            }</div>${brief()}${context()}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}${kbWritesSection(c, name)}
+            }</div>${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}${kbWritesSection(c, name)}
 </div><div class="side">${campaignUsage(k)}</div></div>`
       }${drawer}`,
       vs,

@@ -228,6 +228,13 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
   };
   /** Control's SSH to the machines it sets rigs up on. */
   const ssh = parts.machineSsh;
+  /**
+   * Words from another program's error (ssh, git, kubectl, a GPU cloud, an MCP server), kept on
+   * control for the page a form returns to: the address carries their ID (notes.ts).
+   */
+  const noted = (text: string) => parts.notes.put(text);
+  /** Why a form failed, from the page's address: the words a note's ID names, or those given. */
+  const said = (c: Ctx, key = "error") => parts.notes.read(c.req.query(key));
   return {
     store,
     opts,
@@ -254,6 +261,8 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
     notArchived,
     page,
     ssh,
+    noted,
+    said,
   };
 }
 

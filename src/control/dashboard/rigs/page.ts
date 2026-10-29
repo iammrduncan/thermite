@@ -76,7 +76,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
     const joined = store.joinedRigs.get(c.req.param("rig"));
     const pulled = store.tunnels.get(c.req.param("rig"));
     const flashOk = c.req.query("ok");
-    const flashError = c.req.query("error");
+    const flashError = dash.said(c);
     // A command the green line is about (Edit rig's settings): the page says how it stands.
     const flashCmd = flashOk ? store.commands.row(c.req.query("cmd") ?? "") : undefined;
     const flashing = flashCmd ? commandProgress(flashCmd, Date.now()) : undefined;
@@ -249,11 +249,13 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
             ? `<b class="bad">${esc(u.id)} has ${neverReported(u) ? "not reported yet" : `not reported for ${esc(span(u.last_seen, now))}`}.</b>`
             : `${esc(u.id)} is live; it reported ${esc(ago(u.last_seen, now))} ago.`,
       drain?.said ?? "",
-      live.length
-        ? `It runs ${live.map((i) => `<a href="${runHref(i)}">${esc(runCampaign(i))} › ${esc(i.id)}</a>`).join(" and ")}.`
-        : u.runs.length
-          ? "No run is at work on it."
-          : "No campaign is assigned to it.",
+      u.unreadable
+        ? `<b class="bad">Control can't read its events now.</b>`
+        : live.length
+          ? `It runs ${live.map((i) => `<a href="${runHref(i)}">${esc(runCampaign(i))} › ${esc(i.id)}</a>`).join(" and ")}.`
+          : u.runs.length
+            ? "No run is at work on it."
+            : "No campaign is assigned to it.",
       j
         ? `The judge is ${jobHtml(u, j)}${queued ? `, with ${queued} more queued` : ""}.`
         : `The judge is idle${queued ? `, with ${queued} queued` : ""}.`,
@@ -438,7 +440,7 @@ ${retireForm}</div></details>`;
         active: "rigs",
       },
       `<p class="run-said" data-part="said">${said}</p>
-${flash}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc(updateProgress(u.id).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}</div>${keyCard}
+${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Control can't read ${esc(u.id)}'s events now.</b> ${esc(u.unreadable)}. Until it can, its runs, checks and the judge's jobs are not shown here; the rest of this page is from its last report. Every other rig's pages are as they were.</div>` : ""}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc(updateProgress(u.id).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}</div>${keyCard}
 ${rp ? podSection(c, u.id, now) : ""}
 <div data-part="at-work">${runsNow ? `<div class="block"><div class="head"><h2>At work</h2><span class="n">${live.length}</span></div>${runsNow}</div>` : ""}</div>
 <div class="cols run-cols"><div>

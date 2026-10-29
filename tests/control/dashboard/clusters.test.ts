@@ -8,10 +8,14 @@ describe("clusters in Providers and Add a rig", () => {
   test("a cluster is added and checked; a rig is applied into a namespace of its own and managed", async () => {
     const f = fakeCluster();
     const s = await control(f.k);
-    assert.match(
-      await s.post("/ui/settings/add", { type: "k8s", name: "k8s-a", kubeconfig: "not yaml" }),
-      /not a kubeconfig/,
-    );
+    // kubectl's own words come back on the page; its address names them by an ID.
+    const notYaml = await s.post("/ui/settings/add", {
+      type: "k8s",
+      name: "k8s-a",
+      kubeconfig: "not yaml",
+    });
+    assert.match(notYaml, /error=note-[0-9a-f]+/);
+    assert.match(await s.page(notYaml), /not a kubeconfig/);
     // A kubeconfig that would run a command or read a file inside control is refused.
     assert.match(
       await s.post("/ui/settings/add", {
@@ -263,10 +267,13 @@ describe("clusters in Providers and Add a rig", () => {
     assert.equal(s.store.clusters.rig("cpu-1")?.status, "updating");
     const busy = await control(f.k, { store: s.store, secrets: s.secrets, tag: "9" });
     assert.match(
-      await busy.post("/ui/rigs/cpu-1/cluster/images", {}),
-      /error=cpu-1 is being updated/,
+      await busy.page(await busy.post("/ui/rigs/cpu-1/cluster/images", {})),
+      /cpu-1 is being updated/,
     );
-    assert.match(await busy.post("/ui/rigs/cpu-1/cluster/restart", {}), /error=cpu-1 is updating/);
+    assert.match(
+      await busy.page(await busy.post("/ui/rigs/cpu-1/cluster/restart", {})),
+      /cpu-1 is updating/,
+    );
     // A stopped rig stays stopped: it runs the new images when it starts again.
     assert.match(await s.post("/ui/rigs/cpu-1/cluster/stop", {}), /ok=Stopped/);
     const later = await control(f.k, { store: s.store, secrets: s.secrets, tag: "3" });
@@ -289,8 +296,8 @@ describe("clusters in Providers and Add a rig", () => {
       publicUrl: null,
     });
     assert.match(
-      await lost.post("/ui/rigs/cpu-1/cluster/images", {}),
-      /error=Control's address for rigs is not set/,
+      await lost.page(await lost.post("/ui/rigs/cpu-1/cluster/images", {})),
+      /Control's address for rigs is not set/,
     );
     // The same images, but control's address changed: the update carries the new address.
     const moved = await control(f.k, {

@@ -5,7 +5,13 @@
  * knowledge base's tools, kb_search, kb_read and kb_write (kb.ts).
  */
 
-export { Fetcher, FetchRefused, htmlToText, registrableDomain } from "./fetcher.ts";
+export {
+  blockedAddress,
+  Fetcher,
+  FetchRefused,
+  htmlToText,
+  registrableDomain,
+} from "./fetcher.ts";
 export {
   argsRefusal,
   KB_FILE_TYPES,

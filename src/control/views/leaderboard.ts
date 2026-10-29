@@ -1,5 +1,5 @@
 import type { ControlStore } from "../store/index.ts";
-import { rigView } from "./cache.ts";
+import { rigViews } from "./cache.ts";
 import { currentChampion } from "./facts.ts";
 import { championValues } from "./metric-values.ts";
 
@@ -20,13 +20,14 @@ export interface LeaderEntry {
 /**
  * The campaign leaderboard: each run's champion and its gain over its baseline, measured
  * on its own rig (never absolute numbers across devices), marked cross-verified once another
- * rig's judge accepted it.
+ * rig's judge accepted it. A run's campaign is the one control's run registry gives it (its
+ * assignment's), never the one its rig's events name; a run the registry does not hold is left out.
  */
 export function leaderboard(
   store: ControlStore,
   opts: { staleAfterMs: number },
 ): Record<string, LeaderEntry[]> {
-  const views = store.reportedRigs.list().flatMap((u) => rigView(store, u.id, opts) ?? []);
+  const views = rigViews(store, opts);
   // An acceptance counts only for the tree it accepted: the key includes the tree, which must be
   // the one the source rig itself published (signed) for that seq.
   const verified = new Map<string, Set<string>>();
@@ -43,12 +44,14 @@ export function leaderboard(
   for (const v of views) {
     for (const i of v.runs) {
       // Hill climbs: a gain over the baseline is what is compared.
-      if (i.mode !== "hill_climb" || !i.campaign) continue;
+      if (i.mode !== "hill_climb") continue;
+      const campaign = store.runRegistry.createdOn(i.id, v.id)?.campaign;
+      if (!campaign) continue;
       const champ = currentChampion(i);
       const seq = champ?.seq ?? 1;
       const tree = i.published_trees[seq];
-      if (!out[i.campaign]) out[i.campaign] = [];
-      out[i.campaign]?.push({
+      if (!out[campaign]) out[campaign] = [];
+      out[campaign]?.push({
         rig: v.id,
         run: i.id,
         mode: i.mode,

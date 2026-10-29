@@ -12,6 +12,7 @@ import {
   ModelDownloadError,
   ModelDownloads,
   ModelRefused,
+  publicFetch,
 } from "../../src/supervisor/model-download.ts";
 import { stageCommand } from "../../src/supervisor/staging.ts";
 
@@ -112,6 +113,8 @@ describe("model files by URL", () => {
       name: "big",
       run: "run-1",
       downloads,
+      // Served on this machine.
+      allowPrivate: true,
     };
     try {
       await assert.rejects(downloadModel(input), /the download broke after .* The next try/);
@@ -383,5 +386,59 @@ describe("model files by URL", () => {
       /a redirect from HTTPS to plain HTTP is refused/,
     );
     assert.deepEqual(asked, ["https://huggingface.co/org/m/resolve/main/model.bin"]);
+  });
+
+  test("a file is fetched only from the internet: a private, loopback or link-local address, or a redirect to one, is refused", async () => {
+    const { inbox, downloads } = setup();
+    const bytes = Buffer.from("weights");
+    const asked: string[] = [];
+    // The names as DNS gives them here; the server's answers as the stand-in gives them.
+    const names: Record<string, string[]> = {
+      "models.example.com": ["93.184.215.14"], // public-check: allow (an example public address, for the test)
+      "inside.example.com": ["10.20.30.40"], // public-check: allow (a private address, for the test)
+      "metadata.example.com": ["169.254.169.254"], // public-check: allow (a link-local address, for the test)
+      "both.example.com": ["93.184.215.14", "fd00::1"], // public-check: allow (example addresses, for the test)
+    };
+    const inner: typeof fetch = async (input) => {
+      asked.push(String(input));
+      const u = new URL(String(input));
+      if (u.pathname === "/hop")
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://inside.example.com/m.bin" },
+        });
+      return new Response(new Uint8Array(bytes), {
+        headers: { "content-length": String(bytes.length) },
+      });
+    };
+    const f = publicFetch(inner, async (host) => names[host] ?? [host]);
+    const get = (url: string, name: string) =>
+      downloadModel({
+        url,
+        sha256: sha(bytes),
+        target: join(inbox, `${name}.bin`),
+        path: `${name}.bin`,
+        name,
+        downloads,
+        fetchImpl: f,
+      });
+    await get("https://models.example.com/m.bin", "public");
+    assert.deepEqual(readFileSync(join(inbox, "public.bin")), bytes);
+    for (const [url, name] of [
+      ["https://inside.example.com/m.bin", "private"],
+      ["http://metadata.example.com/latest", "metadata"],
+      ["https://both.example.com/m.bin", "both"],
+      ["http://127.0.0.1:8080/m.bin", "loopback"],
+      ["https://models.example.com/hop", "redirected"],
+    ]) {
+      await assert.rejects(
+        get(url as string, name as string),
+        /is on a private or local network/,
+        name,
+      );
+      assert.ok(!existsSync(join(inbox, `${name}.bin`)), name);
+    }
+    // The stand-in was asked only for the public file and the hop: never a private address.
+    assert.deepEqual(asked, ["https://models.example.com/m.bin", "https://models.example.com/hop"]);
   });
 });

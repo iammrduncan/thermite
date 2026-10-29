@@ -2,8 +2,9 @@
  * The campaigns control keeps: a new one from the new-campaign page (new.ts, with builder.ts), a
  * copy (copy.ts), Start a run (start-run.ts) and the queue it copies from a past run
  * (queue-copy.ts), a campaign's context settings (context.ts), the owner's additions to its roles
- * (additions.ts), which roles write in its collection of the knowledge base (kb-writes.ts), and
- * archive and folders (folders.ts).
+ * (additions.ts), which roles write in its collection of the knowledge base (kb-writes.ts), the
+ * operator's proposals of those two for the owner to approve (proposals.ts), and archive and
+ * folders (folders.ts).
  */
 
 export {
@@ -58,6 +59,14 @@ export {
   setCampaignKbWrites,
 } from "./kb-writes.ts";
 export { askOwnerFrom, startCampaign } from "./new.ts";
+export {
+  type DecideOutcome,
+  decideProposal,
+  PROPOSED_WORDS,
+  type ProposeOutcome,
+  proposalChange,
+  proposeSetting,
+} from "./proposals.ts";
 export { copiedFromRecords, queueFromRecords, untriedOf } from "./queue-copy.ts";
 export {
   bodyRefusal,

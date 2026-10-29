@@ -20,6 +20,7 @@ import type { ControlStore } from "../store/index.ts";
 import { currentChampion, findRun, type RigView, type RunView, rigView } from "../views/index.ts";
 import { publishCommand, unpublishCommand } from "./bus.ts";
 import { commandRig } from "./rig.ts";
+import { agentAssignRefusal, gitAccessRefusal } from "./sources.ts";
 
 export { sendCommandsOn } from "./bus.ts";
 export { commandRig } from "./rig.ts";
@@ -296,6 +297,8 @@ export interface IssueInput {
   payload: unknown;
   ttlMinutes?: number | undefined;
   issuedBy: string;
+  /** Issued with an agent's token: it may not name a Git access, a source or MCP servers. */
+  agent?: boolean | undefined;
 }
 
 /**
@@ -409,7 +412,12 @@ export function prepareCommand(
   // A rig control refuses would never fetch it: say why now, not when it expires.
   const refused = store.refusals.get(rig);
   if (refused) throw new Error(`Control sends no commands to ${rig}. ${refused.reason}`);
-  const unrunnable = input.kind === "assign_campaign" ? assignRefusal(input.payload) : "";
+  const assigns = input.kind === "assign_campaign";
+  const unrunnable = assigns
+    ? (input.agent ? agentAssignRefusal(input.payload) : "") ||
+      assignRefusal(input.payload) ||
+      gitAccessRefusal(store, input.payload)
+    : "";
   if (unrunnable) throw new Error(unrunnable);
   const shelved = archivedRefusal(store, rig, input.kind, input.payload);
   if (shelved) throw new Error(shelved);

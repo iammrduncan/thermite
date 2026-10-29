@@ -24,7 +24,7 @@ import { placeFollowUrl, rigHelpers } from "./shared.ts";
  * restart and remove.
  */
 export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
-  const { opts, parts, ssh, store } = dash;
+  const { noted, opts, parts, ssh, store } = dash;
   const { joinedPage, mintJoin, placeProgress } = rigHelpers(dash);
 
   // ---------------------------------------------------------------- rigs you join yourself
@@ -35,6 +35,9 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
         ? c.json({ ...placeProgress(rig), said: msg, tone: "ok", follow: placeFollowUrl(rig) })
         : c.json(notSent(msg), 400)
       : c.redirect(`/ui/rigs/${encodeURIComponent(rig)}?${k}=${encodeURIComponent(msg)}`, 303);
+  /** placeBack for another program's words (ssh, kubectl): the page's address names them. */
+  const placeFailed = (c: Ctx, rig: string, why: string) =>
+    placeBack(c, rig, "error", wantsJson(c) ? why : noted(why));
   app.post("/ui/rigs/:rig/join/:action", async (c) => {
     const r = store.joinedRigs.get(c.req.param("rig"));
     const action = c.req.param("action");
@@ -157,7 +160,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       const done = await updateRigImages(parts, r.rig, "owner:ui", {
         wait: action !== "images-now",
       });
-      return "error" in done ? back("error", done.error) : back("ok", done.ok);
+      return "error" in done ? placeFailed(c, r.rig, done.error) : back("ok", done.ok);
     }
     if (action === "drain-cancel") {
       const done = cancelDrain(parts, r.rig, "owner:ui");
@@ -182,7 +185,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
     const done = await actOnClusterRig(parts, r, action as ClusterRigAction, "owner:ui", {
       ...removing,
     });
-    return "error" in done ? back("error", done.error) : back("ok", done.ok);
+    return "error" in done ? placeFailed(c, r.rig, done.error) : back("ok", done.ok);
   });
   app.post("/ui/rigs/:rig/machine/:action", async (c) => {
     const r = store.machines.rig(c.req.param("rig"));
@@ -214,7 +217,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
     } catch (err) {
       const why = errorText(err);
       store.rigHistory.add(r.rig, action, false, why);
-      return back("error", why);
+      return placeFailed(c, r.rig, why);
     }
     store.rigHistory.add(r.rig, action, true);
     store.machines.setRigStatus(

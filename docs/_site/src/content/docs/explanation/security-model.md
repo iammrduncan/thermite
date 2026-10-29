@@ -45,8 +45,8 @@ flowchart LR
 
 - **Runs as** a user other than root, in a container of its own, with every Linux capability dropped. No agent's, build's or candidate's code runs in it, and it listens on no port.
 - **Reaches** control, by dialing out; its harness's API; git hosts, to fetch projects and kits and to push results; the advisors' model providers; public web pages, for advisors that the advisors file lets fetch them; and the MCP servers that its runs' kits give the advisors, which it calls for them.
-- **Trusts** control, at the address that it was given. It doesn't need to trust anything else, because the harness checks each command, and each project, kit, model or champion that the supervisor fetched, against what control signed.
-- **Holds** the rig's outside credentials: its rig token for control, its token for the harness, the results repository's deploy key, a private repository's Git access for one fetch at a time, the advisors' keys, and the sign-in of each MCP server its runs name, in memory. It holds no signing key, so it can't make a command or a report, submit a change or set a verdict.
+- **Trusts** control, at the address that it was given. It doesn't need to trust anything else, because the harness checks each command, and each project, kit, model or champion that the supervisor fetched, against what control signed. Before it fetches a command's sources, it asks its harness to check control's signature on the command, and fetches nothing for one the harness refuses. It fetches a model file only from an address on the internet, a source that names no Git access with no key, and a Git access's repository only on that access's host.
+- **Holds** the rig's outside credentials: its rig token for control, its token for the harness, the results repository's deploy key, used for the results repository alone, a private repository's Git access for one fetch at a time, the advisors' keys, and the sign-in of each MCP server its live runs name, in memory. It holds no signing key, so it can't make a command or a report, submit a change or set a verdict.
 
 ## The harness
 

@@ -16,6 +16,7 @@ import {
 } from "../../core/mcp.ts";
 import { keyHint, type SecretBox } from "../secrets.ts";
 import type { ControlStore } from "../store/index.ts";
+import { closedRuns } from "../views/index.ts";
 import { namedBy } from "./campaigns.ts";
 import { OAuthSignIns, type SignInDone } from "./oauth.ts";
 import { type SignIn, SignIns } from "./sign-in.ts";
@@ -293,13 +294,16 @@ export class McpServers {
   // ------------------------------------------------------------------ what a rig gets
 
   /**
-   * What a rig's supervisor gets: each server the runs control assigned the rig name, with its
-   * sign-in as headers and the kinds of agent any of those runs gives it to; and the servers they
-   * name that can't be given, with why. Any server no run of the rig names is never given.
+   * What a rig's supervisor gets: each server the live runs control assigned the rig name (their
+   * assignments pending or delivered, the runs not closed), with its sign-in as headers and the
+   * kinds of agent any of those runs gives it to; and the servers they name that can't be given,
+   * with why. A server no live run of the rig names is not given: the rig loses it once the last
+   * such run closes.
    */
   async forRig(rig: string): Promise<{ servers: McpConnection[]; unavailable: McpUnavailable[] }> {
     const agents = new Map<string, Set<AgentKind>>();
-    for (const uses of this.store.commands.assignedMcpServers(rig).values())
+    const assigned = this.store.commands.assignedMcpServers(rig, closedRuns(this.store, rig));
+    for (const uses of assigned.values())
       for (const u of uses) {
         const set = agents.get(u.name) ?? new Set<AgentKind>();
         for (const a of u.agents) set.add(a);

@@ -51,7 +51,7 @@ function canonical(w: KbWrites | undefined): string {
 
 export type CampaignKbWritesOutcome =
   | {
-      state: "saved" | "unchanged";
+      state: "saved" | "unchanged" | "valid";
       campaign: string;
       version: number;
       sha: string;
@@ -66,12 +66,14 @@ export function campaignKbWrites(store: ControlStore, campaign: string): KbWrite
 
 /**
  * Sets which kinds each role may write, or (none given) puts back the default: a new version of
- * the campaign's contract, unless its newest says the same already.
+ * the campaign's contract, unless its newest says the same already. With `check`, nothing is
+ * saved (proposals.ts).
  */
 export function setCampaignKbWrites(
   store: ControlStore,
   req: { campaign: string; kb_writes?: KbWrites | undefined },
   by: string,
+  check = false,
 ): CampaignKbWritesOutcome {
   const want = req.kb_writes;
   const out = saveWithField(store, {
@@ -86,6 +88,7 @@ export function setCampaignKbWrites(
     by,
     action: "campaign_kb_writes_set",
     audit: { kb_writes: want ?? "default" },
+    check,
   });
   return out.state === "refused" ? out : { ...out, kb_writes: want ?? KB_WRITES_DEFAULT };
 }

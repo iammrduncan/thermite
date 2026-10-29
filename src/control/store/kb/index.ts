@@ -184,15 +184,33 @@ export class KnowledgeBase {
     return typeof r?.c === "string" && r.c ? r.c : undefined;
   }
 
-  /** Whether control assigned a run of this campaign to any rig. */
-  private assignedAnywhere(campaign: string): boolean {
+  /**
+   * Whether control knows a campaign of this name: it assigned a run of it to any rig, saved a
+   * version of it, or a grant names it.
+   */
+  private knowsCampaign(campaign: string): boolean {
     return (
       this.db
         .prepare(
           `select 1 from command where kind = 'assign_campaign'
-           and json_extract(signed, '$.envelope.payload.contract.campaign') = ? limit 1`,
+             and json_extract(signed, '$.envelope.payload.contract.campaign') = ?1
+           union all select 1 from campaign_version where campaign = ?1
+           union all select 1 from kb_read where campaign = ?1 or reads = ?1
+           limit 1`,
         )
         .get(campaign) !== undefined
+    );
+  }
+
+  /** Whether control assigned a run of this name to another rig, whatever became of it. */
+  private assignedElsewhere(rig: string, run: string): boolean {
+    return (
+      this.db
+        .prepare(
+          `select 1 from command where kind = 'assign_campaign' and rig != ?
+             and json_extract(signed, '$.envelope.payload.run') = ? limit 1`,
+        )
+        .get(rig, run) !== undefined
     );
   }
 
@@ -216,12 +234,15 @@ export class KnowledgeBase {
     const { rig, ledger } = src;
     return {
       // Filed under the campaign control assigned this run on this rig. A run control did not
-      // assign keeps the campaign its event names, unless control assigned that campaign
-      // somewhere: a rig cannot file items into a campaign it was not given.
+      // assign keeps the campaign its event names only when control knows no campaign of that
+      // name (none assigned, saved or granted) and assigned no run of this name to another rig:
+      // a rig cannot file items into a campaign it was not given.
       runCreated: (run, named) => {
         if (o.keepRuns && this.campaignOf(rig, ledger, run)) return;
         const assigned = this.assigned(rig, run);
-        const campaign = assigned ?? (named && !this.assignedAnywhere(named) ? named : "");
+        const own =
+          named && !this.knowsCampaign(named) && !this.assignedElsewhere(rig, run) ? named : "";
+        const campaign = assigned ?? own;
         if (!campaign) return;
         this.makeCollection(campaign);
         this.db

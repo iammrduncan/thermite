@@ -63,6 +63,12 @@ export interface RigView {
   gpu_split: { set: number; judge: number } | null;
   /** A rig the owner launched on a GPU cloud: its pod, its price and what it has cost so far. */
   runpod?: RunpodRigView | undefined;
+  /**
+   * Why control can't read the rig's events now, in words (its fold failed on one, or is being
+   * read again from the message bus): its runs, events and judge are then empty, and the rest of
+   * the view comes from its last report.
+   */
+  unreadable?: string | undefined;
 }
 
 /**

@@ -44,6 +44,29 @@ describe("control dashboard", () => {
     assert.equal(bad.headers.get("set-cookie"), null);
   });
 
+  test("failed sign-ins are counted for each address apart: one that fails too often waits, and another still signs in", async () => {
+    const { control, store } = controlStack({});
+    const from = (address: string, token: string) =>
+      control.request(
+        "/ui/login",
+        {
+          method: "POST",
+          body: new URLSearchParams({ token }),
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+        },
+        { incoming: { socket: { remoteAddress: address } } },
+      );
+    for (let i = 0; i < 20; i++)
+      assert.equal((await from("192.0.2.7", "wrong")).status, 303, `failure ${i + 1}`);
+    const waits = await from("192.0.2.7", ADMIN);
+    assert.equal(waits.status, 429);
+    assert.equal(await waits.text(), "too many failed sign-ins; wait a minute");
+    const other = await from("198.51.100.9", ADMIN);
+    assert.equal(other.status, 303);
+    assert.equal(other.headers.get("location"), "/ui");
+    assert.equal(store.auditLog.list(200, { action: "login_throttled" }).length, 1);
+  });
+
   test("with only the token's hash, the owner signs in with the token, and the hash signs in no one", async () => {
     const { control } = controlStack({
       tokens: { admin: Credential.ofHash(sha256(ADMIN)), rigs: {} },

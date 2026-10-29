@@ -247,16 +247,22 @@ function inputOf(
 /** The routes behind the blocks (the dashboard's session and form token apply). */
 export function mountMcpUi(
   app: Hono,
-  o: { store: ControlStore; servers: McpServers; publicUrl?: string | undefined },
+  o: {
+    store: ControlStore;
+    servers: McpServers;
+    publicUrl?: string | undefined;
+    /** Keeps a server's own error words for the page, and gives their ID (notes.ts). */
+    noted: (text: string) => string;
+  },
 ): void {
-  const { servers } = o;
+  const { noted, servers } = o;
   const back = (c: Ctx, k: "ok" | "error", m: string, name?: string) =>
     c.redirect(settingsUrl(k, m, name ? `&mcp=${encodeURIComponent(name)}` : ""), 303);
   /** Reads the server's tools and says how it went; `kept`: what was done before, if anything. */
   const checked = async (c: Ctx, name: string, said: string, kept?: string) => {
     const why = await servers.check(name);
     return why
-      ? back(c, "error", kept ? `${name} is ${kept}, but ${why}.` : `${name}: ${why}.`, name)
+      ? back(c, "error", noted(kept ? `${name} is ${kept}, but ${why}.` : `${name}: ${why}.`), name)
       : back(
           c,
           "ok",
@@ -343,7 +349,7 @@ export function mountMcpUi(
       );
       return c.redirect(url, 302);
     } catch (err) {
-      return back(c, "error", `${name}: ${errorText(err)}`, name);
+      return back(c, "error", noted(`${name}: ${errorText(err)}`), name);
     }
   });
 

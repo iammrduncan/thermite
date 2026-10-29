@@ -99,8 +99,27 @@ describe("who writes what in a campaign's collection", () => {
       arguments: { campaign: "matmul-speed", kb_writes: { auditor: ["review"] } },
     });
     assert.equal(r.isError, undefined, JSON.stringify(r.content));
-    assert.deepEqual(s.newest().kb_writes, { auditor: ["review"] });
+    // The operator's is a proposal, which the owner approves on the campaign's page.
+    const proposed = JSON.parse((r as { content: { text: string }[] }).content[0]?.text ?? "{}");
+    assert.equal(proposed.state, "proposed");
+    assert.equal(s.newest().kb_writes, undefined);
     const { page, csrfOf, post } = await signIn(s.control);
+    const before = await page("/ui/campaigns/matmul-speed");
+    assert.match(before, /proposes which roles write in its collection for matmul-speed/);
+    assert.match(before, /auditor: review/);
+    await post(`/ui/campaigns/matmul-speed/proposals/${proposed.proposal}/approve`, {
+      csrf: csrfOf(before),
+    });
+    assert.deepEqual(s.newest().kb_writes, { auditor: ["review"] });
+    // The owner's own call is saved at once.
+    const own = await mcpClient(s.control, ADMIN);
+    const mine = await own.callTool({
+      name: "set_campaign_kb_writes",
+      arguments: { campaign: "matmul-speed", kb_writes: { auditor: ["review", "note"] } },
+    });
+    await own.close();
+    assert.match(JSON.stringify(mine.content), /is saved with which roles write in its collection/);
+    assert.deepEqual(s.newest().kb_writes, { auditor: ["review", "note"] });
     const html = await page("/ui/campaigns/matmul-speed");
     assert.match(html, /Who writes in its collection/);
     assert.match(html, /name="w_auditor_review" value="1"[^>]* checked/);

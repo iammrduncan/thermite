@@ -168,6 +168,31 @@ describe("harness service and API", () => {
     assert.equal(again.status, "replayed");
   });
 
+  test("a command is checked for the supervisor without being applied: control's signature, its rig, its time", async () => {
+    const env = makeHarnessEnv();
+    const api = createHarnessApi(env.service, tokens);
+    const check = async (body: unknown, token = tokens.supervisor) =>
+      await api.request("/v1/commands/check", {
+        method: "POST",
+        headers: auth(token),
+        body: JSON.stringify(body),
+      });
+    const good = env.sign("assign_campaign", env.assignPayload());
+    assert.deepEqual(await (await check(good)).json(), { ok: true });
+    const forged = env.sign("assign_campaign", env.assignPayload());
+    forged.envelope.payload = { ...(forged.envelope.payload as object), run: "evil" };
+    assert.deepEqual(await (await check(forged)).json(), { ok: false, reason: "bad signature" });
+    const other = env.sign("export_now", {}, { rig: "rig-b" });
+    assert.deepEqual(await (await check(other)).json(), {
+      ok: false,
+      reason: "command is for rig rig-b",
+    });
+    // Only the supervisor asks; nothing is applied or recorded.
+    assert.equal((await check(good, tokens.proposer)).status, 401);
+    assert.equal(env.service.ledger.runs.list().length, 0);
+    assert.equal(env.service.ledger.eventsAfter(0, 1000).events.length, 0);
+  });
+
   test("submissions are preserved first, then checked by V0 and for duplicates", async () => {
     const env = makeHarnessEnv();
     await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));

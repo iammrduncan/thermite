@@ -3,6 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
 import { MCP_SERVERS } from "../../core/api/control/rigs.ts";
+import type { PageNotes } from "../notes.ts";
 import type { ControlStore } from "../store/index.ts";
 import { MCP_AUTHS, type McpServer, type McpServers, namedBy } from "./index.ts";
 
@@ -43,9 +44,11 @@ export function mountMcpServerRoutes(
     admin: MiddlewareHandler;
     rigAuth: MiddlewareHandler;
     publicUrl?: string | undefined;
+    /** Where the sign-in's own error words wait for Settings (notes.ts). */
+    notes: PageNotes;
   },
 ): void {
-  const { store, servers } = o;
+  const { notes, store, servers } = o;
   const one = (name: string) => {
     const s = servers.get(name);
     return s ? serverJson(store, s) : undefined;
@@ -153,7 +156,10 @@ export function mountMcpServerRoutes(
     const state = c.req.query("state") ?? "";
     const code = c.req.query("code") ?? "";
     const back = (k: "ok" | "error", m: string) =>
-      c.redirect(`/ui/settings?${k}=${encodeURIComponent(m)}&at=mcp#mcp`, 303);
+      c.redirect(
+        `/ui/settings?${k}=${encodeURIComponent(k === "error" ? notes.put(m) : m)}&at=mcp#mcp`,
+        303,
+      );
     if (!state) return back("error", "The sign-in came back without its state. Start it again.");
     if (!code) {
       const said = (c.req.query("error_description") ?? c.req.query("error") ?? "")

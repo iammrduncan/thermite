@@ -6,6 +6,7 @@ import { readReport } from "../../core/link/report.ts";
 import { takeReport } from "../ingest.ts";
 import { cancelCommand, pendingFor } from "../issue/index.ts";
 import { takeLive } from "../live/index.ts";
+import { closedRuns } from "../views/index.ts";
 import type { ApiContext } from "./context.ts";
 import { supervisorRoutes } from "./supervisor.ts";
 
@@ -71,13 +72,14 @@ export function relayRoutes(app: Hono, api: ApiContext): void {
     });
   });
 
-  // Git access for a private repository, to a rig whose assigned campaign names it; otherwise
-  // refused. The secret leaves control only here, never in a signed command.
+  // Git access for a private repository, to a rig while a live assignment of it names the access,
+  // with the host it is for; otherwise refused. The secret leaves control only here, never in a
+  // signed command.
   app.get(GIT_ACCESS.path, rigAuth, (c) => {
     const rig = c.req.param("rig");
     const name = c.req.param("name");
     const g = store.gitAccess.get(name);
-    if (!g || !store.commands.rigUsesGitAccess(rig, name))
+    if (!g?.host || !store.commands.rigUsesGitAccess(rig, name, closedRuns(store, rig)))
       return c.json({ error: "no such Git access for this rig" }, 404);
     let secret: string;
     try {
@@ -92,8 +94,8 @@ export function relayRoutes(app: Hono, api: ApiContext): void {
     c.header("cache-control", "no-store");
     return c.json(
       g.kind === "ssh"
-        ? { kind: "ssh", private_key: secret }
-        : { kind: "token", token: secret, username: g.username ?? undefined },
+        ? { kind: "ssh", private_key: secret, host: g.host }
+        : { kind: "token", token: secret, username: g.username ?? undefined, host: g.host },
     );
   });
 }

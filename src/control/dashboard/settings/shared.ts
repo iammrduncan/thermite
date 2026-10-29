@@ -1,6 +1,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errorText } from "../../../common/errors.ts";
+import { gitHost } from "../../../common/git-auth.ts";
 import { readRunpod } from "../../runpod/index.ts";
 import type { ProviderType } from "../../store/index.ts";
 import type { Dashboard } from "../context.ts";
@@ -32,11 +33,23 @@ export const usd = (n: number | null) => (n === null ? "–" : `$${n.toFixed(2)}
  */
 export function settingsHelpers(dash: Dashboard) {
   const { opts, store } = dash;
-  /** Git access for control's own lookups: the secret unsealed, host keys pinned per access. */
-  const accessFor = (name: string | undefined) => {
+  /**
+   * Git access for control's own lookup of `url`: the secret unsealed, host keys pinned per
+   * access. Refused, in words, for a URL on a host other than the one the access is for.
+   */
+  const accessFor = (name: string | undefined, url: string) => {
     if (!name) return undefined;
     const g = store.gitAccess.get(name);
     if (!g) throw new Error(`no Git access named ${name}`);
+    if (!g.host)
+      throw new Error(
+        `the Git access ${name} is for no host yet: set the host it is for in Settings › Providers`,
+      );
+    const host = gitHost(url);
+    if (host !== g.host)
+      throw new Error(
+        `the Git access ${name} is for ${g.host} only, and ${url} is on ${host ?? "no host"}`,
+      );
     const secret = opts.secrets.open(g.secret_sealed);
     return {
       auth:

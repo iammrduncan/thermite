@@ -71,7 +71,7 @@ export function createControlApi(
     const to = c.res.headers.get("location");
     // Pages send a refusal back as error, or as msgerror for a message to agents.
     const back = to ? new URL(to, "http://control").searchParams : undefined;
-    const why = back?.get("error") ?? back?.get("msgerror") ?? null;
+    const why = parts.notes.read(back?.get("error") ?? back?.get("msgerror") ?? undefined) ?? null;
     if (why || status >= 400) {
       const reason = redact(why ?? `status ${status}`);
       log("control", "refused", { path, why: reason }, "warn");
@@ -100,6 +100,7 @@ export function createControlApi(
     admin,
     rigAuth,
     publicUrl: parts.publicUrl,
+    notes: parts.notes,
   });
 
   // Where control keeps the exports rigs without a results repository send it (api/results.ts

@@ -79,6 +79,7 @@ export function registerControl(tools: ToolContext): void {
         kind: g.kind,
         fingerprint: g.fingerprint,
         username: g.username,
+        host: g.host,
       })),
       machines: store.machines.list().map((m) => ({
         name: m.name,

@@ -5,7 +5,7 @@ import { settingsUrl } from "./shared.ts";
 
 /** A cluster's forms on Providers: check it now, its slots, and delete it. */
 export function clusterRoutes(app: Hono, dash: Dashboard): void {
-  const { parts, store } = dash;
+  const { noted, parts, store } = dash;
 
   // ---------------------------------------------------------------- clusters (Providers)
   app.post("/ui/settings/clusters/:name/check", async (c) => {
@@ -13,7 +13,9 @@ export function clusterRoutes(app: Hono, dash: Dashboard): void {
     if (!store.clusters.get(name)) return c.redirect(settingsUrl("error", "No such cluster."), 303);
     const why = await checkClusterNow(parts, name);
     return c.redirect(
-      why ? settingsUrl("error", `"${name}": ${why}`) : settingsUrl("ok", `Read "${name}" again.`),
+      why
+        ? settingsUrl("error", noted(`"${name}": ${why}`))
+        : settingsUrl("ok", `Read "${name}" again.`),
       303,
     );
   });
@@ -26,7 +28,7 @@ export function clusterRoutes(app: Hono, dash: Dashboard): void {
     const why = await setClusterSlots(parts, name, slots, "owner:ui");
     return c.redirect(
       why
-        ? settingsUrl("error", `"${name}": ${why}.`)
+        ? settingsUrl("error", noted(`"${name}": ${why}.`))
         : settingsUrl(
             "ok",
             `"${name}" now has ${slots.length} slot${slots.length === 1 ? "" : "s"}, read again.`,

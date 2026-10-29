@@ -7,6 +7,7 @@ import type { KitRepos } from "./kits/index.ts";
 import { RunpodDriver } from "./lifecycle.ts";
 import { type MachineSsh, openSsh, type RigBus } from "./machines/index.ts";
 import { McpServers } from "./mcp-servers/index.ts";
+import { PageNotes } from "./notes.ts";
 import { ChatGPTLogins, PlanUsageReader } from "./providers/index.ts";
 import type { RigImages } from "./rigs/index.ts";
 import { ControlTunnels, RunpodRigs, RunpodTests } from "./runpod/index.ts";
@@ -60,6 +61,8 @@ export interface ControlParts {
   bus?: BusView | undefined;
   /** Control's loops and when each last came around, for its health route (goal 173). */
   loops: Loops;
+  /** Why a dashboard form failed, kept for the page it returns to (notes.ts). */
+  notes: PageNotes;
   /** Every rig as control sees it now (views.ts), through the folds control keeps. */
   views(): RigView[];
   /**
@@ -143,6 +146,7 @@ export function controlParts(
     runpodDriver: new RunpodDriver(runpodRigs),
     bus: opts.bus,
     loops: opts.loops ?? new Loops(),
+    notes: new PageNotes(),
     views: () => folds.views(viewOpts),
     run: (id) => folds.run(id, viewOpts),
     campaignRuns: (campaign) => folds.campaignRuns(campaign, viewOpts),

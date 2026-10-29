@@ -11,9 +11,10 @@
  * directions.
  */
 
-export { agentEvent, agentRun } from "./agent.ts";
+export { agentEvent, agentRun, readerRun, withoutPromptText } from "./agent.ts";
 export {
   campaignRuns,
+  closedRuns,
   EARLIER_FOLDS,
   FoldCache,
   findRun,

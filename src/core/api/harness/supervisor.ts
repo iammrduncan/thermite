@@ -143,6 +143,21 @@ export const COMMANDS = {
   maxBytes: COMMAND_MAX_BYTES,
 } as const satisfies Route;
 
+/**
+ * A signed command checked, not applied: its signature, its rig, its time and its payload, as the
+ * harness checks them before it applies one (verifyCommand). The supervisor asks before it
+ * fetches a command's sources, so it never fetches for a command control did not sign. It records
+ * nothing.
+ */
+export const COMMAND_CHECK = {
+  method: "POST",
+  path: "/v1/commands/check",
+  what: "a command's check",
+  body: SignedCommand,
+  answer: z.looseObject({ ok: z.boolean(), reason: z.string().optional() }),
+  maxBytes: COMMAND_MAX_BYTES,
+} as const satisfies Route;
+
 /** The live lines of a page when not told how many; the most is a batch's (LIVE_BATCH_MAX). */
 export const LIVE_PAGE_DEFAULT = 500;
 

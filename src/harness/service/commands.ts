@@ -48,6 +48,12 @@ export class Commands {
     this.checks = checks;
   }
 
+  /** Whether control signed the command for this rig, now, with a payload that fits its kind. */
+  checkCommand(input: unknown): { ok: true } | { ok: false; reason: string } {
+    const verified = verifyCommand(input, this.controlPublicKeyPem, this.svc.rig, this.svc.clock());
+    return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
+  }
+
   async applyCommand(input: unknown, actor: string): Promise<CommandOutcome> {
     const svc = this.svc;
     const verified = verifyCommand(input, this.controlPublicKeyPem, svc.rig, svc.clock());

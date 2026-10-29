@@ -32,7 +32,7 @@ The last line says `No check failed.` when the machine is ready. A check that sa
 
 ## Where the logs are
 
-Every part of Thermite writes one JSON object per line, such as `{"at":"…","level":"error","component":"supervisor","msg":"relay error","error":"…"}`. Lines at `warn` and `error` are the ones to read first; for more detail, set [`THERMITE_LOG_LEVEL`](../../reference/settings.md#every-service) to `debug`, or send the part `SIGUSR2`.
+Every part of Thermite writes one JSON object per line, such as `{"at":"…","level":"error","component":"supervisor","msg":"relay error","error":"…"}`. Lines at `warn` and `error` are the ones to read first; for more detail, set [`THERMITE_LOG_LEVEL`](../../reference/settings.md#every-service) to `debug`, or send the part `SIGUSR2`. Before a part writes a line, it takes what looks like a credential out of every text in it, as [a pod's log](../../reference/rest-api.md#a-pods-log) says: an error that echoes a URL, a header or a key shows `***` in its place.
 
 | What | Where |
 | --- | --- |
@@ -176,7 +176,7 @@ Never prune tagged images: they may belong to other projects. For more memory or
 
 - **You see:** after **Sign in**, the sign-in page shows again.
 - **Why:** the token is not the owner's. Only the owner's token signs in; an operator's, agent's or reader's token can't. A token with a space or a missing character fails too.
-- **Do:** copy the owner's token again: `cat .dev/secrets/control-admin-token` on the local stack, or the file of the owner's token you made yourself. After 20 failures in a minute, the page says `too many failed sign-ins; wait a minute`.
+- **Do:** copy the owner's token again: `cat .dev/secrets/control-admin-token` on the local stack, or the file of the owner's token you made yourself. After 20 failures in a minute from one address, the page says `too many failed sign-ins; wait a minute` to that address; other addresses still sign in.
 
 A sign-in also ends when the owner's token changes, or after 30 days without use.
 

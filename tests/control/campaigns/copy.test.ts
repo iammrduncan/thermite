@@ -535,7 +535,9 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
     const sent = s.assigned().at(-1);
     assert.ok(sent);
     assert.deepEqual(sent.payload.mcp_servers, uses);
-    const given = s.store.commands.assignedMcpServers("rig-a").get(String(sent.payload.run));
+    const given = s.store.commands
+      .assignedMcpServers("rig-a", new Set())
+      .get(String(sent.payload.run));
     assert.deepEqual(usesFor(given, "workers"), [{ name: "paper-search", tools: ["find"] }]);
 
     // Over MCP, with an operator's token: [] names none.

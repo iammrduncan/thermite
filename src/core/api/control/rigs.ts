@@ -462,7 +462,10 @@ export const EXPORT_FILE = {
   maxBytes: EXPORT_PIECE_MAX,
 } as const satisfies Route;
 
-/** Git access for a private repository, to a rig whose assigned campaign names it. */
+/**
+ * Git access for a private repository, to a rig while a live assignment of it names the access,
+ * with the host it is for: the rig's supervisor uses it for that host only.
+ */
 export const GIT_ACCESS = {
   method: "GET",
   path: "/v1/rigs/:rig/git-access/:name",
@@ -472,6 +475,7 @@ export const GIT_ACCESS = {
     private_key: z.string().optional(),
     token: z.string().optional(),
     username: z.string().optional(),
+    host: z.string().optional(),
   }),
 } as const satisfies Route;
 

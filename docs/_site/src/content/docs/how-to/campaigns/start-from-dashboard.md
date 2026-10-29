@@ -332,6 +332,12 @@ Each prompt of the role then carries your text as a part of its own, after the r
 
 A script or an agent does the same with [`POST /v1/campaigns/<campaign>/additions`](../../reference/rest-api.md#the-owners-additions-to-a-campaigns-roles), MCP's [`set_campaign_additions`](../../reference/mcp-tools.md#set_campaign_additions) or [`thermite campaign additions`](../../reference/command-line.md#campaign-additions).
 
+### What the operator proposes
+
+The prompts carry the additions as your own words, so an operator's change to them waits for you. So does an operator's change to which roles write in the campaign's collection. With the operator's token, `set_campaign_additions` and `set_campaign_kb_writes` check the change as they would yours, keep it as a proposal, and save nothing: they answer `Proposed to the owner: additions to its roles of sort-speed. Nothing changes until the owner approves it on the campaign's page; the campaign's runs keep what they have.` A newer proposal of the same setting replaces one still waiting.
+
+The campaign's page then has a block **Proposed to you**, above **Your additions to the agents' roles**, and **Needs you** has the same card: who proposed it, and, when you open it, the setting now and as proposed. **Approve** saves a new version of the contract with it, as your own change, and the block says `Approved: version 5 of sort-speed has the additions to its roles owner:operator proposed. Runs started from now take it.` **Decline** changes nothing. Your own changes, on this page, over REST and with your token on MCP, take effect at once.
+
 ## Compare two models from zero
 
 To compare two models on the same campaign, give each model a campaign of its own: a copy. Two runs of one campaign share its collection in [Thermite's knowledge base](../../reference/knowledge-base.md). Each new run starts with what the campaign's earlier runs recorded, and while both work, each reads the other's records every few minutes. So the second model would not start from zero. A copy has the same contract and kit under another name, its own empty collection, no [grants](../../reference/knowledge-base.md#grants) and no runs.

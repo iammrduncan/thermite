@@ -101,7 +101,8 @@ ${BRIEF_PAGE_JS}
     if (!url) return;
     out.textContent = "Looking it up…";
     try {
-      const res = await fetch("/ui/campaigns/new/probe?" + new URLSearchParams({ url, ref, access: val("project_access"), folder: folder() }), { credentials: "same-origin" });
+      const body = new URLSearchParams({ csrf: form.elements.csrf.value, url, ref, access: val("project_access"), folder: folder() });
+      const res = await fetch("/ui/campaigns/new/probe", { method: "POST", body, credentials: "same-origin" });
       const j = await res.json();
       if (!res.ok) { found = null; out.textContent = j.error || "Control could not read it."; update(); return; }
       found = j;
@@ -284,7 +285,8 @@ ${BRIEF_PAGE_JS}
     repoKit = { key, list: null, said: "Reading the kit's kit.json…" };
     update();
     try {
-      const res = await fetch("/ui/campaigns/new/kit-repo?" + new URLSearchParams({ url, commit, access: val("kit_access") }), { credentials: "same-origin" });
+      const body = new URLSearchParams({ csrf: form.elements.csrf.value, url, commit, access: val("kit_access") });
+      const res = await fetch("/ui/campaigns/new/kit-repo", { method: "POST", body, credentials: "same-origin" });
       const j = await res.json();
       repoKit = res.ok ? { key, list: j.mcp_servers, said: "" } : { key, list: null, said: j.error || "Control could not read the kit's kit.json." };
     } catch { repoKit = { key, list: null, said: "Control could not reach the kit's repository." }; }

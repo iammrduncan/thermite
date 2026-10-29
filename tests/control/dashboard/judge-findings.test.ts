@@ -7,6 +7,7 @@ import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { type GoalContract, parseContract } from "../../../src/core/contract.ts";
 import { goalChecks } from "../../../src/core/goal/index.ts";
 import { KitSchema } from "../../../src/core/kit.ts";
+import { assigned } from "../../helpers/assignments.ts";
 import { seedDemo } from "../../helpers/control-demo.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { applied, ingestReport } from "../../helpers/control-store.ts";
@@ -276,7 +277,8 @@ describe("each goal's real check on control (goal 082)", () => {
         /<td><code>diag<\/code><\/td><td><code>n=8192 flags=--full<\/code><\/td>/,
       );
       assert.ok(!saved.includes("HIDDEN-INPUT"));
-      // With a run, on the campaign's own page.
+      // With a run control assigned, on the campaign's own page.
+      assigned(c.store, "rig-a", "sum-1", "sum-goals");
       await c.ingest([goalRun]);
       const withRun = await c.page("/ui/campaigns/sum-goals");
       assert.match(withRun, /<summary>How each goal is checked<\/summary>/);

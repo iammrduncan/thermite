@@ -127,7 +127,7 @@ describe("Settings › MCP servers", () => {
     // Read tools again; then a failing server says why, and the rows say which kits name it.
     s.fake.down = true;
     const again = await s.post("/ui/settings/mcp/gbrain/check", {});
-    assert.match(decodeURIComponent(again.headers.get("location") ?? ""), /can't read its tools/);
+    assert.match(await s.page(again.headers.get("location") ?? ""), /can't read its tools/);
     s.store.campaigns.put({
       campaign: "q4-gemv",
       version: 1,
@@ -302,16 +302,18 @@ describe("New campaign › MCP servers for the agents", () => {
     const s = await stack(t, {
       kitJson: { name: "q4-gemv-kit", mcp_servers: [{ name: "gbrain", agents: ["workers"] }] },
     });
-    const ok = await s.get(
-      `/ui/campaigns/new/kit-repo?${new URLSearchParams({ url: "https://git.example.com/kits/q4.git", commit: KIT_C })}`,
-    );
+    const ok = await s.post("/ui/campaigns/new/kit-repo", {
+      url: "https://git.example.com/kits/q4.git",
+      commit: KIT_C,
+    });
     assert.deepEqual(await ok.json(), {
       name: "q4-gemv-kit",
       mcp_servers: [{ name: "gbrain", agents: ["workers"] }],
     });
-    const broken = await s.get(
-      `/ui/campaigns/new/kit-repo?${new URLSearchParams({ url: "https://git.example.com/kits/broken.git", commit: KIT_C })}`,
-    );
+    const broken = await s.post("/ui/campaigns/new/kit-repo", {
+      url: "https://git.example.com/kits/broken.git",
+      commit: KIT_C,
+    });
     assert.equal(broken.status, 400);
     assert.match(((await broken.json()) as { error: string }).error, /no kit\.json/);
   });

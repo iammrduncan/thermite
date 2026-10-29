@@ -651,6 +651,24 @@ test("a rig files a run's items only under a campaign control gave it", async ()
     ["harness", "run_created", "l-1", { campaign: "local-try", mode: "goal" }],
     ["lane-1", "journal_note", "l-1", { id: 2, by: "lane-1", kind: "lesson", text: "local" }],
   ]);
+  // Nor under a campaign control saved or a grant names, nor for a run of a name control
+  // assigned another rig, whatever campaign it names.
+  store.campaigns.put({
+    campaign: "saved-only",
+    version: 1,
+    contract: { campaign: "saved-only" },
+    sha: "0".repeat(64),
+    by: "owner:ui",
+  });
+  store.kb().grant("granted-reader", "granted-only", "owner:api");
+  await ingest(store, "rig-c", [
+    ["harness", "run_created", "s-1", { campaign: "saved-only", mode: "goal" }],
+    ["lane-1", "journal_note", "s-1", { id: 1, by: "lane-1", kind: "lesson", text: "into saved" }],
+    ["harness", "run_created", "s-2", { campaign: "granted-only", mode: "goal" }],
+    ["lane-1", "journal_note", "s-2", { id: 2, by: "lane-1", kind: "lesson", text: "into grant" }],
+    ["harness", "run_created", "g-1", { campaign: "its-own-name", mode: "goal" }],
+    ["lane-1", "journal_note", "g-1", { id: 3, by: "lane-1", kind: "lesson", text: "a copy" }],
+  ]);
   const kb = store.kb();
   assert.deepEqual(
     kb.search("lesson", ["gemv-speed"]).map((x) => x.body),
@@ -658,6 +676,9 @@ test("a rig files a run's items only under a campaign control gave it", async ()
   );
   assert.equal(kb.search("planted", ["gemv-speed"]).length, 0);
   assert.equal(kb.search("local", ["local-try"], { kinds: ["note"] }).length, 1);
+  assert.equal(kb.search("saved", ["saved-only"]).length, 0);
+  assert.equal(kb.search("grant", ["granted-only"]).length, 0);
+  assert.equal(kb.search("copy", ["its-own-name"]).length, 0);
 });
 
 test("a store built by an earlier reading rebuilds its experiments and attempts once (goal 162)", async () => {

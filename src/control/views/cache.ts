@@ -15,7 +15,7 @@ import {
   runEventsOfKind,
   type StreamEvent,
 } from "./stream.ts";
-import type { RigView, RunOnRig } from "./types.ts";
+import type { RigView, RunOnRig, RunView } from "./types.ts";
 
 /**
  * The folds control keeps (goal 168): one for each rig, of its current ledger's events, kept up to
@@ -124,12 +124,15 @@ export class FoldCache {
     return this.current(row).state();
   }
 
-  /** Every rig's view, read now. */
+  /**
+   * Every rig's view, read now. A rig whose events can't be read now is listed as `unreadable`,
+   * with why, so one rig never keeps the others' views from a page.
+   */
   views(opts: ViewOptions): RigView[] {
     const rows = this.store.reportedRigs.list();
     const listed = new Set(rows.map((u) => u.id));
     for (const rig of this.kept.keys()) if (!listed.has(rig)) this.drop(rig);
-    return rows.map((u) => this.read(u, opts));
+    return rows.map((u) => this.readOrSay(u, opts));
   }
 
   /** A run's view wherever it ran, read now; undefined for a run no rig created. */
@@ -252,6 +255,16 @@ export class FoldCache {
 
   private read(row: RigRow, opts: ViewOptions): RigView {
     return readRig(this.current(row).state(), rigInputs(this.store, row, opts));
+  }
+
+  /** A rig's view; or, when its events can't be read now, one without them that says why. */
+  private readOrSay(row: RigRow, opts: ViewOptions): RigView {
+    try {
+      return this.read(row, opts);
+    } catch (err) {
+      const empty = readRig(new RigFold().state(), rigInputs(this.store, row, opts));
+      return { ...empty, unreadable: errorText(err) };
+    }
   }
 
   /**
@@ -417,6 +430,11 @@ export function rigView(
   return foldsOf(store).view(rig, opts);
 }
 
+/** Every rig's view, as rigView reads one; a rig whose events can't be read says why (`unreadable`). */
+export function rigViews(store: ControlStore, opts: ViewOptions = DEFAULT_VIEW): RigView[] {
+  return foldsOf(store).views(opts);
+}
+
 /** A run's view wherever it ran (goal 170), as rigView reads a rig's: undefined when none. */
 export function findRun(
   store: ControlStore,
@@ -455,6 +473,21 @@ export function campaignRuns(
  */
 export function rigChecks(store: ControlStore, rig: string): Record<string, RigCheckView> {
   return ownCopier()(foldsOf(store).folded(rig)?.checks ?? {});
+}
+
+/**
+ * The runs a rig closed on its current ledger, from its fold. None while its events can't be read
+ * (the view says why): then what is handed for a run rests on its assignment's status alone.
+ */
+export function closedRuns(store: ControlStore, rig: string): Set<string> {
+  let runs: RunView[];
+  try {
+    runs = foldsOf(store).folded(rig)?.runs ?? [];
+  } catch (err) {
+    logDebug("control", "a rig's closed runs not read", { rig, error: errorText(err) });
+    return new Set();
+  }
+  return new Set(runs.filter((r) => r.status === "closed").map((r) => r.id));
 }
 
 /**

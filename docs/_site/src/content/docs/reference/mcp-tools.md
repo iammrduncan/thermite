@@ -76,6 +76,8 @@ The six queue kinds change a run's [experiment queue](signed-commands.md#queue_a
 
 While the owner fully resets a rig, `issue_command` with the agent's token refuses that rig: `<rig> is being reset by the owner`.
 
+An `assign_campaign` with the agent's token may not name what reaches past its rig: a Git access, a source for the rig to fetch (`{"git": …}` or `{"url": …}`), or MCP servers, in `mcp_servers` or in a research contract's own list. It is refused before it is signed: `An agent's token may not name a Git access, a source for its rig to fetch, MCP servers in an assignment. The owner or the operator assigns such a campaign; an agent's token may assign one whose imports are in the rig's inbox already, or are kits control keeps.`, naming only what it named. The owner's and the operator's tokens may name them. For every token, a Git access must be one **Settings** has, bound to a host, and the import's address must be on that host: `The Git access <name> is for <host> only, and <path> comes from <host>.`
+
 Each role's calls are recorded under one actor. Commands carry it as their issuer, and the rig's harness checks the issuer again before it acts on an owner-only kind.
 
 | Token | Actor |
@@ -538,7 +540,7 @@ No inputs. Returns:
 | --- | --- |
 | `model_providers` | `{name, type, base_url, models, models_at, models_error, usage}`. `models` is the model ids; `base_url` has any credentials removed. `usage`, for a Claude or ChatGPT subscription: `{source, windows, rig, plan, at, error}`, each window `{id, label, minutes, used_percent, resets_at}` ([Use a ChatGPT subscription](../how-to/models/chatgpt-subscription.md#watch-the-plans-usage)); `null` for another provider, or a Claude subscription no rig reported yet |
 | `model_prices` | `{provider, model, price, source}`: each price [`model_usage`](#model_usage) costs calls at, as [`GET /v1/model-prices`](rest-api.md#model-usage) gives it |
-| `git_access` | `{name, kind, fingerprint, username}` |
+| `git_access` | `{name, kind, fingerprint, username, host}`; `host` is the one host it is for, or `null` while it has none |
 | `machines` | `{name, address, port, user, host_key_trusted, facts, checked_at, check_error}` |
 | `clusters` | `{name, context, placement, namespace_pattern, slots, facts, checked_at, check_error}` |
 | `gpu_clouds` | `{name, kind, facts, checked_at, check_error}`. A RunPod account's `facts` include `spend`: `{today, month, last30, days}` in US dollars, `days` being the last 7 days as `{day, usd}`, or `error` when the key may not read billing |
@@ -971,7 +973,7 @@ Errors:
 
 > Sets the owner's additions to a campaign's agent roles: text added to a role's own instructions for this campaign's runs, without a change to Thermite's code. additions: each role's text, by the role's id (agent_roles lists the roles): worker, planner, teacher, merged-by, auditor or reviewer for a hill-climb or goal campaign; research-worker, research-planner, research-teacher, research-merged-by, research-reviewer, synthesizer or final-writer for a research campaign; each at most 20000 characters. Each prompt of the role carries its addition as a section of its own after the role's text, labelled as the owner's, with the contract's version; it adds to the role's text and replaces none of it, and the role's text comes first where the two differ. An addition never decides a measurement, a verdict or a promotion: code does. Each call sets them anew: a role left out, or an empty text, has none. Control saves a new version of the campaign's contract (its role_additions), signed into each assignment; runs started from then take it, and a run keeps what it started with. A rig's harness older than this change refuses a contract with role_additions. Returns {campaign, version, contract_sha, role_additions, said}. Refused in words: a role the campaign's mode never runs, an unknown role, a text too long, a campaign with no saved version and no assignment, a rig check's campaign.
 
-It does what [`POST /v1/campaigns/<campaign>/additions`](rest-api.md#the-owners-additions-to-a-campaigns-roles) and **Your additions to the agents' roles** on the campaign's page do, with the same refusals.
+With the owner's token, it does what [`POST /v1/campaigns/<campaign>/additions`](rest-api.md#the-owners-additions-to-a-campaigns-roles) and **Your additions to the agents' roles** on the campaign's page do, with the same refusals. With the operator's token, the change is a proposal: control checks it the same way, with the same refusals, keeps it, and saves nothing until the owner approves it on the campaign's page ([What the operator proposes](../how-to/campaigns/start-from-dashboard.md#what-the-operator-proposes)). It returns `{campaign, proposal, state: "proposed", said}`, or `{campaign, state: "unchanged", said}` when the newest version has these additions already, and the operator's description of the tool says so.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -993,7 +995,7 @@ Errors:
 
 > Sets which kinds of item each agent role may write, each in its own slot, in the campaign's collection of Thermite's knowledge base: …
 
-It does what [`POST /v1/campaigns/<campaign>/kb-writes`](rest-api.md#which-roles-write-in-the-collection) and **Who writes in its collection** on the campaign's page do: a new version of the campaign's contract, its [`kb_writes`](contract.md#fields-every-mode-has).
+With the owner's token, it does what [`POST /v1/campaigns/<campaign>/kb-writes`](rest-api.md#which-roles-write-in-the-collection) and **Who writes in its collection** on the campaign's page do: a new version of the campaign's contract, its [`kb_writes`](contract.md#fields-every-mode-has). With the operator's token, the change is a proposal that waits for the owner, as for [`set_campaign_additions`](#set_campaign_additions).
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
