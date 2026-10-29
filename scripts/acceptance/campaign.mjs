@@ -408,7 +408,8 @@ try {
       headers: { cookie },
       redirect: "manual",
     }).then((r) => decodeURIComponent(String(r.headers.get("location"))));
-  await settingsPost("/ui/settings/add", { type: "gitkey", name: "acc-deploy" });
+  // A Git access is for one host: the stand-in Git host's name.
+  await settingsPost("/ui/settings/add", { type: "gitkey", name: "acc-deploy", host: gitBox });
   const settings = await (await fetch(`${control}/ui/settings`, { headers: { cookie } })).text();
   const deployKey = /<pre class="json"[^>]*>(ssh-ed25519 [A-Za-z0-9+/=]+[^<]*)<\/pre>/.exec(
     settings,
