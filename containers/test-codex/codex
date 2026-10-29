@@ -323,7 +323,9 @@ async function readTurn() {
   return stop("Read the kernel.");
 }
 
-const trial = /thermite-trial submit/.test(prompt);
+// A trial's prompt names thermite-trial submit; in its terminal the first message may come typed,
+// as a real program takes it, and then decides it (runTerminal).
+let trial = /thermite-trial submit/.test(prompt);
 if (terminal) runTerminal();
 else runHeadless();
 
@@ -407,6 +409,7 @@ async function runTerminal() {
       record("event_msg", { type: "item_completed", item: { type: "UserMessage", content: [{ type: "text", text }] } });
       show(`› ${text.split("\n")[0]}`);
       hook("UserPromptSubmit", { prompt: text.slice(0, 2000) });
+      if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
       const at = taken++;
       let lastSaid = "done";
       if (trial && at === 0) {
