@@ -232,9 +232,11 @@ export const USAGE = `usage: thermite <command> [options]
                                       manifest, restore each stream the bus does not have and
                                       check it (its count, last place and last message), then
                                       put control's state back, what it replaces moved aside
-                                      into a dated folder. A stream on the bus that is not the
-                                      backup's is refused, and nothing changes. --control:
-                                      refused while control answers there. --bus-store DIR,
-                                      with the bus stopped: only move the bus's store aside
-                                      into a dated folder in DIR, so that the bus starts empty
+                                      into a dated folder. A stream on the bus is kept when it
+                                      holds the backup's events unchanged, with or without
+                                      newer ones after them; any other is refused, and nothing
+                                      changes. --control: refused while control answers there.
+                                      --bus-store DIR, with the bus stopped: only move the
+                                      bus's store aside into a dated folder in DIR, so that
+                                      the bus starts empty
 `;

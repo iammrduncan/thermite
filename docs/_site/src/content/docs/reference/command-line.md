@@ -262,11 +262,13 @@ usage: thermite <command> [options]
                                       manifest, restore each stream the bus does not have and
                                       check it (its count, last place and last message), then
                                       put control's state back, what it replaces moved aside
-                                      into a dated folder. A stream on the bus that is not the
-                                      backup's is refused, and nothing changes. --control:
-                                      refused while control answers there. --bus-store DIR,
-                                      with the bus stopped: only move the bus's store aside
-                                      into a dated folder in DIR, so that the bus starts empty
+                                      into a dated folder. A stream on the bus is kept when it
+                                      holds the backup's events unchanged, with or without
+                                      newer ones after them; any other is refused, and nothing
+                                      changes. --control: refused while control answers there.
+                                      --bus-store DIR, with the bus stopped: only move the
+                                      bus's store aside into a dated folder in DIR, so that
+                                      the bus starts empty
 ```
 
 ## Rules for every command
@@ -965,7 +967,7 @@ In order, it:
 
 1. With `--control`, asks control's health there, and refuses while control answers: `control answers at <url>: stop it first`.
 2. Checks every file of the backup against its manifest: there, its size and its SHA-256. A file that differs: `<path> is not the file the backup's manifest names: it changed`.
-3. For each stream in the backup: where the bus has none of that name, restores it through the server's restore API, printing the memory the server needs for it (about 1 KiB a message, over 128 MiB), then checks the stream it finds against the manifest: its message count, its last place and its last message. Where the bus has one already, it checks the same: a stream that is the backup's is left as it is; any other is refused. A server stopped part way through a restore leaves a stream that looks whole, and a bus that ran on since the backup holds more, so both are refused: `EVENTS on the bus is not the backup's: it holds <n> messages to <n>, and the backup holds <m> to <m>. …`.
+3. For each stream in the backup: where the bus has none of that name, restores it through the server's restore API, printing the memory the server needs for it (about 1 KiB a message, over 128 MiB), then checks the stream it finds against the manifest. Where the bus has one already, it checks that one the same way, and leaves it as it is. The check keeps a stream that holds the backup's events unchanged, with or without newer ones after them: its first place is the backup's, its last place is the backup's or after, it holds one message more than the backup for each place more (the stream deletes none, so every place holds one), and its message at the backup's last place has the SHA-256 the manifest gives. For a stream with newer events, as on a bus that ran on since the backup, it prints `EVENTS on the bus holds the backup's events and <n> newer ones after them, to <last>: control applies them from its place, <place>, as it starts`; control, started on the restored store, applies them from its place in the backup. Any other stream is refused, naming what differs: `EVENTS on the bus is not the backup's: <what differs>. …`, such as `it holds <n> messages to <n>, and the backup holds <m> to <m>`, which a server stopped part way through a restore leaves, `its message at <m>, the backup's last place, is not the one the backup recorded`, `its first place is <f>, and the backup's is <g>`, or `…: a place holds no message, and this stream deletes none`.
 4. Puts control's state back: each of control's files and folders that is there now (`control.db` with its `-wal` and `-shm`, the keys, `kits/`, `exports/`) is moved into `replaced-<time>/` in the state folder, and the backup's are copied in, given to the state folder's owner when it runs as root. Nothing is deleted, and files that are not control's stay. A state folder that holds the backup's files already is left as it is.
 
 A refusal at any step changes no file of control's, prints `restore refused: <why>` on standard error, and exits 1. It ends with `restored: start control, and it applies the events from its place in the stream`.

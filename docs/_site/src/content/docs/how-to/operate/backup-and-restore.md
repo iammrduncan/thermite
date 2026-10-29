@@ -65,9 +65,12 @@ To tell that it worked: the last line names the folder, and the folder's name do
 
 ## Restore a backup
 
-A restore takes control back to the backup. Rigs enrolled, campaigns made and commands issued after it are not in it. The rigs' events after it come back from the rigs: each rig's supervisor sends its ledger's events again from control's place. A restore keeps what it replaces: control's files go to `replaced-<time>/` in control's state folder, and the bus's store to `replaced-<time>/` in the bus's volume. Remove those yourself once the restore is good.
+A restore takes control back to the backup. Rigs enrolled, campaigns made and commands issued after it are not in it. The rigs' events after it come back from the bus, where it kept them, and from the rigs: each rig's supervisor sends again, from control's place, the events of its ledger that control lacks. A restore keeps what it replaces: control's files go to `replaced-<time>/` in control's state folder, and the bus's store to `replaced-<time>/` in the bus's volume. Remove those yourself once the restore is good.
 
-The bus keeps `EVENTS` for good, and the server's restore makes a stream only where it has none of that name. So the bus's store is set aside first, with the bus stopped, and the restore then brings the stream back into an empty store.
+The bus keeps `EVENTS` for good, and the server's restore makes a stream only where it has none of that name. So the restore first checks the stream the bus holds. It keeps a stream that holds the backup's events unchanged, with or without newer ones after them, as a bus that ran on since the backup does, and control, started on the backup's store, applies the newer events from its place. It refuses any other stream.
+
+- When the bus kept its stream, as when only control's state goes back after an update that went wrong, follow [Restore onto the bus as it is](#restore-onto-the-bus-as-it-is): three steps, and the bus goes on running.
+- When the bus lost its store, or the restore refused its stream, follow the steps below. The bus's store is set aside first, with the bus stopped, and the restore then brings the stream back into an empty store.
 
 1. Stop control and the bus. The rigs' supervisors keep their places and send again later.
 
@@ -110,9 +113,44 @@ The bus keeps `EVENTS` for good, and the server's restore makes a stream only wh
 
 To tell that it worked: control's log, `docker compose logs control`, says `control's records go on from the events stream's place` with the `place` the backup's manifest gives under `store.positions`, and then `control's views built from the events stream`, with no `fatal` line. `/v1/health` answers 200. The rigs' pages fill again as their supervisors report, and `GET /v1/bus` says `0` under `events.apply.behind`.
 
+### Restore onto the bus as it is
+
+When the bus kept its `EVENTS` stream, only control stops, and the restore checks the stream instead of bringing it back.
+
+1. Stop control:
+
+   ```sh
+   docker compose stop control   # or: podman compose stop control
+   ```
+
+2. Restore the backup, with the bus running:
+
+   ```sh
+   docker compose --profile backup run --rm backup thermite restore --control http://control:8800 /backups/thermite-backup-2026-10-29T10-00-00-000Z
+   ```
+
+   It says how many events the bus holds after the backup's:
+
+   ```text
+   the backup of 2026-10-29T10:00:00.000Z is whole: 24 files and 1 streams as its manifest says
+   EVENTS on the bus holds the backup's events and 1,312 newer ones after them, to 49,522: control applies them from its place, 48,210, as it starts
+   control's state: control.db, control-signing.key, control-signing.pub, secrets.key, bus-ca.pem, bus-ca.key, bus-backup.seed, kits, exports moved aside to /var/lib/thermite-control/replaced-2026-10-29T12-00-00-000Z, and the backup's put back
+   restored: start control, and it applies the events from its place in the stream
+   ```
+
+   A bus that holds no event after the backup's says `EVENTS is on the bus as the backup holds it` instead. If the restore is refused, follow [the steps above](#restore-a-backup) from step 1.
+
+3. Start control, with your `-f` options:
+
+   ```sh
+   docker compose up -d control   # or: podman compose up -d control
+   ```
+
+To tell that it worked: control's log says `control's records go on from the events stream's place` with the `place` the backup's manifest gives under `store.positions`, and `behind`, the events it applies from there. Then `GET /v1/bus` says `0` under `events.apply.behind`, and the rigs' pages show their newer events.
+
 ### If the restore is refused
 
-The restore checks each stream it finds after its restore against the backup's manifest: its count, its last place and its last message. A server stopped part way through a restore, for want of memory, leaves a stream that looks whole and is not, and starts with it again; the restore refuses it, naming it, and changes no file of control's:
+The restore checks the stream the bus holds, and each stream it finds after its restore, against the backup's manifest: the stream's first place, its count, its last place, and its message at the backup's last place. It keeps a stream that is the backup's, or the backup's with newer events after it. A server stopped part way through a restore, for want of memory, leaves a stream that looks whole and is not, and starts with it again; the restore refuses it, naming what differs, and changes no file of control's:
 
 ```text
 restore refused: EVENTS on the bus is not the backup's: it holds 356,496 messages to 356,496, and the backup holds 500,000 to 500,000. …

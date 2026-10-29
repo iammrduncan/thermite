@@ -20,9 +20,17 @@ import {
 } from "../../src/common/backup/index.ts";
 import { EventsApply } from "../../src/control/events/index.ts";
 import { ControlStore, type IngestReport } from "../../src/control/store/index.ts";
+import { keepFolds } from "../../src/control/views/index.ts";
 import { CONTROL_STATE, STREAMS_LEFT_OUT, snapshotFile } from "../../src/core/backup.ts";
 import { EVENT_STREAM } from "../../src/core/link/events.ts";
-import { applied, closeBus, controlStore, ingestReport } from "../helpers/control-store.ts";
+import {
+  applied,
+  busOf,
+  closeBus,
+  controlStore,
+  heldEvents,
+  ingestReport,
+} from "../helpers/control-store.ts";
 import { FakeBackupBus } from "../helpers/fake-backup-bus.ts";
 import { FakeBus } from "../helpers/fake-bus.ts";
 
@@ -31,9 +39,10 @@ import { FakeBus } from "../helpers/fake-bus.ts";
  * folder (its store on the fake bus, its keys, a kit and an export) and the bus's EVENTS stream.
  * A backup holds both, with a manifest; a restore onto a new folder and an empty bus brings back
  * the stream, checked, then control's state, and control then starts on it, its start check
- * holding; a restore over a folder keeps what it replaced; a stream that comes back short, or one
- * the bus already holds that is not the backup's, is refused, naming it, with control's state left
- * as it was.
+ * holding; a restore over a folder keeps what it replaced; a bus that ran on since the backup is
+ * kept, and control, started on the restored store, applies its newer events from its place to
+ * the stream's end; a stream that comes back short, or one the bus already holds that is not the
+ * backup's, is refused, naming it, with control's state left as it was.
  */
 
 const BUILD = { version: "0.1.1", commit: null };
@@ -275,7 +284,57 @@ describe("backup and restore of control (goal 173)", () => {
     assert.deepEqual(readdirSync(target), []);
   });
 
-  test("a stream the bus holds that is not the backup's is refused, as is a changed backup", async () => {
+  test("a bus that ran on since the backup is kept, and control applies its newer events", async () => {
+    const { dir, bus } = await controlState(60);
+    const { folder } = await backupControl({
+      stateDir: dir,
+      into: fresh("backups"),
+      bus: new FakeBackupBus(bus),
+      build: BUILD,
+    });
+    // Control goes on after the backup: rig-a reports five events more, which the bus keeps.
+    const ranOn = controlStore(join(dir, CONTROL_STATE.db), bus);
+    await ingestReport(ranOn, page("rig-a", 61, 5));
+    closeBus(ranOn);
+    ranOn.db.close();
+    assert.equal(placeIn(dir), 65);
+    // Control's state goes back to the backup's, and the bus is kept as it is.
+    const lines: string[] = [];
+    const r = await restoreControl({
+      from: folder,
+      stateDir: dir,
+      bus: new FakeBackupBus(bus),
+      now: new Date("2026-10-29T18:00:00.000Z"),
+      say: (l) => lines.push(l),
+    });
+    assert.equal(r.replaced, join(dir, "replaced-2026-10-29T18-00-00-000Z"));
+    assert.equal(
+      lines[1],
+      "EVENTS on the bus holds the backup's events and 5 newer ones after them, to 65: control applies them from its place, 60, as it starts",
+    );
+    assert.equal(bus.kept.filter((k) => k.stream === EVENT_STREAM).length, 65);
+    assert.equal(placeIn(dir), 60);
+    // Control starts on the restored store: its start check holds, and it applies the newer events
+    // from its place, so that its records and its views end at the stream's end.
+    const store = controlStore(join(dir, CONTROL_STATE.db), bus);
+    const events = await heldEvents(store, "rig-a");
+    assert.equal(busOf(store).apply.stopped, null);
+    assert.equal(store.busPositions.of(EVENT_STREAM), 65);
+    assert.equal(store.reportedRigs.heldCursor("rig-a", "l-1"), 65);
+    assert.deepEqual(keepFolds(store).held(), [{ rig: "rig-a", ledger: "l-1", seq: 65 }]);
+    assert.equal(keepFolds(store).through, 65);
+    assert.deepEqual(
+      events.map((e) => [e.seq, e.id]),
+      Array.from({ length: 65 }, (_, i) => [i + 1, i + 1]),
+    );
+    // The rig's supervisor sends again from the place control's store had: none of it is new.
+    assert.equal(await ingestReport(store, page("rig-a", 61, 5)), 0);
+    assert.equal(bus.kept.filter((k) => k.stream === EVENT_STREAM).length, 65);
+    closeBus(store);
+    store.db.close();
+  });
+
+  test("another control's stream on the bus is refused, as is a changed backup", async () => {
     const { dir, bus } = await controlState(60);
     const { folder } = await backupControl({
       stateDir: dir,
@@ -284,14 +343,16 @@ describe("backup and restore of control (goal 173)", () => {
       build: BUILD,
     });
     const before = readdirSync(dir).sort();
-    // The bus ran on since the backup: its stream holds more.
-    const store = controlStore(join(fresh("other"), CONTROL_STATE.db), bus);
-    await ingestReport(store, page("rig-c", 1, 5));
+    // Another control's bus: as many events and more, of another rig.
+    const other = new FakeBus();
+    const store = controlStore(join(fresh("other"), CONTROL_STATE.db), other);
+    await ingestReport(store, page("rig-c", 1, 50));
+    await ingestReport(store, page("rig-c", 51, 15));
     closeBus(store);
     await assert.rejects(
-      restoreControl({ from: folder, stateDir: dir, bus: new FakeBackupBus(bus) }),
+      restoreControl({ from: folder, stateDir: dir, bus: new FakeBackupBus(other) }),
       refused(
-        /^EVENTS on the bus is not the backup's: it holds 65 messages to 65, and the backup holds 60 to 60\./,
+        /^EVENTS on the bus is not the backup's: its message at 60, the backup's last place, is not the one the backup recorded\. A restore keeps a stream that holds the backup's events unchanged, with or without newer ones after them; .* Nothing of control's state was changed\.$/,
       ),
     );
     assert.deepEqual(readdirSync(dir).sort(), before);

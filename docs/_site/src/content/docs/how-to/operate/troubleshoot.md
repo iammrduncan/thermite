@@ -118,11 +118,15 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 ### A restore is refused
 
 - **You see:** `thermite restore` ends with `restore refused:` and exits 1, with one of:
-  - `EVENTS on the bus is not the backup's: it holds 356,496 messages to 356,496, and the backup holds 500,000 to 500,000. …`;
+  - `EVENTS on the bus is not the backup's: <what differs>. …`, where what differs is one of:
+    - `it holds 356,496 messages to 356,496, and the backup holds 500,000 to 500,000`;
+    - `its message at 500,000, the backup's last place, is not the one the backup recorded`;
+    - `its first place is 2, and the backup's is 1`;
+    - `it holds 500,009 messages to 500,010, and the backup holds 500,000 to 500,000: a place holds no message, and this stream deletes none`;
   - `the restore of EVENTS failed: connection closed. A server with less than about 617 MiB of memory is stopped part way; …`;
   - `<path> is not the file the backup's manifest names: it changed`;
   - `control answers at http://control:8800: stop it first`.
-- **Why:** a restore puts a stream back only where the bus has none of that name, and checks the stream it finds against the backup's manifest, since a server stopped part way through a restore leaves a stream that looks whole and is not. A bus that ran on since the backup holds more than the backup and is refused too. A changed file means the backup is not the one its manifest describes. In each case the restore changed no file of control's.
+- **Why:** a restore puts a stream back only where the bus has none of that name, and checks the stream the bus holds, and the one it finds after its restore, against the backup's manifest: its first place, its count, its last place and its message at the backup's last place. It keeps a stream that holds the backup's events unchanged, with or without newer ones after them, as a bus that ran on since the backup does. It refuses any other: one shorter than the backup's, which a server stopped part way through a restore leaves, looking whole; one with another message at the backup's last place, or another first place, as another control's bus holds; and one with a place that holds no message, which this stream, deleting none, never has. A changed file means the backup is not the one its manifest describes. In each case the restore changed no file of control's.
 - **Do:** for a stream, stop the bus, set its store aside, start it with the memory the restore printed, and run the restore again: [Restore a backup](backup-and-restore.md#restore-a-backup). The store set aside is kept, in `replaced-<time>` inside it. For a changed file, use another backup. For a running control, stop it first.
 
 ### Control answers that it is starting

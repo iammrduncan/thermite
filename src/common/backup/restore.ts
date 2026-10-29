@@ -20,9 +20,12 @@ import type { BackupBus, StreamEnd } from "./streams.ts";
  * state, each file and folder it replaces moved aside into a dated folder beside them, never
  * deleted. A stream comes back only where the bus has none of that name: its server keeps a
  * stream for good, and only its store, set aside with the bus stopped (setBusStoreAside), makes
- * room. The stream it finds after is checked against the manifest (its count, its last place and
- * its last message), since a server stopped part way through a restore leaves a stream that looks
- * whole: the restore refuses one that differs, naming it, and changes no file of control's.
+ * room. A stream the bus holds already, and the one it holds after a restore, is checked against
+ * the manifest (against()): it is kept when it holds the backup's events unchanged, with or
+ * without newer ones after them, as a bus that ran on since the backup holds them (the owner,
+ * 2026-10-29), and control, started on the restored store, applies the newer ones from its place.
+ * Any other is refused, naming what differs, and no file of control's is changed: a server stopped
+ * part way through a restore leaves a stream that looks whole and is not.
  */
 
 /** A restore refused: the backup, or a stream on the bus, is not what the manifest says. */
@@ -76,24 +79,47 @@ export function setBusStoreAside(storeDir: string, now = new Date()): string | u
 const words = (n: number) => n.toLocaleString("en-US");
 const mib = (bytes: number) => `${words(Math.ceil(bytes / 2 ** 20))} MiB`;
 
-/** Why a stream on the bus is not the backup's, in words; undefined when it is. */
-async function differs(
+/**
+ * The place a stream's first message is at, or would be at when it holds none: the server gives 0
+ * as the first place of a stream that never held one, and its last place + 1 for one emptied or
+ * made to start later.
+ */
+const firstPlace = (e: StreamEnd) => (e.messages > 0 ? e.first_seq : e.last_seq + 1);
+
+/**
+ * How a stream on the bus stands to the backup's: it holds the backup's events and `after` newer
+ * ones after them (0: it is the backup's own), or `why` it does not, in words. It does when it
+ * starts at the backup's first place, reaches the backup's last place or further, holds one message
+ * more than the backup for each place more (the stream refuses deletes, so a place with no message
+ * means another stream), and holds at the backup's last place the message the backup recorded.
+ */
+async function against(
   bus: BackupBus,
   s: BackupStream,
   now: StreamEnd,
-): Promise<string | undefined> {
+): Promise<{ after: number } | { why: string }> {
   const got = `${words(now.messages)} messages to ${words(now.last_seq)}`;
   const want = `${words(s.messages)} to ${words(s.last_seq)}`;
-  if (now.messages !== s.messages || now.last_seq !== s.last_seq)
-    return `it holds ${got}, and the backup holds ${want}`;
+  if (firstPlace(now) !== firstPlace(s))
+    return {
+      why: `its first place is ${words(firstPlace(now))}, and the backup's is ${words(firstPlace(s))}`,
+    };
+  if (now.last_seq < s.last_seq) return { why: `it holds ${got}, and the backup holds ${want}` };
+  const after = now.last_seq - s.last_seq;
+  if (now.messages - s.messages !== after)
+    return {
+      why: `it holds ${got}, and the backup holds ${want}: a place holds no message, and this stream deletes none`,
+    };
   if (s.last_sha256 && (await bus.messageSha256(s.name, s.last_seq)) !== s.last_sha256)
-    return `its last message, at ${words(s.last_seq)}, is not the one the backup recorded`;
-  return undefined;
+    return {
+      why: `its message at ${words(s.last_seq)}, the backup's last place, is not the one the backup recorded`,
+    };
+  return { after };
 }
 
 /** What to do about a stream the bus holds that is not the backup's: set the store aside, then again. */
 const setAsideFirst = (name: string, why: string) =>
-  `${name} on the bus is not the backup's: ${why}. A server stopped part way through a restore leaves a stream that looks whole and is not, and a bus that ran on since the backup holds more. Stop the bus, set its store aside (thermite restore --bus-store), start it with room for the restore, and run the restore again. Nothing of control's state was changed.`;
+  `${name} on the bus is not the backup's: ${why}. A restore keeps a stream that holds the backup's events unchanged, with or without newer ones after them; a server stopped part way through a restore leaves one that looks whole and is not, and another control's bus holds another. Stop the bus, set its store aside (thermite restore --bus-store), start it with room for the restore, and run the restore again. Nothing of control's state was changed.`;
 
 export interface RestoreOptions {
   /** The backup's folder. */
@@ -123,9 +149,15 @@ export async function restoreControl(o: RestoreOptions): Promise<{ replaced: str
   for (const s of manifest.streams) {
     const before = await o.bus.state(s.name);
     if (before) {
-      const why = await differs(o.bus, s, before);
-      if (why) throw new RestoreRefused(setAsideFirst(s.name, why));
-      say(`${s.name} is on the bus as the backup holds it`);
+      const found = await against(o.bus, s, before);
+      if ("why" in found) throw new RestoreRefused(setAsideFirst(s.name, found.why));
+      // A bus that ran on since the backup: control's restored store applies the rest as it starts.
+      const place = manifest.store.positions[s.name] ?? 0;
+      say(
+        found.after
+          ? `${s.name} on the bus holds the backup's events and ${words(found.after)} newer ones after them, to ${words(before.last_seq)}: control applies them from its place, ${words(place)}, as it starts`
+          : `${s.name} is on the bus as the backup holds it`,
+      );
       continue;
     }
     const need = restoreMemoryBytes(s.messages);
@@ -141,10 +173,10 @@ export async function restoreControl(o: RestoreOptions): Promise<{ replaced: str
       );
     }
     const after = await o.bus.state(s.name);
-    const why = after
-      ? await differs(o.bus, s, after)
-      : "the bus has no such stream after its restore";
-    if (why) throw new RestoreRefused(setAsideFirst(s.name, why));
+    const found = after
+      ? await against(o.bus, s, after)
+      : { why: "the bus has no such stream after its restore" };
+    if ("why" in found) throw new RestoreRefused(setAsideFirst(s.name, found.why));
     say(`${s.name}: restored and checked, ${words(s.messages)} messages to ${words(s.last_seq)}`);
   }
 

@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Backup and restore acceptance (goal 173): the compose stack's own backup service, as the page
 // "Back up and restore control" runs it. It starts control and one rig, gives the rig work so that
-// the bus's EVENTS stream holds its events, backs control up while it runs, gives the rig more work,
-// then restores the backup by the page's steps: control and the bus stopped, the bus's store set
-// aside, the bus started alone with room for the restore, the restore, then the stack again.
+// the bus's EVENTS stream holds its events, backs control up while it runs, and gives the rig more
+// work. Then it restores the backup onto the bus as it is, which ran on since the backup: the
+// restore must keep its stream, saying how many events it holds after the backup's, and control,
+// started on the restored store, must apply them to the stream's end. It backs control up again,
+// and restores the first backup by the page's steps: control and the bus stopped, the bus's store
+// set aside, the bus started alone with room for the restore, the restore, then the stack again.
+// The second backup, newer than the stream the bus then holds, must be refused, changing nothing.
 // Control must start on the restored store with its start check holding, and the events the rig
-// recorded after the backup must come back from the rig. A restore run again on the bus that ran
-// on must be refused, and change nothing.
+// recorded after the backup must come back from the rig.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/backup.mjs (or "docker compose", or
 // "podman-compose"). KEEP=1 leaves the stack up.
@@ -108,22 +111,57 @@ try {
   );
 
   // Work after the backup: the rig records more, which a restore must bring back from the rig.
-  const second = await judged(env, "kits/smoke-cpu/candidates/noop", "after the backup");
+  // Another candidate: the same patch again would be a duplicate, recorded but never judged.
+  const second = await judged(env, "kits/smoke-cpu/candidates/good", "after the backup");
   const ranOn = eventsStream();
   console.log("after the backup, EVENTS holds", ranOn.messages);
   if (ranOn.last <= stream.last_seq) throw new Error("the stream did not grow after the backup");
 
-  // A restore on the bus that ran on is refused, and changes nothing.
+  // A restore onto the bus that ran on keeps its stream, and control applies the newer events.
   stack("stop", "control");
-  const refused = backupFails("thermite", "restore", `/backups/${name}`);
-  if (refused.status !== 1 || !/EVENTS on the bus is not the backup's/.test(refused.stderr))
-    throw new Error(
-      `the restore was not refused as it should be: ${refused.status} ${refused.stderr}`,
+  const onBus = backup(
+    "thermite",
+    "restore",
+    "--control",
+    "http://control:8800",
+    `/backups/${name}`,
+  );
+  console.log(onBus.trim());
+  const newer =
+    /EVENTS on the bus holds the backup's events and ([\d,]+) newer ones after them, to ([\d,]+)/.exec(
+      onBus,
     );
-  console.log("refused, as it should be:", refused.stderr.trim().slice(0, 160));
+  const count = (words) => Number(words.replaceAll(",", ""));
+  if (
+    !newer ||
+    count(newer[2]) < ranOn.last ||
+    count(newer[1]) !== count(newer[2]) - stream.last_seq
+  )
+    throw new Error("the restore did not keep the stream that ran on, with its newer events");
+  stack("up", "-d", "control");
+  await healthy();
+  const caughtUp = await until(
+    "control's apply at the stream's end, the attempt after the backup at control",
+    async () => {
+      const e = (await api("/v1/bus")).body.events;
+      const end = e?.apply?.place >= count(newer[2]) && e.apply.behind === 0;
+      return end && latestVerdicts(await events())[second] && e;
+    },
+    300_000,
+    2000,
+  );
+  if (caughtUp.apply?.stopped !== null)
+    throw new Error(`control's apply stopped: ${caughtUp.apply?.stopped}`);
+  console.log("kept the bus:", JSON.stringify(caughtUp.apply));
+
+  // A second backup, newer than the first, to be refused on a bus restored from the first.
+  const out2 = backup("thermite", "backup", "/backups");
+  const name2 = /backup: \/backups\/(thermite-backup-[^ ]+) /.exec(out2)?.[1];
+  if (!name2) throw new Error("the second backup named no folder");
+  made.push(name2);
 
   // The page's steps.
-  stack("stop", "nats");
+  stack("stop", "control", "nats");
   console.log(
     backup("thermite", "restore", "--bus-store", "/bus-store", `/backups/${name}`).trim(),
   );
@@ -142,6 +180,21 @@ try {
     throw new Error(`EVENTS came back as ${JSON.stringify(back)}, not the backup's`);
   const kept = stack("exec", "-T", "nats", "ls", "/data");
   if (!/replaced-/.test(kept)) throw new Error("the bus's store was not kept aside");
+
+  // The newer backup on the bus the older one restored: its stream is shorter, and refused.
+  const stateBefore = backup("ls", "/var/lib/thermite-control");
+  const refused = backupFails("thermite", "restore", `/backups/${name2}`);
+  if (
+    refused.status !== 1 ||
+    !/EVENTS on the bus is not the backup's: it holds /.test(refused.stderr)
+  )
+    throw new Error(
+      `the restore was not refused as it should be: ${refused.status} ${refused.stderr}`,
+    );
+  console.log("refused, as it should be:", refused.stderr.trim().slice(0, 200));
+  if (backup("ls", "/var/lib/thermite-control") !== stateBefore)
+    throw new Error("the refused restore changed control's state folder");
+
   stack("up", "-d", "nats", "control");
   await healthy();
   const state = backup("ls", "/var/lib/thermite-control");

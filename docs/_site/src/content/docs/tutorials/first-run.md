@@ -41,7 +41,7 @@ docker compose run --rm init     # Docker
 podman compose run --rm init     # Podman
 ```
 
-The first time, this downloads Thermite's control image. Then it lists each file it makes, says in lines that start with `rig:` what Thermite can use on your computer (its CPUs, its memory and any GPUs), and its last line is `local init: .dev ready (17 made, 0 kept)`. The tokens are now in the folder `.dev/secrets/`, in your `thermite` folder. They stay on your computer. Keep the folder: Thermite reads its tokens from there every time it starts.
+The first time, this downloads Thermite's control image. Then it lists each file it makes, says in lines that start with `rig:` what Thermite can use on your computer (its CPUs, its memory and any GPUs), and its last line is `local init: .dev ready (18 made, 0 kept)`. The tokens are now in the folder `.dev/secrets/`, in your `thermite` folder. They stay on your computer. Keep the folder: Thermite reads its tokens from there every time it starts.
 
 ## 3. Start Thermite
 
