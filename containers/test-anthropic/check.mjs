@@ -1,15 +1,20 @@
 // Test only (scripts/acceptance/claude-real.mjs): Thermite's own calls of Claude Code, run in the
 // harness container with the image's real Claude Code and the stand-in for Anthropic's API
-// (anthropic.mjs). It prints one JSON line: { checks: [{ name, ok, detail }], peakRssBytes }, the
-// last the peak memory the broker recorded for Claude Code's runs in the first trial.
-//   node check.mjs harness   as the controller's user: the model check, a planner call and a
-//                            trial, through the broker (each as its role's user)
+// (anthropic.mjs). It prints one JSON line: { checks: [{ name, ok, detail }], peakRssBytes,
+// peakTerminalRssBytes }, the peak memory the broker recorded for Claude Code's runs in the
+// headless trial, and for the terminal host's run (the host, Claude Code and its commands) in the
+// trial in its terminal.
+//   node check.mjs harness   as the controller's user: the model check, a planner call and
+//                            trials, through the broker (each as its role's user): the same
+//                            trial in Claude Code's own terminal (goal 169; the default) and
+//                            headless, and a trial that compacts, in its terminal
 //   node check.mjs advisor   as the supervisor's user, with its own TMPDIR: an advisor's call,
 //                            and what /proc shows of its processes' environments
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -23,8 +28,12 @@ import { startAnthropicStandIn } from "./anthropic.mjs";
 /** A made-up sign-in token: letters only, never a real one. */
 const TOKEN = "madeupsignintokenforthestandin";
 const checks = [];
-/** The most memory the broker recorded for one of Claude Code's runs in the first trial. */
+/**
+ * The most memory the broker recorded for one of Claude Code's runs in the headless trial, and
+ * for the terminal host's run in the trial in its terminal.
+ */
 let peakRssBytes;
+let peakTerminalRssBytes;
 /** One check; `log`: lines that say why it failed, printed in full when it does. */
 const check = (name, ok, detail, log) =>
   checks.push({ name, ok: Boolean(ok), detail, ...(!ok && log?.length ? { log } : {}) });
@@ -82,8 +91,90 @@ async function harness() {
 
   // A trial: Claude Code edits the workspace with its Write tool, runs a command that looks for
   // the token, and submits with thermite-trial, as the lane's user. The harness API is a stand-in
-  // here that takes the submission.
+  // here that takes the submission. The same trial runs in Claude Code's own terminal (goal 169:
+  // the rig's default), through the terminal host, and headless (`-p`), an advanced choice.
   const lane = "lane-1";
+  for (const terminal of [true, false])
+    await codeTrial({ runner, runClaudeTrial, lane, scratchDir, terminal });
+
+  // Goal 070: a trial that compacts. The stand-in makes two rounds and says the conversation is
+  // large after the second, so the real Claude Code compacts before its next request (its window
+  // 100,000 tokens, compacted at 50%). Thermite's PreCompact hook, from Thermite's settings for
+  // the run, copies the transcript as the lane's user and adds its line to the compaction's
+  // instructions; the stand-in's summary names the file, and the harness reads the hook's copy.
+  // Claude Code writes its debug log (DEBUG=1) in its home: on a failure, the check prints its
+  // compaction lines, with what the hooks wrote and what the transcript shows.
+  const area2 = join(scratchDir, "lanes", lane, randomUUID());
+  const repo2 = join(area2, "repo");
+  mkdirSync(join(repo2, "src"), { recursive: true });
+  writeFileSync(join(repo2, "src", "value.txt"), "1\n");
+  execFileSync("git", ["init", "--quiet", "-b", "work"], { cwd: repo2, stdio: "ignore" });
+  await runner.handOver(area2, lane, { harnessReads: true });
+  const compacted = [];
+  const said2 = [];
+  const kept = { dir: join(scratchDir, "research", "claude-real-1", "compactions"), stem: "t-compact", readable: true };
+  // In its terminal: the compaction comes from its transcript, as the host copies it.
+  const ct = await runClaudeTrial(
+    {
+      trialId: "t-compact",
+      token: "trial-compact",
+      run: "claude-real-1",
+      lane,
+      workspace: repo2,
+      workspaceRoot: area2,
+      parentCommit: "0".repeat(40),
+      editablePaths: ["src/**"],
+      brief: "COMPACT-CHECK Look at the value.",
+      wallMs: 150_000,
+    },
+    {
+      runner,
+      model: { ...model, contextWindow: 100_000, compactAt: 50 },
+      apiUrl: "http://127.0.0.1:9",
+      live: (entries) => said2.push(...entries),
+      progress: () => undefined,
+      submitted: () => undefined,
+      pollMs: 300,
+      keptAt: kept,
+      compacted: (c) => compacted.push(c),
+      env: { DEBUG: "1" },
+      terminal: true,
+    },
+  );
+  const first = compacted[0];
+  const compactedOk =
+    first?.number === 1 &&
+    first.own === true &&
+    /from Claude Code's own transcript of the session/.test(first.markdown) &&
+    /COMPACT-CHECK/.test(first.markdown) &&
+    // The newest tool result before the compaction: Claude Code wrote it to its transcript only
+    // while the hook waited.
+    /Tool result: Bash \(toolu_compact_2\)/.test(first.markdown) &&
+    (first.summary ?? "").includes(`${kept.dir}/t-compact-1.md`);
+  check(
+    "the real Claude Code, in its terminal, compacted a trial's conversation: its PreCompact hook copied the whole transcript, to the last tool result, and the summary names the kept file",
+    compactedOk,
+    {
+      compactions: ct.compactions ?? 0,
+      stopped: ct.stopped,
+      error: ct.error,
+      own: first?.own,
+      summary: first?.summary,
+      head: first?.markdown.slice(0, 300),
+      results: first?.markdown.match(/Tool result: [^\n]*/g),
+    },
+    compactedOk ? undefined : await compactionDiagnostics(runner, area2, said2),
+  );
+  await runner.remove(area2);
+  runner.close();
+}
+
+/**
+ * The trial that edits the workspace and submits, in Claude Code's own terminal or headless, in a
+ * workspace of its own; its checks, and the peak memory of its runs.
+ */
+async function codeTrial({ runner, runClaudeTrial, lane, scratchDir, terminal }) {
+  const mode = terminal ? "in its terminal" : "headless";
   const area = join(scratchDir, "lanes", lane, randomUUID());
   const repo = join(area, "repo");
   mkdirSync(join(repo, "src"), { recursive: true });
@@ -127,14 +218,16 @@ async function harness() {
     command: `node ${here}/probe.mjs ${TOKEN.slice(0, half)} ${TOKEN.slice(half)} && thermite-trial submit --hypothesis "value two, from the real Claude Code"`,
   };
   const live = [];
-  // What the broker records of each of Claude Code's runs (the program's run is the one it may
-  // spare from the memory limit), for the figure in Claude Code's limits note.
+  // What the broker records of each of Claude Code's runs (the program's run, or the terminal
+  // host's, is the one it may spare from the memory limit), for the figure in Claude Code's limits
+  // note.
+  let peak = 0;
   const measured = new Proxy(runner, {
     get(target, key) {
       if (key === "run")
         return async (req) => {
           const r = await target.run(req);
-          if (req.spareExe) peakRssBytes = Math.max(peakRssBytes ?? 0, r.peakRssBytes ?? 0);
+          if (req.spareExe) peak = Math.max(peak, r.peakRssBytes ?? 0);
           return r;
         };
       const v = target[key];
@@ -143,7 +236,7 @@ async function harness() {
   });
   const trial = await runClaudeTrial(
     {
-      trialId: "t-check",
+      trialId: `t-check-${terminal ? "terminal" : "headless"}`,
       token: "trial-check",
       run: "claude-real-1",
       lane,
@@ -163,95 +256,43 @@ async function harness() {
       submitted: () => (submission ? { attempt: "a-check", lifecycle: "queued" } : undefined),
       pollMs: 300,
       afterSubmitMs: 1500,
+      terminal,
     },
-  );
-  harnessApi.close();
+  ).finally(() => harnessApi.close());
+  if (terminal) peakTerminalRssBytes = peak;
+  else peakRssBytes = peak;
   check(
-    "a trial in Claude Code submitted with thermite-trial, with the trial's token",
+    `a trial in Claude Code ${mode} submitted with thermite-trial, with the trial's token`,
     trial.stopped === "submitted" && submission?.trialToken,
-    { stopped: trial.stopped, error: trial.error, turns: trial.turns },
+    { stopped: trial.stopped, error: trial.error, turns: trial.turns, tokensIn: trial.tokensIn },
   );
   check(
-    "its Write tool changed the workspace: permissions bypassed, nothing waited for approval",
+    `its Write tool changed the workspace ${mode}: permissions bypassed, nothing waited for approval`,
     /-1\n\+2/.test(submission?.patch ?? "") && /src\/value\.txt/.test(submission?.patch ?? ""),
     submission?.patch ?? live.slice(-4),
   );
   const said = live.find((e) => e.kind === "result" && /signin=/.test(e.text))?.text ?? "";
   check(
-    "its command ran as the lane's user and found the token in no environment, Claude Code's included",
+    `its command ran as the lane's user ${mode} and found the token in no environment, Claude Code's included`,
     /uid=10101 signin=absent/.test(said),
     said || live.slice(-4),
   );
+  if (terminal) {
+    // The host's copy of its transcript, which the tally came from, and its screen at the end.
+    const copy = join(area, "claude-session.jsonl");
+    const screen = join(area, "claude-screen.ansi");
+    const copied = existsSync(copy) ? readFileSync(copy, "utf8").split("\n").filter(Boolean) : [];
+    check(
+      "in its terminal, its transcript was copied for the harness and its tally came from it, and its screen was kept at the end",
+      copied.some((l) => l.includes('"type":"assistant"')) &&
+        trial.turns >= 2 &&
+        trial.tokensIn > 0 &&
+        existsSync(screen) &&
+        readFileSync(screen, "utf8").length > 0,
+      { lines: copied.length, turns: trial.turns, screen: existsSync(screen) },
+    );
+  }
   await runner.remove(area);
-
-  // Goal 070: a trial that compacts. The stand-in makes two rounds and says the conversation is
-  // large after the second, so the real Claude Code compacts before its next request (its window
-  // 100,000 tokens, compacted at 50%). Thermite's PreCompact hook, from Thermite's settings for
-  // the run, copies the transcript as the lane's user and adds its line to the compaction's
-  // instructions; the stand-in's summary names the file, and the harness reads the hook's copy.
-  // Claude Code writes its debug log (DEBUG=1) in its home: on a failure, the check prints its
-  // compaction lines, with what the hooks wrote and what the transcript shows.
-  const area2 = join(scratchDir, "lanes", lane, randomUUID());
-  const repo2 = join(area2, "repo");
-  mkdirSync(join(repo2, "src"), { recursive: true });
-  writeFileSync(join(repo2, "src", "value.txt"), "1\n");
-  execFileSync("git", ["init", "--quiet", "-b", "work"], { cwd: repo2, stdio: "ignore" });
-  await runner.handOver(area2, lane, { harnessReads: true });
-  const compacted = [];
-  const said2 = [];
-  const kept = { dir: join(scratchDir, "research", "claude-real-1", "compactions"), stem: "t-compact", readable: true };
-  const ct = await runClaudeTrial(
-    {
-      trialId: "t-compact",
-      token: "trial-compact",
-      run: "claude-real-1",
-      lane,
-      workspace: repo2,
-      workspaceRoot: area2,
-      parentCommit: "0".repeat(40),
-      editablePaths: ["src/**"],
-      brief: "COMPACT-CHECK Look at the value.",
-      wallMs: 150_000,
-    },
-    {
-      runner,
-      model: { ...model, contextWindow: 100_000, compactAt: 50 },
-      apiUrl: "http://127.0.0.1:9",
-      live: (entries) => said2.push(...entries),
-      progress: () => undefined,
-      submitted: () => undefined,
-      pollMs: 300,
-      keptAt: kept,
-      compacted: (c) => compacted.push(c),
-      env: { DEBUG: "1" },
-    },
-  );
-  const first = compacted[0];
-  const compactedOk =
-    first?.number === 1 &&
-    first.own === true &&
-    /from Claude Code's own transcript of the session/.test(first.markdown) &&
-    /COMPACT-CHECK/.test(first.markdown) &&
-    // The newest tool result before the compaction: Claude Code wrote it to its transcript only
-    // while the hook waited.
-    /Tool result: Bash \(toolu_compact_2\)/.test(first.markdown) &&
-    (first.summary ?? "").includes(`${kept.dir}/t-compact-1.md`);
-  check(
-    "the real Claude Code compacted a trial's conversation: its PreCompact hook copied the whole transcript, to the last tool result, and the summary names the kept file",
-    compactedOk,
-    {
-      compactions: ct.compactions ?? 0,
-      stopped: ct.stopped,
-      error: ct.error,
-      own: first?.own,
-      summary: first?.summary,
-      head: first?.markdown.slice(0, 300),
-      results: first?.markdown.match(/Tool result: [^\n]*/g),
-    },
-    compactedOk ? undefined : await compactionDiagnostics(runner, area2, said2),
-  );
-  await runner.remove(area2);
-  runner.close();
 }
 
 /**
@@ -403,4 +444,12 @@ check(
   api.seen,
 );
 await api.close();
-console.log(JSON.stringify({ checks, ...(peakRssBytes !== undefined ? { peakRssBytes } : {}) }));
+console.log(
+  JSON.stringify({
+    checks,
+    ...(peakRssBytes !== undefined ? { peakRssBytes } : {}),
+    ...(peakTerminalRssBytes !== undefined ? { peakTerminalRssBytes } : {}),
+  }),
+);
+// A check that failed may leave a server or the broker's connection open: the line above is all.
+process.exit(0);

@@ -42,7 +42,7 @@ The owner, 2026-10-26, on the clean-up guide's question 25: "`Ledger.invalidate(
 ## Decisions
 
 - 2026-10-26, owner: wired to an owner's command, "invalidate this evidence", with its propagation, in a goal of its own.
-- 2026-10-29 17:05 UTC, owner: when results go to the project's own `thermite/<run>/champion` branch (the owner's design of 2026-10-27, not built yet), a champion withdrawn after it was pushed there is never force-moved: Thermite records the withdrawal by a new commit back to the champion that still stands, and a tag on the withdrawn one, so the branch's history keeps it.
+- 2026-10-29 17:03 UTC, owner: when results go to the project's own `thermite/<run>/champion` branch (the owner's design of 2026-10-27, not built yet), a champion withdrawn after it was pushed there is never force-moved: Thermite records the withdrawal by a new commit back to the champion that still stands, and a tag on the withdrawn one, so the branch's history keeps it.
 
 ## Open questions
 

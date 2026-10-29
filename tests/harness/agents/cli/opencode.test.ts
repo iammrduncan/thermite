@@ -417,7 +417,7 @@ describe("the OpenCode harness", () => {
       },
     });
     const note = limitsNote(limits, "OpenCode", OPENCODE_MEMORY);
-    assert.match(note, /Memory: 4096 MiB .*OpenCode itself included \(it uses about 500 MiB\)/);
+    assert.match(note, /Memory: 4096 MiB .*OpenCode itself included \(it uses about 650 MiB\)/);
     assert.match(note, /command that takes it over the limit is killed/);
     assert.doesNotMatch(limitsNote(limits, "Codex"), /it uses|OpenCode/);
     assert.equal(breachError({ killedFor: "timeout", peakRssBytes: 0 }, limits, "X"), undefined);

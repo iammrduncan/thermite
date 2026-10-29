@@ -77,12 +77,12 @@ export function quietField(u: { summary: unknown }, value: number | null): strin
 
 /** Edit rig's description of how the agent programs run (goal 169), beside its field. */
 export const PROGRAM_MODE_TIP =
-  "How Claude Code, Codex and OpenCode run a worker's trial. In their own terminal: the program's own screen, as you would run it, and Thermite follows its session log and its hooks. Headless: one command for each turn, and Thermite reads its output. Headless is the default for now. Pi runs inside the harness and has no terminal. A trial that runs keeps its mode; the next trial takes the new one.";
+  "How Claude Code, Codex and OpenCode run a worker's trial. In their own terminal (the default): the program's own screen, as you would run it, and Thermite follows its session log and its hooks. Headless: one command for each turn, and Thermite reads its output. Pi runs inside the harness and has no terminal. A trial that runs keeps its mode; the next trial takes the new one.";
 
-/** Edit rig's choices of how the agent programs run, in its list's order. */
+/** Edit rig's choices of how the agent programs run, in its list's order: the default first. */
 const PROGRAM_MODE_WORDS: Record<ProgramMode, string> = {
-  headless: "Headless",
   terminal: "In their own terminal",
+  headless: "Headless",
 };
 
 /**
@@ -94,7 +94,7 @@ export function programModeField(u: { summary: unknown }, value: ProgramMode): s
   const takes = !!reported && Object.hasOwn(reported, "program_mode");
   if (!takes)
     return `<select name="program_mode" disabled><option>update the rig first</option></select>`;
-  const options = (["headless", "terminal"] as const)
+  const options = (Object.keys(PROGRAM_MODE_WORDS) as ProgramMode[])
     .map(
       (m) =>
         `<option value="${m}"${m === value ? " selected" : ""}>${PROGRAM_MODE_WORDS[m]}</option>`,
@@ -313,7 +313,7 @@ export const rigSettingsFields = {
     .enum(PROGRAM_MODES)
     .optional()
     .describe(
-      "How a trial's agent program runs, where it can run a terminal UI (Claude Code, Codex, OpenCode): terminal (in its own terminal, as a person runs it) or headless (one command for each turn, the default for now). Pi has no such choice. The next trial takes it",
+      "How a trial's agent program runs, where it can run a terminal UI (Claude Code, Codex, OpenCode): terminal (in its own terminal, as a person runs it; the default) or headless (one command for each turn). Pi has no such choice. The next trial takes it",
     ),
   promotion: z
     .enum(["auto", "owner_approval"])

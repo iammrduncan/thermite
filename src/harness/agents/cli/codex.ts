@@ -51,6 +51,13 @@ import type { CliProgram, CliRun, CliTrialDeps } from "./program.ts";
  * messages.
  */
 
+/**
+ * What the Codex CLI itself uses, as its limits note says: in its own terminal, the default, with
+ * the terminal host, as the harness image's terminal check measured it (2026-10-29: 304 to 307 MiB
+ * at its peak).
+ */
+export const CODEX_MEMORY = "about 300 MiB";
+
 /** Where a trial's Codex home is, under the trial's area: CODEX_HOME. */
 const CODEX_HOME = ["codex-home", ".codex"];
 
@@ -84,6 +91,7 @@ export const codexProgram: CliProgram<CodexTally> = {
   prefix: "codex",
   eventsVar: "THERMITE_CODEX_EVENTS",
   turnWords: "each message or tool call is one",
+  memory: CODEX_MEMORY,
   bin: codexBin,
   exe: codexExe,
   // Its hooks and notify signal each turn and tool, and its hooks give the agent the owner's

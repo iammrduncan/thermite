@@ -171,17 +171,18 @@ describe("control dashboard", () => {
       page,
       /<input name="quiet_minutes" type="number" min="1" max="1440" value="" placeholder="never"/,
     );
-    // How the agent programs run (goal 169), under Advanced: headless until someone chooses.
+    // How the agent programs run (goal 169), under Advanced: in their own terminal until someone
+    // chooses headless.
     assert.match(
       page,
-      /<details class="adv"><summary>Advanced<\/summary>.*Agent programs run.*<select name="program_mode" data-label="how agent programs run"><option value="headless" selected>Headless<\/option><option value="terminal">In their own terminal<\/option><\/select>/s,
+      /<details class="adv"><summary>Advanced<\/summary>.*Agent programs run.*<select name="program_mode" data-label="how agent programs run"><option value="terminal" selected>In their own terminal<\/option><option value="headless">Headless<\/option><\/select>/s,
     );
     Object.assign(form, {
       lanes: "2",
       trial_minutes: "20",
       max_turns: "",
       quiet_minutes: "30",
-      program_mode: "terminal",
+      program_mode: "headless",
       promotion: "auto",
     });
     const r = await s.post("/ui/rigs/rig-a/edit", form);
@@ -194,18 +195,18 @@ describe("control dashboard", () => {
     assert.equal(s.store.commands.latest("rig-a", "rig_settings", 1)[0]?.payload.quiet_minutes, 30);
     assert.equal(
       s.store.commands.latest("rig-a", "rig_settings", 1)[0]?.payload.program_mode,
-      "terminal",
+      "headless",
     );
     await s.relay();
     assert.equal(s.env.service.settings.get().planner, false);
     assert.equal(s.env.service.settings.get().lanes, 2);
     assert.equal(s.env.service.settings.get().quiet_minutes, 30);
-    assert.equal(s.env.service.settings.get().program_mode, "terminal");
+    assert.equal(s.env.service.settings.get().program_mode, "headless");
     await s.relay();
     const after = await (await s.get("/ui/rigs/rig-a/edit")).text();
     assert.match(after, /name="planner" value="1" data-part data-name="Planner">/);
     assert.match(after, /name="quiet_minutes" type="number" min="1" max="1440" value="30"/);
-    assert.match(after, /<option value="terminal" selected>In their own terminal<\/option>/);
+    assert.match(after, /<option value="headless" selected>Headless<\/option>/);
   });
 
   test("Edit rig: a rig with a GPU set shows the judge's share, and a new one is sent signed", async () => {

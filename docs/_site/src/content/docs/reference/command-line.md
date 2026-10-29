@@ -812,11 +812,11 @@ npx thermite command --control https://control.example.com --token-file ~/thermi
   --kind close_run --payload '{"run":"run-1","reason":"another run finished the work"}'
 ```
 
-A rig's own settings, as **Edit rig** has them, go with `rig_settings` and only the fields to change ([`rig_settings`](signed-commands.md#rig_settings) lists them). This runs the next trials' Claude Code, Codex or OpenCode in its own terminal on `rig-1`:
+A rig's own settings, as **Edit rig** has them, go with `rig_settings` and only the fields to change ([`rig_settings`](signed-commands.md#rig_settings) lists them). This runs the next trials' Claude Code, Codex or OpenCode headless on `rig-1`, not in its own terminal, the default:
 
 ```sh
 npx thermite command --control https://control.example.com --token-file ~/thermite-owner-token \
-  --rig rig-1 --kind rig_settings --payload '{"program_mode":"terminal"}'
+  --rig rig-1 --kind rig_settings --payload '{"program_mode":"headless"}'
 ```
 
 Unlike [`POST /v1/rigs/<rig>/settings`](rest-api.md#a-rigs-settings), it sends the fields as given, without comparing them with what the rig reports.

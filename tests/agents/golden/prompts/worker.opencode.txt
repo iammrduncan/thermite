@@ -42,7 +42,7 @@ thermite-trial research add_note TEXT [--source SOURCE]...
 Your shell tool stops a command after two minutes unless you set its timeout: for a long build or
 test, set timeout to 0. What a command starts in the background runs until the trial ends.
 
-Memory: 2048 MiB for everything your lane runs at once, OpenCode itself included (it uses about 500 MiB). A command that takes it over the limit is killed (your shell tool reports "Killed by SIGKILL"): run it again with less parallelism (for example make -j2) or a smaller input, or as a development run, which has its own limit. Disk: 2048 MiB, and at most 50,000 files, for this trial's directory, OpenCode's own files included; going over ends the trial.
+Memory: 2048 MiB for everything your lane runs at once, OpenCode itself included (it uses about 650 MiB). A command that takes it over the limit is killed (your shell tool reports "Killed by SIGKILL"): run it again with less parallelism (for example make -j2) or a smaller input, or as a development run, which has its own limit. Disk: 2048 MiB, and at most 50,000 files, for this trial's directory, OpenCode's own files included; going over ends the trial.
 
 # Assignment (epoch 1, trial 1 of 1, lane-1)
 Campaign: Speed up the sum (hill_climb)

@@ -8,8 +8,11 @@
 //   - a lane's background work runs on across its commands and a dev run, as in a shell;
 //   - no lane process outlives its trial;
 //   - control's model check reaches the model through the rig's route with a correct tool call;
-//   - under OpenCode, a hill-climb trial submits with thermite-trial, and a research run's trial
-//     runs the research tools as `thermite-trial research` commands;
+//   - under OpenCode, a hill-climb trial runs in OpenCode's own terminal (goal 169: the default,
+//     on a rig nobody set), its server first and its terminal attached, and submits with
+//     thermite-trial; then, the rig set to headless over REST, a research run's trial runs
+//     headless (headless stays an advanced choice, so both modes keep a trial here) and runs the
+//     research tools as `thermite-trial research` commands;
 //   - that trial reads and searches its run's research folder, is refused changing the harness's
 //     part of it, and the file it writes in its working area is saved when it ends.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/agents.mjs
@@ -23,6 +26,7 @@ import {
   command,
   control,
   dc,
+  dcLogs,
   events,
   latestVerdicts,
   lifecycles,
@@ -385,8 +389,14 @@ try {
       !JSON.stringify(await events()).includes(providerKey),
     { taken, summary: routeCheck.summary, keys: keysSeen.size },
   );
-  // The OpenCode harness with the same provider: OpenCode runs as the lane, submits with
-  // thermite-trial, and reaches the provider only through the harness's proxy, which adds the key.
+  // The OpenCode harness with the same provider: OpenCode runs as the lane, in its own terminal
+  // on a rig nobody set, submits with thermite-trial, and reaches the provider only through the
+  // harness's proxy, which adds the key.
+  check(
+    "a rig nobody set runs its agent programs in their own terminal (the default)",
+    view.settings?.program_mode === "terminal",
+    view.settings,
+  );
   await ui.post("/ui/settings/rigs", {
     csrf,
     rig: "local-1",
@@ -427,9 +437,18 @@ try {
     120_000,
     2000,
   );
+  // The harness says where it started each program in its terminal (cli/terminal.ts).
+  const terminalStarts = () =>
+    dcLogs(composeEnv, "harness")
+      .split("\n")
+      .filter((l) => l.includes('"msg":"OpenCode started in its terminal"'));
+  const ocInTerminal = terminalStarts().some((l) =>
+    l.includes(`"trial":"${String(ocTrial.body.trial)}"`),
+  );
   check(
-    "OpenCode runs the check and a trial as the lane, submits with thermite-trial, and reaches the provider only through the proxy",
-    ocCheck.body.ok === true &&
+    "OpenCode runs the check and a trial as the lane, the trial in its own terminal, submits with thermite-trial, and reaches the provider only through the proxy",
+    ocInTerminal &&
+      ocCheck.body.ok === true &&
       ocAttempt !== undefined &&
       Number(ocTrial.body.turns) >= 1 &&
       // Its first command passed the lane's memory limit: the broker killed it, not OpenCode.
@@ -437,6 +456,7 @@ try {
       keysSeen.has(`Bearer ${providerKey}`) &&
       ![...keysSeen].some((k) => /Bearer (trial|proxy)\./.test(k)),
     {
+      in_terminal: ocInTerminal,
       check: ocCheck.body.summary,
       attempt: ocAttempt?.subject,
       lane: ocAttempt?.body.lane,
@@ -463,6 +483,20 @@ try {
     min_duration: "30m",
   });
   if (!researchContract.ok) throw new Error(researchContract.errors.join("; "));
+  // Headless from now on: the research trial runs OpenCode one command for each turn.
+  const headless = await api("/v1/rigs/local-1/settings", {
+    method: "POST",
+    body: JSON.stringify({ program_mode: "headless" }),
+  });
+  await until(
+    "the rig runs its agent programs headless",
+    async () => (await api("/v1/rigs/local-1/view")).body.settings?.program_mode === "headless",
+  );
+  check(
+    "the rig is set to run its agent programs headless over REST",
+    headless.status === 200 && headless.body.sent?.program_mode === "headless",
+    headless.body,
+  );
   keysSeen.clear();
   await command("assign_campaign", {
     run: "research-oc",
@@ -482,9 +516,13 @@ try {
   const researchEvents = (await events()).filter((e) => e.subject === "research-oc");
   const refusal = researchEvents.find((e) => e.kind === "fetch_refused");
   const note = researchEvents.find((e) => e.kind === "research_note");
+  const researchInTerminal = terminalStarts().some((l) =>
+    l.includes(`"trial":"${String(researchTrial.body.trial)}"`),
+  );
   check(
-    "a research trial under OpenCode runs the research tools as thermite-trial commands, through the harness",
-    researchSeen.prompt === true &&
+    "a research trial under OpenCode, headless, runs the research tools as thermite-trial commands, through the harness",
+    !researchInTerminal &&
+      researchSeen.prompt === true &&
       researchTrial.body.stopped === "finished" &&
       Number(researchTrial.body.turns) >= 1 &&
       // The fetch went through the harness's fetcher, which refused this machine's address.
@@ -499,6 +537,7 @@ try {
       researchSeen.progress === true &&
       ![...keysSeen].some((k) => /Bearer (trial|proxy)\./.test(k)),
     {
+      in_terminal: researchInTerminal,
       trial: researchTrial.body,
       seen: researchSeen,
       refusal: refusal?.body.reason,

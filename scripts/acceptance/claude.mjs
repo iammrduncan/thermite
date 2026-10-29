@@ -4,14 +4,19 @@
 // Claude subscription added in Providers, its model given to the rig (in Claude Code), then:
 //   - the rig takes the route; its model check runs one Bash call through Claude Code;
 //   - the planner plans through Claude Code, with no tools;
-//   - a worker trial runs Claude Code as the lane's user, with the token on file descriptor 3
-//     (in no environment) and the safety flags, edits the code and submits with thermite-trial;
+//   - a worker trial runs Claude Code in its own terminal (goal 169: the default, on a rig nobody
+//     set), as the lane's user, with the token on file descriptor 3 (in no environment), the
+//     safety flags, its seeds (no screen waits) and its transcript copied for the harness, edits
+//     the code and submits with thermite-trial;
 //   - it compacts once: Thermite's PreCompact hook copies its transcript and names the file in
 //     the summary, and the harness keeps the conversation and records the compaction;
 //   - Thermite's hooks run in it as the lane's user and reach the harness with the trial's token:
 //     of two owner's messages sent to the running trial, the PostToolUse hook gives the first
 //     after a command and the Stop hook the second at the end of the turn, each read once with
 //     how it went in;
+//   - the rig set to headless over REST, a later trial runs Claude Code headless (`-p`), with
+//     the same token, flags, hooks and two messages inside its turn, and submits: headless stays
+//     an advanced choice, so both modes keep a trial here;
 //   - the auditor, given the subscription's model on Edit rig, audits a large gain in Claude
 //     Code in the supervisor, with no tools, no settings or MCP, its effort, and the token on
 //     file descriptor 3 (in no environment), without the scrub;
@@ -81,7 +86,15 @@ writeFileSync(env.contractFile, JSON.stringify(contract));
 dc(composeEnv, ...files, "up", "-d", "--build");
 try {
   await until("control health", async () => (await fetch(`${control}/v1/health`)).ok);
-  await until("the rig reports", async () => (await api("/v1/rigs/local-1/view")).body?.hardware);
+  const reported = await until("the rig reports its settings", async () => {
+    const view = (await api("/v1/rigs/local-1/view")).body;
+    return view?.hardware && view.settings ? view : undefined;
+  });
+  check(
+    "a rig nobody set runs its agent programs in their own terminal (the default)",
+    reported.settings?.program_mode === "terminal",
+    reported.settings,
+  );
   const login = await fetch(`${control}/ui/login`, {
     method: "POST",
     body: new URLSearchParams({ token: secret("control-admin-token") }),
@@ -173,8 +186,27 @@ try {
     2000,
   );
   const trialId = String(started.body.trial);
+  const messaged = new Set([trialId]);
   for (const text of ["Look at the inner loop first.", "Keep the change small."])
     await command("message_agent", { run: "smoke-1", to: `trial:${trialId}`, text });
+  // Once the trial has its first message, it runs in the mode it started with: the rig is set to
+  // headless for the trials after it.
+  await until(
+    "the terminal trial read its first message",
+    async () =>
+      (await events()).find((e) => e.kind === "agent_message_read" && e.body.trial === trialId),
+    300_000,
+    2000,
+  );
+  const headless = await api("/v1/rigs/local-1/settings", {
+    method: "POST",
+    body: JSON.stringify({ program_mode: "headless" }),
+  });
+  check(
+    "the rig is set to run its agent programs headless over REST",
+    headless.status === 200 && headless.body.sent?.program_mode === "headless",
+    headless.body,
+  );
   const attempt = await until(
     "a trial in Claude Code submitted",
     async () =>
@@ -188,13 +220,14 @@ try {
   );
   const said = String(attempt.body.hypothesis);
   check(
-    "Claude Code ran as the lane's user with the token on file descriptor 3, its own sandbox off and no settings or MCP, and submitted with thermite-trial",
+    "Claude Code ran in its own terminal as the lane's user, with the token on file descriptor 3, its own sandbox off, no settings or MCP, its seeds and no question tool, and submitted with thermite-trial",
     /uid=10101 /.test(said) &&
       /token=set /.test(said) &&
       /token_on=fd3 /.test(said) &&
       /scrub=unset /.test(said) &&
       /strict_mcp=true /.test(said) &&
       /no_settings=true /.test(said) &&
+      / mode=terminal tty=true seeded=yes bypass_warning=skipped no_questions=true /.test(said) &&
       /model=claude-opus-5-5\)/.test(said),
     said,
   );
@@ -208,8 +241,8 @@ try {
     2000,
   );
   check(
-    "the controller followed Claude Code's output (turns counted)",
-    Number(trial.body.turns) >= 1,
+    "the controller followed Claude Code's transcript in its terminal (turns and tokens counted)",
+    Number(trial.body.turns) >= 1 && Number(trial.body.tokens_in) > 0,
     trial.body,
   );
   const reads = (await events()).filter(
@@ -227,7 +260,10 @@ try {
   // user) copied the transcript and told the summary where the run keeps it; the harness kept
   // that copy in the run's research folder and recorded the compaction.
   const compacted = (await events()).find(
-    (e) => e.kind === "context_compacted" && e.body.harness === "claude-code",
+    (e) =>
+      e.kind === "context_compacted" &&
+      e.body.harness === "claude-code" &&
+      e.body.trial === trialId,
   );
   const kept = String(compacted?.body.snapshot ?? "");
   check(
@@ -270,6 +306,52 @@ try {
       /no_settings=true /.test(why) &&
       /model=claude-opus-5-5\)/.test(why),
     audited,
+  );
+  // The later trial, headless: the owner's two messages go to each trial that starts, until one
+  // submits headless.
+  const later = await until(
+    "a trial in Claude Code submitted headless",
+    async () => {
+      const all = await events();
+      for (const e of all.filter((x) => x.kind === "trial_started" && x.subject === "smoke-1")) {
+        const id = String(e.body.trial);
+        if (messaged.has(id)) continue;
+        messaged.add(id);
+        for (const text of ["Look at the inner loop first.", "Keep the change small."])
+          await command("message_agent", { run: "smoke-1", to: `trial:${id}`, text });
+      }
+      return all.find(
+        (e) =>
+          e.kind === "attempt_recorded" &&
+          /claude code harness/.test(String(e.body.hypothesis ?? "")) &&
+          String(e.body.hypothesis).includes(" mode=headless "),
+      );
+    },
+    900_000,
+    3000,
+  );
+  const saidLater = String(later.body.hypothesis);
+  const laterTrial = await until(
+    "the headless trial's end",
+    async () =>
+      (await events()).find((e) => e.kind === "trial_finished" && e.body.attempt === later.subject),
+    120_000,
+    2000,
+  );
+  const laterReads = (await events()).filter(
+    (e) => e.kind === "agent_message_read" && e.body.trial === laterTrial.body.trial,
+  );
+  check(
+    "a trial after the change ran Claude Code headless, with the same token, flags and hooks, gave the owner's two messages inside its turn, and submitted",
+    /uid=10101 /.test(saidLater) &&
+      /token=set /.test(saidLater) &&
+      /token_on=fd3 /.test(saidLater) &&
+      /strict_mcp=true /.test(saidLater) &&
+      /no_settings=true /.test(saidLater) &&
+      /steered=after-tool:owner,turn-end:owner /.test(saidLater) &&
+      laterReads.map((e) => e.body.how).join(",") === "after-tool,turn-end" &&
+      Number(laterTrial.body.turns) >= 1,
+    { said: saidLater, reads: laterReads.map((e) => e.body), trial: laterTrial.body },
   );
   const providers = await until(
     "the subscription's usage on the Providers page",

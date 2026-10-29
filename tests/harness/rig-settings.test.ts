@@ -97,18 +97,18 @@ describe("the rig's own settings (Edit rig)", () => {
     assert.equal((r as { accepted: boolean }).accepted, true);
     assert.equal(env.service.settings.get().workers, false);
     assert.equal(env.service.promotion, "auto");
-    // Headless until someone sets the terminal (goal 169); then the next trial runs in it.
-    assert.equal(env.service.settings.get().program_mode, "headless");
-    const terminal = await env.service.applyCommand(
-      env.sign("rig_settings", { program_mode: "terminal" }),
-    );
-    assert.equal((terminal as { accepted: boolean }).accepted, true);
+    // In their own terminal until someone sets headless (goal 169); then the next trial is headless.
     assert.equal(env.service.settings.get().program_mode, "terminal");
+    const headless = await env.service.applyCommand(
+      env.sign("rig_settings", { program_mode: "headless" }),
+    );
+    assert.equal((headless as { accepted: boolean }).accepted, true);
+    assert.equal(env.service.settings.get().program_mode, "headless");
     const bad = (await env.service.applyCommand(
       env.sign("rig_settings", { program_mode: "tui" }),
     )) as { status: string; accepted?: boolean };
     assert.ok(bad.status === "rejected" || bad.accepted === false, JSON.stringify(bad));
-    assert.equal(env.service.settings.get().program_mode, "terminal");
+    assert.equal(env.service.settings.get().program_mode, "headless");
     const report = env.service.snapshot(0, 10) as { summary: { settings: RigSettings } };
     assert.equal(report.summary.settings.workers, false);
     assert.ok(

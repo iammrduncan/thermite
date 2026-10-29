@@ -6,18 +6,23 @@
 // model, and a made-up token signs in to it, so no subscription, key or network is needed:
 //   - the model check: Claude Code runs its Bash call as the model check's user;
 //   - a planner call: Claude Code's Grep reads past research outside its folder;
-//   - a trial as lane-1: its Write tool edits the workspace, its command finds the token in no
-//     environment, and it submits with thermite-trial;
-//   - a trial that compacts (the stand-in reports a large conversation): Thermite's PreCompact
-//     hook copies the whole transcript, to the last tool result, which Claude Code writes only
-//     after the hook starts, and the summary names the kept file (goal 070);
+//   - a trial as lane-1, in Claude Code's own terminal (goal 169: the rig's default) through the
+//     terminal host, and again headless (`-p`, an advanced choice): its Write tool edits the
+//     workspace, its command finds the token in no environment, and it submits with
+//     thermite-trial; in its terminal, its tally comes from its transcript, which the host copies
+//     for the harness, and its screen is kept at the end;
+//   - a trial in its terminal that compacts (the stand-in reports a large conversation):
+//     Thermite's PreCompact hook copies the whole transcript, to the last tool result, which
+//     Claude Code writes only after the hook starts, and the summary names the kept file (goal
+//     070);
 //   - an advisor's call as the supervisor's user, with /tmp closed to it (the one-container rig):
 //     without CLAUDE_CODE_SUBPROCESS_ENV_SCRUB, with the token on file descriptor 3 and in no
 //     process's environment;
 //   - every call to the stand-in was signed in with the token;
 //   - the image has no bubblewrap: no call of Claude Code needs it.
-// It prints the peak memory the broker recorded for Claude Code's runs in its trial, the figure
-// Claude Code's limits note states.
+// It prints the peak memory the broker recorded for Claude Code's runs in its trials, headless and
+// in its terminal (the terminal host, Claude Code and its commands), the figure Claude Code's
+// limits note states.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/claude-real.mjs
 //   CLAUDE_CODE_VERSION  the version the image is built with (default 2.1.308)
@@ -112,6 +117,8 @@ try {
     name,
     "--network",
     "none",
+    "--memory",
+    "2g",
     "--cap-drop",
     "ALL",
     ...["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETGID", "SETUID"].flatMap((c) => [
@@ -193,9 +200,13 @@ try {
   ]);
   results.push(inside("10001:10001", "advisor", ["-e", "TMPDIR=/var/lib/claude-real-sup"]));
   for (const r of results) for (const c of r.checks) report(c);
-  const peak = results[0]?.peakRssBytes;
+  const mib = (b) =>
+    typeof b === "number"
+      ? `${Math.round(b / 2 ** 20)} MiB`
+      : "not recorded (the trial did not run)";
+  console.log(`Claude Code's peak memory in its trial, headless: ${mib(results[0]?.peakRssBytes)}`);
   console.log(
-    `Claude Code's peak memory in its trial: ${typeof peak === "number" ? `${Math.round(peak / 2 ** 20)} MiB` : "not recorded (the trial did not run)"}`,
+    `Claude Code's peak memory in its trial, in its terminal with the terminal host: ${mib(results[0]?.peakTerminalRssBytes)}`,
   );
 } catch (err) {
   report({

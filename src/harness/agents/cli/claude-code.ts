@@ -107,10 +107,11 @@ async function readClaudeVersion(run: CliRun, runner: Runner): Promise<string | 
 }
 
 /**
- * What Claude Code itself uses, as its limits note says: measured in the real Claude Code
- * acceptance (2026-10-28: 343 MiB at its trial's peak, with the commands it ran).
+ * What Claude Code itself uses, as its limits note says: in its own terminal, the default, with the
+ * terminal host, as the real Claude Code acceptance measured it (2026-10-29: 553 and 574 MiB at its
+ * trial's peak, with the commands it ran; 342 and 346 MiB headless).
  */
-export const CLAUDE_CODE_MEMORY = "about 350 MiB";
+export const CLAUDE_CODE_MEMORY = "about 550 MiB";
 
 /** Claude Code's settings in a trial: its hooks, and its compaction hooks when the conversation is kept. */
 const trialSettings = (run: CliRun) =>

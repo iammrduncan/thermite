@@ -52,11 +52,12 @@ export const PROGRAM_MODES = ["terminal", "headless"] as const;
 export type ProgramMode = (typeof PROGRAM_MODES)[number];
 
 /**
- * A rig's mode until someone sets one: headless, for now. The owner chose the terminal as the
- * default where a program can run one (2026-10-26); it becomes the default once the stand-in
- * programs and the acceptance checks run trials in a terminal.
+ * A rig's mode until someone sets one: the terminal, the owner's choice where a program can run
+ * one (2026-10-26); headless is an advanced option. A rig's settings file keeps only what someone
+ * set, so every rig nobody set follows this default. A harness that reports no mode is older than
+ * the terminal mode and runs headless (control's readSettings).
  */
-export const PROGRAM_MODE_DEFAULT: ProgramMode = "headless";
+export const PROGRAM_MODE_DEFAULT: ProgramMode = "terminal";
 
 /** The rig_settings payload: only the fields that change. */
 export type RigSettingsChange = z.infer<(typeof CommandPayloads)["rig_settings"]>;

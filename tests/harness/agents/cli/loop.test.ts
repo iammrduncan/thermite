@@ -484,7 +484,7 @@ describe("the CLI trial loop's research mode", () => {
     assert.equal(run.env?.THERMITE_EDITABLE_PATHS, undefined);
     const prompt = String(run.stdin);
     assert.ok(prompt.startsWith(RESEARCH_WORKER_SYSTEM));
-    assert.match(prompt, /OpenCode itself included \(it uses about 500 MiB\)/);
+    assert.match(prompt, /OpenCode itself included \(it uses about 650 MiB\)/);
     // The brief, then the trial's length; the MCP line last.
     assert.ok(
       prompt.endsWith(

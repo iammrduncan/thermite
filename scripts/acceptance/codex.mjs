@@ -6,14 +6,19 @@
 //   - the rig takes the route; its model check runs one shell call through Codex, as the model
 //     check's own user;
 //   - the planner plans through Codex, as the planner's own user, with a credential minted for it;
-//   - a worker trial runs Codex as the lane's user, with its own home and configuration, its
-//     approvals and sandbox off, edits the code and submits with thermite-trial;
+//   - a worker trial runs Codex in its own terminal (goal 169: the default, on a rig nobody set),
+//     as the lane's user, with its own home and configuration, its workspace trusted (no screen
+//     waits), its approvals and sandbox off and its rollout copied for the harness, edits the
+//     code and submits with thermite-trial;
 //   - it compacts once: its compaction prompt (Thermite's) names where the run keeps the
 //     conversation, and the harness keeps the conversation from Codex's rollout and records it;
-//   - Thermite's hooks run in it (`codex exec` with --dangerously-bypass-hook-trust) as the
-//     lane's user and reach the harness with the trial's token: of two owner's messages sent to
-//     the running trial, the PostToolUse hook gives the first after a command and the Stop hook
-//     the second at the end of the turn, each read once with how it went in;
+//   - Thermite's hooks run in it (with --dangerously-bypass-hook-trust) as the lane's user and
+//     reach the harness with the trial's token: of two owner's messages sent to the running
+//     trial, the PostToolUse hook gives the first after a command and the Stop hook the second at
+//     the end of the turn, each read once with how it went in;
+//   - the rig set to headless over REST, a later trial runs `codex exec` headless, with the same
+//     home, flags, hooks and two messages inside its turn, and submits: headless stays an
+//     advanced choice, so both modes keep a trial here;
 //   - the auditor, given the same model in Codex over REST (goal 073), audits a large gain in
 //     the Codex CLI in the supervisor: in its own folder, with the read-only sandbox, no
 //     approvals asked, no shell, through the supervisor's proxy for the call with a credential
@@ -94,7 +99,15 @@ writeFileSync(env.contractFile, JSON.stringify(contract));
 dc(composeEnv, ...files, "up", "-d", "--build");
 try {
   await until("control health", async () => (await fetch(`${control}/v1/health`)).ok);
-  await until("the rig reports", async () => (await api("/v1/rigs/local-1/view")).body?.hardware);
+  const reported = await until("the rig reports its settings", async () => {
+    const view = (await api("/v1/rigs/local-1/view")).body;
+    return view?.hardware && view.settings ? view : undefined;
+  });
+  check(
+    "a rig nobody set runs its agent programs in their own terminal (the default)",
+    reported.settings?.program_mode === "terminal",
+    reported.settings,
+  );
   const login = await fetch(`${control}/ui/login`, {
     method: "POST",
     body: new URLSearchParams({ token: secret("control-admin-token") }),
@@ -192,8 +205,27 @@ try {
     2000,
   );
   const trialId = String(started.body.trial);
+  const messaged = new Set([trialId]);
   for (const text of ["Look at the inner loop first.", "Keep the change small."])
     await command("message_agent", { run: "smoke-1", to: `trial:${trialId}`, text });
+  // Once the trial has its first message, it runs in the mode it started with: the rig is set to
+  // headless for the trials after it.
+  await until(
+    "the terminal trial read its first message",
+    async () =>
+      (await events()).find((e) => e.kind === "agent_message_read" && e.body.trial === trialId),
+    300_000,
+    2000,
+  );
+  const headless = await api("/v1/rigs/local-1/settings", {
+    method: "POST",
+    body: JSON.stringify({ program_mode: "headless" }),
+  });
+  check(
+    "the rig is set to run its agent programs headless over REST",
+    headless.status === 200 && headless.body.sent?.program_mode === "headless",
+    headless.body,
+  );
   const attempt = await until(
     "a trial in Codex submitted",
     async () =>
@@ -206,14 +238,14 @@ try {
   );
   const said = String(attempt.body.hypothesis);
   check(
-    "Codex ran as the lane's user with its own home, approvals and sandbox off, reached the model through the proxy with the trial's token, and submitted with thermite-trial",
+    "Codex ran in its own terminal as the lane's user with its own home, its workspace trusted, approvals and sandbox off, reached the model through the proxy with the trial's token, and submitted with thermite-trial",
     /uid=10101 /.test(said) &&
       /home=own /.test(said) &&
       /proxy_url=harness /.test(said) &&
       /auth=trial /.test(said) &&
       /proxied=200 /.test(said) &&
       /bypass=true /.test(said) &&
-      /ignore_rules=true /.test(said) &&
+      / mode=terminal tty=true trusted=yes no_daemon=true hook_trust=true /.test(said) &&
       /model=scripted\)/.test(said),
     said,
   );
@@ -227,8 +259,8 @@ try {
     2000,
   );
   check(
-    "the controller followed Codex's output (turns counted)",
-    Number(trial.body.turns) >= 1,
+    "the controller followed Codex's rollout in its terminal (turns and tokens counted)",
+    Number(trial.body.turns) >= 1 && Number(trial.body.tokens_in) > 0,
     trial.body,
   );
   const reads = (await events()).filter(
@@ -246,7 +278,7 @@ try {
   // read Codex's rollout of the thread from the lane's area and kept it in the run's research
   // folder, with Codex's summary.
   const compacted = (await events()).find(
-    (e) => e.kind === "context_compacted" && e.body.harness === "codex",
+    (e) => e.kind === "context_compacted" && e.body.harness === "codex" && e.body.trial === trialId,
   );
   const kept = String(compacted?.body.snapshot ?? "");
   check(
@@ -293,6 +325,53 @@ try {
       /proxied=200 /.test(why) &&
       /model=scripted\)/.test(why),
     audited,
+  );
+  // The later trial, headless: the owner's two messages go to each trial that starts, until one
+  // submits headless.
+  const later = await until(
+    "a trial in Codex submitted headless",
+    async () => {
+      const all = await events();
+      for (const e of all.filter((x) => x.kind === "trial_started" && x.subject === "smoke-1")) {
+        const id = String(e.body.trial);
+        if (messaged.has(id)) continue;
+        messaged.add(id);
+        for (const text of ["Look at the inner loop first.", "Keep the change small."])
+          await command("message_agent", { run: "smoke-1", to: `trial:${id}`, text });
+      }
+      return all.find(
+        (e) =>
+          e.kind === "attempt_recorded" &&
+          /codex harness/.test(String(e.body.hypothesis ?? "")) &&
+          String(e.body.hypothesis).includes(" mode=headless "),
+      );
+    },
+    900_000,
+    3000,
+  );
+  const saidLater = String(later.body.hypothesis);
+  const laterTrial = await until(
+    "the headless trial's end",
+    async () =>
+      (await events()).find((e) => e.kind === "trial_finished" && e.body.attempt === later.subject),
+    120_000,
+    2000,
+  );
+  const laterReads = (await events()).filter(
+    (e) => e.kind === "agent_message_read" && e.body.trial === laterTrial.body.trial,
+  );
+  check(
+    "a trial after the change ran `codex exec` headless, with its own home, the proxy, its flags and hooks, gave the owner's two messages inside its turn, and submitted",
+    /uid=10101 /.test(saidLater) &&
+      /home=own /.test(saidLater) &&
+      /auth=trial /.test(saidLater) &&
+      /proxied=200 /.test(saidLater) &&
+      /bypass=true /.test(saidLater) &&
+      /ignore_rules=true /.test(saidLater) &&
+      /steered=after-tool:owner,turn-end:owner /.test(saidLater) &&
+      laterReads.map((e) => e.body.how).join(",") === "after-tool,turn-end" &&
+      Number(laterTrial.body.turns) >= 1,
+    { said: saidLater, reads: laterReads.map((e) => e.body), trial: laterTrial.body },
   );
   check(
     "every Responses call reached the provider with its own key, added by the proxy, never a run's credential",

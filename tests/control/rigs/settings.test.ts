@@ -496,16 +496,16 @@ describe("Edit rig's settings over REST and MCP", () => {
     const r = text(
       await operator.callTool({
         name: "set_rig_settings",
-        arguments: { rig: "rig-a", lanes: 3, review: false, program_mode: "terminal" },
+        arguments: { rig: "rig-a", lanes: 3, review: false, program_mode: "headless" },
       }),
     );
-    assert.deepEqual(r.sent, { lanes: 3, review: false, program_mode: "terminal" });
+    assert.deepEqual(r.sent, { lanes: 3, review: false, program_mode: "headless" });
     await relay();
     // The harness's owner-only gate passes the operator, who acts for the owner.
     assert.equal(env.service.settings.get().lanes, 3);
     assert.equal(env.service.settings.get().review, false);
-    // Its next trials run their program in its own terminal (goal 169).
-    assert.equal(env.service.settings.get().program_mode, "terminal");
+    // Its next trials run their program headless, not in its own terminal (goal 169).
+    assert.equal(env.service.settings.get().program_mode, "headless");
     assert.equal(
       store.commands.list(10).find((c) => c.id === r.id)?.status,
       "delivered",
@@ -559,7 +559,11 @@ test("Edit rig's choice of how agent programs run is off on a rig whose harness 
     "headless",
   );
   assert.doesNotMatch(newer, /disabled/);
-  assert.match(newer, /<option value="headless" selected>Headless<\/option>/);
+  // The default first.
+  assert.match(
+    newer,
+    /<option value="terminal">In their own terminal<\/option><option value="headless" selected>Headless<\/option>/,
+  );
   assert.match(
     programModeField({ summary: { settings: { program_mode: "terminal" } } }, "terminal"),
     /<option value="terminal" selected>In their own terminal<\/option>/,

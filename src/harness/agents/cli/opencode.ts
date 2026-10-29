@@ -44,8 +44,12 @@ import type { CliProgram, CliRun, CliTrialDeps } from "./program.ts";
  * checks the trial's token and adds the key. OpenCode's own models (its free ones) need no key.
  */
 
-/** What OpenCode itself uses, as its limits note says. */
-export const OPENCODE_MEMORY = "about 500 MiB";
+/**
+ * What OpenCode itself uses, as its limits note says: in its own terminal, the default, its server,
+ * its terminal and the terminal host, as the harness image's terminal check measured them
+ * (2026-10-29: 636 to 640 MiB at their peak).
+ */
+export const OPENCODE_MEMORY = "about 650 MiB";
 
 /** A trial's configuration for OpenCode: its route through the proxy, and its MCP servers. */
 const trialConfig = (run: CliRun) =>

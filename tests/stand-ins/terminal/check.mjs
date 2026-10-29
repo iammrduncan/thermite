@@ -17,7 +17,9 @@
 //     containers/test-anthropic's stand-in, with a made-up sign-in on file descriptor 3: its
 //     transcript, which only lane-1 may read, copied; its hooks' signals; `/exit`;
 //   - one short trial through the trial loop's terminal mode for the fake TUI in Claude Code's
-//     place, the real Codex and the real OpenCode (trials.mjs).
+//     place, the real Codex and the real OpenCode (trials.mjs);
+//   - for each real program, the peak memory of its run in its terminal, the host with it, as the
+//     broker recorded it: the figure its limits note states.
 // THERMITE_SRC names the code it imports: the image's build (/opt/thermite/dist), or a mounted
 // source tree (TypeScript, run as it is).
 import { execFileSync } from "node:child_process";
@@ -111,6 +113,14 @@ const laneProcesses = () =>
         return false;
       }
     });
+
+/** The peak memory of a program's run in its terminal, the host and its commands with it. */
+const peak = (name, done) =>
+  check(
+    `${name} in its terminal, with the terminal host, used this much memory at its peak`,
+    true,
+    `${Math.round((done.outcome.peakRssBytes ?? 0) / 2 ** 20)} MiB`,
+  );
 
 const limits = {
   timeoutMs: 600_000,
@@ -349,7 +359,7 @@ async function codex() {
     }
     const ended = await t.end();
     check("/exit ends Codex", ended.how === "end steps" && ended.code === 0, ended);
-    await t.done;
+    peak("Codex", await t.done);
   } finally {
     api.close();
   }
@@ -435,7 +445,7 @@ async function opencode() {
     }
     await sleep(2000);
     const ended = await t.end();
-    await t.done;
+    peak("OpenCode, its server and its terminal", await t.done);
     await sleep(500);
     check(
       "/exit ends OpenCode, and its server with it",
@@ -524,12 +534,15 @@ async function claude() {
       );
       await t.type("Say ok again.");
       await until("its second turn's end", () => stops() >= 2, 60_000);
+      // The transcript's records land after the Stop hook, and the host copies every 250 ms.
+      const replies = () => lines(copy).filter((r) => r.type === "assistant").length;
+      await until("both replies in the copy", () => replies() >= 2, 10_000).catch(() => false);
       check(
         "its transcript, lane-1's alone, was copied for the harness, with both turns",
-        lines(copy).filter((r) => r.type === "assistant").length >= 2,
+        replies() >= 2,
         lines(copy)
           .map((r) => r.type)
-          .slice(-8),
+          .slice(-12),
       );
     } catch (err) {
       check("Claude Code's turns ended", false, {
@@ -539,7 +552,7 @@ async function claude() {
     }
     const ended = await t.end();
     check("/exit ends Claude Code", ended.how === "end steps" && ended.code === 0, ended);
-    await t.done;
+    peak("Claude Code", await t.done);
   } finally {
     await api.close();
   }

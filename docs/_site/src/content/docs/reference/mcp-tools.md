@@ -732,7 +732,7 @@ Returns `{rig, settings, gpu_split}`, from the rig's last signed report, as its 
 | `settings.trial_minutes` | whole number, 1 to 1440, or `null` | **One trial lasts (minutes)** | A trial's length when the campaign's contract sets none. `null`: no limit |
 | `settings.max_turns` | whole number, 1 to 100000, or `null` | **Turns per trial** | Model turns in one trial. `null`: no limit |
 | `settings.quiet_minutes` | whole number, 1 to 1440, or `null` | **Ask me after a quiet spell of (minutes)** | A trial with no line for this long asks the owner under **Needs you**. `null`: never |
-| `settings.program_mode` | `terminal` or `headless` | **Agent programs run**, under **Advanced** in **2 · The agents** | How a worker's trial runs Claude Code, Codex or OpenCode: in its own terminal, or headless (the default) |
+| `settings.program_mode` | `terminal` or `headless` | **Agent programs run**, under **Advanced** in **2 · The agents** | How a worker's trial runs Claude Code, Codex or OpenCode: in its own terminal (the default), or headless |
 | `settings.promotion` | `auto` or `owner_approval` | **3 · When a change becomes the champion**: **Automatically** or **Ask me for each change** | The rig's promotion rule, for runs that set none |
 | `settings.judge_gpus` | whole number or `null` | | The judge's share of the GPUs that the rig keeps. `null`: the rig's default |
 | `gpu_split` | `{set, judge}` or `null` | **GPUs for the judge**, under **4 · Where it runs** | The rig's set of GPUs, and how many are the judge's now. `null`: the rig has no GPU set to split |

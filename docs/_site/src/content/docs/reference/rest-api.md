@@ -265,7 +265,7 @@ The rest of **Edit rig**: the rig's parts, workers at a time, its limits, how it
 | `trial_minutes` | whole number, 1 to 1440, or `null` | **One trial lasts (minutes)**, for a campaign whose contract sets no `trial_minutes`. `null`: no limit; a trial lasts until its worker submits or stops |
 | `max_turns` | whole number, 1 to 100000, or `null` | **Turns per trial**. `null`: no limit |
 | `quiet_minutes` | whole number, 1 to 1440, or `null` | **Ask me after a quiet spell of (minutes)**: a trial with no line for this long asks the owner under **Needs you**. `null`: never |
-| `program_mode` | `terminal` or `headless` | **Agent programs run**, under **Advanced** in **2 · The agents**: `terminal` (**In their own terminal**) or `headless` (**Headless**, the default). The next trial takes it |
+| `program_mode` | `terminal` or `headless` | **Agent programs run**, under **Advanced** in **2 · The agents**: `terminal` (**In their own terminal**, the default) or `headless` (**Headless**). The next trial takes it |
 | `promotion` | `auto` or `owner_approval` | **3 · When a change becomes the champion**: **Automatically** or **Ask me for each change**. A campaign's own rule comes first for its runs |
 | `judge_gpus` | whole number, or `null` | **GPUs for the judge**, on a rig set up with its set of GPUs: from 1 to the lower of 8 and one less than the set, with at most 8 left for the agents. `null`: the rig's default split. A new split restarts the rig's harness to regroup the GPUs: running trials and judge jobs start again |
 
