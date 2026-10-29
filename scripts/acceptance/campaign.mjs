@@ -21,6 +21,7 @@ import {
   dc,
   engine,
   events,
+  formAnswer,
   latestVerdicts,
   prepare,
   secret,
@@ -407,7 +408,7 @@ try {
       body: new URLSearchParams({ csrf, ...form }),
       headers: { cookie },
       redirect: "manual",
-    }).then((r) => decodeURIComponent(String(r.headers.get("location"))));
+    }).then((r) => formAnswer(r, cookie));
   // A Git access is for one host: the stand-in Git host's name.
   await settingsPost("/ui/settings/add", { type: "gitkey", name: "acc-deploy", host: gitBox });
   const settings = await (await fetch(`${control}/ui/settings`, { headers: { cookie } })).text();

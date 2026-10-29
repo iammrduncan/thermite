@@ -86,6 +86,21 @@ export async function until(what, fn, timeoutMs = 180_000, everyMs = 1000) {
   }
 }
 
+/**
+ * Where a dashboard form sent the owner back, as words: its address, or the page itself when the
+ * message is a note the page shows (control keeps other programs' errors out of addresses).
+ */
+export async function formAnswer(r, cookie) {
+  const to = String(r.headers.get("location"));
+  return /=note-[0-9a-f]{24}\b/.test(to)
+    ? (await (await fetch(new URL(to, control), { headers: { cookie } })).text())
+        .replaceAll("&quot;", '"')
+        .replaceAll("&lt;", "<")
+        .replaceAll("&gt;", ">")
+        .replaceAll("&amp;", "&")
+    : decodeURIComponent(to);
+}
+
 export async function api(path, init = {}) {
   const res = await fetch(`${control}${path}`, {
     ...init,

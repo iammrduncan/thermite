@@ -11,7 +11,7 @@
 // Usage: COMPOSE="podman compose" node scripts/acceptance/rig-deploy.mjs (Podman only).
 import { execSync } from "node:child_process";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { control, dc, engine, secret, sh, until } from "./lib/smoke-env.mjs";
+import { control, dc, engine, formAnswer, secret, sh, until } from "./lib/smoke-env.mjs";
 
 const { check, results } = acceptanceChecks();
 if (engine !== "podman") {
@@ -85,7 +85,7 @@ try {
       headers: { cookie },
       redirect: "manual",
     });
-    return decodeURIComponent(String(r.headers.get("location")));
+    return formAnswer(r, cookie);
   };
 
   // The machine, as the owner adds it in Providers.

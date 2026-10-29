@@ -8,7 +8,7 @@
 // Usage: COMPOSE="podman compose" node scripts/acceptance/machine.mjs (or "docker compose").
 import { execFileSync } from "node:child_process";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { control, dc, engine, secret, sh, until } from "./lib/smoke-env.mjs";
+import { control, dc, engine, formAnswer, secret, sh, until } from "./lib/smoke-env.mjs";
 
 const { check, results } = acceptanceChecks();
 const box = "thermite-test-machine";
@@ -60,7 +60,7 @@ try {
       headers: { cookie },
       redirect: "manual",
     });
-    return decodeURIComponent(String(r.headers.get("location")));
+    return formAnswer(r, cookie);
   };
 
   const added = await post("/ui/settings/add", {
