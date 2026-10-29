@@ -120,6 +120,7 @@ export const KB_EVENT_KINDS = [
   "run_created",
   "run_status",
   "champion_promoted",
+  "champion_moved_back",
   "trial_started",
   "trial_finished",
   "journal_note",
@@ -259,6 +260,26 @@ export function indexEvent(t: KbIndexTarget, event: KbEvent): void {
             old,
             "Best so far",
             `Best so far: attempt ${str(b.attempt)} (champion ${str(b.seq)})`,
+          ),
+        },
+        e.at,
+      );
+      return;
+    }
+    // The owner withdrew evidence (goal 174), and the champion moved back.
+    case "champion_moved_back": {
+      const old = t.item(e.subject, "run", ref(e.subject))?.body;
+      if (old === undefined) return;
+      const best = str(b.attempt) ? `attempt ${str(b.attempt)}` : "the starting point";
+      t.put(
+        e.subject,
+        "run",
+        ref(e.subject),
+        {
+          body: setLine(
+            old,
+            "Best so far",
+            `Best so far: ${best} (champion ${str(b.to)}; champion ${str(b.from)} was withdrawn: ${clip(str(b.reason), 300)})`,
           ),
         },
         e.at,
@@ -502,7 +523,12 @@ export function indexEvent(t: KbIndexTarget, event: KbEvent): void {
           typeof b.delta === "number"
             ? ` (${b.delta >= 0 ? "+" : ""}${(b.delta * 100).toFixed(2)}%)`
             : "";
-        const meta = { ...old.meta, verdict: `${verdict}${delta}` };
+        // Withdrawn evidence (goal 174) says why.
+        const why =
+          verdict === "invalidated" && str(b.reasons)
+            ? ` (withdrawn: ${clip(str(b.reasons), 300)})`
+            : "";
+        const meta = { ...old.meta, verdict: `${verdict}${delta}${why}` };
         t.put(old.run, "attempt", ref(e.subject), { body: attemptBody(meta), meta }, e.at);
       }
       return;

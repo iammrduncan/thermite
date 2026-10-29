@@ -106,7 +106,14 @@ const startedId = (cmd: CommandRow): string | null => {
  */
 export function commandProgress(cmd: CommandRow, now: number): Progress {
   const p = commandProgressOnly(cmd, now);
-  if (cmd.kind !== "export_now" || p.tone === "bad") return p;
+  if (p.tone === "bad") return p;
+  // Withdraw evidence (goal 174): a preview's answer shows on the attempt's page, to confirm.
+  if (cmd.kind === "invalidate_evidence" && p.state === "done")
+    return {
+      ...p,
+      said: `${p.said} ${cmd.payload.preview === true ? "What it would reach is on the attempt's page: confirm it there." : "The evidence is withdrawn."}`,
+    };
+  if (cmd.kind !== "export_now") return p;
   // An export the owner asked for (goal 103): which kind, and where it will show.
   const words = exportWords(cmd.payload as { full?: unknown; run?: unknown });
   const made = (cmd.outcome as { result?: { export?: unknown } } | null)?.result?.export;

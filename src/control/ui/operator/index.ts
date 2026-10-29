@@ -1,7 +1,7 @@
 import type { ControlStore, Decision } from "../../store/index.ts";
 import type { RigView } from "../../views/index.ts";
 import { stuckNeeds } from "../stuck.ts";
-import { diskNeeds, drainNeeds } from "./hold.ts";
+import { controlDiskNeeds, diskNeeds, drainNeeds } from "./hold.ts";
 import { auditNeeds, promotionNeeds } from "./promotion.ts";
 import { conclusionNeeds, reviewNeeds } from "./review.ts";
 import { agentsNeeds, keyNeeds, resetNeeds, staleNeeds } from "./rig.ts";
@@ -27,6 +27,7 @@ export {
   waitingOn,
 } from "./run.ts";
 export { sentenceHtml, type TimelineRow, timeline } from "./timeline.ts";
+export { withdrawBlock } from "./withdraw.ts";
 
 /**
  * The operator's views: every decision with what is being decided, the evidence, and what each
@@ -125,6 +126,8 @@ export function needs(
     out.push(...drainNeeds(c, store, u));
   }
   out.push(...resetNeeds(c, store, vs));
+  // Control's own disk at its floor (goal 173).
+  out.push(...controlDiskNeeds(c, store));
   const order = [
     "key",
     "reset",

@@ -113,7 +113,8 @@ With the [message bus](how-the-parts-talk.md#who-may-use-the-message-bus), each 
 
 - **A rig's key on the bus** is in the supervisor's state folder, readable by the supervisor alone. Only its public part travels, to control, on the supervisor's regular call. It survives a full reset.
 - **A rig's seal key** is beside it, the same way. Control seals the rig's config on the bus to it: the model routes with their providers' keys, and the MCP servers with their sign-ins. Only that rig's supervisor can open them, so neither the bus nor its store, nor another rig, holds them in the clear.
-- **Control's two keys on the bus**, its own user and the one that asks the server to reload its users, are sealed in control's store like the secrets above.
+- **Control's two keys on the bus**, its own user and its system user, which asks the server to reload its users and for its store's figures, are sealed in control's store like the secrets above.
+- **The backup's key on the bus** is a file in control's state folder, `bus-backup.seed`, readable by control's user alone, for `thermite backup` and `thermite restore`, which run where that folder is mounted. Its user may only take and restore a snapshot of the `EVENTS` stream: whoever holds it can read every rig's events, never change or remove one. A backup holds it, with control's other keys, so keep a backup as you keep control's state.
 - **Control's certificate authority for the bus** is in control's own folder, beside its signing key, readable by control alone. It signs the bus's server's certificate. Rigs get only its certificate, which is public, and trust the server through it.
 - **The bus's server's TLS key** is in the folder control writes for the server, readable by control's user and group only: the server reads it through that group.
 

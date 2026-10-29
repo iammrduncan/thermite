@@ -2,12 +2,13 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join } from "node:path";
 import { serve } from "@hono/node-server";
 import { buildInfo } from "../common/build-info.ts";
-import { busHost, natsBus, reloadBus } from "../common/bus.ts";
+import { busHost, natsBus } from "../common/bus.ts";
 import { log, optionalSecretFromFile, parseListen } from "../common/env.ts";
 import { writeAtomic } from "../common/fs.ts";
 import { every } from "../common/health.ts";
 import { startLogging } from "../common/log.ts";
 import { readNumber } from "../common/settings.ts";
+import { CONTROL_STATE } from "../core/backup.ts";
 import { generateSigningKeys } from "../core/commands.ts";
 import { EVENT_STREAM_CONFIG } from "../core/link/events.ts";
 import { createControlApi } from "./api/index.ts";
@@ -20,13 +21,16 @@ import {
   busConfigDir,
   busHealth,
   busPublicUrl,
+  busStoreUse,
   CONFIG_WRITE_MS,
   ConfigWriter,
   ConfigWritten,
   controlBusUrl,
+  reloadBus,
 } from "./bus/index.ts";
 import { Credential } from "./credential.ts";
 import { mountDashboard } from "./dashboard/index.ts";
+import { CONTROL_DISK_CHECK_MS, ControlDisk } from "./disk.ts";
 import { EventsApply, EventsMove, EventsWriter } from "./events/index.ts";
 import { followReports } from "./ingest.ts";
 import { sendCommandsOn } from "./issue/index.ts";
@@ -50,8 +54,8 @@ async function main(): Promise<void> {
   const natsUrl = controlBusUrl(env);
   const dir = env.THERMITE_CONTROL_DIR ?? "/var/lib/thermite-control";
   mkdirSync(dir, { recursive: true });
-  const keyPath = join(dir, "control-signing.key");
-  const pubPath = join(dir, "control-signing.pub");
+  const keyPath = join(dir, CONTROL_STATE.signingKey);
+  const pubPath = join(dir, CONTROL_STATE.signingPub);
   if (!existsSync(keyPath)) {
     const keys = generateSigningKeys();
     writeFileSync(keyPath, keys.privateKeyPem, { mode: 0o600 });
@@ -97,12 +101,14 @@ async function main(): Promise<void> {
         >)
       : {},
   };
-  const store = new ControlStore(join(dir, "control.db"));
+  const store = new ControlStore(join(dir, CONTROL_STATE.db));
   const { host, port } = parseListen(env.THERMITE_CONTROL_LISTEN ?? "0.0.0.0:8800");
   // A rig is stale after 3 missed reports (the supervisor reports every 60 s by default).
   const staleAfterMs = readNumber(env, CONTROL_NUMBERS.staleSeconds) * 1000;
   // Offline after 15 minutes without a report (never before it is stale).
   const offlineAfterMs = readNumber(env, CONTROL_NUMBERS.offlineSeconds) * 1000;
+  // The free space control keeps on its state and in the bus's store (goal 173).
+  const diskFloorGib = readNumber(env, CONTROL_NUMBERS.diskFloorGib);
   const driver = driverFromEnv(env);
   // Optional: the owner accepts each rig's first report key (no trust on first use).
   const requireKeyAcceptance = env.THERMITE_CONTROL_REQUIRE_KEY_ACCEPT === "1";
@@ -125,7 +131,7 @@ async function main(): Promise<void> {
   // The key that seals model routes' API keys: its own file, made on first use. Mount it
   // from a separate secret to keep it off the database's volume.
   const secrets = SecretBox.fromFile(
-    env.THERMITE_CONTROL_SECRETS_KEY_FILE ?? join(dir, "secrets.key"),
+    env.THERMITE_CONTROL_SECRETS_KEY_FILE ?? join(dir, CONTROL_STATE.secretsKey),
   );
   // Who may use the bus: control's own users and each rig's that registered its key, written to
   // the server's users file, which the server reloads on control's request (bus/users.ts).
@@ -135,6 +141,8 @@ async function main(): Promise<void> {
     file: join(busDir, BUS_USERS_FILE),
     tls: busTls,
     reload: (seed) => reloadBus(natsUrl, seed, trust),
+    // The backup's own user, which `thermite backup` and `thermite restore` sign in as (goal 173).
+    backupSeedFile: join(dir, CONTROL_STATE.busBackupSeed),
   });
   // Control's connection to the bus, signed in as its own user; the apply of the events stream,
   // which writes what control derives from the events; the writer of the stream, which publishes
@@ -159,7 +167,7 @@ async function main(): Promise<void> {
       runpodTestImage: env.THERMITE_RUNPOD_TEST_IMAGE || undefined,
       runpodRigImage: env.THERMITE_RUNPOD_RIG_IMAGE || undefined,
       // Kits written on the new-campaign page, kept as git repositories in control's state.
-      kits: new KitRepos(join(dir, "kits")),
+      kits: new KitRepos(join(dir, CONTROL_STATE.kits)),
       publicUrl,
       // The images rigs on machines run (none: control can't set rigs up there).
       rigImages:
@@ -200,7 +208,7 @@ async function main(): Promise<void> {
     // The dashboard's pages.
     pages: mountDashboard,
     // Exports from rigs without a results repository, kept in control's state.
-    exportsDir: join(dir, "exports"),
+    exportsDir: join(dir, CONTROL_STATE.exports),
     // Who may use the message bus: a rig's new key gets its user there, and a new seal key its
     // config.
     busUsers,
@@ -334,6 +342,16 @@ async function main(): Promise<void> {
       });
     return watching;
   });
+  // Control's disk floor (goal 173): its state folder, and the room left in the bus's store, as
+  // control's system user reads it. At the floor, new runs wait; nothing else does.
+  const disk = new ControlDisk({
+    store,
+    stateDir: dir,
+    floorGib: diskFloorGib,
+    busStore: () => busStoreUse(natsUrl, busUsers.systemSeed, trust),
+  });
+  void disk.check();
+  const diskWatch = every(loops, "control", "disk", CONTROL_DISK_CHECK_MS, () => disk.check());
   // GPU clouds' prices, pods and spend, read again every 15 minutes.
   const clouds = every(loops, "control", "gpu_clouds", 15 * 60_000, () =>
     refreshGpuClouds(store, secrets).catch((err) =>
@@ -349,6 +367,7 @@ async function main(): Promise<void> {
     clearInterval(clouds);
     clearInterval(usersSync);
     clearInterval(configWrite);
+    clearInterval(diskWatch);
     server.close();
     process.exit(0);
   };

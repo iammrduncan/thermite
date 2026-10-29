@@ -8,6 +8,7 @@ import { heldOutBlock } from "./held-out.ts";
 import type { Need } from "./index.ts";
 import { outcome } from "./outcome.ts";
 import { timeline } from "./timeline.ts";
+import { withdrawnBlock } from "./withdraw.ts";
 
 /**
  * Why the static checks refused a change before building (goal 082): each violation, as the
@@ -32,7 +33,12 @@ export function attemptDetail(
   r: RunView,
   a: AttemptView,
   now: number,
-  opts: { decision?: Need | undefined; patch?: string | undefined } = {},
+  opts: {
+    decision?: Need | undefined;
+    patch?: string | undefined;
+    /** The owner's form to withdraw its evidence, or its preview (goal 174). */
+    withdraw?: string | undefined;
+  } = {},
 ): string {
   const o = outcome(r, a, u);
   const base = r.champion.filter((c) => !c.reopened && c.commit === a.parent).at(-1);
@@ -50,15 +56,17 @@ export function attemptDetail(
     : undefined;
   const state = champ
     ? `It became champion #${champ.seq}: the lanes build on it.`
-    : opts.decision
-      ? "It waits for your decision."
-      : leftOpen
-        ? "The run closed while this change waited for a decision. It does not become the champion, and the rig refuses a decision on it."
-        : a.lifecycle === "declined"
-          ? "You declined it: it never becomes the champion."
-          : audit?.decision === "block"
-            ? "The auditor blocked it."
-            : "";
+    : o.word === "Withdrawn"
+      ? "Its evidence was withdrawn: it can't become the champion."
+      : opts.decision
+        ? "It waits for your decision."
+        : leftOpen
+          ? "The run closed while this change waited for a decision. It does not become the champion, and the rig refuses a decision on it."
+          : a.lifecycle === "declined"
+            ? "You declined it: it never becomes the champion."
+            : audit?.decision === "block"
+              ? "The auditor blocked it."
+              : "";
   const said = `${esc(a.lane ?? "Someone")} submitted it ${esc(ago(a.recorded_at, now))} ago${a.lane ? "" : " by hand"}${esc(on)}. ${esc(evidence(r, a))}${state ? ` <b class="${o.tone === "ok" ? "ok" : o.tone === "bad" ? "bad" : "warn"}">${esc(state)}</b>` : ""}`;
 
   // What happened to it, in order: submitted, each verdict, its audit, its promotion.
@@ -199,11 +207,13 @@ ${a.known_flaws.length ? `<div class="block"><div class="head"><h2>Flaws its aut
     now,
     { limit: 100 },
   )}</details></div>
+${withdrawnBlock(r, a, now)}
 ${heldOutBlock(a, now)}
 ${goals}
 <div class="block"><div class="head"><h2>Files it changes</h2><span class="n">${a.files_total}</span><span class="right">the diff stays on the rig: <code>attempts/${esc(a.id)}.patch</code> in its exports</span></div><div class="card flat">${files}</div></div>
 </div><div class="side">
 <div class="block"><div class="head"><h2>Facts</h2></div><div class="card"><dl class="facts">${facts}</dl></div></div>
 ${a.reasons ? `<div class="block"><div class="head"><h2>The judge's reasons</h2></div><div class="card small">${esc(a.reasons)}</div></div>` : ""}
+${opts.withdraw ?? ""}
 </div></div>`;
 }

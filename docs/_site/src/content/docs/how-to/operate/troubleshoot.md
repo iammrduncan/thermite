@@ -1,6 +1,6 @@
 ---
 title: "Troubleshoot"
-description: "Check the machine with thermite doctor, then find out why a check failed, a port clashes, a build is slow, a rig is quiet, a drain passed its deadline, a disk is at its floor, a part is unhealthy, a trial makes no progress, a message goes unread, a queue change doesn't take, a research run doesn't end, past research or an MCP server doesn't work, or a sign-in bounces back, and where the logs are."
+description: "Check the machine with thermite doctor, then find out why a check failed, a port clashes, a build is slow, a rig is quiet, a drain passed its deadline, a disk is at its floor, control's disk is at its floor, a restore is refused, a part is unhealthy, a trial makes no progress, a message goes unread, a queue change doesn't take, a research run doesn't end, past research or an MCP server doesn't work, or a sign-in bounces back, and where the logs are."
 type: how-to
 sidebar:
   order: 9
@@ -89,7 +89,7 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 
 - **You see:** control stops soon after it starts, and its log has `control's store is past the events stream's end`, then a `fatal` line with `control's store has applied the EVENTS stream to place …, past its last, …`.
 - **Why:** control's store holds records of events the bus's `EVENTS` stream no longer has: the bus's volume was restored from a backup older than control's store, or removed. Going on would skip the stream's next events.
-- **Do:** restore the stream from a backup at least as new as control's store, or the store from one no newer than the stream, then start control again.
+- **Do:** restore both from one backup, which holds the store and the stream in that order ([Restore a backup](backup-and-restore.md#restore-a-backup)); or restore the stream from a backup at least as new as control's store, or the store from one no newer than the stream, then start control again.
 
 ### Control stops at start: its events table can't go to the events stream
 
@@ -108,6 +108,22 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 - **You see:** a rig's events stop reaching its page. Its supervisor's log has `ingest -> 503:` with `the message bus did not take this report's events: …`; control's log has `a report refused for now: its events are not on the bus`, and `GET /v1/bus` says why under `events.waiting`, such as `the bus's store is full: insufficient resources`.
 - **Why:** control keeps every rig's event on its message bus first, and takes a report only once the bus has its events and control has applied them. While the bus is away, or its store is full, control takes none of a report but what the bus has, and the rig keeps its place and sends it again at its next round. A report on the bus waits on the bus and is handed again. Nothing is lost, and nothing is taken twice.
 - **Do:** bring the bus's server back, or give it more disk: [Give it more memory or disk](message-bus.md#give-it-more-memory-or-disk). The next report goes through, control's log says `reports' events go on the bus again`, and `events.waiting` is `null`.
+
+### Control's disk is at its floor
+
+- **You see:** under **Needs you**, `Control holds new runs: its disk is at its floor`; **Start a run**, `thermite run start` and `assign_campaign` answer `Control's disk is at its floor of 5 GiB: the bus's store has 0.5 GiB left of its 10 GiB. No new run starts until there is room: …` (over REST, `409`); `/v1/health` answers 200 with `"degraded":true` and the reading under `disk`; `/metrics` has `thermite_control_disk_low 1`; control's log has `control's disk is at its floor`, and its audit log `disk_low`.
+- **Why:** control keeps [`THERMITE_DISK_FLOOR_GIB`](../../reference/settings.md#address-and-state) free, 5 GiB by default, on its state folder and in the message bus's store: the room JetStream has left under its limit, `THERMITE_NATS_STORE` or NATS's own default of three quarters of the disk that was free when the server started. Control looks every minute. Below the floor on either, it holds new runs, so that what runs already has room. It drops nothing: reports, commands and the runs under way go on, and a store that fills refuses a report for now, which its rig sends again ([the entry above](#rigs-reports-are-refused-for-now-the-bus-is-away-or-its-store-is-full)).
+- **Do:** make room where the card says. The state folder holds `control.db`, the kits and the exports of rigs without a results repository ([Exports on control](exports-on-control.md)), and old `replaced-<time>` folders a restore left. The bus's store keeps every rig's events for good: give its volume more disk, or raise `THERMITE_NATS_STORE` ([Give it more memory or disk](message-bus.md#give-it-more-memory-or-disk)). Control lets go once each place has 1 GiB more than the floor, at its next look: the card goes, `/v1/health` says `"degraded":false`, and the audit log has `disk_room`.
+
+### A restore is refused
+
+- **You see:** `thermite restore` ends with `restore refused:` and exits 1, with one of:
+  - `EVENTS on the bus is not the backup's: it holds 356,496 messages to 356,496, and the backup holds 500,000 to 500,000. …`;
+  - `the restore of EVENTS failed: connection closed. A server with less than about 617 MiB of memory is stopped part way; …`;
+  - `<path> is not the file the backup's manifest names: it changed`;
+  - `control answers at http://control:8800: stop it first`.
+- **Why:** a restore puts a stream back only where the bus has none of that name, and checks the stream it finds against the backup's manifest, since a server stopped part way through a restore leaves a stream that looks whole and is not. A bus that ran on since the backup holds more than the backup and is refused too. A changed file means the backup is not the one its manifest describes. In each case the restore changed no file of control's.
+- **Do:** for a stream, stop the bus, set its store aside, start it with the memory the restore printed, and run the restore again: [Restore a backup](backup-and-restore.md#restore-a-backup). The store set aside is kept, in `replaced-<time>` inside it. For a changed file, use another backup. For a running control, stop it first.
 
 ### Control answers that it is starting
 

@@ -17,6 +17,7 @@ import { approvePromotion, declinePromotion } from "./champion.ts";
 import type { RigCheckRunner } from "./checks.ts";
 import { askStop, drainCommand } from "./drain.ts";
 import type { HarnessService } from "./index.ts";
+import { invalidateEvidence } from "./invalidation.ts";
 import { conflictCheck, unknownIn } from "./rules.ts";
 import { decidingRun, openRun, pauseOthers, requireRun } from "./runs.ts";
 import { requestWipe } from "./wipe.ts";
@@ -321,6 +322,14 @@ export class Commands {
         decidingRun(svc.ledger, p.run, "conclude");
         return new Conclusions(svc.ledger).decide(p.run, p.proposal, p.accept, p.note, by);
       }
+      // The owner withdraws bad evidence (goal 174): a preview, or the withdrawal it previewed.
+      case "invalidate_evidence":
+        return invalidateEvidence(
+          svc,
+          CommandPayloads.invalidate_evidence.parse(payload),
+          envelope.issued_by,
+          by,
+        );
     }
   }
 }

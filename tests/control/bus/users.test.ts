@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -17,6 +17,7 @@ import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import {
   BUS_ACCOUNT,
+  backupPermissions,
   controlPermissions,
   rigPermissions,
   SYSTEM_ACCOUNT,
@@ -321,6 +322,47 @@ describe("each rig's key on the message bus", () => {
           reload: async () => {},
         }),
       /^Error: control's control key on the message bus does not open with its secrets key \(was THERMITE_CONTROL_SECRETS_KEY_FILE replaced\?\)$/,
+    );
+    store.db.close();
+  });
+
+  test("the backup's key: made once in its file, 0600, a user that may back up and restore", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "thermite-bus-backup-"));
+    const seedFile = join(dir, "bus-backup.seed");
+    const store = new ControlStore(":memory:");
+    const secrets = SecretBox.ephemeral();
+    const make = (file = usersPath()) =>
+      new BusUsers({
+        store,
+        secrets,
+        file,
+        reload: async () => {},
+        backupSeedFile: seedFile,
+      });
+    const file = usersPath();
+    await make(file).sync();
+    assert.equal(statSync(seedFile).mode & 0o777, 0o600);
+    const seed = readFileSync(seedFile, "utf8");
+    assert.match(seed, /^SU[A-Z2-7]{56}$/);
+    const backup = fromSeed(new TextEncoder().encode(seed)).getPublicKey();
+    const users = accountsIn(file)[BUS_ACCOUNT]?.users ?? [];
+    assert.deepEqual(users[1], { nkey: backup, permissions: backupPermissions() });
+    // Control started again keeps it.
+    await make().sync();
+    assert.equal(readFileSync(seedFile, "utf8"), seed);
+    // A file that holds no seed stops control, saying what to do.
+    const bad = join(dir, "bad.seed");
+    writeFileSync(bad, "not a seed\n");
+    assert.throws(
+      () =>
+        new BusUsers({
+          store,
+          secrets,
+          file: usersPath(),
+          reload: async () => {},
+          backupSeedFile: bad,
+        }),
+      /does not hold the seed of a NATS user key: remove it, and control makes the backup's key anew as it starts$/,
     );
     store.db.close();
   });

@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { redact } from "../../common/env.ts";
 import { errorText, jsonBody } from "../../common/errors.ts";
-import { ISSUE } from "../../core/api/control/owner.ts";
+import { COMMAND, ISSUE } from "../../core/api/control/owner.ts";
 import { issueWaking, WakeRefused } from "../issue/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 
@@ -57,7 +57,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
 export function commandStatusRoutes(app: Hono, api: ApiContext): void {
   const { store, admin } = api;
 
-  app.get("/v1/commands/:id", admin, (c) => {
+  app.get(COMMAND.path, admin, (c) => {
     const cmd = store.commands.get(c.req.param("id"));
     return cmd ? c.json(cmd) : c.json({ error: "not found" }, 404);
   });

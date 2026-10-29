@@ -195,18 +195,46 @@ export const USAGE = `usage: thermite <command> [options]
                                       run is on, so --rig may be left out; every other kind
                                       needs it. assign_campaign and resume_run on a RunPod rig
                                       whose pod is stopped start the pod first, and say so
+  invalidate --run RUN (--attempt ID | --job N) --reason TEXT [--yes] --control URL --token-file F
+                                      withdraw bad evidence (owner's token): an attempt, for
+                                      good, with every attempt built on it, or a judge job's
+                                      measurements, whose attempts are judged again. It prints
+                                      what it would reach, from the rig, and changes nothing;
+                                      with --yes it then withdraws exactly that, or the rig
+                                      refuses when what it reaches changed. Nothing is deleted
   submit --harness URL --token-file F --run ID --patch-file P --hypothesis TEXT
          [--known-flaw TEXT ...]      submit a patch as a proposer
   status --harness URL --token-file F --attempt ID
                                       show an attempt's lifecycle and verdict
   local init DIR [--engine docker|podman]
                                       make DIR, the local compose stack's .dev folder: random
-                                      tokens in DIR/secrets, the inbox, the outbox and the
-                                      advisors' folder. Files that exist are kept. Run as root,
-                                      it gives what it makes to the owner of DIR's parent folder.
-                                      It says what the local rig gets (CPUs, memory, GPUs), and
-                                      with NVIDIA GPUs the rig can have, writes compose.gpu.yaml
-                                      next to DIR for the engine named, or the one it finds
+                                      tokens in DIR/secrets, the inbox, the outbox, and the
+                                      advisors' and backups' folders. Files that exist are
+                                      kept. Run as root, it gives what it makes to the owner of
+                                      DIR's parent folder. It says what the local rig gets
+                                      (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
+                                      have, writes compose.gpu.yaml next to DIR for the engine
+                                      named, or the one it finds
   selftest isolation [--force]        inside the harness container, as root, with the rig idle: check that role
                                       users cannot reach the ledger, kits, builds or secrets
+  backup FOLDER [--state DIR] [--bus URL]
+                                      where control's state folder is mounted (compose: the
+                                      backup service): copy control's state (control.db, whole
+                                      while control runs, its keys, kits and exports) and a
+                                      snapshot of the bus's EVENTS stream into a new folder in
+                                      FOLDER, named for the time, with a manifest of each file's
+                                      SHA-256 and each stream's count and last place. --state:
+                                      control's state folder (THERMITE_CONTROL_DIR, or
+                                      /var/lib/thermite-control); --bus: the bus
+                                      (THERMITE_NATS_URL)
+  restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]
+                                      with control stopped: check the backup against its
+                                      manifest, restore each stream the bus does not have and
+                                      check it (its count, last place and last message), then
+                                      put control's state back, what it replaces moved aside
+                                      into a dated folder. A stream on the bus that is not the
+                                      backup's is refused, and nothing changes. --control:
+                                      refused while control answers there. --bus-store DIR,
+                                      with the bus stopped: only move the bus's store aside
+                                      into a dated folder in DIR, so that the bus starts empty
 `;

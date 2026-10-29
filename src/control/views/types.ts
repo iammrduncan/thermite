@@ -188,6 +188,26 @@ export interface ChampionStep {
 }
 
 /**
+ * The owner withdrew evidence in a run (goal 174), from the rig's `invalidation` event: its subject
+ * (an attempt, for good, or a judge's job whose measurements were withdrawn), who and why, the
+ * attempts it reached, how many `invalidated` verdicts it recorded, the champions it reopened, and
+ * where the run's champion moved back to (`champion_moved_back`).
+ */
+export interface InvalidationView {
+  id: number;
+  at: string;
+  /** Who withdrew it, as the rig recorded it: `control:owner:ui`, `control:owner:api`… */
+  by: string;
+  kind: "attempt" | "job";
+  subject: string;
+  reason: string;
+  attempts: string[];
+  verdicts: number;
+  champions: number[];
+  champion: { from: number; to: number; attempt: string | null } | null;
+}
+
+/**
  * A hill climb's baseline (goal 115): the judge's values of its starting point, measured alone
  * on every measured cell before any change was judged. Never a held-out cell's.
  */
@@ -264,6 +284,8 @@ export interface RunView {
   status: string;
   pause_reason: string | null;
   champion: ChampionStep[];
+  /** The owner's withdrawals of evidence in the run (goal 174), oldest first. */
+  invalidations: InvalidationView[];
   attempts: AttemptView[];
   verdicts: Record<string, number>;
   /** Confirmed wins that wait for the owner's approval; none in a closed run (goal 087). */
@@ -444,7 +466,13 @@ export interface RunView {
    * and repository. Control keeps a champion's patch only if its SHA-256 is the newest one here
    * for its seq.
    */
-  published_patches: { seq: number; sha256: string; base_commit: string; repo: string | null }[];
+  published_patches: {
+    seq: number;
+    sha256: string;
+    base_commit: string;
+    repo: string | null;
+    path: string;
+  }[];
   /** Champions received from other rigs, and how this rig's judge decided them. */
   propagations: {
     attempt: string | null;

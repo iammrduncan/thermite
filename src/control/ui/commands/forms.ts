@@ -8,6 +8,8 @@ import { exportForm } from "../exports.ts";
  */
 export function formPayload(kind: CommandKind, f: Record<string, unknown>): unknown {
   const run = String(f.run ?? "");
+  // Withdraw evidence (goal 174): the attempt, or one of its jobs; a preview, until it names one.
+  const job = /^job:(\d+)$/.exec(String(f.subject ?? ""))?.[1];
   const payloads: Partial<Record<CommandKind, unknown>> = {
     pause_run: { run, reason: String(f.reason || "paused from the dashboard") },
     resume_run: { run },
@@ -61,6 +63,12 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
     },
     queue_accept: { run, id: String(f.id ?? "") },
     drop_directive: { run, id: Number(f.id) },
+    invalidate_evidence: {
+      run,
+      ...(job ? { job: Number(job) } : { attempt: String(f.attempt ?? "") }),
+      reason: String(f.reason ?? "").trim(),
+      ...(String(f.reach ?? "") ? { reach: String(f.reach) } : { preview: true }),
+    },
     unkeep_message: { run, message: Number(f.message) },
     // A drain's card and its trials under At work (goal 136): End the drain, and Stop the trial.
     // A stuck trial's card (goal 143) gives why, and the trial's stop records it.

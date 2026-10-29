@@ -62,7 +62,8 @@ describe("thermite local init", () => {
     // The supervisor fetches into the inbox as another user.
     for (const dir of ["inbox", "inbox/repos", "inbox/models"])
       assert.equal(statSync(join(root, dir)).mode & 0o777, 0o777, dir);
-    for (const dir of ["outbox", "advisors"]) assert.ok(statSync(join(root, dir)).isDirectory());
+    for (const dir of ["outbox", "advisors", "backups"])
+      assert.ok(statSync(join(root, dir)).isDirectory());
   });
 
   test("keeps every file that exists and writes the rig tokens map again", () => {
@@ -120,7 +121,7 @@ describe("thermite local init", () => {
     const keptGid = statSync(join(root, "secrets/control-admin-token")).gid;
     assert.notEqual(keptGid, other);
     const { made } = localInit(root, { uid, gid: other });
-    assert.equal(made.length, 14);
+    assert.equal(made.length, 15);
     for (const rel of made) assert.equal(statSync(join(root, rel)).gid, other, rel);
     assert.equal(statSync(join(root, "secrets/control-admin-token")).gid, keptGid);
   });
@@ -132,7 +133,7 @@ describe("thermite local init", () => {
     const first = await cli("local", "init", root);
     assert.match(first.stdout, /^made \.dev\nmade \.dev\/secrets\n/);
     assert.match(first.stdout, /made \.dev\/secrets\/control-admin-token\n/);
-    assert.match(first.stdout, /local init: \.dev ready \(17 made, 0 kept\)\n$/);
+    assert.match(first.stdout, /local init: \.dev ready \(18 made, 0 kept\)\n$/);
     for (const name of LOCAL_TOKEN_FILES) assert.ok(!first.stdout.includes(secret(root, name)));
     const second = await cli("local", "init", root);
     // Before its last line, it says what the rig gets on the machine that runs the test.

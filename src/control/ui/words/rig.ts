@@ -19,6 +19,7 @@ const COMMAND: Record<string, string> = {
   assign_campaign: "assign a campaign",
   propagate: "import another rig's champion",
   wipe_state: "wipe the rig's state",
+  invalidate_evidence: "withdraw evidence",
 };
 export const commandText = (kind: string) => COMMAND[kind] ?? kind.replace(/_/g, " ");
 

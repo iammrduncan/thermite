@@ -1,6 +1,7 @@
 import type { Loops } from "../common/health.ts";
 import { LoopAges } from "../core/health.ts";
 import { type BusView, busState } from "./bus/index.ts";
+import { controlDiskOf } from "./disk.ts";
 import type { ControlStore } from "./store/index.ts";
 import { currentChampion, diskOf, type RigView, rigView, workOf } from "./views/index.ts";
 
@@ -78,9 +79,11 @@ export function metricsText(store: ControlStore, staleAfterMs: number, now = Dat
 /**
  * The series of health (goal 173), on which an operator alerts: each of control's loops, and each
  * rig's harness and supervisor loops as their last report and figures gave them, with the seconds
- * since each came around, its limit and whether it is late; each rig's free disk on each place
- * against its floor, and whether it holds new work for it; and how long a rig has drained, and
- * whether its drain passed its deadline. Bounded: by part, loop, rig and place.
+ * since each came around, its limit and whether it is late; control's free disk on its state
+ * folder and in the bus's store against its floor, and whether it holds new runs for it; each
+ * rig's free disk on each place against its floor, and whether it holds new work for it; and how
+ * long a rig has drained, and whether its drain passed its deadline. Bounded: by part, loop, rig
+ * and place.
  */
 export function healthMetricsText(
   store: ControlStore,
@@ -119,6 +122,22 @@ export function healthMetricsText(
       lines.push(`thermite_loop_limit_seconds{${ls}} ${l.limit_seconds}`);
       lines.push(`thermite_loop_late{${ls}} ${l.late ? 1 : 0}`);
     }
+  const own = controlDiskOf(store)?.state();
+  if (own) {
+    help("thermite_control_disk_free_bytes", "gauge", "Free space on a place control writes to");
+    help(
+      "thermite_control_disk_floor_bytes",
+      "gauge",
+      "The free space control keeps on each place",
+    );
+    help("thermite_control_disk_low", "gauge", "1 when control holds new runs for its disk floor");
+    for (const p of own.places)
+      lines.push(
+        `thermite_control_disk_free_bytes{place="${label(p.name)}"} ${Math.round(p.free_gib * 2 ** 30)}`,
+      );
+    lines.push(`thermite_control_disk_floor_bytes ${Math.round(own.floor_gib * 2 ** 30)}`);
+    lines.push(`thermite_control_disk_low ${own.low ? 1 : 0}`);
+  }
   help("thermite_rig_disk_free_bytes", "gauge", "Free space on a place the rig writes to");
   help("thermite_rig_disk_floor_bytes", "gauge", "The free space the rig keeps on each place");
   help("thermite_rig_disk_low", "gauge", "1 when the rig holds new work for its disk floor");

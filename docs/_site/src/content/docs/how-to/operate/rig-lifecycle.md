@@ -74,7 +74,7 @@ It answers `{"restarted":["supervisor"]}`, or `409 {"error":"no deployment drive
 
 ## Move a rig onto new images
 
-A rig keeps the images it was set up with until you move it. What you can do depends on the kind of rig:
+A rig keeps the images it was set up with until you move it. Before you move it, keep its ledger: a **Full export** takes it off the rig, to its results repository or to control ([Keep a rig's ledger](backup-and-restore.md#keep-a-rigs-ledger)). The new harness also copies the ledger before it migrates it. What you can do depends on the kind of rig:
 
 - **The compose stack:** rebuild its images and start it again with your compose tool, as [Stop, start and update](../install/one-machine.md#stop-start-and-update) says.
 - **Set up by control on a machine or a cluster:** when its version is behind control's, **Update to** control's version on its page moves it onto the images control deploys now, with its runs paused, then checked and resumed: see [Update to control's version](#update-to-controls-version).

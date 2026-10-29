@@ -165,6 +165,8 @@ The bus keeps its messages on disk, on the `nats-data` volume. The `EVENTS` stre
 
 To tell that it worked: the server's log as it starts, `docker compose logs nats`, says `Max Memory` at 75% of what Go is told (149.76 MB for 256 MiB), and `Max Storage` at the store's size (`20G` shows as 18.63 GB).
 
+Control keeps 5 GiB of the store free, `THERMITE_DISK_FLOOR_GIB`: with less left under its limit, it starts no new run until there is room ([Control's disk is at its floor](troubleshoot.md#controls-disk-is-at-its-floor)). A [restore](backup-and-restore.md#restore-a-backup) needs more memory than the bus's own for its run: about 1 KiB for each event, over 128 MiB.
+
 ## Keep the rigs off it
 
 Control always uses its bus: it keeps every rig's events there. A rig may still report over HTTP, and take its commands and config from control's API, as Thermite did before the bus: control keeps its events on the bus all the same. To keep the compose stack's own rigs off the bus, set `THERMITE_NATS_URL` to nothing in `.env`, then start the stack again:

@@ -149,16 +149,30 @@ A kind comes from how the judge saw the run fail, never from what the run or the
 | `invalid` | The change's build failed, or its build or run left files the judge refuses, or the kit's check failed, or a measured value was impossible (for example not a number) | "broken: it failed a correctness check or did not build" |
 | `crash_candidate` | The change's run exited with an error or was stopped at a kit limit, or its build was stopped at a kit limit for the second time: the first time, the build may have met a busy host, so the job is an infrastructure failure (`crash_infra`, `build killed (timeout); tried once more`) and runs once more | "crashed when run" |
 | `crash_infra` | Something failed that was not the change's fault, such as the champion's own run or a busy device. The judge tries once more. It never counts against the research | "the rig failed while measuring it (not the change's fault)" |
+| `invalidated` | The owner withdrew the evidence it rested on ([Withdrawn evidence](#withdrawn-evidence)). It supersedes the verdict before it, which stays in the record. Its reasons are the owner's, or `lineage of invalidated evidence: …` for a change built on a withdrawn one | "its evidence was invalidated" |
 
 The [kit manifest reference](kit-manifest.md) lists which kit failure gives which verdict.
 
-The ledger also has two verdicts that nothing in this version records: `invalidated`, which would replace a verdict whose evidence was withdrawn, and `neutral_simplify`.
+v0.1.0's list of verdicts also had `neutral_simplify`, for a change that measured the same and made the code simpler. Nothing ever recorded it, and the judge has no measure of simpler code, so it is gone from the list: no ledger holds one.
+
+### Withdrawn evidence
+
+Evidence the judge recorded can turn out bad: a change that games a check, or measurements taken on a card that ran slow. The owner withdraws it with [`invalidate_evidence`](signed-commands.md#invalidate_evidence): from the attempt's page, `thermite invalidate`, REST or MCP, always after a preview of what it reaches. Agents, an operator and the advisors can't. Nothing is deleted: each step is a new record. [Withdraw bad evidence](../how-to/campaigns/withdraw-bad-evidence.md) shows how.
+
+| Withdrawn | What it reaches | What becomes of it |
+| --- | --- | --- |
+| An attempt | The attempt, and every attempt built on it (on its commit), in turn | Each gets `invalidated`, for good: it never gets another verdict and can't become the champion. A change submitted later on top of one is withdrawn as it arrives, and never judged |
+| A judge job's measurements | Each attempt whose current verdict rests on that job (its screen, or its confirmation and the screen before it), and every attempt built on those | Each gets `invalidated` and goes back to the judge's queue to be measured again: a new verdict follows. Not in a closed run, nor for a change the judge never measures (`rejected_v0`, `duplicate`) or one withdrawn for good before |
+
+Either way, the judge's jobs still waiting for those attempts, or under way, are `cancelled`; an attempt not judged again that waited for the judge, an audit or the owner settles as `judged`. Each champion that rested on an attempt reached is reopened, and the run's champion moves back to the newest that stands, the starting point at least, with its own event; new trials build on it, and a goal run's judge checks its goals again. A withdrawn champion already published keeps its patch in the results repository and on control; control no longer offers it.
+
+**On the dashboard** the attempt's page shows its chip **Withdrawn** and a block **Its evidence was withdrawn**: when, by whom and why, what was withdrawn, the attempts it reached, the `invalidated` verdicts it recorded, the champions it reopened and where the run's champion moved. The run's **History** says `You withdrew attempt <attempt>: <why>. It and the <n> attempts built on it are withdrawn for good. Nothing is deleted.` (for a job: `You withdrew the measurements of judge job <job>: <why>. <n> attempts lose their verdicts, resting on them or built on what did: the judge measures them again unless the run is closed. Nothing is deleted.`), then `The run's champion moved back from #<n> to #<m> (<attempt>): its evidence was withdrawn. New trials build on #<m>.`, and for each job cancelled `The judge's job (…) was cancelled: its evidence was withdrawn: <why>.` The run's **Champions** list leaves the reopened ones out. Control's views hold each withdrawal in the run's `invalidations`, `{id, at, by, kind, subject, reason, attempts, verdicts, champions, champion}`, which [`get_run`](mcp-tools.md#get_run) and `GET /v1/runs/<run>` give as one of the run's lists.
 
 ## Attempt states
 
 | State | Meaning | Dashboard says |
 | --- | --- | --- |
-| `queued` | Waiting for the judge. Also after a screen again or a retry | "waiting for the judge" |
+| `queued` | Waiting for the judge. Also after a screen again or a retry, and when the owner withdrew the measurements its verdict rested on | "waiting for the judge" |
 | `rejected_v0` | Refused by the static checks before any build: a file outside the editable paths, a forbidden pattern in an added line, a binary file, a link or a submodule, or no change at all. Kept, never built, no verdict. Its violations, such as `binary change: assets/table.bin`, are in its record: see [Why a change was refused](#why-a-change-was-refused) | "rejected v0" |
 | `duplicate` | The same change as an earlier attempt of the run. Not judged again | "the same change as an earlier attempt" |
 | `building` | The judge is building the change and the champion | "being built" |
@@ -217,6 +231,7 @@ Attempt lists show one word for each attempt, in this order of precedence:
 | Word | When |
 | --- | --- |
 | **Champion #N** | It became champion number N: the current champion or an earlier one. The run's starting point is champion #1, so the first change to win is #2. In a hill climb in setup, the setup change that became the starting point is a champion too |
+| **Withdrawn** | Its verdict is `invalidated`: the owner withdrew its evidence ([Withdrawn evidence](#withdrawn-evidence)), and it is not being judged again |
 | **Blocked** | The auditor blocked it |
 | **Run closed** | It waited for the owner or for an audit when its run closed: no one decides it now, and it does not become the champion |
 | **Auditing** | The rig's auditor is checking it |
@@ -343,7 +358,7 @@ The filter chips above the table each show a count, and group the results by the
 | **Wins** | `Champion #N`, `Promoted` or `Won`, and every attempt that waits for you: `Needs you`, or one that waits for your approval |
 | **Not better** | `Lost`: not better than the champion. A `regress` verdict (slower, or a goal lost) reads `Lost`, so it is here |
 | **Broken or blocked** | `Broken` or `Blocked` |
-| **Other results** | `Unclear`, `Declined`, `Duplicate`, `Run closed` and `Judging` |
+| **Other results** | `Unclear`, `Withdrawn`, `Declined`, `Duplicate`, `Run closed` and `Judging` |
 | **Research finished** | `finished: <yield>`, or `finished: its research is in the run's notes`. Shown only when there are some |
 | **No attempt or dropped** | `no attempt`, `no attempt: <reason>`, `<attempt>: not judged yet` and `dropped by <who>: <why>` |
 
@@ -354,7 +369,7 @@ Beside the chips, two lists narrow the rows further: **Every direction** (the **
 | Thing | States | Meaning |
 | --- | --- | --- |
 | Trial ending | `submitted`, `no_submission`, `finished`, `interrupted`, `turns`, `wall`, `context`, `error` | Why a trial ended: it submitted; it stopped without submitting; a research trial ended on its own; a pause, reset or restart ended it; the turn cap; its time ran out; the model's context was full; an error |
-| Judge job | `queued`, `leased`, `done`, `failed`, `blocked`, `cancelled` | A job is `blocked` after three lease expiries or harness restarts. A lease lasts 15 minutes; the judge renews it as it measures, and every few minutes while it builds, also while it waits for another executor's build of the same change. A blocked job's attempt is `errored`, so its lane's round can end without it. When the harness starts, each blocked job is queued once more (`job_unblocked`), its attempt `queued` again, and one more lost lease blocks it again. The start queues the blocked jobs before it takes back the leases of the process that died: a job whose third lost lease is that one, such as a job that killed the harness, stays blocked through this start, and gets its one more try at the next. A queued job is `cancelled` when its run closes, or when the harness starts and finds its run closed: it never runs |
+| Judge job | `queued`, `leased`, `done`, `failed`, `blocked`, `cancelled` | A job is `blocked` after three lease expiries or harness restarts. A lease lasts 15 minutes; the judge renews it as it measures, and every few minutes while it builds, also while it waits for another executor's build of the same change. A blocked job's attempt is `errored`, so its lane's round can end without it. When the harness starts, each blocked job is queued once more (`job_unblocked`), its attempt `queued` again, and one more lost lease blocks it again. The start queues the blocked jobs before it takes back the leases of the process that died: a job whose third lost lease is that one, such as a job that killed the harness, stays blocked through this start, and gets its one more try at the next. A queued job is `cancelled` when its run closes, or when the harness starts and finds its run closed: it never runs. A queued or leased job is `cancelled` when the owner withdraws its attempt's evidence (`job_cancelled`): a judge measuring it can no longer record its outcome |
 | Judge job kind | `baseline`, `validate`, `confirm`, `evaluate`, `parent_screen`, `calibrate` | Taken lowest priority number first: `baseline` 10, `validate` 40 (or 60 for a new champion), `confirm` 50, `evaluate` 100, `parent_screen` 150 (a change written on an older champion, measured against it for a port: [A change written on an older champion](#a-change-written-on-an-older-champion)), `calibrate` 200. A hill climb's `baseline` measures its starting point, or a change in setup; until the run has its baseline, the judge takes no other job of it |
 | Goal check | `met`, `unmet`, `inconclusive`, `not_runnable` | One check of one goal. A threshold goal is `met` only when every case's interval is on the passing side |
 | Goal (on the champion) | `untouched`, `verified`, `unmet`, `attempted`, `not_runnable` | The champion's goals: not checked yet, met, unmet, unclear, cannot be checked. The dashboard shows each goal's latest check: "met", "unmet", "inconclusive", "not runnable" or "waiting on another goal" |

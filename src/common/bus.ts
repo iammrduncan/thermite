@@ -22,7 +22,6 @@ import {
   nkeyAuthenticator,
   type TlsOptions,
 } from "@nats-io/transport-node";
-import { reloadSubject } from "../core/link/users.ts";
 import { log } from "./env.ts";
 import { removeOnceEmpty, startEmptying } from "./work-queue.ts";
 
@@ -52,8 +51,6 @@ export const BUS_ACK_TIMEOUT_MS = 30_000;
 export const BUS_RETRY_MS = 5_000;
 /** How many messages on a subject a removal looks at, at most: then it says it found none. */
 export const BUS_REMOVE_LOOK_MAX = 1000;
-/** How long a request for the server to reload its users may wait for the answer. It then fails. */
-export const BUS_RELOAD_TIMEOUT_MS = 10_000;
 /** How many consumers of a stream its state lists, at most: then it says how many it left out. */
 export const BUS_STATE_CONSUMERS_MAX = 200;
 /** How many messages a batch holds, at most: the server's own limit, which refuses a larger one. */
@@ -465,6 +462,33 @@ async function sendBatch(nc: NatsConnection, batch: readonly Outgoing[]): Promis
 }
 
 /**
+ * A connection to the server at `url` as `name`, over TLS, signed in with `signIn` when given;
+ * after a drop it tries `reconnects` times (-1: for ever).
+ */
+function connectTo(url: string, name: string, signIn: BusSignIn | undefined, reconnects: number) {
+  const auth = signIn && {
+    authenticator: nkeyAuthenticator(signIn.seed),
+    inboxPrefix: signIn.inboxPrefix,
+  };
+  const tls = tlsOf(signIn?.trust, url);
+  return connect({
+    servers: url,
+    name,
+    timeout: BUS_CONNECT_TIMEOUT_MS,
+    maxReconnectAttempts: reconnects,
+    tls,
+    ...auth,
+  });
+}
+
+/** A connection of its own, for calls that end: it never reconnects, and the caller closes it. */
+export const connectOnce = (
+  url: string,
+  name: string,
+  signIn: BusSignIn,
+): Promise<NatsConnection> => connectTo(url, name, signIn, 0);
+
+/**
  * The bus at `url`, as `name` (the part and its rig, shown in the server's list of connections),
  * signed in with `signIn` when given. It connects on first use, and again after a connection fails
  * or the client gave one up, as after the server refused its user; the NATS client reconnects on
@@ -479,16 +503,7 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
   const readings = new Set<ConsumerMessages>();
   const connection = (): Promise<NatsConnection> => {
     if (conn) return conn;
-    const made = connect({
-      servers: url,
-      name,
-      timeout: BUS_CONNECT_TIMEOUT_MS,
-      maxReconnectAttempts: -1,
-      tls: tlsOf(signIn?.trust, url),
-      ...(signIn
-        ? { authenticator: nkeyAuthenticator(signIn.seed), inboxPrefix: signIn.inboxPrefix }
-        : {}),
-    }).then(
+    const made = connectTo(url, name, signIn, -1).then(
       (nc) => {
         void watch(nc, server, (on) => {
           up = on;
@@ -765,33 +780,4 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       await nc?.close();
     },
   };
-}
-
-/**
- * Asks the server at `url` to read its configuration again, as control's system user (`seed`),
- * trusting it through `trust`: the users file and the certificate control wrote take effect without
- * a restart, and the connections of a user it no longer has are closed. Throws when the server
- * can't be reached, refuses the user, or says the reload failed.
- */
-export async function reloadBus(url: string, seed: Uint8Array, trust?: BusTrust): Promise<void> {
-  const nc = await connect({
-    servers: url,
-    name: "control (reloads)",
-    timeout: BUS_CONNECT_TIMEOUT_MS,
-    maxReconnectAttempts: 0,
-    tls: tlsOf(trust, url),
-    authenticator: nkeyAuthenticator(seed),
-  });
-  try {
-    const id = nc.info?.server_id;
-    if (!id) throw new Error("the bus's server gave no id");
-    const m = await nc.request(reloadSubject(id), "", { timeout: BUS_RELOAD_TIMEOUT_MS });
-    const answer = m.json<{ error?: { description?: string } }>();
-    if (answer.error)
-      throw new Error(
-        `the bus's server did not reload: ${answer.error.description ?? "no reason"}`,
-      );
-  } finally {
-    await nc.close();
-  }
 }

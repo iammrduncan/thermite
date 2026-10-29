@@ -163,11 +163,12 @@ Control's health, `GET /v1/health`, says whether control holds a connection to t
 
 ### Who may use the message bus
 
-Only control and the rigs' supervisors sign in to the bus, each with a NATS user key of its own, an nkey. The server knows each key by its public part. The secret part, the key's seed, never leaves the part that made it.
+Only control, its backups and the rigs' supervisors sign in to the bus, each with a NATS user key of its own, an nkey. The server knows each key by its public part. The secret part, the key's seed, never leaves the part that made it.
 
 - **A rig's supervisor makes its own key** the first time it starts with the bus, and keeps the seed in its state folder, `bus-key.seed`. It sends the key's public part to control on its regular call, the one that carries its figures, which the rig's token already authenticates: once before its first report, then with every call. Beside it, it makes its seal key, `bus-seal.pem`, and sends that key's public part on the same call, for its config. A NATS user key signs; it can't be sealed to, so the seal key is an X25519 key of its own.
 - **Control writes the server's users.** It records the key for the rig, writes every user to the users file that the server's settings include, and asks the server to reload the file, which the server does without a restart. Control answers the supervisor's call once the server has reloaded, so the supervisor can sign in at once. A rig with no key registered has no user.
 - **A new key replaces the old one.** A supervisor that lost its state folder makes a new key at its next start. Control keeps the change as a step in the rig's history, `bus_key_changed`, and in its audit log, `rig_bus_key_changed`, each with the fingerprints of the old key and the new one, and the old key no longer signs in. A new seal key is `seal_key_changed` and `rig_seal_key_changed` in the same way, and control seals the rig's config to it at once. A full reset keeps both keys.
+- **Control makes the backup's key** at its first start with the bus, and keeps its seed in its state folder, `bus-backup.seed` (0600), where `thermite backup` and `thermite restore` read it, run where that folder is mounted ([Back up and restore control](../how-to/operate/backup-and-restore.md)).
 - **Control looks at its users every 5 seconds.** It writes the file, and asks the server to reload it, only when the users changed: a rig retired loses its user, a rig brought back has it again, and a run control gives a rig opens that run's live lines to the rig.
 
 Each user may do only its part:
@@ -176,7 +177,8 @@ Each user may do only its part:
 | --- | --- |
 | Control | Everything on the bus but delete or purge the `EVENTS` stream, which is kept for good: make the streams, make the reports stream again as an inbox, fold the reports, publish their events and move an older store's events table, publish commands and take back a cancelled one, and write each rig's config |
 | A rig's supervisor | Publish to its own report subject, `thermite.rig.<rig>.report`; publish its own live lines, `thermite.rig.<rig>.live.*`, and those of each run that control's run registry gives the rig (assigned to it, or made there), `thermite.run.<run>.live.*`, the newest 1,000; make, read and take from its own consumer of the commands, `rig-<rig>-commands`, which the server lets take only the rig's own subject; make again, read and take from its own consumer of its config, `rig-<rig>-config`, which the server lets take only the rig's own keys; ack what it took; and receive replies only under its own inbox, `_INBOX.rig.<rig>` |
-| Control's system user | Ask the server to reload its users |
+| The backup's user | For the `EVENTS` stream only: read its state and a message by its place, take its snapshot and ack its chunks, and restore it, which the server does only where it has no stream of that name; and receive replies only under `_INBOX.backup`. Nothing else: no publish to a stream, no delete or purge |
+| Control's system user | Ask the server to reload its users, and for JetStream's figures (`JSZ`, the server's monitoring): how much of its store JetStream uses, and its limit, for [control's disk floor](../reference/settings.md#address-and-state) |
 
 So a rig can't publish another rig's reports or the live lines of another rig's runs, take another rig's commands, read another rig's config or another rig's consumer, write any config, its own included, or reach the `EVENTS` stream at all; and a key the server does not know is refused. The bus's credentials add to the signatures and do not replace them: each report still carries the harness's signature, and each command control's.
 

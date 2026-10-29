@@ -13,6 +13,8 @@ for (const d of [
   join(root, "outbox"),
   // Advisor configuration and keys for local runs (mounted read-only into the supervisors).
   join(root, "advisors"),
+  // Control's backups, which the backup service writes (thermite backup).
+  join(root, "backups"),
 ]) {
   mkdirSync(d, { recursive: true, mode: 0o755 });
 }

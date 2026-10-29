@@ -112,10 +112,57 @@ export const CHAMPIONS: Handlers = {
     });
     v.pending_promotions = v.pending_promotions.filter((p) => p !== attempt);
   },
+  // The owner withdrew evidence (goal 174): what it reached, in its run's view.
+  invalidation(f, e, b) {
+    const subject = String(e.subject ?? "");
+    const run = typeof b.run === "string" && b.run ? b.run : (f.attempts.get(subject)?.run ?? null);
+    if (!run) return;
+    const list = (v: unknown) => (Array.isArray(v) ? v : []);
+    f.run(run).invalidations.push({
+      id: typeof b.id === "number" ? b.id : 0,
+      at: e.at,
+      by: e.actor,
+      kind: b.kind === "job" ? "job" : "attempt",
+      subject: clip(subject, 80),
+      reason: clip(String(b.reason ?? ""), 2000),
+      attempts: list(b.attempts)
+        .slice(0, 1000)
+        .map((x) => clip(String(x), 80)),
+      verdicts: list(b.verdicts).length,
+      champions: list(b.champions).map(Number),
+      champion: null,
+    });
+  },
+  champion_moved_back(f, e, b) {
+    const v = f.run(String(e.subject));
+    const i = v.invalidations.find((x) => x.id === Number(b.invalidation));
+    if (i)
+      i.champion = {
+        from: Number(b.from),
+        to: Number(b.to),
+        attempt: typeof b.attempt === "string" ? b.attempt : null,
+      };
+  },
   champion_reopened(f, e, b) {
     const v = f.run(String(e.subject));
     const step = v.champion.find((c) => c.seq === Number(b.seq));
     if (step) step.reopened = true;
+    // A published champion withdrawn (goal 174): the run's published one is the newest that
+    // stands, or none, so neither its download nor a propagation offers the withdrawn one.
+    if (v.published?.seq === Number(b.seq)) {
+      const standing = new Set(v.champion.filter((c) => !c.reopened).map((c) => c.seq));
+      const back = v.published_patches.filter((p) => standing.has(p.seq)).at(-1);
+      v.published = back
+        ? {
+            seq: back.seq,
+            repo: back.repo,
+            base_commit: back.base_commit,
+            tree: v.published_trees[back.seq] ?? "",
+            sha256: back.sha256,
+            path: back.path,
+          }
+        : null;
+    }
     // A starting point withdrawn takes its baseline with it (goal 115).
     if (v.baseline?.champion_seq === Number(b.seq)) v.baseline = null;
   },
@@ -182,6 +229,7 @@ export const CHAMPIONS: Handlers = {
         sha256: String(b.sha256 ?? ""),
         base_commit: String(b.base_commit ?? ""),
         repo: (b.repo as string | null) ?? null,
+        path: String(b.path ?? ""),
       }),
     );
     f.run(String(e.subject)).published = {

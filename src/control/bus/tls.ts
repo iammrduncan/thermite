@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { BUS_URL_SETTING, busUrl } from "../../common/bus.ts";
 import { log } from "../../common/env.ts";
 import { writeAtomic } from "../../common/fs.ts";
+import { CONTROL_STATE } from "../../core/backup.ts";
 import { type CertAndKey, certFingerprint, makeCa, makeServerCert } from "./cert.ts";
 
 /**
@@ -17,7 +18,7 @@ import { type CertAndKey, certFingerprint, makeCa, makeServerCert } from "./cert
  */
 
 /** The authority's files in control's state folder. */
-export const BUS_CA_FILES = { cert: "bus-ca.pem", key: "bus-ca.key" } as const;
+export const BUS_CA_FILES = { cert: CONTROL_STATE.busCaCert, key: CONTROL_STATE.busCaKey } as const;
 /** The server's files in the folder control writes for it, beside its users. */
 export const BUS_TLS_FILES = { cert: "server-cert.pem", key: "server-key.pem" } as const;
 

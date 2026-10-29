@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createUser, fromSeed } from "@nats-io/nkeys";
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
@@ -11,7 +12,10 @@ import type { BusIdentityName, ControlStore } from "../store/index.ts";
  * Who may use the message bus (goal 168). Each rig's supervisor makes its own key and registers
  * its public part on its regular call to control (takeRigBusKey); control keeps it, writes every
  * user with what it may do to the server's users file, and asks the server to reload the file
- * (BusUsers). Control's own two keys are made here on first use and kept sealed in its store.
+ * (BusUsers). Control's own two keys are made here on first use and kept sealed in its store. The
+ * backup's key (goal 173) is made here too, its seed in a file of control's state folder that
+ * `thermite backup` and `thermite restore` read: its user may snapshot and restore the streams kept
+ * for good, and nothing else.
  */
 
 /**
@@ -103,6 +107,8 @@ export interface BusUsersOptions {
   tls?: { write(): boolean } | undefined;
   /** Asks the server to read the users file again, signed in as control's system user. */
   reload: (systemSeed: Uint8Array) => Promise<void>;
+  /** The file of the backup's seed, made there first (mode 0600); none: the bus has no backup user. */
+  backupSeedFile?: string | undefined;
 }
 
 /** One of control's own keys: its seed, and the public part the users file names. */
@@ -120,6 +126,8 @@ export class BusUsers {
   private readonly o: BusUsersOptions;
   private readonly control: Identity;
   private readonly system: Identity;
+  /** The backup's key's public part, when control keeps one. */
+  private readonly backup: string | undefined;
   /** The users file as control last wrote it; undefined before its first write. */
   private written: string | undefined;
   /** Whether the server took the file as last written. */
@@ -132,11 +140,17 @@ export class BusUsers {
     this.o = o;
     this.control = identity(o, "control");
     this.system = identity(o, "system");
+    this.backup = o.backupSeedFile ? backupKey(o.backupSeedFile) : undefined;
   }
 
   /** The seed control signs in to the bus with. */
   get controlSeed(): Uint8Array {
     return this.control.seed;
+  }
+
+  /** The seed of control's system user: a reload, and the server's figures of its store. */
+  get systemSeed(): Uint8Array {
+    return this.system.seed;
   }
 
   /** The users file's text now: each rig's user with the runs control's run registry gives it. */
@@ -148,7 +162,8 @@ export class BusUsers {
       key: r.key,
       runs: runs.get(r.rig) ?? [],
     }));
-    return usersFile({ control: this.control.publicKey, system: this.system.publicKey, rigs });
+    const own = { control: this.control.publicKey, system: this.system.publicKey };
+    return usersFile({ ...own, backup: this.backup, rigs });
   }
 
   /**
@@ -196,6 +211,36 @@ export class BusUsers {
       this.failing = true;
     }
   }
+}
+
+/**
+ * The backup's key's public part, from the seed in `file`; made there first (mode 0600, never
+ * overwritten). Throws, with what to do, when the file does not hold a user key's seed.
+ */
+function backupKey(file: string): string {
+  if (!existsSync(file)) {
+    const made = createUser();
+    try {
+      // "wx": never over a seed another process made meanwhile.
+      writeFileSync(file, made.getSeed(), { mode: 0o600, flag: "wx" });
+      log("control", "made the backup's key on the bus", {
+        fingerprint: userKeyFingerprint(made.getPublicKey()),
+      });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    }
+  }
+  try {
+    const key = fromSeed(
+      new TextEncoder().encode(readFileSync(file, "utf8").trim()),
+    ).getPublicKey();
+    if (isUserKey(key)) return key;
+  } catch {
+    // Said below.
+  }
+  throw new Error(
+    `${file} does not hold the seed of a NATS user key: remove it, and control makes the backup's key anew as it starts`,
+  );
 }
 
 /** How many users a users file names. */

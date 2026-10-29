@@ -78,7 +78,7 @@ Run `npx thermite` in your `thermite-source` folder; from another folder, `npx` 
 
 `docker compose ps` gives each container's health: control, the harness and the supervisor each answer a health route that says whether each of their loops still comes around, and the `nats` container's server is checked too. A container says `(health: starting)` for up to 5 minutes, then `(healthy)`, or `(unhealthy)` once its check failed three times running, 30 seconds apart. Compose only reports it: see [A part that is unhealthy](../operate/troubleshoot.md#a-part-that-is-unhealthy). Each container's log is bounded too: at most three files of 50 MB with Docker, one with Podman ([Where the logs are](../operate/troubleshoot.md#where-the-logs-are)).
 
-The rig keeps 5 GiB free on each place it writes to: below that, it starts no new trial, judge's job or export until there is room again, and says so on its page and under **Needs you**. Set [`THERMITE_DISK_FLOOR_GIB`](../../reference/settings.md#places-exports-and-the-broker) in `.env` to change it, or `0` for none.
+The rig keeps 5 GiB free on each place it writes to: below that, it starts no new trial, judge's job or export until there is room again, and says so on its page and under **Needs you**. Control keeps the same on its state and in the message bus's store, and below it starts no new run. Set [`THERMITE_DISK_FLOOR_GIB`](../../reference/settings.md#places-exports-and-the-broker) in `.env` to change both, or `0` for none.
 
 ## What the rig gets
 
@@ -292,7 +292,14 @@ Inside the stack, the bus keeps port 4222. Control always uses it; to keep the s
 
 - **Stop:** `docker compose down`. **Start:** `docker compose up -d`, with your `-f` options.
 - Each container restarts by itself if it stops (`restart: unless-stopped`). Thermite ships nothing that starts the stack again after the computer restarts ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)). Docker starts the containers again when its own service starts; on Linux, `sudo systemctl enable docker` starts that service at boot. With Podman, start the stack again yourself after a restart: on a Mac `podman machine start` first, then your `up -d` command.
-- **Update** to the newest release. Read its notes on the [releases page](https://github.com/iammrduncan/thermite/releases) first: 0.x releases make no promise that an update keeps everything working. Then, in your `thermite` folder:
+- **Update** to the newest release. Read its notes on the [releases page](https://github.com/iammrduncan/thermite/releases) first: 0.x releases make no promise that an update keeps everything working. Back up control first, and copy the backup off this machine ([Back up and restore control](../operate/backup-and-restore.md)):
+
+  ```sh
+  docker compose --profile backup run --rm backup thermite backup /backups   # Docker
+  podman compose --profile backup run --rm backup thermite backup /backups   # Podman
+  ```
+
+  Then, in your `thermite` folder:
 
   ```sh
   curl -fsSLO https://github.com/iammrduncan/thermite/releases/latest/download/compose.yaml
@@ -300,7 +307,7 @@ Inside the stack, the bus keeps port 4222. Control always uses it; to keep the s
   docker compose up -d             # or: podman compose up -d
   ```
 
-  Add your `-f` options to the last line, as in [the example above](#settings-and-override-files). `curl` replaces `compose.yaml` with the new release's. `init` keeps every token file that exists, the empty owner's file too, and adds any file a newer version needs. `up` downloads the new images and replaces the containers whose images changed. The volumes stay. When the harness restarts, running trials and judge jobs start again. If you built the [command line](#the-command-line), take the same release there: in `thermite-source`, `git fetch --tags`, then `git checkout` the new tag, `npm ci` and `npm run build`.
+  Add your `-f` options to the last line, as in [the example above](#settings-and-override-files). An update that migrates control's store keeps a copy of it from before, and so does the harness for its ledger; the backup also holds every rig's events, and a [restore](../operate/backup-and-restore.md#restore-a-backup) puts it all back. `curl` replaces `compose.yaml` with the new release's. `init` keeps every token file that exists, the empty owner's file too, and adds any file a newer version needs. `up` downloads the new images and replaces the containers whose images changed. The volumes stay. When the harness restarts, running trials and judge jobs start again. If you built the [command line](#the-command-line), take the same release there: in `thermite-source`, `git fetch --tags`, then `git checkout` the new tag, `npm ci` and `npm run build`.
 
 After an update, run the rig's **Judge smoke** check ([Check a rig](../operate/check-a-rig.md)). This updates only the local stack. Rigs elsewhere keep the images they run:
 

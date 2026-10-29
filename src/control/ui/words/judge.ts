@@ -12,7 +12,7 @@ import { verdictText } from "./verdicts.ts";
  * the judge's own checks: the starting point, the champion's goals and the rig's noise.
  */
 export function judgeSentence(w: SentenceContext, e: StoredEvent): Sentence | null {
-  const { b, att, job, s } = w;
+  const { b, att, job, s, who } = w;
   switch (e.kind) {
     case "attempt_recorded": {
       const flaws = Array.isArray(b.known_flaws) ? b.known_flaws.length : 0;
@@ -118,6 +118,41 @@ export function judgeSentence(w: SentenceContext, e: StoredEvent): Sentence | nu
       return s(`Champion #${String(b.seq)} was withdrawn: its evidence was invalidated.`, "bad", {
         run: String(e.subject),
       });
+    // The owner withdrew evidence (goal 174): what, why and how far it reached.
+    case "invalidation": {
+      const n = Array.isArray(b.attempts) ? b.attempts.length : 0;
+      const job = b.kind === "job";
+      const reached = job
+        ? `${n === 1 ? "1 attempt loses its verdict" : `${n} attempts lose their verdicts`}, resting on them or built on what did: the judge measures ${n === 1 ? "it" : "them"} again unless the run is closed`
+        : n > 1
+          ? `It and the ${n - 1} attempt${n === 2 ? "" : "s"} built on it are withdrawn for good`
+          : "It is withdrawn for good";
+      return s(
+        `${who(e.actor)} withdrew ${job ? `the measurements of judge job ${String(e.subject)}` : `attempt ${String(e.subject)}`}: ${clip(String(b.reason ?? ""), 300)}. ${reached}. Nothing is deleted.`,
+        "bad",
+        {
+          run: typeof b.run === "string" ? b.run : undefined,
+          attempt: job ? undefined : String(e.subject),
+        },
+      );
+    }
+    case "champion_moved_back":
+      return s(
+        `The run's champion moved back from #${String(b.from)} to #${String(b.to)}${b.attempt ? ` (${String(b.attempt)})` : ", the starting point"}: its evidence was withdrawn. New trials build on #${String(b.to)}.`,
+        "warn",
+        { run: String(e.subject), attempt: b.attempt ? String(b.attempt) : undefined },
+      );
+    case "job_cancelled": {
+      const j = job(e.subject);
+      return s(
+        `The judge's job ${j ? `(${jobText(j)})` : String(e.subject)} was cancelled: ${clip(String(b.reason ?? ""), 200)}.`,
+        "",
+        {
+          attempt: typeof b.attempt === "string" ? b.attempt : undefined,
+          run: typeof b.run === "string" ? b.run : undefined,
+        },
+      );
+    }
     case "promotion_pending":
       return s(
         `${e.subject} waits for your approval${b.reason ? ` (${String(b.reason)})` : ""}.`,

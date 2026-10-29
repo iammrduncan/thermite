@@ -164,12 +164,16 @@ describe("the release bundle", () => {
         assert.ok(compose.includes(`[ -s ${dir}/${name} ]`), `it waits for ${name}`);
       // Its health check: the server answers, with JetStream on.
       assert.match(compose, /healthz\?js-enabled-only=true/);
-      // Control is always on it; both rigs' supervisors are unless THERMITE_NATS_URL is set to
-      // nothing in .env.
+      // Control is always on it, and its backup service reaches it as control does; both rigs'
+      // supervisors are unless THERMITE_NATS_URL is set to nothing in .env.
       const fixed = "\n      THERMITE_NATS_URL: nats://nats:4222\n";
-      assert.equal(compose.split(fixed).length - 1, 1);
+      assert.equal(compose.split(fixed).length - 1, 2);
       const at = compose.indexOf(fixed);
       assert.ok(compose.indexOf("\n  control:\n") < at && at < compose.indexOf("\n  nats:\n"));
+      const backup = compose.indexOf(fixed, at + 1);
+      assert.ok(
+        compose.indexOf("\n  backup:\n") < backup && backup < compose.indexOf("\n  harness:\n"),
+      );
       const on = /THERMITE_NATS_URL: "\$\{THERMITE_NATS_URL-nats:\/\/nats:4222\}"/g;
       assert.equal(compose.match(on)?.length, 2);
       assert.equal(compose.split("THERMITE_NATS_CA_FILE: /keys/bus-ca.pem").length - 1, 2);

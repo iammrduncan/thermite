@@ -76,7 +76,28 @@ export interface EventBodies {
     supersedes: number | null;
     values?: unknown;
   };
-  invalidation: { kind: "attempt" | "job"; reason: string; attempts: string[] };
+  /**
+   * The owner withdrew evidence (goal 174): the invalidation's id, its subject, the attempts it
+   * reached, the `invalidated` verdicts it recorded and the champions it reopened.
+   */
+  invalidation: {
+    id?: number | undefined;
+    run?: string | null | undefined;
+    kind: "attempt" | "job";
+    reason: string;
+    attempts: string[];
+    verdicts?: number[] | undefined;
+    champions?: number[] | undefined;
+  };
+  /** A job cancelled before it ran or while it ran: its attempt's evidence was withdrawn. */
+  job_cancelled: {
+    run: string | null;
+    attempt: string | null;
+    kind: string;
+    was: string;
+    reason: string;
+    invalidation?: number | undefined;
+  };
   baseline: {
     run: string;
     job: number;
@@ -163,6 +184,15 @@ export interface EventBodies {
   };
   champion_ref_failed: { seq: number; error: string };
   champion_reopened: { seq: number; attempt: string; reason: string };
+  /** The run's champion moved back to the newest that stands, after an invalidation (goal 174). */
+  champion_moved_back: {
+    from: number;
+    to: number;
+    attempt: string | null;
+    commit: string;
+    invalidation: number;
+    reason: string;
+  };
   promotion_pending: { run: string; expected_seq: number; commit: unknown; reason: string };
   promotion_blocked: { reason: string };
   promotion_declined: { run: string; was: string; note?: string | undefined };
@@ -174,7 +204,7 @@ export interface EventBodies {
     tree: string;
     attempt: string | null;
     result?: string | undefined;
-    lifecycle?: "duplicate" | "queued" | "rejected_v0" | undefined;
+    lifecycle?: "duplicate" | "queued" | "rejected_v0" | "judged" | undefined;
   };
   propagation_accepted: PropagationJudged;
   propagation_rejected: PropagationJudged;

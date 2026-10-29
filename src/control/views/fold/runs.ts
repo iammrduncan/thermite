@@ -15,6 +15,7 @@ export function emptyRun(id: string): RunView {
     status: "unknown",
     pause_reason: null,
     champion: [],
+    invalidations: [],
     attempts: [],
     verdicts: {},
     pending_promotions: [],

@@ -21,7 +21,7 @@ The first prints `ok`, the contract's mode, name, version and SHA-256. The secon
 | Where | How to run it | Used there for |
 | --- | --- | --- |
 | Your computer, in a clone of the repository | `npx thermite <command>`, after `npm ci` and `npm run build`. It runs `dist/cli/thermite/main.js` and needs Node.js 22.19 or later. With a release's compose stack, link its `.dev/` folder into the clone, as [the command line](../how-to/install/one-machine.md#the-command-line) shows | Checking the machine, contracts, tokens, starting runs, commands, enrolling rigs |
-| Control's image | `thermite` (`/usr/local/bin/thermite`, which runs `node /opt/thermite/dist/cli/thermite/main.js`) | The same commands, from inside control's container, except `doctor`, which checks the machine it runs on. A release's `init` service runs `local init` from this image |
+| Control's image | `thermite` (`/usr/local/bin/thermite`, which runs `node /opt/thermite/dist/cli/thermite/main.js`) | The same commands, from inside control's container, except `doctor`, which checks the machine it runs on. A release's `init` service runs `local init` from this image, and the compose stack's `backup` service runs `backup` and `restore` |
 | The supervisor's image | `thermite`, the same wrapper | The same commands |
 | The harness image | `thermite`, the same wrapper, and `thermite-trial` | `submit` and `status` against the harness at `http://127.0.0.1:8700`; `selftest isolation`, which must run there, as root |
 
@@ -225,27 +225,55 @@ usage: thermite <command> [options]
                                       run is on, so --rig may be left out; every other kind
                                       needs it. assign_campaign and resume_run on a RunPod rig
                                       whose pod is stopped start the pod first, and say so
+  invalidate --run RUN (--attempt ID | --job N) --reason TEXT [--yes] --control URL --token-file F
+                                      withdraw bad evidence (owner's token): an attempt, for
+                                      good, with every attempt built on it, or a judge job's
+                                      measurements, whose attempts are judged again. It prints
+                                      what it would reach, from the rig, and changes nothing;
+                                      with --yes it then withdraws exactly that, or the rig
+                                      refuses when what it reaches changed. Nothing is deleted
   submit --harness URL --token-file F --run ID --patch-file P --hypothesis TEXT
          [--known-flaw TEXT ...]      submit a patch as a proposer
   status --harness URL --token-file F --attempt ID
                                       show an attempt's lifecycle and verdict
   local init DIR [--engine docker|podman]
                                       make DIR, the local compose stack's .dev folder: random
-                                      tokens in DIR/secrets, the inbox, the outbox and the
-                                      advisors' folder. Files that exist are kept. Run as root,
-                                      it gives what it makes to the owner of DIR's parent folder.
-                                      It says what the local rig gets (CPUs, memory, GPUs), and
-                                      with NVIDIA GPUs the rig can have, writes compose.gpu.yaml
-                                      next to DIR for the engine named, or the one it finds
+                                      tokens in DIR/secrets, the inbox, the outbox, and the
+                                      advisors' and backups' folders. Files that exist are
+                                      kept. Run as root, it gives what it makes to the owner of
+                                      DIR's parent folder. It says what the local rig gets
+                                      (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
+                                      have, writes compose.gpu.yaml next to DIR for the engine
+                                      named, or the one it finds
   selftest isolation [--force]        inside the harness container, as root, with the rig idle: check that role
                                       users cannot reach the ledger, kits, builds or secrets
+  backup FOLDER [--state DIR] [--bus URL]
+                                      where control's state folder is mounted (compose: the
+                                      backup service): copy control's state (control.db, whole
+                                      while control runs, its keys, kits and exports) and a
+                                      snapshot of the bus's EVENTS stream into a new folder in
+                                      FOLDER, named for the time, with a manifest of each file's
+                                      SHA-256 and each stream's count and last place. --state:
+                                      control's state folder (THERMITE_CONTROL_DIR, or
+                                      /var/lib/thermite-control); --bus: the bus
+                                      (THERMITE_NATS_URL)
+  restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]
+                                      with control stopped: check the backup against its
+                                      manifest, restore each stream the bus does not have and
+                                      check it (its count, last place and last message), then
+                                      put control's state back, what it replaces moved aside
+                                      into a dated folder. A stream on the bus that is not the
+                                      backup's is refused, and nothing changes. --control:
+                                      refused while control answers there. --bus-store DIR,
+                                      with the bus stopped: only move the bus's store aside
+                                      into a dated folder in DIR, so that the bus starts empty
 ```
 
 ## Rules for every command
 
-- **Options.** Each option takes its value as the next word or after `=`. In `doctor`, `local init`, `token new`, `assign`, `assign-payload`, `rig`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `command`, `submit` and `status`, an option the command does not know, or a word it does not expect, ends the command with Node's own message and exit code 2. In `runpod` and `mcp`, an option it does not know does the same; a word after the name it takes is ignored.
+- **Options.** Each option takes its value as the next word or after `=`. In `doctor`, `local init`, `backup`, `restore`, `token new`, `assign`, `assign-payload`, `rig`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `command`, `invalidate`, `submit` and `status`, an option the command does not know, or a word it does not expect, ends the command with Node's own message and exit code 2. In `runpod` and `mcp`, an option it does not know does the same; a word after the name it takes is ignored.
 - **Older option names.** `--instance` is read as `--run`, and `--unit` as `--rig`. These are the names from before runs and rigs were renamed.
-- **Control's token.** The commands that talk to control (`assign`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `mcp`, `command`, `rig add`, `rig token`, `rig retire`, `rig list`, and every `runpod` command) send the contents of `--token-file`, trimmed, as `Authorization: Bearer <token>`. Only the owner's token works on these routes; any other token gets `401 {"error":"unauthorized"}`. See [Tokens and roles](tokens.md).
+- **Control's token.** The commands that talk to control (`assign`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `mcp`, `command`, `invalidate`, `rig add`, `rig token`, `rig retire`, `rig list`, and every `runpod` command) send the contents of `--token-file`, trimmed, as `Authorization: Bearer <token>`. Only the owner's token works on these routes; any other token gets `401 {"error":"unauthorized"}`. See [Tokens and roles](tokens.md).
 - **Control's address.** `--control` is control's base address, such as `https://control.example.com`. A trailing `/` is removed.
 - **Refusals.** When control or the harness refuses a request, the command prints `<url> -> <status> <body>` on standard error and exits 2. `status` is the exception: see [below](#status). A request body that does not match the route gives `400 {"error":"invalid request"}` from control. The harness says which field and why, such as `400 {"error":"invalid request: run is missing: it must be a string"}`. A command that control refuses before signing it gives `400` with the reason (for example a payload that does not fit its kind, or a message that nothing would read), or `404` for an unknown rig; another refusal from inside control gives `500` with the reason. The [REST API reference](rest-api.md) lists the routes.
 
@@ -254,7 +282,7 @@ usage: thermite <command> [options]
 | Code | When |
 | --- | --- |
 | `0` | The command did its work. Also `thermite`, `help` and `--help` |
-| `1` | `doctor` found a check that failed; `contract validate` found the contract invalid; `run start` gave the rig a model and did not start the run yet; `selftest isolation` found a probe that was not refused |
+| `1` | `doctor` found a check that failed; `contract validate` found the contract invalid; `restore` refused the backup, a stream on the bus or a running control; `run start` gave the rig a model and did not start the run yet; `invalidate`: the rig refused the preview or the withdrawal, or did not answer within 10 minutes; `selftest isolation` found a probe that was not refused |
 | `2` | Missing or wrong options (the usage text goes to standard error); an unknown command (the usage text goes to standard output); a refused request; any other error, with its message on standard error |
 
 ## Commands
@@ -795,6 +823,38 @@ Unlike [`POST /v1/rigs/<rig>/settings`](rest-api.md#a-rigs-settings), it sends t
 
 Control refuses `wipe_state` with `400 {"error":"wipe_state is issued only by a full reset"}`, and a payload that does not fit its kind with `400 {"error":"bad <kind> payload: …"}` (an unknown rig: `404`). `GET /v1/commands/<id>` and the dashboard's **Commands** page show the command's status. A command the rig refuses, such as a `queue_move` for an experiment that is no longer queued, shows there as `failed`, with the reason.
 
+### `invalidate`
+
+`thermite invalidate` withdraws bad evidence ([`invalidate_evidence`](signed-commands.md#invalidate_evidence)), the owner's alone: an attempt, for good, with every attempt built on it, or the measurements of one of the judge's jobs, whose attempts are judged again. It always asks the rig first what it would reach, and prints it; nothing changes then. With `--yes` it sends the withdrawal next, naming what the preview reached, so the rig does exactly that or refuses. [Withdraw bad evidence](../how-to/campaigns/withdraw-bad-evidence.md) says what to check first.
+
+| Option | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `--control URL` | Yes | | Control's address |
+| `--token-file F` | Yes | | A file with the owner's token |
+| `--run RUN` | Yes | | The run. Control sends the command to the rig the run is on |
+| `--attempt ID` | One of the two | | An attempt of the run: withdrawn for good, with every attempt built on it |
+| `--job N` | One of the two | | A judge job of the run that finished: its measurements are withdrawn, and the attempts whose verdict rests on them, and those built on them, are judged again |
+| `--reason TEXT` | Yes | | Why, 1 to 2000 characters. The record keeps it, and every page that shows the withdrawal says it |
+| `--yes` | No | Off | Withdraw it once the preview is printed. Without it, nothing is withdrawn |
+
+```sh
+npx thermite invalidate --control https://control.example.com --token-file ~/thermite-owner-token \
+  --run sort-speed-1 --attempt a-0123abcd4567ef89 --reason "it reads the timer it is measured with"
+```
+
+```text
+What withdrawing it reaches:
+Attempt a-0123abcd4567ef89 and the 1 attempt built on it (a-89ab01cd23ef4567) are withdrawn for good: none is judged again, and none can become the champion.
+2 verdicts are superseded by an invalidated verdict. Nothing is deleted: the old verdicts stay in the record.
+Champions #2 (a-0123abcd4567ef89) and #3 (a-89ab01cd23ef4567) are reopened.
+The run's champion moves back from #3 to #1, the starting point: new trials build on it.
+
+  a-0123abcd4567ef89  win_confirmed, promoted  ->  withdrawn for good
+  a-89ab01cd23ef4567  win_confirmed, promoted  ->  withdrawn for good
+```
+
+On standard error it then says `Nothing was withdrawn. To withdraw it, run this again with --yes.` With `--yes`, the same lines come first, then `Withdrawn: invalidation <n> on the rig.` It waits for the rig's answer to each command, asking control every 2 seconds, until the rig's signed report confirms it (`GET /v1/commands/<id>`); a refusal, such as `the rig refused it (command <id>): what it reaches changed since the preview: preview it again, and confirm what it reaches now`, an expiry, or no answer within 10 minutes ends it with exit code 1.
+
 ### `submit`
 
 `thermite submit` sends a change to a harness as a proposer (`POST /v1/attempts`), the way a person or a script tests a kit by hand. See [Test a kit with known candidates](../how-to/campaigns/test-a-kit.md).
@@ -822,7 +882,7 @@ It prints the harness's answer whatever its HTTP status, and exits 0 even when t
 
 | What | Mode | Made |
 | --- | --- | --- |
-| `secrets/`, `outbox/`, `advisors/` | 0755 | When missing |
+| `secrets/`, `outbox/`, `advisors/`, `backups/` | 0755 | When missing. The compose stack's `backup` service writes [backups](../how-to/operate/backup-and-restore.md) into `backups/` |
 | `inbox/`, `inbox/repos/`, `inbox/models/` | 0777, set again at every run | When missing. The supervisor writes into the inbox as its own user |
 | `secrets/control-admin-token`, `control-operator-token`, `control-rig-token`, `control-rig-token-2`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644 | When missing: 24 random bytes each, base64url-encoded |
 | `secrets/model-api-key` | 0644 | When missing: `local-placeholder` |
@@ -864,6 +924,57 @@ A rig takes 16 GPUs at most. On a machine with more, the file names the first 16
 Without `--force`, a busy rig is refused, with exit 2: `the rig is busy: <n> open trial(s) and <m> judge job(s): pause the rig's runs and let the judge finish first (each probe kills its role's processes); rerun with --force to probe anyway`.
 
 It reads where the broker's socket and the rig's directories are from `THERMITE_BROKER_DIR` (default `/run/thermite`), `THERMITE_STATE_DIR` (`/var/lib/thermite`), `THERMITE_SCRATCH_DIR` (`/scratch`) and `THERMITE_OUTBOX_DIR` (`/outbox`), and probes the secret files named by `THERMITE_SUPERVISOR_TOKEN_FILE`, `THERMITE_PROPOSER_TOKEN_FILE` and `THERMITE_MODEL_API_KEY_FILE`, and, in the one-container rig image, the tunnel's `keys.json` in `THERMITE_TUNNEL_DIR`. The same check runs from the dashboard as a rig check; see [Rig checks](rig-checks.md) and [Check a rig](../how-to/operate/check-a-rig.md).
+
+### `backup`
+
+`thermite backup FOLDER [--state DIR] [--bus URL]` backs up control: its state folder and every rig's events on the message bus. It runs where control's state folder is mounted and the bus is reached as control reaches it; under compose, in the `backup` service, which mounts control's state and `.dev/backups` at `/backups`. Control may go on running. [Back up and restore control](../how-to/operate/backup-and-restore.md) gives the steps for each placement.
+
+```sh
+docker compose --profile backup run --rm backup thermite backup /backups
+```
+
+It makes a new folder in `FOLDER`, named for the time, such as `thermite-backup-2026-10-29T10-00-00-000Z`, written first as `<name>.partial` and renamed once its manifest is written. A folder that still ends in `.partial` is a backup that stopped part way: no restore reads it.
+
+| In the backup | What |
+| --- | --- |
+| `state/control.db` | Control's store, copied first, whole and consistent while control writes to it (`vacuum into`) |
+| `state/control-signing.key`, `control-signing.pub`, `secrets.key`, `bus-ca.pem`, `bus-ca.key`, `bus-backup.seed` | Control's keys, each as it is in the state folder, with its mode. A secrets key kept elsewhere (`THERMITE_CONTROL_SECRETS_KEY_FILE`) is not in it |
+| `state/kits/`, `state/exports/` | The kits control keeps and the exports of rigs without a results repository, file by file |
+| `streams/EVENTS.snapshot` | The bus's `EVENTS` stream, every rig's events, as the server's snapshot API gives it, taken after the store |
+| `manifest.json` | Each file's path, size and SHA-256; the stream's message count, first and last place, bytes, last message's SHA-256 and settings; control's place in each stream (`bus_position`), which is at or before the stream's end; the store's schema version; the Thermite version and commit that made it; and the streams left out, with why |
+
+It leaves out the `REPORTS`, `COMMANDS`, `LIVE` and `CONFIG` streams: a page waits in `REPORTS` only until control takes it, and a rig sends again what control lacks; control keeps every command in its store and publishes those still pending again as it starts; `LIVE` holds the newest live lines, which the rigs make again; and control writes each rig's config again from its store. It prints each step, then `backup: <folder> (<n> files, 1 streams)`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--state DIR` | `THERMITE_CONTROL_DIR`, else `/var/lib/thermite-control` | Control's state folder. One without `control.db`: `<dir> holds no control.db: give control's state folder with --state`, exit 2 |
+| `--bus URL` | `THERMITE_NATS_URL` | The bus, as control reaches it. It signs in as the backup's own user, with the seed in `bus-backup.seed`, and trusts the server through `bus-ca.pem`, both in the state folder. Control makes the seed as it starts; without it: `<file> is not there: control makes the backup's key on the bus as it starts. Start control once, then run this again`, exit 2 |
+
+A failure, such as the bus away or `FOLDER` missing, says why and exits 2, leaving the `.partial` folder.
+
+### `restore`
+
+`thermite restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]` puts a backup back, with control stopped. It runs where `backup` runs. [Restore a backup](../how-to/operate/backup-and-restore.md#restore-a-backup) gives the steps.
+
+```sh
+docker compose stop control
+docker compose --profile backup run --rm backup thermite restore --control http://control:8800 /backups/thermite-backup-2026-10-29T10-00-00-000Z
+```
+
+In order, it:
+
+1. With `--control`, asks control's health there, and refuses while control answers: `control answers at <url>: stop it first`.
+2. Checks every file of the backup against its manifest: there, its size and its SHA-256. A file that differs: `<path> is not the file the backup's manifest names: it changed`.
+3. For each stream in the backup: where the bus has none of that name, restores it through the server's restore API, printing the memory the server needs for it (about 1 KiB a message, over 128 MiB), then checks the stream it finds against the manifest: its message count, its last place and its last message. Where the bus has one already, it checks the same: a stream that is the backup's is left as it is; any other is refused. A server stopped part way through a restore leaves a stream that looks whole, and a bus that ran on since the backup holds more, so both are refused: `EVENTS on the bus is not the backup's: it holds <n> messages to <n>, and the backup holds <m> to <m>. …`.
+4. Puts control's state back: each of control's files and folders that is there now (`control.db` with its `-wal` and `-shm`, the keys, `kits/`, `exports/`) is moved into `replaced-<time>/` in the state folder, and the backup's are copied in, given to the state folder's owner when it runs as root. Nothing is deleted, and files that are not control's stay. A state folder that holds the backup's files already is left as it is.
+
+A refusal at any step changes no file of control's, prints `restore refused: <why>` on standard error, and exits 1. It ends with `restored: start control, and it applies the events from its place in the stream`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--state DIR`, `--bus URL` | As for `backup` | Control's state folder, and the bus. It signs in with the backup's seed in the state folder before it puts anything back, which the bus's server knows |
+| `--control URL` | None: not asked | Control's address, such as `http://control:8800` in the compose stack: the restore refuses while control answers there |
+| `--bus-store DIR` | None | The bus's store, mounted (`/bus-store` in the `backup` service), with the bus stopped: it checks the backup, then only moves everything in `DIR` into `DIR/replaced-<time>/`, so that the bus starts with an empty store, and says to run the restore again without it. The bus answering at its address: `the bus answers at <host>: stop it first, then set its store aside`, exit 1 |
 
 ## `thermite-trial`
 

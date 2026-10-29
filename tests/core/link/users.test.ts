@@ -6,12 +6,16 @@ import { configConsumerConfig } from "../../../src/core/link/config.ts";
 import { EVENT_STREAM, EVENT_SUBJECTS } from "../../../src/core/link/events.ts";
 import { REPORT_STREAM } from "../../../src/core/link/report.ts";
 import {
+  BACKUP_INBOX_PREFIX,
   BUS_ACCOUNT,
+  backupPermissions,
   controlPermissions,
   isUserKey,
+  jetStreamFiguresSubject,
   reloadSubject,
   rigInboxPrefix,
   rigPermissions,
+  STREAMS_KEPT_FOR_GOOD,
   SYSTEM_ACCOUNT,
   userKeyFingerprint,
   usersFile,
@@ -137,17 +141,49 @@ describe("who may do what on the message bus", () => {
       {
         nkey: keys.system,
         permissions: {
-          publish: { allow: ["$SYS.REQ.SERVER.*.RELOAD"] },
+          publish: { allow: ["$SYS.REQ.SERVER.*.RELOAD", "$SYS.REQ.SERVER.*.JSZ"] },
           subscribe: { allow: ["_INBOX.>"] },
         },
       },
     ]);
     assert.equal(reloadSubject("NABC"), "$SYS.REQ.SERVER.NABC.RELOAD");
+    assert.equal(jetStreamFiguresSubject("NABC"), "$SYS.REQ.SERVER.NABC.JSZ");
     // With no rig: control's users alone.
     const none = readUsers(usersFile({ control: keys.control, system: keys.system, rigs: [] }));
     assert.deepEqual(none.accounts[BUS_ACCOUNT]?.users, [
       { nkey: keys.control, permissions: controlPermissions() },
     ]);
+  });
+
+  test("the backup's user may snapshot and restore the streams kept for good, and nothing else", () => {
+    const keys = { control: user(), system: user(), backup: user() };
+    const { accounts } = readUsers(usersFile({ ...keys, rigs: [] }));
+    assert.deepEqual(accounts[BUS_ACCOUNT]?.users, [
+      { nkey: keys.control, permissions: controlPermissions() },
+      { nkey: keys.backup, permissions: backupPermissions() },
+    ]);
+    assert.deepEqual(backupPermissions(), {
+      publish: {
+        allow: [
+          `$JS.API.STREAM.INFO.${EVENT_STREAM}`,
+          `$JS.API.STREAM.MSG.GET.${EVENT_STREAM}`,
+          `$JS.API.STREAM.SNAPSHOT.${EVENT_STREAM}`,
+          `$JS.SNAPSHOT.ACK.${EVENT_STREAM}.>`,
+          `$JS.API.STREAM.RESTORE.${EVENT_STREAM}`,
+          `$JS.SNAPSHOT.RESTORE.${EVENT_STREAM}.>`,
+        ],
+      },
+      subscribe: { allow: [`${BACKUP_INBOX_PREFIX}.>`] },
+    });
+    assert.deepEqual(STREAMS_KEPT_FOR_GOOD, [EVENT_STREAM]);
+    // No delete, no purge, no publish to a stream's subjects.
+    const text = JSON.stringify(backupPermissions());
+    for (const word of ["DELETE", "PURGE", "CREATE", "thermite."])
+      assert.ok(!text.includes(word), word);
+    assert.throws(
+      () => usersFile({ ...keys, backup: "UNOTAKEY", rigs: [] }),
+      /not a NATS user key/,
+    );
   });
 
   test("control may do everything but delete or purge a stream kept for good", () => {

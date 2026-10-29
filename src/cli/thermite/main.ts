@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { errorText } from "../../common/errors.ts";
 import { thermiteAgents } from "./agents.ts";
+import { thermiteBackup, thermiteRestore } from "./backup.ts";
 import { thermiteCampaign, thermiteRun } from "./campaigns.ts";
+import { thermiteInvalidate } from "./evidence.ts";
 import { thermiteAssign, thermiteAssignPayload, thermiteCommand } from "./issue.ts";
 import { thermiteKit } from "./kits.ts";
 import {
@@ -21,7 +23,8 @@ import { USAGE } from "./usage.ts";
 
 /**
  * The thermite command line: the machine's checks, contract checks, key generation, issuing
- * commands through control, and the scripted proposer's submit/status calls against a harness.
+ * commands through control, the scripted proposer's submit/status calls against a harness, and
+ * control's backup and restore.
  * Each command is a function in a module of thermite/, and the usage text is thermite/usage.ts.
  */
 
@@ -61,6 +64,8 @@ async function main(argv: string[]): Promise<void> {
       return thermiteMcp(rest);
     case "command":
       return thermiteCommand(rest);
+    case "invalidate":
+      return thermiteInvalidate(rest);
     case "submit":
       return thermiteSubmit(rest);
     case "status":
@@ -69,6 +74,10 @@ async function main(argv: string[]): Promise<void> {
       return thermiteLocal(rest);
     case "selftest":
       return thermiteSelftest(rest);
+    case "backup":
+      return thermiteBackup(rest);
+    case "restore":
+      return thermiteRestore(rest);
     default:
       process.stdout.write(USAGE);
       if (cmd && cmd !== "help" && cmd !== "--help") process.exit(2);

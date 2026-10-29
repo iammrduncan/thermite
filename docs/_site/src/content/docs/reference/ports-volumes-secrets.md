@@ -52,7 +52,7 @@ Two Unix sockets matter too:
 | --- | --- | --- |
 | `rig` | Internal: no way out | `harness`, `supervisor` |
 | `rig2` | Internal | `harness-2`, `supervisor-2` (the `two-rigs` profile) |
-| `control` | Normal | `control`, `nats`, `supervisor`, `supervisor-2` |
+| `control` | Normal | `control`, `nats`, `backup`, `supervisor`, `supervisor-2` |
 | `egress` | Normal: the way out | `harness`, `supervisor`, `harness-2`, `supervisor-2` |
 
 The harness is not on the `control` network, so it never reaches control or the message bus. Control and the harness also get the host name `host.docker.internal`, so they can reach a model server on the host. A release's compose file also has an `init` service, which makes the local tokens: it has no network at all (`network_mode: none`).
@@ -83,9 +83,9 @@ In a **slot**, a namespace the cluster's operators made for Thermite, the operat
 
 | Container | Path | Holds |
 | --- | --- | --- |
-| Control | `/var/lib/thermite-control` (`THERMITE_CONTROL_DIR`) | `control.db` and, after an update that migrated it, its two newest copies from before (`control.db.v<version>.<time>.copy`); `control.db` holds rigs, reports, commands, providers, MCP servers with their secrets and sign-ins sealed, [Thermite's knowledge base](knowledge-base.md), the audit log); `control-signing.key` (0600) and `control-signing.pub`; with the message bus, `bus-ca.key` (0600) and `bus-ca.pem`, control's own certificate authority for the bus; `secrets.key`, which seals every key and sign-in control stores; `kits/`, kits written or uploaded on the **New campaign** page; `exports/`, the [exports](exports.md#where-control-keeps-them) of rigs without a results repository |
+| Control | `/var/lib/thermite-control` (`THERMITE_CONTROL_DIR`) | `control.db` and, after an update that migrated it, its two newest copies from before (`control.db.v<version>.<time>.copy`); `control.db` holds rigs, reports, commands, providers, MCP servers with their secrets and sign-ins sealed, [Thermite's knowledge base](knowledge-base.md), the audit log); `control-signing.key` (0600) and `control-signing.pub`; with the message bus, `bus-ca.key` (0600) and `bus-ca.pem`, control's own certificate authority for the bus, and `bus-backup.seed` (0600), the backup's key on the bus; `secrets.key`, which seals every key and sign-in control stores; `kits/`, kits written or uploaded on the **New campaign** page; `exports/`, the [exports](exports.md#where-control-keeps-them) of rigs without a results repository; after a [restore](../how-to/operate/backup-and-restore.md#restore-a-backup), `replaced-<time>/`, what it replaced |
 | Control | `/keys` | `control-signing.pub`, copied there for rigs (`THERMITE_CONTROL_PUBKEY_EXPORT`); with the message bus, `bus-ca.pem`, its authority's certificate, for the supervisors (`THERMITE_NATS_CA_EXPORT`) |
-| Control | `/nats-config` | With the message bus (`THERMITE_NATS_CONFIG_DIR`): `users.conf` (0644), the bus's users that control writes for the NATS server, each user's public key and what it may do, never a seed; `server-cert.pem` (0644) and `server-key.pem` (0640), the server's TLS certificate, which control's authority signs, and its key. Control's own two keys on the bus are in `control.db`, their seeds sealed with `secrets.key` |
+| Control | `/nats-config` | With the message bus (`THERMITE_NATS_CONFIG_DIR`): `users.conf` (0644), the bus's users that control writes for the NATS server, each user's public key and what it may do, never a seed; `server-cert.pem` (0644) and `server-key.pem` (0640), the server's TLS certificate, which control's authority signs, and its key. Control's own two keys on the bus are in `control.db`, their seeds sealed with `secrets.key`; the backup's is in control's state folder |
 | Harness | `/var/lib/thermite` | The ledger, its two newest copies from before a migration (`ledger.db.v<version>.<time>.copy`), and the rig's report key (`ledger/`), git mirrors (`git/`), kits (`kits/`), imports (`imports/`), models (`models/`), builds (`builds/`), the model route control set (`model-route.json`, root only), the rig's settings (`rig-settings.json`; one the harness can't read is kept aside as `rig-settings.json.unreadable-<time>`, logged and reported, and the defaults apply) and its copy of each run's past research (`knowledge/<run>/`) |
 | Harness | `/scratch` | Workspaces, lane caches, the judge's runs and each run's research folder (`thermite/research/<run>/`, with its `knowledge/`). Emptied at every start, except each lane's cache folder, `thermite/lanes/<lane>/cache`, which a start keeps when it is a real folder its own lane's user owns ([below](#a-lanes-cache)) |
 | Harness | `/inbox` | Read-only: project and kit bundles and [model files](model-files.md) the supervisor fetched |
@@ -119,7 +119,7 @@ A full reset empties the harness's state, scratch and outbox, keeping only the r
 
 | Volume or folder | Mounted in | At | Mode |
 | --- | --- | --- | --- |
-| `control-state` | control | `/var/lib/thermite-control` | read-write |
+| `control-state` | control; backup | `/var/lib/thermite-control` | read-write |
 | `control-pub` | control; harness, harness-2; supervisor, supervisor-2 | `/keys` | read-write in control; read-only in the harnesses and the supervisors |
 | `nats-config` | control; nats | `/nats-config` in control; `/etc/nats/thermite` in nats | read-write in control; read in nats, which gives the folder to control's user as it starts |
 | `harness-state`, `harness2-state` | harness, harness-2 | `/var/lib/thermite` | read-write |
@@ -128,8 +128,9 @@ A full reset empties the harness's state, scratch and outbox, keeping only the r
 | `outbox`, `outbox2` | a harness and its supervisor | `/outbox` | read-write in the harness; read-only in the supervisor |
 | `supervisor-home`, `supervisor2-home` | supervisor, supervisor-2 | `/var/lib/thermite-supervisor` | read-write |
 | `results` | both supervisors | `/results` | read-write. The default results repository is `file:///results/results.git` |
-| `nats-data` | nats | `/data` | read-write. It holds the `EVENTS` stream, every rig's events, which control's records in `control-state` are applied from: keep the two together. Control refuses a store that applied the stream past its end |
+| `nats-data` | nats; backup | `/data` in nats; `/bus-store` in backup | read-write. It holds the `EVENTS` stream, every rig's events, which control's records in `control-state` are applied from: keep the two together, as `thermite backup` does. Control refuses a store that applied the stream past its end. A restore's `--bus-store` moves its contents into `replaced-<time>/` inside it |
 | `./.dev/advisors` (a folder) | both supervisors | `/etc/thermite/advisors` | read-only |
+| `./.dev/backups` (a folder) | backup | `/backups` | read-write. `thermite backup` writes each backup here, and `thermite restore` reads it. The `backup` service runs as root with only the capabilities `CHOWN`, `DAC_OVERRIDE` and `FOWNER`, and gives what it writes here to the folder's owner |
 | `.` (the folder that holds `compose.yaml`) | init, in a release's compose file | `/work` | read-write. It runs as root, with only the capabilities `CHOWN`, `DAC_OVERRIDE` and `FOWNER` |
 
 The `init` service makes the `.dev/` folders, next to `compose.yaml`: it runs `thermite local init` with that folder mounted at `/work`. On a machine with NVIDIA GPUs, it also writes `compose.gpu.yaml` there, which gives the harness the machine's GPUs ([Use the machine's NVIDIA GPUs](../how-to/install/one-machine.md#use-the-machines-nvidia-gpus)). In a checkout of the source code, `npm run dev:init` makes the same folders. `docker compose down -v` removes the named volumes; without `-v` they keep their state.
@@ -185,7 +186,8 @@ The [one-container rig image](harness-image.md#where-the-state-lives) says when 
 | The operator's, agent's and reader's tokens | Control | `THERMITE_CONTROL_OPERATOR_TOKEN_FILE`, `THERMITE_CONTROL_AGENT_TOKEN_FILE`, `THERMITE_CONTROL_READ_TOKEN_FILE` | Optional, as above |
 | The rig tokens file | Control | `THERMITE_CONTROL_RIG_TOKENS_FILE` | `{"<rig>": "<token>"}` for rigs not enrolled through control. Read once, at start |
 | The secrets key | Control | `THERMITE_CONTROL_SECRETS_KEY_FILE`, default `secrets.key` in control's state folder | The key that seals every provider key, Git access, machine key, kubeconfig, RunPod key, MCP server's key, client secret and sign-in, and control's own keys on the message bus. Made on first start |
-| Control's keys on the message bus | Control | `control.db`, sealed with the secrets key | With the message bus: control's user and its system user, which asks the NATS server to reload its users. Made at the first start with `THERMITE_NATS_URL` |
+| Control's keys on the message bus | Control | `control.db`, sealed with the secrets key | With the message bus: control's user and its system user, which asks the NATS server to reload its users and for its store's figures. Made at the first start with `THERMITE_NATS_URL` |
+| The backup's key on the message bus | `thermite backup` and `thermite restore` | `bus-backup.seed` in control's state folder, 0600 | The seed of the backup's NATS user key, which may only take and restore a snapshot of the `EVENTS` stream. Control makes it at its first start with the bus, and writes its public part to the server's users |
 | Control's signing key | Control | `control-signing.key` in control's state folder, 0600 | Signs every command to rigs. Made on first start |
 | The bus's certificate authority | Control | `bus-ca.key` in control's state folder, 0600, beside `bus-ca.pem` | With the message bus: signs the bus's server's certificate. Made at the first start with `THERMITE_NATS_URL`, valid for 10 years. Only its certificate leaves control, to every rig on the bus |
 | The bus's server's key | The NATS server | `server-key.pem` in `THERMITE_NATS_CONFIG_DIR`, 0640, control's user and group | With the message bus: the key of the server's TLS certificate. Control makes it with each new certificate |

@@ -57,7 +57,7 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 
 ### A command about one run
 
-A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `approve_promotion`, `decline_promotion`, `accept_review` and `conclude`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
+A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude` and `invalidate_evidence`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
 
 Control refuses, before it signs:
 
@@ -132,7 +132,7 @@ The harness checks every command in this order. A command that fails a check mar
 | It is not being applied right now | None: the harness answers `in_progress`, and the supervisor asks again later | Stays `pending` |
 | An owner-only kind was issued by the owner (`issued_by` is `owner` or starts with `owner:`) | `<kind> is the owner's to issue, not <issuer>'s` | `failed` |
 
-The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, and `stop_trial`, which stops one trial. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
+The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, and `invalidate_evidence`, which withdraws bad evidence. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
 
 A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`.
 
@@ -164,10 +164,11 @@ A command that passes these checks and that the harness then refuses is `failed`
 | `accept_review` | **Needs you**: **Accept**, **Reject** | Yes | No | No | No | Yes |
 | `conclude` | **Needs you**: **End it: not possible**, **Keep going** | Yes | No | No | No | Yes |
 | `hypothesis_status` | **Promote**, **Return to pool** or **Retire**, then its button, on a hypothesis on a research run's **Hypotheses** tab | Yes | Yes | No | No | Yes |
+| `invalidate_evidence` | **Withdraw its evidence…**, then **See what it reaches**, then **Withdraw the evidence**, on an attempt's page | Yes; `thermite invalidate` | Yes | No | No | Yes |
 | `rig_settings` | **Save changes** on **Edit rig**; **GPUs for the judge** on **New campaign** and in the **Start a run** panel | `POST /v1/rigs/<rig>/settings`, or `POST /v1/commands`; `POST /v1/rigs/<rig>/cluster/resources` with a new number of GPUs | `set_rig_settings`; `start_run` with `judge_gpus`; `set_cluster_rig_resources` with a new number of GPUs | `set_rig_settings`, but not `promotion` or `judge_gpus`; `set_cluster_rig_resources` with a new number of GPUs, which sends the new default share only | No | Yes |
 | `wipe_state` | Only as a step of a full reset | No: `wipe_state is issued only by a full reset` | No | No | No | Yes |
 
-Control's own lists decide what each MCP role may issue; the harness's owner-only check is a second gate behind them. The operator acts for the owner, so its `owner:operator` passes that gate for `message_agent`, `unkeep_message`, the six queue kinds and the `rig_settings` that `set_rig_settings` sends. The operator's list has no `close_run`, `approve_promotion`, `decline_promotion` or `hypothesis_status`. During the owner's full reset of a rig, MCP's `issue_command` refuses an agent's token for that rig: `<rig> is being reset by the owner`. [Tokens and roles](tokens.md) describes each token.
+Control's own lists decide what each MCP role may issue; the harness's owner-only check is a second gate behind them. The operator acts for the owner, so its `owner:operator` passes that gate for `message_agent`, `unkeep_message`, the six queue kinds and the `rig_settings` that `set_rig_settings` sends. The operator's list has no `close_run`, `approve_promotion`, `decline_promotion`, `hypothesis_status` or `invalidate_evidence`. For `invalidate_evidence` the harness refuses `owner:operator` itself too: `invalidate_evidence is the owner's own to issue, not owner:operator's`. During the owner's full reset of a rig, MCP's `issue_command` refuses an agent's token for that rig: `<rig> is being reset by the owner`. [Tokens and roles](tokens.md) describes each token.
 
 On the dashboard, only an experiment up next has **Edit**: a lane's idea's words change only over the REST API, the command line or MCP. [Choose what runs next](../how-to/campaigns/choose-what-runs-next.md) walks through the **Experiments** and **Planner** tabs.
 
@@ -677,6 +678,32 @@ The owner's answer to the harness's proposal that a goal campaign's goals cannot
 | `note` | text up to 2000 characters | Optional |
 
 A closed run is refused, whichever the answer: `run <run> is closed: it can't end as not possible or go on`.
+
+### `invalidate_evidence`
+
+The owner withdraws bad evidence: an attempt, for good, with every attempt built on it, or the measurements of one of the judge's jobs, whose attempts are judged again. Nothing is deleted: each step is a new record. It goes in two steps. A **preview** (`preview: true`) answers with what it would reach and changes nothing: the rig records only the command, as it records every command. The **withdrawal** names the preview's `sha` in `reach`: the harness works out the reach again and does exactly that, or refuses when it differs. [Withdraw bad evidence](../how-to/campaigns/withdraw-bad-evidence.md) shows the steps.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The run |
+| `attempt` | text, 1 to 64 characters | One of the two. An attempt of the run: withdrawn for good, with every attempt built on it |
+| `job` | positive whole number | One of the two. A judge job of the run that finished: its measurements are withdrawn |
+| `reason` | text, 1 to 2000 characters, not spaces alone | Why. The record keeps it, and every page that shows the withdrawal says it |
+| `preview` | boolean | `true`: say what it would reach, and change nothing |
+| `reach` | sha256, 64 hexadecimal characters | Without `preview`, required: the `sha` the preview answered |
+
+Control refuses, before it signs: `name one attempt or one job` (both, or neither), and `send a preview first (preview: true), then the sha it gave as reach` (neither `preview` nor `reach`). The harness refuses: `invalidate_evidence is the owner's own to issue, not <issuer>'s` (an operator), `attempt <attempt> is not in <run>`, `attempt <attempt> was withdrawn already, for good: there is nothing more to withdraw`, `job <job> is not in <run>`, `job <job> is <state>: it has no measurements to withdraw yet` (a job still queued, leased or blocked), `no verdict rests on job <job>'s measurements now: there is nothing to withdraw`, and, for the withdrawal, `what it reaches changed since the preview: preview it again, and confirm what it reaches now`. A closed run's evidence can be withdrawn too: nothing in it is judged again.
+
+What it reaches, from the subject: the attempt itself, or each attempt whose current verdict rests on the job, then every attempt built on one reached (the attempt whose commit it was made on), in turn.
+
+- **Each attempt reached** gets an `invalidated` verdict that supersedes its current one (the verdict before stays in the record). An attempt withdrawn for good is marked so, never gets another verdict, and can't become the champion; a change submitted later on top of one is withdrawn as it arrives, with `lineage of invalidated evidence: built on <attempt>, which was withdrawn: <reason>`, and never judged. When a job's measurements are withdrawn, each attempt goes back to the judge's queue (`queued`, with a new job) to be measured again, unless its run is closed, it was never judged (`rejected_v0`, `duplicate`), or it was withdrawn for good before.
+- **The judge's open jobs** for the attempts reached, queued or under way, are cancelled (`job_cancelled`). A judge measuring one can no longer record its outcome, as after a lost lease. An attempt that is not judged again and waited for the judge, an audit or the owner settles as `judged`.
+- **Each champion** whose attempt is reached is reopened (`champion_reopened`). When the run's champion is among them, it moves back to the newest champion that stands, the starting point at least, with a `champion_moved_back` event; its git ref follows, new trials build on it, and a goal run's judge checks its goals again.
+- **A champion already published** keeps its patch in the results repository and on control: nothing there is deleted or rewritten, and the next export carries the events that withdrew it. Control no longer offers it to download or to propagate.
+
+The answer, to both steps: `{"sha", "reach", "words"}`, with `"preview": true` for a preview and `"invalidation": <id>` for the withdrawal. `words` says what it reaches in sentences, as the dashboard shows them. `reach` is `{run, subject: {kind, id}, for_good, attempts, attempts_total, superseded, jobs: {cancelled, cancelled_total, queued}, champions, champion}`: `attempts`, the first 200, each `{attempt, why: subject|evidence|lineage, parent, lifecycle, verdict, then: withdrawn|judged_again|stays_withdrawn}` as it is before; `superseded`, how many current verdicts an `invalidated` one supersedes; `champions`, each `{seq, attempt, published}`; `champion`, `{from, to, to_attempt, validate}` when the run's champion moves back, else `null`. The `sha` covers each attempt and what becomes of it, the verdicts superseded, the champions reopened and where the champion moves.
+
+The withdrawal records, in one transaction: the `invalidation` event (`{id, run, kind, reason, attempts, verdicts, champions}`, its subject the attempt or the job), each `verdict` and `champion_reopened`, each `job_cancelled`, `job_queued` and `attempt_lifecycle`, and `champion_moved_back` (`{from, to, attempt, commit, invalidation, reason}`). Each reaches control, the exports and the knowledge base like any event.
 
 ## Imports
 

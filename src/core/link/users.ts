@@ -8,17 +8,20 @@ import { LIVE_RUNS_PER_RIG, liveSubject, rigLiveSubject } from "./live.ts";
 import { reportSubject } from "./report.ts";
 
 /**
- * Who may do what on the message bus (goal 168): only control and the rigs' supervisors hold a
- * credential, each a NATS user key (an nkey) that the part made itself. The server knows a user by
+ * Who may do what on the message bus (goal 168): only control, its backups and the rigs'
+ * supervisors hold a credential, each a NATS user key (an nkey) that the part made itself. The server knows a user by
  * the key's public part alone; its seed, the secret, never leaves the part that made it. Control
  * writes every user, with what it may do, to the server's users file (usersFile), and asks the
  * server to read it again (reloadSubject): a rig's supervisor registers its key on its regular call
  * to control, and has a user once control has written it.
  */
 
-/** The account every stream is in, with control's user and each rig's. */
+/** The account every stream is in, with control's user, the backup's and each rig's. */
 export const BUS_ACCOUNT = "THERMITE";
-/** The server's own account: control's second user, which only asks the server to reload. */
+/**
+ * The server's own account: control's system user, which asks the server to reload and reads how
+ * much of its store JetStream uses.
+ */
 export const SYSTEM_ACCOUNT = "SYS";
 
 /** A user key's public part: 56 characters of base32, starting with U. */
@@ -105,10 +108,11 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
 }
 
 /**
- * The streams kept for good: the record of every rig's events. The reports stream is an inbox
- * (report.ts), which control makes again when it was made as one kept for good.
+ * The streams kept for good: the record of every rig's events, which a backup holds (core/backup.ts).
+ * The reports stream is an inbox (report.ts), which control makes again when it was made as one
+ * kept for good.
  */
-const STREAMS_KEPT_FOR_GOOD = [EVENT_STREAM] as const;
+export const STREAMS_KEPT_FOR_GOOD = [EVENT_STREAM] as const;
 
 /**
  * What control's user may not do: delete or purge a stream kept for good. Such a stream refuses to
@@ -124,36 +128,70 @@ export function controlPermissions(): { publish: { deny: string[] } } {
   return { publish: { deny } };
 }
 
+/**
+ * The start of every subject the backup's user takes replies on: the server's answers, and the
+ * chunks of a stream's snapshot. Its user may subscribe there and nowhere else.
+ */
+export const BACKUP_INBOX_PREFIX = "_INBOX.backup";
+
+/**
+ * What the backup's user may do (`thermite backup` and `thermite restore`): for each stream kept
+ * for good, read its state and a message by its place, take its snapshot and ack its chunks, and
+ * restore it, which the server does only for a stream it does not have. Nothing else: it may not
+ * publish to a stream, nor delete or purge one.
+ */
+export function backupPermissions(): Permissions {
+  const allow = STREAMS_KEPT_FOR_GOOD.flatMap((s) => [
+    `${API}.STREAM.INFO.${s}`,
+    `${API}.STREAM.MSG.GET.${s}`,
+    `${API}.STREAM.SNAPSHOT.${s}`,
+    `$JS.SNAPSHOT.ACK.${s}.>`,
+    `${API}.STREAM.RESTORE.${s}`,
+    `$JS.SNAPSHOT.RESTORE.${s}.>`,
+  ]);
+  return { publish: { allow }, subscribe: { allow: [`${BACKUP_INBOX_PREFIX}.>`] } };
+}
+
 /** The subject control's system user asks the server with this id to reload its configuration. */
 export function reloadSubject(serverId: string): string {
   return `$SYS.REQ.SERVER.${serverId}.RELOAD`;
 }
 
-/** What control's system user may do: ask for a reload, and read the answer. */
+/**
+ * The subject control's system user asks the server with this id for JetStream's figures on: how
+ * much of its store JetStream uses, and its limit (the server's monitoring, as `/jsz`).
+ */
+export function jetStreamFiguresSubject(serverId: string): string {
+  return `$SYS.REQ.SERVER.${serverId}.JSZ`;
+}
+
+/** What control's system user may do: ask for a reload and for JetStream's figures, and read the answers. */
 const SYSTEM_PERMISSIONS: Permissions = {
-  publish: { allow: [reloadSubject("*")] },
+  publish: { allow: [reloadSubject("*"), jetStreamFiguresSubject("*")] },
   subscribe: { allow: ["_INBOX.>"] },
 };
 
 /**
- * The users the server knows: control's two keys, and each rig's that has one registered, with
- * the runs control gives it.
+ * The users the server knows: control's two keys, the backup's when control has made it, and each
+ * rig's that has one registered, with the runs control gives it.
  */
 export interface BusUserKeys {
   control: string;
   system: string;
+  backup?: string | undefined;
   rigs: readonly { rig: string; key: string; runs?: readonly string[] | undefined }[];
 }
 
 /**
  * The server's users file, which its configuration includes: control's user, which may do
- * everything in the account but what controlPermissions denies it; a user for each rig, which may
- * do only what rigPermissions gives it; and control's system user. A rig with no key has no user.
- * The values are JSON, which the server's configuration reads. Throws on a key or a rig's name
- * that is not one.
+ * everything in the account but what controlPermissions denies it; the backup's, which may do only
+ * what backupPermissions gives it; a user for each rig, which may do only what rigPermissions gives
+ * it; and control's system user. A rig with no key has no user. The values are JSON, which the
+ * server's configuration reads. Throws on a key or a rig's name that is not one.
  */
 export function usersFile(u: BusUserKeys): string {
-  for (const key of [u.control, u.system, ...u.rigs.map((r) => r.key)])
+  const backup = u.backup === undefined ? [] : [u.backup];
+  for (const key of [u.control, u.system, ...backup, ...u.rigs.map((r) => r.key)])
     if (!isUserKey(key)) throw new Error("not a NATS user key for the bus's users file");
   const rigs = [...u.rigs].sort((a, b) => (a.rig < b.rig ? -1 : a.rig > b.rig ? 1 : 0));
   const accounts = {
@@ -161,6 +199,7 @@ export function usersFile(u: BusUserKeys): string {
       jetstream: "enabled",
       users: [
         { nkey: u.control, permissions: controlPermissions() },
+        ...backup.map((nkey) => ({ nkey, permissions: backupPermissions() })),
         ...rigs.map((r) => ({ nkey: r.key, permissions: rigPermissions(r.rig, r.runs) })),
       ],
     },

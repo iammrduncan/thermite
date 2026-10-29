@@ -376,6 +376,23 @@ export class FakeBus
     });
   }
 
+  /** A stream's settings and messages, as its snapshot holds them; undefined for one not made. */
+  streamCopy(name: string): { settings: StreamSettings; messages: Kept[] } | undefined {
+    const settings = this.made.get(name);
+    if (!settings) return undefined;
+    return {
+      settings,
+      messages: this.kept.filter((m) => m.stream === name).map((m) => ({ ...m })),
+    };
+  }
+
+  /** Makes a stream from a copy, each message at its own place, as the server's restore does. */
+  putStream(settings: StreamSettings, messages: readonly Kept[]): void {
+    this.made.set(settings.name, settings);
+    for (const m of messages) this.kept.push({ ...m, stream: settings.name });
+    this.seqs.set(settings.name, messages.at(-1)?.seq ?? 0);
+  }
+
   /** The duplicate window passes: a message id published before is new again, in every stream. */
   forgetIds(): void {
     this.ids.clear();

@@ -1,3 +1,4 @@
+import { DISK_FLOOR } from "../common/disk.ts";
 import type { NumberSpec } from "../common/settings.ts";
 
 /** How long a dashboard session lasts without use; each day of use renews it. */
@@ -24,4 +25,6 @@ export const CONTROL_NUMBERS = {
     rule: { unit: "days", aboveMin: true },
     fallback: SESSION_DAYS,
   },
+  /** The free space control keeps on its state folder and in the bus's store (control/disk.ts). */
+  diskFloorGib: DISK_FLOOR,
 } satisfies Record<string, NumberSpec>;

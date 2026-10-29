@@ -2,7 +2,8 @@
  * The message bus as control keeps it: who may use it, each rig's key and control's own two, and
  * the users file control writes for the bus's server (users.ts); its TLS, with control's own
  * certificate authority and the server's certificate (tls.ts, cert.ts); each rig's config in the
- * config bucket, sealed to the rig's seal key (config.ts); and its state, for whoever runs control
+ * config bucket, sealed to the rig's seal key (config.ts); what control's system user asks the
+ * server: a reload, and its store's use (system.ts); and its state, for whoever runs control
  * (state.ts).
  */
 
@@ -16,7 +17,6 @@ export {
   type RigConfig,
   takeRigSealKey,
 } from "./config.ts";
-
 export {
   BUS_STATE_TIMEOUT_MS,
   BUS_STREAMS,
@@ -26,6 +26,11 @@ export {
   liveState,
   type RigLive,
 } from "./state.ts";
+export {
+  type BusStoreUse,
+  busStoreUse,
+  reloadBus,
+} from "./system.ts";
 export {
   BUS_CA_EXPORT_SETTING,
   BUS_CA_FILES,

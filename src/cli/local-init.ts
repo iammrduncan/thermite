@@ -13,8 +13,8 @@ import { dirname, join } from "node:path";
 import { GPU_OVERRIDE } from "./machine.ts";
 
 /**
- * The local compose stack's folder, `.dev/`: random tokens in `secrets/`, the inbox, the outbox
- * and the advisors' folder. The release bundle's `init` service makes it with
+ * The local compose stack's folder, `.dev/`: random tokens in `secrets/`, the inbox, the outbox,
+ * the advisors' folder and the backups' folder. The release bundle's `init` service makes it with
  * `thermite local init`; a checkout makes the same layout with `npm run dev:init`
  * (scripts/dev/init.mjs, which needs no build). Files that exist are kept, so the tokens stay
  * the same from one start to the next; only the rig tokens map is written again, from the rig
@@ -43,6 +43,8 @@ export const LOCAL_FOLDERS = [
   "outbox",
   // Advisor configuration and keys (mounted read-only into the supervisors).
   "advisors",
+  // Control's backups, which the backup service writes (thermite backup).
+  "backups",
 ] as const;
 
 // The supervisor fetches sources into the inbox as its own user in its container: on native

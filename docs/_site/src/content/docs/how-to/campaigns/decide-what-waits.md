@@ -42,6 +42,7 @@ A closed run is finished, and nothing in it waits for you: what waited in it whe
 | **Repeats** | Stop lane-1's trial, or leave it running? | A trial made the same tool call with the same answer 10 times in a row, or asked 10 times for a page the run refused before for a reason that lasts | **Stop this trial…**, **Leave it running** |
 | **Not reporting** | This rig stopped reporting, or, for a rig that never reported, This rig has not reported yet | A rig has sent no report for a while. A new rig whose first key waits for you shows under **New key** instead. A rig on RunPod whose pod is stopped shows no card: it can't report while stopped | **Open the rig** |
 | **Disk full** | Make room on this rig's disk | A place the rig writes to has less free space than its floor, `THERMITE_DISK_FLOOR_GIB` (5 GiB by default): it starts no new trial, judge's job or export | **Open the rig** |
+| **Disk full** | Make room on control's disk | Control's state folder, or the room left in the message bus's store, is below control's floor, `THERMITE_DISK_FLOOR_GIB` (5 GiB by default): no new run starts, and the runs under way go on ([Troubleshoot](../operate/troubleshoot.md#controls-disk-is-at-its-floor)) | None: the card says where to make room, and it goes once there is |
 | **Drain** | Go ahead now, or end the drain? | A rig's drain passed its deadline, 60 minutes by default, with work still under way: it starts nothing new until you choose | **Update it now** (or **Change its size now**, or **Stop what still runs**), **End the drain** |
 
 ### Choose what waits

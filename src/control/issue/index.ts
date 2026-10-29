@@ -13,6 +13,7 @@ import { MAX_LANES } from "../../core/contract.ts";
 import { RESEARCH_TASK_KINDS, researchDirectionRefusal } from "../../core/directions.ts";
 import { McpUses, sameUses, usesWords } from "../../core/mcp.ts";
 import { campaignContextRefusal } from "../campaigns/index.ts";
+import { controlDiskOf } from "../disk.ts";
 import { mcpRefusal } from "../mcp-servers/index.ts";
 import { usedRunRefusal } from "../run-names.ts";
 import type { ControlStore } from "../store/index.ts";
@@ -331,6 +332,12 @@ export const WAKING_KINDS: readonly CommandKind[] = ["assign_campaign", "resume_
 /** A command refused because its rig's pod on RunPod could not be started for it (a conflict). */
 export class WakeRefused extends Error {}
 
+/**
+ * A run's assignment held while control's disk is at its floor (goal 173): refused for now, in
+ * words, as a conflict, as a wake refused is.
+ */
+export class AssignmentHeld extends WakeRefused {}
+
 /** What issueWaking needs of the rigs on RunPod (RunpodRigs, runpod/rigs.ts). */
 export interface PodWaker {
   /** The rig's pod as control follows it, when the rig is one launched on RunPod. */
@@ -354,6 +361,9 @@ export async function issueWaking(
   pods: PodWaker | undefined,
   input: IssueInput & { owner: boolean },
 ): Promise<{ id: string; woke: string | null }> {
+  // Control's disk at its floor holds new runs; what runs already goes on.
+  const held = input.kind === "assign_campaign" ? controlDiskOf(store)?.held : undefined;
+  if (held) throw new AssignmentHeld(held);
   const signed = prepareCommand(store, privateKeyPem, input);
   const rig = signed.envelope.rig;
   let woke: string | null = null;

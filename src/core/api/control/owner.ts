@@ -231,6 +231,16 @@ export const ISSUE = {
 } as const satisfies Route;
 
 /**
+ * One command: its delivery status and its outcome, with the rig's answer in `outcome.result`
+ * (`outcome.source` is `harness` once the harness's signed report confirmed it).
+ */
+export const COMMAND = {
+  method: "GET",
+  path: "/v1/commands/:id",
+  answer: z.looseObject({ status: z.string(), outcome: z.unknown() }),
+} as const satisfies Route;
+
+/**
  * A run (goal 170), addressed by its name alone, which is unique on control, wherever it ran: its
  * rig's current ledger, an earlier ledger or a retired rig. What hangs from it is addressed
  * under it. Control answers 404 for a run no rig created.

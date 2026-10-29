@@ -52,6 +52,9 @@ services:
       THERMITE_NATS_CONFIG_DIR: /nats-config
       # The certificate of control's own authority for the bus, which the supervisors trust.
       THERMITE_NATS_CA_EXPORT: /keys/bus-ca.pem
+      # The free space control keeps on its state and in the bus's store (GiB; empty: 5): below it,
+      # new runs wait.
+      THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
 
     volumes:
       - control-state:/var/lib/thermite-control
@@ -142,6 +145,31 @@ services:
     cap_add: [CHOWN]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+    logging: *logging
+
+  # Backups of control's state and of every rig's events, and their restore (goal 173), with
+  # control's image: never started by `up`. It mounts control's state, the bus's store (to set it
+  # aside before a restore) and .dev/backups, reaches the bus as control does, and runs as root
+  # with only the capabilities to read control's files and give what it writes to their owners:
+  #   docker compose --profile backup run --rm backup thermite backup /backups
+  #   docker compose --profile backup run --rm backup thermite restore --control http://control:8800 /backups/<name>
+  backup:
+    profiles: [backup]
+    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    command: ["thermite", "help"]
+    environment:
+      THERMITE_CONTROL_DIR: /var/lib/thermite-control
+      THERMITE_NATS_URL: nats://nats:4222
+    user: "0:0"
+    volumes:
+      - control-state:/var/lib/thermite-control
+      - nats-data:/bus-store
+      - ./.dev/backups:/backups
+    networks: [control]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
     logging: *logging
 
   harness:

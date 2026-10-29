@@ -11,6 +11,7 @@ import { canonicalJson } from "./canonical.ts";
 import { CommitSchema, IdSchema, MAX_LANES, MAX_LANES_REASON, Sha256Schema } from "./contract.ts";
 import { DirectionRef, directionName } from "./directions.ts";
 import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
+import { InvalidateEvidence } from "./invalidation.ts";
 import { McpUses } from "./mcp.ts";
 import { PROGRAM_MODES } from "./rig-settings.ts";
 
@@ -496,6 +497,8 @@ export const CommandPayloads = {
     accept: z.boolean(),
     note: z.string().max(2000).optional(),
   }),
+  /** The owner withdraws bad evidence (goal 174; owner only): core/invalidation.ts. */
+  invalidate_evidence: InvalidateEvidence,
 } as const;
 
 export type CommandKind = keyof typeof CommandPayloads;
@@ -545,6 +548,7 @@ export const MCP_OWNER_KINDS = [
   "close_run",
   // A research run's hypotheses (goal 117): which need the review panel's verdict.
   "hypothesis_status",
+  "invalidate_evidence",
 ] as const satisfies readonly CommandKind[];
 
 /**
@@ -569,6 +573,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "drop_directive",
   "hypothesis_status",
   "stop_trial",
+  "invalidate_evidence",
 ]);
 
 /**
@@ -597,6 +602,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "decline_promotion",
   "accept_review",
   "conclude",
+  "invalidate_evidence",
 ]);
 
 export const Envelope = z.object({

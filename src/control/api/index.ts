@@ -4,6 +4,7 @@ import { log, redact } from "../../common/env.ts";
 import { answerOf } from "../../common/errors.ts";
 import { busHealth } from "../bus/index.ts";
 import { watchDrains } from "../clusters/index.ts";
+import { controlDiskOf } from "../disk.ts";
 import { ExportFiles } from "../exports.ts";
 import { mountMcp } from "../mcp/index.ts";
 import { mountMcpServerRoutes } from "../mcp-servers/index.ts";
@@ -78,12 +79,15 @@ export function createControlApi(
     }
   });
 
-  // Control is up; the message bus as control holds it: off, connected or away; and each of
-  // control's loops with its age, 503 when one is late (goal 173). The bus away is no reason for
-  // 503: control waits for it, and says so here.
+  // Control is up; the message bus as control holds it: off, connected or away; each of
+  // control's loops with its age, 503 when one is late (goal 173); and its disk against its floor,
+  // `degraded` while it holds new runs for it. The bus away and a full disk are no reason for 503:
+  // control waits for the one, holds new runs for the other, and says so here.
   app.get("/v1/health", (c) => {
     const h = parts.loops.health();
-    return c.json({ ...h, bus: busHealth(parts.bus) }, h.ok ? 200 : 503);
+    const disk = controlDiskOf(store)?.state();
+    const more = disk ? { disk, degraded: disk.low } : {};
+    return c.json({ ...h, bus: busHealth(parts.bus), ...more }, h.ok ? 200 : 503);
   });
 
   relayRoutes(app, api);

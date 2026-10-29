@@ -1,7 +1,7 @@
 // Shared setup for the compose smoke and the judge acceptance test: the smoke project and kit
 // as git bundles in the inbox, the stack, signed commands through control, submissions from
 // inside the harness, and verdicts read back from control's event stream.
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync, execSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,6 +29,16 @@ export function dc(env, ...args) {
   });
   if (args.includes("down")) cleanEngine();
   return out;
+}
+
+/** A service's whole log, its output and its errors: larger than execFileSync's usual buffer. */
+export function dcLogs(env, service) {
+  const r = spawnSync(compose[0], [...compose.slice(1), ...project, "logs", service], {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  return `${r.stdout ?? ""}${r.stderr ?? ""}`;
 }
 
 /**

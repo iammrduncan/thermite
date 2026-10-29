@@ -20,7 +20,10 @@ export function card(o: {
   why: string;
   chips?: string | undefined;
   key: string;
-  u: RigView;
+  /** The rig it is about; none for control's own, which gives `where` instead. */
+  u?: RigView | undefined;
+  /** Where it is, in place of the rig and run (HTML, escaped). */
+  where?: string | undefined;
   r?: RunView | undefined;
   lane?: string | null | undefined;
   since?: string | undefined;
@@ -32,9 +35,14 @@ export function card(o: {
   /** The owner's choice already sent for this item, and the rig's answer (see decidedState). */
   decided?: { sent: boolean; html: string } | undefined;
 }): { html: string; box: string; decided: boolean } {
-  const where = o.r
-    ? `<a href="${runHref(o.r)}">${esc(o.r.campaign || o.r.id)} › ${esc(o.r.id)}</a> · ${esc(o.u.id)}${o.lane ? ` · ${esc(o.lane)}` : ""}`
-    : `rig <a href="/ui/rigs/${encodeURIComponent(o.u.id)}">${esc(o.u.id)}</a>`;
+  const u = o.u;
+  const where =
+    o.where ??
+    (u && o.r
+      ? `<a href="${runHref(o.r)}">${esc(o.r.campaign || o.r.id)} › ${esc(o.r.id)}</a> · ${esc(u.id)}${o.lane ? ` · ${esc(o.lane)}` : ""}`
+      : u
+        ? `rig <a href="/ui/rigs/${encodeURIComponent(u.id)}">${esc(u.id)}</a>`
+        : "");
   // Once the owner has chosen, the row says so instead of offering the buttons again; a choice
   // the rig refused says why, and the buttons come back.
   const buttons = o.decided?.sent

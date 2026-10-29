@@ -3,9 +3,28 @@ import { clipReason, REASONS_CHARS } from "../judge/index.ts";
 import { LedgerError, LedgerPart, type Row } from "./part.ts";
 
 export interface InvalidationResult {
+  /** The invalidation's id in the `invalidation` table. */
+  id: number;
   attempts: string[];
   verdictsSuperseded: number[];
   championsReopened: { run: string; seq: number }[];
+}
+
+/**
+ * What an invalidation would reach, read without changing anything: the attempts in the order the
+ * walk meets them, why each is reached and its current verdict, and the champions that rest on
+ * them. invalidate() walks the same way, so a preview is what the invalidation then does.
+ */
+export interface InvalidationWalk {
+  /** The run of the subject; null for a job no run owns. */
+  run: string | null;
+  attempts: {
+    attempt: string;
+    why: "subject" | "evidence" | "lineage";
+    parent: string | null;
+    current: { id: number; verdict: string } | undefined;
+  }[];
+  champions: { run: string; seq: number; attempt: string }[];
 }
 
 /** A verdict as recorded. */
@@ -138,8 +157,63 @@ export class LedgerVerdicts extends LedgerPart {
   }
 
   /**
-   * Invalidates a job's evidence or a whole attempt. Never deletes: current verdicts that depend
-   * on the subject are superseded by an `invalidated` verdict, champions built on them are marked
+   * What invalidating a job's evidence or a whole attempt would reach (the walk), with nothing
+   * changed. An invalidated attempt (and everything built on it) is invalid for good. Attempts
+   * whose current verdict rests on an invalidated job may be measured again; their descendants
+   * are judged again too.
+   */
+  walk(subject: { kind: "job" | "attempt"; id: string }): InvalidationWalk {
+    const out: InvalidationWalk = { run: null, attempts: [], champions: [] };
+    let frontier: {
+      attempt: string;
+      why: "subject" | "evidence" | "lineage";
+      parent: string | null;
+    }[] = [];
+    if (subject.kind === "attempt") {
+      const a = this.row<Row>("select run from attempt where id = ?", subject.id);
+      out.run = typeof a?.run === "string" ? a.run : null;
+      frontier = [{ attempt: subject.id, why: "subject", parent: null }];
+    } else {
+      const jobId = Number(subject.id);
+      const job = this.row<Row>(
+        `select coalesce(a.run, json_extract(j.spec, '$.run')) as run from job j
+           left join attempt a on a.id = j.attempt where j.id = ?`,
+        jobId,
+      );
+      out.run = typeof job?.run === "string" ? job.run : null;
+      for (const r of this.rows<Row>("select distinct attempt from verdict order by attempt")) {
+        const current = this.current(String(r.attempt));
+        if (current?.depends_on_jobs.includes(jobId))
+          frontier.push({ attempt: String(r.attempt), why: "evidence", parent: null });
+      }
+    }
+    const seen = new Set<string>();
+    while (frontier.length) {
+      const next = frontier.shift() as (typeof frontier)[number];
+      if (seen.has(next.attempt)) continue;
+      seen.add(next.attempt);
+      const current = this.current(next.attempt);
+      out.attempts.push({
+        ...next,
+        current: current ? { id: current.id, verdict: current.verdict } : undefined,
+      });
+      for (const c of this.rows<Row>(
+        "select run, seq from champion where attempt = ? and reopened = 0 order by seq",
+        next.attempt,
+      ))
+        out.champions.push({ run: String(c.run), seq: Number(c.seq), attempt: next.attempt });
+      for (const child of this.rows<Row>(
+        "select id from attempt where parent_attempt = ? order by created_at, id",
+        next.attempt,
+      ))
+        frontier.push({ attempt: String(child.id), why: "lineage", parent: next.attempt });
+    }
+    return out;
+  }
+
+  /**
+   * Invalidates a job's evidence or a whole attempt, as walk() reaches it. Never deletes: the
+   * current verdicts are superseded by an `invalidated` verdict, champions built on them are marked
    * reopened, and attempts derived from an invalidated attempt are invalidated in turn.
    */
   invalidate(input: {
@@ -150,11 +224,7 @@ export class LedgerVerdicts extends LedgerPart {
   }): InvalidationResult {
     return this.tx(() => {
       const at = this.now();
-      const result: InvalidationResult = {
-        attempts: [],
-        verdictsSuperseded: [],
-        championsReopened: [],
-      };
+      const walk = this.walk({ kind: input.subjectKind, id: input.subjectId });
       const invalidationId = this.execute(
         "insert into invalidation (subject_kind, subject_id, reason, actor, created_at) values (?, ?, ?, ?, ?)",
         input.subjectKind,
@@ -163,25 +233,16 @@ export class LedgerVerdicts extends LedgerPart {
         input.actor,
         at,
       ).id;
+      const result: InvalidationResult = {
+        id: invalidationId,
+        attempts: [],
+        verdictsSuperseded: [],
+        championsReopened: [],
+      };
       // An invalidated attempt (and everything built on it) is invalid for good. Attempts whose
       // job evidence was invalidated may be measured again; their descendants are re-judged too.
       const permanent = input.subjectKind === "attempt";
-      let frontier: string[] = [];
-      if (input.subjectKind === "attempt") {
-        frontier = [input.subjectId];
-      } else {
-        const jobId = Number(input.subjectId);
-        const rows = this.rows<Row>("select distinct attempt from verdict");
-        for (const r of rows) {
-          const current = this.current(String(r.attempt));
-          if (current?.depends_on_jobs.includes(jobId)) frontier.push(String(r.attempt));
-        }
-      }
-      const seen = new Set<string>();
-      while (frontier.length) {
-        const attempt = frontier.shift() as string;
-        if (seen.has(attempt)) continue;
-        seen.add(attempt);
+      for (const { attempt, current } of walk.attempts) {
         result.attempts.push(attempt);
         if (permanent) {
           this.execute(
@@ -191,7 +252,6 @@ export class LedgerVerdicts extends LedgerPart {
             attempt,
           );
         }
-        const current = this.current(attempt);
         if (current?.verdict !== "invalidated") {
           const id = this.insert({
             attempt,
@@ -205,35 +265,55 @@ export class LedgerVerdicts extends LedgerPart {
           });
           result.verdictsSuperseded.push(id);
         }
-        for (const c of this.rows<Row>(
-          "select run, seq from champion where attempt = ? and reopened = 0",
-          attempt,
-        )) {
-          this.execute(
-            "update champion set reopened = 1 where run = ? and seq = ?",
-            String(c.run),
-            Number(c.seq),
-          );
-          result.championsReopened.push({ run: String(c.run), seq: Number(c.seq) });
-          this.ledger.appendEvent(input.actor, "champion_reopened", String(c.run), {
-            seq: Number(c.seq),
+        for (const c of walk.champions.filter((x) => x.attempt === attempt)) {
+          this.execute("update champion set reopened = 1 where run = ? and seq = ?", c.run, c.seq);
+          result.championsReopened.push({ run: c.run, seq: c.seq });
+          this.ledger.appendEvent(input.actor, "champion_reopened", c.run, {
+            seq: c.seq,
             attempt,
             reason: input.reason,
           });
         }
-        for (const child of this.rows<Row>(
-          "select id from attempt where parent_attempt = ?",
-          attempt,
-        )) {
-          frontier.push(String(child.id));
-        }
       }
       this.ledger.appendEvent(input.actor, "invalidation", input.subjectId, {
+        id: invalidationId,
+        run: walk.run,
         kind: input.subjectKind,
         reason: input.reason,
         attempts: result.attempts,
+        verdicts: result.verdictsSuperseded,
+        champions: result.championsReopened.map((c) => c.seq),
       });
       return result;
+    });
+  }
+
+  /**
+   * An attempt built on one invalidated for good is invalid with it, from the moment it is
+   * recorded (lineage): marked with the same invalidation and given an `invalidated` verdict.
+   * False when its parent stands.
+   */
+  inherit(attempt: string, parent: string, actor: string): boolean {
+    return this.tx(() => {
+      const p = this.ledger.attempts.get(parent);
+      if (!p || p.invalidated_by === null) return false;
+      const from = this.row<Row>(
+        "select reason from invalidation where id = ?",
+        Number(p.invalidated_by),
+      );
+      this.execute(
+        "update attempt set invalidated_by = ?, updated_at = ? where id = ?",
+        Number(p.invalidated_by),
+        this.now(),
+        attempt,
+      );
+      this.insert({
+        attempt,
+        verdict: "invalidated",
+        reasons: `lineage of invalidated evidence: built on ${parent}, which was withdrawn: ${String(from?.reason ?? "")}`,
+        judgedBy: actor,
+      });
+      return true;
     });
   }
 }

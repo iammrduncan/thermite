@@ -1,7 +1,11 @@
 import type { Hono } from "hono";
 import { commandFollowUrl, commandProgress } from "../../../command-progress.ts";
 import { esc } from "../../../ui/components/index.ts";
-import { attemptDetail, needs as operatorNeeds } from "../../../ui/operator/index.ts";
+import {
+  attemptDetail,
+  needs as operatorNeeds,
+  withdrawBlock,
+} from "../../../ui/operator/index.ts";
 import {
   attemptHref,
   campaignHref,
@@ -89,6 +93,18 @@ export function attemptRoutes(app: Hono, dash: Dashboard): void {
       champ && store.championPatches.get(u.id, u.ledger_id, r.id, champ.seq)
         ? `<a href="${championPatchHref(r, champ.seq)}">Download champion #${champ.seq} as a patch</a>`
         : undefined;
+    // The owner's withdrawal of its evidence (goal 174): the newest command about it or its jobs.
+    const jobs = u.judge.jobs.filter((j) => j.attempt === a.id);
+    const asked = store.commands
+      .latest(u.id, "invalidate_evidence")
+      .find(
+        (y) =>
+          y.payload.run === r.id &&
+          (y.payload.attempt === a.id || jobs.some((j) => Number(j.id) === y.payload.job)),
+      );
+    const withdraw = x.earlier
+      ? undefined
+      : withdrawBlock({ csrf: forms(c).csrf, rig: u.id, back }, r, a, jobs, asked, now);
     return page(
       c,
       {
@@ -102,7 +118,7 @@ export function attemptRoutes(app: Hono, dash: Dashboard): void {
       },
       // One part: the owner's decision and what the rig did show without a refresh (goal 080),
       // followed while the rig has not done it.
-      `<div data-part="attempt"${followDecision(u.id, a.id, now)}>${attemptDetail(u, r, a, now, { decision, patch })}</div>`,
+      `<div data-part="attempt"${followDecision(u.id, a.id, now)}>${attemptDetail(u, r, a, now, { decision, patch, withdraw })}</div>`,
     );
   });
 }
