@@ -89,6 +89,7 @@ Each green on its own, with its tests and docs in the same commit. In goal 172's
 - 2026-10-27, owner: the blurbs, kept, made searchable by zvec-grep with a local model.
 - 2026-10-27, owner, replacing the first design: the knowledge base lives on control, with all its storage and indexes; one collection for each campaign; every agent reads it over MCP, and the roles allowed to write each write into their own slot, never changing another's items; items are blurbs or files; writes arrive as durable events on NATS; a run continues its campaign's collection or starts fresh; other campaigns' collections are read only, by grant. The words of the hierarchy matter ([decisions.md](../decisions.md#research-and-judging)).
 - 2026-10-27, owner, on question 5: a file has no size limit by default. The owner can set one in the knowledge base's settings on control.
+- 2026-10-29 17:40 UTC, owner (gate B): yes to downloading zvec-grep (npm's `@zvec/zvec-grep` 0.2.2 with its dependencies) and the model `potion-retrieval-32M` into a scratch folder for the spike only, "also think of some alternatives that may be better than zvec"; nothing goes into the repository or an image until the owner decides from the numbers. The PDF text extractor is `pdfjs-dist` (Mozilla's PDF.js, Apache-2.0, JavaScript only), pinned.
 
 ## Open questions
 
