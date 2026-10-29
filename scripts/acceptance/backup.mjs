@@ -35,7 +35,10 @@ const stack = (...args) => dc(composeEnv, ...args);
 /** The backup service, as the page runs it. */
 const backup = (...args) => stack("--profile", "backup", "run", "--rm", "backup", ...args);
 
-/** The backup service's run that must fail: its exit code and what it wrote on standard error. */
+/**
+ * The backup service's run that must fail: its exit code and what it wrote, both streams together
+ * (podman-compose passes a container's standard error on its own standard output).
+ */
 function backupFails(...args) {
   try {
     execFileSync(
@@ -48,7 +51,7 @@ function backupFails(...args) {
       },
     );
   } catch (err) {
-    return { status: err.status, stderr: String(err.stderr ?? "") };
+    return { status: err.status, output: `${err.stdout ?? ""}${err.stderr ?? ""}` };
   }
   throw new Error(`thermite ${args.slice(1).join(" ")} did not fail`);
 }
@@ -189,12 +192,12 @@ try {
   const refused = backupFails("thermite", "restore", `/backups/${name2}`);
   if (
     refused.status !== 1 ||
-    !/EVENTS on the bus is not the backup's: it holds /.test(refused.stderr)
+    !/EVENTS on the bus is not the backup's: it holds /.test(refused.output)
   )
     throw new Error(
-      `the restore was not refused as it should be: ${refused.status} ${refused.stderr}`,
+      `the restore was not refused as it should be: ${refused.status} ${refused.output}`,
     );
-  console.log("refused, as it should be:", refused.stderr.trim().slice(0, 200));
+  console.log("refused, as it should be:", refused.output.trim().slice(0, 200));
   if (backup("ls", "/var/lib/thermite-control") !== stateBefore)
     throw new Error("the refused restore changed control's state folder");
 
