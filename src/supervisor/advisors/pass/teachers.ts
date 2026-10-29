@@ -56,7 +56,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
     now,
     domains,
     toolsFor,
-    pastSearchFor,
+    kbFor,
     codeFor,
     researchFor,
     configFor,
@@ -180,6 +180,8 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
           research: inst.mode === "research",
           // The owner's additions to the teacher and the merged by model (goal 166).
           additions: inst.role_additions ?? undefined,
+          // The merged by model's own slot, under the same rule.
+          ...(openFetch ? {} : { mergedKb: await kbFor(inst.id, "merged-by") }),
           tools: {
             ...toolsFor(),
             // A research run has no code: its seed is a placeholder, with no repository on the
@@ -190,9 +192,9 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             ...(openFetch || !research ? {} : { research: researchFor(inst.id) }),
             // The run's MCP servers for its advisors (none with an open fetch: mcpFor says so).
             mcp: await mcpFor(inst.id),
-            // Teachers with an open fetch search no past research either.
-            // Only when the run has some: the brief says so in past_research.
-            ...(openFetch || !brief.past_research ? {} : { pastSearch: pastSearchFor(inst.id) }),
+            // Thermite's knowledge base (goal 175), from the run's scope; not for teachers with
+            // an open fetch, so private records and the open web never meet in one agent.
+            ...(openFetch ? {} : { kb: await kbFor(inst.id, "teacher") }),
             brief: async () => closed(await briefOf()),
           },
         });

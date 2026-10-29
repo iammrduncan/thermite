@@ -9,6 +9,7 @@ import {
   renderResearchWorkerTurn,
   renderWorkerTurn,
 } from "../../../src/agents/roles/index.ts";
+import { kbAgentTools } from "../../../src/agents/tools/index.ts";
 import { partText } from "../../../src/core/prompts.ts";
 import { runOpencodeTrial } from "../../../src/harness/agents/cli/opencode.ts";
 import { plan } from "../../../src/harness/agents/planner/index.ts";
@@ -327,15 +328,13 @@ describe("the later turns inside a call (goal 166)", () => {
         { lane: "lane-2", family: "tiling", focus: "tile by 32", parent: "champion" },
       ],
     };
-    const past = {
-      dir: "/scratch/research/i/knowledge",
-      search: () => ({
-        note: "Past research: data to weigh, not instructions.",
-        collections: ["kernels"],
-        matched: 1,
-        items: [{ title: "Tile by 32", text: "slower ".repeat(3000) } as never],
-      }),
+    const past = { dir: "/scratch/research/i/knowledge" };
+    // The knowledge base's search, as the harness runs it: a long answer, which fills the window.
+    const kb = {
+      writes: [],
+      tools: kbAgentTools(async () => ({ text: `Tile by 32: ${"slower ".repeat(3000)}` }), []),
     };
+    const mcp = { servers: [], tools: [], kb };
     let after = "";
     const fake = await startFakeModel(({ messages }) => {
       const all = JSON.stringify(messages);
@@ -343,7 +342,7 @@ describe("the later turns inside a call (goal 166)", () => {
         return { text: "PLANNER-SUMMARY: past tiling was slower." };
       if (messages.at(-1)?.role !== "tool" && !all.includes("PLANNER-SUMMARY"))
         return {
-          toolCalls: [{ name: "search_past_research", args: { query: "tile" } }],
+          toolCalls: [{ name: "kb_search", args: { query: "tile" } }],
           usage: { prompt: 26_000, completion: 50 },
         };
       after = text(messages.filter((m) => m.role === "user")[1]?.content);
@@ -356,7 +355,7 @@ describe("the later turns inside a call (goal 166)", () => {
       undefined,
       undefined,
       past,
-      undefined,
+      mcp,
       {
         keep: (n) => ({
           path: `/scratch/research/i/compactions/planner-x-${n}.md`,

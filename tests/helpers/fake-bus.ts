@@ -14,7 +14,7 @@ import {
   type Published,
   type StreamSettings,
   type StreamState,
-} from "../../src/common/bus.ts";
+} from "../../src/common/bus/index.ts";
 
 /** A message the fake bus keeps. */
 export interface Kept {
@@ -72,7 +72,7 @@ const NO_RETENTION_CHANGE = {
 
 /**
  * A stand-in for the NATS server, in memory, for tests of what control and the supervisor do on
- * the message bus (common/bus.ts talks to a real one). It keeps the streams made, each message
+ * the message bus (common/bus/index.ts talks to a real one). It keeps the streams made, each message
  * published to a subject one of them takes, once by its id within its stream, each stream's
  * places counted on their own; removes one by its id; gives a subject's newest, a message by its
  * place, a stream's last place, and reads a stream in order. A batch is stored whole or not at
@@ -133,7 +133,7 @@ export class FakeBus
   }
 
   /**
-   * As common/bus.ts's follow, in one pass: the stream made or brought to its settings, then each
+   * As common/bus/index.ts's follow, in one pass: the stream made or brought to its settings, then each
    * message the consumer has yet to take handed to `handle`, in order, until one is asked for
    * again, which stays for the next call; a test calls it again for what comes later. A stream on
    * the fake with another retention than the work queue it is now is emptied first, as
@@ -260,7 +260,7 @@ export class FakeBus
    * nothing (with that message's own refusal, where the server says only that the batch is
    * incomplete); a first message that expects another last place than the stream's refuses it
    * too. A batch whose stream has some of its ids is published a message at a time, as
-   * common/bus.ts does.
+   * common/bus/index.ts does.
    */
   async publishBatch(batch: readonly Outgoing[]): Promise<BatchPublished> {
     await this.hold;
@@ -291,7 +291,7 @@ export class FakeBus
     return { seq, stored, duplicate: stored === 0 };
   }
 
-  /** A stream's messages in order, as common/bus.ts reads them, the same limits and header test. */
+  /** A stream's messages in order, as common/bus/index.ts reads them, the same limits and header test. */
   async read(
     stream: string,
     o: {

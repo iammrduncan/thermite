@@ -1,5 +1,5 @@
 import { harnessClient } from "../../common/api/harness.ts";
-import { type Bus, refusedForGood } from "../../common/bus.ts";
+import { type Bus, refusedForGood } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import type { LiveFigures } from "../../core/api/control/rigs.ts";

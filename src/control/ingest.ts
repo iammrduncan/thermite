@@ -1,4 +1,4 @@
-import { BUS_RETRY_MS, type Bus, type BusMessage } from "../common/bus.ts";
+import { BUS_RETRY_MS, type Bus, type BusMessage } from "../common/bus/index.ts";
 import { log } from "../common/env.ts";
 import {
   REPORT_CONSUMER_CONFIG,

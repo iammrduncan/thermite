@@ -319,6 +319,31 @@ export const CAMPAIGN_ADDITIONS = {
   answer: z.looseObject({ said: z.string().optional() }),
 } as const satisfies Route;
 
+/** Which kinds each role may write in the campaign's knowledge base (goal 175): a new version. */
+export const CAMPAIGN_KB_WRITES = {
+  method: "POST",
+  path: "/v1/campaigns/:campaign/kb-writes",
+  body: SharedFields,
+  answer: z.looseObject({ said: z.string().optional() }),
+} as const satisfies Route;
+
+/**
+ * The owner's search of the knowledge base (goal 175): `q`, `collection` and `kind` (lists, with
+ * commas), `limit`; and one item read whole by its `address`, at a `version`.
+ */
+export const KB_SEARCH = {
+  method: "GET",
+  path: "/v1/kb/search",
+  what: "knowledge base search",
+  answer: z.looseObject({ matched: z.number(), hits: z.array(z.looseObject({})) }),
+} as const satisfies Route;
+export const KB_ITEM = {
+  method: "GET",
+  path: "/v1/kb/item",
+  what: "knowledge base item",
+  answer: z.looseObject({ item: z.looseObject({ text: z.string() }) }),
+} as const satisfies Route;
+
 /** A copy of a campaign control keeps (control/copy-campaign.ts checks the request). */
 export const CAMPAIGN_COPY = {
   method: "POST",

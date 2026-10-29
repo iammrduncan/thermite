@@ -3,7 +3,7 @@ import { ApiError } from "../../common/api/call.ts";
 import { controlClient } from "../../common/api/control.ts";
 import { harnessClient } from "../../common/api/harness.ts";
 import { buildInfo } from "../../common/build-info.ts";
-import type { Bus } from "../../common/bus.ts";
+import type { Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { ACK, CursorElsewhere, INGEST, PENDING_COMMANDS } from "../../core/api/control/rigs.ts";
 import { COMMANDS, SNAPSHOT } from "../../core/api/harness/supervisor.ts";

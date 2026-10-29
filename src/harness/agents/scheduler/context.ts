@@ -25,7 +25,8 @@ export const BRIEF_GOAL_CHARS = 600;
  */
 export interface PlannerCallOptions {
   read?: string | undefined;
-  mcp?: { auth: string; servers: string[] } | undefined;
+  /** The kit's MCP servers, and Thermite's own with the knowledge base's tools (goal 175). */
+  mcp?: { auth: string; servers: string[]; kb?: boolean | undefined } | undefined;
   usage?: ((u: CallUsage) => void) | undefined;
   /**
    * Where the call's conversation is kept before each compaction, and who records it (goal 070):
@@ -151,7 +152,8 @@ export interface SchedulerContext {
    * results (goal 079): a trial that ends at its own time limit while its calls fail passes it on.
    */
   failingSince: Map<string, number>;
-  limitNoted: string | undefined;
+  /** The provider's limit each run waits for, as Live last said it. */
+  limitNoted: Map<string, string>;
   /** Runs waiting for their MCP servers on this harness, since when (ms). */
   mcpWaits: Map<string, number>;
   /** Runs whose wait for their MCP servers is over on this harness. */
@@ -199,7 +201,7 @@ export function schedulerContext(opts: SchedulerOptions): SchedulerContext {
     reportNoted: "",
     stopping: false,
     failingSince: new Map(),
-    limitNoted: undefined,
+    limitNoted: new Map(),
     mcpWaits: new Map(),
     mcpReady: new Set(),
     confirmNoted: new Map(),

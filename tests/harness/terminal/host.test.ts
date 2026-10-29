@@ -12,7 +12,7 @@ import {
   TERMINAL_SOCKET,
   type Terminal,
 } from "../../../src/harness/terminal/index.ts";
-import { SETSID } from "../../../src/harness/terminal/pty.ts";
+import { programStdio, SETSID } from "../../../src/harness/terminal/pty.ts";
 
 /**
  * The terminal host on the fake TUI (tests/helpers/fake-tui.ts), through the local runner: the
@@ -232,6 +232,28 @@ describe("the terminal host", { skip }, () => {
     await seen(stubborn, "sigterm");
   });
 
+  test("an end without its steps types nothing: SIGTERM at once", async () => {
+    const f = await fake({});
+    await seen(f, "start");
+    const e = await f.t.end({ steps: false });
+    assert.equal(e.how, "sigterm");
+    assert.equal(e.code, 143);
+    await seen(f, "sigterm");
+    assert.equal(f.records().filter((r) => r.type === "exit").length, 0);
+  });
+
+  test("the program holds its terminal's own end, never the end the host types with", async () => {
+    const f = await fake({});
+    const start = await seen(f, "start");
+    const fds = start.fds as string[];
+    assert.ok(
+      fds.some((l) => l.startsWith("/dev/pts/")),
+      fds.join(", "),
+    );
+    assert.ok(!fds.some((l) => l.endsWith("ptmx")), fds.join(", "));
+    await f.t.end();
+  });
+
   test("a program that exits by itself ends the run, and a session resumed goes on in the same copy", async () => {
     const f = await fake({ session: "s-crash" });
     await seen(f, "start");
@@ -304,5 +326,21 @@ describe("the terminal host", { skip }, () => {
       }),
       /socket would be over/,
     );
+  });
+});
+
+describe("the program's file descriptors on its terminal", () => {
+  test("the terminal's end as 0, 1 and 2, the token's pipe as 3, and /dev/null in the host's end's place", () => {
+    const fds = programStdio({ master: 9, slave: 8 }, true, 5);
+    assert.deepEqual(fds, [8, 8, 8, "pipe", "ignore", "ignore", "ignore", "ignore", "ignore", 5]);
+    assert.deepEqual(programStdio({ master: 6, slave: 7 }, false, 4), [
+      7,
+      7,
+      7,
+      "ignore",
+      "ignore",
+      "ignore",
+      4,
+    ]);
   });
 });

@@ -179,11 +179,8 @@ describe("field notes in planning and briefs", () => {
     assert.match(prompt, /Vector loads need 16-byte aligned pointers/);
     assert.match(prompt, /past_research/);
     // The planner (in Pi) is told its search, read only, and given it.
-    assert.match(
-      prompt,
-      /1 experiment, from kernels\. search_past_research searches it, read only/,
-    );
-    assert.deepEqual(x.offered[0]?.sort(), ["search_past_research", "submit_plan"]);
+    assert.match(prompt, /1 experiment, from kernels\. kb_search searches it, read only/);
+    assert.deepEqual(x.offered[0]?.sort(), ["kb_read", "kb_search", "kb_write", "submit_plan"]);
     assert.match(prompt, /Field notes: write down what you learn/);
     const brief = x.briefs["lane-1"]?.[0] ?? "";
     assert.match(

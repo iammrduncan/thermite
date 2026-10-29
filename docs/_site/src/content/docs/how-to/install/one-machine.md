@@ -178,7 +178,7 @@ Compose keeps Thermite's state in named volumes. Their names start with the proj
 | `nats-data` | The message bus's store: every report a rig sent over it, the commands waiting for each rig, the newest live lines, for an hour at most, and each rig's config, sealed to the rig ([The compose file](../../reference/settings.md#the-compose-file)) |
 | `nats-config` | What control writes for the bus's server: its users, each user's public key and what it may do, and its TLS certificate and key |
 
-The folder `.dev/`, next to `compose.yaml`, holds the tokens (`.dev/secrets/`), the inbox (`.dev/inbox/`) and the advisors' files (`.dev/advisors/`). The `init` container makes it.
+The folder `.dev/`, next to `compose.yaml`, holds the tokens (`.dev/secrets/`), the inbox (`.dev/inbox/`) and the advisors' files (`.dev/advisors/`). The `init` container makes it, and closes it to every other user of the computer each time it runs (mode 0700).
 
 `docker compose down` removes the containers and keeps the volumes. `docker compose down -v` deletes the volumes too, and with them every campaign, result and provider key.
 

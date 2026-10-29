@@ -33,9 +33,9 @@ export async function runClaudeCode<S extends z.ZodType>(
   // only those servers and only their tools allowed.
   const t = input.tools;
   const past =
-    t?.pastSearch || t?.mcp?.servers.length || t?.code || t?.research || t?.paper
+    t?.kb || t?.mcp?.servers.length || t?.code || t?.research || t?.paper
       ? await serveAdvisorTools({
-          pastSearch: t.pastSearch,
+          kb: t.kb,
           mcp: t.mcp,
           code: t.code,
           research: t.research,
@@ -113,6 +113,7 @@ export async function runClaudeCode<S extends z.ZodType>(
         input.prompt({
           program: "claude-code",
           mcpServers: t?.mcp?.servers ?? [],
+          kbWrites: t?.kb?.writes,
           answerSchema: input.answerSchema,
         }),
       ),

@@ -2,9 +2,10 @@ import type { DatabaseSync } from "node:sqlite";
 
 /**
  * What a run reads in the knowledge base (goal 175): its campaign's whole collection, or its own
- * run alone when it starts fresh, and the granted collections it includes. The data only: a search
- * reads it in a later step, and Start a run sets it then. A run with none set reads the whole
- * collection and every grant.
+ * run alone when it starts fresh, and the granted collections it includes. Start a run sets it as
+ * the run starts, and it stays so: nothing changes it later. A grant revoked since leaves it, as it
+ * leaves the campaign; one given since does not join it. A run with none set (one started before
+ * runs had a scope) reads the whole collection and every grant its campaign has now.
  */
 export interface KbScope {
   /** True: its own run's items alone, of its campaign's collection. */
@@ -30,8 +31,8 @@ export function scopeOf(
 }
 
 /**
- * Keeps a run's scope, its granted collections among `reads`. Throws, in words, on a collection
- * its campaign may not read.
+ * Keeps a run's scope as it starts, its granted collections among `reads`. Throws, in words, on a
+ * collection its campaign may not read, and on a run whose scope is kept already.
  */
 export function keepScope(
   db: DatabaseSync,
@@ -44,16 +45,20 @@ export function keepScope(
     throw new Error(
       `${s.campaign} may not read ${not.join(", ")}: the owner grants a collection first`,
     );
-  db.prepare(
-    `insert into kb_scope (campaign, run, fresh, granted, set_by, set_at) values (?, ?, ?, ?, ?, ?)
-     on conflict (campaign, run) do update set fresh = excluded.fresh, granted = excluded.granted,
-       set_by = excluded.set_by, set_at = excluded.set_at`,
-  ).run(
-    s.campaign,
-    s.run,
-    s.fresh ? 1 : 0,
-    JSON.stringify([...new Set(s.granted)]),
-    by,
-    new Date().toISOString(),
+  const kept = Number(
+    db
+      .prepare(
+        `insert into kb_scope (campaign, run, fresh, granted, set_by, set_at) values (?, ?, ?, ?, ?, ?)
+         on conflict (campaign, run) do nothing`,
+      )
+      .run(
+        s.campaign,
+        s.run,
+        s.fresh ? 1 : 0,
+        JSON.stringify([...new Set(s.granted)]),
+        by,
+        new Date().toISOString(),
+      ).changes,
   );
+  if (!kept) throw new Error(`run ${s.run}'s scope was set when it started, and stays so`);
 }

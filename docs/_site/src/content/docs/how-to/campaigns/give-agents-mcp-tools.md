@@ -19,6 +19,10 @@ An **MCP server** gives agents tools from outside Thermite: a knowledge base suc
 
 The server's secret never reaches an agent. Control keeps it sealed and hands each rig only the servers its runs name. A [rig on RunPod](../install/runpod-rig.md) gets them the same way, through control's own connection to it, sealed like the rest of its traffic. On the rig, the harness makes the calls for the workers and the planner, and the supervisor makes them for the advisors ([Who holds your keys](../../explanation/who-holds-your-keys.md#mcp-servers)).
 
+:::note
+Every agent already has one MCP server of Thermite's own, `thermite`, with the tools of [Thermite's knowledge base](../../reference/knowledge-base.md#the-agents-tools): `kb_search`, `kb_read` and, for the roles the campaign lets write, `kb_write`. You don't add it, and a kit may not name a server `thermite`.
+:::
+
 ## Before you start
 
 - You are signed in to the dashboard as the owner.

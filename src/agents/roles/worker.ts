@@ -12,6 +12,7 @@ import {
 } from "../tools/index.ts";
 import {
   fitToWindow,
+  kbSections,
   limitsNote,
   ownerAdditionSection,
   ownerLineSections,
@@ -257,6 +258,8 @@ export interface WorkerInput extends TrialBudget {
   brief: string | readonly Section[];
   /** The MCP servers the run's kit gives the workers (goal 068). */
   mcpServers: readonly string[];
+  /** The kinds it may write in the knowledge base (goal 175); undefined: no knowledge base tools. */
+  kbWrites?: readonly string[] | undefined;
   /** The lane's limits: a program's prompt states them (Pi's tools carry them). */
   limits: LaneLimitValues;
   editablePaths: readonly string[];
@@ -293,6 +296,7 @@ export function renderWorker(i: WorkerInput): Prompt {
         section("instructions", "role", WORKER_PI_SYSTEM),
         section("notes-and-sources", "role", WORKER_PI_NOTES, "\n\n"),
         mcp,
+        ...kbSections(i.kbWrites),
         ...ownerAdditionSection(i.addition),
       ],
       message: fitToWindow(
@@ -306,6 +310,7 @@ export function renderWorker(i: WorkerInput): Prompt {
       [
         section("instructions", "role", workerProgramText(i.program.id)),
         mcp,
+        ...kbSections(i.kbWrites),
         ...ownerAdditionSection(i.addition),
         section("limits", "rig", limitsNote(i.limits, i.program.name, i.program.memory), "\n\n"),
         ...brief,

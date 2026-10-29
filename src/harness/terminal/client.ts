@@ -190,9 +190,12 @@ export class Terminal {
     return this.ask({ op: "screen", form: "snapshot", scrollback }, ScreenSnapshot);
   }
 
-  /** The program's clean end, then SIGTERM; the host exits after it answers. */
-  end(): Promise<ProgramExit> {
-    return this.ask({ op: "end" }, ProgramExit, END_ASK_MS);
+  /**
+   * The program's clean end, then SIGTERM; the host exits after it answers. `steps` false: SIGTERM
+   * at once, nothing typed into the program.
+   */
+  end(o: { steps?: boolean } = {}): Promise<ProgramExit> {
+    return this.ask({ op: "end", steps: o.steps ?? true }, ProgramExit, END_ASK_MS);
   }
 }
 

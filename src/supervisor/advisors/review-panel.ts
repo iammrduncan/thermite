@@ -14,7 +14,7 @@ import type { AdvisorKeeper, AdvisorMcp, AdvisorResult, AdvisorUsage } from "./c
 import { type AdvisorRuntime, packageFit } from "./config.ts";
 import { OwnerAnswers, OwnerAnswersSchema } from "./owner-answers.ts";
 import { runAdvisor } from "./run.ts";
-import type { AdvisorResearch, PastSearch } from "./tools/index.ts";
+import type { AdvisorKb, AdvisorResearch } from "./tools/index.ts";
 
 /**
  * A reviewer's reasons, cut to 8,000 characters rather than refused: a long but sound answer is
@@ -222,8 +222,8 @@ export const isResearchPackage = (pkg: unknown): boolean =>
 export async function reviewOne(input: {
   runtime: AdvisorRuntime;
   pkg: unknown;
-  /** The run's past research, read only: a tool of the review panel's reviewers. */
-  pastSearch?: PastSearch | undefined;
+  /** Thermite's knowledge base (goal 175): the review panel's tools for it. */
+  kb?: AdvisorKb | undefined;
   /** The MCP servers the run's kit gives the advisors (goal 068). */
   mcp?: AdvisorMcp | undefined;
   /** A research package's run's own research, read only (goal 112). */
@@ -237,7 +237,7 @@ export async function reviewOne(input: {
   // question, if it is answered, and for each hypothesis, its verdict.
   if (isResearchPackage(input.pkg)) {
     const tools = {
-      ...(input.pastSearch ? { pastSearch: input.pastSearch } : {}),
+      ...(input.kb ? { kb: input.kb } : {}),
       ...(input.mcp ? { mcp: input.mcp } : {}),
       ...(input.research ? { research: input.research } : {}),
     };
@@ -320,10 +320,10 @@ export async function reviewOne(input: {
     schema: PanelAnswer,
     answerSchema: PanelAnswerSchema,
     keeper: input.keeper,
-    ...(input.pastSearch || input.mcp
+    ...(input.kb || input.mcp
       ? {
           tools: {
-            ...(input.pastSearch ? { pastSearch: input.pastSearch } : {}),
+            ...(input.kb ? { kb: input.kb } : {}),
             ...(input.mcp ? { mcp: input.mcp } : {}),
           },
         }

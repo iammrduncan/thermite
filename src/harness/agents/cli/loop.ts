@@ -147,9 +147,11 @@ export async function runCliTrial<T extends CliTally>(
     home: join(area, `${p.prefix}-home`),
     tmp: join(area, `${p.prefix}-tmp`),
     auth,
-    mcp: spec.mcpServers?.length
-      ? { apiUrl: deps.apiUrl, auth, servers: spec.mcpServers }
-      : undefined,
+    // The kit's MCP servers, and Thermite's own with the knowledge base's tools (goal 175).
+    mcp:
+      spec.mcpServers?.length || spec.kbWrites
+        ? { apiUrl: deps.apiUrl, auth, servers: spec.mcpServers ?? [], kb: Boolean(spec.kbWrites) }
+        : undefined,
     keptAt: deps.keptAt,
     wallMs: spec.wallMs,
     env: deps.env,
@@ -196,6 +198,7 @@ export async function runCliTrial<T extends CliTally>(
         program: p,
         brief: spec.brief,
         mcpServers,
+        kbWrites: spec.kbWrites,
         limits,
         editablePaths: trial.spec.editablePaths,
         minutes,
@@ -208,6 +211,7 @@ export async function runCliTrial<T extends CliTally>(
         program: p,
         brief: spec.brief,
         mcpServers,
+        kbWrites: spec.kbWrites,
         folder: trial.folder,
         limits,
         minutes,
@@ -256,14 +260,15 @@ export async function runCliTrial<T extends CliTally>(
     if (term) return term.read();
     const r = readNew(events, offset);
     offset = r.next;
-    return { live: p.read(r.lines, tally), lines: r.lines.length };
+    return { live: p.read(r.lines, tally), lines: r.lines.length, more: r.more };
   };
   /** Ends the program: its own way in its terminal, else by ending the lane's processes. */
   const halt = async () => {
     if (term) await term.stop();
     else await deps.runner.killRole(spec.lane).catch(() => 0);
   };
-  const pump = () => {
+  /** One read of the output into the tally; true when the output holds more than it read. */
+  const pump = (): boolean => {
     const r = readOutput();
     signals?.read();
     const live = r.live;
@@ -281,6 +286,7 @@ export async function runCliTrial<T extends CliTally>(
       const windows = p.windows?.(tally);
       if (windows) deps.usage?.(windows);
     }
+    return r.more;
   };
   for (let nudges = 0; ; nudges++) {
     const remaining = deadline - Date.now();
@@ -340,7 +346,8 @@ export async function runCliTrial<T extends CliTally>(
     }
     const outcome = await running;
     inTurn?.close();
-    pump();
+    // The rest of the run's output, a read's size at a time.
+    while (pump()) {}
     // Headless only: in its terminal, its session log gave each call's usage as it came.
     if (p.closeRun && !term) {
       p.closeRun(tally);
@@ -371,6 +378,15 @@ export async function runCliTrial<T extends CliTally>(
     const own = p.stopAfterRun?.(tally);
     if (own) {
       Object.assign(result, own);
+      break;
+    }
+    // In its terminal, a usage limit with no time it resets ends the trial: nothing is typed into
+    // a program that shows one, whose screen may take any key as an answer.
+    const limit = term?.limitShown();
+    if (limit && !limit.resetsAt) {
+      result.stopped = "error";
+      result.errorKind = "rate_limit";
+      result.error = tally.errors.at(-1) ?? `${p.name} shows a usage limit`;
       break;
     }
     // A memory or disk limit ends the program with everything it ran: say which, with the figures.

@@ -1,7 +1,14 @@
-import { BUS_READ_MAX, type Bus } from "../../common/bus.ts";
+import { BUS_READ_MAX, type Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
-import { type KbItemBody, readKbItem, slotOfWriter } from "../../core/kb.ts";
+import {
+  KB_RECORDS,
+  KB_WRITES_DEFAULT,
+  type KbItemBody,
+  kindsForSlot,
+  readKbItem,
+  slotOfWriter,
+} from "../../core/kb.ts";
 import { EVENT_STREAM, type EventRead, kindSubjects } from "../../core/link/events.ts";
 import type { ControlStore } from "../store/index.ts";
 import { streamEvent } from "../views/index.ts";
@@ -14,8 +21,8 @@ import { streamEvent } from "../views/index.ts";
  * Then: the event reads as an item; the run is the rig's, in this ledger, by control's run
  * registry; the slot is the event's writer's (slotOfWriter: records from Thermite's code, an
  * agent's own slot from that agent), never one the item names for another writer; and the item is
- * new in its slot or the next version of the writer's own (store/kb/). Which writer may write
- * which kind is the campaign's, in a later step: every slot may write every kind now. A refused
+ * new in its slot or the next version of the writer's own (store/kb/); and an agent's kind is one
+ * the campaign lets the agent's role write, as the run's signed assignment says (core/kb.ts). A refused
  * item is recorded in control's audit log (`kb_item_refused`) and its log, and the rest of the
  * page goes on. Its file meets it by its SHA-256 (control/kb/files.ts), whichever comes first.
  */
@@ -50,6 +57,12 @@ function storeItem(
   if (!own) return `${e.actor} has no slot in the knowledge base: it writes no item`;
   if (own !== b.slot)
     return `${e.actor} writes only in its own slot, ${own}: not in ${b.slot}, another writer's`;
+  // An agent writes the kinds its role may; Thermite's code, any kind in its records slot.
+  // A run control signed no assignment of (one a rig assigned itself) keeps to the default.
+  const writes = store.commands.assignedKbWrites(src.rig, src.run) ?? KB_WRITES_DEFAULT;
+  const kinds = kindsForSlot(writes, b.slot);
+  if (b.slot !== KB_RECORDS && !kinds.includes(b.kind))
+    return `the campaign lets ${b.slot} write ${kinds.length ? kinds.join(", ") : "nothing"} in run ${src.run}: not a ${b.kind}`;
   return store.kb().write({ ...src, event: e.id, at: e.at }, b);
 }
 

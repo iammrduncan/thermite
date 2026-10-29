@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { McpCaller } from "../../../agents/mcp/index.ts";
 import { type Prompt, promptRecord } from "../../../agents/prompt.ts";
+import { kbCall } from "../../../agents/tools/index.ts";
 import { log } from "../../../common/env.ts";
 import { errorText } from "../../../common/errors.ts";
 import type { AdvisorRole } from "../../../core/agents.ts";
@@ -12,7 +13,6 @@ import {
   CODE_FILES,
   EVIDENCE,
   JOURNAL,
-  KNOWLEDGE,
   MODEL_CALLS,
   MODEL_CALLS_MAX,
   QUEUE,
@@ -33,17 +33,18 @@ import { type ADVISOR_PROMPT_ROLES, KEEP_PROMPT } from "../../../core/api/harnes
 import {
   RESEARCH_KINDS,
   type ResearchKind,
-  SEARCH_MAX,
   SEARCH_QUERY_MAX,
 } from "../../../core/api/harness/research.ts";
+import { KB_WRITE, KB_WRITES, type KbAdvisorSlot } from "../../../core/api/harness/supervisor.ts";
 import type { NoteInput } from "../../../core/journal.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import type { RunAdditions } from "../../../core/role-additions.ts";
 import { type AdvisorAgent, AGENT_WORDS } from "../../../core/usage.ts";
+import { askControl } from "../../kb/index.ts";
 import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage } from "../call.ts";
 import { type RunningAdvisors, withRunContext } from "../config.ts";
 import { advisorFetcher } from "../fetcher.ts";
-import type { AdvisorCode, AdvisorResearch, PastSearch } from "../tools/index.ts";
+import type { AdvisorCode, AdvisorKb, AdvisorResearch } from "../tools/index.ts";
 import { kbSearchFor } from "./kb.ts";
 import { advisorKeeper } from "./keeper.ts";
 import { clip, harnessOf } from "./shared.ts";
@@ -84,19 +85,33 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     ...(fetchUrl ? { fetchUrl } : {}),
     ...(domains.includes("*") ? {} : { kbSearch: kbSearchFor(cfg.advisors) }),
   });
-  // The run's past research, read only: a search of the harness's copy of its knowledge/, for a
-  // run whose brief or package says it has some (past_research).
-  const pastSearchFor =
-    (run: string): PastSearch =>
-    (query, o = {}) =>
-      harness.call(KNOWLEDGE, {
-        query: {
-          run,
-          q: query.slice(0, SEARCH_QUERY_MAX),
-          kinds: o.kinds?.length ? o.kinds.join(",") : undefined,
-          limit: o.limit ? Math.max(1, Math.min(SEARCH_MAX, Math.floor(o.limit))) : undefined,
-        },
-      });
+  // Thermite's knowledge base for an advisor's call (goal 175): kb_search and kb_read asked of
+  // control for the run, from the run's scope, and kb_write recorded by the harness in the
+  // advisor's own slot, when the run's campaign lets that slot write. None without a control.
+  const kbFor = async (run: string, slot: KbAdvisorSlot): Promise<AdvisorKb | undefined> => {
+    const control = cfg.kb;
+    if (!control) return undefined;
+    let writes: string[] = [];
+    try {
+      writes = (await harness.call(KB_WRITES, { query: { run, slot } })).kinds;
+    } catch (err) {
+      // It reads, and writes nothing, until the harness answers.
+      log(
+        "supervisor",
+        "an advisor's kinds to write not read",
+        { run, slot, error: errorText(err) },
+        "warn",
+      );
+    }
+    return {
+      writes,
+      call: kbCall({
+        run,
+        ask: (kind, ask) => askControl(control, kind, ask),
+        write: (args) => harness.call(KB_WRITE, { body: { run, slot, args } }),
+      }),
+    };
+  };
   // The run's code and evidence for its teachers, read only, through the harness (goal 081): the
   // champion's tree, a file of it, an attempt's diff, and the judge's public findings.
   /** A read of the run's, by its route: the teacher gets the answer as it came. */
@@ -388,7 +403,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     mark,
     domains,
     toolsFor,
-    pastSearchFor,
+    kbFor,
     codeFor,
     researchFor,
     configFor,

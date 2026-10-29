@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { modelConfigFromEnv, UsageSender } from "../../agents/model/index.ts";
 import { type Prompt, promptRecord } from "../../agents/prompt.ts";
-import type { McpCallResult } from "../../common/mcp-client.ts";
+import { KB_SERVER, type KbCall } from "../../agents/tools/index.ts";
+import { type McpCallResult, resultText } from "../../common/mcp-client.ts";
 import { KEEP_TRIAL_PROMPT } from "../../core/api/harness/prompts.ts";
 import type { McpToolInfo } from "../../core/mcp.ts";
 import type { Runner, RunOutcome, RunRequest } from "../broker/index.ts";
@@ -127,6 +128,18 @@ async function main(): Promise<void> {
         .catch(() => undefined);
     }
   }
+  // Thermite's knowledge base (goal 175): its tools through the gateway's own server, which runs
+  // them for this trial's slot; a failure is said in words.
+  const kb: KbCall | undefined = trial.spec.kbWrites
+    ? async (tool, args) => {
+        const r = (await call("POST", "/v1/mcp-call", {
+          server: KB_SERVER,
+          tool,
+          arguments: args,
+        })) as McpCallResult;
+        return { text: resultText(r), isError: r.isError === true };
+      }
+    : undefined;
   // Compactions (goal 070): the harness keeps the conversation in the run's research folder and
   // records each compaction; the trial's token decides the run, the lane and the file's name.
   const compaction: CompactionLink = {
@@ -149,6 +162,7 @@ async function main(): Promise<void> {
   if (trial.kind === "research") {
     const result = await runResearchTrial(trial.spec, {
       mcp,
+      kb,
       compaction,
       model,
       call: (op, args) => call("POST", `/v1/research/${op}`, args),
@@ -191,6 +205,7 @@ async function main(): Promise<void> {
     research: (op, args) => call("POST", `/v1/research/${op}`, args),
     link,
     mcp,
+    kb,
     compaction,
     modelUsage: usage.add,
     waiting,

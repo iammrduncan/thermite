@@ -208,7 +208,7 @@ const types = (home: string) =>
     .map((s) => String(s.type));
 
 describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
-  test("its first message on the command line, its tally from its transcript, and a submission ends it its own way, its screen kept", async () => {
+  test("its first message typed, never on its command line, its tally from its transcript, and a submission ends it its own way, its screen kept", async () => {
     const a = area([
       [
         { lines: [said("go"), call(1)] },
@@ -234,11 +234,12 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     const start = got.find((s) => s.type === "start") as Record<string, unknown>;
     assert.equal(start.resumed, false);
     assert.equal((start.token as { length: number }).length, MODEL.apiKey.length);
-    // The kept prompt is what it was given, on its command line after `--`.
+    // The kept prompt is what it was given, typed once the program was ready: its command line
+    // holds nothing after `--`, where any user of the computer could read it.
     assert.equal(sent.length, 1);
     assert.deepEqual(
       got.filter((s) => s.type === "user").map((s) => [s.how, s.text]),
-      [["first", messageText(sent[0] as Prompt)]],
+      [["typed", messageText(sent[0] as Prompt)]],
     );
     // Its turn was under way: interrupted, then `/exit`.
     assert.deepEqual(types(a.home).slice(-2), ["interrupt", "exit"]);
@@ -266,11 +267,11 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     );
     assert.equal(starts[0]?.session, starts[1]?.session, "the same session, resumed");
     assert.ok(got.some((s) => s.type === "crash" && s.code === 1));
-    // Each later turn is typed, as the loop kept it: the nudge, the one after the crash, the last.
+    // Each turn is typed, as the loop kept it: the first, the nudge, the one after the crash, the last.
     const typed = got.filter((s) => s.type === "user" && s.how === "typed").map((s) => s.text);
     assert.deepEqual(
       typed,
-      sent.slice(1).map((p) => messageText(p)),
+      sent.map((p) => messageText(p)),
     );
     assert.equal(sent.length, 4);
     // Each call's usage once, across the two hosts: the copy goes on where it was.
@@ -278,6 +279,30 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
       { turns: r.turns, toolCalls: r.toolCalls, tokensIn: r.tokensIn },
       { turns: 5, toolCalls: 3, tokensIn: 70 },
     );
+  });
+
+  test("a usage limit with no reset ends the trial: nothing more is typed, and SIGTERM ends the program", async () => {
+    // Claude Code's own message at a usage limit that gives no time it resets.
+    const limited = {
+      type: "assistant",
+      sessionId: S,
+      timestamp: AT,
+      isApiErrorMessage: true,
+      error: "rate_limit",
+      message: {
+        id: "msg_limit",
+        model: "<synthetic>",
+        content: [{ type: "text", text: "You've hit your limit" }],
+      },
+    };
+    const a = area([[{ lines: [said("go"), call(1), result(1), limited] }, { waitMs: 60_000 }]]);
+    const { r, sent } = await trial(a);
+    assert.equal(r.stopped, "error");
+    assert.equal(r.errorKind, "rate_limit");
+    assert.equal(sent.length, 1, "no turn after the limit");
+    const kinds = types(a.home);
+    assert.ok(!kinds.includes("interrupt") && !kinds.includes("exit"), kinds.join(", "));
+    assert.equal(kinds.at(-1), "sigterm");
   });
 
   test("a stop ends the program its own way, mid-turn, and the trial is interrupted", async () => {

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { KEEP_TRIAL_PROMPT } from "../../core/api/harness/prompts.ts";
 import { TURN_OFFER, TURN_TAKEN } from "../../core/api/harness/turn.ts";
 import { compactionOf, KEPT_MAX } from "../compactions.ts";
+import { LedgerError } from "../ledger/index.ts";
 import { type ApiContext, limitOf } from "./context.ts";
 
 /**
@@ -60,6 +61,13 @@ export function trialRoutes(app: Hono, { service, trialOf }: ApiContext): void {
           .optional(),
       })
       .parse(await c.req.json());
+    // Counters and waits come only from a worker that reports its own session (Pi's): for a
+    // command-line program, the harness reads them from the program's output itself.
+    if ((body.progress || body.wait) && !service.ownSession(trial.id))
+      throw new LedgerError(
+        "conflict",
+        "this trial's counters and waits come from the harness, which reads its program's output",
+      );
     service.trialReport(trial, body);
     if (body.wait) service.trialWait(trial, body.wait);
     return c.json({ ok: true });

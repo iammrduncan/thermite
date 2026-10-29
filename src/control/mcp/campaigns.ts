@@ -14,18 +14,22 @@ import {
   campaignContextAnswer,
   campaignContextFields,
   campaignFoldersAnswer,
+  campaignKbWritesAnswer,
+  campaignKbWritesFields,
   copyACampaign,
   copyCampaignAnswer,
   copyCampaignFields,
   createFolder,
   deleteFolder,
   FOLDER_NAME_MAX,
+  kbWritesDefaultWords,
   moveCampaign,
   renameFolder,
   type ShelfOutcome,
   type StartRunBody,
   setCampaignAdditions,
   setCampaignContext,
+  setCampaignKbWrites,
   startARun,
   startRunAnswer,
   startRunFields,
@@ -140,6 +144,27 @@ export function registerCampaignSettings(tools: ToolContext): void {
           );
           if (out.state === "refused") throw new Error(out.error);
           return campaignContextAnswer(out);
+        },
+      ),
+    );
+    // Which kinds each role may write in the campaign's collection (goal 175): a new version.
+    server.registerTool(
+      "set_campaign_kb_writes",
+      {
+        title: "Set which roles write in a campaign's collection",
+        description: `Sets which kinds of item each agent role may write, each in its own slot, in the campaign's collection of Thermite's knowledge base: kb_writes, by role (planner, worker, teacher, merged-by, auditor, review-panel, synthesizer, final-writer), each a list of kinds (note, decision, surprise, journal, finding, review, doc, reference, report, paper). A role with kinds gets the kb_write tool; every role gets kb_search and kb_read. A role left out, or given [], writes nothing. Left out: the default, ${kbWritesDefaultWords()}. Control saves a new version of the campaign's contract (its kb_writes), signed into each assignment; runs started from then take it, and a run keeps what it started with. Returns {campaign, version, contract_sha, kb_writes, said}. Refused in words: an unknown role or kind, a campaign with no saved version and no assignment, a rig check's campaign.`,
+        inputSchema: { campaign: z.string().min(1), ...campaignKbWritesFields },
+      },
+      audited(
+        "set_campaign_kb_writes",
+        (a: { campaign: string; kb_writes?: Record<string, string[]> }) => {
+          const out = setCampaignKbWrites(
+            store,
+            { campaign: a.campaign, kb_writes: a.kb_writes as never },
+            actor,
+          );
+          if (out.state === "refused") throw new Error(out.error);
+          return campaignKbWritesAnswer(out);
         },
       ),
     );

@@ -1,5 +1,6 @@
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
+import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
 import { gpuSplit, type RigBus } from "../machines/index.ts";
 
 /**
@@ -102,7 +103,9 @@ const labels = (rig: string, component?: "harness" | "supervisor") => ({
  * Prepares the shared volume's folders for both pods' users, as the compose images do. It changes
  * the owner of the folders it makes only, never their trees: everything below them is written by
  * their users, and root without DAC_OVERRIDE cannot read a folder a user made private (as the Codex
- * CLI makes its own), so a recursive chown would stop the rig at every start.
+ * CLI makes its own), so a recursive chown would stop the rig at every start. The inbox is the
+ * supervisor's, with the controller's group (setgid, so what the supervisor adds keeps it), and
+ * closed to everyone else, as the outbox is the controller's with the supervisor's group.
  */
 const prepare = (image: string, resources?: Resources): Obj => ({
   name: "prepare",
@@ -112,7 +115,7 @@ const prepare = (image: string, resources?: Resources): Obj => ({
   command: [
     "sh",
     "-c",
-    "mkdir -p /data/state /data/scratch /data/inbox/repos /data/inbox/models /data/outbox /data/supervisor && chown 10001:10001 /data/inbox /data/inbox/repos /data/inbox/models /data/supervisor && chown 10010:10001 /data/outbox && chmod 2750 /data/outbox",
+    "mkdir -p /data/state /data/scratch /data/inbox/repos /data/inbox/models /data/outbox /data/supervisor && chown 10001:10010 /data/inbox /data/inbox/repos /data/inbox/models && chmod 2750 /data/inbox /data/inbox/repos /data/inbox/models && chown 10001:10001 /data/supervisor && chown 10010:10001 /data/outbox && chmod 2750 /data/outbox",
   ],
   securityContext: {
     runAsUser: 0,
@@ -284,7 +287,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
           volumeMounts: [
             { name: "data", mountPath: "/var/lib/thermite", subPath: "state" },
             { name: "data", mountPath: "/scratch", subPath: "scratch" },
-            { name: "data", mountPath: "/inbox", subPath: "inbox", readOnly: true },
+            { name: "data", mountPath: HARNESS_INBOX_DIR, subPath: "inbox", readOnly: true },
             { name: "data", mountPath: "/outbox", subPath: "outbox" },
             secretFile("control-signing.pub", "/keys/control-signing.pub"),
             secretFile("harness-supervisor-token", "/run/secrets/harness-supervisor-token"),

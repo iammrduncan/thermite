@@ -1,6 +1,6 @@
 import { JetStreamApiCodes, JetStreamApiError, jetstreamManager } from "@nats-io/jetstream";
 import type { NatsConnection } from "@nats-io/transport-node";
-import type { StreamSettings } from "./bus.ts";
+import type { StreamSettings } from "./bus/index.ts";
 import { log } from "./env.ts";
 
 /**

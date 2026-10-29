@@ -11,6 +11,8 @@ import {
   windowFit,
 } from "../../../agents/roles/index.ts";
 import {
+  type KbCall,
+  kbAgentTools,
   NOTE_TOOL,
   NoteLimit,
   type NoteRequest,
@@ -69,6 +71,8 @@ export interface ResearchTrialSpec {
   folder?: ResearchFolderPaths | undefined;
   /** The MCP servers the run's kit gives its workers (goal 068), by name (see TrialSpec). */
   mcpServers?: string[] | undefined;
+  /** The kinds it may write in the knowledge base (goal 175; see TrialSpec). */
+  kbWrites?: string[] | undefined;
   /** The owner's addition to the research worker for the campaign (goal 166; see TrialSpec). */
   addition?: OwnerAddition | undefined;
 }
@@ -84,6 +88,8 @@ export interface ResearchDeps {
   note?: ((req: NoteRequest) => Promise<{ note: number }>) | undefined;
   /** The MCP tools the run's kit gives its workers (goal 068), through the harness's gateway. */
   mcp?: McpForAgent | undefined;
+  /** The knowledge base's tools (goal 175), run by the harness for the trial's own slot. */
+  kb?: KbCall | undefined;
   /** Where a compaction keeps the conversation, and where it is said (goal 070). */
   compaction?: CompactionLink | undefined;
   /** Each model call's usage, as the trial's code measures it (goal 075). */
@@ -102,7 +108,13 @@ const out = (value: unknown) => ({
 /** A research trial's prompt in Pi (goal 166), from the research worker's definition. */
 export function piResearchPrompt(
   spec: ResearchTrialSpec,
-  o: { mcpServers: readonly string[]; idea: boolean; note: boolean; fit?: number | undefined },
+  o: {
+    mcpServers: readonly string[];
+    kbWrites?: readonly string[] | undefined;
+    idea: boolean;
+    note: boolean;
+    fit?: number | undefined;
+  },
 ): Prompt {
   return renderResearchWorker({
     program: PI_TRIAL,
@@ -181,6 +193,12 @@ export async function runResearchTrial(
           },
         )
       : []),
+    // Thermite's knowledge base (goal 175): kb_search, kb_read, and kb_write when it may write.
+    ...(deps.kb && spec.kbWrites
+      ? kbAgentTools(deps.kb, spec.kbWrites, () => {
+          result.toolCalls++;
+        })
+      : []),
   ];
 
   const { models, model, thinkingLevel } = buildModel(deps.model);
@@ -193,6 +211,7 @@ export async function runResearchTrial(
     spec.sent ??
     piResearchPrompt(spec, {
       mcpServers: [...new Set((deps.mcp?.tools ?? []).map((t) => t.server))],
+      kbWrites: deps.kb ? spec.kbWrites : undefined,
       idea: deps.idea !== undefined,
       note: deps.note !== undefined,
       fit: windowFit(deps.model.contextWindow, deps.model.compactAt),

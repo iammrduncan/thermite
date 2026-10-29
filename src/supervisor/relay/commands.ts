@@ -1,4 +1,4 @@
-import type { Bus, BusMessage, Handled } from "../../common/bus.ts";
+import type { Bus, BusMessage, Handled } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import type { SignedCommand } from "../../core/commands.ts";

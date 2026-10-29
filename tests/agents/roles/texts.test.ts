@@ -51,6 +51,8 @@ import {
   CONTEXT_FULL_TURN,
   CUT_OFF_TURN,
   FAILED_GO_ON,
+  KB_GUIDE,
+  kbWriteLine,
   OWNER_LINE_HEAD,
   OWNER_TURN_HEAD,
   PAST_GUIDE,
@@ -101,6 +103,9 @@ const TEXTS: Record<string, string> = {
   "advisors.at-work-guide": AT_WORK_GUIDE,
   "advisors.past-guide": PAST_GUIDE,
   "advisors.research-guide": RESEARCH_GUIDE,
+  // The knowledge base's part of every role's prompt (goal 175), and kb_write's line.
+  "shared.kb-guide": KB_GUIDE,
+  "shared.kb-write": kbWriteLine(["note", "finding"]),
   "teacher.system": TEACHER_SYSTEM,
   "merged-by.system": MERGED_BY_SYSTEM,
   "research-teacher.system": RESEARCH_TEACHER_SYSTEM,

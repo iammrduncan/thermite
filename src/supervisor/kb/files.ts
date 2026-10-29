@@ -9,7 +9,7 @@ import {
   statSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { Bus } from "../../common/bus.ts";
+import type { Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { writeAtomic } from "../../common/fs.ts";

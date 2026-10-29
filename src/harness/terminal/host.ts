@@ -327,17 +327,20 @@ export class TerminalHost {
   }
 
   /**
-   * Ends the program: its end steps, then SIGTERM, then, if it still runs, the host stops waiting
-   * and the broker ends it with the run. Asked again, the same end.
+   * Ends the program: its end steps (unless `steps` is false: nothing is typed), then SIGTERM,
+   * then, if it still runs, the host stops waiting and the broker ends it with the run. Asked
+   * again, the same end.
    */
-  end(): Promise<ProgramExit> {
+  end(steps = true): Promise<ProgramExit> {
     if (this.state === "starting") this.cancelled = true;
     this.ending ??= this.input("the end", async (p) => {
       this.state = "ending";
-      this.note("ending the program");
-      this.endedBy = "end steps";
-      await this.steps(p, TERMINAL_PROFILES[this.start.program].end);
-      if (await within(p.exited, END_WAIT_MS)) return;
+      this.note("ending the program", { steps });
+      if (steps) {
+        this.endedBy = "end steps";
+        await this.steps(p, TERMINAL_PROFILES[this.start.program].end);
+        if (await within(p.exited, END_WAIT_MS)) return;
+      }
       this.endedBy = "sigterm";
       p.signal("SIGTERM");
       if (await within(p.exited, TERM_WAIT_MS)) return;

@@ -37,7 +37,7 @@ async function answer(host: Host, r: Request): Promise<object> {
     case "screen":
       return r.form === "snapshot" ? host.screenSnapshot(r.scrollback) : host.screenText();
     case "end":
-      return host.end();
+      return host.end(r.steps);
   }
 }
 

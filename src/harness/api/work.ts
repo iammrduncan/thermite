@@ -128,8 +128,6 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
         return c.json(
           r.read(run, s("source"), Number(body.offset ?? 0), Number(body.length ?? 6000)),
         );
-      case "search":
-        return c.json(r.search(run, lane, s("query")));
       case "search-corpus":
         return c.json(r.searchCorpus(run, s("text"), Number(body.skip ?? 0)));
       case "claim":

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { BUS_READ_MAX } from "../../../src/common/bus.ts";
+import { BUS_READ_MAX } from "../../../src/common/bus/index.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { RigFold } from "../../../src/control/views/fold/index.ts";
 import {

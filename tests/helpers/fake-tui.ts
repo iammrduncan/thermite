@@ -7,7 +7,8 @@
 //   start      its process, its terminal (both ends a terminal, the size, a controlling terminal
 //              or not, TERM), its session and whether it was resumed, and the sign-in on file
 //              descriptor 3, when CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR names it (its length
-//              and a hash, never it)
+//              and a hash, never it), and what its open file descriptors are, where /proc shows
+//              them (Linux)
 //   query      whether its device-attributes query (ESC [ c) was answered
 //   user       a message: the first one (after `--`), or one typed or pasted, then Enter
 //   key        a named key: tab, up, down, left, right, page-up, page-down
@@ -39,13 +40,26 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
+  readlinkSync,
   readSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { dirname, join } from "node:path";
+
+/** What this process's open file descriptors are (Linux), each as /proc names it. */
+function openFiles(): string[] {
+  return readdirSync("/proc/self/fd").flatMap((n) => {
+    try {
+      return [readlinkSync(`/proc/self/fd/${n}`)];
+    } catch {
+      return [];
+    }
+  });
+}
 
 const args = process.argv.slice(2);
 const dash = args.indexOf("--");
@@ -155,6 +169,7 @@ function runTui(): void {
     ctty,
     term: process.env.TERM,
     ...(token ? { token } : {}),
+    ...(existsSync("/proc/self/fd") ? { fds: openFiles() } : {}),
   });
   /** One step of a scripted turn. */
   type Step =

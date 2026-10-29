@@ -9,10 +9,10 @@ import type { CallUsage, UsageRoute } from "../../core/usage.ts";
 import type { AdvisorRuntime } from "./config.ts";
 import type {
   AdvisorCode,
+  AdvisorKb,
   AdvisorPaper,
   AdvisorResearch,
   AdvisorServers,
-  PastSearch,
 } from "./tools/index.ts";
 
 /**
@@ -111,10 +111,11 @@ export interface AdvisorTools {
   fetchUrl?: (url: string) => Promise<unknown>;
   kbSearch?: (query: string) => Promise<unknown>;
   /**
-   * The run's past research (Thermite's knowledge base: the folders its campaign may read), read
-   * only, through the harness. Claude Code gets it over MCP; a command-line agent, not at all.
+   * Thermite's knowledge base (goal 175): kb_search and kb_read, asked of control, and kb_write
+   * when the run's campaign lets the advisor's role write. Pi gets them as tools; Claude Code,
+   * OpenCode and Codex over MCP on localhost; a command-line agent, not at all.
    */
-  pastSearch?: PastSearch | undefined;
+  kb?: AdvisorKb | undefined;
   /**
    * The MCP servers the run's kit gives its advisors (goal 068), called by the supervisor, which
    * holds their sign-in: in Pi a tool for each MCP tool; in Claude Code each server on localhost

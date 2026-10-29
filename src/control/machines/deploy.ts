@@ -4,6 +4,7 @@ import { shellQuote } from "../../common/exec.ts";
 import { gpuSplit, MAX_RIG_GPUS } from "../../core/hardware.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
+import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
 
 /**
  * A rig on a machine control reaches over SSH, as files and Podman Quadlet units: the same two
@@ -144,7 +145,7 @@ ${env({
 })}
 Volume=thermite-${p.rig}-state:/var/lib/thermite
 Volume=thermite-${p.rig}-scratch:/scratch
-Volume=thermite-${p.rig}-inbox:/inbox:ro
+Volume=thermite-${p.rig}-inbox:${HARNESS_INBOX_DIR}:ro
 Volume=thermite-${p.rig}-outbox:/outbox
 Volume=${unitDir}/keys:/keys:ro,Z
 ${secret("secrets/harness-supervisor-token")}

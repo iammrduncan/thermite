@@ -193,9 +193,9 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
   // A run cut off before its result (a submission, the cap) keeps what its stream showed.
   closeRun: closeClaudeRun,
   windows: (t) => t.usage,
-  // In its own terminal: the session's id the harness gives it, its first message after `--`, its
-  // settings with the warning about bypassed permissions taken as read, its onboarding and the
-  // workspace's trust seeded, and its transcript copied by the host (goal 169).
+  // In its own terminal: the session's id the harness gives it, its settings with the warning about
+  // bypassed permissions taken as read, its onboarding and the workspace's trust seeded, and its
+  // transcript copied by the host (goal 169).
   terminal: {
     prepare: readClaudeVersion,
     newSession: () => randomUUID(),
@@ -203,7 +203,6 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
       args: claudeTerminalArgs(run.model, {
         session: at.session,
         resume: at.resume,
-        first: at.first,
         mcpConfig: run.mcp ? join(run.home, "mcp.json") : undefined,
         settings: claudeTerminalSettings(trialSettings(run)),
       }),

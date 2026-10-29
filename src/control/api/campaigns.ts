@@ -6,6 +6,7 @@ import {
   CAMPAIGN_ADDITIONS,
   CAMPAIGN_CONTEXT,
   CAMPAIGN_COPY,
+  CAMPAIGN_KB_WRITES,
   START_RUN,
 } from "../../core/api/control/owner.ts";
 import {
@@ -13,10 +14,12 @@ import {
   bodyRefusal,
   CampaignAdditionsBody,
   CampaignContextBody,
+  CampaignKbWritesBody,
   CopyCampaignBody,
   campaignAdditionsAnswer,
   campaignContextAnswer,
   campaignFoldersAnswer,
+  campaignKbWritesAnswer,
   copyACampaign,
   copyCampaignAnswer,
   createFolder,
@@ -29,6 +32,7 @@ import {
   StartRunBody,
   setCampaignAdditions,
   setCampaignContext,
+  setCampaignKbWrites,
   startARun,
   startRunAnswer,
   startRunRequest,
@@ -132,6 +136,26 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       return c.json({ error: out.error }, out.status);
     }
     return c.json(campaignAdditionsAnswer(out), out.state === "saved" ? 201 : 200);
+  });
+
+  // Which kinds each role may write in the campaign's collection of the knowledge base (goal 175):
+  // the twin of MCP's set_campaign_kb_writes. A new version of its contract; an empty body puts
+  // back the default. 201 with a new version, 200 when the newest version says it already.
+  app.post(CAMPAIGN_KB_WRITES.path, admin, bodyLimit({ maxSize: 64 * 1024 }), async (c) => {
+    const campaign = c.req.param("campaign");
+    const raw: unknown = await c.req.json().catch(() => undefined);
+    const body = CampaignKbWritesBody.safeParse(raw);
+    const out = body.success
+      ? setCampaignKbWrites(store, { campaign, kb_writes: body.data.kb_writes }, "owner:api")
+      : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
+    if (out.state === "refused") {
+      store.auditLog.add("owner:api", "refused", {
+        path: `/v1/campaigns/${campaign}/kb-writes`,
+        why: redact(out.error),
+      });
+      return c.json({ error: out.error }, out.status);
+    }
+    return c.json(campaignKbWritesAnswer(out), out.state === "saved" ? 201 : 200);
   });
 
   // Archive a campaign, and the left navigation's folders (goal 077): the same functions as the

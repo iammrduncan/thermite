@@ -1,4 +1,4 @@
-import { BUS_READ_MAX, type Bus, type BusMessage } from "../../common/bus.ts";
+import { BUS_READ_MAX, type Bus, type BusMessage } from "../../common/bus/index.ts";
 import {
   EVENT_HEADERS,
   EVENT_STREAM,

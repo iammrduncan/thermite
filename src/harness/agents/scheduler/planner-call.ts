@@ -3,6 +3,7 @@ import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import { type McpCaller, mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { type ModelConfig, withAgentsContext } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
+import { kbAgentTools } from "../../../agents/tools/index.ts";
 import { type Harness, programForApi } from "../../../core/agents.ts";
 import type { Contract } from "../../../core/contract.ts";
 import type { NoteInput } from "../../../core/journal.ts";
@@ -82,8 +83,8 @@ export async function plannerRoute(
   const keeping = isCliProgram(via) ? cliPlannerCompaction(sched, run, via) : undefined;
   const withMcp = (o: Parameters<Ask>[2]): PlannerCallOptions => ({
     ...(o?.read !== undefined ? { read: o.read } : {}),
-    ...(o?.mcp?.length
-      ? { mcp: { auth: sched.o.service.mintMcpToken(caller), servers: o.mcp } }
+    ...(o?.mcp?.length || o?.kb
+      ? { mcp: { auth: sched.o.service.mintMcpToken(caller), servers: o.mcp ?? [], kb: o.kb } }
       : {}),
     usage,
     ...(keeping ? { compaction: keeping() } : {}),
@@ -97,23 +98,29 @@ export async function plannerRoute(
           { program: via },
         )
       : undefined;
-  const mcp: PlannerMcp | undefined = mcpServers.length
-    ? {
-        servers: mcpServers,
-        tools: ask
-          ? []
-          : mcpAgentTools((await sched.o.service.mcp.tools(caller)).tools, (s, t, a) =>
-              sched.o.service.mcp.call(caller, s, t, a),
-            ),
-      }
-    : undefined;
-  // The run's past research, read only: Pi's planner searches it with its tool; through OpenCode,
-  // Claude Code or Codex, the planner reads the run's knowledge/ files with its own tools.
+  // Thermite's knowledge base (goal 175): in Pi its tools run here, for the planner's slot;
+  // another program reaches them at the gateway, with the call's credential.
+  const kbTools = sched.o.service.kbTools;
+  const writes = kbTools.writes(run, "planner");
+  const kb = {
+    writes,
+    tools: ask ? [] : kbAgentTools(kbTools.callFor({ run, slot: "planner" }), writes),
+  };
+  const mcp: PlannerMcp = {
+    servers: mcpServers,
+    tools:
+      ask || !mcpServers.length
+        ? []
+        : mcpAgentTools((await sched.o.service.mcp.tools(caller)).tools, (s, t, a) =>
+            sched.o.service.mcp.call(caller, s, t, a),
+          ),
+    kb,
+  };
+  // The run's past research, read only: kb_search searches it in every program; through
+  // OpenCode, Claude Code or Codex, the planner may also read the run's knowledge/ files.
   const knowledge = sched.o.service.knowledge;
   const pastLine = pastResearch(sched, run, ask ? "files" : "tool");
-  const past: PlannerPast | undefined = pastLine
-    ? { search: (q, o) => knowledge.search(run, q, o), dir: knowledge.dir(run) }
-    : undefined;
+  const past: PlannerPast | undefined = pastLine ? { dir: knowledge.dir(run) } : undefined;
   // Each try's prompt, kept whole in the ledger (goal 166).
   const sent = (p: Prompt) => keepPrompt(sched.o.service.ledger, run, p, { call: `epoch ${n}` });
   return { m, ask, mcp, usage, past, pastLine, sent };

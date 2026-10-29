@@ -18,8 +18,12 @@ for (const d of [
 ]) {
   mkdirSync(d, { recursive: true, mode: 0o755 });
 }
+// .dev/ itself is yours alone, made so or not: no other user of this computer reaches the tokens,
+// the inbox or the advisors' keys. The containers mount the folders and files below it, so their
+// own users still reach those.
+chmodSync(root, 0o700);
 // The supervisor fetches sources into the inbox as its own user in its container: on native
-// Linux that user is not you, so the local inbox is open to it (local development only).
+// Linux that user is not you, so the inbox is open to it, inside the closed .dev/.
 for (const d of [join(root, "inbox"), join(root, "inbox", "repos"), join(root, "inbox", "models")])
   chmodSync(d, 0o777);
 const token = () => randomBytes(24).toString("base64url");

@@ -1,4 +1,4 @@
-import type { Bus } from "../../common/bus.ts";
+import type { Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { EVENT_STREAM } from "../../core/link/events.ts";
 import { reportMessageId } from "../../core/link/report.ts";

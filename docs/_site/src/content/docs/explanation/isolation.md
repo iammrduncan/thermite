@@ -93,7 +93,7 @@ If a rig can't set up its GPU layout this way, it neither times anything nor all
 
 The broker needs a few of root's powers: to change files' owners and permissions, to open any file, to switch users and groups, and to stop any process. The compose file, and the rigs control sets up on machines and clusters, give the harness container only those, with every other power dropped and no way for a process to gain new ones. So the broker controls every process, temporary folder and device file in its container.
 
-The **supervisor**, which holds the rig's git keys, its token for control, the advisors' keys and the sign-in of the MCP servers its runs give the advisors, runs in a separate container that no role is part of. It listens on no port. The two containers share only the harness API, which the supervisor reaches with a token of its own; an inbox the supervisor fills and the harness can only read; and an outbox the harness fills and only the supervisor's group can read. [Who holds your keys](who-holds-your-keys.md) follows each secret.
+The **supervisor**, which holds the rig's git keys, its token for control, the advisors' keys and the sign-in of the MCP servers its runs give the advisors, runs in a separate container that no role is part of. It listens on no port. The two containers share only the harness API, which the supervisor reaches with a token of its own; an inbox the supervisor fills and only the harness's controller can read, in a folder of the harness image that no role may enter; and an outbox the harness fills and only the supervisor's group can read. [Who holds your keys](who-holds-your-keys.md) follows each secret.
 
 ### One container, on RunPod
 

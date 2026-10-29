@@ -214,8 +214,8 @@ export interface CliProgram<T extends CliTally> {
 
 /**
  * One run of a program in its own terminal (goal 169), as the terminal host starts it: a new
- * session, with its first message on its command line when one is given, or the session it had
- * before a crash, resumed.
+ * session, or the session it had before a crash, resumed. Its messages are typed into it, never
+ * put on its command line.
  */
 export interface TerminalAt {
   /** Where it works: a code trial's workspace, or a research trial's working area. */
@@ -223,7 +223,6 @@ export interface TerminalAt {
   /** A new session's id, for a program that takes one (Claude Code), or the one to resume. */
   session: string;
   resume: boolean;
-  first?: string | undefined;
   /** A port on localhost that was free, for a program with a server of its own (OpenCode). */
   port: number | undefined;
 }

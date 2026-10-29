@@ -15,7 +15,7 @@ import type { AdvisorKeeper, AdvisorResult } from "./call.ts";
 import { type AdvisorRuntime, packageFit } from "./config.ts";
 import { leniently } from "./review-panel.ts";
 import { runAdvisor } from "./run.ts";
-import type { AdvisorResearch } from "./tools/index.ts";
+import type { AdvisorKb, AdvisorResearch } from "./tools/index.ts";
 
 /**
  * The synthesizer's answer (goal 117): one card for each question of its request. Read leniently,
@@ -155,6 +155,8 @@ export async function synthesizeCards(input: {
   runtime: AdvisorRuntime;
   pkg: unknown;
   research?: AdvisorResearch | undefined;
+  /** Thermite's knowledge base (goal 175), in the synthesizer's own slot. */
+  kb?: AdvisorKb | undefined;
   keeper?: AdvisorKeeper | undefined;
   /** The owner's additions to the run's roles (goal 166): the synthesizer's goes in its prompt. */
   additions?: RunAdditions;
@@ -181,6 +183,13 @@ export async function synthesizeCards(input: {
       if (problems) refusedOnce = true;
       return problems;
     },
-    ...(input.research ? { tools: { research: input.research } } : {}),
+    ...(input.research || input.kb
+      ? {
+          tools: {
+            ...(input.research ? { research: input.research } : {}),
+            ...(input.kb ? { kb: input.kb } : {}),
+          },
+        }
+      : {}),
   });
 }

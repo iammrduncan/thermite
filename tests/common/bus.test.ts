@@ -13,7 +13,7 @@ import {
   busUrl,
   type Outgoing,
   refusedForGood,
-} from "../../src/common/bus.ts";
+} from "../../src/common/bus/index.ts";
 import { makeCa, makeServerCert } from "../../src/control/bus/cert.ts";
 import {
   EVENT_STREAM,

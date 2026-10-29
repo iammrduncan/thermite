@@ -88,7 +88,7 @@ const out = (e) => process.stdout.write(JSON.stringify(e) + "\\n");
     const r = await fetch(mcpUrl, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(auth ? { authorization: "Bearer " + auth } : {}) },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search_past_research", arguments: { query: "tiling" } } }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "kb_search", arguments: { query: "tiling" } } }),
     });
     return r.status === 200 ? JSON.stringify(await r.json()) : String(r.status);
   };
@@ -157,7 +157,10 @@ async function call(kind: "codex" | "opencode", runtime: AdvisorRuntime) {
       schema: Facts,
       answerSchema: Type.Object({ decision: Type.String() }),
       tools: {
-        pastSearch: async (query) => [{ kind: "experiment", title: `found for ${query}` }],
+        kb: {
+          writes: [],
+          call: async (_tool, a) => ({ text: `found for ${String(a.query)}` }),
+        },
       },
     });
   } finally {
@@ -167,7 +170,7 @@ async function call(kind: "codex" | "opencode", runtime: AdvisorRuntime) {
 }
 
 describe("advisors in OpenCode and the Codex CLI", () => {
-  test("Codex: its own folder, the read-only sandbox, no tools of its own, the model through the call's proxy, the past research over MCP", async (t) => {
+  test("Codex: its own folder, the read-only sandbox, no tools of its own, the model through the call's proxy, the knowledge base over MCP", async (t) => {
     const p = await provider(t);
     const r = await call("codex", {
       name: "auditor",
@@ -217,7 +220,7 @@ describe("advisors in OpenCode and the Codex CLI", () => {
       p.seen.map((s) => [s.path, s.headers.authorization]),
       [["POST /v1/responses", `Bearer ${KEY}`]],
     );
-    // The past research over MCP, its token in the environment only.
+    // The knowledge base over MCP, its token in the environment only.
     assert.deepEqual(f.mcp_servers, ["thermite"]);
     assert.match(f.config, /bearer_token_env_var = "THERMITE_MCP_AUTH"/);
     assert.match(f.config, /default_tools_approval_mode = "approve"/);

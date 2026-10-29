@@ -6,7 +6,7 @@ import {
   type StreamEnd,
   type StreamSnapshot,
 } from "../../src/common/backup/index.ts";
-import type { StreamSettings } from "../../src/common/bus.ts";
+import type { StreamSettings } from "../../src/common/bus/index.ts";
 import type { FakeBus, Kept } from "./fake-bus.ts";
 
 /**

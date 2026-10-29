@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { closeSync, existsSync, write } from "node:fs";
+import { type StdioOptions, spawn } from "node:child_process";
+import { closeSync, existsSync, openSync, write } from "node:fs";
 import { createRequire } from "node:module";
 import type { Writable } from "node:stream";
 import { ReadStream } from "node:tty";
@@ -12,8 +12,9 @@ import { errorText } from "../../common/errors.ts";
  * too, but it passes the program no other file descriptor, and Claude Code reads its sign-in from
  * file descriptor 3 (decision 51): here it is a pipe the host writes the token to, then closes.
  *
- * The program inherits the host's end of the pair (node-pty leaves it open across exec): it could
- * read its own output from it, or write its own input, which it can do anyway.
+ * The program holds only the terminal's own end of the pair. node-pty opens the host's end without
+ * close-on-exec, so the program gets /dev/null in that end's place: neither it nor a command it
+ * runs holds the end the host types into it with.
  */
 
 /** util-linux's setsid, which the harness image has (the build checks it); none on macOS. */
@@ -53,6 +54,20 @@ export interface PtyProgram {
   readonly exited: Promise<PtyExit>;
 }
 
+/**
+ * The program's file descriptors: the terminal's end as 0, 1 and 2, the token's pipe as 3, and
+ * `nul` (/dev/null) as the host's end's number, which takes that end's place in the program.
+ */
+export function programStdio(
+  pair: { master: number; slave: number },
+  token: boolean,
+  nul: number,
+): StdioOptions {
+  const fds: StdioOptions = [pair.slave, pair.slave, pair.slave, token ? "pipe" : "ignore"];
+  for (let fd = fds.length; fd <= pair.master; fd++) fds.push(fd === pair.master ? nul : "ignore");
+  return fds;
+}
+
 /** A write the terminal would not take yet is tried again after this. */
 const RETRY_MS = 10;
 /** After the program exits, what it wrote last is still read for this long. */
@@ -74,11 +89,17 @@ export function startOnPty(o: {
 }): PtyProgram {
   if (!SETSID) throw new Error("the terminal host needs util-linux's setsid, which is not here");
   const pair = ptyNative().open(o.cols, o.rows);
-  const child = spawn(SETSID, ["-c", ...o.argv], {
-    cwd: o.cwd,
-    env: o.env,
-    stdio: [pair.slave, pair.slave, pair.slave, o.token !== undefined ? "pipe" : "ignore"],
-  });
+  const nul = openSync("/dev/null", "r");
+  let child: ReturnType<typeof spawn>;
+  try {
+    child = spawn(SETSID, ["-c", ...o.argv], {
+      cwd: o.cwd,
+      env: o.env,
+      stdio: programStdio(pair, o.token !== undefined, nul),
+    });
+  } finally {
+    closeSync(nul);
+  }
   closeSync(pair.slave);
   if (o.token !== undefined) {
     const fd3 = child.stdio[3] as Writable | null;

@@ -12,7 +12,7 @@ import {
   setBusStoreAside,
 } from "../../common/backup/index.ts";
 import { buildInfo } from "../../common/build-info.ts";
-import { busUrl } from "../../common/bus.ts";
+import { busUrl } from "../../common/bus/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { CONTROL_STATE } from "../../core/backup.ts";
 import { fail } from "./shared.ts";

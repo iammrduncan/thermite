@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { Published } from "../../../src/common/bus.ts";
+import type { Published } from "../../../src/common/bus/index.ts";
 import {
   REPORT_MAX_BYTES,
   readReport,

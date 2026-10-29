@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { COMMAND_MAX_BYTES, SignedCommand } from "../../commands.ts";
 import { HealthAnswer } from "../../health.ts";
+import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
 import { ControlRoute } from "../model-route.ts";
 import type { Route } from "../route.ts";
@@ -189,6 +190,75 @@ export const KB = {
   }),
   answer: z.unknown(),
   maxBytes: 32 * 1024 * 1024,
+} as const satisfies Route;
+
+/**
+ * The agents' searches and reads of the knowledge base that wait in the harness (goal 175): the
+ * supervisor holds this call open up to `wait` seconds (at most 30) until one comes, asks control
+ * for each, and hands each answer back with KB_ANSWERS. Each ask is handed over once.
+ */
+export const KB_ASKS = {
+  method: "GET",
+  path: "/v1/kb/asks",
+  what: "knowledge base asks",
+  answer: z.object({
+    asks: z.array(
+      z.discriminatedUnion("kind", [
+        z.object({ id: z.string(), kind: z.literal("search"), ask: KbSearchAsk }),
+        z.object({ id: z.string(), kind: z.literal("read"), ask: KbReadAsk }),
+      ]),
+    ),
+  }),
+} as const satisfies Route;
+/** The longest the supervisor holds KB_ASKS open, in seconds. */
+export const KB_ASKS_WAIT_MAX_S = 30;
+
+/** Control's answers to the asks the supervisor took: each by its ask's id. */
+export const KB_ANSWERS = {
+  method: "POST",
+  path: "/v1/kb/answers",
+  body: z.strictObject({
+    answers: z.array(z.strictObject({ id: z.string().max(64), answer: KbAskAnswer })).max(100),
+  }),
+  answer: z.object({ taken: z.number() }),
+  maxBytes: 8 * 1024 * 1024,
+} as const satisfies Route;
+
+/** The advisors' slots in a run of the knowledge base: the roles the supervisor runs. */
+export const KB_ADVISOR_SLOTS = [
+  "teacher",
+  "merged-by",
+  "auditor",
+  "review-panel",
+  "synthesizer",
+  "final-writer",
+] as const;
+export type KbAdvisorSlot = (typeof KB_ADVISOR_SLOTS)[number];
+
+/**
+ * An advisor's kb_write (goal 175): the supervisor runs the advisor's call, so it names the
+ * advisor's slot (teacher, merged-by, auditor, review-panel, synthesizer, final-writer); the
+ * harness records the item there, signed, if the run's contract lets that role write its kind.
+ * The rest is the agent's arguments, which name no slot.
+ */
+export const KB_WRITE = {
+  method: "POST",
+  path: "/v1/kb/write",
+  body: z.strictObject({
+    run: z.string().min(1).max(100),
+    slot: z.enum(KB_ADVISOR_SLOTS),
+    args: z.record(z.string(), z.unknown()),
+  }),
+  answer: z.object({ text: z.string(), isError: z.boolean().optional() }),
+  maxBytes: 8 * 1024 * 1024,
+} as const satisfies Route;
+
+/** The kinds an advisor's slot may write in a run, as its contract says: `run` and `slot`. */
+export const KB_WRITES = {
+  method: "GET",
+  path: "/v1/kb/writes",
+  what: "knowledge base writers",
+  answer: z.object({ kinds: z.array(z.string()) }),
 } as const satisfies Route;
 
 /** The exports safe off the rig, which leave the outbox. */

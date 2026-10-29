@@ -47,7 +47,10 @@ describe("a rig deployed on a machine", () => {
     assert.match(h, /^AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETGID SETUID$/m);
     assert.match(h, /^DropCapability=ALL$/m);
     assert.ok(!h.includes("control-rig-token"), "the harness never sees control's token");
+    // The harness reads the inbox in its image's closed folder; the supervisor fills it.
+    assert.match(h, /^Volume=thermite-gpu-box-1-a-inbox:\/controller\/inbox:ro$/m);
     const s = u["thermite-gpu-box-1-a-supervisor.container"] ?? "";
+    assert.match(s, /^Volume=thermite-gpu-box-1-a-inbox:\/inbox:U$/m);
     assert.match(s, /^Environment=CONTROL_URL=https:\/\/control\.example\.com$/m);
     assert.match(s, /^Environment=HARNESS_URL=http:\/\/thermite-gpu-box-1-a-harness:8700$/m);
     assert.match(s, /^Requires=thermite-gpu-box-1-a-harness\.service$/m);

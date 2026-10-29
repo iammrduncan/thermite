@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
-import type { SessionEvent, SessionLogAdapter } from "../../../agents/programs/index.ts";
+import {
+  readNew,
+  type SessionEvent,
+  type SessionLogAdapter,
+} from "../../../agents/programs/index.ts";
 import { messageText, type Prompt } from "../../../agents/prompt.ts";
 import { log, logDebug } from "../../../common/log.ts";
 import type { InTurn } from "../../../core/agents.ts";
@@ -13,36 +16,6 @@ import type { MessageInbox, TurnDelivery } from "../live-session.ts";
  * file, read into the session-log adapters' events; and the owner's messages the hooks and the
  * plugin take inside the turn (TurnMessages), which the trial's routes offer them.
  */
-
-/** The most bytes of a trial's file read at once; the rest is read at the next look. */
-const SIGNALS_READ_MAX = 4 * 1024 * 1024;
-
-/**
- * What a growing file gained since `from`, whole lines only, at most SIGNALS_READ_MAX bytes: the
- * trial's signals, or the copy of its program's session log (terminal.ts). The file is the
- * lane's, so it is read as a plain file and never through a link.
- */
-export function readNewLines(path: string, from: number): { lines: string[]; next: number } {
-  let fd: number;
-  try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  } catch {
-    return { lines: [], next: from };
-  }
-  try {
-    const st = fstatSync(fd);
-    if (!st.isFile() || st.size <= from) return { lines: [], next: from };
-    const buf = Buffer.alloc(Math.min(st.size - from, SIGNALS_READ_MAX));
-    const got = readSync(fd, buf, 0, buf.length, from);
-    const end = buf.subarray(0, got).lastIndexOf(0x0a);
-    if (end < 0) return { lines: [], next: from };
-    return { lines: buf.subarray(0, end).toString("utf8").split("\n"), next: from + end + 1 };
-  } catch {
-    return { lines: [], next: from };
-  } finally {
-    closeSync(fd);
-  }
-}
 
 /**
  * A trial's signals, followed while it runs: each read gives the events its hooks or plugin
@@ -66,7 +39,7 @@ export class TrialSignals {
 
   /** The events of the signals written since the last read. */
   read(): SessionEvent[] {
-    const r = readNewLines(this.file, this.next);
+    const r = readNew(this.file, this.next);
     this.next = r.next;
     const lines = r.lines.filter((l) => l.trim());
     if (!lines.length) return [];

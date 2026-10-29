@@ -103,7 +103,8 @@ export const USAGE = `usage: thermite <command> [options]
                                       cancel the rig's full reset before its wipe (owner's token)
   run start CAMPAIGN --rig R [--agents off] [--provider P --model M] [--promotion auto|owner]
          [--ask gain:PERCENT|flaws|reviews|not-possible ...]
-         [--judge-gpus N] [--queue-from RUN] [--past ID ...] --control URL --token-file F
+         [--judge-gpus N] [--queue-from RUN] [--past ID ...] [--fresh]
+         [--granted C ... | --no-granted] --control URL --token-file F
                                       start a run of a campaign control keeps (owner's token), as
                                       Start a run on the campaign's page does, with its checks and
                                       refusals: a campaign saved on the New campaign page or
@@ -112,7 +113,11 @@ export const USAGE = `usage: thermite <command> [options]
                                       command exits 1; run it again once the rig has the model.
                                       --queue-from starts the queue with the untried experiments
                                       of a run of the campaign, by its name; --past adds
-                                      items of Thermite's knowledge base by id. It prints the new
+                                      items of Thermite's knowledge base by id. Its agents search
+                                      the campaign's whole collection, or with --fresh only the
+                                      run's own items, and every collection the campaign is
+                                      granted, or those --granted names, or none with
+                                      --no-granted; fixed as it starts. It prints the new
                                       run and its command id; a stopped RunPod pod starts first
   campaign copy FROM NAME [--mcp-servers-json FILE] [--context-window TOKENS]
          [--compact-at PERCENT] [--info-file F] [--link URL ...] [--idea TEXT ...]
@@ -155,6 +160,17 @@ export const USAGE = `usage: thermite <command> [options]
   kit list --control URL --token-file F [--json]
                                       the kits control keeps (owner's or reader's token): each
                                       one's head, commits and kit.json's name and target
+  kb search [WORDS...] [--collection C ...] [--kind K ...] [--limit N] --control URL
+         --token-file F
+                                      search Thermite's knowledge base (owner's token): items with
+                                      any of the words, best first, each with its id, address,
+                                      slot, an excerpt, why it matched and, for an experiment, its
+                                      result; no words: the newest. --collection and --kind keep
+                                      those collections and kinds. It prints JSON
+  kb read ADDRESS [--version N] --control URL --token-file F
+                                      one item of the knowledge base whole, by its address
+                                      (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
+                                      or version N, with its links. It prints JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does

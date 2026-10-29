@@ -48,7 +48,7 @@ The harness and the supervisor have tokens of their own, which never reach contr
 | Proposer token | `THERMITE_PROPOSER_TOKEN_FILE` on the harness (optional) | A person or script submitting changes with `thermite submit` |
 | Trial token | Made by the harness for each trial | One worker's tools during one trial, such as submitting its change, proposing an idea for the run's experiment queue, or calling the MCP servers the run's kit gives the workers, through the harness's gateway. It stops working when the trial ends |
 | Planner's gateway token | Made by the harness for one planner call in OpenCode, Claude Code or Codex | That call's use of the MCP servers the run's kit gives the planner, through the harness's gateway. It lasts 15 minutes |
-| An advisor's local token | Made by the supervisor for one call of an advisor in Claude Code | That call's use of the past-research search and the MCP servers the supervisor serves on `127.0.0.1`. It stops working when the call ends |
+| An advisor's local token | Made by the supervisor for one call of an advisor in Claude Code | That call's use of the knowledge base's tools and the MCP servers the supervisor serves on `127.0.0.1`. It stops working when the call ends |
 
 ## Making, changing and ending tokens
 

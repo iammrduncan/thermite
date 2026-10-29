@@ -208,7 +208,8 @@ services:
     volumes:
       - harness-state:/var/lib/thermite
       - harness-scratch:/scratch
-      - ./.dev/inbox:/inbox:ro
+      # In the image's folder that only the controller enters: no role reaches the inbox.
+      - ./.dev/inbox:/controller/inbox:ro
       - outbox:/outbox
       - control-pub:/keys:ro
     secrets: [harness-supervisor-token, harness-proposer-token, model-api-key]
@@ -307,7 +308,8 @@ services:
     volumes:
       - harness2-state:/var/lib/thermite
       - harness2-scratch:/scratch
-      - ./.dev/inbox:/inbox:ro
+      # In the image's folder that only the controller enters: no role reaches the inbox.
+      - ./.dev/inbox:/controller/inbox:ro
       - outbox2:/outbox
       - control-pub:/keys:ro
     secrets: [harness2-supervisor-token, harness2-proposer-token, model-api-key]

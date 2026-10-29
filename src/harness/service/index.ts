@@ -24,6 +24,7 @@ import type { ControlRoute, ModelSource, TurnDelivery } from "../agents/index.ts
 import type { Compactions } from "../compactions.ts";
 import type { DiskWatch } from "../disk.ts";
 import { Journal } from "../journal.ts";
+import { KbAsks, KbTools } from "../kb/index.ts";
 import { Knowledge } from "../knowledge.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
 import { type AdvisorRole, OwnerMessages } from "../messages.ts";
@@ -135,6 +136,12 @@ export class HarnessService {
    * here; their sign-in, from control by way of the supervisor, stays in this process's memory.
    */
   readonly mcp: McpGateway;
+  /**
+   * Thermite's knowledge base for every agent (goal 175): kb_search and kb_read, asked of control
+   * through the supervisor's channel (kbAsks), and kb_write, kept in the run's ledger.
+   */
+  readonly kbAsks = new KbAsks();
+  readonly kbTools: KbTools;
   /** A rig configured with its GPU set: how many cards, and how many the judge has now. */
   gpuSplit?: { set: number; judge: number } | undefined;
   /**
@@ -275,6 +282,12 @@ export class HarnessService {
     this.runResearch = new RunResearch({
       ledger: this.ledger,
       savedLanes: join(this.paths.stateDir, SAVED_LANES_DIR),
+    });
+    this.kbTools = new KbTools({
+      ledger: this.ledger,
+      outboxDir: this.paths.outboxDir,
+      contractFor: (run) => this.contractFor(run),
+      asks: this.kbAsks,
     });
     this.mcp = new McpGateway({
       uses: (run) => this.mcpUses(run),
@@ -616,6 +629,20 @@ export class HarnessService {
     w: { until: string; kind: string; words: string },
   ): void {
     trials.trialWait(this, trial, w);
+  }
+
+  /** Trials whose worker reports its own session's counters and waits (Pi's), while they run. */
+  private readonly ownSessions = new Set<string>();
+
+  /** The trial's worker reports its counters and waits itself; the function it returns ends that. */
+  reportsOwnSession(id: string): () => void {
+    this.ownSessions.add(id);
+    return () => this.ownSessions.delete(id);
+  }
+
+  /** Whether the trial's worker may send its counters and waits on the trial's route. */
+  ownSession(id: string): boolean {
+    return this.ownSessions.has(id);
   }
 
   takeMessages(trial: { id: string; run: string; lane: string }): string[] {

@@ -25,6 +25,8 @@ export type Ask = ((
     read?: string | undefined;
     /** The MCP servers it may call (goal 068), by name, at the harness's gateway. */
     mcp?: string[] | undefined;
+    /** Thermite's own server too, with the knowledge base's tools (goal 175). */
+    kb?: boolean | undefined;
   },
 ) => Promise<string>) & {
   /** The program it asks through (its prompt names it); none: a program like OpenCode. */
@@ -83,6 +85,7 @@ export async function plannerTries<T>(o: {
       refused,
       read: o.ask ? o.past?.dir : undefined,
       mcpServers: o.ask ? (o.mcp?.servers ?? []) : o.mcp?.tools.length ? o.mcp.servers : [],
+      kbWrites: o.mcp?.kb?.writes,
       // Cut to the model's window, when the route says it (decision 8).
       fit: windowFit(o.model.contextWindow, o.model.compactAt),
       addition: o.addition,
@@ -91,18 +94,15 @@ export async function plannerTries<T>(o: {
     let raw: unknown;
     try {
       raw = o.ask
-        ? await askPlanner(o.ask, sent, o.signal, o.past?.dir, o.mcp?.servers)
-        : await callPlanner(
-            o.model,
+        ? await askPlanner(
+            o.ask,
             sent,
             o.signal,
-            o.past?.search,
-            o.mcp,
-            o.compaction,
-            o.usage,
-            o.spec,
-            o.sent,
-          );
+            o.past?.dir,
+            o.mcp?.servers,
+            o.mcp?.kb !== undefined,
+          )
+        : await callPlanner(o.model, sent, o.signal, o.mcp, o.compaction, o.usage, o.spec, o.sent);
     } catch (err) {
       const why = err instanceof PlannerCallError ? err : causeOf(err);
       causes.push({ try: tries, cause: why.planCause, detail: why.message.slice(0, 600) });
@@ -130,12 +130,13 @@ async function askPlanner(
   signal?: AbortSignal,
   read?: string,
   mcp?: string[],
+  kb?: boolean,
 ): Promise<unknown> {
   const text = await ask(
     messageText(sent),
     signal,
-    read || mcp?.length
-      ? { ...(read ? { read } : {}), ...(mcp?.length ? { mcp } : {}) }
+    read || mcp?.length || kb
+      ? { ...(read ? { read } : {}), ...(mcp?.length ? { mcp } : {}), ...(kb ? { kb } : {}) }
       : undefined,
   );
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1];

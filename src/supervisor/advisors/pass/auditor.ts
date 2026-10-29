@@ -17,7 +17,7 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
     due,
     mark,
     toolsFor,
-    pastSearchFor,
+    kbFor,
     configFor,
     additionsFor,
     keeperFor,
@@ -116,7 +116,8 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
           tools: {
             ...toolsFor(),
             mcp: await mcpFor(pkg.run),
-            ...(pkg.run && pkg.past_research ? { pastSearch: pastSearchFor(pkg.run) } : {}),
+            // Thermite's knowledge base, from the run's scope (goal 175).
+            ...(pkg.run ? { kb: await kbFor(pkg.run, "auditor") } : {}),
           },
         });
         count(r);

@@ -39,7 +39,7 @@ import {
   renderResearchReviewer,
   renderReviewer,
 } from "./reviewer.ts";
-import { TRIAL_TURN_TEXTS } from "./shared.ts";
+import { KB_GUIDE, TRIAL_TURN_TEXTS } from "./shared.ts";
 import { renderSynthesizer, SYNTHESIZER_SYSTEM } from "./synthesizer.ts";
 import { RESEARCH_TEACHER_SYSTEM, renderTeacher, TEACHER_SYSTEM } from "./teacher.ts";
 import {
@@ -177,6 +177,16 @@ export interface RoleDefinition {
 /** Every role that runs in Pi with compaction goes on from renderCompacted's message after one. */
 const PI_TURNS = [renderCompacted] as const;
 
+/**
+ * The knowledge base's part of every role's prompt but the model check's and compaction's (goal
+ * 175), after the role's instructions; for a role the campaign lets write, kb_write's line follows.
+ */
+const KB_TEXT: RoleText = {
+  id: "kb",
+  what: "Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows",
+  text: KB_GUIDE,
+};
+
 const WORKER_PROGRAMS = ["Pi", "OpenCode", "Claude Code", "Codex"] as const;
 const ADVISOR_PROGRAMS = ["Pi", "Claude Code", "OpenCode", "Codex", "a command (cli)"] as const;
 
@@ -227,6 +237,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: WORKER_SUBMIT_NOW,
       },
       ...TRIAL_TURN_TEXTS,
+      KB_TEXT,
     ],
   },
   {
@@ -248,6 +259,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: RESEARCH_WORKER_GO_ON,
       },
       ...TRIAL_TURN_TEXTS,
+      KB_TEXT,
     ],
   },
   {
@@ -272,6 +284,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: PLANNER_ASK_SYSTEM,
       },
       { id: "limits", what: "the limits of its answer", text: PLAN_LIMITS_TEXT },
+      KB_TEXT,
     ],
   },
   {
@@ -296,6 +309,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: RESEARCH_PLANNER_ASK_SYSTEM,
       },
       { id: "limits", what: "the limits of its answer", text: RESEARCH_PLAN_LIMITS_TEXT },
+      KB_TEXT,
     ],
   },
   {
@@ -308,7 +322,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: true,
     render: renderTeacher,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: TEACHER_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: TEACHER_SYSTEM }, KB_TEXT],
   },
   {
     id: "research-teacher",
@@ -320,7 +334,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: true,
     render: renderTeacher,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_TEACHER_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: RESEARCH_TEACHER_SYSTEM }, KB_TEXT],
   },
   {
     id: "merged-by",
@@ -332,7 +346,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: false,
     render: renderMergedBy,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: MERGED_BY_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: MERGED_BY_SYSTEM }, KB_TEXT],
   },
   {
     id: "research-merged-by",
@@ -344,7 +358,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: false,
     render: renderMergedBy,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_MERGED_BY_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: RESEARCH_MERGED_BY_SYSTEM }, KB_TEXT],
   },
   {
     id: "auditor",
@@ -356,7 +370,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: true,
     render: renderAuditor,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: AUDITOR_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: AUDITOR_SYSTEM }, KB_TEXT],
   },
   {
     id: "reviewer",
@@ -368,7 +382,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: true,
     render: renderReviewer,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: REVIEWER_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: REVIEWER_SYSTEM }, KB_TEXT],
   },
   {
     id: "research-reviewer",
@@ -380,7 +394,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: true,
     render: renderResearchReviewer,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_REVIEWER_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: RESEARCH_REVIEWER_SYSTEM }, KB_TEXT],
   },
   {
     id: "synthesizer",
@@ -392,7 +406,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: false,
     render: renderSynthesizer,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: SYNTHESIZER_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: SYNTHESIZER_SYSTEM }, KB_TEXT],
   },
   {
     id: "final-writer",
@@ -407,6 +421,7 @@ export const ROLES: readonly RoleDefinition[] = [
     texts: [
       { id: "system", what: "its instructions", text: FINAL_WRITER_SYSTEM },
       { id: "ste", what: "the short STE rules, with no STE checker", text: STE_SHORT_RULES },
+      KB_TEXT,
     ],
   },
   {

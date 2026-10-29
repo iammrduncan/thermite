@@ -22,7 +22,7 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
     now,
     retryMs,
     mark,
-    pastSearchFor,
+    kbFor,
     researchFor,
     configFor,
     additionsFor,
@@ -75,12 +75,14 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         // The reviewers review at once, in parallel (goal 117), each blind to the others. Each
         // one's call is then recorded in the panel's order: its usage, its line in Live and its
         // answer. A reviewer whose call throws gave no answer, with the error as why.
+        // Thermite's knowledge base for the reviewers (goal 175), in the review panel's slot.
+        const kb = pkg.run ? await kbFor(pkg.run, "review-panel") : undefined;
         const calls = await Promise.all(
           panel.map((runtime) =>
             reviewOne({
               runtime,
               pkg: { ...pkg, owner_messages: owner },
-              ...(pkg.run && pkg.past_research ? { pastSearch: pastSearchFor(pkg.run) } : {}),
+              ...(kb ? { kb } : {}),
               ...(mcp ? { mcp } : {}),
               ...(research && pkg.run ? { research: researchFor(pkg.run) } : {}),
               keeper: keeperFor(pkg.run),

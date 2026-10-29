@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { BusMessage, ConsumerSettings, StreamSettings } from "../../../src/common/bus.ts";
+import type {
+  BusMessage,
+  ConsumerSettings,
+  StreamSettings,
+} from "../../../src/common/bus/index.ts";
 import { foldLive, followLive, LIVE_REFUSALS, LiveTaken } from "../../../src/control/live/index.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys, signJson } from "../../../src/core/commands.ts";

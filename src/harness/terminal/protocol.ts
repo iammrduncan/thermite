@@ -116,8 +116,12 @@ export const TerminalRequest = z.discriminatedUnion("op", [
     form: z.enum(["text", "snapshot"]).default("text"),
     scrollback: z.number().int().min(0).max(SCROLLBACK_MAX).default(0),
   }),
-  /** The program's clean end, then SIGTERM; the host exits after it answers. */
-  z.object({ op: z.literal("end"), secret }),
+  /**
+   * The program's clean end, then SIGTERM; the host exits after it answers. `steps` false: SIGTERM
+   * at once, nothing typed (the harness's choice while the program shows a usage limit, whose
+   * screen may take any key as an answer).
+   */
+  z.object({ op: z.literal("end"), secret, steps: z.boolean().default(true) }),
 ]);
 export type TerminalRequest = z.input<typeof TerminalRequest>;
 

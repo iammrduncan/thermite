@@ -342,9 +342,13 @@ test("Start a run from past research: the search reads only granted collections;
   assert.deepEqual(r.collections, ["gemv-speed"]);
   assert.deepEqual(r.items, []);
   r = await search("gemv-speed", "vector loads");
+  // Ranked by words (BM25): the experiment with both words first, then the one with one of them.
   assert.deepEqual(
     r.items.map((x) => [x.kind, x.label, x.goes]),
-    [["experiment", "Past experiment", "queue"]],
+    [
+      ["experiment", "Past experiment", "queue"],
+      ["experiment", "Past experiment", "queue"],
+    ],
     "attempts are not offered: an experiment carries its result",
   );
   assert.match(
@@ -479,18 +483,31 @@ test("MCP: the owner and an operator read, search and grant the collections; age
   assert.equal(pn?.counts.experiment, 2);
   const found = text(
     await reader.callTool({ name: "kb_search", arguments: { q: "verifier", kinds: ["finding"] } }),
-  ) as { campaign: string; run: string; by: string; kind: string; rig: string }[];
+  ) as {
+    matched: number;
+    hits: {
+      collection: string;
+      run: string;
+      by: string;
+      kind: string;
+      excerpt: string;
+      why: string;
+    }[];
+  };
   assert.deepEqual(
-    found.map((x) => [x.campaign, x.rig, x.run, x.kind, x.by]),
-    [["survey-study", "rig-b", "sv-2", "finding", "lane-2"]],
+    found.hits.map((x) => [x.collection, x.run, x.kind, x.by]),
+    [["survey-study", "sv-2", "finding", "lane-2"]],
   );
+  assert.equal(found.matched, 1);
+  assert.match(found.hits[0]?.excerpt ?? "", /\*\*verifier\*\*/i, "the excerpt marks the words");
+  assert.match(found.hits[0]?.why ?? "", /verifier/);
   const inPn = text(
     await reader.callTool({
       name: "kb_search",
-      arguments: { q: "verifier", campaigns: ["gemv-speed"] },
+      arguments: { q: "verifier", collections: ["gemv-speed"] },
     }),
   );
-  assert.deepEqual(inPn, []);
+  assert.deepEqual((inPn as { hits: unknown[] }).hits, []);
   // An operator grants, the owner revokes; both audited with who did it.
   const operator = await mcpClient(s.control, s.tokens.operator);
   const g = text(

@@ -185,6 +185,9 @@ export async function adviseRound(
         const url = new URL(String(input));
         return await api.request(`${url.pathname}${url.search}`, init as RequestInit);
       },
+      // Thermite's knowledge base, as the advisors reach it (goal 175): asked of no control here,
+      // since only what the advisors are sent is captured.
+      kb: { rig: "rig-a" },
     },
     emptyAdviseState(),
   );

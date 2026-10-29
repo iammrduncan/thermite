@@ -124,6 +124,11 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
         : // Any other run started with its agents off (goal 099): say so plainly. A rig check's
           // smoke run is the rig page's to explain.
           `<div class="card hl" style="margin-bottom:12px"><b>Judge only:</b> ${esc(JUDGE_ONLY_WORDS)}</div>`;
+    // What its agents search in the knowledge base, fixed when it started (goal 175).
+    const scope = agents && !x.earlier ? store.kb().scope(campaign, r.id) : undefined;
+    const searches = scope
+      ? `<div class="muted small" style="margin-bottom:12px" data-part="kb-scope">Its agents search ${scope.fresh ? "only this run's own items" : "the campaign's whole collection"} in the <a href="/ui/knowledge?collection=${encodeURIComponent(campaign)}">knowledge base</a>${scope.granted.length ? `, and ${esc(scope.granted.join(", "))}, read only` : ""}: set when the run started.</div>`
+      : "";
     // The Prompts tab's list, read from the message bus.
     const prompts = tab === "prompts" ? await runPrompts(store, x) : [];
     return page(
@@ -135,7 +140,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
         active: "campaigns",
         actions: actions(c, x, back),
       },
-      `${said}${earlierCard}${kind}${runSection(c, x, vs, now, tab, prompts)}`,
+      `${said}${earlierCard}${kind}${searches}${runSection(c, x, vs, now, tab, prompts)}`,
       vs,
     );
   };

@@ -14,7 +14,7 @@ import { modelStallMs } from "../agents/model/index.ts";
 import { controlClient } from "../common/api/control.ts";
 import { harnessClient } from "../common/api/harness.ts";
 import { buildInfo } from "../common/build-info.ts";
-import { busTrust, busUrl, natsBus } from "../common/bus.ts";
+import { busTrust, busUrl, natsBus } from "../common/bus/index.ts";
 import { GIB } from "../common/disk.ts";
 import { log, optionalSecretFromFile, requireEnv, secretFromFile } from "../common/env.ts";
 import { Loops } from "../common/health.ts";
@@ -49,7 +49,7 @@ import { applyConfig, ConfigCounts, followConfig, keepConfig, RigConfig } from "
 import { type UploadState, uploadExportsOnce } from "./export-upload.ts";
 import { type ExportState, exportOnce } from "./git-export.ts";
 import { serveHealth } from "./health.ts";
-import { putKbFiles } from "./kb/index.ts";
+import { type KbControl, putKbFiles, relayKbAsks } from "./kb/index.ts";
 import { emptyKbSyncState, type KbSyncState, syncKnowledgeOnce } from "./kb-sync.ts";
 import {
   LiveCounts,
@@ -150,6 +150,8 @@ async function main(): Promise<void> {
   // The live lines it published to the bus and dropped there, and the config updates it took
   // and refused, by subject, for its figures; and the rig's config as the bus gave it.
   const liveCounts = bus ? new LiveCounts() : undefined;
+  // Where the agents' searches and reads of the knowledge base ask control (goal 175).
+  const kbControl: KbControl = { rig, bus, control };
   const configCounts = bus ? new ConfigCounts() : undefined;
   const known = bus ? new RigConfig() : undefined;
   // A full reset keeps the tunnel's keys and enrollment, and the rig's keys on the bus: control's
@@ -430,6 +432,7 @@ async function main(): Promise<void> {
             mcp: advisorMcp,
             // The deployment's STE checker for research papers (goal 112), when it gives one.
             steChecker: env.THERMITE_STE_CHECKER || undefined,
+            kb: kbControl,
           },
           adviseState,
         );
@@ -616,6 +619,11 @@ async function main(): Promise<void> {
     }
   };
   const syncingKbDone = syncingKb();
+
+  // The agents' searches and reads of the knowledge base (goal 175): taken from the harness as
+  // they come, and asked of control, on the bus or over HTTP.
+  // Not waited for at a stop: its call held open to the harness ends with the process.
+  void relayKbAsks({ harness, control: kbControl, stopping: () => stopping });
 
   loops.add("report", intervalMs);
   while (!stopping) {

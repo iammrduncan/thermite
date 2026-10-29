@@ -14,7 +14,7 @@ import {
 } from "./hypotheses.ts";
 import { addNote } from "./notes.ts";
 import { report, updateSection } from "./report.ts";
-import { fetchSource, frontier, readSource, searchCorpus, searchWeb } from "./sources.ts";
+import { fetchSource, frontier, readSource, searchCorpus } from "./sources.ts";
 import { statsOf } from "./stats.ts";
 import { trialYield } from "./yield.ts";
 
@@ -116,11 +116,6 @@ export class Research {
   /** Plain-text search over the archived texts, a page at a time: research/sources.ts. */
   searchCorpus(run: string, text: string, skip?: number) {
     return searchCorpus(this.ctx, run, text, skip);
-  }
-
-  /** Web search, checked against the contract's search policy and logged: research/sources.ts. */
-  search(run: string, lane: string | null, query: string) {
-    return searchWeb(this.ctx, run, lane, query);
   }
 
   /** A worker's claim, verified or kept as a draft: research/claims.ts. */

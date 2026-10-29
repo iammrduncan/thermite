@@ -2,7 +2,7 @@ import { createPrivateKey, createPublicKey, X509Certificate } from "node:crypto"
 import { existsSync, readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { join } from "node:path";
-import { BUS_URL_SETTING, busUrl } from "../../common/bus.ts";
+import { BUS_URL_SETTING, busUrl } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { writeAtomic } from "../../common/fs.ts";
 import { CONTROL_STATE } from "../../core/backup.ts";

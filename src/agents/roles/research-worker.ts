@@ -12,6 +12,7 @@ import {
 } from "../tools/index.ts";
 import {
   fitToWindow,
+  kbSections,
   limitsNote,
   ownerAdditionSection,
   ownerLineSections,
@@ -53,6 +54,8 @@ export interface ResearchWorkerInput {
   /** The run's part, as the harness gathered it (a text is one section): the brief, then the owner's messages. */
   brief: string | readonly Section[];
   mcpServers: readonly string[];
+  /** The kinds it may write in the knowledge base (goal 175); undefined: no knowledge base tools. */
+  kbWrites?: readonly string[] | undefined;
   /** The run's research folder and the lane's working area in it. */
   folder?: ResearchFolderPaths | undefined;
   /** In Pi: whether it has the idea tool and the note tool. */
@@ -98,6 +101,7 @@ export function renderResearchWorker(i: ResearchWorkerInput): Prompt {
           "\n\n",
         ),
         mcp,
+        ...kbSections(i.kbWrites),
         ...ownerAdditionSection(i.addition),
       ],
       // With the note tool, the brief says how to keep field notes, and how they differ from
@@ -130,6 +134,7 @@ export function renderResearchWorker(i: ResearchWorkerInput): Prompt {
           "\n\n",
         ),
         mcp,
+        ...kbSections(i.kbWrites),
       ],
       i.fit,
       TRIAL_CUT_WHERE,

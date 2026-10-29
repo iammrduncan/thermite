@@ -133,7 +133,8 @@ usage: thermite <command> [options]
                                       cancel the rig's full reset before its wipe (owner's token)
   run start CAMPAIGN --rig R [--agents off] [--provider P --model M] [--promotion auto|owner]
          [--ask gain:PERCENT|flaws|reviews|not-possible ...]
-         [--judge-gpus N] [--queue-from RUN] [--past ID ...] --control URL --token-file F
+         [--judge-gpus N] [--queue-from RUN] [--past ID ...] [--fresh]
+         [--granted C ... | --no-granted] --control URL --token-file F
                                       start a run of a campaign control keeps (owner's token), as
                                       Start a run on the campaign's page does, with its checks and
                                       refusals: a campaign saved on the New campaign page or
@@ -142,7 +143,11 @@ usage: thermite <command> [options]
                                       command exits 1; run it again once the rig has the model.
                                       --queue-from starts the queue with the untried experiments
                                       of a run of the campaign, by its name; --past adds
-                                      items of Thermite's knowledge base by id. It prints the new
+                                      items of Thermite's knowledge base by id. Its agents search
+                                      the campaign's whole collection, or with --fresh only the
+                                      run's own items, and every collection the campaign is
+                                      granted, or those --granted names, or none with
+                                      --no-granted; fixed as it starts. It prints the new
                                       run and its command id; a stopped RunPod pod starts first
   campaign copy FROM NAME [--mcp-servers-json FILE] [--context-window TOKENS]
          [--compact-at PERCENT] [--info-file F] [--link URL ...] [--idea TEXT ...]
@@ -185,6 +190,17 @@ usage: thermite <command> [options]
   kit list --control URL --token-file F [--json]
                                       the kits control keeps (owner's or reader's token): each
                                       one's head, commits and kit.json's name and target
+  kb search [WORDS...] [--collection C ...] [--kind K ...] [--limit N] --control URL
+         --token-file F
+                                      search Thermite's knowledge base (owner's token): items with
+                                      any of the words, best first, each with its id, address,
+                                      slot, an excerpt, why it matched and, for an experiment, its
+                                      result; no words: the newest. --collection and --kind keep
+                                      those collections and kinds. It prints JSON
+  kb read ADDRESS [--version N] --control URL --token-file F
+                                      one item of the knowledge base whole, by its address
+                                      (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
+                                      or version N, with its links. It prints JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does
@@ -621,11 +637,14 @@ It prints control's answer on one line, such as `{"started":true,"campaign":"sor
 | `--ask WHAT` | No, repeatable | nothing | **Ask me first about**: `gain:PERCENT`, `flaws`, `reviews` or `not-possible`, as for `assign` |
 | `--judge-gpus N` | No | the rig's current split | For a rig with several GPUs: how many the judge measures on. The rig's harness restarts to apply a new split |
 | `--queue-from RUN` | No | | Another run of this campaign, by its name (one of a retired rig or from before a full reset too): its untried experiments start the new run's queue |
-| `--past ID` | No | | An item of Thermite's knowledge base, by the id MCP's `kb_search` gives; give it again for more. Experiments join the queue; findings, claims, notes and reports go to every agent's brief |
+| `--past ID` | No | | An item of Thermite's knowledge base, by the id `thermite kb search` or MCP's `kb_search` gives; give it again for more. Experiments join the queue; findings, claims, notes and reports go to every agent's brief |
+| `--fresh` | No | continue | The run's agents search only the run's own items in the knowledge base, not the campaign's whole collection. Fixed when the run starts ([A run's scope](knowledge-base.md#a-runs-scope)) |
+| `--granted C` | No, repeatable | every collection the campaign is granted now | A granted collection the run's agents also search, read only |
+| `--no-granted` | No | | They search no granted collection |
 | `--control URL` | Yes | | Control's address |
 | `--token-file F` | Yes | | A file with the owner's token |
 
-Before it sends anything, it ends with exit code 2 and one of these: `--rig names the rig the run starts on`, `--agents is on or off`, `--promotion is auto or owner`, `--ask is gain:PERCENT, flaws, reviews or not-possible`, `--provider and --model go together: the agents' model is one of a provider's models`, `--queue-from names a run`, `--judge-gpus takes a whole number, not "…"` or `--past takes a whole number, not "…"`. Control's refusals come back as `<url> -> <status> <body>` with the words of **Start a run**, such as `-> 409 {"error":"rig-1 has no model for its agents, so they could not work: …"}`: [Campaigns](rest-api.md#campaigns) lists them. MCP's [`start_run`](mcp-tools.md#start_run) does the same with an operator's token too. With `--agents off`, control refuses `--provider`, `--queue-from` and `--past`: `-> 400 {"error":"A try (agents off) takes no model, no experiments and no background: leave them out, or start the run with agents."}`.
+Before it sends anything, it ends with exit code 2 and one of these: `--no-granted searches no granted collection: leave out --granted`, `--rig names the rig the run starts on`, `--agents is on or off`, `--promotion is auto or owner`, `--ask is gain:PERCENT, flaws, reviews or not-possible`, `--provider and --model go together: the agents' model is one of a provider's models`, `--queue-from names a run`, `--judge-gpus takes a whole number, not "…"` or `--past takes a whole number, not "…"`. Control's refusals come back as `<url> -> <status> <body>` with the words of **Start a run**, such as `-> 409 {"error":"rig-1 has no model for its agents, so they could not work: …"}`: [Campaigns](rest-api.md#campaigns) lists them. MCP's [`start_run`](mcp-tools.md#start_run) does the same with an operator's token too. With `--agents off`, control refuses `--provider`, `--queue-from` and `--past`: `-> 400 {"error":"A try (agents off) takes no model, no experiments and no background: leave them out, or start the run with agents."}`.
 
 ### `campaign copy`
 
@@ -735,6 +754,30 @@ A refusal ends the command with `control refused the kit (<status>): ` and contr
 ```sh
 npx thermite kit list --control https://control.example.com --token-file ~/thermite-owner-token
 ```
+
+### `kb`
+
+`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item whole, as `GET /v1/kb/item` and `kb_read` do. Each prints control's answer as JSON on one line.
+
+```sh
+npx thermite kb search which approaches failed to improve speed --collection sort-speed \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+npx thermite kb read sort-speed/sort-speed-1/records/experiment:x-3 \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+```
+
+| Option | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `search [WORDS...]` | | | The words to find: an item matches with any of them, best first. None: the newest items |
+| `read ADDRESS` | | | The item's address, `<campaign>/<run>/<slot>/<kind>:<id>`, as a search gives it |
+| `--collection C` | No, repeatable; search only | every collection | A collection to search, by its campaign |
+| `--kind K` | No, repeatable; search only | every kind | Only items of this kind |
+| `--limit N` | No; search only | 10 | How many hits, 1 to 50 |
+| `--version N` | No; read only | its newest | One of the item's versions |
+| `--control URL` | Yes | | Control's address |
+| `--token-file F` | Yes | | A file with the owner's token |
+
+A search prints `{note, collections, matched, hits}`, each hit with its `id` (`run start --past` takes it), `address`, `slot`, `excerpt`, `why` and, for an experiment, its `result`; a read prints `{note, item}`. Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address and --version: kb search takes the others` or `kb search takes no --version: kb read does`.
 
 ### `agents list`
 
@@ -884,9 +927,10 @@ It prints the harness's answer whatever its HTTP status, and exits 0 even when t
 
 | What | Mode | Made |
 | --- | --- | --- |
+| `DIR` itself | 0700, set again at every run | When missing. Only its owner may open it, so no other user of the computer reaches the tokens, the inbox or the advisors' keys. The containers mount the folders and files in it, which their own users reach as the modes below say |
 | `secrets/`, `outbox/`, `advisors/`, `backups/` | 0755 | When missing. The compose stack's `backup` service writes [backups](../how-to/operate/backup-and-restore.md) into `backups/` |
 | `inbox/`, `inbox/repos/`, `inbox/models/` | 0777, set again at every run | When missing. The supervisor writes into the inbox as its own user |
-| `secrets/control-admin-token`, `control-operator-token`, `control-rig-token`, `control-rig-token-2`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644 | When missing: 24 random bytes each, base64url-encoded |
+| `secrets/control-admin-token`, `control-operator-token`, `control-rig-token`, `control-rig-token-2`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644, so that control's and the supervisors' users in their containers can read them | When missing: 24 random bytes each, base64url-encoded |
 | `secrets/model-api-key` | 0644 | When missing: `local-placeholder` |
 | `secrets/control-rig-tokens.json` | 0644 | At every run, from the two rig tokens: `{"local-1": …, "local-2": …}` |
 
@@ -1011,7 +1055,6 @@ The research tools are a Pi research worker's, without its file tools. In a hill
 | --- | --- | --- | --- |
 | `fetch` | `URL` | | Fetches a web page; the harness archives it and returns the first 6,000 characters of its text, with `next_offset` when there is more, and its links (as many of the first 60 as fit in 5,000 characters, with `links_not_shown` for the rest) |
 | `read_source` | `SOURCE` | `--offset N`, `--length N` | Reads more of an archived source's text, from an offset: 6,000 characters by default and at most 10,000. While more is left, the answer has `next_offset` and `more`, such as `4000 more characters: read_source s-3f2a9c41d0b7 with offset 16000` |
-| `search` | `QUERY` | | Searches the web. Rigs have no web search yet, so it returns the reason |
 | `search_corpus` | `TEXT` | `--skip N` | Searches the archived sources for a piece of text, ignoring case: a page of at most 30 matches, each with 500 characters around it, and fewer when they would not fit the answer. When more sources match, the answer has `next_skip`, which `--skip` takes for the next page |
 | `add_claim` | none | `--text`, `--question N`, `--confidence N`; the quotes only through `-` | Records a claim with exact quotes from archived sources. Unverified quotes leave it a draft. Its text has 5 to 4,000 characters, and it has 1 to 10 quotes of 20 to 2,000 characters each. A claim outside these is refused and not recorded, with each field and what is wrong: `error: 400: {"error":"invalid request: quotes[0].quote has 9 characters; it needs at least 20"}`. Each quote's `source` is the source's id, `s-…`, as `fetch` returned it; its address and its file name are taken too (below). `question` is the index of the campaign question it answers, from 0. In a research run with more than one question, a claim without it is refused and not recorded (`give "question": the index of the campaign question this claim answers, from 0 to <n-1>, …`), as is an index the campaign has no question for (`no question <n>: …`); with one question, a claim without it answers that one. In a hill-climb or goal run it is left out |
 | `add_note` | `TEXT` | `--source SOURCE`, repeated | Records a research note, with the sources it relies on: its text cut to 4000 characters, at most 20 sources. An empty text is refused: `a note needs its text`, and so is a note that repeats one of the run's last 200 research notes word for word, case, punctuation and spaces aside: `this note repeats note <id> (by <lane>, <time>) word for word: it is not recorded again. Record what is new, or go on with the work`. A research note is not a field note |

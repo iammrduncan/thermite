@@ -31,6 +31,7 @@ export {
   type SchedulerOptions,
 } from "./context.ts";
 export { plannerHarness } from "./planner-call.ts";
+export { holdUntil } from "./provider.ts";
 export type { AgentsStopped };
 
 /**

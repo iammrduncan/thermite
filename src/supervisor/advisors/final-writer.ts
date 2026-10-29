@@ -6,7 +6,7 @@ import { additionIn, type RunAdditions } from "../../core/role-additions.ts";
 import type { AdvisorKeeper, AdvisorResult } from "./call.ts";
 import { type AdvisorRuntime, packageFit } from "./config.ts";
 import { runAdvisor } from "./run.ts";
-import type { AdvisorPaper, AdvisorResearch } from "./tools/index.ts";
+import type { AdvisorKb, AdvisorPaper, AdvisorResearch } from "./tools/index.ts";
 
 /**
  * The final writer's answer (goal 112): the whole paper, and its next experiments as items, each
@@ -62,6 +62,8 @@ export async function writePaper(input: {
   pkg: unknown;
   paper: AdvisorPaper;
   research?: AdvisorResearch | undefined;
+  /** Thermite's knowledge base (goal 175), in the final writer's own slot. */
+  kb?: AdvisorKb | undefined;
   /** The STE checker's guide, when the rig has a checker with one beside it. */
   guide?: string | undefined;
   accept?: ((output: WriterAnswer) => Promise<string | undefined>) | undefined;
@@ -88,6 +90,7 @@ export async function writePaper(input: {
     tools: {
       paper: input.paper,
       ...(input.research ? { research: input.research } : {}),
+      ...(input.kb ? { kb: input.kb } : {}),
     },
   });
 }

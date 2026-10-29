@@ -1,4 +1,4 @@
-import { BUS_READ_MAX, BUS_RETRY_MS, type Bus, type BusMessage } from "../../common/bus.ts";
+import { BUS_READ_MAX, BUS_RETRY_MS, type Bus, type BusMessage } from "../../common/bus/index.ts";
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { canonicalJson } from "../../core/canonical.ts";

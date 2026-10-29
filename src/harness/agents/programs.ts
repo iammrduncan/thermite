@@ -47,10 +47,11 @@ export interface TrialLink extends Omit<CliTrialDeps, "model" | "compacted"> {
   scratchDir: string;
   port: number;
   /**
-   * Opens the trial's record of the model usage its program's own code hands over (Pi's worker,
-   * goal 075), for its route as `harness` runs it; the function it returns closes it.
+   * Opens what its program's own code hands over with the trial's token (Pi's worker): its model
+   * usage (goal 075), for its route as `harness` runs it, and its session's counters and waits for
+   * the provider. The function it returns closes it.
    */
-  handOverUsage(harness: Harness): () => void;
+  handOver(harness: Harness): () => void;
 }
 
 export interface AgentProgram {
@@ -86,12 +87,13 @@ export async function runPiTrial(
   t: AgentTrial,
   link: Pick<
     TrialLink,
-    "handOverUsage" | "sent" | "runner" | "scratchDir" | "port" | "signal" | "model"
+    "handOver" | "sent" | "runner" | "scratchDir" | "port" | "signal" | "model"
   >,
   spawn: typeof spawnTrial = spawnTrial,
 ): Promise<TrialResult> {
-  // Its worker hands its model usage over with the trial's token while the trial runs.
-  const close = link.handOverUsage("pi");
+  // Its worker hands its model usage, counters and waits over with the trial's token while the
+  // trial runs.
+  const close = link.handOver("pi");
   try {
     const mcpServers = t.spec.mcpServers ?? [];
     // Cut to the model's window, when the route says it (decision 8).
@@ -101,7 +103,7 @@ export async function runPiTrial(
         ? piTrialPrompt(t.spec, mcpServers, Date.now(), fit)
         : piResearchPrompt(
             { ...t.spec, folder: t.folder },
-            { mcpServers, idea: true, note: true, fit },
+            { mcpServers, kbWrites: t.spec.kbWrites, idea: true, note: true, fit },
           );
     link.sent?.(sent);
     return await spawn(

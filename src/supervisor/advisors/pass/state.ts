@@ -1,6 +1,7 @@
 import type { McpGateway } from "../../../agents/mcp/index.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import type { McpUse } from "../../../core/mcp.ts";
+import type { KbControl } from "../../kb/index.ts";
 import type { RunningAdvisors } from "../config.ts";
 
 export interface AdviseConfig {
@@ -23,6 +24,11 @@ export interface AdviseConfig {
    * a script run with Node. None: the papers are not checked for style, and say so.
    */
   steChecker?: string | undefined;
+  /**
+   * Where the advisors' kb_search and kb_read ask control (goal 175): the bus, or control's HTTP
+   * API. None: the advisors get no knowledge base tools.
+   */
+  kb?: KbControl | undefined;
 }
 
 export interface AdviseState {

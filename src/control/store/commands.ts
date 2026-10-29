@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { canonicalJson } from "../../core/canonical.ts";
 import type { SignedCommand } from "../../core/commands.ts";
+import { type KbWrites, kbWritesOf } from "../../core/kb.ts";
 import { type McpUse, McpUses } from "../../core/mcp.ts";
 import { type Row, StorePart } from "./part.ts";
 
@@ -448,5 +449,23 @@ export class IssuedCommands extends StorePart {
       if (uses.length) out.set(r.run, uses);
     }
     return out;
+  }
+
+  /**
+   * What the campaign lets each role write in the knowledge base for a run control assigned this
+   * rig (goal 175): its newest signed assignment's contract's `kb_writes`, or the default when it
+   * sets none. Undefined for a run control did not assign the rig.
+   */
+  assignedKbWrites(rig: string, run: string): KbWrites | undefined {
+    const r = this.db
+      .prepare(
+        `select signed -> '$.envelope.payload.contract' as contract from command
+         where rig = ? and kind = 'assign_campaign' and run = ?
+           and status not in ('failed', 'rejected', 'expired')
+         order by issued_at desc limit 1`,
+      )
+      .get(rig, run) as { contract: string | null } | undefined;
+    if (!r) return undefined;
+    return kbWritesOf(r.contract === null ? undefined : JSON.parse(r.contract));
   }
 }

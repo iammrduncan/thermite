@@ -185,6 +185,55 @@ describe("agent scheduler: the agents stop", () => {
     assert.equal(two.events("agents_cooldown").length, 0, "no cooldown after failures in a row");
   });
 
+  test("a wait a trial asks for lasts at most one of its run's trials, and holds only its own run", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 10 } });
+    await env.start();
+    const run = (env.assign.envelope.payload as { run: string }).run;
+    // A reset time a month away, as a program's words at the trial's end may give one.
+    const far = new Date(Date.now() + 30 * 86_400_000).toISOString();
+    const result = () => ({
+      stopped: "error" as const,
+      turns: 0,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      error: "the usage window is full",
+      errorKind: "rate_limit" as const,
+      retryAfter: far,
+    });
+    // The run sets no trial length, nor does the rig: at most 24 hours, the longest a trial may be.
+    const { started, round, events } = provider(env, result);
+    await round();
+    const day = Date.parse(String(events("agents_wait_for_limit")[0]?.until)) - Date.now();
+    assert.ok(day > 23.9 * 3_600_000 && day <= 24 * 3_600_000, `about a day (${day} ms)`);
+    await round();
+    assert.equal(started.n, 1, "the run waits");
+    // With the rig's trial length (30 minutes), at most that.
+    const env2 = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 10 } });
+    await env2.start();
+    const two = provider(env2, result, { trialWallMs: 30 * 60_000 });
+    await two.round();
+    const half = Date.parse(String(two.events("agents_wait_for_limit")[0]?.until)) - Date.now();
+    assert.ok(half > 29 * 60_000 && half <= 30 * 60_000, `about 30 minutes (${half} ms)`);
+    // A hold of another run on the same rig leaves this one working.
+    const env3 = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 10 } });
+    await env3.start();
+    env3.ledger.appendEvent("scheduler", "agents_wait_for_limit", `${run}-other`, {
+      until: far,
+      trial: "t-other",
+      reason: "another run's limit",
+    });
+    const three = provider(env3, () => ({
+      stopped: "no_submission",
+      turns: 0,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+    }));
+    await three.round();
+    assert.equal(three.started.n, 1, "another run's hold does not hold this run");
+  });
+
   test("model calls that fail for 30 minutes with no call that worked stop the run's agents as no credits does (goal 079)", async () => {
     const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 10 } });
     await env.start();

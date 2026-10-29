@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { codexCompactPrompt, compactionTokens, type KeptAt } from "../../compaction/index.ts";
-import { gatewayUrl, type McpAccess } from "../../mcp/index.ts";
+import { gatewayUrl, type McpAccess, servedNames } from "../../mcp/index.ts";
 import type { ModelConfig } from "../../model/index.ts";
 import { hookArgv, hookShellLine } from "../hooks/index.ts";
 import { agentPath } from "../path.ts";
@@ -68,12 +68,12 @@ export function codexExe(): string | undefined {
 export function codexConfig(
   m: ModelConfig,
   proxyRoot: string,
-  mcp?: Pick<McpAccess, "apiUrl" | "servers"> | undefined,
+  mcp?: Pick<McpAccess, "apiUrl" | "servers" | "kb"> | undefined,
   keptAt?: KeptAt | undefined,
   notify?: readonly string[] | undefined,
 ): string {
   const effort = m.reasoning === "off" ? "none" : m.reasoning;
-  const servers = (mcp?.servers ?? []).flatMap((s) => [
+  const servers = servedNames(mcp).flatMap((s) => [
     `[mcp_servers.${s}]`,
     `url = ${tomlString(gatewayUrl(mcp?.apiUrl ?? "", s))}`,
     'bearer_token_env_var = "THERMITE_MCP_AUTH"',

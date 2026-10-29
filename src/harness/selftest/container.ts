@@ -51,8 +51,6 @@ export interface OneContainerTargets {
   supervisorHome: string;
   /** Its copy of the token it uses on the harness API. */
   supervisorToken: string;
-  /** The inbox it writes and the controller reads. */
-  inboxDir: string;
   /**
    * Pull mode: the harness's copy of control's key (root's), and the SHA-256 the launch named
    * (THERMITE_TUNNEL_CONTROL_KEY_SHA256, which the broker passes the controller).
@@ -71,7 +69,6 @@ export function oneContainerTargets(
   return {
     supervisorHome: p.home,
     supervisorToken: p.tokenFile,
-    inboxDir: p.inbox,
     ...(file && sha256 ? { controlKey: { file, sha256 } } : {}),
   };
 }

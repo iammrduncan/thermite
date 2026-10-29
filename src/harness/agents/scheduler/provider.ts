@@ -1,4 +1,8 @@
+import type { Contract } from "../../../core/contract.ts";
+import type { Ledger } from "../../ledger/index.ts";
 import { statusEvents } from "../../run-status.ts";
+import { HARNESS_NUMBERS } from "../../settings.ts";
+import { limitsInForce } from "../coordinator.ts";
 import {
   classifyProviderError,
   FAILING_SAID,
@@ -16,6 +20,29 @@ import type { SchedulerContext } from "./context.ts";
  * subscription's usage window.
  */
 
+/** The longest a trial may be set to last: a contract's trial_minutes, THERMITE_TRIAL_MINUTES. */
+const LONGEST_TRIAL_MS = HARNESS_NUMBERS.trialMinutes.rule.max * 60_000;
+
+/**
+ * The end of a wait for the provider that a trial's words ask for (its worker's wait, or a reset
+ * time its program gave at its end), at most one of its run's trials long from now: the run's
+ * trial length (a trial_minutes rule, else its contract's), else the rig's (`rigMs`), else the
+ * longest a trial may be set to, 24 hours. A trial's words never hold its run longer than one
+ * trial could last; a limit still in force then shows again in the next trial, which asks again.
+ */
+export function holdUntil(
+  ledger: Ledger,
+  run: string,
+  contract: Contract,
+  rigMs: number | undefined,
+  until: string,
+  now = Date.now(),
+): string {
+  const minutes = limitsInForce(ledger, run, contract).trialMinutes;
+  const longest = minutes ? minutes * 60_000 : (rigMs ?? LONGEST_TRIAL_MS);
+  return new Date(Math.min(Date.parse(until), now + longest)).toISOString();
+}
+
 /** The first pause before the model is checked again after the run's agents stopped (goal 079). */
 const RECHECK_FIRST_MS = 60_000;
 /** The longest pause between those checks: they double up to it. */
@@ -31,15 +58,16 @@ export interface AgentsStopped {
 }
 
 /**
- * A subscription's usage window is full (a trial said until when): no new trials or plans on
- * this rig until it resets. The agents wait; nothing pays for more (the owner's rule).
+ * The provider's limit holds the run (one of its trials said until when, at most one trial's
+ * length ahead: holdUntil): no new trials or plans for this run until then. The agents wait;
+ * nothing pays for more (the owner's rule). A hold is its own run's: the rig's other runs go on.
  */
 export function waitingForLimit(sched: SchedulerContext, run: string): boolean {
-  const resetAt = sched.ledger.events.newest("agents_wait_for_limit")?.body.until;
+  const resetAt = sched.ledger.events.newest("agents_wait_for_limit", { subject: run })?.body.until;
   const until = resetAt ? Date.parse(resetAt) : 0;
   if (Date.now() >= until) return false;
-  if (sched.limitNoted !== resetAt) {
-    sched.limitNoted = resetAt;
+  if (resetAt && sched.limitNoted.get(run) !== resetAt) {
+    sched.limitNoted.set(run, resetAt);
     sched.o.service.live.append({
       source: "planner",
       kind: "status",
@@ -185,7 +213,13 @@ export function afterTrial(sched: SchedulerContext, id: string, run: string, r: 
     r.retryAfter ?? (kind === "rate_limit" ? classifyProviderError(r.error).retryAt : undefined);
   if (until)
     sched.ledger.appendEvent(sched.o.owner, "agents_wait_for_limit", run, {
-      until,
+      until: holdUntil(
+        sched.ledger,
+        run,
+        sched.o.service.contractFor(run),
+        sched.o.trialWallMs,
+        until,
+      ),
       trial: id,
       reason: r.error,
     });

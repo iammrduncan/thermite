@@ -132,6 +132,8 @@ export function campaignPanels(dash: Dashboard) {
         result: (x) => kb.resultOf(x),
       }),
       campaign,
+      // The collections it may also search, read only (goal 175): those granted now.
+      granted: kb.reads(campaign),
       csrf: csrf(c),
       open,
       rigs: startContext(campaign, startRigs(campaign, vs)),

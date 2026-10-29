@@ -55,3 +55,11 @@ export const newExperimentId = (): string => `x-${randomBytes(6).toString("hex")
 
 /** A pattern's body without its anchors, to match it inside another one. */
 export const inner = (pattern: RegExp): string => pattern.source.replace(/^\^|\$$/g, "");
+
+/**
+ * The most lanes a rig can run: its harness image has a user for each of lanes 1 to 16
+ * (containers/harness/Containerfile; IDS.maxLanes in src/harness/broker/runner.ts). A contract's
+ * lanes.count, a rig's workers at a time and the campaign builder refuse more, with this reason.
+ */
+export const MAX_LANES = 16;
+export const MAX_LANES_REASON = `at most ${MAX_LANES}: a rig has users for lanes 1 to ${MAX_LANES} only`;

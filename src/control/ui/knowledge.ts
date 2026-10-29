@@ -295,7 +295,7 @@ ${o.collections.length ? `<div class="card flat">${o.collections.map(collectionR
 <button class="primary">Search</button></form>
 <div class="card kbresults">${
     o.results.length
-      ? `${filtered ? "" : `<div class="muted small">The newest items in every collection.</div>`}${o.results.map((x) => resultHtml(x, o.now, o.link, o.result(x))).join("")}${o.results.length >= o.limit ? `<div class="muted small">The newest ${o.limit} matches. Add words or a filter to see others.</div>` : ""}`
+      ? `${filtered ? "" : `<div class="muted small">The newest items in every collection.</div>`}${o.results.map((x) => resultHtml(x, o.now, o.link, o.result(x))).join("")}${o.results.length >= o.limit ? `<div class="muted small">The ${o.q.trim() ? "best" : "newest"} ${o.limit} matches. Add words or a filter to see others.</div>` : ""}`
       : `<div class="empty">${filtered ? "Nothing matches." : "The knowledge base is empty."}</div>`
   }</div></div>`;
 }

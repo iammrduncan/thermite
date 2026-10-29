@@ -1,6 +1,7 @@
 import { withAgentsContext } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
 import { renderPlanner, renderWorker, windowFit } from "../../../agents/roles/index.ts";
+import { workerSlot } from "../../../core/kb.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import { LedgerError } from "../../ledger/index.ts";
 import type { PreviewAsk } from "../../prompts.ts";
@@ -36,6 +37,7 @@ export function previewPrompt(sched: SchedulerContext, run: string, ask: Preview
       context: plannerContext(input),
       read: isCliProgram(via) && past ? sched.o.service.knowledge.dir(run) : undefined,
       mcpServers: sched.o.service.mcp.given(run, "planner").map((g) => g.name),
+      kbWrites: sched.o.service.kbTools.writes(run, "planner"),
       fit: windowFit((own ?? m)?.contextWindow, (own ?? m)?.compactAt),
       addition: input.addition,
     });
@@ -80,6 +82,7 @@ export function previewPrompt(sched: SchedulerContext, run: string, ask: Preview
     program: programOf(m).trial,
     brief: sections,
     mcpServers: sched.o.service.mcp.given(run, "workers").map((g) => g.name),
+    kbWrites: sched.o.service.kbTools.writes(run, workerSlot(lane)),
     limits,
     editablePaths: "editable_paths" in contract ? contract.editable_paths : [],
     minutes: wallMs !== undefined ? Math.round(wallMs / 60_000) : undefined,

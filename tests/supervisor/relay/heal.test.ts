@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { buildInfo } from "../../../src/common/build-info.ts";
-import type { StreamSettings } from "../../../src/common/bus.ts";
+import type { StreamSettings } from "../../../src/common/bus/index.ts";
 import { type Folded, foldReport } from "../../../src/control/ingest.ts";
 import { fingerprint } from "../../../src/control/store/index.ts";
 import {

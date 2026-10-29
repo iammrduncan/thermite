@@ -75,11 +75,12 @@ Every field this example leaves out takes its default. The repository has one ex
 | `budget` | object | `{"max_open_attempts": 4}` | Optional budgets and back-pressure. See [Budget](#budget) |
 | `min_duration` | duration | none | Research: required. The time the run has to collect sources and claims: a floor, never a stop. After it, at each digest, the review panel is asked about the questions and hypotheses with no decision that stands, and a review that gives every question an end ends the run, as the progress rule does ([Research](#research)). Other modes: accepted, not used yet |
 | `max_duration` | duration | none | Research: when the run ends at the latest, its questions answered or not. It may not be shorter than `min_duration`. Without it, a research run whose questions the review panel never finds answered runs until someone closes it. Other modes: accepted, not used yet |
-| `search_policy` | object | none | Rules for research search queries. See [Search policy](#search-policy) |
+| `search_policy` | object | none | Accepted, and read by nothing: Thermite has no web search of its own. See [Search policy](#search-policy) |
 | `notes` | text | none | The campaign's additional information, from its author, in Markdown, with no length limit. See [The campaign's brief](#the-campaigns-brief) |
 | `hypotheses` | list of text, each not empty | none | What the campaign's author thinks is true, one entry each. See [The campaign's brief](#the-campaigns-brief) |
 | `agents_context` | object | none: each agent keeps the rig's settings | The campaign's own context window and compaction point for all its runs' agents. See [Agents' context](#agents-context) |
 | `role_additions` | object: a role's id and its text | none: each role has its own text only | Your own words added to a role's instructions for this campaign's runs. See [Your additions to the agents' roles](#your-additions-to-the-agents-roles) |
+| `kb_writes` | object: a role and its kinds | none: [the default](knowledge-base.md#who-writes-what) | Which kinds of item each role may write in its own slot of the campaign's collection in Thermite's knowledge base: `planner`, `worker`, `teacher`, `merged-by`, `auditor`, `review-panel`, `synthesizer`, `final-writer`, each a list of `note`, `decision`, `surprise`, `journal`, `finding`, `review`, `doc`, `reference`, `report`, `paper`, each once. A role left out, or given `[]`, writes nothing. See [Who writes what](knowledge-base.md#who-writes-what) |
 
 ### Agents' context
 
@@ -198,8 +199,8 @@ No budget is set unless you set one, and without one a run keeps going. A spent 
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `search_policy.allowed_purposes` | list of text | `[]` | What public search may be used for. Accepted, not used yet |
-| `search_policy.blocked_patterns` | list of regular expressions | `[]` | A research search query that matches one, ignoring case, is refused and logged with `blocked by the search policy (<pattern>)`. Rigs have no web search, so every query returns no results |
+| `search_policy.allowed_purposes` | list of text | `[]` | What public search may be used for. Accepted, not used |
+| `search_policy.blocked_patterns` | list of regular expressions | `[]` | Accepted, not used: Thermite has no web search of its own, and a research worker has no search tool. Web search comes from an MCP server the campaign names |
 
 ## Hill climb and goal: what a candidate may change
 
@@ -356,7 +357,7 @@ These fields pass validation and become part of the contract and its hash, but n
 
 | Mode | Fields |
 | --- | --- |
-| Every mode | `target.class`; `search_policy.allowed_purposes` |
+| Every mode | `target.class`; `search_policy` |
 | Hill climb and goal | `min_duration`, `max_duration` |
 | Hill climb | `objective.policy`; `objective.secondary` (checked against the kit only); `monitor_only`; hard constraints of kind `check` |
 | Goal | `independence_epochs`; `min_live_families`; each goal's `priority` and `parent` (stored only) |

@@ -35,6 +35,7 @@ export function addIsolationCheck(ctx: ControllerContext, service: HarnessServic
           // paths.scratchDir, is a directory inside it).
           scratchDir: env.THERMITE_SCRATCH_DIR ?? "/scratch",
           outboxDir: paths.outboxDir,
+          inboxDir: paths.inboxDir,
           secretFiles: [
             routeFile,
             env.THERMITE_SUPERVISOR_TOKEN_FILE,

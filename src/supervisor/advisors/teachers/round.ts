@@ -15,6 +15,7 @@ import type {
 } from "../call.ts";
 import { type AdvisorsConfig, packageFit } from "../config.ts";
 import { runAdvisor } from "../run.ts";
+import type { AdvisorKb } from "../tools/index.ts";
 import {
   checkPortfolio,
   DirectiveAnswer,
@@ -89,6 +90,8 @@ export async function teacherRound(input: {
   run: string;
   brief: unknown;
   tools: AdvisorTools;
+  /** The merged by model's knowledge base tools, in its own slot (goal 175). */
+  mergedKb?: AdvisorKb | undefined;
   /** Why the round runs now, when not on the clock: said on the brief's first line. */
   why?: string | undefined;
   /** Where each call's conversation is kept before a compaction (goal 070). */
@@ -222,6 +225,7 @@ export async function teacherRound(input: {
       schema: DirectiveSet,
       answerSchema: research ? ResearchDirectiveAnswer : DirectiveAnswer,
       keeper: input.keeper,
+      ...(input.mergedKb ? { tools: { kb: input.mergedKb } } : {}),
     });
     count(r, "merged_by");
     if (!r.output) {

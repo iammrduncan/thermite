@@ -76,6 +76,7 @@ export async function writePapers(ctx: AdviseContext): Promise<void> {
           pkg,
           keeper: keeperFor(run),
           research: researchFor(run),
+          kb: await ctx.kbFor(run, "final-writer"),
           additions: await additionsFor(run),
           guide: ste?.guide,
           paper: {

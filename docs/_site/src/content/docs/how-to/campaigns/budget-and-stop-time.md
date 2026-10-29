@@ -73,7 +73,7 @@ Resuming doesn't help: the run is still over its limit, so it is paused again at
 
 ## Limits that are not budgets
 
-- A Claude or ChatGPT subscription's usage window: when it is used up, that rig's agents wait for it to reset, then go on.
+- A Claude or ChatGPT subscription's usage window: when it is used up, the run's agents wait for it to reset, then go on.
 - **One try lasts (minutes)** on the **New campaign** page ends one trial, and the next starts fresh. A command over an agent's memory or disk limit is stopped.
 
 Neither ends a campaign. The [limits and pacing reference](../../reference/limits-and-pacing.md) lists them all.

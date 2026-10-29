@@ -9,7 +9,7 @@ import {
 } from "../../../core/directions.ts";
 import type { OwnerAddition } from "../../../core/role-additions.ts";
 import { NOTES_ARE_DATA, type notesData } from "../../journal.ts";
-import { briefingData, type KnowledgeSearch } from "../../knowledge.ts";
+import { briefingData } from "../../knowledge.ts";
 import type { BriefingItem } from "../../ledger/index.ts";
 import type { QueueBrief } from "../../queue.ts";
 import type { Evidence, FamilyView } from "../registry.ts";
@@ -80,14 +80,11 @@ export function queueTargetContext(
 }
 
 /**
- * The run's past research for the planner, read only: in Pi, its search tool; through OpenCode or
- * Claude Code, the folder its files are in, which the planner reads with its own read tools.
+ * The run's past research for the planner through OpenCode, Claude Code or Codex: the folder its
+ * files are in, which the planner reads with its own read tools. In every program it searches the
+ * knowledge base with kb_search (PlannerMcp's kb).
  */
 export interface PlannerPast {
-  search: (
-    query: string,
-    o: { kinds?: string[] | undefined; limit?: number | undefined },
-  ) => KnowledgeSearch;
   /** The run's knowledge/ folder. */
   dir: string;
 }

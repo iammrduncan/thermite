@@ -181,9 +181,15 @@ export function agentLinks(
       modelUsage: m
         ? service.usage.recorder(spec.run, { trial: spec.trialId, agent: "workers" }, routeOf(m))
         : undefined,
-      handOverUsage: (harness) => {
+      // A Pi worker's own code also reports its session's counters and its waits for the
+      // provider; a command-line program's trial loop reports them here, in the harness.
+      handOver: (harness) => {
         if (m) service.usage.open(trial, routeOf(m, harness));
-        return () => service.usage.close(spec.trialId);
+        const own = service.reportsOwnSession(spec.trialId);
+        return () => {
+          own();
+          service.usage.close(spec.trialId);
+        };
       },
       // The provider's error answers the model proxy saw, and each wait for it (goal 079).
       providerAnswer: (since) => service.providerAnswerSince(spec.trialId, since),

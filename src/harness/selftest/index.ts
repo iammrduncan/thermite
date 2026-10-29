@@ -24,6 +24,7 @@ import { deviceProbes, deviceSide, isFailure, PROBE, type Probe } from "./probes
 import {
   firstBaselineFile,
   firstBuildFile,
+  firstInboxFile,
   firstKitFile,
   readsResearch,
   removeOwnTree,
@@ -48,13 +49,14 @@ export {
   supervisorUserCheck,
 } from "./container.ts";
 export { deviceProbes, isFailure, PROBE, type Probe } from "./probes.ts";
-export { readsResearch, researchProbeFolder } from "./targets.ts";
+export { firstInboxFile, readsResearch, researchProbeFolder } from "./targets.ts";
 
 /**
  * Isolation self-test, run as root inside the harness container (`thermite selftest
  * isolation`). For each role it asks the broker to run a probe as that role's user, which tries
- * to read, list or write what the role must not reach. Every probe must be refused, except a
- * `readable` or `reachable` probe, which must succeed. In the one-container rig image it also
+ * to read, list or write what the role must not reach, the inbox and a file in it among them, in
+ * every placement. Every probe must be refused, except a `readable` or `reachable` probe, which
+ * must succeed. In the one-container rig image it also
  * checks the container as a whole (containerChecks): the supervisor's user, its GPU access,
  * set-id files, RunPod's variables, the enrollment code, in pull mode control's key, and the state
  * snapshot (THERMITE_STATE_SNAPSHOT_DIR): its folder holds nothing but sealed files, and only
@@ -104,6 +106,8 @@ export async function isolationSelftest(opts: {
   stateDir: string;
   scratchDir: string;
   outboxDir: string;
+  /** The inbox, which the supervisor fills for the controller alone. */
+  inboxDir: string;
   secretFiles: string[];
   roles?: Role[];
   /** The rig is configured for a dedicated development card (THERMITE_DEV_GPU_INDEX). */
@@ -141,6 +145,7 @@ export async function isolationSelftest(opts: {
     { name: "broker-socket", op: "access", path: opts.socketPath },
     { name: "outbox-write", op: "access", path: opts.outboxDir },
     { name: "outbox-read", op: "list", path: opts.outboxDir },
+    { name: "inbox-list", op: "list", path: opts.inboxDir },
     { name: "runs-list", op: "list", path: join(opts.scratchDir, "thermite", "runs") },
     { name: "tmp-create", op: "create", path: "/tmp" },
     { name: "var-tmp-create", op: "create", path: "/var/tmp" },
@@ -155,7 +160,6 @@ export async function isolationSelftest(opts: {
     probes.push(
       { name: "supervisor-home", op: "list", path: pod.supervisorHome },
       { name: "supervisor-token", op: "read", path: pod.supervisorToken },
-      { name: "inbox-list", op: "list", path: pod.inboxDir },
     );
     const sup = pidsRunning(SUPERVISOR_SCRIPT)[0];
     if (sup) probes.push({ name: "supervisor-environ", op: "read", path: `/proc/${sup}/environ` });
@@ -171,6 +175,10 @@ export async function isolationSelftest(opts: {
       { name: "state-snapshot", op: "sealed", path: opts.snapshotDir },
       { name: "snapshot-key", op: "environ", path: "/proc", expect: SNAPSHOT_KEY_VAR },
     );
+  // A file the supervisor fetched (a kit's bundle, say), reached by its full path.
+  const fetched = firstInboxFile(opts.inboxDir);
+  if (fetched) probes.push({ name: "inbox-read", op: "read", path: fetched });
+  else skipped.push("inbox-read (nothing in the inbox yet)");
   const kitFile = firstKitFile(join(opts.stateDir, "kits"));
   if (kitFile) probes.push({ name: "kit-by-path", op: "read", path: kitFile });
   else skipped.push("kit-by-path (no kit checked out yet)");

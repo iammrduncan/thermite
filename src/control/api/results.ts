@@ -1,11 +1,26 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
-import { PROPAGATE } from "../../core/api/control/owner.ts";
-import { CHAMPION_PATCH, KB, KB_NOT_ASSIGNED, REPORTS } from "../../core/api/control/rigs.ts";
+import { KB_ITEM, KB_SEARCH, PROPAGATE } from "../../core/api/control/owner.ts";
+import {
+  CHAMPION_PATCH,
+  KB,
+  KB_NOT_ASSIGNED,
+  KB_READ_ASK,
+  KB_SEARCH_ASK,
+  REPORTS,
+} from "../../core/api/control/rigs.ts";
 import { keepChampionPatch } from "../champions.ts";
 import { type ExportFiles, mountExports } from "../exports.ts";
 import { propagateChampion } from "../issue/index.ts";
+import {
+  answerKbAsk,
+  KbReadQuery,
+  KbSearchQuery,
+  kbAskLimit,
+  ownerKbRead,
+  ownerKbSearch,
+} from "../kb/index.ts";
 import { resultsLeft } from "../results-left.ts";
 import { leaderboard } from "../views/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
@@ -44,6 +59,45 @@ export function resultRoutes(
     if (sync.campaign !== assigned)
       return c.json({ error: `run ${run} is not of the campaign control assigned` }, 409);
     return c.json(sync);
+  });
+
+  // A search or a read of the knowledge base for an agent of one of the rig's runs (goal 175), for
+  // a rig not on the message bus: the answer the bus gives, a refusal in words included.
+  for (const [route, kind] of [
+    [KB_SEARCH_ASK, "search"],
+    [KB_READ_ASK, "read"],
+  ] as const)
+    app.post(route.path, rigAuth, bodyLimit({ maxSize: route.maxBytes }), async (c) => {
+      c.header("cache-control", "no-store");
+      const body = await c.req.json().catch(() => undefined);
+      const rig = c.req.param("rig");
+      return c.json(await kbAskLimit.run(rig, () => answerKbAsk(store, rig, kind, body)));
+    });
+
+  // The owner's search of the knowledge base, and one item read whole (goal 175): as MCP's kb_search
+  // and kb_read, with each list given with commas, or as a repeated parameter.
+  app.get(KB_SEARCH.path, admin, (c) => {
+    const n = c.req.query("limit");
+    const list = (k: string) =>
+      (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);
+    const q = KbSearchQuery.safeParse({
+      q: c.req.query("q") ?? "",
+      ...(list("collection").length ? { collections: list("collection") } : {}),
+      ...(list("kind").length ? { kinds: list("kind") } : {}),
+      ...(n !== undefined ? { limit: Number(n) } : {}),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    return c.json(ownerKbSearch(store, q.data));
+  });
+  app.get(KB_ITEM.path, admin, (c) => {
+    const v = c.req.query("version");
+    const q = KbReadQuery.safeParse({
+      address: c.req.query("address") ?? "",
+      ...(v !== undefined ? { version: Number(v) } : {}),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    const r = ownerKbRead(store, q.data);
+    return "error" in r ? c.json(r, 404) : c.json(r);
   });
 
   // A champion's patch, uploaded by the rig's supervisor once its export is published. It is
@@ -106,4 +160,9 @@ export function resultRoutes(
     });
     return c.json(r, 201);
   });
+}
+
+/** A query refused, in words: each field and what is wrong with it. */
+function queryRefusal(err: { issues: { path: PropertyKey[]; message: string }[] }): string {
+  return `bad request: ${err.issues.map((i) => `${i.path.join(".") || "query"}: ${i.message}`).join("; ")}`;
 }

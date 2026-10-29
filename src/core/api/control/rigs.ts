@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LoopAges } from "../../health.ts";
+import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { LIVE_FIGURE_SUBJECTS } from "../../link/live.ts";
 import { SignedReport } from "../../link/report.ts";
 import { LiveBatchWire } from "../../live.ts";
@@ -360,6 +361,28 @@ export const KB = {
   answer: z.unknown(),
 } as const satisfies Route;
 export const KB_NOT_ASSIGNED = "not_assigned";
+
+/**
+ * A search or a read of the knowledge base for one of the rig's runs (goal 175), over HTTP, for a
+ * rig not on the message bus: the same ask and answer as on the bus (core/link/kb.ts). Control
+ * answers only for a run it assigned to this rig, from the run's scope, and refuses in words.
+ */
+export const KB_SEARCH_ASK = {
+  method: "POST",
+  path: "/v1/rigs/:rig/kb/search",
+  what: "knowledge base search",
+  body: KbSearchAsk,
+  answer: KbAskAnswer,
+  maxBytes: 16 * 1024,
+} as const satisfies Route;
+export const KB_READ_ASK = {
+  method: "POST",
+  path: "/v1/rigs/:rig/kb/read",
+  what: "knowledge base read",
+  body: KbReadAsk,
+  answer: KbAskAnswer,
+  maxBytes: 16 * 1024,
+} as const satisfies Route;
 
 /**
  * The largest champion's patch. Control keeps one only when its SHA-256 is the one the rig's

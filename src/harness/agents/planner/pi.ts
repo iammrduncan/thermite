@@ -1,22 +1,19 @@
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
-import { type Message, Type } from "@earendil-works/pi-ai";
+import type { Message } from "@earendil-works/pi-ai";
 import { type CompactionReport, Compactor, summarizer } from "../../../agents/compaction/index.ts";
 import { buildModel, type ModelConfig, PiMeter } from "../../../agents/model/index.ts";
 import { messageText, type Prompt, systemText } from "../../../agents/prompt.ts";
 import { renderCompacted } from "../../../agents/roles/index.ts";
-import { PAST_SEARCH_DESCRIPTION, PAST_SEARCH_TOOL } from "../../../agents/tools/index.ts";
 import { routeRefusal } from "../../../core/agents.ts";
 import { canonicalJson } from "../../../core/canonical.ts";
 import type { CallUsage } from "../../../core/usage.ts";
-import { SEARCH_MAX } from "../../knowledge.ts";
 import { classifyProviderError, KIND_WORDS } from "../provider-errors.ts";
 import { PlannerCallError } from "./causes.ts";
-import type { PlannerPast } from "./context.ts";
 import { PLAN_SPEC, type PlannerCallSpec } from "./submit.ts";
 
 /**
- * The planner in Pi: one agent with submit_plan, the run's past research as a search tool and
- * the MCP servers' tools, compacted near its window.
+ * The planner in Pi: one agent with submit_plan, the knowledge base's tools and the MCP servers'
+ * tools, compacted near its window.
  */
 
 /**
@@ -26,6 +23,11 @@ import { PLAN_SPEC, type PlannerCallSpec } from "./submit.ts";
 export interface PlannerMcp {
   servers: string[];
   tools: AgentTool[];
+  /**
+   * Thermite's knowledge base (goal 175): the kinds the planner may write, and in Pi its tools
+   * (kb_search, kb_read, and kb_write when it may write). None: no knowledge base tools.
+   */
+  kb?: { writes: string[]; tools: AgentTool[] } | undefined;
 }
 
 /**
@@ -38,41 +40,10 @@ export interface PlannerCompaction {
   done(r: CompactionReport): void;
 }
 
-/** The planner's read-only search of the run's past research, as Pi's tool. */
-function pastSearchTool(search: PlannerPast["search"]) {
-  return {
-    name: PAST_SEARCH_TOOL,
-    label: PAST_SEARCH_TOOL,
-    description: PAST_SEARCH_DESCRIPTION,
-    parameters: Type.Object({
-      query: Type.String({ description: "Words that must all be in an item; empty: the newest" }),
-      kinds: Type.Optional(
-        Type.Array(Type.String(), {
-          description:
-            "Only these kinds: run, trial, experiment, attempt, note, doc, source, claim, hypothesis, finding, report",
-        }),
-      ),
-      limit: Type.Optional(Type.Number({ description: `How many items, 1 to ${SEARCH_MAX}` })),
-    }),
-    execute: async (_id: string, params: unknown) => {
-      const p = (params ?? {}) as { query?: unknown; kinds?: unknown; limit?: unknown };
-      const found = search(typeof p.query === "string" ? p.query : "", {
-        kinds: Array.isArray(p.kinds) ? p.kinds.map(String) : undefined,
-        limit: typeof p.limit === "number" ? p.limit : undefined,
-      });
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(found) }],
-        details: {},
-      };
-    },
-  };
-}
-
 export async function callPlanner(
   cfg: ModelConfig,
   sent: Prompt,
   signal?: AbortSignal,
-  search?: PlannerPast["search"],
   mcp?: PlannerMcp,
   compaction?: PlannerCompaction,
   usage?: (u: CallUsage) => void,
@@ -94,7 +65,8 @@ export async function callPlanner(
       model,
       thinkingLevel,
       tools: [
-        ...(search ? [pastSearchTool(search)] : []),
+        // Thermite's knowledge base (goal 175), run by the harness for the planner's slot.
+        ...(mcp?.kb?.tools ?? []),
         // The MCP servers the run's kit gives the planner, through the harness's gateway.
         ...(mcp?.tools ?? []),
         {

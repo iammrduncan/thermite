@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { MAX_LANES } from "./contract.ts";
-import { NAME_PATTERN } from "./ids.ts";
+import { MAX_LANES, NAME_PATTERN } from "./ids.ts";
 import { KB_BODY_MAX } from "./kb-index.ts";
 
 /**
@@ -36,8 +35,8 @@ export type KbKind = z.infer<typeof KbKind>;
 /**
  * The kinds a `kb_item` event writes: blurbs (a short text) or files (a document kept whole). The
  * records slot's runs, trials, experiments, attempts, sources, claims and hypotheses come only from
- * Thermite's reading of the run's signed events (core/kb-index.ts). Which writer may write which
- * kind is set later, on the campaign (goal 175, step 3): every writer may write each of these now.
+ * Thermite's reading of the run's signed events (core/kb-index.ts). Which role may write which of
+ * them is set on the campaign (KbWrites).
  */
 export const KB_WRITTEN_KINDS = [
   "note",
@@ -157,6 +156,75 @@ export const KbAddress = z
   .refine((s) => readKbAddress(s) !== undefined, {
     message: "an item's address is <campaign>/<run>/<slot>/<kind>:<id>",
   });
+
+// ---------------------------------------------------------------- who writes what
+
+/**
+ * The roles the agents' slots are named for, as a campaign says which kinds each may write: a
+ * worker's slots (`worker-<lane>`) are the worker's. The research roles write in the same slots
+ * (the research planner in `planner`, a research teacher in `teacher`).
+ */
+export const KB_WRITER_ROLES = [
+  "planner",
+  "worker",
+  "teacher",
+  "merged-by",
+  "auditor",
+  "review-panel",
+  "synthesizer",
+  "final-writer",
+] as const;
+export const KbWriterRole = z.enum(KB_WRITER_ROLES);
+export type KbWriterRole = z.infer<typeof KbWriterRole>;
+
+/** The role a slot is named for; undefined for the records slot, which only Thermite's code writes. */
+export function roleOfSlot(slot: string): KbWriterRole | undefined {
+  if (WORKER_SLOT.test(slot)) return isAgentSlot(slot) ? "worker" : undefined;
+  return KbWriterRole.safeParse(slot).data;
+}
+
+const KindList = z
+  .array(KbWrittenKind)
+  .max(KB_WRITTEN_KINDS.length)
+  .refine((k) => new Set(k).size === k.length, "a kind is named twice");
+
+/**
+ * Which kinds each role may write in its own slot, as a campaign sets it (the contract's
+ * `kb_writes`, goal 175): a role left out, or given none, writes nothing. A run keeps what its
+ * contract said when it started.
+ */
+export const KbWrites = z.partialRecord(KbWriterRole, KindList);
+export type KbWrites = z.infer<typeof KbWrites>;
+
+/**
+ * What a campaign that sets nothing lets each role write: the planner its decisions, surprises and
+ * notes; a worker its journal entries, surprises, notes and findings, and the files it writes
+ * (doc) or downloads (reference); a teacher notes, findings and docs; the auditor and the review
+ * panel reviews and decisions; the synthesizer reports; the final writer the paper and reports.
+ * The merged-by model, the model check and compaction write nothing.
+ */
+export const KB_WRITES_DEFAULT: KbWrites = {
+  planner: ["decision", "surprise", "note"],
+  worker: ["journal", "surprise", "note", "finding", "doc", "reference"],
+  teacher: ["note", "finding", "doc"],
+  auditor: ["review", "decision"],
+  "review-panel": ["review", "decision"],
+  synthesizer: ["report"],
+  "final-writer": ["paper", "report"],
+};
+
+/** What a contract lets each role write: its `kb_writes`, or KB_WRITES_DEFAULT when it sets none. */
+export function kbWritesOf(contract: unknown): KbWrites {
+  const set = (contract as { kb_writes?: unknown } | null | undefined)?.kb_writes;
+  const r = KbWrites.safeParse(set);
+  return set !== undefined && r.success ? r.data : KB_WRITES_DEFAULT;
+}
+
+/** The kinds a slot's writer may write under `writes`: none for the records slot. */
+export function kindsForSlot(writes: KbWrites, slot: string): KbWrittenKind[] {
+  const role = roleOfSlot(slot);
+  return role ? [...(writes[role] ?? [])] : [];
+}
 
 // ---------------------------------------------------------------- the kb_item event
 

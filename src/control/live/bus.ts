@@ -1,4 +1,4 @@
-import type { Bus, BusMessage } from "../../common/bus.ts";
+import type { Bus, BusMessage } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import {
   LIVE_CONSUMER_CONFIG,

@@ -87,7 +87,7 @@ describe("the owner's additions in the prompts sent (goal 166)", () => {
         runPiTrial(
           { mode: "code", spec },
           {
-            handOverUsage: () => () => undefined,
+            handOver: () => () => undefined,
             sent: (p) =>
               keepPrompt(env.service.ledger, spec.run, p, { lane: spec.lane, trial: spec.trialId }),
             runner,

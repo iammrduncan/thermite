@@ -117,7 +117,7 @@ export const opencodeProgram: CliProgram<OpencodeTally> = {
       const port = at.port;
       if (port === undefined) throw new Error("OpenCode's terminal needs a port for its server");
       return {
-        args: opencodeTerminalArgs(port, at.cwd, at.first, at.resume ? at.session : undefined),
+        args: opencodeTerminalArgs(port, at.cwd, undefined, at.resume ? at.session : undefined),
         env: { OPENCODE_SERVER_PASSWORD: newToken().token, OPENCODE_DISABLE_AUTOUPDATE: "1" },
         seeds: [
           {

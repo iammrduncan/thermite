@@ -41,7 +41,7 @@ A model in several files, such as a model in shards, is one entry in the contrac
 
 ## Where the file goes
 
-1. The supervisor downloads to `<path>.part` in its inbox (`THERMITE_INBOX_DIR`, `/inbox` by default), hashing the bytes as they arrive.
+1. The supervisor downloads to `<path>.part` in its inbox (`THERMITE_INBOX_DIR`, `/inbox` by default), hashing the bytes as they arrive. It keeps the rig's disk floor (`THERMITE_DISK_FLOOR_GIB`) before it starts and as it writes.
 2. When the last byte is in and its SHA-256 is the signed one, the file is renamed to `<path>`. Only then does the supervisor hand the assignment to the harness.
 3. The harness copies the file into its own state (`THERMITE_STATE_DIR`, under `models/`), hashing it again as it copies. The kit reads that copy as `{models:<sha256>}`, read-only. See [the kit manifest](kit-manifest.md).
 
@@ -134,6 +134,7 @@ The assignment fails with `staging:` and one of these. Its command shows `failed
 | --- | --- |
 | `model <name> from <url> refused: its SHA-256 is <sha256>, not the signed <sha256>. The file was deleted` | The file is not the one the contract names |
 | `not enough free space for model <name>: it needs <size> more, and <size> is free where it goes (the inbox's models)` | Too little free space where the file goes |
+| `not enough free space for model <name>: the download stopped after <size>, with <size> free where it goes (the inbox's models), and the rig keeps <n> GiB free (THERMITE_DISK_FLOOR_GIB). What it had downloaded was deleted` | The download reached the rig's [disk floor](settings.md#places-and-advisors) as it wrote, which a server that gives no size can do. The supervisor looks at the free space after each MiB |
 | `<url>: HTTP <status>` | The server refused the file. For Hugging Face, with what to do, as above |
 | `<url>: the download broke after <size> (<why>). The next try continues from there` | The connection broke. The part is kept |
 | `<url>: the download ended after <size> of <size>. The next try continues from there` | The server sent less than it said |

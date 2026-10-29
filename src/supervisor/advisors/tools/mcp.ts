@@ -5,35 +5,47 @@ import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { type Context, Hono } from "hono";
-import { z } from "zod";
-import { PAST_SEARCH_DESCRIPTION, PAST_SEARCH_TOOL } from "../../../agents/tools/index.ts";
-import { errorText } from "../../../common/errors.ts";
-import { SEARCH_MAX } from "../../../core/api/harness/research.ts";
+import {
+  KB_SERVER,
+  KB_TOOLS,
+  type KbCall,
+  KbReadArgs,
+  KbSearchArgs,
+  KbWriteArgs,
+  kbTools,
+} from "../../../agents/tools/index.ts";
 import { type AdvisorCode, CODE_TOOL_NAMES, registerCodeTools } from "./code.ts";
 import { type AdvisorPaper, PAPER_TOOL_NAMES, registerPaperTools } from "./paper.ts";
 import { type AdvisorResearch, RESEARCH_TOOL_NAMES, registerResearchTools } from "./research.ts";
 
 /**
- * The run's past research for an advisor in Claude Code (goal 065), OpenCode or the Codex CLI
- * (goal 073). Each runs with none of its own tools (the supervisor holds git and model
- * credentials), so the supervisor serves the one read-only search over MCP: on localhost, for the
- * length of one call, behind a token made for that call. Claude Code is given that server alone
- * (`--strict-mcp-config`) and only its tool; OpenCode and Codex get it in their configuration for
- * the call (advisors/cli.ts), with the token in their environment.
- * The search reads the harness's copy of the run's knowledge/ through the harness API; nothing
- * here writes.
+ * Thermite's own tools for an advisor in Claude Code, OpenCode or the Codex CLI (goals 065, 073
+ * and 175). Each runs with none of its own tools (the supervisor holds git and model credentials),
+ * so the supervisor serves them over MCP: on localhost, for the length of one call, behind a token
+ * made for that call, as the server KB_SERVER. Claude Code is given those servers alone
+ * (`--strict-mcp-config`) and only their tools; OpenCode and Codex get them in their configuration
+ * for the call (advisors/cli.ts), with the token in their environment.
  */
 
-/** The server's name in Claude Code's MCP config. */
-export const PAST_MCP_SERVER = "thermite";
-/** The tool's name as Claude Code calls it. */
-export const PAST_MCP_TOOL = `mcp__${PAST_MCP_SERVER}__${PAST_SEARCH_TOOL}`;
+/** The server's name in each program's MCP configuration. */
+export const PAST_MCP_SERVER = KB_SERVER;
 
-/** A search of one run's past research: the query, and optionally the kinds and how many. */
-export type PastSearch = (
-  query: string,
-  o?: { kinds?: string[] | undefined; limit?: number | undefined },
-) => Promise<unknown>;
+/**
+ * Thermite's knowledge base for an advisor's call (goal 175): the kinds its slot may write, and its
+ * tools, run by the supervisor for that slot (kb_search and kb_read asked of control, kb_write
+ * recorded by the harness).
+ */
+export interface AdvisorKb {
+  writes: string[];
+  call: KbCall;
+}
+
+/** Each tool's arguments, as the MCP server lists and checks them. */
+const KB_SHAPES = {
+  [KB_TOOLS.search]: KbSearchArgs.shape,
+  [KB_TOOLS.read]: KbReadArgs.shape,
+  [KB_TOOLS.write]: KbWriteArgs.shape,
+} as const;
 
 export interface PastSearchServer {
   /** The MCP address (no token in it). */
@@ -48,11 +60,6 @@ export interface PastSearchServer {
   /** The bearer token the servers take, made for this call alone. */
   token: string;
   close(): Promise<void>;
-}
-
-/** Starts the search's MCP server on a free local port. Close it when the call ends. */
-export function servePastSearch(search: PastSearch): Promise<PastSearchServer> {
-  return serveAdvisorTools({ pastSearch: search });
 }
 
 /**
@@ -73,7 +80,8 @@ export interface AdvisorServers {
  * when the call ends.
  */
 export async function serveAdvisorTools(o: {
-  pastSearch?: PastSearch | undefined;
+  /** Thermite's knowledge base's tools (goal 175), on the same server. */
+  kb?: AdvisorKb | undefined;
   mcp?: AdvisorServers | undefined;
   /** The teachers' read-only tools for the run's code and evidence (goal 081), on the same server. */
   code?: AdvisorCode | undefined;
@@ -83,7 +91,7 @@ export async function serveAdvisorTools(o: {
   paper?: AdvisorPaper | undefined;
 }): Promise<PastSearchServer> {
   const token = randomBytes(24).toString("hex");
-  const search = o.pastSearch;
+  const kb = o.kb;
   const code = o.code;
   const research = o.research;
   const paper = o.paper;
@@ -92,44 +100,23 @@ export async function serveAdvisorTools(o: {
     if (code) registerCodeTools(server, code);
     if (research) registerResearchTools(server, research);
     if (paper) registerPaperTools(server, paper);
-    if (search)
-      server.registerTool(
-        PAST_SEARCH_TOOL,
-        {
-          description: PAST_SEARCH_DESCRIPTION,
-          inputSchema: {
-            query: z
-              .string()
-              .max(300)
-              .describe("Words that must all be in an item; empty: the newest"),
-            kinds: z
-              .array(z.string().max(20))
-              .max(10)
-              .optional()
-              .describe(
-                "Only these kinds: run, trial, experiment, attempt, note, doc, source, claim, hypothesis, finding, report",
-              ),
-            limit: z.number().int().min(1).max(SEARCH_MAX).optional().describe("How many items"),
+    if (kb)
+      for (const t of kbTools(kb.writes))
+        server.registerTool(
+          t.name,
+          {
+            description: t.description,
+            inputSchema: KB_SHAPES[t.name as keyof typeof KB_SHAPES],
+            annotations: { readOnlyHint: t.reads },
           },
-          annotations: { readOnlyHint: true },
-        },
-        async (a) => {
-          try {
-            const found = await (search as PastSearch)(a.query, { kinds: a.kinds, limit: a.limit });
-            return { content: [{ type: "text" as const, text: JSON.stringify(found) }] };
-          } catch (err) {
+          async (a: Record<string, unknown>) => {
+            const r = await kb.call(t.name, a);
             return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `the search failed: ${errorText(err)}`,
-                },
-              ],
-              isError: true,
+              content: [{ type: "text" as const, text: r.text }],
+              ...(r.isError ? { isError: true } : {}),
             };
-          }
-        },
-      );
+          },
+        );
     return server;
   };
   const app = new Hono();
@@ -143,7 +130,7 @@ export async function serveAdvisorTools(o: {
     await make().connect(transport);
     return transport.handleRequest(c.req.raw);
   };
-  const thermite = Boolean(search || code || research || paper);
+  const thermite = Boolean(kb || code || research || paper);
   if (thermite) app.all("/mcp", serving(build));
   const mcp = o.mcp;
   if (mcp)
@@ -174,7 +161,7 @@ export async function serveAdvisorTools(o: {
       "--mcp-config",
       JSON.stringify(config),
       "--allowedTools",
-      ...(search ? [PAST_MCP_TOOL] : []),
+      ...(kb ? kbTools(kb.writes).map((t) => `mcp__${PAST_MCP_SERVER}__${t.name}`) : []),
       ...(code ? CODE_TOOL_NAMES.map((n) => `mcp__${PAST_MCP_SERVER}__${n}`) : []),
       ...(research ? RESEARCH_TOOL_NAMES.map((n) => `mcp__${PAST_MCP_SERVER}__${n}`) : []),
       ...(paper ? PAPER_TOOL_NAMES.map((n) => `mcp__${PAST_MCP_SERVER}__${n}`) : []),

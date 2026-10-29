@@ -88,7 +88,7 @@ In a **slot**, a namespace the cluster's operators made for Thermite, the operat
 | Control | `/nats-config` | With the message bus (`THERMITE_NATS_CONFIG_DIR`): `users.conf` (0644), the bus's users that control writes for the NATS server, each user's public key and what it may do, never a seed; `server-cert.pem` (0644) and `server-key.pem` (0640), the server's TLS certificate, which control's authority signs, and its key. Control's own two keys on the bus are in `control.db`, their seeds sealed with `secrets.key`; the backup's is in control's state folder |
 | Harness | `/var/lib/thermite` | The ledger, its two newest copies from before a migration (`ledger.db.v<version>.<time>.copy`), and the rig's report key (`ledger/`), git mirrors (`git/`), kits (`kits/`), imports (`imports/`), models (`models/`), builds (`builds/`), the model route control set (`model-route.json`, root only), the rig's settings (`rig-settings.json`; one the harness can't read is kept aside as `rig-settings.json.unreadable-<time>`, logged and reported, and the defaults apply) and its copy of each run's past research (`knowledge/<run>/`) |
 | Harness | `/scratch` | Workspaces, lane caches, the judge's runs and each run's research folder (`thermite/research/<run>/`, with its `knowledge/`). Emptied at every start, except each lane's cache folder, `thermite/lanes/<lane>/cache`, which a start keeps when it is a real folder its own lane's user owns ([below](#a-lanes-cache)) |
-| Harness | `/inbox` | Read-only: project and kit bundles and [model files](model-files.md) the supervisor fetched |
+| Harness | `/controller/inbox` | Read-only: project and kit bundles and [model files](model-files.md) the supervisor fetched. Mounted in `/controller`, a folder of the harness image that only root and the controller's group may enter, so no role reaches it |
 | Harness | `/outbox` | Exports, written by the harness |
 | Harness | `/keys` | Read-only: control's public key |
 | NATS, the `nats` service | `/data` | JetStream's store: the `EVENTS` stream, every rig's events, kept for good; the `REPORTS` stream, each rig's reports sent over the bus until control has taken or refused them; the `COMMANDS` stream, each rig's commands until its supervisor takes them; the `LIVE` stream, the newest live lines, an hour and 256 MiB at most; the `CONFIG` stream, the latest value of each rig's config keys, each sealed to the rig's seal key; and the `KB_FILES` stream, the knowledge base's files in chunks, each until control has taken it. Control's consumers of the reports and of the live lines, `control-reports` and `control-live`, and each rig's consumers of its commands and its config, `rig-<rig>-commands` and `rig-<rig>-config`, keep their places there |
@@ -124,7 +124,7 @@ A full reset empties the harness's state, scratch and outbox, keeping only the r
 | `nats-config` | control; nats | `/nats-config` in control; `/etc/nats/thermite` in nats | read-write in control; read in nats, which gives the folder to control's user as it starts |
 | `harness-state`, `harness2-state` | harness, harness-2 | `/var/lib/thermite` | read-write |
 | `harness-scratch`, `harness2-scratch` | harness, harness-2 | `/scratch` | read-write |
-| `./.dev/inbox` (a folder) | harnesses and supervisors | `/inbox` | read-only in the harnesses; read-write in the supervisors |
+| `./.dev/inbox` (a folder) | harnesses and supervisors | `/controller/inbox` in the harnesses; `/inbox` in the supervisors | read-only in the harnesses; read-write in the supervisors |
 | `outbox`, `outbox2` | a harness and its supervisor | `/outbox` | read-write in the harness; read-only in the supervisor |
 | `supervisor-home`, `supervisor2-home` | supervisor, supervisor-2 | `/var/lib/thermite-supervisor` | read-write |
 | `results` | both supervisors | `/results` | read-write. The default results repository is `file:///results/results.git` |
@@ -147,7 +147,7 @@ The `init` service makes the `.dev/` folders, next to `compose.yaml`: it runs `t
 | --- | --- | --- |
 | `thermite-<rig>-state` | `/var/lib/thermite` | |
 | `thermite-<rig>-scratch` | `/scratch` | |
-| `thermite-<rig>-inbox` | `/inbox`, read-only | `/inbox`, read-write |
+| `thermite-<rig>-inbox` | `/controller/inbox`, read-only | `/inbox`, read-write |
 | `thermite-<rig>-outbox` | `/outbox`, read-write | `/outbox`, read-only |
 | `thermite-<rig>-supervisor` | | `/var/lib/thermite-supervisor` |
 
@@ -158,7 +158,7 @@ Removing a rig removes these five volumes, the two networks, the unit files and 
 | Object | What |
 | --- | --- |
 | PersistentVolumeClaim `thermite-<rig>-data` | One volume, `ReadWriteOnce`, 100 GB unless set (1 to 10,000 GB), in the cluster's default storage class unless one is named |
-| Its subpaths | `state` → `/var/lib/thermite`; `scratch` → `/scratch`; `inbox` → `/inbox` (read-only in the harness); `outbox` → `/outbox` (read-only in the supervisor); `supervisor` → `/var/lib/thermite-supervisor` |
+| Its subpaths | `state` → `/var/lib/thermite`; `scratch` → `/scratch`; `inbox` → `/controller/inbox`, read-only, in the harness and `/inbox` in the supervisor (the supervisor's, with the controller's group `thermite`, mode 2750, as `prepare` sets it); `outbox` → `/outbox` (read-only in the supervisor); `supervisor` → `/var/lib/thermite-supervisor` |
 | Init container `prepare` | Runs the harness image to make the folders and set their owners before each pod starts |
 
 Both pods run on the same node, so they can share the volume. An update to control's images or address (**Update to these images**, **Try the update again** or **Give it control's new address** on the rig's page) applies the rig's two Deployments again and leaves its volume claim, its Secret and its Service as they are, so the rig keeps its state and its tokens.

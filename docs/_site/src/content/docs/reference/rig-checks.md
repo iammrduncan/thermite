@@ -123,6 +123,8 @@ It prints the whole report as JSON and exits with 1 when isolation does not hold
 | `broker-socket` | Check for write access | The broker's socket |
 | `outbox-write` | Check for write access | The outbox |
 | `outbox-read` | List | The outbox |
+| `inbox-list` | List | The inbox, which the supervisor fills for the controller |
+| `inbox-read` | Read | A file in the inbox, such as a kit's bundle, reached by its full path. Skipped while the inbox holds none |
 | `runs-list` | List | The directory of the judge's runs |
 | `tmp-create`, `var-tmp-create`, `shm-create` | Create a file | `/tmp`, `/var/tmp`, `/dev/shm` |
 | `kit-by-path` | Read | A checked-out `kit.json`, reached by its full path. Skipped before any kit is checked out |
@@ -144,7 +146,6 @@ In the [one-container rig image](harness-image.md#the-one-container-rig-image), 
 | --- | --- | --- |
 | `supervisor-home` | List | The supervisor's state folder |
 | `supervisor-token` | Read | The supervisor's copy of its token for the harness API |
-| `inbox-list` | List | The inbox, which the supervisor fills for the controller |
 | `supervisor-environ` | Read | The environment of the supervisor's process. Skipped when no supervisor runs |
 | `control-key-write` | Write | Root's copy of control's key, which the harness trusts. In pull mode only |
 

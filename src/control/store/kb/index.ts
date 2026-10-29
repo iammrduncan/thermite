@@ -6,6 +6,7 @@ import {
   type KbItemWire,
   type KbKind,
   type KbSync,
+  readKbAddress,
   writtenRef,
 } from "../../../core/kb.ts";
 import {
@@ -19,14 +20,22 @@ import {
   str,
 } from "../../../core/kb-index.ts";
 import { eventKinds } from "../../../core/names.ts";
-import { JOURNAL_KINDS, type KbCollection, type KbItem, SYNC_PAGE } from "../../kb/index.ts";
+import {
+  JOURNAL_KINDS,
+  type KbCollection,
+  type KbFound,
+  type KbItem,
+  SYNC_PAGE,
+} from "../../kb/index.ts";
 import { type KbVersion, keepVersion, versionRefusal, versionsOf, writtenFields } from "./items.ts";
 import { knowledgeHierarchy } from "./schema.ts";
 import { type KbScope, keepScope, scopeOf } from "./scope.ts";
+import { findItems, type KbWhere } from "./search.ts";
 
 export type { KbVersion } from "./items.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
+export { type KbWhere, searchTerms } from "./search.ts";
 
 /**
  * The knowledge base's tables in control's store (goals 065, 125 and 175): one collection for each
@@ -490,35 +499,58 @@ export class KnowledgeBase {
     });
   }
 
-  /** Every word in the title or text, newest first; within the given collections only. */
+  /**
+   * Items by words within `where` (search.ts): each a campaign's whole collection, or one run's
+   * items of it. Best first by BM25, each with an excerpt and why it matched, with how many matched
+   * in all; no words: the newest. `limit`: 50 when not given.
+   */
+  find(
+    q: string,
+    where: readonly KbWhere[],
+    o: { kinds?: readonly string[]; sub?: readonly string[]; limit?: number } = {},
+  ): { matched: number; hits: KbFound[] } {
+    const r = findItems(this.db, q, where, { ...o, limit: o.limit ?? 50 });
+    return {
+      matched: r.matched,
+      hits: r.found.map((f) => ({ ...itemOf(f.row), excerpt: f.excerpt, why: f.why })),
+    };
+  }
+
+  /** find() over whole collections: the Knowledge page's, a campaign's and the owner's search. */
   search(
     q: string,
     campaigns: string[],
     o: { kinds?: KbKind[]; limit?: number; sub?: string[] } = {},
-  ): KbItem[] {
-    if (!campaigns.length) return [];
-    const words = q
-      .toLowerCase()
-      .split(/\s+/)
-      .map((w) => w.replace(/[%_\\]/g, ""))
-      .filter((w) => w.length > 1)
-      .slice(0, 8);
-    const where = [
-      `campaign in (${campaigns.map(() => "?").join(", ")})`,
-      ...(o.kinds?.length ? [`kind in (${o.kinds.map(() => "?").join(", ")})`] : []),
-      ...(o.sub?.length ? [`sub in (${o.sub.map(() => "?").join(", ")})`] : []),
-      ...words.map(() => "lower(title || ' ' || body) like ?"),
-    ].join(" and ");
-    const rows = this.db
-      .prepare(`select * from kb_item where ${where} order by updated_at desc, seq desc limit ?`)
-      .all(
-        ...campaigns,
-        ...(o.kinds ?? []),
-        ...(o.sub ?? []),
-        ...words.map((w) => `%${w}%`),
-        o.limit ?? 50,
-      ) as Row[];
-    return rows.map(itemOf);
+  ): KbFound[] {
+    const where = campaigns.map((campaign) => ({ campaign }));
+    return this.find(q, where, o).hits;
+  }
+
+  /**
+   * What a run of a campaign reads, as find() takes it: its own run alone when it started fresh,
+   * else the campaign's whole collection; and the granted collections it includes.
+   */
+  scopeWhere(campaign: string, run: string): { scope: KbScope; where: KbWhere[] } {
+    const scope = this.scope(campaign, run);
+    const own: KbWhere = scope.fresh ? { campaign, run } : { campaign };
+    return { scope, where: [own, ...scope.granted.map((c) => ({ campaign: c }))] };
+  }
+
+  /**
+   * The item at an address (core/kb.ts), the newest of that address if two rigs' runs share its
+   * run's name; within `where` when given. Undefined when there is none there.
+   */
+  at(address: string, where?: readonly KbWhere[]): KbItem | undefined {
+    const a = readKbAddress(address);
+    if (!a) return undefined;
+    if (where && !where.some((w) => w.campaign === a.campaign && (!w.run || w.run === a.run)))
+      return undefined;
+    const r = this.db
+      .prepare(
+        "select * from kb_item where campaign = ? and run = ? and slot = ? and kind = ? and ref = ? order by updated_at desc limit 1",
+      )
+      .get(a.campaign, a.run, a.slot, a.kind, a.ref) as Row | undefined;
+    return r ? itemOf(r) : undefined;
   }
 
   /** How many items of each kind one run put in its collection (field notes apart). */

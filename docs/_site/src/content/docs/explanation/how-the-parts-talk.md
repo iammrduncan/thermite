@@ -111,6 +111,10 @@ flowchart LR
 
 Against the pinned server with 512 MiB, over TLS: a rig put a 50 MiB file in 51 chunks in 0.44 seconds, control took both files waiting, checked and kept them in 0.3 seconds, and the stream was empty after, the server at 22 MiB of memory. A rig's put on another rig's subject, its consumer, a read of a message by its place or the last of a subject, the stream's state, and a removal, purge or delete were each refused as a permissions violation.
 
+#### Searches of the knowledge base
+
+The agents' `kb_search` and `kb_read` need an answer at once, so they are no stream's: each is a request with its one answer. The rig's supervisor takes them from its harness, which never calls out, and asks control on its own subject, `thermite.kb.search.<rig>` or `thermite.kb.read.<rig>`; control answers at the rig's inbox, and only there, and nothing is kept. With no bus, the supervisor asks control's HTTP API the same. Control works out what the run may read from its own records of the run, never from the request ([How a search reaches control](../reference/knowledge-base.md#how-a-search-reaches-control)).
+
 #### Control's views
 
 Control's pages, REST and MCP read views of the rigs' events: one fold for each rig, of its current ledger's events, that the apply keeps up to date.
@@ -195,7 +199,7 @@ Each user may do only its part:
 | User | May |
 | --- | --- |
 | Control | Everything on the bus but delete or purge the `EVENTS` stream, which is kept for good: make the streams, make the reports stream again as an inbox, fold the reports, publish their events and move an older store's events table, publish commands and take back a cancelled one, write each rig's config, and take the knowledge base's files from `KB_FILES` |
-| A rig's supervisor | Publish to its own report subject, `thermite.rig.<rig>.report`; publish its own live lines, `thermite.rig.<rig>.live.*`, and those of each run that control's run registry gives the rig (assigned to it, or made there), `thermite.run.<run>.live.*`, the newest 1,000; make, read and take from its own consumer of the commands, `rig-<rig>-commands`, which the server lets take only the rig's own subject; make again, read and take from its own consumer of its config, `rig-<rig>-config`, which the server lets take only the rig's own keys; ack what it took; put the knowledge base's files on its own subjects of `KB_FILES`, `thermite.rig.<rig>.kbfile.*`, which it may not read or remove from; and receive replies only under its own inbox, `_INBOX.rig.<rig>` |
+| A rig's supervisor | Publish to its own report subject, `thermite.rig.<rig>.report`; publish its own live lines, `thermite.rig.<rig>.live.*`, and those of each run that control's run registry gives the rig (assigned to it, or made there), `thermite.run.<run>.live.*`, the newest 1,000; make, read and take from its own consumer of the commands, `rig-<rig>-commands`, which the server lets take only the rig's own subject; make again, read and take from its own consumer of its config, `rig-<rig>-config`, which the server lets take only the rig's own keys; ack what it took; put the knowledge base's files on its own subjects of `KB_FILES`, `thermite.rig.<rig>.kbfile.*`, which it may not read or remove from; ask control to search and read the knowledge base on its own subjects, `thermite.kb.search.<rig>` and `thermite.kb.read.<rig>`; and receive replies only under its own inbox, `_INBOX.rig.<rig>` |
 | The backup's user | For the `EVENTS` stream only: read its state and a message by its place, take its snapshot and ack its chunks, and restore it, which the server does only where it has no stream of that name; and receive replies only under `_INBOX.backup`. Nothing else: no publish to a stream, no delete or purge |
 | Control's system user | Ask the server to reload its users, and for JetStream's figures (`JSZ`, the server's monitoring): how much of its store JetStream uses, and its limit, for [control's disk floor](../reference/settings.md#address-and-state) |
 
@@ -210,7 +214,7 @@ A RunPod pod can't be reached from outside except through RunPod's own HTTPS pro
 The supervisor and the harness are two containers, and they talk two ways:
 
 - **The harness's API.** The supervisor calls it: for the events and live lines it relays, for the commands it delivers, for the run's settings, and, for the advisors, about 25 routes that read the run and post their answers. The harness never calls the supervisor.
-- **Two shared folders.** The supervisor puts what a command brings (a project, a kit, another rig's champion, a model) in `/inbox`, which the harness may only read. The harness writes each export to `/outbox`, and the supervisor takes it from there to git or to control, then tells the harness it is done.
+- **Two shared folders.** The supervisor puts what a command brings (a project, a kit, another rig's champion, a model) in `/inbox`, which the harness may only read, at `/controller/inbox`: a folder of the harness image that only the harness's controller may enter, so the agents and the judge's runs never reach it. The harness writes each export to `/outbox`, and the supervisor takes it from there to git or to control, then tells the harness it is done.
 
 Inside the harness container, the **controller** (the harness itself) and the **broker** talk over one socket, a JSON object per line each way. The broker runs as root and starts every other process as its role's own user: each lane's agent, the judge's builds and runs, and the kit's checks. The judge takes its jobs from the ledger, where the controller queues each attempt. [Isolation](isolation.md) explains the users and what each one can reach.
 

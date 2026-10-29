@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { newToken } from "../../common/secrets.ts";
 import { generateSigningKeys } from "../../core/commands.ts";
 import { parseContract } from "../../core/contract.ts";
+import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
 import {
   answeringEngines,
   doctor,
@@ -173,6 +174,7 @@ export async function thermiteSelftest(rest: string[]): Promise<void> {
     stateDir: env.THERMITE_STATE_DIR ?? "/var/lib/thermite",
     scratchDir: env.THERMITE_SCRATCH_DIR ?? "/scratch",
     outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
+    inboxDir: env.THERMITE_INBOX_DIR ?? HARNESS_INBOX_DIR,
     secretFiles,
     // As the broker set the cards up: explicit lists, or the rig's GPU set and its split.
     dedicated:

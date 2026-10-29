@@ -2,6 +2,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import {
   newSessionTally,
+  readNew,
   type SessionEvent,
   type SessionLogAdapter,
   tallyEvents,
@@ -18,15 +19,14 @@ import {
   type Terminal,
   type TerminalEnded,
 } from "../../terminal/index.ts";
-import { readNewLines } from "./in-turn.ts";
 import type { CliProgram, CliRun, CliTally } from "./program.ts";
 
 /**
  * The trial loop's terminal mode (goal 169): a program in its own terminal UI, held by the
  * terminal host (src/harness/terminal/), which the broker runs as the lane's user under the lane's
  * limits, instead of one headless run for each turn. One host holds the program while it runs: its
- * first message goes on its command line, and each later turn of the trial is typed into it once
- * the turn before has ended.
+ * first message is typed into it once it is ready, never put on its command line, which other
+ * processes on the rig can read, and each later turn once the turn before has ended.
  *
  * What happened comes from the program's session log, which the host copies where the harness may
  * read it (OpenCode's events come from Thermite's plugin, in the trial's signals file), read with
@@ -39,8 +39,6 @@ import type { CliProgram, CliRun, CliTally } from "./program.ts";
 
 /** How long a turn's end must stand in the log before the loop takes it: a late line reopens it. */
 const SETTLE_MS = 1_000;
-/** The longest first message put on the command line (an argument holds 128 KiB); longer: typed. */
-const FIRST_ARG_MAX = 100 * 1024;
 /**
  * Text typed in pieces of at most this many characters: one request to the host holds at most
  * 132 KiB, and a character can take 6 bytes of JSON.
@@ -143,6 +141,11 @@ export class TerminalTrial<T extends CliTally> {
   private endedAt: number | undefined;
   private failure: string | undefined;
   private stopping = false;
+  /**
+   * The usage limit the log showed last, with when it resets if it said: while one shows, no key
+   * goes into the program, whose screen may take any key as an answer (a menu that buys more).
+   */
+  private limit: { resetsAt?: string | undefined } | undefined;
   private lastExit: ProgramExit | undefined;
   private screenKept = false;
 
@@ -184,9 +187,9 @@ export class TerminalTrial<T extends CliTally> {
   }
 
   /**
-   * One run: `text` goes into the program, on the command line of a new host (a new session), or
-   * typed, into the program running or into a host that resumed its session after it exited.
-   * Resolves when the log says the turn has ended, when the program has, or after a stop.
+   * One run: `text` is typed into the program, running, or in a new host (a new session, or one
+   * that resumed its session after the program exited) once it is ready. Resolves when the log
+   * says the turn has ended, when the program has, or after a stop.
    */
   turn(text: string, remaining: number): Promise<RunEnd> {
     this.began = false;
@@ -219,10 +222,8 @@ export class TerminalTrial<T extends CliTally> {
     let host = this.host;
     const started = !host;
     if (!host) {
-      const session = this.counts.session;
-      const first = !session && Buffer.byteLength(text) <= FIRST_ARG_MAX ? text : undefined;
-      host = await this.startHost(session, first, remaining);
-      if (first !== undefined || this.stopping) return;
+      host = await this.startHost(this.counts.session, remaining);
+      if (this.stopping) return;
     }
     try {
       if (started) await ready(host, () => this.stopping);
@@ -234,12 +235,8 @@ export class TerminalTrial<T extends CliTally> {
     }
   }
 
-  /** A host for a new session (with its first message, when it fits) or one resumed. */
-  private async startHost(
-    resumed: string | undefined,
-    first: string | undefined,
-    remaining: number,
-  ): Promise<Terminal> {
+  /** A host for a new session, or one resumed. */
+  private async startHost(resumed: string | undefined, remaining: number): Promise<Terminal> {
     const p = this.p;
     const exe = p.exe() ?? p.bin();
     const session = resumed ?? p.terminal.newSession?.() ?? "";
@@ -247,7 +244,6 @@ export class TerminalTrial<T extends CliTally> {
       cwd: this.o.cwd,
       session,
       resume: resumed !== undefined,
-      first,
       port: p.terminal.server ? await freePort() : undefined,
     });
     const limits = this.o.limits;
@@ -312,10 +308,11 @@ export class TerminalTrial<T extends CliTally> {
 
   /**
    * What the session log said since the last read: into the tally (as the headless reader fills
-   * it), the live view's lines, and the end of the turn under way.
+   * it), the live view's lines, and the end of the turn under way. `more`: the read stopped at its
+   * size, and the log holds more now.
    */
-  read(): { live: { kind: LiveKind; text: string }[]; lines: number } {
-    const r = readNewLines(this.logFile, this.next);
+  read(): { live: { kind: LiveKind; text: string }[]; lines: number; more: boolean } {
+    const r = readNew(this.logFile, this.next);
     this.next = r.next;
     const lines = r.lines.filter((l) => l.trim());
     const live: { kind: LiveKind; text: string }[] = [];
@@ -325,10 +322,13 @@ export class TerminalTrial<T extends CliTally> {
       for (const e of events) {
         this.p.terminal.take?.(e, this.o.tally, live.length);
         this.liveOf(e, live);
+        if (e.type === "limit") this.limit = { resetsAt: e.resetsAt };
+        else if (e.type === "turn.ended" && e.reason === "limit") this.limit ??= {};
         if (e.type === "turn.started") {
           this.began = true;
           this.open = true;
           this.endedAt = undefined;
+          this.limit = undefined;
         } else if (e.type === "turn.ended") {
           this.open = false;
           this.endedAt = Date.now();
@@ -344,7 +344,7 @@ export class TerminalTrial<T extends CliTally> {
       Date.now() - this.endedAt >= SETTLE_MS
     )
       this.settle(TURN_ENDED);
-    return { live, lines: lines.length };
+    return { live, lines: lines.length, more: r.more };
   }
 
   /** The loop's tally, from the log's counts: the same fields a headless reader fills. */
@@ -377,10 +377,16 @@ export class TerminalTrial<T extends CliTally> {
       live.push({ kind: "text", text: liveText(`(${this.p.name}: ${e.error ?? e.reason})`) });
   }
 
+  /** The usage limit the program's log shows now, if any, with its reset when it gave one. */
+  limitShown(): { resetsAt?: string | undefined } | undefined {
+    return this.limit;
+  }
+
   /**
    * Ends the program its own way, its screen kept first: its turn interrupted when one is under
-   * way, then its end steps (`/exit`, then SIGTERM); if the host can't be asked, the broker ends
-   * the lane's processes. Resolves once the host has ended, and so has the run under way.
+   * way, then its end steps (`/exit`, then SIGTERM); while it shows a usage limit, by SIGTERM
+   * alone, nothing typed. If the host can't be asked, the broker ends the lane's processes.
+   * Resolves once the host has ended, and so has the run under way.
    */
   async stop(): Promise<void> {
     this.stopping = true;
@@ -388,9 +394,10 @@ export class TerminalTrial<T extends CliTally> {
     const host = this.host;
     if (host) {
       await this.keepScreen(host);
+      const typing = !this.limit;
       try {
-        if (this.open) await host.interrupt();
-        await host.end();
+        if (this.open && typing) await host.interrupt();
+        await host.end({ steps: typing });
       } catch (err) {
         logWarn("harness", `could not end ${this.p.name} its own way`, {
           ...this.fields(),

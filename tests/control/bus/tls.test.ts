@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { connect, createServer } from "node:tls";
-import { busHost } from "../../../src/common/bus.ts";
+import { busHost } from "../../../src/common/bus/index.ts";
 import { makeCa, makeServerCert } from "../../../src/control/bus/cert.ts";
 import {
   BUS_CA_DAYS,

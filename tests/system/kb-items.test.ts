@@ -4,8 +4,10 @@ import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { followKbFiles, KbFiles } from "../../src/control/kb/index.ts";
+import { answerKbAsk, followKbFiles, KbFiles } from "../../src/control/kb/index.ts";
+import type { SignedCommand } from "../../src/core/commands.ts";
 import { KB_OUTBOX_FILES, type KbItemBody } from "../../src/core/kb.ts";
+import type { KbSearchAnswer } from "../../src/core/link/kb.ts";
 import { KB_FILES_STREAM, KB_FILES_STREAM_CONFIG } from "../../src/core/link/kb-files.ts";
 import { writeKbItem } from "../../src/harness/kb/index.ts";
 import { putKbFiles } from "../../src/supervisor/kb/index.ts";
@@ -150,7 +152,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     // The other way round: the file first, then its item.
     s.write({
       writer: "teacher",
-      kind: "reference",
+      kind: "doc",
       title: "The same paper",
       file: { bytes: paper, name: "p.pdf", type: "application/pdf" },
     });
@@ -175,7 +177,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     );
   });
 
-  test("an item for another writer's slot, or by a writer with none, or of another rig's run, is refused and recorded; the rest of the page goes on", async () => {
+  test("an item for another writer's slot, by a writer with none, of a kind its role may not write, or of another rig's run, is refused and recorded; the rest of the page goes on", async () => {
     const s = await setup();
     const body = (slot: string, item = 1): KbItemBody => ({
       slot,
@@ -194,6 +196,8 @@ describe("a write to the knowledge base, from the harness to control", () => {
     ledger.appendEvent("worker-3", "kb_item", RUN, { ...body("worker-3"), title: "" });
     s.write({ writer: "worker-1", kind: "note", title: "Mine", text: "Kept" });
     ledger.appendEvent("worker-1", "kb_item", RUN, body("worker-1", 1));
+    // A kind the campaign does not let the role write (the default: the planner writes no finding).
+    ledger.appendEvent("planner", "kb_item", RUN, { ...body("planner"), kind: "finding" });
     assert.equal(await s.report(), 200);
     assert.deepEqual(s.refusals().reverse(), [
       "worker-2 writes only in its own slot, worker-2: not in worker-1, another writer's",
@@ -202,6 +206,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
       "run someone-elses-run is not this rig's: control's run registry has no such run of this ledger",
       "not an item: title: Too small: expected string to have >=1 characters",
       "item 1 of slot worker-1 exists already: a new version of it is version 2",
+      "the campaign lets planner write decision, surprise, note in run smoke-1: not a finding",
     ]);
     assert.deepEqual(
       s.items().map((i) => [i.slot, i.ref, i.version, i.body]),
@@ -251,5 +256,47 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.equal(await s.report(0), 200);
     assert.equal((await s.put()).put, 0, "the supervisor put it once");
     assert.deepEqual(once(), { items: 1, versions: 1, files: 1 });
+  });
+});
+
+describe("an agent's item, written over its tools, found by an agent of another run", () => {
+  test("a worker's kb_write lands in its own slot, reaches control with the report, and another run of the campaign finds it", async () => {
+    const s = await setup();
+    // The worker's tool, as the harness runs it for lane-1's trial: the slot is the trial's.
+    const kept = await s.env.service.kbTools.call({ run: RUN, slot: "worker-1" }, "kb_write", {
+      kind: "finding",
+      title: "Unrolling gave nothing",
+      text: "Unrolling the inner loop by 4 failed to improve speed on every cell.",
+    });
+    assert.equal(kept.isError, undefined, kept.text);
+    assert.equal(await s.report(), 200);
+    // Another run of the same campaign, which control assigned the rig.
+    s.store.commands.enqueue({
+      envelope: {
+        v: 1,
+        id: "c-other",
+        rig: "rig-a",
+        kind: "assign_campaign",
+        issued_by: "owner:api",
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        payload: { run: "smoke-2", contract: { campaign: COLLECTION } },
+      },
+      signature: "not checked by the store",
+    } as unknown as SignedCommand);
+    const found = answerKbAsk(s.store, "rig-a", "search", {
+      run: "smoke-2",
+      q: "which approaches failed to improve speed",
+    }) as KbSearchAnswer;
+    const hit = found.hits.find((h) => h.slot === "worker-1");
+    assert.equal(hit?.address, `${COLLECTION}/${RUN}/worker-1/finding:1`);
+    assert.match(hit?.excerpt ?? "", /\*\*failed\*\* to \*\*improve\*\* \*\*speed\*\*/);
+    // Started fresh, that run would read only its own items: none of these.
+    s.store.kb().setScope(COLLECTION, "smoke-2", { fresh: true, granted: [] }, "owner:api");
+    const fresh = answerKbAsk(s.store, "rig-a", "search", {
+      run: "smoke-2",
+      q: "speed",
+    }) as KbSearchAnswer;
+    assert.deepEqual(fresh.hits, []);
   });
 });

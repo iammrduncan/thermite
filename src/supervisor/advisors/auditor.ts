@@ -74,13 +74,13 @@ export async function auditOne(input: {
     answerSchema: AuditAnswerSchema,
     keeper: input.keeper,
     // The auditor reads private diffs: it fetches only from listed domains, never anywhere. It
-    // may search the run's past research (read only).
+    // may search the knowledge base, from the run's scope.
     tools: {
       fetchUrl:
         input.config.fetch_domains.length && !input.config.fetch_domains.includes("*")
           ? input.tools.fetchUrl
           : undefined,
-      pastSearch: input.tools.pastSearch,
+      kb: input.tools.kb,
       // The MCP servers the run's kit gives the advisors (goal 068).
       mcp: input.tools.mcp,
     },

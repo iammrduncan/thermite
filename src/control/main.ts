@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join } from "node:path";
 import { serve } from "@hono/node-server";
 import { buildInfo } from "../common/build-info.ts";
-import { busHost, natsBus } from "../common/bus.ts";
+import { busHost, natsBus } from "../common/bus/index.ts";
 import { log, optionalSecretFromFile, parseListen } from "../common/env.ts";
 import { writeAtomic } from "../common/fs.ts";
 import { every } from "../common/health.ts";
@@ -34,7 +34,7 @@ import { CONTROL_DISK_CHECK_MS, ControlDisk } from "./disk.ts";
 import { EventsApply, EventsMove, EventsWriter } from "./events/index.ts";
 import { followReports } from "./ingest.ts";
 import { sendCommandsOn } from "./issue/index.ts";
-import { followKbFiles, KbFiles } from "./kb/index.ts";
+import { followKbFiles, KbFiles, serveKbAsks } from "./kb/index.ts";
 import { KitRepos } from "./kits/index.ts";
 import { advanceResets, driverFromEnv } from "./lifecycle.ts";
 import { followLive, LiveTaken } from "./live/index.ts";
@@ -297,6 +297,10 @@ async function main(): Promise<void> {
   // The knowledge base's files, each kept once by its SHA-256 in control's state (goal 175).
   followKbFiles(bus, new KbFiles(join(dir, CONTROL_STATE.kbFiles), store)).catch((err) =>
     log("control", "files for the knowledge base stopped", { error: String(err) }, "error"),
+  );
+  // Searches and reads of the knowledge base for the rigs' agents, each answered from its run's scope.
+  serveKbAsks(bus, store).catch((err) =>
+    log("control", "knowledge base searches stopped", { error: String(err) }, "error"),
   );
   sendCommandsOn(store, bus).catch((err) =>
     log("control", "commands stream not made", { error: String(err) }, "error"),

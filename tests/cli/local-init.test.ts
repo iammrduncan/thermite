@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -57,9 +58,11 @@ describe("thermite local init", () => {
       "local-1": secret(root, "control-rig-token"),
       "local-2": secret(root, "control-rig-token-2"),
     });
+    // .dev/ is its owner's alone: no other user of the computer reaches what is in it.
+    assert.equal(statSync(root).mode & 0o777, 0o700);
+    // Below it, the containers' own users read the tokens, and the supervisor's writes the inbox.
     const fileMode = 0o644 & ~process.umask();
     assert.equal(statSync(join(root, "secrets/control-admin-token")).mode & 0o777, fileMode);
-    // The supervisor fetches into the inbox as another user.
     for (const dir of ["inbox", "inbox/repos", "inbox/models"])
       assert.equal(statSync(join(root, dir)).mode & 0o777, 0o777, dir);
     for (const dir of ["outbox", "advisors", "backups"])
@@ -69,6 +72,8 @@ describe("thermite local init", () => {
   test("keeps every file that exists and writes the rig tokens map again", () => {
     const root = fresh();
     localInit(root);
+    // A .dev/ that others could enter is closed again.
+    chmodSync(root, 0o755);
     const admin = secret(root, "control-admin-token");
     writeFileSync(join(root, "secrets/control-rig-token"), "changed-by-hand\n");
     writeFileSync(join(root, "secrets/model-api-key"), "sk-real-key\n");
@@ -78,6 +83,7 @@ describe("thermite local init", () => {
     assert.equal(secret(root, "control-admin-token"), admin);
     assert.equal(secret(root, "model-api-key"), "sk-real-key");
     assert.equal(JSON.parse(secret(root, "control-rig-tokens.json"))["local-1"], "changed-by-hand");
+    assert.equal(statSync(root).mode & 0o777, 0o700);
   });
 
   test("writes the model key's placeholder whatever other key files the folder has", () => {
@@ -95,6 +101,7 @@ describe("thermite local init", () => {
     const root = fresh();
     localInit(root);
     assert.deepEqual(tree(root), tree(join(checkout, ".dev")));
+    assert.equal(statSync(join(checkout, ".dev")).mode & 0o777, 0o700);
   });
 
   test("chooses the folder's owner only when it runs as root for someone else", () => {

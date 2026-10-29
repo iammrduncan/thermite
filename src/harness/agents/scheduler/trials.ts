@@ -3,6 +3,7 @@ import { errorText } from "../../../common/errors.ts";
 import { log } from "../../../common/log.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { newTrialId } from "../../../core/ids.ts";
+import { workerSlot } from "../../../core/kb.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import type { Role } from "../../broker/index.ts";
@@ -182,6 +183,8 @@ export function startTrial(
           limits,
           // The MCP servers the run's kit gives its workers (goal 068).
           mcpServers: sched.o.service.mcp.given(run, "workers").map((g) => g.name),
+          // What the lane's worker may write in the knowledge base (goal 175).
+          kbWrites: sched.o.service.kbTools.writes(run, workerSlot(a.lane)),
           // The owner's addition to the worker, from the run's contract (goal 166).
           addition: additionOf(contract, "worker"),
         },

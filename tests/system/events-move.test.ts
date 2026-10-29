@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
-import type { Outgoing } from "../../src/common/bus.ts";
+import type { Outgoing } from "../../src/common/bus/index.ts";
 import { copiesOf } from "../../src/common/db-copy.ts";
 import { MOVE_CHECK_SAMPLE } from "../../src/control/events/index.ts";
 import { ControlStore } from "../../src/control/store/index.ts";

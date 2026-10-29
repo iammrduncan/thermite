@@ -15,8 +15,6 @@ import {
   EVIDENCE,
   EvidenceQuery,
   JOURNAL,
-  KNOWLEDGE,
-  KnowledgeQuery,
   LinesQuery,
   PAPER,
   PAPER_CHECK,
@@ -264,24 +262,5 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
   app.post(KB.path, supervisor, limitOf(KB), async (c) => {
     const body = KB.body.parse(await c.req.json());
     return c.json(service.writeKnowledge(body.run, body.items, body.collections));
-  });
-
-  // A search of a run's past research for its advisors, read only (the supervisor gives it to
-  // them as a tool): the items of its knowledge/ with every word given, newest first, marked as
-  // data. Nothing here writes.
-  app.get(KNOWLEDGE.path, supervisor, (c) => {
-    const q = KnowledgeQuery.parse({
-      run: c.req.query("run"),
-      q: c.req.query("q") ?? undefined,
-      kinds: c.req.query("kinds") ?? undefined,
-      limit: c.req.query("limit") ?? undefined,
-    });
-    if (!service.ledger.runs.get(q.run)) return c.json({ error: `no run ${q.run}` }, 404);
-    return c.json(
-      service.knowledge.search(q.run, q.q, {
-        kinds: q.kinds ? q.kinds.split(",").map((k) => k.trim()) : undefined,
-        limit: q.limit,
-      }),
-    );
   });
 }

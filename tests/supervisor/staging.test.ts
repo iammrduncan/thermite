@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -110,6 +118,7 @@ describe("staging sources by reference", () => {
 
   test("a project's commit is fetched from its repository and lands in the inbox as a bundle", async () => {
     const { root, inboxDir, cfg } = setup();
+    chmodSync(inboxDir, 0o755);
     const repo = join(root, "project");
     mkdirSync(repo);
     git(repo, "init", "--quiet", "-b", "main");
@@ -136,6 +145,34 @@ describe("staging sources by reference", () => {
     assert.match(heads, new RegExp(`^${first} refs/thermite/stage/${first}$`));
     // Already there: the next command naming it relays at once, without fetching.
     assert.equal(await stageCommand(cfg, assign("c-2", imports)), "ready");
+    // Under compose and on a machine the inbox lets other users in (the harness's controller is
+    // one of them): the bundle does too.
+    assert.equal(statSync(bundle).mode & 0o777, 0o644);
+  });
+
+  test("a bundle in an inbox closed to other users is read by the inbox's group only", async () => {
+    const { root, inboxDir, cfg } = setup();
+    // As the one-container image and a cluster's volume have it: the supervisor's, with the
+    // controller's group, closed to everyone else.
+    chmodSync(inboxDir, 0o2750);
+    const repo = join(root, "kit");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "-b", "main");
+    writeFileSync(join(repo, "kit.json"), "{}\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "--quiet", "-m", "kit");
+    const commit = git(repo, "rev-parse", "HEAD");
+    const imports = [
+      {
+        kind: "kit_bundle",
+        path: "repos/kit.bundle",
+        repo: "kit",
+        commit,
+        source: { git: `file://${repo}` },
+      },
+    ];
+    assert.equal(await staged(cfg, assign("k-closed", imports)), "ready");
+    assert.equal(statSync(join(inboxDir, "repos", "kit.bundle")).mode & 0o777, 0o640);
   });
 
   test("a model is downloaded and kept only with the signed hash; a missing commit fails", async () => {

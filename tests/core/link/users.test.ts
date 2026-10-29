@@ -65,7 +65,7 @@ describe("who may do what on the message bus", () => {
     assert.ok(!key.includes(fp));
   });
 
-  test("a rig may publish its own reports, live lines and files, take its own commands and read its own config, and nothing else", () => {
+  test("a rig may publish its own reports, live lines and files, ask control to search and read the knowledge base, take its own commands and read its own config, and nothing else", () => {
     assert.deepEqual(rigPermissions("rig-a"), {
       publish: {
         allow: [
@@ -81,6 +81,8 @@ describe("who may do what on the message bus", () => {
           "$JS.API.CONSUMER.MSG.NEXT.CONFIG.rig-rig-a-config",
           "$JS.ACK.CONFIG.rig-rig-a-config.>",
           "thermite.rig.rig-a.kbfile.*",
+          "thermite.kb.search.rig-a",
+          "thermite.kb.read.rig-a",
         ],
       },
       subscribe: { allow: ["_INBOX.rig.rig-a.>"] },

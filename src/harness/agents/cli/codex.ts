@@ -132,13 +132,12 @@ export const codexProgram: CliProgram<CodexTally> = {
     adapter: () => hookSignals("codex"),
     how: { "after-tool": "Codex's PostToolUse hook", "turn-end": "Codex's Stop hook" },
   },
-  // In its own terminal: its configuration with the workspace trusted (else it asks), its first
-  // message as its last argument, its thread resumed after a crash, its rollout copied (goal 169).
+  // In its own terminal: its configuration with the workspace trusted (else it asks), its thread
+  // resumed after a crash, its rollout copied (goal 169).
   terminal: {
     start: (run, at) => ({
       args: codexTerminalArgs(run.model, {
         cwd: at.cwd,
-        first: at.first,
         resume: at.resume ? at.session : undefined,
       }),
       seeds: [

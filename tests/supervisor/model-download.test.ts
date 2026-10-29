@@ -315,6 +315,50 @@ describe("model files by URL", () => {
     );
   });
 
+  test("a download with no size stops at the rig's disk floor as it writes, and deletes what it had", async () => {
+    const { inbox, downloads } = setup();
+    const target = join(inbox, "models", "endless.bin");
+    // A server that names no size and sends 1 MiB pieces for as long as it is read.
+    let sent = 0;
+    const fetchImpl: typeof fetch = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(c) {
+            sent++;
+            c.enqueue(new Uint8Array(1024 * 1024));
+          },
+        }),
+      );
+    // The disk fills as the file grows: 4 MiB free above the floor at the start.
+    const floor = 2 ** 30;
+    const free = () =>
+      floor +
+      4 * 1024 * 1024 -
+      (existsSync(`${target}.part`) ? statSync(`${target}.part`).size : 0);
+    await assert.rejects(
+      downloadModel({
+        url: "https://models.example.com/endless.bin",
+        sha256: "4".repeat(64),
+        target,
+        path: "models/endless.bin",
+        name: "endless",
+        downloads,
+        fetchImpl,
+        free,
+        floor,
+      }),
+      (err: Error) =>
+        err instanceof ModelDownloadError &&
+        /^not enough free space for model endless: the download stopped after [\d.]+ MB, with [\d.]+ GB free where it goes \(the inbox's models\), and the rig keeps 1 GiB free \(THERMITE_DISK_FLOOR_GIB\)\. What it had downloaded was deleted$/.test(
+          err.message,
+        ),
+    );
+    assert.ok(sent < 16, `it stopped at the floor, after ${sent} pieces`);
+    assert.ok(!existsSync(`${target}.part`));
+    assert.ok(!existsSync(target));
+    assert.equal(downloads.list()[0]?.state, "failed");
+  });
+
   test("a redirect from HTTPS to plain HTTP is refused, and never followed", async () => {
     const { inbox, downloads } = setup();
     const asked: string[] = [];

@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { createReadStream, createWriteStream } from "node:fs";
 import { createInbox, type NatsConnection } from "@nats-io/transport-node";
 import { BACKUP_INBOX_PREFIX } from "../../core/link/users.ts";
-import { type BusTrust, connectOnce } from "../bus.ts";
+import { type BusTrust, connectOnce } from "../bus/index.ts";
 
 /**
  * The streams of a backup (goal 173): each stream kept for good is backed up by the server's

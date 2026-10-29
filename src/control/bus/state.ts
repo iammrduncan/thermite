@@ -1,4 +1,4 @@
-import type { Bus, StreamState } from "../../common/bus.ts";
+import type { Bus, StreamState } from "../../common/bus/index.ts";
 import { errorText } from "../../common/errors.ts";
 import type { LiveFigures } from "../../core/api/control/rigs.ts";
 import { COMMAND_STREAM } from "../../core/link/commands.ts";

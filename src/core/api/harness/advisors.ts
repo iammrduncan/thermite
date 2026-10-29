@@ -221,19 +221,6 @@ export const RESEARCH_SEARCH = {
   answer: z.unknown(),
 } as const satisfies Route;
 
-/** A search of a run's past research (its knowledge/), read only; 404 for a run it has not. */
-export const KnowledgeQuery = z.object({
-  run: z.string().min(1).max(100),
-  q: z.string().max(SEARCH_QUERY_MAX).default(""),
-  kinds: z.string().max(200).optional(),
-  limit: z.coerce.number().int().min(1).max(SEARCH_MAX).optional(),
-});
-export const KNOWLEDGE = {
-  method: "GET",
-  path: "/v1/knowledge",
-  answer: z.unknown(),
-} as const satisfies Route;
-
 /** An audit that waits for the auditor: its own id, the attempt, and the owner's messages. */
 const AuditPackage = z.looseObject({
   id: z.number().optional(),

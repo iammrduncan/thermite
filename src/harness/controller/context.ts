@@ -6,6 +6,7 @@ import {
   secretFromFile,
   waitForFile,
 } from "../../common/env.ts";
+import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
 import type { ApiTokens } from "../api/index.ts";
 import { BrokerClient, LocalRunner, type Runner } from "../broker/index.ts";
 import type { PromotionPolicy } from "../judge/index.ts";
@@ -44,7 +45,7 @@ export async function controllerContext(env: NodeJS.ProcessEnv): Promise<Control
       env.THERMITE_SCRATCH_DIR ?? "/scratch",
       env.THERMITE_BROKER_SOCKET ? "thermite" : "",
     ),
-    inboxDir: env.THERMITE_INBOX_DIR ?? "/inbox",
+    inboxDir: env.THERMITE_INBOX_DIR ?? HARNESS_INBOX_DIR,
     outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
   };
   for (const d of [paths.stateDir, paths.scratchDir, paths.outboxDir])

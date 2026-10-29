@@ -215,13 +215,12 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
       calls.push({ method, path, body });
       return path.endsWith("/stats") ? { sources: 2 } : "fetched text";
     };
-    // The same eleven tools as Pi's research worker, each with its use for the prompt.
+    // The same ten tools as Pi's research worker, each with its use for the prompt.
     assert.deepEqual(
       RESEARCH_TOOLS.map((t) => t.name),
       [
         "fetch",
         "read_source",
-        "search",
         "search_corpus",
         "add_claim",
         "add_note",
@@ -239,7 +238,6 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
       "fetched text",
     );
     await trialCli(["research", "read_source", "s-1", "--offset", "6000"], env, call);
-    await trialCli(["research", "search", "2-bit", "decoding"], env, call);
     await trialCli(["research", "search_corpus", "dequantize"], env, call);
     await trialCli(["research", "search_corpus", "dequantize", "--skip", "18"], env, call);
     await trialCli(
@@ -261,7 +259,6 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
     assert.deepEqual(calls, [
       { method: "POST", path: "/v1/research/fetch", body: { url: "https://example.com/a" } },
       { method: "POST", path: "/v1/research/read", body: { source: "s-1", offset: 6000 } },
-      { method: "POST", path: "/v1/research/search", body: { query: "2-bit decoding" } },
       { method: "POST", path: "/v1/research/search-corpus", body: { text: "dequantize" } },
       {
         method: "POST",

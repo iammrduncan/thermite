@@ -61,6 +61,8 @@ export function tunnelRouteAllowed(rig: string, method: string, path: string): b
   const post = method === "POST";
   return (
     (post && ["ingest", "supervisor", "live", "reports"].includes(rest)) ||
+    // The agents' searches and reads of the knowledge base, for a rig off the bus (goal 175).
+    (post && ["kb/search", "kb/read"].includes(rest)) ||
     // mcp-servers: the MCP servers its runs' kits name, with their sign-in (goal 068).
     (get &&
       ["commands/pending", "model-route", "advisor-routes", "kb", "mcp-servers"].includes(rest)) ||

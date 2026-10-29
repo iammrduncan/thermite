@@ -11,6 +11,12 @@ import { z } from "zod";
 
 /** A server's name in Settings, and how a kit names it: lowercase letters, digits and dashes. */
 export const MCP_SERVER_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/**
+ * The name of Thermite's own MCP server, which gives every agent the knowledge base's tools (goal
+ * 175) beside the kit's servers: no kit may name a server so.
+ */
+export const OWN_MCP_SERVER = "thermite";
+
 /** An MCP tool's name (the protocol allows letters, digits and a few marks). */
 export const MCP_TOOL_NAME = /^[A-Za-z0-9_./-]{1,128}$/;
 
@@ -31,7 +37,13 @@ const ToolNames = z
  */
 export const McpUse = z
   .strictObject({
-    name: z.string().regex(MCP_SERVER_NAME, "a server's name: lowercase letters, digits, dashes"),
+    name: z
+      .string()
+      .regex(MCP_SERVER_NAME, "a server's name: lowercase letters, digits, dashes")
+      .refine(
+        (n) => n !== OWN_MCP_SERVER,
+        `${OWN_MCP_SERVER} is the name of Thermite's own tools: give the server another name`,
+      ),
     agents: z
       .array(AgentKind)
       .min(1, "give the server to at least one kind of agent")

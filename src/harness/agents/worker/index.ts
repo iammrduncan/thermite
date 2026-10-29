@@ -72,6 +72,7 @@ export function piTrialPrompt(
     program: PI_TRIAL,
     brief: spec.brief,
     mcpServers,
+    kbWrites: spec.kbWrites,
     limits: spec.limits ?? laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }),
     editablePaths: spec.editablePaths,
     minutes: spec.wallMs !== undefined ? Math.round(spec.wallMs / 60_000) : undefined,

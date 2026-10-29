@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { buildInfo } from "../../src/common/build-info.ts";
-import type { Outgoing } from "../../src/common/bus.ts";
+import type { Outgoing } from "../../src/common/bus/index.ts";
 import { EventsWriter } from "../../src/control/events/index.ts";
 import { foldReport, type Intake, keepReport, takeReport } from "../../src/control/ingest.ts";
 import type { ControlStore, IngestReport } from "../../src/control/store/index.ts";

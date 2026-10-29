@@ -1,6 +1,4 @@
-import { randomUUID, X509Certificate } from "node:crypto";
-import { isIP } from "node:net";
-import { type ConnectionOptions, checkServerIdentity } from "node:tls";
+import { randomUUID } from "node:crypto";
 import {
   type ConsumerConfig,
   type ConsumerMessages,
@@ -20,10 +18,21 @@ import {
   type MsgHdrs,
   type NatsConnection,
   nkeyAuthenticator,
-  type TlsOptions,
+  type Subscription,
 } from "@nats-io/transport-node";
-import { log } from "./env.ts";
-import { removeOnceEmpty, startEmptying } from "./work-queue.ts";
+import { log } from "../env.ts";
+import { removeOnceEmpty, startEmptying } from "../work-queue.ts";
+import { type BusTrust, tlsOf, where } from "./tls.ts";
+
+export {
+  BUS_CA_FILE_SETTING,
+  BUS_CA_SETTING,
+  BUS_URL_SETTING,
+  type BusTrust,
+  busHost,
+  busTrust,
+  busUrl,
+} from "./tls.ts";
 
 /**
  * The message bus (goal 168): a NATS server with JetStream, which control runs. Control and the
@@ -31,18 +40,13 @@ import { removeOnceEmpty, startEmptying } from "./work-queue.ts";
  * calls: a publish that waits for the server's ack, a batch published whole or not at all, a
  * durable consumer whose messages are handed over one at a time, a key-value bucket watched from
  * the latest of each key, a read of a stream in order, a message by its place, a subject's last
- * message, a stream's last place, a stream made, a message removed, and the streams' state. Every
+ * message, a stream's last place, a stream made, a message removed, the streams' state, and a
+ * request with its one answer (where the server and its authority come from: tls.ts). Every
  * connection is over TLS, and trusts the server through the authority it is given (control's own,
  * which control hands every rig it sets up), or else the system's. The harness and the agents
  * never reach the bus.
  */
 
-/** The setting that names the server. Not set: the part keeps to HTTP. */
-export const BUS_URL_SETTING = "THERMITE_NATS_URL";
-/** The settings that give a supervisor the authority it trusts the server through: the PEM itself… */
-export const BUS_CA_SETTING = "THERMITE_NATS_CA";
-/** …or a file that holds it, read at each connection. */
-export const BUS_CA_FILE_SETTING = "THERMITE_NATS_CA_FILE";
 /** How long a connection attempt may take: the call that needed it fails, the next tries again. */
 export const BUS_CONNECT_TIMEOUT_MS = 10_000;
 /** How long a publish waits for the server's ack. It then fails; the message may be kept or not. */
@@ -108,6 +112,14 @@ export interface BusRead {
   done: boolean;
 }
 
+/** A request on the bus, as the code that answers it sees it. */
+export interface BusRequest {
+  subject: string;
+  /** The subject its answer goes to: the asker's inbox; none for a message that wants none. */
+  reply: string | undefined;
+  data: Uint8Array;
+}
+
 /** A message from a stream, as the code that handles it sees it. */
 export interface BusMessage {
   subject: string;
@@ -130,9 +142,6 @@ export interface BusSignIn {
   /** The authority the server's certificate must come from; none: the system's authorities. */
   trust?: BusTrust | undefined;
 }
-
-/** The certificate authority a part trusts the bus's server through: its PEM, or a file of it. */
-export type BusTrust = { ca: string } | { caFile: string };
 
 /** A stream as the server has it now, with what each of its consumers has still to take. */
 export interface StreamState {
@@ -246,6 +255,22 @@ export interface Bus {
   remove(stream: string, subject: string, id: string): Promise<boolean>;
   /** The state of each of these streams the server has; a stream not made yet is left out. */
   streams(names: readonly string[]): Promise<StreamState[]>;
+  /**
+   * Sends a request on `subject` and waits up to `timeoutMs` for its one answer (NATS's request
+   * and reply, which no stream keeps). It fails when no one serves the subject, on the timeout, or
+   * when the bus can't be reached.
+   */
+  request(subject: string, data: string | Uint8Array, timeoutMs: number): Promise<Uint8Array>;
+  /**
+   * Answers each request on `subject` (`*` and `>` stand for tokens) with what `answer` gives
+   * for it (its subject, the subject its answer goes to, and its data), until the bus is closed,
+   * and subscribes again after a failure. A request `answer` gives nothing for, or throws on, gets
+   * no answer, and its asker's wait ends with its timeout.
+   */
+  serve(
+    subject: string,
+    answer: (request: BusRequest) => Promise<string | undefined>,
+  ): Promise<void>;
   /** Whether the part holds a connection to the server now. */
   connected(): boolean;
   close(): Promise<void>;
@@ -261,74 +286,6 @@ export function refusedForGood(err: unknown): boolean {
   for (let depth = 0; e instanceof Error && depth < 5; depth++, e = e.cause)
     if (e instanceof errors.PermissionViolationError || e instanceof JetStreamApiError) return true;
   return false;
-}
-
-/**
- * The bus's address from its setting (`setting`: another that names one), or undefined when not
- * set. A bad one stops the part.
- */
-export function busUrl(
-  env: Record<string, string | undefined>,
-  setting = BUS_URL_SETTING,
-): string | undefined {
-  const raw = env[setting]?.trim();
-  if (!raw) return undefined;
-  let url: URL | undefined;
-  try {
-    url = new URL(raw);
-  } catch {
-    url = undefined;
-  }
-  if (url?.protocol !== "nats:" || !url.hostname)
-    throw new Error(`${setting} takes a nats:// address, such as nats://nats:4222, not "${raw}"`);
-  return raw;
-}
-
-/**
- * The authority a supervisor trusts the bus's server through, from its settings: the certificate
- * itself (THERMITE_NATS_CA, as a rig on a cluster gets it), or a file of it (THERMITE_NATS_CA_FILE,
- * read at each connection, so that it may come after the supervisor starts); undefined when neither
- * is set, and the system's authorities serve. Both set, or a certificate that is not an
- * authority's, stops the part at start.
- */
-export function busTrust(env: Record<string, string | undefined>): BusTrust | undefined {
-  const ca = env[BUS_CA_SETTING]?.trim();
-  const caFile = env[BUS_CA_FILE_SETTING]?.trim();
-  if (ca && caFile) throw new Error(`set ${BUS_CA_SETTING} or ${BUS_CA_FILE_SETTING}, not both`);
-  if (caFile) return { caFile };
-  if (!ca) return undefined;
-  let authority = false;
-  try {
-    authority = new X509Certificate(ca).ca;
-  } catch {
-    authority = false;
-  }
-  if (!authority)
-    throw new Error(
-      `${BUS_CA_SETTING} takes the PEM certificate of the authority that signed the bus's server's certificate`,
-    );
-  return { ca: `${ca}\n` };
-}
-
-/** The server's host and port, for logs: never a user or password in its address. */
-const where = (url: string) => new URL(url).host;
-
-/** The host of a nats:// address, as a certificate names it: no brackets round an IPv6 one. */
-export const busHost = (url: string) => new URL(url).hostname.replace(/^\[(.*)\]$/, "$1");
-
-/**
- * The client's TLS options: always TLS, with the authority when one is given. A server reached at
- * an address, not a name, is checked against the certificate's addresses: the NATS client gives
- * Node's TLS no name then, and Node would check the certificate against "localhost".
- */
-function tlsOf(trust: BusTrust | undefined, url: string): TlsOptions {
-  const host = busHost(url);
-  if (!isIP(host)) return trust ?? {};
-  const byAddress: TlsOptions & Pick<ConnectionOptions, "checkServerIdentity"> = {
-    ...trust,
-    checkServerIdentity: (_name, cert) => checkServerIdentity(host, cert),
-  };
-  return byAddress;
 }
 
 /**
@@ -501,6 +458,8 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
   let up = false;
   /** The consumers being read now, each by its own loop: a close stops them all. */
   const readings = new Set<ConsumerMessages>();
+  /** The subjects it serves now: a close ends them all. */
+  const serving = new Set<Subscription>();
   const connection = (): Promise<NatsConnection> => {
     if (conn) return conn;
     const made = connectTo(url, name, signIn, -1).then(
@@ -772,10 +731,48 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       }
       return out;
     },
+    async request(subject, data, timeoutMs) {
+      const nc = await connection();
+      const r = await nc.request(subject, data, { timeout: timeoutMs }).catch((err: unknown) => {
+        if (err instanceof errors.RequestError && err.isNoResponders())
+          throw new Error(`no one answers on ${subject} now`, { cause: err });
+        throw err;
+      });
+      return r.data;
+    },
+    async serve(subject, answer) {
+      let failing = false;
+      while (!closed) {
+        let sub: Subscription | undefined;
+        try {
+          sub = (await connection()).subscribe(subject);
+          serving.add(sub);
+          failing = false;
+          log("bus", "serving", { subject });
+          for await (const m of sub)
+            answer({ subject: m.subject, reply: m.reply || undefined, data: m.data }).then(
+              (a) => {
+                if (a !== undefined) m.respond(a);
+              },
+              (err: unknown) =>
+                log("bus", "a request got no answer", { subject: m.subject, error: String(err) }),
+            );
+        } catch (err) {
+          if (closed) break;
+          const what = { subject, error: String(err) };
+          log("bus", "serving failed; trying again", what, failing ? "debug" : "error");
+          failing = true;
+        } finally {
+          if (sub) serving.delete(sub);
+        }
+        if (!closed) await pause(BUS_RETRY_MS);
+      }
+    },
     connected: () => up,
     async close() {
       closed = true;
       for (const r of readings) r.stop();
+      for (const sub of serving) sub.unsubscribe();
       const nc = await conn?.catch(() => undefined);
       await nc?.close();
     },

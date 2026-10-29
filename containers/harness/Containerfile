@@ -130,6 +130,10 @@ RUN groupadd -g 10500 gpu && groupadd -g 10501 gpudev && groupadd -g 10502 gpuct
 # The outbox mount point, as the broker keeps it: thermite writes, the supervisor's group (10001)
 # reads. A new named volume copies this ownership, whichever container mounts it first.
 RUN mkdir -p /outbox && chown 10010:10001 /outbox && chmod 2750 /outbox
+# The folder the inbox is mounted in (/controller/inbox, src/core/paths.ts): root's, with the
+# controller's group, closed to everyone else. No role reaches what the supervisor fetched (a kit's
+# bundle among it), whatever the modes in the mounted folder are.
+RUN mkdir -p /controller && chown 0:10010 /controller && chmod 0750 /controller
 WORKDIR /opt/thermite
 COPY --from=build /src/package.json ./
 COPY --from=build /src/node_modules ./node_modules

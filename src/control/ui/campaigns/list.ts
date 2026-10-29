@@ -177,6 +177,20 @@ export interface StartRig {
   context?: { note: string; line: string; refused: boolean } | undefined;
 }
 
+/**
+ * What a run's agents search in the knowledge base (goal 175): the campaign's whole collection or
+ * only the run's own items, and the granted collections it includes, all ticked to start with.
+ * `granted_shown` tells the form's handler that none ticked means none.
+ */
+function knowledgeField(granted: readonly string[]): string {
+  const opt = (value: string, title: string, line: string, on: boolean) =>
+    `<label class="sopt"><input type="radio" name="collection" value="${value}"${on ? " checked" : ""}><span><b>${title}</b><span class="sd">${line}</span></span><span></span></label>`;
+  const grants = granted.length
+    ? `<input type="hidden" name="granted_shown" value="1"><div class="small muted" style="margin-top:6px">Also search, read only:</div>${granted.map((g) => `<label class="small"><input type="checkbox" name="granted" value="${esc(g)}" checked> ${esc(g)}</label>`).join(" ")}`
+    : "";
+  return `<div class="sfd" data-agents-only>${infoLabel("What its agents search", "The run's agents search Thermite's knowledge base with kb_search. Continue: the campaign's whole collection, with every earlier run's items. Start fresh: only this run's own items. Either way, this run's items go into the campaign's collection. Ticked collections of other campaigns, which you granted this campaign, are searched too, read only. Fixed when the run starts.")}<div class="sopts">${opt("continue", "Continue the campaign's collection", "Earlier runs' items, and this run's.", true)}${opt("fresh", "Start fresh", "Only this run's own items.", false)}</div>${grants}</div>`;
+}
+
 /** The Start a run panel: where it runs, agents on or off (with a model if the rig has none). */
 export function startDrawer(o: {
   campaign: string;
@@ -192,6 +206,8 @@ export function startDrawer(o: {
   copyPick?: string | undefined;
   /** "From past research" (goal 065): a search of the collections the campaign may read. */
   past?: string | undefined;
+  /** The other campaigns' collections it is granted now, which a run may also search (goal 175). */
+  granted?: readonly string[] | undefined;
 }): string {
   // A stopped pod is chosen only by the owner: starting it costs money.
   const first =
@@ -235,6 +251,7 @@ ${
     ? `<div class="sfd" data-agents-only>${infoLabel("Experiments to start with", "Each run has its own queue. Copy the experiments another run of this campaign had not tried yet, so the new run starts from them; who added each one and why come along. Leave it off for an empty queue the planner fills.")}<label class="sopt"><input type="checkbox" name="copy_queue" value="1" checked><span><b>Copy the untried experiments of</b> <select name="copy_from" aria-label="From which run" style="width:auto;height:28px;display:inline-block;margin-left:4px">${o.copyFrom.map((x) => `<option value="${esc(x.key)}"${x.key === o.copyPick ? " selected" : ""}>${esc(x.label)}</option>`).join("")}</select><span class="sd">They join the new run's queue in the same order, up to 500. The tried ones stay with their run.</span></span><span></span></label></div>`
     : ""
 }${o.past ?? ""}
+${knowledgeField(o.granted ?? [])}
 <details class="adv"><summary>More options</summary><div class="sgrid">
 <label class="sfd">${infoLabel("When a change is confirmed better", "Keep it at once as the new best (the default), or wait for you every time. The rig's default is set on its Edit rig page.")}<select name="promotion"><option value="">the rig's default</option><option value="auto">always keep it</option><option value="owner_approval">ask me every time</option></select></label>
 <div class="sfd">${infoLabel("Ask me first about", "Thermite is hands-off by default: when the judge confirms a change is better, it becomes the champion with no step of yours (after the auditor clears it, when the rig has an auditor and the campaign calls for an audit). A review panel's pass is accepted, and a goal campaign the evidence shows is not possible ends. Choose here what you want to decide yourself; it then waits for you in Needs you.")}<span class="act" style="display:grid;gap:4px"><input name="ask_above_gain" inputmode="decimal" placeholder="a gain above this %, such as 15 (empty: never)" aria-label="Ask me about a gain above this percent"><label class="small" title="A change whose agent declared flaws in it waits for you."><input type="checkbox" name="ask_declared_flaws" value="1"> a change whose agent declared flaws</label><label class="small" title="A review goal is met, and a research run writes its paper and ends, only after you accept the review panel's pass."><input type="checkbox" name="ask_reviews" value="1"> a review panel's pass of a goal or of a research run's questions</label><label class="small" title="A goal campaign the evidence shows is not possible ends only after you accept."><input type="checkbox" name="ask_not_possible" value="1"> ending a goal campaign as not possible</label></span></div>

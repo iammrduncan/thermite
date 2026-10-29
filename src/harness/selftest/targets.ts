@@ -1,11 +1,12 @@
-import { chmodSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, type Dirent, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { writeAtomic } from "../../common/fs.ts";
 import { LAYOUT_FILE, type LayoutRecord, type Role, walk } from "../broker/index.ts";
 
 /**
  * What the role probes aim at in the rig's folders: a research folder written for the selftest,
- * the first kit, build and baseline file there are, and the broker's record of shared mode; and
+ * the first file in the inbox, the first kit, build and baseline file there are, and the broker's
+ * record of shared mode; and
  * the removal of what the selftest made.
  */
 
@@ -42,6 +43,29 @@ export function sharedRecord(socketPath: string): LayoutRecord | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The most entries the inbox's walk looks at for a file to probe. */
+const INBOX_LOOK_MAX = 1000;
+
+/** A file in the inbox (a bundle or a model the supervisor fetched), by its full path. */
+export function firstInboxFile(inboxDir: string): string | undefined {
+  const stack = [inboxDir];
+  for (let seen = 0; stack.length && seen < INBOX_LOOK_MAX; ) {
+    const dir = stack.pop() as string;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      seen++;
+      if (e.isFile()) return join(dir, e.name);
+      if (e.isDirectory()) stack.push(join(dir, e.name));
+    }
+  }
+  return undefined;
 }
 
 export function firstKitFile(kitsDir: string): string | undefined {

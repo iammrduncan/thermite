@@ -12,4 +12,5 @@ export {
   mcpAgentTools,
   mcpLine,
   opencodeMcp,
+  servedNames,
 } from "./tools.ts";

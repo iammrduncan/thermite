@@ -1,7 +1,7 @@
 import type { CompactionReport } from "../../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
 import type { Prompt, Section } from "../../../agents/prompt.ts";
-import type { NoteRequest } from "../../../agents/tools/index.ts";
+import type { KbCall, NoteRequest } from "../../../agents/tools/index.ts";
 import type { McpCallResult } from "../../../common/mcp-client.ts";
 import type { LaneLimitValues } from "../../../core/contract.ts";
 import type { McpToolInfo } from "../../../core/mcp.ts";
@@ -52,6 +52,12 @@ export interface TrialSpec {
    * through the harness's gateway with its own token.
    */
   mcpServers?: string[] | undefined;
+  /**
+   * The kinds the worker may write in the knowledge base, as the run's contract lets a worker
+   * (goal 175): it gets kb_search and kb_read, and kb_write when it may write one. Undefined: no
+   * knowledge base tools.
+   */
+  kbWrites?: string[] | undefined;
   /** The owner's addition to the worker for the run's campaign (goal 166); none: no section. */
   addition?: OwnerAddition | undefined;
 }
@@ -85,6 +91,8 @@ export interface TrialDeps {
   note?(req: NoteRequest): Promise<{ note: number }>;
   /** The research service (sources, claims and notes in the run's folder): one operation. */
   research?(op: string, args: Record<string, unknown>): Promise<unknown>;
+  /** The knowledge base's tools (goal 175), run by the harness for the trial's own slot. */
+  kb?: KbCall | undefined;
   /** The live view: the session's turns out, the owner's messages in. */
   link?: SessionLink | undefined;
   /** The MCP tools the run's kit gives its workers, and how to call one (the harness's gateway). */

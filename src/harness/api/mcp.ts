@@ -3,28 +3,42 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import type { McpCaller } from "../../agents/mcp/index.ts";
+import { KB_SERVER, kbServer } from "../../agents/tools/index.ts";
+import { workerSlot } from "../../core/kb.ts";
+import type { KbCaller } from "../kb/index.ts";
 import { type ApiContext, Unauthorized } from "./context.ts";
 
-/** The MCP gateway, through which the workers and the planner call their run's MCP servers. */
+/**
+ * The MCP gateway, through which the workers and the planner call their run's MCP servers, and
+ * Thermite's own server (KB_SERVER), whose tools are the knowledge base's (goal 175).
+ */
 export function mcpRoutes(app: Hono, { service, trialOf }: ApiContext): void {
   // The MCP gateway for workers (their trial's token) and the planner (a credential the harness
   // made for one plan): the tools their run's kit gives their kind of agent, never a secret.
-  const mcpCaller = (header: string | undefined): McpCaller => {
+  // The caller's slot in the knowledge base comes from the trial (its lane) or the plan.
+  const callers = (header: string | undefined): { mcp: McpCaller; kb: KbCaller } => {
     const h = header ?? "";
     const given = h.startsWith("Bearer ") ? h.slice(7) : "";
     if (given.startsWith("trial.")) {
       const t = trialOf(h).trial;
-      return { run: t.run, kind: "workers", source: `trial:${t.id}` };
+      return {
+        mcp: { run: t.run, kind: "workers", source: `trial:${t.id}` },
+        kb: { run: t.run, slot: workerSlot(t.lane) },
+      };
     }
     const caller = given.startsWith("mcp.") ? service.mcpTokenCaller(given) : undefined;
     if (!caller) throw new Unauthorized("unauthorized");
-    return caller;
+    // A credential made for a plan is the planner's; one for another caller writes nothing.
+    return {
+      mcp: caller,
+      kb: { run: caller.run, slot: caller.kind === "planner" ? "planner" : "" },
+    };
   };
   app.get("/v1/mcp-tools", async (c) =>
-    c.json(await service.mcp.tools(mcpCaller(c.req.header("authorization")))),
+    c.json(await service.mcp.tools(callers(c.req.header("authorization")).mcp)),
   );
   app.post("/v1/mcp-call", bodyLimit({ maxSize: 4 * 1024 * 1024 }), async (c) => {
-    const caller = mcpCaller(c.req.header("authorization"));
+    const caller = callers(c.req.header("authorization"));
     const b = z
       .strictObject({
         server: z.string().min(1).max(64),
@@ -32,16 +46,30 @@ export function mcpRoutes(app: Hono, { service, trialOf }: ApiContext): void {
         arguments: z.record(z.string(), z.unknown()).default({}),
       })
       .parse(await c.req.json());
-    return c.json(await service.mcp.call(caller, b.server, b.tool, b.arguments));
+    if (b.server === KB_SERVER) {
+      const r = await service.kbTools.call(caller.kb, b.tool, b.arguments);
+      return c.json({
+        content: [{ type: "text", text: r.text }],
+        ...(r.isError ? { isError: true } : {}),
+      });
+    }
+    return c.json(await service.mcp.call(caller.mcp, b.server, b.tool, b.arguments));
   });
-  // One server as an MCP endpoint (streamable HTTP, stateless), for OpenCode and Claude Code.
+  // One server as an MCP endpoint (streamable HTTP, stateless), for OpenCode, Claude Code and
+  // Codex: the kit's servers, and Thermite's own.
   app.all("/v1/mcp/:server", bodyLimit({ maxSize: 4 * 1024 * 1024 }), async (c) => {
-    const caller = mcpCaller(c.req.header("authorization"));
+    const caller = callers(c.req.header("authorization"));
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
-    await service.mcp.serverFor(caller, c.req.param("server")).connect(transport);
+    const name = c.req.param("server");
+    const kb = service.kbTools;
+    const server =
+      name === KB_SERVER
+        ? kbServer(kb.callFor(caller.kb), kb.writes(caller.kb.run, caller.kb.slot))
+        : service.mcp.serverFor(caller.mcp, name);
+    await server.connect(transport);
     return transport.handleRequest(c.req.raw);
   });
 }

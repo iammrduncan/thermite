@@ -72,7 +72,7 @@ export async function cliOnce<T extends CliTally>(
       if (!deps.mintProxyToken) throw new Error(`${p.name} needs a credential for the model proxy`);
       return deps.mintProxyToken(model);
     },
-    mcp: o.mcp?.servers.length ? { apiUrl: deps.apiUrl, ...o.mcp } : undefined,
+    mcp: o.mcp?.servers.length || o.mcp?.kb ? { apiUrl: deps.apiUrl, ...o.mcp } : undefined,
     keptAt: keeping?.keptAt,
     timeoutMs: o.timeoutMs,
     tools: o.tools,

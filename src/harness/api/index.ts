@@ -6,6 +6,7 @@ import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import type { HarnessService } from "../service/index.ts";
 import { advisorRoutes } from "./advisors.ts";
 import { type ApiTokens, apiContext, type HarnessApiExtras, statusFor } from "./context.ts";
+import { kbRoutes } from "./kb.ts";
 import { mcpRoutes } from "./mcp.ts";
 import { promptRoutes } from "./prompts.ts";
 import { proxyRoutes } from "./proxy.ts";
@@ -58,6 +59,7 @@ export function createHarnessApi(
   proxyRoutes(app, api);
   rigRoutes(app, api);
   mcpRoutes(app, api);
+  kbRoutes(app, api);
   reportRoutes(app, api);
   advisorRoutes(app, api);
   liveRoutes(app, api);

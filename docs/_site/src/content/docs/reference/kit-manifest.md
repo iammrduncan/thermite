@@ -151,7 +151,160 @@ The device's driver also refuses values it cannot believe. The `cpu` driver refu
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `name` | text matching `^[a-z0-9][a-z0-9-]{0,63}$` | required | The server's name in **Settings** |
+| `name` | text matching `^[a-z0-9][a-z0-9-]{0,63}---
+title: "Kit manifest"
+description: "Every field of kit.json, and the placeholders, processes, limits, outputs and outcomes of a kit."
+type: reference
+sidebar:
+  order: 3
+---
+
+A **kit** is the judge's recipe for one project: how to build a candidate, run it on each input, time it and check its results. It is a git repository with `kit.json`, the manifest, at its root. Agents never see it. This page describes the manifest and how the [judge](glossary.md) uses it.
+
+[Why the benchmark lives in a kit](../explanation/kits.md) says why kits exist. [Write a kit for your project](../how-to/campaigns/write-a-kit.md) and [Test a kit with known candidates](../how-to/campaigns/test-a-kit.md) give the steps.
+
+This is the manifest of the CPU smoke kit in the repository, [`kits/smoke-cpu`](https://github.com/iammrduncan/thermite/blob/main/kits/smoke-cpu):
+
+```json title="kit.json"
+{
+  "schema_version": 1,
+  "name": "smoke-cpu",
+  "target": "cpu",
+  "build": {
+    "copy": ["bench"],
+    "command": ["sh", ".kit/bench/build.sh"],
+    "outputs": ["out/bench"],
+    "timeout_s": 120,
+    "rss_mib": 1024,
+    "disk_mib": 256
+  },
+  "cells": {
+    "small": { "n": 128, "reps": 240, "seed": 11, "work": 1006632960 },
+    "large": { "n": 256, "reps": 40, "seed": 23, "work": 1342177280 },
+    "held": { "n": 192, "reps": 60, "seed": 37, "work": 849346560 }
+  },
+  "run": {
+    "command": ["{build:out/bench}", "{params}", "{out}"],
+    "timeout_s": 60,
+    "rss_mib": 256,
+    "disk_mib": 32
+  },
+  "metrics": {
+    "flops_per_s": { "unit": "FLOP/s", "work": "work" }
+  },
+  "check": {
+    "command": ["node", "{kit:check.mjs}", "{params_json}", "{out}"],
+    "timeout_s": 60
+  }
+}
+```
+
+The build copies the kit's `bench` folder into the source tree and compiles the candidate. Each run executes the build on one cell's parameters. The check, the judge's own program, reads the run's outputs and says whether they are correct. The metric is the cell's `work` divided by the run's time on the judge's clock.
+
+## Layout
+
+A kit is a git repository. `kit.json` sits at its root; every other file belongs to the kit: build scripts, run drivers, the check, reference results. Scripts may be in any language the rig's image can run. A [contract](contract.md) names the kit and pins its commit in `project.kit`.
+
+## `kit.json`
+
+Unknown fields are refused at every level.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `schema_version` | `1` | required | The manifest format |
+| `name` | text matching `^[a-z0-9][a-z0-9._-]{0,63}$` | required | The kit's name |
+| `target` | text | required | The kind of device the kit measures on. This version has the drivers `cpu` and `cuda-gpu`. A rig only measures with a kit whose `target` is its own |
+| `build.copy` | list of kit paths | `[]` | Kit files and folders copied into the source tree under `.kit/<path>` before the build |
+| `build.command` | list of text, at least one | required | The build's command and arguments, run in the source tree. Placeholders are not expanded here |
+| `build.outputs` | list of paths, at least one | required | Paths, relative to the source tree, that make up the build |
+| `build.timeout_s` | integer from 1 to 86400 | 600 | The build's time limit, in seconds |
+| `build.rss_mib` | integer ≥ 1 | 4096 | The build's memory limit, in MiB |
+| `build.disk_mib` | integer ≥ 1 | 4096 | The build's disk limit, in MiB |
+| `cells` | object | required | Every cell the kit can measure, with its parameters and, when it needs one, its own time limit. See [Cells](#cells) |
+| `run.copy` | list of kit paths | `[]` | Kit files and folders copied, read-only, into every run. A run reaches them as `{kit:<path>}` |
+| `run.command` | list of text, at least one | required | One run of one build on one cell |
+| `run.timeout_s` | integer from 1 to 86400 | 300 | A run's time limit, in seconds, for each cell that sets none of its own |
+| `run.rss_mib` | integer ≥ 1 | 1024 | A run's memory limit, in MiB |
+| `run.disk_mib` | integer ≥ 1 | 256 | A run's disk limit, in MiB |
+| `metrics` | object | required | What the judge measures. See [Metrics](#metrics) |
+| `check.command` | list of text, at least one | required | The check's command and arguments. See [Check output](#check-output) |
+| `check.timeout_s` | integer from 1 to 86400 | 120 | The check's time limit, in seconds |
+| `verifiers` | object | `{}` | Named verifiers for goal campaigns. See [Verifiers](#verifiers) |
+| `mcp_servers` | list | none | The MCP servers the campaign's agents use, and which agents get each. See [MCP servers](#mcp-servers) |
+
+### Rules across fields
+
+| Rule | Message |
+| --- | --- |
+| A kit path (in `build.copy` or `run.copy`) is relative and normalized, stays inside the kit, has no `..`, does not start or end with `/`, and is not `.` | `a kit path is relative, normalized and inside the kit` |
+| Each name in a verifier's `requires` is another verifier of the kit | `<name> is not another verifier of this kit` |
+| Verifiers' `requires` do not form a loop | `verifier gates form a cycle` |
+| Every `{kit}` or `{kit:<path>}` in `run.command` is in `run.copy` | `{kit:<path>} is not in run.copy (a run cannot read the kit)` |
+| Every time limit (`build.timeout_s`, `run.timeout_s`, `check.timeout_s` and a cell's `timeout_s`) is at most 86400 seconds, a day: the judge runs nothing for longer | `a time limit is at most 86400 s (24 hours)` |
+
+### Cells
+
+A **cell** is one measured input, a test case: a name and its parameters. The dashboard calls cells **cases**. `cells` maps each cell's name to its parameters, in one of two forms:
+
+- **Its parameters alone:** an object whose values are numbers, text or `true`/`false`, such as `"small": {"n": 128, "work": 1006632960}`. Its runs have the time limit `run.timeout_s`.
+- **Its parameters and its own time limit:** `{"params": {…}, "timeout_s": <seconds>}`. `timeout_s` is an integer from 1 to 86400. It replaces `run.timeout_s` for this cell's runs only, so one slow cell does not set the limit for every cell. Leave `timeout_s` out to keep `run.timeout_s`. No other field is taken in this form.
+
+```json title="kit.json (part)"
+{
+  "cells": {
+    "small": { "n": 128, "work": 1006632960 },
+    "diagnostic": { "params": { "n": 4096, "mode": "full", "work": 137438953472 }, "timeout_s": 1800 }
+  },
+  "run": { "command": ["{build:out/bench}", "{params}", "{out}"], "timeout_s": 60 }
+}
+```
+
+Here `small` is stopped after 60 seconds and `diagnostic` after 1,800. A parameter's value is never an object, so the second form is never read as parameters. A parameter that is called `timeout_s` in the first form is only a parameter: it sets no limit. A kit written before cells could set a limit works as before.
+
+A run receives the parameters through `{params}` and `{params_json}`, in both forms; the time limit is not among them.
+
+The contract chooses which cells count: `cells` for every block, `held_out_cells` for confirmation only, and each goal's cells. A rate metric reads one parameter, named by its `work`, from each cell; time and check metrics need none.
+
+### Metrics
+
+`metrics` maps each metric's name to one of three kinds. The judge works out every value itself: a run never reports its own score.
+
+| Kind | Form | Value |
+| --- | --- | --- |
+| Rate | `{"unit": "<unit>", "work": "<parameter>"}` | The cell's parameter named by `work`, divided by the run's time in seconds on the judge's clock. `unit` is required |
+| Time | `{"unit": "s", "from": "time"}` | The run's time in seconds, on the judge's clock. `unit` defaults to `s`. A contract improves it with `"direction": "min"` |
+| From the check | `{"unit": "", "from": "check", "field": "<field>"}` | A number the kit's check prints under `<field>` in its result line, for example an accuracy. `unit` defaults to empty |
+
+Every value must be above zero, because the judge compares runs by their ratio. A run whose check prints no number above zero for a check metric is invalid: `the check reported no <field> above zero (got <value>)`. Every run works out every metric of the kit, so each case the contract runs needs each rate's `work` parameter, a number above zero: the [check against the contract](#the-kit-against-the-contract) refuses a case without it. A rate whose `work` parameter is still missing, zero or not a number at a run is an infrastructure error: `kit metric <name>: bad work <value> or time <seconds>`. On a held-out case, the agents get only `a held-out check could not finish (an infrastructure failure)`, and the rig's log keeps the error.
+
+The device's driver also refuses values it cannot believe. The `cpu` driver refuses values that are not finite; the `cuda-gpu` driver refuses values that are not finite or not above zero.
+
+### Verifiers
+
+`verifiers` maps each verifier's name to how a goal contract's `{"type": "code", "verifier": "<name>"}` goal is checked. A verifier passes when one run on each of its cells ends normally and passes the kit's check.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `cells` | list of cell names, at least one | required | The cells whose runs must all pass the check |
+| `priority` | integer | 100 | The order verifiers run in: lower first. Goals are checked in this order and reported in the contract's order |
+| `requires` | list of verifier names | `[]` | Gates: other verifiers that must pass first. If one does not, this verifier runs none of its cells, and its goal is unmet with `not run: it requires <names>, which did not pass`. A gate with no cells in this pass (all held out, or none held out) does not block |
+
+### MCP servers
+
+`mcp_servers` lists the [MCP servers](../how-to/campaigns/give-agents-mcp-tools.md) whose tools this kit's campaigns give their agents, by their names in control's **Settings › Providers**. The judge never uses them. At most 20 servers, each named once.
+
+```json title="kit.json (part)"
+{
+  "mcp_servers": [
+    { "name": "gbrain", "agents": ["workers", "planner", "advisors"] },
+    { "name": "github", "agents": ["workers", "advisors"], "tools": { "advisors": ["search_code"] } }
+  ]
+}
+```
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+ | required | The server's name in **Settings**. Not `thermite`, the name of Thermite's own server, which gives every agent the [knowledge base's tools](knowledge-base.md#the-agents-tools), refused with "thermite is the name of Thermite's own tools: give the server another name" |
 | `agents` | list of `workers`, `planner` and `advisors`, at least one, each once | required | The kinds of agent that get the server: the workers (every lane), the planner, and the advisors (the teachers, the auditor and the review panel) |
 | `tools` | object | none | Only when narrowed: for a kind of agent in `agents`, the tools it may call, as a list of 1 to 500 tool names, each once. A kind left out gets every tool the server lists. A kind not in `agents` is refused: `the <kind> do not get this server: add <kind> to agents, or take out its tools` |
 

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   createReadStream,
   existsSync,
   mkdirSync,
@@ -272,10 +273,22 @@ async function bundleFromGit(
   const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
   try {
     await git(cache, ["bundle", "create", tmp, ref]);
+    chmodSync(tmp, bundleMode(cfg.inboxDir));
     renameSync(tmp, target);
   } finally {
     rmSync(tmp, { force: true });
   }
+}
+
+/**
+ * A bundle's mode: its owner and the inbox's group read it, and other users only where the inbox
+ * lets them in. Where the inbox is closed to others, its group is the harness's controller's (the
+ * one-container image, a cluster's volume), and the bundle is 0640. Under compose and on a machine,
+ * the controller reads the inbox as another user, in a folder of the harness image that only it
+ * may enter, and the bundle is 0644.
+ */
+function bundleMode(inboxDir: string): number {
+  return statSync(inboxDir).mode & 0o004 ? 0o644 : 0o640;
 }
 
 /** Git access by name, from control: only for a campaign assigned to this rig that names it. */

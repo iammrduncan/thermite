@@ -18,7 +18,23 @@ import { clip } from "../../core/kb-index.ts";
  */
 
 export type { KbKind } from "../../core/kb.ts";
+export {
+  answerKbAsk,
+  hitOf,
+  KB_ASKS_IN_FLIGHT_MAX,
+  KbAskLimit,
+  kbAskLimit,
+  serveKbAsks,
+} from "./asks.ts";
 export { followKbFiles, KbFiles } from "./files.ts";
+export {
+  KbReadQuery,
+  KbSearchQuery,
+  kbReadFields,
+  kbSearchFields,
+  ownerKbRead,
+  ownerKbSearch,
+} from "./owner.ts";
 
 /** The field notes' kinds (journal_note); a research note is a note of kind "note". */
 export const JOURNAL_KINDS = ["observation", "decision", "surprise", "question", "lesson"] as const;
@@ -53,6 +69,10 @@ export interface KbItem {
   at: string;
   updated_at: string;
 }
+
+/** An item a search found: the item, the part of its text around the words that matched (each in
+ * **bold**), and why it matched, in words (control/store/kb/search.ts). */
+export type KbFound = KbItem & { excerpt: string; why: string };
 
 /** One campaign's collection: its items by kind, its runs, its newest change and its grants. */
 export interface KbCollection {

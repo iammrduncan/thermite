@@ -1,4 +1,4 @@
-import { type BusTrust, connectOnce } from "../../common/bus.ts";
+import { type BusTrust, connectOnce } from "../../common/bus/index.ts";
 import { jetStreamFiguresSubject, reloadSubject } from "../../core/link/users.ts";
 
 /**

@@ -120,7 +120,7 @@ The agent sends it with the `issue_command` tool, kind `assign_campaign`, then p
 
 For the kit, give control the kit's repository instead, and start the run with `--kit control:NAME`: control keeps the kit, and the rig fetches it from control. See [Give control a kit you wrote elsewhere](write-a-kit.md#give-control-a-kit-you-wrote-elsewhere).
 
-Otherwise, put the project and the kit in the rig's inbox yourself, as git bundles that hold the commits. This works for a private repository too. The inbox is `/inbox` in the rig's containers, and `.dev/inbox` in your Thermite folder on the local stack:
+Otherwise, put the project and the kit in the rig's inbox yourself, as git bundles that hold the commits. This works for a private repository too. The inbox is `/inbox` in the rig's supervisor, and `.dev/inbox` in your Thermite folder on the local stack:
 
 ```sh
 mkdir -p .dev/inbox/repos

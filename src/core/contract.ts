@@ -2,9 +2,12 @@ import { z } from "zod";
 import { canonicalSha } from "./canonical.ts";
 import { AgentsContext } from "./compaction.ts";
 import { DURATION_PATTERN, parseDuration } from "./duration.ts";
-import { CampaignId } from "./ids.ts";
+import { CampaignId, MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
+import { KbWrites } from "./kb.ts";
 import { McpUses } from "./mcp.ts";
 import { additionRefusals, RoleAdditions } from "./role-additions.ts";
+
+export { MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
 
 /**
  * Campaign contract, schema version 1.
@@ -37,20 +40,17 @@ const RegexSchema = z
     }
   }, "invalid regular expression");
 
+/**
+ * A research campaign's web search policy. Thermite has no web search of its own (web search comes
+ * from an MCP server the campaign names, goal 046), so nothing reads it: a contract may still carry
+ * it, and keeps its hash, until a new contract version leaves it out.
+ */
 const SearchPolicy = z.strictObject({
   /** What public search may be used for, stated for agents and auditors. */
   allowed_purposes: z.array(z.string().min(1)).default([]),
   /** Regular expressions; matching queries are refused and logged. */
   blocked_patterns: z.array(RegexSchema).default([]),
 });
-
-/**
- * The most lanes a rig can run: its harness image has a user for each of lanes 1 to 16
- * (containers/harness/Containerfile; IDS.maxLanes in src/harness/broker/runner.ts). A contract's
- * lanes.count, a rig's workers at a time and the campaign builder refuse more, with this reason.
- */
-export const MAX_LANES = 16;
-export const MAX_LANES_REASON = `at most ${MAX_LANES}: a rig has users for lanes 1 to ${MAX_LANES} only`;
 
 /**
  * What a worker's lane may use. Optional and without schema defaults, so contracts written
@@ -187,6 +187,13 @@ const Common = {
    * keep their hash.
    */
   role_additions: RoleAdditions.optional(),
+  /**
+   * Which kinds of item each role may write in its own slot of Thermite's knowledge base (goal
+   * 175): planner, worker, teacher, merged-by, auditor, review-panel, synthesizer and
+   * final-writer, each with its kinds. Left out: core/kb.ts's KB_WRITES_DEFAULT. Optional and
+   * without a default, so contracts written before it keep their hash.
+   */
+  kb_writes: KbWrites.optional(),
 };
 
 const EditPolicy = {

@@ -27,6 +27,7 @@ import {
   containerChecks,
   controlKeyCheck,
   enrollCodeCheck,
+  firstInboxFile,
   type IsolationReport,
   isFailure,
   isolationBusy,
@@ -214,6 +215,47 @@ describe("the research folder the selftest probes", () => {
   });
 });
 
+describe("the inbox in the isolation selftest", () => {
+  test("a file in it is found by its full path, below its folders; an empty or missing inbox has none", () => {
+    const inbox = mkdtempSync(join(tmpdir(), "inbox-probe-"));
+    assert.equal(firstInboxFile(inbox), undefined);
+    assert.equal(firstInboxFile(join(inbox, "missing")), undefined);
+    mkdirSync(join(inbox, "repos"));
+    mkdirSync(join(inbox, "models"));
+    assert.equal(firstInboxFile(inbox), undefined);
+    writeFileSync(join(inbox, "repos", "kit.bundle"), "a kit's bundle");
+    assert.equal(firstInboxFile(inbox), join(inbox, "repos", "kit.bundle"));
+  });
+
+  test("in its closed folder, a bundle is read only by the controller's group, whatever its own mode", () => {
+    // As the harness image has it: a folder of root's with the controller's group, mode 0750, and
+    // the inbox mounted in it, its files open to every user.
+    const base = mkdtempSync(join(tmpdir(), "inbox-closed-"));
+    chmodSync(base, 0o755);
+    const closed = join(base, "controller");
+    const inbox = join(closed, "inbox");
+    mkdirSync(join(inbox, "repos"), { recursive: true });
+    chmodSync(closed, 0o750);
+    const bundle = join(inbox, "repos", "kit.bundle");
+    writeFileSync(bundle, "a kit's answers", { mode: 0o644 });
+    const probes: Probe[] = [
+      { name: "inbox-list", op: "list", path: inbox },
+      { name: "inbox-read", op: "read", path: bundle },
+    ];
+    // Its owner and group (here: this user) reach it, as the controller does.
+    assert.deepEqual(probe(probes), { "inbox-list": "ALLOWED", "inbox-read": "ALLOWED" });
+    // Another user, as every role is: refused at the closed folder (root can start one).
+    if (asRoot) {
+      const r = spawnSync(process.execPath, ["-e", PROBE, JSON.stringify(probes)], {
+        encoding: "utf8",
+        uid: 65534,
+        gid: 65534,
+      });
+      assert.deepEqual(JSON.parse(r.stdout), { "inbox-list": "EACCES", "inbox-read": "EACCES" });
+    }
+  });
+});
+
 describe("a role's probe for RunPod's variables", () => {
   test("none in its own environment or any it can read", () => {
     const proc = fakeProc([{ pid: 1, ppid: 0, env: { PATH: "/bin" } }]);
@@ -262,7 +304,6 @@ describe("the one-container image's checks of the container", () => {
       {
         supervisorHome: "/workspace/thermite/supervisor",
         supervisorToken: "/workspace/thermite/supervisor/harness-token",
-        inboxDir: "/workspace/thermite/inbox",
       },
     );
     // Pull mode: the key the harness trusts, and the SHA-256 the launch named.

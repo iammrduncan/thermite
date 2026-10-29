@@ -23,6 +23,7 @@ import {
 } from "../../../agents/programs/index.ts";
 import { messageText, type Prompt } from "../../../agents/prompt.ts";
 import type { AdvisorFrame } from "../../../agents/roles/index.ts";
+import { KB_SERVER } from "../../../agents/tools/index.ts";
 import type { UsageRoute } from "../../../core/usage.ts";
 import type { AdvisorKeeper, AdvisorResult, AdvisorTools } from "../call.ts";
 import {
@@ -84,9 +85,9 @@ export async function runCliHarness<S extends z.ZodType>(
   let tools: Awaited<ReturnType<typeof serveAdvisorTools>> | undefined;
   let proxy: Awaited<ReturnType<typeof serveAdvisorModel>> | undefined;
   try {
-    if (t?.pastSearch || t?.mcp?.servers.length || t?.code || t?.research || t?.paper)
+    if (t?.kb || t?.mcp?.servers.length || t?.code || t?.research || t?.paper)
       tools = await serveAdvisorTools({
-        pastSearch: t.pastSearch,
+        kb: t.kb,
         mcp: t.mcp,
         code: t.code,
         research: t.research,
@@ -168,7 +169,9 @@ export async function runCliHarness<S extends z.ZodType>(
       messageText(
         input.prompt({
           program: rt.runtime,
-          mcpServers: servers.map((s) => s.name),
+          // The kit's servers: Thermite's own has its own part of the prompt (goal 175).
+          mcpServers: servers.map((s) => s.name).filter((s) => s !== KB_SERVER),
+          kbWrites: t?.kb?.writes,
           answerSchema: input.answerSchema,
         }),
       ),

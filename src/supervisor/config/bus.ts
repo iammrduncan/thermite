@@ -1,4 +1,4 @@
-import type { Bus, BusMessage, Handled } from "../../common/bus.ts";
+import type { Bus, BusMessage, Handled } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { type ConfigFigures, FIGURE_CONFIG_SUBJECTS } from "../../core/api/control/rigs.ts";

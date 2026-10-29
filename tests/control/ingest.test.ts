@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { buildInfo } from "../../src/common/build-info.ts";
-import type { Bus, BusMessage } from "../../src/common/bus.ts";
+import type { Bus, BusMessage } from "../../src/common/bus/index.ts";
 import { foldReport, followReports, type Intake } from "../../src/control/ingest.ts";
 import {
   REPORT_CONSUMER,

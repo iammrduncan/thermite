@@ -1,4 +1,4 @@
-import { BUS_READ_MAX } from "../../src/common/bus.ts";
+import { BUS_READ_MAX } from "../../src/common/bus/index.ts";
 import { EventsApply, EventsMove, EventsWriter } from "../../src/control/events/index.ts";
 import { keepReport } from "../../src/control/ingest.ts";
 import { ControlStore, type IngestReport } from "../../src/control/store/index.ts";

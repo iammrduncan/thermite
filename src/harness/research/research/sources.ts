@@ -230,18 +230,6 @@ export function searchCorpus(ctx: ResearchContext, run: string, text: string, sk
   };
 }
 
-/** Web search: every query is checked against the contract's search policy and logged. */
-export function searchWeb(ctx: ResearchContext, run: string, lane: string | null, query: string) {
-  const c = ctx.contract(run);
-  const q = query.slice(0, 500);
-  const blocked = (c.search_policy?.blocked_patterns ?? []).find((p) => new RegExp(p, "i").test(q));
-  const reason = blocked
-    ? `blocked by the search policy (${blocked})`
-    : "this rig has no web search: fetch URLs from the seeds and the links of archived sources";
-  ctx.ledger.sources.recordQuery({ run, lane, query: q, allowed: false, reason });
-  return { results: [], note: reason };
-}
-
 /**
  * Links from archived sources that are not archived yet: where to go next without search.
  * Site boilerplate (a link found on two or more archived pages of the same site, such as

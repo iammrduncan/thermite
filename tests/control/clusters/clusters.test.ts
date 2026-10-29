@@ -227,11 +227,27 @@ describe("rigs on Kubernetes", () => {
     assert.ok(inits.length > 0);
     for (const i of inits) {
       assert.doesNotMatch(i, /chown -R/);
-      assert.match(
-        i,
-        /chown 10001:10001 \/data\/inbox \/data\/inbox\/repos \/data\/inbox\/models \/data\/supervisor/,
-      );
+      assert.match(i, /chown 10001:10001 \/data\/supervisor/);
     }
+  });
+
+  test("the inbox is the supervisor's with the controller's group, and the harness reads it in a closed folder", () => {
+    const objs = clusterRigObjects(plan, secrets) as Obj[];
+    const inits = JSON.stringify(objs).match(/"name":"prepare"[^}]*"command":\[[^\]]*\]/g) ?? [];
+    assert.ok(inits.length > 0);
+    const inbox = "\\/data\\/inbox \\/data\\/inbox\\/repos \\/data\\/inbox\\/models";
+    for (const i of inits) {
+      assert.match(i, new RegExp(`chown 10001:10010 ${inbox}`));
+      assert.match(i, new RegExp(`chmod 2750 ${inbox}`));
+    }
+    const mounts = JSON.stringify(objs).match(/\{[^{}]*"subPath":"inbox"[^{}]*\}/g) ?? [];
+    assert.deepEqual(
+      mounts.map((m) => JSON.parse(m)),
+      [
+        { name: "data", mountPath: "/controller/inbox", subPath: "inbox", readOnly: true },
+        { name: "data", mountPath: "/inbox", subPath: "inbox" },
+      ],
+    );
   });
 
   test("the check reads nodes with their GPUs and the default storage class", () => {

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { appendFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { Bus, BusMessage, Handled } from "../../common/bus.ts";
+import type { Bus, BusMessage, Handled } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import {

@@ -6,6 +6,7 @@ import { ExperimentText } from "../../core/commands.ts";
 import type { LiveKind } from "../../core/live.ts";
 import { measurementIn, measurementRefusal } from "../../core/research-check.ts";
 import {
+  holdUntil,
   KIND_WORDS,
   type MessageInbox,
   type ProviderErrorKind,
@@ -132,7 +133,8 @@ export function trialReport(
 /**
  * A trial waits for its provider and then goes on in the same conversation (goal 079): a line in
  * its session, and for a rate limit, a wait the scheduler and the research clock read: no new
- * trial starts before it ends, and a research run's clock stops meanwhile.
+ * trial of its run starts before it ends, at most one trial's length from now (holdUntil), and a
+ * research run's clock stops meanwhile.
  */
 export function trialWait(
   svc: HarnessService,
@@ -159,13 +161,22 @@ export function trialWait(
     lane: trial.lane,
     run: trial.run,
   });
-  if (w.kind === "rate_limit" && !Number.isNaN(at.getTime()))
+  if (w.kind === "rate_limit" && !Number.isNaN(at.getTime())) {
+    const minutes = svc.settings.get().trial_minutes;
+    const until = holdUntil(
+      svc.ledger,
+      trial.run,
+      svc.contractFor(trial.run),
+      minutes === null ? undefined : minutes * 60_000,
+      at.toISOString(),
+    );
     svc.ledger.appendEvent("scheduler", "agents_wait_for_limit", trial.run, {
-      until: at.toISOString(),
+      until,
       trial: trial.id,
       reason: w.words.slice(0, 600),
       in_trial: true,
     });
+  }
 }
 
 /**

@@ -115,14 +115,6 @@ export const RESEARCH_TOOLS: ResearchTool[] = [
     usage: "thermite-trial research read_source SOURCE [--offset N] [--length N]",
   },
   {
-    name: "search",
-    op: "search",
-    description: "Search the web (may be unavailable; the reason is returned).",
-    positional: "query",
-    args: { query: str("query") },
-    usage: "thermite-trial research search QUERY",
-  },
-  {
     name: "search_corpus",
     op: "search-corpus",
     description:

@@ -30,3 +30,11 @@ export function normalizePath(path: string): string {
 export function joinPath(...paths: string[]): string {
   return normalizePath(paths.filter((p) => p !== "").join("/"));
 }
+
+/**
+ * Where the harness reads its inbox, which the supervisor fills: inside a folder of the harness
+ * image's own that only root and the controller's group may enter (containers/harness/Containerfile),
+ * so that no role reaches what the supervisor fetched, whatever the modes in the mounted folder.
+ * Compose, the machine units and the cluster manifests mount the inbox here.
+ */
+export const HARNESS_INBOX_DIR = "/controller/inbox";

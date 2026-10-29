@@ -35,7 +35,7 @@ export const LOCAL_TOKEN_FILES = [
   "harness2-proposer-token",
 ] as const;
 
-/** The folders, relative to `.dev/`. The inbox ones are open to every user: see below. */
+/** The folders, relative to `.dev/`, which is closed to other users. The inbox's: see below. */
 export const LOCAL_FOLDERS = [
   "secrets",
   "inbox/repos",
@@ -48,7 +48,7 @@ export const LOCAL_FOLDERS = [
 ] as const;
 
 // The supervisor fetches sources into the inbox as its own user in its container: on native
-// Linux that user is not you, so the local inbox is open to it (local development only).
+// Linux that user is not you, so the inbox is open to it, inside the closed `.dev/`.
 const OPEN_FOLDERS = ["inbox", "inbox/repos", "inbox/models"];
 
 export interface Owner {
@@ -93,10 +93,14 @@ export function localInit(root: string, owner?: Owner): LocalInitResult {
     if (owner) chownSync(join(root, rel), owner.uid, owner.gid);
   };
   if (!existsSync(root)) {
-    mkdirSync(root, { recursive: true, mode: 0o755 });
+    mkdirSync(root, { recursive: true, mode: 0o700 });
     made.push(".");
     give(".");
   }
+  // `.dev/` is its owner's alone, made now or before: no other user of the computer reaches the
+  // tokens, the inbox or the advisors' keys. The containers mount the folders and files below it,
+  // so their own users still reach those.
+  chmodSync(root, 0o700);
   for (const folder of LOCAL_FOLDERS) {
     // Each step of the path, so that a new `inbox` is given away as well as `inbox/repos`.
     const parts = folder.split("/");

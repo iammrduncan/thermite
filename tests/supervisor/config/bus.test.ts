@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { BusMessage } from "../../../src/common/bus.ts";
+import type { BusMessage } from "../../../src/common/bus/index.ts";
 import {
   CONFIG_STREAM,
   type ConfigKey,
