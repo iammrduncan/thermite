@@ -45,14 +45,16 @@ import {
 } from "../../views/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { type LiveFeed, type PushedLine, pushLive, pushStart, recheckIds } from "./push.ts";
+import { terminalPanel, terminalRoutes } from "./terminal.ts";
 
 /**
  * Live, one run at a time (goal 063), under the run's address, with the owner's messages to its
- * agents; and one rig's sessions over every run. Each page's new lines are pushed to it as control
- * gets them (push.ts).
+ * agents; and one rig's sessions over every run, a trial's with its terminal and the owner's
+ * console (terminal.ts). Each page's new lines are pushed to it as control gets them (push.ts).
  */
 export function liveRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, moreMenu, opts, page, pauseMenu, runOf, store, views } = dash;
+  terminalRoutes(app, dash);
   /** The run a route names, under the campaign it names (goal 170). */
   const named = (c: Ctx) => runOf(c.req.param("campaign") ?? "", c.req.param("run") ?? "");
 
@@ -125,6 +127,16 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
       chip("advisors", "Advisors"),
       chip("you", "You", "your messages, and who read them"),
     ].join("");
+    // Each lane's trial at work in its program's own terminal (goal 169): its page has the terminal.
+    const inTerminals =
+      r.status === "running" && u.settings?.program_mode === "terminal" && u.model?.harness !== "pi"
+        ? Object.entries(r.at_work).sort(([a], [b]) =>
+            a.localeCompare(b, undefined, { numeric: true }),
+          )
+        : [];
+    const terminals = inTerminals.length
+      ? `<details class="lkept"><summary class="lchip" title="Each lane's agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.family)})</span></div>`).join("")}</div></details>`
+      : "";
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
       ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${kept
@@ -234,7 +246,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         active: "live",
         flush: true,
       },
-      `<div class="lwrap" id="lwrap">${nav}<section class="lcol">${head}<div data-fw-top></div><div class="lchips">${chips}<span class="grow"></span><span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
+      `<div class="lwrap" id="lwrap">${nav}<section class="lcol">${head}<div data-fw-top></div><div class="lchips">${chips}<span class="grow"></span>${terminals}<span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
 <div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>
 <div data-part="lnotice">${notice}</div>${box}</section></div>`,
       vs,
@@ -413,6 +425,16 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           .map((x) => `<a href="${runLiveHref(x)}">${esc(x.id)}</a>`)
           .join(", ")}.</div>`
       : `<div class="composer off">No run on this rig to message.</div>`;
+    // A trial's page has its terminal, and the owner's console into it (goal 169).
+    const term =
+      trial?.run && u.model?.harness !== "pi"
+        ? terminalPanel(dash, c, {
+            rig: u.id,
+            run: trial.run,
+            trial: source.slice(6),
+            ended: Boolean(ended.get(source)),
+          })
+        : "";
     const title = source ? sourceName(source, sel?.lane) : "Everything";
     return page(
       c,
@@ -443,7 +465,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         flush: true,
       },
       `<aside class="sessions"><div class="section" style="margin-top:4px">Sessions</div>${list}</aside>
-<div class="transcript-wrap">${head}<div class="transcript" id="transcript" data-stream="${esc(rigLiveStreamHref(u.id))}" data-source="${esc(source)}" data-after="${after}">${out.join("") || `<div class="empty">No live lines yet. They appear here as the rig's agents and judge work.</div>`}</div>${composer}</div>`,
+<div class="transcript-wrap">${head}${term}<div class="transcript" id="transcript" data-stream="${esc(rigLiveStreamHref(u.id))}" data-source="${esc(source)}" data-after="${after}">${out.join("") || `<div class="empty">No live lines yet. They appear here as the rig's agents and judge work.</div>`}</div>${composer}</div>`,
       vs,
     );
   });

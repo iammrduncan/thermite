@@ -218,6 +218,8 @@ async function codeTrial({ runner, runClaudeTrial, lane, scratchDir, terminal })
     command: `node ${here}/probe.mjs ${TOKEN.slice(0, half)} ${TOKEN.slice(half)} && thermite-trial submit --hypothesis "value two, from the real Claude Code"`,
   };
   const live = [];
+  // The trial's console in its terminal (goal 169): its last screen, kept in memory at its end.
+  let held;
   // What the broker records of each of Claude Code's runs (the program's run, or the terminal
   // host's, is the one it may spare from the memory limit), for the figure in Claude Code's limits
   // note.
@@ -257,6 +259,9 @@ async function codeTrial({ runner, runClaudeTrial, lane, scratchDir, terminal })
       pollMs: 300,
       afterSubmitMs: 1500,
       terminal,
+      console: (c) => {
+        if (c !== "headless") held = c;
+      },
     },
   ).finally(() => harnessApi.close());
   if (terminal) peakTerminalRssBytes = peak;
@@ -278,18 +283,19 @@ async function codeTrial({ runner, runClaudeTrial, lane, scratchDir, terminal })
     said || live.slice(-4),
   );
   if (terminal) {
-    // The host's copy of its transcript, which the tally came from, and its screen at the end.
+    // The host's copy of its transcript, which the tally came from, and its screen at the end,
+    // kept in memory for the live view, never in the trial's area.
     const copy = join(area, "claude-session.jsonl");
-    const screen = join(area, "claude-screen.ansi");
+    const screen = held?.lastScreen()?.data ?? "";
     const copied = existsSync(copy) ? readFileSync(copy, "utf8").split("\n").filter(Boolean) : [];
     check(
       "in its terminal, its transcript was copied for the harness and its tally came from it, and its screen was kept at the end",
       copied.some((l) => l.includes('"type":"assistant"')) &&
         trial.turns >= 2 &&
         trial.tokensIn > 0 &&
-        existsSync(screen) &&
-        readFileSync(screen, "utf8").length > 0,
-      { lines: copied.length, turns: trial.turns, screen: existsSync(screen) },
+        screen.length > 0 &&
+        !existsSync(join(area, "claude-screen.ansi")),
+      { lines: copied.length, turns: trial.turns, screen: screen.length },
     );
   }
   await runner.remove(area);

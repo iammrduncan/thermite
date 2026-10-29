@@ -94,13 +94,21 @@ describe("rigs on Kubernetes", () => {
       JSON.stringify(pod(objs, "thermite-k8s-a-1-supervisor")),
       /kubernetes\.io\/hostname/,
     );
-    // Neither pod gets a service-account token: nothing in them calls the cluster's API.
-    for (const name of ["thermite-k8s-a-1-harness", "thermite-k8s-a-1-supervisor"])
-      assert.equal(
-        (pod(objs, name) as { automountServiceAccountToken?: boolean })
-          .automountServiceAccountToken,
-        false,
-      );
+    // Neither pod gets a service-account token: nothing in them calls the cluster's API. Both run
+    // under the runtime's default seccomp profile; the supervisor keeps its own user.
+    for (const name of ["thermite-k8s-a-1-harness", "thermite-k8s-a-1-supervisor"]) {
+      const spec = pod(objs, name) as {
+        automountServiceAccountToken?: boolean;
+        securityContext?: { seccompProfile?: { type: string } };
+      };
+      assert.equal(spec.automountServiceAccountToken, false);
+      assert.deepEqual(spec.securityContext?.seccompProfile, { type: "RuntimeDefault" });
+    }
+    assert.deepEqual(pod(objs, "thermite-k8s-a-1-supervisor").securityContext, {
+      runAsUser: 10001,
+      runAsGroup: 10001,
+      seccompProfile: { type: "RuntimeDefault" },
+    });
     assert.equal(JSON.parse(asList(objs)).kind, "List");
   });
 
@@ -248,6 +256,30 @@ describe("rigs on Kubernetes", () => {
         { name: "data", mountPath: "/inbox", subPath: "inbox" },
       ],
     );
+  });
+
+  test("prepare runs as root with the controller's group, and enters the closed inbox at every start", () => {
+    // Root without DAC_READ_SEARCH enters the inbox (10001:10010, 2750) only through its group.
+    // With root's own group, prepare stopped at the inbox's folders, and no pod of the rig started.
+    // Without FSETID, root keeps the setgid bit only on a folder of its own group.
+    const objs = clusterRigObjects(plan, secrets) as Obj[];
+    for (const name of ["thermite-k8s-a-1-harness", "thermite-k8s-a-1-supervisor"]) {
+      const inits = pod(objs, name).initContainers as { name: string; securityContext: unknown }[];
+      assert.deepEqual(
+        inits.map((i) => [i.name, i.securityContext]),
+        [
+          [
+            "prepare",
+            {
+              runAsUser: 0,
+              runAsGroup: 10010,
+              allowPrivilegeEscalation: false,
+              capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER"] },
+            },
+          ],
+        ],
+      );
+    }
   });
 
   test("the check reads nodes with their GPUs and the default storage class", () => {

@@ -56,6 +56,7 @@ import {
   type LiveRelayState,
   publishLiveOnce,
   relayLiveOnce,
+  relayScreens,
   supervisorLive,
 } from "./live/index.ts";
 import { ModelDownloads } from "./model-download.ts";
@@ -520,6 +521,11 @@ async function main(): Promise<void> {
     }
   };
   const livingDone = living();
+  // The terminal view (goal 169): the screens of the trials someone watches on control.
+  const screensDone =
+    controlUrl && controlToken
+      ? relayScreens({ rig, harnessUrl, harnessToken, controlUrl, controlToken }, () => stopping)
+      : undefined;
 
   // Commands on their own short interval: a pause or a message should not wait for the next
   // report. The report loop below leaves commands to this one. With the bus, each command comes
@@ -764,6 +770,7 @@ async function main(): Promise<void> {
   }
   await advisingDone;
   await livingDone;
+  await screensDone;
   await commandingDone;
   await routingDone;
   await syncingKbDone;

@@ -1,4 +1,5 @@
 import type { Harness } from "../../core/agents.ts";
+import type { TerminalKey } from "../../core/terminal-input.ts";
 
 /**
  * An agent program in its own terminal (goal 169), as Thermite's terminal host
@@ -19,33 +20,8 @@ export const TERMINAL_PROGRAMS = [
   "opencode",
 ] as const satisfies readonly TerminalProgram[];
 
-/**
- * The keys that may be sent by name, the owner's list for a program's menus (2026-10-26): Enter,
- * Esc, Tab, the arrows, the digits, Page Up and Page Down. Ctrl+C is not one: it exits Codex on an
- * empty composer and Claude Code on a second press. An interrupt is each program's own steps.
- */
-export const TERMINAL_KEYS = [
-  "enter",
-  "esc",
-  "tab",
-  "up",
-  "down",
-  "left",
-  "right",
-  "page-up",
-  "page-down",
-  "0",
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-] as const;
-export type TerminalKey = (typeof TERMINAL_KEYS)[number];
+// The keys a program may be sent by name are the signed command's (terminal_input).
+export { TERMINAL_KEYS, type TerminalKey } from "../../core/terminal-input.ts";
 
 /** One step of an interrupt or an end: keys, text typed and then Enter, or a pause. */
 export type TerminalStep = { keys: TerminalKey[] } | { text: string } | { pauseMs: number };

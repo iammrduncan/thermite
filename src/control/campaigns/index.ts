@@ -66,6 +66,7 @@ export {
   type ProposeOutcome,
   proposalChange,
   proposeSetting,
+  savedSettingsRefusal,
 } from "./proposals.ts";
 export { copiedFromRecords, queueFromRecords, untriedOf } from "./queue-copy.ts";
 export {

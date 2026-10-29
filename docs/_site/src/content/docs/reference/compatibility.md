@@ -60,7 +60,7 @@ Two acceptance tests need Podman and refuse Docker: rig deploy and cluster. [Ins
 | Placements | `created` (control makes the namespace), `slot` (a namespace made for Thermite), `joined` (a namespace join command) | Cluster acceptance tests `created` and `slot`, with CPU rigs only. In the slot it also moves the rig onto newly tagged images (**Update to these images**), and checks that the rig reports again with its volume claim and secret unchanged |
 | GPUs through the device plugin (`nvidia.com/gpu`) | Control can set a rig up this way | Not tested |
 | GPUs through dynamic resource allocation (a device class) | Control can set a rig up this way | Not tested |
-| NetworkPolicy | Control writes them for `created` and `joined` placements, and checks a slot's rules before it uses the slot. They need a network plugin that enforces them | Cluster acceptance: a created namespace gets its policies, and a slot without the needed rule is refused |
+| NetworkPolicy | Control writes them for `created` and `joined` placements, and checks a slot's rules before it uses the slot. They need a network plugin that enforces them, and the rig's isolation check fails when a lane reaches the cluster's API server | Cluster acceptance: a created namespace gets its policies, and a slot without the needed rule is refused |
 | Running control itself on Kubernetes | No manifest or chart ships. [Goal 058](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/058-helm-and-npm.goal) plans one | Not tested |
 
 See [Add a rig on a Kubernetes cluster](../how-to/install/rig-on-a-cluster.md).

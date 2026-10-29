@@ -24,6 +24,7 @@ import type { MessageInbox, TrialProgress, TurnDelivery } from "../live-session.
 import type { ProviderLink } from "../provider-errors.ts";
 import type { ResearchTrialSpec } from "../research/index.ts";
 import type { SubmitOutcome, TrialResult, TrialSpec } from "../worker/index.ts";
+import type { TrialConsole } from "./console.ts";
 
 /**
  * The agent programs that run as command-line programs (OpenCode, Claude Code, Codex), as one
@@ -335,4 +336,9 @@ export interface CliTrialDeps extends ProviderLink {
    * host, instead of headless. Unset: headless.
    */
   terminal?: boolean | undefined;
+  /**
+   * Given the owner's console into the trial's terminal (goal 169) when the trial starts, or
+   * "headless" when its program runs without one.
+   */
+  console?: ((c: TrialConsole | "headless") => void) | undefined;
 }

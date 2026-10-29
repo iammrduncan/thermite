@@ -41,6 +41,7 @@ import * as attempts from "./attempts.ts";
 import * as champion from "./champion.ts";
 import * as checks from "./checks.ts";
 import { type CommandOutcome, Commands } from "./commands.ts";
+import { TrialConsoles } from "./consoles.ts";
 import * as decisions from "./decisions.ts";
 import { type Draining, drainDeadline, endDrainAtStart, type Work, workNow } from "./drain.ts";
 import { noteModelStall, ProviderAnswers, ProxyCredentials } from "./proxy.ts";
@@ -605,6 +606,9 @@ export class HarnessService {
     this.inboxes.trialAtWork(id);
   }
 
+  /** The owner's consoles into the trials' terminals, and their screens (goal 169). */
+  readonly consoles = new TrialConsoles(this);
+
   /** A running trial's way to take the owner's messages inside its turn (goal 169). */
   inTurn(id: string, d: TurnDelivery | undefined): void {
     this.inboxes.inTurn(id, d);
@@ -622,6 +626,7 @@ export class HarnessService {
   trialEnded(id: string, atWork: boolean): void {
     if (atWork) this.trialAtWork(id);
     this.inboxes.forget(id);
+    this.consoles.ended(id);
     this.watch.forget(id);
   }
 

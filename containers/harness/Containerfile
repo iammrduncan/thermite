@@ -105,7 +105,18 @@ RUN gcc -O2 -Wall -Wextra -Werror -o /usr/local/bin/thermite-devfence /tmp/devfe
 # to run-7) and gpu-d1..gpu-d7 for further development cards. Planner calls and model checks under
 # OpenCode, Claude Code or Codex run as `planner` and `model-check`, users no lane shares. Judge
 # card 0 builds as `builder`, cards 1 to 7 as builder-1..builder-7, so builds run apart at once.
+# Each card runs the kit's check as `checker` (checker-1..checker-7), which reads the kits and the
+# baselines through the `checkers` group, and a kit's driver as `driver` (driver-1..driver-7),
+# apart from the candidate's timing user.
 RUN groupadd -g 10500 gpu && groupadd -g 10501 gpudev && groupadd -g 10502 gpuctl \
+ && groupadd -g 10049 checkers \
+ && for i in $(seq 0 7); do \
+      s=$([ "$i" = 0 ] || echo "-$i") \
+      && groupadd -g $((10050 + i)) checker$s \
+      && useradd -u $((10050 + i)) -g checker$s -M -d /nonexistent -s /usr/sbin/nologin checker$s \
+      && groupadd -g $((10060 + i)) driver$s \
+      && useradd -u $((10060 + i)) -g driver$s -M -d /nonexistent -s /usr/sbin/nologin driver$s; \
+    done \
  && groupadd -g 10010 thermite && useradd -u 10010 -g thermite -M -d /nonexistent -s /usr/sbin/nologin thermite \
  && groupadd -g 10020 builder && useradd -u 10020 -g builder -M -d /nonexistent -s /usr/sbin/nologin builder \
  && for i in $(seq 1 7); do \

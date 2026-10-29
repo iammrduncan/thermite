@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { programOf } from "../agents/index.ts";
 import {
   busyReason,
+  clusterApi,
   isolationBusy,
   isolationSelftest,
   isolationSummary,
@@ -49,6 +50,7 @@ export function addIsolationCheck(ctx: ControllerContext, service: HarnessServic
           controllerPid: process.pid,
           oneContainer: oneContainerTargets(env),
           snapshotDir: env.THERMITE_STATE_SNAPSHOT_DIR || undefined,
+          clusterApi: clusterApi(env),
         });
         return { ok: report.ok, summary: isolationSummary(report), detail: { ...report } };
       },

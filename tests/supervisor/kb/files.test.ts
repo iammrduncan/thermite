@@ -31,7 +31,7 @@ async function setup() {
 }
 
 describe("the supervisor puts the knowledge base's files on the bus", () => {
-  test("each file once, on the rig's subject, with its place and size; noted in its state", async () => {
+  test("each file once, on the rig's subject, with its SHA-256, place and size; noted in its state", async () => {
     const s = await setup();
     const sha = s.keep("# notes\n");
     const first = await s.put();
@@ -39,10 +39,11 @@ describe("the supervisor puts the knowledge base's files on the bus", () => {
     assert.deepEqual(
       s.bus.kept.map((m) => [
         m.subject,
+        m.headers[KB_FILE_HEADERS.sha256],
         m.headers[KB_FILE_HEADERS.chunk],
         m.headers[KB_FILE_HEADERS.bytes],
       ]),
-      [[`thermite.rig.rig-a.kbfile.${sha}`, "0", "8"]],
+      [["thermite.rig.rig-a.kbfile", sha, "0", "8"]],
     );
     assert.ok(existsSync(join(s.home, KB_FILES_PUT, sha)));
     assert.deepEqual(await s.put(), { put: 0, waiting: 0, spoilt: [] });
@@ -58,8 +59,8 @@ describe("the supervisor puts the knowledge base's files on the bus", () => {
     assert.deepEqual(r.spoilt, [name]);
     assert.equal(r.put, 1);
     assert.deepEqual(
-      s.bus.kept.map((m) => m.subject),
-      [`thermite.rig.rig-a.kbfile.${good}`],
+      s.bus.kept.map((m) => m.headers[KB_FILE_HEADERS.sha256]),
+      [good],
     );
     // Names that are not a SHA-256, and the exports beside them, are not files to put.
     writeFileSync(join(s.outbox, KB_OUTBOX_FILES, "notes.md.tmp-1234"), "half");

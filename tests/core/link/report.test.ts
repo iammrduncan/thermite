@@ -8,6 +8,7 @@ import {
   REPORT_MAX_BYTES,
   REPORT_STREAM_CONFIG,
   REPORT_SUBJECTS,
+  REPORTS_WAITING_PER_RIG,
   readReport,
   reportFits,
   reportMessageId,
@@ -82,8 +83,8 @@ describe("the reports' contract on the message bus", () => {
     assert.equal(s.retention, "workqueue", "an inbox: a report control acked is gone");
     assert.deepEqual(
       [s.max_msgs, s.max_bytes, s.max_age, s.max_msgs_per_subject],
-      [-1, -1, 0, -1],
-      "no limit on count, bytes or age of the reports waiting",
+      [-1, -1, 0, REPORTS_WAITING_PER_RIG],
+      "at most REPORTS_WAITING_PER_RIG of one rig's reports wait, and no limit on their age",
     );
     assert.ok(!("deny_delete" in s) && !("deny_purge" in s), "not a stream kept for good");
     assert.equal(s.discard, "new", "a full store refuses new reports, never drops waiting ones");

@@ -12,7 +12,8 @@ import {
 import { MAX_LANES } from "../../core/contract.ts";
 import { RESEARCH_TASK_KINDS, researchDirectionRefusal } from "../../core/directions.ts";
 import { McpUses, sameUses, usesWords } from "../../core/mcp.ts";
-import { campaignContextRefusal } from "../campaigns/index.ts";
+import { typesIntoTerminals } from "../../core/terminal-input.ts";
+import { campaignContextRefusal, savedSettingsRefusal } from "../campaigns/index.ts";
 import { controlDiskOf } from "../disk.ts";
 import { mcpRefusal } from "../mcp-servers/index.ts";
 import { usedRunRefusal } from "../run-names.ts";
@@ -299,6 +300,12 @@ export interface IssueInput {
   issuedBy: string;
   /** Issued with an agent's token: it may not name a Git access, a source or MCP servers. */
   agent?: boolean | undefined;
+  /**
+   * False: issued with the operator's or an agent's token, so an assignment carries the role
+   * additions and knowledge-base writers of the campaign's saved version. Control's own commands
+   * leave it out.
+   */
+  owner?: boolean | undefined;
 }
 
 /**
@@ -415,12 +422,16 @@ export function prepareCommand(
   const assigns = input.kind === "assign_campaign";
   const unrunnable = assigns
     ? (input.agent ? agentAssignRefusal(input.payload) : "") ||
+      (input.owner === false ? savedSettingsRefusal(store, input.payload) : "") ||
       assignRefusal(input.payload) ||
       gitAccessRefusal(store, input.payload)
     : "";
   if (unrunnable) throw new Error(unrunnable);
   const shelved = archivedRefusal(store, rig, input.kind, input.payload);
   if (shelved) throw new Error(shelved);
+  // Typing into an agent's terminal is the owner's own (goal 169): never an operator's or an agent's.
+  if (input.kind === "terminal_input" && !typesIntoTerminals(input.issuedBy))
+    throw new Error("Only the owner types into an agent's terminal: send the agents a message.");
   // A campaign's own context window above what a provider lists for one of the rig's agents'
   // models (goal 070): refused before signing, on every path that starts a run. A try has no agents.
   const assigned = input.payload as { contract?: unknown; agents?: unknown } | null;

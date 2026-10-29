@@ -120,6 +120,10 @@ The broker runs each kind of work as its own user. The numbers are fixed in the 
 | `run-1` … `run-7` | 10031 … 10037 | `gpu-j1` … `gpu-j7` (10511 … 10517) | Timed runs on judge GPUs 2 to 8 |
 | `planner` | 10040 | `planner` (10040) | Planner calls under OpenCode, Claude Code or Codex |
 | `model-check` | 10041 | `model-check` (10041) | The model check under OpenCode, Claude Code or Codex |
+| `checker` | 10050 | `checker` (10050) | The kit's check of a run's outputs on the first judge device; the broker adds the `checkers` group |
+| `checker-1` … `checker-7` | 10051 … 10057 | `checker-1` … `checker-7` (10051 … 10057) | The kit's check on judge GPUs 2 to 8, with the `checkers` group |
+| `driver` | 10060 | `driver` (10060) | A kit's driver (`run.driver`) beside a timed run on the first judge device |
+| `driver-1` … `driver-7` | 10061 … 10067 | `driver-1` … `driver-7` (10061 … 10067) | A kit's driver on judge GPUs 2 to 8 |
 | `lane-1` … `lane-16` | 10101 … 10116 | `lane-1` … `lane-16` (10101 … 10116) | A lane's commands and file tools; OpenCode, Claude Code and Codex sessions |
 | `lane-1-dev` … `lane-16-dev` | 10201 … 10216 | `gpudev` (10501) | A lane's development runs |
 | `agent-1` … `agent-16` | 10301 … 10316 | `agent-1` … `agent-16` (10301 … 10316) | A lane's Pi worker process |
@@ -131,6 +135,7 @@ The broker runs each kind of work as its own user. The numbers are fixed in the 
 | `gpuctl` | 10502 | The control nodes every CUDA process needs, on a rig with dedicated GPUs |
 | `gpu-j1` … `gpu-j7` | 10511 … 10517 | Judge GPUs 2 to 8 |
 | `gpu-d1` … `gpu-d7` | 10521 … 10527 | Development GPUs 2 to 8 |
+| `checkers` | 10049 | Nothing: the kits' and the baselines' folders in the harness's state are in it, so the checkers read them and no other role does |
 
 The broker sets each process's groups by number when it starts it: a development run, for example, gets its device's group. The users have no home and no login shell. These numbers set the limits of a rig: 16 lanes, and 8 judge plus 8 development GPUs.
 

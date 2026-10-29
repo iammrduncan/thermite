@@ -131,6 +131,28 @@ export function runSentence(w: SentenceContext, e: StoredEvent): Sentence | null
         { run: String(e.subject) },
       );
     }
+    // The owner's input into a trial's terminal (goal 169), word for word, and what became of it.
+    case "terminal_input": {
+      const what = Array.isArray(b.keys)
+        ? `the keys ${b.keys.map(String).join(", ")}`
+        : `“${clip(String(b.text ?? ""), 200)}”`;
+      const where = `${b.lane ? `${String(b.lane)}'s` : "a"} terminal (trial ${String(b.trial)})`;
+      const words: Record<string, [string, Sentence["tone"]]> = {
+        typed: [`You typed ${what} into ${where}.`, ""],
+        queued: [
+          `You typed ${what} into ${where}: it waits for the usage window's reset${b.until ? ` (${String(b.until)})` : ""}.`,
+          "warn",
+        ],
+        typed_after_reset: [
+          `Your input ${what} went into ${where} after the usage window's reset.`,
+          "",
+        ],
+        dropped: [`Your input ${what} for ${where} was dropped: ${String(b.why ?? "")}`, "warn"],
+        refused: [`Not typed into ${where}: ${what}. ${String(b.why ?? "")}`, "bad"],
+      };
+      const [text, tone] = words[String(b.outcome)] ?? [`You typed ${what} into ${where}.`, ""];
+      return s(text, tone, { run: String(e.subject) });
+    }
     default:
       return null;
   }

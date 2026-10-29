@@ -86,7 +86,8 @@ export function commandConsumerName(rig: string): string {
 /**
  * A rig's consumer: its subject alone, from the first command, in order. A command is acked once
  * control has its outcome; one that waits (its sources still stage) is handed again later, while
- * the commands after it go on, up to as many as the rig's queue holds.
+ * the commands after it go on, up to as many as the rig's queue holds. Control makes it, for each
+ * rig with a user on the bus; the rig's user may only read it and take from it (users.ts).
  */
 export function commandConsumerConfig(rig: string) {
   return {

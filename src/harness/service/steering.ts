@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AdvisorQueueRequest } from "../../core/api/harness/advisors.ts";
-import { StructuredDirective } from "../../core/commands.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
+import { StructuredDirective } from "../../core/directives.ts";
 import { ideaWords, ruleRefusal } from "../../core/queue-target.ts";
 import { labelledQuestion, measurementIn, measurementRefusal } from "../../core/research-check.ts";
 import { LedgerError } from "../ledger/index.ts";

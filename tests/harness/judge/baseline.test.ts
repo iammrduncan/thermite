@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -407,11 +408,14 @@ process.stdout.write(JSON.stringify({ pass: true, reasons: [], has_dir: dir ? 1 
       },
     ]);
     assert.equal(b.bytes, content.length);
-    // The judge's alone, and sealed.
-    assert.equal(statSync(join(env.paths.stateDir, "baselines")).mode & 0o777, 0o700);
-    assert.equal(statSync(join(env.paths.stateDir, "baselines", "js-1")).mode & 0o777, 0o700);
-    assert.equal(statSync(dir).mode & 0o777, 0o500);
-    assert.equal(statSync(join(dir, "ref-20000000.json")).mode & 0o777, 0o400);
+    // The judge's, entered by the checkers' group alone (the broker gives it in the image), and
+    // sealed: read by the group, written by no one.
+    assert.equal(statSync(join(env.paths.stateDir, "baselines")).mode & 0o777, 0o710);
+    assert.equal(statSync(join(env.paths.stateDir, "baselines", "js-1")).mode & 0o777, 0o710);
+    assert.equal(statSync(dir).mode & 0o777, 0o550);
+    assert.equal(statSync(join(dir, "ref-20000000.json")).mode & 0o777, 0o440);
+    // The checks wrote to a folder of the job's in scratch, which is gone.
+    assert.ok(!existsSync(join(env.paths.scratchDir, "runs", `job-${b.job}`, "baseline")));
     // What each check saw, from the receipts: the baseline's could write, later ones could only
     // read the same reference; no run command got the folder.
     const seen = (kind: string) =>

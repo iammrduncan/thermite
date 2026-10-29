@@ -1,8 +1,8 @@
 import { fromPublic } from "@nats-io/nkeys";
 import { sha256Hex } from "../canonical.ts";
 import { RIG_ID } from "../ids.ts";
-import { COMMAND_STREAM, commandConsumerName, commandSubject } from "./commands.ts";
-import { CONFIG_STREAM, configConsumerConfig, configConsumerName } from "./config.ts";
+import { COMMAND_STREAM, commandConsumerName } from "./commands.ts";
+import { CONFIG_STREAM, configConsumerName, configSubject } from "./config.ts";
 import { EVENT_STREAM } from "./events.ts";
 import { kbAskSubject } from "./kb.ts";
 import { kbFileSubject } from "./kb-files.ts";
@@ -73,15 +73,16 @@ const anySource = (subject: string) => subject.replace(/\.[^.]+$/, ".*");
 
 /**
  * What a rig's user may do: publish its own reports, and the live lines of its own runs and its
- * own (`runs`: the runs control's run registry gives the rig, the newest LIVE_RUNS_PER_RIG); make,
- * read and take from its own consumer of the commands stream, and ack what it took; and make
- * again, read and take from its own consumer of its config keys, and ack what it took. The server
- * checks that a consumer it makes takes the rig's own subjects alone: the subject names the
- * consumer's filter. A run whose name a subject can't hold has no subject of its own. Nothing on
- * the events stream: control publishes a rig's events there, from its reports. It may put the
- * knowledge base's files on its own subjects of the `KB_FILES` stream, and may not read that
- * stream or remove from it (kb-files.ts). It may ask control to search and read the knowledge base
- * on its own subjects (kb.ts), and takes the answers at its inbox.
+ * own (`runs`: the runs control's run registry gives the rig, the newest LIVE_RUNS_PER_RIG); read
+ * and take from its own consumer of the commands stream, and ack what it took; read and take from
+ * its own consumer of its config keys, ack what it took, and read the latest value of each of its
+ * own keys by its subject. Control makes both consumers, with their settings (commands.ts,
+ * config.ts): the rig's user may make no consumer, nor remove one. A run whose name a subject
+ * can't hold has no subject of its own. Nothing on the events stream: control publishes a rig's
+ * events there, from its reports. It may put the knowledge base's files on its own subject of the
+ * `KB_FILES` stream, and may not read that stream or remove from it (kb-files.ts). It may ask
+ * control to search and read the knowledge base on its own subjects (kb.ts), and takes the answers
+ * at its inbox.
  */
 export function rigPermissions(rig: string, runs: readonly string[] = []): Permissions {
   const consumer = `${COMMAND_STREAM}.${commandConsumerName(rig)}`;
@@ -97,16 +98,14 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
         reportSubject(rig),
         own,
         ...new Set(live),
-        `${API}.CONSUMER.CREATE.${consumer}.${commandSubject(rig)}`,
         `${API}.CONSUMER.INFO.${consumer}`,
         `${API}.CONSUMER.MSG.NEXT.${consumer}`,
         `$JS.ACK.${consumer}.>`,
-        `${API}.CONSUMER.CREATE.${config}.${configConsumerConfig(rig).filter_subject}`,
         `${API}.CONSUMER.INFO.${config}`,
-        `${API}.CONSUMER.DELETE.${config}`,
         `${API}.CONSUMER.MSG.NEXT.${config}`,
         `$JS.ACK.${config}.>`,
-        kbFileSubject(rig, "*"),
+        anySource(`${API}.DIRECT.GET.${CONFIG_STREAM}.${configSubject(rig, "model-route")}`),
+        kbFileSubject(rig),
         kbAskSubject("search", rig),
         kbAskSubject("read", rig),
       ],

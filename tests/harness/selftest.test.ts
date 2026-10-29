@@ -11,6 +11,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -24,6 +25,7 @@ import {
 } from "../../src/harness/broker/snapshot/index.ts";
 import {
   callsBusy,
+  clusterApi,
   containerChecks,
   controlKeyCheck,
   enrollCodeCheck,
@@ -153,6 +155,55 @@ describe("the isolation selftest's results", () => {
     assert.equal(
       isolationSummary({ ...report, ok: true, container: {} }),
       "isolation holds: every probe of 1 roles came out as it must (devices: shared (fence: landlock))",
+    );
+  });
+});
+
+describe("the cluster's network in the isolation selftest", () => {
+  test("it probes the API server Kubernetes names, and only on Kubernetes", () => {
+    assert.equal(clusterApi({}), undefined);
+    assert.deepEqual(clusterApi({ KUBERNETES_SERVICE_HOST: "api.cluster.test" }), {
+      host: "api.cluster.test",
+      port: "443",
+    });
+    assert.deepEqual(
+      clusterApi({ KUBERNETES_SERVICE_HOST: "fd00::1", KUBERNETES_SERVICE_PORT: "6443" }),
+      { host: "fd00::1", port: "6443" },
+    );
+  });
+
+  test("a connection that is made fails it; a refused one passes", async () => {
+    const server = createServer((s) => s.end());
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    const { port } = server.address() as { port: number };
+    const probes: Probe[] = [
+      { name: "cluster-network", op: "connect", path: "127.0.0.1", expect: String(port) },
+    ];
+    const open = probe(probes)["cluster-network"] as string;
+    assert.equal(open, `ALLOWED: connected to 127.0.0.1 port ${port}`);
+    assert.equal(isFailure(open), true);
+    await new Promise((done) => server.close(done));
+    const closed = probe(probes)["cluster-network"] as string;
+    assert.equal(closed, "ECONNREFUSED");
+    assert.equal(isFailure(closed), false);
+  });
+
+  test("the summary says the cluster does not hold the rig's network rules", () => {
+    const report: IsolationReport = {
+      ok: false,
+      devices: "shared",
+      roles: {
+        "lane-1": {
+          ledger: "EACCES",
+          "cluster-network": "ALLOWED: connected to api.cluster.test port 443",
+        },
+        builder: { ledger: "ALLOWED" },
+      },
+      skipped: [],
+    };
+    assert.equal(
+      isolationSummary(report),
+      "isolation does NOT hold (devices: shared): the cluster does not hold the rig's network rules: lane-1 reached the cluster's API server (ALLOWED: connected to api.cluster.test port 443); builder ledger: ALLOWED",
     );
   });
 });

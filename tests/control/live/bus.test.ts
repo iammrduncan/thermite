@@ -205,7 +205,7 @@ describe("control's live view from the message bus", () => {
 
   test("control follows the live stream with its own consumer, folding each message", async () => {
     const s = setup();
-    let followed: [StreamSettings | string, ConsumerSettings] | undefined;
+    let followed: [StreamSettings | string, ConsumerSettings | string] | undefined;
     let folded: unknown;
     await followLive(
       {

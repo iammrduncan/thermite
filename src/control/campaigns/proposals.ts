@@ -1,15 +1,16 @@
 import type { KbWrites } from "../../core/kb.ts";
 import type { CampaignProposal, ControlStore, ProposedField } from "../store/index.ts";
-import { contractAdditions, setCampaignAdditions } from "./additions.ts";
+import { contractAdditions, sameAdditions, setCampaignAdditions } from "./additions.ts";
 import { campaignContract } from "./context.ts";
-import { campaignKbWrites, setCampaignKbWrites } from "./kb-writes.ts";
+import { campaignKbWrites, sameKbWrites, setCampaignKbWrites } from "./kb-writes.ts";
 
 /**
  * The operator's proposals to a campaign's own settings (the owner's decision, 2026-10-29): the
  * additions to its roles, which the prompts carry as the owner's, and which roles write in its
  * collection. An operator's change is checked as the owner's would be, then waits for the owner,
  * who approves or declines it on the campaign's page and under Needs you; only an approval saves
- * a new version of the contract. The owner's own changes take effect at once.
+ * a new version of the contract. The owner's own changes take effect at once. An assignment from
+ * the operator's or an agent's token carries both as a saved version has them (savedSettingsRefusal).
  */
 
 /** Each setting in words, for the cards and the answers. */
@@ -151,4 +152,35 @@ export function proposalChange(
     now: words(campaignKbWrites(store, p.campaign)),
     proposed: p.value === null ? "the default" : words(p.value as KbWrites),
   };
+}
+
+/**
+ * Why control refuses an assignment from the operator's or an agent's token, in words, or "": its
+ * contract's additions to the roles, or which roles write in the collection, differ from those of
+ * the campaign's saved version (the one the contract names, else the newest), which the owner
+ * saved or approved; for a campaign control knows only by an assignment, from those of its last
+ * one. With neither, the contract may set neither. The owner's token is not held to it.
+ */
+export function savedSettingsRefusal(store: ControlStore, payload: unknown): string {
+  const contract = (payload as { contract?: { campaign?: unknown; version?: unknown } } | null)
+    ?.contract;
+  const campaign = typeof contract?.campaign === "string" ? contract.campaign : "";
+  const versions = campaign ? store.campaigns.versions(campaign) : [];
+  const saved = versions.find((v) => v.version === contract?.version) ?? versions[0];
+  const known = saved?.contract ?? (campaign ? campaignContract(store, campaign) : undefined);
+  const differ = (Object.keys(PROPOSED_WORDS) as ProposedField[]).filter((field) =>
+    field === "role_additions"
+      ? !sameAdditions(contractAdditions(contract), contractAdditions(known))
+      : !sameKbWrites(contract, known),
+  );
+  if (!differ.length) return "";
+  const what = differ
+    .map((f) => (f === "role_additions" ? `the ${PROPOSED_WORDS[f]}` : PROPOSED_WORDS[f]))
+    .join(" and ");
+  const against = saved
+    ? `in ${what}, this assignment differs from version ${saved.version} of ${campaign}, as the owner saved it`
+    : known
+      ? `in ${what}, this assignment differs from the last assignment of ${campaign}`
+      : `control has no saved version of ${campaign || "this campaign"}, so this assignment may not change ${what}`;
+  return `Not sent: ${against}. With the operator's or an agent's token, an assignment carries the campaign's saved settings: propose a change with set_campaign_additions or set_campaign_kb_writes for the owner to approve, or assign it with the owner's token.`;
 }

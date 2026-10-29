@@ -7,6 +7,7 @@ import {
   type BaselineFailure,
   baselineState,
   baselineValue,
+  keepBaselineDir,
   prepareBaselineDir,
   removeBaselineDir,
   sealBaselineDir,
@@ -24,8 +25,8 @@ import { clipReason, REASONS_CHARS } from "../reasons.ts";
 /**
  * The baseline job (goal 115). It builds the starting point, or a setup change, and runs it
  * alone in blocks on every measured cell (never a held-out one), each block running each cell
- * `runs_per_cell` times. The kit's check may write to the job's judge-only folder meanwhile;
- * the folder is then sealed and each file hashed. Whatever would give a candidate `invalid` or
+ * `runs_per_cell` times. The kit's check may write meanwhile to a folder the job hands the
+ * card's checker; the folder is then sealed, each file hashed, and kept in the judge's state. Whatever would give a candidate `invalid` or
  * `crash_candidate` means the build can't be measured: for the starting point, a
  * `baseline_failed` event with the reasons (the run is in setup); for a setup change, its
  * verdict. A setup change that measures becomes the starting point (finish), and its values
@@ -61,11 +62,12 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
   };
   const expectedSeq = judge.ledger.champions.current(run).seq;
   const dir = prepareBaselineDir(judge.o.service.paths.stateDir, run, job.id);
+  const written = await judge.baselineWork(job);
   try {
     const k = await judge.kitFor(contract);
     step("building");
     const arm = await judge.armFor("baseline", run, commit, k);
-    const ctx = judge.context(k, job, dir);
+    const ctx = judge.context(k, job, written);
     step("screening");
     const count = Math.max(2, judge.o.baselineBlocks ?? BASELINE_BLOCKS);
     const blocks = await runBlocks(judge, {
@@ -76,8 +78,10 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
       count,
       runsPerCell: contract.acceptance.runs_per_cell,
     });
-    const sealed = sealBaselineDir(dir);
+    await judge.o.runner.reclaim(written);
+    const sealed = sealBaselineDir(written);
     if (!sealed.ok) throw new Stop("invalid", sealed.reason);
+    keepBaselineDir(written, dir);
     const body = baselineBody({
       job,
       run,
@@ -122,6 +126,9 @@ export async function baseline(judge: JudgeContext, job: JobRow): Promise<Finish
       result: { baseline_failed: true, champion_seq: s.start.seq },
       events: [{ kind: "baseline_failed" as const, subject: run, body: failure }],
     };
+  } finally {
+    // The kept copy is in the state; the checks' folder goes, whoever owns its files.
+    await judge.o.runner.remove(written);
   }
 }
 

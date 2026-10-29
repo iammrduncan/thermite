@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { CommandPayloads, StructuredDirective } from "../../src/core/commands.ts";
+import { CommandPayloads } from "../../src/core/commands.ts";
 import {
   CONVERT_PER_ROUND,
   convertedRule,
@@ -14,6 +14,7 @@ import {
   researchDirectionRefusal,
   rulesToConvert,
 } from "../../src/core/directions.ts";
+import { StructuredDirective } from "../../src/core/directives.ts";
 
 describe("directions, written as plain words or :name: (goal 066)", () => {
   test("a direction's name: case, spaces and dashes don't matter; colons are optional", () => {

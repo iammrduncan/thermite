@@ -201,13 +201,16 @@ try {
     });
     return decodeURIComponent(String(r.headers.get("location")));
   };
-  /** Waits until a rig's page shows this step done (or a step failed). */
+  /**
+   * Waits until a rig's page shows this step done (or a step failed). Done is the step with its
+   * tick: the page names a step that failed in the same words.
+   */
   const rigStep = (rig, done) =>
     until(
       `${rig}: ${done}`,
       async () => {
         const h = await get(`/ui/rigs/${rig}`);
-        if (h.includes(done)) return "reported";
+        if (h.includes(`<span class="ok">✓</span><span>${done}`)) return "reported";
         const failed =
           /<span class="bad">✕<\/span><span>([^<]*)(?:<span class="muted small">· ([^<]*)<\/span>)?/.exec(
             h,

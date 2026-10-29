@@ -1,7 +1,7 @@
 import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
-import type { StoredRule } from "../../../core/commands.ts";
 import type { Contract } from "../../../core/contract.ts";
+import type { StoredRule } from "../../../core/directives.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Runner } from "../../broker/index.ts";
 import type { Ledger } from "../../ledger/index.ts";

@@ -36,3 +36,12 @@ paths = ['''^src/control/git-keys\.ts$''']
 regexes = [
   '''^-----BEGIN OPENSSH PRIVATE KEY-----"; // public-check: allow \(armour only\)\nconst END = "-----END OPENSSH PRIVATE KEY-----$''',
 ]
+
+# xterm.js 6.0.0, bundled in vendor/xterm/ (goal 169), is minified: two of its class names read as
+# key assignments to the generic rule. Each is skipped by its exact text, in that file only.
+[[allowlists]]
+description = "Two minified class names in the bundled xterm.js 6.0.0"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^vendor/xterm/xterm\.js$''']
+regexes = ['''^t\.TwoKeyMap=void$''', '''^t\.Sequencer=t\.Throttler=void$''']

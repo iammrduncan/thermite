@@ -17,7 +17,8 @@
 //     containers/test-anthropic's stand-in, with a made-up sign-in on file descriptor 3: its
 //     transcript, which only lane-1 may read, copied; its hooks' signals; `/exit`;
 //   - one short trial through the trial loop's terminal mode for the fake TUI in Claude Code's
-//     place, the real Codex and the real OpenCode (trials.mjs);
+//     place, the real Codex and the real OpenCode, and the owner's input (terminal_input's) through
+//     a trial's console into the fake and the real Codex (trials.mjs);
 //   - for each real program, the peak memory of its run in its terminal, the host with it, as the
 //     broker recorded it: the figure its limits note states.
 // THERMITE_SRC names the code it imports: the image's build (/opt/thermite/dist), or a mounted
@@ -565,7 +566,8 @@ for (const [name, part] of [
   ["Claude Code", claude],
   [
     "the loop's terminal mode",
-    () => loopTrials({ load, runner, check, area, laneProcesses, sleep, LANE, TOKEN }),
+    () =>
+      loopTrials({ load, runner, check, area, lines, laneProcesses, sleep, until, LANE, TOKEN }),
   ],
 ]) {
   try {

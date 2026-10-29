@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { PLAN_LIMITS } from "../../../agents/roles/index.ts";
 import { canonicalJson } from "../../../core/canonical.ts";
-import { DIRECTIVE_KINDS, QueuePosition } from "../../../core/commands.ts";
+import { QueuePosition } from "../../../core/commands.ts";
 import { asToken, DirectionRef, directionName, notADirection } from "../../../core/directions.ts";
+import { DIRECTIVE_KINDS } from "../../../core/directives.ts";
 import { directionOf, inFamily } from "../../queue.ts";
 import { directiveSets, lanesOf, type PlannerInput, toConvert, toDesign } from "./context.ts";
 

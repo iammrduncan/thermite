@@ -5,6 +5,7 @@ import type { BusView } from "./bus/index.ts";
 import { type ClusterKubectl, realKubectl } from "./clusters/index.ts";
 import type { KitRepos } from "./kits/index.ts";
 import { RunpodDriver } from "./lifecycle.ts";
+import { Screens } from "./live/index.ts";
 import { type MachineSsh, openSsh, type RigBus } from "./machines/index.ts";
 import { McpServers } from "./mcp-servers/index.ts";
 import { PageNotes } from "./notes.ts";
@@ -63,6 +64,8 @@ export interface ControlParts {
   loops: Loops;
   /** Why a dashboard form failed, kept for the page it returns to (notes.ts). */
   notes: PageNotes;
+  /** The screens of the trials the owner watches, in memory only (goal 169). */
+  screens: Screens;
   /** Every rig as control sees it now (views.ts), through the folds control keeps. */
   views(): RigView[];
   /**
@@ -147,6 +150,7 @@ export function controlParts(
     bus: opts.bus,
     loops: opts.loops ?? new Loops(),
     notes: new PageNotes(),
+    screens: new Screens(),
     views: () => folds.views(viewOpts),
     run: (id) => folds.run(id, viewOpts),
     campaignRuns: (campaign) => folds.campaignRuns(campaign, viewOpts),

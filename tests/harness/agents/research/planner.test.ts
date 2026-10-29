@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { StoredRule } from "../../../../src/core/commands.ts";
+import type { StoredRule } from "../../../../src/core/directives.ts";
 import { GAP_LINE, MEASURES_NOTHING, questionLabel } from "../../../../src/core/research-check.ts";
 import {
   PLANNER_PROMOTIONS_MAX,

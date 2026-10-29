@@ -47,6 +47,10 @@ export function configSubject(rig: string, key: ConfigKey): string {
   return `thermite.rig.${rig}.config.${key}`;
 }
 
+/** The subjects of every key of a rig this build knows. */
+export const configSubjects = (rig: string): string[] =>
+  CONFIG_KEYS.map((key) => configSubject(rig, key));
+
 const SUBJECT = /^thermite\.rig\.([^.*>\s]+)\.config\.([^.*>\s]+)$/;
 
 /** The rig and the key a subject names, or null. The key may be one this build does not know. */
@@ -201,7 +205,8 @@ const DUPLICATE_WINDOW_NS = 2 * 60 * 1e9;
 /**
  * The stream's settings: a key-value bucket. It keeps one message for each subject, the latest;
  * a new value replaces the one before. Nothing ages out: a value stays until control writes the
- * next.
+ * next. A key's latest value is read by its subject (direct get), as a rig's supervisor reads its
+ * own keys when it starts watching them.
  */
 export const CONFIG_STREAM_CONFIG = {
   name: CONFIG_STREAM,
@@ -216,6 +221,7 @@ export const CONFIG_STREAM_CONFIG = {
   max_msg_size: CONFIG_MAX_BYTES,
   discard: "old",
   duplicate_window: DUPLICATE_WINDOW_NS,
+  allow_direct: true,
   num_replicas: 1,
 } satisfies Partial<StreamConfig> & { name: string };
 
@@ -227,14 +233,12 @@ export function configConsumerName(rig: string): string {
 
 /** How long the supervisor may take over one value before the stream hands it again. */
 const ACK_WAIT_NS = 30 * 1e9;
-/**
- * How long a consumer nobody reads is kept, in nanoseconds: an hour. The supervisor makes it anew.
- */
-const INACTIVE_NS = 3600 * 1e9;
 
 /**
  * A rig's consumer: the rig's keys alone, the latest value of each first, then each new one.
- * The supervisor makes it again each time it starts watching, so it starts from the latest.
+ * Control makes it, as it makes the rig's commands consumer; the rig's user may only read it and
+ * take from it. The supervisor reads each key's latest value by its subject each time it starts
+ * watching, since the consumer hands only what it has not acked.
  */
 export function configConsumerConfig(rig: string) {
   return {
@@ -245,6 +249,5 @@ export function configConsumerConfig(rig: string) {
     max_ack_pending: 1,
     ack_wait: ACK_WAIT_NS,
     max_deliver: -1,
-    inactive_threshold: INACTIVE_NS,
   } satisfies Partial<ConsumerConfig> & { durable_name: string };
 }

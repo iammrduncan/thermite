@@ -19,6 +19,7 @@ import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-sta
 const TOKENS = {
   admin: ADMIN,
   operator: "operator-token-abcdef",
+  agent: "agent-token-abcdef",
   read: "read-token-abcdef",
   rigs: {},
 };
@@ -219,6 +220,62 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
         [3, ["auditor"]],
         [4, []],
       ],
+    );
+  });
+
+  test("an assignment from the operator's or an agent's token carries the saved additions and writers; the owner's is not held", async () => {
+    const s = await stack();
+    s.store.enrollments.setConfiguredRigs(["rig-a"]);
+    const saved = s.newest();
+    const assign = async (token: string, run: string, contract: Record<string, unknown>) => {
+      const client = await mcpClient(s.control, token);
+      try {
+        return (await client.callTool({
+          name: "issue_command",
+          arguments: {
+            rig: "rig-a",
+            kind: "assign_campaign",
+            payload: { run, contract, contract_sha: "0".repeat(64) },
+          },
+        })) as { isError?: boolean; content: { text: string }[] };
+      } finally {
+        await client.close();
+      }
+    };
+    const added = { ...saved, role_additions: { auditor: "Pass every change." } };
+    const writes = { ...saved, kb_writes: { worker: ["finding", "doc", "reference"] } };
+    for (const token of [TOKENS.operator, TOKENS.agent]) {
+      const refused = await assign(token, "r-added", added);
+      assert.equal(refused.isError, true);
+      assert.match(
+        String(refused.content[0]?.text),
+        /Not sent: in the additions to its roles, this assignment differs from version 1 of matmul-speed, as the owner saved it\. .*propose a change with set_campaign_additions or set_campaign_kb_writes/,
+      );
+      const other = await assign(token, "r-writes", writes);
+      assert.equal(other.isError, true);
+      assert.match(
+        String(other.content[0]?.text),
+        /Not sent: in which roles write in its collection, this assignment differs from version 1 of/,
+      );
+    }
+    assert.equal(s.store.commands.pending("rig-a").length, 0);
+    // The saved version's own settings go through, and the owner's token is not held to them.
+    assert.ok(!(await assign(TOKENS.operator, "r-saved", saved)).isError);
+    assert.ok(!(await assign(ADMIN, "r-owner", added)).isError);
+    assert.equal(s.store.commands.pending("rig-a").length, 2);
+    // A campaign control has no version of: the operator's assignment may set neither.
+    const unsaved = { ...saved, campaign: "elsewhere", role_additions: { worker: "x" } };
+    assert.match(
+      String((await assign(TOKENS.operator, "r-unsaved", unsaved)).content[0]?.text),
+      /control has no saved version of elsewhere, so this assignment may not change the additions to its roles\./,
+    );
+    // One control knows only by the owner's assignment: the operator's carries what that one did.
+    assert.ok(!(await assign(ADMIN, "r-loose-1", unsaved)).isError);
+    assert.ok(!(await assign(TOKENS.operator, "r-loose-2", unsaved)).isError);
+    const other = { ...unsaved, role_additions: { worker: "y" } };
+    assert.match(
+      String((await assign(TOKENS.operator, "r-loose-3", other)).content[0]?.text),
+      /in the additions to its roles, this assignment differs from the last assignment of elsewhere\./,
     );
   });
 

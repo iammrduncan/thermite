@@ -18,6 +18,9 @@
 # No run uses runners until a maintainer approves it, as in ci.yml: the first job, approval,
 # deploys to the repository's environment ci, and every other job waits for it.
 #
+# Each action is pinned by its commit, with its version in a comment, and a value from the tag or
+# the run reaches a script as an environment variable, never as its text (as in ci.yml).
+#
 # The images never carry Claude Code: no build here sets CLAUDE_CODE_VERSION. The harness images
 # carry OpenCode and the Codex CLI, both open source, at their Containerfile's pinned versions.
 name: release
@@ -85,7 +88,7 @@ jobs:
       publish: ${{ env.PUBLISH }}
       release: ${{ env.RELEASE }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: version
         name: Read the version, and check the tag against package.json
         run: |
@@ -93,6 +96,10 @@ jobs:
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             version="${GITHUB_REF_NAME#v}"
             case "$version" in
+              *[!0-9A-Za-z.-]*)
+                echo "::error::A version tag holds only letters, digits, dots and hyphens."
+                exit 1
+                ;;
               "$pkg" | "$pkg"-*) ;;
               *)
                 echo "::error::The tag $GITHUB_REF_NAME does not match package.json's version $pkg."
@@ -180,7 +187,7 @@ jobs:
             description: "Thermite's supervisor: a rig's link to control, its advisors and its git work."
             licenses: "MIT AND Apache-2.0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # The CUDA base is several gigabytes: make room on the runner's disk first.
       - name: Make room for the CUDA image
         if: matrix.cuda
@@ -188,13 +195,13 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
       # arm64 images are built under emulation.
-      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         if: contains(matrix.platforms, 'arm64')
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           # On the host's network, the CUDA job's builder reaches the job's own registry.
           driver-opts: ${{ matrix.cuda && 'network=host' || '' }}
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         if: env.PUBLISH == 'true'
         with:
           registry: ghcr.io
@@ -205,7 +212,7 @@ jobs:
       # and annotations: the source repository, which links each package to this repository, and
       # the version and commit.
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         env:
           DOCKER_METADATA_SHORT_SHA_LENGTH: "12"
           # A multi-platform image is an index, and the registry reads the index's annotations.
@@ -232,7 +239,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=${{ matrix.licenses }}
       - id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ matrix.containerfile }}
@@ -262,21 +269,22 @@ jobs:
       - name: Keep the image's digest for the bundle
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
+          KEY: ${{ matrix.key }}
         run: |
           case "$DIGEST" in
             sha256:*) ;;
             *) echo "::error::The build reported no image digest."; exit 1 ;;
           esac
           mkdir -p digests
-          printf '%s\n' "$DIGEST" > "digests/${{ matrix.key }}"
-          echo "${{ matrix.key }}: $DIGEST"
+          printf '%s\n' "$DIGEST" > "digests/$KEY"
+          echo "$KEY: $DIGEST"
       # The one-container rig image, which RunPod pods run (containers/rig/Containerfile): the CUDA 12
       # harness just built, named by its digest (on GHCR for a run that publishes, in the job's own
       # registry for a dry run), with the supervisor's parts added. It keeps the harness's THERMITE_COMMIT and
       # THERMITE_IMAGE_ID. Tags, labels and annotations as for the other images, under thermite-rig.
       - id: rig-meta
         if: matrix.rig
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         env:
           DOCKER_METADATA_SHORT_SHA_LENGTH: "12"
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
@@ -303,7 +311,7 @@ jobs:
             org.opencontainers.image.licenses=${{ matrix.licenses }}
       - id: rig-build
         if: matrix.rig
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: containers/rig/Containerfile
@@ -327,7 +335,7 @@ jobs:
           printf '%s\n' "$DIGEST" > digests/rig-cuda
           echo "rig-cuda: $DIGEST"
       # One file per image: the CUDA 12 job's holds the rig image's too.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: digest-${{ matrix.key }}
           path: digests/
@@ -343,24 +351,26 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # The CUDA images are several gigabytes each: make room on the runner's disk first.
       - name: Make room for the CUDA images
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: digest-*
           path: digests
           merge-multiple: true
       - name: Check each published image
+        env:
+          REGISTRY: ${{ needs.version.outputs.registry }}
         run: |
           node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/release/check-images.ts \
-            --registry '${{ needs.version.outputs.registry }}' \
+            --registry "$REGISTRY" \
             --commit "$GITHUB_SHA" --digests digests --summary "$GITHUB_STEP_SUMMARY"
 
   # A release's version tags, on the images that passed their checks: each tag is a copy of the
@@ -375,13 +385,13 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: digest-*
           path: digests
@@ -414,24 +424,29 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: digest-*
           path: digests
           merge-multiple: true
-      # The script needs no packages: only Node.js and the files in the repository.
+      # The script needs no packages: only Node.js and the files in the repository. The version
+      # comes from the tag's name, so it reaches the script as a variable, never as its text.
       - name: Write the bundle from the images' digests
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          REGISTRY: ${{ needs.version.outputs.registry }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/release/bundle.ts \
-            --version '${{ needs.version.outputs.version }}' \
-            --registry '${{ needs.version.outputs.registry }}' \
-            --repo-url '${{ github.server_url }}/${{ github.repository }}' \
+            --version "$VERSION" \
+            --registry "$REGISTRY" \
+            --repo-url "$REPO_URL" \
             --digests digests --out bundle
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-bundle
           path: bundle/

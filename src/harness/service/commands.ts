@@ -6,6 +6,7 @@ import {
   verifyCommand,
 } from "../../core/commands.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
+import { typesIntoTerminals } from "../../core/terminal-input.ts";
 import { Conclusions } from "../conclusions.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { receivePropagation } from "../propagation.ts";
@@ -131,6 +132,13 @@ export class Commands {
         return drainCommand(svc, CommandPayloads.drain_rig.parse(payload), by, svc.clock());
       case "stop_trial":
         return askStop(svc.ledger, CommandPayloads.stop_trial.parse(payload), by);
+      // The owner's input into a trial's terminal (goal 169): the owner's own, never an operator's.
+      case "terminal_input":
+        if (!typesIntoTerminals(envelope.issued_by))
+          throw new Refusal(
+            `terminal_input is the owner's own to issue, not ${envelope.issued_by}'s: an operator may message the agents instead`,
+          );
+        return svc.consoles.input(CommandPayloads.terminal_input.parse(payload), envelope.id, by);
       case "pause_run": {
         const p = CommandPayloads.pause_run.parse(payload);
         // A closed run stays closed: a pause would let a resume open it again.

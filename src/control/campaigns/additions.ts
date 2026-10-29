@@ -54,7 +54,8 @@ export function contractAdditions(contract: unknown): RoleAdditions | undefined 
     : undefined;
 }
 
-const same = (a: RoleAdditions | undefined, b: RoleAdditions | undefined) =>
+/** Whether two contracts' additions say the same, in any order. */
+export const sameAdditions = (a: RoleAdditions | undefined, b: RoleAdditions | undefined) =>
   JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort());
 
 /**
@@ -83,7 +84,7 @@ export function setCampaignAdditions(
     campaign: req.campaign,
     field: "role_additions",
     value: want,
-    same: (contract) => same(contractAdditions(contract), want),
+    same: (contract) => sameAdditions(contractAdditions(contract), want),
     what: "their roles' own texts",
     by,
     action: "campaign_additions_set",

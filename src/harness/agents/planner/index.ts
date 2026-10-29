@@ -1,6 +1,6 @@
 import type { ModelConfig } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
-import type { StoredRule } from "../../../core/commands.ts";
+import type { StoredRule } from "../../../core/directives.ts";
 import type { NoteInput } from "../../../core/journal.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Assignment } from "../registry.ts";

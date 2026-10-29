@@ -22,6 +22,7 @@ import {
   trialEnd,
   turnsUp,
 } from "./common.ts";
+import { TrialConsole } from "./console.ts";
 import { TrialSignals, TurnMessages } from "./in-turn.ts";
 import type { CliProgram, CliRun, CliSetup, CliTally, CliTrial, CliTrialDeps } from "./program.ts";
 import { type RunEnd, TerminalTrial } from "./terminal.ts";
@@ -183,6 +184,9 @@ export async function runCliTrial<T extends CliTally>(
     : undefined;
   const unprepared = await term?.prepare();
   if (unprepared) return { ...result, stopped: "error", error: unprepared };
+  // The owner's console into its terminal (goal 169), or word that its program has none.
+  const ownerConsole = term ? new TrialConsole(term) : undefined;
+  deps.console?.(ownerConsole ?? "headless");
   const started = Date.now();
   // A trial's length only when the campaign or the rig sets one (goal 079).
   const deadline = spec.wallMs !== undefined ? started + spec.wallMs : Number.POSITIVE_INFINITY;
@@ -270,6 +274,8 @@ export async function runCliTrial<T extends CliTally>(
   /** One read of the output into the tally; true when the output holds more than it read. */
   const pump = (): boolean => {
     const r = readOutput();
+    // Input the owner queued for a usage window's reset goes in once the log shows work again.
+    ownerConsole?.flush();
     signals?.read();
     const live = r.live;
     if (live.length) deps.live(live);
@@ -444,8 +450,10 @@ export async function runCliTrial<T extends CliTally>(
     if (ends) break;
     message = goOn();
   }
-  // In its terminal, the program is ended now, its screen kept (terminal.ts).
-  await term?.close();
+  // In its terminal, the program is ended now, its screen kept (terminal.ts), and the owner's
+  // input still waiting for a usage window's reset is dropped.
+  await term?.stop();
+  ownerConsole?.close("the trial ended before the program's usage window reset");
   const sub = submitted();
   if (sub) {
     result.submitted = sub;

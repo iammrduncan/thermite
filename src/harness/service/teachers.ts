@@ -1,6 +1,6 @@
 import { briefData } from "../../core/brief.ts";
-import type { StructuredDirective } from "../../core/commands.ts";
 import { isLegacyRule } from "../../core/directions.ts";
+import type { StructuredDirective } from "../../core/directives.ts";
 import { queueTarget, ruleRefusal } from "../../core/queue-target.ts";
 import { handedOut, Registry, rulesInForce } from "../agents/index.ts";
 import {

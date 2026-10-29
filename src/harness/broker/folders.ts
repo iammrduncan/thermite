@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { log, logError } from "../../common/log.ts";
 import { type Broker, fatalExit, SECRET_VARS, TG, TU, tryDo } from "./context.ts";
 import { emptyScratchKeepingCaches, restoreLaneCaches } from "./lane-caches.ts";
-import { type Role, roleIds } from "./runner.ts";
+import { IDS, type Role, roleIds } from "./runner.ts";
 
 /**
  * The broker's folders, as root: at its start, the state, scratch, outbox and socket folders, each
@@ -36,6 +36,7 @@ export function prepareDirectories(broker: Broker): void {
     );
   }
   chmodSync(broker.stateDir, 0o711);
+  shareWithCheckers(broker.stateDir);
   // Scratch is disposable: whatever an earlier run left (including hostile trees) goes now. The
   // lanes' cache folders are kept (goal 079): each a real folder its own lane's user owns.
   chownSync(broker.scratchDir, 0, 0);
@@ -67,6 +68,38 @@ export function prepareDirectories(broker: Broker): void {
     });
   }
   prepareOutbox(broker);
+}
+
+/**
+ * The kits and the baselines: the controller's, and entered by the checkers' group too, which
+ * the kit's check runs with (runner.ts): it reads the kit, and later jobs' checks the files a
+ * hill climb's baseline kept. No other role may enter either. Every folder under the baselines
+ * keeps the group (setgid), and what is there already gets it, readable by the group. Root here
+ * has no CAP_FSETID, and a folder keeps its setgid mark only when its group is the process's own:
+ * the broker takes the checkers' group as its own for these calls alone.
+ */
+function shareWithCheckers(stateDir: string): void {
+  const group = `${TU}:${IDS.checkersGroup}`;
+  const was = process.getegid?.();
+  tryDo("share the kits and the baselines with the checkers", () => {
+    process.setegid?.(IDS.checkersGroup);
+    try {
+      const kits = join(stateDir, "kits");
+      mkdirSync(kits, { recursive: true });
+      chownSync(kits, TU, IDS.checkersGroup);
+      chmodSync(kits, 0o710);
+      const baselines = join(stateDir, "baselines");
+      mkdirSync(baselines, { recursive: true });
+      execFileSync("chown", ["-R", "-P", group, baselines], { stdio: "ignore" });
+      execFileSync("chmod", ["-R", "g+rX,g-w", baselines], { stdio: "ignore" });
+      execFileSync("find", [baselines, "-type", "d", "-exec", "chmod", "g+s", "{}", "+"], {
+        stdio: "ignore",
+      });
+      chmodSync(baselines, 0o2710);
+    } finally {
+      if (was !== undefined) process.setegid?.(was);
+    }
+  });
 }
 
 /** The broker's socket directory, and a clean socket path to listen on (at broker start only). */

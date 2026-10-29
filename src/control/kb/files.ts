@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { appendFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Bus, BusMessage, Handled } from "../../common/bus/index.ts";
@@ -12,7 +20,11 @@ import {
   type KbFileChunk,
   readKbFileChunk,
 } from "../../core/link/kb-files.ts";
+import { controlDiskOf } from "../disk.ts";
 import type { ControlStore } from "../store/index.ts";
+
+/** How long a chunk waits on the stream while control's disk is at its floor, before it is tried again. */
+export const KB_FILES_HELD_MS = 60_000;
 
 /**
  * The knowledge base's files in control's state (goal 175, step 2). Each file is kept once, by its
@@ -20,11 +32,13 @@ import type { ControlStore } from "../store/index.ts";
  * checked, and recorded in the store (kb_file), from where every item that names its SHA-256 has
  * it. Control takes the chunks from the `KB_FILES` stream one at a time, in the order the rig's
  * supervisor put them (core/link/kb-files.ts), and puts each file together in
- * `<dir>/.partial/<rig>.<sha256>`: a first chunk starts it again, a chunk it has is passed over,
- * and a chunk after a gap drops it, to be put again whole. At its last chunk control checks its
- * size and SHA-256, and keeps it or drops it, in its log and audit log (`kb_file_refused`). A chunk
- * is acked once written, so one control did not finish with is handed again. A file control holds
- * already takes nothing more. The item and its file meet by the SHA-256, whichever comes first:
+ * `<dir>/.partial/<rig>.<sha256>`: a first chunk starts it again, and drops any other file of the
+ * rig's that was cut short, so a rig has one such file at most; a chunk it has is passed over, and
+ * a chunk after a gap drops it, to be put again whole. At its last chunk control checks its size
+ * and SHA-256, and keeps it or drops it, in its log and audit log (`kb_file_refused`). A chunk is
+ * acked once written, so one control did not finish with is handed again. A file control holds
+ * already takes nothing more. While control's disk is at its floor (disk.ts) nothing is written:
+ * each chunk waits on the stream, tried again every KB_FILES_HELD_MS. The item and its file meet by the SHA-256, whichever comes first:
  * an item whose file is not here yet waits for it; a file no item names yet waits for its item.
  */
 export class KbFiles {
@@ -33,6 +47,8 @@ export class KbFiles {
   /** Files kept and chunks refused since control started, for its log and tests. */
   kept = 0;
   refused = 0;
+  /** Whether chunks wait for room on control's disk now: said in the log once, when it begins. */
+  private held = false;
 
   constructor(dir: string, store: ControlStore) {
     this.dir = dir;
@@ -55,6 +71,14 @@ export class KbFiles {
     }
     const kb = this.store.kb();
     if (kb.hasFile(c.sha256)) return undefined;
+    const floor = controlDiskOf(this.store)?.held;
+    if (floor) {
+      if (!this.held)
+        log("control", "files for the knowledge base wait for room", { floor }, "warn");
+      this.held = true;
+      return { againInMs: KB_FILES_HELD_MS };
+    }
+    this.held = false;
     const final = this.path(c.sha256);
     // Named only once checked: a control stopped before it recorded the file records it now.
     if (existsSync(final)) {
@@ -63,6 +87,7 @@ export class KbFiles {
     }
     const part = join(this.dir, ".partial", `${c.rig}.${c.sha256}`);
     mkdirSync(dirname(part), { recursive: true });
+    if (c.chunk === 0) this.dropCutShort(c.rig, part);
     const have = c.chunk === 0 || !existsSync(part) ? 0 : statSync(part).size;
     const at = c.chunk * KB_FILE_CHUNK_BYTES;
     const size = Math.min(KB_FILE_CHUNK_BYTES, c.bytes - at);
@@ -93,6 +118,16 @@ export class KbFiles {
       bytes: c.bytes,
     });
     return undefined;
+  }
+
+  /** A rig puts one file at a time: its first chunk drops the rig's other files cut short. */
+  private dropCutShort(rig: string, part: string): void {
+    const dir = dirname(part);
+    for (const name of readdirSync(dir))
+      if (name.startsWith(`${rig}.`) && join(dir, name) !== part) {
+        rmSync(join(dir, name), { force: true });
+        log("control", "a file for the knowledge base cut short dropped", { rig, part: name });
+      }
   }
 
   private refuse(what: Partial<KbFileChunk> & { subject?: string }, why: string): Handled {

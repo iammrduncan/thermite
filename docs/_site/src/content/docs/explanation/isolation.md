@@ -19,6 +19,8 @@ Inside the harness, every kind of work runs as its own Unix user. These are **ro
 | `thermite` | The controller: the ledger, the judge, the planner and scheduler, and the harness API |
 | `builder` | The judge's builds of each change, under the kit's limits. On a rig with several judge GPUs, each further card builds as a builder of its own, so builds run at once and none can reach another's |
 | `run` | The judge's timed runs of a change. On a rig with several judge GPUs, each further card has a timing user of its own |
+| `driver` | A kit's driver, where the kit has one (`run.driver`), beside the timed run but apart from it: the candidate can't signal or trace it. Each further judge GPU has its own |
+| `checker` | The kit's check of a run's outputs. It reads the kit and the baselines' kept files through the `checkers` group, which no other role holds. Each further judge GPU has its own |
 | `planner` | The planner's calls, when it runs in OpenCode, Claude Code or Codex |
 | `model-check` | The model check, when it runs in OpenCode, Claude Code or Codex |
 | `lane-1` … `lane-16` | One lane's commands and file tools. On a GPU, a lane's development runs also run as its user, with the device's group added |
@@ -36,6 +38,7 @@ flowchart TB
   C -- asks over a private socket --> B
   B -- runs as --> BU[builder: builds]
   B -- runs as --> R["run: timed runs"]
+  B -- runs as --> K["checker, driver: the kit's check and driver"]
   B -- runs as --> L["lane-N: a lane's commands"]
   B -- runs as --> A["agent-N: a worker agent"]
   A -- tools, with its trial's token --> C
@@ -72,7 +75,8 @@ The controller keeps its state where no role can look around in it:
 - the ledger, the harness's copies of projects and kits, and imported files are open to the controller alone;
 - stored builds and model files can be reached only by their exact path. Build outputs are hashed and made read-only, and checked again before every timed run;
 - each timed run gets a folder of its own, with a read-only copy of the files the kit's `run.copy` lists. The judge owns that copy; the run can read it but not change it;
-- the kit's check runs as the controller, in the kit's own folder, which no role can open.
+- the kit's check runs as `checker`, in a folder of its own, with the run's outputs and the judge's copy of the parameters. Through the `checkers` group it reads the kits and the files a hill climb's baseline kept, which no other role can open; it can write neither, nor reach the ledger, the git mirrors or the rig's keys;
+- a kit's driver, where the kit has one, runs as `driver` beside the timed run, the two joined only by their standard input and output: the candidate's user can't signal or trace the driver, nor reach its folder.
 
 The results of hidden test cases stay in a table of the ledger that never goes into an export. The owner sees each hidden case's name, how it failed and its value against its threshold, through the judge's `held_out_checked` event, which reaches control and no agent. The agents see only that a hidden check failed and its kind, such as "a held-out check timed out": never which case, its inputs or its output ([Held-out failures](../reference/verdicts.md#held-out-failures)).
 
@@ -113,6 +117,6 @@ The isolation self-test checks all five, and the supervisor's user, in that imag
 
 The **isolation self-test** runs every time the harness starts, while nothing else is running yet, and control shows the result with the rig's hardware. You can also run it as a rig check ([Check a rig](../how-to/operate/check-a-rig.md)), or with `thermite selftest isolation` as root inside the harness container.
 
-For each kind of role, the self-test asks the broker to run a small probe as that user. The probe tries what the role must not do, such as reading the ledger, a kit or a secret file, reaching the broker's socket, changing a stored build or a run's research folder, or opening a GPU it may not use. Every one of those must be refused. A few things must succeed: a timing user must read its run's copy of the kit, the workers' and the planner's users must read the research folder, and a role with a card must open it and see exactly that one card.
+For each kind of role, the self-test asks the broker to run a small probe as that user. The probe tries what the role must not do, such as reading the ledger, a kit or a secret file, reaching the broker's socket, changing a stored build or a run's research folder, or opening a GPU it may not use. Every one of those must be refused. On Kubernetes, a lane also tries to reach the cluster's API server, which the rig's network rules must stop. A few things must succeed: a timing user must read its run's copy of the kit, the workers' and the planner's users must read the research folder, and a role with a card must open it and see exactly that one card.
 
 The result is one sentence, `isolation holds: every probe of <n> roles came out as it must` or `isolation does NOT hold` with what got through. Each probe stops its role's processes, so the test wants an idle rig. The [rig checks reference](../reference/rig-checks.md#isolation-check) lists every probe.

@@ -7,9 +7,10 @@
 // the real Codex CLI and OpenCode (its server first, then its terminal) in their own terminals,
 // against a stand-in model; and the real Claude Code when the image has it, against
 // containers/test-anthropic's stand-in, with a made-up sign-in; then one short trial through the
-// trial loop's terminal mode for the fake TUI, the real Codex and the real OpenCode
-// (tests/stand-ins/terminal/trials.mjs). It downloads nothing but what the image's build does, and
-// no model is called.
+// trial loop's terminal mode for the fake TUI, the real Codex and the real OpenCode, with each
+// trial's last screen kept in memory, and the owner's input (terminal_input's) typed through a
+// trial's console into the fake TUI and the real Codex (tests/stand-ins/terminal/trials.mjs). It
+// downloads nothing but what the image's build does, and no model is called.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/terminal.mjs
 //   IMAGE      an image already built: no build, and it is kept (one built with

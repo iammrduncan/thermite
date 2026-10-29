@@ -38,6 +38,9 @@ WORKDIR /opt/thermite
 COPY --from=build /src/package.json ./
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/dist ./dist
+# xterm.js, which draws a trial's terminal on Live (goal 169): the copy kept in the repository, with
+# its MIT licence. Control serves it only when its SHA-256 is the pinned one.
+COPY vendor/xterm ./vendor/xterm
 COPY containers/thermite /usr/local/bin/thermite
 COPY --from=build /kubectl /usr/local/bin/kubectl
 COPY containers/control/kubectl/LICENSE /usr/local/share/doc/kubectl/LICENSE

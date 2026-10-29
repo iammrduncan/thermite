@@ -157,7 +157,7 @@ export async function thermiteLocal(rest: string[]): Promise<void> {
 /** thermite selftest isolation: inside the harness container, as root. */
 export async function thermiteSelftest(rest: string[]): Promise<void> {
   if (rest[0] !== "isolation") fail(USAGE);
-  const { isolationSelftest, oneContainerTargets } = await import(
+  const { clusterApi, isolationSelftest, oneContainerTargets } = await import(
     "../../harness/selftest/index.ts"
   );
   const { effectiveGpuLists, savedJudgeGpus } = await import("../../harness/broker/devices.ts");
@@ -185,6 +185,8 @@ export async function thermiteSelftest(rest: string[]): Promise<void> {
     oneContainer: oneContainerTargets(env),
     // The state's snapshot on the host's volume, where the rig keeps one.
     snapshotDir: env.THERMITE_STATE_SNAPSHOT_DIR || undefined,
+    // On Kubernetes: the API server, which no lane may reach.
+    clusterApi: clusterApi(env),
   });
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (!report.ok) process.exit(1);

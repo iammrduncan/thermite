@@ -7,14 +7,18 @@ import {
   type SessionLogAdapter,
   tallyEvents,
 } from "../../../agents/programs/index.ts";
-import { errorText } from "../../../common/errors.ts";
+import { errorText, Refusal } from "../../../common/errors.ts";
 import { log, logWarn } from "../../../common/log.ts";
 import type { LaneLimitValues } from "../../../core/contract.ts";
 import { MAX_RUN_MS } from "../../../core/kit.ts";
 import { type LiveKind, liveText, summarizeArgs } from "../../../core/live.ts";
+import { SCREEN_DATA_MAX } from "../../../core/screens.ts";
+import type { TerminalKey } from "../../../core/terminal-input.ts";
 import type { Runner, RunOutcome } from "../../broker/index.ts";
 import {
-  type ProgramExit,
+  DEFAULT_COLS,
+  DEFAULT_ROWS,
+  type ScreenSnapshot,
   startTerminal,
   type Terminal,
   type TerminalEnded,
@@ -33,8 +37,9 @@ import type { CliProgram, CliRun, CliTally } from "./program.ts";
  * the program's adapter into the tally the headless reader fills. A turn has ended when the log
  * says so and nothing begins for SETTLE_MS: never from the screen. A program that exits by itself
  * is resumed in a new host at the next turn, as a headless run's session is continued. At the
- * trial's end, its submission, or a stop, the loop keeps a snapshot of the screen in the trial's
- * area (for the live view; no decision reads it), and the host ends the program its own way.
+ * trial's end, its submission, or a stop, the loop keeps the last screen in memory (for the live
+ * view; no decision reads it), and the host ends the program its own way. The owner's console
+ * (console.ts) types into the same host, one input at a time with the loop's own.
  */
 
 /** How long a turn's end must stand in the log before the loop takes it: a late line reopens it. */
@@ -50,9 +55,12 @@ const TYPE_PIECE = 16 * 1024;
  */
 const READY_STILL_MS = 750;
 const READY_MAX_MS = 20_000;
-/** The screen kept at the end: the lines above it, and the most bytes of the snapshot. */
+/** The lines above the screen kept at the end, for the live view after the trial. */
 const SCREEN_SCROLLBACK = 500;
-const SCREEN_KEEP_MAX = 1024 * 1024;
+
+/** A snapshot's last SCREEN_DATA_MAX characters: a longer one starts in its scrollback. */
+const kept = (s: ScreenSnapshot): ScreenSnapshot =>
+  s.data.length > SCREEN_DATA_MAX ? { ...s, data: s.data.slice(-SCREEN_DATA_MAX) } : s;
 /**
  * How long past the trial's end the broker lets a host run (at most a day in all, the broker's
  * longest run): the loop's own end of the program comes first.
@@ -146,8 +154,11 @@ export class TerminalTrial<T extends CliTally> {
    * goes into the program, whose screen may take any key as an answer (a menu that buys more).
    */
   private limit: { resetsAt?: string | undefined } | undefined;
-  private lastExit: ProgramExit | undefined;
-  private screenKept = false;
+  /** The program's last screen, once it ended or was ended, and the host it was taken from. */
+  private last: ScreenSnapshot | undefined;
+  private lastOf: Terminal | undefined;
+  /** What is typed into the program, one input at a time: the loop's turns and the owner's. */
+  private typing: Promise<unknown> = Promise.resolve();
 
   constructor(p: CliProgram<T>, run: CliRun, o: TerminalTrialDeps<T>) {
     this.p = p;
@@ -162,11 +173,6 @@ export class TerminalTrial<T extends CliTally> {
   /** The host's copy of the session log, in the trial's area. */
   private copyName(): string {
     return `${this.p.prefix}-session.jsonl`;
-  }
-
-  /** The screen kept at the trial's end, in the trial's area. */
-  private screenFile(): string {
-    return join(this.run.area, `${this.p.prefix}-screen.ansi`);
   }
 
   private fields(more: Record<string, unknown> = {}): Record<string, unknown> {
@@ -227,7 +233,7 @@ export class TerminalTrial<T extends CliTally> {
     }
     try {
       if (started) await ready(host, () => this.stopping);
-      if (!this.stopping && this.host === host) await typeIn(host, text);
+      if (!this.stopping && this.host === host) await this.typed(() => typeIn(host, text));
     } catch (err) {
       // The program ended meanwhile: its end settles the run, and the next turn resumes it.
       const gone = await Promise.race([host.done.then(() => true), sleep(2_000).then(() => false)]);
@@ -285,8 +291,10 @@ export class TerminalTrial<T extends CliTally> {
   /** The host ended: the program exited, by itself or ended, and the run under way with it. */
   private hostEnded(host: Terminal, e: TerminalEnded): void {
     if (this.host === host) this.host = undefined;
-    this.lastExit = e.exit;
     const exit = e.exit;
+    // A program that exited by itself leaves its screen's last lines.
+    if (this.lastOf !== host && exit?.screen?.length)
+      this.last = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS, data: exit.screen.join("\r\n") };
     log(
       "harness",
       `${this.p.name}'s terminal ended`,
@@ -382,6 +390,51 @@ export class TerminalTrial<T extends CliTally> {
     return this.limit;
   }
 
+  /** `work` once what was typed before it has gone in. */
+  private typed<R>(work: () => Promise<R>): Promise<R> {
+    const next = this.typing.then(work);
+    this.typing = next.catch(() => undefined);
+    return next;
+  }
+
+  /**
+   * The owner's input (terminal_input), into the program now: text, then Enter, or keys by name,
+   * after what the loop is typing. Refused in words when no program runs: it is being ended, or
+   * it exited and starts again in its session at the trial's next turn.
+   */
+  async ownerInput(i: { text?: string | undefined; keys?: readonly TerminalKey[] | undefined }) {
+    const host = this.host;
+    if (this.stopping) throw new Refusal(`${this.p.name} is being ended: nothing more goes in`);
+    if (!host)
+      throw new Refusal(
+        `${this.p.name} is not running now: it starts again in its session at the trial's next turn`,
+      );
+    await this.typed(() =>
+      i.text !== undefined ? typeIn(host, i.text) : host.keys([...(i.keys ?? [])]),
+    );
+  }
+
+  /**
+   * The program's screen now, for the live view, or its last one once it has ended; undefined
+   * before it drew one. Only ever shown: no decision reads it.
+   */
+  async screen(): Promise<ScreenSnapshot | undefined> {
+    const host = this.host;
+    if (host && !this.stopping) {
+      try {
+        return await host.snapshot(0);
+      } catch {
+        // It ended meanwhile: its last screen.
+      }
+    }
+    return this.last;
+  }
+
+  /** The program's last screen, kept in memory when the trial ended. */
+  lastScreen(): ScreenSnapshot | undefined {
+    return this.last;
+  }
+
   /**
    * Ends the program its own way, its screen kept first: its turn interrupted when one is under
    * way, then its end steps (`/exit`, then SIGTERM); while it shows a usage limit, by SIGTERM
@@ -411,44 +464,16 @@ export class TerminalTrial<T extends CliTally> {
     this.stopping = false;
   }
 
-  /** At the trial's end: the program ended, if it still runs, with its screen kept. */
-  async close(): Promise<void> {
-    await this.stop();
-    if (!this.screenKept && this.lastExit?.screen?.length)
-      await this.keep(this.lastExit.screen.join("\n"));
-  }
-
+  /** The screen and the lines above it, kept in memory before the program is ended. */
   private async keepScreen(host: Terminal): Promise<void> {
     try {
-      await this.keep((await host.snapshot(SCREEN_SCROLLBACK)).data);
+      this.last = kept(await host.snapshot(SCREEN_SCROLLBACK));
+      this.lastOf = host;
     } catch (err) {
       logWarn("harness", `could not keep ${this.p.name}'s screen`, {
         ...this.fields(),
         error: errorText(err),
       });
     }
-  }
-
-  /** The screen in the trial's area, written as the lane (whose area it is): its last bytes. */
-  private async keep(data: string): Promise<void> {
-    const bytes = Buffer.from(data, "utf8");
-    const kept =
-      bytes.length > SCREEN_KEEP_MAX
-        ? bytes.subarray(bytes.length - SCREEN_KEEP_MAX).toString("utf8")
-        : data;
-    const r = await this.o.runner.run({
-      role: this.run.role,
-      argv: ["sh", "-c", 'umask 022 && cat > "$1"', "sh", this.screenFile()],
-      cwd: this.run.area,
-      stdin: kept,
-      timeoutMs: 30_000,
-      captureBytes: 4096,
-    });
-    this.screenKept = r.exitCode === 0;
-    if (!this.screenKept)
-      logWarn("harness", `could not keep ${this.p.name}'s screen`, {
-        ...this.fields(),
-        error: r.stderr.slice(-300),
-      });
   }
 }

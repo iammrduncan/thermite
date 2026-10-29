@@ -118,7 +118,13 @@ const prepare = (image: string, resources?: Resources): Obj => ({
     "mkdir -p /data/state /data/scratch /data/inbox/repos /data/inbox/models /data/outbox /data/supervisor && chown 10001:10010 /data/inbox /data/inbox/repos /data/inbox/models && chmod 2750 /data/inbox /data/inbox/repos /data/inbox/models && chown 10001:10001 /data/supervisor && chown 10010:10001 /data/outbox && chmod 2750 /data/outbox",
   ],
   securityContext: {
+    // Root, with the controller's group as its own. Without DAC_READ_SEARCH, root enters the
+    // closed inbox only through that group: with root's group, it stopped at the inbox's folders
+    // once it had closed the inbox, and no pod of the rig started. Both pods run it at every
+    // start. Without FSETID, root keeps the setgid bit only on a folder of its own group, as the
+    // inbox's folders are.
     runAsUser: 0,
+    runAsGroup: 10010,
     allowPrivilegeEscalation: false,
     capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER"] },
   },
@@ -181,10 +187,18 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
         },
       },
       // Neither part calls the Kubernetes API (control drives the rig's lifecycle), so neither
-      // pod gets the namespace's service-account token.
+      // pod gets the namespace's service-account token. Both run under the container runtime's
+      // default seccomp profile, as compose and Quadlet run them, whatever the kubelet's default.
       template: {
         metadata: { labels: labels(p.rig, component) },
-        spec: { automountServiceAccountToken: false, ...pod },
+        spec: {
+          automountServiceAccountToken: false,
+          ...pod,
+          securityContext: {
+            ...((pod.securityContext as Obj | undefined) ?? {}),
+            seccompProfile: { type: "RuntimeDefault" },
+          },
+        },
       },
     },
   });

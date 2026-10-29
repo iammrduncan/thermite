@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -229,20 +230,45 @@ export function baselineDir(stateDir: string, run: string, job: number): string 
 }
 
 /**
- * A fresh, empty folder for a baseline job, mode 0700 and owned by the judge, as are the folders
- * above it: no run user can reach it. An earlier try of the same job's folder is removed first.
+ * A fresh, empty folder for a baseline job's kept files, mode 0700 and owned by the judge. The
+ * folders above it are the judge's, 0710: the broker gives the baselines' folder the checkers'
+ * group, which the folders and files below it keep, and no other role may enter. An earlier try
+ * of the same job's folder is removed first.
  */
 export function prepareBaselineDir(stateDir: string, run: string, job: number): string {
   const top = join(stateDir, "baselines");
-  for (const d of [top, join(top, run)]) {
-    mkdirSync(d, { recursive: true, mode: 0o700 });
-    chmodSync(d, 0o700);
-  }
+  // Made here only when missing: a chmod by the judge would take off the group the folder keeps.
+  for (const d of [top, join(top, run)]) if (!existsSync(d)) mkdirSync(d, { mode: 0o710 });
   const dir = baselineDir(stateDir, run, job);
   removeBaselineDir(dir);
+  // No chmod after: the folder keeps the group, and the mark that passes it on, from above.
   mkdirSync(dir, { mode: 0o700 });
-  chmodSync(dir, 0o700);
   return dir;
+}
+
+/**
+ * Keeps a baseline job's sealed folder (sealBaselineDir), which the job's checks wrote in the
+ * scratch folder it handed them, in its folder in the judge's state (prepareBaselineDir): files
+ * 0440 and folders 0550, in the checkers' group, so later jobs' checks read them and change
+ * nothing.
+ */
+export function keepBaselineDir(from: string, to: string): void {
+  const dirs: string[] = [to];
+  const copy = (src: string, dst: string) => {
+    for (const e of readdirSync(src)) {
+      const [s, d] = [join(src, e), join(dst, e)];
+      if (lstatSync(s).isDirectory()) {
+        mkdirSync(d, { mode: 0o700 });
+        dirs.push(d);
+        copy(s, d);
+      } else {
+        copyFileSync(s, d);
+        chmodSync(d, 0o440);
+      }
+    }
+  };
+  copy(from, to);
+  for (const d of dirs.reverse()) chmodSync(d, 0o550);
 }
 
 /** Removes a baseline folder, read-only or not. */

@@ -30,7 +30,8 @@ import {
  * state (`kb-files-put/<sha256>`), so a file is sent once. A file whose bytes do not have its name
  * as their SHA-256 is never put. A put cut short is not noted, and starts again at the next round:
  * the stream keeps once a chunk it had within its duplicate window, and control starts a file
- * again at its first chunk. With the bus away, or control's stream not made yet, the files wait in
+ * again at its first chunk. A put is cut short, too, while the stream holds as many of the rig's
+ * chunks as it takes (KB_FILE_CHUNKS_WAITING_PER_RIG), until control has taken some. With the bus away, or control's stream not made yet, the files wait in
  * the outbox, and the item's event in the ledger and the report, until both can go.
  */
 
@@ -103,9 +104,10 @@ async function putFile(
     for (let i = 0; i < chunks; i++) {
       const at = i * KB_FILE_CHUNK_BYTES;
       const data = chunkOf(fd, at, Math.min(KB_FILE_CHUNK_BYTES, bytes - at));
-      await bus.publish(kbFileSubject(rig, sha256), data, {
+      await bus.publish(kbFileSubject(rig), data, {
         id: kbChunkId(rig, sha256, i),
         headers: {
+          [KB_FILE_HEADERS.sha256]: sha256,
           [KB_FILE_HEADERS.chunk]: String(i),
           [KB_FILE_HEADERS.chunks]: String(chunks),
           [KB_FILE_HEADERS.bytes]: String(bytes),

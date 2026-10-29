@@ -2,7 +2,7 @@ import type { Bus, BusMessage, Handled } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import type { SignedCommand } from "../../core/commands.ts";
-import { COMMAND_STREAM, commandConsumerConfig, readCommand } from "../../core/link/commands.ts";
+import { COMMAND_STREAM, commandConsumerName, readCommand } from "../../core/link/commands.ts";
 import { SUPERVISOR_NUMBERS, supervisorMs } from "../settings.ts";
 import { deliverCommand, type RelayConfig } from "./index.ts";
 
@@ -73,8 +73,8 @@ export async function takeCommand(cfg: RelayConfig, m: BusMessage): Promise<Hand
 
 /**
  * Takes the rig's commands from its consumer on the commands stream, which control makes, until
- * the bus is closed. A stream not made yet is waited for.
+ * the bus is closed. A stream or a consumer not made yet is waited for.
  */
 export async function followCommands(bus: Pick<Bus, "follow">, cfg: RelayConfig): Promise<void> {
-  await bus.follow(COMMAND_STREAM, commandConsumerConfig(cfg.rig), (m) => takeCommand(cfg, m));
+  await bus.follow(COMMAND_STREAM, commandConsumerName(cfg.rig), (m) => takeCommand(cfg, m));
 }

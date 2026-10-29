@@ -5,14 +5,20 @@ import { LIVE_FIGURE_SUBJECTS } from "../../link/live.ts";
 import { SignedReport } from "../../link/report.ts";
 import { LiveBatchWire } from "../../live.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
+import {
+  SCREENS_MAX_BYTES,
+  SCREENS_WATCHED_MAX,
+  ScreenFrame,
+  WatchedTrials,
+} from "../../screens.ts";
 import { MCP_SERVERS_MAX } from "../harness/supervisor.ts";
 import type { Route } from "../route.ts";
 
 /**
  * Control's API for a rig's supervisor (src/control/api/ answers it), each route with the rig's
- * own token and only for that rig (`:rig`): its reports, live lines and figures, the commands
- * waiting for it and their outcomes, the model routes and MCP servers control gives it, past
- * research for its runs, its results (champion patches and exports, for a rig with no results
+ * own token and only for that rig (`:rig`): its reports, live lines, screens and figures, the
+ * commands waiting for it and their outcomes, the model routes and MCP servers control gives it,
+ * past research for its runs, its results (champion patches and exports, for a rig with no results
  * repository), its daily report, and the Git access and kits its campaigns name. In pull mode the
  * same calls cross the tunnel (control/tunnel.ts lets these routes through, and no other).
  */
@@ -278,6 +284,20 @@ export const LIVE = {
   }),
   answer: z.looseObject({ left_out: z.record(z.string(), z.number()).optional() }),
   maxBytes: 4 * 1024 * 1024,
+} as const satisfies Route;
+
+/**
+ * The screens of the rig's trials that someone watches on control (goal 169; core/screens.ts),
+ * none when nobody does; control's answer names the trials watched now, whose screens the
+ * supervisor sends next. Control keeps the newest of each in memory while it is watched.
+ */
+export const SCREENS = {
+  method: "POST",
+  path: "/v1/rigs/:rig/screens",
+  what: "screens",
+  body: z.object({ frames: z.array(ScreenFrame).max(SCREENS_WATCHED_MAX) }),
+  answer: z.looseObject({ watch: WatchedTrials }),
+  maxBytes: SCREENS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A model route as the supervisor reads it: it passes the route on to its harness untouched. */

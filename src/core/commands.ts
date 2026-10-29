@@ -9,11 +9,13 @@ import {
 import { z } from "zod";
 import { canonicalJson } from "./canonical.ts";
 import { CommitSchema, IdSchema, MAX_LANES, MAX_LANES_REASON, Sha256Schema } from "./contract.ts";
-import { DirectionRef, directionName } from "./directions.ts";
+import { directionName } from "./directions.ts";
+import { StructuredDirective } from "./directives.ts";
 import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
 import { InvalidateEvidence } from "./invalidation.ts";
 import { McpUses } from "./mcp.ts";
 import { PROGRAM_MODES } from "./rig-settings.ts";
+import { TerminalInput } from "./terminal-input.ts";
 
 /**
  * Control commands. Control signs every command with its Ed25519 key; the harness verifies
@@ -94,86 +96,6 @@ export const ImportSpec = z.discriminatedUnion("kind", [
   }),
 ]);
 export type ImportSpec = z.infer<typeof ImportSpec>;
-
-/**
- * Low-power steering. Strict: a directive cannot carry anything but these fields, so it cannot
- * set a verdict, a contract or text for workers. AVOID, TRY and MANDATE name a direction (goal
- * 066), in plain words or as `:name:`, kept as its name; code keeps them at every hand-out. A
- * direction the run doesn't have yet is the planner's to design at its next round. PRIORITY ranks a
- * direction; LANE_COUNT sets the lanes (up to the contract's count); TRIAL_MINUTES sets how long
- * one trial lasts, in minutes (value, 1 to 1,440), over the contract's; KEEP_WORKING turns the
- * run's lanes keeping working while the judge works on or off (value, on or off), over the
- * contract's; NOTE is free text for the
- * planner only. The planner sees rationales and notes; workers never do. A rule in words that
- * names no direction (`match`) is no longer made: one already in a ledger stays in force as
- * legacy (isLegacyRule) until the planner's next round converts it to a named direction.
- */
-/** The kinds of directive. None of them is ever a direction's name (a lane "on try"). */
-export const DIRECTIVE_KINDS = [
-  "avoid",
-  "try",
-  "mandate",
-  "priority",
-  "lane_count",
-  "trial_minutes",
-  "keep_working",
-  "note",
-] as const;
-
-export const StructuredDirective = z
-  .strictObject(
-    {
-      kind: z.enum(DIRECTIVE_KINDS),
-      /** The direction the directive is about: plain words or `:name:`, kept as its name. */
-      family: DirectionRef.optional(),
-      value: z.union([z.string().max(1000), z.number()]).optional(),
-      /** Why, with citations; shown to the planner, never to workers. */
-      rationale: z.string().min(1).max(2000),
-      citations: z.array(z.string().min(1).max(500)).max(20).default([]),
-    },
-    {
-      error: (iss) =>
-        iss.code === "unrecognized_keys" && iss.keys.includes("match")
-          ? "a rule no longer takes match: name its direction in family, in plain words or as :name:"
-          : undefined,
-    },
-  )
-  // A research run's TRY or MANDATE may name a question by its number (value) instead.
-  .refine(
-    (d) =>
-      !["avoid", "try", "mandate"].includes(d.kind) ||
-      d.family !== undefined ||
-      (d.kind !== "avoid" && d.value !== undefined),
-    {
-      message: "an avoid, try or mandate rule names a direction (family)",
-      path: ["family"],
-    },
-  )
-  .refine(
-    (d) =>
-      d.kind !== "trial_minutes" ||
-      (Number.isInteger(d.value) && Number(d.value) >= 1 && Number(d.value) <= 1440),
-    {
-      message: "a trial_minutes rule gives value: minutes, a whole number from 1 to 1440",
-      path: ["value"],
-    },
-  )
-  .refine((d) => d.kind !== "keep_working" || d.value === "on" || d.value === "off", {
-    message: "a keep_working rule gives value: on or off",
-    path: ["value"],
-  });
-export type StructuredDirective = z.infer<typeof StructuredDirective>;
-
-/**
- * A rule as a ledger holds it: a directive, the owner's message a planner's rule came from, and,
- * for an old rule in words (legacy), its words. A rule the planner converted from an old rule in
- * words names that rule and its words (`converted_from`).
- */
-export type StoredRule = StructuredDirective & {
-  from_message?: number | undefined;
-  match?: string | undefined;
-  converted_from?: { rule: number; words: string } | undefined;
-};
 
 export { ExperimentId };
 
@@ -499,6 +421,8 @@ export const CommandPayloads = {
   }),
   /** The owner withdraws bad evidence (goal 174; owner only): core/invalidation.ts. */
   invalidate_evidence: InvalidateEvidence,
+  /** The owner types into a running trial's terminal (goal 169; owner only): core/terminal-input.ts. */
+  terminal_input: TerminalInput,
 } as const;
 
 export type CommandKind = keyof typeof CommandPayloads;
@@ -549,6 +473,7 @@ export const MCP_OWNER_KINDS = [
   // A research run's hypotheses (goal 117): which need the review panel's verdict.
   "hypothesis_status",
   "invalidate_evidence",
+  "terminal_input",
 ] as const satisfies readonly CommandKind[];
 
 /**
@@ -574,6 +499,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "hypothesis_status",
   "stop_trial",
   "invalidate_evidence",
+  "terminal_input",
 ]);
 
 /**
@@ -603,6 +529,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "accept_review",
   "conclude",
   "invalidate_evidence",
+  "terminal_input",
 ]);
 
 export const Envelope = z.object({

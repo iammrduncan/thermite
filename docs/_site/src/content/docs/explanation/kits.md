@@ -59,7 +59,9 @@ flowchart LR
 1. **Build.** The judge exports the change's commit into a fresh directory, copies in the kit files that the build needs, and runs the kit's build command as a separate builder user. It hashes what the build produced and moves it into a store that nothing else can write. The same commit, kit and compilers are built once and reused.
 2. **Run.** For each cell, a separate run user runs the stored build with the cell's parameters. Before every run, the judge checks the build's hashes again and gives the run a fresh, read-only copy of the kit's run files, such as a driver script.
 3. **Time.** The judge times the whole run from outside, with its own clock. Nothing the run prints is a score.
-4. **Check.** The judge runs the kit's check on the outputs, with its own copy of the parameters. If the check fails, the run is invalid, however fast it was.
+4. **Check.** The judge runs the kit's check on the outputs, with its own copy of the parameters, as a checker user of its own that reads the kit and writes only its own folder. If the check fails, the run is invalid, however fast it was.
+
+A kit can also have a **driver**: a program of its own that runs beside the candidate, as a user apart from the candidate's, sends it input and reads its answers through their standard input and output, and writes the outputs the check reads ([A kit's driver](../reference/kit-manifest.md#a-kits-driver)).
 
 A hill climb does this for the **champion**, the best confirmed version so far, and for the change, cell by cell, and compares them with statistics. A goal campaign runs each goal's cells and records which goals are met.
 

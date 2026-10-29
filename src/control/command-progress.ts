@@ -113,6 +113,21 @@ export function commandProgress(cmd: CommandRow, now: number): Progress {
       ...p,
       said: `${p.said} ${cmd.payload.preview === true ? "What it would reach is on the attempt's page: confirm it there." : "The evidence is withdrawn."}`,
     };
+  // Typed into a trial's terminal (goal 169): the rig's answer is the outcome; no report waits.
+  if (cmd.kind === "terminal_input" && (p.state === "taken" || p.state === "done")) {
+    const r = (cmd.outcome as { result?: { outcome?: unknown; until?: unknown } } | null)?.result;
+    const until = typeof r?.until === "string" ? ` at ${clockUtc(r.until)}` : "";
+    return {
+      ...p,
+      state: "done",
+      final: true,
+      tone: "ok",
+      said:
+        r?.outcome === "queued"
+          ? `It waits for the program's usage window to reset${until}, then goes in.`
+          : "Typed into the agent's terminal.",
+    };
+  }
   if (cmd.kind !== "export_now") return p;
   // An export the owner asked for (goal 103): which kind, and where it will show.
   const words = exportWords(cmd.payload as { full?: unknown; run?: unknown });

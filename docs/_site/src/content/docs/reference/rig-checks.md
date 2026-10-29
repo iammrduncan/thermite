@@ -102,6 +102,8 @@ It prints the whole report as JSON and exits with 1 when isolation does not hold
 | `builder-<i>` | The builder of each further judge GPU, on a rig with dedicated GPUs: each card builds as its own user, at the same time as the others |
 | `run` | The user that runs timed runs on the first (or only) judge device |
 | `run-<i>` | The user of each further judge GPU, on a rig with dedicated GPUs |
+| `checker`, `checker-<i>` | The kit's check, on each judge GPU |
+| `driver`, `driver-<i>` | A kit's driver, on each judge GPU |
 | `planner` | The user of planner calls under OpenCode, Claude Code or Codex |
 | `model-check` | The user of the model check under OpenCode, Claude Code or Codex |
 | `lane-1` | A lane's plain commands |
@@ -127,16 +129,18 @@ It prints the whole report as JSON and exits with 1 when isolation does not hold
 | `inbox-read` | Read | A file in the inbox, such as a kit's bundle, reached by its full path. Skipped while the inbox holds none |
 | `runs-list` | List | The directory of the judge's runs |
 | `tmp-create`, `var-tmp-create`, `shm-create` | Create a file | `/tmp`, `/var/tmp`, `/dev/shm` |
-| `kit-by-path` | Read | A checked-out `kit.json`, reached by its full path. Skipped before any kit is checked out |
+| `kit-by-path` | Read | A checked-out `kit.json`, reached by its full path. Skipped before any kit is checked out. The checkers must read it instead (below) |
 | `secret:<file>` | Read | Each secret file: the supervisor token, the proposer token and the model key files. The rig check also tries the stored model route. Where the harness shares its container with a supervisor in [pull mode](../explanation/trust.md#rigs-in-pull-mode) (`THERMITE_TUNNEL_DIR` set), also the pod's own keys, `keys.json` |
 | `build-overwrite` | Write | A file of a stored build. Skipped before any build exists |
 | `build-work` | List | A build under way, handed to `builder` as the judge hands one over. Every role but `builder` must be refused, the other cards' builders among them |
-| `baseline-by-path` | Read | A file a kit's check kept with a baseline, reached by its full path. Skipped before any baseline kept a file |
+| `baseline-by-path` | Read | A file a kit's check kept with a baseline, reached by its full path. Skipped before any baseline kept a file. The checkers must read it instead (below) |
 | `run-kit-write`, `run-kit-create` | Write, create a file | A run's read-only copy of kit files, made the way the judge makes it |
 | `research-write`, `research-create` | Write, create a file | A claim's file in a run's [research folder](../explanation/campaign-modes.md#research), and its `claims/` folder, written the way the harness writes them |
 | `controller-environ` | Read | The environment of the harness's controller process |
 | `pid1-environ` | Read | The environment of the container's first process, which holds what the container was started with |
 | `device:<node>` | Open | Each GPU device node, for roles that must not use the device |
+
+On Kubernetes, `lane-1` also tries the cluster's network: `cluster-network` opens a TCP connection to the cluster's API server, at the address and port Kubernetes gives every pod (`KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`). The rig's network rules must stop it. It passes with the error it met, such as `ECONNREFUSED`, or with `no answer in 3 s`; `ALLOWED: connected to <host> port <port>` fails.
 
 One more probe must find nothing: `runpod-variables` looks for RunPod's variables (`RUNPOD_` and a name) in the role's own environment and in every process environment the role can read. Its result is `none`, or `FOUND` with each name and where it was found.
 
@@ -161,6 +165,7 @@ Where the rig keeps a sealed snapshot of its state on the host's volume (`THERMI
 | Probe | Who | What |
 | --- | --- | --- |
 | `run-kit-read` | The timing users (`run`, `run-<i>`) | Read the run's copy of kit files |
+| `kit-by-path`, `baseline-by-path` | The checkers (`checker`, `checker-<i>`) | Read a checked-out `kit.json` and a file a baseline kept, by their full paths, which every other role is refused. Skipped as for the others |
 | `research-read` | The workers' users (`lane-1`, `agent-1`) and the planner's (`planner`) | Read the claim's file in that research folder |
 | `device:<own card>` and the control nodes | Each role with a GPU of its own (dedicated GPUs only) | Open its own card and the shared control nodes |
 | `visible-gpus` | Each role with a GPU of its own | `nvidia-smi -L` lists exactly that role's card |
@@ -201,6 +206,7 @@ Each probe's result is the error the operation met (refused, as it must be), `re
 | --- | --- |
 | `isolation holds: every probe of <n> roles came out as it must (devices: <devices>)` | Passed |
 | `isolation does NOT hold (devices: <devices>): <role> <probe>: <result>; …` | Failed. Up to 12 failures are listed, those of the container first, as `container <check>: <result>` |
+| `isolation does NOT hold (devices: <devices>): the cluster does not hold the rig's network rules: lane-1 reached the cluster's API server (ALLOWED: connected to <host> port <port>); …` | Failed on Kubernetes: the cluster's network plugin does not enforce the network rules, or the slot's rules let the harness reach the cluster. This failure comes first |
 | `isolation does NOT hold (devices: <devices>): the device setup failed` | The GPU's device nodes could not be set up |
 
 `<devices>` is one of these:

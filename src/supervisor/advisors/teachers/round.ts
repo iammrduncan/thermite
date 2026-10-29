@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { Prompt } from "../../../agents/prompt.ts";
 import { renderMergedBy, renderTeacher } from "../../../agents/roles/index.ts";
-import { StructuredDirective } from "../../../core/commands.ts";
+import { StructuredDirective } from "../../../core/directives.ts";
 import type { NoteInput } from "../../../core/journal.ts";
 import { ideaWords, ruleRefusal } from "../../../core/queue-target.ts";
 import { additionIn, type RunAdditions } from "../../../core/role-additions.ts";

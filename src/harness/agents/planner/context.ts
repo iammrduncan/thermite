@@ -1,12 +1,12 @@
 import type { BriefData } from "../../../core/brief.ts";
 import { canonicalJson } from "../../../core/canonical.ts";
-import type { StoredRule } from "../../../core/commands.ts";
 import {
   directionsToDesign,
   directionTokens,
   isLegacyRule,
   rulesToConvert,
 } from "../../../core/directions.ts";
+import type { StoredRule } from "../../../core/directives.ts";
 import type { OwnerAddition } from "../../../core/role-additions.ts";
 import { NOTES_ARE_DATA, type notesData } from "../../journal.ts";
 import { briefingData } from "../../knowledge.ts";

@@ -41,6 +41,11 @@ export function defaultWords(): string {
   ).join("; ");
 }
 
+/** Whether two contracts let each role write the same kinds, the default where one sets none. */
+export function sameKbWrites(a: unknown, b: unknown): boolean {
+  return canonical(kbWritesOf(a)) === canonical(kbWritesOf(b));
+}
+
 /** A setting with its roles and kinds in one order, so that equal settings compare equal. */
 function canonical(w: KbWrites | undefined): string {
   if (!w) return "";

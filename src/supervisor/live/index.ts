@@ -10,12 +10,14 @@ import { untoldKinds } from "../../core/kb.ts";
 import { LiveLog } from "../../core/live.ts";
 
 export { type LiveBusConfig, LiveCounts, publishLiveOnce } from "./bus.ts";
+export { relayScreens, relayScreensOnce, type ScreensRelayConfig } from "./screens.ts";
 
 /**
  * The live relay: every few seconds, the harness's newest live-log lines (signed by the harness)
  * go to control, with the supervisor's own lines (its advisors; unsigned, and labelled so). The
  * supervisor passes the harness's batch through untouched: it cannot sign for the harness. With
- * the message bus, they go there instead (bus.ts), and control takes them from the bus.
+ * the message bus, they go there instead (bus.ts), and control takes them from the bus. The screens
+ * of the trials someone watches go over HTTP either way (screens.ts).
  */
 export interface LiveRelayConfig {
   rig: string;

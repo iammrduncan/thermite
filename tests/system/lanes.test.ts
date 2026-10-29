@@ -104,6 +104,33 @@ describe("the most lanes a rig runs", () => {
     );
   });
 
+  test("each judge card checks as a checker and drives a kit's driver as a driver of its own, in the image and probed by the selftest", () => {
+    const file = readFileSync(
+      new URL("../../containers/harness/Containerfile", import.meta.url),
+      "utf8",
+    );
+    assert.match(file, /groupadd -g 10049 checkers/);
+    assert.equal(IDS.checkersGroup, 10049);
+    assert.match(file, /useradd -u \$\(\(10050 \+ i\)\) -g checker\$s .* checker\$s/);
+    assert.match(file, /useradd -u \$\(\(10060 \+ i\)\) -g driver\$s .* driver\$s/);
+    for (let i = 0; i <= 7; i++) {
+      const s = i ? `-${i}` : "";
+      for (const [role, base] of [
+        [`checker${s}`, IDS.checker.uid],
+        [`driver${s}`, IDS.driver.uid],
+      ] as const) {
+        assert.ok(RoleSchema.safeParse(role).success, role);
+        assert.deepEqual(roleIds(role), { uid: base + i, gid: base + i });
+        assert.ok(ALL_ROLES.includes(role), role);
+      }
+    }
+    assert.ok(!RoleSchema.safeParse("checker-8").success);
+    assert.deepEqual(
+      probedRoles(2).filter((r) => /^(checker|driver)/.test(r)),
+      ["checker", "checker-1", "driver", "driver-1"],
+    );
+  });
+
   test("the broker's roles and the owner's message recipients stop at the same lane", () => {
     for (const role of [`lane-${MAX_LANES}`, `lane-${MAX_LANES}-dev`, `agent-${MAX_LANES}`])
       assert.ok(RoleSchema.safeParse(role).success, role);

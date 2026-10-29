@@ -6,7 +6,8 @@ import {
   CONFIG_STREAM,
   type ConfigKey,
   type ConfigValue,
-  configConsumerConfig,
+  configConsumerName,
+  configSubjects,
   readConfig,
 } from "../../core/link/config.ts";
 
@@ -113,7 +114,13 @@ export async function takeConfig(w: ConfigWatch, m: BusMessage): Promise<Handled
   return undefined;
 }
 
-/** Watches the rig's keys until the bus is closed. The stream is control's, and is waited for. */
+/**
+ * Watches the rig's keys until the bus is closed: the latest value of each, read by its subject,
+ * then each new one from the rig's consumer. The stream and the consumer are control's, and are
+ * waited for.
+ */
 export async function followConfig(bus: Pick<Bus, "watch">, w: ConfigWatch): Promise<void> {
-  await bus.watch(CONFIG_STREAM, configConsumerConfig(w.rig), (m) => takeConfig(w, m));
+  await bus.watch(CONFIG_STREAM, configConsumerName(w.rig), configSubjects(w.rig), (m) =>
+    takeConfig(w, m),
+  );
 }

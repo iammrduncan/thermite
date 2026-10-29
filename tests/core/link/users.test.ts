@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createAccount, createUser } from "@nats-io/nkeys";
-import { commandConsumerConfig } from "../../../src/core/link/commands.ts";
-import { configConsumerConfig } from "../../../src/core/link/config.ts";
+import { commandConsumerName } from "../../../src/core/link/commands.ts";
+import { configConsumerName, configSubjects } from "../../../src/core/link/config.ts";
 import { EVENT_STREAM, EVENT_SUBJECTS } from "../../../src/core/link/events.ts";
 import { REPORT_STREAM } from "../../../src/core/link/report.ts";
 import {
@@ -71,16 +71,14 @@ describe("who may do what on the message bus", () => {
         allow: [
           "thermite.rig.rig-a.report",
           "thermite.rig.rig-a.live.*",
-          "$JS.API.CONSUMER.CREATE.COMMANDS.rig-rig-a-commands.thermite.rig.rig-a.cmd",
           "$JS.API.CONSUMER.INFO.COMMANDS.rig-rig-a-commands",
           "$JS.API.CONSUMER.MSG.NEXT.COMMANDS.rig-rig-a-commands",
           "$JS.ACK.COMMANDS.rig-rig-a-commands.>",
-          "$JS.API.CONSUMER.CREATE.CONFIG.rig-rig-a-config.thermite.rig.rig-a.config.*",
           "$JS.API.CONSUMER.INFO.CONFIG.rig-rig-a-config",
-          "$JS.API.CONSUMER.DELETE.CONFIG.rig-rig-a-config",
           "$JS.API.CONSUMER.MSG.NEXT.CONFIG.rig-rig-a-config",
           "$JS.ACK.CONFIG.rig-rig-a-config.>",
-          "thermite.rig.rig-a.kbfile.*",
+          "$JS.API.DIRECT.GET.CONFIG.thermite.rig.rig-a.config.*",
+          "thermite.rig.rig-a.kbfile",
           "thermite.kb.search.rig-a",
           "thermite.kb.read.rig-a",
         ],
@@ -90,13 +88,17 @@ describe("who may do what on the message bus", () => {
     // It puts the knowledge base's files on its own subjects; it may not read or remove any.
     const kbFiles = rigPermissions("rig-a").publish.allow.filter((x) => x.includes("KB_FILES"));
     assert.deepEqual(kbFiles, [], "no call of the JetStream API on the KB_FILES stream");
-    // The consumers it may make are the ones the supervisor follows its commands and watches its
-    // config with; it may publish nothing to a config subject, which only control writes.
+    // It makes no consumer and removes none: control makes the two it reads, with their settings.
+    // It reads its own keys' latest values by their subjects, and publishes to none of them,
+    // which only control writes.
     const allow = rigPermissions("rig-a").publish.allow;
-    const c = commandConsumerConfig("rig-a");
-    assert.ok(allow[2]?.endsWith(`.${c.durable_name}.${c.filter_subject}`));
-    const w = configConsumerConfig("rig-a");
-    assert.ok(allow[6]?.endsWith(`.${w.durable_name}.${w.filter_subject}`));
+    assert.ok(!allow.some((x) => /\.CONSUMER\.(CREATE|DURABLE\.CREATE|DELETE)\b/.test(x)));
+    assert.ok(allow[2]?.endsWith(`.${commandConsumerName("rig-a")}`));
+    assert.ok(allow[5]?.endsWith(`.${configConsumerName("rig-a")}`));
+    const direct = allow[8]?.replace(/\*$/, "");
+    assert.ok(
+      configSubjects("rig-a").every((s) => s.startsWith(direct?.split("CONFIG.")[1] ?? "-")),
+    );
     assert.ok(!allow.some((x) => x.startsWith("thermite.rig.rig-a.config")));
     assert.equal(rigInboxPrefix("rig-a"), "_INBOX.rig.rig-a");
     // Nothing of one rig's is in another's: no subject of rig-a's is open to rig-b.

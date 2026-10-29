@@ -168,6 +168,8 @@ export function agentLinks(
       // Its hooks or plugin take the owner's messages inside the agent's turn, through the
       // trial's routes (goal 169).
       inTurn: (d) => service.inTurn(spec.trialId, d),
+      // The owner's console into its terminal, and its screen for Live (goal 169).
+      console: (c) => service.consoles.set(spec.trialId, c),
       usage: windows,
       // A compaction the program reported (goal 070): kept and recorded as a Pi worker's are,
       // with the program's own conversation where Thermite could read it.

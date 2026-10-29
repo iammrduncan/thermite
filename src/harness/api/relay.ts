@@ -6,6 +6,7 @@ import {
   LIVE,
   LIVE_MESSAGES,
   LIVE_PAGE_DEFAULT,
+  SCREENS,
   SNAPSHOT,
   SNAPSHOT_PAGE_DEFAULT,
   SNAPSHOT_PAGE_MAX,
@@ -44,7 +45,7 @@ export function reportRoutes(app: Hono, { service, supervisor }: ApiContext): vo
   );
 }
 
-/** The live log. */
+/** The live log, and the screens of the trials someone watches. */
 export function liveRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   /** The page a request asks for; undefined unless `after` is a whole number from 0, `limit` from 1. */
   const pageOf = (c: Context) => {
@@ -64,6 +65,11 @@ export function liveRoutes(app: Hono, { service, supervisor }: ApiContext): void
     const p = pageOf(c);
     if (!p) return c.json({ error: "bad after or limit" }, 400);
     return c.json(service.liveMessages(p.after, p.limit) as object);
+  });
+  // The screens of the trials control's viewers watch (goal 169), for the supervisor to send on.
+  app.post(SCREENS.path, supervisor, limitOf(SCREENS), async (c) => {
+    const { trials } = SCREENS.body.parse(await c.req.json());
+    return c.json({ screens: await service.consoles.screens(trials) });
   });
 }
 

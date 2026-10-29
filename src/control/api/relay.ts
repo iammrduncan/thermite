@@ -1,7 +1,14 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
-import { ACK, GIT_ACCESS, INGEST, LIVE, PENDING_COMMANDS } from "../../core/api/control/rigs.ts";
+import {
+  ACK,
+  GIT_ACCESS,
+  INGEST,
+  LIVE,
+  PENDING_COMMANDS,
+  SCREENS,
+} from "../../core/api/control/rigs.ts";
 import { readReport } from "../../core/link/report.ts";
 import { takeReport } from "../ingest.ts";
 import { cancelCommand, pendingFor } from "../issue/index.ts";
@@ -16,7 +23,8 @@ const RETRY_SECONDS = 5;
 /**
  * What a rig's supervisor relays to control and fetches from it, with the rig's token: its reports,
  * the commands it fetches and acknowledges (and the owner's cancel of one still pending), its own
- * figures, the live view, the kits control keeps, and Git access for a private repository.
+ * figures, the live view and the screens watched, the kits control keeps, and Git access for a
+ * private repository.
  */
 export function relayRoutes(app: Hono, api: ApiContext): void {
   const { store, privateKeyPem, opts, control, parts, admin, rigAuth } = api;
@@ -56,6 +64,15 @@ export function relayRoutes(app: Hono, api: ApiContext): void {
   app.post(LIVE.path, rigAuth, bodyLimit({ maxSize: LIVE.maxBytes }), async (c) => {
     const [status, answer] = takeLive(store, c.req.param("rig"), await jsonBody(c.req));
     return c.json(answer, status);
+  });
+
+  // The screens of the rig's trials the owner watches (goal 169): held in memory while watched
+  // (live/screens.ts); the answer names the trials watched now.
+  app.post(SCREENS.path, rigAuth, bodyLimit({ maxSize: SCREENS.maxBytes }), async (c) => {
+    const rig = c.req.param("rig");
+    const { frames } = SCREENS.body.parse(await jsonBody(c.req));
+    parts.screens.take(rig, frames);
+    return c.json({ watch: parts.screens.watched(rig) });
   });
 
   // A kit control keeps, as plain-HTTP git for a rig's supervisor to fetch by commit. Only the

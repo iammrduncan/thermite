@@ -5,8 +5,10 @@
 // Codex and OpenCode reach the stand-in model (model.mjs), which answers each call with text, so
 // each trial is its first message, the loop's nudge typed into the terminal, and its end: no
 // submission, with each turn's end read from the session log, its usage counted, its screen kept,
-// the program ended its own way, and nothing of the lane's left running.
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+// the program ended its own way, and nothing of the lane's left running. Then the owner's input
+// (terminal_input's last step) through a trial's console, as lane-1's host types it: text and a
+// key into the fake TUI, and text into the real Codex.
+import { chmodSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { startModel } from "./model.mjs";
 
@@ -74,12 +76,27 @@ export async function loopTrials(c) {
     else process.env[k] = v;
   };
   try {
-    /** One code trial of lane-1 in its terminal; what it gave, and what it kept and showed. */
-    const trial = async (name, p, model, files) => {
+    /**
+     * One code trial of lane-1 in its terminal; what it gave, and what it kept and showed.
+     * `during`: run with the trial's console once it has one, the trial stopped after it.
+     */
+    const trial = async (name, p, model, files, during) => {
       const a = await c.area(`loop-${name}`, files);
       const sent = [];
       const live = [];
       const started = Date.now();
+      const stop = new AbortController();
+      let held;
+      const typing = during
+        ? (async () => {
+            const con = await c.until(`${name}'s console`, () => held, 60_000);
+            try {
+              return await during(con, a);
+            } finally {
+              stop.abort();
+            }
+          })().catch((err) => ({ error: err instanceof Error ? err.message : String(err) }))
+        : undefined;
       const r = await runCliTrial(
         p,
         {
@@ -107,18 +124,26 @@ export async function loopTrials(c) {
           env: a.env ?? {},
           pollMs: 200,
           terminal: true,
+          console: (x) => {
+            if (x !== "headless") held = x;
+          },
+          ...(during ? { signal: stop.signal } : {}),
         },
       );
+      const owner = await typing;
       await c.runner.killRole(c.LANE).catch(() => 0);
       await c.sleep(500);
-      const screen = join(a.dir, `${p.prefix}-screen.ansi`);
       return {
         a,
         r,
+        model,
         sent,
         live,
+        owner,
         seconds: Math.round((Date.now() - started) / 1000),
-        screen: existsSync(screen) ? readFileSync(screen, "utf8") : "",
+        // Its last screen, kept in memory for the live view: no file in its area.
+        screen: held?.lastScreen()?.data ?? "",
+        file: existsSync(join(a.dir, `${p.prefix}-screen.ansi`)),
         left: c.laneProcesses(),
       };
     };
@@ -130,6 +155,7 @@ export async function loopTrials(c) {
           t.r.turns >= 1 &&
           t.r.tokensIn > 0 &&
           t.screen.length > 0 &&
+          !t.file &&
           t.left.length === 0 &&
           more(t),
         {
@@ -175,6 +201,56 @@ export async function loopTrials(c) {
     );
     ended("the fake TUI as Claude Code", fake, (t) => t.r.toolCalls === 1 && t.r.turns === 2);
 
+    // The owner's input through the trial's console, into the fake mid-turn: text, then a key.
+    const fakeSeen = (dir) => {
+      const folder = join(dir, "claude-home", ".fake-tui");
+      if (!existsSync(folder)) return [];
+      return readdirSync(folder)
+        .filter((f) => f.endsWith(".jsonl") && f !== "server.jsonl")
+        .flatMap((f) => c.lines(join(folder, f)));
+    };
+    const fakeInput = await trial(
+      "fake-input",
+      claudeProgram,
+      fake.model,
+      (dir) => {
+        const bin = join(dir, "claude");
+        writeFileSync(
+          bin,
+          `#!/bin/sh\nexec "${process.execPath}" /opt/fake-tui/fake-tui.ts "$@"\n`,
+        );
+        chmodSync(bin, 0o755);
+        process.env.THERMITE_CLAUDE_BIN = bin;
+        const script = join(dir, "script.json");
+        const busy = fakeScript();
+        busy.turns = [[{ lines: busy.turns[0][0].lines.slice(0, 2) }, { waitMs: 60_000 }]];
+        writeFileSync(script, JSON.stringify(busy));
+        return { FAKE_TUI_SCRIPT: script };
+      },
+      async (con, a) => {
+        await c.until("its first message", () => fakeSeen(a.dir).some((x) => x.type === "user"));
+        const text = await con.input({ text: "OWNER-INPUT-1", wait: "queue" }, () => undefined);
+        const key = await con.input({ keys: ["down"], wait: "queue" }, () => undefined);
+        await c.until("the input in the program", () =>
+          fakeSeen(a.dir).some((x) => x.type === "key" && x.key === "down"),
+        );
+        return { text: text.outcome, key: key.outcome, seen: fakeSeen(a.dir) };
+      },
+    );
+    const ownerSeen = fakeInput.owner?.seen ?? [];
+    c.check(
+      "the fake TUI as Claude Code: the owner's input through the trial's console, typed by lane-1's host mid-turn, text then Enter and a key by name",
+      fakeInput.owner?.text === "typed" &&
+        fakeInput.owner?.key === "typed" &&
+        ownerSeen.some(
+          (x) => x.type === "user" && x.text === "OWNER-INPUT-1" && x.how === "typed",
+        ) &&
+        ownerSeen.some((x) => x.type === "key" && x.key === "down") &&
+        fakeInput.r.stopped === "interrupted" &&
+        fakeInput.left.length === 0,
+      { owner: { ...fakeInput.owner, seen: ownerSeen.slice(-6) }, stopped: fakeInput.r.stopped },
+    );
+
     if (existsSync("/opt/codex/bin/codex")) {
       process.env.THERMITE_CODEX_BIN = "/opt/codex/bin/codex";
       const codex = await trial("codex", codexProgram, {
@@ -187,6 +263,36 @@ export async function loopTrials(c) {
         maxTokens: 0,
       });
       ended("Codex", codex, (t) => t.live.some((l) => /done\./.test(l)));
+      // The owner's text into the real Codex, through the trial's console: its next model call
+      // carries it.
+      const first = api.calls["TERMINAL-CHECK-1"] ?? 0;
+      const input = await trial(
+        "codex-input",
+        codexProgram,
+        codex.model,
+        undefined,
+        async (con) => {
+          await c.until("Codex's first call", () => api.calls["TERMINAL-CHECK-1"] > first, 60_000);
+          const got = await con.input(
+            { text: "TERMINAL-CHECK-2: the owner typed this.", wait: "queue" },
+            () => undefined,
+          );
+          await c.until("the owner's text at the model", () => api.calls["TERMINAL-CHECK-2"] >= 1);
+          return { outcome: got.outcome };
+        },
+      );
+      c.check(
+        "Codex: the owner's text through the trial's console, typed into its terminal by lane-1's host, reached its model",
+        input.owner?.outcome === "typed" &&
+          api.calls["TERMINAL-CHECK-2"] >= 1 &&
+          input.left.length === 0,
+        {
+          owner: input.owner,
+          calls: api.calls,
+          stopped: input.r.stopped,
+          live: input.live.slice(-4),
+        },
+      );
     } else c.check("the image has no Codex CLI: its loop trial was not run", true, "");
 
     if (existsSync("/usr/local/bin/opencode")) {

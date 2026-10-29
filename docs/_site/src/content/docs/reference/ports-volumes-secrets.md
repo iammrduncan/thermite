@@ -75,7 +75,7 @@ For a rig in a namespace control creates, or one joined with a namespace join co
 | `thermite-<rig>-harness-net` | In: only from the rig's supervisor, on port 8700. Out: DNS (port 53, UDP and TCP), and addresses outside the private ranges of RFC 1918 |
 | `thermite-<rig>-supervisor-net` | In: nothing |
 
-In a **slot**, a namespace the cluster's operators made for Thermite, the operators write the policies. Control refuses a slot unless some egress policy selects the harness and every egress rule that selects it reaches only DNS or addresses outside the private ranges. NetworkPolicies need a cluster network plugin that enforces them.
+In a **slot**, a namespace the cluster's operators made for Thermite, the operators write the policies. Control refuses a slot unless some egress policy selects the harness and every egress rule that selects it reaches only DNS or addresses outside the private ranges. NetworkPolicies need a cluster network plugin that enforces them. In every placement on a cluster, the rig's [isolation check](rig-checks.md#isolation-check) tries to reach the cluster's API server from a lane, and fails when it can.
 
 ## Volumes and state
 
@@ -159,7 +159,7 @@ Removing a rig removes these five volumes, the two networks, the unit files and 
 | --- | --- |
 | PersistentVolumeClaim `thermite-<rig>-data` | One volume, `ReadWriteOnce`, 100 GB unless set (1 to 10,000 GB), in the cluster's default storage class unless one is named |
 | Its subpaths | `state` → `/var/lib/thermite`; `scratch` → `/scratch`; `inbox` → `/controller/inbox`, read-only, in the harness and `/inbox` in the supervisor (the supervisor's, with the controller's group `thermite`, mode 2750, as `prepare` sets it); `outbox` → `/outbox` (read-only in the supervisor); `supervisor` → `/var/lib/thermite-supervisor` |
-| Init container `prepare` | Runs the harness image to make the folders and set their owners before each pod starts |
+| Init container `prepare` | Runs the harness image to make the folders and set their owners before each pod starts: as root with the controller's group (10010), and only the `CHOWN` and `FOWNER` capabilities |
 
 Both pods run on the same node, so they can share the volume. An update to control's images or address (**Update to these images**, **Try the update again** or **Give it control's new address** on the rig's page) applies the rig's two Deployments again and leaves its volume claim, its Secret and its Service as they are, so the rig keeps its state and its tokens.
 

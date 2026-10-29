@@ -70,7 +70,10 @@ describe("control folds rigs' reports from the message bus", () => {
     const bus: Pick<Bus, "follow"> = {
       async follow(stream, consumer, handle) {
         const name = typeof stream === "string" ? stream : stream.name;
-        followed = { stream: name, consumer: consumer.durable_name };
+        followed = {
+          stream: name,
+          consumer: typeof consumer === "string" ? consumer : consumer.durable_name,
+        };
         for (const p of pages) {
           const m = message(p);
           await handle(m);

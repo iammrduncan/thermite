@@ -90,6 +90,7 @@ export class FakeBus
       | "lastSeq"
       | "makeStream"
       | "follow"
+      | "makeConsumer"
       | "remove"
       | "streams"
       | "last"
@@ -123,6 +124,16 @@ export class FakeBus
 
   /** Each durable consumer's place in a stream that keeps what it hands (not a work queue). */
   private readonly places = new Map<string, number>();
+  /** The consumers made for another part (makeConsumer), by `<stream>.<name>`, with their settings. */
+  readonly consumers = new Map<string, ConsumerSettings>();
+
+  /** As the server: a consumer made unless one of its name exists; none on a stream not made. */
+  async makeConsumer(stream: string, consumer: ConsumerSettings): Promise<void> {
+    if (!this.made.has(stream))
+      throw new Error(`no stream ${stream} on the bus yet: control makes it`);
+    const at = `${stream}.${consumer.durable_name}`;
+    if (!this.consumers.has(at)) this.consumers.set(at, consumer);
+  }
 
   /** As the server: a stream's retention never changes to or from a work queue in place. */
   async makeStream(stream: StreamSettings): Promise<void> {
@@ -142,20 +153,21 @@ export class FakeBus
    */
   async follow(
     stream: StreamSettings | string,
-    consumer: ConsumerSettings,
+    consumer: ConsumerSettings | string,
     handle: (m: BusMessage) => Handled | Promise<Handled>,
   ): Promise<void> {
     const name = typeof stream === "string" ? stream : stream.name;
+    const durable = typeof consumer === "string" ? consumer : consumer.durable_name;
     const had = this.made.get(name);
     if (typeof stream !== "string") {
       if (had && stream.retention === "workqueue" && had.retention !== "workqueue") {
         this.made.set(name, { ...had, subjects: [name] });
-        if (!(await this.hand(name, consumer.durable_name, handle))) return;
+        if (!(await this.hand(name, durable, handle))) return;
         this.removeStream(name);
       }
       await this.makeStream(stream);
     } else if (!had) return;
-    await this.hand(name, consumer.durable_name, handle);
+    await this.hand(name, durable, handle);
   }
 
   /** Hands a consumer its messages in order; false at the first the handler asks for again. */

@@ -127,7 +127,7 @@ export class IssuedCommands extends StorePart {
     const out: SignedCommand[] = [];
     for (const r of this.db
       .prepare(
-        "select id, signed from command where rig = ? and status = 'pending' order by issued_at",
+        "select id, signed from command where rig = ? and status = 'pending' order by issued_at, rowid",
       )
       .all(rig) as Row[]) {
       const cmd = JSON.parse(String(r.signed)) as SignedCommand;
@@ -243,7 +243,7 @@ export class IssuedCommands extends StorePart {
          from command where kind in ('assign_campaign', 'resume_run') and run <> ''
            and (status = 'pending' or (status = 'delivered' and kind = 'assign_campaign' and acked_at > ?))
            and (kind = 'resume_run' or campaign = ?)
-         order by issued_at`,
+         order by issued_at, rowid`,
       )
       .all(since, campaign) as Row[]) {
       const rig = String(r.rig);
@@ -274,7 +274,7 @@ export class IssuedCommands extends StorePart {
   > {
     const rows = this.db
       .prepare(
-        "select id, rig, campaign, issued_at from command where kind = 'assign_campaign' and campaign is not null and status in ('pending', 'delivered') order by issued_at desc",
+        "select id, rig, campaign, issued_at from command where kind = 'assign_campaign' and campaign is not null and status in ('pending', 'delivered') order by issued_at desc, rowid desc",
       )
       .all() as { id: string; rig: string; campaign: string; issued_at: string }[];
     const out = new Map<
@@ -310,7 +310,7 @@ export class IssuedCommands extends StorePart {
   ): { refused: string | null; issued_at: string } | undefined {
     const rows = this.db
       .prepare(
-        "select signed, status, outcome, issued_at from command where rig = ? and kind = 'message_agent' order by issued_at desc limit 30",
+        "select signed, status, outcome, issued_at from command where rig = ? and kind = 'message_agent' order by issued_at desc, rowid desc limit 30",
       )
       .all(rig) as Row[];
     for (const r of rows) {
@@ -351,7 +351,7 @@ export class IssuedCommands extends StorePart {
     return (
       this.db
         .prepare(
-          "select id, rig, kind, issued_by, issued_at, status, acked_at, outcome from command order by issued_at desc limit ?",
+          "select id, rig, kind, issued_by, issued_at, status, acked_at, outcome from command order by issued_at desc, rowid desc limit ?",
         )
         .all(limit) as Row[]
     ).map((r) => ({
@@ -376,7 +376,7 @@ export class IssuedCommands extends StorePart {
       .prepare(
         `select id, rig, kind, signed, issued_at, status, acked_at, outcome from command
          where kind in ('approve_promotion', 'decline_promotion', 'accept_review', 'conclude')
-         order by issued_at desc limit ?`,
+         order by issued_at desc, rowid desc limit ?`,
       )
       .all(limit) as Row[];
     return rows.map((r) => {
@@ -430,7 +430,7 @@ export class IssuedCommands extends StorePart {
     return (
       this.db
         .prepare(
-          "select id, rig, kind, signed, issued_by, issued_at, status, outcome, acked_at from command where rig = ? and kind = ? order by issued_at desc limit ?",
+          "select id, rig, kind, signed, issued_by, issued_at, status, outcome, acked_at from command where rig = ? and kind = ? order by issued_at desc, rowid desc limit ?",
         )
         .all(rig, kind, limit) as Row[]
     ).map(commandRowOf);
@@ -449,7 +449,7 @@ export class IssuedCommands extends StorePart {
         `select run, signed -> '$.envelope.payload.mcp_servers' as uses from command
          where rig = ? and kind = 'assign_campaign' and run is not null
            and status in ('pending', 'delivered')
-         order by issued_at`,
+         order by issued_at, rowid`,
       )
       .all(rig) as { run: string; uses: string | null }[]) {
       if (closed.has(r.run)) continue;
@@ -470,7 +470,7 @@ export class IssuedCommands extends StorePart {
         `select signed -> '$.envelope.payload.contract' as contract from command
          where rig = ? and kind = 'assign_campaign' and run = ?
            and status not in ('failed', 'rejected', 'expired')
-         order by issued_at desc limit 1`,
+         order by issued_at desc, rowid desc limit 1`,
       )
       .get(rig, run) as { contract: string | null } | undefined;
     if (!r) return undefined;

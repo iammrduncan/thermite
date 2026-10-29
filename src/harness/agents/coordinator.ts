@@ -1,5 +1,5 @@
-import type { StoredRule } from "../../core/commands.ts";
 import { type Contract, type LaneLimitValues, laneLimits, MAX_LANES } from "../../core/contract.ts";
+import type { StoredRule } from "../../core/directives.ts";
 import { ideaWords, ruleRefusal } from "../../core/queue-target.ts";
 import { JUDGED_LIFECYCLES } from "../../core/verdicts.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";

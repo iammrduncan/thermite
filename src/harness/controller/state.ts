@@ -29,11 +29,13 @@ export function openState(ctx: ControllerContext): {
 } {
   const { paths } = ctx;
   // Private state: only the controller's user may enter. Builds and models are reachable by
-  // exact path only (0711), because the run user executes builds and loads models.
+  // exact path only (0711), because the run user executes builds and loads models. The kits are
+  // entered by the checkers' group too (0710), which the broker gives the folder: the kit's check
+  // reads its kit.
   for (const [dir, mode] of [
     ["ledger", 0o700],
     ["git", 0o700],
-    ["kits", 0o700],
+    ["kits", 0o710],
     ["imports", 0o700],
     ["models", 0o711],
   ] as const) {
@@ -53,7 +55,7 @@ export function openState(ctx: ControllerContext): {
     for (const [dir, mode] of [
       ["ledger", 0o700],
       ["git", 0o700],
-      ["kits", 0o700],
+      ["kits", 0o710],
       ["imports", 0o700],
       ["models", 0o711],
     ] as const) {

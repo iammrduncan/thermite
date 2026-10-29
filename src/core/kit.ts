@@ -12,7 +12,7 @@ import { normalizePath } from "./paths.ts";
  *   {kit}    the kit checkout in the check; in a run, the run's read-only copy of `run.copy`
  *   {build}  the verified build directory of the arm being run (read-only)
  *   {params} a file with the cell's parameters as key=value lines ({params_json}: as JSON)
- *   {out}    the run's output directory
+ *   {out}    the run's output directory (with run.driver, the driver's alone)
  *   {models} the imported models, one read-only file per sha256: `{models:<sha256>}` (run and
  *            check only; the contract's `models` list names them)
  *
@@ -91,6 +91,13 @@ const KitFields = z.strictObject({
      */
     copy: z.array(KitPath).default([]),
     command: Argv,
+    /**
+     * The kit's driver, where a run needs one beside the candidate: started with `command`, as a
+     * user of its own, its standard output the command's standard input and the command's output
+     * its input. It writes {out}, and the run ends when it does; the judge times it. It gets no
+     * {build}: it never runs the candidate's code. Without it, `command` runs alone.
+     */
+    driver: Argv.optional(),
     timeout_s: Seconds.default(300),
     rss_mib: Mib.default(1024),
     disk_mib: Mib.default(256),
@@ -187,22 +194,39 @@ export const KitSchema = KitFields.superRefine((kit, ctx) => {
     }
   }
   // A run reaches only the kit paths it copies.
-  for (const arg of kit.run.command) {
-    for (const m of arg.matchAll(/\{kit(?::([^}]+))?\}/g)) {
-      const sub = m[1] === undefined ? undefined : normalizePath(m[1]);
-      const covered =
-        sub === undefined
-          ? kit.run.copy.length > 0
-          : kit.run.copy.some((c) => sub === c || sub.startsWith(`${c}/`));
-      if (!covered) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["run", "command"],
-          message: `${m[0]} is not in run.copy (a run cannot read the kit)`,
-        });
+  for (const field of ["command", "driver"] as const) {
+    for (const arg of kit.run[field] ?? []) {
+      for (const m of arg.matchAll(/\{kit(?::([^}]+))?\}/g)) {
+        const sub = m[1] === undefined ? undefined : normalizePath(m[1]);
+        const covered =
+          sub === undefined
+            ? kit.run.copy.length > 0
+            : kit.run.copy.some((c) => sub === c || sub.startsWith(`${c}/`));
+        if (!covered) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["run", field],
+            message: `${m[0]} is not in run.copy (a run cannot read the kit)`,
+          });
+        }
       }
     }
   }
+  // A driver writes the outputs and never reaches the candidate's build.
+  const uses = (argv: readonly string[], name: string) =>
+    argv.some((a) => new RegExp(`\\{${name}(?::[^}]+)?\\}`).test(a));
+  if (kit.run.driver && uses(kit.run.driver, "build"))
+    ctx.addIssue({
+      code: "custom",
+      path: ["run", "driver"],
+      message: "{build} is not for the driver: the candidate's build runs as run.command alone",
+    });
+  if (kit.run.driver && uses(kit.run.command, "out"))
+    ctx.addIssue({
+      code: "custom",
+      path: ["run", "command"],
+      message: "with run.driver, the driver writes {out}: the candidate's command gets none",
+    });
 });
 export type Kit = z.infer<typeof KitSchema>;
 

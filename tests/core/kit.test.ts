@@ -53,6 +53,24 @@ describe("kit commands", () => {
     }
   });
 
+  test("a kit's driver writes the outputs, reaches only the kit paths in run.copy, and never the build", () => {
+    const driven = withRun({
+      copy: ["run"],
+      command: ["{build:out/bench}", "{params}"],
+      driver: ["python3", "{kit:run/drive.py}", "{params_json}", "{out}"],
+    });
+    assert.deepEqual(KitSchema.parse(driven).run.driver?.[1], "{kit:run/drive.py}");
+    assert.equal(KitSchema.parse(base).run.driver, undefined, "a run alone needs no driver");
+    const refused = (run: Record<string, unknown>, message: RegExp) =>
+      assert.throws(() => KitSchema.parse({ ...driven, run: { ...driven.run, ...run } }), message);
+    refused({ driver: ["{kit:check.py}"] }, /not in run\.copy/);
+    refused(
+      { driver: ["{kit:run/drive.py}", "{build:out/bench}"] },
+      /\{build\} is not for the driver/,
+    );
+    refused({ command: ["{build:out/bench}", "{out}"] }, /the driver writes \{out\}/);
+  });
+
   test("a cell may set its own time limit; a cell of parameters alone keeps the kit's", () => {
     const kit = KitSchema.parse({
       ...base,

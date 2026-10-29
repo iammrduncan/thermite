@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { ControlDisk } from "../../../src/control/disk.ts";
 import { followKbFiles, KbFiles } from "../../../src/control/kb/index.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import {
@@ -32,11 +33,12 @@ async function setup() {
   const put = (rig: string, bytes: Buffer, i: number, as = sha(bytes)) => {
     const at = i * KB_FILE_CHUNK_BYTES;
     return bus.publish(
-      kbFileSubject(rig, as),
+      kbFileSubject(rig),
       bytes.subarray(at, Math.min(at + KB_FILE_CHUNK_BYTES, bytes.length)),
       {
         id: `${kbChunkId(rig, as, i)}:${Math.random()}`,
         headers: {
+          [KB_FILE_HEADERS.sha256]: as,
           [KB_FILE_HEADERS.chunk]: String(i),
           [KB_FILE_HEADERS.chunks]: String(kbFileChunks(bytes.length)),
           [KB_FILE_HEADERS.bytes]: String(bytes.length),
@@ -131,5 +133,42 @@ describe("control's files of the knowledge base", () => {
     await s.take();
     assert.equal(s.store.kb().hasFile(sha(bytes)), true);
     assert.equal(s.files.kept, 1, "not written again");
+  });
+
+  test("a rig's first chunk of another file drops the file it cut short: one at most for each rig", async () => {
+    const s = await setup();
+    const cut = randomBytes(KB_FILE_CHUNK_BYTES + 5);
+    await s.put("rig-a", cut, 0);
+    await s.put("rig-b", cut, 0);
+    await s.take();
+    const partial = () => readdirSync(join(s.files.dir, ".partial")).sort();
+    assert.deepEqual(partial(), [`rig-a.${sha(cut)}`, `rig-b.${sha(cut)}`]);
+    const next = randomBytes(KB_FILE_CHUNK_BYTES + 9);
+    await s.put("rig-a", next, 0);
+    await s.take();
+    assert.deepEqual(partial(), [`rig-a.${sha(next)}`, `rig-b.${sha(cut)}`], "rig-b's stays");
+  });
+
+  test("at control's disk floor nothing is written: each chunk waits on the stream", async () => {
+    const s = await setup();
+    let free = 1;
+    const disk = new ControlDisk({
+      store: s.store,
+      stateDir: s.files.dir,
+      floorGib: 5,
+      free: () => ({ free: free * 1024 ** 3, total: 100 * 1024 ** 3 }),
+    });
+    await disk.check();
+    const bytes = Buffer.from("written once there is room");
+    await s.putAll("rig-a", bytes);
+    await s.take();
+    assert.equal(s.store.kb().hasFile(sha(bytes)), false);
+    assert.equal(s.bus.kept.length, 1, "the chunk waits on the stream");
+    assert.ok(!existsSync(join(s.files.dir, ".partial")), "nothing written");
+    free = 50;
+    await disk.check();
+    await s.take();
+    assert.equal(s.store.kb().hasFile(sha(bytes)), true);
+    assert.equal(s.bus.kept.length, 0);
   });
 });

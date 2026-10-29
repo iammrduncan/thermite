@@ -5,6 +5,7 @@ import type { HeldOutCell } from "../held-out.ts";
 import type { KbItemBody } from "../kb.ts";
 import type { AgentPromptBody } from "../prompts.ts";
 import type { RigSettings } from "../rig-settings.ts";
+import type { TerminalOutcome } from "../terminal-input.ts";
 import type { EventKind } from "./kinds.ts";
 
 /**
@@ -434,6 +435,22 @@ export interface EventBodies {
     how?: MessageHow | undefined;
   };
   agent_message_unkept: { message: number };
+  /**
+   * The owner's input to a trial's terminal (goal 169), word for word, and what became of it: one
+   * when the command is applied, and one more when an input queued for a usage window's reset is
+   * typed or dropped.
+   */
+  terminal_input: {
+    command: string;
+    trial: string;
+    lane: string;
+    text?: string | undefined;
+    keys?: string[] | undefined;
+    wait: "queue" | "now";
+    outcome: TerminalOutcome;
+    why?: string | undefined;
+    until?: string | undefined;
+  };
   /** A prompt a run's agent was sent (goal 166): its sections and sources (core/prompts.ts). */
   agent_prompt: AgentPromptBody;
 

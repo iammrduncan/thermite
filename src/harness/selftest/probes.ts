@@ -19,11 +19,13 @@ export interface Probe {
     | "gpus"
     | "runpod"
     | "sealed"
-    | "environ";
+    | "environ"
+    | "connect";
   path: string;
   /**
    * For `gpus`: the only card UUIDs nvidia-smi may list, comma-separated. For `environ`: the
-   * variable no environment the role can read may hold.
+   * variable no environment the role can read may hold. For `connect`: the port on the host
+   * `path` names.
    */
   expect?: string;
 }
@@ -56,13 +58,16 @@ export function isFailure(result: string): boolean {
  * tries to list the state snapshot's folder and to write an empty file in it (removed again):
  * refused, as it must be where the volume keeps permissions, or, where it does not, "open,
  * sealed" when the folder holds only what a sealed snapshot holds, as inspectSnapshotFolder
- * (broker/snapshot.ts) looks, and "FOUND" with the first thing that is not.
+ * (broker/snapshot.ts) looks, and "FOUND" with the first thing that is not. `connect` opens a TCP
+ * connection to `path` on port `expect`, after the other probes: one that is made is "ALLOWED";
+ * one refused, unreachable or not answered in 3 s passes.
  */
 export const PROBE = `
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const probes = JSON.parse(process.argv[1]);
 const out = {};
+const connects = [];
 const sealedLook = (dir, names) => {
   let manifest = false, files = 0;
   for (const n of names) {
@@ -91,6 +96,10 @@ const sealedLook = (dir, names) => {
   return { words: !manifest && !files ? "no snapshot yet" : manifest ? "the manifest and " + count : count + " and no manifest" };
 };
 for (const p of probes) {
+  if (p.op === "connect") {
+    connects.push(p);
+    continue;
+  }
   if (p.op === "environ") {
     const found = Object.keys(process.env).filter((k) => k === p.expect).map((k) => k + " (own)");
     try {
@@ -169,7 +178,16 @@ for (const p of probes) {
     out[p.name] = must + (e.code || String(e));
   }
 }
-process.stdout.write(JSON.stringify(out));
+const connect = (p) => new Promise((done) => {
+  const socket = require("node:net").connect({ host: p.path, port: Number(p.expect), timeout: 3000 });
+  const end = (result) => { socket.destroy(); done(result); };
+  socket.on("connect", () => end("ALLOWED: connected to " + p.path + " port " + p.expect));
+  socket.on("timeout", () => end("no answer in 3 s"));
+  socket.on("error", (e) => end(e.code || String(e)));
+});
+Promise.all(connects.map(async (p) => { out[p.name] = await connect(p); })).then(() =>
+  process.stdout.write(JSON.stringify(out)),
+);
 `;
 
 /** Who a role is to the device: the run user, a development run, or neither. */

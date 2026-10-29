@@ -3,6 +3,7 @@ import { COMMAND_MAX_BYTES, SignedCommand } from "../../commands.ts";
 import { HealthAnswer } from "../../health.ts";
 import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
+import { ScreenFrame, WatchedTrials } from "../../screens.ts";
 import { ControlRoute } from "../model-route.ts";
 import type { Route } from "../route.ts";
 
@@ -189,6 +190,19 @@ export const LIVE_MESSAGES = {
       }),
     ),
   }),
+} as const satisfies Route;
+
+/**
+ * The screens of the trials control's viewers watch (goal 169; core/screens.ts): a running trial's
+ * now, an ended one's last. For the live view only: nothing records them.
+ */
+export const SCREENS = {
+  method: "POST",
+  path: "/v1/screens",
+  what: "screens",
+  body: z.object({ trials: WatchedTrials }),
+  answer: z.looseObject({ screens: z.array(ScreenFrame) }),
+  maxBytes: 16 * 1024,
 } as const satisfies Route;
 
 /**

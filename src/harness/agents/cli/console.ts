@@ -1,0 +1,123 @@
+import { errorText, Refusal } from "../../../common/errors.ts";
+import {
+  TERMINAL_QUEUE_MAX,
+  type TerminalInput,
+  type TerminalOutcome,
+} from "../../../core/terminal-input.ts";
+import type { ScreenSnapshot } from "../../terminal/index.ts";
+
+/**
+ * The owner's console into one trial's terminal (goal 169): the owner's inputs (terminal_input),
+ * typed into the program by its terminal host, and its screen for the live view. While the
+ * program's session log shows a usage limit, an input waits for the reset unless the owner said to
+ * send it now (the owner's decision of 2026-10-27): it goes in, in order, once the log shows the
+ * program at work again; at the trial's end, what still waits is dropped. Each input's outcome
+ * goes to whoever gave it, at once, and once more later for one that waited.
+ */
+
+/** What the console needs of the trial's terminal (terminal.ts's TerminalTrial). */
+export interface ConsoleTerminal {
+  ownerInput(i: Pick<TerminalInput, "text" | "keys">): Promise<void>;
+  limitShown(): { resetsAt?: string | undefined } | undefined;
+  screen(): Promise<ScreenSnapshot | undefined>;
+  lastScreen(): ScreenSnapshot | undefined;
+}
+
+/** What became of an input at once: typed, or waiting for the usage window's reset. */
+export type ConsoleNow = { outcome: "typed" } | { outcome: "queued"; until?: string | undefined };
+
+/** What became of an input that waited: typed after the reset, or dropped, with why. */
+export type ConsoleLater = (
+  outcome: Extract<TerminalOutcome, "typed_after_reset" | "dropped">,
+  why?: string,
+) => void;
+
+/** The usage limit the screen shows, for the live view: until when, when the program said. */
+export type ConsoleLimit = { resetsAt?: string | undefined } | undefined;
+
+export class TrialConsole {
+  private readonly term: ConsoleTerminal;
+  /** The inputs waiting for the usage window's reset, oldest first, with whom to tell. */
+  private readonly waiting: { input: Pick<TerminalInput, "text" | "keys">; later: ConsoleLater }[] =
+    [];
+  private flushing = false;
+  /** Why the console takes no more input, once the trial ended. */
+  private closed: string | undefined;
+
+  constructor(term: ConsoleTerminal) {
+    this.term = term;
+  }
+
+  /**
+   * One input: typed now, or, while the program shows a usage limit and the owner did not say to
+   * send it now, kept for after the reset (`later` is told then). Refused in words when the trial
+   * has ended, when TERMINAL_QUEUE_MAX inputs wait already, or when no program runs to take it.
+   */
+  async input(
+    i: Pick<TerminalInput, "text" | "keys" | "wait">,
+    later: ConsoleLater,
+  ): Promise<ConsoleNow> {
+    if (this.closed) throw new Refusal(this.closed);
+    const limit = this.term.limitShown();
+    if (limit && i.wait === "queue") {
+      if (this.waiting.length >= TERMINAL_QUEUE_MAX)
+        throw new Refusal(
+          `${TERMINAL_QUEUE_MAX} inputs wait for the usage window's reset already: send this one now, or after the reset`,
+        );
+      this.waiting.push({ input: { text: i.text, keys: i.keys }, later });
+      return { outcome: "queued", until: limit.resetsAt };
+    }
+    await this.term.ownerInput({ text: i.text, keys: i.keys });
+    return { outcome: "typed" };
+  }
+
+  /** How many inputs wait for the reset. */
+  get queued(): number {
+    return this.waiting.length;
+  }
+
+  /** The usage limit the program shows now, if any. */
+  limit(): ConsoleLimit {
+    return this.term.limitShown();
+  }
+
+  /**
+   * After each read of the session log: once it no longer shows a limit, the inputs that waited go
+   * in, in order. One that can't go in is dropped, with why.
+   */
+  flush(): void {
+    if (this.flushing || !this.waiting.length || this.term.limitShown()) return;
+    this.flushing = true;
+    void (async () => {
+      try {
+        while (this.waiting.length && !this.closed && !this.term.limitShown()) {
+          const w = this.waiting.shift() as (typeof this.waiting)[number];
+          try {
+            await this.term.ownerInput(w.input);
+            w.later("typed_after_reset");
+          } catch (err) {
+            w.later("dropped", errorText(err));
+          }
+        }
+      } finally {
+        this.flushing = false;
+      }
+    })();
+  }
+
+  /** The trial ended: no more input, and what still waits is dropped with `why`. */
+  close(why: string): void {
+    this.closed = "the trial has ended: nothing more goes into its terminal";
+    for (const w of this.waiting.splice(0)) w.later("dropped", why);
+  }
+
+  /** The screen now, or the last one; undefined before the program drew one. */
+  screen(): Promise<ScreenSnapshot | undefined> {
+    return this.term.screen();
+  }
+
+  /** The program's last screen, once the trial ended. */
+  lastScreen(): ScreenSnapshot | undefined {
+    return this.term.lastScreen();
+  }
+}

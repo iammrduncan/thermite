@@ -70,9 +70,10 @@ Unknown fields are refused at every level.
 | `cells` | object | required | Every cell the kit can measure, with its parameters and, when it needs one, its own time limit. See [Cells](#cells) |
 | `run.copy` | list of kit paths | `[]` | Kit files and folders copied, read-only, into every run. A run reaches them as `{kit:<path>}` |
 | `run.command` | list of text, at least one | required | One run of one build on one cell |
+| `run.driver` | list of text, at least one | none | The kit's driver, where a run needs one beside the candidate: see [A kit's driver](#a-kits-driver). Without it, `run.command` runs alone |
 | `run.timeout_s` | integer from 1 to 86400 | 300 | A run's time limit, in seconds, for each cell that sets none of its own |
-| `run.rss_mib` | integer ≥ 1 | 1024 | A run's memory limit, in MiB |
-| `run.disk_mib` | integer ≥ 1 | 256 | A run's disk limit, in MiB |
+| `run.rss_mib` | integer ≥ 1 | 1024 | A run's memory limit, in MiB; with a driver, the driver's and the candidate's each |
+| `run.disk_mib` | integer ≥ 1 | 256 | A run's disk limit, in MiB; with a driver, the driver's and the candidate's each |
 | `metrics` | object | required | What the judge measures. See [Metrics](#metrics) |
 | `check.command` | list of text, at least one | required | The check's command and arguments. See [Check output](#check-output) |
 | `check.timeout_s` | integer from 1 to 86400 | 120 | The check's time limit, in seconds |
@@ -86,7 +87,9 @@ Unknown fields are refused at every level.
 | A kit path (in `build.copy` or `run.copy`) is relative and normalized, stays inside the kit, has no `..`, does not start or end with `/`, and is not `.` | `a kit path is relative, normalized and inside the kit` |
 | Each name in a verifier's `requires` is another verifier of the kit | `<name> is not another verifier of this kit` |
 | Verifiers' `requires` do not form a loop | `verifier gates form a cycle` |
-| Every `{kit}` or `{kit:<path>}` in `run.command` is in `run.copy` | `{kit:<path>} is not in run.copy (a run cannot read the kit)` |
+| Every `{kit}` or `{kit:<path>}` in `run.command` or `run.driver` is in `run.copy` | `{kit:<path>} is not in run.copy (a run cannot read the kit)` |
+| `run.driver` has no `{build}` | `{build} is not for the driver: the candidate's build runs as run.command alone` |
+| With `run.driver`, `run.command` has no `{out}` | `with run.driver, the driver writes {out}: the candidate's command gets none` |
 | Every time limit (`build.timeout_s`, `run.timeout_s`, `check.timeout_s` and a cell's `timeout_s`) is at most 86400 seconds, a day: the judge runs nothing for longer | `a time limit is at most 86400 s (24 hours)` |
 
 ### Cells
@@ -151,160 +154,7 @@ The device's driver also refuses values it cannot believe. The `cpu` driver refu
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `name` | text matching `^[a-z0-9][a-z0-9-]{0,63}---
-title: "Kit manifest"
-description: "Every field of kit.json, and the placeholders, processes, limits, outputs and outcomes of a kit."
-type: reference
-sidebar:
-  order: 3
----
-
-A **kit** is the judge's recipe for one project: how to build a candidate, run it on each input, time it and check its results. It is a git repository with `kit.json`, the manifest, at its root. Agents never see it. This page describes the manifest and how the [judge](glossary.md) uses it.
-
-[Why the benchmark lives in a kit](../explanation/kits.md) says why kits exist. [Write a kit for your project](../how-to/campaigns/write-a-kit.md) and [Test a kit with known candidates](../how-to/campaigns/test-a-kit.md) give the steps.
-
-This is the manifest of the CPU smoke kit in the repository, [`kits/smoke-cpu`](https://github.com/iammrduncan/thermite/blob/main/kits/smoke-cpu):
-
-```json title="kit.json"
-{
-  "schema_version": 1,
-  "name": "smoke-cpu",
-  "target": "cpu",
-  "build": {
-    "copy": ["bench"],
-    "command": ["sh", ".kit/bench/build.sh"],
-    "outputs": ["out/bench"],
-    "timeout_s": 120,
-    "rss_mib": 1024,
-    "disk_mib": 256
-  },
-  "cells": {
-    "small": { "n": 128, "reps": 240, "seed": 11, "work": 1006632960 },
-    "large": { "n": 256, "reps": 40, "seed": 23, "work": 1342177280 },
-    "held": { "n": 192, "reps": 60, "seed": 37, "work": 849346560 }
-  },
-  "run": {
-    "command": ["{build:out/bench}", "{params}", "{out}"],
-    "timeout_s": 60,
-    "rss_mib": 256,
-    "disk_mib": 32
-  },
-  "metrics": {
-    "flops_per_s": { "unit": "FLOP/s", "work": "work" }
-  },
-  "check": {
-    "command": ["node", "{kit:check.mjs}", "{params_json}", "{out}"],
-    "timeout_s": 60
-  }
-}
-```
-
-The build copies the kit's `bench` folder into the source tree and compiles the candidate. Each run executes the build on one cell's parameters. The check, the judge's own program, reads the run's outputs and says whether they are correct. The metric is the cell's `work` divided by the run's time on the judge's clock.
-
-## Layout
-
-A kit is a git repository. `kit.json` sits at its root; every other file belongs to the kit: build scripts, run drivers, the check, reference results. Scripts may be in any language the rig's image can run. A [contract](contract.md) names the kit and pins its commit in `project.kit`.
-
-## `kit.json`
-
-Unknown fields are refused at every level.
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `schema_version` | `1` | required | The manifest format |
-| `name` | text matching `^[a-z0-9][a-z0-9._-]{0,63}$` | required | The kit's name |
-| `target` | text | required | The kind of device the kit measures on. This version has the drivers `cpu` and `cuda-gpu`. A rig only measures with a kit whose `target` is its own |
-| `build.copy` | list of kit paths | `[]` | Kit files and folders copied into the source tree under `.kit/<path>` before the build |
-| `build.command` | list of text, at least one | required | The build's command and arguments, run in the source tree. Placeholders are not expanded here |
-| `build.outputs` | list of paths, at least one | required | Paths, relative to the source tree, that make up the build |
-| `build.timeout_s` | integer from 1 to 86400 | 600 | The build's time limit, in seconds |
-| `build.rss_mib` | integer ≥ 1 | 4096 | The build's memory limit, in MiB |
-| `build.disk_mib` | integer ≥ 1 | 4096 | The build's disk limit, in MiB |
-| `cells` | object | required | Every cell the kit can measure, with its parameters and, when it needs one, its own time limit. See [Cells](#cells) |
-| `run.copy` | list of kit paths | `[]` | Kit files and folders copied, read-only, into every run. A run reaches them as `{kit:<path>}` |
-| `run.command` | list of text, at least one | required | One run of one build on one cell |
-| `run.timeout_s` | integer from 1 to 86400 | 300 | A run's time limit, in seconds, for each cell that sets none of its own |
-| `run.rss_mib` | integer ≥ 1 | 1024 | A run's memory limit, in MiB |
-| `run.disk_mib` | integer ≥ 1 | 256 | A run's disk limit, in MiB |
-| `metrics` | object | required | What the judge measures. See [Metrics](#metrics) |
-| `check.command` | list of text, at least one | required | The check's command and arguments. See [Check output](#check-output) |
-| `check.timeout_s` | integer from 1 to 86400 | 120 | The check's time limit, in seconds |
-| `verifiers` | object | `{}` | Named verifiers for goal campaigns. See [Verifiers](#verifiers) |
-| `mcp_servers` | list | none | The MCP servers the campaign's agents use, and which agents get each. See [MCP servers](#mcp-servers) |
-
-### Rules across fields
-
-| Rule | Message |
-| --- | --- |
-| A kit path (in `build.copy` or `run.copy`) is relative and normalized, stays inside the kit, has no `..`, does not start or end with `/`, and is not `.` | `a kit path is relative, normalized and inside the kit` |
-| Each name in a verifier's `requires` is another verifier of the kit | `<name> is not another verifier of this kit` |
-| Verifiers' `requires` do not form a loop | `verifier gates form a cycle` |
-| Every `{kit}` or `{kit:<path>}` in `run.command` is in `run.copy` | `{kit:<path>} is not in run.copy (a run cannot read the kit)` |
-| Every time limit (`build.timeout_s`, `run.timeout_s`, `check.timeout_s` and a cell's `timeout_s`) is at most 86400 seconds, a day: the judge runs nothing for longer | `a time limit is at most 86400 s (24 hours)` |
-
-### Cells
-
-A **cell** is one measured input, a test case: a name and its parameters. The dashboard calls cells **cases**. `cells` maps each cell's name to its parameters, in one of two forms:
-
-- **Its parameters alone:** an object whose values are numbers, text or `true`/`false`, such as `"small": {"n": 128, "work": 1006632960}`. Its runs have the time limit `run.timeout_s`.
-- **Its parameters and its own time limit:** `{"params": {…}, "timeout_s": <seconds>}`. `timeout_s` is an integer from 1 to 86400. It replaces `run.timeout_s` for this cell's runs only, so one slow cell does not set the limit for every cell. Leave `timeout_s` out to keep `run.timeout_s`. No other field is taken in this form.
-
-```json title="kit.json (part)"
-{
-  "cells": {
-    "small": { "n": 128, "work": 1006632960 },
-    "diagnostic": { "params": { "n": 4096, "mode": "full", "work": 137438953472 }, "timeout_s": 1800 }
-  },
-  "run": { "command": ["{build:out/bench}", "{params}", "{out}"], "timeout_s": 60 }
-}
-```
-
-Here `small` is stopped after 60 seconds and `diagnostic` after 1,800. A parameter's value is never an object, so the second form is never read as parameters. A parameter that is called `timeout_s` in the first form is only a parameter: it sets no limit. A kit written before cells could set a limit works as before.
-
-A run receives the parameters through `{params}` and `{params_json}`, in both forms; the time limit is not among them.
-
-The contract chooses which cells count: `cells` for every block, `held_out_cells` for confirmation only, and each goal's cells. A rate metric reads one parameter, named by its `work`, from each cell; time and check metrics need none.
-
-### Metrics
-
-`metrics` maps each metric's name to one of three kinds. The judge works out every value itself: a run never reports its own score.
-
-| Kind | Form | Value |
-| --- | --- | --- |
-| Rate | `{"unit": "<unit>", "work": "<parameter>"}` | The cell's parameter named by `work`, divided by the run's time in seconds on the judge's clock. `unit` is required |
-| Time | `{"unit": "s", "from": "time"}` | The run's time in seconds, on the judge's clock. `unit` defaults to `s`. A contract improves it with `"direction": "min"` |
-| From the check | `{"unit": "", "from": "check", "field": "<field>"}` | A number the kit's check prints under `<field>` in its result line, for example an accuracy. `unit` defaults to empty |
-
-Every value must be above zero, because the judge compares runs by their ratio. A run whose check prints no number above zero for a check metric is invalid: `the check reported no <field> above zero (got <value>)`. Every run works out every metric of the kit, so each case the contract runs needs each rate's `work` parameter, a number above zero: the [check against the contract](#the-kit-against-the-contract) refuses a case without it. A rate whose `work` parameter is still missing, zero or not a number at a run is an infrastructure error: `kit metric <name>: bad work <value> or time <seconds>`. On a held-out case, the agents get only `a held-out check could not finish (an infrastructure failure)`, and the rig's log keeps the error.
-
-The device's driver also refuses values it cannot believe. The `cpu` driver refuses values that are not finite; the `cuda-gpu` driver refuses values that are not finite or not above zero.
-
-### Verifiers
-
-`verifiers` maps each verifier's name to how a goal contract's `{"type": "code", "verifier": "<name>"}` goal is checked. A verifier passes when one run on each of its cells ends normally and passes the kit's check.
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `cells` | list of cell names, at least one | required | The cells whose runs must all pass the check |
-| `priority` | integer | 100 | The order verifiers run in: lower first. Goals are checked in this order and reported in the contract's order |
-| `requires` | list of verifier names | `[]` | Gates: other verifiers that must pass first. If one does not, this verifier runs none of its cells, and its goal is unmet with `not run: it requires <names>, which did not pass`. A gate with no cells in this pass (all held out, or none held out) does not block |
-
-### MCP servers
-
-`mcp_servers` lists the [MCP servers](../how-to/campaigns/give-agents-mcp-tools.md) whose tools this kit's campaigns give their agents, by their names in control's **Settings › Providers**. The judge never uses them. At most 20 servers, each named once.
-
-```json title="kit.json (part)"
-{
-  "mcp_servers": [
-    { "name": "gbrain", "agents": ["workers", "planner", "advisors"] },
-    { "name": "github", "agents": ["workers", "advisors"], "tools": { "advisors": ["search_code"] } }
-  ]
-}
-```
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
- | required | The server's name in **Settings**. Not `thermite`, the name of Thermite's own server, which gives every agent the [knowledge base's tools](knowledge-base.md#the-agents-tools), refused with "thermite is the name of Thermite's own tools: give the server another name" |
+| `name` | text matching `^[a-z0-9][a-z0-9-]{0,63}$` | required | The server's name in **Settings**. Not `thermite`, the name of Thermite's own server, which gives every agent the [knowledge base's tools](knowledge-base.md#the-agents-tools), refused with "thermite is the name of Thermite's own tools: give the server another name" |
 | `agents` | list of `workers`, `planner` and `advisors`, at least one, each once | required | The kinds of agent that get the server: the workers (every lane), the planner, and the advisors (the teachers, the auditor and the review panel) |
 | `tools` | object | none | Only when narrowed: for a kind of agent in `agents`, the tools it may call, as a list of 1 to 500 tool names, each once. A kind left out gets every tool the server lists. A kind not in `agents` is refused: `the <kind> do not get this server: add <kind> to agents, or take out its tools` |
 
@@ -317,14 +167,14 @@ A research campaign has no kit: its contract's `mcp_servers` takes the same list
 
 ## Placeholders
 
-Placeholders go inside the arguments of `run.command` and `check.command`. `{name:sub/path}` is the placeholder's path joined with `sub/path`. Any other lowercase name in braces is an infrastructure error when the command runs: `unknown placeholder {<name>}`.
+Placeholders go inside the arguments of `run.command`, `run.driver` and `check.command`. `{name:sub/path}` is the placeholder's path joined with `sub/path`. Any other lowercase name in braces is an infrastructure error when the command runs: `unknown placeholder {<name>}`.
 
 | Placeholder | In a run | In the check |
 | --- | --- | --- |
 | `{build}` | The arm's stored build (read-only) | The same build |
-| `{params}` | The run's copy of the cell's parameters, as `key=value` lines | The judge's own copy |
-| `{params_json}` | The run's copy of the cell's parameters, as a JSON object | The judge's own copy |
-| `{out}` | The run's output folder, which it may write | The same folder, to read |
+| `{params}` | The run's copy of the cell's parameters, as `key=value` lines; the driver gets a copy of its own | The judge's own copy, in the check's folder |
+| `{params_json}` | The run's copy of the cell's parameters, as a JSON object; the driver gets a copy of its own | The judge's own copy, in the check's folder |
+| `{out}` | The run's output folder, which it may write; with a driver, the driver's alone | The same outputs, moved to the check's folder, to read |
 | `{kit}` | The run's read-only copy of the `run.copy` paths | The kit itself |
 | `{models}` | The imported [model files](glossary.md) (data files such as a model's weights), one read-only file per SHA-256: `{models:<sha256>}` is one | The same |
 
@@ -336,9 +186,34 @@ The judge runs each stage as its own Unix user, so a candidate cannot change the
 | --- | --- | --- | --- |
 | Build | `builder` | The source tree: a fresh export of the candidate's commit, without `.git` | `PATH`, `LANG=C.UTF-8`, `USER`, and `HOME` and `TMPDIR` set to the working folder |
 | Run | `run`, whose group owns the device. On a rig with several judge cards, card *i* is timed by `run-<i>`, with that card's own group | The run's own folder, holding `params.txt`, `params.json` and `out/` | As for the build. With dedicated judge cards, `CUDA_VISIBLE_DEVICES` names the run's card. On a GPU rig, timed runs are pinned by default to the CPUs near their card (`THERMITE_RUN_CPUS`) |
-| Check | The harness's own user, `thermite` | The kit | `PATH`, and in a hill climb `THERMITE_BASELINE_DIR` ([The check's baseline folder](#the-checks-baseline-folder)) |
+| Driver, with `run.driver` | `driver`, a user of its own, apart from the candidate's; card *i*'s is `driver-<i>`. No group of a device | Its own folder, holding `params.txt`, `params.json` and `out/` | As for the build. It gets no GPU |
+| Check | `checker`, a user of its own; card *i*'s is `checker-<i>`. It holds the `checkers` group, through which it reads the kit and the baselines | A folder of its own, holding the judge's `params.txt` and `params.json` and the run's outputs in `out/` | As for the build, and in a hill climb `THERMITE_BASELINE_DIR` ([The check's baseline folder](#the-checks-baseline-folder)). `/tmp` is closed to it: it writes temporary files to its own folder (`TMPDIR`) |
+
+What each of these users may reach:
+
+| User | Reads | Writes | Can't reach |
+| --- | --- | --- | --- |
+| `run` | The stored build, the run's copy of `run.copy`, the models, its own folder | Its own folder | The kit, the judge's state, the check's and the driver's folders and processes |
+| `driver` | The run's copy of `run.copy`, the models, its own folder | Its own folder, and `{out}` in it | The kit, the judge's state, the candidate's folder and processes |
+| `checker` | The kit and the baselines' kept files (by their paths, through the `checkers` group), the stored build, the models, its own folder | Its own folder, and the baseline's folder during a baseline job | The judge's state otherwise (the ledger, the git mirrors, the stored builds' list), the run's and the driver's folders, the lanes' work |
 
 A run cannot read the kit. The kit files a run needs go in `run.copy`. Before each run, the judge copies them into a folder outside the run's working folder. The copies are plain files owned by the judge: folders `0555`, files `0444`, or `0555` when executable. Neither the build nor the run can change them. A link among them, or a path missing from the kit, is an infrastructure error: `kit run.copy: not a regular file or directory: <path>` or `kit run.copy: <path> is not in the kit`.
+
+## A kit's driver
+
+Some measurements need a program of the kit's beside the candidate: to send it requests and time its answers, say, or to feed it input as it runs. Name that program in `run.driver`. The judge then starts `run.command`, the candidate, and the driver at the same time, each as its own user:
+
+- The driver's standard output is the candidate's standard input, and the candidate's standard output is the driver's standard input. The two talk through these pipes alone; neither can signal or trace the other's processes, or read the other's folder.
+- The driver writes the run's outputs to `{out}`, and the check reads them. The candidate gets no `{out}`, and the driver gets no `{build}`: it never runs the candidate's code.
+- The run is over when the driver's command ends; then every process of the candidate's user is ended. The judge's time is from the start of both to the driver's end. A driver that exits with an error, or the candidate or the driver stopped for a limit, ends the run as a crash; the reason has the driver's standard error, and the candidate's after `candidate:`.
+
+```json title="kit.json (part)"
+"run": {
+  "copy": ["run"],
+  "command": ["{build:out/server}", "--stdio"],
+  "driver": ["python3", "{kit:run/drive.py}", "{params_json}", "{out}"]
+}
+```
 
 ## Limits
 
@@ -348,10 +223,10 @@ A run cannot read the kit. The kit files a run needs go in `run.copy`. Before ea
 | Memory: the summed resident memory of the user's processes, sampled every 100 ms | `build.rss_mib` | `run.rss_mib` | none |
 | Disk: the working folder, sampled every 500 ms | `build.disk_mib` | `run.disk_mib` | none |
 | Files: 50,000 or more files and folders, or folders nested 128 deep, count as over the disk limit | yes | yes | none |
-| Processes and threads (`RLIMIT_NPROC`) | 512 | 256 | none |
+| Processes and threads (`RLIMIT_NPROC`) | 512 | 256 | 256 |
 | Output kept: the last part of standard output and standard error | 64 KiB | 64 KiB | 64 KiB |
 
-When a build or run goes over a limit, every process of its user is ended. Processes still alive when the main process exits are ended too, and the files the user left in `/tmp`, `/var/tmp` and `/dev/shm` are removed. After a timeout, the judge waits up to 15 seconds more for the output to close. These limits end one build, run or check; they never end a campaign.
+When a build or run goes over a limit, every process of its user is ended. Processes still alive when the main process exits are ended too, and the files the user left in `/tmp`, `/var/tmp` and `/dev/shm` are removed. After a timeout, the judge waits up to 15 seconds more for the output to close. These limits end one build, run or check; they never end a campaign. With a driver, the driver and the candidate each have the run's limits; the run is over when the driver ends, and every process of the candidate's user is ended then.
 
 ## Outputs
 
@@ -390,8 +265,8 @@ const drift = compare(output, readFileSync(ref)); // every later job: compare wi
 
 | Rule | Value |
 | --- | --- |
-| Where | `<state>/baselines/<run>/job-<id>`, the judge's own: the folder and those above it are mode `0700`. The build and the run never get it, and their users cannot reach it |
-| Writable | During the baseline job only. Then each file is made `0400` and each folder `0500` |
+| Where | During the baseline job, a folder of the job's own that the checker's user writes. Then the judge keeps its files at `<state>/baselines/<run>/job-<id>`: the judge's own, in the `checkers` group, so later checks read them. The build, the run and the driver never get it, and their users cannot reach it |
+| Writable | During the baseline job only. Then each file is kept `0440` and each folder `0550`, and no user can change them |
 | Contents | Plain files and folders. A link, a hard link or a special file fails the baseline |
 | Limits | 64 MiB and 1,000 files in all, at most 32 folders deep. More fails the baseline: `the kit's check wrote to the baseline's folder: it holds more than 64 MiB, the most it may keep` |
 | Record | Each file's `path`, `bytes` and `sha256`, in the `baseline` event's `files`, sorted by path, and the total in `bytes` |

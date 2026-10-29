@@ -26,6 +26,7 @@ import {
   ConfigWriter,
   ConfigWritten,
   controlBusUrl,
+  RigConsumers,
   reloadBus,
 } from "./bus/index.ts";
 import { Credential } from "./credential.ts";
@@ -248,8 +249,13 @@ async function main(): Promise<void> {
   // views' folds in one pass from its first message (control/events).
   // Control's loops, each ticked as its round ends, for its health route and /metrics (goal 173).
   const { loops } = parts;
+  // Each rig's consumers of its commands and its config, which control makes (bus/consumers.ts).
+  const rigConsumers = new RigConsumers({ store, bus });
   void busUsers.sync();
-  const usersSync = every(loops, "control", "bus_users", BUS_USERS_SYNC_MS, () => busUsers.sync());
+  const usersSync = every(loops, "control", "bus_users", BUS_USERS_SYNC_MS, async () => {
+    await busUsers.sync();
+    await rigConsumers.make();
+  });
   const started = performance.now();
   await bus.makeStream(EVENT_STREAM_CONFIG);
   await eventsApply.start();

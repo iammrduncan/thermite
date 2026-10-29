@@ -26,6 +26,7 @@ import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import { messageText, type Prompt } from "../../../../src/agents/prompt.ts";
 import { signEnvelope } from "../../../../src/core/commands.ts";
 import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts";
+import type { ConsoleLater, TrialConsole } from "../../../../src/harness/agents/cli/console.ts";
 import { runCliTrial } from "../../../../src/harness/agents/cli/loop.ts";
 import type { CliTrialDeps } from "../../../../src/harness/agents/cli/program.ts";
 import { Registry } from "../../../../src/harness/agents/registry.ts";
@@ -208,7 +209,7 @@ const types = (home: string) =>
     .map((s) => String(s.type));
 
 describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
-  test("its first message typed, never on its command line, its tally from its transcript, and a submission ends it its own way, its screen kept", async () => {
+  test("its first message typed, never on its command line, its tally from its transcript, and a submission ends it its own way, its screen kept in memory", async () => {
     const a = area([
       [
         { lines: [said("go"), call(1)] },
@@ -218,11 +219,15 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
         { waitMs: 60_000 },
       ],
     ]);
+    let held: TrialConsole | undefined;
     const { r, sent, live } = await trial(a, {
       submitted: () =>
         existsSync(join(a.home, "submitted"))
           ? { attempt: "a-1", lifecycle: "submitted" }
           : undefined,
+      console: (c) => {
+        if (c !== "headless") held = c;
+      },
     });
     assert.equal(r.stopped, "submitted");
     assert.equal(r.submitted?.attempt, "a-1");
@@ -247,8 +252,9 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     assert.ok(live.includes("Submitted."));
     // Its signals came from Thermite's hook program, as Claude Code's settings name it.
     assert.match(readFileSync(join(a.dir, "claude-signals.jsonl"), "utf8"), /"PreToolUse"/);
-    // Its screen, kept in the trial's area.
-    assert.match(readFileSync(join(a.dir, "claude-screen.ansi"), "utf8"), /fake-tui/);
+    // Its last screen, kept in memory for the live view, never in the trial's area.
+    assert.match(held?.lastScreen()?.data ?? "", /fake-tui/);
+    assert.ok(!existsSync(join(a.dir, "claude-screen.ansi")));
   });
 
   test("a turn's end in the log brings the next turn, typed; a program that exits is resumed in a new host with its session", async () => {
@@ -308,7 +314,13 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
   test("a stop ends the program its own way, mid-turn, and the trial is interrupted", async () => {
     const a = area([[{ lines: [said("go"), call(1)] }, { waitMs: 60_000 }]]);
     const stop = new AbortController();
-    const running = trial(a, { signal: stop.signal });
+    let held: TrialConsole | undefined;
+    const running = trial(a, {
+      signal: stop.signal,
+      console: (c) => {
+        if (c !== "headless") held = c;
+      },
+    });
     await until("its first turn", () => seen(a.home).some((s) => s.type === "user"));
     await until("its tool call in the copy", () =>
       existsSync(join(a.dir, "claude-session.jsonl"))
@@ -320,7 +332,92 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     const { r } = await running;
     assert.equal(r.stopped, "interrupted");
     assert.deepEqual(types(a.home).slice(-2), ["interrupt", "exit"]);
-    assert.ok(existsSync(join(a.dir, "claude-screen.ansi")));
+    assert.ok(held?.lastScreen()?.data);
+  });
+
+  test("the owner's input goes into its terminal through its console: text then Enter, and keys by name", async () => {
+    const a = area([[{ lines: [said("go"), call(1)] }, { waitMs: 60_000 }]]);
+    const stop = new AbortController();
+    let held: TrialConsole | undefined;
+    const running = trial(a, {
+      signal: stop.signal,
+      console: (c) => {
+        if (c !== "headless") held = c;
+      },
+    });
+    await until("its first turn", () => seen(a.home).some((s) => s.type === "user"));
+    const c = await until("its console", () => held);
+    const later: ConsoleLater = () => assert.fail("nothing waited");
+    assert.deepEqual(await c.input({ text: "OWNER-INPUT-1", wait: "queue" }, later), {
+      outcome: "typed",
+    });
+    assert.deepEqual(await c.input({ keys: ["down", "page-up"], wait: "queue" }, later), {
+      outcome: "typed",
+    });
+    await until("the owner's input in the program", () =>
+      seen(a.home).some((s) => s.type === "user" && s.text === "OWNER-INPUT-1"),
+    );
+    await until("the keys in the program", () =>
+      seen(a.home).some((s) => s.type === "key" && s.key === "page-up"),
+    );
+    const typed = seen(a.home).filter((s) => s.type === "user" && s.text === "OWNER-INPUT-1");
+    assert.deepEqual(
+      typed.map((s) => s.how),
+      ["typed"],
+    );
+    assert.match((await c.screen())?.data ?? "", /fake-tui/);
+    stop.abort();
+    await running;
+    await assert.rejects(c.input({ text: "too late", wait: "now" }, later), /trial has ended/);
+  });
+
+  test("while its log shows a usage limit with a reset: an input waits for the reset, one sent now goes in, and what waits is dropped when the trial ends first", async () => {
+    // Claude Code's own message at a full five-hour window, with the time it resets.
+    const limited = {
+      type: "assistant",
+      sessionId: S,
+      timestamp: AT,
+      isApiErrorMessage: true,
+      error: "rate_limit",
+      apiErrorParams: {
+        rate_limit_info: {
+          resetsAt: Math.floor(Date.now() / 1000) + 3600,
+          rateLimitType: "five_hour",
+        },
+      },
+      message: {
+        id: "msg_limit",
+        model: "<synthetic>",
+        content: [{ type: "text", text: "You've hit your limit" }],
+      },
+    };
+    const a = area([[{ lines: [said("go"), call(1), result(1), limited] }, { waitMs: 60_000 }]]);
+    let held: TrialConsole | undefined;
+    const outcomes: string[] = [];
+    const running = trial(a, {
+      console: (c) => {
+        if (c !== "headless") held = c;
+      },
+    });
+    const c = await until("the limit shown", () => held?.limit() && held);
+    const queued = await c.input({ text: "AFTER-THE-RESET", wait: "queue" }, (o, why) =>
+      outcomes.push(`${o}: ${why ?? ""}`),
+    );
+    assert.equal(queued.outcome, "queued");
+    assert.ok(queued.outcome === "queued" && queued.until);
+    assert.deepEqual(await c.input({ text: "AT-ONCE", wait: "now" }, () => undefined), {
+      outcome: "typed",
+    });
+    const { r } = await running;
+    assert.equal(r.errorKind, "rate_limit");
+    assert.deepEqual(outcomes, [
+      "dropped: the trial ended before the program's usage window reset",
+    ]);
+    const typedIn = seen(a.home)
+      .filter((s) => s.type === "user")
+      .map((s) => s.text);
+    assert.ok(typedIn.includes("AT-ONCE"), typedIn.join(", "));
+    assert.ok(!typedIn.includes("AFTER-THE-RESET"), typedIn.join(", "));
   });
 
   test("an owner's message goes in inside the turn, through the PostToolUse hook, with its receipt", async () => {
