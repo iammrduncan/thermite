@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { queueSeedOf } from "../../../src/control/kb.ts";
+import { queueSeedOf } from "../../../src/control/kb/index.ts";
 import { controlOnly, signIn } from "../../helpers/control-stack.ts";
 import { ingestReport } from "../../helpers/control-store.ts";
 

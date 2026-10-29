@@ -10,6 +10,7 @@ import {
   eventsTableHoldsRows,
   eventsTableMayGo,
 } from "./events.ts";
+import { knowledgeHierarchy } from "./kb/index.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { migrateModelRoutes } from "./providers.ts";
@@ -726,6 +727,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   dropEventsTable,
   // The run and the campaign each command names, in columns of their own (goal 168).
   commandRunAndCampaign,
+  // The knowledge base's hierarchy: a collection for each campaign, slots, versions (goal 175).
+  knowledgeHierarchy,
 ];
 
 /**

@@ -176,8 +176,8 @@ export const LIVE_MESSAGES = {
 } as const satisfies Route;
 
 /**
- * Past research for a run's folder, from control's knowledge base: its items, and the folders the
- * run's campaign may read now (one no longer listed is removed).
+ * Past research for a run's folder, from control's knowledge base: its items, and the collections
+ * the run's campaign may read now (one no longer listed is removed).
  */
 export const KB = {
   method: "POST",
@@ -185,7 +185,7 @@ export const KB = {
   body: z.strictObject({
     run: z.string().min(1).max(100),
     items: z.array(z.unknown()),
-    folders: z.array(z.string().min(1).max(200)).optional(),
+    collections: z.array(z.string().min(1).max(200)).optional(),
   }),
   answer: z.unknown(),
   maxBytes: 32 * 1024 * 1024,

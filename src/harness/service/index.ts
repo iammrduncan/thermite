@@ -529,8 +529,8 @@ export class HarnessService {
     return steering.advisorNotes(this, input);
   }
 
-  writeKnowledge(run: string, items: unknown[], folders?: string[] | undefined) {
-    return steering.writeKnowledge(this, run, items, folders);
+  writeKnowledge(run: string, items: unknown[], collections?: string[] | undefined) {
+    return steering.writeKnowledge(this, run, items, collections);
   }
 
   advisorMessages(input: steering.AdvisorReceipts) {

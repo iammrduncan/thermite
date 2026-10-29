@@ -259,11 +259,11 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
   );
 
   // Past research for a run's folder, from control's knowledge base (the supervisor syncs it):
-  // each item a file under the run's knowledge/. `folders` (the folders the run's campaign may
-  // read now) removes a folder whose grant was revoked.
+  // each item a file under the run's knowledge/. `collections` (those the run's campaign may read
+  // now) removes the folder of a collection whose grant was revoked.
   app.post(KB.path, supervisor, limitOf(KB), async (c) => {
     const body = KB.body.parse(await c.req.json());
-    return c.json(service.writeKnowledge(body.run, body.items, body.folders));
+    return c.json(service.writeKnowledge(body.run, body.items, body.collections));
   });
 
   // A search of a run's past research for its advisors, read only (the supervisor gives it to

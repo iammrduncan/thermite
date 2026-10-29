@@ -188,17 +188,17 @@ export function advisorNotes(
 
 /**
  * Past research for a run's folder (the supervisor, from control's knowledge base): each item
- * a file under the run's knowledge/, overwritten when it changed. With `folders` (the campaign
- * folders the run may read now), a folder no longer among them is removed.
+ * a file under the run's knowledge/, overwritten when it changed. With `collections` (those the
+ * run's campaign may read now), the folder of one no longer among them is removed.
  */
 export function writeKnowledge(
   svc: HarnessService,
   run: string,
   items: unknown[],
-  folders?: string[] | undefined,
+  collections?: string[] | undefined,
 ): { written: number; updated: number; removed: string[]; skipped: number } {
   requireRun(svc.ledger, run);
-  return svc.knowledge.write(run, items, folders);
+  return svc.knowledge.write(run, items, collections);
 }
 
 /** An advisor role's receipts and answers for the owner's messages in a run. */

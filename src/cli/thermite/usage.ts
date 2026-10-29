@@ -119,8 +119,8 @@ export const USAGE = `usage: thermite <command> [options]
          [--hypothesis TEXT ...] --control URL --token-file F
                                       copy a campaign control keeps (owner's token): a new
                                       campaign NAME with FROM's contract and kit, its own empty
-                                      folder in Thermite's knowledge base and no runs. Start a
-                                      run of it with run start. It prints the copy.
+                                      collection in Thermite's knowledge base and no runs. Start
+                                      a run of it with run start. It prints the copy.
                                       --mcp-servers-json: for a research campaign, the MCP
                                       servers the copy's agents use instead, as a JSON list
                                       ([] for none). --context-window and --compact-at give the

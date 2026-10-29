@@ -13,8 +13,8 @@ import { campaignModes } from "../../views/index.ts";
 import { backTo, type Ctx, type Dashboard } from "../context.ts";
 
 /**
- * Archive, the navigation's folders (goal 077), and the knowledge base's folders a campaign
- * reads (grant and revoke).
+ * Archive, the navigation's folders (goal 077), and the knowledge base's collections a
+ * campaign reads (grant and revoke).
  */
 export function shelfRoutes(app: Hono, dash: Dashboard): void {
   const { store, views } = dash;
@@ -152,13 +152,13 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     const reads = String((await c.req.parseBody()).reads ?? "").trim();
     const known = campaignModes(store, views());
     if (!known.has(campaign)) return c.text("No such campaign.", 404);
-    if (!reads) return grantBack(c, campaign, "error", "Choose a folder to add.");
+    if (!reads) return grantBack(c, campaign, "error", "Choose a collection to add.");
     if (reads === campaign)
       return grantBack(
         c,
         campaign,
         "error",
-        "A campaign always reads its own folder: choose another campaign's.",
+        "A campaign always reads its own collection: choose another campaign's.",
       );
     if (!known.has(reads))
       return grantBack(c, campaign, "error", `Control has no campaign named ${reads}.`);
@@ -169,7 +169,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
       c,
       campaign,
       "ok",
-      `${campaign}'s agents may now read ${reads}'s folder. Runs at work get it at their next sync.`,
+      `${campaign}'s agents may now read ${reads}'s collection. Runs at work get it at their next sync.`,
     );
   });
   app.post("/ui/campaigns/:campaign/kb/revoke", async (c) => {
@@ -182,7 +182,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
       c,
       campaign,
       "ok",
-      `${campaign}'s agents no longer read ${reads}'s folder. Runs at work drop it at their next sync.`,
+      `${campaign}'s agents no longer read ${reads}'s collection. Runs at work drop it at their next sync.`,
     );
   });
 }

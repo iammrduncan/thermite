@@ -7,7 +7,7 @@ import { currentEvent } from "../../core/names.ts";
 import { MODEL_CALL_EVENT, ModelCallBody } from "../../core/usage.ts";
 import type { ControlStore } from "../store/index.ts";
 import { type FoldCache, keepFolds, streamEvent } from "../views/index.ts";
-import { readKnowledgeAgain } from "./knowledge.ts";
+import { readKnowledgeAgain, takeKbItem } from "./knowledge.ts";
 
 /**
  * What control derives from its rigs' events, written from the `EVENTS` stream (goal 168, step 4).
@@ -270,8 +270,9 @@ function readOrSay(m: BusMessage): EventRead | undefined {
  * entry for a run the rig created (ingest wrote it before it published the event, whose subject
  * the registry chose; this writes the same again), a command's outcome
  * as the harness gave it, a model call's usage (goal 075; a body that does not read as one stays
- * an event only), and, with `toKb`, its items in the knowledge base. An event the knowledge base
- * can't index is left out of it, in control's log and the audit log.
+ * an event only), and, with `toKb`, its items in the knowledge base: Thermite's reading of it into
+ * its run's records slot, or a writer's `kb_item` into the writer's slot (knowledge.ts). An event
+ * the knowledge base can't index is left out of it, in control's log and the audit log.
  */
 function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boolean): void {
   const { rig, ledger } = read;
@@ -288,7 +289,11 @@ function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boo
   if (!toKb) return;
   try {
     // A savepoint: an event indexed in part is not kept.
-    store.tx(() => store.kb().index({ rig, ledger }, e));
+    store.tx(() =>
+      e.kind === "kb_item"
+        ? takeKbItem(store, { rig, ledger }, e)
+        : store.kb().index({ rig, ledger }, e),
+    );
   } catch (err) {
     const error = redact(errorText(err));
     const what = { rig, ledger, event: e.id, kind: e.kind, error };

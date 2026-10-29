@@ -235,7 +235,7 @@ describe("Copy a campaign over REST (goal 069)", () => {
     assert.equal(copy.created_by, "owner:api");
     // Its own folder, empty, reading nothing else; the source still reads survey-study.
     const kb = s.store.kb();
-    const folder = kb.folder("matmul-speed-b");
+    const folder = kb.collection("matmul-speed-b");
     assert.deepEqual([folder.items, folder.runs, folder.reads, folder.read_by], [0, 0, [], []]);
     assert.deepEqual(kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
     assert.deepEqual(kb.reads("matmul-speed"), ["survey-study"]);
@@ -253,7 +253,7 @@ describe("Copy a campaign over REST (goal 069)", () => {
       /Copied from<\/span> <a href="[^"]*matmul-speed">matmul-speed version 2<\/a>/,
     );
     // The dashboard is the owner's: their own copy, over any surface, is "you".
-    assert.match(html, /by you, just now\. Its folder in the knowledge base started empty\./);
+    assert.match(html, /by you, just now\. Its collection in the knowledge base started empty\./);
     assert.match(html, /Saved on control, with no run yet\./);
 
     // Start a run of the copy: its own contract, the source's project and kit imports.
@@ -275,11 +275,11 @@ describe("Copy a campaign over REST (goal 069)", () => {
     ]);
     const sync = s.store.kb().sync("rig-a", "matmul-speed-b-1", 0);
     assert.deepEqual(
-      [sync?.campaign, sync?.folders, sync?.items],
+      [sync?.campaign, sync?.collections, sync?.items],
       ["matmul-speed-b", ["matmul-speed-b"], []],
     );
     // The source's run still reads its own folder and survey-study's.
-    assert.deepEqual(s.store.kb().sync("rig-a", "matmul-speed-1", 0)?.folders, [
+    assert.deepEqual(s.store.kb().sync("rig-a", "matmul-speed-1", 0)?.collections, [
       "matmul-speed",
       "survey-study",
     ]);

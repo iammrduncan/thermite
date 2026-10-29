@@ -67,7 +67,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
   });
 
   // Copy a campaign control keeps (goal 069): a new campaign with the same contract and kit
-  // under another name, with its own empty folder in the knowledge base and no runs. Its own
+  // under another name, with its own empty collection in the knowledge base and no runs. Its own
   // brief may come with it (goal 078): room for as much as one command carries to a rig.
   app.post(CAMPAIGN_COPY.path, admin, bodyLimit({ maxSize: 4 * 1024 * 1024 }), async (c) => {
     const from = c.req.param("campaign");

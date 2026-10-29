@@ -175,7 +175,7 @@ The try shows that the kit works. Now start the real run, with an agent.
    If you left the try's page, open the campaign's page instead: press **primes-speed** in the line at the top of the try's page, or open **Campaigns** in the sidebar and press `primes-speed` under **All campaigns**. Then press **Start a run** at the top right. The same panel opens.
 2. **Where it runs**: the card for `local-1` is chosen. It is marked **busy**, and says `Busy: primes-speed-try-1 is at work there, and pauses when this run starts (a rig runs one run at a time).` That is expected: the new run replaces the try.
 3. **Agents**: keep **On**. Under it, the panel says `The rig's agents, on` and the name of the free model you gave `local-1`.
-4. **From past research** searches what earlier runs of this campaign recorded, for a new run to start from ([Use past research in a new run](../how-to/campaigns/use-past-research.md)). The try recorded nothing a run can start from, so the list says `Nothing found in these folders yet.` Leave it.
+4. **From past research** searches what earlier runs of this campaign recorded, for a new run to start from ([Use past research in a new run](../how-to/campaigns/use-past-research.md)). The try recorded nothing a run can start from, so the list says `Nothing found in these collections yet.` Leave it.
 5. Open **More options**, and set **When a change is confirmed better** to **ask me every time**. Every change the judge confirms will wait for you before it becomes the new best version.
 6. At the bottom, the panel sums it up: `Starts a new run on local-1, with agents on` and your model. Press **Start the run**.
 

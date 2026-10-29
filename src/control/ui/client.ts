@@ -290,7 +290,7 @@ export const CLIENT_JS = `
         if (!list.children.length) {
           const d = document.createElement("div");
           d.className = "muted small";
-          d.textContent = "Nothing found in these folders.";
+          d.textContent = "Nothing found in these collections.";
           list.append(d);
         }
       } catch {}

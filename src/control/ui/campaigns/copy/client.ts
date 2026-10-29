@@ -35,7 +35,7 @@ const nameCheck = (value, taken, folderOnly) => {
     return { ok: false, cls: "bad", say: "A campaign's name is ${NAME_WORDS}.", fix: f && !taken.includes(f) && !f.startsWith(${JSON.stringify(RIG_CHECK_PREFIX)}) ? f : "" };
   }
   if (v.startsWith(${JSON.stringify(RIG_CHECK_PREFIX)})) return { ok: false, cls: "bad", say: "A name that starts with ${RIG_CHECK_PREFIX} is for rig checks. Choose another name.", fix: "" };
-  if (taken.includes(v)) return { ok: false, cls: "bad", say: "There is a campaign named " + v + " already." + (folderOnly.includes(v) ? " It has no runs now, but its folder is in the knowledge base." : "") + " Choose another name.", fix: "" };
+  if (taken.includes(v)) return { ok: false, cls: "bad", say: "There is a campaign named " + v + " already." + (folderOnly.includes(v) ? " It has no runs now, but its collection is in the knowledge base." : "") + " Choose another name.", fix: "" };
   return { ok: true, cls: "ok", say: "✓ Free. Its runs are named " + v + "-1, " + v + "-2, and so on.", fix: "" };
 };
 // As canonicalUses: by name, each with its kinds and its narrowed tools in one order.

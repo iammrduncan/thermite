@@ -12,7 +12,7 @@ import { campaignModes, campaignViews, type RigView } from "../views/index.ts";
  *   archived campaign keeps its folder (the owner, 2026-10-21): the navigation leaves it out of
  *   the folder and its count while it is archived, and unarchiving brings it back into the folder.
  * - **Folders.** A folder groups campaigns in the navigation, and nothing else: it is not a
- *   campaign's folder in the knowledge base. A campaign is in one folder or in none, archived or
+ *   campaign's collection in the knowledge base. A campaign is in one folder or in none, archived or
  *   not. A folder with campaigns in it, archived ones too, is not deleted.
  *
  * The dashboard, REST (`/v1/campaigns/<campaign>/archive`, `/unarchive` and `/folder`,

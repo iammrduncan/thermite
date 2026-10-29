@@ -4,7 +4,8 @@
  * the apply (writer.ts); the apply of the stream writes what control derives from the events and
  * hands them to control's views (apply.ts); a store from before holds its events in a table,
  * moved to the stream once, checked there and dropped (move.ts); the knowledge base reads the
- * stream again after an upgrade (knowledge.ts). Events become messages, in batches, in batch.ts.
+ * stream again after an upgrade, and takes each writer's item after its checks (knowledge.ts).
+ * Events become messages, in batches, in batch.ts.
  */
 
 export { APPLY_PAGE, applyState, EventsApply, type EventsApplyOptions } from "./apply.ts";

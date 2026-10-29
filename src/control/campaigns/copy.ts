@@ -14,9 +14,9 @@ import { campaignModes } from "../views/index.ts";
  * kit as the source's newest saved version or, for a campaign control knows only by an
  * assignment, as that assignment. Control saves the copy as its first version, with the new name
  * in its contract, so its contract hash is its own. The copy has no runs: Start a run starts one.
- * Its folder in Thermite's knowledge base is its own and empty, and no grant names it, so its
+ * Its collection in Thermite's knowledge base is its own and empty, and no grant names it, so its
  * runs read nothing that the source's runs recorded. That is what two runs of one campaign can't
- * do: they share the campaign's folder.
+ * do: they share the campaign's collection.
  *
  * A research campaign keeps its agents' MCP servers in its contract (it has no kit), so a copy may
  * name others (`mcp_servers`), with the New campaign page's checks: the copy's contract then
@@ -139,7 +139,7 @@ export const RUN_FIELDS = new Set([
 
 /**
  * Copies a campaign, or says in words why not. `known`: every campaign name control knows (from
- * rigs' reports, saved versions, assignments and the knowledge base's folders), none of which a
+ * rigs' reports, saved versions, assignments and the knowledge base's collections), none of which a
  * copy may take.
  */
 export function copyCampaign(

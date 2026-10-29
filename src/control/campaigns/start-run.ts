@@ -2,7 +2,7 @@ import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
 import type { BriefingSeed } from "../../core/commands.ts";
 import { AskOwner } from "../../core/commands.ts";
-import { briefingSeedOf, type KbItem, PICKABLE, queueSeedOf } from "../kb.ts";
+import { briefingSeedOf, type KbItem, PICKABLE, queueSeedOf } from "../kb/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import type { ControlParts } from "../parts.ts";
 import { sameModel } from "../providers/index.ts";
@@ -262,7 +262,7 @@ export async function startARun(
     );
   const split = splitFor(rig, String(req.judgeGpus ?? ""));
   if (typeof split === "string") return refuse(split, 400);
-  // From past research (goal 065): only items of folders this campaign may read, looked up
+  // From past research (goal 065): only items of collections this campaign may read, looked up
   // here by id. Experiments join the queue; findings, claims, notes and reports brief the agents.
   const kb = store.kb();
   const readable = new Set(kb.readable(campaign));

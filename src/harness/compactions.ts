@@ -11,7 +11,7 @@ import type { Ledger } from "./ledger/index.ts";
  * conversation before it is kept in the run's research folder (compactions/), where every agent
  * of the run may read it and none may change it, and where the run keeps it: the harness's state
  * holds it whole, it is exported with the run's folder, and its text, cut to an item's length, is
- * a document of the run's folder in the knowledge base. Each compaction is one
+ * a document of the run's records in the knowledge base. Each compaction is one
  * `context_compacted` event and lines in the live view, with the summary when there is one.
  */
 

@@ -34,6 +34,7 @@ import { CONTROL_DISK_CHECK_MS, ControlDisk } from "./disk.ts";
 import { EventsApply, EventsMove, EventsWriter } from "./events/index.ts";
 import { followReports } from "./ingest.ts";
 import { sendCommandsOn } from "./issue/index.ts";
+import { followKbFiles, KbFiles } from "./kb/index.ts";
 import { KitRepos } from "./kits/index.ts";
 import { advanceResets, driverFromEnv } from "./lifecycle.ts";
 import { followLive, LiveTaken } from "./live/index.ts";
@@ -292,6 +293,10 @@ async function main(): Promise<void> {
   );
   followLive(bus, { store, taken: liveTaken }).catch((err) =>
     log("control", "live lines from the bus stopped", { error: String(err) }, "error"),
+  );
+  // The knowledge base's files, each kept once by its SHA-256 in control's state (goal 175).
+  followKbFiles(bus, new KbFiles(join(dir, CONTROL_STATE.kbFiles), store)).catch((err) =>
+    log("control", "files for the knowledge base stopped", { error: String(err) }, "error"),
   );
   sendCommandsOn(store, bus).catch((err) =>
     log("control", "commands stream not made", { error: String(err) }, "error"),

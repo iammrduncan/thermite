@@ -16,6 +16,7 @@ import {
 } from "../../src/control/lifecycle.ts";
 import { leaderboard } from "../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
+import { KB_OUTBOX_FILES } from "../../src/core/kb.ts";
 import { WIPE_MARKER, wipeIfRequested } from "../../src/harness/service/index.ts";
 import { controlStack } from "../helpers/control-stack.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";
@@ -188,7 +189,14 @@ describe("full reset", () => {
     mkdirSync(locked, { recursive: true });
     chmodSync(locked, 0o555);
     chmodSync(join(env.paths.stateDir, "builds", "locked"), 0o555);
+    // A file of the knowledge base the supervisor has yet to put on the bus stays (goal 175).
+    const kbFile = join(env.paths.outboxDir, KB_OUTBOX_FILES, "a".repeat(64));
+    mkdirSync(join(env.paths.outboxDir, KB_OUTBOX_FILES), { recursive: true });
+    writeFileSync(kbFile, "waiting");
+    mkdirSync(join(env.paths.outboxDir, "an-export"), { recursive: true });
     assert.ok(wipeIfRequested(env.paths, ["rig-signing.key", "rig-signing.key.pub"]));
+    assert.ok(existsSync(kbFile));
+    assert.ok(!existsSync(join(env.paths.outboxDir, "an-export")));
     assert.ok(!existsSync(join(env.paths.stateDir, "builds")));
     assert.ok(!existsSync(join(env.paths.stateDir, "ledger", "ledger.db")));
     const { Ledger } = await import("../../src/harness/ledger/index.ts");

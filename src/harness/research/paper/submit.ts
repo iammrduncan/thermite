@@ -40,7 +40,7 @@ export function checkDraft(
  * A paper the supervisor posts for a run that waits for one: checked by code, then accepted or
  * refused with its problems. Accepted, its citations become numbered references, and it is kept
  * whole with the References and the appendices that code appends; each next experiment becomes
- * an experiment of the campaign's knowledge-base folder.
+ * an experiment of the campaign's knowledge-base collection.
  */
 export function submit(
   ctx: PapersContext,

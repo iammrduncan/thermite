@@ -168,7 +168,7 @@ Compose keeps Thermite's state in named volumes. Their names start with the proj
 
 | Volume | What it holds |
 | --- | --- |
-| `control-state` | Control's database, with Thermite's [knowledge base](../../explanation/journals-and-knowledge.md) (a folder for each campaign), its signing key, its certificate authority for the message bus, the key that seals every provider key, and kits written on the New campaign page |
+| `control-state` | Control's database, with Thermite's [knowledge base](../../explanation/journals-and-knowledge.md) (a collection for each campaign), its signing key, its certificate authority for the message bus, the key that seals every provider key, and kits written on the New campaign page |
 | `control-pub` | Control's public key, which the harness reads, and its bus authority's certificate, which the supervisor trusts the bus through |
 | `harness-state` | The rig's ledger, its git copies, kits, imports, models and settings, and copies of past research (what earlier runs recorded) for its runs to read |
 | `harness-scratch` | Working copies. The harness empties it every time it starts |

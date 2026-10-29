@@ -153,6 +153,7 @@ describe("backup and restore of control (goal 173)", () => {
     assert.deepEqual(Object.keys(manifest.left_out).sort(), [
       "COMMANDS",
       "CONFIG",
+      "KB_FILES",
       "LIVE",
       "REPORTS",
     ]);

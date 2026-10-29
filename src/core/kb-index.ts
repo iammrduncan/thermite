@@ -3,9 +3,10 @@ import { currentEvent } from "./names.ts";
 import { hypothesisStatusWords, PAPER_ACCEPTED, questionLabel } from "./research-check.ts";
 
 /**
- * How a run's events become the items of its campaign's folder in Thermite's knowledge base
- * (goal 065). One reading, shared: control builds the folders with it from the events in the
- * rigs' signed reports, and a rig's harness builds each export's part of the folder
+ * How a run's events become the items of its records slot, in its campaign's collection in
+ * Thermite's knowledge base (goals 065 and 175). One reading, shared: control builds the records
+ * with it from the events in the rigs' signed reports, and a rig's harness builds each export's
+ * part of the collection
  * (knowledge.jsonl) with it from its own ledger, so the two hold the same items.
  *
  * Every item keeps its origin: its run, who wrote it (a lane, the planner, an advisor, the judge,
@@ -643,7 +644,7 @@ export function indexEvent(t: KbIndexTarget, event: KbEvent): void {
       );
       return;
     // A research run's paper (goal 112): each next experiment its final writer gave, as an
-    // experiment of the campaign's folder, which a goal or hill-climb run can take into its queue.
+    // experiment of the campaign's collection, which a goal or hill-climb run can take into its queue.
     // Its details say what it rests on, in words: a run that takes it cannot read this run.
     case PAPER_ACCEPTED: {
       // The paper itself, an item of its own (the owner, goal 162).

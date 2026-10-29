@@ -1,5 +1,5 @@
 import type { Hono } from "hono";
-import { PICKABLE } from "../kb.ts";
+import { PICKABLE } from "../kb/index.ts";
 import { knowledgePage, pastWords, SEARCH_KINDS } from "../ui/knowledge.ts";
 import { runHref } from "../ui/urls.ts";
 import { campaignModes } from "../views/index.ts";
@@ -24,12 +24,13 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   app.get("/ui/knowledge", (c) => {
     const vs = views();
     const kb = store.kb();
-    const folders = kb.folders();
+    const collections = kb.collections();
     const q = (c.req.query("q") ?? "").slice(0, 300);
     const kind = SEARCH_KINDS.find((k) => k === c.req.query("kind")) ?? "";
-    const folder = folders.find((f) => f.campaign === c.req.query("folder"))?.campaign ?? "";
+    const collection =
+      collections.find((f) => f.campaign === c.req.query("collection"))?.campaign ?? "";
     const limit = 100;
-    const results = kb.search(q, folder ? [folder] : folders.map((f) => f.campaign), {
+    const results = kb.search(q, collection ? [collection] : collections.map((f) => f.campaign), {
       ...(kind ? { kinds: [kind] } : {}),
       limit,
     });
@@ -37,15 +38,16 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       c,
       {
         title: "Knowledge",
-        summary: "Thermite's knowledge base: a folder for each campaign, and what each may read",
+        summary:
+          "Thermite's knowledge base: a collection for each campaign, and what each may read",
         active: "knowledge",
       },
       knowledgePage({
-        folders,
+        collections,
         mode: modeWords(campaignModes(store, vs)),
         q,
         kind,
-        folder,
+        collection,
         results,
         limit,
         now: Date.now(),
@@ -57,7 +59,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   });
 
   /**
-   * Start a run's "From past research": a search of the folders one campaign may read (its own
+   * Start a run's "From past research": a search of the collections one campaign may read (its own
    * and those granted), of the kinds a new run can start from. Agents' text, sent as JSON data.
    */
   app.get("/ui/kb/search.json", (c) => {
@@ -66,11 +68,11 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     if (!campaignModes(store, views()).has(campaign))
       return c.json({ error: "no such campaign" }, 404);
     const kb = store.kb();
-    const folders = kb.readable(campaign);
+    const collections = kb.readable(campaign);
     const items = pastResults(campaign, (c.req.query("q") ?? "").slice(0, 300));
     return c.json({
       campaign,
-      folders,
+      collections,
       items: items.map((x) => {
         const w = pastWords(x, kb.resultOf(x));
         return {

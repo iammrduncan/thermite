@@ -65,7 +65,7 @@ describe("who may do what on the message bus", () => {
     assert.ok(!key.includes(fp));
   });
 
-  test("a rig may publish its own reports and live lines, take its own commands and read its own config, and nothing else", () => {
+  test("a rig may publish its own reports, live lines and files, take its own commands and read its own config, and nothing else", () => {
     assert.deepEqual(rigPermissions("rig-a"), {
       publish: {
         allow: [
@@ -80,10 +80,14 @@ describe("who may do what on the message bus", () => {
           "$JS.API.CONSUMER.DELETE.CONFIG.rig-rig-a-config",
           "$JS.API.CONSUMER.MSG.NEXT.CONFIG.rig-rig-a-config",
           "$JS.ACK.CONFIG.rig-rig-a-config.>",
+          "thermite.rig.rig-a.kbfile.*",
         ],
       },
       subscribe: { allow: ["_INBOX.rig.rig-a.>"] },
     });
+    // It puts the knowledge base's files on its own subjects; it may not read or remove any.
+    const kbFiles = rigPermissions("rig-a").publish.allow.filter((x) => x.includes("KB_FILES"));
+    assert.deepEqual(kbFiles, [], "no call of the JetStream API on the KB_FILES stream");
     // The consumers it may make are the ones the supervisor follows its commands and watches its
     // config with; it may publish nothing to a config subject, which only control writes.
     const allow = rigPermissions("rig-a").publish.allow;

@@ -49,6 +49,7 @@ import { applyConfig, ConfigCounts, followConfig, keepConfig, RigConfig } from "
 import { type UploadState, uploadExportsOnce } from "./export-upload.ts";
 import { type ExportState, exportOnce } from "./git-export.ts";
 import { serveHealth } from "./health.ts";
+import { putKbFiles } from "./kb/index.ts";
 import { emptyKbSyncState, type KbSyncState, syncKnowledgeOnce } from "./kb-sync.ts";
 import {
   LiveCounts,
@@ -618,6 +619,17 @@ async function main(): Promise<void> {
 
   loops.add("report", intervalMs);
   while (!stopping) {
+    // The knowledge base's files first, on the bus, so that control has an item's file as soon
+    // as it can: the item's event goes in the report, and the two meet on control by the file's
+    // SHA-256, whichever comes first (goal 175).
+    if (bus)
+      try {
+        const files = await putKbFiles({ rig, outboxDir: exportCfg.outboxDir, home, bus });
+        if (files.error || files.spoilt.length)
+          log("supervisor", "files for the knowledge base wait", { ...files }, "warn");
+      } catch (err) {
+        log("supervisor", "files for the knowledge base wait", { error: String(err) }, "error");
+      }
     try {
       const next = await relayOnce({ ...cfg, skipCommands: commandMs > 0 }, state);
       if (next.cursor !== state.cursor || next.ledgerId !== state.ledgerId) {

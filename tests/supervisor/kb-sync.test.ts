@@ -34,7 +34,7 @@ const item = (seq: number, over: Partial<KbItemWire> = {}): KbItemWire => ({
 });
 
 /**
- * A fake control that serves the items of the folders a run may read after a cursor, `page` at a
+ * A fake control that serves the items of the collections a run may read after a cursor, `page` at a
  * time (and records each ask), and the real harness API behind the supervisor's token.
  */
 async function setup(items: KbItemWire[], page = 2) {
@@ -43,7 +43,7 @@ async function setup(items: KbItemWire[], page = 2) {
   assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
   const api = createHarnessApi(env.service, tokens);
   const asked: string[] = [];
-  const folders = ["smoke-matmul", "kernels"];
+  const collections = ["smoke-matmul", "kernels"];
   let harnessDown = false;
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
@@ -52,15 +52,15 @@ async function setup(items: KbItemWire[], page = 2) {
       assert.equal(new Headers(init?.headers).get("authorization"), "Bearer rig-token");
       const after = Number(url.searchParams.get("after"));
       const next = items
-        .filter((i) => i.seq > after && folders.includes(i.campaign))
+        .filter((i) => i.seq > after && collections.includes(i.campaign))
         .slice(0, page);
       return Response.json({
         campaign: "smoke-matmul",
-        folders,
+        collections,
         items: next,
         next: next.at(-1)?.seq ?? after,
         more: items.some(
-          (i) => i.seq > (next.at(-1)?.seq ?? after) && folders.includes(i.campaign),
+          (i) => i.seq > (next.at(-1)?.seq ?? after) && collections.includes(i.campaign),
         ),
       });
     }
@@ -81,7 +81,7 @@ async function setup(items: KbItemWire[], page = 2) {
     cfg,
     asked,
     dir,
-    folders,
+    collections,
     down: (v: boolean) => {
       harnessDown = v;
     },
@@ -194,7 +194,7 @@ describe("past research, synced from control into the run's folder", () => {
     assert.equal(first.items, 2);
     assert.ok(existsSync(join(s.dir, "kernels")));
     // The owner revokes the grant: control no longer lists the folder, and sends nothing new.
-    s.folders.splice(s.folders.indexOf("kernels"), 1);
+    s.collections.splice(s.collections.indexOf("kernels"), 1);
     const second = await syncKnowledgeOnce(s.cfg, first.state);
     assert.deepEqual(second.errors, []);
     assert.equal(second.items, 0);
@@ -205,7 +205,7 @@ describe("past research, synced from control into the run's folder", () => {
     const readme = readFileSync(join(s.dir, "README.md"), "utf8");
     assert.doesNotMatch(readme, /## kernels\//);
     assert.match(readme, /## smoke-matmul\//);
-    assert.deepEqual(s.env.service.knowledge.summary(RUN)?.folders, ["smoke-matmul"]);
+    assert.deepEqual(s.env.service.knowledge.summary(RUN)?.collections, ["smoke-matmul"]);
     // Scratch cleared: the harness's copy shows only what the run may still read.
     rmSync(s.dir, { recursive: true, force: true });
     s.env.service.knowledge.show(RUN);

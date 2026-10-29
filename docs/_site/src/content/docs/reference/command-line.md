@@ -149,8 +149,8 @@ usage: thermite <command> [options]
          [--hypothesis TEXT ...] --control URL --token-file F
                                       copy a campaign control keeps (owner's token): a new
                                       campaign NAME with FROM's contract and kit, its own empty
-                                      folder in Thermite's knowledge base and no runs. Start a
-                                      run of it with run start. It prints the copy.
+                                      collection in Thermite's knowledge base and no runs. Start
+                                      a run of it with run start. It prints the copy.
                                       --mcp-servers-json: for a research campaign, the MCP
                                       servers the copy's agents use instead, as a JSON list
                                       ([] for none). --context-window and --compact-at give the
@@ -629,7 +629,7 @@ Before it sends anything, it ends with exit code 2 and one of these: `--rig name
 
 ### `campaign copy`
 
-`thermite campaign copy` copies a campaign control keeps under a new name, as **Copy** on the campaign's page does (`POST /v1/campaigns/<campaign>/copy`). The copy has the campaign's contract and kit, as its newest saved version has them or as it was assigned before. It has its own folder in Thermite's knowledge base, which starts empty, and no runs.
+`thermite campaign copy` copies a campaign control keeps under a new name, as **Copy** on the campaign's page does (`POST /v1/campaigns/<campaign>/copy`). The copy has the campaign's contract and kit, as its newest saved version has them or as it was assigned before. It has its own collection in Thermite's knowledge base, which starts empty, and no runs.
 
 ```sh
 npx thermite campaign copy sort-speed sort-speed-b \
@@ -941,11 +941,11 @@ It makes a new folder in `FOLDER`, named for the time, such as `thermite-backup-
 | --- | --- |
 | `state/control.db` | Control's store, copied first, whole and consistent while control writes to it (`vacuum into`) |
 | `state/control-signing.key`, `control-signing.pub`, `secrets.key`, `bus-ca.pem`, `bus-ca.key`, `bus-backup.seed` | Control's keys, each as it is in the state folder, with its mode. A secrets key kept elsewhere (`THERMITE_CONTROL_SECRETS_KEY_FILE`) is not in it |
-| `state/kits/`, `state/exports/` | The kits control keeps and the exports of rigs without a results repository, file by file |
+| `state/kits/`, `state/exports/`, `state/kb-files/` | The kits control keeps, the exports of rigs without a results repository and the knowledge base's files, file by file |
 | `streams/EVENTS.snapshot` | The bus's `EVENTS` stream, every rig's events, as the server's snapshot API gives it, taken after the store |
 | `manifest.json` | Each file's path, size and SHA-256; the stream's message count, first and last place, bytes, last message's SHA-256 and settings; control's place in each stream (`bus_position`), which is at or before the stream's end; the store's schema version; the Thermite version and commit that made it; and the streams left out, with why |
 
-It leaves out the `REPORTS`, `COMMANDS`, `LIVE` and `CONFIG` streams: a page waits in `REPORTS` only until control takes it, and a rig sends again what control lacks; control keeps every command in its store and publishes those still pending again as it starts; `LIVE` holds the newest live lines, which the rigs make again; and control writes each rig's config again from its store. It prints each step, then `backup: <folder> (<n> files, 1 streams)`.
+It leaves out the `REPORTS`, `COMMANDS`, `LIVE`, `CONFIG` and `KB_FILES` streams: a page waits in `REPORTS` only until control takes it, and a rig sends again what control lacks; control keeps every command in its store and publishes those still pending again as it starts; `LIVE` holds the newest live lines, which the rigs make again; control writes each rig's config again from its store; and a chunk waits in `KB_FILES` only until control keeps its file in its state, which the backup holds. It prints each step, then `backup: <folder> (<n> files, 1 streams)`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -968,7 +968,7 @@ In order, it:
 1. With `--control`, asks control's health there, and refuses while control answers: `control answers at <url>: stop it first`.
 2. Checks every file of the backup against its manifest: there, its size and its SHA-256. A file that differs: `<path> is not the file the backup's manifest names: it changed`.
 3. For each stream in the backup: where the bus has none of that name, restores it through the server's restore API, printing the memory the server needs for it (about 1 KiB a message, over 128 MiB), then checks the stream it finds against the manifest. Where the bus has one already, it checks that one the same way, and leaves it as it is. The check keeps a stream that holds the backup's events unchanged, with or without newer ones after them: its first place is the backup's, its last place is the backup's or after, it holds one message more than the backup for each place more (the stream deletes none, so every place holds one), and its message at the backup's last place has the SHA-256 the manifest gives. For a stream with newer events, as on a bus that ran on since the backup, it prints `EVENTS on the bus holds the backup's events and <n> newer ones after them, to <last>: control applies them from its place, <place>, as it starts`; control, started on the restored store, applies them from its place in the backup. Any other stream is refused, naming what differs: `EVENTS on the bus is not the backup's: <what differs>. …`, such as `it holds <n> messages to <n>, and the backup holds <m> to <m>`, which a server stopped part way through a restore leaves, `its message at <m>, the backup's last place, is not the one the backup recorded`, `its first place is <f>, and the backup's is <g>`, or `…: a place holds no message, and this stream deletes none`.
-4. Puts control's state back: each of control's files and folders that is there now (`control.db` with its `-wal` and `-shm`, the keys, `kits/`, `exports/`) is moved into `replaced-<time>/` in the state folder, and the backup's are copied in, given to the state folder's owner when it runs as root. Nothing is deleted, and files that are not control's stay. A state folder that holds the backup's files already is left as it is.
+4. Puts control's state back: each of control's files and folders that is there now (`control.db` with its `-wal` and `-shm`, the keys, `kits/`, `exports/`, `kb-files/`) is moved into `replaced-<time>/` in the state folder, and the backup's are copied in, given to the state folder's owner when it runs as root. Nothing is deleted, and files that are not control's stay. A state folder that holds the backup's files already is left as it is.
 
 A refusal at any step changes no file of control's, prints `restore refused: <why>` on standard error, and exits 1. It ends with `restored: start control, and it applies the events from its place in the stream`.
 

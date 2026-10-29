@@ -279,7 +279,7 @@ Over the REST API, with the owner's token: `POST /v1/rigs/<rig>/reset` with `{"c
 | The harness's state: its ledger, git mirrors, kits, imports, models, builds, research archive and research folders with their copies of past research (`knowledge/`), the **Edit rig** settings and the model route it was handed | The rig's signing key, so control still trusts it (no key to accept) |
 | Its scratch space and outbox | Everything in the results repository or on control, with the full export |
 | The supervisor's state: its copy of the results, its fetch caches, its known hosts for Git access, its advisors' records, the day's spending and where each run's past research sync had got to | Control's records: the rig's past events, its commands, champion patches and daily reports. The rig's page shows only what the rig records after the reset; its earlier runs are under their campaigns' **Earlier runs** |
-| | Control's [knowledge base](../../reference/knowledge-base.md): the items of the rig's earlier runs stay in their campaigns' folders |
+| | Control's [knowledge base](../../reference/knowledge-base.md): the items of the rig's earlier runs stay in their campaigns' collections |
 | | Files outside the rig's state: the advisors file, its tokens, and its environment settings |
 
 After the wipe, the rig refuses commands issued before it. Its model route comes back from control within about half a minute, or at once with the message bus.

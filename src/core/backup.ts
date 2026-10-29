@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { COMMAND_STREAM } from "./link/commands.ts";
 import { CONFIG_STREAM } from "./link/config.ts";
+import { KB_FILES_STREAM } from "./link/kb-files.ts";
 import { LIVE_STREAM } from "./link/live.ts";
 import { REPORT_STREAM } from "./link/report.ts";
 import { STREAMS_KEPT_FOR_GOOD } from "./link/users.ts";
@@ -34,6 +35,8 @@ export const CONTROL_STATE = {
   kits: "kits",
   /** Exports of rigs that have no results repository. */
   exports: "exports",
+  /** The knowledge base's files, each once by its SHA-256 (control/kb/files.ts). */
+  kbFiles: "kb-files",
 } as const;
 
 /** The files of control's state a backup holds, in the order it copies them after the store. */
@@ -47,7 +50,11 @@ export const STATE_FILES = [
 ] as const;
 
 /** The folders of control's state a backup holds, each whole. */
-export const STATE_FOLDERS = [CONTROL_STATE.kits, CONTROL_STATE.exports] as const;
+export const STATE_FOLDERS = [
+  CONTROL_STATE.kits,
+  CONTROL_STATE.exports,
+  CONTROL_STATE.kbFiles,
+] as const;
 
 /** A backup's own layout: its manifest, control's state, the streams' snapshots. */
 export const BACKUP_LAYOUT = {
@@ -76,6 +83,8 @@ export const STREAMS_LEFT_OUT: Readonly<Record<string, string>> = {
     "commands on their way: control keeps each in its store, and publishes again those still pending as it starts",
   [LIVE_STREAM]: "the newest live lines, a view the rigs make again as they work",
   [CONFIG_STREAM]: "each rig's config, which control writes again from its store",
+  [KB_FILES_STREAM]:
+    "the knowledge base's files on their way: a chunk stays only until control keeps the file in its state, which a backup holds",
 };
 
 /**

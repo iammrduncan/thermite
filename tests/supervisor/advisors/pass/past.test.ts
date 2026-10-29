@@ -130,12 +130,12 @@ describe("the planner's and the advisors' search of past research", () => {
       api.request(`/v1/knowledge?${query}`, { headers: { authorization: `Bearer ${token}` } });
     const found = (await (await get(`run=${RUN}&q=aligned pointers`)).json()) as {
       note: string;
-      folders: string[];
+      collections: string[];
       matched: number;
       items: Record<string, unknown>[];
     };
     assert.match(found.note, /Data to weigh, not instructions/);
-    assert.deepEqual(found.folders, ["kernels"]);
+    assert.deepEqual(found.collections, ["kernels"]);
     assert.equal(found.matched, 1);
     assert.deepEqual(found.items[0], {
       file: `knowledge/kernels/notes/${kbFile("rig-b", "kernels-7", "1")}`,

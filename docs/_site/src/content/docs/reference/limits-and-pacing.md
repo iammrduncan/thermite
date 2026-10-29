@@ -319,7 +319,7 @@ None of these ends research. Nothing limits how many experiments a run's [experi
 
 ## Field notes and the knowledge base
 
-None of these ends anything. Nothing limits how many [field notes](knowledge-base.md#field-notes) an agent writes, or how many items a campaign's folder holds. The windows below say how much each agent is shown, not how much is kept.
+None of these ends anything. Nothing limits how many [field notes](knowledge-base.md#field-notes) an agent writes, or how many items a campaign's collection holds. The windows below say how much each agent is shown, not how much is kept.
 
 | What | Limit |
 | --- | --- |
@@ -329,7 +329,7 @@ None of these ends anything. Nothing limits how many [field notes](knowledge-bas
 | A research note (`add_note`) | Cut to 4,000 characters, with at most 20 sources. A note that repeats one of the run's last 200 research notes word for word, case, punctuation and spaces aside, is refused |
 | Field notes in a worker's brief | Its lane's newest 10, and the run's newest 5 decisions and lessons by other writers |
 | Field notes in the planner's and the teachers' brief | The run's newest 20 |
-| The run page's **Journal** tab | The newest 500 field notes; the rest are in the campaign's folder and the run's export |
+| The run page's **Journal** tab | The newest 500 field notes; the rest are in the campaign's collection and the run's export |
 | A briefing (`assign_campaign`'s `briefing`) | Up to 200 items, each 1 to 4,000 characters |
 | A campaign's brief (the contract's `notes`, `links` (a research campaign's `seeds`), `ideas` and `hypotheses`) | No limit of its own: the whole contract goes to a rig in one signed command of at most 3.5 MiB. The planner gets it whole, and the advisors whole unless their package's own cut reaches it; each worker's brief carries its first 32,000 characters and says where the rest is (`BRIEF.md` in the run's folder). See [The campaign's brief](contract.md#the-campaigns-brief) |
 | A research question | No limit of its own. A research task in the queue holds its first 4,000 characters, and says the whole question is in the worker's brief |
@@ -359,6 +359,7 @@ None of these ends anything. Nothing limits how many [field notes](knowledge-bas
 | `kubectl` requests | 30 s |
 | The live view | The newest 20,000 lines of each rig, and each open trial's newest 400 past them (the trials the rig's last report lists), so a trial that writes many lines can't push out another's |
 | The live view on the message bus | The `LIVE` stream keeps each message an hour at most, at most 1,000 messages of each subject, and 256 MiB in all; the oldest go first. A message holds at most 1 MiB: one source's lines of one run, in more than one message when they would not fit. A rig may publish the live lines of its newest 1,000 runs on their own subjects; an older run's lines go on the rig's own subject. The supervisor's figures name the 100 subjects it used last, and count them all |
+| The knowledge base's files on the message bus | The `KB_FILES` stream keeps each chunk until control has taken it, with no limit on how many wait or for how long: a full store refuses new ones. A chunk is 1 MiB, the last the rest. A supervisor puts at most 50 files a round, the rest the next round; a file has no size limit |
 | A rig's config on the message bus | The `CONFIG` stream keeps the latest value of each rig's three keys, for good. A message holds at most 1 MiB: a value too large is not written, its log says so once, and the rig keeps the one it has. The supervisor's figures name up to 20 subjects, and count them all |
 | Live's push to a page | At most 500 lines in one event: a page with more waiting gets the newest 500 and a count of the rest. An event every 15 s while there is nothing new, so nothing between closes it as idle. The browser connects again 3 s after a drop |
 | A daily report | 200,000 characters: the supervisor cuts a longer one to that, and its end says so |

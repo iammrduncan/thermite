@@ -125,12 +125,12 @@ async function twoCampaigns(store: ControlStore) {
   ]);
 }
 
-test("each campaign's folder is built from its runs' events; folders are read only where granted", async () => {
+test("each campaign's collection is built from its runs' events; collections are read only where granted", async () => {
   const store = controlStore();
   await twoCampaigns(store);
   const kb = store.kb();
-  const folders = kb.folders();
-  const pn = folders.find((f) => f.campaign === "gemv-speed");
+  const collections = kb.collections();
+  const pn = collections.find((f) => f.campaign === "gemv-speed");
   assert.deepEqual(pn?.counts, { attempt: 1, experiment: 1, note: 1, run: 1 });
   assert.equal(pn?.journal, 1, "the observation is a field note");
   assert.equal(pn?.runs, 1);
@@ -155,7 +155,7 @@ test("each campaign's folder is built from its runs' events; folders are read on
   assert.equal(note?.by, "lane-1");
   assert.equal(note?.rig, "rig-a");
   assert.equal(note?.run, "gs-3");
-  // Search stays inside the folders given; a grant adds another campaign's folder.
+  // Search stays inside the collections given; a grant adds another campaign's collection.
   assert.deepEqual(kb.search("verifier", ["gemv-speed"]), []);
   assert.equal(kb.search("verifier", ["survey-study"]).length, 2);
   assert.equal(kb.grant("gemv-speed", "survey-study", "owner:ui"), true);
@@ -194,7 +194,7 @@ test("the knowledge base carries on after a restart of control: its cursor and s
   const path = join(mkdtempSync(join(tmpdir(), "thermite-kb-")), "control.db");
   const first = controlStore(path);
   await twoCampaigns(first);
-  const before = first.kb().folders();
+  const before = first.kb().collections();
   const top = Math.max(
     ...first
       .kb()
@@ -208,7 +208,7 @@ test("the knowledge base carries on after a restart of control: its cursor and s
   await applied(second);
   assert.equal(busOf(second).apply.applied, 0);
   const kb = second.kb();
-  assert.deepEqual(kb.folders(), before);
+  assert.deepEqual(kb.collections(), before);
   await ingest(
     second,
     "rig-a",
@@ -260,7 +260,7 @@ test("a rig's new ledger never mixes its runs' items with the old ledger's", asy
   assert.equal(kb.sync("rig-a", "r-1", 0)?.campaign, "new-campaign");
 });
 
-test("a run's sync: its readable folders by seq, never its own items, in pages, updates again", async () => {
+test("a run's sync: its readable collections by seq, never its own items, in pages, updates again", async () => {
   const store = controlStore();
   await twoCampaigns(store);
   // A second run of gemv-speed on another rig, and a third campaign nobody granted.
@@ -289,13 +289,13 @@ test("a run's sync: its readable folders by seq, never its own items, in pages, 
       out.push(...page.items);
       assert.ok(page.next >= cur, "the cursor never goes back");
       cur = page.next;
-      if (!page.more) return { items: out, next: cur, folders: page.folders };
+      if (!page.more) return { items: out, next: cur, collections: page.collections };
     }
     throw new Error("the sync never ended");
   };
-  // Its own folder only, without its own items: the other run's note.
+  // Its own collection only, without its own items: the other run's note.
   const s = all("rig-c", "gs-4");
-  assert.deepEqual(s.folders, ["gemv-speed"]);
+  assert.deepEqual(s.collections, ["gemv-speed"]);
   assert.deepEqual(s.items.map((x) => `${x.run}/${x.kind}`).sort(), [
     "gs-3/attempt",
     "gs-3/experiment",
@@ -304,7 +304,7 @@ test("a run's sync: its readable folders by seq, never its own items, in pages, 
   ]);
   assert.ok(
     s.items.every((x) => x.campaign === "gemv-speed"),
-    "never a folder not granted",
+    "never a collection not granted",
   );
   // Each item says which rig's run it came from (run names are unique per rig only).
   assert.ok(s.items.every((x) => x.rig === "rig-a" && x.run === "gs-3"));
@@ -337,26 +337,26 @@ test("a run's sync: its readable folders by seq, never its own items, in pages, 
   assert.equal(again.items.length, 1);
   assert.equal(again.items[0]?.ref, "x-1");
   assert.match(String(again.items[0]?.body), /Dropped: done elsewhere/);
-  // A grant made while the run is at work: the granted folder's items come at the next sync,
+  // A grant made while the run is at work: the granted collection's items come at the next sync,
   // although their seqs are behind the run's cursor.
   assert.equal(kb.grant("gemv-speed", "survey-study", "owner:ui"), true);
   const granted = all("rig-c", "gs-4", again.next);
-  assert.deepEqual(granted.folders, ["gemv-speed", "survey-study"]);
+  assert.deepEqual(granted.collections, ["gemv-speed", "survey-study"]);
   assert.deepEqual(granted.items.map((x) => x.kind).sort(), ["claim", "finding", "run", "source"]);
   assert.ok(granted.items.every((x) => x.campaign === "survey-study" && x.rig === "rig-b"));
   assert.deepEqual(all("rig-c", "gs-4", granted.next).items, [], "and only once");
-  // The secret campaign's folder never comes.
+  // The secret campaign's collection never comes.
   assert.ok(
     ![...s.items, ...again.items, ...granted.items].some((x) => x.campaign === "secret-campaign"),
   );
-  // After a revoke, the folder leaves the run's folders at once (its supervisor removes its
+  // After a revoke, the collection leaves the run's collections at once (its supervisor removes its
   // copy), and its items no longer come, even from the start.
   kb.revoke("gemv-speed", "survey-study");
   const after = store.kb().sync("rig-c", "gs-4", granted.next);
-  assert.deepEqual(after?.folders, ["gemv-speed"]);
+  assert.deepEqual(after?.collections, ["gemv-speed"]);
   assert.deepEqual(after?.items, []);
   const fresh = all("rig-c", "gs-4", 0);
-  assert.deepEqual(fresh.folders, ["gemv-speed"]);
+  assert.deepEqual(fresh.collections, ["gemv-speed"]);
   assert.ok(fresh.items.every((x) => x.campaign === "gemv-speed"));
   // An unknown run, or another rig's run, has no sync.
   assert.equal(kb.sync("rig-c", "nope", 0), undefined);
@@ -382,7 +382,7 @@ test("the rigs' route: the rig's own token, its own runs, a KbSync", async () =>
   const withGrant = KbSync.parse(
     await (await get("/v1/rigs/rig-b/kb?run=sv-2&after=0", "rig-b-token-abcd")).json(),
   );
-  assert.deepEqual(withGrant.folders, ["survey-study", "gemv-speed"]);
+  assert.deepEqual(withGrant.collections, ["survey-study", "gemv-speed"]);
   assert.deepEqual(withGrant.items.map((x) => x.kind).sort(), [
     "attempt",
     "experiment",
@@ -399,7 +399,7 @@ test("the rigs' route: the rig's own token, its own runs, a KbSync", async () =>
   assert.equal((await get("/v1/rigs/rig-b/kb?run=sv-2", "admin-token-abcdef")).status, 401);
 });
 
-test("a research note is a note of its own in the folder and in the run's journal", async () => {
+test("a research note is a note of its own in the collection and in the run's journal", async () => {
   const store = controlStore();
   await ingest(store, "rig-c", [
     ["harness", "run_created", "g-1", { campaign: "gemv-speed", mode: "goal" }],
@@ -441,7 +441,7 @@ test("a research note is a note of its own in the folder and in the run's journa
   assert.ok(!run?.timeline.some((e) => e.kind === "research_note"));
 });
 
-test("a folder holds everything a run produces: the run, its trials, its documents, the sources' text", async () => {
+test("a collection holds everything a run produces: the run, its trials, its documents, the sources' text", async () => {
   const store = controlStore();
   const text = `The weights stream from memory. ${"More words. ".repeat(40)}`;
   await ingest(store, "rig-r", [
@@ -524,7 +524,7 @@ test("a folder holds everything a run produces: the run, its trials, its documen
     ],
   ]);
   const kb = store.kb();
-  const f = kb.folder("kernel-survey");
+  const f = kb.collection("kernel-survey");
   assert.deepEqual(f.counts, { doc: 1, hypothesis: 1, run: 1, source: 1, trial: 1 });
   const one = (kind: "run" | "trial" | "doc" | "source" | "hypothesis") => {
     const [x] = kb.search("", ["kernel-survey"], { kinds: [kind] });
@@ -600,7 +600,7 @@ test("a folder holds everything a run produces: the run, its trials, its documen
   assert.equal(full.find((e) => e.kind === "source_fetched")?.body.text, text);
 });
 
-test("after an upgrade, the runs indexed before get their run and trial items, once, in their folder", async () => {
+test("after an upgrade, the runs indexed before get their run and trial items, once, in their collection", async () => {
   const store = controlStore();
   assigned(store, "rig-a", "gs-3", "gemv-speed");
   await ingest(store, "rig-a", [
@@ -620,7 +620,7 @@ test("after an upgrade, the runs indexed before get their run and trial items, o
   const note = kb.search("kept", ["gemv-speed"])[0];
   // Control starts again: the knowledge base reads those events again from the events stream.
   await readKnowledgeAgain(store, busOf(store).bus);
-  assert.deepEqual(kb.folder("gemv-speed").counts, { note: 1, run: 1, trial: 1 });
+  assert.deepEqual(kb.collection("gemv-speed").counts, { note: 1, run: 1, trial: 1 });
   const [run] = kb.search("", ["gemv-speed"], { kinds: ["run"] });
   assert.match(String(run?.body), /Status: paused \(a pause\)$/);
   assert.equal(run?.campaign, "gemv-speed");
@@ -632,7 +632,7 @@ test("after an upgrade, the runs indexed before get their run and trial items, o
   // Once only: a later call reads nothing again.
   store.db.exec("delete from kb_item where kind = 'trial'");
   assert.equal(await readKnowledgeAgain(store, busOf(store).bus), 0);
-  assert.equal(kb.folder("gemv-speed").counts.trial, undefined);
+  assert.equal(kb.collection("gemv-speed").counts.trial, undefined);
 });
 
 test("a rig files a run's items only under a campaign control gave it", async () => {
@@ -643,7 +643,7 @@ test("a rig files a run's items only under a campaign control gave it", async ()
     ["harness", "run_created", "g-1", { campaign: "gemv-speed", mode: "goal" }],
     ["lane-1", "journal_note", "g-1", { id: 1, by: "lane-1", kind: "lesson", text: "real lesson" }],
   ]);
-  // rig-b names gemv-speed for a run control never assigned it: nothing goes in that folder.
+  // rig-b names gemv-speed for a run control never assigned it: nothing goes in that collection.
   await ingest(store, "rig-b", [
     ["harness", "run_created", "g-9", { campaign: "gemv-speed", mode: "goal" }],
     ["lane-1", "journal_note", "g-9", { id: 1, by: "lane-1", kind: "lesson", text: "planted" }],

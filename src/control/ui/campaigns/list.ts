@@ -190,7 +190,7 @@ export function startDrawer(o: {
   copyFrom?: { key: string; label: string }[] | undefined;
   /** The run to copy from, chosen first (its name): a judge-only run's link here (goal 099). */
   copyPick?: string | undefined;
-  /** "From past research" (goal 065): a search of the folders the campaign may read. */
+  /** "From past research" (goal 065): a search of the collections the campaign may read. */
   past?: string | undefined;
 }): string {
   // A stopped pod is chosen only by the owner: starting it costs money.

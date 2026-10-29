@@ -232,7 +232,7 @@ export class ResearchFolder {
     const knowledge = this.knowledge?.summary(run);
     const knowledgeLine = knowledge
       ? [
-          `- knowledge/: past research from the folders this campaign may read (${countsText(knowledge.counts)}, from ${knowledge.folders.join(", ")}); README.md there says what is where`,
+          `- knowledge/: past research from the collections this campaign may read (${countsText(knowledge.counts)}, from ${knowledge.collections.join(", ")}); README.md there says what is where`,
         ]
       : [];
 
@@ -375,7 +375,7 @@ export class ResearchFolder {
         [
           `# ${contract.title ?? run}`,
           "",
-          "This folder holds the sources, claims and notes this run's workers recorded, and past research from the folders its campaign may read. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
+          "This folder holds the sources, claims and notes this run's workers recorded, and past research from the collections its campaign may read. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
           "",
           "## What is here",
           "",

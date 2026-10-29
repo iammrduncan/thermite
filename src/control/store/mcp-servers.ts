@@ -207,7 +207,7 @@ export class McpServerRows extends StorePart {
 
   /**
    * Goal 065's outside knowledge bases become ordinary MCP servers, once, at the update: each one
-   * a server with a key (Authorization: Bearer and its token, kept). Copies of campaign folders
+   * a server with a key (Authorization: Bearer and its token, kept). Copies of campaigns' collections
    * stop (the pages already written stay on the server), and the campaigns' grants to search them
    * go: a kit names a server now. The audit says what each became and what stopped. The grants
    * are the knowledge base's rows, removed here as part of this one migration.

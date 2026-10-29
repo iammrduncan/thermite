@@ -20,7 +20,7 @@ import { answeredResearchRun, goodPaper, NO_STE } from "../../helpers/research-p
  * a draft or a posted paper in code (claims, numbers, a section for each question, a verdict the
  * review panel gave for each hypothesis, the STE checker's errors), and refuses one that fails.
  * An accepted paper is the run's paper.md and leads its final report; its next experiments go to
- * the campaign's knowledge-base folder; then the run closes once its trials end.
+ * the campaign's knowledge-base collection; then the run closes once its trials end.
  */
 
 const RUN = "r-1";

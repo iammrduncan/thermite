@@ -4,6 +4,7 @@ import type { LiveFigures } from "../../core/api/control/rigs.ts";
 import { COMMAND_STREAM } from "../../core/link/commands.ts";
 import { CONFIG_STREAM } from "../../core/link/config.ts";
 import { EVENT_STREAM } from "../../core/link/events.ts";
+import { KB_FILES_STREAM } from "../../core/link/kb-files.ts";
 import {
   LIVE_KEPT_BYTES,
   LIVE_KEPT_PER_SUBJECT,
@@ -38,6 +39,7 @@ export const BUS_STREAMS = [
   COMMAND_STREAM,
   LIVE_STREAM,
   CONFIG_STREAM,
+  KB_FILES_STREAM,
 ] as const;
 
 /** How long a look at the server may take: then the state says the server did not answer. */

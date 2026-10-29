@@ -213,19 +213,19 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
   });
 
   // ---------------------------------------------------------------- the knowledge base (goal 065)
-  /** A campaign's Knowledge section: its folder, the folders it reads, who reads it. */
+  /** A campaign's Knowledge section: its collection, the collections it reads, who reads it. */
   const knowledgeSection = (c: Ctx, name: string, vs: RigView[], error?: string) => {
     const kb = store.kb();
-    const folders = kb.folders();
-    const have = new Set(folders.map((f) => f.campaign));
+    const collections = kb.collections();
+    const have = new Set(collections.map((f) => f.campaign));
     const modes = campaignModes(store, vs);
     return campaignKnowledge({
       campaign: name,
-      folder: kb.folder(name, folders),
-      folders: [
-        ...folders,
-        // Campaigns with no folder yet can be granted too: their items come as their runs report.
-        ...[...modes.keys()].filter((x) => !have.has(x)).map((x) => kb.folder(x, folders)),
+      collection: kb.collection(name, collections),
+      collections: [
+        ...collections,
+        // A campaign control knows only by a rig's runs can be granted too.
+        ...[...modes.keys()].filter((x) => !have.has(x)).map((x) => kb.collection(x, collections)),
       ],
       mode: modeWords(modes),
       csrf: csrf(c),

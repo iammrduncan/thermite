@@ -348,7 +348,7 @@ export const MCP_SERVERS = {
 } as const satisfies Route;
 
 /**
- * Past research for a run (goal 065): the items of the folders its campaign may read, after the
+ * Past research for a run (goal 065): the items of the collections its campaign may read, after the
  * supervisor's cursor (core/kb.ts reads a page). A 404 names its code: `not_assigned` when control
  * did not assign the run to this rig (asked again an hour later); with none, control has not heard
  * of the run from the rig yet (asked again at the next sync).

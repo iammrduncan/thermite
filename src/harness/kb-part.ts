@@ -11,7 +11,7 @@ import {
 import type { Ledger } from "./ledger/index.ts";
 
 /**
- * A rig's runs' part of their campaigns' folders (goal 065), for an export: the items this
+ * A rig's runs' part of their campaigns' collections (goal 065), for an export: the items this
  * ledger's events make, read the same way control reads them (core/kb-index.ts), so an export
  * holds what its runs put in Thermite's knowledge base. Each item keeps its origin: campaign,
  * rig, run, who wrote it and when.

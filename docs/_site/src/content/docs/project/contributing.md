@@ -136,7 +136,7 @@ To work on the dashboard without a stack, run the dashboard demo. It serves made
 node --experimental-strip-types scripts/dev/dashboard-demo/main.ts   # http://127.0.0.1:8810/ui
 ```
 
-One of the demo's runs has a made-up experiment queue: experiments tried, in progress and up next, a lane's idea and a hand-out. The same run has made-up field notes on its **Journal** tab, and the **Knowledge** page shows the demo campaigns' folders. The demo has no campaign saved on control or assigned through it and no owner's messages, so it shows no **Start a run** and no kept messages. The dashboard's tests cover those. This site's screenshots come from the demo, because its data is made up: with the demo running, `node scripts/docs/screenshots.mjs` takes them again, the run's **Journal** tab and the **Knowledge** page among them. [The contributor guide](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md) has more.
+One of the demo's runs has a made-up experiment queue: experiments tried, in progress and up next, a lane's idea and a hand-out. The same run has made-up field notes on its **Journal** tab, and the **Knowledge** page shows the demo campaigns' collections. The demo has no campaign saved on control or assigned through it and no owner's messages, so it shows no **Start a run** and no kept messages. The dashboard's tests cover those. This site's screenshots come from the demo, because its data is made up: with the demo running, `node scripts/docs/screenshots.mjs` takes them again, the run's **Journal** tab and the **Knowledge** page among them. [The contributor guide](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md) has more.
 
 ## Keep the repository public-safe
 

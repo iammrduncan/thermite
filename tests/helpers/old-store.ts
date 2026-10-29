@@ -107,3 +107,97 @@ export function keepOldRows(db: DatabaseSync, rows: readonly OldRow[]): void {
       ).run(rig, ledger, now, ledger === r.ledger ? null : now);
   }
 }
+
+/** One item of a knowledge base from before its hierarchy (goal 175), as control kept it then. */
+export interface OldItem {
+  id: number;
+  seq: number;
+  campaign: string;
+  rig: string;
+  ledger: string;
+  run: string;
+  kind: string;
+  ref: string;
+  title: string;
+  body: string;
+  by?: string;
+  at?: string;
+}
+
+/**
+ * Control's knowledge base as goals 065 and 162 left it, at store version 13, made again in a store
+ * of this code's: its items in one table, without slots, versions, collections or a words index,
+ * each campaign's runs, and its cursors (`itemSeq`, the last seq given, which the rigs' cursors
+ * count). The hierarchy's tables go; the store's version is set back to 13.
+ */
+export function withKnowledgeBaseBefore175(
+  db: DatabaseSync,
+  items: readonly OldItem[],
+  o: {
+    itemSeq: number;
+    runs: readonly { rig: string; ledger: string; run: string; campaign: string }[];
+  },
+): void {
+  db.exec(`drop trigger if exists kb_item_words_added;
+drop trigger if exists kb_item_words_changed;
+drop trigger if exists kb_item_words_removed;
+drop table if exists kb_words;
+drop table if exists kb_item;
+drop table if exists kb_version;
+drop table if exists kb_link;
+drop table if exists kb_file;
+drop table if exists kb_collection;
+drop table if exists kb_scope;
+create table kb_item (
+  id integer primary key autoincrement,
+  seq integer not null,
+  campaign text not null,
+  rig text not null,
+  ledger text not null,
+  run text not null,
+  kind text not null,
+  ref text not null,
+  title text not null,
+  body text not null,
+  by text not null,
+  url text,
+  sub text,
+  meta text not null default '{}',
+  at text not null,
+  updated_at text not null,
+  unique (rig, ledger, run, kind, ref)
+);
+create index kb_item_campaign on kb_item (campaign, kind);
+create index kb_item_seq on kb_item (campaign, seq);`);
+  const insert = db.prepare(
+    `insert into kb_item (id, seq, campaign, rig, ledger, run, kind, ref, title, body, by, at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const i of items) {
+    const at = i.at ?? "2026-10-28T10:00:00.000Z";
+    insert.run(
+      i.id,
+      i.seq,
+      i.campaign,
+      i.rig,
+      i.ledger,
+      i.run,
+      i.kind,
+      i.ref,
+      i.title,
+      i.body,
+      i.by ?? "harness",
+      at,
+      at,
+    );
+  }
+  for (const r of o.runs)
+    db.prepare("insert or ignore into kb_run (rig, ledger, run, campaign) values (?, ?, ?, ?)").run(
+      r.rig,
+      r.ledger,
+      r.run,
+      r.campaign,
+    );
+  db.prepare("update kb_cursor set item_seq = ? where id = 1").run(o.itemSeq);
+  db.prepare("delete from schema_migrations where version > 13").run();
+}

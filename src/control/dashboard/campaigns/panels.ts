@@ -173,7 +173,7 @@ export function campaignPanels(dash: Dashboard) {
       now - Date.parse(first.created_at) < 60_000
         ? "just now"
         : `${ago(first.created_at, now)} ago`;
-    return `<div class="card" style="margin-bottom:16px"><span class="muted">Copied from</span> <a href="${campaignHref(f.campaign)}">${esc(copiedFromWords(f))}</a> <span class="muted">by ${esc(copiedBy(first.created_by))}, ${esc(when)}. Its folder in the knowledge base started empty.${f.other_mcp_servers ? ` ${esc(copiedMcpWords(first.contract))}` : ""}</span></div>`;
+    return `<div class="card" style="margin-bottom:16px"><span class="muted">Copied from</span> <a href="${campaignHref(f.campaign)}">${esc(copiedFromWords(f))}</a> <span class="muted">by ${esc(copiedBy(first.created_by))}, ${esc(when)}. Its collection in the knowledge base started empty.${f.other_mcp_servers ? ` ${esc(copiedMcpWords(first.contract))}` : ""}</span></div>`;
   };
   /**
    * What a copy of a campaign takes, as copyCampaign takes it: whether it is research, what it
@@ -243,7 +243,7 @@ export function campaignPanels(dash: Dashboard) {
     const folders = store.folders.list();
     const here = store.folders.of(name);
     const move = folders.length
-      ? `<form class="sfd" method="post" action="${campaignHref(name)}/folder">${hidden}${infoLabel("Move to folder", archived ? "The folder this campaign keeps while it is archived, and comes back into when you unarchive it. Its runs, results and folder in the knowledge base do not change." : "Where this campaign shows in the left navigation. You can also drag it there. Its runs, results and folder in the knowledge base do not change.")}<span class="kmove"><select name="folder" aria-label="Folder"><option value=""${here ? "" : " selected"}>No folder</option>${folders.map((f) => `<option value="${f.id}"${f.id === here?.id ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select><button class="sm">Move</button></span></form>`
+      ? `<form class="sfd" method="post" action="${campaignHref(name)}/folder">${hidden}${infoLabel("Move to folder", archived ? "The folder this campaign keeps while it is archived, and comes back into when you unarchive it. Its runs, results and collection in the knowledge base do not change." : "Where this campaign shows in the left navigation. You can also drag it there. Its runs, results and collection in the knowledge base do not change.")}<span class="kmove"><select name="folder" aria-label="Folder"><option value=""${here ? "" : " selected"}>No folder</option>${folders.map((f) => `<option value="${f.id}"${f.id === here?.id ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</select><button class="sm">Move</button></span></form>`
       : `<div class="sfd">${infoLabel("Move to folder", "Where this campaign shows in the left navigation. Make a folder with the folder button beside Campaigns there.")}<span class="muted small">No folder yet: make one with the folder button beside Campaigns in the navigation.</span></div>`;
     const more = `<details class="menu" data-campaign-more><summary class="btn" title="More" aria-label="More">${icon.dots}</summary><div class="menu-pop kmore-pop">${
       archived

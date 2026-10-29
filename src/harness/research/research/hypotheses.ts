@@ -230,7 +230,7 @@ export function proposeHypothesis(
       supporting: ok,
       status: "pool",
     });
-    // So the campaign's folder in the knowledge base holds the run's hypotheses too.
+    // So the campaign's collection in the knowledge base holds the run's hypotheses too.
     ctx.ledger.appendEvent(lane ?? "research", "hypothesis_added", run, {
       hypothesis: id,
       lane: lane ?? null,

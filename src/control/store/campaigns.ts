@@ -71,7 +71,8 @@ export class CampaignVersions extends StorePart {
 
   /**
    * Stores a campaign version, approved by whoever created it, with where its runs fetch from
-   * and, for a copy, where it was copied from.
+   * and, for a copy, where it was copied from. The campaign's collection in the knowledge base is
+   * made with its first version.
    */
   put(c: {
     campaign: string;
@@ -98,6 +99,7 @@ export class CampaignVersions extends StorePart {
         c.by,
         c.copiedFrom ? canonicalJson(c.copiedFrom) : null,
       );
+    this.store.kb().makeCollection(c.campaign);
     this.store.auditLog.add(c.by, "campaign_version_created", {
       campaign: c.campaign,
       version: c.version,

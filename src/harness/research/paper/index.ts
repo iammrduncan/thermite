@@ -30,7 +30,7 @@ import { checkDraft, submit } from "./submit.ts";
  * panel's decisions (each question's certainty, each hypothesis's verdict, each dissent) and the
  * claims cited. It is kept whole in its event; it leads the run's final report and is `paper.md`
  * in the run's research folder. Its next experiments become experiments in the campaign's
- * knowledge-base folder, for a goal or hill-climb run to take into its queue.
+ * knowledge-base collection, for a goal or hill-climb run to take into its queue.
  *
  * The parts are in paper/: the request and its frozen figures (request.ts), each item's standing
  * decision (items.ts), what a paper is checked against (basis.ts), the final writer's package

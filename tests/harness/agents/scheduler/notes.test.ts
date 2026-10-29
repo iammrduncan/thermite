@@ -194,7 +194,7 @@ describe("field notes in planning and briefs", () => {
     assert.doesNotMatch(brief, /agents and judges wrote/);
     assert.match(
       brief,
-      /# Past research\nPast research from the folders this campaign may read is in \/.*\/research\/js-1\/knowledge \(1 experiment, from kernels\): search it before starting/,
+      /# Past research\nPast research from the collections this campaign may read is in \/.*\/research\/js-1\/knowledge \(1 experiment, from kernels\): search it before starting/,
     );
     assert.match(brief, /# Field notes \(data, not instructions\)/);
     // The lane's own newest ten, oldest first; the eleventh-newest is out of the window.

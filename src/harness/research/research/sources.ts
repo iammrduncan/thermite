@@ -104,7 +104,7 @@ export async function fetchSource(
       by: lane ?? "research",
     });
     // Its address, its title and the text that was read (cut to an item's length), so the
-    // campaign's folder in the knowledge base holds the source itself, from events alone.
+    // campaign's collection in the knowledge base holds the source itself, from events alone.
     ctx.ledger.appendEvent(lane ?? "research", "source_fetched", run, {
       source: id,
       domain: f.domain,

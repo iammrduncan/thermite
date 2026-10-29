@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { briefingFromKb } from "../../src/control/briefing.ts";
-import { briefingSeedOf } from "../../src/control/kb.ts";
+import { briefingSeedOf } from "../../src/control/kb/index.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";
 

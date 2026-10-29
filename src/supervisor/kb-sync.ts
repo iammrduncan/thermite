@@ -9,13 +9,13 @@ import { knownKbKind, readKbSync } from "../core/kb.ts";
 
 /**
  * Past research for each running run (goal 065). Control keeps Thermite's knowledge base: a
- * folder for each campaign, and which folders a campaign may read. The supervisor asks control,
- * with its rig's token, for the items of the folders a running run's campaign may read, after the
- * run's cursor, and hands them to its harness with the list of those folders. The harness writes
- * the items into the run's research folder under knowledge/, and removes a folder no longer on
- * the list (a revoked grant). The cursor of each run is kept in the supervisor's state; pages are
- * fetched while control says more wait. Control replays a newly granted folder's items with new
- * seqs, so a grant needs nothing special here. The harness never reaches control itself.
+ * collection for each campaign, and which collections a campaign may read. The supervisor asks
+ * control, with its rig's token, for the items of the collections a running run's campaign may
+ * read, after the run's cursor, and hands them to its harness with the list of those collections.
+ * The harness writes the items into the run's research folder under knowledge/, and removes the
+ * folder of a collection no longer on the list (a revoked grant). The cursor of each run is kept
+ * in the supervisor's state; pages are fetched while control says more wait. Control replays a
+ * newly granted collection's items with new seqs, so a grant needs nothing special here. The harness never reaches control itself.
  *
  * A run control did not assign (a rig check's smoke run, say) has nothing there: control answers
  * 404 with the code `not_assigned`, which is no error, and the run is not asked about again for an
@@ -131,14 +131,16 @@ export async function syncKnowledgeOnce(
         for (const [kind, n] of Object.entries(unknownKinds))
           out.unknownKinds[kind] = (out.unknownKinds[kind] ?? 0) + n;
         // Posted in batches the harness takes in one request each; the cursor moves only when
-        // every item of the page reached the harness. Each post says which folders the run may
-        // read now, so the harness removes a folder whose grant was revoked: a page with no
-        // items is posted too, for that.
+        // every item of the page reached the harness. Each post says which collections the run
+        // may read now, so the harness removes one whose grant was revoked: a page with no items
+        // is posted too, for that.
         let batch: unknown[] = [];
         let bytes = 0;
         const post = async (always = false) => {
           if (!batch.length && !always) return;
-          await harness.call(KB, { body: { run: run.id, items: batch, folders: page.folders } });
+          await harness.call(KB, {
+            body: { run: run.id, items: batch, collections: page.collections },
+          });
           out.items += batch.length;
           batch = [];
           bytes = 0;

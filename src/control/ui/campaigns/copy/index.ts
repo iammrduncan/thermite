@@ -191,7 +191,7 @@ export function copyDrawer(p: CopyPanel): string {
 <header><h3>Copy ${esc(p.campaign)}</h3><span class="grow"></span><a class="btn sm ghost" href="${href}" data-close>Close</a></header>
 <div class="drawer-body"><input type="hidden" name="csrf" value="${esc(p.csrf)}">
 ${p.error ? `<div class="card warn" data-c-error><b class="bad">Not copied.</b> ${esc(p.error)}</div>` : ""}
-<p class="cp-why">Copy it to start from zero: the copy gets its own empty folder in the knowledge base, so its runs read nothing that the runs of <b>${esc(p.campaign)}</b> recorded.</p>
+<p class="cp-why">Copy it to start from zero: the copy gets its own empty collection in the knowledge base, so its runs read nothing that the runs of <b>${esc(p.campaign)}</b> recorded.</p>
 <label class="sfd"><span class="lb">Name of the copy<i class="ii" tabindex="0" data-tip="${esc(`As on the New campaign page: ${NAME_WORDS}. No campaign can have it yet: not one with runs, a saved one, or a folder in the knowledge base. The copy's runs are named after it: name-1, name-2.`)}">i</i></span><input name="name" value="${esc(p.name)}" data-c-name required spellcheck="false" autocapitalize="off" maxlength="90">${
     // The name the panel offers is free; after a refusal, the card above says why not.
     p.error

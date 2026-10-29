@@ -17,14 +17,14 @@ podman compose --profile backup run --rm backup thermite backup /backups   # Pod
 
 | What | Where it is | How it is kept |
 | --- | --- | --- |
-| Control's state: `control.db`, its keys, the bus's certificate authority, the backup's key on the bus, the kits control keeps and the exports rigs send it | Control's state folder, `/var/lib/thermite-control`: the `control-state` volume under compose | `thermite backup` |
+| Control's state: `control.db`, its keys, the bus's certificate authority, the backup's key on the bus, the kits control keeps, the exports rigs send it and the knowledge base's files (`kb-files/`) | Control's state folder, `/var/lib/thermite-control`: the `control-state` volume under compose | `thermite backup` |
 | Every rig's events: the bus's `EVENTS` stream, which control's records are applied from | The bus's store, `/data` in the `nats` service: the `nats-data` volume | `thermite backup`, by the server's snapshot, after the store |
 | The secrets key, when control keeps it elsewhere (`THERMITE_CONTROL_SECRETS_KEY_FILE`) | Where you mounted it | By you, with each backup: without it, the sealed keys and sign-ins in `control.db` do not open |
 | The tokens | `.dev/secrets/` next to `compose.yaml`, or only their hashes in `.env` | By you: they are files you made |
 | Each rig's ledger: everything the rig recorded | The rig's harness state | A full export: [Keep a rig's ledger](#keep-a-rigs-ledger) |
 | The champions' code | The [results repository](results-repository.md), or control's exports | Your Git host; control's exports are in its backup |
 
-A backup leaves out what control makes again as it starts: the bus's other streams (`REPORTS`, an inbox whose pages a rig sends again; `COMMANDS`, which control publishes again from its store; `LIVE`, the newest live lines; `CONFIG`, which control writes again), the files it writes for the bus's server (`nats-config`), and its public files (`control-pub`).
+A backup leaves out what control makes again as it starts: the bus's other streams (`REPORTS`, an inbox whose pages a rig sends again; `COMMANDS`, which control publishes again from its store; `LIVE`, the newest live lines; `CONFIG`, which control writes again; `KB_FILES`, the knowledge base's files on their way: a file's chunks stay only until control keeps it in `kb-files/`, which a backup holds), the files it writes for the bus's server (`nats-config`), and its public files (`control-pub`).
 
 A backup holds control's signing key, its secrets key and the bus's certificate authority: whoever has it can act as control. Keep it as you keep control's state.
 
@@ -47,11 +47,12 @@ A backup holds control's signing key, its secrets key and the bus's certificate 
    It prints each step, and ends with the backup's folder:
 
    ```text
-   copied control.db: schema 13, 2539520 bytes
+   copied control.db: schema 14, 2539520 bytes
    copied kits/: 12 files
    copied exports/: 3 files
+   copied kb-files/: 5 files
    took EVENTS's snapshot: 48210 messages to 48210
-   backup: /backups/thermite-backup-2026-10-29T10-00-00-000Z (24 files, 1 streams)
+   backup: /backups/thermite-backup-2026-10-29T10-00-00-000Z (29 files, 1 streams)
    ```
 
    It copies the store first, whole while control writes to it, then takes the stream's snapshot. So control's place in the stream, which the backup's store holds, is at or before the stream's end, and control, started from the backup, applies what came between.

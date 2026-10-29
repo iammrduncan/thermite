@@ -72,7 +72,7 @@ A rig's supervisor asks control for its MCP servers on the same beat as its mode
 
 ## After the update from an outside knowledge base
 
-Before 0.1.0, control could keep an **outside knowledge base**: an MCP server it copied campaign folders to, and that a campaign's teachers could search. At the update to 0.1.0, control changed each one, once, when it first started:
+Before 0.1.0, control could keep an **outside knowledge base**: an MCP server it copied campaign collections to, and that a campaign's teachers could search. At the update to 0.1.0, control changed each one, once, when it first started:
 
 - It became an MCP server with a key: the header `Authorization`, with the value `Bearer` and its token. The token is kept. Its name became lowercase letters, digits and dashes (`team.brain` became `team-brain`).
 - Control stopped copying campaign folders to it. The pages it wrote there stay on the server.

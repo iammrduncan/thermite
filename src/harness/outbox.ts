@@ -29,7 +29,7 @@ export function runEvents(run: string): (e: { run: string | null }) => boolean {
  * into the shared outbox, and the supervisor pushes them to the results repository as packed
  * commits. An export holds patches and manifests for attempts recorded since the last export,
  * the events since then, the runs' field notes, research notes, briefings and prompts sent since
- * then, the runs' part of their campaigns' folders in the knowledge base that changed since then, a
+ * then, the runs' part of their campaigns' collections in the knowledge base that changed since then, a
  * consistent ledger snapshot, each new run champion as a patch against its seed (what other rigs
  * need to judge it themselves), and the research folder of each run that finished. A full export
  * also holds the research archive and the research folder of every run, finished or not.
@@ -185,7 +185,7 @@ export async function writeExport(input: {
       writeFileSync(join(tmp, PROMPTS_FILE), gzipSync(jsonl(prompts)));
       notesRel.push(PROMPTS_FILE);
     }
-    // The runs' part of their campaigns' folders (knowledge.jsonl): each item that an event
+    // The runs' part of their campaigns' collections (knowledge.jsonl): each item that an event
     // since the last export added or changed, as it stands now, with its origin, read as
     // control reads it into the knowledge base.
     const part = knowledgePart(ledger, input.rig, since, through).filter(

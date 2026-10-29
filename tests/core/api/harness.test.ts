@@ -87,7 +87,7 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
       [supervisor.ADVISORS, { auditor: true, review_panel: 0, writer: false }],
       [supervisor.EXPORTS_DONE, { names: ["20261020T120000Z-0123abcd"] }],
       [supervisor.MCP_EVENTS, { run: "smoke-1", server: "gbrain", ok: false, error: "it failed" }],
-      [supervisor.KB, { run: "smoke-1", items: [{ seq: 1 }], folders: ["smoke-matmul"] }],
+      [supervisor.KB, { run: "smoke-1", items: [{ seq: 1 }], collections: ["smoke-matmul"] }],
       [
         advisors.AUDITS,
         {

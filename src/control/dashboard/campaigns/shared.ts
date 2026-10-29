@@ -1,7 +1,7 @@
 import { parseContract } from "../../../core/contract.ts";
 import { type GoalChecks, goalChecks } from "../../../core/goal/index.ts";
 import { KitSchema } from "../../../core/kit.ts";
-import { type KbKind, PICKABLE } from "../../kb.ts";
+import { type KbKind, PICKABLE } from "../../kb/index.ts";
 import type { ChecksSource } from "../../ui/campaigns/goal-checks.ts";
 import { isRigCheck, workCard } from "../../ui/campaigns/list.ts";
 import { bestGainWords, icon, modeName, num, pct } from "../../ui/components/index.ts";
@@ -39,7 +39,7 @@ export const headline = (k: CampaignView): { value: string; sub: string; best?: 
 export const copiedBy = (by: string) =>
   by === "owner:operator" ? "the operator" : by === "owner" || by.startsWith("owner:") ? "you" : by;
 
-/** A campaign's mode in words, for folders: hill climb, goal, research or rig check. */
+/** A campaign's mode in words, for collections: hill climb, goal, research or rig check. */
 export const modeWords =
   (modes: Map<string, string | null>) =>
   (name: string): string =>
@@ -52,7 +52,7 @@ export const modeWords =
  */
 export function campaignHelpers(dash: Dashboard) {
   const { opts, pauseMenu, store } = dash;
-  /** Past research a new run of a campaign can start from: its readable folders' newest matches. */
+  /** Past research a new run of a campaign can start from: its readable collections' newest matches. */
   const pastResults = (campaign: string, q: string) => {
     const kb = store.kb();
     return kb.search(q, kb.readable(campaign), {

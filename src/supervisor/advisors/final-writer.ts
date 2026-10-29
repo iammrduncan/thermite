@@ -46,7 +46,7 @@ const WriterAnswerSchema = Type.Object({
     }),
     {
       description:
-        "The paper's next experiments, as items: each one becomes an experiment in the campaign's knowledge-base folder",
+        "The paper's next experiments, as items: each one becomes an experiment in the campaign's collection in the knowledge base",
     },
   ),
 });

@@ -1,21 +1,24 @@
-import type { BriefingSeed, QueueSeed } from "../core/commands.ts";
-import { RunId } from "../core/ids.ts";
-import type { KbKind } from "../core/kb.ts";
-import { clip } from "../core/kb-index.ts";
+import type { BriefingSeed, QueueSeed } from "../../core/commands.ts";
+import { RunId } from "../../core/ids.ts";
+import type { KbItemFile, KbKind } from "../../core/kb.ts";
+import { clip } from "../../core/kb-index.ts";
 
 /**
- * Thermite's own knowledge base (goal 065): one folder for each campaign, built from what its
- * runs report. Control indexes the rigs' events as they arrive (core/kb-index.ts reads each):
- * the runs, the trials, the agents' field notes and research notes, the documents lanes wrote,
- * the experiments with their results, attempts with their verdicts, sources with their text,
- * claims, findings and reports, each with its run, who wrote it and when. A campaign reads its
- * own folder and, when the owner grants it, other campaigns' folders. Agents only read folders;
- * the folders are written from the rigs' signed events alone.
+ * Thermite's own knowledge base (goals 065 and 175), on control: one collection for each
+ * campaign, a collection's runs, a run's slots (one for each writer), a slot's items and their
+ * versions. Thermite's code writes each run's records slot from the rigs' signed events as they
+ * arrive (core/kb-index.ts reads each): the runs, the trials, the agents' field notes and research
+ * notes, the documents lanes wrote, the experiments with their results, attempts with their
+ * verdicts, sources with their text, claims, findings and reports, each with its run, who wrote it
+ * and when. An agent writes only its own slot, with a `kb_item` event its harness signs. A
+ * campaign reads its own collection and, when the owner grants it, other campaigns' collections.
  *
- * Its items, runs, grants and cursor are kept by the store's knowledge base (store/kb.ts).
+ * Its collections, items, versions, runs, grants, scopes, files and cursor are kept by the store's
+ * knowledge base (store/kb/); the files themselves in control's state (files.ts).
  */
 
-export type { KbKind } from "../core/kb.ts";
+export type { KbKind } from "../../core/kb.ts";
+export { followKbFiles, KbFiles } from "./files.ts";
 
 /** The field notes' kinds (journal_note); a research note is a note of kind "note". */
 export const JOURNAL_KINDS = ["observation", "decision", "surprise", "question", "lesson"] as const;
@@ -29,9 +32,13 @@ export interface KbItem {
   /** The rig's ledger the item came from (a reset starts a new one; items never mix). */
   ledger: string;
   run: string;
+  /** Its writer's slot in the run: records (Thermite's code), or an agent's role and lane. */
+  slot: string;
   kind: KbKind;
-  /** The item's id in its run (an experiment, an attempt, a claim, a note's number). */
+  /** The item's id in its slot (an experiment, an attempt, a claim, a note's number). */
   ref: string;
+  /** Its newest version; the older ones stay. */
+  version: number;
   title: string;
   body: string;
   /** Who wrote it: a lane, the planner, an advisor, the judge, the owner. */
@@ -41,12 +48,14 @@ export interface KbItem {
   sub: string | null;
   /** Fields kept apart: an experiment's details, why and direction. */
   meta: Record<string, string>;
+  /** A file item's file, by its SHA-256; null for a blurb. */
+  file: KbItemFile | null;
   at: string;
   updated_at: string;
 }
 
-/** One campaign's folder: its items by kind, its runs, its newest change and its grants. */
-export interface KbFolder {
+/** One campaign's collection: its items by kind, its runs, its newest change and its grants. */
+export interface KbCollection {
   campaign: string;
   counts: Partial<Record<KbKind, number>>;
   /** Of the notes, how many are field notes (observations, decisions, …), not research notes. */
@@ -54,9 +63,9 @@ export interface KbFolder {
   items: number;
   runs: number;
   updated_at: string;
-  /** The campaigns granted to read this folder. */
+  /** The campaigns granted to read this collection. */
   read_by: string[];
-  /** The folders this campaign reads besides its own. */
+  /** The collections this campaign reads besides its own. */
   reads: string[];
 }
 

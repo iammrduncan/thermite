@@ -67,8 +67,8 @@ kind is hill_climb for an improvement that a hill climb measures against its cha
 the metric it should move, and which way), or goal for an outcome that a goal campaign proves (its
 measure: how a check would know the goal is reached). In the part on future work, put each one
 under "### For a hill climb" or "### For a goal campaign", as its kind says. Code keeps each item,
-tagged with its kind, in the campaign's knowledge-base folder and in the run's research folder, for
-the next campaign to take up.
+tagged with its kind, in the campaign's collection in the knowledge base and in the run's research
+folder, for the next campaign to take up.
 
 Before you answer, check your draft: check_paper runs the harness's checks, and ste_check runs the
 rig's STE checker. Fix each problem. Then call answer with paper and experiments. When the package

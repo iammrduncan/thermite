@@ -17,7 +17,7 @@ function recording(answer: unknown) {
 
 test("control's client: a rig's routes as that rig, with this build's version and a time limit", async () => {
   assert.equal(CONTROL_CALL_TIMEOUT_MS, 5 * 60_000);
-  const r = recording({ campaign: "c", folders: [], items: [], next: 0, more: false });
+  const r = recording({ campaign: "c", collections: [], items: [], next: 0, more: false });
   const control = controlClient({
     url: "http://control/",
     token: "rig-token",

@@ -4,6 +4,7 @@ import { RIG_ID } from "../ids.ts";
 import { COMMAND_STREAM, commandConsumerName, commandSubject } from "./commands.ts";
 import { CONFIG_STREAM, configConsumerConfig, configConsumerName } from "./config.ts";
 import { EVENT_STREAM } from "./events.ts";
+import { kbFileSubject } from "./kb-files.ts";
 import { LIVE_RUNS_PER_RIG, liveSubject, rigLiveSubject } from "./live.ts";
 import { reportSubject } from "./report.ts";
 
@@ -76,7 +77,9 @@ const anySource = (subject: string) => subject.replace(/\.[^.]+$/, ".*");
  * again, read and take from its own consumer of its config keys, and ack what it took. The server
  * checks that a consumer it makes takes the rig's own subjects alone: the subject names the
  * consumer's filter. A run whose name a subject can't hold has no subject of its own. Nothing on
- * the events stream: control publishes a rig's events there, from its reports.
+ * the events stream: control publishes a rig's events there, from its reports. It may put the
+ * knowledge base's files on its own subjects of the `KB_FILES` stream, and may not read that
+ * stream or remove from it (kb-files.ts).
  */
 export function rigPermissions(rig: string, runs: readonly string[] = []): Permissions {
   const consumer = `${COMMAND_STREAM}.${commandConsumerName(rig)}`;
@@ -101,6 +104,7 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
         `${API}.CONSUMER.DELETE.${config}`,
         `${API}.CONSUMER.MSG.NEXT.${config}`,
         `$JS.ACK.${config}.>`,
+        kbFileSubject(rig, "*"),
       ],
     },
     subscribe: { allow: [`${rigInboxPrefix(rig)}.>`] },

@@ -1,5 +1,5 @@
 import { log } from "../common/env.ts";
-import { briefingSeedOf } from "./kb.ts";
+import { briefingSeedOf } from "./kb/index.ts";
 import type { ControlStore } from "./store/index.ts";
 
 /**

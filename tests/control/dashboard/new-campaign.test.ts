@@ -254,7 +254,7 @@ describe("the new-campaign page", () => {
     const note = /<div class="nc-does" id="nc-past">([\s\S]*?)<\/div>/.exec(page)?.[1] ?? "";
     assert.match(note, /<a href="\/ui\/knowledge">Thermite's knowledge base<\/a>/);
     assert.match(note, /press <b>Save without starting<\/b>/);
-    assert.match(note, /add folders under <b>Can read from<\/b>/);
+    assert.match(note, /add collections under <b>Can read from<\/b>/);
     assert.match(note, /press <b>Start a run<\/b> and pick items under <b>From past research<\/b>/);
     // Saved without starting: the campaign's page has both, as the note says.
     const res = await s.post("/ui/campaigns/new", {

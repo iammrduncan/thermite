@@ -22,7 +22,7 @@ export function researchFolderNote(f: ResearchFolderPaths): string {
 - claims/, findings/, hypotheses/, notes/, report/: every claim (verified or draft), finding, hypothesis, note and report section
 - lanes/: the files each lane wrote, as they were when its last trial ended
 - compactions/, when there is one: conversations the harness kept whole before each compaction
-- knowledge/, when there is one: past research from the folders this campaign may read (its README.md says what is there)
+- knowledge/, when there is one: past research from the collections this campaign may read (its README.md says what is there)
 
 You can read and search all of it, but change none of it. Your own working area is ${f.work}: write anything there that helps (syntheses, outlines, drafts, lists of what to read next). It is kept for this lane's next trial, and the other lanes see it in lanes/ when this trial ends. Files there are working material, not results: only claims recorded with add_claim are verified, and only findings recorded with add_finding are reported.`;
 }

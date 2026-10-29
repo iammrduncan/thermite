@@ -79,6 +79,7 @@ export const EVENT_KINDS = [
   "job_queued",
   "job_unblocked",
   "journal_note",
+  "kb_item",
   "lane_best",
   "mcp_server_back",
   "mcp_server_failed",

@@ -83,7 +83,7 @@ export interface Published {
  */
 export interface Outgoing {
   subject: string;
-  data: string;
+  data: string | Uint8Array;
   id?: string | undefined;
   headers?: Record<string, string> | undefined;
 }
@@ -173,7 +173,7 @@ export interface Bus {
    */
   publish(
     subject: string,
-    data: string,
+    data: string | Uint8Array,
     o: { id: string; headers?: Record<string, string> | undefined },
   ): Promise<Published>;
   /**

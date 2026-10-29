@@ -1,6 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import { transaction } from "../../../common/sqlite.ts";
-import type { KbItemWire, KbKind, KbSync } from "../../../core/kb.ts";
+import {
+  KB_RECORDS,
+  type KbItemBody,
+  type KbItemWire,
+  type KbKind,
+  type KbSync,
+  writtenRef,
+} from "../../../core/kb.ts";
 import {
   indexEvent,
   type KbFields,
@@ -12,14 +19,22 @@ import {
   str,
 } from "../../../core/kb-index.ts";
 import { eventKinds } from "../../../core/names.ts";
-import { JOURNAL_KINDS, type KbFolder, type KbItem, SYNC_PAGE } from "../../kb.ts";
-import { KB_SCHEMA } from "./schema.ts";
+import { JOURNAL_KINDS, type KbCollection, type KbItem, SYNC_PAGE } from "../../kb/index.ts";
+import { type KbVersion, keepVersion, versionRefusal, versionsOf, writtenFields } from "./items.ts";
+import { knowledgeHierarchy } from "./schema.ts";
+import { type KbScope, keepScope, scopeOf } from "./scope.ts";
+
+export type { KbVersion } from "./items.ts";
+export { knowledgeHierarchy } from "./schema.ts";
+export type { KbScope } from "./scope.ts";
 
 /**
- * The knowledge base's tables in control's store (goal 065; goal 125, T6): each campaign's items
- * and runs, the grants to read other folders, and its cursors (kb_cursor in schema.ts). The apply
- * of the events stream feeds it (control/events). What the knowledge base is, and its items'
- * shape, are in kb.ts.
+ * The knowledge base's tables in control's store (goals 065, 125 and 175): one collection for each
+ * campaign, its runs, each run's slots and their items with every version, the files the items
+ * name, the grants to read other collections, a run's scope, the words index, and its cursors
+ * (store/kb/schema.ts). The apply of the events stream feeds it (control/events): Thermite's
+ * reading of each event into the records slot of its run, and each writer's `kb_item` event into
+ * the writer's own slot. What the knowledge base is, and its items' shape, are in control/kb/.
  */
 
 type Row = Record<string, unknown>;
@@ -61,7 +76,9 @@ export class KnowledgeBase {
 
   constructor(db: DatabaseSync) {
     this.db = db;
-    db.exec(KB_SCHEMA);
+    // Store migration 14 runs it; a store that waits at an older version for the move of its
+    // events table has its hierarchy here, before the apply writes its first item.
+    transaction(db, () => knowledgeHierarchy(db));
   }
 
   /** Runs fn in one transaction: all of it is kept, or none of it. */
@@ -90,11 +107,11 @@ export class KnowledgeBase {
   }
 
   /**
-   * One event of a rig's ledger into the folder of its run's campaign (core/kb-index.ts reads
-   * it). The apply of the events stream hands each event here, in the stream's order, so each
-   * ledger's events come while it is the rig's: a rig's report from a ledger it has left is
-   * refused. `again`: an event read again after an upgrade (kindsToReadAgain), whose run, filed
-   * already, stays in its folder.
+   * One event of a rig's ledger into the records slot of its run, in its campaign's collection
+   * (core/kb-index.ts reads it). The apply of the events stream hands each event here, in the
+   * stream's order, so each ledger's events come while it is the rig's: a rig's report from a
+   * ledger it has left is refused. `again`: an event read again after an upgrade
+   * (kindsToReadAgain), whose run, filed already, stays in its collection.
    */
   index(
     src: { rig: string; ledger: string },
@@ -179,8 +196,9 @@ export class KnowledgeBase {
   }
 
   /**
-   * Where one rig ledger's events put their items: the folder control files each run in.
-   * `keepRuns`: a run filed already stays in its folder (reading old events again).
+   * Where one rig ledger's events put their items: the records slot of each run, in the collection
+   * control files the run in. `keepRuns`: a run filed already stays in its collection (reading old
+   * events again).
    */
   private target(
     src: { rig: string; ledger: string },
@@ -195,17 +213,18 @@ export class KnowledgeBase {
         if (o.keepRuns && this.campaignOf(rig, ledger, run)) return;
         const assigned = this.assigned(rig, run);
         const campaign = assigned ?? (named && !this.assignedAnywhere(named) ? named : "");
-        if (campaign)
-          this.db
-            .prepare(
-              "insert into kb_run (rig, ledger, run, campaign) values (?, ?, ?, ?) on conflict(rig, ledger, run) do update set campaign = excluded.campaign",
-            )
-            .run(rig, ledger, run, campaign);
+        if (!campaign) return;
+        this.makeCollection(campaign);
+        this.db
+          .prepare(
+            "insert into kb_run (rig, ledger, run, campaign) values (?, ?, ?, ?) on conflict(rig, ledger, run) do update set campaign = excluded.campaign",
+          )
+          .run(rig, ledger, run, campaign);
       },
       item: (run, kind, ref) => {
         const r = this.db
           .prepare(
-            "select body, meta from kb_item where rig = ? and ledger = ? and run = ? and kind = ? and ref = ?",
+            "select body, meta from kb_item where rig = ? and ledger = ? and run = ? and slot = 'records' and kind = ? and ref = ?",
           )
           .get(rig, ledger, run, kind, ref) as { body: string; meta: string } | undefined;
         return r && { body: r.body, meta: metaOf(r.meta) };
@@ -213,7 +232,7 @@ export class KnowledgeBase {
       attempt: (ref) => {
         const r = this.db
           .prepare(
-            "select run, body, meta from kb_item where rig = ? and ledger = ? and kind = 'attempt' and ref = ?",
+            "select run, body, meta from kb_item where rig = ? and ledger = ? and slot = 'records' and kind = 'attempt' and ref = ?",
           )
           .get(rig, ledger, ref) as { run: string; body: string; meta: string } | undefined;
         return r && { run: r.run, body: r.body, meta: metaOf(r.meta) };
@@ -235,7 +254,7 @@ export class KnowledgeBase {
     if (!campaign || !ref) return;
     const row = this.db
       .prepare(
-        "select title, body, by, url, sub, meta from kb_item where rig = ? and ledger = ? and run = ? and kind = ? and ref = ?",
+        "select title, body, by, url, sub, meta from kb_item where rig = ? and ledger = ? and run = ? and slot = 'records' and kind = ? and ref = ?",
       )
       .get(rig, ledger, run, kind, ref) as Row | undefined;
     const old: KbStored | undefined = row
@@ -251,35 +270,84 @@ export class KnowledgeBase {
     const next = mergeItem(ref, old, f);
     // Nothing changed: the item keeps its seq, so no rig syncs it again.
     if (old && sameItem(old, next)) return;
-    this.db
-      .prepare(
-        `insert into kb_item (seq, campaign, rig, ledger, run, kind, ref, title, body, by, url, sub, meta, at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         on conflict(rig, ledger, run, kind, ref) do update set seq = excluded.seq,
-           title = excluded.title, body = excluded.body, by = excluded.by, url = excluded.url,
-           sub = excluded.sub, meta = excluded.meta, updated_at = excluded.updated_at`,
-      )
-      .run(
-        this.nextSeq(),
-        campaign,
-        rig,
-        ledger,
-        run,
-        kind,
-        ref,
-        next.title,
-        next.body,
-        next.by,
-        next.url,
-        next.sub,
-        next.meta,
-        at,
-        at,
-      );
+    // A change is the item's next version: the one before stays.
+    const place = { campaign, rig, ledger, run, slot: KB_RECORDS, kind, ref };
+    keepVersion(this.db, this.nextSeq(), place, next, { at });
   }
 
-  /** Every campaign folder (also one with runs and no items yet), newest change first. */
-  folders(): KbFolder[] {
+  /**
+   * One writer's `kb_item` event, in its writer's slot of the event's run, in the collection
+   * control filed the run in: a new item, or the next version of the writer's own item. The
+   * caller checked that the run is the rig's and that the slot is the event's writer's
+   * (control/events/knowledge.ts). Undefined once stored; else why it is refused, in words. In
+   * the caller's transaction.
+   */
+  write(
+    src: { rig: string; ledger: string; run: string; event: number; at: string },
+    b: KbItemBody,
+  ): string | undefined {
+    const { rig, ledger, run } = src;
+    const campaign = this.campaignOf(rig, ledger, run);
+    if (!campaign)
+      return `run ${run} has no collection: control filed it under no campaign of its own`;
+    const refused = versionRefusal(this.db, src, b);
+    if (refused) return refused;
+    const place = {
+      campaign,
+      rig,
+      ledger,
+      run,
+      slot: b.slot,
+      kind: b.kind,
+      ref: writtenRef(b.slot, b.item),
+    };
+    const links = b.links.map((l) => ({ rel: l.rel, to: l.to }));
+    keepVersion(this.db, this.nextSeq(), place, writtenFields(b), {
+      at: src.at,
+      event: src.event,
+      links,
+    });
+    return undefined;
+  }
+
+  /** A campaign's collection, made with the campaign; nothing when it has one. */
+  makeCollection(campaign: string, at = new Date().toISOString()): void {
+    this.db
+      .prepare("insert into kb_collection (campaign, made_at) values (?, ?) on conflict do nothing")
+      .run(campaign, at);
+  }
+
+  /** Every version of an item, oldest first, each with its links. */
+  versions(id: number): KbVersion[] {
+    return versionsOf(this.db, id);
+  }
+
+  /** Whether control holds the file with this SHA-256 (control/kb/files.ts keeps it). */
+  hasFile(sha256: string): boolean {
+    return this.db.prepare("select 1 from kb_file where sha256 = ?").get(sha256) !== undefined;
+  }
+
+  /** A file control now holds, once: every item that names its SHA-256 has it from now on. */
+  fileKept(sha256: string, bytes: number, at = new Date().toISOString()): void {
+    this.db
+      .prepare(
+        "insert into kb_file (sha256, bytes, stored_at) values (?, ?, ?) on conflict do nothing",
+      )
+      .run(sha256, bytes, at);
+  }
+
+  /** What a run reads: its scope (scope.ts), never past what its campaign may read. */
+  scope(campaign: string, run: string): KbScope {
+    return scopeOf(this.db, this.reads(campaign), campaign, run);
+  }
+
+  /** Sets what a run reads (scope.ts); throws, in words, on a collection not granted. */
+  setScope(campaign: string, run: string, s: KbScope, by: string): void {
+    keepScope(this.db, this.reads(campaign), { campaign, run, ...s }, by);
+  }
+
+  /** Every campaign's collection (also one with no runs or items yet), newest change first. */
+  collections(): KbCollection[] {
     const rows = this.db
       .prepare(
         `select campaign, kind, count(*) as n, max(updated_at) as at,
@@ -287,9 +355,11 @@ export class KnowledgeBase {
          from kb_item group by campaign, kind`,
       )
       .all(...JOURNAL_KINDS) as Row[];
-    type Sum = Pick<KbFolder, "counts" | "items" | "journal" | "updated_at">;
+    type Sum = Pick<KbCollection, "counts" | "items" | "journal" | "updated_at">;
     const by = new Map<string, Sum>();
     const empty = (): Sum => ({ counts: {}, items: 0, journal: 0, updated_at: "" });
+    for (const r of this.db.prepare("select campaign from kb_collection").all() as Row[])
+      by.set(str(r.campaign), empty());
     for (const r of rows) {
       const c = str(r.campaign);
       const f = by.get(c) ?? empty();
@@ -319,8 +389,8 @@ export class KnowledgeBase {
       );
   }
 
-  /** One campaign's folder (empty when nothing of it is indexed yet). */
-  folder(campaign: string, all = this.folders()): KbFolder {
+  /** One campaign's collection (empty when nothing of it is stored yet). */
+  collection(campaign: string, all = this.collections()): KbCollection {
     return (
       all.find((f) => f.campaign === campaign) ?? {
         campaign,
@@ -335,7 +405,7 @@ export class KnowledgeBase {
     );
   }
 
-  /** The folders a campaign reads besides its own. */
+  /** The collections a campaign reads besides its own: its grants. */
   reads(campaign: string): string[] {
     return (
       this.db
@@ -344,12 +414,12 @@ export class KnowledgeBase {
     ).map((r) => str(r.reads));
   }
 
-  /** The campaign folders a campaign's agents may read: its own first, then those granted. */
+  /** The collections a campaign's agents may read: its own first, then those granted. */
   readable(campaign: string): string[] {
     return [campaign, ...this.reads(campaign).filter((f) => f !== campaign)];
   }
 
-  /** The campaigns granted to read this one's folder. */
+  /** The campaigns granted to read this one's collection. */
   readBy(campaign: string): string[] {
     return (
       this.db
@@ -368,8 +438,9 @@ export class KnowledgeBase {
   }
 
   /**
-   * Lets a campaign read another folder. Its runs at work receive the folder's items at their
-   * next sync, with seqs given now. False: nothing changed (already granted, or its own folder).
+   * Lets a campaign read another's collection, read only. Its runs at work receive the collection's
+   * items at their next sync, with seqs given now. False: nothing changed (already granted, or its
+   * own collection).
    */
   grant(campaign: string, reads: string, by: string): boolean {
     if (!campaign || !reads || campaign === reads) return false;
@@ -419,7 +490,7 @@ export class KnowledgeBase {
     });
   }
 
-  /** Every word in the title or text, newest first; within the given folders only. */
+  /** Every word in the title or text, newest first; within the given collections only. */
   search(
     q: string,
     campaigns: string[],
@@ -450,7 +521,7 @@ export class KnowledgeBase {
     return rows.map(itemOf);
   }
 
-  /** How many items of each kind one run put in its folder (field notes apart). */
+  /** How many items of each kind one run put in its collection (field notes apart). */
   runCounts(
     rig: string,
     ledger: string,
@@ -488,14 +559,14 @@ export class KnowledgeBase {
   }): KbItem | undefined {
     const rows = this.db
       .prepare(
-        `select * from kb_item where campaign = ? and run = ? and kind = ? and ref = ?${o.rig ? " and rig = ?" : ""} limit 2`,
+        `select * from kb_item where campaign = ? and run = ? and slot = 'records' and kind = ? and ref = ?${o.rig ? " and rig = ?" : ""} limit 2`,
       )
       .all(o.campaign, o.run, o.kind, o.ref, ...(o.rig ? [o.rig] : [])) as Row[];
     // Two rigs may each have run a run of this name: without its rig, which one is not known.
     return rows.length === 1 && rows[0] ? itemOf(rows[0]) : undefined;
   }
 
-  /** An experiment's result in words, with its attempt's verdict when the folder has it. */
+  /** An experiment's result in words, with its attempt's verdict when the collection has it. */
   resultOf(x: KbItem): string | null {
     if (x.kind !== "experiment") return null;
     const m = /(?:^|\n)(Result|Dropped): (.*)$/s.exec(x.body);
@@ -507,7 +578,7 @@ export class KnowledgeBase {
             (
               this.db
                 .prepare(
-                  "select body from kb_item where rig = ? and ledger = ? and kind = 'attempt' and ref = ?",
+                  "select body from kb_item where rig = ? and ledger = ? and slot = 'records' and kind = 'attempt' and ref = ?",
                 )
                 .get(x.rig, x.ledger, attempt) as { body?: string } | undefined
             )?.body,
@@ -517,7 +588,7 @@ export class KnowledgeBase {
     return `${m[1] === "Dropped" ? "dropped" : "tried"}: ${m[2]}${verdict ? `, ${verdict.replace(/_/g, " ")}` : ""}`;
   }
 
-  /** Items of the given folders changed after a seq, in seq order. */
+  /** Items of the given collections changed after a seq, in seq order. */
   changedAfter(campaigns: string[], after: number, limit = SYNC_PAGE): KbItem[] {
     if (!campaigns.length) return [];
     return (
@@ -540,8 +611,8 @@ export class KnowledgeBase {
   }
 
   /**
-   * What a run's supervisor syncs into the run's knowledge/ folder: the items of the folders its
-   * campaign may read, changed after `after`, in seq order, at most SYNC_PAGE at once, without
+   * What a run's supervisor syncs into the run's knowledge/ folder: the items of the collections
+   * its campaign may read, changed after `after`, in seq order, at most SYNC_PAGE at once, without
    * the run's own items (it has them). Undefined: the rig has no such run in its current ledger.
    * A grant's copy of an item comes only to a cursor already past the item's own seq; a run that
    * pages through both may still get an item twice, and keeps the newer.
@@ -554,15 +625,15 @@ export class KnowledgeBase {
     )?.ledger_id;
     const campaign = ledger ? this.campaignOf(rig, ledger, run) : undefined;
     if (!ledger || !campaign) return undefined;
-    const folders = this.readable(campaign);
-    const granted = folders.slice(1);
+    const collections = this.readable(campaign);
+    const granted = collections.slice(1);
     const marks = (xs: string[]) => xs.map(() => "?").join(", ");
     const notOwn = "not (i.rig = ? and i.ledger = ? and i.run = ?)";
     const own = [rig, ledger, run];
     const rows = this.db
       .prepare(
         `select i.*, i.seq as s from kb_item i
-         where i.campaign in (${marks(folders)}) and i.seq > ? and ${notOwn}
+         where i.campaign in (${marks(collections)}) and i.seq > ? and ${notOwn}
          ${
            granted.length
              ? `union all
@@ -574,7 +645,7 @@ export class KnowledgeBase {
          order by s limit ?`,
       )
       .all(
-        ...folders,
+        ...collections,
         after,
         ...own,
         ...(granted.length ? [campaign, ...granted, after, after, ...own] : []),
@@ -601,7 +672,7 @@ export class KnowledgeBase {
     });
     return {
       campaign,
-      folders,
+      collections,
       items,
       next: items.at(-1)?.seq ?? after,
       more: rows.length > limit,
@@ -627,14 +698,24 @@ function itemOf(r: Row): KbItem {
     rig: str(r.rig),
     ledger: str(r.ledger),
     run: str(r.run),
+    slot: str(r.slot) || KB_RECORDS,
     kind: str(r.kind) as KbKind,
     ref: str(r.ref),
+    version: Number(r.version ?? 1),
     title: str(r.title),
     body: str(r.body),
     by: str(r.by),
     url: r.url ? str(r.url) : null,
     sub: r.sub ? str(r.sub) : null,
     meta,
+    file: r.file_sha256
+      ? {
+          sha256: str(r.file_sha256),
+          name: str(r.file_name),
+          type: str(r.file_type),
+          bytes: Number(r.file_bytes ?? 0),
+        }
+      : null,
     at: str(r.at),
     updated_at: str(r.updated_at),
   };

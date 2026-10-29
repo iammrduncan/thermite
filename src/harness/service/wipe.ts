@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { z } from "zod";
 import { Refusal } from "../../common/errors.ts";
 import type { CommandPayloads } from "../../core/commands.ts";
+import { KB_OUTBOX_FILES } from "../../core/kb.ts";
 import type { HarnessPaths, HarnessService } from "./index.ts";
 
 /** A full reset's wipe: the command that asks for it, and the wipe at the next start. */
@@ -38,9 +39,11 @@ export function wipeIfRequested(paths: HarnessPaths, keep: string[]): boolean {
     }
     remove(join(paths.stateDir, name));
   }
-  // Scratch, and the outbox: its exports reached the results repository before the wipe.
+  // Scratch, and the outbox: its exports reached the results repository before the wipe. The
+  // knowledge base's files stay, for the supervisor to put on the bus (goal 175).
   for (const dir of [paths.scratchDir, paths.outboxDir]) {
-    for (const name of existsSync(dir) ? readdirSync(dir) : []) remove(join(dir, name));
+    for (const name of existsSync(dir) ? readdirSync(dir) : [])
+      if (!(dir === paths.outboxDir && name === KB_OUTBOX_FILES)) remove(join(dir, name));
   }
   mkdirSync(join(paths.stateDir, "ledger"), { recursive: true });
   writeFileSync(join(paths.stateDir, "ledger", NOT_BEFORE_FILE), notBeforeOf(marker));

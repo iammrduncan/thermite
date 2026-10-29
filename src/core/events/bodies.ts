@@ -2,6 +2,7 @@ import type { AdvisorRole, Harness, MessageHow } from "../agents.ts";
 import type { Mode } from "../contract.ts";
 import type { GoalCellValues, GoalCheck } from "../goal/index.ts";
 import type { HeldOutCell } from "../held-out.ts";
+import type { KbItemBody } from "../kb.ts";
 import type { AgentPromptBody } from "../prompts.ts";
 import type { RigSettings } from "../rig-settings.ts";
 import type { EventKind } from "./kinds.ts";
@@ -617,6 +618,8 @@ export interface EventBodies {
     open: { questions: number[]; hypotheses: string[] };
   };
   research_paper_requested: { review: number; figures: unknown; end: string };
+  /** One version of one item in its writer's slot of the knowledge base (core/kb.ts). */
+  kb_item: KbItemBody;
   research_paper_refused: {
     review: number;
     writer: string;

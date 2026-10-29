@@ -25,6 +25,8 @@ export interface Kept {
   /** Its id; none for a message published without one. */
   id: string | undefined;
   data: string;
+  /** Its data as bytes, for a message published as bytes (a file's chunk): `data` is empty then. */
+  bytes?: Uint8Array | undefined;
   headers: Record<string, string>;
   /** When the stream stored it. */
   at?: string | undefined;
@@ -224,13 +226,15 @@ export class FakeBus
     if (m.id !== undefined) ids.add(m.id);
     const seq = this.lastOf(stream) + 1;
     this.seqs.set(stream, seq);
-    const { subject, id, data } = m;
+    const { subject, id } = m;
+    const bytes = typeof m.data === "string" ? undefined : m.data;
     this.kept.push({
       stream,
       subject,
       seq,
       id,
-      data,
+      data: typeof m.data === "string" ? m.data : "",
+      ...(bytes ? { bytes } : {}),
       headers: m.headers ?? {},
       at: new Date().toISOString(),
     });
@@ -243,7 +247,7 @@ export class FakeBus
 
   async publish(
     subject: string,
-    data: string,
+    data: string | Uint8Array,
     o: { id: string; headers?: Record<string, string> | undefined },
   ): Promise<Published> {
     await this.hold;
@@ -314,7 +318,7 @@ export class FakeBus
     );
     let bytes = 0;
     for (const [i, m] of on.entries()) {
-      bytes += Buffer.byteLength(m.data);
+      bytes += m.bytes?.length ?? Buffer.byteLength(m.data);
       out.next = m.seq + 1;
       const message = asMessage(m);
       if (Object.entries(o.headers ?? {}).every(([k, v]) => message.header(k) === v))
@@ -365,7 +369,7 @@ export class FakeBus
         {
           name,
           messages: kept.length,
-          bytes: kept.reduce((n, m) => n + Buffer.byteLength(m.data), 0),
+          bytes: kept.reduce((n, m) => n + (m.bytes?.length ?? Buffer.byteLength(m.data)), 0),
           subjects: new Set(kept.map((m) => m.subject)).size,
           first_at: null,
           last_at: null,
@@ -432,7 +436,7 @@ export function asMessage(m: Kept): BusMessage {
   return {
     subject: m.subject,
     seq: m.seq,
-    data: new TextEncoder().encode(m.data),
+    data: m.bytes ?? new TextEncoder().encode(m.data),
     header: (name) => headers[name],
     at: m.at,
   };

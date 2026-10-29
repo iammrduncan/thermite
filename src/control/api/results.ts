@@ -23,8 +23,8 @@ export function resultRoutes(
 ): void {
   const { store, privateKeyPem, opts, admin, rigAuth } = api;
 
-  // Past research for a run's agents (goal 065): the items of the folders the run's campaign may
-  // read, after the supervisor's cursor. Only the rig's own runs; never a folder not granted.
+  // Past research for a run's agents (goal 065): the items of the collections the run's campaign
+  // may read, after the supervisor's cursor. Only the rig's own runs; never a collection not granted.
   app.get(KB.path, rigAuth, (c) => {
     c.header("cache-control", "no-store");
     const run = c.req.query("run") ?? "";
@@ -33,7 +33,7 @@ export function resultRoutes(
     if (!Number.isSafeInteger(after) || after < 0)
       return c.json({ error: "after is a whole number from 0" }, 400);
     // Only a run control assigned to this rig, of the campaign control assigned: a rig cannot
-    // read another campaign's folders by naming it in its own events.
+    // read another campaign's collections by naming it in its own events.
     const assigned = store.runRegistry.assignedCampaigns(c.req.param("rig")).get(run);
     if (!assigned) {
       const error = `control did not assign run ${run} to this rig`;
