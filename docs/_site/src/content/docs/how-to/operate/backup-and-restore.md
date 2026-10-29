@@ -37,7 +37,14 @@ A backup holds control's signing key, its secrets key and the bus's certificate 
 
 ## Back up control
 
-1. Run the backup. Control may go on running.
+1. From the source code, build the backup service's image after each update: it is in a profile of its own, which `up --build` neither starts nor builds. A release's compose file runs control's own image, and needs no build.
+
+   ```sh
+   docker compose --profile backup build backup   # Docker
+   podman compose --profile backup build backup   # Podman
+   ```
+
+2. Run the backup. Control may go on running.
 
    ```sh
    docker compose --profile backup run --rm backup thermite backup /backups   # Docker
@@ -56,7 +63,7 @@ A backup holds control's signing key, its secrets key and the bus's certificate 
    ```
 
    It copies the store first, whole while control writes to it, then takes the stream's snapshot. So control's place in the stream, which the backup's store holds, is at or before the stream's end, and control, started from the backup, applies what came between.
-2. Copy the folder off this machine, for example as one file:
+3. Copy the folder off this machine, for example as one file:
 
    ```sh
    tar -C .dev/backups -czf thermite-backup-2026-10-29.tgz thermite-backup-2026-10-29T10-00-00-000Z

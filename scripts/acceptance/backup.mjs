@@ -89,6 +89,9 @@ const env = prepare();
 const made = [];
 console.log("compose: build and start");
 stack("up", "-d", "--build");
+// The backup service is in its own profile, which `up` neither starts nor builds: build it here,
+// so that it runs this code and not an image left from before.
+stack("--profile", "backup", "build", "backup");
 try {
   await healthy();
   await assign(env, "smoke-1");
