@@ -1,28 +1,36 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
-import { KB_ITEM, KB_SEARCH, PROPAGATE } from "../../core/api/control/owner.ts";
+import { KB_ITEM, KB_LIST, KB_SEARCH, PROPAGATE } from "../../core/api/control/owner.ts";
 import { CHAMPION_PATCH } from "../../core/api/control/rigs.ts";
 import { keepChampionPatch } from "../champions.ts";
 import { type ExportFiles, mountExports } from "../exports.ts";
 import { propagateChampion } from "../issue/index.ts";
-import { KbReadQuery, KbSearchQuery, ownerKbRead, ownerKbSearch } from "../kb/index.ts";
+import {
+  KbListQuery,
+  KbReadQuery,
+  KbSearchQuery,
+  ownerKbList,
+  ownerKbRead,
+  ownerKbSearch,
+} from "../kb/index.ts";
 import { resultsLeft } from "../results-left.ts";
-import { leaderboard } from "../views/index.ts";
+import { leaderboard, rigViews } from "../views/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 
 /**
- * What rigs' runs produce, and the owner reads: the knowledge base, champions' patches as the rigs
- * upload them (the owner reads them under the run: api/runs.ts), exports (`exportFiles`: where
- * control keeps them; none, it takes none), daily reports (the rigs send them on the message bus:
- * bus/asks.ts), the leaderboard, and a champion propagated to another rig.
+ * What rigs' runs produce, and the owner reads: the knowledge base (its search, an item, a
+ * place's list), champions' patches as the rigs upload them (the owner reads them under the run:
+ * api/runs.ts), exports (`exportFiles`: where control keeps them; none, it takes none), daily
+ * reports (the rigs send them on the message bus: bus/asks.ts), the leaderboard, and a champion
+ * propagated to another rig.
  */
 export function resultRoutes(
   app: Hono,
   api: ApiContext,
   exportFiles: ExportFiles | undefined,
 ): void {
-  const { store, privateKeyPem, opts, admin, rigAuth } = api;
+  const { store, privateKeyPem, opts, admin, rigAuth, viewOpts } = api;
 
   // The owner's search of the knowledge base, and one item read (goal 175): as MCP's kb_search and
   // kb_read. A list of names is given with commas, or as a repeated parameter; more queries
@@ -68,6 +76,34 @@ export function resultRoutes(
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
     const r = ownerKbRead(store, q.data);
+    return "error" in r ? c.json(r, 404) : c.json(r);
+  });
+
+  // The owner's list of one place (goal 176): as MCP's kb_list, and the Knowledge page.
+  app.get(KB_LIST.path, admin, (c) => {
+    const list = (k: string) =>
+      (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);
+    const given = {
+      kinds: list("kind"),
+      outcomes: list("outcome"),
+      types: list("type"),
+      slots: list("slot"),
+    };
+    const words = (k: "sort" | "order") => (c.req.query(k) ? { [k]: c.req.query(k) } : {});
+    const num = (k: string) => {
+      const v = c.req.query(k);
+      return v === undefined ? {} : { [k]: Number(v) };
+    };
+    const q = KbListQuery.safeParse({
+      at: c.req.query("at") ?? "",
+      ...Object.fromEntries(Object.entries(given).filter(([, v]) => v.length)),
+      ...words("sort"),
+      ...words("order"),
+      ...num("offset"),
+      ...num("limit"),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    const r = ownerKbList(store, rigViews(store, viewOpts), q.data);
     return "error" in r ? c.json(r, 404) : c.json(r);
   });
 

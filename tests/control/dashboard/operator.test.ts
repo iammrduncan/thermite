@@ -274,10 +274,10 @@ describe("control dashboard for an operator", () => {
       await get("/ui/campaigns/sum-speed/runs/sum-1/history"),
       /Unrolling past 8/,
     );
-    // The campaign's folder on the Knowledge page.
+    // The campaign's collection on the Knowledge page.
     assert.match(
       await get("/ui/knowledge"),
-      /<b>sum-speed<\/b><\/a> <span class="muted small">hill climb · /,
+      /<a class="kx-node" href="\/ui\/knowledge\/sum-speed"><svg[^>]*>[\s\S]*?<\/svg><span class="nm">sum-speed<\/span>/,
     );
   });
 

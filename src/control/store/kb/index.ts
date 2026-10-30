@@ -5,7 +5,6 @@ import {
   type KbItemBody,
   type KbItemWire,
   type KbKind,
-  KbOutcome,
   type KbSync,
   readKbAddress,
   writtenRef,
@@ -29,7 +28,22 @@ import {
   SYNC_PAGE,
 } from "../../kb/index.ts";
 import { KbFileRows } from "./files.ts";
-import { type KbVersion, keepVersion, versionRefusal, versionsOf, writtenFields } from "./items.ts";
+import {
+  itemOf,
+  type KbVersion,
+  keepVersion,
+  versionRefusal,
+  versionsOf,
+  writtenFields,
+} from "./items.ts";
+import {
+  type KbFolderRow,
+  type KbListAt,
+  type KbListed,
+  type KbListOptions,
+  listItems,
+  placeFolders,
+} from "./list.ts";
 import { knowledgeHierarchy } from "./schema.ts";
 import { type KbScope, keepScope, scopeOf } from "./scope.ts";
 import { findItems, type KbFind, type KbFindResult, type KbWhere } from "./search.ts";
@@ -37,6 +51,7 @@ import { knowledgeSearch } from "./words.ts";
 
 export type { KbFileRow } from "./files.ts";
 export type { KbVersion } from "./items.ts";
+export type { KbFolderRow, KbListAt, KbListCounts, KbListed, KbListOptions } from "./list.ts";
 export { type KbSearchMode, OUTCOME_WORDS, searchTerms } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
@@ -557,6 +572,16 @@ export class KnowledgeBase {
     return this.find(q, where, o).hits;
   }
 
+  /** The collections, runs or slots a place holds (list.ts), each with its items and newest change. */
+  folders(at: KbListAt): KbFolderRow[] {
+    return placeFolders(this.db, at);
+  }
+
+  /** A page of the items under a place (list.ts), with how many, and their counts by filter. */
+  list(at: KbListAt, o: KbListOptions): KbListed {
+    return listItems(this.db, at, o);
+  }
+
   /**
    * What a run of a campaign reads, as find() takes it: its own run alone when it started fresh,
    * else the campaign's whole collection; and the granted collections it includes.
@@ -741,46 +766,4 @@ export class KnowledgeBase {
       more: rows.length > limit,
     };
   }
-}
-
-function itemOf(r: Row): KbItem {
-  let meta: Record<string, string> = {};
-  try {
-    const m = JSON.parse(str(r.meta) || "{}") as Record<string, unknown>;
-    meta = Object.fromEntries(Object.entries(m).map(([k, v]) => [k, str(v)] as const)) as Record<
-      string,
-      string
-    >;
-  } catch {
-    // meta is written by this module as JSON; anything else reads as none
-  }
-  return {
-    id: Number(r.id),
-    seq: Number(r.seq),
-    campaign: str(r.campaign),
-    rig: str(r.rig),
-    ledger: str(r.ledger),
-    run: str(r.run),
-    slot: str(r.slot) || KB_RECORDS,
-    kind: str(r.kind) as KbKind,
-    ref: str(r.ref),
-    version: Number(r.version ?? 1),
-    title: str(r.title),
-    body: str(r.body),
-    by: str(r.by),
-    url: r.url ? str(r.url) : null,
-    sub: r.sub ? str(r.sub) : null,
-    meta,
-    outcome: KbOutcome.safeParse(r.outcome).data ?? null,
-    file: r.file_sha256
-      ? {
-          sha256: str(r.file_sha256),
-          name: str(r.file_name),
-          type: str(r.file_type),
-          bytes: Number(r.file_bytes ?? 0),
-        }
-      : null,
-    at: str(r.at),
-    updated_at: str(r.updated_at),
-  };
 }

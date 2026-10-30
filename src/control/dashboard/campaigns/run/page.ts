@@ -14,6 +14,7 @@ import { exportMenu } from "../../../ui/exports.ts";
 import { waitEnd, waitsForLimit } from "../../../ui/operator/index.ts";
 import {
   campaignHref,
+  knowledgeHref,
   RUN_ROUTES,
   type RunTab,
   rigHref,
@@ -142,7 +143,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
     // What its agents search in the knowledge base, fixed when it started (goal 175).
     const scope = agents && !x.earlier ? store.kb().scope(campaign, r.id) : undefined;
     const searches = scope
-      ? `<div class="muted small" style="margin-bottom:12px" data-part="kb-scope">Its agents search ${scope.fresh ? "only this run's own items" : "the campaign's whole collection"} in the <a href="/ui/knowledge?collection=${encodeURIComponent(campaign)}">knowledge base</a>${scope.granted.length ? `, and ${esc(scope.granted.join(", "))}, read only` : ""}: set when the run started.</div>`
+      ? `<div class="muted small" style="margin-bottom:12px" data-part="kb-scope">Its agents search ${scope.fresh ? "only this run's own items" : "the campaign's whole collection"} in the <a href="${knowledgeHref(campaign)}">knowledge base</a>${scope.granted.length ? `, and ${esc(scope.granted.join(", "))}, read only` : ""}: set when the run started.</div>`
       : "";
     // The Prompts tab's list, read from the message bus.
     const prompts = tab === "prompts" ? await runPrompts(store, x) : [];

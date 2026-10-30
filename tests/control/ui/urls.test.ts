@@ -4,6 +4,8 @@ import {
   attemptHref,
   campaignHref,
   championPatchHref,
+  knowledgeHref,
+  knowledgeParts,
   liveHref,
   paperHref,
   RUN_ROUTES,
@@ -83,4 +85,22 @@ test("each link is the path of the route that answers it; every tab but the over
     assert.equal(runTab(part), undefined, part);
   // No address of a run's names its rig.
   for (const pattern of Object.values(RUN_ROUTES)) assert.doesNotMatch(pattern, /rig/);
+});
+
+test("the knowledge explorer's addresses: a place's parts, and an item's id kept whole in one part", () => {
+  assert.equal(knowledgeHref(), "/ui/knowledge");
+  assert.equal(knowledgeHref("gemv/gs-1/worker-1"), "/ui/knowledge/gemv/gs-1/worker-1");
+  assert.equal(
+    knowledgeHref("gemv/gs-1/worker-1/finding:2"),
+    "/ui/knowledge/gemv/gs-1/worker-1/finding:2",
+  );
+  // A document's id holds its lane and path: one part, its slashes encoded.
+  const doc = "gemv/gs-1/records/doc:lane-1/drafts/a b.md";
+  const href = knowledgeHref(doc);
+  assert.equal(href, "/ui/knowledge/gemv/gs-1/records/doc:lane-1%2Fdrafts%2Fa%20b.md");
+  assert.deepEqual(knowledgeParts(href), ["gemv", "gs-1", "records", "doc:lane-1/drafts/a b.md"]);
+  assert.deepEqual(knowledgeParts("/ui/knowledge"), []);
+  assert.deepEqual(knowledgeParts("/ui/knowledge/gemv/"), ["gemv"]);
+  assert.equal(knowledgeParts("/ui/knowledge/%zz"), undefined);
+  assert.equal(knowledgeParts("/ui/knowledgebase"), undefined);
 });

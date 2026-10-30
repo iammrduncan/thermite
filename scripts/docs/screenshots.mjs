@@ -149,7 +149,11 @@ try {
     ["experiments", run && `${run}/experiments`],
     ["journal", run && `${run}/journal`],
     ["live", live],
-    ["knowledge", "/ui/knowledge"],
+    // The Knowledge page open at the run's records: the tree down to its slots, and their table.
+    [
+      "knowledge",
+      run?.replace(/^\/ui\/campaigns\/([^/]+)\/runs\/([^/]+)$/, "/ui/knowledge/$1/$2/records"),
+    ],
     ["rig", rig],
   ];
   for (const [name, path] of shots) {

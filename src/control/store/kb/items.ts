@@ -1,5 +1,14 @@
 import type { DatabaseSync } from "node:sqlite";
-import { KB_RECORDS, type KbItemBody, type KbItemFile, writtenRef } from "../../../core/kb.ts";
+import {
+  KB_RECORDS,
+  type KbItemBody,
+  type KbItemFile,
+  type KbKind,
+  KbOutcome,
+  writtenRef,
+} from "../../../core/kb.ts";
+import { str } from "../../../core/kb-index.ts";
+import type { KbItem } from "../../kb/index.ts";
 import {
   campaignAbout,
   contextOf,
@@ -211,5 +220,48 @@ export function writtenFields(b: KbItemBody): VersionFields {
     sub: null,
     meta: "{}",
     file: b.file,
+  };
+}
+
+/** An item as control's store keeps its row: its newest version, with its place, outcome and file. */
+export function itemOf(r: Record<string, unknown>): KbItem {
+  let meta: Record<string, string> = {};
+  try {
+    const m = JSON.parse(str(r.meta) || "{}") as Record<string, unknown>;
+    meta = Object.fromEntries(Object.entries(m).map(([k, v]) => [k, str(v)] as const)) as Record<
+      string,
+      string
+    >;
+  } catch {
+    // meta is written by this module as JSON; anything else reads as none
+  }
+  return {
+    id: Number(r.id),
+    seq: Number(r.seq),
+    campaign: str(r.campaign),
+    rig: str(r.rig),
+    ledger: str(r.ledger),
+    run: str(r.run),
+    slot: str(r.slot) || KB_RECORDS,
+    kind: str(r.kind) as KbKind,
+    ref: str(r.ref),
+    version: Number(r.version ?? 1),
+    title: str(r.title),
+    body: str(r.body),
+    by: str(r.by),
+    url: r.url ? str(r.url) : null,
+    sub: r.sub ? str(r.sub) : null,
+    meta,
+    outcome: KbOutcome.safeParse(r.outcome).data ?? null,
+    file: r.file_sha256
+      ? {
+          sha256: str(r.file_sha256),
+          name: str(r.file_name),
+          type: str(r.file_type),
+          bytes: Number(r.file_bytes ?? 0),
+        }
+      : null,
+    at: str(r.at),
+    updated_at: str(r.updated_at),
   };
 }

@@ -100,3 +100,31 @@ export const liveHref = (rig: string, source?: string) =>
 
 /** A rig's new Live lines, pushed to its page as they come (server-sent events). */
 export const rigLiveStreamHref = (rig: string) => `${rigHref(rig)}/live/stream`;
+
+/** The knowledge explorer's root (goal 176). */
+export const KNOWLEDGE_ROOT = "/ui/knowledge";
+
+/**
+ * The knowledge explorer at a place (`<campaign>`, `<campaign>/<run>`, `<campaign>/<run>/<slot>`)
+ * or an item's own page, by its address (`<campaign>/<run>/<slot>/<kind>:<id>`). Each part is one
+ * segment of the path: an item's id may hold `/`, which its segment keeps encoded; its `:` stays.
+ */
+export function knowledgeHref(at = ""): string {
+  if (!at) return KNOWLEDGE_ROOT;
+  const parts = at.split("/");
+  const segments = parts.length > 4 ? [...parts.slice(0, 3), parts.slice(3).join("/")] : parts;
+  return `${KNOWLEDGE_ROOT}/${segments.map((s) => enc(s).replace(/%3A/g, ":")).join("/")}`;
+}
+
+/** The parts of an explorer's path, each decoded: a place's, or an item's (its fourth). */
+export function knowledgeParts(path: string): string[] | undefined {
+  if (path !== KNOWLEDGE_ROOT && !path.startsWith(`${KNOWLEDGE_ROOT}/`)) return undefined;
+  const raw = path.slice(KNOWLEDGE_ROOT.length).split("/").filter(Boolean);
+  try {
+    const parts = raw.map((s) => decodeURIComponent(s));
+    return parts.length > 4 ? [...parts.slice(0, 3), parts.slice(3).join("/")] : parts;
+  } catch {
+    // A broken escape, such as %zz, names no place.
+    return undefined;
+  }
+}

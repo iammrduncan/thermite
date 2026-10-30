@@ -294,46 +294,6 @@ test("a campaign's read grants: forms with the form token, refused for itself, a
   );
 });
 
-test("the Knowledge page: every collection with its counts and grants, and a search with each item's origin", async () => {
-  const s = await stack();
-  s.store.kb().grant("gemv-speed", "survey-study", "owner:ui");
-  const page = await (await s.get("/ui/knowledge")).text();
-  assert.match(page, /<a href="\/ui\/knowledge" class="on">/, "the sidebar's Knowledge entry");
-  assert.match(page, /id="collection-gemv-speed"/);
-  assert.match(page, /<b>gemv-speed<\/b><\/a> <span class="muted small">goal · 8 items<\/span>/);
-  assert.match(page, /1 run · 3 field notes · 2 experiments · 1 attempt · 1 note/);
-  assert.match(page, /read by: <b>gemv-speed<\/b>/);
-  assert.match(page, /reads: survey-study/);
-  assert.match(page, /The newest items in every collection/);
-  // A search, with where each item came from.
-  const found = await (await s.get("/ui/knowledge?q=verifier")).text();
-  assert.match(found, /<b>Finding<\/b> · Self-training helps only where a verifier exists/);
-  assert.match(
-    found,
-    /<a href="\/ui\/campaigns\/survey-study">survey-study<\/a> · <a href="\/ui\/campaigns\/survey-study\/runs\/sv-2">sv-2<\/a> · by lane-2/,
-  );
-  // By collection, and by kind.
-  assert.match(
-    await (await s.get("/ui/knowledge?q=verifier&collection=gemv-speed")).text(),
-    /Nothing matches\./,
-  );
-  const exps = await (await s.get("/ui/knowledge?kind=experiment")).text();
-  assert.match(exps, /<b>Experiment<\/b> · Load int4 weights/);
-  assert.match(exps, /outcome: won · tried: attempt a-1 \(submitted\), win confirmed \(\+6\.10%\)/);
-  assert.ok(!exps.includes("<b>Finding</b>"));
-  // With words: how many match, and where the words land before the filters.
-  assert.match(found, /<b>2<\/b> items match\. Where the words land, before the filters:/);
-  assert.match(found, /by kind:<\/span> claims 1 · findings 1/);
-  // By outcome: the experiment that won, and the attempt its verdict made won.
-  const won = await (await s.get("/ui/knowledge?outcome=won")).text();
-  assert.match(won, /<option value="won" selected>won<\/option>/);
-  assert.match(won, /<b>Experiment<\/b> · Load int4 weights/);
-  assert.ok(!won.includes("<b>Finding</b>"));
-  // Every form label has its description.
-  for (const l of ["Words", "Kind", "Outcome", "Collection"])
-    assert.match(page, new RegExp(`${l}<i class="ii" tabindex="0" data-tip="`));
-});
-
 test("Start a run from past research: the search reads only granted collections; ticks become queue and briefing", async () => {
   const s = await stack();
   const search = async (campaign: string, q: string) =>

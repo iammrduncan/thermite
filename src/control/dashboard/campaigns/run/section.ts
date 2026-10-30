@@ -23,7 +23,7 @@ import {
   stackBar,
   startWords,
 } from "../../../ui/components/index.ts";
-import { journalTab } from "../../../ui/knowledge.ts";
+import { journalTab } from "../../../ui/knowledge/index.ts";
 import {
   attemptRows,
   baselineBlock,

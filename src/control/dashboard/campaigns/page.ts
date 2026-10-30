@@ -42,7 +42,7 @@ import {
   runCompleted,
   runState,
 } from "../../ui/components/index.ts";
-import { campaignKnowledge } from "../../ui/knowledge.ts";
+import { campaignKnowledge } from "../../ui/knowledge/index.ts";
 import { goalState } from "../../ui/operator/index.ts";
 import { campaignHref, runHref } from "../../ui/urls.ts";
 import { campaignUsageBlock, runStateWord } from "../../ui/usage.ts";

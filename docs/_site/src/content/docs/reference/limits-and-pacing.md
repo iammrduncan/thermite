@@ -346,7 +346,8 @@ None of these ends anything. Nothing limits how many [field notes](knowledge-bas
 | A research question | No limit of its own. A research task in the queue holds its first 4,000 characters, and says the whole question is in the worker's brief |
 | An item of the knowledge base | Title 300 characters, text 20,000 |
 | Search words | The first 8 words of 2 or more characters; at most 300 characters in all |
-| Search results | The **Knowledge** page 100; **Start a run** › **From past research** 40; the owner's and the agents' `kb_search` 1 to 50, default 10; a search counts its first 12 words |
+| Search results | The **Knowledge** page 50 a page, with the next pages; **Start a run** › **From past research** 40; the owner's and the agents' `kb_search` 1 to 50, default 10; a search counts its first 12 words |
+| A place's list | The owner's `kb_list` 0 to 200 items a page, default 50, from any `offset`; the **Knowledge** page 50 a page, with the next pages, as deep as the items go |
 | The agents' searches and reads | Wait in the harness at most 15 seconds for the supervisor to take them, and 30 seconds for control's answer after that; the supervisor waits 20 seconds for control and takes 20 at a time; at most 200 wait in the harness at once, and control answers at most 32 of one rig's at once. Past each, the agent is told so in words and goes on ([How a search reaches control](knowledge-base.md#how-a-search-reaches-control)) |
 | `kb_write` | A text of up to 20,000 characters, or any length kept as a file with `file_name`; a title of up to 300; up to 20 links |
 | A run's sync of past research | Pages of up to 500 items from control, posted to the harness in parts of at most 8 MiB. The harness takes at most 32 MiB in one request |

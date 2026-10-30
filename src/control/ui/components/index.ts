@@ -122,6 +122,14 @@ export const icon = {
     15,
   ),
   chevron: svg('<path d="m9 6 6 6-6 6"/>', 12),
+  down: svg('<path d="m6 9 6 6 6-6"/>', 12),
+  search: svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 14),
+  panel: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>'),
+  record: svg('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'),
+  blurb: svg('<path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>'),
+  doc: svg(
+    '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+  ),
   archive: svg(
     '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
     14,
@@ -480,7 +488,15 @@ export interface Shell {
   flush?: boolean | undefined;
   /** The left navigation's folders and archived campaigns (goal 077); none: no folders. */
   nav?: NavCampaigns | undefined;
+  /** The left navigation shows only its icons: the owner collapsed it in this browser (NAV_COOKIE). */
+  rail?: boolean | undefined;
 }
+
+/**
+ * The cookie that keeps the left navigation collapsed in one browser, `rail` when it is: control
+ * reads it for each page, so a collapsed navigation is drawn so, before the page's script runs.
+ */
+export const NAV_COOKIE = "thermite_nav";
 
 /** What the left navigation shows of the campaigns besides their runs (goal 077). */
 export interface NavCampaigns {
@@ -568,7 +584,8 @@ export function shell(s: Shell, body: string): string {
     { queued: 0, leased: 0 },
   );
   const nav = (href: string, key: Shell["active"], ic: string, text: string, right = "") =>
-    `<a href="${href}" class="${s.active === key ? "on" : ""}">${ic}<span>${esc(text)}</span>${right}</a>`;
+    `<a href="${href}" class="${s.active === key ? "on" : ""}"${s.rail ? ` title="${esc(text)}"` : ""}>${ic}<span>${esc(text)}</span>${right}</a>`;
+  const fold = s.rail ? "Expand the navigation" : "Collapse the navigation";
   // No list of rigs here (goal 077): the Rigs page lists them, with their state.
   const camps = campaignViews(s.rigs);
   const archived = s.nav?.archived;
@@ -576,9 +593,9 @@ export function shell(s: Shell, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(s.title)} · Thermite</title>${ICON_LINKS}
 <style>${STYLE}</style><script src="/ui/assets/app.js" defer></script></head>
-<body><div class="app">
-<aside class="sidebar">
-  <a class="brand" href="/ui"><span class="mark">Th</span>Thermite</a>
+<body><div class="app${s.rail ? " rail" : ""}">
+<aside class="sidebar" id="sidebar">
+  <div class="side-top"><a class="brand" href="/ui"><span class="mark">Th</span><span class="brand-name">Thermite</span></a><button type="button" class="ib side-tog" id="side-tog" aria-controls="sidebar" aria-expanded="${s.rail ? "false" : "true"}" aria-label="${fold}" title="${fold}">${icon.panel}</button></div>
   <nav class="nav">
     ${nav("/ui", "overview", icon.home, "Overview", s.needs ? `<span class="badge">${s.needs}</span>` : "")}
     ${nav("/ui/campaigns", "campaigns", icon.trophy, "Campaigns", `<span class="count">${campCount}</span>`)}
@@ -592,7 +609,7 @@ export function shell(s: Shell, body: string): string {
     ${nav("/ui/audit", "audit", icon.shield, "Audit log")}
   </nav>
   ${navCampaigns(camps, s.nav)}
-  <div class="side-foot"><form method="post" action="/ui/logout"><button class="ghost sm">${icon.logout}Sign out</button></form><a class="cog${s.active === "settings" ? " on" : ""}" href="/ui/settings" title="Settings" aria-label="Settings">${icon.cog}</a></div>
+  <div class="side-foot"><form method="post" action="/ui/logout"><button class="ghost sm">${icon.logout}<span>Sign out</span></button></form><a class="cog${s.active === "settings" ? " on" : ""}" href="/ui/settings" title="Settings" aria-label="Settings">${icon.cog}</a></div>
 </aside>
 <div class="main">
   <header class="topbar">

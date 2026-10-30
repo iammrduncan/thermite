@@ -23,6 +23,7 @@ export {
   rigChecks,
   rigEventsPage,
   rigView,
+  rigViews,
   runEvents,
   runMessages,
 } from "./cache.ts";

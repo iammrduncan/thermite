@@ -28,6 +28,21 @@ export {
 } from "./asks.ts";
 export { followKbFiles, KB_ORPHANS_LOOK_MS, KbFiles } from "./files.ts";
 export {
+  KB_LIST_DEFAULT,
+  KB_LIST_MAX,
+  type KbFolder,
+  type KbLevel,
+  type KbListAnswer,
+  type KbListedItem,
+  KbListQuery,
+  kbFolders,
+  kbListFields,
+  kbPlacePath,
+  listedItem,
+  ownerKbList,
+  readKbPlace,
+} from "./list.ts";
+export {
   KbReadQuery,
   KbSearchQuery,
   kbReadFields,

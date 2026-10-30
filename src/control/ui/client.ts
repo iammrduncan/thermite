@@ -1,3 +1,5 @@
+import { NAV_COOKIE } from "./components/index.ts";
+
 /**
  * The dashboard's only script, served from control itself (CSP script-src 'self'; nothing inline
  * runs). It streams the live view, from control's push of new lines (server-sent events, on
@@ -323,6 +325,25 @@ export const CLIENT_JS = `
     chips("#jk [data-jk]", (b) => (jk = b.dataset.jk));
     if (words) words.addEventListener("input", apply);
   }
+
+  // ------------------------------------------------ the left navigation: open, or only its icons
+  // This browser keeps the choice in a cookie control reads (NAV_COOKIE), so every page is drawn
+  // as the navigation was left, before this script runs.
+  const tog = $("#side-tog");
+  if (tog) tog.addEventListener("click", () => {
+    const app = $(".app");
+    const rail = !app.classList.contains("rail");
+    app.classList.toggle("rail", rail);
+    const words = rail ? "Expand the navigation" : "Collapse the navigation";
+    tog.setAttribute("aria-expanded", String(!rail));
+    tog.setAttribute("aria-label", words);
+    tog.title = words;
+    document.querySelectorAll(".sidebar .nav a").forEach((a) => {
+      const t = a.querySelector("span");
+      if (rail && t) a.title = t.textContent; else a.removeAttribute("title");
+    });
+    document.cookie = ${JSON.stringify(NAV_COOKIE)} + "=" + (rail ? "rail" : "open") + "; path=/ui; max-age=31536000; samesite=strict";
+  });
 
   // ------------------------------------------------ the navigation's campaigns and folders (goal 077)
   // A folder folds and opens, and this browser remembers which are folded. A campaign dragged

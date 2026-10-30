@@ -5,7 +5,10 @@
 export const SHELL = `/* ---------------------------------------------------------------- shell */
 .app { display: grid; grid-template-columns: 256px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 30px; height: 100vh; }
 .sidebar { grid-row: 1 / 2; background: var(--sidebar); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+.side-top { display: flex; align-items: flex-start; gap: 4px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; font-weight: 600; font-size: 16px; }
+.side-top .brand { flex: 1; min-width: 0; }
+.sidebar .side-tog { flex: none; margin-top: 4px; }
 .mark { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: #18181b; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: -.02em; }
 @media (prefers-color-scheme: dark) { .mark { background: #f5f5f5; color: #0a0a0a; } }
 .nav a { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--control-radius); color: var(--foreground); }
@@ -68,6 +71,19 @@ details.side-folder > summary .n { margin-left: auto; font-size: 11px; color: va
 .side-foot { margin-top: auto; padding: 12px 8px 0; display: flex; align-items: center; justify-content: space-between; }
 .side-foot .cog { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--control-radius); color: var(--muted-foreground); }
 .side-foot .cog:hover, .side-foot .cog.on { background: var(--sidebar-row-hover); color: var(--foreground); text-decoration: none; }
+/* The left navigation collapsed to its icons (NAV_COOKIE): each name stays for screen readers. */
+.app.rail { grid-template-columns: 56px minmax(0, 1fr); }
+.app.rail .sidebar { padding: 12px 6px; }
+.app.rail .side-top { flex-direction: column; align-items: center; gap: 6px; margin-bottom: 10px; }
+.app.rail .brand { padding: 4px 0; }
+.app.rail .sidebar .side-tog { margin-top: 0; }
+.app.rail .nav a { justify-content: center; padding: 8px 0; position: relative; }
+.app.rail .brand-name, .app.rail .nav a > span:not(.count):not(.badge), .app.rail .side-foot button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.app.rail .nav a .count { display: none; }
+.app.rail .nav a .badge { position: absolute; top: 1px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+.app.rail .side-head, .app.rail .side-camps, .app.rail .side-say { display: none; }
+.app.rail .side-foot { flex-direction: column; gap: 6px; padding: 12px 0 0; }
+.app.rail .side-foot button { padding: 0 7px; }
 
 .main { grid-row: 1 / 2; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .topbar { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--background); }

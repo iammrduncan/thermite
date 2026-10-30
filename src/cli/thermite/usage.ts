@@ -178,6 +178,17 @@ export const USAGE = `usage: thermite <command> [options]
                                       (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
                                       or version N, with its links, and its text from --offset,
                                       10,000 characters at most. It prints JSON
+  kb list [PLACE] [--kind K ...] [--outcome O ...] [--type T ...] [--slot S ...]
+         [--sort S] [--order asc|desc] [--offset N] [--limit N] --control URL --token-file F
+                                      what one place of the knowledge base holds, as the
+                                      Knowledge page shows it: the whole knowledge base, or
+                                      PLACE (<campaign>, <campaign>/<run> or
+                                      <campaign>/<run>/<slot>): its folders (collections, runs or
+                                      slots) and a page of every item under it, with how many
+                                      and their counts by kind, outcome, type and slot. --type is
+                                      record, blurb or file; --sort is name, kind, outcome,
+                                      writer, modified (the default) or size; --limit 0 to 200
+                                      (default 50). It prints JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does

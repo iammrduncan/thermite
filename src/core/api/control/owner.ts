@@ -359,6 +359,20 @@ export const KB_ITEM = {
   what: "knowledge base item",
   answer: z.looseObject({ item: z.looseObject({ text: z.string() }) }),
 } as const satisfies Route;
+/**
+ * The owner's list of one place of the knowledge base (goal 176): `at`, the filters `kind`,
+ * `outcome`, `type` and `slot` (lists, with commas), `sort`, `order`, `offset` and `limit`.
+ */
+export const KB_LIST = {
+  method: "GET",
+  path: "/v1/kb/list",
+  what: "knowledge base list",
+  answer: z.looseObject({
+    folders: z.array(z.looseObject({})),
+    matched: z.number(),
+    items: z.array(z.looseObject({})),
+  }),
+} as const satisfies Route;
 
 /** A copy of a campaign control keeps (control/copy-campaign.ts checks the request). */
 export const CAMPAIGN_COPY = {

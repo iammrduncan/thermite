@@ -10,8 +10,9 @@ import { serve } from "@hono/node-server";
 import { controlOnly } from "../../helpers/control-stack.ts";
 
 /**
- * The owner's search of Thermite's knowledge base, and an item read whole (goal 175): over REST
- * (GET /v1/kb/search and /v1/kb/item) and with `thermite kb`, which prints control's answer.
+ * The owner's search of Thermite's knowledge base, an item read whole (goal 175), and a place's
+ * list (goal 176): over REST (GET /v1/kb/search, /v1/kb/item and /v1/kb/list) and with `thermite
+ * kb`, which prints control's answer.
  */
 
 const run = promisify(execFile);
@@ -154,7 +155,7 @@ describe("the owner's search of the knowledge base", () => {
     assert.equal(it.next_offset, null);
   });
 
-  test("thermite kb search and read print control's answer; a wrong use is refused", async () => {
+  test("thermite kb search, read and list print control's answer; a wrong use is refused", async () => {
     const { api } = control();
     const server = serve({ fetch: api.fetch, port: 0, hostname: "127.0.0.1" });
     await new Promise((r) => server.once("listening", r));
@@ -231,6 +232,89 @@ describe("the owner's search of the knowledge base", () => {
       const wrong = await cli("kb", "read", "--control", url, "--token-file", tokenFile);
       assert.notEqual(wrong.code, 0);
       assert.match(wrong.stderr, /kb read takes one item's address/);
+      // A place's list (goal 176): what GET /v1/kb/list answers, its filters and sort as flags.
+      const l = await cli(
+        "kb",
+        "list",
+        "gemv/gs-1",
+        "--kind",
+        "experiment",
+        "--outcome",
+        "open",
+        "--outcome",
+        "won",
+        "--sort",
+        "name",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.equal(l.code, 0, l.stderr);
+      const place = JSON.parse(l.stdout) as {
+        at: { level: string };
+        folders: { path: string }[];
+        matched: number;
+        items: { address: string; type: string }[];
+      };
+      assert.equal(place.at.level, "run");
+      assert.deepEqual(
+        place.folders.map((f) => f.path),
+        ["gemv/gs-1/records"],
+      );
+      assert.equal(place.matched, 2);
+      assert.deepEqual(
+        place.items.map((x) => [x.address, x.type]),
+        [
+          ["gemv/gs-1/records/experiment:x-2", "record"],
+          ["gemv/gs-1/records/experiment:x-1", "record"],
+        ],
+      );
+      const root = await cli(
+        "kb",
+        "list",
+        "--limit",
+        "0",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.equal(root.code, 0, root.stderr);
+      assert.deepEqual(
+        (JSON.parse(root.stdout) as { folders: { name: string }[] }).folders
+          .map((f) => f.name)
+          .sort(),
+        ["gemv", "sorting"],
+      );
+      const listWrong = await cli(
+        "kb",
+        "list",
+        "gemv",
+        "--query",
+        "x",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.notEqual(listWrong.code, 0);
+      assert.match(listWrong.stderr, /kb list takes a place, --kind, --outcome, --type, --slot/);
+      const missing = await cli("kb", "list", "nope", "--control", url, "--token-file", tokenFile);
+      assert.notEqual(missing.code, 0);
+      assert.match(missing.stderr, /the knowledge base has no collection nope/);
+      const sortWrong = await cli(
+        "kb",
+        "search",
+        "x",
+        "--sort",
+        "name",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.match(sortWrong.stderr, /kb search takes no --type, --sort or --order: kb list does/);
     } finally {
       server.close();
     }

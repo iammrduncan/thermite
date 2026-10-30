@@ -90,10 +90,7 @@ export const KbReadQuery = z.strictObject(kbReadFields);
 export type KbReadQuery = z.infer<typeof KbReadQuery>;
 
 /** The owner's search: a page of hits, best first, and what the search says beside them. */
-export function ownerKbSearch(
-  store: ControlStore,
-  s: KbSearchQuery,
-): Record<string, unknown> | { error: string } {
+export function ownerKbSearch(store: ControlStore, s: KbSearchQuery) {
   const kb = store.kb();
   const collections = s.collections?.length
     ? s.collections
@@ -104,7 +101,7 @@ export function ownerKbSearch(
     collections.map((campaign) => ({ campaign })),
     kbFindOf(rest),
   );
-  if (r.refused) return { error: r.refused };
+  if (r.refused) return { error: r.refused } as const;
   return {
     note: KB_IS_DATA,
     collections,
@@ -114,17 +111,17 @@ export function ownerKbSearch(
 }
 
 /** The owner's read of one item: one version whole, its links, and how many versions it has. */
-export function ownerKbRead(
-  store: ControlStore,
-  q: KbReadQuery,
-): Record<string, unknown> | { error: string } {
+export function ownerKbRead(store: ControlStore, q: KbReadQuery) {
   const kb = store.kb();
   const x = kb.at(q.address);
-  if (!x) return { error: `the knowledge base has no item ${q.address}` };
+  if (!x) return { error: `the knowledge base has no item ${q.address}` } as const;
   const versions = kb.versions(x.id);
   const v =
     q.version === undefined ? versions.at(-1) : versions.find((o) => o.version === q.version);
-  if (!v) return { error: `${q.address} has versions 1 to ${versions.length}, not ${q.version}` };
+  if (!v)
+    return {
+      error: `${q.address} has versions 1 to ${versions.length}, not ${q.version}`,
+    } as const;
   const { excerpt: _e, why: _w, passage: _p, ...item } = hitOf(x);
   return {
     note: KB_IS_DATA,

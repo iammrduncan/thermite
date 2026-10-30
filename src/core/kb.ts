@@ -224,6 +224,25 @@ export const KbAddress = z
     message: "an item's address is <campaign>/<run>/<slot>/<kind>:<id>",
   });
 
+// ---------------------------------------------------------------- the owner's list of a place
+
+/**
+ * What an item is, as the owner's list of a place (goal 176) sorts and filters it: a record,
+ * which Thermite's code writes in a run's records slot; a blurb, a short text an agent wrote; or a
+ * file, a document kept whole, whoever wrote it.
+ */
+export const KB_ITEM_TYPES = ["record", "blurb", "file"] as const;
+export type KbItemType = (typeof KB_ITEM_TYPES)[number];
+export const kbItemType = (x: { slot: string; file: unknown }): KbItemType =>
+  x.file ? "file" : x.slot === KB_RECORDS ? "record" : "blurb";
+
+/**
+ * What the list sorts by: an item's title, kind, outcome, writer (its slot), last change or file
+ * size. Folders sort by name or last change, and by name for the others.
+ */
+export const KB_LIST_SORTS = ["name", "kind", "outcome", "writer", "modified", "size"] as const;
+export type KbListSort = (typeof KB_LIST_SORTS)[number];
+
 // ---------------------------------------------------------------- who writes what
 
 /**

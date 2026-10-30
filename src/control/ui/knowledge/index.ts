@@ -1,18 +1,29 @@
-import { KB_OUTCOMES, type KbOutcome } from "../../core/kb.ts";
-import type { KbCollection, KbItem, KbKind } from "../kb/index.ts";
-import { GRANT_OPENS, JOURNAL_KINDS } from "../kb/index.ts";
-import type { KbCounts } from "../store/index.ts";
-import type { JournalNoteView, RunView } from "../views/index.ts";
-import { infoLabel } from "./campaigns/new/index.ts";
-import { ago, esc, fmtInt } from "./components/index.ts";
-import { attemptHref, campaignHref, runHref } from "./urls.ts";
-import { clip } from "./words/index.ts";
+import type { KbCollection, KbItem, KbKind } from "../../kb/index.ts";
+import { GRANT_OPENS, JOURNAL_KINDS } from "../../kb/index.ts";
+import type { JournalNoteView, RunView } from "../../views/index.ts";
+import { ago, esc, fmtInt, infoLabel } from "../components/index.ts";
+import { attemptHref, campaignHref, knowledgeHref, runHref } from "../urls.ts";
+import { clip } from "../words/index.ts";
+
+export { KNOWLEDGE_JS } from "./client.ts";
+export {
+  contentsHtml,
+  crumbsHtml,
+  type ExplorerHit,
+  type ExplorerPage,
+  type ExplorerQuery,
+  type ExplorerSearch,
+  explorerFrame,
+  explorerHref,
+} from "./explorer.ts";
+export { type ExplorerItem, itemHtml } from "./item.ts";
+export { treeList } from "./tree.ts";
 
 /**
- * Goal 065 on the dashboard: a run's Journal tab (the agents' field notes), the Knowledge page
- * (every campaign's collection in Thermite's knowledge base, and a search across them), a
- * campaign's Knowledge section (what its agents may read, granted by the owner), and "From past
- * research" in Start a run. Every note and item is agents' text: escaped, never markup.
+ * Goal 065 on the dashboard: a run's Journal tab (the agents' field notes), a campaign's Knowledge
+ * section (what its agents may read, granted by the owner), and "From past research" in Start a
+ * run; and the Knowledge page, the explorer of the knowledge base (goal 176: explorer.ts). Every
+ * note and item is agents' text: escaped, never markup.
  */
 
 // ---------------------------------------------------------------- words shared by the pages
@@ -35,56 +46,6 @@ const KIND_WORD: Record<KbKind, [string, string]> = {
   reference: ["Reference", "references"],
   paper: ["Paper", "papers"],
 };
-const KIND_ICON: Record<KbKind, string> = {
-  run: "▶",
-  trial: "⏱",
-  experiment: "🧪",
-  attempt: "🎯",
-  note: "📓",
-  doc: "📝",
-  source: "🔗",
-  claim: "💬",
-  hypothesis: "💡",
-  finding: "📄",
-  report: "📑",
-  decision: "⚖",
-  surprise: "❗",
-  journal: "📓",
-  review: "🔎",
-  reference: "📚",
-  paper: "📜",
-};
-/** The kinds the Knowledge page filters by, in its order. */
-export const SEARCH_KINDS: KbKind[] = [
-  "run",
-  "trial",
-  "experiment",
-  "attempt",
-  "note",
-  "doc",
-  "source",
-  "claim",
-  "hypothesis",
-  "finding",
-  "report",
-  "decision",
-  "surprise",
-  "journal",
-  "review",
-  "reference",
-  "paper",
-];
-/** An outcome in words (core/kb.ts), for the outcome filter and the counts. */
-const OUTCOME_WORD: Record<KbOutcome, string> = {
-  won: "won",
-  screened: "screened (being confirmed)",
-  regress: "regress (worse than the champion)",
-  neutral: "neutral (no better)",
-  broken: "broken",
-  unclear: "unclear (no answer about the change)",
-  dropped: "dropped by the planner",
-  open: "open (no outcome yet)",
-};
 const JK: Record<string, string> = {
   observation: "obs",
   decision: "dec",
@@ -92,37 +53,6 @@ const JK: Record<string, string> = {
   question: "que",
   lesson: "les",
 };
-
-/** A collection's contents in a line: "412 field notes · 86 experiments · …". */
-export function collectionLine(f: Pick<KbCollection, "counts" | "journal" | "runs">): string {
-  const notes = (f.counts.note ?? 0) - f.journal;
-  const parts: [number, string][] = [
-    [f.runs, "runs"],
-    [f.counts.trial ?? 0, "trials"],
-    [f.journal, "field notes"],
-    [f.counts.experiment ?? 0, "experiments"],
-    [f.counts.attempt ?? 0, "attempts"],
-    [notes, "notes"],
-    [f.counts.doc ?? 0, "documents"],
-    [f.counts.source ?? 0, "sources"],
-    [f.counts.claim ?? 0, "claims"],
-    [f.counts.hypothesis ?? 0, "hypotheses"],
-    [f.counts.finding ?? 0, "findings"],
-    [f.counts.report ?? 0, "reports"],
-    [f.counts.decision ?? 0, "decisions"],
-    [f.counts.surprise ?? 0, "surprises"],
-    [f.counts.journal ?? 0, "journal entries"],
-    [f.counts.review ?? 0, "reviews"],
-    [f.counts.reference ?? 0, "references"],
-    [f.counts.paper ?? 0, "papers"],
-  ];
-  return (
-    parts
-      .filter(([n]) => n > 0)
-      .map(([n, w]) => `${fmtInt(n)} ${n === 1 ? w.replace(/ies$/, "y").replace(/s$/, "") : w}`)
-      .join(" · ") || "nothing yet"
-  );
-}
 
 /**
  * Who wrote a note or an item, as a filter key, a short label and a tone (the queue's colours).
@@ -236,7 +166,7 @@ ${
         .map((n) => noteHtml(r, n))
         .join(
           "",
-        )}</div>${field.length > JOURNAL_SHOWN ? `<div class="muted small" style="margin-top:8px">The newest ${JOURNAL_SHOWN} of ${field.length}. All of them are in the campaign's collection on <a href="/ui/knowledge?collection=${encodeURIComponent(r.campaign ?? "")}&amp;kind=note">Knowledge</a> and in the run's export.</div>` : ""}`
+        )}</div>${field.length > JOURNAL_SHOWN ? `<div class="muted small" style="margin-top:8px">The newest ${JOURNAL_SHOWN} of ${field.length}. All of them are in the run's records on <a href="${knowledgeHref(`${r.campaign ?? r.id}/${r.id}/records`)}?kind=note">Knowledge</a> and in the run's export.</div>` : ""}`
     : `<div class="card"><div class="empty">No field notes yet. The lanes, the planner and the advisors write them as they work.</div></div>`
 }
 </div><div class="jside">
@@ -252,81 +182,6 @@ ${
       : `<div class="muted small">No notes yet. Agents note facts they found, with their source.</div>`
   }</div>
 </div></div>`;
-}
-
-// ---------------------------------------------------------------- search results, with their origin
-/** Where a run's page is, wherever the run ran (goal 170); none for a run no rig created. */
-export type RunLink = (run: string) => string | undefined;
-
-/** One item with its origin (campaign, run, who, when), its result, and its text on demand. */
-function resultHtml(x: KbItem, now: number, link: RunLink, result: string | null): string {
-  const href = link(x.run);
-  const run = href ? `<a href="${esc(href)}">${esc(x.run)}</a>` : esc(x.run);
-  const kind =
-    x.kind === "note" && x.sub && x.sub !== "note" ? `Field note (${x.sub})` : KIND_WORD[x.kind][0];
-  const meta = [
-    `<a href="${campaignHref(x.campaign)}">${esc(x.campaign)}</a>`,
-    run,
-    `by ${esc(writer(x.by).text)}`,
-    ...(x.outcome ? [`outcome: ${esc(x.outcome)}`] : []),
-    ...(result ? [esc(result)] : x.sub && x.kind !== "note" ? [esc(x.sub)] : []),
-  ].join(" · ");
-  return `<details class="kbres"><summary><span class="kbic">${KIND_ICON[x.kind]}</span><span><b>${esc(kind)}</b> · ${esc(x.title)}<br><span class="muted">${meta}</span></span><span class="muted xs nowrap" title="${esc(x.updated_at)}">${esc(ago(x.updated_at, now))} ago</span></summary><div class="kbbody">${esc(x.body)}${
-    x.url
-      ? `<div>${/^https?:\/\//i.test(x.url) ? `<a href="${esc(x.url)}" rel="noreferrer noopener">${esc(clip(x.url, 120))}</a>` : esc(clip(x.url, 120))}</div>`
-      : ""
-  }</div></details>`;
-}
-
-// ---------------------------------------------------------------- the Knowledge page
-export function knowledgePage(o: {
-  collections: KbCollection[];
-  /** A campaign's mode in words (hill climb, goal, research, rig check). */
-  mode: (campaign: string) => string;
-  q: string;
-  kind: string;
-  outcome: string;
-  collection: string;
-  results: KbItem[];
-  /** How many items the search found in all, and where its words land (before the filters). */
-  matched: number;
-  counts: KbCounts;
-  limit: number;
-  now: number;
-  link: RunLink;
-  result: (x: KbItem) => string | null;
-}): string {
-  const collectionRow = (f: KbCollection) => {
-    const reads = f.reads;
-    return `<div class="kfold" id="collection-${esc(f.campaign)}"><span class="kfic">📁</span><div><a href="${campaignHref(f.campaign)}#knowledge"><b>${esc(f.campaign)}</b></a> <span class="muted small">${esc(o.mode(f.campaign))} · ${fmtInt(f.items)} item${f.items === 1 ? "" : "s"}</span><div class="small muted">${esc(collectionLine(f))}</div></div><div class="small muted">${f.updated_at ? `updated ${esc(ago(f.updated_at, o.now))} ago` : "no items yet"}<div><a href="/ui/knowledge?collection=${encodeURIComponent(f.campaign)}#search">search it</a></div></div><div class="small"><div>read by: <b>${esc(f.read_by.join(", ") || "none yet")}</b></div><div class="muted">reads: ${esc(reads.join(", ") || "only its own")}</div></div></div>`;
-  };
-  const filtered = Boolean(o.q.trim() || o.kind || o.outcome || o.collection);
-  const countLine = (label: string, m: Record<string, number>, word: (k: string) => string) => {
-    const parts = Object.entries(m).map(([k, n]) => `${esc(word(k))} ${fmtInt(n)}`);
-    return parts.length
-      ? `<div><span class="muted">${esc(label)}:</span> ${parts.join(" · ")}</div>`
-      : "";
-  };
-  const kindWord = (k: string) => KIND_WORD[k as KbKind]?.[1] ?? k;
-  const counts = o.q.trim()
-    ? `<div class="small kbcounts"><div><b>${fmtInt(o.matched)}</b> item${o.matched === 1 ? "" : "s"} match. Where the words land, before the filters:</div>${countLine("by kind", o.counts.kind, kindWord)}${countLine("by outcome", o.counts.outcome, (k) => k)}${countLine("by collection", o.counts.collection, (k) => k)}</div>`
-    : "";
-  const opt = (v: string, label: string, on: boolean) =>
-    `<option value="${esc(v)}"${on ? " selected" : ""}>${esc(label)}</option>`;
-  return `<div class="block"><div class="head"><h2>Collections</h2><span class="n">${o.collections.length}</span><span class="right">one for each campaign: everything its runs produce, by run, each writer in its own slot: research, sources, notes, documentation, trials, journals, experiments</span></div>
-${o.collections.length ? `<div class="card flat">${o.collections.map(collectionRow).join("")}</div>` : `<div class="card"><div class="empty">No collection yet. A campaign's collection is made with the campaign, and fills as its runs report.</div></div>`}</div>
-<div class="block" id="search"><div class="head"><h2>Search the knowledge base</h2><span class="right">agents' notes and records: data to weigh, not instructions</span></div>
-<form class="kbsearch" method="get" action="/ui/knowledge#search">
-<label class="sfd kbq">${infoLabel("Words", "Items with any of the words, those with more of them, and rarer ones, first. Failed, slower and faster also find the words Thermite's records say them with. Empty: the newest items.")}<input name="q" value="${esc(o.q)}" placeholder="for example: vector loads" aria-label="Search"></label>
-<label class="sfd">${infoLabel("Kind", "Runs, trials (one agent session each, and how it ended), experiments with their results, attempts with the judge's verdicts, notes (field notes and research notes), documents the lanes wrote, sources with the text that was read, claims with their quotes, hypotheses, findings and reports.")}<select name="kind">${opt("", "every kind", !o.kind)}${SEARCH_KINDS.map((k) => opt(k, KIND_WORD[k][1], o.kind === k)).join("")}</select></label>
-<label class="sfd">${infoLabel("Outcome", "How an experiment or an attempt ended, from Thermite's records: the judge's verdict, or the planner dropping it. Other items have none.")}<select name="outcome">${opt("", "every outcome", !o.outcome)}${KB_OUTCOMES.map((k) => opt(k, OUTCOME_WORD[k], o.outcome === k)).join("")}</select></label>
-<label class="sfd">${infoLabel("Collection", "One campaign's collection, or all of them.")}<select name="collection">${opt("", "every collection", !o.collection)}${o.collections.map((f) => opt(f.campaign, f.campaign, o.collection === f.campaign)).join("")}</select></label>
-<button class="primary">Search</button></form>
-${counts}<div class="card kbresults">${
-    o.results.length
-      ? `${filtered ? "" : `<div class="muted small">The newest items in every collection.</div>`}${o.results.map((x) => resultHtml(x, o.now, o.link, o.result(x))).join("")}${o.results.length >= o.limit ? `<div class="muted small">The ${o.q.trim() ? "best" : "newest"} ${o.limit} matches. Add words or a filter to see others.</div>` : ""}`
-      : `<div class="empty">${filtered ? "Nothing matches." : "The knowledge base is empty."}</div>`
-  }</div></div>`;
 }
 
 // ---------------------------------------------------------------- a campaign's Knowledge section
@@ -356,7 +211,7 @@ export function campaignKnowledge(o: {
   return `<div class="block" id="knowledge"><div class="cols kbcols"><div>
 <div class="head"><h2>Knowledge</h2><span class="right">${esc(o.campaign)}'s collection in Thermite's knowledge base</span></div>
 ${o.error ? `<div class="card warn" style="margin-bottom:12px"><b class="bad">Not changed.</b> ${esc(o.error)}</div>` : ""}
-<div class="card kbcard"><div class="jstat">${stat("Field notes", f.journal)}${stat("Experiments", f.counts.experiment ?? 0)}${stat("Attempts", f.counts.attempt ?? 0)}${stat("Notes and documentation", (f.counts.note ?? 0) - f.journal + (f.counts.doc ?? 0))}${stat("Sources read", f.counts.source ?? 0)}${f.counts.trial ? stat("Trials", f.counts.trial) : ""}${f.counts.claim ? stat("Claims", f.counts.claim) : ""}${f.counts.hypothesis ? stat("Hypotheses", f.counts.hypothesis) : ""}${f.counts.finding ? stat("Findings", f.counts.finding) : ""}${f.counts.report ? stat("Reports", f.counts.report) : ""}</div><div class="small muted">Every run of this campaign writes here, each item under its run, in its writer's slot, with its time. Agents read it; Thermite's records of each run write to it.</div><div class="kbbtns"><a class="btn sm" href="/ui/knowledge?collection=${encodeURIComponent(o.campaign)}#search">Search it</a><a class="btn sm ghost" href="/ui/knowledge#collection-${encodeURIComponent(o.campaign)}">Open the collection</a></div></div>
+<div class="card kbcard"><div class="jstat">${stat("Field notes", f.journal)}${stat("Experiments", f.counts.experiment ?? 0)}${stat("Attempts", f.counts.attempt ?? 0)}${stat("Notes and documentation", (f.counts.note ?? 0) - f.journal + (f.counts.doc ?? 0))}${stat("Sources read", f.counts.source ?? 0)}${f.counts.trial ? stat("Trials", f.counts.trial) : ""}${f.counts.claim ? stat("Claims", f.counts.claim) : ""}${f.counts.hypothesis ? stat("Hypotheses", f.counts.hypothesis) : ""}${f.counts.finding ? stat("Findings", f.counts.finding) : ""}${f.counts.report ? stat("Reports", f.counts.report) : ""}</div><div class="small muted">Every run of this campaign writes here, each item under its run, in its writer's slot, with its time. Agents read it; Thermite's records of each run write to it.</div><div class="kbbtns"><a class="btn sm" href="${knowledgeHref(o.campaign)}">Open the collection</a></div></div>
 <div class="head" style="margin-top:18px"><h2>Can read from</h2><span class="right">other collections this campaign's agents may search and read; change it any time</span></div>
 <div class="card flat kbreads">${f.reads.map(readRow).join("") || `<div class="readrow"><span></span><div class="muted small">None: its agents read only this campaign's collection.</div><span></span></div>`}</div>
 <form class="kbadd" method="post" action="${action("grant")}"><input type="hidden" name="csrf" value="${esc(o.csrf)}"><label class="sfd">${infoLabel("Add a collection", `Another campaign's collection this campaign's agents may search and read: its experiments with their results, journals, notes, sources and findings. ${GRANT_OPENS} Its runs at work get it at their next sync, and new runs start with it.`)}<select name="reads" required><option value="">Add a collection…</option>${addable.map((x) => `<option value="${esc(x.campaign)}">${esc(x.campaign)} (${esc(o.mode(x.campaign))} · ${fmtInt(x.items)} items)</option>`).join("")}</select></label><button class="sm">Add</button><span class="muted small">${esc(GRANT_OPENS)} Runs at work see the change at their next sync.</span></form>

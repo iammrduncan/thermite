@@ -13,7 +13,7 @@ import { copyDrawer, suggestCopyName } from "../../ui/campaigns/copy/index.ts";
 import { isRigCheck, lastActivity, type StartRig, startDrawer } from "../../ui/campaigns/list.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { ago, esc, hardwareLine, icon } from "../../ui/components/index.ts";
-import { pastSection } from "../../ui/knowledge.ts";
+import { pastSection } from "../../ui/knowledge/index.ts";
 import { campaignHref } from "../../ui/urls.ts";
 import { earlierWords } from "../../ui/words/index.ts";
 import {
