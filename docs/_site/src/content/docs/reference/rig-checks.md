@@ -199,7 +199,7 @@ Each advisor's program runs as an advisor user of its own on the supervisor ([Th
 | `tunnel-keys` | Read | In pull mode, the pod's own keys, `keys.json` |
 | `harness-token`, `control-token`, `results-key`, `hf-token` | Read | The supervisor's secret files: its token for the harness, its token for control, the results repository's key and the Hugging Face token |
 | `advisors-file`, `advisors-folder`, `advisor-key-<n>` | Read, list, read | The advisors file, its folder, and each key file it names (`api_key_file`) |
-| `secrets-list` | List | `/run/secrets` |
+| `secrets-list:<folder>` | List | The folder of each of the supervisor's secret files outside its state: `/run/secrets` in the supervisor image. A `/run/secrets` the platform mounts for itself, as Podman does in every container, is not the supervisor's and is left out |
 | `inbox-list`, `inbox-read` | List, read | The inbox, and a file in it by its full path |
 | `results-list` | List | `/results`, under compose |
 | `runs-list` | List | The runs' root, where each advisor call has its folder |

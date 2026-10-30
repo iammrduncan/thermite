@@ -160,6 +160,10 @@ setInterval(() => {}, 1000);`,
       h.client.run({ dir: h.folder("env"), argv: SAY, env: { "BAD NAME": "x" }, stdin: "" }),
       /advisor runs: /,
     );
+    await assert.rejects(
+      h.client.run({ dir: h.folder("no-program"), argv: ["", "x"], env: {}, stdin: "" }),
+      /the program's name is empty/,
+    );
     // A line that is not a request is refused under its own id, or none.
     const answer = await new Promise<string>((resolve) => {
       const sock = connect(h.socketPath);
@@ -189,6 +193,25 @@ setInterval(() => {}, 1000);`,
     assert.equal(said.route, "wrapped");
     assert.equal(said.token, "a sign-in token");
     assert.equal(said.stdin, "the prompt");
+  });
+
+  test("an empty argument reaches the program as it is", async () => {
+    const h = await helper();
+    const r = await h.client.run({
+      dir: h.folder("empty-args"),
+      argv: [
+        process.execPath,
+        "-e",
+        "console.log(JSON.stringify(process.argv.slice(1)))",
+        "--",
+        "--tools",
+        "",
+      ],
+      env: {},
+      stdin: "",
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), ["--tools", ""]);
   });
 
   // Root on Linux: each run is an advisor user, and its folder its own for the run.

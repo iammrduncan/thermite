@@ -58,11 +58,30 @@ describe("what an advisor user must not reach on the supervisor", () => {
     assert.equal(by["inbox-read"]?.path, join(t.inbox, "repos", "kit.bundle"));
     assert.equal(by["bus-key"]?.op, "read");
     assert.equal(by["harness-token"]?.path, t.env.THERMITE_HARNESS_TOKEN_FILE);
+    // The folder of the supervisor's secret files, never a /run/secrets the platform mounted.
+    assert.equal(by[`secrets-list:${t.base}`]?.op, "list");
+    assert.equal(
+      probes.some((p) => p.path === "/run/secrets"),
+      false,
+    );
     assert.equal(by["advisor-key-1"]?.path, join(t.base, "advisors", "teacher.key"));
     assert.equal(by["supervisor-signal"]?.path, "4242");
     assert.equal(by["supervisor-environ"]?.path, "/proc/4242/environ");
     assert.equal(by["control-token"], undefined, "a file that is not there is not probed");
     assert.equal(by["seal-key"], undefined);
+    // A secret file in the supervisor's state, as in the one-container rig image: its folder is the
+    // state, listed once as state-list.
+    const inState = advisorProbes({
+      env: { THERMITE_HARNESS_TOKEN_FILE: join(t.home, "bus-key.seed") },
+      home: t.home,
+      inboxDir: t.inbox,
+      runner: { client: new RunAsClient(t.env[ADVISOR_RUNS_ENV.socket] as string), root: t.runs },
+      pid: 4242,
+    });
+    assert.deepEqual(
+      inState.filter((p) => p.name.startsWith("secrets-list")),
+      [],
+    );
   });
 
   test("through a runner that keeps no run apart, the check shows each probe that got through", async () => {

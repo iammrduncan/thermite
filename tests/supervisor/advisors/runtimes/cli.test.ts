@@ -13,10 +13,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
+import { Type } from "@earendil-works/pi-ai";
 import { z } from "zod";
 import { RunAsServer } from "../../../../src/common/run-as/index.ts";
 import { ADVISOR_RUNS_ENV } from "../../../../src/core/advisor-runs.ts";
+import { runAdvisor } from "../../../../src/supervisor/advisors/index.ts";
 import { runCli } from "../../../../src/supervisor/advisors/runtimes/cli.ts";
+import { testPrompt } from "../../../helpers/advisor-prompt.ts";
 
 /**
  * An advisor's command through the advisors' runner (src/common/run-as/), as the supervisor's
@@ -116,5 +119,42 @@ describe("an advisor's command through the advisors' runner", () => {
     );
     assert.match(slow.error ?? "", /no valid answer/);
     assert.deepEqual(readdirSync(root), []);
+  });
+
+  test("an advisor in Claude Code runs through it with its empty arguments and its token on fd 3", async () => {
+    // Claude Code's command has empty arguments (`--tools ""`, `--setting-sources ""`): the runner
+    // once refused the whole request for them, and the auditor's call never ran.
+    await runner();
+    const dir = mkdtempSync(join(tmpdir(), "thermite-fake-claude-"));
+    after(() => rmSync(dir, { recursive: true, force: true }));
+    const bin = join(dir, "claude");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const val = (f) => args[args.indexOf(f) + 1];
+const token = fs.readFileSync(Number(process.env.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR), "utf8");
+fs.readFileSync(0, "utf8");
+console.log(JSON.stringify({ type: "result", result: JSON.stringify({ tools: val("--tools"),
+  sources: val("--setting-sources"), token: token === "sk-ant-oat01-test" }) }));
+`,
+    );
+    chmodSync(bin, 0o755);
+    const before = process.env.THERMITE_CLAUDE_BIN;
+    process.env.THERMITE_CLAUDE_BIN = bin;
+    try {
+      const r = await runAdvisor({
+        runtime: { name: "a", runtime: "claude-code", model: "m", token: "sk-ant-oat01-test" },
+        prompt: testPrompt("You audit.", "Audit this."),
+        schema: z.object({ tools: z.string(), sources: z.string(), token: z.boolean() }),
+        answerSchema: Type.Object({}),
+      });
+      assert.equal(r.error, undefined, r.error);
+      assert.deepEqual(r.output, { tools: "", sources: "", token: true });
+    } finally {
+      if (before === undefined) delete process.env.THERMITE_CLAUDE_BIN;
+      else process.env.THERMITE_CLAUDE_BIN = before;
+    }
   });
 });

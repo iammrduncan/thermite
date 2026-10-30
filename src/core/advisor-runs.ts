@@ -68,15 +68,15 @@ export const AdvisorRunRequest = z.discriminatedUnion("op", [
     id: Id,
     op: z.literal("run"),
     dir: Folder,
+    /**
+     * The program, then its arguments. An argument may be empty, as Claude Code's `--tools ""`
+     * and `--setting-sources ""` are; the program's name may not.
+     */
     argv: z
-      .array(
-        z
-          .string()
-          .min(1)
-          .max(64 * 1024),
-      )
+      .array(z.string().max(64 * 1024))
       .min(1)
-      .max(256),
+      .max(256)
+      .refine((a) => (a[0] ?? "") !== "", "the program's name is empty"),
     env: z
       .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string())
       .refine(

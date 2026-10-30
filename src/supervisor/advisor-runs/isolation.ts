@@ -135,11 +135,22 @@ export function advisorProbes(o: {
   }
   for (const [name, path] of files)
     if (path && existsSync(path)) probes.push({ name, op: "read", path });
-  for (const [name, path] of [
-    ["secrets-list", "/run/secrets"],
-    ["results-list", "/results"],
-  ] as const)
-    if (existsSync(path)) probes.push({ name, op: "list", path });
+  // The folder of each of the supervisor's secret files (/run/secrets in its own image), but its
+  // state, listed above: never a folder the platform put there for itself, such as the /run/secrets
+  // Podman mounts into every container from its host.
+  const secretFiles = [
+    env.THERMITE_HARNESS_TOKEN_FILE,
+    env.THERMITE_CONTROL_TOKEN_FILE,
+    env.THERMITE_RESULTS_KEY_FILE,
+    env.THERMITE_HF_TOKEN_FILE,
+  ];
+  const folders = new Set(
+    secretFiles.filter((f): f is string => Boolean(f && existsSync(f))).map((f) => dirname(f)),
+  );
+  for (const d of folders)
+    if (d !== home && !d.startsWith(`${home}/`))
+      probes.push({ name: `secrets-list:${d}`, op: "list", path: d });
+  if (existsSync("/results")) probes.push({ name: "results-list", op: "list", path: "/results" });
   return probes.slice(0, SUPERVISOR_ISOLATION_MAX.probes);
 }
 
