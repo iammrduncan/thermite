@@ -388,7 +388,7 @@ async function otherLaneAsks(port, paths) {
 for (const p of ${JSON.stringify(paths)}) {
   try {
     const r = await fetch("http://127.0.0.1:${port}" + p, { signal: AbortSignal.timeout(5000) });
-    out[p] = r.status;
+    out[p] = r.status === 401 ? 401 : \`\${r.status} \${r.headers.get("content-type") ?? ""}\`.trim();
     await r.body?.cancel();
   } catch (err) {
     out[p] = String(err);
@@ -474,9 +474,13 @@ async function opencode() {
       await until("a typed message's call", () => api.calls["TERMINAL-CHECK-2"] >= 1, 60_000);
       check("a message typed into OpenCode's terminal was taken in", true, api.calls);
       const refused = await otherLaneAsks(port, ["/api/event", "/api/session", "/"]);
+      // Its API needs the trial's password; "/" may be the web app's own page, which holds no
+      // session's data: never JSON there.
       check(
-        "OpenCode's server, on the localhost every lane shares, refuses another lane without the trial's password",
-        Object.values(refused).every((status) => status === 401),
+        "OpenCode's server, on the localhost every lane shares, refuses another lane its API without the trial's password",
+        refused["/api/event"] === 401 &&
+          refused["/api/session"] === 401 &&
+          (refused["/"] === 401 || /^200 text\/html/.test(String(refused["/"]))),
         refused,
       );
     } catch (err) {
