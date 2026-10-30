@@ -335,7 +335,7 @@ jobs:
           printf '%s\n' "$DIGEST" > digests/rig-cuda
           echo "rig-cuda: $DIGEST"
       # One file per image: the CUDA 12 job's holds the rig image's too.
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: digest-${{ matrix.key }}
           path: digests/
@@ -446,7 +446,7 @@ jobs:
             --registry "$REGISTRY" \
             --repo-url "$REPO_URL" \
             --digests digests --out bundle
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-bundle
           path: bundle/
