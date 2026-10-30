@@ -215,7 +215,8 @@ try {
   );
 
   const store = new ControlStore(":memory:");
-  store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+  // Two rigs enrolled, as control enrolls every rig: only their tokens' hashes kept.
+  for (const rig of ["rig-a", "rig-b"]) store.enrollments.enroll(rig, "0".repeat(64), "check");
   store.busKeys.setRigKey("rig-a", keys.a.publicKey);
   store.busKeys.setRigKey("rig-b", keys.b.publicKey);
   await new RigConsumers({ store, bus }).make();
