@@ -1,4 +1,4 @@
-import type { Hono, MiddlewareHandler } from "hono";
+import type { Context, Hono, MiddlewareHandler } from "hono";
 import { buildInfo } from "../../common/build-info.ts";
 import type { Loops } from "../../common/health.ts";
 import { sameSecret } from "../../common/secrets.ts";
@@ -166,6 +166,11 @@ export interface ApiContext {
   rigAuth: MiddlewareHandler;
   /** The owner's token or the read token: what guards the reads a scraper or an observer makes. */
   reader: MiddlewareHandler;
+  /**
+   * Who a guard let this request through as, by its audit actor (`owner:api`, `reader:api` or
+   * `rig:<rig>`); none when no guard took it.
+   */
+  callerOf(c: Context): string | undefined;
 }
 
 /**
@@ -222,9 +227,12 @@ export function apiContext(
   const given = Object.values(creds).filter((x): x is Credential => x !== undefined);
   if (given.some((x, i) => given.slice(i + 1).some((y) => x.same(y))))
     throw new Error("the admin, operator, agent and read tokens must all be different");
+  // Who each guard let a request through as, for the audit log's entries of what it then refused.
+  const callers = new WeakMap<Context, string>();
   const admin: MiddlewareHandler = async (c, next) => {
     if (!owner.matches(bearer(c.req.header("authorization"))))
       return c.json({ error: "unauthorized" }, 401);
+    callers.set(c, "owner:api");
     await next();
   };
   // A rig's token is in the rig tokens file, or was made by control when the rig was enrolled.
@@ -264,12 +272,14 @@ export function apiContext(
       store.refusals.countCall(rig);
       return c.json({ error: refused }, 409);
     }
+    callers.set(c, `rig:${rig}`);
     await next();
   };
   // Metrics: the read token is enough (a scraper should not hold the owner's credential).
   const reader: MiddlewareHandler = async (c, next) => {
     const t = bearer(c.req.header("authorization"));
     if (!owner.matches(t) && !creds.read?.matches(t)) return c.json({ error: "unauthorized" }, 401);
+    callers.set(c, owner.matches(t) ? "owner:api" : "reader:api");
     await next();
   };
   return {
@@ -284,5 +294,6 @@ export function apiContext(
     admin,
     rigAuth,
     reader,
+    callerOf: (c) => callers.get(c),
   };
 }

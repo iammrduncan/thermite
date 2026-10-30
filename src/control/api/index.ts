@@ -43,7 +43,7 @@ export function createControlApi(
 ): Hono {
   const app = new Hono();
   const api = apiContext(app, store, tokens, privateKeyPem, opts);
-  const { control, creds, parts, admin, rigAuth } = api;
+  const { control, creds, parts, admin, rigAuth, callerOf } = api;
   const owner = creds.owner;
   const { secrets, chatgpt, runpodTests, mcpServers, runpodRigs, runpodDriver } = parts;
 
@@ -56,15 +56,20 @@ export function createControlApi(
   );
 
   // What fails goes to control's output and its audit log: the dashboard says why only once, in
-  // the page it sends back, and whoever debugs control reads it again over MCP (control_log).
+  // the page it sends back, and whoever debugs control reads it again over MCP (control_log). The
+  // entry is the caller's, as its route's guard took it (control's own on a route without one);
+  // a refusal (a status below 500) that repeats stays one entry, with its count.
   app.use("*", async (c, next) => {
     await next();
     const path = new URL(c.req.url).pathname;
     const status = c.res.status;
     if (c.error || status >= 500) {
       const error = redact(c.error?.message ?? `status ${status}`);
-      log("control", "request failed", { method: c.req.method, path, status, error }, "error");
-      store.auditLog.add("control", "failed", { method: c.req.method, path, status, error });
+      const failed = { method: c.req.method, path, status, error };
+      log("control", "request failed", failed, "error");
+      const by = callerOf(c) ?? "control";
+      if (status < 500) store.auditLog.refusal(by, "failed", failed);
+      else store.auditLog.add(by, "failed", failed);
       return;
     }
     if (!path.startsWith("/ui/") || c.req.method !== "POST") return;
@@ -75,7 +80,7 @@ export function createControlApi(
     if (why || status >= 400) {
       const reason = redact(why ?? `status ${status}`);
       log("control", "refused", { path, why: reason }, "warn");
-      store.auditLog.add("owner:ui", "refused", { path, why: reason });
+      store.auditLog.refusal("owner:ui", "refused", { path, why: reason });
     }
   });
 

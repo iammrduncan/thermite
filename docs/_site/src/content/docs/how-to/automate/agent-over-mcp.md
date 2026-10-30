@@ -93,4 +93,4 @@ Control writes each tool call it runs, reads included, to its audit log, as an `
 | Reader | `reader:mcp` |
 | Owner | `owner:mcp` |
 
-A tool call that control refuses has a second entry, `refused`, with the tool's name and the reason. Open **Audit log** in the dashboard's sidebar to see them. **Commands** shows who issued each command in its **By** column.
+A tool call that control refuses has a second entry, `refused`, with the tool's name and the reason. The same refusal again, from the same token, adds no entry: it counts on the first one, which says how many times it came and when the last came. Open **Audit log** in the dashboard's sidebar to see them. **Commands** shows who issued each command in its **By** column.

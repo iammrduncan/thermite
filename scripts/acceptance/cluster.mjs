@@ -18,6 +18,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CLOSED_RANGES } from "../../src/control/clusters/netcheck.ts";
 import { acceptanceChecks } from "./lib/checks.mjs";
 import {
   cleanEngine,
@@ -36,7 +37,6 @@ if (engine !== "podman") {
   process.exit(1);
 }
 const cluster = "thermite-accept";
-const privateRanges = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]; // public-check: allow (the RFC 1918 private ranges)
 const ctl = "thermite-kind-control";
 const kindEnv = { ...process.env, KIND_EXPERIMENTAL_PROVIDER: "podman" };
 const kind = (...a) =>
@@ -401,7 +401,7 @@ try {
         }),
       ),
   );
-  // The operators' rule: the harness reaches DNS and the internet, not private addresses.
+  // The operators' rule: the harness reaches DNS and the internet, not the closed ranges.
   const rule = {
     apiVersion: "networking.k8s.io/v1",
     kind: "NetworkPolicy",
@@ -421,7 +421,7 @@ try {
             {
               ipBlock: {
                 cidr: "0.0.0.0/0",
-                except: privateRanges,
+                except: CLOSED_RANGES,
               },
             },
           ],

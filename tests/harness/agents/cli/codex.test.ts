@@ -458,6 +458,15 @@ describe("the Codex CLI", () => {
     // The model check's own user: never a lane's, whose cleanup could kill it (or it theirs).
     assert.ok(runs.every((x) => x.role === "model-check"));
     assert.ok(!JSON.stringify(runs).includes(ACCESS));
+    // Outside a trial (the model check, a planner call) Codex starts headless in a fresh folder
+    // of the call's own, never in a copy of a workspace: no project's `.codex/` is there to load,
+    // and no folder is trusted.
+    assert.match(call.cwd ?? "", /\/lanes\/codex-ask\/[0-9a-f-]{36}$/);
+    assert.ok(runs.every((x) => x.cwd === call.cwd));
+    assert.ok(call.argv.includes("--ignore-rules"));
+    const setup = runs.find((x) => !x.argv.includes("exec")) as RunRequest;
+    assert.match(String(setup.stdin), /^project_doc_max_bytes = 0$/m);
+    assert.doesNotMatch(String(setup.stdin), /\[projects\.|trust_level/);
   });
 
   test("Codex goes only with OpenAI's Responses API: a ChatGPT sign-in or an OpenAI route, in a route or in the environment", () => {

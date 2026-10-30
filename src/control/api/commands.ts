@@ -31,7 +31,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
       // A refused command (a bad payload, a message nothing would read) is the client's to fix,
       // and in the audit log as the dashboard's and MCP's refusals are.
       const error = errorText(err);
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: "/v1/commands",
         kind: body.kind,
         why: redact(error),

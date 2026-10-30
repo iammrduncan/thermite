@@ -5,10 +5,23 @@
  * NetworkPolicies add up: traffic is allowed if any policy that selects the pod allows it, and a
  * pod no egress policy selects may go anywhere. So the harness is kept off the cluster when some
  * egress policy selects it, and every egress rule of every policy that selects it reaches only
- * DNS, or only addresses outside the private ranges.
+ * DNS, or only addresses outside the closed ranges.
  */
 
-export const PRIVATE_RANGES = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]; // public-check: allow (the RFC 1918 private ranges, not addresses of any network)
+/**
+ * The ranges a cluster harness never reaches, in the rules control writes and in the rules it
+ * accepts in a slot: the private ranges of RFC 1918, the shared range of RFC 6598 (carrier-grade
+ * NAT, some clusters' pod and service ranges, Tailscale's addresses), link-local addresses (a
+ * cloud's instance metadata) and "this network".
+ */
+export const CLOSED_RANGES = [
+  "10.0.0.0/8", // public-check: allow (a reserved range, not an address of any network)
+  "172.16.0.0/12", // public-check: allow (a reserved range, not an address of any network)
+  "192.168.0.0/16", // public-check: allow (a reserved range, not an address of any network)
+  "100.64.0.0/10", // public-check: allow (a reserved range, not an address of any network)
+  "169.254.0.0/16", // public-check: allow (a reserved range, not an address of any network)
+  "0.0.0.0/8",
+];
 
 type Selector = {
   matchLabels?: Record<string, string>;
@@ -55,12 +68,12 @@ const ip4 = (cidr: string) => {
   return { start: n - (n % size), end: n - (n % size) + size - 1 };
 };
 
-/** Whether `cidr` minus `except` still reaches any private address. */
-export function reachesPrivate(cidr: string, except: string[] = []): boolean {
+/** Whether `cidr` minus `except` still reaches any address in the closed ranges. */
+export function reachesClosed(cidr: string, except: string[] = []): boolean {
   const c = ip4(cidr);
   if (!c) return true; // IPv6 or unreadable: assume it may reach the cluster
   const holes = except.map(ip4).filter((x): x is NonNullable<typeof x> => x !== undefined);
-  return PRIVATE_RANGES.map(ip4).some((p) => {
+  return CLOSED_RANGES.map(ip4).some((p) => {
     if (!p || p.end < c.start || p.start > c.end) return false;
     // Covered only if one exception holds the whole overlap.
     const lo = Math.max(p.start, c.start);
@@ -99,10 +112,10 @@ export function harnessKeptOffCluster(
             ok: false,
             why: `the rule "${name}" lets the harness connect to pods in the cluster`,
           };
-        if (peer.ipBlock?.cidr && reachesPrivate(peer.ipBlock.cidr, peer.ipBlock.except))
+        if (peer.ipBlock?.cidr && reachesClosed(peer.ipBlock.cidr, peer.ipBlock.except))
           return {
             ok: false,
-            why: `the rule "${name}" lets the harness reach private addresses (${peer.ipBlock.cidr})`,
+            why: `the rule "${name}" lets the harness reach private, shared or link-local addresses (${peer.ipBlock.cidr})`,
           };
       }
     }

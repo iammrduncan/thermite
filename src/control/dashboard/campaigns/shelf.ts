@@ -35,7 +35,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     if (c.req.header("accept")?.includes("application/json")) {
       if (out.ok) return c.json({ ...out.answer, said: done(out.answer) });
       // A redirect's refusal is audited from its address; this answer says it itself.
-      store.auditLog.add("owner:ui", "refused", {
+      store.auditLog.refusal("owner:ui", "refused", {
         path: new URL(c.req.url).pathname,
         why: out.error,
       });

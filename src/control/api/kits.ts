@@ -30,7 +30,7 @@ export function kitRoutes(app: Hono, api: ApiContext): void {
       maxSize: KIT_ADD.maxBytes,
       onError: (c) => {
         const error = `the bundle is above the ${KIT_BUNDLE_MAX} bytes (64 MiB) control takes`;
-        store.auditLog.add("owner:api", "refused", { path: c.req.path, why: error });
+        store.auditLog.refusal("owner:api", "refused", { path: c.req.path, why: error });
         return c.json({ error }, 413);
       },
     }),
@@ -38,7 +38,7 @@ export function kitRoutes(app: Hono, api: ApiContext): void {
       const name = c.req.param("name");
       const path = `/v1/kits/${name}`;
       const refuse = (error: string, status: 400 | 404 | 409 | 413) => {
-        store.auditLog.add("owner:api", "refused", { path, why: redact(error) });
+        store.auditLog.refusal("owner:api", "refused", { path, why: redact(error) });
         return c.json({ error }, status);
       };
       if (!kits) return refuse("this control keeps no kits", 404);

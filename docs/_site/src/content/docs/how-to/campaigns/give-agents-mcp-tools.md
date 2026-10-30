@@ -26,7 +26,7 @@ Every agent already has one MCP server of Thermite's own, `thermite`, with the t
 ## Before you start
 
 - You are signed in to the dashboard as the owner.
-- The server's address. It speaks MCP over streamable HTTP or SSE, starts with `https://` (control takes `http://` only for `localhost`, `127.0.0.1` and `[::1]`), and holds no secret. Control reaches it to read its tools, and your rigs' harness and supervisor reach it over the internet to call them. On Kubernetes, a rig's harness reaches only addresses outside the private ranges ([The security model](../../explanation/security-model.md#where-a-rig-runs)).
+- The server's address. It speaks MCP over streamable HTTP or SSE, starts with `https://` (control takes `http://` only for `localhost`, `127.0.0.1` and `[::1]`), and holds no secret. Control reaches it to read its tools, and your rigs' harness and supervisor reach it over the internet to call them. On Kubernetes, a rig's harness reaches only addresses outside the private, shared and link-local ranges ([The security model](../../explanation/security-model.md#where-a-rig-runs)).
 - How the server signs a client in: OAuth, a key that goes in a header, a client ID and secret it gave you, or nothing (a public server).
 - For OAuth: your browser must reach control's callback, `/v1/mcp-oauth/callback` on control's address. That address is `THERMITE_CONTROL_PUBLIC_URL` when it is set ([Settings](../../reference/settings.md)), else the address you use for the dashboard.
 

@@ -82,7 +82,7 @@ async function takeNow(
   // can't carry is refused before anything of it is kept, the rig's key too.
   const refusedByBus = notForBus(body);
   if (refusedByBus) {
-    store.auditLog.add(`rig:${rig}`, "report_refused", { reason: refusedByBus });
+    store.auditLog.refusal(`rig:${rig}`, "report_refused", { reason: refusedByBus });
     return [409, { error: refusedByBus }];
   }
   if (!key.pubkey) {
@@ -104,7 +104,7 @@ async function takeNow(
     generatedAt: body.generated_at,
   });
   if (!fresh.ok) {
-    store.auditLog.add(`rig:${rig}`, "report_refused", { reason: fresh.reason });
+    store.auditLog.refusal(`rig:${rig}`, "report_refused", { reason: fresh.reason });
     return [409, { error: fresh.reason, expected_cursor: fresh.expectedCursor }];
   }
   if (Date.parse(body.generated_at) > Date.now() + 5 * 60_000)

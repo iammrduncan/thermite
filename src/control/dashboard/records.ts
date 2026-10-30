@@ -39,10 +39,13 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
       {},
       before !== undefined ? { before } : { after: cursorOf(c.req.query("after")) },
     );
+    // A refusal that repeats is one entry: when it came first, how often, and when last.
+    const when = (x: { at: string; count: number; last_at: string }) =>
+      `${esc(ago(x.at, now))} ago${x.count > 1 ? `<div class="xs">${x.count} times, the last ${esc(ago(x.last_at, now))} ago</div>` : ""}`;
     const rows = p.entries
       .map(
         (x) =>
-          `<tr><td class="muted nowrap">${esc(ago(x.at, now))} ago</td><td>${esc(x.actor)}</td><td><b>${esc(x.action.replace(/_/g, " "))}</b> <span class="muted xs">${esc(x.action)}</span></td><td class="clip"><code class="muted">${esc(JSON.stringify(x.body).slice(0, 200))}</code></td></tr>`,
+          `<tr><td class="muted nowrap">${when(x)}</td><td>${esc(x.actor)}</td><td><b>${esc(x.action.replace(/_/g, " "))}</b> <span class="muted xs">${esc(x.action)}</span></td><td class="clip"><code class="muted">${esc(JSON.stringify(x.body).slice(0, 200))}</code></td></tr>`,
       )
       .join("");
     const links = [

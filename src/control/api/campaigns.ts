@@ -61,7 +61,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
       // In the audit log, as the dashboard's and MCP's refusals are.
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/runs`,
         why: redact(out.error),
       });
@@ -81,7 +81,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       ? copyACampaign(parts, { from, ...body.data }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${from}/copy`,
         why: redact(out.error),
       });
@@ -109,7 +109,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
         )
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/context`,
         why: redact(out.error),
       });
@@ -129,7 +129,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       ? setCampaignAdditions(store, { campaign, additions: body.data.additions }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/additions`,
         why: redact(out.error),
       });
@@ -149,7 +149,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       ? setCampaignKbWrites(store, { campaign, kb_writes: body.data.kb_writes }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/kb-writes`,
         why: redact(out.error),
       });
@@ -168,7 +168,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
   /** A shelf outcome as the answer, a refusal in the audit log as the other routes' are. */
   const shelf = <T>(c: Context, path: string, out: ShelfOutcome<T>, created = false) => {
     if (out.ok) return c.json(out.answer, created ? 201 : 200);
-    store.auditLog.add("owner:api", "refused", { path, why: redact(out.error) });
+    store.auditLog.refusal("owner:api", "refused", { path, why: redact(out.error) });
     return c.json({ error: out.error }, out.status);
   };
   const refusedBody = (e: z.ZodError) =>

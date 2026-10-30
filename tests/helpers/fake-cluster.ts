@@ -1,5 +1,5 @@
 import type { ClusterKubectl } from "../../src/control/clusters/kubectl.ts";
-import { PRIVATE_RANGES } from "../../src/control/clusters/netcheck.ts";
+import { CLOSED_RANGES } from "../../src/control/clusters/netcheck.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { ADMIN, controlOnly, mcpClient, type Requester, signIn } from "./control-stack.ts";
@@ -139,7 +139,7 @@ export function fakeCluster(
         const hard = o.quota?.[rq[1] as string];
         return ok(JSON.stringify({ items: hard ? [{ status: { hard } }] : [] }));
       }
-      // The operators' network rule in slot 1: DNS and the internet without private ranges.
+      // The operators' network rule in slot 1: DNS and the internet without the closed ranges.
       const np = /^get networkpolicy -n (\S+) -o json$/.exec(a);
       if (np)
         return ok(
@@ -158,7 +158,7 @@ export function fakeCluster(
                             {
                               ipBlock: {
                                 cidr: "0.0.0.0/0",
-                                except: PRIVATE_RANGES,
+                                except: CLOSED_RANGES,
                               },
                             },
                           ],

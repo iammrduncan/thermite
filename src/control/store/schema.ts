@@ -1,6 +1,7 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { copyBeforeMigration, keepCopyBefore, newerSchemaWords } from "../../common/db-copy.ts";
 import { transaction } from "../../common/sqlite.ts";
+import { auditRepeats } from "./audit.ts";
 import { busKeyTables, busSealKeyColumn } from "./bus.ts";
 import { commandRunAndCampaign } from "./commands.ts";
 import {
@@ -675,6 +676,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   knowledgeSearch,
   // The operator may propose a grant of another campaign's collection too.
   campaignProposalGrants,
+  // A refusal that repeats is one audit entry, with its count and its first and last time.
+  auditRepeats,
 ];
 
 /**

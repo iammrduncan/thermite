@@ -73,5 +73,6 @@ Control's audit log names who did each thing:
 | `owner:operator` | The operator's token, over MCP |
 | `agent:mcp` | The agent's token, over MCP |
 | `reader:mcp` | The reader's token, over MCP |
+| `reader:api` | The reader's token, over the REST API: only for what it refused or failed at |
 | `rig:<rig>` | A rig, with its own token |
 | `control` | Control itself |

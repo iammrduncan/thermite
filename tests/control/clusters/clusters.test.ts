@@ -11,6 +11,7 @@ import {
   clusterRigDeployments,
   clusterRigObjects,
 } from "../../../src/control/clusters/manifests.ts";
+import { harnessKeptOffCluster } from "../../../src/control/clusters/netcheck.ts";
 
 const plan: ClusterRigPlan = {
   rig: "k8s-a-1",
@@ -110,6 +111,30 @@ describe("rigs on Kubernetes", () => {
       seccompProfile: { type: "RuntimeDefault" },
     });
     assert.equal(JSON.parse(asList(objs)).kind, "List");
+  });
+
+  test("the harness's network rule leaves out the private, shared, link-local and this-network ranges", () => {
+    const objs = clusterRigObjects(plan, secrets) as Obj[];
+    const rule = find(objs, "NetworkPolicy", "thermite-k8s-a-1-harness-net") as unknown as {
+      spec: { egress: { to?: { ipBlock: { cidr: string; except: string[] } }[] }[] };
+    };
+    const internet = rule.spec.egress.find((e) => e.to)?.to?.[0]?.ipBlock;
+    assert.equal(internet?.cidr, "0.0.0.0/0");
+    for (const range of [
+      "10.0.0.0/8", // public-check: allow (a reserved range, for the test)
+      "172.16.0.0/12", // public-check: allow (a reserved range, for the test)
+      "192.168.0.0/16", // public-check: allow (a reserved range, for the test)
+      "100.64.0.0/10", // public-check: allow (a reserved range, for the test)
+      "169.254.0.0/16", // public-check: allow (a reserved range, for the test)
+      "0.0.0.0/8",
+    ])
+      assert.ok(internet?.except.includes(range), range);
+    // The rule control writes passes the check control makes of a slot's rules.
+    const labels = {
+      "app.kubernetes.io/instance": "k8s-a-1",
+      "app.kubernetes.io/component": "harness",
+    };
+    assert.deepEqual(harnessKeptOffCluster([rule as never], labels).ok, true);
   });
 
   test("each part has startup, readiness and liveness probes on its health, and a grace period (goal 173)", () => {

@@ -72,10 +72,12 @@ For a rig in a namespace control creates, or one joined with a namespace join co
 
 | Policy | Rule |
 | --- | --- |
-| `thermite-<rig>-harness-net` | In: only from the rig's supervisor, on port 8700. Out: DNS (port 53, UDP and TCP), and addresses outside the private ranges of RFC 1918 |
+| `thermite-<rig>-harness-net` | In: only from the rig's supervisor, on port 8700. Out: DNS (port 53, UDP and TCP), and every address outside the private, shared and link-local ranges below |
 | `thermite-<rig>-supervisor-net` | In: nothing |
 
-In a **slot**, a namespace the cluster's operators made for Thermite, the operators write the policies. Control refuses a slot unless some egress policy selects the harness and every egress rule that selects it reaches only DNS or addresses outside the private ranges. NetworkPolicies need a cluster network plugin that enforces them. In every placement on a cluster, the rig's [isolation check](rig-checks.md#isolation-check) tries to reach the cluster's API server from a lane, and fails when it can.
+These ranges are the private ranges of RFC 1918 (`10.0.0.0/8`, `172.16.0.0/12` and `192.168.0.0/16`), the shared range of RFC 6598 (`100.64.0.0/10`: carrier-grade NAT, the pod or service addresses of some managed clusters, and Tailscale's addresses), the link-local range (`169.254.0.0/16`, where a cloud serves its machines' metadata) and `0.0.0.0/8`. A model server or target on one of them needs a network rule of its own on the cluster ([Reach a model server on a private or Tailscale address](../how-to/install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address)). <!-- public-check: allow (reserved ranges, not addresses of any network) -->
+
+In a **slot**, a namespace the cluster's operators made for Thermite, the operators write the policies. Control refuses a slot unless some egress policy selects the harness and every egress rule that selects it reaches only DNS or addresses outside the same ranges. NetworkPolicies need a cluster network plugin that enforces them. In every placement on a cluster, the rig's [isolation check](rig-checks.md#isolation-check) tries to reach the cluster's API server from a lane, and fails when it can.
 
 ## Volumes and state
 

@@ -57,7 +57,7 @@ kubectl create rolebinding thermite-control-read -n thermite-slot-1 \
 
 For a user rather than a service account, give `--user=<the kubeconfig's user>` to the two `rolebinding` commands. With rights to read the slot's resource quota (`resourcequotas` in the second role), control also fills in the rig's CPUs, memory and volume from it, and keeps the rig within it when it adds the rig and when it [changes its GPUs, CPUs and memory](#change-the-rigs-gpus-cpus-and-memory): its CPUs (`limits.cpu`, else `requests.cpu`), its memory (`limits.memory`, else `requests.memory`), its GPUs through the device plugin (`requests.nvidia.com/gpu`), and, with DRA, the devices of its class (`gpu.nvidia.com.deviceclass.resource.k8s.io/devices` for the class `gpu.nvidia.com`).
 
-Control writes no network rules in a slot, but it reads them. It refuses a slot unless some network rule selects the rig's harness pods (label `app.kubernetes.io/component: harness`), and every such rule lets them reach only DNS (port 53) or addresses outside the private (RFC 1918) ranges. Thermite's cluster test uses this rule. Its egress part is the same as the rule control writes in a namespace it creates:
+Control writes no network rules in a slot, but it reads them. It refuses a slot unless some network rule selects the rig's harness pods (label `app.kubernetes.io/component: harness`), and every such rule lets them reach only DNS (port 53) or addresses outside the private, shared and link-local ranges ([the list](../../reference/ports-volumes-secrets.md#kubernetes)). Thermite's cluster test uses this rule. Its egress part is the same as the rule control writes in a namespace it creates:
 
 ```yaml title="thermite-harness-net.yaml"
 apiVersion: networking.k8s.io/v1
@@ -77,10 +77,16 @@ spec:
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
-            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]   # the RFC 1918 ranges (public-check: allow)
+            except:   # the private, shared, link-local and this-network ranges
+              - 10.0.0.0/8       # public-check: allow (a reserved range)
+              - 172.16.0.0/12    # public-check: allow (a reserved range)
+              - 192.168.0.0/16   # public-check: allow (a reserved range)
+              - 100.64.0.0/10    # public-check: allow (a reserved range)
+              - 169.254.0.0/16   # public-check: allow (a reserved range)
+              - 0.0.0.0/8
 ```
 
-If the slot has other rules, such as one that denies all traffic, they must still let the supervisor pod (label `app.kubernetes.io/component: supervisor`) reach control's address, the internet, the harness on port 8700, and any [MCP server](../campaigns/give-agents-mcp-tools.md) its runs' kits give the advisors. The harness pod calls the MCP servers of the workers and the planner, so it too must reach them, outside the private ranges.
+If the slot has other rules, such as one that denies all traffic, they must still let the supervisor pod (label `app.kubernetes.io/component: supervisor`) reach control's address, the internet, the harness on port 8700, and any [MCP server](../campaigns/give-agents-mcp-tools.md) its runs' kits give the advisors. The harness pod calls the MCP servers of the workers and the planner, so it too must reach them, outside these ranges.
 
 A helper that writes a slot's objects out for the operators is planned ([goal 033](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/033-slot-helper.goal)).
 
@@ -149,7 +155,7 @@ What control applies, all labelled `app.kubernetes.io/instance: rig-1`:
 
 Both deployments' pods run without a service-account token and under the container runtime's default seccomp profile (`RuntimeDefault`).
 
-In a namespace it creates, control's network rules let the harness reach only DNS and addresses outside the private ranges, and let only its supervisor reach the harness. At every start, the harness's isolation check tries to reach the cluster's API server from a lane. Where the cluster's network plugin doesn't enforce network rules, or a slot's rules let the harness reach the cluster, the check fails with `the cluster does not hold the rig's network rules: lane-1 reached the cluster's API server (…)`, and the rig's page shows it ([The isolation check](../../reference/rig-checks.md#isolation-check)). With the message bus, the supervisor's deployment carries the bus's address (`THERMITE_NATS_URL`, from control's `THERMITE_NATS_PUBLIC_URL`) and the certificate of control's authority for the bus (`THERMITE_NATS_CA`), which is no secret, in its environment: each update and each change of size applies the deployments again with the ones control has then, so a rig set up before the bus gets it at its next update.
+In a namespace it creates, control's network rules let the harness reach only DNS and addresses outside the private, shared and link-local ranges, and let only its supervisor reach the harness. At every start, the harness's isolation check tries to reach the cluster's API server from a lane. Where the cluster's network plugin doesn't enforce network rules, or a slot's rules let the harness reach the cluster, the check fails with `the cluster does not hold the rig's network rules: lane-1 reached the cluster's API server (…)`, and the rig's page shows it ([The isolation check](../../reference/rig-checks.md#isolation-check)). With the message bus, the supervisor's deployment carries the bus's address (`THERMITE_NATS_URL`, from control's `THERMITE_NATS_PUBLIC_URL`) and the certificate of control's authority for the bus (`THERMITE_NATS_CA`), which is no secret, in its environment: each update and each change of size applies the deployments again with the ones control has then, so a rig set up before the bus gets it at its next update.
 
 Each deployment checks its part's health: startup, readiness and liveness probes on the part's `/v1/health`, which answers 503 while one of its loops is late. The startup probe gives the harness 10 minutes to start (its isolation check runs before it listens) and the supervisor 5; then the kubelet looks every 30 seconds and restarts a part that fails three times running. The harness is asked on its port, 8700; the supervisor inside its container, with `node -e`, since it takes no connection. Each pod has 30 seconds to stop (`terminationGracePeriodSeconds`): the harness ends its trials as interrupted and waits at most 5 seconds for the judge's job, whose lease is taken back at its next start. See [A part that is unhealthy](../operate/troubleshoot.md#a-part-that-is-unhealthy).
 
@@ -183,6 +189,31 @@ The rig's page keeps the **Set up by control** block: the cluster, the namespace
 Control makes one change at a time. While the status says `starting` or `updating`, it refuses a start, a restart or an update, and the page shows a card that starts with **Not done.**, such as `rig-1 is starting: wait until its page shows it running, or failed.` It refuses an update before it compares any images, even for a rig that already runs control's images. **Stop its pods** and **Remove the rig** are never refused for this, and they end control's wait: a rig you stopped or removed meanwhile doesn't turn `failed` later.
 
 Next, [check the rig](../operate/check-a-rig.md), then [give it a model](../models/connect-a-provider.md).
+
+## Reach a model server on a private or Tailscale address
+
+The rig's harness calls its model and reaches its measurement target from the harness pod, which reaches no address in the private, shared or link-local ranges. A model server or a target on such an address, such as a server on your own network or a Tailscale address (in RFC 6598's shared range), needs a network rule of its own on the cluster. In a namespace control creates, or that you join, ask whoever runs the cluster to add a NetworkPolicy beside control's that lets the rig's harness pods reach that one address and port, and nothing more: code that a lane runs can reach it too. For example, for a model server on port 8000:
+
+```yaml title="thermite-rig-1-model.yaml"
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thermite-rig-1-model
+  namespace: thermite-rig-1
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: rig-1
+      app.kubernetes.io/component: harness
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: { cidr: 100.64.0.7/32 }   # the server's address (public-check: allow)
+      ports:
+        - { port: 8000, protocol: TCP }
+```
+
+Network rules add up, so control's own rule stays as it is. In a slot, control refuses the slot when one of its rules lets the harness reach these ranges, as [What a slot needs](#what-a-slot-needs) says.
 
 ## Update the rig's images
 

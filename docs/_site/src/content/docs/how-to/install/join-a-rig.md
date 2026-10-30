@@ -87,7 +87,7 @@ Copy the command and run it within the hour. On a machine, you can first `podman
 
   Then it writes the rig's files and services, pulls the images, starts the rig and prints `started`. It sets the rig up the same way control does over SSH, with the message bus's address and the certificate of control's authority for the bus among the files; [What control writes on the machine](rig-on-a-machine.md#what-control-writes-on-the-machine) lists them.
 
-- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS and addresses outside the private ranges, and only its supervisor reaches the harness. The supervisor's deployment carries the message bus's address and the certificate of control's authority in its environment.
+- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS and addresses outside the private, shared and link-local ranges, and only its supervisor reaches the harness. The supervisor's deployment carries the message bus's address and the certificate of control's authority in its environment.
 
   | You see | Do this |
   | --- | --- |

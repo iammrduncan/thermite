@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  CLOSED_RANGES,
   harnessKeptOffCluster,
-  PRIVATE_RANGES,
-  reachesPrivate,
+  reachesClosed,
   selects,
 } from "../../../src/control/clusters/netcheck.ts";
 
@@ -19,7 +19,7 @@ const dns = {
   ],
 };
 const internet = {
-  to: [{ ipBlock: { cidr: "0.0.0.0/0", except: PRIVATE_RANGES } }],
+  to: [{ ipBlock: { cidr: "0.0.0.0/0", except: CLOSED_RANGES } }],
 };
 const policy = (name: string, podSelector: object, egress: object[]) => ({
   metadata: { name },
@@ -27,7 +27,7 @@ const policy = (name: string, podSelector: object, egress: object[]) => ({
 });
 
 describe("a slot's network rules and the harness", () => {
-  test("DNS plus the internet without the private ranges keeps the harness off the cluster", () => {
+  test("DNS plus the internet without the closed ranges keeps the harness off the cluster", () => {
     const r = harnessKeptOffCluster(
       [
         policy("thermite-harness", { matchLabels: { "app.kubernetes.io/component": "harness" } }, [
@@ -57,8 +57,22 @@ describe("a slot's network rules and the harness", () => {
         [policy("all", {}, [{ to: [{ ipBlock: { cidr: "0.0.0.0/0" } }] }])],
         harness,
       ).why,
-      /private addresses/,
+      /private, shared or link-local addresses/,
     );
+    // The private ranges alone are not enough: link-local (a cloud's instance metadata), the
+    // shared range and "this network" stay closed too.
+    const rfc1918 = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]; // public-check: allow (reserved ranges, for the test)
+    const metadata = "169.254.169.254/32"; // public-check: allow (a link-local address, for the test)
+    const shared = "100.100.100.100/32"; // public-check: allow (a shared address, for the test)
+    for (const cidr of ["0.0.0.0/0", metadata, shared, "0.0.0.0/8"])
+      assert.match(
+        harnessKeptOffCluster(
+          [policy("rfc1918", {}, [{ to: [{ ipBlock: { cidr, except: rfc1918 } }] }])],
+          harness,
+        ).why,
+        /private, shared or link-local addresses/,
+        cidr,
+      );
     // Rules add up: one permissive rule that selects the harness opens it, whatever else says.
     assert.equal(
       harnessKeptOffCluster(
@@ -89,9 +103,11 @@ describe("a slot's network rules and the harness", () => {
       ),
     );
     assert.ok(!selects({ matchExpressions: [{ key: "tier", operator: "Exists" }] }, harness));
-    assert.ok(reachesPrivate("10.1.0.0/16")); // public-check: allow (a private range, for the test)
-    assert.ok(!reachesPrivate("203.0.113.0/24"));
-    assert.ok(!reachesPrivate("0.0.0.0/0", PRIVATE_RANGES));
-    assert.ok(reachesPrivate("0.0.0.0/0", ["10.0.0.0/8"])); // public-check: allow (a private range, for the test)
+    assert.ok(reachesClosed("10.1.0.0/16")); // public-check: allow (a private range, for the test)
+    assert.ok(reachesClosed("100.64.0.0/16")); // public-check: allow (a shared range, for the test)
+    assert.ok(reachesClosed("169.254.169.254/32")); // public-check: allow (a link-local address, for the test)
+    assert.ok(!reachesClosed("203.0.113.0/24"));
+    assert.ok(!reachesClosed("0.0.0.0/0", CLOSED_RANGES));
+    assert.ok(reachesClosed("0.0.0.0/0", ["10.0.0.0/8"])); // public-check: allow (a private range, for the test)
   });
 });

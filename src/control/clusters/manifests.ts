@@ -2,6 +2,7 @@ import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
 import { gpuSplit, type RigBus } from "../machines/index.ts";
+import { CLOSED_RANGES } from "./netcheck.ts";
 
 /**
  * A rig on a Kubernetes cluster, as the objects control applies with `kubectl apply -f -`: the
@@ -354,11 +355,10 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     }),
   );
   if (p.placement === "created" || p.placement === "joined") {
-    const cluster = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]; // public-check: allow (the RFC 1918 private ranges, not addresses of any network)
     objects.push(
       {
-        // The harness reaches DNS and the internet, not the cluster or control; only its
-        // supervisor reaches it.
+        // The harness reaches DNS and the internet, not the cluster, control or the closed
+        // ranges; only its supervisor reaches it.
         apiVersion: "networking.k8s.io/v1",
         kind: "NetworkPolicy",
         metadata: meta(`${n.harness}-net`, "harness"),
@@ -392,7 +392,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
                 { port: 53, protocol: "TCP" },
               ],
             },
-            { to: [{ ipBlock: { cidr: "0.0.0.0/0", except: cluster } }] },
+            { to: [{ ipBlock: { cidr: "0.0.0.0/0", except: CLOSED_RANGES } }] },
           ],
         },
       },

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { ControlStore } from "../../src/control/store/index.ts";
-import { controlOnly, signIn } from "../helpers/control-stack.ts";
+import { controlOnly, RIG_TOKEN, signIn } from "../helpers/control-stack.ts";
 
 /** Every entry, one page at a time, following one cursor until it ends. */
 function walk(
@@ -145,5 +145,52 @@ describe("paging through control's audit log (goal 015)", () => {
     const empty = await page("/ui/audit?after=100000");
     assert.match(empty, /No entry here\./);
     assert.ok(link(empty, "Older"));
+  });
+
+  test("a refusal that repeats is one entry, with its count and its first and last time; the rest stay", async () => {
+    const { store, api, control } = controlOnly();
+    const refused = { tool: "mcp:start_run", why: "no campaign speed" };
+    store.auditLog.refusal("owner:operator", "refused", refused);
+    store.auditLog.refusal("owner:operator", "refused", refused);
+    // Another caller, another reason or another action is an entry of its own.
+    store.auditLog.refusal("agent:mcp", "refused", refused);
+    store.auditLog.refusal("owner:operator", "refused", { ...refused, why: "no campaign size" });
+    store.auditLog.refusal("owner:operator", "refused_again", refused);
+    store.auditLog.refusal("owner:operator", "refused", refused);
+    // Every other entry is kept as it comes, the same twice too.
+    store.auditLog.add("owner:ui", "rig_retired", { rig: "rig-b" });
+    store.auditLog.add("owner:ui", "rig_retired", { rig: "rig-b" });
+    const entries = store.auditLog.list(20);
+    const said = entries.map((e) => [e.actor, e.action, e.count]);
+    assert.deepEqual(said, [
+      ["owner:ui", "rig_retired", 1],
+      ["owner:ui", "rig_retired", 1],
+      ["owner:operator", "refused_again", 1],
+      ["owner:operator", "refused", 1],
+      ["agent:mcp", "refused", 1],
+      ["owner:operator", "refused", 3],
+    ]);
+    const merged = entries.at(-1);
+    assert.deepEqual(merged?.body, refused);
+    assert.ok(merged && merged.last_at >= merged.at, "its last time is its newest");
+    assert.equal(entries[0]?.last_at, entries[0]?.at, "an entry that came once has one time");
+
+    // Over REST: a rig's call refused three times for one reason is one entry, by the rig, and a
+    // page of the log gives its count and both times.
+    for (let i = 0; i < 3; i++) {
+      const r = await api("POST", "/v1/rigs/rig-a/commands/c-1/ack", { status: "done" }, RIG_TOKEN);
+      assert.equal(r.status, 400);
+    }
+    type Entry = { actor: string; action: string; body: { path: string }; count: number };
+    const page = (await (await api("GET", "/v1/audit?limit=1")).json()) as { audit: Entry[] };
+    const failed = page.audit[0] as Entry & { at: string; last_at: string };
+    assert.deepEqual(
+      [failed.actor, failed.action, failed.body.path, failed.count],
+      ["rig:rig-a", "failed", "/v1/rigs/rig-a/commands/c-1/ack", 3],
+    );
+    assert.ok(failed.last_at >= failed.at);
+    // The Audit log page says how often, and when the last came.
+    const { page: html } = await signIn(control);
+    assert.match(await html("/ui/audit"), /<div class="xs">3 times, the last \d+s ago<\/div>/);
   });
 });

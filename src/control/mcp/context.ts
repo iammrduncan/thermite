@@ -106,7 +106,7 @@ export function toolContext(
       } catch (err) {
         const error = errorText(err);
         // A refusal is in the audit log too, as the dashboard's are.
-        store.auditLog.add(actor, "refused", { tool: `mcp:${tool}`, why: redact(error) });
+        store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: redact(error) });
         return { ...json({ error }), isError: true };
       }
     };
