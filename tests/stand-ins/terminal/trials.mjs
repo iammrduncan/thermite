@@ -8,7 +8,7 @@
 // the program ended its own way, and nothing of the lane's left running. Then the owner's input
 // (terminal_input's last step) through a trial's console, as lane-1's host types it: text and a
 // key into the fake TUI, and text into the real Codex.
-import { chmodSync, existsSync, readdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { startModel } from "./model.mjs";
 
@@ -202,13 +202,8 @@ export async function loopTrials(c) {
     ended("the fake TUI as Claude Code", fake, (t) => t.r.toolCalls === 1 && t.r.turns === 2);
 
     // The owner's input through the trial's console, into the fake mid-turn: text, then a key.
-    const fakeSeen = (dir) => {
-      const folder = join(dir, "claude-home", ".fake-tui");
-      if (!existsSync(folder)) return [];
-      return readdirSync(folder)
-        .filter((f) => f.endsWith(".jsonl") && f !== "server.jsonl")
-        .flatMap((f) => c.lines(join(folder, f)));
-    };
+    // The fake shows each thing it takes on its screen; its own record is lane-1's alone.
+    const fakeShows = async (con) => (await con.screen())?.data ?? "";
     const fakeInput = await trial(
       "fake-input",
       claudeProgram,
@@ -227,28 +222,31 @@ export async function loopTrials(c) {
         writeFileSync(script, JSON.stringify(busy));
         return { FAKE_TUI_SCRIPT: script };
       },
-      async (con, a) => {
-        await c.until("its first message", () => fakeSeen(a.dir).some((x) => x.type === "user"));
+      async (con) => {
+        await c.until("its first message", async () =>
+          /user: TERMINAL-CHECK-1/.test(await fakeShows(con)),
+        );
         const text = await con.input({ text: "OWNER-INPUT-1", wait: "queue" }, () => undefined);
         const key = await con.input({ keys: ["down"], wait: "queue" }, () => undefined);
-        await c.until("the input in the program", () =>
-          fakeSeen(a.dir).some((x) => x.type === "key" && x.key === "down"),
+        await c.until("the input in the program", async () =>
+          /key: down/.test(await fakeShows(con)),
         );
-        return { text: text.outcome, key: key.outcome, seen: fakeSeen(a.dir) };
+        return { text: text.outcome, key: key.outcome, seen: await fakeShows(con) };
       },
     );
-    const ownerSeen = fakeInput.owner?.seen ?? [];
+    const ownerSeen = fakeInput.owner?.seen ?? "";
     c.check(
       "the fake TUI as Claude Code: the owner's input through the trial's console, typed by lane-1's host mid-turn, text then Enter and a key by name",
       fakeInput.owner?.text === "typed" &&
         fakeInput.owner?.key === "typed" &&
-        ownerSeen.some(
-          (x) => x.type === "user" && x.text === "OWNER-INPUT-1" && x.how === "typed",
-        ) &&
-        ownerSeen.some((x) => x.type === "key" && x.key === "down") &&
+        /user: OWNER-INPUT-1/.test(ownerSeen) &&
+        /key: down/.test(ownerSeen) &&
         fakeInput.r.stopped === "interrupted" &&
         fakeInput.left.length === 0,
-      { owner: { ...fakeInput.owner, seen: ownerSeen.slice(-6) }, stopped: fakeInput.r.stopped },
+      {
+        owner: { ...fakeInput.owner, seen: ownerSeen.match(/(?:user|key): [\w :.-]*/g) ?? [] },
+        stopped: fakeInput.r.stopped,
+      },
     );
 
     if (existsSync("/opt/codex/bin/codex")) {
