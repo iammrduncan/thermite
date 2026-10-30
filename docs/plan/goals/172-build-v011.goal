@@ -89,6 +89,7 @@ The owner, 2026-10-27: "write a single .goal that outlines how to complete the a
 ## Decisions
 
 - 2026-10-27, owner: one goal to launch and finish all the v0.1.1 work the audit planned.
+- 2026-10-30 03:51 UTC, owner, in step 10: control keeps a list of addresses and ports that cluster rigs' harnesses may reach beside the internet ("Allow control to define a list of addresses/ports that rigs can access"); control writes it into each rig's network rules and accepts a pre-made slot whose rules open exactly listed ones. The other answers of step 10 are recorded privately, apart from those that shape the product: bus only (goal [168](168-message-bus.goal)) and the knowledge base's orphan files (goal [175](175-knowledge-base.goal)).
 
 ## Open questions
 
