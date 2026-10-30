@@ -13,6 +13,7 @@ import { mcpLine } from "../../../../src/agents/mcp/tools.ts";
 import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import type { PlanWindows } from "../../../../src/agents/programs/claude-code/windows.ts";
 import { RESEARCH_WORKER_SYSTEM } from "../../../../src/agents/roles/research-worker.ts";
+import { throughProxy } from "../../../../src/core/agents.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
 import type { CallUsage } from "../../../../src/core/usage.ts";
 import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts";
@@ -349,10 +350,24 @@ describe("the CLI trial loop, in each program's entry", () => {
 
   test("a provider's failure: no credits ends the trial with its kind; a passing fault waits and goes on in the same session", async () => {
     for (const p of PROGRAMS) {
+      // The model proxy saw the provider's 402 (OpenCode, Codex); Claude Code's words are its own.
       const broke = fakeProgramRunner(p.program, lines(p.failed("402 insufficient credits")));
-      const r = await trial(p, spec(area()), broke, { pauseMs: () => 5 });
+      const r = await trial(p, spec(area()), broke, {
+        pauseMs: () => 5,
+        providerAnswer: () => ({ status: 402, body: '{"error":"insufficient credits"}' }),
+      });
       assert.deepEqual([r.stopped, r.errorKind], ["error", "credits"], p.entry.name);
       assert.equal(broke.programRuns().length, 1, p.entry.name);
+      // Through the proxy, the program's words alone stop nothing: the model's own error, tried
+      // again in the same session.
+      if (throughProxy(p.model.api)) {
+        const said = fakeProgramRunner(p.program, lines(p.failed("402 insufficient credits")));
+        const w = await trial(p, spec(area(), { limits: limits({ failuresInARow: 2 }) }), said, {
+          pauseMs: () => 5,
+        });
+        assert.deepEqual([w.stopped, w.errorKind], ["error", "model"], p.entry.name);
+        assert.equal(said.programRuns().length, 2, `${p.entry.name}: went on once`);
+      }
       const flaky = fakeProgramRunner(p.program, lines(p.failed("stream disconnected")));
       const waits: unknown[] = [];
       const e = await trial(p, spec(area(), { limits: limits({ failuresInARow: 2 }) }), flaky, {

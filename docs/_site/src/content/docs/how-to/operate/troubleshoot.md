@@ -85,6 +85,12 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 - **Why:** control keeps every rig's events on the bus, and does not start without it. The compose stack sets it for control; a deployment of your own may not.
 - **Do:** give control `THERMITE_NATS_URL`, and its bus's folder, `THERMITE_NATS_CONFIG_DIR`, with a NATS server beside it as the compose stack's `nats` service runs it. To keep a rig off the bus, leave the setting off that rig's supervisor instead: [Keep the rigs off it](message-bus.md#keep-the-rigs-off-it).
 
+### Control stops at start: `plain http to another host`
+
+- **You see:** control keeps restarting, and its log has a `fatal` line that says `THERMITE_CONTROL_PUBLIC_URL is "http://…", plain http to another host: rigs would send their tokens, and rigs off the message bus their keys, across the network unencrypted. …`.
+- **Why:** control's address for rigs is plain `http://` on another host. Control takes `http://` only for this computer (`localhost`, `127.0.0.1`, `[::1]`) or a name with no dot, as compose names a service (`http://control:8800`).
+- **Do:** give control an `https://` address, behind a proxy that holds its certificate. On a network you trust, such as a home network, set `THERMITE_CONTROL_ALLOW_PLAIN_HTTP=1` beside it instead ([Settings](../../reference/settings.md#rigs-that-control-sets-up)).
+
 ### Control stops at start: its store is past the events stream's end
 
 - **You see:** control stops soon after it starts, and its log has `control's store is past the events stream's end`, then a `fatal` line with `control's store has applied the EVENTS stream to place …, past its last, …`.
@@ -393,8 +399,8 @@ Two causes are common on a laptop:
 ### Trials wait for the provider
 
 - **You see:** in a trial's **Live**, `waiting until 03:14:20 UTC: the provider's rate limit (429 Rate limit reached …). The trial goes on in the same conversation.`, or `the provider failed for now (503 Service Unavailable)`, or `the model's stream went silent for 600 s: retried at 03:14:20 UTC, in the same conversation.` ([A trial makes no progress for a long time](#a-trial-makes-no-progress-for-a-long-time)). The run's **History** may say `The agents wait for the provider's limit until 2026-10-22 03:14 UTC (…)`.
-- **Why:** the provider asked for a pause (a rate limit), or failed for now (an outage). The trial waits for the time the provider gives (its `Retry-After`, its rate-limit reset headers, or its words), or a growing pause when it gives none, and then goes on where it was. No new trial starts on the rig until a rate limit's time. Nothing ends the trial for this unless the campaign sets `lanes.limits.failures_in_a_row`, or no model call has worked for 30 minutes: then the agents stop and the run shows in **Needs you** ([The agents stopped](#the-agents-stopped-the-provider-refuses); [Limits and pacing](../../reference/limits-and-pacing.md#the-model-provider)).
-- **Do:** nothing. If it happens all the time, the provider's limits are too low for the rig's workers: lower **Workers at a time** on **Edit rig**, or raise the provider's limits.
+- **Why:** the provider asked for a pause (a rate limit), or failed for now (an outage). The trial waits for the time the provider gives (its `Retry-After`, its rate-limit reset headers, or its words), or a growing pause when it gives none, and then goes on where it was. No new trial of that run starts until a rate limit's time, at most one trial's length from when it was asked; the rig's other runs go on. Nothing ends the trial for this unless the campaign sets `lanes.limits.failures_in_a_row`, or no model call has worked for 30 minutes: then the agents stop and the run shows in **Needs you** ([The agents stopped](#the-agents-stopped-the-provider-refuses); [Limits and pacing](../../reference/limits-and-pacing.md#the-model-provider)).
+- **Do:** nothing, or press **Resume now** in the run's header to end the run's wait early ([End a wait for the provider](../campaigns/steer-a-run.md#end-a-wait-for-the-provider)). If it happens all the time, the provider's limits are too low for the rig's workers: lower **Workers at a time** on **Edit rig**, or raise the provider's limits.
 
 ### A research campaign's trials all end in errors
 

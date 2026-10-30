@@ -177,6 +177,8 @@ THERMITE_NATS_URL=
 
 Both of the stack's supervisors then report over HTTP. Control stays on the bus, and `/v1/health` still says `"bus":"connected"`. The line never reaches control: its own `THERMITE_NATS_URL` is fixed in the compose file. Take the line out of `.env` and start the stack again to put the rigs back on the bus.
 
+Set it before the rigs' first start. A rig whose supervisor has registered its keys on the bus gets its model routes, MCP servers and advisors' routes only there, sealed to its key: control refuses them over HTTP with `<rig> is on the message bus: control gives it its model routes, MCP servers and advisors' routes only in its config there, …`, which the supervisor's log shows as `model route error`.
+
 A rig that control sets up on a machine or a cluster gets the bus's address with its other files, and reports over the bus: open the bus's port to it ([Let rigs on other machines reach it](#let-rigs-on-other-machines-reach-it)). A rig whose supervisor has no `THERMITE_NATS_URL`, such as one you join yourself without it, reports over HTTP.
 
 A rig on RunPod never uses the bus: control reaches it in [pull mode](../../explanation/trust.md#rigs-in-pull-mode), and keeps its events on the bus as it keeps any rig's.

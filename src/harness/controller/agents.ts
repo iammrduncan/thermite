@@ -193,6 +193,8 @@ export function agentLinks(
           service.usage.close(spec.trialId);
         };
       },
+      // The tokens the model proxy sees of its calls, which its run's budget counts.
+      throughProxy: () => service.ledger.trials.countByProxy(spec.trialId),
       // The provider's error answers the model proxy saw, and each wait for it (goal 079).
       providerAnswer: (since) => service.providerAnswerSince(spec.trialId, since),
       waiting: (w) => service.trialWait(trial, w),

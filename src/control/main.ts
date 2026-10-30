@@ -43,7 +43,7 @@ import { controlParts } from "./parts.ts";
 import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
 import { refreshGpuClouds } from "./runpod/index.ts";
 import { SecretBox } from "./secrets.ts";
-import { CONTROL_NUMBERS } from "./settings.ts";
+import { CONTROL_NUMBERS, controlPublicUrl } from "./settings.ts";
 import { ControlStore } from "./store/index.ts";
 
 /** Control service entry point. Generates its signing key on first start. */
@@ -54,6 +54,9 @@ async function main(): Promise<void> {
   // stream, and what control derives from them is applied from there. Rigs report over the bus,
   // or over HTTP; control publishes the events of both. Commands and live lines go over it too.
   const natsUrl = controlBusUrl(env);
+  // How rigs and the machines control sets rigs up on reach control: https, or plain http only to
+  // this computer, a compose service, or where the owner allows it (settings.ts).
+  const publicUrl = controlPublicUrl(env);
   const dir = env.THERMITE_CONTROL_DIR ?? "/var/lib/thermite-control";
   mkdirSync(dir, { recursive: true });
   const keyPath = join(dir, CONTROL_STATE.signingKey);
@@ -114,8 +117,6 @@ async function main(): Promise<void> {
   const driver = driverFromEnv(env);
   // Optional: the owner accepts each rig's first report key (no trust on first use).
   const requireKeyAcceptance = env.THERMITE_CONTROL_REQUIRE_KEY_ACCEPT === "1";
-  // How rigs and the machines control sets rigs up on reach control.
-  const publicUrl = env.THERMITE_CONTROL_PUBLIC_URL || undefined;
   // The bus as the rigs control sets up reach it (none: they keep to HTTP), and its TLS: control's
   // own authority, kept beside its signing key, and the server's certificate for the names control
   // and those rigs reach it by, written to the folder the server reads (bus/tls.ts).

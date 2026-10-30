@@ -358,16 +358,25 @@ The owner changes it on the campaign's page, under **Who writes in its collectio
 
 ## Grants
 
-A campaign's agents always read its own collection. A **grant** lets them also read another campaign's collection, read only. They never write to another campaign's collection.
+A campaign's agents always read its own collection. A **grant** lets them also read another campaign's collection, read only. They never write to another campaign's collection. A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it.
 
 ### Who can grant
 
+Only the owner grants and removes a collection. The operator's token may propose a grant, which waits for the owner.
+
 | Where | Who | Grant | Remove |
 | --- | --- | --- | --- |
-| A campaign's page, section **Knowledge** | The owner, signed in to the dashboard | **Add a collection** (any other campaign control knows, also one with no items yet), then **Add**. Beside it: "Runs at work see the change at their next sync." | **Remove** beside the collection under **Can read from** |
-| MCP | The owner's and the operator's tokens | [`kb_grant`](mcp-tools.md#kb_grant) `{campaign, reads}` | [`kb_revoke`](mcp-tools.md#kb_revoke) `{campaign, reads}` |
+| A campaign's page, section **Knowledge** | The owner, signed in to the dashboard | **Add a collection** (any other campaign control knows, also one with no items yet), then **Add**. Beside it: "A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Runs at work see the change at their next sync." | **Remove** beside the collection under **Can read from** |
+| MCP | The owner's token | [`kb_grant`](mcp-tools.md#kb_grant) `{campaign, reads}` | [`kb_revoke`](mcp-tools.md#kb_revoke) `{campaign, reads}` |
+| MCP | The operator's token | [`kb_grant`](mcp-tools.md#kb_grant) `{campaign, reads}` proposes it: see [A proposed grant](#a-proposed-grant) | None |
 
-Agents have no way to grant or remove a collection. Control writes each change to its audit log as `kb_grant` or `kb_revoke`, with who did it.
+REST has no route for grants. Agents have no way to grant or remove a collection. Control writes each change to its audit log as `kb_grant` or `kb_revoke`, with who did it.
+
+### A proposed grant
+
+With the operator's token, `kb_grant` checks the grant as it would the owner's, keeps it as a proposal, and grants nothing: it returns `{campaign, proposal, state: "proposed", said}`, with `said` "Proposed to the owner: the grant of `<other>`'s collection to `<campaign>`. A grant opens the collection to every agent of the campaign: … Nothing changes until the owner approves it on the campaign's page.", or `state: "unchanged"` when the campaign reads it already. A newer proposal of the same collection replaces one still waiting.
+
+The campaign's page then has a block **Proposed to you**, and **Needs you** has the same card: "Let every agent of `<campaign>` read `<other>`'s collection, as owner:operator proposes?", with what a grant opens, the collections the campaign reads now and as proposed, and who proposed it. **Approve** grants it as your own grant: the page says "Approved: every agent of `<campaign>` may now search and read `<other>`'s collection, read only, as owner:operator proposed. …". **Decline** changes nothing. The audit log keeps `campaign_setting_proposed`, then `campaign_setting_approved` with `kb_grant`, or `campaign_setting_declined`.
 
 ### What a grant gives
 

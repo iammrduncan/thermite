@@ -13,6 +13,8 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
   const payloads: Partial<Record<CommandKind, unknown>> = {
     pause_run: { run, reason: String(f.reason || "paused from the dashboard") },
     resume_run: { run },
+    // Resume now, on a run's page while its agents wait for the provider's limit.
+    end_wait: { run },
     close_run: { run, reason: String(f.reason ?? "").trim() },
     reset_workers: { run },
     // Export (goal 103): what changed since the last export, or a full one, as the owner chose.

@@ -9,6 +9,7 @@ import {
   renderWorkerTurn,
   windowFit,
 } from "../../../agents/roles/index.ts";
+import { throughProxy } from "../../../core/agents.ts";
 import { type LaneLimitValues, laneLimits } from "../../../core/contract.ts";
 import type { Role, Runner, RunOutcome } from "../../broker/index.ts";
 import { afterProgramFailure, type FailureCount, failingOf } from "../provider-errors.ts";
@@ -415,6 +416,7 @@ export async function runCliTrial<T extends CliTally>(
       const step = await afterProgramFailure({
         error: tally.errors.at(-1) as string,
         answer: deps.providerAnswer?.(runStarted),
+        proxied: throughProxy(deps.model.api),
         count,
         failuresInARow: limits.failuresInARow,
         deadline,

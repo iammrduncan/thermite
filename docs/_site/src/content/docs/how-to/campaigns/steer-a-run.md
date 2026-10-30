@@ -1,6 +1,6 @@
 ---
 title: "Steer a run"
-description: "Pause, resume or close a run, restart its lanes, change its agents' model, and send its agents messages."
+description: "Pause, resume or close a run, restart its lanes, end its wait for the provider, change its agents' model, and send its agents messages."
 type: how-to
 sidebar:
   order: 8
@@ -12,6 +12,7 @@ You can steer a running campaign without touching its judge: pause or resume it,
 | --- | --- | --- |
 | **Pause** | The run's header, Live's header, or the run's card under **At work now** | The agents' running [trials](../../reference/glossary.md) stop, and no new ones start. A stopped trial's work that it had not submitted is thrown away; changes already submitted stay. Each stopped trial's experiment goes back to the top of the run's [queue](choose-what-runs-next.md). The judge finishes the job it is on; the run's other queued jobs wait until you resume |
 | **Resume** | The run's header; Live's header, where a paused run is listed under **Ended in the last day**, marked `paused`; or the run's row under **Earlier runs** | New trials start again, in the round the run was in: a trial that the pause stopped still counts in it. The planner plans the next round when this one's trials are done. If the model provider stopped the run's agents, the model is checked again at once ([limits and pacing](../../reference/limits-and-pacing.md#the-model-provider)). Any other running run on that rig is paused: a rig runs one run at a time |
+| **Resume now** | The run's header, while its agents wait for the provider's limit | Ends the wait now: new trials and plans of the run start at once. See [End a wait for the provider](#end-a-wait-for-the-provider) |
 | **Restart the lanes** | **⋯** in the run's header or in Live's header, while a run with agents is running | Ends the running trials and the current round at once, with no question first. Their experiments go back to the top of the queue. The planner plans the next round straight away, and every lane starts again from the champion. Nothing the judge decided is lost |
 | **Close run** | **⋯** in the run's header, while the run is running or paused | Ends the run for good, with your reason: as for **Pause**, its running trials stop and nothing new starts, and its jobs waiting for the judge never run. It can't be resumed. Its experiments, attempts, champion and journal stay. See [Close a run](#close-a-run) |
 | A message | The message box in **Live**, or **Tell the planner** on the **Planner** tab | Text for everyone working, one lane, the planner or the [advisors](../../reference/glossary.md). A message to everyone or to a lane can stay in force for every new trial. The planner makes rules from what you tell it |
@@ -39,6 +40,16 @@ A trial is one worker's session in a [lane](../../reference/glossary.md): it end
 With **why (optional)** left empty, the reason is `paused from the dashboard`. The reason also shows in the run's **Now** block, and under **Why it stopped** in the campaign's **Earlier runs**.
 
 To stop one trial, not the whole run: a trial that repeats the same calls, or one quiet for longer than the rig's **Ask me after a quiet spell of (minutes)**, asks you under **Needs you**, and its lane under **Now** has a chip that leads to the card. Press **Stop this trial…**, then **Stop the trial** in the card's foot. See [Stuck trials](decide-what-waits.md#stuck-trials). Over MCP or REST, [`stop_trial`](../../reference/signed-commands.md#stop_trial) stops any running trial.
+
+## End a wait for the provider
+
+When a model call meets the provider's rate limit or a full subscription window, the run waits: no new trial or plan of it starts until the time the provider gave, at most one trial's length from when it was asked, 24 hours when neither the campaign nor the rig sets one ([The model provider](../../reference/limits-and-pacing.md#the-model-provider)). The rig's other runs go on. To end the wait early, for example once you raised the provider's limit:
+
+1. Open the run's page. While it waits, its **Overview** says `Its agents wait for the provider's limit until 2026-10-22 03:14 UTC: no new trial or plan starts before then. Resume now ends the wait.`, and its header has **Resume now**.
+2. Press **Resume now**. A small menu opens with the time the wait lasts until, the provider's words, and what ending it does. Press **End the wait now**.
+3. Once the rig has reported, **Resume now** is gone, new trials start, and the run's **History** says `You ended the agents' wait for the provider's limit, which was to last until 2026-10-22 03:14 UTC: new trials and plans start again.` If the limit still holds, the next trial meets it and the run waits again. A trial that waits in its own conversation goes on at its own time.
+
+Over REST or MCP, send [`end_wait`](../../reference/signed-commands.md#end_wait) `{"run": "<run>"}`. MCP's `get_run` gives the wait as `agents_wait`.
 
 ## Close a run
 
@@ -205,7 +216,7 @@ Over MCP, an agent sends the same kinds and payloads with the `issue_command` to
 
 ## Who may do what
 
-| | Pause, resume, restart the lanes, add rules | Message the agents, remove a kept message | Change the experiment queue, remove a rule | Close a run |
+| | Pause, resume, restart the lanes, add rules | Message the agents, remove a kept message, end a wait for the provider | Change the experiment queue, remove a rule | Close a run |
 | --- | --- | --- | --- | --- |
 | The owner: dashboard, REST API, command line, MCP | yes | yes | yes | yes |
 | The operator's token over MCP | yes | yes | yes | no |

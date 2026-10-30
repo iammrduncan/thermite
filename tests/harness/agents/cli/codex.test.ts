@@ -329,7 +329,7 @@ describe("the Codex CLI", () => {
     assert.deepEqual(done.given, [], "it stays waiting for the lane's next trial");
   });
 
-  test("a turn cap stops a trial; a failed run waits and resumes its thread; no credits ends it", async () => {
+  test("a turn cap stops a trial; a failed run waits and resumes its thread; no credits the proxy saw ends it", async () => {
     const b = area();
     const capped = fakeRunner(events());
     const c = await runCodexTrial(spec(b, join(b, "repo"), { maxTurns: 1 }), deps(capped));
@@ -355,13 +355,18 @@ describe("the Codex CLI", () => {
       broken.programRuns()[1]?.argv.join(" ").includes(`resume ${THREAD} -`),
       "in the same thread",
     );
-    // No credits: the trial ends at once, with its kind, for the scheduler to stop the agents.
+    // No credits, as the model proxy saw the provider answer: the trial ends at once, with its
+    // kind, for the scheduler to stop the agents.
     const g = area();
     const broke = fakeRunner([
       JSON.stringify({ type: "thread.started", thread_id: THREAD }),
       JSON.stringify({ type: "turn.failed", error: { message: "402 insufficient credits" } }),
     ]);
-    const h = await runCodexTrial(spec(g, join(g, "repo")), { ...deps(broke), pauseMs: () => 5 });
+    const h = await runCodexTrial(spec(g, join(g, "repo")), {
+      ...deps(broke),
+      pauseMs: () => 5,
+      providerAnswer: () => ({ status: 402, body: '{"error":"insufficient credits"}' }),
+    });
     assert.deepEqual([h.stopped, h.errorKind], ["error", "credits"]);
     assert.equal(broke.programRuns().length, 1);
   });

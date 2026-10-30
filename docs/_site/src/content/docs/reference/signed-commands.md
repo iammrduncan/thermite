@@ -57,7 +57,7 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 
 ### A command about one run
 
-A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
+A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
 
 Control refuses, before it signs:
 
@@ -132,7 +132,7 @@ The harness checks every command in this order. A command that fails a check mar
 | It is not being applied right now | None: the harness answers `in_progress`, and the supervisor asks again later | Stays `pending` |
 | An owner-only kind was issued by the owner (`issued_by` is `owner` or starts with `owner:`) | `<kind> is the owner's to issue, not <issuer>'s` | `failed` |
 
-The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `invalidate_evidence`, which withdraws bad evidence, and `terminal_input`, which types into a trial's terminal. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
+The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `invalidate_evidence`, which withdraws bad evidence, and `terminal_input`, which types into a trial's terminal. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
 
 A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`.
 
@@ -150,6 +150,7 @@ A command that passes these checks and that the harness then refuses is `failed`
 | `export_now` | **Export** in the header of a rig's page or a run's page, with **What changed** (`full: false`) or **Full export** (`full: true`), or, on a run's page, **This run** (`run`) | Yes | Yes | Yes | Yes | |
 | `drain_rig` | **Update to these images**, **Try the update again** and **Give it control's new address** on the page of a rig at work set up on a cluster, and **Call the update off**; **Save changes** on **Edit rig** with a new number of GPUs, CPUs or memory for such a rig, and **Call the change off**; control issues it as the caller. **End the drain** in the [drain card](rig-page.md#the-drain-card) of a draining rig's page | Yes (`POST /v1/commands`): the rig drains, but its page shows no update waiting, and it stays drained until `drain: false` or a restart; `POST /v1/rigs/<rig>/cluster/resources` | `update_rig_images`, `set_cluster_rig_resources` | `update_rig_images`, `set_cluster_rig_resources` | No | |
 | `stop_trial` | **Stop this trial…**, then **Stop the trial**, in a stuck trial's card under **Needs you** ([Stuck trials](../how-to/campaigns/decide-what-waits.md#stuck-trials)), and under a trial a draining rig waits for, on the rig's page ([The trials it waits for](rig-page.md#the-trials-it-waits-for)) | Yes | Yes | Yes | No | Yes |
+| `end_wait` | **Resume now**, then **End the wait now**, in the header of a run's page while its agents wait for the provider's limit | Yes | Yes | Yes | No | Yes |
 | `message_agent` | **Send** in the message box of a run's **Live**; **Send to the planner** on a run's **Planner** tab, while the planner is on | Yes | Yes | Yes | No | Yes |
 | `unkeep_message` | **Remove** in the **📌 &lt;n&gt; kept** list of a run's **Live** | Yes | Yes | Yes | No | Yes |
 | `queue_add` | **Add** under **Up next** on a run's **Experiments** tab | Yes | Yes | Yes | No | Yes |
@@ -597,6 +598,16 @@ The owner stops one running trial, such as one a drain waits for. An operator's 
 | `reason` | text, 1 to 500 characters, optional | Why, as the event records it. Without one: `stopped by <issuer>` |
 
 The harness refuses a trial of another run (`run <run> has no trial <trial>`) and one that has ended (`trial <trial> has ended already`). Otherwise it records `trial_stop_asked` `{trial, lane, reason?}`, and the scheduler stops the trial within a second, as a restart would: the event `trial_stopped` `{lane, trial, reason}`, then the trial ends as `interrupted`, with the counters its worker last reported. Its sources and claims stay. Its experiment goes back to the top of the run's queue, as for [`reset_workers`](#reset_workers): during a drain, a lane takes it up again once the drain ends. Nothing else stops. A trial that ends before the scheduler gets to it is left as it ended. Result: `{"run", "trial", "lane", "stopping": true}`.
+
+### `end_wait`
+
+The owner ends a run's wait for its provider's limit before its time. An operator's token may send it too, for the owner; an agent's may not.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The run whose agents wait |
+
+While a run waits for its provider's limit (`agents_wait_for_limit`), no new trial or plan of the run starts until the time the provider gave, at most one trial's length from when it was asked ([The model provider](limits-and-pacing.md#the-model-provider)). `end_wait` ends that wait now: the harness records `agents_wait_ended` `{until}`, with the time the wait was to last until, and new trials and plans of the run start at once. If the limit still holds, the next trial meets it, and the run waits again. A trial that waits in its own conversation goes on at its own time. A research run's clock runs again from then. The run's **History** says `You ended the agents' wait for the provider's limit, which was to last until <time> UTC: new trials and plans start again.` A run that does not wait has nothing to end: nothing is recorded. The harness refuses a closed run (`run <run> is closed`). Result: `{"run", "ended": true, "until"}`, or `{"run", "ended": false}`.
 
 ### `wipe_state`
 

@@ -20,7 +20,7 @@ A limit pauses only a run with agents that has a model. A run with no agents, su
 
 :::caution[The model spend limit is not your total spend]
 - It counts only the workers' trials. The planner's calls are not counted, and the advisors' calls are not counted either: they have a daily limit of their own (see [Configure advisors](../operate/advisors.md#spending)).
-- A trial's tokens count when that trial ends, at one pair of prices for every model the rig uses.
+- A trial's tokens count at one pair of prices for every model the rig uses. A trial in OpenCode or Codex counts the tokens the provider's answers reported, as the harness's model proxy saw each answer pass, whatever the program says; a trial in Pi or Claude Code counts the tokens it reports.
 - Rigs that control sets up on machines and clusters, and rigs you join yourself, can't be given the prices ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)). There, `llm_usd` never pauses anything.
 
 Where `llm_usd` can't count what you spend, set a stop time, and set a spending limit with your model provider, on the key the rig uses.

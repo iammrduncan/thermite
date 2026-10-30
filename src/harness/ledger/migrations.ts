@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { MIGRATIONS } from "../schema/index.ts";
 import { PROMPT_TABLE, PROMPT_TURN_COLUMN } from "./prompts.ts";
 import { eventRunColumn } from "./runs.ts";
+import { TRIAL_PROXY_TOKENS } from "./trials.ts";
 
 /**
  * Every ledger migration, in order: schema.ts's, then the ones since, here, so schema.ts no longer
@@ -23,4 +24,6 @@ export const LEDGER_MIGRATIONS: readonly (string | ((db: DatabaseSync) => void))
   PROMPT_TABLE,
   // 25: which turn of its call each prompt was: the later turns are kept too (goal 166).
   PROMPT_TURN_COLUMN,
+  // 26: the tokens the model proxy saw of each trial through it, which a run's budget counts.
+  TRIAL_PROXY_TOKENS,
 ];

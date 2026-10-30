@@ -26,7 +26,10 @@ export {
   runProgress,
   runRow,
   runStateHtml,
+  waitEnd,
   waitingOn,
+  waitsForLimit,
+  waitWords,
 } from "./run.ts";
 export { sentenceHtml, type TimelineRow, timeline } from "./timeline.ts";
 export { withdrawBlock } from "./withdraw.ts";

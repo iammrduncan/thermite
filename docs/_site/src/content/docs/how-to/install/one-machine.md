@@ -232,7 +232,7 @@ Put settings in a file named `.env` next to `compose.yaml` (git ignores it), the
 
 | Container | The settings `.env` reaches |
 | --- | --- |
-| `control` | `THERMITE_CONTROL_PUBLIC_URL`, `THERMITE_RIG_HARNESS_IMAGE`, `THERMITE_RIG_HARNESS_CUDA_IMAGE`, `THERMITE_RIG_SUPERVISOR_IMAGE`, `THERMITE_RUNPOD_RIG_IMAGE`, `THERMITE_RUNPOD_TEST_IMAGE`, `THERMITE_CONTROL_REQUIRE_KEY_ACCEPT`, `THERMITE_CONTROL_SESSION_DAYS`, `THERMITE_CONTROL_STALE_SECONDS`, `THERMITE_CONTROL_OFFLINE_SECONDS`, `THERMITE_LIFECYCLE`, `THERMITE_NATS_PUBLIC_URL` |
+| `control` | `THERMITE_CONTROL_PUBLIC_URL`, `THERMITE_CONTROL_ALLOW_PLAIN_HTTP`, `THERMITE_RIG_HARNESS_IMAGE`, `THERMITE_RIG_HARNESS_CUDA_IMAGE`, `THERMITE_RIG_SUPERVISOR_IMAGE`, `THERMITE_RUNPOD_RIG_IMAGE`, `THERMITE_RUNPOD_TEST_IMAGE`, `THERMITE_CONTROL_REQUIRE_KEY_ACCEPT`, `THERMITE_CONTROL_SESSION_DAYS`, `THERMITE_CONTROL_STALE_SECONDS`, `THERMITE_CONTROL_OFFLINE_SECONDS`, `THERMITE_LIFECYCLE`, `THERMITE_NATS_PUBLIC_URL` |
 | `harness` | `THERMITE_PROMOTION`, `THERMITE_CALIBRATION_BLOCKS`, `THERMITE_MODEL_BASE_URL`, `THERMITE_MODEL`, `THERMITE_MODEL_CONTEXT_WINDOW`, `THERMITE_MODEL_MAX_TOKENS`, `THERMITE_MODEL_REASONING_EFFORT`, `THERMITE_MAX_TRIALS`, `THERMITE_TRIAL_MINUTES`, `THERMITE_MAX_TURNS`, `THERMITE_RESEARCH_MAX_MB`, `THERMITE_LLM_USD_PER_MTOK_IN`, `THERMITE_LLM_USD_PER_MTOK_OUT`, `THERMITE_EXPORT_MINUTES` |
 | `supervisor` | `THERMITE_POLL_SECONDS`, `THERMITE_COMMAND_POLL_SECONDS`, `THERMITE_MODEL_ROUTE_POLL_SECONDS`, `THERMITE_LIVE_INTERVAL_MS`, `THERMITE_RESULTS_REMOTE`, `THERMITE_ADVISORS_FILE`, `THERMITE_KB_SYNC_SECONDS`, `THERMITE_NATS_URL` |
 | Compose itself | `THERMITE_CONTROL_PORT`, `THERMITE_NATS_PUBLISH`, `THERMITE_NATS_MEMORY`, `THERMITE_NATS_STORE`, `THERMITE_COMMIT` for the images' builds, and `THERMITE_ENGINE_SOCKET_HOST` for `compose.lifecycle.yaml` |
@@ -329,6 +329,8 @@ A rig on another machine or a cluster reports to control by connecting to it. Th
    ```sh title=".env (part)"
    THERMITE_CONTROL_PUBLIC_URL=https://control.example.com
    ```
+
+   Control takes an `http://` address only for this computer or a compose service's name, and otherwise stops at start and says why. On a network you trust, such as a home network, `THERMITE_CONTROL_ALLOW_PLAIN_HTTP=1` in `.env` lets it take one: the rigs then send their tokens over plain HTTP.
 
 3. **The images control sets rigs up from**, in a registry the rigs can pull from. The release's `compose.yaml` sets them to the release's own images on `ghcr.io`, pinned by digest: the CPU harness, the CUDA harness and the supervisor. So with the release's file there is nothing to do. To use images of your own instead ([Push the images to your own registry](own-registry.md)), name them in `.env`:
 

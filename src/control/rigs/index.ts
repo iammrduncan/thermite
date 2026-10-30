@@ -35,6 +35,7 @@ export {
 } from "./model.ts";
 export {
   advisorRoutesOf,
+  configOnBusRefusal,
   type ModelRoutes,
   modelRoutesOf,
   type RouteParts,

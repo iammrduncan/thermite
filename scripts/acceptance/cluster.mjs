@@ -141,6 +141,9 @@ try {
       `THERMITE_CONTROL_ADMIN_TOKEN_SHA256=${createHash("sha256").update(admin).digest("hex")}`,
       "-e",
       `THERMITE_CONTROL_PUBLIC_URL=http://${ip}:8800`,
+      // The kind network's own address: plain http on the test's private network.
+      "-e",
+      "THERMITE_CONTROL_ALLOW_PLAIN_HTTP=1",
       "-e",
       `THERMITE_RIG_HARNESS_IMAGE=${harness}`,
       "-e",

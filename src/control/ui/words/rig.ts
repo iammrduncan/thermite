@@ -20,6 +20,7 @@ const COMMAND: Record<string, string> = {
   propagate: "import another rig's champion",
   wipe_state: "wipe the rig's state",
   invalidate_evidence: "withdraw evidence",
+  end_wait: "end the agents' wait for the provider",
   terminal_input: "type into an agent's terminal",
 };
 export const commandText = (kind: string) => COMMAND[kind] ?? kind.replace(/_/g, " ");
@@ -75,6 +76,16 @@ export function rigSentence(w: SentenceContext, e: StoredEvent): Sentence | null
           .replace("T", " ")
           .slice(0, 16)} UTC${b.reason ? ` (${clip(String(b.reason), 160)})` : ""}.`,
         "warn",
+        { run: String(e.subject) },
+      );
+    case "agents_wait_ended":
+      return s(
+        `${who(e.actor)} ended the agents' wait for the provider's limit, which was to last until ${String(
+          b.until ?? "?",
+        )
+          .replace("T", " ")
+          .slice(0, 16)} UTC: new trials and plans start again.`,
+        "ok",
         { run: String(e.subject) },
       );
     case "model_route_set":

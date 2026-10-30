@@ -192,7 +192,7 @@ No budget is set unless you set one, and without one a run keeps going. A spent 
 | --- | --- | --- | --- | --- |
 | `budget.wall_hours` | number > 0 | none | Hours since the run was created, paused time included. It also shapes the search: every lane starts again from the champion at a third and two thirds of it (every 20 epochs without it) | `the wall-time budget is spent` |
 | `budget.device_hours` | number > 0 | none | Hours the judge's finished jobs for this run have taken | `the device-hours budget is spent` |
-| `budget.llm_usd` | number ≥ 0 | none | US dollars of model tokens the run's trials have used. Counted only when the rig sets both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` (prices per million tokens); without them, it has no effect | `the model budget is spent ($<amount>)` |
+| `budget.llm_usd` | number ≥ 0 | none | US dollars of model tokens the run's trials have used: for a trial in OpenCode or Codex, the tokens the provider's answers reported as the model proxy saw them. Counted only when the rig sets both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` (prices per million tokens); without them, it has no effect | `the model budget is spent ($<amount>)` |
 | `budget.max_open_attempts` | integer ≥ 1 | 4 | Back-pressure, not a budget: no new trial starts while this many of the run's attempts wait for the judge (queued, building, screening, confirming, verifying, waiting for an audit or for approval) | none: lanes wait |
 
 ### Search policy

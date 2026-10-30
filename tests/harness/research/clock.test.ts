@@ -68,6 +68,12 @@ describe("the research clock", () => {
     });
     pass(300);
     assert.equal(clock().elapsed_ms, going.elapsed_ms, "waiting: stopped");
+    // The owner ends the wait: the clock runs again from then.
+    ledger.appendEvent("control:owner", "agents_wait_ended", "r-1", {
+      until: new Date(now() + 59_700).toISOString(),
+    });
+    pass(400);
+    assert.equal(clock().elapsed_ms - going.elapsed_ms, 400, "the wait ended: it runs again");
     // A wait for the MCP servers (goal 068) recorded after it ended is taken off the clock.
     const r3 = await onClock({ min_duration: "1s", max_duration: undefined });
     r3.pass(1200);

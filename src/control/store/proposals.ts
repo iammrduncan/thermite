@@ -3,13 +3,17 @@ import { type Row, StorePart } from "./part.ts";
 
 /**
  * Changes the operator proposes to a campaign's own settings that the owner approves first: the
- * additions to its roles and which roles write in its collection. Each waits until the owner
- * approves or declines it on the campaign's page; a newer proposal of the same setting replaces
- * one still waiting. Nothing is deleted: each keeps who proposed it and who decided.
+ * additions to its roles, which roles write in its collection, and another campaign's collection
+ * its agents read (a grant). Each waits until the owner approves or declines it on the campaign's
+ * page; a newer proposal of the same setting replaces one still waiting (of a grant: of the same
+ * collection). Nothing is deleted: each keeps who proposed it and who decided.
  */
 
-/** The settings a proposal may change: a field of the campaign's contract. */
-export const PROPOSED_FIELDS = ["role_additions", "kb_writes"] as const;
+/**
+ * The settings a proposal may change: a field of the campaign's contract, or a grant of another
+ * campaign's collection (its value is that campaign's name).
+ */
+export const PROPOSED_FIELDS = ["role_additions", "kb_writes", "kb_grant"] as const;
 export type ProposedField = (typeof PROPOSED_FIELDS)[number];
 
 /** A proposal as the store keeps it. */
@@ -42,10 +46,31 @@ export function campaignProposalTable(db: DatabaseSync): void {
 )`);
 }
 
+/**
+ * Store migration 18: proposals may grant another campaign's collection too. SQLite can't change a
+ * table's check, so the table is made again with its rows.
+ */
+export function campaignProposalGrants(db: DatabaseSync): void {
+  db.exec(`create table campaign_proposal_18 (
+  id integer primary key autoincrement,
+  campaign text not null,
+  field text not null check (field in ('role_additions', 'kb_writes', 'kb_grant')),
+  value text,
+  proposed_by text not null,
+  proposed_at text not null,
+  decision text check (decision in ('approved', 'declined', 'replaced')),
+  decided_by text,
+  decided_at text
+)`);
+  db.exec("insert into campaign_proposal_18 select * from campaign_proposal");
+  db.exec("drop table campaign_proposal");
+  db.exec("alter table campaign_proposal_18 rename to campaign_proposal");
+}
+
 const proposalOf = (r: Row): CampaignProposal => ({
   id: Number(r.id),
   campaign: String(r.campaign),
-  field: r.field === "kb_writes" ? "kb_writes" : "role_additions",
+  field: PROPOSED_FIELDS.find((f) => f === r.field) ?? "role_additions",
   value: r.value === null ? null : (JSON.parse(String(r.value)) as unknown),
   proposed_by: String(r.proposed_by),
   proposed_at: String(r.proposed_at),
@@ -55,28 +80,27 @@ const proposalOf = (r: Row): CampaignProposal => ({
 });
 
 export class CampaignProposals extends StorePart {
-  /** Keeps a proposal; one of the same setting of the campaign still waiting is replaced by it. */
+  /**
+   * Keeps a proposal; one of the same setting of the campaign still waiting is replaced by it (a
+   * grant: one of the same collection).
+   */
   propose(p: { campaign: string; field: ProposedField; value: unknown; by: string }): number {
     return this.tx(() => {
       const now = new Date().toISOString();
+      const value = p.value === undefined ? null : JSON.stringify(p.value);
       this.db
         .prepare(
           `update campaign_proposal set decision = 'replaced', decided_by = ?, decided_at = ?
-           where campaign = ? and field = ? and decision is null`,
+           where campaign = ? and field = ? and decision is null
+             and (field != 'kb_grant' or value = ?)`,
         )
-        .run(p.by, now, p.campaign, p.field);
+        .run(p.by, now, p.campaign, p.field, value);
       const r = this.db
         .prepare(
           `insert into campaign_proposal (campaign, field, value, proposed_by, proposed_at)
            values (?, ?, ?, ?, ?)`,
         )
-        .run(
-          p.campaign,
-          p.field,
-          p.value === undefined ? null : JSON.stringify(p.value),
-          p.by,
-          now,
-        );
+        .run(p.campaign, p.field, value, p.by, now);
       return Number(r.lastInsertRowid);
     });
   }

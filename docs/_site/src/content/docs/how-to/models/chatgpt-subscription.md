@@ -80,7 +80,7 @@ Control asks ChatGPT's usage endpoint for them, the one the Codex CLI reads for 
 
 ## When the plan is full
 
-When the plan is full, the agents on the subscription wait and try again every 15 minutes. No new trial (a worker's session) or plan starts on that rig while they wait. Nothing pays for more.
+When the plan is full, the agents on the subscription wait and try again every 15 minutes. No new trial (a worker's session) or plan of that run starts while they wait, for at most one trial's length at a time (24 hours when neither the campaign nor the rig sets one); the rig's other runs go on until they meet the full plan too. To end a wait early, press **Resume now** on the run's page ([End a wait for the provider](../campaigns/steer-a-run.md#end-a-wait-for-the-provider)). Nothing pays for more.
 
 A trial at work waits in its own conversation, in OpenCode v2 and Codex as in Pi, and goes on after the wait. Its **Live** says `waiting until 03:14:20 UTC: the provider's rate limit (…). The trial goes on in the same conversation.`
 

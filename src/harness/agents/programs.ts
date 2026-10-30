@@ -2,7 +2,13 @@ import type { CliCompacted } from "../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../agents/model/index.ts";
 import { type TrialProgram, windowFit } from "../../agents/roles/index.ts";
 import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
-import { type Harness, type ProviderType, programForApi, reaches } from "../../core/agents.ts";
+import {
+  type Harness,
+  type ProviderType,
+  programForApi,
+  reaches,
+  throughProxy,
+} from "../../core/agents.ts";
 import type { Role } from "../broker/index.ts";
 import {
   type CliAskOptions,
@@ -52,6 +58,12 @@ export interface TrialLink extends Omit<CliTrialDeps, "model" | "compacted"> {
    * the provider. The function it returns closes it.
    */
   handOver(harness: Harness): () => void;
+  /**
+   * Told when the trial's program reaches its provider through the harness's model proxy: from
+   * then on, the run's budget counts the tokens the proxy sees in the provider's answers to the
+   * trial's calls, not those the program reports.
+   */
+  throughProxy?: (() => void) | undefined;
 }
 
 export interface AgentProgram {
@@ -165,6 +177,7 @@ async function cliTrial<T extends CliTally>(
   const model = link.model;
   // Without a route the agents run in Pi (programOf): this is a programmer's error.
   if (!model) throw new Error(`${p.name} runs only on a model route`);
+  if (throughProxy(model.api)) link.throughProxy?.();
   const compacted = link.compacted;
   const deps: CliTrialDeps = {
     ...link,

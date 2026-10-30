@@ -58,20 +58,52 @@ export interface AgentsStopped {
 }
 
 /**
+ * The run's wait for its provider's limit now: its newest, until its time, unless the owner ended
+ * it (`agents_wait_ended`). Undefined: the run does not wait.
+ */
+export function holdOf(
+  ledger: Ledger,
+  run: string,
+  now = Date.now(),
+): { until: string; reason: string } | undefined {
+  const e = ledger.events.newest(["agents_wait_for_limit", "agents_wait_ended"], { subject: run });
+  if (e?.kind !== "agents_wait_for_limit") return undefined;
+  const until = String(e.body.until);
+  return Date.parse(until) > now ? { until, reason: String(e.body.reason ?? "") } : undefined;
+}
+
+/**
+ * The owner (or an operator, for the owner) ends the run's wait for its provider now (`end_wait`):
+ * its new trials and plans start at once. A limit still in force shows again in the next trial,
+ * which waits again. Nothing is recorded for a run that does not wait.
+ */
+export function endWait(
+  ledger: Ledger,
+  run: string,
+  by: string,
+  now = Date.now(),
+): { run: string; ended: boolean; until?: string } {
+  const hold = holdOf(ledger, run, now);
+  if (!hold) return { run, ended: false };
+  ledger.appendEvent(by, "agents_wait_ended", run, { until: hold.until });
+  return { run, ended: true, until: hold.until };
+}
+
+/**
  * The provider's limit holds the run (one of its trials said until when, at most one trial's
- * length ahead: holdUntil): no new trials or plans for this run until then. The agents wait;
- * nothing pays for more (the owner's rule). A hold is its own run's: the rig's other runs go on.
+ * length ahead: holdUntil): no new trials or plans for this run until then, or until the owner
+ * ends the wait. The agents wait; nothing pays for more (the owner's rule). A hold is its own
+ * run's: the rig's other runs go on.
  */
 export function waitingForLimit(sched: SchedulerContext, run: string): boolean {
-  const resetAt = sched.ledger.events.newest("agents_wait_for_limit", { subject: run })?.body.until;
-  const until = resetAt ? Date.parse(resetAt) : 0;
-  if (Date.now() >= until) return false;
-  if (resetAt && sched.limitNoted.get(run) !== resetAt) {
-    sched.limitNoted.set(run, resetAt);
+  const hold = holdOf(sched.ledger, run);
+  if (!hold) return false;
+  if (sched.limitNoted.get(run) !== hold.until) {
+    sched.limitNoted.set(run, hold.until);
     sched.o.service.live.append({
       source: "planner",
       kind: "status",
-      text: `agents wait for the subscription's usage window to reset at ${resetAt}`,
+      text: `agents wait for the subscription's usage window to reset at ${hold.until}`,
       run,
     });
   }

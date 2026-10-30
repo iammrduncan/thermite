@@ -362,6 +362,12 @@ export const CommandPayloads = {
     reason: z.string().trim().min(1).max(500).optional(),
   }),
   /**
+   * The owner (or an operator, for the owner) ends a run's wait for its provider's limit now: its
+   * new trials and plans start again at once. A trial that waits in its own conversation goes on
+   * at its own time. A run that does not wait has nothing to end.
+   */
+  end_wait: z.strictObject({ run: RunId }),
+  /**
    * Owner-only full reset, after control verified that `export` (an export_now's result) was
    * pushed to the results repository. The harness refuses if research was recorded after it.
    */
@@ -445,14 +451,16 @@ export const MCP_AGENT_KINDS = [
   "rig_check",
 ] as const satisfies readonly CommandKind[];
 /**
- * An operator (a token the owner gives an operating agent) may also message the run's agents and
- * stop a trial (goal 136), on the owner's behalf; it never approves, accepts or wipes.
+ * An operator (a token the owner gives an operating agent) may also message the run's agents,
+ * stop a trial (goal 136) and end a run's wait for its provider, on the owner's behalf; it never
+ * approves, accepts or wipes.
  */
 export const MCP_OPERATOR_KINDS = [
   ...MCP_AGENT_KINDS,
   "message_agent",
   "unkeep_message",
   "stop_trial",
+  "end_wait",
   // The experiment queue and the rules for the plan (goal 064): the owner's and operators'.
   "queue_add",
   "queue_move",
@@ -498,6 +506,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "drop_directive",
   "hypothesis_status",
   "stop_trial",
+  "end_wait",
   "invalidate_evidence",
   "terminal_input",
 ]);
@@ -524,6 +533,7 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "hypothesis_status",
   "propagate",
   "stop_trial",
+  "end_wait",
   "approve_promotion",
   "decline_promotion",
   "accept_review",

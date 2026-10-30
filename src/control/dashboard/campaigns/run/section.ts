@@ -34,6 +34,7 @@ import {
   leftByClose,
   runBrief,
   timeline,
+  waitWords,
 } from "../../../ui/operator/index.ts";
 import { promptsTab } from "../../../ui/prompts.ts";
 import { attemptHref, championPatchHref, type RunTab, runHref } from "../../../ui/urls.ts";
@@ -314,6 +315,8 @@ export function runHelpers(dash: Dashboard) {
           : "No lane is at work."
         : `It is ${esc(runStatusText(i))}.`,
       i.status === "running" ? confirmingWords(i) : "",
+      // A wait for the provider's limit: Resume now in the header ends it.
+      esc(waitWords(i, now)),
       // A hill climb's baseline (goal 115): the judge measures the starting point first.
       i.status === "running" ? esc(baselineWords(i)) : "",
       judging

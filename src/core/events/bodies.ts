@@ -416,6 +416,8 @@ export interface EventBodies {
     reason: string;
     in_trial?: boolean | undefined;
   };
+  /** The owner ended the run's wait for its provider before its time (`end_wait`). */
+  agents_wait_ended: { until: string };
   journal_note: {
     id: number;
     by: string;

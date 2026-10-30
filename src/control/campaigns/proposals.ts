@@ -1,23 +1,37 @@
 import type { KbWrites } from "../../core/kb.ts";
+import { GRANT_OPENS } from "../kb/index.ts";
 import type { CampaignProposal, ControlStore, ProposedField } from "../store/index.ts";
 import { contractAdditions, sameAdditions, setCampaignAdditions } from "./additions.ts";
 import { campaignContract } from "./context.ts";
 import { campaignKbWrites, sameKbWrites, setCampaignKbWrites } from "./kb-writes.ts";
 
 /**
- * The operator's proposals to a campaign's own settings (the owner's decision, 2026-10-29): the
- * additions to its roles, which the prompts carry as the owner's, and which roles write in its
- * collection. An operator's change is checked as the owner's would be, then waits for the owner,
- * who approves or declines it on the campaign's page and under Needs you; only an approval saves
- * a new version of the contract. The owner's own changes take effect at once. An assignment from
- * the operator's or an agent's token carries both as a saved version has them (savedSettingsRefusal).
+ * The operator's proposals to a campaign's own settings (the owner's decisions, 2026-10-29 and
+ * 2026-10-30): the additions to its roles, which the prompts carry as the owner's, which roles
+ * write in its collection, and a grant of another campaign's collection, which opens it to every
+ * agent of the campaign. An operator's change is checked as the owner's would be, then waits for
+ * the owner, who approves or declines it on the campaign's page and under Needs you; only an
+ * approval saves a new version of the contract, or grants. The owner's own changes take effect at
+ * once. An assignment from the operator's or an agent's token carries the contract's two as a
+ * saved version has them (savedSettingsRefusal).
  */
 
 /** Each setting in words, for the cards and the answers. */
 export const PROPOSED_WORDS: Record<ProposedField, string> = {
   role_additions: "additions to its roles",
   kb_writes: "which roles write in its collection",
+  kb_grant: "another campaign's collection for its agents to read",
 };
+
+/** The settings in the campaign's contract, which a saved version holds. */
+const CONTRACT_FIELDS = ["role_additions", "kb_writes"] as const;
+
+/** A proposal's change in a few words, such as "the grant of b's collection to a". */
+function proposalWhat(p: Pick<CampaignProposal, "campaign" | "field" | "value">): string {
+  return p.field === "kb_grant"
+    ? `the grant of ${String(p.value)}'s collection to ${p.campaign}`
+    : `the ${PROPOSED_WORDS[p.field]} of ${p.campaign}`;
+}
 
 export type ProposeOutcome =
   | { state: "proposed"; id: number; campaign: string; field: ProposedField; said: string }
@@ -31,7 +45,7 @@ type Value = Record<string, string> | KbWrites | undefined;
 function setField(
   store: ControlStore,
   campaign: string,
-  field: ProposedField,
+  field: (typeof CONTRACT_FIELDS)[number],
   value: Value,
   by: string,
   check: boolean,
@@ -53,9 +67,12 @@ function setField(
  */
 export function proposeSetting(
   store: ControlStore,
-  req: { campaign: string; field: ProposedField; value: Value },
+  req:
+    | { campaign: string; field: "role_additions" | "kb_writes"; value: Value }
+    | { campaign: string; field: "kb_grant"; value: string },
   by: string,
 ): ProposeOutcome {
+  if (req.field === "kb_grant") return proposeGrant(store, req.campaign, req.value, by);
   const { campaign, field } = req;
   const checked = setField(store, campaign, field, req.value, by, true);
   if (checked.state === "refused") return checked;
@@ -78,6 +95,39 @@ export function proposeSetting(
   };
 }
 
+/**
+ * An operator's grant, kept as a proposal for the owner. The caller checks both campaigns as the
+ * owner's grant does; one the campaign has already is nothing to propose.
+ */
+function proposeGrant(
+  store: ControlStore,
+  campaign: string,
+  reads: string,
+  by: string,
+): ProposeOutcome {
+  if (store.kb().reads(campaign).includes(reads))
+    return {
+      state: "unchanged",
+      campaign,
+      field: "kb_grant",
+      said: `${campaign} reads ${reads}'s collection already: nothing to propose.`,
+    };
+  const id = store.proposals.propose({ campaign, field: "kb_grant", value: reads, by });
+  store.auditLog.add(by, "campaign_setting_proposed", {
+    campaign,
+    field: "kb_grant",
+    reads,
+    proposal: id,
+  });
+  return {
+    state: "proposed",
+    id,
+    campaign,
+    field: "kb_grant",
+    said: `Proposed to the owner: the grant of ${reads}'s collection to ${campaign}. ${GRANT_OPENS} Nothing changes until the owner approves it on the campaign's page.`,
+  };
+}
+
 export type DecideOutcome =
   | { state: "approved"; said: string }
   | { state: "declined"; said: string }
@@ -85,8 +135,9 @@ export type DecideOutcome =
 
 /**
  * The owner's decision on a proposal. Approved: saved as the owner's own change would be, a new
- * version of the contract, which the audit log ties to the proposal; refused in words when it can
- * no longer be saved, and it waits on. Declined: nothing changes.
+ * version of the contract, which the audit log ties to the proposal (a grant: granted, as the
+ * owner's); refused in words when it can no longer be saved, and it waits on. Declined: nothing
+ * changes.
  */
 export function decideProposal(
   store: ControlStore,
@@ -97,7 +148,6 @@ export function decideProposal(
   const p = store.proposals.get(id);
   if (!p || p.decision !== null)
     return { state: "refused", error: "That proposal no longer waits for you.", status: 404 };
-  const what = `${PROPOSED_WORDS[p.field]} of ${p.campaign}`;
   if (!approve) {
     store.proposals.decide(id, "declined", by);
     store.auditLog.add(by, "campaign_setting_declined", {
@@ -108,7 +158,23 @@ export function decideProposal(
     });
     return {
       state: "declined",
-      said: `Declined: the ${what}, as ${p.proposed_by} proposed them. Nothing changed.`,
+      said: `Declined: ${proposalWhat(p)}, as ${p.proposed_by} proposed ${p.field === "kb_grant" ? "it" : "them"}. Nothing changed.`,
+    };
+  }
+  if (p.field === "kb_grant") {
+    const reads = String(p.value);
+    const granted = store.kb().grant(p.campaign, reads, by);
+    store.proposals.decide(id, "approved", by);
+    if (granted) store.auditLog.add(by, "kb_grant", { campaign: p.campaign, reads });
+    store.auditLog.add(by, "campaign_setting_approved", {
+      campaign: p.campaign,
+      field: p.field,
+      proposal: id,
+      proposed_by: p.proposed_by,
+    });
+    return {
+      state: "approved",
+      said: `Approved: every agent of ${p.campaign} may now search and read ${reads}'s collection, read only, as ${p.proposed_by} proposed. Runs started from now may search it; runs at work get it at their next sync.`,
     };
   }
   const saved = setField(store, p.campaign, p.field, (p.value ?? undefined) as Value, by, false);
@@ -132,6 +198,12 @@ export function proposalChange(
   store: ControlStore,
   p: CampaignProposal,
 ): { now: string; proposed: string } {
+  if (p.field === "kb_grant") {
+    const reads = store.kb().reads(p.campaign);
+    const words = (r: string[]) =>
+      r.length ? `its own and ${r.join(", ")}` : "its own collection only";
+    return { now: words(reads), proposed: words([...new Set([...reads, String(p.value)])]) };
+  }
   if (p.field === "role_additions") {
     const words = (a: Record<string, string> | undefined) =>
       Object.entries(a ?? {})
@@ -168,7 +240,7 @@ export function savedSettingsRefusal(store: ControlStore, payload: unknown): str
   const versions = campaign ? store.campaigns.versions(campaign) : [];
   const saved = versions.find((v) => v.version === contract?.version) ?? versions[0];
   const known = saved?.contract ?? (campaign ? campaignContract(store, campaign) : undefined);
-  const differ = (Object.keys(PROPOSED_WORDS) as ProposedField[]).filter((field) =>
+  const differ = CONTRACT_FIELDS.filter((field) =>
     field === "role_additions"
       ? !sameAdditions(contractAdditions(contract), contractAdditions(known))
       : !sameKbWrites(contract, known),

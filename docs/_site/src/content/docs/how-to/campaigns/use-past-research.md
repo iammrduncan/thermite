@@ -71,11 +71,13 @@ A campaign's agents always read its own collection: what the campaign's other ru
 1. Open the campaign's page: **Campaigns** in the sidebar, then the campaign. (The collection's name on **Knowledge**, or **What it can read** on a run's **Journal** tab, opens the same place.)
 2. Go down to **Knowledge**, after the runs. It counts what the campaign's own collection holds, with the buttons **Search it** and **Open the collection**, which open the **Knowledge** page. At the side, **Who reads sort-speed's collection** names the campaigns that may read this campaign's collection, or says `No other campaign.`
 3. Under **Can read from**, choose a campaign in **Add a collection**. Each is listed with its mode and items, such as `merge-speed (hill climb · 86 items)`. A campaign whose runs haven't reported yet is listed too: its items come as its runs report.
-4. Press **Add**. Beside it, the form says `Runs at work see the change at their next sync.`
+4. Press **Add**. Beside it, the form says `A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Runs at work see the change at their next sync.`
 
 The campaign's page comes back at its **Knowledge** section, and the top of the page says `sort-speed's agents may now read merge-speed's collection. Runs at work get it at their next sync.` The collection shows under **Can read from**, with its mode, its items and when it last changed. On **merge-speed**'s page, **Who reads merge-speed's collection** now names `sort-speed`.
 
 If control can't add it, the **Knowledge** section says **Not changed.** and why, such as `Choose a collection to add.` or `A campaign always reads its own collection: choose another campaign's.` A collection the campaign reads already changes nothing, and the top of the page says `sort-speed reads merge-speed already.`
+
+Only you grant and remove a collection. With the operator's token, `kb_grant` proposes a grant instead: it waits for you under **Proposed to you** on the campaign's page and under **Needs you**, where **Approve** grants it and **Decline** changes nothing ([A proposed grant](../../reference/knowledge-base.md#a-proposed-grant)).
 
 To stop it, press **Remove** beside the collection under **Can read from**. The page says `sort-speed's agents no longer read merge-speed's collection. Runs at work drop it at their next sync.` New runs start without it. Experiments and a briefing that a run already took from that collection stay with the run.
 
@@ -142,8 +144,8 @@ The [MCP tools](../../reference/mcp-tools.md) for the knowledge base:
 | [`kb_collections`](../../reference/mcp-tools.md#kb_collections) | The owner's and an operator's | Lists the collections, each with its mode, its counts by kind, its runs, its newest change, `read_by` (the campaigns granted to read it) and `reads` (the collections it reads besides its own) |
 | [`kb_search`](../../reference/mcp-tools.md#kb_search) | The owner's and an operator's | Takes `q` (the words), and optionally `queries`, `mode`, `like`, `seen`, `collections` (every collection when left out), `kinds`, `outcomes`, `runs`, `slots`, `offset` and `limit` (1 to 50, 10 unless set). Returns `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}`, best first ([Search](../../reference/knowledge-base.md#search)), each hit with its `id`, `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`. REST's `GET /v1/kb/search` and `thermite kb search` give the same |
 | [`kb_read`](../../reference/mcp-tools.md#kb_read) | The owner's and an operator's | Takes an item's `address`, and optionally a `version`: the item whole, with its links. REST's `GET /v1/kb/item` and `thermite kb read` give the same |
-| [`kb_grant`](../../reference/mcp-tools.md#kb_grant) | The owner's and an operator's | Takes `campaign` and `reads`, as **Add** does: from now on, `campaign`'s agents may read the collection of `reads` |
-| [`kb_revoke`](../../reference/mcp-tools.md#kb_revoke) | The owner's and an operator's | Takes the same, as **Remove** does |
+| [`kb_grant`](../../reference/mcp-tools.md#kb_grant) | The owner's; an operator's proposes it | Takes `campaign` and `reads`, as **Add** does: from now on, every agent of `campaign` may read the collection of `reads`. With the operator's token, a proposal that waits for your approval |
+| [`kb_revoke`](../../reference/mcp-tools.md#kb_revoke) | The owner's | Takes the same, as **Remove** does |
 
 The agent's and the reader's tokens don't have these tools. `kb_grant` refuses `no campaign <name>`, and `a campaign always reads its own collection: name another campaign`. `kb_revoke` refuses `<campaign> does not read <reads>`.
 

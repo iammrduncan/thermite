@@ -7,6 +7,7 @@ import {
 } from "../../core/commands.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
+import { endWait } from "../agents/index.ts";
 import { Conclusions } from "../conclusions.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { receivePropagation } from "../propagation.ts";
@@ -132,6 +133,21 @@ export class Commands {
         return drainCommand(svc, CommandPayloads.drain_rig.parse(payload), by, svc.clock());
       case "stop_trial":
         return askStop(svc.ledger, CommandPayloads.stop_trial.parse(payload), by);
+      // The owner ends a run's wait for its provider's limit: new trials and plans start at once.
+      case "end_wait": {
+        const p = CommandPayloads.end_wait.parse(payload);
+        if (requireRun(svc.ledger, p.run).status === "closed")
+          throw new Refusal(`run ${p.run} is closed`);
+        const r = endWait(svc.ledger, p.run, by, svc.clock().getTime());
+        if (r.ended)
+          svc.live.append({
+            source: "planner",
+            kind: "status",
+            text: `the wait for the provider's limit (until ${r.until}) was ended by hand: new trials and plans start again`,
+            run: p.run,
+          });
+        return r;
+      }
       // The owner's input into a trial's terminal (goal 169): the owner's own, never an operator's.
       case "terminal_input":
         if (!typesIntoTerminals(envelope.issued_by))

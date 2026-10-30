@@ -67,6 +67,16 @@ const TRIAL_COLS = `id, run, lane, epoch, family, parent_commit, attempt, stoppe
   tokens_in, tokens_out, error, started_at, ended_at`;
 
 /**
+ * Ledger migration 26: the tokens the model proxy saw in the provider's answers to a trial's calls,
+ * for a trial whose program reaches its provider through the proxy (OpenCode, Codex). Null for
+ * any other trial, whose own counters count.
+ */
+export const TRIAL_PROXY_TOKENS = `
+alter table trial add column proxy_tokens_in integer;
+alter table trial add column proxy_tokens_out integer;
+`;
+
+/**
  * The `trial`, `lane`, `epoch` and `family` tables: the workers' trials, each lane's retained
  * best, the planner's epochs and the direction registry's families.
  */
@@ -236,10 +246,37 @@ export class LedgerTrials extends LedgerPart {
     return r ? toTrial(r) : undefined;
   }
 
-  /** The tokens a run's trials used. */
+  /**
+   * A trial whose program reaches its provider through the model proxy: from now on, its tokens are
+   * those the proxy sees in the provider's answers (proxySaw), whatever its program reports.
+   */
+  countByProxy(id: string): void {
+    this.execute(
+      `update trial set proxy_tokens_in = coalesce(proxy_tokens_in, 0),
+         proxy_tokens_out = coalesce(proxy_tokens_out, 0) where id = ?`,
+      id,
+    );
+  }
+
+  /** The tokens one of the provider's answers to a trial's call reported, as the proxy saw it. */
+  proxySaw(id: string, t: { in: number; out: number }): void {
+    this.execute(
+      `update trial set proxy_tokens_in = coalesce(proxy_tokens_in, 0) + ?,
+         proxy_tokens_out = coalesce(proxy_tokens_out, 0) + ? where id = ?`,
+      t.in,
+      t.out,
+      id,
+    );
+  }
+
+  /**
+   * The tokens a run's trials used: what the model proxy saw of a trial through it, else what the
+   * trial reported.
+   */
   tokens(run: string): { in: number; out: number } {
     const r = this.row<Row>(
-      "select coalesce(sum(tokens_in), 0) as i, coalesce(sum(tokens_out), 0) as o from trial where run = ?",
+      `select coalesce(sum(coalesce(proxy_tokens_in, tokens_in)), 0) as i,
+         coalesce(sum(coalesce(proxy_tokens_out, tokens_out)), 0) as o from trial where run = ?`,
       run,
     );
     return { in: Number(r?.i ?? 0), out: Number(r?.o ?? 0) };

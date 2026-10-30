@@ -364,16 +364,37 @@ export type ProgramStep =
   | { wall: true };
 
 /**
+ * The kind of a program's error: from its words and the error answer the harness's model proxy
+ * saw. For a program whose calls go through the proxy (`proxied`: OpenCode, Codex), a stop kind
+ * comes only from that answer: the program's words alone, which its agent's commands can write,
+ * never stop the run's agents, and are the model's own error instead.
+ */
+export function programErrorKind(
+  error: string,
+  answer: (ProviderAnswer & { body?: string | undefined }) | undefined,
+  proxied: boolean,
+): ProviderError {
+  const text = answer?.body ? `${error} (${answer.body})` : error;
+  const e = classifyProviderError(text, answer);
+  if (!proxied || !stopsAgents(e.kind)) return e;
+  const seen = answer ? classifyProviderError(answer.body ?? "", answer) : undefined;
+  if (stopsAgents(seen?.kind)) return e;
+  return seen ? { ...seen, words: e.words } : { ...e, kind: "model" };
+}
+
+/**
  * A trial in a program of its own (OpenCode, Codex, Claude Code) ended a run with an error (goal
- * 079): its kind, from the program's words and the error answer the harness's model proxy saw.
- * A stop kind or the campaign's limit ends the trial. Otherwise the trial waits (the provider's
- * time, or a growing pause, never past its own end) and goes on in the program's same session:
- * `goOn` holds the provider's words, for the agent's turn that goes on.
+ * 079): its kind, from the program's words and the error answer the harness's model proxy saw
+ * (programErrorKind). A stop kind or the campaign's limit ends the trial. Otherwise the trial waits
+ * (the provider's time, or a growing pause, never past its own end) and goes on in the program's
+ * same session: `goOn` holds the provider's words, for the agent's turn that goes on.
  */
 export async function afterProgramFailure(input: {
   error: string;
   /** The error answer the model proxy saw during the run, if any. */
   answer?: (ProviderAnswer & { body?: string | undefined }) | undefined;
+  /** Whether the program's calls go through the model proxy (OpenCode, Codex on a provider's key). */
+  proxied?: boolean | undefined;
   count: FailureCount;
   failuresInARow?: number | undefined;
   /** The trial's end (ms), or Infinity. */
@@ -383,8 +404,7 @@ export async function afterProgramFailure(input: {
   /** How long a wait really lasts (tests shorten it). */
   pauseMs?: ((ms: number) => number) | undefined;
 }): Promise<ProgramStep> {
-  const text = input.answer?.body ? `${input.error} (${input.answer.body})` : input.error;
-  const e = classifyProviderError(text, input.answer);
+  const e = programErrorKind(input.error, input.answer, input.proxied === true);
   // A program compacts its own conversation: a context error here is the model's refusal.
   const step = nextStep(
     e.kind === "context" ? { ...e, kind: "model" } : e,

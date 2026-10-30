@@ -11,6 +11,7 @@ export const EVENT_KINDS = [
   "agent_prompt",
   "agents_resumed",
   "agents_stopped",
+  "agents_wait_ended",
   "agents_wait_for_limit",
   "attempt_lifecycle",
   "attempt_recorded",

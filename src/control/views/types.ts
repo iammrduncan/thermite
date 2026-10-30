@@ -333,6 +333,12 @@ export interface RunView {
     by: string;
     since: string;
   } | null;
+  /**
+   * The run's newest wait for its provider's limit (`agents_wait_for_limit`): no new trial or plan
+   * starts before `until`, unless the owner ends it (`end_wait`). Null when none was asked since
+   * the last one ended; one whose time has passed stays until the next.
+   */
+  agents_wait: { until: string; reason: string; since: string } | null;
   /** Research mode: the newest digest's figures and report. */
   research: Record<string, unknown> | null;
   /**

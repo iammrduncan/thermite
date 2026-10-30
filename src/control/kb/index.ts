@@ -36,6 +36,10 @@ export {
   ownerKbSearch,
 } from "./owner.ts";
 
+/** What a grant of another campaign's collection opens, in words: every agent of the campaign. */
+export const GRANT_OPENS =
+  "A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it.";
+
 /** The field notes' kinds (journal_note); a research note is a note of kind "note". */
 export const JOURNAL_KINDS = ["observation", "decision", "surprise", "question", "lesson"] as const;
 

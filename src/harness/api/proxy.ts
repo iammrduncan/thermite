@@ -11,6 +11,8 @@ export function proxyRoutes(app: Hono, { service, registry }: ApiContext): void 
   // trial's token or one the harness minted for a check or a plan (as a bearer token, or as
   // Anthropic's x-api-key), adds the real key and streams the answer. A minted token may name
   // its own route: the planner's, when control gave the planner a model of its own (goal 073).
+  // The tokens a trial's answers report are kept with the trial: its run's budget counts them,
+  // not what the trial's program says.
   const openTrial = (token: string) => {
     try {
       return registry.openTrial(token);
@@ -47,6 +49,8 @@ export function proxyRoutes(app: Hono, { service, registry }: ApiContext): void 
       (a) => service.noteProviderAnswer(trialId ?? "proxy", a),
       // A stream that goes silent is broken off, logged and said in the trial's Live (goal 079).
       { ms: service.modelStallMs, onStall: (ms) => service.noteModelStall(open, ms) },
+      // The tokens each of a trial's answers reported: what its run's budget counts of it.
+      trialId ? (t) => service.ledger.trials.proxySaw(trialId, t) : undefined,
     );
   });
 }

@@ -214,8 +214,13 @@ test("a campaign's read grants: forms with the form token, refused for itself, a
   );
   assert.ok(!/<option value="gemv-speed">gemv-speed \(/.test(page), "never itself in the Add list");
   assert.match(page, /Add a collection<i class="ii" tabindex="0" data-tip="/);
-  // Runs at work get a change at their supervisor's next sync, as the tip says.
+  // Runs at work get a change at their supervisor's next sync, as the tip says; and the form says
+  // what a grant opens.
   assert.match(page, /Runs at work see the change at their next sync\./);
+  assert.match(
+    page,
+    /<span class="muted small">A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it\. Runs at work/,
+  );
   assert.doesNotMatch(page, /at their next trial/);
   // Without the form token: refused.
   const forged = await s.post("/ui/campaigns/gemv-speed/kb/grant", { reads: "survey-study" });
@@ -466,7 +471,7 @@ test("Start a run from past research: the search reads only granted collections;
 const text = (r: unknown) =>
   JSON.parse(((r as { content: { text: string }[] }).content[0] as { text: string }).text);
 
-test("MCP: the owner and an operator read, search and grant the collections; agents and readers see none", async () => {
+test("MCP: the owner and an operator read and search the collections; the owner grants, the operator proposes a grant; agents and readers see none", async () => {
   const s = await stack();
   for (const token of [s.tokens.read, s.tokens.agent]) {
     const c = await mcpClient(s.control, token);
@@ -516,18 +521,52 @@ test("MCP: the owner and an operator read, search and grant the collections; age
     }),
   );
   assert.deepEqual((inPn as { hits: unknown[] }).hits, []);
-  // An operator grants, the owner revokes; both audited with who did it.
+  // An operator proposes a grant; the owner approves it on the campaign's page and revokes it
+  // over MCP; each audited with who did it.
   const operator = await mcpClient(s.control, s.tokens.operator);
-  const g = text(
-    await operator.callTool({
-      name: "kb_grant",
-      arguments: { campaign: "gemv-speed", reads: "survey-study" },
-    }),
+  const propose = async () =>
+    text(
+      await operator.callTool({
+        name: "kb_grant",
+        arguments: { campaign: "gemv-speed", reads: "survey-study" },
+      }),
+    ) as { state: string; proposal?: number; said: string };
+  const first = await propose();
+  assert.equal(first.state, "proposed");
+  assert.equal(
+    first.said,
+    "Proposed to the owner: the grant of survey-study's collection to gemv-speed. A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Nothing changes until the owner approves it on the campaign's page.",
   );
-  assert.deepEqual(g, { granted: true, reads: ["survey-study"] });
+  assert.deepEqual(s.store.kb().reads("gemv-speed"), [], "nothing granted before the owner says");
   assert.ok(
-    s.store.auditLog.list(50).some((a) => a.action === "kb_grant" && a.actor === "owner:operator"),
+    !s.store.auditLog.list(50).some((a) => a.action === "kb_grant"),
+    "the operator granted nothing",
   );
+  // The same again replaces the one waiting: one card, the newest.
+  const second = await propose();
+  assert.deepEqual(
+    s.store.proposals.waiting("gemv-speed").map((p) => p.id),
+    [second.proposal],
+  );
+  const page = await (await s.get("/ui/campaigns/gemv-speed")).text();
+  assert.match(
+    page,
+    /owner:operator proposes that gemv-speed read survey-study(&#39;|')s collection/,
+  );
+  assert.match(page, /Reads now<\/dt><dd>its own collection only/);
+  const approved = await s.post(`/ui/campaigns/gemv-speed/proposals/${second.proposal}/approve`, {
+    csrf: s.csrf,
+  });
+  assert.match(
+    s.where(approved),
+    /Approved: every agent of gemv-speed may now search and read survey-study's collection/,
+  );
+  assert.deepEqual(s.store.kb().reads("gemv-speed"), ["survey-study"]);
+  assert.ok(
+    s.store.auditLog.list(50).some((a) => a.action === "kb_grant" && a.actor === "owner:ui"),
+  );
+  // One it reads already is nothing to propose.
+  assert.equal((await propose()).state, "unchanged");
   const self = await operator.callTool({
     name: "kb_grant",
     arguments: { campaign: "gemv-speed", reads: "gemv-speed" },
@@ -538,6 +577,15 @@ test("MCP: the owner and an operator read, search and grant the collections; age
     arguments: { campaign: "gemv-speed", reads: "nope" },
   });
   assert.equal((unknown as { isError?: boolean }).isError, true);
+  // Only the owner revokes: the operator's token has no kb_revoke.
+  const operatorRevokes = await operator
+    .callTool({ name: "kb_revoke", arguments: { campaign: "gemv-speed", reads: "survey-study" } })
+    .then(
+      (r) => (r as { isError?: boolean }).isError === true,
+      () => true,
+    );
+  assert.ok(operatorRevokes);
+  assert.deepEqual(s.store.kb().reads("gemv-speed"), ["survey-study"]);
   const owner = await mcpClient(s.control, s.tokens.admin);
   const v = text(
     await owner.callTool({

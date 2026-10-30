@@ -37,6 +37,7 @@ export function emptyRun(id: string): RunView {
       attempts: 0,
     },
     agents_stopped: null,
+    agents_wait: null,
     research: null,
     cards: [],
     card_refusals: [],

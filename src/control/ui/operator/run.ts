@@ -51,6 +51,23 @@ export function runStateHtml(r: RunView): string {
 }
 
 /**
+ * Whether a running run's agents wait for the provider's limit now: its newest wait, before its
+ * time. Resume now (`end_wait`) ends it.
+ */
+export function waitsForLimit(r: RunView, now: number): boolean {
+  return r.status === "running" && r.agents_wait !== null && Date.parse(r.agents_wait.until) > now;
+}
+
+/** A wait's end, in words: `2026-10-29 03:14 UTC`. */
+export const waitEnd = (until: string) => `${until.replace("T", " ").slice(0, 16)} UTC`;
+
+/** Why a running run starts no new trial or plan for now, in words; "" when it does not wait. */
+export function waitWords(r: RunView, now: number): string {
+  if (!waitsForLimit(r, now) || !r.agents_wait) return "";
+  return `Its agents wait for the provider's limit until ${waitEnd(r.agents_wait.until)}: no new trial or plan starts before then. Resume now ends the wait.`;
+}
+
+/**
  * Why a goal run starts no new trial while the judge confirms a champion that met every required
  * goal (goal 086), in words; "" when it does not wait for that.
  */

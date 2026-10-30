@@ -4,6 +4,7 @@ import { errorText } from "../../common/errors.ts";
 import { chatgptRequest, chatgptRouteAllowed } from "./chatgpt.ts";
 import type { ModelConfig } from "./index.ts";
 import { DataSeen, ModelStreamSilent, modelStallMs, stallWords } from "./stall.ts";
+import { type AnswerTokens, TokensSeen } from "./tokens.ts";
 
 /**
  * One call through a key-adding model proxy: OpenCode and the Codex CLI reach a provider through
@@ -60,12 +61,16 @@ export interface ForwardStall {
  * a gateway does; during the answer, it breaks the program's connection, which the program sees
  * as a broken connection. Either way `onError` gets a 504 with the words, so a trial whose
  * program then stops tells it as the provider's `server` error and goes on in the same session.
+ *
+ * `onTokens`: the tokens a successful answer reported (tokens.ts), once, when it ends, breaks off
+ * or is cancelled; never for an answer that reported none.
  */
 export async function forwardToProvider(
   call: ForwardCall,
   target: ForwardTarget,
   onError?: ((a: ProviderErrorAnswer) => void) | undefined,
   stall: ForwardStall = { ms: modelStallMs() },
+  onTokens?: ((t: AnswerTokens) => void) | undefined,
 ): Promise<Response> {
   // A ChatGPT sign-in reaches only OpenAI's Responses API and the account's model list.
   const chatgpt = target.api === "chatgpt";
@@ -163,6 +168,15 @@ export async function forwardToProvider(
         return;
       }
       const data = new DataSeen(res.headers["content-type"]);
+      // The tokens the answer reports, told once however it ends.
+      const seen = new TokensSeen();
+      let told = false;
+      const tell = () => {
+        const t = seen.tokens();
+        if (told || !t) return;
+        told = true;
+        onTokens?.(t);
+      };
       const silent = () => {
         brokeOff();
         res.destroy(new ModelStreamSilent(stall.ms ?? 0));
@@ -172,20 +186,24 @@ export async function forwardToProvider(
           arm(silent);
           res.on("data", (d: Buffer) => {
             if (data.feed(d)) arm(silent);
+            seen.feed(d);
             ctrl.enqueue(new Uint8Array(d));
           });
           res.on("end", () => {
             quiet();
+            tell();
             ctrl.close();
           });
           // A silent stream ends here too: the program's connection is broken off.
           res.on("error", (e) => {
             quiet();
+            tell();
             ctrl.error(e);
           });
         },
         cancel() {
           quiet();
+          tell();
           res.destroy();
         },
       });

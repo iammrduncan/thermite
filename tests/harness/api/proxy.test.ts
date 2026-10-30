@@ -303,4 +303,86 @@ describe("the model proxy", () => {
       }
     }
   });
+
+  test("a trial's tokens are what the proxy saw in the provider's answers, whatever its program reports; its run's budget counts them", async () => {
+    const env = makeHarnessEnv();
+    const out = await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));
+    assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
+    const registry = new Registry(env.service.ledger);
+    const trials = env.service.ledger.trials;
+    for (const id of ["t-seen", "t-own"])
+      registry.startTrial({
+        id,
+        run: "smoke-1",
+        lane: "lane-1",
+        epoch: 1,
+        family: "f",
+        parent: env.seedCommit,
+        token: `${id}-token`,
+      });
+    trials.countByProxy("t-seen");
+    // Each API's answer, streamed or whole, as a provider sends it. A figure in the model's own
+    // text is escaped there, and never counts.
+    const answers: { type: string; body: string }[] = [
+      {
+        type: "text/event-stream",
+        body: `data: {"choices":[{"delta":{"content":"\\"output_tokens\\": 999999"}}]}\n\ndata: {"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":30,"prompt_tokens_details":{"cached_tokens":100}}}\n\ndata: [DONE]\n\n`,
+      },
+      {
+        type: "text/event-stream",
+        body: `event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":10,"cache_read_input_tokens":200,"cache_creation_input_tokens":5,"output_tokens":1}}}\n\nevent: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":40}}\n\n`,
+      },
+      {
+        type: "application/json",
+        body: JSON.stringify({ output: [], usage: { input_tokens: 7, output_tokens: 3 } }),
+      },
+    ];
+    let next = 0;
+    const server = createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        const a = answers[next++ % answers.length] as { type: string; body: string };
+        res.writeHead(200, { "content-type": a.type });
+        // In parts that split a key, as a stream may.
+        res.write(a.body.slice(0, 50));
+        res.end(a.body.slice(50));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const file = join(mkdtempSync(join(tmpdir(), "thermite-proxy-")), "model-route.json");
+      env.service.models = new ModelSource(file, {
+        baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        model: "m",
+        apiKey: "real-provider-key",
+        contextWindow: 0,
+        maxTokens: 0,
+      });
+      const api = createHarnessApi(env.service, { supervisor: "sup-token-abcdef" });
+      for (let i = 0; i < 3; i++) {
+        const r = await api.request("/v1/model-proxy/chat/completions", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer trial.t-seen-token",
+          },
+          body: JSON.stringify({ model: "m", stream: true, messages: [] }),
+        });
+        assert.equal(r.status, 200);
+        await r.text();
+      }
+      const seen = env.service.ledger.db
+        .prepare(
+          "select proxy_tokens_in as i, proxy_tokens_out as o from trial where id = 't-seen'",
+        )
+        .get() as { i: number; o: number };
+      assert.deepEqual({ ...seen }, { i: 120 + 215 + 7, o: 30 + 40 + 3 });
+      // Its program says it used fewer; the other trial, which the proxy does not count, keeps its own.
+      trials.setCounters("t-seen", { turns: 3, tool_calls: 0, tokens_in: 1, tokens_out: 1 });
+      trials.setCounters("t-own", { turns: 1, tool_calls: 0, tokens_in: 50, tokens_out: 5 });
+      assert.deepEqual(registry.tokensUsed("smoke-1"), { in: 342 + 50, out: 73 + 5 });
+    } finally {
+      server.close();
+    }
+  });
 });

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
 import { MCP_SERVERS } from "../../core/api/control/rigs.ts";
 import type { PageNotes } from "../notes.ts";
+import { configOnBusRefusal } from "../rigs/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { MCP_AUTHS, type McpServer, type McpServers, namedBy } from "./index.ts";
 
@@ -183,10 +184,13 @@ export function mountMcpServerRoutes(
   });
 
   // What a rig's supervisor gets: the servers its runs' kits name, each with its sign-in as
-  // headers. Audited when the servers a rig gets change (McpServers.handed).
+  // headers. Audited when the servers a rig gets change (McpServers.handed). A rig on the message
+  // bus gets them only in its config there.
   app.get(MCP_SERVERS.path, o.rigAuth, async (c) => {
     c.header("cache-control", "no-store");
     const rig = c.req.param("rig");
+    const onBus = configOnBusRefusal(store, rig);
+    if (onBus) return c.json({ error: onBus }, 409);
     const r = await servers.forRig(rig);
     servers.handed(rig, r);
     return c.json(r);

@@ -336,6 +336,28 @@ describe("a rig's seal key on the supervisor's call", () => {
     assert.equal("bus_seal_key" in (s.store.reportedRigs.supervisor("rig-a") ?? {}), false);
   });
 
+  test("once a rig registered its seal key, the HTTP config routes refuse it in words; a rig without one gets them", async () => {
+    const s = setupRoute();
+    const get = (rig: string, token: string, path: string) =>
+      s.control.request(`/v1/rigs/${rig}/${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+    const paths = ["model-route", "advisor-routes", "mcp-servers"];
+    for (const path of paths) assert.equal((await get("rig-a", RIG_TOKEN, path)).status, 200, path);
+    const busKey = createUser().getPublicKey();
+    const seal = newSealKey().publicKey;
+    assert.equal((await s.figures({ bus_key: busKey, bus_seal_key: seal })).status, 200);
+    for (const path of paths) {
+      const r = await get("rig-a", RIG_TOKEN, path);
+      assert.equal(r.status, 409, path);
+      assert.deepEqual(await r.json(), {
+        error:
+          "rig-a is on the message bus: control gives it its model routes, MCP servers and advisors' routes only in its config there, sealed to its key, never over HTTP. Its supervisor reads them from the bus (THERMITE_NATS_URL).",
+      });
+      assert.equal((await get("rig-b", RIG_B_TOKEN, path)).status, 200, `rig-b's ${path}`);
+    }
+  });
+
   test("a value that is not a seal key, or one without the rig's key, is refused whole", async () => {
     const s = setupRoute();
     const busKey = createUser().getPublicKey();

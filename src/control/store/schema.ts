@@ -14,7 +14,7 @@ import { gitAccessHost } from "./git-access.ts";
 import { knowledgeHierarchy, knowledgeSearch } from "./kb/index.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
-import { campaignProposalTable } from "./proposals.ts";
+import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { migrateModelRoutes } from "./providers.ts";
 import { renameAgentRoles, renameUnitsToRigs } from "./renames.ts";
 import { runRegistryTable } from "./runs.ts";
@@ -673,6 +673,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   campaignProposalTable,
   // The knowledge base's words index anew: passages, each item's outcome and context (goal 175).
   knowledgeSearch,
+  // The operator may propose a grant of another campaign's collection too.
+  campaignProposalGrants,
 ];
 
 /**

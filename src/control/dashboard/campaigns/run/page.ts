@@ -11,6 +11,7 @@ import {
   runState,
 } from "../../../ui/components/index.ts";
 import { exportMenu } from "../../../ui/exports.ts";
+import { waitEnd, waitsForLimit } from "../../../ui/operator/index.ts";
 import {
   campaignHref,
   RUN_ROUTES,
@@ -51,7 +52,21 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
     return `<div class="card" style="margin-bottom:16px" data-part="starting"${follow}><b${failed ? ` class="bad"` : ""}>${failed ? "Not started:" : "Starting"} ${esc(run)} on ${esc(a.rig)}.</b> <span class="${p.tone}">${esc(p.said)}</span>${failed ? "" : ` <span class="muted">The rig fetches the project and the kit, and checks both. The run's page opens here when the rig reports the run, usually within a minute.</span>`}</div>`;
   };
 
-  /** The run's buttons: Live, Message, Pause or Resume, Export and ⋯; none for an earlier run. */
+  /**
+   * Resume now, while the run's agents wait for the provider's limit: what the wait is, and what
+   * ending it does (`end_wait`).
+   */
+  const resumeNow = (c: Ctx, x: RunOnRig, back: string) => {
+    const { rig: u, run: r } = x;
+    const wait = r.agents_wait;
+    if (!wait || !waitsForLimit(r, Date.now())) return "";
+    return `<details class="menu" data-part="resume-now"><summary class="btn">Resume now</summary><div class="menu-pop">${cmdForm(c, { rig: u.id, kind: "end_wait", fields: { run: r.id }, label: "End the wait now", cls: "sm primary", back })}<div class="muted small">The agents wait for the provider's limit until ${esc(waitEnd(wait.until))}${wait.reason ? ` (${esc(wait.reason.slice(0, 200))})` : ""}: no new trial or plan of this run starts before then. Ending the wait starts them now. If the limit still holds, the next trial meets it and the run waits again. A trial that waits in its own conversation goes on at its own time.</div></div></details>`;
+  };
+
+  /**
+   * The run's buttons: Live, Message, Resume now (while it waits for its provider), Pause or
+   * Resume, Export and ⋯; none for an earlier run.
+   */
   const actions = (c: Ctx, x: RunOnRig, back: string) => {
     const { rig: u, run: r } = x;
     if (x.earlier) return "";
@@ -69,7 +84,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
           : "";
     // A run without agents (a try, a rig check) has no one to message and no lanes to restart.
     const agents = r.has_agents !== false;
-    return `<a class="btn" href="${runLiveHref(r)}">${icon.terminal}Live</a>${agents ? `<a class="btn" href="${runLiveHref(r, { compose: true })}">Message</a>` : ""}${quick}${exportMenu({ csrf: csrf(c), rig: u.id, run: r.id, back })}${moreMenu(c, u.id, r, back, "", true)}`;
+    return `<a class="btn" href="${runLiveHref(r)}">${icon.terminal}Live</a>${agents ? `<a class="btn" href="${runLiveHref(r, { compose: true })}">Message</a>` : ""}${resumeNow(c, x, back)}${quick}${exportMenu({ csrf: csrf(c), rig: u.id, run: r.id, back })}${moreMenu(c, u.id, r, back, "", true)}`;
   };
 
   const runPage = async (c: Ctx, tab: RunTab) => {

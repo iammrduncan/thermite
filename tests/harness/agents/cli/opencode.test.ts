@@ -654,7 +654,7 @@ describe("the OpenCode harness", () => {
     assert.match(prompt, /This trial lasts 1 minutes/);
   });
 
-  test("a research trial: a failed call waits and continues it, as the owner's messages do; no credits, or the turn cap, ends it", async () => {
+  test("a research trial: a failed call waits and continues it, as the owner's messages do; no credits the proxy saw, or the turn cap, ends it", async () => {
     const failed = JSON.stringify({ type: "error", error: { message: "429 rate limited" } });
     const broke = JSON.stringify({ type: "error", error: { message: "402 out of credits" } });
     const tool = JSON.stringify({
@@ -675,6 +675,8 @@ describe("the OpenCode harness", () => {
         hang?: boolean;
         /** A message the owner sends while this run (from 1) is going on. */
         during?: { run: number; text: string };
+        /** The error answer the model proxy saw, if any. */
+        answer?: { status: number };
       } = {},
     ) => {
       const area = mkdtempSync(join(tmpdir(), "thermite-oc-"));
@@ -727,6 +729,7 @@ describe("the OpenCode harness", () => {
           pollMs: 5,
           // The waits after a failed call, shortened (goal 079).
           pauseMs: () => 5,
+          providerAnswer: () => o.answer,
         },
       );
       return {
@@ -751,8 +754,8 @@ describe("the OpenCode harness", () => {
     assert.equal(early.r.stopped, "finished");
     assert.equal(early.prompts.length, 2);
     assert.match(String(early.prompts[1]), /^The model call failed \(429 rate limited\)/);
-    // No credits ends it at once, with its kind.
-    const credits = await trial([[broke]]);
+    // No credits, as the model proxy saw the provider answer, ends it at once, with its kind.
+    const credits = await trial([[broke]], { answer: { status: 402 } });
     assert.deepEqual([credits.r.stopped, credits.r.errorKind], ["error", "credits"]);
     assert.equal(credits.r.error, "402 out of credits");
     assert.equal(credits.prompts.length, 1);
@@ -781,7 +784,10 @@ describe("the OpenCode harness", () => {
     assert.match(String(third.prompts[3]), /owner: three passes on/);
     assert.deepEqual(third.given, [1]);
     // No credits before any work ends the trial; a waiting message is not taken.
-    const noWork = await trial([[tool, step], [broke]], { messages: ["unread"] });
+    const noWork = await trial([[tool, step], [broke]], {
+      messages: ["unread"],
+      answer: { status: 402 },
+    });
     assert.equal(noWork.r.stopped, "error");
     assert.match(String(noWork.prompts[1]), /owner: unread/);
     assert.deepEqual(noWork.given, [], "the agent never started on it: it stays waiting");

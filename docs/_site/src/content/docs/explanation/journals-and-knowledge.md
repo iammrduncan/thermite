@@ -125,7 +125,7 @@ Past research helps only when it fits. A lesson from another project, another ki
 
 A grant can change at any time, also after the campaign was made:
 
-- **Who:** the owner, under **Can read from** in the campaign's **Knowledge** section, or over MCP with the owner's or the operator's token (`kb_grant` and `kb_revoke`). An agent's token has neither tool. Control's audit log records each change.
+- **Who:** the owner, under **Can read from** in the campaign's **Knowledge** section, or over MCP with the owner's token (`kb_grant` and `kb_revoke`). A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors. The operator's token may propose a grant (`kb_grant`), which waits for the owner's approval on the campaign's page. An agent's token has neither tool. Control's audit log records each change.
 - **When it takes effect:** a run at work gets a newly granted collection at its supervisor's next sync, and a new run at its first. When a grant is removed, the collection leaves each running run's `knowledge/` folder at the next sync.
 - **What it gives:** reading only. A campaign never writes to another's collection.
 

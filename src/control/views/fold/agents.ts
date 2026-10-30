@@ -2,8 +2,8 @@ import { frozen } from "../sharing.ts";
 import type { Handlers } from "./index.ts";
 
 /**
- * The run's agents: stopped and resumed, the planner's rounds and hand-outs, and each lane's
- * trials, started and finished.
+ * The run's agents: stopped and resumed, their waits for the provider's limit, the planner's
+ * rounds and hand-outs, and each lane's trials, started and finished.
  */
 
 /** How many finished trials a run's view keeps, and how many of the planner's hand-outs. */
@@ -23,6 +23,16 @@ export const AGENTS: Handlers = {
   },
   agents_resumed(f, e) {
     f.run(String(e.subject)).agents_stopped = null;
+  },
+  agents_wait_for_limit(f, e, b) {
+    f.run(String(e.subject)).agents_wait = {
+      until: String(b.until ?? ""),
+      reason: String(b.reason ?? ""),
+      since: e.at,
+    };
+  },
+  agents_wait_ended(f, e) {
+    f.run(String(e.subject)).agents_wait = null;
   },
   epoch_started(f, e, b) {
     const v = f.run(String(e.subject));

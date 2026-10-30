@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { proposeSetting } from "../campaigns/index.ts";
 import { exportSummary } from "../exports.ts";
 import {
+  GRANT_OPENS,
   type KbReadQuery,
   type KbSearchQuery,
   kbReadFields,
@@ -14,7 +16,7 @@ import type { ToolContext } from "./context.ts";
 /**
  * Thermite's own knowledge base (goals 065 and 175): its collections and a search of them, the
  * exports control keeps, and which collections a campaign's agents may read. The owner's and an
- * operator's.
+ * operator's; the operator proposes a grant to the owner, and never revokes one.
  */
 export function registerKnowledgeBase(tools: ToolContext): void {
   const { server, store, opts, actor, role, audited } = tools;
@@ -98,18 +100,25 @@ export function registerKnowledgeBase(tools: ToolContext): void {
         })),
       ),
     );
-  // Which collections a campaign's agents may read: the owner's choice, or an operator's for them.
+  // Which collections a campaign's agents may read: the owner's choice. An operator proposes a
+  // grant, which waits for the owner's approval on the campaign's page; it never revokes one.
+  const grantInput = {
+    campaign: z.string().min(1).describe("The campaign whose agents read"),
+    reads: z.string().min(1).describe("The other campaign whose collection they read"),
+  };
   if (role === "owner" || role === "operator") {
-    const grantInput = {
-      campaign: z.string().min(1).describe("The campaign whose agents read"),
-      reads: z.string().min(1).describe("The other campaign whose collection they read"),
-    };
+    const proposing = role === "operator";
     server.registerTool(
       "kb_grant",
       {
-        title: "Let a campaign read another's collection",
-        description:
-          "From now on, the campaign's agents may search and read the other campaign's collection in Thermite's knowledge base, read only: they never write to it. Runs started from now may include it in what they search (Start a run's granted collections); a run's scope is fixed when it starts. Until the copies of past research leave the rigs, the campaign's runs at work also receive the collection in their research folder at their supervisor's next sync. A campaign always reads its own collection.",
+        title: proposing
+          ? "Propose that a campaign read another's collection"
+          : "Let a campaign read another's collection",
+        description: `${
+          proposing
+            ? "Proposes to the owner that the campaign's agents may search and read the other campaign's collection in Thermite's knowledge base. Control checks it as it would the owner's grant, keeps it, and grants nothing until the owner approves it on the campaign's page (Needs you lists it); it returns {campaign, proposal, state: \"proposed\", said}, or state \"unchanged\" when the campaign reads it already. A newer proposal of the same collection replaces one still waiting. Once approved: "
+            : "From now on, "
+        }the campaign's agents may search and read the other campaign's collection, read only: they never write to it. ${GRANT_OPENS} Runs started from now may include it in what they search (Start a run's granted collections); a run's scope is fixed when it starts. Until the copies of past research leave the rigs, the campaign's runs at work also receive the collection in their research folder at their supervisor's next sync. A campaign always reads its own collection.`,
         inputSchema: grantInput,
       },
       audited("kb_grant", (a: { campaign: string; reads: string }) => {
@@ -118,12 +127,25 @@ export function registerKnowledgeBase(tools: ToolContext): void {
         if (!known.has(a.reads)) throw new Error(`no campaign ${a.reads}`);
         if (a.campaign === a.reads)
           throw new Error("a campaign always reads its own collection: name another campaign");
+        if (proposing) {
+          const out = proposeSetting(
+            store,
+            { campaign: a.campaign, field: "kb_grant", value: a.reads },
+            actor,
+          );
+          if (out.state === "refused") throw new Error(out.error);
+          return out.state === "proposed"
+            ? { campaign: out.campaign, proposal: out.id, state: out.state, said: out.said }
+            : { campaign: out.campaign, state: out.state, said: out.said };
+        }
         const granted = store.kb().grant(a.campaign, a.reads, actor);
         if (granted)
           store.auditLog.add(actor, "kb_grant", { campaign: a.campaign, reads: a.reads });
         return { granted, reads: store.kb().reads(a.campaign) };
       }),
     );
+  }
+  if (role === "owner")
     server.registerTool(
       "kb_revoke",
       {
@@ -139,5 +161,4 @@ export function registerKnowledgeBase(tools: ToolContext): void {
         return { revoked: true, reads: store.kb().reads(a.campaign) };
       }),
     );
-  }
 }

@@ -7,11 +7,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { controlBusUrl } from "../../src/control/bus/index.ts";
+import { controlPublicUrl } from "../../src/control/settings.ts";
 
 /**
  * Control needs its message bus (goal 168, step 4): it keeps every rig's events in the bus's
  * events stream and derives its records from them there, so it does not start without one, and
- * says which setting to give.
+ * says which setting to give. Nor does it start with a plain http address for rigs on another
+ * host, unless the owner allows it.
  */
 
 const WORDS =
@@ -43,6 +45,66 @@ describe("control and its bus", () => {
       .map((l) => JSON.parse(l) as { msg: string; error?: string });
     const fatal = lines.find((l) => l.msg === "fatal");
     assert.match(String(fatal?.error), new RegExp(`^Error: ${WORDS.replace(/[.()]/g, "\\$&")}`));
+    assert.equal(existsSync(dir), false, "before it makes its state folder");
+  });
+
+  test("control's address for rigs: https, or plain http only to this computer, a compose service or where the owner allows it", () => {
+    const url = (address: string, allow?: string) =>
+      controlPublicUrl({
+        THERMITE_CONTROL_PUBLIC_URL: address,
+        ...(allow ? { THERMITE_CONTROL_ALLOW_PLAIN_HTTP: allow } : {}),
+      });
+    assert.equal(controlPublicUrl({}), undefined);
+    assert.equal(url(" "), undefined);
+    for (const ok of [
+      "https://control.example.com",
+      "https://192.0.2.5:8800",
+      "http://localhost:8800",
+      "http://127.0.0.1:8800",
+      "http://[::1]:8800",
+      "http://control:8800",
+    ])
+      assert.equal(url(ok), ok);
+    const refused = (address: string) =>
+      `THERMITE_CONTROL_PUBLIC_URL is "${address}", plain http to another host: rigs would send their tokens, and rigs off the message bus their keys, across the network unencrypted. Give control an https:// address, or set THERMITE_CONTROL_ALLOW_PLAIN_HTTP=1 to allow plain http on a network you trust`;
+    for (const lan of [
+      "http://192.0.2.5:8800",
+      "http://control.example.net:8800",
+      "http://[2001:db8::5]:8800",
+    ]) {
+      assert.throws(() => url(lan), { message: refused(lan) });
+      assert.throws(() => url(lan, "yes"), { message: refused(lan) }, "only 1 allows it");
+      assert.equal(url(lan, "1"), lan);
+    }
+    assert.throws(() => url("control.example.com"), {
+      message:
+        'THERMITE_CONTROL_PUBLIC_URL takes an https:// address, such as https://control.example.com, not "control.example.com"',
+    });
+    assert.throws(() => url("ftp://control.example.com"), /takes an https:\/\/ address/);
+  });
+
+  test("control with a plain http address for rigs on another host does not start, and says why", () => {
+    const dir = join(mkdtempSync(join(tmpdir(), "thermite-control-")), "state");
+    const r = spawnSync(process.execPath, ["src/control/main.ts"], {
+      env: {
+        PATH: process.env.PATH ?? "",
+        THERMITE_CONTROL_DIR: dir,
+        THERMITE_NATS_URL: "nats://127.0.0.1:9",
+        THERMITE_CONTROL_PUBLIC_URL: "http://192.0.2.5:8800",
+      },
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    assert.equal(r.status, 1, r.stderr);
+    const fatal = `${r.stdout}${r.stderr}`
+      .split("\n")
+      .filter((l) => l.startsWith("{"))
+      .map((l) => JSON.parse(l) as { msg: string; error?: string })
+      .find((l) => l.msg === "fatal");
+    assert.match(
+      String(fatal?.error),
+      /^Error: THERMITE_CONTROL_PUBLIC_URL is "http:\/\/192\.0\.2\.5:8800", plain http to another host: .* set THERMITE_CONTROL_ALLOW_PLAIN_HTTP=1/,
+    );
     assert.equal(existsSync(dir), false, "before it makes its state folder");
   });
 

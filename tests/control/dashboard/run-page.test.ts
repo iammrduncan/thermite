@@ -3,8 +3,8 @@ import { describe, test } from "node:test";
 import { stack } from "./stack.ts";
 
 /**
- * A run's page: its Experiments and Planner tabs, the planner's script, and its agents, or a run
- * without any.
+ * A run's page: its Experiments and Planner tabs, the planner's script, its agents and their wait
+ * for the provider, or a run without any.
  */
 
 describe("control dashboard", () => {
@@ -161,6 +161,53 @@ describe("control dashboard", () => {
     const stale = await s.get("/ui/campaigns/js-sum/runs/js-9");
     assert.equal(stale.status, 404);
     assert.doesNotMatch(await stale.text(), /Starting/);
+  });
+
+  test("while a run's agents wait for the provider's limit, its page says until when, and Resume now ends the wait", async () => {
+    const s = await stack();
+    await s.env.service.applyCommand(s.env.assign);
+    const until = new Date(Date.now() + 3_600_000).toISOString();
+    s.env.service.ledger.appendEvent("scheduler", "agents_wait_for_limit", "js-1", {
+      until,
+      trial: "t-1",
+      reason: "429 the usage window is full",
+    });
+    await s.relay();
+    const href = "/ui/campaigns/js-sum/runs/js-1";
+    const page = await (await s.get(href)).text();
+    const end = `${until.replace("T", " ").slice(0, 16)} UTC`;
+    assert.ok(
+      page.includes(
+        `Its agents wait for the provider's limit until ${end}: no new trial or plan starts before then. Resume now ends the wait.`,
+      ),
+    );
+    assert.match(page, /<summary class="btn">Resume now<\/summary>/);
+    assert.match(
+      page,
+      /name="kind" value="end_wait"><input type="hidden" name="run" value="js-1">/,
+    );
+    assert.ok(page.includes(`until ${end} (429 the usage window is full)`));
+    const r = await s.post("/ui/commands", {
+      csrf: s.csrfFrom(page),
+      rig: "rig-a",
+      kind: "end_wait",
+      run: "js-1",
+      back: href,
+    });
+    assert.equal(r.status, 303);
+    await s.relay(); // the signed command to the harness
+    await s.relay(); // its events back to control
+    const [cmd] = s.store.commands.list(1);
+    assert.equal(cmd?.kind, "end_wait");
+    assert.notEqual(cmd?.status, "failed", JSON.stringify(cmd?.outcome));
+    const after = await (await s.get(href)).text();
+    assert.doesNotMatch(after, /Resume now/);
+    const history = await (await s.get(`${href}/history`)).text();
+    assert.ok(
+      history.includes(
+        `You ended the agents' wait for the provider's limit, which was to last until ${end}: new trials and plans start again.`,
+      ),
+    );
   });
 
   test("a run without agents: no Message and no Restart the lanes on its page", async () => {
