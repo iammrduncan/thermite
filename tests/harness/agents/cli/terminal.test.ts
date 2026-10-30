@@ -3,7 +3,7 @@
  * Code's place, through the terminal host and the local runner: the program and the host run as
  * the test's own user. The fake writes a transcript as Claude Code does and runs Thermite's hook
  * program as Claude Code's settings name it. Linux only, as the host's own tests: it needs
- * util-linux's setsid and node-pty. The harness image's check (scripts/acceptance/terminal.mjs)
+ * util-linux's setsid and node-pty; a refusal that comes before any terminal runs anywhere. The harness image's check (scripts/acceptance/terminal.mjs)
  * runs a trial through the same loop under the broker, with the fake and with the real programs.
  */
 
@@ -25,10 +25,12 @@ import { serve } from "@hono/node-server";
 import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import { messageText, type Prompt } from "../../../../src/agents/prompt.ts";
 import { signEnvelope } from "../../../../src/core/commands.ts";
+import { laneLimits } from "../../../../src/core/contract.ts";
 import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts";
 import type { ConsoleLater, TrialConsole } from "../../../../src/harness/agents/cli/console.ts";
 import { runCliTrial } from "../../../../src/harness/agents/cli/loop.ts";
 import type { CliTrialDeps } from "../../../../src/harness/agents/cli/program.ts";
+import { TerminalTrial } from "../../../../src/harness/agents/cli/terminal.ts";
 import { Registry } from "../../../../src/harness/agents/registry.ts";
 import type { TrialResult, TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import { createHarnessApi } from "../../../../src/harness/api/index.ts";
@@ -233,6 +235,36 @@ const types = (home: string) =>
   seen(home)
     .filter((s) => s.type !== "query")
     .map((s) => String(s.type));
+
+test("follow_up is a worker in Pi's alone: a program in its terminal refuses it, in words (any system)", async () => {
+  const run = {
+    trialId: "t-1",
+    role: "lane-1",
+    title: "Trial t-1 (lane-1)",
+    model: { baseUrl: "http://127.0.0.1:9", model: "m", apiKey: "k" },
+    apiUrl: "http://127.0.0.1:9",
+    area: "/nowhere",
+    home: "/nowhere/home",
+    tmp: "/nowhere/tmp",
+    auth: "trial.x",
+    mcp: undefined,
+    keptAt: undefined,
+    wallMs: undefined,
+    env: undefined,
+  } as const;
+  const t = new TerminalTrial(claudeProgram, run as never, {
+    runner: new LocalRunner(mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "tm-"))),
+    cwd: "/nowhere",
+    env: {},
+    limits: laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }),
+    signalsFile: "/nowhere/signals.jsonl",
+    tally: {} as never,
+  });
+  await assert.rejects(
+    t.ownerInput({ text: "then run the tests", follow_up: true }),
+    /follow_up is for a worker in Pi: Claude Code takes what is typed into it as it comes/,
+  );
+});
 
 describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
   test("its first message typed, never on its command line, its tally from its transcript, and a submission ends it its own way, its screen kept in memory", async () => {

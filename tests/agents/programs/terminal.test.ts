@@ -137,6 +137,11 @@ describe("each program in its own terminal", () => {
   test("each program is interrupted and ended by named keys and text only, never Ctrl+C", () => {
     assert.ok(!(TERMINAL_KEYS as readonly string[]).includes("ctrl-c"));
     for (const [program, p] of Object.entries(TERMINAL_PROFILES)) {
+      // The Pi view takes its interrupt over the trial's routes and ends by SIGTERM: no steps.
+      if (program === "pi") {
+        assert.deepEqual(p, { interrupt: [], end: [] });
+        continue;
+      }
       assert.ok(p.interrupt.length && p.end.length, program);
       for (const step of [...p.interrupt, ...p.end])
         if ("keys" in step)

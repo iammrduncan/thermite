@@ -5,9 +5,11 @@ import { RunId } from "./ids.ts";
  * The owner's console into an agent's terminal (goal 169; the owner's decision of 2026-10-26):
  * `terminal_input`, a signed command only the owner issues, never an operator, an agent or a
  * reader. It types text into one running trial's program (a message, a slash command or a skill,
- * then Enter), or sends it keys from a fixed list. The harness records each input word for word
- * with its outcome. While the program waits for its usage window, an input waits for the reset
- * unless the owner says to send it now (the owner's decision of 2026-10-27).
+ * then Enter), or sends it keys from a fixed list. A worker in Pi takes the same input in its Pi
+ * view, where each is one call in its trial's loop (core/api/harness/console.ts). The harness
+ * records each input word for word with its outcome. While the program waits for its usage
+ * window, an input waits for the reset unless the owner says to send it now (the owner's decision
+ * of 2026-10-27).
  */
 
 /**
@@ -98,10 +100,20 @@ export const TerminalInput = z
     wait: z.enum(TERMINAL_WAITS).default("queue"),
     /** The owner confirmed an input that confirmFirst names. */
     confirm: z.literal(true).optional(),
+    /**
+     * For a worker in Pi (its Pi view) only: the text waits until the agent would stop, at the
+     * end of a reply that calls no tool, and goes in then, instead of steering the agent before
+     * its next model call.
+     */
+    follow_up: z.literal(true).optional(),
   })
   .refine((p) => (p.text === undefined) !== (p.keys === undefined), {
     message: "give text or keys, one of the two",
     path: ["text"],
+  })
+  .refine((p) => p.follow_up === undefined || p.text !== undefined, {
+    message: "follow_up goes with text, not keys",
+    path: ["follow_up"],
   })
   .refine((p) => p.confirm === true || p.text === undefined || !confirmFirst(p.text), {
     message: "confirm this input first (confirm: true)",

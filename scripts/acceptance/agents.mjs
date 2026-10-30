@@ -14,7 +14,15 @@
 //     headless (headless stays an advanced choice, so both modes keep a trial here) and runs the
 //     research tools as `thermite-trial research` commands;
 //   - that trial reads and searches its run's research folder, is refused changing the harness's
-//     part of it, and the file it writes in its working area is saved when it ends.
+//     part of it, and the file it writes in its working area is saved when it ends;
+//   - the Pi view (goal 169): the workers of the first epoch, in Pi on a rig nobody set, run in
+//     their own terminal, where each draws its Pi view; while lane-2's trial holds in a command,
+//     the owner's console (terminal_input over REST) sends each of the view's calls in turn:
+//     words that steer, /status, /mcp, /mcp reconnect (refused: the kit has no MCP server),
+//     /skill:NAME (refused: the kit carries no skills), a command the view has not (refused),
+//     /compact, words as a follow-up, and Esc. Each is recorded word for word with its outcome;
+//     the model gets the steered words and the follow-up, the conversation is compacted once, the
+//     interrupt does not end the trial, which submits; and Live shows the view's screen.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/agents.mjs
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -38,6 +46,20 @@ import {
 } from "./lib/smoke-env.mjs";
 
 const GOOD = readFileSync("kits/smoke-cpu/candidates/good/src/kernel/matmul.c", "utf8");
+/** lane-2's trial in its Pi view (goal 169): when it held, and what its model was sent. */
+const piScene = {};
+/** The owner's inputs to lane-2's Pi view, in order, and what each must become. */
+const PI_INPUTS = [
+  { input: { text: "PI-STEER keep the kernel as it is" }, want: "typed" },
+  { input: { text: "/status" }, want: "typed" },
+  { input: { text: "/mcp" }, want: "typed" },
+  { input: { text: "/mcp reconnect" }, want: /gives its workers no MCP servers/ },
+  { input: { text: "/skill:profile" }, want: /this run's kit carries no skills/ },
+  { input: { text: "/model another" }, want: /is not a command of the Pi view/ },
+  { input: { text: "/compact" }, want: "typed" },
+  { input: { text: "PI-FOLLOW then restate it", follow_up: true }, want: "typed" },
+  { input: { keys: ["esc"] }, want: "typed" },
+];
 const NOOP = readFileSync("kits/smoke-cpu/candidates/noop/src/kernel/matmul.c", "utf8");
 const setid = {};
 const background = {};
@@ -222,11 +244,98 @@ function script(messages, tools) {
           args: { hypothesis: "i-k-j loop order makes the inner loop contiguous" },
         },
       ]
-    : [
-        { name: "write_file", args: { path: "src/kernel/matmul.c", content: NOOP } },
-        { name: "submit", args: { hypothesis: "restate the kernel" } },
-      ];
+    : undefined;
+  if (!steps) return piSteps(messages, done);
   return steps[done] ? { toolCalls: [steps[done]] } : { text: "done" };
+}
+
+/**
+ * lane-2's trial, in its Pi view (goal 169): it holds in a command while the owner's inputs
+ * arrive; then, once the follow-up has reached it (a reply without a tool call gives it its
+ * chance), it restates the kernel and submits.
+ */
+function piSteps(messages, done) {
+  const sent = JSON.stringify(messages);
+  if (done === 0) {
+    piScene.holdAt ??= Date.now();
+    return { toolCalls: [{ name: "run", args: { command: "sleep 90; echo PI-HOLD-DONE" } }] };
+  }
+  if (sent.includes("PI-STEER")) piScene.steered = true;
+  if (!sent.includes("PI-FOLLOW")) return { text: "I stop here for now." };
+  piScene.followed = true;
+  const steps = [
+    { name: "write_file", args: { path: "src/kernel/matmul.c", content: NOOP } },
+    { name: "submit", args: { hypothesis: "restate the kernel" } },
+  ];
+  return steps[done - 1] ? { toolCalls: [steps[done - 1]] } : { text: "done" };
+}
+
+/** One of the owner's inputs to a trial's terminal, as REST sends it: its command, once settled. */
+async function typeInto(trial, input) {
+  const issued = await api("/v1/commands", {
+    method: "POST",
+    body: JSON.stringify({ kind: "terminal_input", payload: { run: "smoke-1", trial, ...input } }),
+  });
+  if (issued.status !== 201) return { status: "not issued", outcome: issued.body };
+  return until(
+    "the input's outcome",
+    async () => {
+      const c = await api(`/v1/commands/${issued.body.id}`);
+      return c.body.status !== "pending" ? c.body : undefined;
+    },
+    120_000,
+  );
+}
+
+/** The first frame of a trial's terminal that Live gets, as the owner's page watches it. */
+async function screenOnLive(trial) {
+  const login = await fetch(`${control}/ui/login`, {
+    method: "POST",
+    body: new URLSearchParams({ token: secret("control-admin-token") }),
+    redirect: "manual",
+  });
+  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), 60_000);
+  try {
+    const res = await fetch(`${control}/ui/rigs/local-1/live/screen?trial=${trial}`, {
+      headers: { cookie },
+      signal: stop.signal,
+    });
+    const reader = res.body.getReader();
+    let text = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return undefined;
+      text += new TextDecoder().decode(value);
+      const at = text.indexOf("event: frame\ndata: ");
+      const end = at < 0 ? -1 : text.indexOf("\n", at + 19);
+      if (end > 0) return JSON.parse(text.slice(at + 19, end));
+    }
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+    stop.abort();
+  }
+}
+
+/**
+ * The owner's console into lane-2's Pi view (goal 169), while its trial holds in a command: each
+ * input in turn, then the screen as Live shows it.
+ */
+async function piConsoleScene() {
+  await until("lane-2's trial holds in its Pi view", async () => piScene.holdAt, 900_000, 1000);
+  const started = await until("lane-2's trial", async () =>
+    (await events()).find(
+      (e) => e.kind === "trial_started" && e.subject === "smoke-1" && e.body.lane === "lane-2",
+    ),
+  );
+  const trial = String(started.body.trial);
+  const sent = [];
+  for (const { input, want } of PI_INPUTS)
+    sent.push({ input, want, command: await typeInto(trial, input) });
+  return { trial, sent, frame: await screenOnLive(trial) };
 }
 
 /** Whether the OpenCode trial's memory hog came back killed (the lane's memory limit). */
@@ -294,6 +403,8 @@ let failed = false;
 try {
   await until("control health", async () => (await fetch("http://127.0.0.1:8800/v1/health")).ok);
   await assign(env, "smoke-1");
+  // lane-2's Pi view, while the epoch runs (goal 169).
+  const piRun = piConsoleScene().catch((err) => ({ error: String(err?.stack ?? err) }));
   const evs = await until(
     "both lanes judged",
     async () => {
@@ -342,6 +453,57 @@ try {
     "dev_run ran on the device",
     evs.some((e) => e.kind === "dev_run"),
     evs.filter((e) => e.kind === "dev_run").map((e) => e.body),
+  );
+  // The Pi view (goal 169): each input's outcome, its record, what the model was sent, the
+  // compaction, and the screen on Live.
+  const pi = await piRun;
+  const outcomeOf = (c) =>
+    c?.status !== "delivered" || c?.outcome?.accepted === false
+      ? `refused: ${JSON.stringify(c?.outcome ?? c)}`
+      : String(c?.outcome?.result?.outcome);
+  const outcomes = (pi.sent ?? []).map((x) => ({
+    input: x.input.text ?? x.input.keys,
+    want: String(x.want),
+    got: outcomeOf(x.command),
+  }));
+  check(
+    "the owner's console reaches lane-2's Pi view: each call typed, or refused in words",
+    outcomes.length === PI_INPUTS.length &&
+      (pi.sent ?? []).every((x, i) =>
+        typeof PI_INPUTS[i].want === "string"
+          ? outcomeOf(x.command) === PI_INPUTS[i].want
+          : PI_INPUTS[i].want.test(outcomeOf(x.command)),
+      ),
+    { error: pi.error, outcomes },
+  );
+  const piRecords = evs.filter((e) => e.kind === "terminal_input" && e.body.trial === pi.trial);
+  const piTrial = trials.find((t) => t.body.trial === pi.trial);
+  check(
+    "each input is recorded word for word with its outcome; the model got the steered words and the follow-up; the conversation was compacted; the interrupt did not end the trial, which submitted",
+    piRecords.length === PI_INPUTS.length &&
+      piRecords.some((e) => e.body.text === "PI-FOLLOW then restate it" && e.body.follow_up) &&
+      piRecords.some(
+        (e) => JSON.stringify(e.body.keys) === '["esc"]' && e.body.outcome === "typed",
+      ) &&
+      piScene.steered === true &&
+      piScene.followed === true &&
+      evs.some((e) => e.kind === "context_compacted" && e.body.trial === pi.trial) &&
+      piTrial?.body.stopped === "submitted",
+    {
+      records: piRecords.map((e) => [e.body.text ?? e.body.keys, e.body.outcome]),
+      steered: piScene.steered,
+      followed: piScene.followed,
+      stopped: piTrial?.body.stopped,
+    },
+  );
+  const frame = pi.frame;
+  check(
+    "Live shows lane-2's Pi view: Thermite's drawing of its Pi session, with the owner's words",
+    typeof frame?.data === "string" &&
+      frame.data.includes("Thermite's view of a worker in Pi") &&
+      frame.data.includes("PI-STEER") &&
+      (frame.pi_view === true || frame.state === "ended"),
+    { state: frame?.state, pi_view: frame?.pi_view, chars: frame?.data?.length },
   );
   const view = (await api("/v1/rigs/local-1/view")).body;
   const agents = view.runs[0].agents;

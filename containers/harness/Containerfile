@@ -14,9 +14,11 @@ COPY scripts/patch-pi-ai.mjs ./scripts/
 RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
 COPY src ./src
 # node-pty's prebuilt modules, for other systems, and its Windows parts stay out of what the final
-# stage copies, which builds its own module.
+# stage copies, which builds its own module. So do pi-tui's prebuilt helpers for its clipboard and
+# modifier keys, which a rig never loads: no image holds a native part of pi-tui (goal 169).
 RUN npm run build && npm prune --omit=dev --no-fund --no-audit \
- && rm -rf node_modules/node-pty/prebuilds node_modules/node-pty/third_party node_modules/node-pty/deps
+ && rm -rf node_modules/node-pty/prebuilds node_modules/node-pty/third_party node_modules/node-pty/deps \
+    node_modules/@earendil-works/pi-tui/native
 
 FROM ${NODE_IMAGE} AS node
 
@@ -180,9 +182,10 @@ COPY kits ./checks/kits
 COPY examples ./checks/examples
 # No set-id file anywhere, as in every Thermite image: no process in the container can gain
 # privileges through a setuid or setgid program. Last, after every package; the build fails if one
-# is left.
+# is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
 RUN find / -xdev -type f -perm /6000 -exec chmod ug-s {} + \
- && test -z "$(find / -xdev -type f -perm /6000 -print -quit)"
+ && test -z "$(find / -xdev -type f -perm /6000 -print -quit)" \
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
 ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
 # The source commit the image is built from (empty: not given). The harness reports it with
 # Thermite's version from package.json; control compares them with its own.

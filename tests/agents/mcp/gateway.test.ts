@@ -301,6 +301,23 @@ describe("the harness's MCP gateway", () => {
     );
   });
 
+  test("a list is kept a few minutes; fresh asks the servers now (the Pi view's /mcp reconnect)", async (t) => {
+    const { fake, api, worker } = await setup(t);
+    const list = async (query = "") => {
+      const before = fake.requests.length;
+      const r = await api.request(`/v1/mcp-tools${query}`, { headers: worker });
+      const body = (await r.json()) as { tools: { server: string; name: string }[] };
+      return { asked: fake.requests.length > before, tools: body.tools.map((x) => x.name) };
+    };
+    const first = await list();
+    assert.ok(first.asked);
+    assert.ok(first.tools.includes("search"));
+    assert.equal((await list()).asked, false, "kept");
+    assert.equal((await list("?fresh=all")).asked, true, "every server, now");
+    assert.equal((await list("?fresh=gbrain")).asked, true, "that server, now");
+    assert.equal((await list("?fresh=elsewhere")).asked, false, "another server's: gbrain's kept");
+  });
+
   test("a failure in words: once, with the verb for its kind of agent", async () => {
     const said: string[] = [];
     const recorded: string[] = [];

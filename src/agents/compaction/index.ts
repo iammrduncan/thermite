@@ -130,7 +130,8 @@ export class Compactor {
   /** Compactions done so far in this conversation. */
   count = 0;
   private readonly o: CompactionDeps;
-  private forced = false;
+  /** The next request compacts first: the provider said the context is full, or the owner asked. */
+  private forced: "full" | "asked" | undefined;
   /** After a compaction that stayed above the point: where the next one starts. */
   private next: number | undefined;
 
@@ -145,9 +146,13 @@ export class Compactor {
       : undefined;
   }
 
-  /** The next request compacts first, whatever its size: the provider said the context is full. */
-  force(): void {
-    this.forced = true;
+  /**
+   * The next request compacts first, whatever its size: the provider said the context is full
+   * (`full`), or the owner asked in a worker's Pi view (`asked`, goal 169), when a conversation
+   * that still does not fit is left to the provider to refuse.
+   */
+  force(why: "full" | "asked" = "full"): void {
+    if (this.forced !== "full") this.forced = why;
   }
 
   /** Pi's hook before each model request, for this agent (assigned to `agent.prepareRequest`). */
@@ -160,8 +165,8 @@ export class Compactor {
       const before = estimateContextTokens(this.o.convert(messages)).tokens;
       const point = this.next ?? this.point;
       if (!this.forced && (point === undefined || before < point)) return undefined;
-      const forced = this.forced;
-      this.forced = false;
+      const forced = this.forced === "full";
+      this.forced = undefined;
       const compacted = await this.compact(messages, before, forced, signal);
       if (!compacted) return undefined;
       agent.state.messages = compacted;

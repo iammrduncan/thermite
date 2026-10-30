@@ -889,6 +889,13 @@ npx thermite command --control https://control.example.com --token-file ~/thermi
 
 Unlike [`POST /v1/rigs/<rig>/settings`](rest-api.md#a-rigs-settings), it sends the fields as given, without comparing them with what the rig reports.
 
+The owner's input to a running trial's terminal goes with [`terminal_input`](signed-commands.md#terminal_input). This gives a worker in Pi words to take when it would stop, as a follow-up, rather than before its next model call:
+
+```sh
+npx thermite command --control https://control.example.com --token-file ~/thermite-owner-token \
+  --kind terminal_input --payload '{"run":"run-1","trial":"t-0123456789abcdef","text":"then run the tests","follow_up":true}'
+```
+
 Control refuses `wipe_state` with `400 {"error":"wipe_state is issued only by a full reset"}`, and a payload that does not fit its kind with `400 {"error":"bad <kind> payload: …"}` (an unknown rig: `404`). `GET /v1/commands/<id>` and the dashboard's **Commands** page show the command's status. A command the rig refuses, such as a `queue_move` for an experiment that is no longer queued, shows there as `failed`, with the reason.
 
 ### `invalidate`

@@ -96,6 +96,39 @@ test("every image's Containerfile clears set-id bits last, and fails its build i
   }
 });
 
+test("no image holds pi-tui's native helpers: each deletes them, its build fails on them, and the release check refuses them (goal 169)", () => {
+  for (const image of ["control", "harness", "supervisor"]) {
+    const text = readFileSync(
+      join(import.meta.dirname, "..", "..", "containers", image, "Containerfile"),
+      "utf8",
+    );
+    const prune = text.slice(
+      text.indexOf("npm prune"),
+      text.indexOf("\nFROM ", text.indexOf("npm prune")),
+    );
+    assert.match(
+      prune,
+      /rm -rf [^\n]*(\\\n[^\n]*)*node_modules\/@earendil-works\/pi-tui\/native/,
+      image,
+    );
+    const final = text.slice(text.lastIndexOf("\nFROM "));
+    assert.match(
+      final,
+      /test -z "\$\(find \/ -xdev -type d -path '\*\/@earendil-works\/pi-tui\/native' -print -quit\)"/,
+      image,
+    );
+  }
+  const facts = {
+    ...clean(),
+    probe:
+      "claude=\nsocat=\nbwrap=\nsetid=\npitui=/opt/thermite/node_modules/@earendil-works/pi-tui/native \n",
+  };
+  for (const key of ["control", "harness", "supervisor", "rig-cuda"] as const)
+    assert.deepEqual(imageProblems(key, COMMIT, facts), [
+      "it holds pi-tui's prebuilt native helpers (/opt/thermite/node_modules/@earendil-works/pi-tui/native): every image deletes them",
+    ]);
+});
+
 test("every image upgrades its base's system packages before it installs its own (goal 125)", () => {
   for (const image of ["control", "harness", "supervisor", "rig"]) {
     const text = readFileSync(

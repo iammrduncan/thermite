@@ -92,7 +92,8 @@ function outcomeOf(
   const why = refusalOf(cmd);
   if (why !== null) return { outcome: `not typed: ${why}`, tone: "bad" };
   const r = (cmd.outcome as { result?: { outcome?: unknown; until?: unknown } } | null)?.result;
-  if (r?.outcome !== "queued") return { outcome: "typed", tone: "ok" };
+  if (r?.outcome !== "queued")
+    return { outcome: cmd.payload.follow_up ? "typed, as a follow-up" : "typed", tone: "ok" };
   const after = later.get(cmd.id);
   if (after?.outcome === "typed_after_reset")
     return { outcome: "typed after the usage window's reset", tone: "ok" };
@@ -248,6 +249,8 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
           ...(key ? { keys: keys as TerminalKey[] } : { text }),
           wait: f.wait === "now" ? "now" : "queue",
           ...(risky ? { confirm: true } : {}),
+          // A worker in Pi's Pi view: the words wait until the agent would stop.
+          ...(!key && f.follow_up === "1" ? { follow_up: true } : {}),
         },
         issuedBy: "owner:ui",
       }));

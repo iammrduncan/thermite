@@ -6,7 +6,12 @@
 
 export { claudeProgram } from "./claude-code.ts";
 export { codexProgram } from "./codex.ts";
-export { type ConsoleLater, type ConsoleNow, TrialConsole } from "./console.ts";
+export {
+  type ConsoleLater,
+  type ConsoleNow,
+  type ConsoleTerminal,
+  TrialConsole,
+} from "./console.ts";
 export { runCliTrial } from "./loop.ts";
 export { type CliAskOptions, type CliOnceDeps, cliAsk, cliModelCheck } from "./once.ts";
 export { opencodeProgram } from "./opencode.ts";

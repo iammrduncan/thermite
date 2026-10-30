@@ -23,8 +23,10 @@ import {
   codexProgram,
   opencodeProgram,
   runCliTrial,
+  TrialConsole,
 } from "./cli/index.ts";
 import { checkModel, type RigCheckReport } from "./model/index.ts";
+import { PiConsole } from "./pi-view/index.ts";
 import { piResearchPrompt, type ResearchTrialSpec } from "./research/index.ts";
 import { spawnTrial } from "./spawn.ts";
 import { PI_TRIAL, piTrialPrompt, type TrialResult, type TrialSpec } from "./worker/index.ts";
@@ -92,14 +94,24 @@ export interface AgentProgram {
 
 /**
  * A trial in Pi: its prompt, from its role's definition, rendered and kept here in the harness
- * (goal 166), then the worker process, which sends it as it is. `spawn`: the worker process
- * (spawn.ts); tests run the worker in their own.
+ * (goal 166), then the worker process, which sends it as it is. On a rig whose agents run in
+ * their own terminal, the worker draws its Pi view there (goal 169), and the trial's console is
+ * its PiConsole; headless, it has none. `spawn`: the worker process (spawn.ts); tests run the
+ * worker in their own.
  */
 export async function runPiTrial(
   t: AgentTrial,
   link: Pick<
     TrialLink,
-    "handOver" | "sent" | "runner" | "scratchDir" | "port" | "signal" | "model"
+    | "handOver"
+    | "sent"
+    | "runner"
+    | "scratchDir"
+    | "port"
+    | "signal"
+    | "model"
+    | "terminal"
+    | "console"
   >,
   spawn: typeof spawnTrial = spawnTrial,
 ): Promise<TrialResult> {
@@ -118,6 +130,8 @@ export async function runPiTrial(
             { mcpServers, kbWrites: t.spec.kbWrites, idea: true, note: true, fit },
           );
     link.sent?.(sent);
+    const view = link.terminal ? new PiConsole() : undefined;
+    link.console?.(view ? new TrialConsole(view) : "headless", view);
     return await spawn(
       t.mode === "code"
         ? { kind: "code", spec: { ...t.spec, sent } }
@@ -127,6 +141,7 @@ export async function runPiTrial(
       link.port,
       link.signal,
       link.model,
+      view,
     );
   } finally {
     close();

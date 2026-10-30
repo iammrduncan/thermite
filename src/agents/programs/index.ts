@@ -13,7 +13,7 @@
 import { CLAUDE_TERMINAL } from "./claude-code/index.ts";
 import { CODEX_TERMINAL } from "./codex/index.ts";
 import { OPENCODE_TERMINAL } from "./opencode/index.ts";
-import type { TerminalProfile, TerminalProgram } from "./terminal.ts";
+import { PI_VIEW_TERMINAL, type TerminalProfile, type TerminalProgram } from "./terminal.ts";
 
 export {
   CLAUDE_BASE_ENV,
@@ -110,6 +110,7 @@ export {
 } from "./session-log.ts";
 export {
   literally,
+  PI_VIEW_TERMINAL,
   TERMINAL_KEYS,
   TERMINAL_PROGRAMS,
   type TerminalKey,
@@ -125,4 +126,5 @@ export const TERMINAL_PROFILES: Readonly<Record<TerminalProgram, TerminalProfile
   "claude-code": CLAUDE_TERMINAL,
   codex: CODEX_TERMINAL,
   opencode: OPENCODE_TERMINAL,
+  pi: PI_VIEW_TERMINAL,
 };

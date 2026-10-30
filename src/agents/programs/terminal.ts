@@ -10,14 +10,18 @@ import type { TerminalKey } from "../../core/terminal-input.ts";
  * 2026-10-29 saw, on Claude Code 2.1.308, Codex 0.162.1 and OpenCode 2.1.4.
  */
 
-/** The programs that run in a terminal: every agent program but Pi, which runs in the harness. */
-export type TerminalProgram = Exclude<Harness, "pi">;
+/**
+ * The programs that run in a terminal: every agent program. Pi's is its worker's own process,
+ * which draws Thermite's Pi view of its session (src/harness/agents/pi-view/).
+ */
+export type TerminalProgram = Harness;
 
 /** Their ids, as the terminal host's start names them. */
 export const TERMINAL_PROGRAMS = [
   "claude-code",
   "codex",
   "opencode",
+  "pi",
 ] as const satisfies readonly TerminalProgram[];
 
 // The keys a program may be sent by name are the signed command's (terminal_input).
@@ -32,6 +36,12 @@ export interface TerminalProfile {
   /** After these, the host waits for the program to exit, then sends it SIGTERM. */
   end: readonly TerminalStep[];
 }
+
+/**
+ * The Pi view has no steps: the owner's interrupt reaches the worker over its trial's routes, never
+ * as a key, and its worker exits at the trial's end, so the host only ever ends it by SIGTERM.
+ */
+export const PI_VIEW_TERMINAL: TerminalProfile = { interrupt: [], end: [] };
 
 /** A file written before the program starts, by the host, as the lane's user. */
 export interface TerminalSeed {

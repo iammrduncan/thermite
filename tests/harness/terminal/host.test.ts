@@ -207,6 +207,17 @@ describe("the terminal host", { skip }, () => {
     }
   });
 
+  test("the Pi view has no steps: an interrupt types nothing, and its end is SIGTERM at once", async () => {
+    const f = await fake({ program: "pi" });
+    await seen(f, "start");
+    await f.t.interrupt();
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(f.records().filter((r) => r.type === "interrupt" || r.type === "stop").length, 0);
+    const exit = await f.t.end();
+    assert.equal(exit.how, "sigterm");
+    assert.equal(f.records().filter((r) => r.type === "user").length, 0, "nothing typed");
+  });
+
   test("an end is the program's own /exit; then SIGTERM; then the broker's", async () => {
     const clean = await fake({});
     await seen(clean, "start");

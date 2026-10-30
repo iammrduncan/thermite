@@ -391,6 +391,7 @@ const BODIES = {
     lane: str,
     text: str,
     keys: strs,
+    follow_up: bool,
     outcome: str,
     why: str,
     until: str,

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { modelConfigFromEnv, UsageSender } from "../../agents/model/index.ts";
 import { type Prompt, promptRecord } from "../../agents/prompt.ts";
 import { KB_SERVER, type KbCall } from "../../agents/tools/index.ts";
@@ -9,6 +9,7 @@ import type { Runner, RunOutcome, RunRequest } from "../broker/index.ts";
 import { KEPT_MAX } from "../compactions.ts";
 import { apiCall } from "./api-call.ts";
 import type { ReplyNow, TrialProgress } from "./live-session.ts";
+import { startView, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
 import { runResearchTrial } from "./research/index.ts";
 import type { AnyTrial } from "./spawn.ts";
 import {
@@ -25,7 +26,8 @@ import {
  * the harness only through the local API with its trial's own token (which binds every call to
  * the trial's run and lane, and stops working when the trial ends). Its file and shell
  * tools run in the lane's workspace, as the lane's user, through that API: the agent itself can
- * read none of it. Prints the trial result as the last line of stdout.
+ * read none of it. Prints the trial result as the last line of stdout; with VIEW_FLAG, in its
+ * terminal, it draws its Pi view there (goal 169) and leaves the result in VIEW_RESULT instead.
  */
 
 /** Lane work through the harness API (the harness checks it against the trial). */
@@ -83,6 +85,7 @@ async function main(): Promise<void> {
   // Each wait for the provider (goal 079): a line in the trial's session, and a rate limit's
   // wait for the scheduler and the research clock. Best effort: the trial waits either way.
   const waiting = (w: ProviderWait) => {
+    view?.waiting(w);
     void call("POST", "/v1/trial/live", { entries: [], wait: w }).catch(() => undefined);
   };
   // Each later turn the trial sends its worker, kept by the harness as the trial's first prompt
@@ -101,21 +104,48 @@ async function main(): Promise<void> {
   // decides the run, the trial and the route.
   const usage = new UsageSender((calls) => call("POST", "/v1/trial/usage", { calls }));
   // The MCP tools the run's kit gives its workers (goal 068), as the harness's gateway lists them
-  // for this trial. A list that can't be read gives none: the trial goes on with its own tools.
+  // for this trial; `fresh`: asked of the servers now (the Pi view's /mcp reconnect).
+  const listMcp = async (fresh?: true | string): Promise<McpForAgent> => {
+    const query =
+      fresh === undefined ? "" : `?fresh=${encodeURIComponent(fresh === true ? "all" : fresh)}`;
+    const listed = (await call("GET", `/v1/mcp-tools${query}`)) as {
+      tools: McpToolInfo[];
+      unavailable?: { server: string; why: string }[];
+    };
+    return {
+      tools: listed.tools,
+      unavailable: listed.unavailable,
+      call: async (server, tool, args) =>
+        (await call("POST", "/v1/mcp-call", { server, tool, arguments: args })) as McpCallResult,
+    };
+  };
+  // In its terminal, the worker draws its Pi view, whose console the owner types into.
+  const view =
+    process.argv[3] === VIEW_FLAG
+      ? startView({
+          heading: `Thermite's view of a worker in Pi · trial ${trial.spec.trialId} · ${trial.spec.lane} · ${model.model}`,
+          call,
+          servers: trial.spec.mcpServers ?? [],
+          relist: listMcp,
+        })
+      : undefined;
+  /** The trial's result: its last line of output, or, in its Pi view, its file (VIEW_RESULT). */
+  const give = async (r: TrialResult): Promise<void> => {
+    if (!view) {
+      process.stdout.write(`\n${JSON.stringify(r)}\n`);
+      return;
+    }
+    await view.finish(r);
+    // Readable by the harness, whose group may enter the folder; no other user may enter it.
+    writeFileSync(VIEW_RESULT, JSON.stringify(r), { mode: 0o644 });
+    process.exit(0);
+  };
+  // A list that can't be read gives none: the trial goes on with its own tools.
   let mcp: McpForAgent | undefined;
   if (trial.spec.mcpServers?.length) {
     try {
-      const listed = (await call("GET", "/v1/mcp-tools")) as { tools: McpToolInfo[] };
-      if (listed.tools.length)
-        mcp = {
-          tools: listed.tools,
-          call: async (server, tool, args) =>
-            (await call("POST", "/v1/mcp-call", {
-              server,
-              tool,
-              arguments: args,
-            })) as McpCallResult,
-        };
+      const listed = await listMcp();
+      if (listed.tools.length) mcp = listed;
     } catch (err) {
       // Said in the live view; the trial goes on with its own tools.
       await link
@@ -172,9 +202,9 @@ async function main(): Promise<void> {
       modelUsage: usage.add,
       waiting,
       sent,
+      view: view?.trial,
     });
-    process.stdout.write(`\n${JSON.stringify(await withUsage(result, usage))}\n`);
-    return;
+    return give(await withUsage(result, usage));
   }
   const spec: TrialSpec = trial.spec;
   const runner = new ApiLaneRunner((path, body) => call("POST", path, body));
@@ -210,8 +240,9 @@ async function main(): Promise<void> {
     modelUsage: usage.add,
     waiting,
     sent,
+    view: view?.trial,
   });
-  process.stdout.write(`\n${JSON.stringify(await withUsage(result, usage))}\n`);
+  return give(await withUsage(result, usage));
 }
 
 /** The trial's result, once its usage is handed over, with the records the harness did not take. */
@@ -221,8 +252,15 @@ async function withUsage(result: TrialResult, usage: UsageSender): Promise<Trial
 }
 
 main().catch((err) => {
-  process.stdout.write(
-    `\n${JSON.stringify({ stopped: "error", turns: 0, toolCalls: 0, tokensIn: 0, tokensOut: 0, error: String(err) })}\n`,
-  );
+  const failed = JSON.stringify({
+    stopped: "error",
+    turns: 0,
+    toolCalls: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    error: String(err),
+  });
+  if (process.argv[3] === VIEW_FLAG) writeFileSync(VIEW_RESULT, failed, { mode: 0o644 });
+  else process.stdout.write(`\n${failed}\n`);
   process.exit(0);
 });

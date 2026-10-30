@@ -4,7 +4,9 @@ import { describe, test } from "node:test";
 import { type CommandKind, signEnvelope } from "../../../src/core/commands.ts";
 import { TERMINAL_INPUTS_PER_MINUTE } from "../../../src/core/terminal-input.ts";
 import { TrialConsole } from "../../../src/harness/agents/index.ts";
+import { PiConsole } from "../../../src/harness/agents/pi-view/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
+import { createHarnessApi } from "../../../src/harness/api/index.ts";
 import { LAST_SCREENS_KEPT } from "../../../src/harness/service/consoles.ts";
 import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 
@@ -71,7 +73,7 @@ async function setup() {
       .eventsAfter(0, 10_000)
       .events.filter((e) => e.kind === "terminal_input")
       .map((e) => e.body as Record<string, unknown>);
-  return { env, trial, as, type, records };
+  return { env, trial, token: `tok-${n}`, as, type, records };
 }
 
 const result = (
@@ -138,7 +140,10 @@ describe("terminal_input, as the harness applies it", () => {
   test("refused, in words and on the record, for a trial that has ended, runs headless or has no terminal", async () => {
     const s = await setup();
     const none = await s.type({ text: "hello" });
-    assert.match(String(result(none).error), /has no terminal to type into: its agent runs in Pi/);
+    assert.match(
+      String(result(none).error),
+      /has no terminal to type into: its program has not started yet/,
+    );
     s.env.service.consoles.set(s.trial, "headless");
     const headless = await s.type({ text: "hello" });
     assert.match(String(result(headless).error), /runs headless, with no terminal/);
@@ -298,5 +303,72 @@ describe("terminal_input, as the harness applies it", () => {
     ]);
     assert.equal(gone?.state, "none");
     assert.equal(newest?.data, `screen ${LAST_SCREENS_KEPT - 1}`);
+  });
+
+  test("a worker in Pi's Pi view: its worker takes each input over its trial's routes, and says what became of it", async () => {
+    const s = await setup();
+    const pi = new PiConsole();
+    s.env.service.consoles.set(s.trial, new TrialConsole(pi), pi);
+    const api = createHarnessApi(s.env.service, { supervisor: "s" });
+    const post = async (path: string, body: object, token = s.token) => {
+      const r = await api.request(path, {
+        method: "POST",
+        headers: { authorization: `Bearer trial.${token}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    // The worker, as worker-main's Pi view asks: the next input, then what became of it.
+    const worker = async (outcome: "typed" | "refused", why?: string) => {
+      const next = await post("/v1/trial/console/next", { wait_ms: 2_000 });
+      assert.equal(next.status, 200);
+      const input = next.body.input as { id: string; call: Record<string, unknown> };
+      const done = await post("/v1/trial/console/done", { id: input.id, outcome, why });
+      assert.equal(done.status, 200);
+      return input.call;
+    };
+    const [out, call] = await Promise.all([
+      s.type({ text: "then run the tests", follow_up: true }),
+      worker("typed"),
+    ]);
+    assert.deepEqual(call, { kind: "follow_up", text: "then run the tests" });
+    assert.equal(result(out).outcome, "typed");
+    const [stopped, esc] = await Promise.all([
+      s.type({ keys: ["esc"] }),
+      worker("refused", "the agent has no reply under way to stop"),
+    ]);
+    assert.deepEqual(esc, { kind: "interrupt" });
+    assert.match(String(result(stopped).error), /the agent has no reply under way to stop/);
+    // One it makes no call for is refused here, and never reaches the worker.
+    const model = await s.type({ text: "/model gpt-x" });
+    assert.match(String(result(model).error), /not a command of the Pi view/);
+    const skill = await s.type({ text: "/skill:profile" });
+    assert.match(String(result(skill).error), /this run's kit carries no skills/);
+    assert.deepEqual(
+      s.records().map((x) => [x.text ?? x.keys, x.follow_up ?? null, x.outcome]),
+      [
+        ["then run the tests", true, "typed"],
+        [["esc"], null, "refused"],
+        ["/model gpt-x", null, "refused"],
+        ["/skill:profile", null, "refused"],
+      ],
+    );
+    const [frame] = await s.env.service.consoles.screens([s.trial]);
+    assert.equal(frame?.pi_view, true, "Live shows the Pi view's console");
+    // Its end: the routes keep the screen, then refuse; another trial's token reaches no view.
+    assert.equal((await post("/v1/trial/console/end", {})).status, 200);
+    assert.deepEqual((await post("/v1/trial/console/next", { wait_ms: 0 })).body, { input: null });
+    new Registry(s.env.ledger).startTrial({
+      id: "t-other-trial-01",
+      run: "js-1",
+      lane: "lane-2",
+      epoch: 1,
+      family: "f",
+      parent: "p",
+      token: "tok-other",
+    });
+    const other = await post("/v1/trial/console/next", { wait_ms: 0 }, "tok-other");
+    assert.equal(other.status, 409);
+    assert.match(String(other.body.error), /this trial has no Pi view/);
   });
 });

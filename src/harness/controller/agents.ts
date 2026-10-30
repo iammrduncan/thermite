@@ -168,8 +168,9 @@ export function agentLinks(
       // Its hooks or plugin take the owner's messages inside the agent's turn, through the
       // trial's routes (goal 169).
       inTurn: (d) => service.inTurn(spec.trialId, d),
-      // The owner's console into its terminal, and its screen for Live (goal 169).
-      console: (c) => service.consoles.set(spec.trialId, c),
+      // The owner's console into its terminal, and its screen for Live (goal 169); a worker in
+      // Pi asks its Pi view's side for the owner's inputs over its trial's routes.
+      console: (c, piView) => service.consoles.set(spec.trialId, c, piView),
       usage: windows,
       // A compaction the program reported (goal 070): kept and recorded as a Pi worker's are,
       // with the program's own conversation where Thermite could read it.
@@ -201,8 +202,8 @@ export function agentLinks(
       // A drain ends a trial that waits in its terminal for its usage window (goal 169).
       draining: () => service.draining !== undefined,
       env: laneCacheEnv(paths.scratchDir, spec.lane),
-      // Claude Code, Codex or OpenCode in its own terminal, or headless: the rig's setting when
-      // the trial starts (goal 169). Pi has no terminal.
+      // Each program in its own terminal (a worker in Pi in its Pi view), or headless: the rig's
+      // setting when the trial starts (goal 169).
       terminal: service.settings.get().program_mode === "terminal",
       // The prompt that starts the trial, kept whole in the ledger (goal 166).
       sent: (p) =>

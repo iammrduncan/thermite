@@ -421,10 +421,19 @@ export class TerminalTrial<T extends CliTally> {
   /**
    * The owner's input (terminal_input), into the program now: text, then Enter, or keys by name,
    * after what the loop is typing. Refused in words when no program runs: it is being ended, or
-   * it exited and starts again in its session at the trial's next turn.
+   * it exited and starts again in its session at the trial's next turn; and with follow_up, which
+   * only a worker in Pi takes.
    */
-  async ownerInput(i: { text?: string | undefined; keys?: readonly TerminalKey[] | undefined }) {
+  async ownerInput(i: {
+    text?: string | undefined;
+    keys?: readonly TerminalKey[] | undefined;
+    follow_up?: true | undefined;
+  }) {
     const host = this.host;
+    if (i.follow_up)
+      throw new Refusal(
+        `follow_up is for a worker in Pi: ${this.p.name} takes what is typed into it as it comes`,
+      );
     if (this.stopping) throw new Refusal(`${this.p.name} is being ended: nothing more goes in`);
     if (!host)
       throw new Refusal(

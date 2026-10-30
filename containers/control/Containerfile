@@ -11,7 +11,10 @@ COPY scripts/patch-pi-ai.mjs ./scripts/
 # harness's terminal host's (goal 169), so it is left out here with what it alone needs.
 RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
 COPY src ./src
-RUN npm run build && npm prune --omit=dev --omit=optional --no-fund --no-audit
+# pi-tui's prebuilt helpers for its clipboard and modifier keys, which nothing here loads, stay out:
+# no image holds a native part of pi-tui (goal 169).
+RUN npm run build && npm prune --omit=dev --omit=optional --no-fund --no-audit \
+ && rm -rf node_modules/@earendil-works/pi-tui/native
 # kubectl, for rigs control sets up on Kubernetes clusters: a pinned release, checked by sha256.
 # The final stage carries its Apache License 2.0, the LICENSE of kubernetes/kubernetes at this
 # tag (containers/control/kubectl/; update it with the version).
@@ -55,9 +58,10 @@ RUN mkdir -p /var/lib/thermite-control /keys /nats-config \
  && chown 10001:10001 /var/lib/thermite-control /keys /nats-config
 # No set-id file anywhere, as in every Thermite image: no process in the container can gain
 # privileges through a setuid or setgid program. Last, after every package; the build fails if one
-# is left.
+# is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
 RUN find / -xdev -type f -perm /6000 -exec chmod ug-s {} + \
- && test -z "$(find / -xdev -type f -perm /6000 -print -quit)"
+ && test -z "$(find / -xdev -type f -perm /6000 -print -quit)" \
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
 ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning HOME=/var/lib/thermite-control
 # The source commit the image is built from (empty: not given). Control reports it with
 # Thermite's version from package.json, and compares rigs' builds with its own.

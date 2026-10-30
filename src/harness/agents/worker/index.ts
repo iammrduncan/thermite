@@ -1,4 +1,4 @@
-import { Agent } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
 import { buildModel, PiMeter } from "../../../agents/model/index.ts";
 import { messageText, type Prompt, systemText } from "../../../agents/prompt.ts";
@@ -23,13 +23,14 @@ import {
 import { guardRepeats } from "../repeats.ts";
 import { TrialClock } from "../trial-clock.ts";
 import { keepGoing, lastAssistant } from "./keep-going.ts";
-import type { TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
+import type { McpForAgent, TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
 import { watchedStream, withoutPastThinking } from "./stream.ts";
 import { trialTools } from "./tools.ts";
 
 export {
   type KeepGoingOptions,
   keepGoing,
+  lastAssistant,
   stopNudging,
   type TrialEnd,
 } from "./keep-going.ts";
@@ -39,7 +40,10 @@ export type {
   ProviderWait,
   SubmitOutcome,
   TrialDeps,
+  TrialLevers,
   TrialSpec,
+  TrialStatus,
+  TrialView,
 } from "./spec.ts";
 export { TrialResult } from "./spec.ts";
 export { watchedStream, withoutPastThinking } from "./stream.ts";
@@ -83,6 +87,25 @@ export function piTrialPrompt(
   });
 }
 
+/**
+ * Lets a trial give its agent new tools while it runs (the owner's /mcp reconnect in its Pi view,
+ * goal 169): from the agent's next turn in the run under way, declared to the model as Pi declares
+ * a change of tools, and for its later runs. Set up before the agent's first run: Pi reads its
+ * next-turn hook when a run starts.
+ */
+export function swappableTools(agent: Agent): (tools: AgentTool[]) => void {
+  let next: AgentTool[] | undefined;
+  agent.prepareNextTurnWithContext = (turn) => {
+    const tools = next;
+    next = undefined;
+    return tools ? { context: { ...turn.context, tools } } : undefined;
+  };
+  return (tools) => {
+    agent.state.tools = tools;
+    next = tools;
+  };
+}
+
 export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialResult> {
   const result: TrialResult = {
     stopped: "no_submission",
@@ -106,7 +129,16 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
       windowFit(deps.model.contextWindow, deps.model.compactAt),
     );
   const notes = new NoteLimit(limits.notesPerTurn); // the notes of one reply (goal 147)
-  const tools = trialTools(spec, deps, result, { limits, clock, notes });
+  // Its tools, with the MCP tools the gateway listed; the owner may have them listed again in the
+  // trial's Pi view (goal 169).
+  let mcp = deps.mcp;
+  const toolsWith = (m: McpForAgent | undefined) =>
+    clock.wrap(
+      guardRepeats(
+        trialTools(spec, { ...deps, mcp: m }, result, { limits, clock, notes }),
+        () => compactor.count,
+      ),
+    );
 
   // The later turns of this trial (goal 166), numbered after its first message.
   let said = 0;
@@ -126,7 +158,7 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     initialState: {
       systemPrompt: systemText(sent),
       model,
-      tools: clock.wrap(guardRepeats(tools, () => compactor.count)),
+      tools: toolsWith(mcp),
       thinkingLevel,
     },
     streamFn: watchedStream(models, watch, meter),
@@ -208,6 +240,35 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
       ownerTurn: (text) => renderWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
       sent: deps.sent,
     });
+  // Its Pi view's console (goal 169): each of the owner's calls is one of these levers.
+  const swapTools = deps.view ? swappableTools(agent) : undefined;
+  deps.view?.attach({
+    agent,
+    compact: () => compactor.force("asked"),
+    ownerTurn: (text) => renderWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+    sent: deps.sent,
+    mcp: () => mcp,
+    setMcp: (m) => {
+      mcp = m;
+      swapTools?.(toolsWith(m));
+    },
+    status: () => ({
+      turns: result.turns,
+      toolCalls: result.toolCalls,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      compactions: compactor.count,
+      msLeft: clock.leftMs(),
+      maxTurns,
+      model: deps.model.model,
+    }),
+    closed: () =>
+      result.submitted
+        ? "the trial has submitted its change: nothing more goes to its agent"
+        : result.stopped !== "no_submission"
+          ? `the trial is ending (${result.stopped})`
+          : undefined,
+  });
   const wall =
     wallMs !== undefined
       ? setTimeout(() => {
@@ -248,6 +309,14 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
         break;
       }
       if (result.submitted || result.stopped !== "no_submission") break;
+      // The owner interrupted the reply in the trial's Pi view (goal 169): not the agent's own
+      // stop, so no nudge is counted. The trial goes on at once with the owner's words that wait,
+      // or with its nudge.
+      if (deps.view?.interrupted()) {
+        if (agent.hasQueuedMessages()) await agent.continue();
+        else await agent.prompt(messageText(later({ kind: "nudge" })));
+        continue;
+      }
       if (nudges > 0 && result.toolCalls === callsAtNudge) break;
       if (spec.limits?.nudges !== undefined && nudges >= spec.limits.nudges) break;
       nudges++;

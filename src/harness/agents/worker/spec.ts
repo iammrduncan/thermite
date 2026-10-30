@@ -1,3 +1,4 @@
+import type { Agent } from "@earendil-works/pi-agent-core";
 import { z } from "zod";
 import type { CompactionReport } from "../../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
@@ -110,6 +111,50 @@ export interface TrialDeps {
    * continuation. The harness keeps the trial's first prompt itself.
    */
   sent?: ((p: Prompt) => void) | undefined;
+  /** The trial's Pi view, when its worker draws one in its terminal (goal 169). */
+  view?: TrialView | undefined;
+}
+
+/**
+ * A trial's Pi view (goal 169; src/harness/agents/pi-view/): the trial hands it its levers once
+ * its agent is built, and asks it, when the agent stops, whether the owner interrupted it.
+ */
+export interface TrialView {
+  attach(levers: TrialLevers): void;
+  /** Whether the agent's reply stopped because the owner interrupted it: asked once per stop. */
+  interrupted(): boolean;
+}
+
+/** What the Pi view's console reaches in a running trial: each of its calls is one of these. */
+export interface TrialLevers {
+  agent: Agent;
+  /** Compacts the conversation before the agent's next model call, as the owner asked. */
+  compact(): void;
+  /** The owner's words as the trial's role puts them to its agent: a later turn of the trial. */
+  ownerTurn(text: string): Prompt;
+  /** Keeps a later turn once it enters the conversation (goal 166). */
+  sent?: ((p: Prompt) => void) | undefined;
+  /** The trial's MCP tools now, with the servers that failed. */
+  mcp(): McpForAgent | undefined;
+  /** Gives the agent a new list of MCP tools, from its next turn. */
+  setMcp(mcp: McpForAgent): void;
+  /** The trial's counts so far. */
+  status(): TrialStatus;
+  /** Why the trial takes no more of the owner's words (it has submitted, or is ending). */
+  closed(): string | undefined;
+}
+
+/** A trial's counts, as its Pi view shows them. */
+export interface TrialStatus {
+  turns: number;
+  toolCalls: number;
+  tokensIn: number;
+  tokensOut: number;
+  compactions: number;
+  /** Its time left, when it has a length. */
+  msLeft?: number | undefined;
+  maxTurns?: number | undefined;
+  model: string;
 }
 
 /** A trial waits for its provider and then goes on in the same conversation (goal 079). */
@@ -134,6 +179,8 @@ export interface CompactionLink {
 /** An agent's MCP tools in Pi: what the gateway listed for it, and a call through the gateway. */
 export interface McpForAgent {
   tools: McpToolInfo[];
+  /** The servers whose tools could not be listed, and why. */
+  unavailable?: { server: string; why: string }[] | undefined;
   call(server: string, tool: string, args: Record<string, unknown>): Promise<McpCallResult>;
 }
 

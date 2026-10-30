@@ -98,17 +98,25 @@ function resultText(result: unknown): string {
 }
 
 /**
- * Steers a later turn into a running session, for its next model call (goal 166). `entered`: once
- * it enters the conversation; a turn that a stop overtakes never does, and was never sent.
+ * Steers a later turn into a running session, for its next model call (goal 166), or, as a
+ * follow-up, for when the agent would stop (`follow-up`: the owner's choice in a trial's Pi view,
+ * goal 169). `entered`: once it enters the conversation; a turn that a stop overtakes never does,
+ * and was never sent.
  */
-export function steerTurn(agent: Agent, p: Prompt, entered: () => void): void {
+export function steerTurn(
+  agent: Agent,
+  p: Prompt,
+  entered: () => void,
+  when: "next-call" | "follow-up" = "next-call",
+): void {
   const message = userMessage(p);
   const off = agent.subscribe((event, signal) => {
     if (event.type !== "message_end" || event.message !== message) return;
     off();
     if (!signal.aborted) entered();
   });
-  agent.steer(message);
+  if (when === "follow-up") agent.followUp(message);
+  else agent.steer(message);
 }
 
 export function linkSession(agent: Agent, link: SessionLink): void {

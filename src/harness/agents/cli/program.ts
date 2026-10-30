@@ -21,6 +21,7 @@ import type { LiveKind } from "../../../core/live.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, Runner } from "../../broker/index.ts";
 import type { MessageInbox, TrialProgress, TurnDelivery } from "../live-session.ts";
+import type { PiConsole } from "../pi-view/index.ts";
 import type { ProviderLink } from "../provider-errors.ts";
 import type { ResearchTrialSpec } from "../research/index.ts";
 import type { SubmitOutcome, TrialResult, TrialSpec } from "../worker/index.ts";
@@ -338,14 +339,15 @@ export interface CliTrialDeps extends ProviderLink {
   sent?: ((p: Prompt) => void) | undefined;
   /**
    * Runs the program in its own terminal (goal 169; the rig's program_mode), held by the terminal
-   * host, instead of headless. Unset: headless.
+   * host, instead of headless; a worker in Pi draws its Pi view there. Unset: headless.
    */
   terminal?: boolean | undefined;
   /** Whether the rig drains: a trial that waits in its terminal for its usage window ends. */
   draining?: (() => boolean) | undefined;
   /**
    * Given the owner's console into the trial's terminal (goal 169) when the trial starts, or
-   * "headless" when its program runs without one.
+   * "headless" when its program runs without one; with a worker's Pi view, that view's own side
+   * too, which the worker asks over its trial's routes.
    */
-  console?: ((c: TrialConsole | "headless") => void) | undefined;
+  console?: ((c: TrialConsole | "headless", piView?: PiConsole) => void) | undefined;
 }

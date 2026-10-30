@@ -34,9 +34,13 @@ export function mcpRoutes(app: Hono, { service, trialOf }: ApiContext): void {
       kb: { run: caller.run, slot: caller.kind === "planner" ? "planner" : "" },
     };
   };
-  app.get("/v1/mcp-tools", async (c) =>
-    c.json(await service.mcp.tools(callers(c.req.header("authorization")).mcp)),
-  );
+  // `?fresh=all` (or a server's name): the servers are asked now, not the list kept for a few
+  // minutes (the owner's /mcp reconnect in a Pi worker's view, goal 169).
+  app.get("/v1/mcp-tools", async (c) => {
+    const fresh = c.req.query("fresh");
+    const caller = callers(c.req.header("authorization")).mcp;
+    return c.json(await service.mcp.tools(caller, fresh === "all" ? true : (fresh ?? false)));
+  });
   app.post("/v1/mcp-call", bodyLimit({ maxSize: 4 * 1024 * 1024 }), async (c) => {
     const caller = callers(c.req.header("authorization"));
     const b = z

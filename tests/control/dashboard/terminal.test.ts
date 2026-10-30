@@ -256,6 +256,56 @@ describe("a trial's terminal on Live", () => {
     assert.match(html, /\[down\] · <span class="ok">typed<\/span>/);
   });
 
+  test("a worker in Pi's view: the console offers its commands and a follow-up, sent as follow_up", async () => {
+    const s = await setup();
+    const html = await s.owner.page(PAGE);
+    // Shown only once a frame says the screen is a Pi view.
+    assert.match(
+      html,
+      /<label class="term-confirm" data-term-pi hidden><input type="checkbox" name="follow_up" value="1"> Follow-up/,
+    );
+    assert.match(
+      html,
+      /data-term-pi hidden>The Pi view: words steer the agent; <b>Esc<\/b> stops its reply; its commands are \/status, \/compact, \/mcp, \/mcp reconnect \[server\] and \/skill:NAME\./,
+    );
+    assert.match(TERMINAL_JS, /el\.hidden = !f\.pi_view/);
+    const csrf = s.owner.csrfOf(html);
+    await s.owner.post("/ui/rigs/rig-a/live/terminal", {
+      csrf,
+      run: "js-1",
+      trial: TRIAL,
+      text: "then run the tests",
+      follow_up: "1",
+    });
+    // A key never carries it.
+    await s.owner.post("/ui/rigs/rig-a/live/terminal", {
+      csrf,
+      run: "js-1",
+      trial: TRIAL,
+      key: "esc",
+      follow_up: "1",
+    });
+    const cmds = s.store.commands.latest("rig-a", "terminal_input", 10).reverse();
+    assert.deepEqual(
+      cmds.map((c) => [c.payload.text ?? c.payload.keys, c.payload.follow_up ?? null]),
+      [
+        ["then run the tests", true],
+        [["esc"], null],
+      ],
+    );
+    await s.relay();
+    await s.relay();
+    assert.deepEqual(s.term.typed[0], {
+      text: "then run the tests",
+      keys: undefined,
+      follow_up: true,
+    });
+    assert.match(
+      await s.owner.page(PAGE),
+      /<code>then run the tests<\/code> · <span class="ok">typed, as a follow-up<\/span>/,
+    );
+  });
+
   test("over MCP and REST, the owner's token alone issues it; control refuses an operator's before signing", async () => {
     const s = await setup();
     const payload = { run: "js-1", trial: TRIAL, text: "/status" };

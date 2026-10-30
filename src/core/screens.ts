@@ -24,8 +24,8 @@ export const ScreenFrame = z.object({
   trial: TrialRef,
   /**
    * `running`: its screen now; `ended`: its last screen, kept once the trial ended; `none`: it has
-   * no terminal (its program runs headless or in Pi, has not started yet, or the harness restarted
-   * since it ended).
+   * no terminal (its program runs headless, has not started yet, or the harness restarted since it
+   * ended).
    */
   state: z.enum(["running", "ended", "none"]),
   /** The terminal's size, and the screen as a string that draws it in a terminal of that size. */
@@ -36,6 +36,11 @@ export const ScreenFrame = z.object({
   limit: z.object({ resets_at: z.string().max(64).optional() }).optional(),
   /** How many of the owner's inputs wait for that reset. */
   queued: z.number().int().min(0).optional(),
+  /**
+   * The screen is a worker in Pi's Pi view, which Thermite draws of its own Pi session: its console
+   * takes words (to steer, or as a follow-up), Esc and the Pi view's commands.
+   */
+  pi_view: z.literal(true).optional(),
   /** When the harness took it. */
   at: z.string().max(40),
 });

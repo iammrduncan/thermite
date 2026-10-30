@@ -449,6 +449,8 @@ export interface EventBodies {
     text?: string | undefined;
     keys?: string[] | undefined;
     wait: "queue" | "now";
+    /** A worker in Pi: the text waited until the agent would stop (its Pi view). */
+    follow_up?: true | undefined;
     outcome: TerminalOutcome;
     why?: string | undefined;
     until?: string | undefined;

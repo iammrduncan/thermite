@@ -61,6 +61,13 @@ describe("terminal_input's payload", () => {
     assert.ok(!parse({ text: "x".repeat(TERMINAL_TEXT_MAX + 1) }).success);
   });
 
+  test("follow_up, for a worker in Pi's view, goes with text only (the owner, 2026-10-30)", () => {
+    assert.equal(parse({ text: "then check the tests", follow_up: true }).data?.follow_up, true);
+    assert.equal(parse({ text: "go on" }).data?.follow_up, undefined, "steers by default");
+    assert.match(why({ keys: ["esc"], follow_up: true }), /follow_up goes with text, not keys/);
+    assert.ok(!parse({ text: "a", follow_up: false }).success, "given, it is true");
+  });
+
   test("a shell command or a change of sign-in or settings is confirmed first", () => {
     for (const t of [
       "!rm -rf build",

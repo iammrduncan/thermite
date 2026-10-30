@@ -22,6 +22,7 @@ export {
   type RigCheckReport,
   ROUTE_FILE,
 } from "./model/index.ts";
+export type { PiConsole } from "./pi-view/index.ts";
 export {
   CLI_PROGRAMS,
   programOf,

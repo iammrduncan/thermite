@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
+import { PI_VIEW_DONE, PI_VIEW_END, PI_VIEW_NEXT } from "../../core/api/harness/console.ts";
 import { KEEP_TRIAL_PROMPT } from "../../core/api/harness/prompts.ts";
 import { TURN_OFFER, TURN_TAKEN } from "../../core/api/harness/turn.ts";
 import { compactionOf, KEPT_MAX } from "../compactions.ts";
@@ -11,9 +12,37 @@ import { type ApiContext, limitOf } from "./context.ts";
  * A running trial's own routes, each bound to the trial by its token: its session's lines for the
  * live log, the owner's messages waiting for it and its receipt for them (a Pi worker's, or its
  * program's hook or plugin's inside the agent's turn), its ideas and field notes, the compactions
- * of its conversation, and the later turns its worker sent in it.
+ * of its conversation, the later turns its worker sent in it, and a worker in Pi's own side of its
+ * Pi view's console.
  */
 export function trialRoutes(app: Hono, { service, trialOf }: ApiContext): void {
+  // A worker in Pi's Pi view (goal 169): the owner's next input, one call in its trial's loop;
+  // what became of it; and the trial's end, when the harness keeps the view's last screen. The
+  // trial's token decides the trial, so a worker reaches only its own trial's console.
+  const piView = (header: string | undefined) => {
+    const { trial } = trialOf(header);
+    const view = service.consoles.piView(trial.id);
+    if (!view) throw new LedgerError("conflict", "this trial has no Pi view");
+    return view;
+  };
+  app.post(PI_VIEW_NEXT.path, limitOf(PI_VIEW_NEXT), async (c) => {
+    const view = piView(c.req.header("authorization"));
+    const { wait_ms } = PI_VIEW_NEXT.body.parse(await c.req.json());
+    return c.json({ input: await view.next(wait_ms) });
+  });
+  app.post(PI_VIEW_DONE.path, limitOf(PI_VIEW_DONE), async (c) => {
+    const view = piView(c.req.header("authorization"));
+    const b = PI_VIEW_DONE.body.parse(await c.req.json());
+    view.done(b.id, b.outcome, b.why);
+    return c.json({ ok: true });
+  });
+  app.post(PI_VIEW_END.path, limitOf(PI_VIEW_END), async (c) => {
+    const view = piView(c.req.header("authorization"));
+    PI_VIEW_END.body.parse(await c.req.json());
+    await view.end();
+    return c.json({ ok: true });
+  });
+
   // A worker's own lines for the live log: its trial decides the source, lane and run.
   app.post("/v1/trial/live", bodyLimit({ maxSize: 256 * 1024 }), async (c) => {
     const { trial } = trialOf(c.req.header("authorization"));

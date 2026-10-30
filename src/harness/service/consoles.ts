@@ -5,7 +5,7 @@ import {
   type TerminalInput,
   type TerminalOutcome,
 } from "../../core/terminal-input.ts";
-import type { TrialConsole } from "../agents/index.ts";
+import type { PiConsole, TrialConsole } from "../agents/index.ts";
 import { LedgerError } from "../ledger/index.ts";
 import type { ScreenSnapshot } from "../terminal/index.ts";
 import type { HarnessService } from "./index.ts";
@@ -15,7 +15,9 @@ import type { HarnessService } from "./index.ts";
  * running trial's console (agents/cli/console.ts), set by its trial loop when it starts; the owner's
  * input to one (terminal_input, owner only: the command's checks are in commands.ts), recorded word
  * for word with its outcome; and the screens for control's live view, the last screen of each
- * trial that ended kept in memory, the newest LAST_SCREENS_KEPT.
+ * trial that ended kept in memory, the newest LAST_SCREENS_KEPT. A worker in Pi's console is its
+ * Pi view's, whose own side (`piView`) the worker asks for the owner's inputs over its trial's
+ * routes.
  */
 
 /** How many ended trials keep their last screen: the newest; the oldest goes first. */
@@ -25,13 +27,14 @@ export const LAST_SCREENS_KEPT = 20;
 const NO_TERMINAL = {
   headless:
     "its program runs headless, with no terminal (on Edit rig, Advanced, Agent programs run: In their own terminal, for the next trials)",
-  none: "its agent runs in Pi, which has no terminal, or its program has not started yet",
+  none: "its program has not started yet",
 };
 
 /** The input a command gives, as its record keeps it: its text or its keys, and its wait. */
 const words = (p: TerminalInput) => ({
   ...(p.text !== undefined ? { text: p.text } : { keys: [...(p.keys ?? [])] }),
   wait: p.wait,
+  ...(p.follow_up ? { follow_up: true as const } : {}),
 });
 
 /** A screen cut to SCREEN_DATA_MAX characters, its newest kept. */
@@ -44,6 +47,8 @@ const fit = (s: ScreenSnapshot) => ({
 export class TrialConsoles {
   private readonly svc: Pick<HarnessService, "ledger" | "live" | "clock">;
   private readonly open = new Map<string, TrialConsole | "headless">();
+  /** The Pi views' own sides, of the trials whose worker in Pi draws one. */
+  private readonly piViews = new Map<string, PiConsole>();
   /** The last screens of trials that ended, oldest first. */
   private readonly last = new Map<string, ScreenSnapshot>();
   /** When each trial took its inputs in the last minute. */
@@ -53,15 +58,22 @@ export class TrialConsoles {
     this.svc = svc;
   }
 
-  /** A trial started: its console, or word that its program has none. */
-  set(trial: string, c: TrialConsole | "headless"): void {
+  /** A trial started: its console, or word that its program has none; a Pi view's own side. */
+  set(trial: string, c: TrialConsole | "headless", piView?: PiConsole): void {
     this.open.set(trial, c);
+    if (piView) this.piViews.set(trial, piView);
+  }
+
+  /** A running trial's Pi view, which its worker asks for the owner's inputs; none: undefined. */
+  piView(trial: string): PiConsole | undefined {
+    return this.piViews.get(trial);
   }
 
   /** A trial ended: its console goes, its last screen stays, the newest LAST_SCREENS_KEPT. */
   ended(trial: string): void {
     const c = this.open.get(trial);
     this.open.delete(trial);
+    this.piViews.delete(trial);
     this.recent.delete(trial);
     const screen = c && c !== "headless" ? c.lastScreen() : undefined;
     if (!screen) return;
@@ -164,6 +176,7 @@ export class TrialConsoles {
           ...(s ? fit(s) : {}),
           ...(limit ? { limit: limit.resetsAt ? { resets_at: limit.resetsAt } : {} } : {}),
           ...(c.queued ? { queued: c.queued } : {}),
+          ...(this.piViews.has(trial) ? { pi_view: true as const } : {}),
           at: at(),
         });
       } else if (ended) out.push({ trial, state: "ended", ...fit(ended), at: at() });

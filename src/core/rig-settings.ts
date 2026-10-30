@@ -34,9 +34,8 @@ export interface RigSettings {
    */
   quiet_minutes: number | null;
   /**
-   * How a trial's agent program runs, where it can run a terminal UI (Claude Code, Codex,
-   * OpenCode; goal 169): in its own terminal, held by the terminal host, or headless. Pi, which
-   * runs in the harness, has no such choice.
+   * How a trial's agent program runs (goal 169): in its own terminal, held by the terminal host
+   * (a worker in Pi draws its Pi view there), or headless.
    */
   program_mode: ProgramMode;
   promotion: "auto" | "owner_approval";

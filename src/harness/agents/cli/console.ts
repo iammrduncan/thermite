@@ -16,9 +16,12 @@ import type { ScreenSnapshot } from "../../terminal/index.ts";
  * and once more later for one that waited.
  */
 
-/** What the console needs of the trial's terminal (terminal.ts's TerminalTrial). */
+/**
+ * What the console needs of the trial's terminal: terminal.ts's TerminalTrial, or a worker's Pi
+ * view (pi-view/console.ts).
+ */
 export interface ConsoleTerminal {
-  ownerInput(i: Pick<TerminalInput, "text" | "keys">): Promise<void>;
+  ownerInput(i: Pick<TerminalInput, "text" | "keys" | "follow_up">): Promise<void>;
   limitShown(): { resetsAt?: string | undefined } | undefined;
   screen(): Promise<ScreenSnapshot | undefined>;
   lastScreen(): ScreenSnapshot | undefined;
@@ -36,11 +39,18 @@ export type ConsoleLater = (
 /** The usage limit the screen shows, for the live view: until when, when the program said. */
 export type ConsoleLimit = { resetsAt?: string | undefined } | undefined;
 
+/** What goes into the terminal of an input: its text or keys, and follow_up only when given. */
+const inputOf = (i: Pick<TerminalInput, "text" | "keys" | "follow_up">) => ({
+  text: i.text,
+  keys: i.keys,
+  ...(i.follow_up ? { follow_up: true as const } : {}),
+});
+
 export class TrialConsole {
   private readonly term: ConsoleTerminal;
   /** The inputs waiting for the usage window's reset, oldest first: whom to tell, and the reset. */
   private readonly waiting: {
-    input: Pick<TerminalInput, "text" | "keys">;
+    input: Pick<TerminalInput, "text" | "keys" | "follow_up">;
     later: ConsoleLater;
     until?: string | undefined;
   }[] = [];
@@ -58,7 +68,7 @@ export class TrialConsole {
    * has ended, when TERMINAL_QUEUE_MAX inputs wait already, or when no program runs to take it.
    */
   async input(
-    i: Pick<TerminalInput, "text" | "keys" | "wait">,
+    i: Pick<TerminalInput, "text" | "keys" | "wait" | "follow_up">,
     later: ConsoleLater,
   ): Promise<ConsoleNow> {
     if (this.closed) throw new Refusal(this.closed);
@@ -68,10 +78,10 @@ export class TrialConsole {
         throw new Refusal(
           `${TERMINAL_QUEUE_MAX} inputs wait for the usage window's reset already: send this one now, or after the reset`,
         );
-      this.waiting.push({ input: { text: i.text, keys: i.keys }, later, until: limit.resetsAt });
+      this.waiting.push({ input: inputOf(i), later, until: limit.resetsAt });
       return { outcome: "queued", until: limit.resetsAt };
     }
-    await this.term.ownerInput({ text: i.text, keys: i.keys });
+    await this.term.ownerInput(inputOf(i));
     return { outcome: "typed" };
   }
 

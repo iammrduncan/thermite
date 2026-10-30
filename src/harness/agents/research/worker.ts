@@ -8,6 +8,7 @@ import {
   renderCompacted,
   renderResearchWorker,
   renderResearchWorkerTurn,
+  type TrialTurn,
   windowFit,
 } from "../../../agents/roles/index.ts";
 import {
@@ -40,8 +41,20 @@ import {
   writeFile,
 } from "../tools/index.ts";
 import { TrialClock } from "../trial-clock.ts";
-import type { CompactionLink, McpForAgent, ProviderWait, TrialResult } from "../worker/index.ts";
-import { keepGoing, PI_TRIAL, watchedStream, withoutPastThinking } from "../worker/index.ts";
+import type {
+  CompactionLink,
+  McpForAgent,
+  ProviderWait,
+  TrialResult,
+  TrialView,
+} from "../worker/index.ts";
+import {
+  keepGoing,
+  PI_TRIAL,
+  swappableTools,
+  watchedStream,
+  withoutPastThinking,
+} from "../worker/index.ts";
 
 /**
  * A research trial in Pi: a fresh agent session with the research tools and file tools over its
@@ -98,6 +111,8 @@ export interface ResearchDeps {
   waiting?: ((w: ProviderWait) => void) | undefined;
   /** Keeps each later turn the trial sends its worker (goal 166; see TrialDeps). */
   sent?: ((p: Prompt) => void) | undefined;
+  /** The trial's Pi view, when its worker draws one in its terminal (goal 169; see TrialDeps). */
+  view?: TrialView | undefined;
 }
 
 const out = (value: unknown) => ({
@@ -140,7 +155,10 @@ export async function runResearchTrial(
   // Near a set length's end, each tool result says the time left, and the end stops a tool (goal 144).
   const clock = new TrialClock(spec.wallMs);
   const notes = new NoteLimit(spec.limits?.notesPerTurn); // the notes of one reply (goal 147)
-  const tools: AgentTool[] = [
+  // Its tools, with the MCP tools the gateway listed; the owner may have them listed again in the
+  // trial's Pi view (goal 169).
+  let mcpNow = deps.mcp;
+  const toolsWith = (mcp: McpForAgent | undefined): AgentTool[] => [
     ...researchAgentTools(
       RESEARCH_TOOLS.map((t) => t.name),
       deps.call,
@@ -184,10 +202,10 @@ export async function runResearchTrial(
           } as AgentTool,
         ]
       : []),
-    ...(deps.mcp
+    ...(mcp
       ? mcpAgentTools(
-          deps.mcp.tools,
-          (s, t, a) => (deps.mcp as McpForAgent).call(s, t, a),
+          mcp.tools,
+          (s, t, a) => mcp.call(s, t, a),
           () => {
             result.toolCalls++;
           },
@@ -220,7 +238,7 @@ export async function runResearchTrial(
     initialState: {
       systemPrompt: systemText(sent),
       model,
-      tools: clock.wrap(guardRepeats(tools, () => compactor.count)),
+      tools: clock.wrap(guardRepeats(toolsWith(mcpNow), () => compactor.count)),
       thinkingLevel,
     },
     streamFn: watchedStream(models, watch, meter),
@@ -274,6 +292,32 @@ export async function runResearchTrial(
         renderResearchWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
       sent: deps.sent,
     });
+  // Its Pi view's console (goal 169): each of the owner's calls is one of these levers.
+  const swapTools = deps.view ? swappableTools(agent) : undefined;
+  deps.view?.attach({
+    agent,
+    compact: () => compactor.force("asked"),
+    ownerTurn: (text) =>
+      renderResearchWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+    sent: deps.sent,
+    mcp: () => mcpNow,
+    setMcp: (m) => {
+      mcpNow = m;
+      swapTools?.(clock.wrap(guardRepeats(toolsWith(m), () => compactor.count)));
+    },
+    status: () => ({
+      turns: result.turns,
+      toolCalls: result.toolCalls,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      compactions: compactor.count,
+      msLeft: clock.leftMs(),
+      maxTurns: spec.maxTurns,
+      model: deps.model.model,
+    }),
+    closed: () =>
+      result.stopped !== "no_submission" ? `the trial is ending (${result.stopped})` : undefined,
+  });
   // A trial's length only when the campaign or the rig sets one (goal 079).
   const wall =
     spec.wallMs !== undefined
@@ -288,32 +332,40 @@ export async function runResearchTrial(
     // With the note tool, the brief says how to keep field notes, and how they differ from
     // research notes.
     await agent.prompt(messageText(sent));
+    // What it is told comes from its role's definition, kept as it is sent (goal 166).
+    const say = (t: TrialTurn | { kind: "go-on" }) => {
+      const p = renderResearchWorkerTurn({ program: "pi", turn: ++said, ...t });
+      deps.sent?.(p);
+      return p;
+    };
     // A cut-off reply, a failed call or a full context (compacted) does not end a research trial
     // before its time; only a conversation that does not fit even compacted does, and failures
     // that stop the run's agents.
-    const end = await keepGoing(
-      agent,
-      () => result.stopped !== "no_submission",
-      deps.model.contextWindow,
-      compactor,
-      {
-        failuresInARow: spec.limits?.failuresInARow,
-        cutoffsInARow: spec.limits?.cutoffsInARow,
-        watch,
-        onWait: deps.waiting,
-        count: failures,
-        // What it is told comes from its role's definition, kept as it is sent (goal 166).
-        say: (t) => {
-          const p = renderResearchWorkerTurn({ program: "pi", turn: ++said, ...t });
-          deps.sent?.(p);
-          return p;
+    for (;;) {
+      const end = await keepGoing(
+        agent,
+        () => result.stopped !== "no_submission",
+        deps.model.contextWindow,
+        compactor,
+        {
+          failuresInARow: spec.limits?.failuresInARow,
+          cutoffsInARow: spec.limits?.cutoffsInARow,
+          watch,
+          onWait: deps.waiting,
+          count: failures,
+          say,
         },
-      },
-    );
-    if (end) {
-      result.stopped = end.stopped;
-      result.error = end.error;
-      if (end.kind) result.errorKind = end.kind;
+      );
+      if (end) {
+        result.stopped = end.stopped;
+        result.error = end.error;
+        if (end.kind) result.errorKind = end.kind;
+      }
+      // The owner interrupted the reply in the trial's Pi view (goal 169): not the agent's own
+      // end, so the trial goes on at once, with the owner's words that wait, or told to go on.
+      if (end || result.stopped !== "no_submission" || !deps.view?.interrupted()) break;
+      if (agent.hasQueuedMessages()) await agent.continue();
+      else await agent.prompt(messageText(say({ kind: "go-on" })));
     }
     if (result.stopped === "no_submission") result.stopped = "finished";
   } catch (err) {

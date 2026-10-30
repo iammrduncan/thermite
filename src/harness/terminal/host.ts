@@ -336,9 +336,11 @@ export class TerminalHost {
     this.ending ??= this.input("the end", async (p) => {
       this.state = "ending";
       this.note("ending the program", { steps });
-      if (steps) {
+      // A program with no end steps (the Pi view) goes straight to SIGTERM.
+      const own = TERMINAL_PROFILES[this.start.program].end;
+      if (steps && own.length) {
         this.endedBy = "end steps";
-        await this.steps(p, TERMINAL_PROFILES[this.start.program].end);
+        await this.steps(p, own);
         if (await within(p.exited, END_WAIT_MS)) return;
       }
       this.endedBy = "sigterm";

@@ -228,7 +228,7 @@ A worker in Claude Code, Codex or OpenCode runs in the program's own terminal by
 2. Set **Agent programs run** to **Headless**, or back to **In their own terminal**. Its ⓘ says what each does.
 3. Press **Save changes**. **What changes when you save** says "You change how agent programs run to Headless."
 
-The rig takes the change in less than one minute. A trial that runs keeps its mode; the next trial starts in the new one. A worker in Pi has no terminal and runs as before. A rig whose harness is older runs its programs headless, and shows the field off, with "update the rig first". Over REST and MCP the field is `program_mode`, `terminal` or `headless` ([A rig's settings](../../reference/rest-api.md#a-rigs-settings)).
+The rig takes the change in less than one minute. A trial that runs keeps its mode; the next trial starts in the new one. A worker in Pi draws its Pi view in its own terminal, and runs with no view when headless ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). A rig whose harness is older runs its programs headless, and shows the field off, with "update the rig first". Over REST and MCP the field is `program_mode`, `terminal` or `headless` ([A rig's settings](../../reference/rest-api.md#a-rigs-settings)).
 
 The advisors' read-only tools are the campaign's brief and a search of the run's past research, plus a guarded web fetch and a knowledge base where the rig's advisors file sets them up. A knowledge base is a search service of your own, reached over MCP, that the teachers may search but not change: see the `kb` field in the [advisors file reference](../../reference/advisors-file.md#top-level).
 
