@@ -198,6 +198,8 @@ export function agentLinks(
       // The provider's error answers the model proxy saw, and each wait for it (goal 079).
       providerAnswer: (since) => service.providerAnswerSince(spec.trialId, since),
       waiting: (w) => service.trialWait(trial, w),
+      // A drain ends a trial that waits in its terminal for its usage window (goal 169).
+      draining: () => service.draining !== undefined,
       env: laneCacheEnv(paths.scratchDir, spec.lane),
       // Claude Code, Codex or OpenCode in its own terminal, or headless: the rig's setting when
       // the trial starts (goal 169). Pi has no terminal.

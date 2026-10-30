@@ -8,6 +8,12 @@
 //     set), as the lane's user, with the token on file descriptor 3 (in no environment), the
 //     safety flags, its seeds (no screen waits) and its transcript copied for the harness, edits
 //     the code and submits with thermite-trial;
+//   - its first turn meets a full five-hour usage window that the stand-in resets 30 s later
+//     (goal 169): the trial waits it out in its terminal, with the run's wait recorded
+//     (`agents_wait_for_limit`, in the trial) and nothing typed into Claude Code meanwhile; the
+//     owner's input sent during the wait (`terminal_input`) is queued for the reset; Claude Code goes
+//     on by itself after the reset (Thermite's settings turn autoContinueAtUsageLimit on), the
+//     queued input is typed into its turn then (`typed_after_reset`), and the same trial submits;
 //   - it compacts once: Thermite's PreCompact hook copies its transcript and names the file in
 //     the summary, and the harness keeps the conversation and records the compaction;
 //   - Thermite's hooks run in it as the lane's user and reach the harness with the trial's token:
@@ -189,6 +195,27 @@ try {
   const messaged = new Set([trialId]);
   for (const text of ["Look at the inner loop first.", "Keep the change small."])
     await command("message_agent", { run: "smoke-1", to: `trial:${trialId}`, text });
+  // Its first turn meets a full five-hour window, which resets 30 s later: the trial waits in its
+  // terminal, and the owner's input sent meanwhile waits for the reset.
+  const wait = await until(
+    "the trial waits for its usage window in its terminal",
+    async () =>
+      (await events()).find((e) => e.kind === "agents_wait_for_limit" && e.body.trial === trialId),
+    300_000,
+    1000,
+  );
+  const queued = await command("terminal_input", {
+    run: "smoke-1",
+    trial: trialId,
+    text: "OWNER-QUEUED-1 Look at the tests too.",
+  });
+  check(
+    "a full usage window in Claude Code's terminal is the run's wait, recorded in the trial, and the owner's input sent during it waits for the reset",
+    wait.body.in_trial === true &&
+      Date.parse(String(wait.body.until)) > Date.parse(wait.at) &&
+      queued.outcome?.result?.outcome === "queued",
+    { wait: wait.body, queued: queued.outcome },
+  );
   // Once the trial has its first message, it runs in the mode it started with: the rig is set to
   // headless for the trials after it.
   await until(
@@ -244,6 +271,17 @@ try {
     "the controller followed Claude Code's transcript in its terminal (turns and tokens counted)",
     Number(trial.body.turns) >= 1 && Number(trial.body.tokens_in) > 0,
     trial.body,
+  );
+  const inputs = (await events()).filter(
+    (e) => e.kind === "terminal_input" && e.body.trial === trialId,
+  );
+  check(
+    "Claude Code waited out its usage window and went on by itself, nothing typed into it during the wait; the queued input went into its turn after the reset; the same trial submitted",
+    / window=went-on typed=OWNER-QUEUED-1 typed_in_wait=0 /.test(said) &&
+      inputs.map((e) => e.body.outcome).join(",") === "queued,typed_after_reset" &&
+      trial.body.trial === trialId &&
+      trial.body.stopped === "submitted",
+    { said, inputs: inputs.map((e) => e.body), trial: trial.body },
   );
   const reads = (await events()).filter(
     (e) => e.kind === "agent_message_read" && e.body.trial === trialId,

@@ -36,10 +36,11 @@ import type { CliProgram, CliRun, CliTally } from "./program.ts";
  * read it (OpenCode's events come from Thermite's plugin, in the trial's signals file), read with
  * the program's adapter into the tally the headless reader fills. A turn has ended when the log
  * says so and nothing begins for SETTLE_MS: never from the screen. A program that exits by itself
- * is resumed in a new host at the next turn, as a headless run's session is continued. At the
- * trial's end, its submission, or a stop, the loop keeps the last screen in memory (for the live
- * view; no decision reads it), and the host ends the program its own way. The owner's console
- * (console.ts) types into the same host, one input at a time with the loop's own.
+ * is resumed in a new host at the next turn, as a headless run's session is continued (one going
+ * on by itself after a usage window is followed: usage-window.ts). At the trial's end, a stop or
+ * its submission, the loop keeps the last screen in memory (for the live view; no decision reads
+ * it), and the host ends the program its own way. The owner's console (console.ts) types into the
+ * same host, one input at a time with the loop's own.
  */
 
 /** How long a turn's end must stand in the log before the loop takes it: a late line reopens it. */
@@ -150,8 +151,8 @@ export class TerminalTrial<T extends CliTally> {
   private failure: string | undefined;
   private stopping = false;
   /**
-   * The usage limit the log showed last, with when it resets if it said: while one shows, no key
-   * goes into the program, whose screen may take any key as an answer (a menu that buys more).
+   * The usage limit the log showed last, with its reset, until a turn begins: meanwhile the program
+   * is ended by SIGTERM alone (its screen may take any key as an answer: a menu that buys more).
    */
   private limit: { resetsAt?: string | undefined } | undefined;
   /** The program's last screen, once it ended or was ended, and the host it was taken from. */
@@ -208,6 +209,26 @@ export class TerminalTrial<T extends CliTally> {
       this.fail(`${this.p.name} could not run in its terminal: ${errorText(err)}`),
     );
     return ended;
+  }
+
+  /**
+   * A run in which nothing is typed: the turn its program began by itself (Claude Code after its
+   * usage window reset), or the owner's input did. Resolves as `turn` does; at once without one.
+   */
+  follow(): Promise<RunEnd> {
+    const ended = new Promise<RunEnd>((resolve) => (this.ends = resolve));
+    if (!this.host) this.settle({ exitCode: null, signal: null, killedFor: null });
+    return ended;
+  }
+
+  /** Whether its program runs now: a host holds it, and it is not being ended. */
+  running(): boolean {
+    return this.host !== undefined && !this.stopping;
+  }
+
+  /** It waits for its provider until `at`, which its log did not say: the console holds input. */
+  waitsUntil(at: string): void {
+    this.limit = { resetsAt: this.limit?.resetsAt ?? at };
   }
 
   private settle(e: RunEnd): void {

@@ -7,10 +7,13 @@
 // submission, with each turn's end read from the session log, its usage counted, its screen kept,
 // the program ended its own way, and nothing of the lane's left running. Then the owner's input
 // (terminal_input's last step) through a trial's console, as lane-1's host types it: text and a
-// key into the fake TUI, and text into the real Codex.
+// key into the fake TUI, and text into the real Codex. Then a full usage window waited out (goal
+// 169): the fake, as Claude Code, goes on by itself after its reset; the real OpenCode meets the
+// stand-in model's 429 and the loop types its continuation after the reset; in each, the wait is
+// recorded and the owner's input queued during it goes in after the reset.
 import { chmodSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { startModel } from "./model.mjs";
+import { startModel, WINDOW_MARKER, WINDOW_S } from "./model.mjs";
 
 const AT = "2026-10-29T05:52:16.107Z";
 
@@ -60,6 +63,75 @@ function fakeScript() {
   };
 }
 
+/**
+ * The fake's script for a full usage window, as Claude Code meets one: its own message with the
+ * reset (`resetsAt`, seconds) and the turn's end, a wait past the reset, then the prompt it goes on
+ * with by itself and a reply.
+ */
+function fakeWindowScript(resetsAt) {
+  const s = "{session}";
+  const ended = { type: "system", sessionId: s, subtype: "turn_duration" };
+  return {
+    log: ".claude/projects/check/{session}.jsonl",
+    turns: [
+      [
+        {
+          lines: [
+            { type: "user", sessionId: s, origin: { kind: "human" }, message: { content: "go" } },
+            {
+              type: "assistant",
+              sessionId: s,
+              timestamp: AT,
+              isApiErrorMessage: true,
+              error: "rate_limit",
+              apiError: "usage_limit_reached",
+              apiErrorParams: { rate_limit_info: { resetsAt, rateLimitType: "five_hour" } },
+              message: {
+                id: "msg_limit",
+                model: "<synthetic>",
+                content: [{ type: "text", text: "You've hit your session limit" }],
+              },
+            },
+            ended,
+          ],
+        },
+        { waitMs: Math.max(0, resetsAt * 1000 - Date.now()) + 1500 },
+        {
+          lines: [
+            {
+              type: "user",
+              sessionId: s,
+              isMeta: true,
+              origin: { kind: "auto-continuation" },
+              message: { content: "Your usage limit has reset. Continue the task." },
+            },
+            {
+              type: "assistant",
+              sessionId: s,
+              timestamp: AT,
+              message: {
+                id: "msg_on",
+                model: "claude-test",
+                content: [{ type: "text", text: "Went on." }],
+                usage: { input_tokens: 10, output_tokens: 2 },
+              },
+            },
+            ended,
+          ],
+        },
+      ],
+    ],
+    rest: [
+      {
+        lines: [
+          { type: "user", sessionId: s, origin: { kind: "human" }, message: { content: "x" } },
+          ended,
+        ],
+      },
+    ],
+  };
+}
+
 /** Runs the loop's trials; `c` is check.mjs's: its loader, runner, checks and lane helpers. */
 export async function loopTrials(c) {
   const { runCliTrial, claudeProgram, codexProgram, opencodeProgram } = await c.load(
@@ -78,12 +150,15 @@ export async function loopTrials(c) {
   try {
     /**
      * One code trial of lane-1 in its terminal; what it gave, and what it kept and showed.
-     * `during`: run with the trial's console once it has one, the trial stopped after it.
+     * `during`: run with the trial's console once it has one, the trial stopped after it; `brief`:
+     * its first message's marker.
      */
-    const trial = async (name, p, model, files, during) => {
+    const trial = async (name, p, model, files, during, brief = "TERMINAL-CHECK-1: reply.") => {
       const a = await c.area(`loop-${name}`, files);
       const sent = [];
       const live = [];
+      // Its waits for its usage window, as the run records them.
+      const waits = [];
       const started = Date.now();
       const stop = new AbortController();
       let held;
@@ -110,7 +185,7 @@ export async function loopTrials(c) {
             workspaceRoot: a.dir,
             parentCommit: "c".repeat(40),
             editablePaths: ["notes.txt"],
-            brief: "TERMINAL-CHECK-1: reply.",
+            brief,
           },
         },
         {
@@ -127,6 +202,7 @@ export async function loopTrials(c) {
           console: (x) => {
             if (x !== "headless") held = x;
           },
+          waiting: (w) => waits.push(w),
           ...(during ? { signal: stop.signal } : {}),
         },
       );
@@ -139,6 +215,7 @@ export async function loopTrials(c) {
         model,
         sent,
         live,
+        waits,
         owner,
         seconds: Math.round((Date.now() - started) / 1000),
         // Its last screen, kept in memory for the live view: no file in its area.
@@ -270,6 +347,64 @@ export async function loopTrials(c) {
       },
     );
 
+    // A full five-hour window: the fake, as Claude Code, goes on by itself after the reset. The
+    // owner's input sent during the wait goes in once it has.
+    const reset = Math.floor(Date.now() / 1000) + 8;
+    const fakeWindow = await trial(
+      "fake-window",
+      claudeProgram,
+      fake.model,
+      (dir) => {
+        const bin = join(dir, "claude");
+        writeFileSync(
+          bin,
+          `#!/bin/sh\nexec "${process.execPath}" /opt/fake-tui/fake-tui.ts "$@"\n`,
+        );
+        chmodSync(bin, 0o755);
+        process.env.THERMITE_CLAUDE_BIN = bin;
+        const script = join(dir, "script.json");
+        writeFileSync(script, JSON.stringify(fakeWindowScript(reset)));
+        return { FAKE_TUI_SCRIPT: script };
+      },
+      async (con) => {
+        await c.until("its usage limit shown", () => con.limit(), 60_000);
+        const later = [];
+        const queued = await con.input({ text: "OWNER-QUEUED-1", wait: "queue" }, (o) =>
+          later.push({ outcome: o, at: Date.now() }),
+        );
+        await c.until(
+          "the queued input in the program",
+          async () => /user: OWNER-QUEUED-1/.test(await fakeShows(con)),
+          60_000,
+        );
+        return { queued, later, seen: await fakeShows(con) };
+      },
+    );
+    const went = fakeWindow.owner ?? {};
+    c.check(
+      "the fake TUI as Claude Code: a full usage window waited out in its terminal, the wait recorded, nothing typed by the loop as it went on by itself, and the owner's input queued during the wait typed after the reset",
+      fakeWindow.waits.length === 1 &&
+        fakeWindow.waits[0].until === new Date(reset * 1000).toISOString() &&
+        went.queued?.outcome === "queued" &&
+        went.later?.[0]?.outcome === "typed_after_reset" &&
+        went.later[0].at >= reset * 1000 &&
+        !JSON.stringify(fakeWindow.sent).includes("The model call failed") &&
+        fakeWindow.r.stopped === "interrupted" &&
+        fakeWindow.left.length === 0,
+      {
+        waits: fakeWindow.waits,
+        owner: {
+          ...went,
+          seen: String(went.seen ?? "")
+            .split("\n")
+            .slice(-6),
+        },
+        prompts: fakeWindow.sent.length,
+        stopped: fakeWindow.r.stopped,
+        error: fakeWindow.r.error,
+      },
+    );
+
     if (existsSync("/opt/codex/bin/codex")) {
       process.env.THERMITE_CODEX_BIN = "/opt/codex/bin/codex";
       const codex = await trial("codex", codexProgram, {
@@ -326,6 +461,56 @@ export async function loopTrials(c) {
         maxTokens: 0,
       });
       ended("OpenCode", opencode, (t) => t.live.some((l) => /done\./.test(l)));
+      // A full usage window: the stand-in model answers OpenCode's first call with a 429 whose
+      // reset is WINDOW_S away. OpenCode fails its step and does not wait; the loop waits for the
+      // reset, types its continuation, and the owner's input queued meanwhile goes in after it.
+      const opencodeWindow = await trial(
+        "opencode-window",
+        opencodeProgram,
+        opencode.model,
+        undefined,
+        async (con) => {
+          await c.until("its usage limit shown", () => con.limit(), 90_000);
+          const later = [];
+          const queued = await con.input(
+            { text: "TERMINAL-CHECK-4: queued during the wait.", wait: "queue" },
+            (o) => later.push({ outcome: o, at: Date.now() }),
+          );
+          await c.until(
+            "the queued input at the model",
+            () => api.calls["TERMINAL-CHECK-4"] >= 1,
+            90_000,
+          );
+          return { queued, later };
+        },
+        `${WINDOW_MARKER}: reply.`,
+      );
+      const resetAt = Date.parse(String(api.window() ?? ""));
+      const after = (api.times[WINDOW_MARKER] ?? []).slice(1);
+      c.check(
+        "OpenCode: a full usage window in its terminal, the wait recorded with OpenCode's reset, the loop's continuation typed after the reset, and the owner's input queued during the wait typed after it",
+        opencodeWindow.waits.length === 1 &&
+          Math.abs(Date.parse(opencodeWindow.waits[0].until) - resetAt) < 3_000 &&
+          after.length >= 1 &&
+          after[0] >= resetAt - 1_000 &&
+          opencodeWindow.owner?.queued?.outcome === "queued" &&
+          opencodeWindow.owner?.later?.[0]?.outcome === "typed_after_reset" &&
+          api.calls["TERMINAL-CHECK-4"] >= 1 &&
+          JSON.stringify(opencodeWindow.sent).includes("The model call failed") &&
+          opencodeWindow.left.length === 0,
+        {
+          waits: opencodeWindow.waits,
+          window: api.window(),
+          after,
+          owner: opencodeWindow.owner,
+          prompts: opencodeWindow.sent.length,
+          stopped: opencodeWindow.r.stopped,
+          error: opencodeWindow.r.error,
+          live: opencodeWindow.live.slice(-6),
+          seconds: opencodeWindow.seconds,
+          windowS: WINDOW_S,
+        },
+      );
     } else c.check("the image has no OpenCode: its loop trial was not run", true, "");
   } finally {
     api.close();

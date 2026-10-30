@@ -42,7 +42,7 @@ Under the keys, the list of your inputs shows each one, newest first, with its o
 | `sent, waiting for the rig` | Control signed it; the rig's report with its outcome has not reached control yet, which takes up to a minute by default |
 | `typed` | The rig typed it into the program |
 | `waits for the usage window's reset (14:00 UTC)` | The program waits for its usage window, and the input waits with it: see below |
-| `typed after the usage window's reset` | It waited, and went in once the program was at work again |
+| `typed after the usage window's reset` | It waited, and went in once the reset had come and the program was at work again |
 | `dropped: the trial ended before the program's usage window reset` | It waited, and the trial ended first |
 | `not typed: <why>` | The rig refused it, such as `trial <trial> has ended: nothing more goes into its terminal` |
 
@@ -50,7 +50,12 @@ The trial's stream says `the owner's input went into its terminal`, and the run'
 
 ## While the program waits for its usage window
 
-When the program's own log shows that its usage window is full, the console says `The program waits for its usage window to reset at 2026-10-30 14:00 UTC.` and offers a choice for your next input. By default, **waits for the reset**: the input goes in once the program is at work again. Choose **goes in now** to type it at once; the program may start its wait again. An input still waiting when the trial ends is dropped, and the list says so. A Claude Code trial ends at a full window today, so an input that waits for its reset is dropped with it.
+When the program's own log shows that its usage window is full, the trial waits for the reset in the program's terminal, and the rig types nothing into it meanwhile: Claude Code waits and goes on by itself; Codex and OpenCode stop their turn, and the rig types the trial's continuation into them after the reset. The same holds while the rig waits out a rate limit that the model proxy saw. The console says `The program waits for its usage window to reset at 2026-10-30 14:00 UTC.`, with the time when the program or the proxy gave one, and offers a choice for your next input:
+
+- **waits for the reset**, the default: the input goes in, in order with any others that wait, once the reset has come and the program is at work again. The list then says `typed after the usage window's reset`.
+- **goes in now**: it is typed at once. The program may start its wait again, and an input that waits still waits for the reset.
+
+An input still waiting when the trial ends is dropped, and the list says so. The trial ends without waiting when the reset is more than a day away (a weekly window), when it comes after the trial's own end, or when the program gives no time it resets: the rig types nothing of its own into a program whose screen may show a menu that waits for a key. [Use a Claude subscription](../models/claude-subscription.md#watch-the-usage-windows) and [Limits and pacing](../../reference/limits-and-pacing.md#the-model-provider) say more.
 
 ## After the trial ends
 

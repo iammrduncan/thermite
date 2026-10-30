@@ -10,6 +10,14 @@
 //     as the lane's user, with its own home and configuration, its workspace trusted (no screen
 //     waits), its approvals and sandbox off and its rollout copied for the harness, edits the
 //     code and submits with thermite-trial;
+//   - its first turn meets a full usage window (goal 169): the provider answers the stand-in's
+//     call with a 429 and a reset 30 s away, through the harness's proxy; Codex ends its turn with
+//     its own usage-limit error and does not wait. The trial waits for the reset in its terminal,
+//     the reset from the proxy's answer (the rollout gives it only in words), with the run's wait
+//     recorded (`agents_wait_for_limit`, in the trial); the owner's input sent during the wait
+//     (`terminal_input`) is queued for the reset; after the reset the harness types its
+//     continuation, the queued input goes into that turn (`typed_after_reset`), and the same trial
+//     submits;
 //   - it compacts once: its compaction prompt (Thermite's) names where the run keeps the
 //     conversation, and the harness keeps the conversation from Codex's rollout and records it;
 //   - Thermite's hooks run in it (with --dangerously-bypass-hook-trust) as the lane's user and
@@ -60,14 +68,45 @@ const composeEnv = {
 };
 const { check, results } = acceptanceChecks({ max: 400 });
 
-/** The provider: its model list for control, and a short Responses stream for each call. */
-const seen = { keys: new Set(), paths: [] };
+/** Seconds from the usage window the provider answers to its reset. */
+const WINDOW_S = 30;
+/**
+ * The provider: its model list for control, and a short Responses stream for each call, but for
+ * the stand-in's first `usage-window` call, which meets a full usage window: a 429 with the reset in
+ * its Retry-After, as Codex's own usage-limit error.
+ */
+const seen = { keys: new Set(), paths: [], window: undefined };
 const provider = createServer((req, res) => {
   // What each Responses call carried (control's own model list carries the key too).
   if (req.url === "/v1/responses") seen.keys.add(String(req.headers.authorization ?? ""));
   seen.paths.push(`${req.method} ${req.url}`);
-  req.resume();
+  let raw = "";
+  req.on("data", (d) => {
+    raw += d;
+  });
   req.on("end", () => {
+    if (req.method === "POST" && req.url === "/v1/responses" && !seen.window) {
+      let input;
+      try {
+        input = JSON.parse(raw).input;
+      } catch {
+        input = undefined;
+      }
+      if (input === "usage-window") {
+        seen.window = new Date(Date.now() + WINDOW_S * 1000).toISOString();
+        res.writeHead(429, { "content-type": "application/json", "retry-after": String(WINDOW_S) });
+        res.end(
+          JSON.stringify({
+            error: {
+              type: "usage_limit_reached",
+              message: "The usage limit has been reached",
+              resets_in_seconds: WINDOW_S,
+            },
+          }),
+        );
+        return;
+      }
+    }
     if (req.method === "GET" && req.url === "/v1/models") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ data: [{ id: "scripted", context_length: 32768 }] }));
@@ -208,6 +247,29 @@ try {
   const messaged = new Set([trialId]);
   for (const text of ["Look at the inner loop first.", "Keep the change small."])
     await command("message_agent", { run: "smoke-1", to: `trial:${trialId}`, text });
+  // Its first turn meets a full usage window, which resets 30 s later: the trial waits in its
+  // terminal, and the owner's input sent meanwhile waits for the reset.
+  const wait = await until(
+    "the trial waits for its usage window in its terminal",
+    async () =>
+      (await events()).find((e) => e.kind === "agents_wait_for_limit" && e.body.trial === trialId),
+    300_000,
+    1000,
+  );
+  const queued = await command("terminal_input", {
+    run: "smoke-1",
+    trial: trialId,
+    text: "OWNER-QUEUED-1 Look at the tests too.",
+  });
+  const resetAt = Date.parse(String(wait.body.until));
+  check(
+    "Codex's full usage window is the run's wait, recorded in the trial, until the reset in the proxy's answer, and the owner's input sent during it waits for the reset",
+    wait.body.in_trial === true &&
+      seen.window !== undefined &&
+      Math.abs(resetAt - Date.parse(seen.window)) < 5_000 &&
+      queued.outcome?.result?.outcome === "queued",
+    { wait: wait.body, window: seen.window, queued: queued.outcome },
+  );
   // Once the trial has its first message, it runs in the mode it started with: the rig is set to
   // headless for the trials after it.
   await until(
@@ -262,6 +324,21 @@ try {
     "the controller followed Codex's rollout in its terminal (turns and tokens counted)",
     Number(trial.body.turns) >= 1 && Number(trial.body.tokens_in) > 0,
     trial.body,
+  );
+  const inputs = (await events()).filter(
+    (e) => e.kind === "terminal_input" && e.body.trial === trialId,
+  );
+  const typedAt = Date.parse(
+    String(inputs.find((e) => e.body.outcome === "typed_after_reset")?.at ?? ""),
+  );
+  check(
+    "after the reset the harness typed its continuation into Codex, the queued input went into that turn, nothing was typed during the wait, and the same trial submitted",
+    / window=went-on typed=OWNER-QUEUED-1 typed_in_wait=0 /.test(said) &&
+      inputs.map((e) => e.body.outcome).join(",") === "queued,typed_after_reset" &&
+      typedAt >= resetAt &&
+      trial.body.trial === trialId &&
+      trial.body.stopped === "submitted",
+    { said, inputs: inputs.map((e) => ({ at: e.at, ...e.body })), trial: trial.body },
   );
   const reads = (await events()).filter(
     (e) => e.kind === "agent_message_read" && e.body.trial === trialId,

@@ -264,8 +264,13 @@ export interface CliTerminal<T extends CliTally> {
    */
   log: { adapter(): SessionLogAdapter<unknown>; from: "copy" | "signals" };
   /**
-   * What its own tally takes from one of the log's events (a compaction, a full usage window);
-   * `at`: the live entries the read gave before it.
+   * At a full usage window it waits for the reset and goes on by itself (Claude Code); else the
+   * harness types its continuation after the reset (usage-window.ts).
+   */
+  goesOnAfterLimit?: boolean | undefined;
+  /**
+   * What its own tally takes from one of the log's events (a compaction); `at`: the live entries
+   * the read gave before it.
    */
   take?(e: SessionEvent, t: T, at: number): void;
 }
@@ -336,6 +341,8 @@ export interface CliTrialDeps extends ProviderLink {
    * host, instead of headless. Unset: headless.
    */
   terminal?: boolean | undefined;
+  /** Whether the rig drains: a trial that waits in its terminal for its usage window ends. */
+  draining?: (() => boolean) | undefined;
   /**
    * Given the owner's console into the trial's terminal (goal 169) when the trial starts, or
    * "headless" when its program runs without one.

@@ -221,6 +221,41 @@ describe("terminal_input, as the harness applies it", () => {
     );
   });
 
+  test("what waits for the reset goes in only once the reset has come: a turn begun before it, by an input sent now, does not take it", async () => {
+    const s = await setup();
+    const t = fakeTerminal();
+    const c = new TrialConsole(t);
+    s.env.service.consoles.set(s.trial, c);
+    const reset = new Date(Date.now() + 400).toISOString();
+    t.limit = { resetsAt: reset };
+    assert.equal(result(await s.type({ text: "after the reset" })).outcome, "queued");
+    assert.equal(result(await s.type({ text: "now", wait: "now" })).outcome, "typed");
+    // The input sent now began a turn before the reset: the log shows no limit.
+    t.limit = undefined;
+    c.flush();
+    await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(
+      t.typed.map((x) => x.text),
+      ["now"],
+    );
+    // The reset has come, and the program is at work: it goes in.
+    await new Promise((r) => setTimeout(r, Math.max(0, Date.parse(reset) - Date.now()) + 20));
+    c.flush();
+    await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(
+      t.typed.map((x) => x.text),
+      ["now", "after the reset"],
+    );
+    assert.deepEqual(
+      s.records().map((x) => [x.text, x.outcome]),
+      [
+        ["after the reset", "queued"],
+        ["now", "typed"],
+        ["after the reset", "typed_after_reset"],
+      ],
+    );
+  });
+
   test("a trial takes at most TERMINAL_INPUTS_PER_MINUTE inputs in a minute; more are refused in words", async () => {
     const s = await setup();
     const t = fakeTerminal();

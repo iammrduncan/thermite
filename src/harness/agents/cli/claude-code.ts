@@ -52,7 +52,8 @@ import type { CliProgram, CliRun, CliTrialDeps } from "./program.ts";
  *
  * Thermite's own tools are the `thermite-trial` command, which calls the harness API with the
  * trial's token. Claude Code reports the subscription's usage windows as it goes
- * (rate_limit_event); a full window ends the trial with the time it resets.
+ * (rate_limit_event). Headless, a full window ends the trial with the time it resets; in its
+ * terminal, Claude Code waits for the reset and goes on by itself (cli/usage-window.ts).
  */
 
 /**
@@ -124,7 +125,8 @@ const trialSettings = (run: CliRun) =>
  * descriptor 3 and its prompt from a file the lane (or, for a call, the controller) writes before
  * each run, a run cut short that keeps its usage, and the subscription's usage windows, a full one
  * of which ends the trial; in its own terminal (goal 169), a session of the harness's id, its
- * token given by the terminal host, and its transcript, which the host copies for the harness.
+ * token given by the terminal host, its transcript, which the host copies for the harness, and a
+ * full window waited out.
  */
 export const claudeProgram: CliProgram<ClaudeTally> = {
   id: "claude-code",
@@ -212,14 +214,17 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
       log: claudeTerminalLog(run.home, at.session),
     }),
     log: { adapter: () => claudeTranscript, from: "copy" },
-    // Its compactions (goal 070), and a full usage window, which ends the trial as headless.
+    // A full usage window: it waits for the reset and goes on by itself (its settings turn
+    // autoContinueAtUsageLimit on), and the trial waits with it (cli/usage-window.ts).
+    goesOnAfterLimit: true,
+    // Its compactions (goal 070).
     take: (e, t, at) => {
       if (e.type === "compaction")
         t.compactions.push({ at, tokensBefore: e.tokensBefore ?? null, tokensAfter: null });
-      else if (e.type === "limit" && e.resetsAt) t.limitedUntil = e.resetsAt;
     },
   },
-  // A full usage window: the trial ends, and the lane waits for the reset (never paid credits).
+  // Headless, a full usage window: the trial ends, and the lane waits for the reset (never paid
+  // credits).
   stopAfterRun: (t) =>
     t.limitedUntil
       ? {
@@ -282,8 +287,9 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
 };
 
 /**
- * One worker trial in Claude Code: the CLI trial loop (cli/loop.ts) with Claude Code's entry. A
- * full usage window ends the trial with the time it resets.
+ * One worker trial in Claude Code: the CLI trial loop (cli/loop.ts) with Claude Code's entry.
+ * Headless, a full usage window ends the trial with the time it resets; in its terminal, the
+ * trial waits it out.
  */
 export function runClaudeTrial(spec: TrialSpec, deps: CliTrialDeps): Promise<TrialResult> {
   return runCliTrial(claudeProgram, { mode: "code", spec }, deps);

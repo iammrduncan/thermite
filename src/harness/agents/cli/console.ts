@@ -10,9 +10,10 @@ import type { ScreenSnapshot } from "../../terminal/index.ts";
  * The owner's console into one trial's terminal (goal 169): the owner's inputs (terminal_input),
  * typed into the program by its terminal host, and its screen for the live view. While the
  * program's session log shows a usage limit, an input waits for the reset unless the owner said to
- * send it now (the owner's decision of 2026-10-27): it goes in, in order, once the log shows the
- * program at work again; at the trial's end, what still waits is dropped. Each input's outcome
- * goes to whoever gave it, at once, and once more later for one that waited.
+ * send it now (the owner's decision of 2026-10-27): it goes in, in order, once the reset has come
+ * and the log shows the program at work again (usage-window.ts waits the window out); at the
+ * trial's end, what still waits is dropped. Each input's outcome goes to whoever gave it, at once,
+ * and once more later for one that waited.
  */
 
 /** What the console needs of the trial's terminal (terminal.ts's TerminalTrial). */
@@ -37,9 +38,12 @@ export type ConsoleLimit = { resetsAt?: string | undefined } | undefined;
 
 export class TrialConsole {
   private readonly term: ConsoleTerminal;
-  /** The inputs waiting for the usage window's reset, oldest first, with whom to tell. */
-  private readonly waiting: { input: Pick<TerminalInput, "text" | "keys">; later: ConsoleLater }[] =
-    [];
+  /** The inputs waiting for the usage window's reset, oldest first: whom to tell, and the reset. */
+  private readonly waiting: {
+    input: Pick<TerminalInput, "text" | "keys">;
+    later: ConsoleLater;
+    until?: string | undefined;
+  }[] = [];
   private flushing = false;
   /** Why the console takes no more input, once the trial ended. */
   private closed: string | undefined;
@@ -64,7 +68,7 @@ export class TrialConsole {
         throw new Refusal(
           `${TERMINAL_QUEUE_MAX} inputs wait for the usage window's reset already: send this one now, or after the reset`,
         );
-      this.waiting.push({ input: { text: i.text, keys: i.keys }, later });
+      this.waiting.push({ input: { text: i.text, keys: i.keys }, later, until: limit.resetsAt });
       return { outcome: "queued", until: limit.resetsAt };
     }
     await this.term.ownerInput({ text: i.text, keys: i.keys });
@@ -82,15 +86,24 @@ export class TrialConsole {
   }
 
   /**
-   * After each read of the session log: once it no longer shows a limit, the inputs that waited go
-   * in, in order. One that can't go in is dropped, with why.
+   * The program takes the input that waits first: its log shows no limit, a turn having begun, and
+   * the reset it waited for has come (a turn the owner's input sent now began is before it).
+   */
+  private taking(): boolean {
+    const until = this.waiting[0]?.until;
+    return !this.term.limitShown() && (until === undefined || Date.now() >= Date.parse(until));
+  }
+
+  /**
+   * After each read of the session log: once the program takes input again after the reset, the
+   * inputs that waited go in, in order. One that can't go in is dropped, with why.
    */
   flush(): void {
-    if (this.flushing || !this.waiting.length || this.term.limitShown()) return;
+    if (this.flushing || !this.waiting.length || !this.taking()) return;
     this.flushing = true;
     void (async () => {
       try {
-        while (this.waiting.length && !this.closed && !this.term.limitShown()) {
+        while (this.waiting.length && !this.closed && this.taking()) {
           const w = this.waiting.shift() as (typeof this.waiting)[number];
           try {
             await this.term.ownerInput(w.input);

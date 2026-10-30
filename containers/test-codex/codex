@@ -26,6 +26,14 @@
 // command and one at the turn's end; a turn whose Stop hook does not block ends there, and the next
 // (the continuation, or the nudge typed into its terminal) submits. It refuses to run without
 // THERMITE_FAKE_CODEX=1 or its mounted folder, so it can't stand in by mistake.
+//
+// In its terminal, a trial's first turn first calls the provider through the proxy (`usage-window`
+// as its input): when the provider answers 429, its usage window is full, and, as Codex 0.162.1
+// does, it says so ("You've hit your usage limit. Try again at …"), ends the turn with that error in
+// its rollout (`usage_limit_exceeded`) and does not wait. The next message typed in (the harness's
+// continuation after the reset) does the turn's work, after waiting, at most WAIT_TYPED_MS, for the
+// owner's input queued for the reset. Text typed while it works is taken into the turn, as Codex
+// takes it; text typed during the wait is counted, and starts a turn, as in Codex.
 const { execSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -144,6 +152,15 @@ const hook = (event, fields) => {
 // What the hooks gave it inside its turns: a PostToolUse hook's added context, a Stop's reason.
 const steered = [];
 const hookFacts = () => `hooks=${hooksRun} steered=${steered.join(",") || "none"}`;
+/** How long, after the wait, its next turn waits for the owner's input queued for the reset. */
+const WAIT_TYPED_MS = 20_000;
+// Its usage window in its terminal (none, open, met, or went-on), the first word of each line typed
+// into a turn, and how many lines were typed during the wait.
+let window = "none";
+const typedIn = [];
+let typedInWait = 0;
+const windowFacts = () =>
+  `window=${window} typed=${typedIn.map((t) => t.split(/\s/)[0].replace(/[^A-Za-z0-9-]/g, "").slice(0, 40)).join(",") || "none"} typed_in_wait=${typedInWait}`;
 /** One response's usage in its rollout, once for its id. */
 let responses = 0;
 const used = () => {
@@ -246,6 +263,29 @@ async function proxiedCall() {
   }
 }
 
+/**
+ * A trial's first turn's call to the provider, through the proxy: Codex's own words for a full
+ * usage window when the provider answers 429, else undefined.
+ */
+async function usageWindow() {
+  window = "open";
+  if (!baseUrl || !credential) return undefined;
+  try {
+    const r = await fetch(`${baseUrl}/responses`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${credential}` },
+      body: JSON.stringify({ model: val("--model"), input: "usage-window", stream: true }),
+    });
+    await r.text();
+    if (r.status !== 429) return undefined;
+    const at = new Date(Date.now() + Number(r.headers.get("retry-after") ?? "0") * 1000);
+    window = "met";
+    return `You’ve hit your usage limit. Try again at ${at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" })}.`;
+  } catch {
+    return undefined;
+  }
+}
+
 /** What it was given, as its words say it. */
 function factsOf(proxied) {
   return [
@@ -309,7 +349,7 @@ function compact() {
 function submitChange(facts) {
   const compacted = compact();
   shell(
-    `printf '\\n/* tidied by codex */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'codex harness: a tidied kernel (compacted=${compacted} ${hookFacts()} ${facts})'`,
+    `printf '\\n/* tidied by codex */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'codex harness: a tidied kernel (compacted=${compacted} ${hookFacts()} ${windowFacts()} ${facts})'`,
   );
   say("Submitted.");
   stop("Submitted.");
@@ -393,11 +433,14 @@ async function runHeadless() {
 
 /**
  * In its terminal: its thread from its first message (or resumed), then each message typed, one
- * turn at a time, until `/exit` or SIGTERM. A trial's first turn reads the kernel; the next submits.
+ * turn at a time, until `/exit` or SIGTERM. A trial's first turn may meet its usage window; then
+ * a turn reads the kernel, and the next submits.
  */
 async function runTerminal() {
   let turns = Promise.resolve();
   let taken = resumed ? 1 : 0;
+  // What a trial's next turn does: read the kernel, then submit.
+  let work = resumed ? "submit" : "read";
   let busy = false;
   let facts = "";
   /** One prompt: its turn in the rollout, its hook, and its work, after the turns before it. */
@@ -410,15 +453,29 @@ async function runTerminal() {
       show(`› ${text.split("\n")[0]}`);
       hook("UserPromptSubmit", { prompt: text.slice(0, 2000) });
       if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
-      const at = taken++;
+      taken++;
       let lastSaid = "done";
-      if (trial && at === 0) {
+      const full = trial && !resumed && window === "none" ? await usageWindow() : undefined;
+      if (full) {
+        // Its usage window is full: the turn ends with Codex's own error, and it does not wait.
+        show(full);
+        record("event_msg", { type: "task_complete", turn_id: turnId, last_agent_message: null, error: { message: full, codex_error_info: "usage_limit_exceeded" } });
+        busy = false;
+        return;
+      }
+      if (trial && work === "read") {
+        if (window === "met") {
+          window = "went-on";
+          const end = Date.now() + WAIT_TYPED_MS;
+          while (!typedIn.length && Date.now() < end) await new Promise((r) => setTimeout(r, 250));
+        }
         // The owner's messages, when the acceptance sends two: the first goes in after its
         // command, the second at the end of its turn, which goes on with it to the submission.
         // With none, the turn ends there, and the nudge typed next submits.
         if (await readTurn()) submitChange(facts);
+        work = "submit";
         lastSaid = "Read the kernel.";
-      } else if (trial && at === 1) {
+      } else if (trial && work === "submit") {
         submitChange(facts);
         lastSaid = "Submitted.";
       } else {
@@ -439,8 +496,15 @@ async function runTerminal() {
     input = "";
     if (text === "/exit") return exit("other", 0);
     if (text === "/stop") return show("background terminals stopped");
-    if (text.trim()) prompted(text);
-    else draw();
+    if (!text.trim()) return draw();
+    // Typed while it works: taken into the turn, as Codex takes it (a steer).
+    if (busy) {
+      record("event_msg", { type: "item_completed", item: { type: "UserMessage", content: [{ type: "text", text }] } });
+      typedIn.push(text);
+      return show(`› ${text.split("\n")[0]}`);
+    }
+    if (window === "met") typedInWait++;
+    prompted(text);
   };
   let pending = "";
   let escTimer;

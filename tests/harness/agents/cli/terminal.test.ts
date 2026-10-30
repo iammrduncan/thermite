@@ -109,6 +109,32 @@ const answer = (i: number, text: string) => ({
 const ended = { type: "system", sessionId: S, subtype: "turn_duration" };
 /** A turn that does nothing: the agent answers a nudge without any work. */
 const idle = [{ lines: [said("x"), ended] }];
+/** Claude Code's own message at a full usage window, with when it resets (seconds) if it says. */
+const limitAt = (resetsAt?: number) => ({
+  type: "assistant",
+  sessionId: S,
+  timestamp: AT,
+  isApiErrorMessage: true,
+  error: "rate_limit",
+  apiError: "usage_limit_reached",
+  ...(resetsAt
+    ? { apiErrorParams: { rate_limit_info: { resetsAt, rateLimitType: "five_hour" } } }
+    : {}),
+  message: {
+    id: "msg_limit",
+    model: "<synthetic>",
+    content: [{ type: "text", text: "You've hit your limit" }],
+  },
+});
+/** Claude Code going on by itself after its usage window reset, as its transcript says. */
+const goesOn = {
+  type: "user",
+  sessionId: S,
+  isMeta: true,
+  origin: { kind: "auto-continuation" },
+  promptSource: "system",
+  message: { content: "Your usage limit has reset. Continue the task." },
+};
 
 type Step =
   | { lines: unknown[] }
@@ -287,28 +313,88 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     );
   });
 
-  test("a usage limit with no reset ends the trial: nothing more is typed, and SIGTERM ends the program", async () => {
-    // Claude Code's own message at a usage limit that gives no time it resets.
-    const limited = {
-      type: "assistant",
-      sessionId: S,
-      timestamp: AT,
-      isApiErrorMessage: true,
-      error: "rate_limit",
-      message: {
-        id: "msg_limit",
-        model: "<synthetic>",
-        content: [{ type: "text", text: "You've hit your limit" }],
+  test("a usage limit with no reset, or one more than a day away (a weekly window), ends the trial: nothing more is typed, and SIGTERM ends the program", async () => {
+    // Claude Code's own message at a usage limit that gives no time it resets, then one that
+    // resets in a week, which Claude Code meets with a menu that waits for a key.
+    const week = Math.floor(Date.now() / 1000) + 7 * 86400;
+    for (const resetsAt of [undefined, week]) {
+      const a = area([
+        [{ lines: [said("go"), call(1), result(1), limitAt(resetsAt), ended] }, { waitMs: 60_000 }],
+      ]);
+      const waits: unknown[] = [];
+      const { r, sent } = await trial(a, { waiting: (w) => waits.push(w) });
+      assert.equal(r.stopped, "error");
+      assert.equal(r.errorKind, "rate_limit");
+      assert.equal(r.retryAfter, resetsAt ? new Date(resetsAt * 1000).toISOString() : undefined);
+      assert.equal(sent.length, 1, "no turn after the limit");
+      assert.deepEqual(waits, [], "nothing is waited for in the trial");
+      const kinds = types(a.home);
+      assert.ok(!kinds.includes("interrupt") && !kinds.includes("exit"), kinds.join(", "));
+      assert.equal(kinds.at(-1), "sigterm");
+    }
+  });
+
+  test("a full five-hour window is waited out: Claude Code goes on by itself after the reset, nothing is typed meanwhile, and the owner's input queued for the reset goes in then", async () => {
+    const reset = Math.floor(Date.now() / 1000) + 3;
+    const a = area([
+      [
+        { lines: [said("go"), call(1), result(1), limitAt(reset), ended] },
+        { waitMs: 3_500 },
+        { lines: [goesOn, answer(2, "Went on."), ended] },
+      ],
+    ]);
+    let held: TrialConsole | undefined;
+    const waits: { until: string; kind: string }[] = [];
+    const later: string[] = [];
+    const running = trial(a, {
+      console: (c) => {
+        if (c !== "headless") held = c;
       },
-    };
-    const a = area([[{ lines: [said("go"), call(1), result(1), limited] }, { waitMs: 60_000 }]]);
-    const { r, sent } = await trial(a);
-    assert.equal(r.stopped, "error");
-    assert.equal(r.errorKind, "rate_limit");
-    assert.equal(sent.length, 1, "no turn after the limit");
-    const kinds = types(a.home);
-    assert.ok(!kinds.includes("interrupt") && !kinds.includes("exit"), kinds.join(", "));
-    assert.equal(kinds.at(-1), "sigterm");
+      waiting: (w) => waits.push(w),
+    });
+    await until("the wait recorded", () => waits.length > 0);
+    const c = await until("its console", () => held);
+    const queued = await c.input({ text: "OWNER-QUEUED-1", wait: "queue" }, (o) => later.push(o));
+    assert.deepEqual(queued, { outcome: "queued", until: new Date(reset * 1000).toISOString() });
+    const { r, sent } = await running;
+    assert.equal(r.stopped, "no_submission");
+    assert.deepEqual(
+      waits.map((w) => [w.until, w.kind]),
+      [[new Date(reset * 1000).toISOString(), "rate_limit"]],
+    );
+    // Typed: its first message, the owner's input after the reset, then the loop's nudge; no
+    // continuation of the loop's, since Claude Code went on by itself.
+    const typed = seen(a.home).filter((s) => s.type === "user" && s.how === "typed");
+    assert.deepEqual(
+      typed.map((s) => s.text),
+      [messageText(sent[0] as Prompt), "OWNER-QUEUED-1", messageText(sent[1] as Prompt)],
+    );
+    assert.equal(sent.length, 2);
+    assert.ok(Number(typed[1]?.t) >= reset * 1000, "the owner's input went in after the reset");
+    assert.deepEqual(later, ["typed_after_reset"]);
+    assert.ok(!types(a.home).includes("sigterm"), "it was never ended in the wait");
+  });
+
+  test("Claude Code that does not go on after the reset is ended by SIGTERM, nothing typed into it, and its session resumed with the loop's continuation", async () => {
+    const reset = Math.floor(Date.now() / 1000) + 1;
+    const a = area([
+      [{ lines: [said("go"), call(1), result(1), limitAt(reset), ended] }, { waitMs: 60_000 }],
+    ]);
+    const { r, sent, live } = await trial(a, { pauseMs: (ms) => Math.min(ms, 1_500) });
+    assert.equal(r.stopped, "no_submission");
+    const got = seen(a.home).filter((s) => s.type !== "query");
+    const kinds = got.map((s) => String(s.type));
+    const term = kinds.indexOf("sigterm");
+    assert.ok(term > 0, kinds.join(", "));
+    const before = kinds.slice(0, term);
+    assert.ok(!before.includes("interrupt") && !before.includes("exit"), kinds.join(", "));
+    assert.deepEqual(
+      got.filter((s) => s.type === "start").map((s) => s.resumed),
+      [false, true],
+    );
+    assert.match(messageText(sent[1] as Prompt), /The model call failed \(You've hit your limit\)/);
+    assert.equal(got.filter((s) => s.type === "user").at(1)?.text, messageText(sent[1] as Prompt));
+    assert.match(live.join("\n"), /did not go on by itself after its usage window reset/);
   });
 
   test("a stop ends the program its own way, mid-turn, and the trial is interrupted", async () => {
@@ -371,34 +457,19 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     await assert.rejects(c.input({ text: "too late", wait: "now" }, later), /trial has ended/);
   });
 
-  test("while its log shows a usage limit with a reset: an input waits for the reset, one sent now goes in, and what waits is dropped when the trial ends first", async () => {
-    // Claude Code's own message at a full five-hour window, with the time it resets.
-    const limited = {
-      type: "assistant",
-      sessionId: S,
-      timestamp: AT,
-      isApiErrorMessage: true,
-      error: "rate_limit",
-      apiErrorParams: {
-        rate_limit_info: {
-          resetsAt: Math.floor(Date.now() / 1000) + 3600,
-          rateLimitType: "five_hour",
-        },
-      },
-      message: {
-        id: "msg_limit",
-        model: "<synthetic>",
-        content: [{ type: "text", text: "You've hit your limit" }],
-      },
-    };
-    const a = area([[{ lines: [said("go"), call(1), result(1), limited] }, { waitMs: 60_000 }]]);
+  test("while it waits for its usage window: an input waits for the reset, one sent now goes in and its turn is followed, and what waits is dropped when the trial ends first", async () => {
+    const reset = Math.floor(Date.now() / 1000) + 3600;
+    const a = area([[{ lines: [said("go"), call(1), result(1), limitAt(reset), ended] }]]);
     let held: TrialConsole | undefined;
+    const waits: unknown[] = [];
     const outcomes: string[] = [];
     const running = trial(a, {
       console: (c) => {
         if (c !== "headless") held = c;
       },
+      waiting: (w) => waits.push(w),
     });
+    await until("the wait recorded", () => waits.length > 0);
     const c = await until("the limit shown", () => held?.limit() && held);
     const queued = await c.input({ text: "AFTER-THE-RESET", wait: "queue" }, (o, why) =>
       outcomes.push(`${o}: ${why ?? ""}`),
@@ -408,8 +479,9 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     assert.deepEqual(await c.input({ text: "AT-ONCE", wait: "now" }, () => undefined), {
       outcome: "typed",
     });
+    // The input sent now began a turn before the reset: the trial follows it, and then ends.
     const { r } = await running;
-    assert.equal(r.errorKind, "rate_limit");
+    assert.equal(r.stopped, "no_submission");
     assert.deepEqual(outcomes, [
       "dropped: the trial ended before the program's usage window reset",
     ]);

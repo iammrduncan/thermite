@@ -9,8 +9,12 @@
 // containers/test-anthropic's stand-in, with a made-up sign-in; then one short trial through the
 // trial loop's terminal mode for the fake TUI, the real Codex and the real OpenCode, with each
 // trial's last screen kept in memory, and the owner's input (terminal_input's) typed through a
-// trial's console into the fake TUI and the real Codex (tests/stand-ins/terminal/trials.mjs). It
-// downloads nothing but what the image's build does, and no model is called.
+// trial's console into the fake TUI and the real Codex; then a full usage window (goal 169): the
+// fake, as Claude Code, waits for its reset and goes on by itself, and the real OpenCode meets the
+// stand-in model's 429 and the loop types its continuation after the reset; each wait recorded,
+// nothing typed during it, and the owner's input queued during it typed after the reset
+// (tests/stand-ins/terminal/trials.mjs). It downloads nothing but what the image's build does,
+// and no model is called.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/terminal.mjs
 //   IMAGE      an image already built: no build, and it is kept (one built with

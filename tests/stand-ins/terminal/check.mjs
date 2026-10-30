@@ -18,7 +18,9 @@
 //     transcript, which only lane-1 may read, copied; its hooks' signals; `/exit`;
 //   - one short trial through the trial loop's terminal mode for the fake TUI in Claude Code's
 //     place, the real Codex and the real OpenCode, and the owner's input (terminal_input's) through
-//     a trial's console into the fake and the real Codex (trials.mjs);
+//     a trial's console into the fake and the real Codex; then a full usage window waited out by
+//     the fake (going on by itself, as Claude Code) and by the real OpenCode (the loop's
+//     continuation after the reset), with the owner's input queued during it (trials.mjs);
 //   - for each real program, the peak memory of its run in its terminal, the host with it, as the
 //     broker recorded it: the figure its limits note states.
 // THERMITE_SRC names the code it imports: the image's build (/opt/thermite/dist), or a mounted

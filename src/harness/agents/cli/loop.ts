@@ -27,6 +27,7 @@ import { TrialConsole } from "./console.ts";
 import { TrialSignals, TurnMessages } from "./in-turn.ts";
 import type { CliProgram, CliRun, CliSetup, CliTally, CliTrial, CliTrialDeps } from "./program.ts";
 import { type RunEnd, TerminalTrial } from "./terminal.ts";
+import { waitOutWindow } from "./usage-window.ts";
 
 /**
  * Sets a program up in its run's area (or its call's folder), as the run's user: relative to that
@@ -110,7 +111,8 @@ function startRun<T extends CliTally>(
  * end. In the terminal mode (`deps.terminal`, goal 169; terminal.ts) each run is one turn of the
  * program in its own terminal, which goes on running between turns: its session log, not its
  * output, fills the tally, and a later turn is typed into it. The decisions after each run are the
- * same in both.
+ * same in both, but for a full usage window, which a trial in its terminal waits out
+ * (usage-window.ts).
  */
 export async function runCliTrial<T extends CliTally>(
   p: CliProgram<T>,
@@ -224,6 +226,8 @@ export async function runCliTrial<T extends CliTally>(
         addition: spec.addition,
       });
   let message = sent;
+  // In its terminal, the next run follows a turn its program began by itself: nothing is typed.
+  let following = false;
   let offset = 0;
   const carried = new CarriedMessages(deps.messages);
   // The later turns of this trial (goal 166), numbered after its first message.
@@ -313,10 +317,12 @@ export async function runCliTrial<T extends CliTally>(
       break;
     }
     // Kept whole as it is sent, the first message and each later turn (goal 166).
-    deps.sent?.(message);
+    if (!following) deps.sent?.(message);
     inTurn?.open();
     const running: Promise<RunEnd> = term
-      ? term.turn(messageText(message), remaining)
+      ? following
+        ? term.follow()
+        : term.turn(messageText(message), remaining)
       : startRun(p, deps.runner, run, {
           cwd,
           env,
@@ -325,6 +331,7 @@ export async function runCliTrial<T extends CliTally>(
           remaining,
           limits,
         });
+    following = false;
     let done = false;
     void running.finally(() => {
       done = true;
@@ -387,21 +394,30 @@ export async function runCliTrial<T extends CliTally>(
       Object.assign(result, own);
       break;
     }
-    // In its terminal, a usage limit with no time it resets ends the trial: nothing is typed into
-    // a program that shows one, whose screen may take any key as an answer.
-    const limit = term?.limitShown();
-    if (limit && !limit.resetsAt) {
-      result.stopped = "error";
-      result.errorKind = "rate_limit";
-      result.error = tally.errors.at(-1) ?? `${p.name} shows a usage limit`;
-      break;
-    }
     // A memory or disk limit ends the program with everything it ran: say which, with the figures.
     const breach = breachError(outcome, limits, p.name);
     if (breach) {
       result.stopped = "error";
       result.error = breach;
       break;
+    }
+    // In its terminal, a full usage window is waited out, or the trial ends (usage-window.ts).
+    if (term?.limitShown()) {
+      const w = await waitOutWindow(term, p, deps, {
+        trialId: run.trialId,
+        since: runStarted,
+        deadline,
+        words: tally.errors.at(-1) ?? `${p.name} shows a usage limit`,
+        pump,
+      });
+      if ("end" in w) {
+        Object.assign(result, w.end);
+        break;
+      }
+      nudges--;
+      following = "followed" in w;
+      if ("goOn" in w) message = goOn(w.goOn);
+      continue;
     }
     if (outcome.killedFor === "timeout" || Date.now() >= deadline) {
       result.stopped = "wall";
@@ -421,7 +437,11 @@ export async function runCliTrial<T extends CliTally>(
         failuresInARow: limits.failuresInARow,
         deadline,
         signal: deps.signal,
-        waiting: deps.waiting,
+        // In its terminal, the owner's input waits with a rate limit's wait (console.ts).
+        waiting: (w) => {
+          if (w.kind === "rate_limit") term?.waitsUntil(w.until);
+          deps.waiting?.(w);
+        },
         pauseMs: deps.pauseMs,
       });
       if (!("goOn" in step)) {

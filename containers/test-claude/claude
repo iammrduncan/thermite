@@ -22,6 +22,14 @@
 // trial's token), so the acceptance can see one given after a tool and one at the turn's end; a
 // turn whose Stop hook does not block ends there, and the next turn (the continuation, or the
 // nudge typed into its terminal) submits.
+//
+// In its terminal, a trial's first turn meets a full 5-hour usage window that resets WINDOW_S
+// later, as Claude Code records one: its own message with the reset, StopFailure, and the turn's
+// end. With autoContinueAtUsageLimit on, as Thermite's settings turn it, it waits for the reset and
+// goes on by itself (an auto-continuation prompt in its transcript), then waits, at most
+// WAIT_TYPED_MS, for the owner's input queued for the reset to be typed in; without the setting, it
+// shows its menu, which waits for a key, and never goes on. Text typed while it works is taken into
+// the turn, as Claude Code takes it (a queued command); text typed during its wait is only counted.
 // It refuses to run without THERMITE_FAKE_CLAUDE=1 or its mounted folder, so it can't stand in by
 // mistake.
 const { execSync, spawnSync } = require("node:child_process");
@@ -210,6 +218,17 @@ const facts = [
   `model=${val("--model")}`,
 ].join(" ");
 const hookFacts = () => `hooks=${hooksRun} steered=${steered.join(",") || "none"}`;
+/** Seconds from its full usage window to the reset. */
+const WINDOW_S = 30;
+/** How long, after it went on, it waits for the owner's input queued for the reset. */
+const WAIT_TYPED_MS = 20_000;
+// Its usage window in its terminal (none, waiting, went-on, or menu), the first word of each line
+// typed into a turn, and how many lines were typed during the wait.
+let window = "none";
+const typedIn = [];
+let typedInWait = 0;
+const windowFacts = () =>
+  `window=${window} typed=${typedIn.map((t) => t.split(/\s/)[0].replace(/[^A-Za-z0-9-]/g, "").slice(0, 40)).join(",") || "none"} typed_in_wait=${typedInWait}`;
 // One compaction, as Claude Code makes one (goal 070): its transcript in its home, then the
 // PreCompact hook Thermite's settings name (run without a shell, its input on stdin), the
 // PostCompact hook with the summary, which names what the first hook said, then the boundary and
@@ -245,7 +264,7 @@ const compact = () => {
 /** The trial's change and its submission, after a compaction, with what it was given. */
 const submitChange = () => {
   const kept = compact();
-  bash(`printf '\\n/* tidied by claude code */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'claude code harness: a tidied kernel (compacted=${kept} ${hookFacts()} ${facts})'`);
+  bash(`printf '\\n/* tidied by claude code */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'claude code harness: a tidied kernel (compacted=${kept} ${hookFacts()} ${windowFacts()} ${facts})'`);
   turn([{ type: "text", text: "Submitted." }]);
   stop("Submitted.");
 };
@@ -316,8 +335,47 @@ function runHeadless() {
 }
 
 /**
+ * Its full usage window, as Claude Code meets one in its terminal; true once it went on by itself
+ * after the reset, false at its menu.
+ */
+async function usageWindow() {
+  const resetsAt = Math.floor(Date.now() / 1000) + WINDOW_S;
+  const clock = new Date(resetsAt * 1000).toISOString().slice(11, 16);
+  const words = `You've hit your session limit · resets ${clock} (UTC)`;
+  const info = { status: "rejected", resetsAt, rateLimitType: "five_hour", overageStatus: "rejected" };
+  record({
+    type: "assistant",
+    isApiErrorMessage: true,
+    apiErrorStatus: 429,
+    error: "rate_limit",
+    apiError: "usage_limit_reached",
+    apiErrorParams: { rate_limit_info: info },
+    quotaLimits: info,
+    message: { id: `msg_limit_${session.slice(0, 8)}`, model: "<synthetic>", role: "assistant", content: [{ type: "text", text: words }], usage: { input_tokens: 0, output_tokens: 0 } },
+  });
+  hook("StopFailure", { error: "rate_limit", last_assistant_message: words });
+  record({ type: "system", subtype: "turn_duration", durationMs: 500, messageCount: n });
+  show(words);
+  if (settings.autoContinueAtUsageLimit !== true) {
+    window = "menu";
+    show("What do you want to do? 1. Wait for the limit to reset  2. Stop and wait for limit to reset");
+    return false;
+  }
+  window = "waiting";
+  show(`Usage limit reached · continuing automatically at ${clock} · esc to cancel`);
+  await new Promise((r) => setTimeout(r, Math.max(0, resetsAt * 1000 - Date.now()) + 1000));
+  window = "went-on";
+  show("Usage limit reset · continuing automatically");
+  record({ type: "user", isMeta: true, origin: { kind: "auto-continuation" }, promptSource: "system", promptId: `p_auto_${n}`, message: { role: "user", content: "Your usage limit has reset. Continue the task." } });
+  const end = Date.now() + WAIT_TYPED_MS;
+  while (!typedIn.length && Date.now() < end) await new Promise((r) => setTimeout(r, 250));
+  return true;
+}
+
+/**
  * In its terminal: its session from its first message (or resumed), then each message typed, one
- * turn at a time, until `/exit` or SIGTERM. A trial's first turn reads the kernel; the next submits.
+ * turn at a time, until `/exit` or SIGTERM. A trial's first turn meets its usage window and then
+ * reads the kernel; the next submits.
  */
 function runTerminal() {
   let turns = Promise.resolve();
@@ -333,6 +391,7 @@ function runTerminal() {
       if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
       const at = taken++;
       if (trial && at === 0) {
+        if (!(await usageWindow())) return;
         // It reads the kernel. The owner's messages, when the acceptance sends two: the first goes
         // in after its command, the second at the end of its turn, which goes on with it to the
         // submission. With none, the turn ends there, and the nudge typed next submits.
@@ -366,8 +425,18 @@ function runTerminal() {
     const text = input;
     input = "";
     if (text === "/exit") return exit("prompt_input_exit", 0);
-    if (text.trim()) prompted(text);
-    else draw();
+    if (!text.trim()) return draw();
+    if (window === "waiting") {
+      typedInWait++;
+      return show(`(typed during the wait) ${text}`);
+    }
+    // Typed while it works: taken into the turn, as Claude Code records it.
+    if (busy) {
+      record({ type: "attachment", attachment: { type: "queued_command", prompt: text, commandMode: "prompt" } });
+      typedIn.push(text);
+      return show(`> ${text.split("\n")[0]}`);
+    }
+    prompted(text);
   };
   let pending = "";
   let escTimer;
