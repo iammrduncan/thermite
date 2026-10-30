@@ -17,7 +17,9 @@
 //     recorded (`agents_wait_for_limit`, in the trial); the owner's input sent during the wait
 //     (`terminal_input`) is queued for the reset; after the reset the harness types its
 //     continuation, the queued input goes into that turn (`typed_after_reset`), and the same trial
-//     submits;
+//     submits. The owner's two messages below are sent only then: sent during the wait, they would
+//     wait for the reset and go in with the continuation, which carries the messages that wait;
+
 //   - it compacts once: its compaction prompt (Thermite's) names where the run keeps the
 //     conversation, and the harness keeps the conversation from Codex's rollout and records it;
 //   - Thermite's hooks run in it (with --dangerously-bypass-hook-trust) as the lane's user and
@@ -236,7 +238,6 @@ try {
       /proxied=200 /.test(planned),
     { source: epoch.body.source, valid: epoch.body.planner_valid, notes: planned },
   );
-  // Goal 169: two messages to the trial while it runs; the stand-in waits for both to wait.
   const started = await until(
     "the Codex trial started",
     async () => (await events()).find((e) => e.kind === "trial_started" && e.subject === "smoke-1"),
@@ -245,8 +246,6 @@ try {
   );
   const trialId = String(started.body.trial);
   const messaged = new Set([trialId]);
-  for (const text of ["Look at the inner loop first.", "Keep the change small."])
-    await command("message_agent", { run: "smoke-1", to: `trial:${trialId}`, text });
   // Its first turn meets a full usage window, which resets 30 s later: the trial waits in its
   // terminal, and the owner's input sent meanwhile waits for the reset.
   const wait = await until(
@@ -270,6 +269,22 @@ try {
       queued.outcome?.result?.outcome === "queued",
     { wait: wait.body, window: seen.window, queued: queued.outcome },
   );
+  // Goal 169: two messages to the trial once it is at work again after the reset; the stand-in
+  // waits for both to wait, and its hooks give them inside its turn.
+  await until(
+    "the queued input typed after the reset",
+    async () =>
+      (await events()).find(
+        (e) =>
+          e.kind === "terminal_input" &&
+          e.body.trial === trialId &&
+          e.body.outcome === "typed_after_reset",
+      ),
+    300_000,
+    1000,
+  );
+  for (const text of ["Look at the inner loop first.", "Keep the change small."])
+    await command("message_agent", { run: "smoke-1", to: `trial:${trialId}`, text });
   // Once the trial has its first message, it runs in the mode it started with: the rig is set to
   // headless for the trials after it.
   await until(

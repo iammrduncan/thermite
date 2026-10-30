@@ -557,6 +557,85 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
     }
   });
 
+  test("while its log shows a usage limit, its hooks are given none of the owner's messages: no Stop hook's block sends it on before the reset", async () => {
+    const env = makeJudgeEnv();
+    await env.service.applyCommand(env.assign);
+    const api = createHarnessApi(env.service, { supervisor: "sup" });
+    const server = serve({ fetch: api.fetch, port: 0, hostname: "127.0.0.1" });
+    await new Promise<void>((r) => (server.listening ? r() : server.once("listening", r)));
+    try {
+      const id = `t-${String(++n).padStart(16, "0")}`;
+      new Registry(env.ledger).startTrial({
+        id,
+        run: "js-1",
+        lane: "lane-1",
+        epoch: 1,
+        family: "f",
+        parent: "p",
+        token: "tok-limit",
+      });
+      const at = { id, run: "js-1", lane: "lane-1" };
+      const out = await env.service.applyCommand(
+        signEnvelope(
+          {
+            v: 1,
+            id: randomUUID(),
+            rig: "rig-a",
+            kind: "message_agent",
+            issued_by: "owner",
+            issued_at: new Date(Date.now() - 1000).toISOString(),
+            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            payload: { run: "js-1", to: `trial:${id}`, text: "Look at the cache misses first." },
+          },
+          env.keys.privateKeyPem,
+        ),
+      );
+      assert.equal(out.status, "applied");
+      const reset = Math.floor(Date.now() / 1000) + 3600;
+      // The limit, then a Stop hook while the limit shows, then the turn's end.
+      const a = area([
+        [
+          { lines: [said("go"), call(1), result(1), limitAt(reset)] },
+          { waitMs: 1_500 },
+          { hook: "Stop", fields: { stop_hook_active: false, last_assistant_message: "x" } },
+          { lines: [ended] },
+        ],
+      ]);
+      const stop = new AbortController();
+      const waits: unknown[] = [];
+      const running = trial(a, {
+        trialId: id,
+        token: "tok-limit",
+        apiUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        messages: env.service.trialInbox(at),
+        inTurn: (d) => env.service.inTurn(id, d),
+        waiting: (w) => waits.push(w),
+        signal: stop.signal,
+      });
+      const signals = join(a.dir, "claude-signals.jsonl");
+      await until("the Stop hook ran", () =>
+        existsSync(signals) ? readFileSync(signals, "utf8").includes('"Stop"') : false,
+      );
+      await until("the wait", () => waits.length > 0);
+      stop.abort();
+      const { r, sent } = await running;
+      assert.equal(r.stopped, "interrupted");
+      assert.equal(sent.length, 1, "no turn typed after the limit");
+      const reads = env.ledger
+        .eventsAfter(0, 5000)
+        .events.filter((e) => e.kind === "agent_message_read")
+        .map((e) => e.body as { trial?: string });
+      assert.deepEqual(
+        reads.filter((x) => x.trial === id),
+        [],
+      );
+      assert.equal(env.service.trialInbox(at).waiting().length, 1, "the message still waits");
+      assert.doesNotMatch(readFileSync(signals, "utf8"), /thermite\.given/);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+
   test("the tally is the headless path's for the same conversation (Claude Code 2.1.308's -p session)", async () => {
     const transcript = readFileSync(join(FIXTURE, "transcript.jsonl"), "utf8")
       .split("\n")

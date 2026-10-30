@@ -232,8 +232,8 @@ export async function runCliTrial<T extends CliTally>(
   const carried = new CarriedMessages(deps.messages);
   // The later turns of this trial (goal 166), numbered after its first message.
   let said = 0;
-  // The owner's messages its hooks or plugin take inside the agent's turn (goal 169), each as
-  // the role's later turn, numbered with the continuations.
+  // The owner's messages its hooks or plugin take inside the agent's turn (goal 169), as the role's
+  // later turns: none while its terminal shows a usage limit, so none sends it on before the reset.
   const inTurn = p.signals
     ? new TurnMessages({
         inbox: deps.messages,
@@ -243,7 +243,7 @@ export async function runCliTrial<T extends CliTally>(
             : renderResearchWorkerTurn({ program: p.id, turn, kind: "owner", text }),
         next: () => ++said,
         held: () => carried.holding(),
-        taking: () => !submitted(),
+        taking: () => !submitted() && !term?.limitShown(),
         sent: deps.sent,
         live: deps.live,
         how: p.signals.how,

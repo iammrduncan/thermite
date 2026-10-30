@@ -95,8 +95,9 @@ export interface TurnMessagesDeps {
   /** The messages a continuation carries now. */
   held(): readonly number[];
   /**
-   * Whether the trial still takes messages: false once it submitted, as in Pi. Its work is over,
-   * and the lane's next trial, which can act on them, reads them in its brief.
+   * Whether the trial takes messages now: false once it submitted, as in Pi (its work is over, and
+   * the lane's next trial, which can act on them, reads them in its brief), and while its program
+   * shows a usage limit (a Stop hook's block would send it on before the reset).
    */
   taking?: (() => boolean) | undefined;
   /** Keeps a later turn once it is given. */
