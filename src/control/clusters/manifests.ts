@@ -121,12 +121,12 @@ const prepare = (image: string, resources?: Resources): Obj => ({
     // Root, with the controller's group as its own. Without DAC_READ_SEARCH, root enters the
     // closed inbox only through that group: with root's group, it stopped at the inbox's folders
     // once it had closed the inbox, and no pod of the rig started. Both pods run it at every
-    // start. Without FSETID, root keeps the setgid bit only on a folder of its own group, as the
-    // inbox's folders are.
+    // start. FSETID keeps the setgid bit on the outbox, whose group (the supervisor's) is not
+    // root's: without it, chmod takes the bit off.
     runAsUser: 0,
     runAsGroup: 10010,
     allowPrivilegeEscalation: false,
-    capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER"] },
+    capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER", "FSETID"] },
   },
   volumeMounts: [{ name: "data", mountPath: "/data" }],
 });

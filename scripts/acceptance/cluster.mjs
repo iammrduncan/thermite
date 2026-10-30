@@ -19,7 +19,16 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { cleanEngine, dc, engine, natsService, secret, sh, until } from "./lib/smoke-env.mjs";
+import {
+  cleanEngine,
+  dc,
+  engine,
+  formAnswer,
+  natsService,
+  secret,
+  sh,
+  until,
+} from "./lib/smoke-env.mjs";
 
 const { check, results } = acceptanceChecks();
 if (engine !== "podman") {
@@ -199,7 +208,7 @@ try {
       headers: { cookie },
       redirect: "manual",
     });
-    return decodeURIComponent(String(r.headers.get("location")));
+    return formAnswer(r, cookie, control);
   };
   /**
    * Waits until a rig's page shows this step done (or a step failed). Done is the step with its

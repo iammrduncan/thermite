@@ -261,7 +261,7 @@ describe("rigs on Kubernetes", () => {
   test("prepare runs as root with the controller's group, and enters the closed inbox at every start", () => {
     // Root without DAC_READ_SEARCH enters the inbox (10001:10010, 2750) only through its group.
     // With root's own group, prepare stopped at the inbox's folders, and no pod of the rig started.
-    // Without FSETID, root keeps the setgid bit only on a folder of its own group.
+    // Without FSETID, chmod takes the setgid bit off the outbox, whose group is not root's.
     const objs = clusterRigObjects(plan, secrets) as Obj[];
     for (const name of ["thermite-k8s-a-1-harness", "thermite-k8s-a-1-supervisor"]) {
       const inits = pod(objs, name).initContainers as { name: string; securityContext: unknown }[];
@@ -274,7 +274,7 @@ describe("rigs on Kubernetes", () => {
               runAsUser: 0,
               runAsGroup: 10010,
               allowPrivilegeEscalation: false,
-              capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER"] },
+              capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER", "FSETID"] },
             },
           ],
         ],

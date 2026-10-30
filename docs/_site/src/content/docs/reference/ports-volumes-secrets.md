@@ -159,7 +159,7 @@ Removing a rig removes these five volumes, the two networks, the unit files and 
 | --- | --- |
 | PersistentVolumeClaim `thermite-<rig>-data` | One volume, `ReadWriteOnce`, 100 GB unless set (1 to 10,000 GB), in the cluster's default storage class unless one is named |
 | Its subpaths | `state` → `/var/lib/thermite`; `scratch` → `/scratch`; `inbox` → `/controller/inbox`, read-only, in the harness and `/inbox` in the supervisor (the supervisor's, with the controller's group `thermite`, mode 2750, as `prepare` sets it); `outbox` → `/outbox` (read-only in the supervisor); `supervisor` → `/var/lib/thermite-supervisor` |
-| Init container `prepare` | Runs the harness image to make the folders and set their owners before each pod starts: as root with the controller's group (10010), and only the `CHOWN` and `FOWNER` capabilities |
+| Init container `prepare` | Runs the harness image to make the folders and set their owners before each pod starts: as root with the controller's group (10010), and only the `CHOWN`, `FOWNER` and `FSETID` capabilities |
 
 Both pods run on the same node, so they can share the volume. An update to control's images or address (**Update to these images**, **Try the update again** or **Give it control's new address** on the rig's page) applies the rig's two Deployments again and leaves its volume claim, its Secret and its Service as they are, so the rig keeps its state and its tokens.
 
