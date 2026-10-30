@@ -223,9 +223,8 @@ export async function loopTrials(c) {
         return { FAKE_TUI_SCRIPT: script };
       },
       async (con) => {
-        await c.until("its first message", async () =>
-          /user: TERMINAL-CHECK-1/.test(await fakeShows(con)),
-        );
+        // Its first message is the whole prompt, the brief inside it.
+        await c.until("its first message", async () => /user: /.test(await fakeShows(con)));
         const text = await con.input({ text: "OWNER-INPUT-1", wait: "queue" }, () => undefined);
         const key = await con.input({ keys: ["down"], wait: "queue" }, () => undefined);
         await c.until("the input in the program", async () =>
