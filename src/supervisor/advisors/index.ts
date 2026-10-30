@@ -47,6 +47,7 @@ export {
   type AdvisorRuntime,
   type AdvisorSetup,
   AdvisorsConfig,
+  AdvisorsFile,
   type AdvisorsFileReport,
   advisorRoute,
   advisorSetup,

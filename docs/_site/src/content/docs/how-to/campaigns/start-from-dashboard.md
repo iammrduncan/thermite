@@ -96,7 +96,7 @@ The judge needs a [kit](../../explanation/kits.md): how to build your project, r
 
 The placeholders, in **Run** and in **Is it right?**, are `{args}` (the case's **Arguments**), `{input}` (its **Input file**), `{build}` (what the build made: `{build}/build/app`), `{out}` (a folder for the run's results, which the check reads) and `{kit}` (the **Files for the check**). Any other gives `{x} is not a placeholder here: use {args}, {input}, {build}, {out} or {kit}`. This short set is the page's own: a `kit.json` you write yourself has other placeholders, and there the check's exit code doesn't count, only its JSON line. See [Write a kit for your project](write-a-kit.md).
 
-- A **Hidden test** case is used only to double-check a change that already looks better, and, in a goal campaign, the champion before the run closes, so a change can't win by helping only the cases agents see. At least one case must not be hidden.
+- A **Hidden test** case is used only to double-check a change that already looks better, and, in a goal campaign, the champion before the run closes. There, the change must still give correct output, and its score may be worse than the champion's by no more than twice the margin the judge counts as no change: 1% for a campaign made on this page. In a goal campaign, a goal checked on the case must be met there too. At least one case must not be hidden.
 - With **How long a run takes**, the score is a time, better lower. When every case, hidden ones too, has a **Work done** value, the score is a rate instead: **Work done** divided by the time, such as items per second, better higher.
 - A kit described here takes up to 64 cases, 32 check files and 32 input files, each up to about 10 MB.
 

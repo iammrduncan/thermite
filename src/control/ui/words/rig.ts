@@ -154,6 +154,13 @@ export function rigSentence(w: SentenceContext, e: StoredEvent): Sentence | null
             { run: String(e.subject) },
           );
     }
+    // An event of v0.1.0 the bus can't carry as it was, moved at control's upgrade (move.ts).
+    case "legacy": {
+      const size = typeof b.bytes === "number" ? b.bytes : undefined;
+      return s(
+        `An event of v0.1.0, kept under the kind legacy because the message bus can't carry it as it was: its own kind is "${clip(String(b.kind), 80)}".${size === undefined ? "" : ` It was ${size} bytes, more than a message holds, so its body is only in the copy of control's store kept at the upgrade.`}`,
+      );
+    }
     default:
       return null;
   }

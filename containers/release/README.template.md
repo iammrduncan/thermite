@@ -4,6 +4,8 @@ This bundle starts Thermite on one computer from its published images. You get t
 
 The bundle has two files: `compose.yaml` and this readme.
 
+**SHA-256 of `compose.yaml`:** `@@COMPOSE_SHA256@@`
+
 ## What you need
 
 - Linux or macOS, with a few CPU cores, a few gigabytes of free memory and about 3 GB of free disk for the images, which take about 2.5 GB. With Podman on a Mac, that space must be free in Podman's virtual machine.
@@ -19,6 +21,14 @@ The commands are for Docker. With Podman, write `podman compose` in place of `do
    mkdir thermite && cd thermite
    curl -fsSLO @@REPO_URL@@/releases/download/@@TAG@@/compose.yaml
    ```
+
+   Check that it is this release's file. On Linux:
+
+   ```sh
+   echo "@@COMPOSE_SHA256@@  compose.yaml" | sha256sum -c -
+   ```
+
+   On macOS, use `shasum -a 256 -c -` in place of `sha256sum -c -`. It prints `compose.yaml: OK`. If it prints `FAILED`, the file is not the one this release published: don't use it. Download it again, and if it fails again, report it privately, as [SECURITY.md](@@REPO_URL@@/blob/@@TAG@@/SECURITY.md) says.
 
 2. Make your tokens. This writes them to `.dev/secrets/` in the folder:
 

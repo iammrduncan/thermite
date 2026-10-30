@@ -1,23 +1,26 @@
 import { readFileSync } from "node:fs";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { cleanMcpError, headerSecrets, mcpConnect } from "../../../common/mcp-client.ts";
 import type { AdvisorTools } from "../call.ts";
 import type { AdvisorsConfig } from "../config.ts";
 
-/** One knowledge base's search over MCP, read only; the token is a bearer header, never in the URL. */
+/**
+ * One knowledge base's search over MCP, read only; the token is a bearer header, never in the
+ * URL. The connection and the call each have mcpConnect's time limits (MCP_TIMEOUT_MS): past one,
+ * the search fails, the advisor is told so, and its call goes on.
+ */
 function mcpSearch(url: string, token: () => string, tool: string) {
+  const connect = mcpConnect(undefined, "thermite-supervisor");
   return async (query: string) => {
-    const client = new Client({ name: "thermite-supervisor", version: "1.0.0" });
-    await client.connect(
-      new StreamableHTTPClientTransport(new URL(url), {
-        requestInit: { headers: { authorization: `Bearer ${token()}` } },
-      }),
-    );
+    const headers = { authorization: `Bearer ${token()}` };
     try {
-      const r = await client.callTool({ name: tool, arguments: { query } });
-      return r.content;
-    } finally {
-      await client.close();
+      const session = await connect(url, headers);
+      try {
+        return (await session.callTool(tool, { query })).content;
+      } finally {
+        await session.close();
+      }
+    } catch (err) {
+      throw new Error(cleanMcpError(err, headerSecrets(headers)));
     }
   };
 }

@@ -149,6 +149,35 @@ describe("the new-campaign page", () => {
     );
   });
 
+  test("every hidden-test field says what the judge checks on a hidden case", async () => {
+    const s = await stack();
+    const page = await (await s.get("/ui/campaigns/new")).text();
+    const tips = [
+      ...page.matchAll(
+        /<span class="lb">(Hidden tests?|The kit\S* cases)<i class="ii" tabindex="0" data-tip="([^"]+)">/g,
+      ),
+    ];
+    assert.deepEqual(
+      tips.map((m) => m[1]?.replace(/&#39;|&#x27;/, "'")),
+      ["Hidden test", "Hidden tests", "The kit's cases"],
+    );
+    for (const [, label, tip] of tips) {
+      assert.match(tip ?? "", /only to double-check a change that already looks better/, label);
+      assert.match(tip ?? "", /the change must still give correct output/, label);
+      assert.match(
+        tip ?? "",
+        /worse than the champion\S*s by no more than twice the margin the judge counts as no change/,
+        label,
+      );
+      assert.match(
+        tip ?? "",
+        /In a goal campaign, a goal checked on it must be met there too/,
+        label,
+      );
+      assert.doesNotMatch(tip ?? "", /win/, label);
+    }
+  });
+
   test("Ideas kept ready (goal 081): a target, explained; in the contract; on the campaign's page", async () => {
     const s = await stack();
     const page = await (await s.get("/ui/campaigns/new")).text();

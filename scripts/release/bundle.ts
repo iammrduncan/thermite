@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Writes the release bundle, compose.yaml and README.md, from the templates in containers/release/
-// and the digests of the images the release workflow pushed (.github/workflows/release.yml):
+// and the digests of the images the release workflow pushed (.github/workflows/release.yml). The
+// readme, which the workflow also makes the release's notes, gives compose.yaml's SHA-256:
 //
 //   node --experimental-strip-types scripts/release/bundle.ts --version 0.1.0 \
 //     --registry ghcr.io/owner --repo-url https://github.com/owner/thermite \
@@ -15,13 +16,10 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import {
   type BundleInput,
-  COMPOSE_NEEDS,
+  bundleFiles,
   checkInput,
   IMAGE_KEYS,
   type ImageKey,
-  placeholders,
-  README_NEEDS,
-  render,
   templateDrift,
 } from "../../src/release/bundle.ts";
 
@@ -63,16 +61,13 @@ const composeTemplate = readFileSync(
 problems.push(...templateDrift(readFileSync(join(root, "compose.yaml"), "utf8"), composeTemplate));
 if (problems.length) fail(problems);
 
-const vals = placeholders(input);
-const compose = render(composeTemplate, vals, COMPOSE_NEEDS);
-const readme = render(
-  readFileSync(join(root, "containers/release/README.template.md"), "utf8"),
-  vals,
-  README_NEEDS,
-);
+const { compose, readme, composeSha256 } = bundleFiles(input, {
+  compose: composeTemplate,
+  readme: readFileSync(join(root, "containers/release/README.template.md"), "utf8"),
+});
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, "compose.yaml"), compose);
 writeFileSync(join(out, "README.md"), readme);
 process.stdout.write(
-  `release-bundle: wrote ${join(out, "compose.yaml")} and ${join(out, "README.md")} for ${version}\n`,
+  `release-bundle: wrote ${join(out, "compose.yaml")} and ${join(out, "README.md")} for ${version}; compose.yaml's SHA-256 is ${composeSha256}\n`,
 );

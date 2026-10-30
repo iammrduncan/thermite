@@ -73,7 +73,7 @@ A store from v0.1.0, or from a control that kept its events in a table and copie
    docker compose logs control | grep "events table"     # or: podman compose logs control | grep "events table"
    ```
 
-   `moving control's events table to the events stream` says how many rows it has to move (`behind`), and every 100,000 how far it got (`moved`) and how many are `left`. `control's events table moved to the events stream` says when it is done, in how many `seconds`; `the events stream holds control's events table whole` that the check passed; then `control's events table dropped: the events stream keeps every event`, with the copy's path (`copy`).
+   `moving control's events table to the events stream` says how many rows it has to move (`behind`), and every 100,000 how far it got (`moved`) and how many are `left`. `control's events table moved to the events stream` says when it is done, in how many `seconds`; `the events stream holds control's events table whole` that the check passed; then `control's events table dropped: the events stream keeps every event`, with the copy's path (`copy`). A line `an event of control's events table moved under the kind legacy` names a v0.1.0 event that the bus can't carry as it was: its kind is not one a subject holds, or it is larger than a message. It is on the stream under the kind `legacy`, with its own kind, and in the **Audit log** as `event_moved_as_legacy`; with `"with_body": false`, its body is only in the kept copy ([A store from before](../../explanation/how-the-parts-talk.md#a-store-from-before-its-events-table-moved-once)).
 2. Find the copy beside the store, in control's state folder, the `control-state` volume:
 
    ```sh

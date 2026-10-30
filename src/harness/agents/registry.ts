@@ -112,19 +112,6 @@ export class Registry {
     });
   }
 
-  setFamilyStatus(
-    run: string,
-    id: string,
-    status: FamilyView["status"],
-    by: string,
-    reason: string,
-  ): void {
-    this.ledger.tx(() => {
-      this.ledger.trials.setFamilyStatus(run, id, status);
-      this.ledger.appendEvent(by, "family_status", run, { family: id, status, reason });
-    });
-  }
-
   families(run: string): FamilyView[] {
     return this.ledger.trials.families(run).map((f) => {
       const attempts = this.ledger.attempts.ofFamily(run, f.id);

@@ -87,6 +87,8 @@ Before a rig enrolls, control sees nothing of it, and the pod's log is the one p
 
 Look for the last thing the image printed: an image that failed to pull, a crash at start, or a supervisor that could not reach control. A read that RunPod refuses says why in the block, such as `Not read: RunPod refused to show pod …'s log with this key: the key may not read pod logs.`: give control a key with read access to pods. Over the REST API, `GET /v1/rigs/<rig>/runpod/logs` gives the same lines, and so does the MCP tool [`runpod_rig_logs`](../../reference/mcp-tools.md#runpod_rig_logs).
 
+**Pod log** stays on the rig's page while the pod exists. Once the pod runs, it also shows when the pod started one of its two parts, the harness and the supervisor, again. The pod checks them itself: a part that exits, or whose health route answers 503 or nothing three times running, 30 seconds apart, is started again, and the log says `supervisor exited; restarting`, after `the supervisor is unhealthy: ending it to start it again` for one that stopped answering ([Restarts and stops](../../reference/harness-image.md#restarts-and-stops)).
+
 ## 4. Start runs on it
 
 Start campaigns on it as on any rig: [from the dashboard](../campaigns/start-from-dashboard.md) or [from the command line](../campaigns/start-from-command-line.md).

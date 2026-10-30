@@ -33,9 +33,11 @@ import {
  * - in the one-container rig image (THERMITE_ONE_CONTAINER=1, broker/one-container.ts), also
  *   prepares the supervisor's places and its token, serves the advisors' runner, which runs each
  *   advisor's program as an advisor user of its own (src/common/run-as/), and runs the supervisor
- *   as its own user, restarting it if it exits. In pull mode it starts the controller only once the supervisor's
- *   enrollment has brought control's key: it checks the key against the launch's SHA-256 and
- *   gives the harness a copy of its own, and takes the rig's settings from control as data;
+ *   as its own user, restarting it if it exits. It asks both parts' health routes, and restarts a
+ *   part that fails three times in a row (broker/watch.ts). In pull mode it starts the controller
+ *   only once the supervisor's enrollment has brought control's key: it checks the key against
+ *   the launch's SHA-256 and gives the harness a copy of its own, and takes the rig's settings
+ *   from control as data;
  * - with THERMITE_STATE_SNAPSHOT_DIR (the one-container rig image sets it) and the launch's
  *   snapshot key, keeps the rig's state over a stop that empties the container's disk: the live
  *   state stays on that disk, and a sealed snapshot of it on the host's volume is restored at a

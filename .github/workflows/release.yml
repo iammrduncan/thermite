@@ -4,8 +4,8 @@
 # (scripts/release/check-images.ts): pulled by digest with no sign-in, it reports the commit, carries no
 # Claude Code, no key and, for the rig image, no set-id file (goal 010). Only images that hold get
 # the version's tag. Then it writes the release bundle, a compose file that pins those images by
-# digest and a short readme (scripts/release/bundle.ts), and attaches both to a draft GitHub
-# Release.
+# digest and a short readme that gives the compose file's SHA-256 (scripts/release/bundle.ts), and
+# attaches both to a draft GitHub Release, whose notes are the readme.
 #
 # Run by hand (Actions › release › Run workflow) with "publish" ticked, it pushes and checks the
 # same images for the commit it runs on, tagged with the commit only: no version tag and no
@@ -451,8 +451,9 @@ jobs:
           name: release-bundle
           path: bundle/
           if-no-files-found: error
-      # A draft: a maintainer reads it, then publishes it. A run again for the same tag replaces
-      # the files of the release it made before.
+      # A draft: a maintainer reads it, then publishes it. Its notes are the readme, which gives
+      # the compose file's SHA-256. A run again for the same tag replaces the files of the release
+      # it made before, and its notes with them, so the SHA-256 is always the attached file's.
       - name: Attach the bundle to a draft release
         if: env.RELEASE == 'true'
         env:
@@ -461,6 +462,7 @@ jobs:
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" bundle/compose.yaml bundle/README.md --clobber
+            gh release edit "$TAG" --notes-file bundle/README.md
           else
             gh release create "$TAG" --draft --verify-tag --title "Thermite $TAG" \
               --notes-file bundle/README.md bundle/compose.yaml bundle/README.md

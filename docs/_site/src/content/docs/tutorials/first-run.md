@@ -32,6 +32,8 @@ curl -fsSLO https://github.com/iammrduncan/thermite/releases/latest/download/com
 
 The folder now holds one file, `compose.yaml`. It says which containers make up Thermite and which images they run. Its first line names the release, such as `# Thermite 0.1.0`. Each image is pinned to the exact build of that release, so every computer that uses this file runs the same Thermite.
 
+Check that the file is the release's own. The notes of the [latest release](https://github.com/iammrduncan/thermite/releases/latest) give its SHA-256 and the command that checks it: `echo "<sha-256>  compose.yaml" | sha256sum -c -` on Linux, or with `shasum -a 256 -c -` in place of `sha256sum -c -` on macOS. It prints `compose.yaml: OK`. If it prints `FAILED`, don't use the file: download it again.
+
 ## 2. Make your local tokens
 
 Thermite uses **tokens**, long random passwords, so that only you can steer it. Make a set for this computer. Use the line for your container tool:

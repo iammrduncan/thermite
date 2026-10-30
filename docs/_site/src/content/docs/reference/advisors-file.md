@@ -80,6 +80,7 @@ This file gives the rig two teachers (one through an API, one a command-line age
 - **Where.** The supervisor reads the file named by its setting `THERMITE_ADVISORS_FILE`. Unset or empty, the rig has no advisors file. The local compose stack leaves it empty and mounts the folder `.dev/advisors` at `/etc/thermite/advisors`, read-only, so a file there is `/etc/thermite/advisors/advisors.json` inside the supervisor.
 - **When.** Once, when the supervisor starts. A change takes effect after the supervisor restarts.
 - **Checks.** The file is parsed with a strict schema. A file that is missing, is not JSON, has a field the schema does not know, or lacks a required field stops the supervisor at start: it logs a `fatal` line and exits with code 1.
+- **No keys or tokens in it.** A key or a token written into the file stops the supervisor the same way, and the `fatal` line says where it comes from instead. An `api_key` gives `Write no key into the advisors file: name a file that holds it with api_key_file, or give the role a model on Edit rig, which control sends with its key.`; a `token`, or a `claude-code` runtime, gives `Write no token into the advisors file: a Claude subscription's token comes only from control. Give the role a Claude subscription on Edit rig.` Keys are in files that the file names (`api_key_file`, and `kb`'s `token_file`), read at each call.
 - **Edit rig comes first.** A role given a model on the rig's **Edit rig** page uses that model instead of the file's runtimes for that role. See [Models from Edit rig](#models-from-edit-rig).
 - **Rigs control sets up.** Rigs that control sets up on a machine, on a cluster or with a join command have no advisors file. Their advisors are the ones **Edit rig** gives.
 - **Switches.** The switches **Teachers**, **Auditor** and **Review panel** under **Edit rig** › **1 · Parts of the rig** decide whether each role runs at all. **Teachers** covers their merged by model too. A role that is switched on but has no model, from the file or from **Edit rig**, does nothing.
@@ -104,9 +105,11 @@ The names `combiner` and `panel` of v0.1.0 are refused like any other field the 
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `mcp_url` | URL | required | An MCP server reached over streamable HTTP |
-| `token_file` | path | required | A file with the bearer token for that server. It is read at each search |
+| `mcp_url` | URL | required | An MCP server reached over streamable HTTP, or over SSE when the server refuses streamable HTTP. It starts with `https://`, or with `http://` only for this machine itself: `localhost`, `127.0.0.1` or `[::1]`. It holds no user, password or fragment, and no query parameter named like a token, key, secret, password or signature. Any other address stops the supervisor at start: `Use https, or http to this machine only (localhost, 127.0.0.1, [::1]), with no user, password, fragment or secret in the address: the token goes in token_file.` |
+| `token_file` | path | required | A file with the bearer token for that server. It is read at each search, and sent only in the `Authorization` header |
 | `tool` | text | `"search"` | The MCP tool to call. It is called with `{"query": "<text>"}` |
+
+Each search connects to the server, calls the tool once and closes the connection. The connection may take at most 30 seconds and the call at most 120 seconds; past either, or on any other failure, the advisor's search answers `failed:` with the reason, with the token taken out, and the advisor's call goes on.
 
 ## Runtimes
 
@@ -122,7 +125,7 @@ Each advisor is one runtime: where and how its model runs. `runtime` chooses one
 | `base_url` | URL | required | The API's address |
 | `model` | text | required | The model's name at that API |
 | `api_key_file` | path | none | A file with the API key. It is read at each call |
-| `api_key` | text | none | The API key itself. Models from **Edit rig** carry their key this way |
+| `api_key` | text | none | The API key itself, as models from **Edit rig** carry it, in memory. Refused in the file ([How the file is read](#how-the-file-is-read)): use `api_key_file` |
 | `reasoning` | `"low"`, `"medium"` or `"high"` | none | The reasoning effort asked of the model. Unset: none is asked for |
 | `context_window` | whole number above 0 | `200000` | The model's context window, in tokens. The call's conversation is compacted near it, and the package is cut to fit it ([Compaction](limits-and-pacing.md#compaction)). A campaign's own window lowers it for that campaign's runs |
 | `compact_at` | whole number, 50 to 95 | none: 80 | The share of the window, in percent, at which the call's conversation is [compacted](limits-and-pacing.md#compaction) and goes on. A campaign's own point replaces it for that campaign's runs |
@@ -133,7 +136,7 @@ Each advisor is one runtime: where and how its model runs. `runtime` chooses one
 | `usd_per_mtok_out` | number, 0 or more | `0` | The price per million output tokens |
 | `provider` | text, 1 to 100 characters | none | The model provider's name, which the advisor's [model usage](../explanation/how-it-fits-together.md#the-model-usage-records) is recorded with. Models from **Edit rig** carry their provider's name from **Settings › Providers** |
 
-With neither `api_key_file` nor `api_key`, every call fails with `advisor <name> has no key`; the supervisor still starts. These advisors can use read-only [tools](#what-each-role-gets).
+With no `api_key_file` (or, for a model from **Edit rig**, no key), every call fails with `advisor <name> has no key`; the supervisor still starts. These advisors can use read-only [tools](#what-each-role-gets).
 
 ### `cli`: a command-line agent
 
@@ -149,19 +152,21 @@ The supervisor runs the command as an advisor user of its own, `advisor-1` to `a
 
 ### `claude-code`: Claude Code with a Claude subscription
 
+A role gets this runtime from **Edit rig**, with a Claude subscription whose token control keeps and sends to the supervisor. The file can't give it: its `token` is refused there ([How the file is read](#how-the-file-is-read)).
+
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `name` | text, 1 to 60 characters | required | The advisor's name |
 | `runtime` | `"claude-code"` | required | |
 | `model` | text | required | Claude Code's name for the model |
-| `token` | text | required | The subscription's token |
+| `token` | text | required | The subscription's token, from control. Refused in the file |
 | `effort` | `"low"`, `"medium"`, `"high"`, `"xhigh"` or `"max"` | none | Passed as `--effort` |
 | `context_window` | whole number above 0 | none: Claude Code's own | The window Claude Code compacts within, as `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (Claude Code takes 100,000 to 1,000,000). The package is cut to fit it. A campaign's own window lowers it for that campaign's runs |
 | `compact_at` | whole number, 50 to 95 | none: 80 | Claude Code's compaction point, as `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`. A campaign's own point replaces it for that campaign's runs |
 | `timeout_s` | whole number, 1 to 7200 | none | Seconds before the call is ended. Without it, no time limit |
 | `provider` | text, 1 to 100 characters | none | The model provider's name, which the advisor's [model usage](../explanation/how-it-fits-together.md#the-model-usage-records) is recorded with. Models from **Edit rig** carry their provider's name from **Settings › Providers** |
 
-The supervisor runs `claude -p --output-format json --model <model> --tools "" --setting-sources "" --strict-mcp-config`, with `--effort` when set: none of Claude Code's own tools, no settings files and no MCP servers of its own. It adds `--settings` with Thermite's own settings for the call: a PreCompact hook, which keeps the conversation before each of Claude Code's compactions and tells the summary where the supervisor keeps it, and a PostCompact hook, which keeps the summary ([Compaction](limits-and-pacing.md#compaction)). When the advisor has Thermite's knowledge base (every advisor but a teacher and its merged by model on a rig whose `fetch_domains` is `"*"`), or other tools of Thermite's, the supervisor adds `--mcp-config` with one MCP server, `thermite`, which it serves for that call alone, on `127.0.0.1` behind a token made for the call, and `--allowedTools` with each of its tools: `mcp__thermite__kb_search`, `mcp__thermite__kb_read`, and `mcp__thermite__kb_write` when the campaign lets the advisor's role write, then the teachers' code and research tools, or the final writer's checks, when it has them ([The agents' tools](knowledge-base.md#the-agents-tools)). When the run's kit gives the advisors MCP servers, the same local server serves each of them too, at `/mcp/<server>`, and `--allowedTools` adds `mcp__<server>` for each ([MCP servers](#mcp-servers)). The server stops when the call ends. Its input, its folder and its answer work as for a `cli` advisor, the answer's JSON Schema included. The token reaches Claude Code on file descriptor 3, never in an environment variable, a file or the command line. Its environment holds `PATH`, `LANG`, `HOME`, `TMPDIR`, `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=3` (where Claude Code reads the token), `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` (it reads no `CLAUDE.md`), `DISABLE_AUTOUPDATER=1`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (the compaction point) and, with a `context_window`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW`. Claude Code's own sandbox stays off: with none of its own tools, it runs no commands. The supervisor finds Claude Code through `THERMITE_CLAUDE_BIN`, or else `claude` on its `PATH`; the supervisor image holds Claude Code only when it was built with `CLAUDE_CODE_VERSION`. Its spending counts as USD 0. **Edit rig** can also give a role a Claude subscription: see [Use a Claude subscription](../how-to/models/claude-subscription.md).
+The supervisor runs `claude -p --output-format json --model <model> --tools "" --setting-sources "" --strict-mcp-config`, with `--effort` when set: none of Claude Code's own tools, no settings files and no MCP servers of its own. It adds `--settings` with Thermite's own settings for the call: a PreCompact hook, which keeps the conversation before each of Claude Code's compactions and tells the summary where the supervisor keeps it, and a PostCompact hook, which keeps the summary ([Compaction](limits-and-pacing.md#compaction)). When the advisor has Thermite's knowledge base (every advisor but a teacher and its merged by model on a rig whose `fetch_domains` is `"*"`), or other tools of Thermite's, the supervisor adds `--mcp-config` with one MCP server, `thermite`, which it serves for that call alone, on `127.0.0.1` behind a token made for the call, and `--allowedTools` with each of its tools: `mcp__thermite__kb_search`, `mcp__thermite__kb_read`, and `mcp__thermite__kb_write` when the campaign lets the advisor's role write, then the teachers' code and research tools, or the final writer's checks, when it has them ([The agents' tools](knowledge-base.md#the-agents-tools)). When the run's kit gives the advisors MCP servers, the same local server serves each of them too, at `/mcp/<server>`, and `--allowedTools` adds `mcp__<server>` for each ([MCP servers](#mcp-servers)). The server stops when the call ends. Its input, its folder and its answer work as for a `cli` advisor, the answer's JSON Schema included. The token reaches Claude Code on file descriptor 3, never in an environment variable, a file or the command line. Its environment holds `PATH`, `LANG`, `HOME`, `TMPDIR`, `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=3` (where Claude Code reads the token), `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` (it reads no `CLAUDE.md`), `DISABLE_AUTOUPDATER=1`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (the compaction point) and, with a `context_window`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW`. Claude Code's own sandbox stays off: with none of its own tools, it runs no commands. The supervisor finds Claude Code through `THERMITE_CLAUDE_BIN`, or else `claude` on its `PATH`; the supervisor image holds Claude Code only when it was built with `CLAUDE_CODE_VERSION`. Its spending counts as USD 0. To give a role a Claude subscription on **Edit rig**, see [Use a Claude subscription](../how-to/models/claude-subscription.md).
 
 ### `opencode`: OpenCode v2 in the supervisor
 
@@ -173,7 +178,7 @@ The supervisor runs `claude -p --output-format json --model <model> --tools "" -
 | `base_url` | URL | required, except with `api` `"opencode"` | The API's address |
 | `model` | text | required | The model's name at that API |
 | `api_key_file` | path | none | A file with the API key. It is read at each call |
-| `api_key` | text | none | The API key itself. Models from **Edit rig** carry their key this way |
+| `api_key` | text | none | The API key itself, as models from **Edit rig** carry it, in memory. Refused in the file ([How the file is read](#how-the-file-is-read)): use `api_key_file` |
 | `context_window` | whole number, 0 or more | `0` | The model's context window, in tokens, which OpenCode's own compaction uses (`limit.context`), and which the package is cut to fit. `0`: unknown. A campaign's own window lowers it for that campaign's runs |
 | `compact_at` | whole number, 50 to 95 | none: 80 | OpenCode's compaction point: its `compaction.buffer` is the window less this share, as for the workers. A campaign's own point replaces it for that campaign's runs |
 | `timeout_s` | whole number, 1 to 7200 | none | Seconds before the call is ended. Without it, no time limit |
@@ -204,7 +209,7 @@ Its answer is the last text in its JSON events, read as a `cli` advisor's answer
 | `base_url` | URL | required | The API's address |
 | `model` | text | required | The model's name at that API |
 | `api_key_file` | path | none | A file with the API key. It is read at each call |
-| `api_key` | text | none | The API key itself. Models from **Edit rig** carry their key this way |
+| `api_key` | text | none | The API key itself, as models from **Edit rig** carry it, in memory. Refused in the file ([How the file is read](#how-the-file-is-read)): use `api_key_file` |
 | `reasoning` | `"low"`, `"medium"` or `"high"` | none | Set as Codex's `model_reasoning_effort` |
 | `context_window` | whole number, 0 or more | `0` | The model's context window, in tokens, which Codex's own compaction uses (`model_context_window`), and which the package is cut to fit. `0`: unknown. A campaign's own window lowers it for that campaign's runs |
 | `compact_at` | whole number, 50 to 95 | none: 80 | Codex's compaction point, as `model_auto_compact_token_limit`, as for the workers. A campaign's own point replaces it for that campaign's runs |

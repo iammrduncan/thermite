@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { windowFit } from "../../agents/roles/index.ts";
+import { LOCAL_HTTP_HOSTS, mcpUrlProblem } from "../../common/mcp-client.ts";
 import { EFFORTS } from "../../core/agents.ts";
 import {
   type AgentsContext,
@@ -216,12 +217,15 @@ export function advisorsFileReport(file: AdvisorsConfig | undefined): AdvisorsFi
   };
 }
 
+/** Why the file's `kb` address is refused, in words. */
+const KB_URL_REFUSED = `Use https, or http to this machine only (${LOCAL_HTTP_HOSTS.join(", ")}), with no user, password, fragment or secret in the address: the token goes in token_file.`;
+
 /**
- * The advisors file, with goal 074's names: one or two teachers, the model that merges the advice
- * of two (`merged_by`), the auditor and the review panel. AdvisorsConfig is what the supervisor
- * runs.
+ * The advisors file's fields, with goal 074's names: one or two teachers, the model that merges
+ * the advice of two (`merged_by`), the auditor and the review panel. AdvisorsConfig is what the
+ * supervisor runs; AdvisorsFile is the file it reads, which may not hold a key or a token.
  */
-const AdvisorsFile = z.strictObject({
+export const AdvisorsConfig = z.strictObject({
   teachers: z.array(Runtime).max(2).default([]),
   merged_by: Runtime.optional(),
   auditor: Runtime.optional(),
@@ -239,17 +243,59 @@ const AdvisorsFile = z.strictObject({
    * unless the owner sets one: Thermite sets no limits of its own.
    */
   max_usd_per_day: z.number().nonnegative().optional(),
-  /** An optional knowledge-base MCP server the advisors may search (read only). */
+  /**
+   * An optional knowledge-base MCP server the advisors may search (read only): https, or http to
+   * this machine only (mcpUrlProblem's rule), with its token in a file, never in the address.
+   */
   kb: z
     .strictObject({
-      mcp_url: z.url(),
+      mcp_url: z.url().refine((url) => mcpUrlProblem(url) === null, KB_URL_REFUSED),
       token_file: z.string().min(1),
       tool: z.string().min(1).default("search"),
     })
     .optional(),
 });
-export const AdvisorsConfig = AdvisorsFile;
 export type AdvisorsConfig = z.output<typeof AdvisorsConfig>;
+
+/**
+ * The fields that hold a key or a token, which the file on disk may not: each one's words say
+ * where it comes from instead. In memory, control's models carry them.
+ */
+const NOT_IN_FILE = {
+  api_key:
+    "Write no key into the advisors file: name a file that holds it with api_key_file, or give the role a model on Edit rig, which control sends with its key.",
+  token:
+    "Write no token into the advisors file: a Claude subscription's token comes only from control. Give the role a Claude subscription on Edit rig.",
+} as const;
+
+/** Each runtime the raw file gives, with its path in the file. */
+function runtimesIn(raw: unknown): [(string | number)[], Record<string, unknown>][] {
+  if (!raw || typeof raw !== "object") return [];
+  const file = raw as Record<string, unknown>;
+  const out: [(string | number)[], Record<string, unknown>][] = [];
+  const one = (path: (string | number)[], v: unknown) => {
+    if (v && typeof v === "object" && !Array.isArray(v))
+      out.push([path, v as Record<string, unknown>]);
+  };
+  for (const role of ["teachers", "review_panel"] as const) {
+    const list = file[role];
+    if (Array.isArray(list)) for (const [i, v] of list.entries()) one([role, i], v);
+  }
+  for (const role of ["merged_by", "auditor"] as const) one([role], file[role]);
+  return out;
+}
+
+/**
+ * The advisors file as the supervisor reads it from disk: AdvisorsConfig, with no key or token
+ * written into it. A `claude-code` runtime needs a token, so the file can't give one.
+ */
+export const AdvisorsFile = z.preprocess((raw, ctx) => {
+  for (const [path, rt] of runtimesIn(raw))
+    for (const field of ["api_key", "token"] as const)
+      if (Object.hasOwn(rt, field) || (field === "token" && rt.runtime === "claude-code"))
+        ctx.addIssue({ code: "custom", path: [...path, field], message: NOT_IN_FILE[field] });
+  return raw;
+}, AdvisorsConfig);
 
 /**
  * What the supervisor runs: the advisors file, with the synthesizer's and the final writer's own
@@ -262,8 +308,9 @@ export type RunningAdvisors = AdvisorsConfig & {
 };
 
 /**
- * An advisor's window in tokens, where Thermite knows it: an API route's, or the one control or the
- * advisors file gives Claude Code, OpenCode or Codex; 0 when unknown, as for a command-line agent.
+ * An advisor's window in tokens, where Thermite knows it: an API route's, the one control gives
+ * Claude Code, or the one control or the advisors file gives OpenCode or Codex; 0 when unknown,
+ * as for a command-line agent.
  */
 export function advisorWindow(rt: AdvisorRuntime): number {
   return rt.runtime === "cli" ? 0 : (rt.context_window ?? 0);

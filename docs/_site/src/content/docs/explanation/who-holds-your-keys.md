@@ -122,4 +122,4 @@ The bus's server holds no other secret: control gives it a users file with each 
 
 ## The advisors file
 
-Advisors you configure in the advisors file on the supervisor read their API keys from the files it names, at each call, so a new key takes effect without a restart. An advisor you give a model from control (**Edit rig**, MCP or the REST API) instead keeps its key or token sealed in control, which hands it to the supervisor in memory. The [advisors file reference](../reference/advisors-file.md) lists every field.
+Advisors you configure in the advisors file on the supervisor read their API keys from the files it names, at each call, so a new key takes effect without a restart. The file itself holds no key or token: the supervisor refuses one written into it, and refuses a knowledge-base address (`kb`) that would send its token over plain HTTP to another machine. An advisor you give a model from control (**Edit rig**, MCP or the REST API) instead keeps its key or token sealed in control, which hands it to the supervisor in memory. The [advisors file reference](../reference/advisors-file.md) lists every field.

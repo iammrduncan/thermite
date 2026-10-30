@@ -410,6 +410,7 @@ const BODIES = {
   rig_settings_changed: z.object({
     change: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]).nullish()),
   }),
+  legacy: z.object({ kind: z.string(), bytes: num }),
 
   // ---------------------------------------------------------------- research
   claim_added: z.object({ verified: bool, text: str, problems: strs, more_problems: num }),

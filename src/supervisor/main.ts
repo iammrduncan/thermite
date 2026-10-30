@@ -33,7 +33,7 @@ import { SUPERVISOR_INBOX_DIR } from "../core/paths.ts";
 import { advisorIsolation } from "./advisor-runs/index.ts";
 import {
   type AdviseState,
-  AdvisorsConfig,
+  AdvisorsFile,
   adviseOnce,
   advisorsFileReport,
   advisorsOf,
@@ -278,7 +278,7 @@ async function main(): Promise<void> {
   };
   const advisorsFile = env.THERMITE_ADVISORS_FILE;
   const fileAdvisors = advisorsFile
-    ? AdvisorsConfig.parse(JSON.parse(readFileSync(advisorsFile, "utf8")))
+    ? AdvisorsFile.parse(JSON.parse(readFileSync(advisorsFile, "utf8")))
     : undefined;
   // The roles control gives models (the owner's choice per rig) over the file's; read each round,
   // from the rig's config on the bus.

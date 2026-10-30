@@ -526,6 +526,14 @@ export interface EventBodies {
     change: Record<string, string | number | boolean | null | undefined>;
     settings: RigSettings;
   };
+  /**
+   * Control's own, never a ledger's: an event of v0.1.0 that the message bus can't carry as the
+   * rig recorded it (a kind a subject can't hold, or more than a message holds), which control
+   * moved at its upgrade on the rig's own subject (control/events/move.ts). Its own kind, and its
+   * body; for one too large even so, its kind cut and its size in bytes, with no body: the copy
+   * of control's store kept at the upgrade holds it whole.
+   */
+  legacy: { kind: string; body?: unknown; bytes?: number };
 
   // ---------------------------------------------------------------- research
   source_fetched: {

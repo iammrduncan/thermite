@@ -31,7 +31,9 @@ export const BEFORE_THE_RENAME: readonly string[] = [
     created_at text not null
   );
   `,
-  // 3: agents (M4). The direction registry, planner epochs and worker trials.
+  // 3: agents (M4). The direction registry, planner epochs and worker trials. The family check
+  // names `blocked`, which nothing sets (a family is live or exhausted): it stays as written, as
+  // every migration that has run does, and old ledgers keep it.
   `
   create table family (
     instance text not null,

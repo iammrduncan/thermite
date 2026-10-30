@@ -8,11 +8,13 @@ import { isRootOnly, isRunpodVariable, isSupervisorOnly } from "./one-container.
 import { killScope } from "./process.ts";
 import { roleIds } from "./runner.ts";
 import { ALL_ROLES } from "./server.ts";
+import { WATCHED, watchHealth } from "./watch.ts";
 
 /**
  * The controller, as the `thermite` user in its own process group: started with the environment
  * it may have (no secret file's variable, none of RunPod's and none of the supervisor's or root's
- * own), started again when it exits, and the broker's exit at a stop once every part has ended.
+ * own), started again when it exits (in the one-container image also when its health route fails,
+ * watch.ts), and the broker's exit at a stop once every part has ended.
  */
 
 export function killRoles(): number {
@@ -71,6 +73,13 @@ export function startController(broker: Broker, extraEnv: Record<string, string>
     detached: true,
   });
   const proc = broker.child;
+  // In the one-container image nothing outside checks the controller: the broker does.
+  if (broker.withSupervisor)
+    watchHealth(proc, {
+      part: "controller",
+      ...WATCHED.controller,
+      stopping: () => broker.stopping,
+    });
   proc.on("exit", (code, signal) => {
     // Worker processes of a dead controller must not live on (they would keep calling the model
     // and the API while new trials run): kill the controller's whole process group.

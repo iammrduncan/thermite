@@ -1,13 +1,17 @@
 import { BUS_BATCH_MAX, BUS_RETRY_MS, type Bus, type BusMessage } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
-import {
-  EVENT_HEADERS,
-  EVENT_STREAM,
-  EVENT_STREAM_CONFIG,
-  eventMessage,
-} from "../../core/link/events.ts";
+import { EVENT_HEADERS, EVENT_STREAM, EVENT_STREAM_CONFIG } from "../../core/link/events.ts";
+import type { ReportEvent } from "../../core/link/report.ts";
 import type { ControlStore, StoredEvent } from "../store/index.ts";
-import { inBatches, isTheRigsRun, onBus, outgoing, publishAfter, publishFailed } from "./batch.ts";
+import {
+  inBatches,
+  isTheRigsRun,
+  type OnBus,
+  onBus,
+  outgoing,
+  publishAfter,
+  publishFailed,
+} from "./batch.ts";
 
 /**
  * The move of a store's events table to the `EVENTS` stream (goal 168, step 4). A store from
@@ -20,8 +24,11 @@ import { inBatches, isTheRigsRun, onBus, outgoing, publishAfter, publishFailed }
  * makes a copy twice. It then checks that the stream holds the table whole: as many moved events
  * as rows, the last at the table's last seq, and a sample of them the same as their rows. Then the
  * store migration that drops the table runs (store/schema.ts), with a copy of the store kept
- * outside the copies' rotation. A stream it can't go on in, a row the bus can't carry, or a stream
- * that lacks rows stops the move, in words, and control does not start: the table stays.
+ * outside the copies' rotation. A row whose kind a subject can't hold, or too large for a message,
+ * goes on the rig's own subject under the kind `legacy`, its own kind kept in its body, and the
+ * move says so in control's log and its audit log (legacyOf). A stream it can't go on in, a row
+ * whose rig or ledger the bus can't name, or a stream that lacks rows stops the move, in words,
+ * and control does not start: the table stays.
  */
 
 /** How many of the moved events the check compares with their rows, spread over the table. */
@@ -29,7 +36,10 @@ export const MOVE_CHECK_SAMPLE = 64;
 /** While the move publishes many rows, it logs how far it got every this many. */
 const MOVE_LOG_ROWS = 100_000;
 
-/** Why the move stopped: a row the bus can't carry, or a stream it can't go on in. */
+/**
+ * Why the move stopped: a row whose rig or ledger the bus can't name, or a stream it can't go on
+ * in.
+ */
 export interface MoveStopped {
   /** The row's rig, ledger and place in the table; null for a stream it can't go on in. */
   rig: string | null;
@@ -47,6 +57,20 @@ export interface EventsMoveOptions {
   retryMs?: number | undefined;
   /** Told after each batch the stream stored: the apply of the stream reads it then. */
   published?: (() => void) | undefined;
+}
+
+/**
+ * A row the move put under the kind `legacy`: its place, rig, ledger and event id, its own kind,
+ * why the bus can't carry it as it was, and whether its body went with it.
+ */
+interface Legacy {
+  seq: number;
+  rig: string;
+  ledger: string;
+  event: number;
+  kind: string;
+  why: string;
+  with_body: boolean;
 }
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -91,23 +115,61 @@ function samplePlaces(rows: number): number[] {
   ];
 }
 
-/** A row's event as the move publishes it, its body parsed. */
+/** A row's event as the rig recorded it, its body parsed. */
 const rowEvent = (row: StoredEvent) => ({ ...row.event, body: JSON.parse(row.body), run: row.run });
+
+/**
+ * The most characters of a row's own kind, actor and subject that its `legacy` event keeps when it
+ * is too large for a message even under that kind.
+ */
+const LEGACY_TEXT_MAX = 1000;
+
+/**
+ * A row's event under the kind `legacy`: as the rig recorded it, with its own kind and body in its
+ * body. With `bytes` (too large even so), its kind, actor and subject cut to LEGACY_TEXT_MAX and
+ * no body, only its size: the copy of the store kept before the table goes holds it whole.
+ */
+function legacyOf(e: ReportEvent, bytes?: number): ReportEvent {
+  if (bytes === undefined) return { ...e, kind: "legacy", body: { kind: e.kind, body: e.body } };
+  const cut = (t: string) => t.slice(0, LEGACY_TEXT_MAX);
+  return {
+    ...e,
+    kind: "legacy",
+    actor: cut(e.actor),
+    subject: e.subject === null ? null : cut(e.subject),
+    body: { kind: cut(e.kind), bytes },
+  };
+}
+
+/**
+ * A row's event as the move publishes it, as a message: as the rig recorded it, or else under the
+ * kind `legacy` on the rig's own subject (legacyOf), with why the bus can't carry it as it was and
+ * whether its body went with it. An error when the bus can't carry it either way: a rig or a
+ * ledger a subject or a header can't name.
+ */
+function rowOnBus(
+  row: StoredEvent,
+  runIsTheRigs: boolean,
+): OnBus & { legacy?: { why: string; with_body: boolean } } {
+  const at = { rig: row.rig, ledger: row.ledger_id, seq: row.seq };
+  const event = rowEvent(row);
+  const as = onBus({ ...at, event, runIsTheRigs });
+  if (!("error" in as)) return as;
+  const why = as.error.slice(0, LEGACY_TEXT_MAX);
+  const whole = onBus({ ...at, event: legacyOf(event), runIsTheRigs: false });
+  if (!("error" in whole)) return { ...whole, legacy: { why, with_body: true } };
+  if (whole.bytes === null) return whole;
+  const cut = onBus({ ...at, event: legacyOf(event, whole.bytes), runIsTheRigs: false });
+  return "error" in cut ? cut : { ...cut, legacy: { why, with_body: false } };
+}
 
 /** Whether a message is the row's event, as the move publishes it: its rig, ledger and data. */
 function holdsRow(m: BusMessage, row: StoredEvent): boolean {
   if (m.header(EVENT_HEADERS.rig) !== row.rig || m.header(EVENT_HEADERS.ledger) !== row.ledger_id)
     return false;
   try {
-    const event = rowEvent(row);
-    const expected = eventMessage({
-      rig: row.rig,
-      ledger: row.ledger_id,
-      event,
-      runIsTheRigs: false,
-      seq: row.seq,
-    });
-    return new TextDecoder().decode(m.data) === expected.data;
+    const expected = rowOnBus(row, false);
+    return !("error" in expected) && new TextDecoder().decode(m.data) === expected.message.data;
   } catch {
     return false;
   }
@@ -223,12 +285,15 @@ export class EventsMove {
     for (;;) {
       const rows = store.eventsTable.inOrder(seq, BUS_BATCH_MAX);
       if (!rows.length) break;
-      const { messages, stop } = this.messagesOf(rows);
+      const { messages, legacy, stop } = this.messagesOf(rows);
       for (const batch of inBatches(messages)) {
         place = await publishAfter(bus, place, batch);
         this.published += batch.length;
         moved += batch.length;
         this.o.published?.();
+        // The rows of this batch the move put under `legacy`, said once the stream holds them.
+        const through = Number(batch.at(-1)?.headers?.[EVENT_HEADERS.seq]);
+        while (legacy[0] && legacy[0].seq <= through) this.saidLegacy(legacy.shift() as Legacy);
       }
       if (stop) {
         this.stop(stop);
@@ -246,29 +311,47 @@ export class EventsMove {
     return true;
   }
 
-  /** The rows' messages, in order, up to a row the bus can't carry, and why it stops there. */
+  /**
+   * The rows' messages, in order, up to a row the bus can't carry, and why it stops there; and the
+   * rows among them that go under `legacy`, in order.
+   */
   private messagesOf(rows: StoredEvent[]) {
     const { store } = this.o;
     const messages: { out: ReturnType<typeof outgoing>; bytes: number }[] = [];
+    const legacy: Legacy[] = [];
     // The rigs the run registry gives each run, looked up once a page.
     const rigsOf = new Map<string, string[]>();
     for (const row of rows) {
       const run = row.run;
       if (run !== null && !rigsOf.has(run)) rigsOf.set(run, store.runRegistry.rigsOf(run));
-      const m = onBus({
-        rig: row.rig,
-        ledger: row.ledger_id,
-        event: rowEvent(row),
-        runIsTheRigs: run !== null && isTheRigsRun(row.rig, rigsOf.get(run) ?? []),
-        seq: row.seq,
-      });
+      const m = rowOnBus(row, run !== null && isTheRigsRun(row.rig, rigsOf.get(run) ?? []));
       if ("error" in m) {
         const at = { rig: row.rig, ledger: row.ledger_id, seq: row.seq };
-        return { messages, stop: { ...at, bytes: m.bytes, error: m.error } };
+        return { messages, legacy, stop: { ...at, bytes: m.bytes, error: m.error } };
       }
+      if (m.legacy)
+        legacy.push({
+          seq: row.seq,
+          rig: row.rig,
+          ledger: row.ledger_id,
+          event: row.event.id,
+          kind: row.event.kind.slice(0, LEGACY_TEXT_MAX),
+          ...m.legacy,
+        });
       messages.push({ out: outgoing(m.message), bytes: m.bytes });
     }
-    return { messages, stop: undefined };
+    return { messages, legacy, stop: undefined };
+  }
+
+  /** Says, in control's log and its audit log, that a row went on the stream under `legacy`. */
+  private saidLegacy(l: Legacy): void {
+    log(
+      "control",
+      "an event of control's events table moved under the kind legacy",
+      { ...l },
+      "warn",
+    );
+    this.o.store.auditLog.add("control", "event_moved_as_legacy", l);
   }
 
   /**

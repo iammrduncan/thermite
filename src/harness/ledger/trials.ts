@@ -1,8 +1,13 @@
 import { canonicalJson, sha256Hex } from "../../core/canonical.ts";
 import { LedgerPart, type Row } from "./part.ts";
 
-/** A family's standing in the direction registry. */
-export type FamilyStatus = "live" | "blocked" | "exhausted";
+/**
+ * A family's standing in the direction registry: `live`, or `exhausted` once a "not possible"
+ * proposal counts it as refuted, and `live` again when that proposal is rejected (conclusions.ts).
+ * The family table's check also names `blocked`, which nothing sets: the check is an old
+ * migration's, kept as written (schema/before-rename.ts).
+ */
+export type FamilyStatus = "live" | "exhausted";
 
 /** Who planned an epoch: the planner, or the rules in code. */
 export type EpochSource = "planner" | "fallback";
@@ -383,18 +388,15 @@ export class LedgerTrials extends LedgerPart {
     );
   }
 
-  /** Sets a family's status; with `from`, only when it has that one. Whether it changed. */
-  setFamilyStatus(run: string, id: string, status: FamilyStatus, from?: FamilyStatus): boolean {
-    const r =
-      from === undefined
-        ? this.execute("update family set status = ? where run = ? and id = ?", status, run, id)
-        : this.execute(
-            "update family set status = ? where run = ? and id = ? and status = ?",
-            status,
-            run,
-            id,
-            from,
-          );
+  /** Sets a family's status, only while it has `from`: whether it changed. */
+  setFamilyStatus(run: string, id: string, status: FamilyStatus, from: FamilyStatus): boolean {
+    const r = this.execute(
+      "update family set status = ? where run = ? and id = ? and status = ?",
+      status,
+      run,
+      id,
+      from,
+    );
     return r.changes > 0;
   }
 

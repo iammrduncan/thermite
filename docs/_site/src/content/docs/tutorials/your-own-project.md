@@ -125,7 +125,7 @@ Fill in these fields, in the order the page shows them. Leave every field that t
 
 2. **Test cases**: in the first row, replace `default` with `100k` under **Name**, and set **Arguments** to `100000`. Press **Add a case**, and in the new row set **Name** to `80k`, **Arguments** to `80000`, and tick **Hidden test**.
 
-   The judge times every change on `100k`. It runs the hidden test, `80k`, only to double-check a change that already looks faster: the change must give the right answer there too, and must not be noticeably slower there.
+   The judge times every change on `100k`. It runs the hidden test, `80k`, only to double-check a change that already looks faster: the change must give the right answer there too, and may be slower there than the champion by no more than 1%.
 
 3. **The score**: keep **How long a run takes**. Keep **Smallest gain that counts (%)** at `5` and **Runs per case** at `3`.
 4. **Is it right?**: `grep -qxF "{args} $(cat {out}/result.txt)" {kit}/expected.txt`

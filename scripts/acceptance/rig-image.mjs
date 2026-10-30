@@ -20,6 +20,9 @@
 //     variables, the enrollment code, control's key, the snapshot folder and its key) and the
 //     supervisor's places, the snapshot folder and its key probed for every role;
 //   - a key the supervisor writes after enrollment changes nothing the harness trusts;
+//   - a supervisor that hangs is ended and starts again: frozen (SIGSTOP), its health route no
+//     longer answers, and the broker, which asks it every 30 s, ends it at the third failure in a
+//     row, about 100 s later (a loop that is really late would take 30 minutes);
 //   - a supervisor or a controller that exits starts again;
 //   - a stop takes a snapshot of the state, with the ledger, then ends both parts cleanly, with
 //     exit code 0.
@@ -492,12 +495,34 @@ try {
     console.log("SKIP nodes a container can't regroup: needs rootless Podman on a machine VM");
   }
 
-  // A supervisor that exits starts again; so does the controller. Until the new supervisor serves
-  // its port, control's pulls fail ("pull mode … fetch failed" in this script's output) and wait
-  // a little longer each time: that is expected here.
+  // A supervisor that hangs starts again. Frozen, it stops answering its health route at once, as a
+  // hung part would; the broker has watched the route since the supervisor first answered it, asks
+  // it every 30 s, and ends the supervisor at the third failure in a row. Until the new supervisor
+  // serves its port, control's pulls fail ("pull mode … fetch failed" in this script's output) and
+  // wait a little longer each time: that is expected here, and below.
+  await waitFor("watching the supervisor's health route", 60_000);
+  const hung = pidsOf("dist/supervisor/main.js");
+  inside(`for (const p of ${hung}) process.kill(p, "SIGSTOP")`);
+  const unhealthy = await waitFor(
+    "the supervisor is unhealthy: ending it to start it again",
+    180_000,
+  );
+  await waitFor("supervisor exited; restarting", 30_000);
+  let unhung = "[]";
+  for (let i = 0; i < 30 && (unhung === "[]" || unhung === hung); i++) {
+    await sleep(1000);
+    unhung = pidsOf("dist/supervisor/main.js");
+  }
+  check(
+    "a supervisor that hangs is ended after three failed health checks and starts again",
+    unhealthy.failures?.length === 3 && unhung !== "[]" && unhung !== hung,
+    `${hung} -> ${unhung}; ${JSON.stringify(unhealthy.failures)}`,
+  );
+
+  // A supervisor that exits starts again; so does the controller.
   const before = pidsOf("dist/supervisor/main.js");
   kill("dist/supervisor/main.js");
-  await waitFor("supervisor exited; restarting", 30_000);
+  await waitFor("supervisor exited; restarting", 30_000, 2);
   let after = "[]";
   for (let i = 0; i < 30 && (after === "[]" || after === before); i++) {
     await sleep(1000);

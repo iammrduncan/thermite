@@ -116,7 +116,7 @@ On **4 How to measure**:
 
 1. Choose the card **Upload a kit**.
 2. Under **Kit archive**, choose the file `matmul-cpu-kit.tar.gz` in your `thermite-source` folder. Control unpacks it and checks it. The page says `matmul-cpu-kit.tar.gz: checked.`, then sums the kit up: `matmul-cpu: measures on cpu, 3 cases, scores flops_per_s.`
-3. Under **The kit's cases**, keep `small` and `large` at **Measured**, and set `held` to **Hidden test**. The judge measures every change on `small` and `large`. It runs the hidden test, `held`, only to double-check a change that already looks faster. So a change can't win by helping only the cases the agents can see.
+3. Under **The kit's cases**, keep `small` and `large` at **Measured**, and set `held` to **Hidden test**. The judge measures every change on `small` and `large`. It runs the hidden test, `held`, only to double-check a change that already looks faster: the change must give the right answer there too, and may be slower there than the champion by no more than 1%.
 4. **The score** shows `flops_per_s: a rate (FLOP/s)`: the speed of the matrix multiply, in floating-point operations a second. Keep **Better is** at **higher**, and **Smallest gain that counts (%)** at `5`. A change must be at least 5% faster to count.
 5. Press **Next**.
 

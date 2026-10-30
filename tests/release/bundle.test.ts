@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,11 +11,11 @@ import { BUS_TLS_FILES, BUS_USERS_FILE } from "../../src/control/bus/index.ts";
 import { BUS_SIGN_IN_SECONDS, BUS_TLS_SECONDS } from "../../src/core/link/leaf.ts";
 import {
   type BundleInput,
+  bundleFiles,
   COMPOSE_NEEDS,
   checkInput,
   IMAGE_KEYS,
   placeholders,
-  README_NEEDS,
   render,
   templateDrift,
 } from "../../src/release/bundle.ts";
@@ -217,7 +218,7 @@ describe("the release bundle", () => {
   });
 
   test("the readme names the version, the images and their tags", () => {
-    const readme = render(README, placeholders(input()), README_NEEDS);
+    const { readme } = bundleFiles(input(), { compose: TEMPLATE, readme: README });
     assert.match(readme, new RegExp(`^# Thermite ${PACKAGE_VERSION.replace(/\./g, "\\.")}\n`));
     assert.ok(
       readme.includes(
@@ -230,6 +231,23 @@ describe("the release bundle", () => {
     assert.ok(readme.includes(`ghcr.io/example/thermite-control@${digest("a")}`));
     assert.ok(readme.includes(`ghcr.io/example/thermite-rig:${PACKAGE_VERSION}-cuda`));
     assert.ok(readme.includes(`ghcr.io/example/thermite-rig@${digest("e")}`));
+  });
+
+  test("the readme gives the compose file's SHA-256, and the command that checks it", () => {
+    const { compose, readme, composeSha256 } = bundleFiles(input(), {
+      compose: TEMPLATE,
+      readme: README,
+    });
+    assert.equal(composeSha256, createHash("sha256").update(compose).digest("hex"));
+    assert.ok(readme.includes(`**SHA-256 of \`compose.yaml\`:** \`${composeSha256}\``));
+    assert.ok(readme.includes(`echo "${composeSha256}  compose.yaml" | sha256sum -c -`));
+    assert.ok(readme.includes("`shasum -a 256 -c -`"), "and on macOS");
+    // Another image, another file, another SHA-256.
+    const other = bundleFiles(input({ digests: { ...input().digests, control: digest("9") } }), {
+      compose: TEMPLATE,
+      readme: README,
+    });
+    assert.notEqual(other.composeSha256, composeSha256);
   });
 
   test("refuses bad input", () => {
@@ -287,6 +305,12 @@ describe("the release bundle", () => {
     const done = await run(process.execPath, args);
     assert.match(done.stdout, /wrote .*compose\.yaml and .*README\.md/);
     const compose = readFileSync(join(out, "compose.yaml"), "utf8");
+    // The readme, the release's notes, gives the SHA-256 of the file written beside it.
+    const sha = createHash("sha256")
+      .update(readFileSync(join(out, "compose.yaml")))
+      .digest("hex");
+    assert.match(done.stdout, new RegExp(`compose\\.yaml's SHA-256 is ${sha}\n$`));
+    assert.ok(readFileSync(join(out, "README.md"), "utf8").includes(`echo "${sha}  compose.yaml"`));
     assert.equal(
       serviceKey(compose, "control", "image"),
       `ghcr.io/example/thermite-control@${digest("1")}`,

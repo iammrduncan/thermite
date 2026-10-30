@@ -1,7 +1,8 @@
 /**
  * Every kind of event a harness's ledger records (goal 125, T1): one list, so a writer can't
  * misspell one and a reader can look each one up. Events recorded before a rename keep their old
- * kinds; core/names.ts reads them under the new ones.
+ * kinds; core/names.ts reads them under the new ones. One kind is control's own, never a
+ * ledger's: `legacy`, an event of v0.1.0 that the message bus can't carry as it was.
  */
 export const EVENT_KINDS = [
   "advisor_answer",
@@ -82,6 +83,7 @@ export const EVENT_KINDS = [
   "journal_note",
   "kb_item",
   "lane_best",
+  "legacy",
   "mcp_server_back",
   "mcp_server_failed",
   "mcp_servers",

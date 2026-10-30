@@ -8,6 +8,7 @@ import type { Outgoing } from "../../src/common/bus/index.ts";
 import { copiesOf } from "../../src/common/db-copy.ts";
 import { MOVE_CHECK_SAMPLE } from "../../src/control/events/index.ts";
 import { ControlStore } from "../../src/control/store/index.ts";
+import { sentence } from "../../src/control/ui/words/index.ts";
 import { keepFolds } from "../../src/control/views/index.ts";
 import { canonicalJson } from "../../src/core/canonical.ts";
 import {
@@ -34,9 +35,10 @@ import { keepOldRows, type OldRow, withEventsTable } from "../helpers/old-store.
  * part 4.5): a store from v0.1.0 or from before step 4's publish starts, moves its rows to the
  * stream in the table's order, checks them there, keeps a copy of itself outside the copies'
  * rotation, and drops the table (store migration 12). Every row once, in order, through a stop part
- * way, a lost ack and a batch stored late; the knowledge base's cursors across it; a stream older
- * than the store, a stream that lacks rows and a row too large for the bus stop the move, and the
- * table stays.
+ * way, a lost ack and a batch stored late; the knowledge base's cursors across it; a row whose kind
+ * a subject can't hold, or too large for a message, goes on under the kind `legacy`; a stream older
+ * than the store, a stream that lacks rows and a row whose ledger a header can't name stop the
+ * move, and the table stays.
  */
 
 const V010 = readFileSync(
@@ -548,17 +550,92 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.ok(MOVE_CHECK_SAMPLE < rows.length, "a sample of the rows is compared");
   });
 
-  test("a row too large for the bus stops the move there; the table stays", async () => {
+  test("a row whose kind a subject can't hold, or too large for a message, goes on under legacy; the upgrade goes on", async () => {
+    const odd = "Trial Started!";
     const path = oldStore([
-      { rig: "rig-a", ledger: "l-1", id: 1, kind: "journal_note" },
       {
         rig: "rig-a",
         ledger: "l-1",
-        id: 2,
+        id: 1,
+        kind: "run_created",
+        subject: "sort-1",
+        run: "sort-1",
+        body: { campaign: "c-1" },
+      },
+      { rig: "rig-a", ledger: "l-1", id: 2, kind: odd, subject: "sort-1", run: "sort-1" },
+      {
+        rig: "rig-a",
+        ledger: "l-1",
+        id: 3,
         kind: "journal_note",
         body: { text: "x".repeat(EVENT_MAX_BYTES) },
       },
-      { rig: "rig-a", ledger: "l-1", id: 3, kind: "journal_note" },
+      { rig: "rig-a", ledger: "l-1", id: 4, kind: "journal_note" },
+    ]);
+    const store = controlStore(path);
+    await applied(store);
+    const { bus, move } = busOf(store);
+    assert.equal(move.stopped, null);
+    assert.deepEqual(
+      onStream(bus).map((k) => k.subject),
+      [
+        "thermite.run.sort-1.ev.run_created",
+        "thermite.rig.rig-a.ev.legacy",
+        "thermite.rig.rig-a.ev.legacy",
+        "thermite.rig.rig-a.ev.journal_note",
+      ],
+    );
+    const read = onStream(bus).map((k) => readEventMessage(asMessage(k)));
+    // Its own kind and body go with it; one too large even so keeps its kind and its size.
+    assert.deepEqual(
+      [read[1]?.seq, read[1]?.event.kind, read[1]?.event.subject, read[1]?.event.body],
+      [2, "legacy", "sort-1", { kind: odd, body: { n: 2 } }],
+    );
+    const big = read[2]?.event.body as { kind: string; bytes: number; body?: unknown };
+    assert.deepEqual([read[2]?.seq, big.kind, big.body], [3, "journal_note", undefined]);
+    assert.ok(big.bytes > EVENT_MAX_BYTES, String(big.bytes));
+    // Checked and dropped; the copy kept at the upgrade holds the rows as they were.
+    assert.equal(hasTable(store.db), false);
+    const copy = new DatabaseSync(move.copy ?? "", { readOnly: true });
+    const kept = copy.prepare("select kind, length(body) as n from rig_event order by seq").all();
+    copy.close();
+    assert.equal(kept[1]?.kind, odd);
+    assert.ok(Number(kept[2]?.n) > EVENT_MAX_BYTES);
+    // The move said so: in the audit log, once a row.
+    const said = store.auditLog.list(10, { action: "event_moved_as_legacy" });
+    assert.deepEqual(
+      said
+        .map((a) => a.body as { seq: number; kind: string; with_body: boolean; why: string })
+        .map((b) => [b.seq, b.kind, b.with_body, /bus|subject/.test(b.why)])
+        .reverse(),
+      [
+        [2, odd, true, true],
+        [3, "journal_note", false, true],
+      ],
+    );
+    // The views show each as such: the run's timeline and the rig's newest events, newest first.
+    const view = keepFolds(store).view("rig-a", { staleAfterMs: 600_000 });
+    assert.ok(view);
+    const run = view.runs.find((r) => r.id === "sort-1");
+    assert.deepEqual(
+      run?.timeline.map((e) => e.kind),
+      ["run_created", "legacy"],
+    );
+    const legacy = view.recent.filter((e) => e.kind === "legacy");
+    assert.deepEqual(
+      legacy.map((e) => sentence(view, e)?.text),
+      [
+        `An event of v0.1.0, kept under the kind legacy because the message bus can't carry it as it was: its own kind is "journal_note". It was ${big.bytes} bytes, more than a message holds, so its body is only in the copy of control's store kept at the upgrade.`,
+        `An event of v0.1.0, kept under the kind legacy because the message bus can't carry it as it was: its own kind is "${odd}".`,
+      ],
+    );
+  });
+
+  test("a row whose ledger a header can't name stops the move there; the table stays", async () => {
+    const path = oldStore([
+      { rig: "rig-a", ledger: "l-1", id: 1, kind: "journal_note" },
+      { rig: "rig-a", ledger: "l 1", id: 1, kind: "journal_note" },
+      { rig: "rig-a", ledger: "l-1", id: 2, kind: "journal_note" },
     ]);
     const store = controlStore(path);
     await busOf(store).started;
@@ -566,9 +643,8 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.equal(onStream(bus).length, 1, "the row before it");
     const stopped = move.stopped;
     assert.ok(stopped);
-    assert.deepEqual([stopped.rig, stopped.ledger, stopped.seq], ["rig-a", "l-1", 2]);
-    assert.ok(Number(stopped.bytes) > EVENT_MAX_BYTES);
-    assert.match(stopped.error, /more than a message on the bus holds \(8388608 bytes/);
+    assert.deepEqual([stopped.rig, stopped.ledger, stopped.seq], ["rig-a", "l 1", 2]);
+    assert.match(stopped.error, /not a ledger's id for an event message/);
     assert.equal(hasTable(store.db), true);
   });
 });

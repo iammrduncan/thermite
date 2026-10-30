@@ -32,6 +32,7 @@ import {
   writeControlKey,
 } from "./one-container.ts";
 import { killScope, SETPRIV } from "./process.ts";
+import { WATCHED, watchHealth } from "./watch.ts";
 
 /**
  * The supervisor in the one-container rig image (one-container.ts holds the rules): its folders and
@@ -225,7 +226,8 @@ export function recordSupervisor(broker: Broker, paths: SupervisorPaths): void {
 
 /**
  * The supervisor, as its own user (one-container image only), in its own process group. When it
- * exits, whatever it started (an advisor's program) ends too, and it starts again.
+ * exits, whatever it started (an advisor's program) ends too, and it starts again. The broker
+ * watches its health route too, and ends it when that fails (watch.ts).
  */
 export function startSupervisor(broker: Broker, paths: SupervisorPaths): void {
   if (broker.stopping) {
@@ -252,6 +254,7 @@ export function startSupervisor(broker: Broker, paths: SupervisorPaths): void {
     detached: true,
   });
   broker.supervisor = proc;
+  watchHealth(proc, { part: "supervisor", ...WATCHED.supervisor, stopping: () => broker.stopping });
   let ended = false;
   const end = (code: number | null, signal: string | null, error?: string) => {
     if (ended) return;
