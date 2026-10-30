@@ -1,15 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import {
-  chmodSync,
-  chownSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, chownSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { secretFromFile } from "../../common/env.ts";
 import { log, logError, logWarn } from "../../common/log.ts";
 import { restartAfter } from "../../common/restart.ts";
 import { RunAsServer } from "../../common/run-as/index.ts";
@@ -87,7 +80,7 @@ export function prepareOneContainer(broker: Broker): SupervisorPaths {
 
 /** The supervisor's files, with its copy of root's harness token (one-container image only). */
 function supervisorFiles(broker: Broker, paths: SupervisorPaths): void {
-  const token = readFileSync(broker.env.THERMITE_SUPERVISOR_TOKEN_FILE as string, "utf8").trim();
+  const token = secretFromFile("THERMITE_SUPERVISOR_TOKEN_FILE", broker.env);
   makeSupervisorFiles(paths, { uid: SU, gid: SG, inboxGid: TG }, token);
 }
 
