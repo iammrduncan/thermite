@@ -15,7 +15,7 @@ import {
   KbSearchAsk,
   kbAskOf,
 } from "../../core/link/kb.ts";
-import { rigInboxPrefix } from "../../core/link/users.ts";
+import { answerStaysWithRig } from "../bus/index.ts";
 import type { ControlStore, KbFind, KbFindAnswer } from "../store/index.ts";
 import type { KbFound, KbItem } from "./index.ts";
 
@@ -232,7 +232,7 @@ export function serveKbAsks(
       );
       return undefined;
     }
-    if (!r.reply?.startsWith(`${rigInboxPrefix(at.rig)}.`)) {
+    if (!answerStaysWithRig(store, at.rig, r.reply)) {
       const what = { rig: at.rig, kind: at.kind, reply: r.reply ?? null };
       log(
         "control",

@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { buildInfo } from "../../../src/common/build-info.ts";
 import type { BusRequest } from "../../../src/common/bus/index.ts";
 import { fitPage } from "../../../src/control/bus/asks.ts";
-import { answerRigAsk, serveRigAsks } from "../../../src/control/bus/index.ts";
+import { answerRigAsk, answerStaysWithRig, serveRigAsks } from "../../../src/control/bus/index.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { Screens } from "../../../src/control/live/index.ts";
 import {
@@ -163,5 +163,42 @@ describe("a rig's asks of control on the bus", () => {
       data: new TextEncoder().encode("{"),
     });
     assert.match(String(notJson), /"refused":"the daily is not JSON/);
+  });
+
+  test("a rig on a leaf node is answered at the reply its service import made; a rig on control's server is not", async () => {
+    const s = setup();
+    let answer: ((r: BusRequest) => Promise<string | undefined>) | undefined;
+    await serveRigAsks(
+      {
+        serve: async (_subject, a) => {
+          answer = a;
+        },
+      },
+      s.deps,
+    );
+    const ask = (reply: string) =>
+      answer?.({
+        subject: "thermite.rig.rig-a.ask.figures",
+        reply,
+        data: new TextEncoder().encode(JSON.stringify({ at: "now" })),
+      });
+    // On control's own server, a reply outside the rig's inbox is refused.
+    assert.equal(await ask("_R_.abc.def"), undefined);
+    // Launched with a leaf node, the rig's asks come through its account's service import.
+    s.deps.store.tunnels.add({
+      rig: "rig-a",
+      port: 8790,
+      prefix_sealed: "x",
+      box_private_sealed: "x",
+      box_public: "x",
+      code_sealed: "x",
+      code_expires_at: null,
+      config: { env: {} },
+      created_by: "owner:ui",
+      leaf_ca: "the pod's authority",
+    });
+    assert.match(String(await ask("_R_.abc.def")), /"reports"/);
+    assert.equal(answerStaysWithRig(s.deps.store, "rig-a", "_INBOX.rig.rig-b.x"), false);
+    assert.equal(answerStaysWithRig(s.deps.store, "rig-b", "_R_.abc.def"), false);
   });
 });

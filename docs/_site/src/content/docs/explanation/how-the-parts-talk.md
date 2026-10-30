@@ -190,7 +190,7 @@ Control does not start without the bus, and a rig's supervisor does not start wi
 
 ### A rig's asks on the message bus
 
-What needs an answer at once goes on the bus as a request with its one answer, NATS's request and reply: no stream keeps either. The supervisor asks on its rig's own subject, `thermite.rig.<rig>.ask.<kind>`, which only the rig's user may publish to, so control knows the rig from the subject; control answers at the rig's own inbox, and nowhere else. A refusal is an answer in words. An ask with no answer within 20 seconds fails, and the loop that made it asks again at its next round.
+What needs an answer at once goes on the bus as a request with its one answer, NATS's request and reply: no stream keeps either. The supervisor asks on its rig's own subject, `thermite.rig.<rig>.ask.<kind>`, which only the rig's user may publish to, so control knows the rig from the subject; control answers at the rig's own inbox, and nowhere else. A rig on RunPod asks through its pod's leaf node, whose account reaches control only by service imports: the server gives each such ask a reply of its own, which it routes back to that account alone, and control answers there for a rig launched with a leaf node only. A refusal is an answer in words. An ask with no answer within 20 seconds fails, and the loop that made it asks again at its next round.
 
 | Ask | What the supervisor sends | Control's answer | How often |
 | --- | --- | --- | --- |

@@ -9,7 +9,7 @@
  * whether a rig reaches it (reach.ts); and its state, for whoever runs control (state.ts).
  */
 
-export { answerRigAsk, type RigAsksDeps, serveRigAsks } from "./asks.ts";
+export { answerRigAsk, answerStaysWithRig, type RigAsksDeps, serveRigAsks } from "./asks.ts";
 export {
   CONFIG_WRITE_MS,
   type ConfigBus,

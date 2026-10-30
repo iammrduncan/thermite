@@ -19,6 +19,7 @@ import type { Screens } from "../live/index.ts";
 import { takeFigures } from "../rigs/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { checkRig } from "../versions.ts";
+import { leafRigsOf } from "./leaf.ts";
 
 /**
  * Control's answers to what a rig asks of it on the message bus (core/link/asks.ts): its
@@ -118,6 +119,25 @@ export function answerRigAsk(
   }
 }
 
+/** The start of a reply the server makes for a request that came through a service import. */
+const SERVICE_IMPORT_REPLY = "_R_.";
+
+/**
+ * Whether control's answer to a rig's ask stays with that rig: at its own inbox, or, for a rig on a
+ * leaf node (RunPod), at the reply the server made for the leaf account's service import, which
+ * the server routes back to that account alone. A rig on control's own server can't take such a
+ * reply, so it is refused there.
+ */
+export function answerStaysWithRig(
+  store: ControlStore,
+  rig: string,
+  reply: string | undefined,
+): boolean {
+  if (!reply) return false;
+  if (reply.startsWith(`${rigInboxPrefix(rig)}.`)) return true;
+  return reply.startsWith(SERVICE_IMPORT_REPLY) && leafRigsOf(store).some((l) => l.rig === rig);
+}
+
 /**
  * Serves every rig's asks on the message bus until it closes. An ask is answered only at its own
  * rig's inbox (core/link/users.ts), where only that rig's user may read: an ask whose answer would
@@ -130,7 +150,7 @@ export function serveRigAsks(bus: Pick<Bus, "serve">, d: RigAsksDeps): Promise<v
       log("control", "an ask on a subject that is no rig's", { subject: r.subject }, "warn");
       return undefined;
     }
-    if (!r.reply?.startsWith(`${rigInboxPrefix(at.rig)}.`)) {
+    if (!answerStaysWithRig(d.store, at.rig, r.reply)) {
       const what = { rig: at.rig, kind: at.kind, reply: r.reply ?? null };
       log("control", "a rig's ask refused: its answer would leave its rig's inbox", what, "warn");
       return undefined;
