@@ -212,7 +212,8 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           BASE: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
-          # The containers and compose files, the APIs and the relay, and the smoke test.
+          # The containers and compose files, the APIs and the relay, the advisors' runner, and the
+          # smoke test.
           COMPOSE: |
             ^containers/
             ^compose[^/]*\.yaml$
@@ -222,17 +223,21 @@ jobs:
             ^src/(control|harness|supervisor)/main\.ts$
             ^src/harness/controller/
             ^src/supervisor/relay(\.ts|/)
+            ^src/supervisor/advisor-runs/
+            ^src/common/run-as/
             ^scripts/acceptance/(compose-smoke|stage-smoke)\.mjs$
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
-          # The rig image and the harness image under it, the broker, the isolation selftest and
-          # pull mode's enrollment.
+          # The rig image and the harness image under it, the broker, the isolation selftest, the
+          # advisors' runner and pull mode's enrollment.
           RIG_IMAGE: |
             ^containers/(rig|harness)/
             ^package(-lock)?\.json$
             ^src/harness/broker(\.ts|/)
             ^tests/harness/broker/
             ^src/harness/selftest(\.ts|/)
+            ^src/supervisor/advisor-runs/
+            ^src/common/run-as/
             ^src/core/tunnel\.ts$
             ^src/control/runpod/tunnel\.ts$
             ^src/core/paths\.ts$
