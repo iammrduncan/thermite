@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { redact } from "../../common/env.ts";
 import { errorText, jsonBody } from "../../common/errors.ts";
 import { COMMAND, ISSUE } from "../../core/api/control/owner.ts";
@@ -10,7 +11,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
   const { store, privateKeyPem, parts, admin } = api;
   const { runpodRigs } = parts;
 
-  app.post(ISSUE.path, admin, async (c) => {
+  app.post(ISSUE.path, admin, bodyLimit({ maxSize: ISSUE.maxBytes }), async (c) => {
     const body = ISSUE.body.parse(await jsonBody(c.req));
     // A wipe goes only through the full reset (export, verified push, the owner's confirmation).
     if (body.kind === "wipe_state")

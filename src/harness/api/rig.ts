@@ -44,7 +44,7 @@ export function rigRoutes(app: Hono, { service, supervisor }: ApiContext): void 
   });
   // The advisors' calls go through the supervisor: it says here when a server failed for them,
   // or works again, and the run's history records it as the gateway records its own.
-  app.post(MCP_EVENTS.path, supervisor, async (c) => {
+  app.post(MCP_EVENTS.path, supervisor, limitOf(MCP_EVENTS), async (c) => {
     const b = MCP_EVENTS.body.parse(await c.req.json());
     if (!service.ledger.runs.get(b.run)) return c.json({ error: `no run ${b.run}` }, 404);
     service.mcp.report(

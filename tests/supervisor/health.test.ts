@@ -14,7 +14,7 @@ async function freePort(): Promise<number> {
 }
 
 describe("the supervisor's health route (goal 173)", () => {
-  test("it answers its loops' ages, 503 for a loop held past its limit, and nothing else", async () => {
+  test("it answers whether it is well, its loops' ages to its token, 503 for a loop held past its limit, and nothing else", async () => {
     const port = await freePort();
     let now = 0;
     const loops = new Loops(() => now);
@@ -24,11 +24,19 @@ describe("the supervisor's health route (goal 173)", () => {
       { THERMITE_SUPERVISOR_HEALTH_LISTEN: `127.0.0.1:${port}` },
       "rig-1",
       loops,
+      "sup-token",
     );
     await new Promise((r) => (server.listening ? r(undefined) : server.once("listening", r)));
     try {
       const url = `http://127.0.0.1:${port}`;
+      const headers = { authorization: "Bearer sup-token" };
+      // A probe gets whether it is well; another token gets no more.
       let res = await fetch(`${url}/v1/health`);
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), { ok: true });
+      res = await fetch(`${url}/v1/health`, { headers: { authorization: "Bearer other" } });
+      assert.deepEqual(await res.json(), { ok: true });
+      res = await fetch(`${url}/v1/health`, { headers });
       assert.equal(res.status, 200);
       assert.deepEqual(await res.json(), {
         ok: true,
@@ -42,6 +50,9 @@ describe("the supervisor's health route (goal 173)", () => {
       now = 75 * 60_000;
       loops.tick("commands");
       res = await fetch(`${url}/v1/health`);
+      assert.equal(res.status, 503);
+      assert.deepEqual(await res.json(), { ok: false });
+      res = await fetch(`${url}/v1/health`, { headers });
       assert.equal(res.status, 503);
       const body = (await res.json()) as { ok: boolean; loops: Record<string, { late: boolean }> };
       assert.equal(body.ok, false);

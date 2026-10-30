@@ -19,7 +19,7 @@ describe("the message bus's keys in control's store", () => {
     six.db.close();
     const store = new ControlStore(path);
     const v = store.db.prepare("select max(version) as v from schema_migrations").get();
-    assert.equal(v?.v, 19);
+    assert.equal(v?.v, 21);
     assert.deepEqual(store.busKeys.rigKeys(), []);
     store.db.close();
     assert.deepEqual(

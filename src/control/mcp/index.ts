@@ -2,10 +2,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { Hono } from "hono";
 import { buildInfo } from "../../common/build-info.ts";
+import { redact } from "../../common/env.ts";
 import type { ControlStore } from "../store/index.ts";
 import { registerAgentReads } from "./agents.ts";
 import { registerCampaignSettings, registerRunStarts } from "./campaigns.ts";
-import { registerAddClusterRig, registerClusterRigs } from "./clusters.ts";
+import {
+  registerAddClusterRig,
+  registerClusterRigs,
+  registerReachableAddresses,
+} from "./clusters.ts";
 import { registerCommands } from "./commands.ts";
 import { type McpOptions, type Role, toolContext } from "./context.ts";
 import { registerControl, registerModelPrice } from "./control.ts";
@@ -58,6 +63,7 @@ function buildServer(store: ControlStore, opts: McpOptions, actor: string, role:
     registerKits(tools);
     registerCampaignSettings(tools);
     registerClusterRigs(tools);
+    registerReachableAddresses(tools);
     registerMcpServers(tools);
     registerRetire(tools);
     registerRunpod(tools);
@@ -65,6 +71,13 @@ function buildServer(store: ControlStore, opts: McpOptions, actor: string, role:
 
   return server;
 }
+
+/**
+ * The largest MCP request control reads, in bytes: room for a kit's bundle in base64
+ * (MCP_KIT_BASE64_MAX) or a command's payload (COMMAND_MAX_BYTES), with the rest of the call. A
+ * larger one is answered 413.
+ */
+export const MCP_BODY_MAX = 4 * 1024 * 1024;
 
 export function mountMcp(app: Hono, store: ControlStore, opts: McpOptions): void {
   app.all("/mcp", async (c) => {
@@ -93,8 +106,29 @@ export function mountMcp(app: Hono, store: ControlStore, opts: McpOptions): void
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
+      maxRequestBodySize: MCP_BODY_MAX,
     });
     await server.connect(transport);
-    return transport.handleRequest(c.req.raw);
+    const answer = await transport.handleRequest(c.req.raw);
+    await auditRefusedCalls(store, actor, answer.clone());
+    return answer;
   });
+}
+
+/**
+ * The calls the MCP SDK refused before a tool ran, in the audit log as refused, as the tools' own
+ * refusals are: a tool the caller's token does not have, or inputs that don't match the tool. The
+ * SDK answers each as a tool error whose text starts with `MCP error` and names the tool.
+ */
+async function auditRefusedCalls(store: ControlStore, actor: string, answer: Response) {
+  if (!answer.headers.get("content-type")?.startsWith("application/json")) return;
+  const body: unknown = await answer.json().catch(() => undefined);
+  for (const m of Array.isArray(body) ? body : [body]) {
+    const r = (m as { result?: { isError?: boolean; content?: { text?: unknown }[] } } | null)
+      ?.result;
+    const text = r?.isError ? r.content?.[0]?.text : undefined;
+    if (typeof text !== "string" || !text.startsWith("MCP error ")) continue;
+    const tool = /\btool (\S+?)(?=:| not found| disabled)/i.exec(text)?.[1] ?? "unknown";
+    store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: redact(text) });
+  }
 }

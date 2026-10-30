@@ -18,7 +18,7 @@ import { leaderboard } from "../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { KB_OUTBOX_FILES } from "../../src/core/kb.ts";
 import { WIPE_MARKER, wipeIfRequested } from "../../src/harness/service/index.ts";
-import { controlStack } from "../helpers/control-stack.ts";
+import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";
 import { FAST_KERNEL, makeJudgeEnv } from "../helpers/judge-env.ts";
 
@@ -338,6 +338,22 @@ describe("leaderboard and propagation", () => {
       }),
       /no champion beyond its seed/,
     );
+    // During the owner's full reset of the receiving rig, an agent's token does not propagate to
+    // it; the owner's does.
+    store.fullResets.create("rig-b", "owner:api");
+    const { control } = controlOnly({ store, keys, tokens: { agent: "agent-token-abcdef" } });
+    const call = async (token: string) =>
+      (await mcpClient(control, token)).callTool({
+        name: "propagate_champion",
+        arguments: { run: "c-1", to_run: "c-1b" },
+      });
+    const refused = (await call("agent-token-abcdef")) as {
+      isError?: boolean;
+      content: { text: string }[];
+    };
+    assert.equal(refused.isError, true);
+    assert.match(refused.content[0]?.text ?? "", /rig-b is being reset by the owner/);
+    assert.ok(!(await call(ADMIN)).isError);
   });
 });
 

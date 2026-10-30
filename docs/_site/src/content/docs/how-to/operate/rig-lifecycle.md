@@ -232,7 +232,7 @@ A full reset gives a rig a clean start: it exports everything, checks that the e
 
 - The rig's exports leave it: to its results repository (the compose stack has one), or to control (every other rig). See [Exports](../../reference/exports.md#where-exports-go).
 - No commands wait for the rig. A pending command holds the reset at its `quiescing` step. [Cancel](cancel-a-command.md) those you don't need.
-- During the reset, `issue_command` refuses an agent's token for the rig, with `rig-1 is being reset by the owner`.
+- During the reset, `issue_command` and `propagate_champion` refuse an agent's token for the rig, with `rig-1 is being reset by the owner`.
 - A rig launched on RunPod: its pod runs, and no stop, start, restart or terminate is under way. Otherwise the reset fails at once, for example with `rp-1a2b3c4d's pod is stopped: start it first, so its results can leave it before the wipe`. Its reset also waits until no other export or champion's patch waits on the pod, and its pod and GPU stay: the harness and the supervisor restart themselves in it.
 
 ### Steps

@@ -193,4 +193,26 @@ describe("paging through control's audit log (goal 015)", () => {
     const { page: html } = await signIn(control);
     assert.match(await html("/ui/audit"), /<div class="xs">3 times, the last \d+s ago<\/div>/);
   });
+  test("a request with no token, or one its route doesn't take, is one entry for each route, by control", async () => {
+    const { store, control } = controlOnly({ tokens: { read: "read-token-abcdef" } });
+    const call = (path: string, token?: string, method = "GET") =>
+      control.request(path, {
+        method,
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+    for (const rig of ["rig-a", "rig-b", "rig-c"])
+      assert.equal((await call(`/v1/rigs/${rig}/commands/pending`, "wrong")).status, 401);
+    assert.equal((await call("/v1/commands")).status, 401);
+    assert.equal((await call("/v1/commands", "read-token-abcdef")).status, 401);
+    assert.equal((await call("/mcp", "wrong", "POST")).status, 401);
+    const seen = store.auditLog
+      .list(10, { action: "unauthorized" })
+      .map((e) => [e.actor, e.body, e.count]);
+    assert.deepEqual(seen, [
+      ["control", { method: "POST", route: "/mcp", token: "refused" }, 1],
+      ["control", { method: "GET", route: "/v1/commands", token: "refused" }, 1],
+      ["control", { method: "GET", route: "/v1/commands", token: "none" }, 1],
+      ["control", { method: "GET", route: "/v1/rigs/:rig/commands/pending", token: "refused" }, 3],
+    ]);
+  });
 });

@@ -1,10 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-/** Whether two secrets, such as tokens, are the same, compared in constant time. */
+/**
+ * Whether two secrets, such as tokens, are the same, compared in constant time. Each side is
+ * hashed first, so the compare takes as long whatever the lengths are.
+ */
 export function sameSecret(a: string, b: string): boolean {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
+  const digest = (s: string) => createHash("sha256").update(s).digest();
+  return timingSafeEqual(digest(a), digest(b));
 }
 
 /** A new token: 32 random bytes, base64url, with its SHA-256 for control's configuration. */

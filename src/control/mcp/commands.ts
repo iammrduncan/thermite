@@ -69,6 +69,7 @@ export function registerCommands(tools: ToolContext): void {
           toRun: a.to_run,
           issuedBy: actor,
           staleAfterMs: opts.staleAfterMs,
+          agent: role === "agent",
         }),
       ),
     );

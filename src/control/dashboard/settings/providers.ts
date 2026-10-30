@@ -21,7 +21,14 @@ import { PRICE_NUMBER, PRICE_WORDS } from "../../ui/usage.ts";
 import { setModelPrice } from "../../usage.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { mountMcpUi } from "./mcp-servers.ts";
-import { machineUrl, newName, settingsHelpers, settingsUrl, TYPES } from "./shared.ts";
+import {
+  machineUrl,
+  newName,
+  settingsHelpers,
+  settingsUrl,
+  TYPES,
+  UNCHECKED_LABEL,
+} from "./shared.ts";
 
 /**
  * Settings › Providers' forms: the add form (a machine, a cluster, a GPU cloud, Git access or a
@@ -89,6 +96,11 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     }
     const seen = await inspectKubeconfig(parts.kube, kubeconfig);
     if (seen.problems.length) return fail(`Not added: ${seen.problems.join("; ")}.`);
+    // A connection control can't check is the owner's to accept, never taken by default.
+    if (seen.unchecked.length && f.unchecked !== "1")
+      return fail(
+        `Not added: ${seen.unchecked.join("; ")}, so control can't tell the real API server from another on the way. Give it a kubeconfig with its certificate-authority-data over https, or tick "${UNCHECKED_LABEL}" to add it anyway.`,
+      );
     if (context && !contexts.contexts.includes(context))
       return fail(
         `The kubeconfig has no context "${context}": it has ${contexts.contexts.join(", ") || "none"}.`,
@@ -104,9 +116,12 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       namespace_pattern: pattern,
       slots,
       by: "owner:ui",
+      unchecked: seen.unchecked,
     });
     const why = await checkClusterNow(parts, name);
-    const careful = seen.warnings.length ? ` Note: ${seen.warnings.join("; ")}.` : "";
+    const careful = seen.unchecked.length
+      ? ` You accepted that its connection isn't checked: ${seen.unchecked.join("; ")}.`
+      : "";
     return c.redirect(
       why
         ? settingsUrl("error", `"${name}" is added, but the check failed: ${why}${careful}`)

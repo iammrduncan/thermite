@@ -33,11 +33,14 @@ The answer holds the tool's result as JSON text, here the five newest [signed co
 | Server name and version | `thermite-control`, and control's Thermite version, such as `0.1.0` |
 | Sign-in | `Authorization: Bearer <token>`: the owner's, an operator's, an agent's or a reader's token. [Tokens and roles](tokens.md#people-and-agents) says how each is made |
 | No token, or an unknown one | HTTP 401 `{"error":"unauthorized"}` |
+| A request over 4 MiB | HTTP 413, with the JSON-RPC error `Payload Too Large: Request body must not exceed 4194304 bytes` |
 | `Accept` header | A client must accept both `application/json` and `text/event-stream`. Otherwise the answer is HTTP 406 `Not Acceptable: Client must accept both application/json and text/event-stream`. MCP clients send this themselves |
 | A tool's result | Its value as JSON text, indented |
-| A tool's error | `{"error":"<message>"}` as the text, with `isError: true` |
+| A tool's error | `{"error":"<message>"}` as the text, with `isError: true`. A key or token in the message is masked as `***`, as in control's log |
 | Inputs that do not match the tool | `MCP error -32602: Input validation error: …` as the text, with `isError: true` |
 | A tool the token may not call | `MCP error -32602: Tool <name> not found` as the text, with `isError: true` |
+
+A tool's error and each of the last two are in control's [audit log](rest-api.md#audit-log-actions) as `refused`, by the caller's actor. A request with no token, or an unknown one, is there as `unauthorized`.
 
 Control checks a token against the owner's first, then the operator's, the agent's and the reader's. `tools/list` shows only the tools that token may call.
 
@@ -53,11 +56,11 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `kb_revoke` | Yes | No | No | No |
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
 | `trial_session`, `control_log`, `providers`, `bus_state`, `rig_models`, `rig_settings`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
-| `runpod_rig_logs`, `agent_roles`, `agent_prompts` | Yes | Yes | No | No |
+| `runpod_rig_logs`, `agent_roles`, `agent_prompts`, `reachable_addresses` | Yes | Yes | No | No |
 | `add_cluster_rig`, `set_rig_model`, `set_model_price`, `start_run`, `copy_campaign`, `kit_add`, `set_campaign_context`, `set_campaign_additions`, `archive_campaign`, `unarchive_campaign`, `create_campaign_folder`, `rename_campaign_folder`, `delete_campaign_folder`, `move_campaign`, `cluster_rig`, `update_rig_images`, `set_cluster_slots`, `runpod_test_start`, `runpod_test_end` | Yes | Yes | No | No |
 | `set_rig_settings` | Yes | Yes, but not the promotion rule or the GPU split | No | No |
 | `set_cluster_rig_resources` | Yes | Yes, but not `judge_gpus` (the GPU split) | No | No |
-| `retire_rig`, `bring_back_rig`, `runpod_launch`, `runpod_rig_limits`, `runpod_rig`, `mcp_server_add`, `mcp_server_change`, `mcp_server_check`, `mcp_server_sign_in`, `mcp_server_delete` | Yes | No | No | No |
+| `retire_rig`, `bring_back_rig`, `runpod_launch`, `runpod_rig_limits`, `runpod_rig`, `set_reachable_addresses`, `mcp_server_add`, `mcp_server_change`, `mcp_server_check`, `mcp_server_sign_in`, `mcp_server_delete` | Yes | No | No | No |
 
 ### Command kinds for each role
 
@@ -77,7 +80,7 @@ Control checks a token against the owner's first, then the operator's, the agent
 
 The six queue kinds change a run's [experiment queue](signed-commands.md#queue_add) and remove its rules; the harness takes them only from the owner, and the operator acts for the owner. So do [`stop_trial`](signed-commands.md#stop_trial), which stops one running trial: `run_queue` gives each lane's trial under `at_work`; and [`end_wait`](signed-commands.md#end_wait), which ends a run's wait for its provider's limit now. No token issues `rig_settings`, `accept_review`, `conclude`, `propagate`, `drain_rig` or `wipe_state` with `issue_command`. A rig's settings change through [`set_rig_settings`](#set_rig_settings), with **Edit rig**'s checks, and a new GPU split also through the owner's [`start_run`](#start_run), as **Start a run** does: each sends a `rig_settings`. The owner accepts reviews and "not possible" endings on the dashboard. Only the owner's token closes a run for good with `close_run`: an operator acts for the owner, but its list has no `close_run`, and the dashboard's **Close run** is the owner's too. Only the owner's token, too, decides which of a research run's hypotheses need a verdict with `hypothesis_status`, as the run's **Hypotheses** tab does. Only the owner's token withdraws bad evidence with [`invalidate_evidence`](signed-commands.md#invalidate_evidence), in two steps: `issue_command` with `{run, attempt or job, reason, preview: true}`, then `command_status` once the rig answered, whose `outcome.result` gives what it would reach (`words`, `reach`) and its `sha`; then `issue_command` again with `reach` set to that `sha` and no `preview`, which the rig does exactly or refuses ([Withdraw bad evidence](../how-to/campaigns/withdraw-bad-evidence.md)). Only the owner's token, too, types into a running trial's terminal with [`terminal_input`](signed-commands.md#terminal_input): `{run, trial, text}` or `{run, trial, keys}`, with `wait` and `confirm` where needed; `command_status` then gives its outcome, `typed` or `queued`, or the rig's refusal. `propagate` goes through `propagate_champion`, `drain_rig` through [`update_rig_images`](#update_rig_images), and `wipe_state` only through a full reset. A kind the role may not issue, or one that does not exist, is input that does not match the tool: `MCP error -32602: Input validation error: …`.
 
-While the owner fully resets a rig, `issue_command` with the agent's token refuses that rig: `<rig> is being reset by the owner`.
+While the owner fully resets a rig, `issue_command` and `propagate_champion` with the agent's token refuse that rig: `<rig> is being reset by the owner`.
 
 An `assign_campaign` with the agent's token may not name what reaches past its rig: a Git access, a source for the rig to fetch (`{"git": …}` or `{"url": …}`), or MCP servers, in `mcp_servers` or in a research contract's own list. It is refused before it is signed: `An agent's token may not name a Git access, a source for its rig to fetch, MCP servers in an assignment. The owner or the operator assigns such a campaign; an agent's token may assign one whose imports are in the rig's inbox already, or are kits control keeps.`, naming only what it named. The owner's and the operator's tokens may name them.
 
@@ -332,7 +335,7 @@ Returns `{id}`. When the command is an `assign_campaign` or a `resume_run` for a
 | `run` | string | | The run whose published champion goes |
 | `to_run` | string | | The run, on another rig, whose judge tests it |
 
-Returns `{id, seq}`: the `propagate` command's id and the champion's number. The command lasts 24 hours. The errors are those of [`POST /v1/propagate`](rest-api.md#signed-commands).
+Returns `{id, seq}`: the `propagate` command's id and the champion's number. The command lasts 24 hours. The errors are those of [`POST /v1/propagate`](rest-api.md#signed-commands), and, with the agent's token while the owner fully resets the receiving rig, `<rig> is being reset by the owner`.
 
 ### command_status
 
@@ -457,12 +460,15 @@ For a rig control set up on a cluster, it returns `{rig, on: "cluster", cluster,
 | `resources` | Its deployments applied with new GPUs, CPUs or memory. Its `detail` says what changed, such as `GPUs 3 → 4 (2 for the judge, 2 for the agents); CPUs and memory: namespace defaults → 16 CPUs, 52 GiB`, with `; the judge's share it kept, 1, → 2` when control also sent the rig its new share, and `; at its next start` for a stopped rig. A failed one has kubectl's error |
 | `resources_running` | Its pods run with the new GPUs, CPUs or memory |
 | `report_after_resources` | A report reached control after the change. Also written, with the detail `it reported after the wait ended`, when a cluster rig marked `failed` during a change of size reports after all |
+| `network` | Its network rules applied with the list of addresses rigs may reach. Written for a rig in a namespace control created when the owner changes the list; its `detail` says how many addresses, and a failed one has kubectl's error ([Reach a model server on a private or Tailscale address](../how-to/install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address)) |
 | `pods_running` | Its pods run again. Written after a cluster rig's `start` or `restart` |
 | `report_after_start` | A report reached control after the start. Written after a cluster rig's `start` or `restart`, and, with the detail `it reported after the wait ended`, when a cluster rig marked `failed` while waiting after a start or restart reports after all |
 | `remove_cluster`, `remove` | Removed from the cluster; Removed from the machine |
 | `model_started`, `model_done`, `model_refused`, `model_failed` | A model download started, finished with its SHA-256 checked, was refused (its SHA-256 did not match) or stopped ([Model files on a rig](model-files.md)) |
 | `bus_key`, `bus_key_changed` | Its key on the message bus registered; Its key on the message bus changed. Its `detail` gives the key's fingerprint, `fingerprint <old> → <new>` for a change ([Who may use the message bus](../explanation/how-the-parts-talk.md#who-may-use-the-message-bus)) |
 | `seal_key`, `seal_key_changed` | Its seal key for its config on the message bus registered; Its seal key for its config on the message bus changed. Its `detail` gives the key's fingerprint, `fingerprint <old> → <new>` for a change ([Config over the message bus](../explanation/how-the-parts-talk.md#config-over-the-message-bus)) |
+| `bus_key_refused`, `seal_key_refused` | Its new key on the message bus refused: another rig or control holds it; Its new seal key refused: another rig holds it. `ok` is false, and `detail` gives `fingerprint <fingerprint>, which <rig <name> or control> holds`. Written once while the same key comes again ([A rig's keys on the bus](../how-to/operate/message-bus.md#a-rigs-keys-on-the-bus)) |
+| `bus_keys_seen` | You saw the change of its keys on the message bus: the owner pressed **Seen** on its card under **Needs you** |
 | `runpod_launched` | Launched on RunPod. Its `detail` gives who launched it, the pod, the GPUs, the cloud and the price |
 | `runpod_stopping` | Stopping the pod: its runs paused, and its results sent out first. Its `detail` says who asked, or which limit was reached, and the runs it paused |
 | `runpod_stopped` | Pod stopped: its GPU is no longer billed, and its volume stays. Its `detail` says whether every result left the pod first, or what stayed on its volume |
@@ -615,7 +621,7 @@ It refuses with the same words as **Add a rig**:
 - `The volume size is a whole number of GB, from 1 to 10000.`
 - `Choose a free slot.`
 - `The slot <namespace> is in use.`
-- `Refused: in the slot <namespace>, <why>. A rig's harness may reach only DNS, the internet and its model: ask the cluster's operators for a network rule that keeps it off the cluster.`
+- `Refused: in the slot <namespace>, <why>. A rig's harness may reach only DNS, the internet, its model and the addresses in Settings › Addresses cluster rigs may reach: ask the cluster's operators for a network rule that keeps it off the cluster.` A rule that opens an address of that list is accepted only when it opens it alone on some of its listed TCP ports: otherwise `<why>` is `the rule "<name>" opens every port of <address>, which the list gives only <ports>` or `the rule "<name>" opens <address> on more than its listed TCP ports (<ports>)`
 - `"<namespace>" is not a namespace name.`
 - `Give the rig both its CPUs and its memory, or neither.`
 - `a rig needs at least 1.5 CPUs and 6 GiB of memory`
@@ -1231,6 +1237,26 @@ Besides `mcp:set_cluster_rig_resources`, the audit log records `cluster_rig_drai
 | `slots` | list of strings, at least one | | The namespaces, one rig each. The list replaces the old one |
 
 Returns `{cluster, slots}`. Errors: `no such cluster`, `<cluster> puts rigs in namespaces control creates, not in slots`, `"<namespace>" is not a namespace name`, `<namespaces> still holds a rig (<rigs>): keep it in the list`, or why control could not read the cluster again.
+
+### reachable_addresses
+
+**Addresses cluster rigs may reach.** Owner and operator.
+
+> The owner's list in Settings › Addresses cluster rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.
+
+No inputs. Returns `{addresses}`, each `{address, ports, note, set_at, set_by}`, as [`GET /v1/reachable-addresses`](rest-api.md#addresses-cluster-rigs-may-reach) gives them.
+
+### set_reachable_addresses
+
+**Set the addresses cluster rigs may reach.** Owner.
+
+> Sets the whole list in Settings › Addresses cluster rigs may reach, in place of the one before (an empty list removes every address). …
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `addresses` | list of `{address, ports, note}`, at most 64 | | The whole list. `address`: one IPv4 or IPv6 address in the private, shared or link-local ranges, never a range, each once. `ports`: 1 to 16 TCP ports. `note`: what it is, at most 200 characters |
+
+Control writes the list at once into the network rules of each rig it set up in a namespace it created, with a step `network` in each rig's history; see [Reach a model server on a private or Tailscale address](../how-to/install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address). Returns `{addresses, said}`, with `said` such as `The list holds 1 address. Control applies it to the network rules of rig-1 now.` Errors are the words of the REST route ([below it](rest-api.md#addresses-cluster-rigs-may-reach)). The audit log records `mcp:set_reachable_addresses` and `reachable_addresses_set`, with the list.
 
 ### mcp_servers
 

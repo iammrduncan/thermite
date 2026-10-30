@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Fetcher } from "../../../agents/tools/index.ts";
+import { log } from "../../../common/env.ts";
+import { errorText } from "../../../common/errors.ts";
 import type { ResearchContract } from "../../../core/contract.ts";
 import { type Ledger, LedgerError, type SourceRow } from "../../ledger/index.ts";
 import { foldText } from "../checks.ts";
@@ -56,9 +58,15 @@ export const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 
 /** A claim's identity for deduplication: its words, case and punctuation folded. */
 export const claimKey = foldText;
 
-/** An archived source's text. */
+/** An archived source's text: not_found, naming only the source, when it can't be read. */
 export function sourceText(source: SourceRow): string {
-  return readFileSync(source.text_path, "utf8");
+  try {
+    return readFileSync(source.text_path, "utf8");
+  } catch (err) {
+    const why = { source: source.id, error: errorText(err) };
+    log("harness", "a source's text can't be read", why, "warn");
+    throw new LedgerError("not_found", `the text of source ${source.id} can't be read on this rig`);
+  }
 }
 
 /** A question's index as a claim or a hypothesis takes it: one of the contract's, or a refusal. */

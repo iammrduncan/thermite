@@ -1,7 +1,7 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { log, redact } from "../../common/env.ts";
-import { answerOf } from "../../common/errors.ts";
+import { answerOf, faultAnswer } from "../../common/errors.ts";
 import { busHealth } from "../bus/index.ts";
 import { watchDrains } from "../clusters/index.ts";
 import { controlDiskOf } from "../disk.ts";
@@ -12,19 +12,26 @@ import type { ControlStore } from "../store/index.ts";
 import { busRoutes } from "./bus.ts";
 import { campaignRoutes } from "./campaigns.ts";
 import { commandRoutes, commandStatusRoutes } from "./commands.ts";
-import { apiContext, type ControlOptions, type ControlTokens } from "./context.ts";
+import {
+  apiContext,
+  bearer,
+  type ControlOptions,
+  type ControlTokens,
+  clientOf,
+} from "./context.ts";
 import { editRigRoutes } from "./edit-rig.ts";
 import { gpuCloudRoutes } from "./gpu-clouds.ts";
 import { kitRoutes } from "./kits.ts";
 import { lifecycleRoutes } from "./lifecycle.ts";
 import { modelRoutes } from "./model-routes.ts";
+import { reachRoutes } from "./reach.ts";
 import { recordRoutes, rigRecordRoutes } from "./records.ts";
 import { relayRoutes } from "./relay.ts";
 import { resultRoutes } from "./results.ts";
 import { rigRoutes } from "./rigs.ts";
 import { usageRoutes } from "./usage.ts";
 
-export type { ControlOptions, ControlTokens } from "./context.ts";
+export { type ControlOptions, type ControlTokens, clientOf } from "./context.ts";
 
 /**
  * Control HTTP API (v1 core). Admin tokens issue commands and read everything; each rig's token
@@ -49,11 +56,16 @@ export function createControlApi(
 
   // Every refusal and bad input is answered in its own words and status, the same as MCP's. A
   // body past its route's limit keeps its own answer, 413: the rig's supervisor halves its page.
-  app.onError((err, c) =>
-    err instanceof HTTPException
-      ? err.getResponse()
-      : c.json({ error: answerOf(err).error }, answerOf(err).status),
-  );
+  // A fault is answered with an id only, which the line below gives with the fault's own words.
+  const faults = new WeakMap<Context, string>();
+  app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse();
+    const { status, error } = answerOf(err);
+    if (status < 500) return c.json({ error }, status);
+    const fault = faultAnswer();
+    faults.set(c, fault.id);
+    return c.json({ error: fault.error }, 500);
+  });
 
   // What fails goes to control's output and its audit log: the dashboard says why only once, in
   // the page it sends back, and whoever debugs control reads it again over MCP (control_log). The
@@ -65,11 +77,22 @@ export function createControlApi(
     const status = c.res.status;
     if (c.error || status >= 500) {
       const error = redact(c.error?.message ?? `status ${status}`);
-      const failed = { method: c.req.method, path, status, error };
+      const id = faults.get(c);
+      const failed = { method: c.req.method, path, status, error, ...(id ? { id } : {}) };
       log("control", "request failed", failed, "error");
       const by = callerOf(c) ?? "control";
       if (status < 500) store.auditLog.refusal(by, "failed", failed);
       else store.auditLog.add(by, "failed", failed);
+      return;
+    }
+    // A request with no token, or one its route does not take: in control's output with where it
+    // came from, and in the audit log once for each route, with its count.
+    if (status === 401) {
+      const token = c.req.header("authorization") ? "refused" : "none";
+      const from = clientOf(c);
+      log("control", "unauthorized", { method: c.req.method, path, from, token }, "warn");
+      const route = c.req.routePath;
+      store.auditLog.refusal("control", "unauthorized", { method: c.req.method, route, token });
       return;
     }
     if (!path.startsWith("/ui/") || c.req.method !== "POST") return;
@@ -84,15 +107,19 @@ export function createControlApi(
     }
   });
 
-  // Control is up; the message bus as control holds it: off, connected or away; each of
-  // control's loops with its age, 503 when one is late (goal 173); and its disk against its floor,
-  // `degraded` while it holds new runs for it. The bus away and a full disk are no reason for 503:
-  // control waits for the one, holds new runs for the other, and says so here.
+  // Control is up; the message bus as control holds it: off, connected or away; 503 when one of
+  // control's loops is late (goal 173); and `degraded` while its disk is at its floor and it holds
+  // new runs for it. The bus away and a full disk are no reason for 503: control waits for the
+  // one, holds new runs for the other, and says so here. That is all a probe needs and all it
+  // gets; the owner's or the reader's token also gets each loop with its age, and the disk's
+  // reading.
   app.get("/v1/health", (c) => {
     const h = parts.loops.health();
     const disk = controlDiskOf(store)?.state();
-    const more = disk ? { disk, degraded: disk.low } : {};
-    return c.json({ ...h, bus: busHealth(parts.bus), ...more }, h.ok ? 200 : 503);
+    const said = { ok: h.ok, bus: busHealth(parts.bus), ...(disk ? { degraded: disk.low } : {}) };
+    const token = bearer(c.req.header("authorization"));
+    const details = owner.matches(token) || creds.read?.matches(token) === true;
+    return c.json(details ? { ...h, ...said, ...(disk ? { disk } : {}) } : said, h.ok ? 200 : 503);
   });
 
   relayRoutes(app, api);
@@ -123,6 +150,7 @@ export function createControlApi(
   editRigRoutes(app, api);
   recordRoutes(app, api);
   gpuCloudRoutes(app, api);
+  reachRoutes(app, api);
   commandStatusRoutes(app, api);
 
   // A draining cluster rig's pods restart once nothing runs on it, and any rig's drain past its

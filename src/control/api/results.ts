@@ -171,7 +171,7 @@ export function resultRoutes(
   );
 
   // One run's published champion to another run of its campaign, each named alone (goal 170).
-  app.post(PROPAGATE.path, admin, async (c) => {
+  app.post(PROPAGATE.path, admin, bodyLimit({ maxSize: PROPAGATE.maxBytes }), async (c) => {
     const body = PROPAGATE.body.parse(await jsonBody(c.req));
     const r = await propagateChampion(store, privateKeyPem, {
       run: body.run,

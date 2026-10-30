@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, type TestContext, test } from "node:test";
 import { issueCommand } from "../../src/control/issue/index.ts";
-import { McpServers, mcpRefusal } from "../../src/control/mcp-servers/index.ts";
+import {
+  McpServers,
+  mcpRefusal,
+  SIGN_IN_ANSWER_MAX,
+  signInFetch,
+} from "../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
 import { ControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
@@ -623,5 +628,48 @@ describe("MCP servers over control's own MCP", () => {
     assert.match(JSON.stringify(gone), /deleted/);
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
     assert.match(everything(store), /given \(…only\)/);
+  });
+  test("a sign-in's calls go only to addresses an MCP server's may be, each answer within its limit", async () => {
+    const asked: string[] = [];
+    let signal: AbortSignal | undefined;
+    const answers: Record<string, () => Response> = {
+      "https://auth.example.com/token": () => Response.json({ access_token: "a" }),
+      "https://auth.example.com/huge": () =>
+        new Response("x".repeat(SIGN_IN_ANSWER_MAX + 1), {
+          headers: { "content-length": String(SIGN_IN_ANSWER_MAX + 1) },
+        }),
+      // Streamed, with no length given.
+      "https://auth.example.com/stream": () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              for (let i = 0; i < 3; i++) c.enqueue(new Uint8Array(SIGN_IN_ANSWER_MAX / 2));
+              c.close();
+            },
+          }),
+        ),
+    };
+    const call = signInFetch(async (input, init) => {
+      asked.push(String(input));
+      signal = init?.signal ?? undefined;
+      return (answers[String(input)] ?? (() => new Response("no", { status: 404 })))();
+    });
+    const ok = await call("https://auth.example.com/token", { method: "POST" });
+    assert.ok(ok instanceof Response);
+    assert.deepEqual(await ok.json(), { access_token: "a" });
+    assert.ok(signal && !signal.aborted, "each call has a time limit");
+    await assert.rejects(
+      call("http://auth.example.com/token"),
+      /^Error: the sign-in leads to http:\/\/auth\.example\.com, which control does not call: Use https\./,
+    );
+    await assert.rejects(call("https://auth.example.com/token?api_key=x"), /no secret in the URL/);
+    assert.equal(asked.length, 1, "a refused address is never called");
+    for (const path of ["huge", "stream"])
+      await assert.rejects(
+        call(`https://auth.example.com/${path}`),
+        new RegExp(
+          `https://auth\\.example\\.com answered with more than ${SIGN_IN_ANSWER_MAX} bytes`,
+        ),
+      );
   });
 });

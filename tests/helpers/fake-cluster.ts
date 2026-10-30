@@ -21,6 +21,10 @@ export function fakeCluster(
     slots?: Record<string, boolean>;
     /** Slots whose operators wrote the network rule (default: thermite-slot-1). */
     ruled?: string[];
+    /** More egress rules in that rule, such as one that opens a model server's address. */
+    moreEgress?: Record<string, unknown>[];
+    /** Ingress rules in that rule; none: the rule limits egress only. */
+    ingress?: Record<string, unknown>[];
     quota?: Record<string, Record<string, string>>;
     /** The node's GPUs through the device plugin (default 2). */
     nodeGpus?: number;
@@ -50,7 +54,20 @@ export function fakeCluster(
                   users: [{ name: "u", user: { exec: { command: "sh" } } }],
                 }
               : {
-                  clusters: [{ name: "c", cluster: { server: "https://k.example.com" } }],
+                  // A kubeconfig that says so skips TLS checks, or names a plain http server.
+                  clusters: [
+                    {
+                      name: "c",
+                      cluster: {
+                        server: _t.kubeconfig.includes("server: http://")
+                          ? "http://k.example.com"
+                          : "https://k.example.com",
+                        ...(_t.kubeconfig.includes("insecure-skip-tls-verify")
+                          ? { "insecure-skip-tls-verify": true }
+                          : {}),
+                      },
+                    },
+                  ],
                   users: [{ name: "u", user: { token: "x" } }],
                 },
           ),
@@ -150,7 +167,8 @@ export function fakeCluster(
                     metadata: { name: "thermite-harness" },
                     spec: {
                       podSelector: { matchLabels: { "app.kubernetes.io/component": "harness" } },
-                      policyTypes: ["Egress"],
+                      policyTypes: o.ingress ? ["Egress", "Ingress"] : ["Egress"],
+                      ...(o.ingress ? { ingress: o.ingress } : {}),
                       egress: [
                         { ports: [{ port: 53, protocol: "UDP" }] },
                         {
@@ -163,6 +181,7 @@ export function fakeCluster(
                             },
                           ],
                         },
+                        ...(o.moreEgress ?? []),
                       ],
                     },
                   },

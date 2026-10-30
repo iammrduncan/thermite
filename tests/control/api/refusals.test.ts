@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { answerOf, BadInput, Refusal } from "../../../src/common/errors.ts";
-import { ADMIN, controlOnly } from "../../helpers/control-stack.ts";
+import { FORM_MAX_BYTES } from "../../../src/control/dashboard/session.ts";
+import { MCP_BODY_MAX } from "../../../src/control/mcp/index.ts";
+import {
+  CLOUD_LAUNCH,
+  ENROLL,
+  ISSUE,
+  PROPAGATE,
+  RESET,
+  RESTART,
+  RUNPOD_LIMITS,
+  RUNPOD_TERMINATE,
+} from "../../../src/core/api/control/owner.ts";
+import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { ingestReport } from "../../helpers/control-store.ts";
 
 function control() {
@@ -92,9 +104,79 @@ describe("refusals over REST are answered as refusals, never as server errors (g
     );
   });
 
-  test("each error has one answer; anything else stays a 500", () => {
+  test("each error has one answer; anything else is a fault, a 500 in words that say nothing of it", () => {
     assert.deepEqual(answerOf(new Refusal("no")), { status: 409, error: "no" });
     assert.deepEqual(answerOf(new BadInput("bad")), { status: 400, error: "bad" });
-    assert.deepEqual(answerOf(new Error("broke")), { status: 500, error: "broke" });
+    assert.deepEqual(answerOf(new Error("broke")), { status: 500, error: "internal error" });
+  });
+
+  test("a fault answers an id only; control's output and audit log keep its words under it", async () => {
+    const { store, control: api } = controlOnly();
+    store.commands.list = () => {
+      throw new Error("SQLITE_IOERR: disk I/O error at /var/lib/thermite-control/control.db");
+    };
+    const r = await api.request("/v1/commands", { headers: { authorization: `Bearer ${ADMIN}` } });
+    assert.equal(r.status, 500);
+    const { error } = (await r.json()) as { error: string };
+    const id = /^internal error ([0-9a-f]{8})$/.exec(error)?.[1];
+    assert.ok(id, error);
+    const entry = store.auditLog.list(5, { action: "failed" })[0];
+    assert.equal(entry?.actor, "owner:api");
+    assert.deepEqual(entry?.body, {
+      method: "GET",
+      path: "/v1/commands",
+      status: 500,
+      error: "SQLITE_IOERR: disk I/O error at /var/lib/thermite-control/control.db",
+      id,
+    });
+  });
+
+  test("an MCP tool's error reaches its caller with any secret in it masked", async () => {
+    const { store, control: api } = controlOnly();
+    store.commands.get = () => {
+      throw new Error("the provider said 401 to Authorization: Bearer made-up-0123456789abcdef");
+    };
+    const mcp = await mcpClient(api);
+    const r = (await mcp.callTool({ name: "command_status", arguments: { id: "c-1" } })) as {
+      isError?: boolean;
+      content: { text: string }[];
+    };
+    assert.equal(r.isError, true);
+    const text = r.content[0]?.text ?? "";
+    assert.ok(!text.includes("0123456789abcdef"), text);
+    assert.match(text, /said 401 to Authorization: \*\*\*/);
+  });
+  test("every route that reads a body refuses one past its limit, 413, before it reads it", async () => {
+    const { control: api } = controlOnly({
+      tokens: { rigs: { "rig-a": "rig-token-aaaaaa" } },
+    });
+    const owner = { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" };
+    const over = (bytes: number) => JSON.stringify({ pad: "x".repeat(bytes) });
+    const routes: [string, number][] = [
+      [ISSUE.path, ISSUE.maxBytes],
+      [ENROLL.path, ENROLL.maxBytes],
+      ["/v1/rigs/rig-a/restart", RESTART.maxBytes],
+      ["/v1/rigs/rig-a/reset", RESET.maxBytes],
+      [PROPAGATE.path, PROPAGATE.maxBytes],
+      ["/v1/gpu-clouds/runpod/tests", 4 * 1024],
+      ["/v1/gpu-clouds/runpod/rigs", CLOUD_LAUNCH.maxBytes],
+      ["/v1/rigs/rig-a/runpod/terminate", RUNPOD_TERMINATE.maxBytes],
+      ["/v1/rigs/rig-a/runpod/limits", RUNPOD_LIMITS.maxBytes],
+    ];
+    for (const [path, max] of routes) {
+      const r = await api.request(path, { method: "POST", headers: owner, body: over(max) });
+      assert.equal(r.status, 413, path);
+    }
+    // The dashboard's forms, past theirs; MCP's requests, past its.
+    const ui = await signIn(api);
+    const csrf = ui.csrfOf(await ui.page("/ui"));
+    const form = await ui.post("/ui/settings/rigs", { csrf, pad: "x".repeat(FORM_MAX_BYTES) });
+    assert.equal(form.status, 413);
+    const mcp = await api.request("/mcp", {
+      method: "POST",
+      headers: { ...owner, accept: "application/json, text/event-stream" },
+      body: over(MCP_BODY_MAX),
+    });
+    assert.equal(mcp.status, 413);
   });
 });

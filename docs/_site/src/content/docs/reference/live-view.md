@@ -8,6 +8,8 @@ sidebar:
 
 **Live** shows what a run's agents, its judge and its advisors do as they work. It is a view, never a record: what happened is in the rig's signed events, and the run's page reads those. Control pushes each new line to the page as it gets it, from the rig's supervisor or the message bus, so the page needs no reload. Only the owner signs in to the dashboard, so only the owner sees Live; the reader's token gets the same lines over REST, `GET /v1/rigs/<rig>/live`, but never a terminal.
 
+The rig masks its own credentials in each line before the line leaves it, wherever an agent printed them: a trial's token, the model proxy's and the MCP gateway's show as `trial.***`, `proxy.***` and `mcp.***`, and the value of any `THERMITE_*_AUTH` setting as `***`. Each line is masked before it is cut to 8,000 characters ([Limits and pacing](limits-and-pacing.md#the-rig-and-control)).
+
 Live has three pages: one run at a time, a rig's sessions, and one trial's session, which has the trial's terminal.
 
 ## One run at a time

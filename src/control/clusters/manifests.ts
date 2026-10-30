@@ -1,8 +1,9 @@
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
+import type { ReachEntry } from "../../core/reach.ts";
 import { gpuSplit, type RigBus } from "../machines/index.ts";
-import { CLOSED_RANGES } from "./netcheck.ts";
+import { CLOSED_RANGES, reachEgress } from "./netcheck.ts";
 
 /**
  * A rig on a Kubernetes cluster, as the objects control applies with `kubectl apply -f -`: the
@@ -45,6 +46,8 @@ export interface ClusterRigPlan {
    * the one control has now.
    */
   bus?: RigBus | undefined;
+  /** The owner's list of addresses rigs may reach, which the harness's network rule opens. */
+  reach?: ReachEntry[] | undefined;
 }
 
 type Resources = { requests: Record<string, string>; limits: Record<string, string> };
@@ -403,6 +406,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
               ],
             },
             { to: [{ ipBlock: { cidr: "0.0.0.0/0", except: CLOSED_RANGES } }] },
+            ...reachEgress(p.reach ?? []),
           ],
         },
       },
@@ -442,6 +446,11 @@ export function clusterRigDeployments(p: ClusterRigPlan, stopped = false): Obj[]
  */
 export function clusterRigResized(p: ClusterRigPlan, stopped = false): Obj[] {
   return clusterRigParts(p, ["ResourceClaimTemplate", "Deployment"], stopped);
+}
+
+/** The rig's network rules alone, as a change of the list of addresses rigs may reach applies them. */
+export function clusterRigNetwork(p: ClusterRigPlan): Obj[] {
+  return clusterRigParts(p, ["NetworkPolicy"], false);
 }
 
 function clusterRigParts(p: ClusterRigPlan, kinds: string[], stopped: boolean): Obj[] {

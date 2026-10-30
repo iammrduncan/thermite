@@ -27,6 +27,7 @@ import { clusterRoutes } from "./settings/clusters.ts";
 import { machineRoutes } from "./settings/machines.ts";
 import { settingsPageRoutes } from "./settings/page.ts";
 import { providerRoutes } from "./settings/providers.ts";
+import { reachRoutes } from "./settings/reach.ts";
 
 export type { DashboardOptions };
 
@@ -64,6 +65,7 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   actionRoutes(app, dash);
   settingsPageRoutes(app, dash);
   clusterRoutes(app, dash);
+  reachRoutes(app, dash);
   cloudRoutes(app, dash);
   addRigRoutes(app, dash);
   joinedRigRoutes(app, dash);

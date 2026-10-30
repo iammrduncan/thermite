@@ -1,5 +1,6 @@
 import { createPublicKey } from "node:crypto";
 import type { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
 import { ENROLL, RETIRE, RIG_TOKEN, RIGS } from "../../core/api/control/owner.ts";
 import { newToken } from "../credential.ts";
@@ -40,7 +41,7 @@ export function rigRoutes(app: Hono, api: ApiContext): void {
     tokens.rigs[rig] !== undefined
       ? `rig ${rig} has its token in control's rig tokens file; change it there`
       : undefined;
-  app.post(ENROLL.path, admin, async (c) => {
+  app.post(ENROLL.path, admin, bodyLimit({ maxSize: ENROLL.maxBytes }), async (c) => {
     const { rig } = ENROLL.body.parse(await jsonBody(c.req));
     const taken =
       inFile(rig) ?? (store.enrollments.rig(rig) ? `rig ${rig} is already enrolled` : undefined);

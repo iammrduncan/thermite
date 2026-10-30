@@ -1,6 +1,7 @@
 import type { ControlStore, Decision } from "../../store/index.ts";
 import type { RigView } from "../../views/index.ts";
 import { stuckNeeds } from "../stuck.ts";
+import { busKeyNeeds, busUsersNeeds } from "./bus.ts";
 import { controlDiskNeeds, diskNeeds, drainNeeds } from "./hold.ts";
 import { auditNeeds, promotionNeeds } from "./promotion.ts";
 import { proposalNeeds } from "./proposal.ts";
@@ -69,7 +70,9 @@ export interface Need {
     | "stuck"
     | "disk"
     | "drain"
-    | "proposal";
+    | "proposal"
+    | "bus_key"
+    | "bus_users";
   rig: string;
   run?: string | undefined;
   attempt?: string | undefined;
@@ -130,15 +133,20 @@ export function needs(
     // Its disk at its floor, or a drain past its deadline (goal 173).
     out.push(...diskNeeds(c, u));
     out.push(...drainNeeds(c, store, u));
+    // Its keys on the message bus changed, or were refused, since the owner saw them.
+    out.push(...busKeyNeeds(c, store, u));
   }
   out.push(...resetNeeds(c, store, vs));
   // Control's own disk at its floor (goal 173).
   out.push(...controlDiskNeeds(c, store));
+  // The bus's server that keeps not taking control's users file.
+  out.push(...busUsersNeeds(c, store));
   // The operator's changes to a campaign's settings that wait for the owner.
   out.push(...proposalNeeds(c, store));
   const order = [
     "key",
     "reset",
+    "bus_users",
     "disk",
     "drain",
     "agents",
@@ -148,6 +156,7 @@ export function needs(
     "review",
     "conclusion",
     "proposal",
+    "bus_key",
     "stale",
   ];
   return out.sort(

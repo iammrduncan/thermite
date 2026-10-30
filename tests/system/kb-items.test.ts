@@ -125,7 +125,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
         file_sha256: sha,
       },
     ]);
-    assert.equal(s.store.kb().hasFile(sha), false);
+    assert.equal(s.store.kb().files.has(sha), false);
     // In the run's collection, in its writer's slot; each version kept, with its links.
     const [finding, reference] = s.store
       .kb()
@@ -147,7 +147,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     const put = await s.put();
     assert.deepEqual([put.put, put.waiting, put.error], [1, 0, undefined]);
     await s.take();
-    assert.equal(s.store.kb().hasFile(sha), true);
+    assert.equal(s.store.kb().files.has(sha), true);
     assert.ok(existsSync(s.files.path(sha)));
     // The other way round: the file first, then its item.
     s.write({
@@ -166,7 +166,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.equal((await s.put()).put, 1, "the paper was put already: only the new file goes");
     await s.take();
     const againSha = createHash("sha256").update(again).digest("hex");
-    assert.equal(s.store.kb().hasFile(againSha), true);
+    assert.equal(s.store.kb().files.has(againSha), true);
     assert.equal(await s.report(), 200);
     assert.deepEqual(
       s
@@ -251,7 +251,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
       files: Number(s.store.db.prepare("select count(*) as n from kb_file").get()?.n),
     });
     assert.deepEqual(once(), { items: 1, versions: 1, files: 1 });
-    assert.equal(s.store.kb().hasFile(sha), true);
+    assert.equal(s.store.kb().files.has(sha), true);
     // Sent again, the report and the file change nothing.
     assert.equal(await s.report(0), 200);
     assert.equal((await s.put()).put, 0, "the supervisor put it once");

@@ -55,7 +55,14 @@ export function clampLimit(raw: string | undefined, fallback: number): number {
   return Number.isInteger(n) ? Math.min(5000, Math.max(1, n)) : fallback;
 }
 
-function bearer(header: string | undefined): string {
+/** The address a request came from, as its socket gives it; empty where there is no socket. */
+export function clientOf(c: Context): string {
+  const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+  return env?.incoming?.socket?.remoteAddress ?? "";
+}
+
+/** The token an Authorization header carries as `Bearer <token>`; empty when it carries none. */
+export function bearer(header: string | undefined): string {
   return header?.startsWith("Bearer ") ? header.slice(7) : "";
 }
 

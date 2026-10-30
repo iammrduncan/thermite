@@ -42,6 +42,14 @@ describe("control dashboard", () => {
     assert.equal(anon.headers.get("location"), "/ui/login");
     const { login: bad } = await signIn(s.control, "wrong");
     assert.equal(bad.headers.get("set-cookie"), null);
+    // Signed in, a form needs the page's form token; signing out needs none.
+    const ui = await signIn(s.control);
+    const forged = await ui.post("/ui/settings/rigs", { csrf: "0".repeat(48) });
+    assert.equal(forged.status, 403);
+    assert.equal(await forged.text(), "bad form token");
+    const out = await ui.post("/ui/logout", {});
+    assert.equal(out.headers.get("location"), "/ui/login");
+    assert.equal((await ui.get("/ui")).status, 303);
   });
 
   test("failed sign-ins are counted for each address apart: one that fails too often waits, and another still signs in", async () => {

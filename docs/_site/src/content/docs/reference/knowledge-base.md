@@ -193,6 +193,15 @@ An item's file is kept whole, once, by its SHA-256:
 
 The item and its file meet by the SHA-256, whichever comes first: an item whose file has not come yet has it as soon as control keeps the file, and a file that comes before its item waits for it. Neither is lost while the other is on its way.
 
+### How long control keeps a file
+
+Control keeps every file for good by default, with no limit for each rig. A file that no item names is an **orphan**: its item never arrived, or control refused it ([Control's checks](#controls-checks)). To remove orphans, set `THERMITE_CONTROL_KB_ORPHAN_HOURS` on control to the hours an orphan stays ([Settings](settings.md#address-and-state)); `0`, the default, keeps every file.
+
+- **How control knows a file is an orphan.** Its store records each file it keeps, with the time it kept it. A file is an orphan when it was kept more than that many hours ago and no version of any item names its SHA-256. Versions are never removed, so a file that an item named once, in any of its versions, is never an orphan, even after the item names another file.
+- **When control looks.** At its start and every hour after, only while the setting is above 0. So an orphan goes between its hours and one hour after them. One look removes at most 1,000 files; the others go at the next look.
+- **What goes.** The file's bytes in `kb-files/` and its record in the store. Control's log says `a file for the knowledge base removed: no item names it`, and its audit log has `kb_file_removed`, with the file's `sha256`, `bytes`, when it was kept (`stored_at`) and the `hours`. A file it can't remove stays, with `an orphan file not removed; trying again at the next look` in its log.
+- **An item that comes later.** An item that names a removed file is kept, and waits for its file, as an item that comes before its file does. The rig puts each file once, so choose hours longer than a rig may be away from the bus.
+
 ## The words index
 
 Control keeps a words index of every item's newest version in its store (SQLite's FTS5), written in the same transaction as the item: a write that fails leaves neither. Every search reads it.

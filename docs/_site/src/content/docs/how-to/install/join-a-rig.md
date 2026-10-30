@@ -40,7 +40,7 @@ podman --version                                  # 4.4 or later
 systemctl --version | head -n 1                   # systemd is there
 loginctl show-user "$(id -un)" -p Linger          # Linger=yes (not needed as root)
 nvidia-ctk cdi list                               # GPUs only: nvidia.com/gpu=0, and one line for each GPU
-curl -fsS https://control.example.com/v1/health   # {"ok":true,"loops":{…},"bus":"connected"}
+curl -fsS https://control.example.com/v1/health   # {"ok":true,"bus":"connected","degraded":false}
 nc -zv control.example.com 4222                   # the message bus's port answers
 ```
 
@@ -87,7 +87,7 @@ Copy the command and run it within the hour. On a machine, you can first `podman
 
   Then it writes the rig's files and services, pulls the images, starts the rig and prints `started`. It sets the rig up the same way control does over SSH, with the message bus's address and the certificate of control's authority for the bus among the files; [What control writes on the machine](rig-on-a-machine.md#what-control-writes-on-the-machine) lists them.
 
-- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS and addresses outside the private, shared and link-local ranges, and only its supervisor reaches the harness. The supervisor's deployment carries the message bus's address and the certificate of control's authority in its environment.
+- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS, addresses outside the private, shared and link-local ranges, and the addresses in **Settings › Addresses cluster rigs may reach** as the list is when the command runs, and only its supervisor reaches the harness. The supervisor's deployment carries the message bus's address and the certificate of control's authority in its environment.
 
   | You see | Do this |
   | --- | --- |

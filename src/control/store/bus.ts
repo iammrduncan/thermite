@@ -66,6 +66,19 @@ export class BusKeys extends StorePart {
     this.db.prepare("update rig_bus_key set seal_key = ? where rig = ?").run(key, rig);
   }
 
+  /**
+   * Who holds this key on the bus, other than `rig`: another rig that registered it as its user
+   * key or its seal key (a retired one too), or control, as one of its own; undefined when none.
+   */
+  holderOf(key: string, rig: string): string | undefined {
+    const r = this.db
+      .prepare("select rig from rig_bus_key where (public_key = ? or seal_key = ?) and rig != ?")
+      .get(key, key, rig) as { rig: string } | undefined;
+    if (r) return `rig ${r.rig}`;
+    const own = this.db.prepare("select 1 from bus_identity where public_key = ?").get(key);
+    return own ? "control" : undefined;
+  }
+
   /** Every rig's registered key, by rig, with its seal key when it registered one. */
   rigKeys(): { rig: string; key: string; sealKey?: string | undefined }[] {
     const rows = this.db

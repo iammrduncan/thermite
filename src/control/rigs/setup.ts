@@ -51,6 +51,7 @@ export const STEP_WORDS: Record<string, string> = {
   resources: "Its deployments applied with new GPUs, CPUs or memory",
   resources_running: "Its pods run with the new GPUs, CPUs or memory",
   report_after_resources: "A report reached control after the change",
+  network: "Its network rules applied with the list of addresses rigs may reach",
   model_started: "Model download started",
   model_done: "Model downloaded, its SHA-256 checked",
   model_refused: "Model refused: its SHA-256 did not match, and the file was deleted",
@@ -60,6 +61,9 @@ export const STEP_WORDS: Record<string, string> = {
   bus_key_changed: "Its key on the message bus changed",
   seal_key: "Its seal key for its config on the message bus registered",
   seal_key_changed: "Its seal key for its config on the message bus changed",
+  bus_key_refused: "Its new key on the message bus refused: another rig or control holds it",
+  seal_key_refused: "Its new seal key refused: another rig holds it",
+  bus_keys_seen: "You saw the change of its keys on the message bus",
   ...UPDATE_STEP_WORDS,
 };
 

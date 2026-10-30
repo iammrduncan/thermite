@@ -44,7 +44,7 @@ import { type ApiContext, limitOf } from "./context.ts";
  * decisions, cards, papers, receipts, queue changes, notes and past research go.
  */
 export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): void {
-  app.post(DIRECTIVES.path, supervisor, async (c) => {
+  app.post(DIRECTIVES.path, supervisor, limitOf(DIRECTIVES), async (c) => {
     const body = DIRECTIVES.body.parse(await c.req.json());
     // Rules naming a direction the run doesn't have are left out, each with why (goal 066).
     return c.json(service.setAdvisorRules(body.run, body.directives, "supervisor"));

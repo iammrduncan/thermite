@@ -31,6 +31,8 @@ import {
 import { checkRowHtml } from "../../ui/rigs/checks.ts";
 import { diskBanner, diskFree } from "../../ui/rigs/disk.ts";
 import { drainView } from "../../ui/rigs/drain.ts";
+import { busKeysHtml } from "../../ui/rigs/keys.ts";
+import { rigReachHtml, slotIngressWarning } from "../../ui/rigs/reach.ts";
 import {
   HISTORY_FILTERS,
   podBlock,
@@ -370,6 +372,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
         : []),
       ...(place.words ? [["Placed on", esc(place.words)]] : []),
       ["Key", `<code>${esc(key.pubkey ? fingerprint(key.pubkey) : "not pinned")}</code>`],
+      ["Keys on the bus", busKeysHtml(store, u.id, now)],
       ["Ledger", `<code>${esc(u.ledger_id ?? "")}</code>`],
       ...(sup
         ? [
@@ -496,7 +499,7 @@ ${rp ? "" : events}
             : s.controlUrl && controlAddress(parts) && s.controlUrl !== controlAddress(parts)
               ? `<div class="small" style="margin-top:12px">Control's address for rigs changed: the rig reports to <span class="mono">${esc(s.controlUrl)}</span>, control is now at <span class="mono">${esc(controlAddress(parts) ?? "")}</span>.</div><div class="small muted" style="margin:4px 0 6px">Its pods restart with the new address, on the same images. ${keeps}</div>${act("images", "Give it control's new address")}`
               : "";
-    return `<div class="block" ${placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Cluster</dt><dd><a href="/ui/settings">${esc(r.cluster)}</a> (Providers)</dd><dt>Namespace</dt><dd>${esc(r.namespace)} <span class="muted">(${r.placement === "created" ? "made by control" : "a slot"})</span></dd><dt>GPUs</dt><dd>${s.gpus ? `${s.gpus} through ${s.gpuMode === "dra" ? `DRA (${esc(s.deviceClass ?? "")})` : "NVIDIA's device plugin"}: ${splitWords(s.gpus, s.judgeGpus)}` : "none: it measures on the CPU"}${s.node ? ` · on ${esc(s.node)}` : ""}</dd><dt>CPUs and memory</dt><dd>${s.resources ? esc(resourcesWords(s.resources)) : "the namespace's defaults"}${manage ? ` · <a href="/ui/rigs/${rName}/edit">change on Edit rig</a>` : ""}</dd><dt>Storage</dt><dd>${s.storageGi} GB${s.storageClass ? ` · ${esc(s.storageClass)}` : ""}</dd><dt>Images</dt><dd class="mono small">${esc(s.images.harness)}<br>${esc(s.images.supervisor)}</dd></dl>
+    return `<div class="block" ${placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Cluster</dt><dd><a href="/ui/settings">${esc(r.cluster)}</a> (Providers)</dd><dt>Namespace</dt><dd>${esc(r.namespace)} <span class="muted">(${r.placement === "created" ? "made by control" : "a slot"})</span></dd><dt>GPUs</dt><dd>${s.gpus ? `${s.gpus} through ${s.gpuMode === "dra" ? `DRA (${esc(s.deviceClass ?? "")})` : "NVIDIA's device plugin"}: ${splitWords(s.gpus, s.judgeGpus)}` : "none: it measures on the CPU"}${s.node ? ` · on ${esc(s.node)}` : ""}</dd><dt>CPUs and memory</dt><dd>${s.resources ? esc(resourcesWords(s.resources)) : "the namespace's defaults"}${manage ? ` · <a href="/ui/rigs/${rName}/edit">change on Edit rig</a>` : ""}</dd><dt>Storage</dt><dd>${s.storageGi} GB${s.storageClass ? ` · ${esc(s.storageClass)}` : ""}</dd><dt>Its harness reaches</dt><dd>${rigReachHtml(r, store.reachable.list())}</dd><dt>Images</dt><dd class="mono small">${esc(s.images.harness)}<br>${esc(s.images.supervisor)}</dd></dl>${slotIngressWarning(r)}
 <div class="tl" style="margin-top:10px">${setupSteps(r.rig) || `<div class="muted small">No step yet.</div>`}</div>${manage}${update}</div></div>`;
   };
   /** A rig in pull mode: its pod, its enrollment, control's last connection and the refusals. */

@@ -32,10 +32,10 @@ The agents' work is code: shell commands, builds and tests that a model chose, r
 
 ## Under compose, that code can reach your local network
 
-Compose joins the harness to a normal network, `egress`, for its way out ([Networks](ports-volumes-secrets.md#compose)). Through it, the lanes' commands, the builds and the timed runs can reach the internet, your computer (as `host.docker.internal`) and the other machines on your local network. A rig that control sets up on a machine, or that you join on one, has the same kind of way out ([Machines](ports-volumes-secrets.md#machines)).
+Compose joins each rig's harness to a normal network of its own, `rig-egress` or `rig2-egress`, for its way out ([Networks](ports-volumes-secrets.md#compose)). Through it, the lanes' commands, the builds and the timed runs can reach the internet, your computer (as `host.docker.internal`) and the other machines on your local network. A rig that control sets up on a machine, or that you join on one, has the same kind of way out ([Machines](ports-volumes-secrets.md#machines)).
 
 - A worker's research fetches are different: the harness fetches each page itself, and refuses private and local addresses.
-- On a Kubernetes cluster, in a namespace that control creates or that you join, network rules let the harness reach only DNS and addresses outside the private, shared and link-local ranges. Control refuses a slot unless its rules do the same, and the rig's isolation check fails when a lane reaches the cluster's API server ([Kubernetes](ports-volumes-secrets.md#kubernetes)).
+- On a Kubernetes cluster, in a namespace that control creates or that you join, network rules let the harness reach only DNS, addresses outside the private, shared and link-local ranges, and the addresses the owner lists in **Settings › Addresses cluster rigs may reach**, each on its listed TCP ports. Control refuses a slot unless its rules do the same, and opens no more of the list than its entries, and the rig's isolation check fails when a lane reaches the cluster's API server ([Kubernetes](ports-volumes-secrets.md#kubernetes)).
 
 **Removed by:** [goal 038](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/038-lane-network-rules.goal), Keep lanes off the local network (v0.3.0), under compose. Until then, run a compose rig where nothing on your local network relies on being out of reach.
 

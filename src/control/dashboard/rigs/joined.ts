@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
+import { clientOf } from "../../api/index.ts";
 import { inBackground } from "../../background.ts";
 import {
   actOnClusterRig,
@@ -16,7 +17,19 @@ import { removeCheck } from "../../results-left.ts";
 import { awaitFirstReport, STEP_WORDS } from "../../rigs/index.ts";
 import { fingerprint } from "../../store/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
+import { ClientFailures } from "../session.ts";
 import { placeFollowUrl, rigHelpers } from "./shared.ts";
+
+/** Failed join requests a client may make in a minute before it waits. */
+const JOIN_FAILURES = 20;
+
+/** What every answer of a join request carries: kept by nothing on the way, and never a page. */
+const JOIN_HEADERS = {
+  "cache-control": "no-store",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+  "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+};
 
 /**
  * Rigs you join yourself: their join command and the requests it makes (/v1/join). Then, for a
@@ -70,22 +83,33 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
     return back("error", "No such action.");
   });
   // The join command's request: no session, only the one-time join token. Control mints the rig's
-  // own token now, so the files it serves are the only copy of it.
+  // own token now, so the files it serves are the only copy of it. Every request that fails gets
+  // the same answer, so it says nothing of which rigs wait to join; the token is used only when
+  // the rest is right. A client that fails JOIN_FAILURES times in a minute waits.
+  const failures = new ClientFailures();
   app.get("/v1/join/:rig/:what", (c) => {
     const rig = c.req.param("rig");
     const what = c.req.param("what");
     const r = store.joinedRigs.get(rig);
-    const no = (status: 401 | 404 | 409, msg: string) =>
-      c.text(`thermite: ${msg}\n`, status, { "cache-control": "no-store" });
-    if (!r || what !== (r.form === "machine" ? "script" : "manifest"))
-      return no(404, "no such join command");
-    if (!parts.publicUrl) return no(409, "control's address for rigs is not set");
+    const client = clientOf(c);
+    const now = Date.now();
+    if (failures.count(client, now) >= JOIN_FAILURES)
+      return c.text("thermite: too many join requests failed; wait a minute\n", 429, JOIN_HEADERS);
     const token = (c.req.header("authorization") ?? "").replace(/^Bearer\s+/i, "");
-    if (!store.joinedRigs.useToken(rig, token))
-      return no(
+    if (
+      !r ||
+      what !== (r.form === "machine" ? "script" : "manifest") ||
+      !parts.publicUrl ||
+      !store.joinedRigs.useToken(rig, token)
+    ) {
+      if (failures.add(client, now) === JOIN_FAILURES)
+        store.auditLog.add("control", "join_throttled", {});
+      return c.text(
+        "thermite: this join command does not work: it was used, revoked or expired. Make a new one on the rig's page in Thermite.\n",
         401,
-        "this join command does not work: it was used, revoked or expired. Make a new one on the rig's page in Thermite.",
+        JOIN_HEADERS,
       );
+    }
     const rigToken = newToken();
     if (store.enrollments.rig(rig))
       store.enrollments.rotateToken(rig, rigToken.sha256, `rig:${rig}`);
@@ -127,6 +151,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
           storageGi: s.storageGi ?? 100,
           controlPublicKey: parts.controlPublicKey,
           bus: parts.rigBus,
+          reach: store.reachable.list(),
         },
         secrets,
       );
@@ -142,7 +167,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       60,
     );
     void inBackground(store, "joined", rig, "first_report", first);
-    return c.text(body, 200, { "cache-control": "no-store" });
+    return c.text(body, 200, JOIN_HEADERS);
   });
 
   app.get("/ui/rigs/:rig/place.json", (c) => {

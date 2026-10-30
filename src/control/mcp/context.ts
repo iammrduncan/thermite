@@ -104,9 +104,10 @@ export function toolContext(
       try {
         return json(await fn(args));
       } catch (err) {
-        const error = errorText(err);
+        // With any secret it names masked: what the caller reads and the audit log keeps.
+        const error = redact(errorText(err));
         // A refusal is in the audit log too, as the dashboard's are.
-        store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: redact(error) });
+        store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: error });
         return { ...json({ error }), isError: true };
       }
     };

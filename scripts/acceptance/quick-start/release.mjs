@@ -162,11 +162,11 @@ function sourceRepository() {
 export function containersHost() {
   if (engine === "podman" || process.platform === "darwin") return hostName(COMPOSE);
   // Docker on Linux names this machine only where compose.yaml maps the name, and the supervisor
-  // has no such mapping: the gateway of the stack's egress network is this machine.
+  // has no such mapping: the gateway of its rig's egress network is this machine.
   return sh("docker", [
     "network",
     "inspect",
-    "thermite_egress",
+    "thermite_rig-egress",
     "--format",
     "{{(index .IPAM.Config 0).Gateway}}",
   ]).trim();

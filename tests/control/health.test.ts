@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { GIB } from "../../src/common/disk.ts";
 import { Loops } from "../../src/common/health.ts";
+import { ControlDisk } from "../../src/control/disk.ts";
 import { diskFree } from "../../src/control/ui/rigs/disk.ts";
-import { controlOnly, RIG_TOKEN, signIn } from "../helpers/control-stack.ts";
+import { ADMIN, controlOnly, RIG_TOKEN, signIn } from "../helpers/control-stack.ts";
 import { ingestReport } from "../helpers/control-store.ts";
 
 const DISK = {
@@ -35,6 +37,45 @@ describe("control's health and the rigs' (goal 173)", () => {
     assert.equal(res.status, 503);
     body = (await res.json()) as typeof body;
     assert.deepEqual(body.loops.resets, { age_seconds: 1860, limit_seconds: 1800, late: true });
+  });
+
+  test("a probe with no token learns only whether control is well, its bus and its disk", async () => {
+    let now = 0;
+    const loops = new Loops(() => now);
+    const { store, control } = controlOnly({
+      options: { loops },
+      tokens: { read: "read-token-abcdef" },
+    });
+    loops.add("resets", 10_000);
+    new ControlDisk({
+      store,
+      stateDir: "/var/lib/thermite-control",
+      floorGib: 5,
+      free: () => ({ free: 40 * GIB, total: 100 * GIB }),
+    });
+    const probe = async (token?: string) => {
+      const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+      const r = await control.request("/v1/health", { headers });
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    assert.deepEqual(await probe(), {
+      status: 200,
+      body: { ok: true, bus: "off", degraded: false },
+    });
+    assert.deepEqual(await probe("rig-token-abcdef"), await probe());
+    // The reader's and the owner's tokens read each loop and the disk.
+    for (const token of ["read-token-abcdef", ADMIN]) {
+      const r = await probe(token);
+      assert.equal(r.status, 200);
+      assert.deepEqual(Object.keys(r.body.loops as object).sort(), ["drains", "resets"]);
+      assert.equal((r.body.disk as { floor_gib: number }).floor_gib, 5);
+    }
+    now = 31 * 60_000;
+    loops.tick("drains");
+    assert.deepEqual(await probe(), {
+      status: 503,
+      body: { ok: false, bus: "off", degraded: false },
+    });
   });
 
   test("/metrics gives each part's loops, a rig's free disk and its drain", async () => {

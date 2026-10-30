@@ -121,6 +121,8 @@ export const DIRECTIVES = {
   answer: z.looseObject({
     left_out: z.array(z.looseObject({ rule: z.string(), why: z.string() })).optional(),
   }),
+  /** Up to 20 rules, each with its rationale and citations. */
+  maxBytes: 1024 * 1024,
 } as const satisfies Route;
 
 /** The longest path of a file a teacher reads, and the most lines of one read. */

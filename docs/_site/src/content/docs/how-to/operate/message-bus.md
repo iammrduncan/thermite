@@ -1,16 +1,16 @@
 ---
 title: "Run the message bus"
-description: "Check the message bus beside control, follow control's events to it and back, see an older store's events table moved there, open its port to rigs on other machines and clusters, give it more memory or disk, and turn the rigs off it."
+description: "Check the message bus beside control, follow control's events to it and back, see an older store's events table moved there, open its port to rigs on other machines and clusters, follow the rigs' keys on it, give it more memory or disk, and turn the rigs off it."
 type: how-to
 sidebar:
   order: 11
 ---
 
-The message bus carries the rigs' reports and live lines to control, and control's commands and each rig's config to the rigs, as soon as each is there, and it keeps every rig's events for control, which writes its records from them. It is a NATS server with JetStream, and it runs beside control: the compose stack's `nats` service. Control needs it, and does not start without it. This page says how to tell that it works, what you see while control keeps its events there and applies them, while it moves an older store's events there, and while it makes an older reports stream again, what to open so that rigs on other machines and clusters reach it, what control keeps for its certificate, how to give it more memory or disk, and how to keep the rigs off it. [How the parts talk](../../explanation/how-the-parts-talk.md#reports-over-the-message-bus) explains what travels on it and why.
+The message bus carries the rigs' reports and live lines to control, and control's commands and each rig's config to the rigs, as soon as each is there, and it keeps every rig's events for control, which writes its records from them. It is a NATS server with JetStream, and it runs beside control: the compose stack's `nats` service. Control needs it, and does not start without it. This page says how to tell that it works, what you see while control keeps its events there and applies them, while it moves an older store's events there, and while it makes an older reports stream again, what to open so that rigs on other machines and clusters reach it, what control keeps for its certificate, what control does with the rigs' keys on it, how to give it more memory or disk, and how to keep the rigs off it. [How the parts talk](../../explanation/how-the-parts-talk.md#reports-over-the-message-bus) explains what travels on it and why.
 
 ```sh
 docker compose ps nats                      # or: podman compose ps nats
-curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"loops":{…},"bus":"connected"}
+curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"bus":"connected","degraded":false}
 ```
 
 ## Before you start
@@ -144,6 +144,14 @@ Every connection to the bus is over TLS. Control keeps its own certificate autho
 - **The rigs** trust the server through the authority's certificate alone, which control gives each rig it sets up: as a file on a machine and in the compose stack, in the supervisor's environment on a cluster. A connection that does not come from such a rig, or that trusts another authority, is refused, and so is one without TLS.
 
 Keep `bus-ca.key` with control's other state: a backup of the `control-state` volume holds it. If it is lost, delete `bus-ca.pem` too and start control again: it makes a new authority, and every rig on the bus needs its certificate again, by moving onto new images. Until then those rigs can't connect.
+
+## A rig's keys on the bus
+
+Each rig's supervisor makes two keys in its home, `bus-key.seed` and `bus-seal.pem`, the first time it starts with the bus, and registers their public parts with control. The rig's page shows their fingerprints under **The rig**, as **Keys on the bus**: `<fingerprint> its user · <fingerprint> its seal key`, or "none registered yet".
+
+- **A key changes at once.** A supervisor whose home was emptied makes new keys at its next start. Control takes them at once: the old key no longer signs in, and nothing waits for you. The rig's page says "changed … ago" beside its keys, and its **Recent** list has the step, such as `Its key on the message bus changed: fingerprint 5a1c… → 9e02….`. **Needs you** shows a **Key changed** card, with each change and its time in UTC, until you press **Seen**: the card leaves, and the changes stay in the rig's history. If you didn't empty the rig's home or set it up again, look at who holds the rig's token ([Tokens and roles](../../reference/tokens.md)).
+- **A key another holds is refused.** Control refuses a key that another rig, a retired one too, or control itself already holds. The supervisor's log shows the refusal, `bus_key is refused: another rig or control holds that key on the message bus. …`, and the rig can't use the bus until it has keys of its own. The rig's history and a **Key refused** card under **Needs you** say which rig, or control, holds it. This happens when one rig's supervisor home was copied from another's: give the rig a home of its own, and its supervisor makes new keys at its next start.
+- **A reload that keeps failing shows too.** Control writes the bus's users and asks the server to reload them each time they change, and tries again every 5 seconds when the reload fails. When the server has not taken the file for a minute, or control can't write it, **Needs you** shows a **Bus users** card with the last error, such as `connection refused: nats:4222`. Until the server takes the file, a new or changed key, a retired rig and a new run's live lines wait; users signed in already go on. Check that the `nats` service runs and that control reaches it; the card goes away by itself once a reload works, and control's log says `the bus's server takes its users again`.
 
 ## Give it more memory or disk
 

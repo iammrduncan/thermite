@@ -44,10 +44,17 @@ export {
 } from "./tls.ts";
 export {
   BUS_CONFIG_DIR_SETTING,
+  BUS_KEY_CHANGE_STEPS,
+  BUS_KEYS_SEEN_STEP,
   BUS_USERS_FILE,
   BUS_USERS_SYNC_MS,
+  BUS_USERS_TROUBLE_MS,
   BusUsers,
   busConfigDir,
+  busKeyHolder,
   busRigs,
+  busUsersOf,
+  keyHeldWords,
+  noteKeyRefused,
   takeRigBusKey,
 } from "./users.ts";

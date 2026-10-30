@@ -342,7 +342,7 @@ The [isolation check](rig-checks.md#the-one-container-image) checks the supervis
 | Part | Detail |
 | --- | --- |
 | Base | `NODE_IMAGE` |
-| Packages | `tini`, `ca-certificates`, `git`, `openssh-client` (for machines over SSH and Git over SSH), `unzip`, after the base's own are upgraded |
+| Packages | `tini`, `ca-certificates`, `git` and `openssh-client` (for machines over SSH and Git over SSH), after the base's own are upgraded |
 | kubectl | `KUBECTL_VERSION`, v1.37.1 by default, checked against a pinned sha256, at `/usr/local/bin/kubectl`. The build stops with `no pinned kubectl for <arch>` on any architecture but amd64 and arm64. kubectl is under the Apache License 2.0: the `LICENSE` of the Kubernetes repository at that tag is kept in `/usr/local/share/doc/kubectl`, from `containers/control/kubectl/LICENSE` |
 | Thermite | `/opt/thermite`, with its production dependencies but `node-pty`, which only the harness's terminal host uses, and the `thermite` command at `/usr/local/bin/thermite` |
 | User | `thermite`, uid and gid 10001, home `/var/lib/thermite-control`. It has a passwd entry because OpenSSH refuses a user without one |

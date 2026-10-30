@@ -8,13 +8,16 @@ import {
   BUS_CONFIG_DIR_SETTING,
   BUS_USERS_FILE,
   BUS_USERS_SYNC_MS,
+  BUS_USERS_TROUBLE_MS,
   BusUsers,
   busConfigDir,
+  busUsersOf,
   takeRigBusKey,
 } from "../../../src/control/bus/users.ts";
 import { STEP_WORDS } from "../../../src/control/rigs/setup.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
+import { newSealKey, sealKeyFingerprint } from "../../../src/core/link/config.ts";
 import {
   BUS_ACCOUNT,
   backupPermissions,
@@ -61,19 +64,25 @@ function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
     },
   });
   if (!users) throw new Error("no bus users");
-  /** The supervisor's regular call, its figures with this key. */
-  const figures = (rig: string, busKey: unknown) =>
+  /** The supervisor's regular call, its figures with this key, and this seal key. */
+  const figures = (rig: string, busKey: unknown, sealKey?: string) =>
     s.control.request(`/v1/rigs/${rig}/supervisor`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${rig === "rig-a" ? RIG_TOKEN : RIG_B_TOKEN}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ at: new Date().toISOString(), bus_key: busKey }),
+      body: JSON.stringify({
+        at: new Date().toISOString(),
+        bus_key: busKey,
+        ...(sealKey ? { bus_seal_key: sealKey } : {}),
+      }),
     });
   const audits = (action: string) => s.store.auditLog.list(50, { action }).map((e) => e.body);
   const steps = (rig: string) =>
-    s.store.rigHistory.list(rig).filter((e) => e.step.startsWith("bus"));
+    s.store.rigHistory
+      .list(rig)
+      .filter((e) => e.step.startsWith("bus") || e.step.startsWith("seal"));
   return { ...s, file, server, users, secrets, figures, audits, steps };
 }
 
@@ -156,6 +165,98 @@ describe("each rig's key on the message bus", () => {
     // Figures without a key are taken as before.
     const r = await s.figures("rig-a", undefined);
     assert.equal(r.status, 200);
+  });
+
+  test("a key another rig or control holds is refused in words, and noted once in the rig's history", async () => {
+    const s = setup();
+    await s.users.sync();
+    const [a, b] = [user(), user()];
+    const [sealA, sealB] = [newSealKey().publicKey, newSealKey().publicKey];
+    assert.equal((await s.figures("rig-a", a, sealA)).status, 200);
+    const calls = s.server.calls.length;
+    const words = (field: string) =>
+      `${field} is refused: another rig or control holds that key on the message bus. Each rig's supervisor makes its own keys in its home; a supervisor whose home was copied from another rig's needs a home of its own`;
+    // rig-a's user key, then its seal key, sent as rig-b's: refused whole, with no name of rig-a.
+    for (const [key, seal, field] of [
+      [a, sealB, "bus_key"],
+      [b, sealA, "bus_seal_key"],
+    ] as const) {
+      const r = await s.figures("rig-b", key, seal);
+      assert.equal(r.status, 409);
+      assert.deepEqual(await r.json(), { error: words(field) });
+    }
+    assert.equal(s.store.busKeys.rigKey("rig-b"), undefined, "nothing of rig-b's is recorded");
+    assert.equal(s.store.reportedRigs.supervisor("rig-b"), null);
+    assert.equal(s.server.calls.length, calls, "no reload");
+    // Control's own keys too: its user, its system user.
+    const [control, system] = s.users.ownKeys();
+    for (const key of [control, system]) assert.equal((await s.figures("rig-b", key)).status, 409);
+    // The rig's page and Needs you read it from its history: each refusal once, with who holds it.
+    for (let i = 0; i < 3; i++) await s.figures("rig-b", a);
+    assert.deepEqual(
+      s.steps("rig-b").map((e) => [e.step, e.ok, e.detail]),
+      [
+        ["bus_key_refused", false, `fingerprint ${userKeyFingerprint(a)}, which rig rig-a holds`],
+        [
+          "seal_key_refused",
+          false,
+          `fingerprint ${sealKeyFingerprint(sealA)}, which rig rig-a holds`,
+        ],
+        [
+          "bus_key_refused",
+          false,
+          `fingerprint ${userKeyFingerprint(control as string)}, which control holds`,
+        ],
+        [
+          "bus_key_refused",
+          false,
+          `fingerprint ${userKeyFingerprint(system as string)}, which control holds`,
+        ],
+        ["bus_key_refused", false, `fingerprint ${userKeyFingerprint(a)}, which rig rig-a holds`],
+      ],
+    );
+    assert.equal(
+      STEP_WORDS.bus_key_refused,
+      "Its new key on the message bus refused: another rig or control holds it",
+    );
+    // A retired rig keeps its key: no other rig may take it. A key of rig-b's own is taken.
+    s.store.retired.add("rig-a", "owner:test");
+    assert.equal((await s.figures("rig-b", a)).status, 409);
+    assert.equal((await s.figures("rig-b", b, sealB)).status, 200);
+    assert.equal(s.store.busKeys.rigKey("rig-b"), b);
+    // The same key again from its own rig is no refusal.
+    assert.equal((await s.figures("rig-b", b, sealB)).status, 200);
+  });
+
+  test("a reload that keeps failing for a minute shows, with its reason, until one works", async () => {
+    let now = Date.parse("2026-10-30T04:00:00.000Z");
+    const server = new FakeServer();
+    const store = new ControlStore(":memory:");
+    const users = new BusUsers({
+      store,
+      secrets: SecretBox.ephemeral(),
+      file: usersPath(),
+      reload: server.reload,
+      clock: () => now,
+    });
+    assert.equal(busUsersOf(store), users, "Needs you finds them by the store");
+    server.failing = true;
+    await users.sync();
+    assert.equal(users.keepsFailing(), undefined, "one failure is not yet a card");
+    now += BUS_USERS_TROUBLE_MS - 1;
+    await users.sync();
+    assert.equal(users.keepsFailing(), undefined);
+    now += 1;
+    await users.sync();
+    assert.deepEqual(users.keepsFailing(), {
+      since: "2026-10-30T04:00:00.000Z",
+      error: "connection refused: nats:4222",
+      step: "reload",
+    });
+    assert.equal(BUS_USERS_TROUBLE_MS, 60_000);
+    server.failing = false;
+    await users.sync();
+    assert.equal(users.keepsFailing(), undefined, "gone as soon as the server takes the file");
   });
 
   test("the users file names control, its system user and each rig with its own permissions", async () => {

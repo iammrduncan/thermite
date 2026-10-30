@@ -41,7 +41,7 @@ docker compose ps                         # or: podman compose ps
 curl http://127.0.0.1:8800/v1/health
 ```
 
-`ps` lists `control`, `nats`, `harness` and `supervisor` as up, and the health check answers `{"ok":true,"loops":{…},"bus":"connected"}`: control is up, each of its loops comes around, and it holds its connection to the message bus. In the first seconds it may say `"bus":"away"`, until the bus's server has started. The dashboard is at <http://127.0.0.1:8800/ui>. To sign in, paste the owner's token: `cat .dev/secrets/control-admin-token` prints it.
+`ps` lists `control`, `nats`, `harness` and `supervisor` as up, and the health check answers `{"ok":true,"bus":"connected","degraded":false}`: control is up, each of its loops comes around, it holds its connection to the message bus, and its disk is above its floor. In the first seconds it may say `"bus":"away"`, until the bus's server has started. The dashboard is at <http://127.0.0.1:8800/ui>. To sign in, paste the owner's token: `cat .dev/secrets/control-admin-token` prints it.
 
 On a computer without a screen, reach the dashboard from your own computer through SSH, then open the same address there:
 
@@ -321,7 +321,7 @@ A rig on another machine or a cluster reports to control by connecting to it. Th
 
 1. **An HTTPS address the rigs can reach.** Compose publishes control on `127.0.0.1` only, so nothing outside this computer reaches it. Put a reverse proxy on this computer in front of `127.0.0.1:8800` (or the port you chose) that serves HTTPS under a name the rigs can reach, such as `control.example.com`. Thermite doesn't include a proxy or its configuration: use one you know. Have the proxy:
    - send `X-Forwarded-Proto: https`, so control marks the dashboard's sign-in cookie as secure;
-   - accept request bodies of up to 64 MB: rigs send champions' patches, and the New campaign page kit archives, of up to that size, and `thermite kit add` sends kit bundles of up to that size.
+   - accept request bodies of up to 90 MB: rigs send champions' patches, the New campaign page kit archives and `thermite kit add` kit bundles of up to 64 MB, and the New campaign page sends the files of a kit it describes as text, of up to 86 MiB.
 
    Nothing streams: the live view asks control every two seconds, and MCP answers in plain JSON.
 2. **That address, in control's settings.** In `.env`:
@@ -353,7 +353,7 @@ Run `docker compose up -d`, with your `-f` options, to restart control with them
 
 To tell that it worked:
 
-- From another machine, `curl https://control.example.com/v1/health` answers `{"ok":true,"loops":{…},"bus":"connected"}`, and `nc -zv control.example.com 4222` connects to the bus's port.
+- From another machine, `curl https://control.example.com/v1/health` answers `{"ok":true,"bus":"connected","degraded":false}`, and `nc -zv control.example.com 4222` connects to the bus's port.
 - **Rigs › Add a rig** no longer says "Control has no rig images configured" or "Control's address for rigs is not set", its **Images** field lists the images, and its **Message bus** field gives the bus's address the rigs will reach, such as `nats://control.example.com:4222`.
 
 Next: [Add a rig on a machine over SSH](rig-on-a-machine.md), [on a Kubernetes cluster](rig-on-a-cluster.md), or [join one yourself](join-a-rig.md).

@@ -114,11 +114,11 @@ async function main(): Promise<void> {
   const statePath = join(home, "relay-state.json");
   let state: RelayState = load(statePath, { cursor: 0 });
   const rig = requireEnv("THERMITE_RIG_ID");
-  // Its report, command and live loops, and its health route on them (goal 173).
-  const loops = new Loops();
-  serveHealth(env, rig, loops);
   const harnessUrl = requireEnv("HARNESS_URL").replace(/\/$/, "");
   const harnessToken = secretFromFile("THERMITE_HARNESS_TOKEN_FILE");
+  // Its report, command and live loops, and its health route on them (goal 173).
+  const loops = new Loops();
+  serveHealth(env, rig, loops, harnessToken);
   const harness = harnessClient({ url: harnessUrl, token: harnessToken });
   // Pull mode (a rig on RunPod): this rig never connects to control. Control connects to the
   // tunnel's port; the supervisor's calls go to the tunnel's local port and wait there for it.

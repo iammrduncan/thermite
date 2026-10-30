@@ -33,6 +33,7 @@ import { ModelAssignments } from "./models.ts";
 import { BusPositions } from "./positions.ts";
 import { CampaignProposals } from "./proposals.ts";
 import { ModelProviders } from "./providers.ts";
+import { ReachableAddresses } from "./reachable.ts";
 import { RigRefusals } from "./refusals.ts";
 import type { IngestReport } from "./report.ts";
 import { FullResets } from "./resets.ts";
@@ -77,6 +78,7 @@ export type { McpServerRows } from "./mcp-servers.ts";
 export { AGENT_ROLES, type AgentRole, codexTakes, harnessOf } from "./models.ts";
 export type { CampaignProposal, ProposedField } from "./proposals.ts";
 export type { ModelProvider, ProviderModel } from "./providers.ts";
+export type { ReachableAddress } from "./reachable.ts";
 export type { RigRefusal } from "./refusals.ts";
 export type { StoredRunpodRig, StoredRunpodTest } from "./runpod.ts";
 export type { RegisteredRun } from "./runs.ts";
@@ -126,6 +128,8 @@ export class ControlStore {
   readonly proposals: CampaignProposals;
   /** How far the store applied the bus's streams: the events stream's apply (control/events). */
   readonly busPositions: BusPositions;
+  /** The addresses cluster rigs' harnesses may reach beside the internet, set by the owner. */
+  readonly reachable: ReachableAddresses;
   private knowledge: KnowledgeBase | undefined;
 
   /** The store's file, or `:memory:`. */
@@ -170,6 +174,7 @@ export class ControlStore {
     this.mcpServers = new McpServerRows(this, this.db);
     this.proposals = new CampaignProposals(this, this.db);
     this.busPositions = new BusPositions(this, this.db);
+    this.reachable = new ReachableAddresses(this, this.db);
   }
 
   /**

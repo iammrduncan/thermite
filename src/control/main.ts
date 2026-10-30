@@ -35,7 +35,7 @@ import { CONTROL_DISK_CHECK_MS, ControlDisk } from "./disk.ts";
 import { EventsApply, EventsMove, EventsWriter } from "./events/index.ts";
 import { followReports } from "./ingest.ts";
 import { sendCommandsOn } from "./issue/index.ts";
-import { followKbFiles, KbFiles, serveKbAsks } from "./kb/index.ts";
+import { followKbFiles, KB_ORPHANS_LOOK_MS, KbFiles, serveKbAsks } from "./kb/index.ts";
 import { KitRepos } from "./kits/index.ts";
 import { advanceResets, driverFromEnv } from "./lifecycle.ts";
 import { followLive, LiveTaken } from "./live/index.ts";
@@ -114,6 +114,8 @@ async function main(): Promise<void> {
   const offlineAfterMs = readNumber(env, CONTROL_NUMBERS.offlineSeconds) * 1000;
   // The free space control keeps on its state and in the bus's store (goal 173).
   const diskFloorGib = readNumber(env, CONTROL_NUMBERS.diskFloorGib);
+  // How long a knowledge-base file no item names is kept; 0, the default: for good.
+  const kbOrphanHours = readNumber(env, CONTROL_NUMBERS.kbOrphanHours);
   const driver = driverFromEnv(env);
   // Optional: the owner accepts each rig's first report key (no trust on first use).
   const requireKeyAcceptance = env.THERMITE_CONTROL_REQUIRE_KEY_ACCEPT === "1";
@@ -241,6 +243,7 @@ async function main(): Promise<void> {
     lifecycle: driver?.kind ?? null,
     bus: new URL(natsUrl).host,
     bus_for_rigs: rigBusUrl ? new URL(rigBusUrl).host : null,
+    kb_orphan_hours: kbOrphanHours,
   });
   // Before control serves a page or takes a report: the users file, so that the server can start,
   // kept up to date after; the events stream made, waiting for the bus; the store's place checked
@@ -301,10 +304,19 @@ async function main(): Promise<void> {
   followLive(bus, { store, taken: liveTaken }).catch((err) =>
     log("control", "live lines from the bus stopped", { error: String(err) }, "error"),
   );
-  // The knowledge base's files, each kept once by its SHA-256 in control's state (goal 175).
-  followKbFiles(bus, new KbFiles(join(dir, CONTROL_STATE.kbFiles), store)).catch((err) =>
+  // The knowledge base's files, each kept once by its SHA-256 in control's state (goal 175); a
+  // file no item names, kept for good unless the owner set how many hours it stays: then control
+  // looks at start and every hour.
+  const kbFiles = new KbFiles(join(dir, CONTROL_STATE.kbFiles), store);
+  followKbFiles(bus, kbFiles).catch((err) =>
     log("control", "files for the knowledge base stopped", { error: String(err) }, "error"),
   );
+  const removeOrphans = () => kbFiles.removeOrphans(kbOrphanHours);
+  if (kbOrphanHours > 0) removeOrphans();
+  const orphans =
+    kbOrphanHours > 0
+      ? every(loops, "control", "kb_orphans", KB_ORPHANS_LOOK_MS, removeOrphans)
+      : undefined;
   // Searches and reads of the knowledge base for the rigs' agents, each answered from its run's scope.
   serveKbAsks(bus, store).catch((err) =>
     log("control", "knowledge base searches stopped", { error: String(err) }, "error"),
@@ -384,6 +396,7 @@ async function main(): Promise<void> {
     clearInterval(usersSync);
     clearInterval(configWrite);
     clearInterval(diskWatch);
+    clearInterval(orphans);
     server.close();
     process.exit(0);
   };

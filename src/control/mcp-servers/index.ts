@@ -77,6 +77,54 @@ export {
  * knowledge bases into servers, once, at the update.
  */
 
+/** How long control waits for one answer of a server's sign-in: discovery, registration, tokens. */
+export const SIGN_IN_TIMEOUT_MS = 30_000;
+/** The largest answer of a server's sign-in control reads, in bytes. */
+export const SIGN_IN_ANSWER_MAX = 1024 * 1024;
+
+/**
+ * How control makes a server's sign-in calls, every address the server's documents lead it to
+ * included: only to an address an MCP server's own may be (mcpUrlProblem), each call within
+ * SIGN_IN_TIMEOUT_MS and its answer within SIGN_IN_ANSWER_MAX. The SDK's OAuth helpers tell an
+ * error answer by `instanceof Response`, and the HTTP server control runs on replaces the global
+ * Response: each answer is made again as one, so an ended sign-in reads as invalid_grant and not
+ * as a garbled answer.
+ */
+export function signInFetch(base: typeof fetch): typeof fetch {
+  return async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const bad = mcpUrlProblem(url);
+    const where = URL.canParse(url) ? new URL(url).origin : url;
+    if (bad) throw new Error(`the sign-in leads to ${where}, which control does not call: ${bad}`);
+    const timeout = AbortSignal.timeout(SIGN_IN_TIMEOUT_MS);
+    const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+    const r = await base(input, { ...init, signal }).catch((err: unknown) => {
+      throw timeout.aborted
+        ? new Error(`${where} did not answer within ${SIGN_IN_TIMEOUT_MS / 1000} s`)
+        : err;
+    });
+    const body = r.status === 204 || r.status === 304 ? null : await cappedBody(r, where);
+    return new Response(body, { status: r.status, statusText: r.statusText, headers: r.headers });
+  };
+}
+
+/** An answer's bytes, refused once past SIGN_IN_ANSWER_MAX. */
+async function cappedBody(r: Response, where: string): Promise<Uint8Array> {
+  const tooLarge = () => new Error(`${where} answered with more than ${SIGN_IN_ANSWER_MAX} bytes`);
+  if (Number(r.headers.get("content-length")) > SIGN_IN_ANSWER_MAX) {
+    await r.body?.cancel();
+    throw tooLarge();
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of r.body ?? []) {
+    size += chunk.length;
+    if (size > SIGN_IN_ANSWER_MAX) throw tooLarge();
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,100}$/;
 const DESCRIPTION_MAX = 1000;
 
@@ -98,18 +146,7 @@ export class McpServers {
   ) {
     this.store = store;
     this.table = new ServerTable(store.mcpServers, secrets);
-    // The SDK's OAuth helpers tell an error answer by `instanceof Response`, and the HTTP server
-    // control runs on replaces the global Response: each answer is made again as one, so an
-    // ended sign-in reads as invalid_grant and not as a garbled answer.
-    const base = o.fetch ?? fetch;
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const r = await base(input, init);
-      return new Response(r.status === 204 || r.status === 304 ? null : await r.arrayBuffer(), {
-        status: r.status,
-        statusText: r.statusText,
-        headers: r.headers,
-      });
-    };
+    const fetchImpl = signInFetch(o.fetch ?? fetch);
     this.signIns = new SignIns(this.table, fetchImpl);
     this.oauth = new OAuthSignIns(this.table, store, fetchImpl, this);
     this.connect = o.connect ?? mcpConnect(o.fetch, "thermite-control");

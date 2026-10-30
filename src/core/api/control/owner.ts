@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { COMMAND_KINDS, type CommandKind } from "../../commands.ts";
+import { COMMAND_KINDS, COMMAND_MAX_BYTES, type CommandKind } from "../../commands.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../ids.ts";
+import { ReachBody } from "../../reach.ts";
 import { POD_CONFIG_ENV } from "../../tunnel.ts";
 import type { Route } from "../route.ts";
 
@@ -16,6 +17,8 @@ import type { Route } from "../route.ts";
 const SharedFields = z.record(z.string(), z.unknown());
 /** A body that says nothing: the route's path says it all. */
 const Nothing = z.object({});
+/** The largest body of a route that takes a few short fields (a rig's name, a confirmation). */
+const FEW_FIELDS_MAX_BYTES = 4 * 1024;
 
 /** A build as control's rig list gives it. */
 const ListedBuild = z.looseObject({
@@ -64,6 +67,7 @@ export const ENROLL = {
   method: "POST",
   path: "/v1/rigs",
   body: RigName,
+  maxBytes: FEW_FIELDS_MAX_BYTES,
   answer: z.looseObject({
     rig: z.string(),
     token: z.string(),
@@ -103,6 +107,7 @@ export const RESTART = {
       .default(["harness", "supervisor"]),
   }),
   answer: z.unknown(),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A request that names its rig to confirm: "reset <rig>", "terminate <rig>". */
@@ -114,6 +119,7 @@ export const RESET = {
   path: "/v1/rigs/:rig/reset",
   body: Confirm,
   answer: z.looseObject({ reset: z.number() }),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 export const RESETS = {
@@ -163,6 +169,7 @@ export const RUNPOD_TERMINATE = {
   path: "/v1/rigs/:rig/runpod/terminate",
   body: z.strictObject({ confirm: z.string() }),
   answer: z.unknown(),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A RunPod rig's spending limit and idle stop: null takes one off. */
@@ -175,6 +182,7 @@ export const RUNPOD_LIMITS = {
   path: "/v1/rigs/:rig/runpod/limits",
   body: LimitsBody,
   answer: z.unknown(),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A GPU cloud's rigs. */
@@ -207,6 +215,8 @@ export const CLOUD_LAUNCH = {
   path: "/v1/gpu-clouds/:name/rigs",
   body: LaunchBody,
   answer: z.unknown(),
+  /** A pod's settings included. */
+  maxBytes: 64 * 1024,
 } as const satisfies Route;
 
 /** The longest life of a command control issues, in minutes: a week. */
@@ -228,6 +238,8 @@ export const ISSUE = {
   path: "/v1/commands",
   body: IssueBody,
   answer: z.looseObject({ woke: z.string().optional() }),
+  /** No larger body makes a command a rig can take. */
+  maxBytes: COMMAND_MAX_BYTES,
 } as const satisfies Route;
 
 /**
@@ -288,6 +300,7 @@ export const PROPAGATE = {
   path: "/v1/propagate",
   body: z.strictObject({ run: z.string().min(1), to_run: z.string().min(1) }),
   answer: z.looseObject({ id: z.string(), seq: z.number() }),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** Start a run of a campaign control keeps (control/start-run.ts checks the request). */
@@ -432,4 +445,29 @@ export const MCP_SERVER_DELETE = {
   method: "DELETE",
   path: "/v1/mcp-servers/:name",
   answer: z.unknown(),
+} as const satisfies Route;
+
+/** An entry of the list of addresses cluster rigs may reach, as control keeps it. */
+const ReachableAddress = z.looseObject({
+  address: z.string(),
+  ports: z.array(z.number()),
+  note: z.string(),
+  set_at: z.string(),
+  set_by: z.string(),
+});
+
+/** The addresses cluster rigs' harnesses may reach beside the internet (core/reach.ts). */
+export const REACHABLE_ADDRESSES = {
+  method: "GET",
+  path: "/v1/reachable-addresses",
+  answer: z.looseObject({ addresses: z.array(ReachableAddress) }),
+} as const satisfies Route;
+
+/** The list as it is to be from now on, whole: control checks it with core/reach.ts's rules. */
+export const SET_REACHABLE_ADDRESSES = {
+  method: "PUT",
+  path: "/v1/reachable-addresses",
+  body: ReachBody,
+  answer: z.looseObject({ addresses: z.array(ReachableAddress), said: z.string() }),
+  maxBytes: 64 * 1024,
 } as const satisfies Route;

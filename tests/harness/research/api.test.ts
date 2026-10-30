@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../../src/harness/api/index.ts";
+import { LedgerError, type SourceRow } from "../../../src/harness/ledger/index.ts";
+import { sourceText } from "../../../src/harness/research/research/context.ts";
 import { researchEnv } from "../../helpers/research-run.ts";
 
 describe("research API", () => {
@@ -41,5 +43,24 @@ describe("research API", () => {
       "t",
     );
     assert.equal((await call("trial.secret-token", { name: "x", body: "y" })).status, 409);
+  });
+
+  test("a fault answers an id only, and a source whose text is gone names only the source", async () => {
+    const { env } = await researchEnv();
+    env.service.snapshot = () => {
+      throw new Error("ENOENT: no such file, open '/var/lib/thermite/state/ledger.db'");
+    };
+    const api = createHarnessApi(env.service, { supervisor: "s", proposer: "p" });
+    const r = await api.request("/v1/snapshot", { headers: { authorization: "Bearer s" } });
+    assert.equal(r.status, 500);
+    assert.match(((await r.json()) as { error: string }).error, /^internal error [0-9a-f]{8}$/);
+    const gone = { id: "s-1", text_path: "/var/lib/thermite/state/research/s-1.txt" };
+    assert.throws(
+      () => sourceText(gone as SourceRow),
+      (err: unknown) =>
+        err instanceof LedgerError &&
+        err.code === "not_found" &&
+        err.message === "the text of source s-1 can't be read on this rig",
+    );
   });
 });

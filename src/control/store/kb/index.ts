@@ -28,12 +28,14 @@ import {
   type KbItem,
   SYNC_PAGE,
 } from "../../kb/index.ts";
+import { KbFileRows } from "./files.ts";
 import { type KbVersion, keepVersion, versionRefusal, versionsOf, writtenFields } from "./items.ts";
 import { knowledgeHierarchy } from "./schema.ts";
 import { type KbScope, keepScope, scopeOf } from "./scope.ts";
 import { findItems, type KbFind, type KbFindResult, type KbWhere } from "./search.ts";
 import { knowledgeSearch } from "./words.ts";
 
+export type { KbFileRow } from "./files.ts";
 export type { KbVersion } from "./items.ts";
 export { type KbSearchMode, OUTCOME_WORDS, searchTerms } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
@@ -88,9 +90,12 @@ const READ_ANEW: Record<string, string[]> = {
 
 export class KnowledgeBase {
   private readonly db: DatabaseSync;
+  /** The files it holds, each once by its SHA-256 (files.ts; control/kb/files.ts keeps them). */
+  readonly files: KbFileRows;
 
   constructor(db: DatabaseSync) {
     this.db = db;
+    this.files = new KbFileRows(db);
     // Store migrations 14 and 17 run them; a store that waits at an older version for the move of
     // its events table has its hierarchy and words index here, before the apply writes an item.
     transaction(db, () => {
@@ -359,20 +364,6 @@ export class KnowledgeBase {
   /** Every version of an item, oldest first, each with its links. */
   versions(id: number): KbVersion[] {
     return versionsOf(this.db, id);
-  }
-
-  /** Whether control holds the file with this SHA-256 (control/kb/files.ts keeps it). */
-  hasFile(sha256: string): boolean {
-    return this.db.prepare("select 1 from kb_file where sha256 = ?").get(sha256) !== undefined;
-  }
-
-  /** A file control now holds, once: every item that names its SHA-256 has it from now on. */
-  fileKept(sha256: string, bytes: number, at = new Date().toISOString()): void {
-    this.db
-      .prepare(
-        "insert into kb_file (sha256, bytes, stored_at) values (?, ?, ?) on conflict do nothing",
-      )
-      .run(sha256, bytes, at);
   }
 
   /** What a run reads: its scope (scope.ts), never past what its campaign may read. */

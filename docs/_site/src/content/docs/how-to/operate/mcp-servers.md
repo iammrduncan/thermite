@@ -31,6 +31,8 @@ Press **Read tools again** on the row. Control reads the server's tools with its
 
 An OAuth server shows **Sign in ↗** until it is first signed in, **Sign in again ↗** when its sign-in ended (the server refused to renew it), and **Sign in again with another account ↗** inside its row when it works. Press it: a new tab opens the server's sign-in page. Allow Thermite there; the tab comes back to **Settings**. Control renews an OAuth sign-in by itself while the server lets it, when less than five minutes of its access token are left.
 
+Control holds each address a sign-in leads it to, from the server's own documents and its sign-in server's, to the rules of an MCP URL: `https://`, or `http://` for this machine alone, with no user, password or secret in it. It waits 30 seconds at most for each answer, and reads 1 MiB of it at most. Otherwise the sign-in stops, with why, such as `the sign-in leads to http://auth.example.com, which control does not call: Use https. …`.
+
 ## Change a server
 
 Open its row, change the fields and press **Save and read its tools**:

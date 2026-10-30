@@ -1,5 +1,6 @@
+import type { ReachEntry } from "../../core/reach.ts";
 import { type ClusterKubectl, type ClusterTarget, kubeError } from "./kubectl.ts";
-import { harnessKeptOffCluster } from "./netcheck.ts";
+import { harnessIngress, harnessKeptOffCluster, type SlotOpening } from "./netcheck.ts";
 
 /**
  * What control reads from a cluster before it sets a rig up there, and again with "Check again".
@@ -27,6 +28,11 @@ export interface ClusterSlot {
   /** Whether the slot's network rules keep a harness off the cluster, and why. */
   network_ok?: boolean | undefined;
   network_why?: string | undefined;
+  /** Each address of the list of addresses rigs may reach that the slot's rules open. */
+  openings?: SlotOpening[] | undefined;
+  /** Whether the slot's rules let only the rig's supervisor connect to the harness, and why not. */
+  ingress_ok?: boolean | undefined;
+  ingress_why?: string | undefined;
   /** What the slot's quota allows a rig (limits, else requests), when control can read it. */
   quota?: SlotQuota | undefined;
 }
@@ -171,24 +177,46 @@ export const HARNESS_LABELS = {
   "app.kubernetes.io/component": "harness",
 };
 
-/** Reads a slot's network rules and says whether they keep a harness with these labels off the cluster. */
+/**
+ * Reads a slot's network rules and says whether they keep a harness with these labels off the
+ * cluster, beside the addresses of the owner's list (`reach`) they open; and whether only the
+ * rig's supervisor may connect to the harness, which is a warning, never a refusal.
+ */
 export async function slotNetwork(
   k: ClusterKubectl,
   t: ClusterTarget,
   namespace: string,
   labels: Record<string, string>,
-): Promise<{ ok: boolean; why: string }> {
+  reach: ReachEntry[],
+): Promise<{
+  ok: boolean;
+  why: string;
+  openings: SlotOpening[];
+  ingress?: { ok: boolean; why: string } | undefined;
+}> {
   const r = await k.kubectl(t, ["get", "networkpolicy", "-n", namespace, "-o", "json"]);
   if (r.code !== 0)
-    return { ok: false, why: `control could not read the slot's network rules: ${kubeError(r)}` };
-  return harnessKeptOffCluster((json(r.stdout).items ?? []) as never[], labels);
+    return {
+      ok: false,
+      why: `control could not read the slot's network rules: ${kubeError(r)}`,
+      openings: [],
+    };
+  const policies = (json(r.stdout).items ?? []) as never[];
+  return {
+    ...harnessKeptOffCluster(policies, labels, reach),
+    ingress: harnessIngress(policies, labels),
+  };
 }
 
-/** Reads the cluster. Throws, in words, when control can't reach it at all. */
+/**
+ * Reads the cluster, each slot's network rules against the owner's list of addresses rigs may
+ * reach. Throws, in words, when control can't reach it at all.
+ */
 export async function checkCluster(
   k: ClusterKubectl,
   t: ClusterTarget,
   slots: string[],
+  reach: ReachEntry[] = [],
 ): Promise<ClusterFacts> {
   const version = await k.kubectl(t, ["version", "-o", "json"]);
   if (version.code !== 0)
@@ -224,14 +252,19 @@ export async function checkCluster(
       "-o",
       "jsonpath={.items[0].metadata.labels.app\\.kubernetes\\.io/instance}",
     ]);
-    const net = await slotNetwork(k, t, s, HARNESS_LABELS);
+    const by = used.code === 0 && used.stdout.trim() ? used.stdout.trim() : undefined;
+    // A slot that holds a rig is read with that rig's labels, as Add a rig read it.
+    const labels = by ? { ...HARNESS_LABELS, "app.kubernetes.io/instance": by } : HARNESS_LABELS;
+    const net = await slotNetwork(k, t, s, labels, reach);
     const quotas = await k.kubectl(t, ["get", "resourcequota", "-n", s, "-o", "json"]);
     out.slots.push({
       namespace: s,
       usable: can.stdout.trim() === "yes",
-      used_by: used.code === 0 && used.stdout.trim() ? used.stdout.trim() : undefined,
+      used_by: by,
       network_ok: net.ok,
       network_why: net.why,
+      ...(net.openings.length ? { openings: net.openings } : {}),
+      ...(net.ingress ? { ingress_ok: net.ingress.ok, ingress_why: net.ingress.why } : {}),
       quota: quotas.code === 0 ? slotQuota(quotas.stdout) : undefined,
     });
   }

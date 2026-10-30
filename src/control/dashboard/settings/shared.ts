@@ -26,6 +26,10 @@ export const settingsUrl = (k: "ok" | "error", m: string) =>
   `/ui/settings?${k}=${encodeURIComponent(m)}`;
 export const machineUrl = (k: "ok" | "error", m: string) => settingsUrl(k, m);
 export const usd = (n: number | null) => (n === null ? "–" : `$${n.toFixed(2)}`);
+/** The add form's box for a cluster whose connection control can't check, and its words. */
+export const UNCHECKED_LABEL = "I accept that this cluster's connection isn't checked";
+export const UNCHECKED_TIP =
+  "Tick this only for a kubeconfig that skips TLS checks (insecure-skip-tls-verify) or reaches its API server over plain http://. Control then can't tell the real API server from another one on the way, which would see every rig's tokens and secrets control applies there. Without the tick, control refuses such a kubeconfig.";
 
 /**
  * What the settings' forms and other pages share: Git access for control's own lookups (a new

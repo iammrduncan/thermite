@@ -26,6 +26,11 @@ import type { ControlStore } from "../store/index.ts";
 /** How long a chunk waits on the stream while control's disk is at its floor, before it is tried again. */
 export const KB_FILES_HELD_MS = 60_000;
 
+/** How often control looks for orphan files, while THERMITE_CONTROL_KB_ORPHAN_HOURS is above 0. */
+export const KB_ORPHANS_LOOK_MS = 60 * 60_000;
+/** The most orphan files one look removes; the others wait for the next look. */
+export const KB_ORPHANS_PER_LOOK = 1_000;
+
 /**
  * The knowledge base's files in control's state (goal 175, step 2). Each file is kept once, by its
  * SHA-256, at `<dir>/<its first two hex digits>/<sha256>`, named there only once it is whole and
@@ -40,6 +45,9 @@ export const KB_FILES_HELD_MS = 60_000;
  * already takes nothing more. While control's disk is at its floor (disk.ts) nothing is written:
  * each chunk waits on the stream, tried again every KB_FILES_HELD_MS. The item and its file meet by the SHA-256, whichever comes first:
  * an item whose file is not here yet waits for it; a file no item names yet waits for its item.
+ * Every file is kept for good, unless the owner sets THERMITE_CONTROL_KB_ORPHAN_HOURS: then a file
+ * no version of any item names, kept more than that many hours ago, is an orphan, and
+ * removeOrphans removes it.
  */
 export class KbFiles {
   readonly dir: string;
@@ -70,7 +78,7 @@ export class KbFiles {
       return undefined;
     }
     const kb = this.store.kb();
-    if (kb.hasFile(c.sha256)) return undefined;
+    if (kb.files.has(c.sha256)) return undefined;
     const floor = controlDiskOf(this.store)?.held;
     if (floor) {
       if (!this.held)
@@ -82,7 +90,7 @@ export class KbFiles {
     const final = this.path(c.sha256);
     // Named only once checked: a control stopped before it recorded the file records it now.
     if (existsSync(final)) {
-      kb.fileKept(c.sha256, statSync(final).size);
+      kb.files.kept(c.sha256, statSync(final).size);
       return undefined;
     }
     const part = join(this.dir, ".partial", `${c.rig}.${c.sha256}`);
@@ -110,7 +118,7 @@ export class KbFiles {
     }
     mkdirSync(dirname(final), { recursive: true });
     renameSync(part, final);
-    kb.fileKept(c.sha256, c.bytes);
+    kb.files.kept(c.sha256, c.bytes);
     this.kept++;
     log("control", "a file for the knowledge base kept", {
       rig: c.rig,
@@ -118,6 +126,41 @@ export class KbFiles {
       bytes: c.bytes,
     });
     return undefined;
+  }
+
+  /**
+   * Removes the orphans: files kept more than `hours` ago that no version of any item names, as
+   * its item never arrived or was refused; 0 removes nothing. Each goes from control's state and
+   * its store, with a line in its log and `kb_file_removed` in its audit log. An item that names
+   * one later waits for its file, as an item that comes before its file does. Says how many went.
+   */
+  removeOrphans(hours: number, now = Date.now()): number {
+    if (!(hours > 0)) return 0;
+    const files = this.store.kb().files;
+    const before = new Date(now - hours * 3_600_000).toISOString();
+    let removed = 0;
+    for (const f of files.orphans(before, KB_ORPHANS_PER_LOOK)) {
+      const what = { sha256: f.sha256, bytes: f.bytes, stored_at: f.stored_at, hours };
+      try {
+        rmSync(this.path(f.sha256), { force: true });
+      } catch (err) {
+        log(
+          "control",
+          "an orphan file not removed; trying again at the next look",
+          {
+            ...what,
+            error: errorText(err),
+          },
+          "warn",
+        );
+        continue;
+      }
+      files.removed(f.sha256);
+      removed++;
+      log("control", "a file for the knowledge base removed: no item names it", what);
+      this.store.auditLog.add("control", "kb_file_removed", what);
+    }
+    return removed;
   }
 
   /** A rig puts one file at a time: its first chunk drops the rig's other files cut short. */

@@ -28,6 +28,12 @@ export const CONTROL_NUMBERS = {
   },
   /** The free space control keeps on its state folder and in the bus's store (control/disk.ts). */
   diskFloorGib: DISK_FLOOR,
+  /** How long a knowledge-base file no item names is kept (control/kb/files.ts); 0: for good. */
+  kbOrphanHours: {
+    name: "THERMITE_CONTROL_KB_ORPHAN_HOURS",
+    rule: { unit: "hours", zeroMeans: "every file is kept" },
+    fallback: 0,
+  },
 } satisfies Record<string, NumberSpec>;
 
 /** Control's address as rigs and the machines it sets rigs up on reach it. */

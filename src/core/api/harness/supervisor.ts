@@ -105,6 +105,7 @@ export const MCP_EVENTS = {
     error: z.string().max(MCP_ERROR_MAX).optional(),
   }),
   answer: z.looseObject({ ok: z.boolean() }),
+  maxBytes: 16 * 1024,
 } as const satisfies Route;
 
 /** The most probes the supervisor's part of the isolation check holds, and the longest words. */

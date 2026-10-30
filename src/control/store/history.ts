@@ -12,14 +12,36 @@ export class RigHistory extends StorePart {
       .run(rig, new Date().toISOString(), step, ok ? 1 : 0, detail ?? null);
   }
 
-  list(rig: string): { at: string; step: string; ok: boolean; detail: string | null }[] {
+  /** A rig's newest steps of these kinds, newest first, at most `limit`. */
+  latest(rig: string, steps: readonly string[], limit = 20): RigStep[] {
+    return (
+      this.db
+        .prepare(
+          `select * from rig_setup_event where rig = ? and step in (${steps.map(() => "?").join(", ")})
+           order by id desc limit ?`,
+        )
+        .all(rig, ...steps, limit) as Row[]
+    ).map(stepOf);
+  }
+
+  list(rig: string): RigStep[] {
     return (
       this.db.prepare("select * from rig_setup_event where rig = ? order by id").all(rig) as Row[]
-    ).map((r) => ({
-      at: String(r.at),
-      step: String(r.step),
-      ok: Number(r.ok) === 1,
-      detail: r.detail === null ? null : String(r.detail),
-    }));
+    ).map(stepOf);
   }
 }
+
+/** One step of a rig's history: when, which, whether it went well, and its detail. */
+interface RigStep {
+  at: string;
+  step: string;
+  ok: boolean;
+  detail: string | null;
+}
+
+const stepOf = (r: Row): RigStep => ({
+  at: String(r.at),
+  step: String(r.step),
+  ok: Number(r.ok) === 1,
+  detail: r.detail === null ? null : String(r.detail),
+});

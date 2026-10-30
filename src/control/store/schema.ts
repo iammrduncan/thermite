@@ -3,6 +3,7 @@ import { copyBeforeMigration, keepCopyBefore, newerSchemaWords } from "../../com
 import { transaction } from "../../common/sqlite.ts";
 import { auditRepeats } from "./audit.ts";
 import { busKeyTables, busSealKeyColumn } from "./bus.ts";
+import { clusterUncheckedColumn } from "./clusters.ts";
 import { commandRunAndCampaign } from "./commands.ts";
 import {
   dropEventsTable,
@@ -17,6 +18,7 @@ import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { migrateModelRoutes } from "./providers.ts";
+import { reachableAddressTable } from "./reachable.ts";
 import { renameAgentRoles, renameUnitsToRigs } from "./renames.ts";
 import { runRegistryTable } from "./runs.ts";
 
@@ -678,6 +680,10 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   campaignProposalGrants,
   // A refusal that repeats is one audit entry, with its count and its first and last time.
   auditRepeats,
+  // The addresses cluster rigs' harnesses may reach beside the internet, set by the owner.
+  reachableAddressTable,
+  // A cluster keeps the owner's acceptance of a connection control can't check.
+  clusterUncheckedColumn,
 ];
 
 /**

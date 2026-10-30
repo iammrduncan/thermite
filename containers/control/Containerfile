@@ -32,7 +32,7 @@ FROM ${NODE_IMAGE}
 # (goal 125).
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
- && apt-get install -y --no-install-recommends tini ca-certificates git openssh-client unzip \
+ && apt-get install -y --no-install-recommends tini ca-certificates git openssh-client \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/thermite
 COPY --from=build /src/package.json ./

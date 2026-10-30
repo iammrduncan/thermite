@@ -47,7 +47,8 @@ import { checkFollowUrl, modelCheckHtml } from "../../ui/rigs/checks.ts";
 import { modelPricesBlock } from "../../ui/usage.ts";
 import type { Dashboard } from "../context.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
-import { modelPrefix, TYPES, usd } from "./shared.ts";
+import { reachBlock } from "./reach.ts";
+import { modelPrefix, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
 
 /**
  * Settings › Providers: what can be added, the providers with their rows, the harness and model
@@ -138,8 +139,10 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
     const atMcp = c.req.query("at") === "mcp";
     // So is what Save prices did (at=prices), in Model prices.
     const atPrices = c.req.query("at") === "prices";
-    const ok = atMcp || atPrices ? undefined : c.req.query("ok");
-    const error = atMcp || atPrices ? undefined : said(c);
+    // And what the addresses cluster rigs may reach said (at=reach), in theirs.
+    const elsewhere = atMcp || atPrices || c.req.query("at") === "reach";
+    const ok = elsewhere ? undefined : c.req.query("ok");
+    const error = elsewhere ? undefined : said(c);
     // Model prices (goal 075): one table under the providers, for every model not on a plan.
     const prices = modelPricesBlock({
       providers,
@@ -255,6 +258,7 @@ ${
 <label data-for="k8s" hidden>${infoLabel("Placement", "Where each rig goes. Namespaces control creates: one namespace per rig, with its own network rules. Slots: namespaces the cluster's operators made for Thermite, with their own quotas and rules; control only deploys into a free one.")}<select name="placement"><option value="created">A namespace control creates for each rig</option><option value="slot">Slots the cluster's operators made</option></select></label>
 <label data-for="k8s" hidden>${infoLabel("Namespace for each rig", "For created namespaces: the name of each rig's namespace. {rig} becomes the rig's name.")}<input name="namespace_pattern" maxlength="63" value="thermite-{rig}"></label>
 <label data-for="k8s" hidden>${infoLabel("Slots", "For slots: the slot namespaces, separated by commas. Control checks that it may deploy into each one.")}<input name="slots" maxlength="2000" placeholder="thermite-slot-1, thermite-slot-2"></label>
+<label data-for="k8s" hidden style="grid-column:1/-1">${infoLabel("Unchecked connection", UNCHECKED_TIP)}<span class="row small" style="gap:8px"><input type="checkbox" name="unchecked" value="1" style="height:auto;width:auto"> ${UNCHECKED_LABEL}.</span></label>
 <div data-for="claude" hidden class="card flat" style="grid-column:1/-1;padding:12px 14px"><b>Get the token on your own computer.</b> <span class="muted small">Control cannot open Anthropic's sign-in page for you.</span><ol class="small" style="margin:8px 0 0 18px;line-height:1.7"><li>Install Claude Code there, if it is not installed: <code>npm install -g @anthropic-ai/claude-code</code></li><li>Run <code>claude setup-token</code> and sign in with your Claude account in the browser.</li><li>Copy the token it prints, and paste it below. It is good for one year.</li></ol></div>
 <label data-for="claude" hidden style="grid-column:1/-1">${infoLabel("Token from claude setup-token", "The long-lived token that Claude Code prints. Control seals it at once and never shows it again. Only Claude Code, Anthropic's own program, uses it on the rigs: Anthropic does not allow other programs to use a subscription.")}<input name="claude_token" type="password" autocomplete="new-password" maxlength="4096" placeholder="sk-ant-oat01-… never shown again"></label>
 <div data-for="chatgpt" hidden class="card flat" style="grid-column:1/-1;padding:12px 14px"><b>Sign in with ChatGPT, then paste one address.</b> <span class="muted small">For your own use only: a Thermite that several people use takes API keys.</span><ol class="small" style="margin:8px 0 0 18px;line-height:1.7"><li>Press <b>Sign in with ChatGPT</b>. A ChatGPT page opens in a new tab. Sign in there and allow Thermite.</li><li>The tab then goes to an address that starts with <code>${esc(CHATGPT_REDIRECT)}</code> and shows an error. That is expected: the address is for an app on your own computer.</li><li>Copy that whole address from the tab's address bar, and paste it below.</li></ol><div class="act" style="margin-top:10px"><a class="btn sm" href="/ui/settings/chatgpt/start" target="_blank" rel="noopener">Sign in with ChatGPT ↗</a></div></div>
@@ -336,6 +340,7 @@ ${note}
 ${prices}
 <div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>
 ${mcpSettingsBlocks(store, mcpServers, t, now, (k) => (k === "error" ? said(c) : c.req.query(k)))}
+${reachBlock(store, t, now, (k) => c.req.query(k))}
 <div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>
 <script src="/ui/assets/providers.js" defer></script>`,
       vs,
@@ -481,6 +486,9 @@ ${form("delete", "Delete this machine", false).replace('class="sm"', 'class="sm 
         const f = k.facts as ClusterFacts | null;
         const kName = encodeURIComponent(k.name);
         const rigsHere = store.clusters.rigs(k.name).filter((r) => r.status !== "removed");
+        const unchecked = k.unchecked
+          ? ` <span class="chip warn" title="${esc(k.unchecked.what.join("; "))}">connection not checked: you accepted it ${esc(ago(k.unchecked.at, Date.now()))} ago</span>`
+          : "";
         const status = k.check_error
           ? `<span class="dq-why bad">${esc(k.check_error)}${f ? " (showing the last check)" : ""}</span>`
           : f
@@ -520,7 +528,7 @@ ${form("delete", "Delete this machine", false).replace('class="sm"', 'class="sm 
           `<form class="inline" method="post" action="/ui/settings/clusters/${kName}/${action}"><input type="hidden" name="csrf" value="${t}"><button class="${cls}">${label}</button></form>`;
         return `<details class="dq${k.check_error ? " dq-bad" : ""}" data-k="cluster-${esc(k.name)}"><summary>
 <span class="dq-kind"><span class="kind r">Cluster</span></span>
-<span class="dq-main"><span class="dq-head">${esc(k.name)} <span class="muted" style="font-weight:400">· Kubernetes</span></span>${status}<span class="dq-sub"><span class="dq-where">${esc(k.context || "its current context")}</span><span class="dq-where">${esc(where)}</span><span class="dq-where">${rigsHere.length ? `runs ${rigsHere.map((r) => esc(r.rig)).join(", ")}` : "no rig yet"}</span></span></span>
+<span class="dq-main"><span class="dq-head">${esc(k.name)} <span class="muted" style="font-weight:400">· Kubernetes</span></span>${status}<span class="dq-sub"><span class="dq-where">${esc(k.context || "its current context")}</span><span class="dq-where">${esc(where)}</span><span class="dq-where">${rigsHere.length ? `runs ${rigsHere.map((r) => esc(r.rig)).join(", ")}` : "no rig yet"}</span>${unchecked}</span></span>
 <span class="dq-side"><span class="dq-btns">${form("check", "Check again")}</span></span>
 </summary><div class="dq-body">${facts}${
           k.placement === "slot"

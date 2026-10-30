@@ -492,7 +492,14 @@ export function prepareCommand(
 export async function propagateChampion(
   store: ControlStore,
   privateKeyPem: string,
-  input: { run: string; toRun: string; issuedBy: string; staleAfterMs: number },
+  input: {
+    run: string;
+    toRun: string;
+    issuedBy: string;
+    staleAfterMs: number;
+    /** Sent with an agent's token, which does not steer a rig during the owner's full reset. */
+    agent?: boolean | undefined;
+  },
 ): Promise<{ id: string; seq: number }> {
   const opts = { staleAfterMs: input.staleAfterMs };
   const from = await findRun(store, input.run, opts);
@@ -501,6 +508,8 @@ export async function propagateChampion(
   const to = await findRun(store, input.toRun, opts);
   const dst = to?.run;
   if (!to || !dst) throw new Refusal(`no run ${input.toRun}`);
+  if (input.agent && store.fullResets.open(to.rig.id))
+    throw new Refusal(`${to.rig.id} is being reset by the owner`);
   if (to.rig.id === from.rig.id)
     throw new Refusal(`${input.run} and ${input.toRun} are on one rig: propagate between two rigs`);
   const champ = currentChampion(src);

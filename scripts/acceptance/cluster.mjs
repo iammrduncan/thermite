@@ -401,14 +401,21 @@ try {
         }),
       ),
   );
-  // The operators' rule: the harness reaches DNS and the internet, not the closed ranges.
+  // The operators' rule: the harness reaches DNS and the internet, not the closed ranges, and
+  // only its supervisor connects to it.
   const rule = {
     apiVersion: "networking.k8s.io/v1",
     kind: "NetworkPolicy",
     metadata: { name: "thermite-harness", namespace: "thermite-slot-1" },
     spec: {
       podSelector: { matchLabels: { "app.kubernetes.io/component": "harness" } },
-      policyTypes: ["Egress"],
+      policyTypes: ["Egress", "Ingress"],
+      ingress: [
+        {
+          from: [{ podSelector: { matchLabels: { "app.kubernetes.io/component": "supervisor" } } }],
+          ports: [{ port: 8700, protocol: "TCP" }],
+        },
+      ],
       egress: [
         {
           ports: [

@@ -185,11 +185,21 @@ describe("the supervisor and the MCP servers control gives the rig", () => {
       assert.match(config.mcpServers.gbrain?.url ?? "", /^http:\/\/127\.0\.0\.1:\d+\/mcp\/gbrain$/);
       assert.ok(!JSON.stringify(config).includes("advisorkey"));
       assert.deepEqual(local.args.slice(2), ["--allowedTools", "mcp__gbrain"]);
-      // A request without the call's own token reaches nothing.
+      // A request without the call's own token, or with another, reaches nothing.
       assert.equal(
         (await fetch(config.mcpServers.gbrain?.url ?? "", { method: "POST" })).status,
         401,
       );
+      for (const other of [`Bearer ${local.token.slice(1)}x`, `Bearer ${local.token}x`])
+        assert.equal(
+          (
+            await fetch(config.mcpServers.gbrain?.url ?? "", {
+              method: "POST",
+              headers: { authorization: other },
+            })
+          ).status,
+          401,
+        );
     } finally {
       await local.close();
     }

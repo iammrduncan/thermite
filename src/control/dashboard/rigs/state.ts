@@ -1,16 +1,18 @@
 import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
+import { BUS_KEY_CHANGE_STEPS, BUS_KEYS_SEEN_STEP } from "../../bus/index.ts";
 import { updateRigImages } from "../../clusters/index.ts";
 import { notSent } from "../../command-progress.ts";
 import { tail, updateScript } from "../../machines/index.ts";
 import { checkRigPlace, controlImages } from "../../rigs/index.ts";
 import { rigHref } from "../../ui/urls.ts";
-import { type Dashboard, wantsJson } from "../context.ts";
+import { backTo, type Dashboard, wantsJson } from "../context.ts";
 import { rigHelpers, updateFollowUrl } from "./shared.ts";
 
 /**
- * A rig's state (goal 012): its update to control's version, and a check of where it runs; and the
- * owner's acceptance of a rig's new report key.
+ * A rig's state (goal 012): its update to control's version, and a check of where it runs; the
+ * owner's acceptance of a rig's new report key; and the owner's Seen of a change of its keys on the
+ * message bus, which took effect without the owner.
  */
 export function rigStateRoutes(app: Hono, dash: Dashboard): void {
   const { control, noted, opts, parts, ssh, store, updates } = dash;
@@ -25,6 +27,17 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
       String(f.fingerprint ?? ""),
     );
     return c.redirect(rigHref(c.req.param("rig")), 303);
+  });
+  // The owner saw the changes of a rig's keys on the bus: their card leaves Needs you, and they
+  // stay in the rig's history.
+  app.post("/ui/rigs/:rig/bus-keys/seen", async (c) => {
+    const rig = c.req.param("rig");
+    const f = await c.req.parseBody();
+    if (store.rigHistory.latest(rig, BUS_KEY_CHANGE_STEPS, 1).length) {
+      store.rigHistory.add(rig, BUS_KEYS_SEEN_STEP, true);
+      store.auditLog.add("owner:ui", "rig_bus_keys_seen", { rig });
+    }
+    return c.redirect(backTo(f, rigHref(rig)), 303);
   });
 
   // ---------------------------------------------------------------- a rig's state (goal 012)

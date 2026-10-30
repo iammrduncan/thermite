@@ -3,6 +3,7 @@ import { createUser, fromSeed } from "@nats-io/nkeys";
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { writeAtomic } from "../../common/fs.ts";
+import { sealKeyFingerprint } from "../../core/link/config.ts";
 import { LIVE_RUNS_PER_RIG } from "../../core/link/live.ts";
 import { isUserKey, userKeyFingerprint, usersFile } from "../../core/link/users.ts";
 import type { SecretBox } from "../secrets.ts";
@@ -49,6 +50,66 @@ export function busConfigDir(env: Record<string, string | undefined>): string {
 
 /** The users file's mode: it holds public keys and permissions, which the server reads. */
 const USERS_FILE_MODE = 0o644;
+
+/**
+ * How long the server may go on not taking the users file (a reload that fails, or a file control
+ * can't write) before Needs you shows it: 12 syncs in a row.
+ */
+export const BUS_USERS_TROUBLE_MS = 60_000;
+
+/** The rig's steps that say a key it registered on the bus changed, or was refused. */
+export const BUS_KEY_CHANGE_STEPS = [
+  "bus_key_changed",
+  "seal_key_changed",
+  "bus_key_refused",
+  "seal_key_refused",
+] as const;
+/** The owner saw the changes above: Needs you shows only those after it. */
+export const BUS_KEYS_SEEN_STEP = "bus_keys_seen";
+
+/**
+ * Who else holds a key a rig registers on the bus: another rig, a retired one too, as its user key
+ * or its seal key; or control, as one of its own (its two in the store, and `own`, the backup's).
+ * Undefined when no one does. Two users with one key would each sign in as the other, and a users
+ * file that names a key twice may not load at all.
+ */
+export function busKeyHolder(
+  store: ControlStore,
+  rig: string,
+  key: string,
+  own: readonly string[] = [],
+): string | undefined {
+  return own.includes(key) ? "control" : store.busKeys.holderOf(key, rig);
+}
+
+/** The words of a refusal of a key another holds: no name of who holds it, which is not the rig's. */
+export const keyHeldWords = (field: "bus_key" | "bus_seal_key") =>
+  `${field} is refused: another rig or control holds that key on the message bus. Each rig's supervisor makes its own keys in its home; a supervisor whose home was copied from another rig's needs a home of its own`;
+
+/**
+ * Notes a refused key in the rig's history, for its page and Needs you, with who holds it: once,
+ * while the same key is refused again at each of the supervisor's calls.
+ */
+export function noteKeyRefused(
+  store: ControlStore,
+  rig: string,
+  field: "bus_key" | "bus_seal_key",
+  key: string,
+  holder: string,
+): void {
+  const step = field === "bus_key" ? "bus_key_refused" : "seal_key_refused";
+  const fingerprint = field === "bus_key" ? userKeyFingerprint(key) : sealKeyFingerprint(key);
+  const detail = `fingerprint ${fingerprint}, which ${holder} holds`;
+  const last = store.rigHistory.latest(rig, [...BUS_KEY_CHANGE_STEPS, "bus_key", "seal_key"], 1)[0];
+  if (last?.step === step && last.detail === detail) return;
+  store.rigHistory.add(rig, step, false, detail);
+  log(
+    "control",
+    "a rig's key on the bus refused: another holds it",
+    { rig, field, fingerprint, holder },
+    "warn",
+  );
+}
 
 /**
  * Records the key a rig's supervisor registered (checked by the caller with isUserKey). Its first
@@ -109,6 +170,16 @@ export interface BusUsersOptions {
   reload: (systemSeed: Uint8Array) => Promise<void>;
   /** The file of the backup's seed, made there first (mode 0600); none: the bus has no backup user. */
   backupSeedFile?: string | undefined;
+  /** The time now, in milliseconds (a test gives its own). */
+  clock?: (() => number) | undefined;
+}
+
+/** The bus's users of each store's control, where control made them: Needs you reads them. */
+const watched = new WeakMap<ControlStore, BusUsers>();
+
+/** The bus's users kept beside this store; undefined where control made none, as in a test. */
+export function busUsersOf(store: ControlStore): BusUsers | undefined {
+  return watched.get(store);
 }
 
 /** One of control's own keys: its seed, and the public part the users file names. */
@@ -134,13 +205,40 @@ export class BusUsers {
   private reloaded = false;
   /** Whether the last sync failed: a failure is logged in full once, then quietly until one works. */
   private failing = false;
+  /** Since when the server has not taken the file, and why, while it has not. */
+  private trouble: { since: number; error: string; step: "write" | "reload" } | undefined;
+  private readonly clock: () => number;
   private last: Promise<void> = Promise.resolve();
 
   constructor(o: BusUsersOptions) {
     this.o = o;
+    this.clock = o.clock ?? Date.now;
     this.control = identity(o, "control");
     this.system = identity(o, "system");
     this.backup = o.backupSeedFile ? backupKey(o.backupSeedFile) : undefined;
+    watched.set(o.store, this);
+  }
+
+  /** Control's own keys on the bus: its user, its system user and the backup's. */
+  ownKeys(): string[] {
+    return [this.control.publicKey, this.system.publicKey, ...(this.backup ? [this.backup] : [])];
+  }
+
+  /**
+   * The server not taking the users file for BUS_USERS_TROUBLE_MS or more: since when, the last
+   * reason, and whether control could not write the file or the server did not reload it.
+   * Undefined while it takes it, and as soon as it does again.
+   */
+  keepsFailing(): { since: string; error: string; step: "write" | "reload" } | undefined {
+    const t = this.trouble;
+    if (!t || this.clock() - t.since < BUS_USERS_TROUBLE_MS) return undefined;
+    return { since: new Date(t.since).toISOString(), error: t.error, step: t.step };
+  }
+
+  /** A sync that failed: since when it fails, kept from the first failure, with the newest reason. */
+  private failed(step: "write" | "reload", error: string): void {
+    this.trouble = { since: this.trouble?.since ?? this.clock(), error, step };
+    this.failing = true;
   }
 
   /** The seed control signs in to the bus with. */
@@ -194,7 +292,7 @@ export class BusUsers {
       const error = errorText(err);
       const level = this.failing ? "debug" : "error";
       log("control", "the bus's files not written; trying again", { ...where, error }, level);
-      this.failing = true;
+      this.failed("write", error);
       return;
     }
     if (this.reloaded) return;
@@ -202,13 +300,18 @@ export class BusUsers {
       await this.o.reload(this.system.seed);
       this.reloaded = true;
       this.failing = false;
+      if (this.trouble)
+        log("control", "the bus's server takes its users again", {
+          since: new Date(this.trouble.since).toISOString(),
+        });
+      this.trouble = undefined;
       log("control", "the bus's server reloaded its users", { users: usersIn(text) });
     } catch (err) {
       const error = redact(errorText(err)).replace(/\bU[A-Z2-7]{55}\b/g, "U…");
       const what = { error, again_in_s: BUS_USERS_SYNC_MS / 1000 };
       const level = this.failing ? "debug" : "warn";
       log("control", "the bus's server did not reload its users; trying again", what, level);
-      this.failing = true;
+      this.failed("reload", error);
     }
   }
 }

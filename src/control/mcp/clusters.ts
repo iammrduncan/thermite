@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { RIG_ID_SENTENCE } from "../../core/ids.ts";
+import { REACH_MAX_ENTRIES, REACH_MAX_PORTS } from "../../core/reach.ts";
 import {
   addClusterRig,
   type ClusterResourcesBody,
@@ -8,6 +9,7 @@ import {
   clusterRigAction,
   setClusterRigResources,
   setClusterSlots,
+  setReachableAddresses,
   updateRigImages,
 } from "../clusters/index.ts";
 import type { ToolContext } from "./context.ts";
@@ -172,4 +174,47 @@ export function registerClusterRigs(tools: ToolContext): void {
       }),
     );
   }
+}
+
+/**
+ * The addresses cluster rigs' harnesses may reach beside the internet, as Settings keeps them: read
+ * by the owner and the operator, set by the owner alone.
+ */
+export function registerReachableAddresses(tools: ToolContext): void {
+  const { server, store, opts, actor, role, audited } = tools;
+  if (role !== "owner" && role !== "operator") return;
+  server.registerTool(
+    "reachable_addresses",
+    {
+      title: "Addresses cluster rigs may reach",
+      description:
+        "The owner's list in Settings › Addresses cluster rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.",
+      inputSchema: {},
+    },
+    audited("reachable_addresses", () => ({ addresses: store.reachable.list() })),
+  );
+  if (role !== "owner") return;
+  server.registerTool(
+    "set_reachable_addresses",
+    {
+      title: "Set the addresses cluster rigs may reach",
+      description: `Sets the whole list in Settings › Addresses cluster rigs may reach, in place of the one before (an empty list removes every address). Each entry: address, one IPv4 or IPv6 address in the private, shared or link-local ranges, never a range; ports, 1 to ${REACH_MAX_PORTS} TCP ports; note, what it is. At most ${REACH_MAX_ENTRIES} addresses, each once. Control writes the list at once into the network rules of each rig it set up in a namespace it created (a step "network" in each rig's history); a joined rig keeps the list its join command gave it; a slot's rules are its operators', and control's check of a slot accepts a rule that opens exactly a listed address on its listed ports. Returns {addresses, said}. The owner's token only.`,
+      inputSchema: {
+        addresses: z
+          .array(
+            z.object({
+              address: z.string(),
+              ports: z.array(z.number().int()),
+              note: z.string().optional(),
+            }),
+          )
+          .max(REACH_MAX_ENTRIES),
+      },
+    },
+    audited("set_reachable_addresses", (a: { addresses: unknown[] }) => {
+      const r = setReachableAddresses(opts.parts, a.addresses, actor);
+      if ("error" in r) throw new Error(r.error);
+      return { addresses: store.reachable.list(), said: r.ok };
+    }),
+  );
 }

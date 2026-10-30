@@ -246,7 +246,7 @@ services:
       - control-pub:/keys:ro
     secrets: [harness-supervisor-token, harness-proposer-token, model-api-key]
     # No published ports: only the rig's supervisor reaches the harness.
-    networks: [rig, egress]
+    networks: [rig, rig-egress]
     # The broker's needs only: separate users for roles, ownership of scratch, killing leftovers.
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
@@ -296,7 +296,7 @@ services:
       - ./.dev/advisors:/etc/thermite/advisors:ro
       - control-pub:/keys:ro
     secrets: [harness-supervisor-token, control-rig-token]
-    networks: [rig, control, egress]
+    networks: [rig, control, rig-egress]
     depends_on: [harness, control]
     # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
     # supervisor and each advisor's program as users of their own. The supervisor keeps none.
@@ -349,7 +349,7 @@ services:
       - outbox2:/outbox
       - control-pub:/keys:ro
     secrets: [harness2-supervisor-token, harness2-proposer-token, model-api-key]
-    networks: [rig2, egress]
+    networks: [rig2, rig2-egress]
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
@@ -396,7 +396,7 @@ services:
       - ./.dev/advisors:/etc/thermite/advisors:ro
       - control-pub:/keys:ro
     secrets: [harness2-supervisor-token, control-rig-token-2]
-    networks: [rig2, control, egress]
+    networks: [rig2, control, rig2-egress]
     depends_on: [harness-2, control]
     # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
     # supervisor and each advisor's program as users of their own. The supervisor keeps none.
@@ -417,7 +417,9 @@ networks:
   rig: { internal: true }
   rig2: { internal: true }
   control: {}
-  egress: {}
+  # Each rig's own way out: one rig's containers reach no other rig's on it.
+  rig-egress: {}
+  rig2-egress: {}
 
 volumes:
   control-state: {}

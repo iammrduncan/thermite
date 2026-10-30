@@ -26,7 +26,7 @@ export {
   kbAskLimit,
   serveKbAsks,
 } from "./asks.ts";
-export { followKbFiles, KbFiles } from "./files.ts";
+export { followKbFiles, KB_ORPHANS_LOOK_MS, KbFiles } from "./files.ts";
 export {
   KbReadQuery,
   KbSearchQuery,

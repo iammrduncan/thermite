@@ -1,5 +1,6 @@
 import type { BuildInfo } from "../../../core/version.ts";
-import { rigVersionWords, UPDATE_STEP_WORDS } from "../../rigs/index.ts";
+import { BUS_KEY_CHANGE_STEPS } from "../../bus/index.ts";
+import { rigVersionWords, STEP_WORDS, UPDATE_STEP_WORDS } from "../../rigs/index.ts";
 import type { RigView } from "../../views/index.ts";
 import { infoLabel } from "../campaigns/new/index.ts";
 import { ago, esc, icon } from "../components/index.ts";
@@ -264,7 +265,10 @@ export function stateSummary(o: Pick<RigStateInput, "u" | "control" | "podStoppe
   return `${live}${ver}`;
 }
 
-/** The lines the rig's state adds to its history: refusals, stale and offline, versions, checks. */
+/**
+ * The lines the rig's state adds to its history: refusals, stale and offline, versions, checks,
+ * and changes of its keys on the message bus.
+ */
 export function stateRows(o: RigStateInput): TimelineRow[] {
   const u = o.u;
   const rows: TimelineRow[] = [];
@@ -317,6 +321,13 @@ export function stateRows(o: RigStateInput): TimelineRow[] {
         at: s.at,
         tone: s.ok ? (s.step === "update_reported" ? "ok" : "") : "bad",
         html: `${esc(UPDATE_STEP_WORDS[s.step] ?? s.step)}${s.detail ? `: ${esc(s.detail)}` : ""}.`,
+      });
+    // A change of its keys on the bus took effect at once; a refused one did not.
+    else if ((BUS_KEY_CHANGE_STEPS as readonly string[]).includes(s.step))
+      rows.push({
+        at: s.at,
+        tone: s.ok ? "warn" : "bad",
+        html: `${esc(STEP_WORDS[s.step] ?? s.step)}${s.detail ? `: ${esc(s.detail)}` : ""}.`,
       });
   }
   return rows;

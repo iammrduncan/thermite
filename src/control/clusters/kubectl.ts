@@ -99,13 +99,14 @@ export async function contextsOf(
  * What a pasted kubeconfig would make kubectl do inside control, read without contacting the
  * cluster (kubectl config view runs no plugin). Refused: exec and auth-provider plugins (they
  * run commands in control's container) and file references (they read control's own files,
- * its secrets among them); everything must be inline data. Warned: skipped TLS checks, plain
- * http.
+ * its secrets among them); everything must be inline data. Unchecked: skipped TLS checks and
+ * plain http, where control can't tell the real API server from another; control takes those only
+ * when the owner accepts it.
  */
 export async function inspectKubeconfig(
   k: ClusterKubectl,
   kubeconfig: string,
-): Promise<{ problems: string[]; warnings: string[] }> {
+): Promise<{ problems: string[]; unchecked: string[] }> {
   const r = await k.kubectl({ kubeconfig }, ["config", "view", "--raw", "-o", "json"]);
   let cfg: {
     clusters?: { name?: string; cluster?: Record<string, unknown> }[];
@@ -114,10 +115,10 @@ export async function inspectKubeconfig(
   try {
     cfg = JSON.parse(r.stdout) as typeof cfg;
   } catch {
-    return { problems: [`kubectl could not read it: ${kubeError(r)}`], warnings: [] };
+    return { problems: [`kubectl could not read it: ${kubeError(r)}`], unchecked: [] };
   }
   const problems: string[] = [];
-  const warnings: string[] = [];
+  const unchecked: string[] = [];
   for (const u of cfg.users ?? []) {
     const user = u.user ?? {};
     const who = `user "${u.name ?? "?"}"`;
@@ -147,13 +148,11 @@ export async function inspectKubeconfig(
         `${which} goes through a proxy (proxy-url): control talks to the API server directly`,
       );
     if (cluster["insecure-skip-tls-verify"])
-      warnings.push(
-        `${which} skips TLS verification: control can't tell the real API server from another`,
-      );
+      unchecked.push(`${which} skips TLS checks (insecure-skip-tls-verify)`);
     if (typeof cluster.server === "string" && cluster.server.startsWith("http:"))
-      warnings.push(`${which} uses plain http`);
+      unchecked.push(`${which} reaches its API server over plain http`);
   }
-  return { problems, warnings };
+  return { problems, unchecked };
 }
 
 /** The kubectl operations control uses (tests give their own). */

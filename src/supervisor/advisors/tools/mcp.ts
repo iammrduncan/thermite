@@ -14,6 +14,7 @@ import {
   KbWriteArgs,
   kbTools,
 } from "../../../agents/tools/index.ts";
+import { sameSecret } from "../../../common/secrets.ts";
 import { type AdvisorCode, CODE_TOOL_NAMES, registerCodeTools } from "./code.ts";
 import { type AdvisorPaper, PAPER_TOOL_NAMES, registerPaperTools } from "./paper.ts";
 import { type AdvisorResearch, RESEARCH_TOOL_NAMES, registerResearchTools } from "./research.ts";
@@ -121,7 +122,7 @@ export async function serveAdvisorTools(o: {
   };
   const app = new Hono();
   const serving = (make: () => McpServer | Server) => async (c: Context) => {
-    if (c.req.header("authorization") !== `Bearer ${token}`)
+    if (!sameSecret(c.req.header("authorization") ?? "", `Bearer ${token}`))
       return c.json({ error: "unauthorized" }, 401);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

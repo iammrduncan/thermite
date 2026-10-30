@@ -25,9 +25,22 @@ export type LiveKind = (typeof LIVE_KINDS)[number];
 /** The longest line of the live view: a longer one is cut, and says so. */
 export const LIVE_TEXT_MAX = 8000;
 
-/** A line's text as the live view keeps it: whole, or cut and marked `[cut]` (goal 171). */
+/**
+ * The rig's own credentials as an agent may print them: a trial's, the model proxy's and the MCP
+ * gateway's tokens (`trial.`, `proxy.` or `mcp.` and hex), and any `THERMITE_*_AUTH` setting.
+ */
+const RIG_CREDENTIALS =
+  /\b(?:(trial|proxy|mcp)\.[0-9a-f]{16,}|(THERMITE_[A-Z0-9_]*_AUTH(?:=|\\?["']?\s*:\s*\\?["']?))[^\s"'\\,;}&]+)/g;
+
+/**
+ * A line's text as the live view keeps it: the rig's credentials in it masked as `***`, then
+ * whole, or cut and marked `[cut]` (goal 171).
+ */
 export function liveText(text: string): string {
-  return text.length > LIVE_TEXT_MAX ? `${text.slice(0, LIVE_TEXT_MAX - 10)} [cut]` : text;
+  const masked = text.replace(RIG_CREDENTIALS, (_, kind, setting) =>
+    kind ? `${kind}.***` : `${setting}***`,
+  );
+  return masked.length > LIVE_TEXT_MAX ? `${masked.slice(0, LIVE_TEXT_MAX - 10)} [cut]` : masked;
 }
 
 export const LiveEntry = z.object({

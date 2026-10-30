@@ -100,6 +100,21 @@ describe("control over MCP", () => {
     );
     const audit = store.auditLog.list(100).map((a) => a.action);
     assert.ok(audit.includes("mcp:issue_command"));
+    // A tool the token lacks, and inputs that don't match a tool, are refusals in the log too.
+    for (const call of [
+      { name: "issue_command", arguments: { rig: "rig-a", kind: "pause_run", payload: {} } },
+      { name: "issue_command", arguments: { rig: "rig-a", kind: "pause_run", payload: {} } },
+      { name: "control_log", arguments: { limit: "all" } },
+    ])
+      assert.equal((await reader.callTool(call)).isError, true);
+    const refused = store.auditLog
+      .list(100, { action: "refused" })
+      .filter((a) => a.actor === "reader:mcp")
+      .map((a) => [(a.body as { tool: string }).tool, a.count]);
+    assert.deepEqual(refused, [
+      ["mcp:control_log", 1],
+      ["mcp:issue_command", 2],
+    ]);
     const denied = await control.request("/mcp", { method: "POST", body: "{}" });
     assert.equal(denied.status, 401);
     await agent.close();
