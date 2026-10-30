@@ -16,10 +16,10 @@ const lcg = () => {
   state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
   return Math.fround((state >>> 8) / 16777216) - 0.5;
 };
+// The benchmark makes all of A and B new for every rep; the result is for the last rep's.
+for (let r = 0; r < p.reps - 1; r++) for (let i = 0; i < 2 * n * n; i++) lcg();
 const a = Float64Array.from({ length: n * n }, lcg);
 const b = Float64Array.from({ length: n * n }, lcg);
-// The benchmark changes one element of A before every rep; the result is for the final A.
-for (let r = 0; r < p.reps; r++) a[(r * 7919) % (n * n)] = lcg();
 
 const cPath = join(outDir, "c.bin");
 let maxErr = Number.POSITIVE_INFINITY;

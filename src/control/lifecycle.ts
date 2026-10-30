@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { log } from "../common/env.ts";
+import { log, secretFromPath } from "../common/env.ts";
 import { errorText, Refusal } from "../common/errors.ts";
 import { RIG_ID } from "../core/ids.ts";
 import { harnessConfirmed, issueCommand } from "./issue/index.ts";
@@ -115,7 +115,8 @@ export class KubernetesDriver implements DeploymentDriver {
     const sa = "/var/run/secrets/kubernetes.io/serviceaccount";
     return new KubernetesDriver({
       apiUrl: env.THERMITE_K8S_API ?? inClusterApi(env),
-      token: () => readFileSync(env.THERMITE_K8S_TOKEN_FILE ?? `${sa}/token`, "utf8").trim(),
+      token: () =>
+        secretFromPath(env.THERMITE_K8S_TOKEN_FILE ?? `${sa}/token`, "THERMITE_K8S_TOKEN_FILE"),
       ca: readFileSync(env.THERMITE_K8S_CA_FILE ?? `${sa}/ca.crt`, "utf8"),
       namespaceTemplate: env.THERMITE_K8S_NAMESPACE || DEFAULT_NAMESPACE,
       selectors: {

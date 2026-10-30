@@ -84,6 +84,9 @@ describe("contracts", () => {
     assert.equal(r.ok, false);
     const g = parseContract({ ...hillClimbFixture, held_out_cell: ["x"] });
     assert.equal(g.ok, false);
+    // A contract has no search policy: web search comes from an MCP server the campaign names.
+    const s = parseContract({ ...researchFixture, search_policy: { blocked_patterns: [] } });
+    assert.deepEqual(s.ok ? [] : s.errors, ['(root): Unrecognized key: "search_policy"']);
   });
 
   test("a project can be one folder of its repository; a folder that leaves it is refused", () => {
@@ -174,7 +177,7 @@ describe("contracts", () => {
       ],
       [
         readJson(join(examples, "smoke-cpu-goal.json")),
-        "d3a0b62d381fa2d834cabdf2f9e99dc490e9ef9a618144c5bcf2d83aa9a88f15",
+        "e36832a534c66e07282f0af8233c04333194e3c4e79aadefa3ee8aa0fbb0e108",
       ],
       [hillClimbFixture, "c459fd271bff175c50f9f4dd32a613a725d39699a0c04e6d568051555369ab8b"],
       [goalFixture, "eb289201617fdeea3212e273e5925ed2bff2b6951b1e11d1525aaca7f36a72d2"],

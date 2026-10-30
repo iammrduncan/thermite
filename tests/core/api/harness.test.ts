@@ -126,4 +126,37 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
       !advisors.QUEUE.body.safeParse({ run: "r", role: "teacher", add: [...add, add[0]] }).success,
     );
   });
+
+  test("the runs and attempts the advisors' packages name are IDs, which the supervisor's record files are named by", () => {
+    const attempt = "a-0123456789abcdef";
+    const run = "smoke-1";
+    const answers = (
+      r: string,
+      a: string,
+    ): [Route & { answer: { safeParse(v: unknown): { success: boolean } } }, unknown][] => [
+      [advisors.RUNS, { runs: [{ id: r, campaign: "c", mode: "hill_climb", status: "running" }] }],
+      [advisors.AUDITS_PENDING, { audits: [{ id: 1, attempt: a, run: r }] }],
+      [advisors.REVIEWS_PENDING, { reviews: [{ id: 1, run: r }] }],
+      [advisors.CARDS_PENDING, { runs: [{ run: r }] }],
+      [advisors.PAPERS_PENDING, { papers: [{ run: r, review: 1 }] }],
+    ];
+    for (const [route, answer] of answers(run, attempt))
+      assert.ok(
+        route.answer.safeParse(answer).success,
+        `${route.path} takes ${run} and ${attempt}`,
+      );
+    // A name with a path in it, or one that is not an attempt's: refused, so the advisors' pass
+    // stops on that answer and writes no file.
+    for (const [r, a] of [
+      ["../../home/x", attempt],
+      ["smoke/1", attempt],
+      [run, "../../home/x"],
+      [run, "a-1/../x"],
+    ] as const)
+      for (const [route, answer] of answers(r, a)) {
+        const named = JSON.stringify(answer);
+        if (named.includes("..") || named.includes("/"))
+          assert.ok(!route.answer.safeParse(answer).success, `${route.path} refuses ${named}`);
+      }
+  });
 });

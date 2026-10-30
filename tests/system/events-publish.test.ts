@@ -23,6 +23,7 @@ import {
   busOf,
   closeBus,
   controlStore,
+  enrollRigs,
   heldEvents,
   ingestReport,
 } from "../helpers/control-store.ts";
@@ -95,7 +96,7 @@ const keep = (store: ControlStore, r: IngestReport) =>
 function signed(store: ControlStore, rig: string, n: number) {
   const env = makeHarnessEnv(rig);
   for (let i = 0; i < n; i++) appendOther(env.service.ledger, "t", "step", null, { i });
-  store.enrollments.setConfiguredRigs([rig]);
+  enrollRigs(store, [rig]);
   const intake: Intake = { store, control: buildInfo(), requireKeyAcceptance: false };
   const snapshot = (cursor: number, limit: number) =>
     readReport(env.service.snapshot(cursor, limit));

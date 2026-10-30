@@ -9,7 +9,7 @@ import { generateSigningKeys } from "../../src/core/commands.ts";
 import { verifyExport } from "../../src/supervisor/git-export.ts";
 import { relayOnce } from "../../src/supervisor/relay/index.ts";
 import { ADMIN, controlOnly, controlStack } from "../helpers/control-stack.ts";
-import { heldEvents, ingestReport } from "../helpers/control-store.ts";
+import { enrollRigs, heldEvents, ingestReport } from "../helpers/control-store.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 import { appendOther } from "../helpers/kinds.ts";
 
@@ -156,7 +156,7 @@ describe("the command queue", () => {
 
   test("a command too large to deliver is refused when it is issued", () => {
     const store = new ControlStore(":memory:");
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     assert.throws(
       () =>
         issueCommand(store, generateSigningKeys().privateKeyPem, {

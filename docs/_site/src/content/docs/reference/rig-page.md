@@ -168,7 +168,7 @@ A key that waits for you has a card under the banners, with its fingerprint and 
 | **Ledger** | Its ledger's id |
 | **Results**, **Models**, **Advisors** | From its supervisor's figures (unsigned) |
 
-Then the block of how it was set up, if control set it up: **Set up by control** (a machine or a cluster), **You run it yourself** (joined), or **Pull mode** (RunPod).
+Then the block of how it was set up, if control set it up: **Set up by control** (a machine or a cluster), **You run it yourself** (joined), or **Pull mode** (RunPod). **Pull mode** has the pod, its address through RunPod's proxy, its **Enrollment**, its **Message bus**, control's **Last exchange** with it, its **Refused requests** and its **Last error**. **Message bus** says where control's bus reaches the pod's leaf node: `Control's bus dials the pod's leaf node at 203.0.113.5:40123, the address RunPod gave it 2 min ago.`; `No address from RunPod now: the pod is starting or stopped. Its reports wait for one.`; or, for a pod launched before its leaf node, `Not on it: launched before the pod's leaf node. It reports through this connection.`
 
 **Recent** lists what happened, newest first: the rig's events, and the lines of its state:
 
@@ -231,7 +231,7 @@ Its heading says `N waiting`, `all out`, or `not reported`.
 
 ### History
 
-A rig on RunPod has **History** in place of **Recent**, with filters: **All**, **The pod**, **Runs** and **The judge**. **The pod** lists its launch, each stop, start, restart and terminate, and each full reset, with what happened, such as `Pod stopped: its GPU is no longer billed, and its volume stays: …`. **Runs** and **The judge** list the rig's events.
+A rig on RunPod has **History** in place of **Recent**, with filters: **All**, **The pod**, **Runs** and **The judge**. **The pod** lists its launch, each stop, start, restart and terminate, each full reset, and each address RunPod gave the pod's leaf node, with what happened, such as `Pod stopped: its GPU is no longer billed, and its volume stays: …` or `Control's bus dials the pod's leaf node at the address RunPod gave it: 203.0.113.5:40123.`. **Runs** and **The judge** list the rig's events.
 
 ### Pod log
 

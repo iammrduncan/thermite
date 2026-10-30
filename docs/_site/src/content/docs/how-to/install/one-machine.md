@@ -73,6 +73,7 @@ Run `npx thermite` in your `thermite-source` folder; from another folder, `npx` 
 | `harness` | The rig `local-1`: its judge and its agents, on the CPU, or on the machine's NVIDIA GPUs with `compose.gpu.yaml`. It has no port outside the stack |
 | `supervisor` | The rig's link to control. It also does the rig's git work |
 | `init` | Makes `.dev/` and your tokens, then stops. `up` runs it too; it finds the files there and keeps them |
+| `enroll` | At each `up`, once control answers and before the supervisor starts: enrolls the rig `local-1` with control and writes the token control made into `.dev/secrets/control-rig-token`, then stops. A token written before is kept while control has the rig enrolled ([`thermite local enroll`](../../reference/command-line.md#local-enroll)). `enroll-2` does the same for `local-2` |
 
 `docker compose --profile two-rigs up -d` adds a second rig, `local-2`, which always runs on the CPU.
 

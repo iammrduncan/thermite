@@ -6,7 +6,7 @@ import { busHost, natsBus } from "../common/bus/index.ts";
 import { log, optionalSecretFromFile, parseListen } from "../common/env.ts";
 import { writeAtomic } from "../common/fs.ts";
 import { every } from "../common/health.ts";
-import { startLogging } from "../common/log.ts";
+import { logWarn, startLogging } from "../common/log.ts";
 import { readNumber } from "../common/settings.ts";
 import { CONTROL_STATE } from "../core/backup.ts";
 import { generateSigningKeys } from "../core/commands.ts";
@@ -43,7 +43,7 @@ import { controlParts } from "./parts.ts";
 import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
 import { refreshGpuClouds } from "./runpod/index.ts";
 import { SecretBox } from "./secrets.ts";
-import { CONTROL_NUMBERS, controlPublicUrl } from "./settings.ts";
+import { CONTROL_NUMBERS, controlPublicUrl, notReadWords } from "./settings.ts";
 import { ControlStore } from "./store/index.ts";
 
 /** Control service entry point. Generates its signing key on first start. */
@@ -97,15 +97,11 @@ async function main(): Promise<void> {
     operator: credential("OPERATOR"),
     agent: credential("AGENT"),
     read: credential("READ"),
-    // Optional: rigs whose tokens are set in a file ({"<rig>": "<token>"}). Rigs enrolled through
-    // control (`thermite rig add`) need no entry and no restart.
-    rigs: env.THERMITE_CONTROL_RIG_TOKENS_FILE
-      ? (JSON.parse(readFileSync(env.THERMITE_CONTROL_RIG_TOKENS_FILE, "utf8")) as Record<
-          string,
-          string
-        >)
-      : {},
   };
+  // Rigs enroll through control, which keeps only their tokens' hashes. A rig tokens file still
+  // set is not read: said at start, in words, and control starts.
+  const notRead = notReadWords(env);
+  if (notRead) logWarn("control", notRead);
   const store = new ControlStore(join(dir, CONTROL_STATE.db));
   const { host, port } = parseListen(env.THERMITE_CONTROL_LISTEN ?? "0.0.0.0:8800");
   // A rig is stale after 3 missed reports (the supervisor reports every 60 s by default).
@@ -184,6 +180,8 @@ async function main(): Promise<void> {
             }
           : undefined,
       rigBus: rigBusUrl ? { url: rigBusUrl, ca: busTls.caCert } : undefined,
+      // A rig on RunPod joins the bus through a leaf node in its pod, which trusts this authority.
+      busCa: busTls.caCert,
       bus: {
         server: new URL(natsUrl).host,
         bus,
@@ -235,7 +233,6 @@ async function main(): Promise<void> {
     host,
     port,
     build: buildInfo(),
-    rigs: Object.keys(tokens.rigs),
     enrolled: store.enrollments
       .rigs()
       .filter((r) => !r.retired_at)

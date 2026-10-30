@@ -84,7 +84,7 @@ Run histories, hypotheses, events, field notes and the queue's titles and reason
 
 ## 4. See what it did
 
-Control writes each tool call it runs, reads included, to its audit log, as an `mcp:<tool>` entry with the call's arguments. Each token has its own name there. An operator acts for you, so its name starts with `owner:`:
+Control writes each tool call it runs, reads included, to its audit log, as an `mcp:<tool>` entry with the call's arguments: an argument named like a key, token, secret or password is written only as `given`, and other text with any credential it recognizes masked ([The audit log](../../reference/mcp-tools.md#the-audit-log)). Each token has its own name there. An operator acts for you, so its name starts with `owner:`:
 
 | Token | Name in the audit log and on commands |
 | --- | --- |

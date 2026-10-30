@@ -35,7 +35,7 @@ A rig's settings change over MCP with `set_rig_settings`, through **Edit rig**'s
 
 | Token | Where it is kept | What it may do |
 | --- | --- | --- |
-| **Rig token** | Enrolled rigs: its SHA-256 in control's store. Rigs listed in `THERMITE_CONTROL_RIG_TOKENS_FILE`: the token itself, in that file | The rig-facing routes for its own rig only: send reports, fetch commands, fetch its model route, its kits and its Git access, its advisors' models, the [MCP servers](rest-api.md#mcp-servers) the runs control assigned it name, with their sign-in, and the past research of the runs control assigned it. A retired rig is refused whatever token it holds |
+| **Rig token** | Its SHA-256 in control's store: control makes it when it enrolls the rig, with **Add a rig**, a join command, `thermite rig add` or, for the local compose stack's `local-1` and `local-2`, the stack's enroll step at each `up` | The rig-facing routes for its own rig only: send reports, fetch commands, fetch its model route, its kits and its Git access, its advisors' models, the [MCP servers](rest-api.md#mcp-servers) the runs control assigned it name, with their sign-in, and the past research of the runs control assigned it. A retired rig is refused whatever token it holds |
 | **Join token** | Its SHA-256 in control's store | Fetch one rig's join script or manifest, once, within one hour |
 
 ## Inside a rig
@@ -56,7 +56,7 @@ The harness and the supervisor have tokens of their own, which never reach contr
 | --- | --- | --- | --- |
 | Owner, operator, agent, reader | `thermite token new --out FILE` on your own computer: it writes the token to the file and prints its SHA-256 for control's setting. Locally, the `init` container of the compose stack (`thermite local init`), or `npm run dev:init` in a checkout, writes an owner and an operator token to `.dev/secrets/` | Make a new token, change the setting, restart control. A new owner token signs every browser out of the dashboard | Remove the setting and restart control |
 | Rig token (enrolled) | `thermite rig add`, `POST /v1/rigs`, **Add a rig** on the dashboard, or a used join command | `thermite rig token`, or `POST /v1/rigs/<rig>/token`. The old token stops working at once | Retire the rig: `thermite rig retire`, `POST /v1/rigs/<rig>/retire`, the MCP tool `retire_rig`, or the rig's page. Bringing a rig back does not bring its token back |
-| Rig token (in the tokens file) | Add the rig to `THERMITE_CONTROL_RIG_TOKENS_FILE` and restart control | Edit the file and restart control | Retire the rig, then remove it from the file |
+| Rig token of the local compose stack (`local-1`, `local-2`) | The stack's enroll step at `up`, into `.dev/secrets/control-rig-token` (`control-rig-token-2`) | Empty the file, then `docker compose up -d` (or `podman compose up -d`): the enroll step gets a new token from control and writes it there, and the old one stops working | Retire the rig |
 | Join token | **Add a rig** › run it yourself, or **Make a new join command** on the rig's page. It is shown once | **Make a new join command** (the earlier one stops working) | **Revoke it** while it is unused, or retire the rig |
 
 [Make and change tokens](../how-to/operate/tokens.md) gives the steps.

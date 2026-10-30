@@ -54,6 +54,8 @@ export const RigList = z.looseObject({
   enrolled: z
     .array(z.looseObject({ rig: z.string(), retired_at: z.string().nullable() }))
     .optional(),
+  /** The rigs the owner retired and has not brought back, by name. */
+  retired: z.array(z.string()).optional(),
   runpod: z.array(z.unknown()).optional(),
 });
 export type RigList = z.input<typeof RigList>;

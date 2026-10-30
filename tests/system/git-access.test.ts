@@ -15,6 +15,7 @@ import { KitRepos } from "../../src/control/kits/repos.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
 import { stageCommand } from "../../src/supervisor/staging.ts";
 import { controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
+import { enrollRigs } from "../helpers/control-store.ts";
 
 const C = "9a41c07e0d1f2a3b4c5d6e7f8091a2b3c4d5e6f7";
 
@@ -228,7 +229,7 @@ describe("Git access for private repositories", () => {
         headers: { authorization: `Bearer ${token}` },
       });
     assert.equal((await ask("rig-a", "rig-token-aaaaaa")).status, 404);
-    s.store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+    enrollRigs(s.store, ["rig-a", "rig-b"]);
     const start = (draft: ReturnType<typeof draftOf>, rig = "rig-a") =>
       startCampaign(
         { store: s.store, kits: s.kits, privateKeyPem: s.keys.privateKeyPem },
@@ -281,7 +282,7 @@ describe("Git access for private repositories", () => {
       token: "glpat-secret-value-1234",
       host: "git.example.com",
     });
-    s.store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(s.store, ["rig-a"]);
     const payload = (run: string, source: Record<string, string>) => ({
       run,
       contract: { campaign: "private-speed", mode: "hill_climb" },
@@ -385,7 +386,7 @@ describe("Git access for private repositories", () => {
         username: "oauth2",
         host: "127.0.0.1",
       });
-      s.store.enrollments.setConfiguredRigs(["rig-a"]);
+      enrollRigs(s.store, ["rig-a"]);
       const r = await startCampaign(
         { store: s.store, kits: s.kits, privateKeyPem: s.keys.privateKeyPem },
         {

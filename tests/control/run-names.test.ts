@@ -7,7 +7,7 @@ import { nextRunName } from "../../src/control/run-names.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { findRun } from "../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
-import { controlStore, ingestReport } from "../helpers/control-store.ts";
+import { controlStore, enrollRigs, ingestReport } from "../helpers/control-store.ts";
 
 /** A rig's report of these events, in `ledger`. */
 async function report(
@@ -51,7 +51,7 @@ describe("a run's name is used once on control (goal 170)", () => {
 
   test("a used name is refused on every rig, also after a full reset; a failed one is free", async () => {
     const store = controlStore();
-    store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+    enrollRigs(store, ["rig-a", "rig-b"]);
     const first = assign(store, "rig-a", "sort-speed-1");
     // On its way: refused on the other rig too, and Start a run names the next.
     assert.throws(

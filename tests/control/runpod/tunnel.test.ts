@@ -503,6 +503,8 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       const page = await s.rigPage();
       assert.match(page, /Refused requests<\/dt><dd>[1-9]/);
       assert.match(page, /Enrolled .* ago/);
+      // A pod launched without the leaf node is not on the bus, and its page says so.
+      assert.match(page, /Message bus<\/dt><dd><span class="muted">Not on it: launched before/);
       // From the network, control's rig routes still need a token: the tunnel's binding is
       // only for calls control's end of the tunnel makes in-process.
       assert.equal((await s.api.request(`/v1/rigs/${s.rig}/commands/pending`)).status, 401);

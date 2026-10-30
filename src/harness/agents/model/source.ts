@@ -19,6 +19,12 @@ export interface ModelInfo {
   key_hint?: string | undefined;
 }
 
+/** The file in the state folder where the rig keeps the route control set for its agents. */
+export const ROUTE_FILE = "model-route.json";
+
+/** Where the planner's own route is kept, beside the agents' route `file`. */
+export const plannerRouteFile = (file: string): string => file.replace(/\.json$/, "-planner.json");
+
 /**
  * Where the agents' model route comes from: the route control set for this rig, kept in a file
  * only root (the harness's controller) reads, or else the rig's own settings (its environment).
@@ -41,7 +47,7 @@ export class ModelSource {
         rmSync(file, { force: true });
       }
     }
-    const plannerFile = file.replace(/\.json$/, "-planner.json");
+    const plannerFile = plannerRouteFile(file);
     if (existsSync(plannerFile)) {
       try {
         this.plannerRoute = ControlRoute.parse(JSON.parse(readFileSync(plannerFile, "utf8")));
@@ -100,7 +106,7 @@ export class ModelSource {
 
   /** Takes or (null) clears the planner's own route; kept like the workers' route. */
   setPlanner(route: ControlRoute | null): void {
-    const file = this.file.replace(/\.json$/, "-planner.json");
+    const file = plannerRouteFile(this.file);
     if (!route) {
       rmSync(file, { force: true });
       this.plannerRoute = undefined;

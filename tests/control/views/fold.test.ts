@@ -83,6 +83,47 @@ test("a kind such as constructor or toString is only an event of its run's timel
   assert.equal(f.state().runs.length, 1);
 });
 
+test("a check or a lane named constructor or __proto__ is a check or a lane, and nothing else", () => {
+  let seq = 0;
+  const event = (
+    kind: string,
+    subject: string | null,
+    body: Record<string, unknown>,
+  ): StoredEvent => {
+    seq++;
+    return {
+      seq,
+      ledger_id: "l",
+      id: seq,
+      at: new Date(VIEW_NOW + seq).toISOString(),
+      actor: "harness",
+      kind,
+      subject,
+      body,
+    };
+  };
+  const names = ["constructor", "__proto__", "toString"];
+  const f = new RigFold();
+  f.apply(event("run_created", "p-1", {}));
+  for (const name of names) {
+    f.apply(event("rig_check_started", null, { check: name, id: `c-${name}` }));
+    f.apply(event("rig_check_finished", null, { check: name, ok: true, summary: "fine" }));
+    f.apply(event("trial_started", "p-1", { lane: name, trial: `t-${name}`, family: "f" }));
+  }
+  const state = f.state();
+  assert.deepEqual(Object.keys(state.checks).sort(), [...names].sort());
+  for (const name of names) {
+    const c = state.checks[name];
+    assert.equal(c?.check, name);
+    // Its start was its own, not a property every object has.
+    assert.equal(c?.started_at, new Date(VIEW_NOW + names.indexOf(name) * 3 + 2).toISOString());
+    assert.equal(c?.id, `c-${name}`);
+  }
+  const [run] = state.runs;
+  assert.deepEqual(Object.keys(run?.at_work ?? {}).sort(), [...names].sort());
+  for (const name of names) assert.equal(run?.at_work[name]?.trial, `t-${name}`);
+});
+
 test("after a reset, a rig's view folds only its new ledger's events", async () => {
   const set = VIEW_SETS.find((s) => s.name === "a reset to a new ledger");
   assert.ok(set);

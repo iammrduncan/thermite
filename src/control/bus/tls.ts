@@ -29,6 +29,9 @@ export const BUS_SERVER_DAYS = 397;
 /** A server certificate this close to its end is made anew. */
 export const BUS_RENEW_DAYS = 30;
 
+/** The extended key usage of a client's certificate (RFC 5280), which pods' servers ask for. */
+const CLIENT_AUTH = "1.3.6.1.5.5.7.3.2";
+
 /** The files' modes: the server reads its key through its group, control's (compose.yaml). */
 const MODES = { caCert: 0o644, caKey: 0o600, cert: 0o644, key: 0o640 };
 
@@ -104,8 +107,8 @@ export class BusTls {
 
   /**
    * Makes the server's certificate and key anew, and writes them, when there is none, its key does
-   * not match, another authority signed it, it lacks one of the names, or it ends within
-   * BUS_RENEW_DAYS. The key is written first: the server waits for its certificate. True when it
+   * not match, another authority signed it, it is not good for a client too, it lacks one of the
+   * names, or it ends within BUS_RENEW_DAYS. The key is written first: the server waits for its certificate. True when it
    * wrote them, so that the server reads them again.
    */
   write(): boolean {
@@ -113,7 +116,8 @@ export class BusTls {
     const key = join(this.o.configDir, BUS_TLS_FILES.key);
     const why = this.staleBecause(cert, key);
     if (!why) return false;
-    const made = makeServerCert(this.ca, this.names, this.now(), BUS_SERVER_DAYS);
+    // Also a client's: the server shows it when it dials a RunPod pod's server (leaf.ts).
+    const made = makeServerCert(this.ca, this.names, this.now(), BUS_SERVER_DAYS, { client: true });
     writeAtomic(key, made.key, MODES.key);
     writeAtomic(cert, made.cert, MODES.cert);
     const validTo = new Date(new X509Certificate(made.cert).validTo).toISOString();
@@ -140,6 +144,7 @@ export class BusTls {
     const authority = new X509Certificate(this.ca.cert);
     if (!cert.checkIssued(authority) || !cert.verify(authority.publicKey))
       return "another authority signed it";
+    if (!cert.keyUsage?.includes(CLIENT_AUTH)) return "it can't sign in to a pod's server";
     const missing = this.names.find((n) => (isIP(n) ? !cert.checkIP(n) : !cert.checkHost(n)));
     if (missing !== undefined) return `it does not name ${missing}`;
     const left = Date.parse(cert.validTo) - this.now().getTime();

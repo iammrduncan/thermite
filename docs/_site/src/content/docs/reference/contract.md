@@ -75,7 +75,6 @@ Every field this example leaves out takes its default. The repository has one ex
 | `budget` | object | `{"max_open_attempts": 4}` | Optional budgets and back-pressure. See [Budget](#budget) |
 | `min_duration` | duration | none | Research: required. The time the run has to collect sources and claims: a floor, never a stop. After it, at each digest, the review panel is asked about the questions and hypotheses with no decision that stands, and a review that gives every question an end ends the run, as the progress rule does ([Research](#research)). Other modes: accepted, not used yet |
 | `max_duration` | duration | none | Research: when the run ends at the latest, its questions answered or not. It may not be shorter than `min_duration`. Without it, a research run whose questions the review panel never finds answered runs until someone closes it. Other modes: accepted, not used yet |
-| `search_policy` | object | none | Accepted, and read by nothing: Thermite has no web search of its own. See [Search policy](#search-policy) |
 | `notes` | text | none | The campaign's additional information, from its author, in Markdown, with no length limit. See [The campaign's brief](#the-campaigns-brief) |
 | `hypotheses` | list of text, each not empty | none | What the campaign's author thinks is true, one entry each. See [The campaign's brief](#the-campaigns-brief) |
 | `agents_context` | object | none: each agent keeps the rig's settings | The campaign's own context window and compaction point for all its runs' agents. See [Agents' context](#agents-context) |
@@ -194,13 +193,6 @@ No budget is set unless you set one, and without one a run keeps going. A spent 
 | `budget.device_hours` | number > 0 | none | Hours the judge's finished jobs for this run have taken | `the device-hours budget is spent` |
 | `budget.llm_usd` | number ≥ 0 | none | US dollars of model tokens the run's trials have used: for a trial in OpenCode or Codex, the tokens the provider's answers reported as the model proxy saw them. Counted only when the rig sets both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` (prices per million tokens); without them, it has no effect | `the model budget is spent ($<amount>)` |
 | `budget.max_open_attempts` | integer ≥ 1 | 4 | Back-pressure, not a budget: no new trial starts while this many of the run's attempts wait for the judge (queued, building, screening, confirming, verifying, waiting for an audit or for approval) | none: lanes wait |
-
-### Search policy
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `search_policy.allowed_purposes` | list of text | `[]` | What public search may be used for. Accepted, not used |
-| `search_policy.blocked_patterns` | list of regular expressions | `[]` | Accepted, not used: Thermite has no web search of its own, and a research worker has no search tool. Web search comes from an MCP server the campaign names |
 
 ## Hill climb and goal: what a candidate may change
 
@@ -357,7 +349,7 @@ These fields pass validation and become part of the contract and its hash, but n
 
 | Mode | Fields |
 | --- | --- |
-| Every mode | `target.class`; `search_policy` |
+| Every mode | `target.class` |
 | Hill climb and goal | `min_duration`, `max_duration` |
 | Hill climb | `objective.policy`; `objective.secondary` (checked against the kit only); `monitor_only`; hard constraints of kind `check` |
 | Goal | `independence_epochs`; `min_live_families`; each goal's `priority` and `parent` (stored only) |
@@ -371,7 +363,7 @@ These fields pass validation and become part of the contract and its hash, but n
 | `sha256 hex` | A model's `sha256` is not 64 lowercase hexadecimal characters |
 | `full git commit id (40 or 64 hex)` | A commit is short or not hexadecimal |
 | `duration like "30m" or "8h"` | `min_duration` or `max_duration` has no unit, or another unit |
-| `invalid regular expression` | A pattern in `forbidden_patterns` or `search_policy.blocked_patterns` does not compile |
+| `invalid regular expression` | A pattern in `forbidden_patterns` does not compile |
 | `Unrecognized key: "<name>"` | A field the contract does not have |
 | `duplicate goal id <id>` | Two goals have the same `id` |
 | `goal <id> has unknown parent <parent>` | A goal's `parent` names no goal in the list |

@@ -52,6 +52,7 @@ export const RUNPOD_STEP_WORDS: Record<string, string> = {
   runpod_terminated: "Pod terminated: RunPod removed it and its volume, and the rig is retired",
   runpod_terminate_refused: "Not terminated: the pod keeps running, with its runs paused",
   runpod_gone: "RunPod no longer has the pod",
+  runpod_leaf_address: "Control's bus dials the pod's leaf node at the address RunPod gave it",
   reset_requested: "Full reset asked: runs paused and every result sent out before the wipe",
   reset_done: "Full reset done: the rig's state is wiped, and the pod and its GPU stay",
   reset_failed: "Full reset failed: nothing was wiped, and its runs stay paused",

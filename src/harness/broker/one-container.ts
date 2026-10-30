@@ -20,6 +20,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { ADVISOR_RUNS_ENV, ADVISOR_RUNS_SOCKET, advisorRunsDir } from "../../core/advisor-runs.ts";
+import { LEAF_ENV } from "../../core/link/leaf.ts";
 import { SUPERVISOR_PASSWD_HOME } from "../../core/paths.ts";
 import {
   ENROLLED_FILES,
@@ -224,16 +225,18 @@ export function pullMode(env: Env): boolean {
 }
 
 /**
- * Pull mode's launch values reach the supervisor alone: the enrollment code above all. The
- * controller keeps two public ones, for its isolation check: the tunnel's folder (no role may
- * read the pod's keys) and the SHA-256 of control's key (the key it trusts must be that one).
+ * Pull mode's launch values reach the supervisor alone: the enrollment code above all, and the
+ * leaf node's, the pod's key among them (core/link/leaf.ts). The controller keeps two public
+ * ones, for its isolation check: the tunnel's folder (no role may read the pod's keys) and the
+ * SHA-256 of control's key (the key it trusts must be that one).
  */
 const CONTROLLER_TUNNEL_VARS = new Set([
   "THERMITE_TUNNEL_DIR",
   "THERMITE_TUNNEL_CONTROL_KEY_SHA256",
 ]);
+const LEAF_VARS = new Set<string>(Object.values(LEAF_ENV));
 export const isSupervisorOnly = (name: string): boolean =>
-  name.startsWith("THERMITE_TUNNEL_") && !CONTROLLER_TUNNEL_VARS.has(name);
+  (name.startsWith("THERMITE_TUNNEL_") && !CONTROLLER_TUNNEL_VARS.has(name)) || LEAF_VARS.has(name);
 
 /** The names rig.env may set: the rig's ID, and the settings control gives a rig at enrollment. */
 export const ENROLLED_SETTINGS: readonly string[] = ["THERMITE_RIG_ID", ...POD_CONFIG_ENV];

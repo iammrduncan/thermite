@@ -47,7 +47,7 @@ describe("the quick start's pages", () => {
     assert.match(plan.firstRun.initDone, /^local init: \.dev ready \(\d+ made, 0 kept\)$/);
     assert.deepEqual(plan.firstRun.services, ["control", "nats", "harness", "supervisor"]);
     assert.deepEqual(plan.firstRun.token, ["cat .dev/secrets/control-admin-token"]);
-    // The judge's twelve verdicts, as step 7 counts them, add up to what step 6's check says.
+    // The judge's thirteen verdicts, as step 7 counts them, add up to what step 6's check says.
     const all = Number(/all (\d+) candidates/.exec(plan.firstRun.smokePassed)?.[1]);
     const counted = Object.values(plan.firstRun.verdicts).reduce((x, y) => x + y, 0);
     assert.equal(counted, all);

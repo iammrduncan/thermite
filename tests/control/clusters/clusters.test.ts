@@ -106,14 +106,16 @@ describe("rigs on Kubernetes", () => {
       JSON.stringify(pod(objs, "thermite-k8s-a-1-supervisor")),
       /kubernetes\.io\/hostname/,
     );
-    // Neither pod gets a service-account token: nothing in them calls the cluster's API. Both run
-    // under the runtime's default seccomp profile.
+    // Neither pod gets a service-account token: nothing in them calls the cluster's API; nor the
+    // namespace's services as variables. Both run under the runtime's default seccomp profile.
     for (const name of ["thermite-k8s-a-1-harness", "thermite-k8s-a-1-supervisor"]) {
       const spec = pod(objs, name) as {
         automountServiceAccountToken?: boolean;
+        enableServiceLinks?: boolean;
         securityContext?: { seccompProfile?: { type: string } };
       };
       assert.equal(spec.automountServiceAccountToken, false);
+      assert.equal(spec.enableServiceLinks, false);
       assert.deepEqual(spec.securityContext?.seccompProfile, { type: "RuntimeDefault" });
     }
     assert.deepEqual(pod(objs, "thermite-k8s-a-1-supervisor").securityContext, {

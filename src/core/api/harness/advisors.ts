@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ADVISOR_ROLES } from "../../agents.ts";
 import { ExperimentText, QueuePosition } from "../../commands.ts";
 import { AgentsContext } from "../../compaction.ts";
-import { ExperimentId } from "../../ids.ts";
+import { AttemptId, ExperimentId, RunId } from "../../ids.ts";
 import { McpUse } from "../../mcp.ts";
 import { AdvisorAgent, CallUsage, UsageHarness } from "../../usage.ts";
 import type { Route } from "../route.ts";
@@ -25,7 +25,8 @@ import {
  * The harness's API for its supervisor's advisors (src/harness/api/ answers it): the runs and
  * their briefs, the run's code, evidence and research to read, the audits, reviews, cards and
  * papers that wait for an advisor, and where the advisors' answers go. None of these can set a
- * verdict, a contract or a champion. Every route takes the supervisor's token.
+ * verdict, a contract or a champion. Every route takes the supervisor's token. A run or an attempt
+ * the harness names is a run's or an attempt's ID: the supervisor names its records' files by them.
  */
 
 /** An owner's message as an advisor's brief or package gives it. */
@@ -43,7 +44,7 @@ const OwnerMessages = z.array(OwnerMessage).optional();
  * roles, and whether the planner's round left its queue below its target (goal 081).
  */
 export const RunRow = z.looseObject({
-  id: z.string(),
+  id: RunId,
   campaign: z.string(),
   mode: z.string(),
   status: z.string(),
@@ -226,8 +227,8 @@ export const RESEARCH_SEARCH = {
 /** An audit that waits for the auditor: its own id, the attempt, and the owner's messages. */
 const AuditPackage = z.looseObject({
   id: z.number().optional(),
-  attempt: z.string(),
-  run: z.string().optional(),
+  attempt: AttemptId,
+  run: RunId.optional(),
   owner_messages: OwnerMessages,
   past_research: z.string().optional(),
 });
@@ -262,7 +263,7 @@ export const AUDITS = {
 /** A review that waits for the review panel: a goal's, or a research run's (goal 112). */
 const ReviewPackage = z.looseObject({
   id: z.number(),
-  run: z.string().optional(),
+  run: RunId.optional(),
   goal: z.string().optional(),
   kind: z.string().optional(),
   owner_messages: OwnerMessages,
@@ -320,7 +321,7 @@ export const CARDS_PENDING = {
   answer: z.looseObject({
     runs: z.array(
       z.looseObject({
-        run: z.string(),
+        run: RunId,
         questions: z
           .array(z.looseObject({ index: z.number(), through: z.string().nullable().optional() }))
           .optional(),
@@ -354,7 +355,7 @@ export const PAPERS_PENDING = {
   method: "GET",
   path: "/v1/research/papers/pending",
   answer: z.looseObject({
-    papers: z.array(z.looseObject({ run: z.string(), review: z.number() })),
+    papers: z.array(z.looseObject({ run: RunId, review: z.number() })),
   }),
 } as const satisfies Route;
 

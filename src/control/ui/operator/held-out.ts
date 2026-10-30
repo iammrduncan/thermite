@@ -33,7 +33,7 @@ function heldOutCard(h: HeldOutView, title: string, now: number): string {
       const kind = c.kind as HeldOutKind | null;
       const result = c.ok
         ? `<span class="chip ok">passed</span>`
-        : `<span class="chip bad">${esc(kind && kind in HELD_OUT_OWNER_WORDS ? HELD_OUT_OWNER_WORDS[kind] : (c.kind ?? "failed"))}</span>`;
+        : `<span class="chip bad">${esc(kind && Object.hasOwn(HELD_OUT_OWNER_WORDS, kind) ? HELD_OUT_OWNER_WORDS[kind] : (c.kind ?? "failed"))}</span>`;
       const forWhat = c.goal
         ? `goal <b>${esc(c.goal)}</b>`
         : c.verifier

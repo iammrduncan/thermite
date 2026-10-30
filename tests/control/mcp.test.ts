@@ -355,6 +355,42 @@ describe("control over MCP", () => {
     await Promise.all([operator.close(), reader.close(), agent.close()]);
   });
 
+  test("the log keeps an MCP call's inputs with each secret hidden and credentials in text masked, for every token", async () => {
+    const { control } = controlOnly({
+      tokens: { operator: "operator-token-abcdef", read: "read-token-abcdef", rigs: {} },
+    });
+    const operator = await mcpClient(control, "operator-token-abcdef");
+    // Refused (no such run), and written to the log first, as every call is.
+    await operator.callTool({
+      name: "issue_command",
+      arguments: {
+        kind: "pause_run",
+        payload: {
+          run: "nope",
+          reason: "see https://someone:hunter2hunter2@git.example/x and Bearer abcdefghijklmnop",
+          api_key: "xxxxxxxxxxxx9z9z",
+          nested: { access_token: "yyyyyyyyyyyy7y7y", count: 3, ok: true },
+        },
+      },
+    });
+    const reader = await mcpClient(control, "read-token-abcdef");
+    const page = text(
+      await reader.callTool({
+        name: "control_log",
+        arguments: { include_mcp: true, action: "mcp:issue_command" },
+      }),
+    ) as { entries: { body: { payload: Record<string, unknown> } }[] };
+    const payload = page.entries[0]?.body.payload;
+    assert.equal(payload?.api_key, "given (…9z9z)");
+    assert.deepEqual(payload?.nested, { access_token: "given (…7y7y)", count: 3, ok: true });
+    assert.equal(payload?.reason, "see https://***@git.example/x and Bearer ***");
+    assert.equal(payload?.run, "nope");
+    const seen = JSON.stringify(page);
+    for (const secret of ["hunter2", "abcdefghijklmnop", "xxxxxxxxxxxx", "yyyyyyyyyyyy"])
+      assert.ok(!seen.includes(secret), secret);
+    await Promise.all([operator.close(), reader.close()]);
+  });
+
   test("an operator gives a rig's agents a model over MCP, as Edit rig does; a wrong model is refused", async () => {
     const { store, control } = controlOnly({
       tokens: { operator: "operator-token-abcdef", rigs: {} },

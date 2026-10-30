@@ -115,3 +115,40 @@ describe("the rig's disk floor (goal 173)", () => {
     );
   });
 });
+
+describe("an import and the rig's disk floor", () => {
+  test("an import that would take its place below the floor is refused before it is copied", async () => {
+    const { importFile, importRoom } = await import("../../src/harness/imports.ts");
+    const { mkdirSync, mkdtempSync, readdirSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { createHash } = await import("node:crypto");
+    const env = makeJudgeEnv();
+    const free: Record<string, number> = { models: 5 + 50 / GIB }; // 50 bytes above the floor
+    const disk = new DiskWatch({
+      ledger: env.ledger,
+      floorGib: 5,
+      places: [{ name: "state", path: env.paths.stateDir }],
+      free: standIn(free),
+    });
+    const inbox = mkdtempSync(join(tmpdir(), "thermite-inbox-"));
+    const model = Buffer.alloc(100, 1);
+    writeFileSync(join(inbox, "m.bin"), model);
+    const storeDir = join(mkdtempSync(join(tmpdir(), "thermite-store-")), "models");
+    mkdirSync(storeDir);
+    const input = {
+      inboxDir: inbox,
+      rel: "m.bin",
+      expectedSha256: createHash("sha256").update(model).digest("hex"),
+      storeDir,
+      room: importRoom(disk, "the model m"),
+    };
+    await assert.rejects(
+      importFile(input),
+      /^Error: the model m is 0 GiB, and the rig's disk has 5 GiB free with a floor of 5 GiB: it is not copied$/,
+    );
+    assert.deepEqual(readdirSync(storeDir), [], "nothing was copied");
+    free.models = 6;
+    assert.ok((await importFile(input)).endsWith(input.expectedSha256), "with room: stored");
+  });
+});

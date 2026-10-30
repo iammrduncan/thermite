@@ -7,7 +7,7 @@ import {
   type KeyObject,
 } from "node:crypto";
 import { z } from "zod";
-import { canonicalJson } from "./canonical.ts";
+import { canonicalJson, sha256Hex } from "./canonical.ts";
 import { CommitSchema, IdSchema, MAX_LANES, MAX_LANES_REASON, Sha256Schema } from "./contract.ts";
 import { directionName } from "./directions.ts";
 import { StructuredDirective } from "./directives.ts";
@@ -578,6 +578,15 @@ export function generateSigningKeys(): KeyPairPem {
     privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
   };
+}
+
+/**
+ * A signing key's short fingerprint, for logs, the dashboard and the audit log: the first 16 hex
+ * digits of the SHA-256 of its public key's PEM, trimmed. The rig's harness logs its own at start,
+ * and control shows the one it pinned, so the owner can compare the two.
+ */
+export function fingerprint(pubkeyPem: string): string {
+  return sha256Hex(pubkeyPem.trim()).slice(0, 16);
 }
 
 export function signEnvelope(envelope: Envelope, privateKeyPem: string): SignedCommand {

@@ -19,6 +19,67 @@ import { championFiles } from "./propagation.ts";
 /** Where an export keeps the prompts sent (goal 166). */
 export const PROMPTS_FILE = "prompts.jsonl.gz";
 
+/**
+ * Where each of the ledger's tables goes in an export's copy of the ledger (ledger.sqlite). Every
+ * table is on one of the two lists, on purpose: a test fails on a table that is on neither, so a
+ * new table is placed when it is made. The held_out table, the judge's whole record of each
+ * held-out check, never goes into an export. The copy goes to the results repository and to
+ * control: a table that holds a secret goes on `dropped`.
+ */
+export const LEDGER_COPY = {
+  dropped: ["held_out"],
+  copied: [
+    "agent_message",
+    "agent_message_read",
+    "attempt",
+    "audit",
+    "budget_ledger",
+    "build",
+    "champion",
+    "claim",
+    "command",
+    "conclusion",
+    "contract",
+    "directive",
+    "epoch",
+    "event",
+    "experiment",
+    "export",
+    "family",
+    "finding",
+    "goal",
+    "goal_check",
+    "hypothesis",
+    "import",
+    "invalidation",
+    "invocation",
+    "item_decision",
+    "job",
+    "journal_note",
+    "lane",
+    "measurement",
+    "meta",
+    "note",
+    "prompt",
+    "propagation",
+    "question_card",
+    "receipt",
+    "report_section",
+    "report_version",
+    "research_file",
+    "research_query",
+    "review",
+    "review_item",
+    "run",
+    "run_briefing",
+    "schema_migrations",
+    "source",
+    // A trial keeps only its token's SHA-256, and the token stops working when its trial ends.
+    "trial",
+    "verdict",
+  ],
+} as const;
+
 /** Whether an event is a run's (goal 170): the run the ledger recorded with it. */
 export function runEvents(run: string): (e: { run: string | null }) => boolean {
   return (e) => e.run === run;
@@ -249,7 +310,7 @@ export async function writeExport(input: {
     // held_out_checked event, with each held-out cell's name, kind of failure and value against
     // its threshold (at most 50 cells), is in the events table and events.jsonl, as it reaches
     // control. No agent reads events.
-    if (!only) ledger.copyTo(join(tmp, "ledger.sqlite"), ["held_out"]);
+    if (!only) ledger.copyTo(join(tmp, "ledger.sqlite"), LEDGER_COPY.dropped);
 
     const files = [
       "events.jsonl",

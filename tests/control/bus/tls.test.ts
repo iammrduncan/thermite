@@ -160,6 +160,27 @@ describe("the bus's TLS as control keeps it", () => {
     assert.ok(cert(f).checkIssued(new X509Certificate(tls.caCert)));
     rmSync(f.root, { recursive: true, force: true });
   });
+
+  test("the server's certificate is good for a client too, which a RunPod pod's server asks for; one of before that is not is made anew", () => {
+    const f = folders();
+    const tls = new BusTls({ ...f, names: ["nats"] });
+    tls.write();
+    const clientAuth = "1.3.6.1.5.5.7.3.2";
+    assert.deepEqual(cert(f).keyUsage?.sort(), ["1.3.6.1.5.5.7.3.1", clientAuth]);
+    // A certificate control made before the leaf nodes: for a server alone.
+    const ca = {
+      cert: read(f.stateDir, BUS_CA_FILES.cert),
+      key: read(f.stateDir, BUS_CA_FILES.key),
+    };
+    const before = makeServerCert(ca, ["nats"], new Date(), 100);
+    assert.deepEqual(new X509Certificate(before.cert).keyUsage, ["1.3.6.1.5.5.7.3.1"]);
+    writeFileSync(join(f.configDir, BUS_TLS_FILES.cert), before.cert);
+    writeFileSync(join(f.configDir, BUS_TLS_FILES.key), before.key);
+    assert.equal(tls.write(), true);
+    assert.ok(cert(f).keyUsage?.includes(clientAuth));
+    assert.equal(tls.write(), false);
+    rmSync(f.root, { recursive: true, force: true });
+  });
 });
 
 const cert = (f: { configDir: string }) =>

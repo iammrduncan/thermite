@@ -7,6 +7,7 @@ import {
   type Harness,
   type ProviderType,
 } from "../../core/agents.ts";
+import { fingerprint } from "../../core/commands.ts";
 import { RIG_ID } from "../../core/ids.ts";
 import { CampaignArchive } from "./archive.ts";
 import { AuditLog } from "./audit.ts";
@@ -25,7 +26,6 @@ import { GpuClouds } from "./gpu-clouds.ts";
 import { RigHistory } from "./history.ts";
 import { JoinedRigs } from "./joined.ts";
 import { KnowledgeBase } from "./kb/index.ts";
-import { fingerprint } from "./keys.ts";
 import { LiveLines } from "./live.ts";
 import { Machines } from "./machines.ts";
 import { McpServerRows } from "./mcp-servers.ts";

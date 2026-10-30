@@ -5,6 +5,7 @@ import { RIG_CONSUMERS_LOOK_AGAIN_MS, RigConsumers } from "../../../src/control/
 import { ControlStore } from "../../../src/control/store/index.ts";
 import { COMMAND_STREAM_CONFIG, commandConsumerConfig } from "../../../src/core/link/commands.ts";
 import { CONFIG_STREAM_CONFIG, configConsumerConfig } from "../../../src/core/link/config.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 import { FakeBus } from "../../helpers/fake-bus.ts";
 
 /**
@@ -14,7 +15,7 @@ import { FakeBus } from "../../helpers/fake-bus.ts";
 
 function setup() {
   const store = new ControlStore(":memory:");
-  store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+  enrollRigs(store, ["rig-a", "rig-b"]);
   const bus = new FakeBus();
   let now = 1_000_000;
   const consumers = new RigConsumers({ store, bus, clock: () => now });

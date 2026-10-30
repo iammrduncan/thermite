@@ -12,7 +12,7 @@ import { ControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { assigned } from "../helpers/assignments.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
-import { applied, controlStore } from "../helpers/control-store.ts";
+import { applied, controlStore, enrollRigs } from "../helpers/control-store.ts";
 import { type FakeAuth, type FakeMcp, startFakeMcp } from "../helpers/fake-mcp.ts";
 import { report } from "../helpers/view-events.ts";
 
@@ -273,7 +273,7 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
 
   test("refused with the server's name and what to do; started once Settings has it", () => {
     const { store, servers } = setup();
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     assert.throws(
       () =>
         assign(store, { contract, mcp_servers: [{ name: "paper-search", agents: ["advisors"] }] }),
@@ -294,7 +294,7 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
 
   test("an agent's token may not name MCP servers in an assignment; the owner's may", () => {
     const { store, servers } = setup();
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     servers.put(
       { name: "paper-search", url: "https://papers.example.com/mcp", auth: "none" },
       "owner:test",
@@ -322,7 +322,7 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
 
   test("a research contract's servers go into its assignment, and a different list is refused", () => {
     const { store, servers } = setup();
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     servers.put(
       { name: "gbrain", url: "https://brain.example.com/mcp", auth: "none" },
       "owner:test",
@@ -476,18 +476,38 @@ describe("what a rig gets", () => {
     const fake = await fakeOf(t, { kind: "oauth" });
     const { servers, app } = await api(t, fake);
     const owner = { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" };
-    const added = (await (
+    // With no THERMITE_CONTROL_PUBLIC_URL, a request that names control by another address gets
+    // no sign-in: the server is kept, and the answer says which setting to set.
+    const named = (await (
       await app.request("http://control.example.com/v1/mcp-servers", {
         method: "POST",
         headers: owner,
         body: JSON.stringify({ name: "notion", url: fake.url, auth: "oauth" }),
       })
-    ).json()) as { sign_in_url: string };
-    assert.equal(
-      new URL(added.sign_in_url).searchParams.get("redirect_uri"),
-      "http://control.example.com/v1/mcp-oauth/callback",
+    ).json()) as { sign_in_url?: string; error?: string };
+    assert.equal(named.sign_in_url, undefined);
+    assert.match(
+      String(named.error),
+      /set THERMITE_CONTROL_PUBLIC_URL to the address you reach control at/,
     );
-    const { state, code } = await allow(added.sign_in_url);
+    const again = await app.request("http://control.example.com/v1/mcp-servers/notion/sign-in", {
+      method: "POST",
+      headers: owner,
+    });
+    assert.equal(again.status, 409);
+    // Reached on control's own machine, the browser comes back there.
+    const added = (await (
+      await app.request("http://127.0.0.1:8800/v1/mcp-servers/notion/sign-in", {
+        method: "POST",
+        headers: owner,
+      })
+    ).json()) as { url: string };
+    const signInUrl = added.url;
+    assert.equal(
+      new URL(signInUrl).searchParams.get("redirect_uri"),
+      "http://127.0.0.1:8800/v1/mcp-oauth/callback",
+    );
+    const { state, code } = await allow(signInUrl);
     const back = await app.request(`/v1/mcp-oauth/callback?state=${state}&code=${code}`);
     assert.equal(back.status, 303);
     assert.match(

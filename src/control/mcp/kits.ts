@@ -82,7 +82,6 @@ export function registerKits(tools: ToolContext): void {
           if (!out.ok) throw new Error(out.error);
           return out.answer;
         },
-        ["bundle_base64"],
       ),
     );
   }

@@ -27,6 +27,7 @@ import {
   userKeyFingerprint,
 } from "../../../src/core/link/users.ts";
 import { controlOnly, RIG_TOKEN } from "../../helpers/control-stack.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 
 const RIG_B_TOKEN = "rig-b-token-abcdef";
 const user = () => createUser().getPublicKey();
@@ -384,8 +385,10 @@ describe("each rig's key on the message bus", () => {
     assert.equal(s.server.calls.length, calls + 1);
     assert.ok(!readFileSync(s.file, "utf8").includes(key));
     assert.equal(accountsIn(s.file)[BUS_ACCOUNT]?.users.length, 1, "control's own alone");
-    // Its key stays recorded: brought back, it has its user again.
+    // Its key stays recorded: brought back and enrolled again (a token control made stays
+    // ended), it has its user again.
     s.store.retired.bringBack("rig-a", "owner:test");
+    enrollRigs(s.store, ["rig-a"]);
     await s.users.sync();
     assert.ok(readFileSync(s.file, "utf8").includes(key));
   });

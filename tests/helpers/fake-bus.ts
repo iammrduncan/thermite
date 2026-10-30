@@ -10,6 +10,7 @@ import {
   type BusRead,
   type ConsumerSettings,
   type Handled,
+  NoStreamTakes,
   type Outgoing,
   type Published,
   type StreamSettings,
@@ -212,7 +213,7 @@ export class FakeBus
     const stream = [...this.made.values()].find((s) =>
       (s.subjects ?? []).some((p) => takes(p, m.subject)),
     );
-    if (!stream) throw new Error(`no stream on the bus takes ${m.subject} yet: control makes it`);
+    if (!stream) throw new NoStreamTakes(m.subject, undefined);
     if (this.full) throw new JetStreamApiError(FULL);
     const bytes =
       Buffer.byteLength(m.data) +

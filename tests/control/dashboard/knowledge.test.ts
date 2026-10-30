@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
-import { ingestReport } from "../../helpers/control-store.ts";
+import { enrollRigs, ingestReport } from "../../helpers/control-store.ts";
 
 type Ev = [string, string, string, Record<string, unknown>];
 
@@ -41,7 +41,7 @@ async function stack() {
   };
   const { keys, store, control } = controlOnly({ tokens, options: { staleAfterMs: 600_000 } });
   // The assignment that started gs-3, before the rig reported it.
-  store.enrollments.setConfiguredRigs(["rig-a"]);
+  enrollRigs(store, ["rig-a"]);
   issueCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",

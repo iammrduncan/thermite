@@ -238,8 +238,9 @@ export async function foldReport(t: Intake, m: BusMessage): Promise<Folded> {
     return { refused: error };
   };
   if (!rig) return refuse("not a rig's report subject", { subject: m.subject.slice(0, 200) });
-  if (!store.enrollments.knownRig(rig)) return refuse("no such rig: control has no token for it");
+  // A retired rig's token has ended too: it is told it is retired, before control knows it not.
   if (store.retired.get(rig)) return refuse("this rig is retired in control");
+  if (!store.enrollments.knownRig(rig)) return refuse("no such rig: control has no token for it");
   let read: { report: SignedReport; unknown: number };
   try {
     read = readReport(JSON.parse(new TextDecoder().decode(m.data)));

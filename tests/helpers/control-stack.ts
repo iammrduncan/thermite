@@ -11,7 +11,7 @@ import { generateSigningKeys, type KeyPairPem } from "../../src/core/commands.ts
 import { createHarnessApi } from "../../src/harness/api/index.ts";
 import type { HarnessService } from "../../src/harness/service/index.ts";
 import { type RelayState, relayOnce } from "../../src/supervisor/relay/index.ts";
-import { applied, controlStore } from "./control-store.ts";
+import { applied, controlStore, enrollRigs } from "./control-store.ts";
 import { makeJudgeEnv } from "./judge-env.ts";
 
 /**
@@ -80,14 +80,23 @@ type Options =
   | Partial<ControlOptions>
   | ((store: ControlStore, keys: { privateKeyPem: string }) => Partial<ControlOptions>);
 
+/**
+ * Control's tokens in a test: the owner's and the others' as control takes them, and `rigs`, each
+ * rig enrolled with control with the token it reports with (enrollRigs): rig-a with RIG_TOKEN
+ * unless given.
+ */
+export type TestTokens = Partial<ControlTokens> & { rigs?: Record<string, string> };
+
 /** Control on `store` with `options`, signing with `privateKeyPem`, and a call to its REST API. */
 function makeControl(
   store: ControlStore,
-  given: Partial<ControlTokens> | undefined,
+  given: TestTokens | undefined,
   keys: { privateKeyPem: string },
   options: Options | undefined,
 ) {
-  const tokens: ControlTokens = { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN }, ...given };
+  const { rigs = { "rig-a": RIG_TOKEN }, ...own } = given ?? {};
+  enrollRigs(store, rigs);
+  const tokens: ControlTokens = { admin: ADMIN, ...own };
   const opts = typeof options === "function" ? options(store, keys) : options;
   const control = createControlApi(store, tokens, keys.privateKeyPem, {
     staleAfterMs: 180_000,
@@ -112,12 +121,7 @@ function makeControl(
  * `api()` as below.
  */
 export function controlOnly(
-  o: {
-    tokens?: Partial<ControlTokens>;
-    options?: Options;
-    store?: ControlStore;
-    keys?: KeyPairPem;
-  } = {},
+  o: { tokens?: TestTokens; options?: Options; store?: ControlStore; keys?: KeyPairPem } = {},
 ) {
   const store = o.store ?? controlStore();
   const keys = o.keys ?? generateSigningKeys();
@@ -137,7 +141,7 @@ interface RigEnv {
  * stream. `api()` calls control's REST API with the owner's token unless given another.
  */
 export function controlStack<E extends RigEnv = ReturnType<typeof makeJudgeEnv>>(
-  o: { env?: E; tokens?: Partial<ControlTokens>; options?: Options } = {},
+  o: { env?: E; tokens?: TestTokens; options?: Options } = {},
 ) {
   const env = (o.env ?? makeJudgeEnv()) as E;
   const store = controlStore();

@@ -11,8 +11,8 @@
 //     (model.mjs): no screen waits once seeded, its rollout copied, a typed message taken in, and
 //     `/exit`;
 //   - the real OpenCode, its server started first with a password of its own and its terminal
-//     attached, against the same stand-in: its first message and a typed one taken in, `/exit`,
-//     and its server ended with it;
+//     attached, against the same stand-in: its first message and a typed one taken in, its server
+//     refusing lane-2's requests without the password, `/exit`, and its server ended with it;
 //   - the real Claude Code, when the image has it (built with CLAUDE_CODE_VERSION), against
 //     containers/test-anthropic's stand-in, with a made-up sign-in on file descriptor 3: its
 //     transcript, which only lane-1 may read, copied; its hooks' signals; `/exit`;
@@ -376,6 +376,42 @@ const freePort = () =>
     });
   });
 
+/**
+ * Each path asked of a server on 127.0.0.1:`port` with no password, by lane-2's user through the
+ * broker, as another lane's commands would ask it: each path's HTTP status, or its error.
+ */
+async function otherLaneAsks(port, paths) {
+  const dir = join("/scratch/thermite/lanes", "lane-2", `ask-${randomUUID().slice(0, 8)}`);
+  mkdirSync(dir, { recursive: true });
+  await runner.handOver(dir, "lane-2");
+  const script = `const out = {};
+for (const p of ${JSON.stringify(paths)}) {
+  try {
+    const r = await fetch("http://127.0.0.1:${port}" + p, { signal: AbortSignal.timeout(5000) });
+    out[p] = r.status;
+    await r.body?.cancel();
+  } catch (err) {
+    out[p] = String(err);
+  }
+}
+process.stdout.write(JSON.stringify(out));`;
+  try {
+    const r = await runner.run({
+      role: "lane-2",
+      argv: [process.execPath, "--input-type=module", "-e", script],
+      cwd: dir,
+      timeoutMs: 30_000,
+    });
+    try {
+      return JSON.parse(r.stdout);
+    } catch {
+      return { error: `exit ${r.exitCode}: ${r.stderr.slice(-300)}` };
+    }
+  } finally {
+    await runner.remove(dir).catch(() => undefined);
+  }
+}
+
 async function opencode() {
   if (!existsSync("/usr/local/bin/opencode")) {
     check("the image has no OpenCode: its check was not run", true, "");
@@ -437,6 +473,12 @@ async function opencode() {
       await t.type("TERMINAL-CHECK-2: reply again.");
       await until("a typed message's call", () => api.calls["TERMINAL-CHECK-2"] >= 1, 60_000);
       check("a message typed into OpenCode's terminal was taken in", true, api.calls);
+      const refused = await otherLaneAsks(port, ["/api/event", "/api/session", "/"]);
+      check(
+        "OpenCode's server, on the localhost every lane shares, refuses another lane without the trial's password",
+        Object.values(refused).every((status) => status === 401),
+        refused,
+      );
     } catch (err) {
       check("OpenCode's turns ran", false, {
         error: String(err),

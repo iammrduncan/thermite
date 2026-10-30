@@ -44,6 +44,10 @@ export const isRigCheck = (name: string): boolean => name.startsWith(RIG_CHECK_P
  */
 export const newAttemptId = (): string => `a-${randomBytes(8).toString("hex")}`;
 
+/** An attempt's ID: `a-` and 16 hex digits. */
+export const ATTEMPT_ID = /^a-[0-9a-f]{16}$/;
+export const AttemptId = z.string().regex(ATTEMPT_ID, "an attempt id (a-...)");
+
 /** A trial's ID: `t-` and 16 hex digits. */
 export const TRIAL_ID = /^t-[0-9a-f]{16}$/;
 export const newTrialId = (): string => `t-${randomBytes(8).toString("hex")}`;

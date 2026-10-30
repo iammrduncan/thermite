@@ -1,5 +1,5 @@
 import { harnessClient } from "../../common/api/harness.ts";
-import { type Bus, refusedForGood } from "../../common/bus/index.ts";
+import { type Bus, NoStreamTakes, refusedForGood } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import type { LiveFigures } from "../../core/api/control/rigs.ts";
@@ -111,10 +111,11 @@ export async function publishLiveOnce(
 }
 
 /**
- * One message, to its subject. A run's subject the bus refuses (a run control does not give this
- * rig yet, such as one the rig made itself, until control has its first report of it) sends the
- * message to the rig's own subject instead, its lines naming their run as always. A message the
- * bus refuses there too, or one too large, is dropped and counted.
+ * One message, to its subject. A run's subject the bus refuses, or no stream takes (a run control
+ * does not give this rig yet, such as one the rig made itself, until control has its first report
+ * of it), sends the message to the rig's own subject instead, its lines naming their run as
+ * always. A message the bus refuses there too, or one too large, is dropped and counted; one no
+ * stream takes there waits for the next round.
  */
 async function publishOne(cfg: LiveBusConfig, m: Message): Promise<void> {
   const lines = m.batch.entries.length;
@@ -146,7 +147,10 @@ async function publishOne(cfg: LiveBusConfig, m: Message): Promise<void> {
       cfg.counts.add(to, "published", lines);
       return;
     } catch (err) {
-      if (!refusedForGood(err)) throw err;
+      // On a leaf node (a rig on RunPod) a run's subject the rig may not use gets no answer, as a
+      // subject no stream takes, where the server refuses it elsewhere: its lines go on the rig's.
+      const leafRefused = to !== own && err instanceof NoStreamTakes;
+      if (!refusedForGood(err) && !leafRefused) throw err;
       const why = { subject: to, error: errorText(err).slice(0, 300) };
       tellOnce(to, () =>
         to === own

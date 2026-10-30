@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -16,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { keySha256 } from "../../src/core/tunnel.ts";
+import { type ControlRoute, ModelSource } from "../../src/harness/agents/index.ts";
 import { SUPERVISOR_RECORD } from "../../src/harness/broker/one-container.ts";
 import type { Role } from "../../src/harness/broker/runner.ts";
 import {
@@ -40,6 +42,7 @@ import {
   platformInit,
   readsResearch,
   researchProbeFolder,
+  rigSecretFiles,
   runpodCheck,
   setIdCheck,
   snapshotKeyCheck,
@@ -266,6 +269,41 @@ describe("the research folder the selftest probes", () => {
   });
 });
 
+describe("the rig's secret files in the isolation selftest", () => {
+  test("both routes control set, the tokens and the model key: one list for the rig check and the command line", () => {
+    const stateDir = mkdtempSync(join(tmpdir(), "thermite-state-"));
+    const env = {
+      THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
+      THERMITE_PROPOSER_TOKEN_FILE: "/run/secrets/harness-proposer-token",
+      THERMITE_MODEL_API_KEY_FILE: "/run/secrets/model-api-key",
+    };
+    const files = rigSecretFiles(env, stateDir);
+    assert.deepEqual(files.slice(2), Object.values(env));
+    // The two routes are where the rig keeps them: the planner's beside the agents'.
+    const route: ControlRoute = {
+      name: "opencode",
+      version: 3,
+      base_url: "https://models.example/v1/",
+      model: "m-1",
+      context_window: 262144,
+      max_tokens: 0,
+      reasoning: "none",
+      key_hint: "…0001",
+      revision: "0123456789abcdef",
+      api_key: "a-made-up-key",
+    };
+    const models = new ModelSource(String(files[0]), undefined);
+    models.set(route);
+    models.setPlanner(route);
+    for (const f of files.slice(0, 2)) assert.ok(existsSync(f), `${f} is where a route is kept`);
+    // In one container with the supervisor: the keys its tunnel signs with.
+    assert.equal(
+      rigSecretFiles({ THERMITE_TUNNEL_DIR: "/var/lib/tunnel" }, stateDir).at(-1),
+      "/var/lib/tunnel/keys.json",
+    );
+  });
+});
+
 describe("the inbox in the isolation selftest", () => {
   test("a file in it is found by its full path, below its folders; an empty or missing inbox has none", () => {
     const inbox = mkdtempSync(join(tmpdir(), "inbox-probe-"));
@@ -383,10 +421,12 @@ describe("the one-container image's checks of the container", () => {
       { pid: 1, ppid: 0 },
       { pid: 9, ppid: 1, uid: 10010, gid: 10010, env: code },
       { pid: 11, ppid: 1, uid: 10001, gid: 10001, env: code },
+      // The leaf node's key (a rig on RunPod), which the supervisor takes out of its environment too.
+      { pid: 12, ppid: 1, uid: 10001, gid: 10001, env: { THERMITE_LEAF_KEY: "a2V5" } },
     ]);
     assert.equal(
       enrollCodeCheck(leaked),
-      "FOUND THERMITE_TUNNEL_ENROLL_CODE in pid 9 (uid 10010), pid 11 (uid 10001)",
+      "FOUND pid 9 (uid 10010): THERMITE_TUNNEL_ENROLL_CODE; pid 11 (uid 10001): THERMITE_TUNNEL_ENROLL_CODE; pid 12 (uid 10001): THERMITE_LEAF_KEY",
     );
   });
 
@@ -526,7 +566,9 @@ describe("the one-container image's checks of the container", () => {
       rootDir: root,
       waitMs: 0,
     });
-    assert.deepEqual(checks, {
+    const { "file-capabilities": caps, ...others } = checks;
+    assert.match(String(caps), /^none/);
+    assert.deepEqual(others, {
       "supervisor-user": "uid 10001, gid 10001, no_new_privs",
       "supervisor-gpu": "no GPU node (fence: none)",
       "setid-files": "none",

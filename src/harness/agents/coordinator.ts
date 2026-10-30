@@ -62,11 +62,21 @@ export function focusOf(x: Pick<Experiment, "title" | "details">): string {
 }
 
 /**
- * The rules for the plan in force. The owner's (issued through control) come first: a supervisor
- * directive about a family the owner has a directive for, or a supervisor lane count when the
- * owner set one, does not apply.
+ * Who set a rule, as the planner reads it: `owner` for the owner (or an operator on the owner's
+ * behalf), else its author as the ledger records it, such as a teacher, the planner or an agent.
  */
-export function rulesInForce(ledger: Ledger, run: string): { id: number; body: StoredRule }[] {
+export const ruleBy = (author: string): string =>
+  author === "control:owner" || author.startsWith("control:owner:") ? "owner" : author;
+
+/**
+ * The rules for the plan in force, each with who set it (ruleBy). The owner's (issued through
+ * control) come first: a supervisor directive about a family the owner has a directive for, or a
+ * supervisor lane count when the owner set one, does not apply.
+ */
+export function rulesInForce(
+  ledger: Ledger,
+  run: string,
+): { id: number; body: StoredRule; by: string }[] {
   // An old rule in words (legacy, goal 066) stays in force for the planner's model until its
   // round converts it; it has no family, so the code below and the fixed rules never keep it.
   // An advisor's rule that freezes the queue's size or pins an experiment, set before code
@@ -78,6 +88,7 @@ export function rulesInForce(ledger: Ledger, run: string): { id: number; body: S
       id: d.id,
       owner: d.author.startsWith("control:"),
       body: d.body as StoredRule,
+      by: ruleBy(d.author),
     }));
   const ownerFamilies = new Set(
     all.filter((d) => d.owner && d.body.family).map((d) => d.body.family),
@@ -90,7 +101,7 @@ export function rulesInForce(ledger: Ledger, run: string): { id: number; body: S
         ((!d.body.family || !ownerFamilies.has(d.body.family)) &&
           !(d.body.kind === "lane_count" && ownerLanes)),
     )
-    .map((d) => ({ id: d.id, body: d.body }));
+    .map((d) => ({ id: d.id, body: d.body, by: d.by }));
 }
 
 /**

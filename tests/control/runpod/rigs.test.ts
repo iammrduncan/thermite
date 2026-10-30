@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { makeCa } from "../../../src/control/bus/cert.ts";
 import { podPortUrl } from "../../../src/control/runpod/cloud.ts";
 import type { RunpodRigView } from "../../../src/control/runpod/rig-view.ts";
 import { DEFAULT_IDLE_STOP_MINUTES, RunpodRigs } from "../../../src/control/runpod/rigs.ts";
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
+import { LEAF_ENV, LEAF_PORT } from "../../../src/core/link/leaf.ts";
 import { keySha256 } from "../../../src/core/tunnel.ts";
 import { controlOnly, mcpClient } from "../../helpers/control-stack.ts";
 import { applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
@@ -21,7 +23,7 @@ const KEY = FAKE_RUNPOD_KEY;
 const IMAGE = "ghcr.io/example/thermite-rig:test-cuda";
 const HOUR = 3_600_000;
 
-function setup(o: { noCapacity?: boolean; image?: string | undefined } = {}) {
+function setup(o: { noCapacity?: boolean; image?: string | undefined; busCa?: string } = {}) {
   const store = controlStore();
   const secrets = SecretBox.ephemeral();
   store.gpuClouds.add({
@@ -35,7 +37,10 @@ function setup(o: { noCapacity?: boolean; image?: string | undefined } = {}) {
   const control = generateSigningKeys();
   let clock = Date.now();
   const now = () => clock;
-  const tunnels = new ControlTunnels(store, secrets, control.privateKeyPem, { now });
+  const tunnels = new ControlTunnels(store, secrets, control.privateKeyPem, {
+    now,
+    busCa: o.busCa,
+  });
   const rigs = new RunpodRigs(store, secrets, tunnels, {
     fetch: cloud.fetch,
     image: "image" in o ? o.image : IMAGE,
@@ -138,6 +143,38 @@ describe("rigs on RunPod: the launch", () => {
     const audit = s.store.auditLog.list(10).find((a) => a.action === "runpod_rig_launched");
     assert.equal(audit?.actor, "owner:api");
     assert.equal((audit?.body as { pod?: string } | undefined)?.pod, "pod1");
+  });
+
+  test("with control's authority for the bus: the leaf's port as TCP, its values, and the pod's address from RunPod while it runs", async () => {
+    const s = setup({ busCa: makeCa(new Date(), 30).cert });
+    const v = await s.rigs.launch("runpod", { gpu: "RTX A4000" }, "owner:api");
+    const [body] = s.created();
+    assert.deepEqual(body?.ports, ["8790/http", `${LEAF_PORT}/tcp`]);
+    assert.deepEqual(
+      Object.keys(body?.env ?? {})
+        .filter((k) => k.startsWith("THERMITE_LEAF_"))
+        .sort(),
+      Object.values(LEAF_ENV).sort(),
+    );
+    assert.equal(v.bus_leaf, null, "no address before RunPod gives one");
+    const pod = s.cloud.pods.get("pod1");
+    assert.ok(pod);
+    pod.tcp = { [LEAF_PORT]: { ip: "203.0.113.5", public: 40123 } };
+    await s.advance(30_000);
+    assert.equal(s.rigs.view(v.rig)?.bus_leaf, "203.0.113.5:40123");
+    // Stopped, the pod has no address; started again, RunPod may give another.
+    pod.status = "EXITED";
+    await s.advance(30_000);
+    assert.equal(s.rigs.view(v.rig)?.bus_leaf, null);
+    pod.status = "STARTING";
+    pod.tcp = { [LEAF_PORT]: { ip: "198.51.100.7", public: 41000 } };
+    await s.advance(30_000);
+    assert.equal(s.rigs.view(v.rig)?.bus_leaf, "198.51.100.7:41000");
+    const steps = s.store.rigHistory.list(v.rig).filter((e) => e.step === "runpod_leaf_address");
+    assert.deepEqual(
+      steps.map((e) => e.detail),
+      ["203.0.113.5:40123", "198.51.100.7:41000"],
+    );
   });
 
   test("GPUs, a data center, an expiry for the code and the owner's settings", async () => {

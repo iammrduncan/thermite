@@ -215,14 +215,13 @@ Retire a rig that is gone. It leaves the rig lists and **Needs you** (on **Overv
 
 The page says `rig-1 is retired.` The rig is listed under **Retired** on **Rigs**. A token control made for the rig, with **Add a rig**, a join command or `thermite rig add`, stops working.
 
-A rig whose token is in control's rig tokens file (`THERMITE_CONTROL_RIG_TOKENS_FILE`), such as the compose stack's `local-1` and `local-2`, keeps its token: the page adds "If its token is in control's settings, take it out there too." Do so only to end the rig for good: take its line out of that file (`.dev/secrets/control-rig-tokens.json` on the local stack) and restart control. Leave it in if you may bring the rig back.
+The local compose stack's enroll step leaves a retired `local-1` or `local-2` retired: at each `up` it says `local enroll: local-1 is retired in control: it is not enrolled again. Bring it back on its page to use it.`
 
 You can also retire a rig with `thermite rig retire`, `POST /v1/rigs/<rig>/retire`, or the MCP tool `retire_rig` with `confirm: "retire rig-1"`. Only the owner's token can.
 
 To **bring it back**, open its page and press **Bring it back**, or use `POST /v1/rigs/<rig>/bring-back` or the MCP tool `bring_back_rig`. It shows again, and its reports are taken again:
 
-- A rig with its token still in the rig tokens file reports again at once.
-- **A token control made for it stays ended.** To let such a rig report again, enroll it again with `thermite rig add`, which also brings it back, and give the rig the new token. See [Make and change tokens](tokens.md).
+- **A token control made for it stays ended.** To let such a rig report again, enroll it again with `thermite rig add`, which also brings it back, and give the rig the new token. See [Make and change tokens](tokens.md). For the local compose stack's `local-1` and `local-2`, the next `docker compose up -d` (or `podman compose up -d`) enrolls the rig again and writes its new token; then restart its supervisor (`docker compose restart supervisor`).
 
 ## Fully reset a rig
 

@@ -21,6 +21,7 @@ import { migrateModelRoutes } from "./providers.ts";
 import { reachableAddressTable } from "./reachable.ts";
 import { renameAgentRoles, renameUnitsToRigs } from "./renames.ts";
 import { runRegistryTable } from "./runs.ts";
+import { tunnelLeafColumns } from "./tunnels.ts";
 
 /**
  * Control's store's schema and its migrations, moved out of store.ts (goal 173). The store's
@@ -684,6 +685,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   reachableAddressTable,
   // A cluster keeps the owner's acceptance of a connection control can't check.
   clusterUncheckedColumn,
+  // A rig on RunPod keeps its pod's leaf node authority and address for the bus (goal 168).
+  tunnelLeafColumns,
 ];
 
 /**

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { createUser, fromSeed } from "@nats-io/nkeys";
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
@@ -8,12 +9,14 @@ import { LIVE_RUNS_PER_RIG } from "../../core/link/live.ts";
 import { isUserKey, userKeyFingerprint, usersFile } from "../../core/link/users.ts";
 import type { SecretBox } from "../secrets.ts";
 import type { BusIdentityName, ControlStore } from "../store/index.ts";
+import { leafRigsFor, leafRigsOf, writeLeafFiles } from "./leaf.ts";
 
 /**
  * Who may use the message bus (goal 168). Each rig's supervisor makes its own key and registers
  * its public part on its regular call to control (takeRigBusKey); control keeps it, writes every
  * user with what it may do to the server's users file, and asks the server to reload the file
- * (BusUsers). Control's own two keys are made here on first use and kept sealed in its store. The
+ * (BusUsers). The file also names each rig on RunPod whose pod's server control's server dials as
+ * a leaf node, with the account its connection binds to (leaf.ts). Control's own two keys are made here on first use and kept sealed in its store. The
  * backup's key (goal 173) is made here too, its seed in a file of control's state folder that
  * `thermite backup` and `thermite restore` read: its user may snapshot and restore the streams kept
  * for good, and nothing else.
@@ -205,6 +208,13 @@ export class BusUsers {
   private reloaded = false;
   /** Whether the last sync failed: a failure is logged in full once, then quietly until one works. */
   private failing = false;
+  /**
+   * The rigs whose leaf account the server took at a reload: only then does the file name the
+   * pod's address. The pinned server (2.15.1) does not answer through an account that came in the
+   * same reload as the connection bound to it; one that came in an earlier reload, or at the
+   * server's start, works. Read from the file at start, which the server had then.
+   */
+  private leafTaken: Set<string>;
   /** Since when the server has not taken the file, and why, while it has not. */
   private trouble: { since: number; error: string; step: "write" | "reload" } | undefined;
   private readonly clock: () => number;
@@ -216,6 +226,7 @@ export class BusUsers {
     this.control = identity(o, "control");
     this.system = identity(o, "system");
     this.backup = o.backupSeedFile ? backupKey(o.backupSeedFile) : undefined;
+    this.leafTaken = leafAccountsIn(existsSync(o.file) ? readFileSync(o.file, "utf8") : "");
     watched.set(o.store, this);
   }
 
@@ -251,7 +262,10 @@ export class BusUsers {
     return this.system.seed;
   }
 
-  /** The users file's text now: each rig's user with the runs control's run registry gives it. */
+  /**
+   * The users file's text now: each rig's user with the runs control's run registry gives it, and
+   * each rig on RunPod whose pod's server control's server dials (leaf.ts).
+   */
   text(): string {
     const { store } = this.o;
     const runs = store.runRegistry.runsByRig(LIVE_RUNS_PER_RIG);
@@ -261,7 +275,8 @@ export class BusUsers {
       runs: runs.get(r.rig) ?? [],
     }));
     const own = { control: this.control.publicKey, system: this.system.publicKey };
-    return usersFile({ ...own, backup: this.backup, rigs });
+    const leaf = leafRigsFor(store, leafRigsOf(store), (rig) => this.leafTaken.has(rig));
+    return usersFile({ ...own, backup: this.backup, rigs, leaf });
   }
 
   /**
@@ -279,8 +294,10 @@ export class BusUsers {
     const where = { file: this.o.file };
     let text: string;
     try {
-      // The certificate first: the server starts once the users file is there.
+      // The certificate first, and each pod's authority: the server starts once the users file is
+      // there, and reads the files it names.
       if (this.o.tls?.write()) this.reloaded = false;
+      if (writeLeafFiles(dirname(this.o.file), leafRigsOf(this.o.store))) this.reloaded = false;
       text = this.text();
       if (text !== this.written) {
         writeAtomic(this.o.file, text, USERS_FILE_MODE);
@@ -300,6 +317,10 @@ export class BusUsers {
       await this.o.reload(this.system.seed);
       this.reloaded = true;
       this.failing = false;
+      // A leaf account the server took now: the next sync names its pod's address.
+      const taken = leafAccountsIn(text);
+      if ([...taken].some((rig) => !this.leafTaken.has(rig))) void this.sync();
+      this.leafTaken = taken;
       if (this.trouble)
         log("control", "the bus's server takes its users again", {
           since: new Date(this.trouble.since).toISOString(),
@@ -348,6 +369,10 @@ function backupKey(file: string): string {
 
 /** How many users a users file names. */
 const usersIn = (text: string) => (text.match(/"nkey":/g) ?? []).length;
+
+/** The rigs whose leaf account a users file names (core/link/leaf.ts's leafAccount). */
+const leafAccountsIn = (text: string) =>
+  new Set([...text.matchAll(/^ {2}"LEAF_([a-z0-9-]+)": \{/gm)].map((m) => m[1] as string));
 
 /**
  * One of control's own keys, from its store; made there first, its seed sealed. Throws, with what

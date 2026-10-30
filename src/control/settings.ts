@@ -36,6 +36,17 @@ export const CONTROL_NUMBERS = {
   },
 } satisfies Record<string, NumberSpec>;
 
+/** The rig tokens file, a setting control no longer reads: rigs enroll through control. */
+export const RIG_TOKENS_SETTING = "THERMITE_CONTROL_RIG_TOKENS_FILE";
+
+/** What control says at its start when the rig tokens file is still set; it starts. */
+export const RIG_TOKENS_NOT_READ = `${RIG_TOKENS_SETTING} is set, and control no longer reads it: rigs enroll through control (Rigs › Add a rig, a join command or thermite rig add), and the local compose stack's enroll step enrolls local-1 and local-2 at each up. A rig whose token was only in that file is refused until it is enrolled. Take the setting out.`;
+
+/** The words control logs at its start for a setting it no longer reads, when one is set. */
+export function notReadWords(env: Record<string, string | undefined>): string | undefined {
+  return env[RIG_TOKENS_SETTING] ? RIG_TOKENS_NOT_READ : undefined;
+}
+
 /** Control's address as rigs and the machines it sets rigs up on reach it. */
 export const PUBLIC_URL_SETTING = "THERMITE_CONTROL_PUBLIC_URL";
 /** `1`: control may give rigs a plain `http://` address on another host, as on a home network. */

@@ -41,18 +41,6 @@ const RegexSchema = z
   }, "invalid regular expression");
 
 /**
- * A research campaign's web search policy. Thermite has no web search of its own (web search comes
- * from an MCP server the campaign names, goal 046), so nothing reads it: a contract may still carry
- * it, and keeps its hash, until a new contract version leaves it out.
- */
-const SearchPolicy = z.strictObject({
-  /** What public search may be used for, stated for agents and auditors. */
-  allowed_purposes: z.array(z.string().min(1)).default([]),
-  /** Regular expressions; matching queries are refused and logged. */
-  blocked_patterns: z.array(RegexSchema).default([]),
-});
-
-/**
  * What a worker's lane may use. Optional and without schema defaults, so contracts written
  * before it keep their hash; laneLimits() fills the defaults.
  */
@@ -161,7 +149,6 @@ const Common = {
     .default({ max_open_attempts: 4 }),
   min_duration: DurationSchema.optional(),
   max_duration: DurationSchema.optional(),
-  search_policy: SearchPolicy.optional(),
   /**
    * The campaign's additional information, from its author (goal 078): background, links, what
    * was tried, limits and what good looks like, in Markdown, with no length limit. The planner,

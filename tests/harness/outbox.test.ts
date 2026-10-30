@@ -73,3 +73,26 @@ test("a run's export takes its attempts' verdicts and its judge's jobs, and no o
     [],
   );
 });
+
+test("each of the ledger's tables is placed on purpose in an export's copy: copied, or dropped", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const { LEDGER_COPY } = await import("../../src/harness/outbox.ts");
+  const dir = mkdtempSync(join(tmpdir(), "thermite-ledger-copy-"));
+  const ledger = Ledger.open(join(dir, "l.db"));
+  const tablesOf = (db: { prepare(sql: string): { all(): unknown[] } }) =>
+    (
+      db.prepare("select name from sqlite_master where type = 'table' order by name").all() as {
+        name: string;
+      }[]
+    )
+      .map((r) => r.name)
+      .filter((n) => !n.startsWith("sqlite_"));
+  const placed = [...LEDGER_COPY.copied, ...LEDGER_COPY.dropped].sort();
+  // A table on neither list fails here: put it on one, on purpose (src/harness/outbox.ts).
+  assert.deepEqual(tablesOf(ledger.db), placed);
+  ledger.copyTo(join(dir, "copy.db"), LEDGER_COPY.dropped);
+  ledger.close();
+  const copy = new DatabaseSync(join(dir, "copy.db"));
+  assert.deepEqual(tablesOf(copy), [...LEDGER_COPY.copied].sort());
+  copy.close();
+});

@@ -70,6 +70,7 @@ export function runpodRigView(
     created_by: r.created_by,
     spend_usd: s.price_per_hr === null ? null : Math.round(spentBy(s, now) * 100) / 100,
     enrolled_at: enrolledAt,
+    bus_leaf: tunnel?.leaf_address ?? null,
     idle_since: idleSince(s, enrolledAt),
   };
 }

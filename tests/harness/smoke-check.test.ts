@@ -124,7 +124,7 @@ describe("the smoke check's report", () => {
     assert.equal(r.ok, true);
     assert.equal(
       r.summary,
-      "smoke on smoke-cpu: all 12 candidates were judged as expected (run check-smoke-1)",
+      "smoke on smoke-cpu: all 13 candidates were judged as expected (run check-smoke-1)",
     );
     assert.equal(r.note, undefined);
     assert.equal(r.detail?.noisy_timing, undefined);
@@ -136,7 +136,7 @@ describe("the smoke check's report", () => {
     assert.equal(r.note, NOISY_TIMING_NOTE);
     assert.equal(
       r.summary,
-      "smoke on smoke-cpu: 11 of 12 candidates were judged as expected; the no-op came out inconclusive, not neutral (run check-smoke-1). Note: The timing on this machine is noisy. Results here need more repeats.",
+      "smoke on smoke-cpu: 12 of 13 candidates were judged as expected; the no-op came out inconclusive, not neutral (run check-smoke-1). Note: The timing on this machine is noisy. Results here need more repeats.",
     );
     assert.equal(r.detail?.noisy_timing, true);
     assert.equal(r.detail?.note, NOISY_TIMING_NOTE);
@@ -167,7 +167,7 @@ describe("the smoke check's report", () => {
       assert.equal(r.ok, false, JSON.stringify(other));
       assert.equal(r.note, undefined);
       assert.equal(r.detail?.noisy_timing, undefined);
-      assert.match(r.summary, /^smoke on smoke-cpu: 2 of 12 candidates were judged otherwise: /);
+      assert.match(r.summary, /^smoke on smoke-cpu: 2 of 13 candidates were judged otherwise: /);
       assert.match(r.summary, /noop expected neutral, got inconclusive/);
     }
   });
@@ -184,7 +184,7 @@ describe("the smoke check's report", () => {
       const r = smokeReport("smoke-cpu", "check-smoke-1", results(got));
       assert.equal(r.ok, false, JSON.stringify(got));
       assert.equal(r.note, undefined);
-      assert.match(r.summary, /^smoke on smoke-cpu: 1 of 12 candidates were judged otherwise: /);
+      assert.match(r.summary, /^smoke on smoke-cpu: 1 of 13 candidates were judged otherwise: /);
     }
     const none = smokeReport("smoke-cpu", "check-smoke-1", results({ noop: "" }));
     assert.match(none.summary, /noop expected neutral, got nothing$/);

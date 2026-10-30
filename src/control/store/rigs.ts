@@ -1,5 +1,5 @@
 import { canonicalJson } from "../../core/canonical.ts";
-import { fingerprint } from "./keys.ts";
+import { fingerprint } from "../../core/commands.ts";
 import { type Row, StorePart } from "./part.ts";
 import type { IngestReport } from "./report.ts";
 

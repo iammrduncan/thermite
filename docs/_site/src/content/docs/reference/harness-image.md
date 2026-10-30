@@ -214,12 +214,13 @@ podman build -t thermite-rig --build-arg HARNESS_IMAGE=localhost/thermite-harnes
 | Users | `supervisor`, uid and gid 10001, home `/var/lib/thermite-supervisor/home`, as in the supervisor image. `/var/lib/thermite-supervisor` and its `home` are mode 0700. `advisor-1` to `advisor-8`, uid and gid 10081 to 10088, as in the supervisor image |
 | Set-id files | None. The build removes every setuid and setgid bit after the last package, and fails if one is left. RunPod does not stop a process from gaining privileges through such a file (`no_new_privs` is off there), so a role could otherwise run a setuid program as its owner |
 | `thermite-rig-start` | `/usr/local/bin/thermite-rig-start`, the entry point. See [How it starts](#how-it-starts) |
+| `nats-server` | `/usr/local/bin/nats-server`, the [NATS server](https://github.com/nats-io/nats-server) 2.15.1: the program alone, 17.4 MB, copied from the bus's image that `compose.yaml` pins, by the same digest. The supervisor runs it as the pod's own server, which control's server dials as a leaf node ([A rig on RunPod](../explanation/how-the-parts-talk.md#a-rig-on-runpod)) |
 | Entry point | `thermite-rig-start`, then `tini`, then `node /opt/thermite/dist/harness/broker/main.js` |
-| Port | 8790 (`EXPOSE 8790`), the supervisor's port for control. The launch exposes it as HTTP, and RunPod's proxy makes it reachable |
+| Ports | 8790 (`EXPOSE 8790 7422`), the supervisor's port for control: the launch exposes it as HTTP, and RunPod's proxy makes it reachable. 7422, the pod's leaf node: the launch exposes it as TCP, and RunPod gives it a public address and port |
 
 ### Settings the image sets
 
-The launch gives the rest: control's launch values for [pull mode](settings.md#pull-mode) (the rig's ID, the random path, the SHA-256 of control's key, the rig's key at control and the one-time enrollment code), the key the state's snapshot is sealed with (`THERMITE_STATE_SNAPSHOT_KEY`), and RunPod's `RUNPOD_POD_ID`.
+The launch gives the rest: control's launch values for [pull mode](settings.md#pull-mode) (the rig's ID, the random path, the SHA-256 of control's key, the rig's key at control and the one-time enrollment code), the leaf node's (the pod's TLS certificate and key, and control's authority: `THERMITE_LEAF_CERT`, `THERMITE_LEAF_KEY` and `THERMITE_LEAF_CONTROL_CA`), the key the state's snapshot is sealed with (`THERMITE_STATE_SNAPSHOT_KEY`), and RunPod's `RUNPOD_POD_ID`.
 
 | Variable | Value | Effect |
 | --- | --- | --- |
@@ -297,7 +298,7 @@ The container's disk holds the live state, models and builds among it, and the v
    - in pull mode, it removes the harness's copy of control's key from an earlier start. A start without `THERMITE_RIG_ID`, `THERMITE_CONTROL_PUBKEY_FILE` or a `THERMITE_TUNNEL_CONTROL_KEY_SHA256` of 64 hexadecimal characters stops with `fatal: pull mode needs the launch's values`.
 4. As the supervisor's user, started the way the supervisor is, it tries to open each GPU device node. It records what happened in `supervisor.json` in its socket's folder, for the isolation check.
 5. It serves the advisors' runner on `/run/thermite-advisors/runs.sock` (root and the supervisor's group, 0660, in a folder of mode 0750), and logs `serving the advisors' runner`. Each advisor's program runs as an advisor user of its own, in a folder of `/var/lib/thermite-rig/thermite-advisors` (the supervisor's, 0711, emptied at every start), as in the [supervisor image](#how-the-supervisor-image-starts), and also with no_new_privs and in the GPU fence with no card.
-6. It starts the supervisor as `supervisor` (10001), with no_new_privs (`setpriv --no-new-privs`), and in the GPU fence with no card where the kernel has Landlock: neither the supervisor nor an advisor's program can open the GPU. The supervisor serves the pull mode port and waits for control to enroll the pod.
+6. It starts the supervisor as `supervisor` (10001), with no_new_privs (`setpriv --no-new-privs`), and in the GPU fence with no card where the kernel has Landlock: neither the supervisor nor an advisor's program can open the GPU. The supervisor serves the pull mode port and waits for control to enroll the pod. With the leaf node's launch values, it also writes the pod's server's files in `THERMITE_TUNNEL_DIR/bus` (its key 0600, the folder 0700), takes `THERMITE_LEAF_KEY` out of its own environment, starts `nats-server` as its own child with an empty environment, and starts it again 5 seconds after it exits; its log says `the pod's bus server started: control's server dials it as a leaf node`. The server listens for the supervisor on `127.0.0.1:4222`, which only the rig's key on the bus signs in to, and for control's server on 7422, which takes only a client certificate of control's authority.
 7. The broker waits for enrollment, and logs `waiting for enrollment: the harness starts once control has enrolled the pod` at once and every 10 minutes after. When the supervisor has written `control.pub` in `THERMITE_TUNNEL_ENROLLED_DIR`, root reads what enrollment left, as data:
    - `control.pub` and `rig.env` must be plain files of the supervisor's own, not links, of at most 16 KiB;
    - `control.pub` must be an Ed25519 public key whose SHA-256 is `THERMITE_TUNNEL_CONTROL_KEY_SHA256`, the one the launch named;
@@ -308,16 +309,16 @@ The container's disk holds the live state, models and builds among it, and the v
 
 A pod that restarts does not enroll again: the supervisor writes the same files again at start, and the broker checks them again before the controller starts. After a stop, the pod's keys and its enrollment come back from the snapshot.
 
-The supervisor's environment is the broker's, without RunPod's variables, the snapshot key and the harness's secret files, with `HOME` (its passwd home), `TMPDIR` (its `tmp`), `USER=supervisor` and `THERMITE_HARNESS_TOKEN_FILE` set. It takes the enrollment code out of its own environment at start. The controller gets no `RUNPOD_` variable, in every image, no snapshot key, and none of pull mode's launch values but `THERMITE_TUNNEL_DIR` and `THERMITE_TUNNEL_CONTROL_KEY_SHA256`, which its isolation check reads. The roles get what they get in the harness image.
+The supervisor's environment is the broker's, without RunPod's variables, the snapshot key and the harness's secret files, with `HOME` (its passwd home), `TMPDIR` (its `tmp`), `USER=supervisor` and `THERMITE_HARNESS_TOKEN_FILE` set. It takes the enrollment code and the leaf node's key out of its own environment at start. The controller gets no `RUNPOD_` variable, in every image, no snapshot key, none of the leaf node's values, and none of pull mode's launch values but `THERMITE_TUNNEL_DIR` and `THERMITE_TUNNEL_CONTROL_KEY_SHA256`, which its isolation check reads. The roles get what they get in the harness image.
 
 ### Restarts and stops
 
 | When | The broker |
 | --- | --- |
 | The controller exits | Does what it does in the harness image: ends the controller's processes and every role's, and starts it again, with the key root copied at this start |
-| The supervisor exits | Ends whatever the supervisor started (its process group and every process of its user), logs `supervisor exited; restarting`, and starts it again |
+| The supervisor exits | Ends whatever the supervisor started (its process group and every process of its user, the pod's bus server among them), logs `supervisor exited; restarting`, and starts it again |
 | A part exits again soon | Waits 2 seconds before the next start, then twice as long each time, up to 30 seconds. After a run of more than a minute it waits 1 second |
-| It gets `SIGTERM` or `SIGINT`, as when the pod stops | Takes a snapshot of the state first, for up to 8 seconds ([Where the state lives](#where-the-state-lives)). Then passes the signal to both parts and starts neither again. Once both have ended, it ends every role's processes, logs `stopped` and exits with the controller's exit code. A stop while it waits for enrollment ends the supervisor the same way. The supervisor logs `stopping` and closes pull mode's ports at once: its calls that wait for control's next exchange end with 503, so it ends within seconds whether or not control is connected |
+| It gets `SIGTERM` or `SIGINT`, as when the pod stops | Takes a snapshot of the state first, for up to 8 seconds ([Where the state lives](#where-the-state-lives)). Then passes the signal to both parts and starts neither again. Once both have ended, it ends every role's processes, logs `stopped` and exits with the controller's exit code. A stop while it waits for enrollment ends the supervisor the same way. The supervisor logs `stopping`, closes pull mode's ports at once, and stops the pod's bus server: its calls that wait for control's next exchange end with 503, so it ends within seconds whether or not control is connected |
 
 ### Paths
 
@@ -335,7 +336,7 @@ The supervisor's environment is the broker's, without RunPod's variables, the sn
 | `/run/thermite/supervisor.json` | The broker's record of the supervisor's user, fence and GPU access | root, 0644, in the broker's folder (root and group `thermite`, 0750) |
 | `/scratch` | As in the harness image, on the container's own disk | root, 0755 |
 
-The [isolation check](rig-checks.md#the-one-container-image) checks the supervisor, set-id files, RunPod's variables, the enrollment code, control's key, the snapshot folder and the snapshot key in this image too.
+The [isolation check](rig-checks.md#the-one-container-image) checks the supervisor, set-id files, files with capabilities, RunPod's variables, the enrollment code and the leaf node's key, control's key, the snapshot folder and the snapshot key in this image too.
 
 ## The control image
 

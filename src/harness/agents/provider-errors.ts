@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { CHATGPT_LIMIT_CODE, CHATGPT_LIMIT_WAIT_MS } from "../../agents/model/index.ts";
 
 /**
@@ -24,14 +25,16 @@ import { CHATGPT_LIMIT_CODE, CHATGPT_LIMIT_WAIT_MS } from "../../agents/model/in
  * Only an error that came from a call to the provider is sorted here: the words of a local failure
  * (a workspace that could not be set up, a program that exited) are not the provider's.
  */
-export type ProviderErrorKind =
-  | "rate_limit"
-  | "credits"
-  | "auth"
-  | "route"
-  | "server"
-  | "context"
-  | "model";
+export const PROVIDER_ERROR_KINDS = [
+  "rate_limit",
+  "credits",
+  "auth",
+  "route",
+  "server",
+  "context",
+  "model",
+] as const;
+export type ProviderErrorKind = (typeof PROVIDER_ERROR_KINDS)[number];
 
 export interface ProviderError {
   kind: ProviderErrorKind;
@@ -70,11 +73,12 @@ export const FAILING_SAID = `no model call worked for ${FAILING_STOP_MS / 60_000
  * A trial's failing model calls when it ended (goal 079): since when they failed with no call that
  * worked between them (ISO), and the newest one's kind and the provider's words.
  */
-export interface TrialFailing {
-  since: string;
-  kind: ProviderErrorKind;
-  words: string;
-}
+export const TrialFailing = z.object({
+  since: z.string(),
+  kind: z.enum(PROVIDER_ERROR_KINDS),
+  words: z.string(),
+});
+export type TrialFailing = z.infer<typeof TrialFailing>;
 
 /** A trial's failed model calls in a row, and since when they have failed (goal 079). */
 export interface FailureCount {

@@ -154,6 +154,28 @@ describe("the supervisor's live lines on the message bus", () => {
     assert.deepEqual(f.subjects["thermite.rig.rig-a.live.judge"], { published: 0, dropped: 1 });
   });
 
+  test("on a leaf node, a run's subject the rig may not use gets no answer: its lines go on the rig's; none there waits", async () => {
+    const s = await rig();
+    // Through a RunPod pod's leaf node, a subject the rig's account does not take reaches no
+    // stream at all, as a subject no stream takes.
+    const leaf = new FakeBus();
+    await leaf.makeStream({ name: "LIVE", subjects: ["thermite.rig.*.live.*"] });
+    s.live.append({ source: "planner", kind: "status", text: "planning", run: "smoke-1" });
+    const st = await publishLiveOnce({ ...s.cfg, bus: leaf }, start);
+    assert.equal(st.cursor, 1);
+    assert.deepEqual(
+      leaf.kept.map((m) => m.subject),
+      ["thermite.rig.rig-a.live.planner"],
+    );
+    // No stream on the rig's subject either (the leaf not up yet): the lines wait for a round.
+    const none = new FakeBus();
+    s.live.append({ source: "planner", kind: "status", text: "planned", run: "smoke-1" });
+    await assert.rejects(
+      publishLiveOnce({ ...s.cfg, bus: none }, st),
+      /no stream on the bus takes/,
+    );
+  });
+
   test("a bus that fails otherwise leaves the place where it was; the round again is kept once", async () => {
     const s = await rig();
     s.live.append({ source: "planner", kind: "status", text: "a", run: "smoke-1" });

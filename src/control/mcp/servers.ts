@@ -29,31 +29,27 @@ export function registerMcpServers(tools: ToolContext): void {
           "Adds an MCP server to Settings, for the kits that name it. auth: oauth (answers with sign_in_url: open it in a browser and allow Thermite; the server's page sends the browser back to control), key (header, default Authorization, and secret: the header's whole value, such as Bearer and the token), client (client_id and client_secret: control gets a token with them) or none (a public server). url: https, or http for localhost only. Control seals each secret, never shows it again, and reads the server's tools; it calls none of them. The owner's token only.",
         inputSchema: ServerBody.shape,
       },
-      audited(
-        "mcp_server_add",
-        async (a: z.infer<typeof ServerBody>) => {
-          if (mcp.get(a.name.trim())) throw new Error(`There is a server named ${a.name} already.`);
-          mcp.put({ ...a, auth: auth.parse(a.auth) }, actor);
-          const name = a.name.trim();
-          if (a.auth === "oauth") {
-            const { url } = await mcp.startSignIn(
-              name,
-              redirectUriOf(opts.publicUrl, opts.requestUrl ?? "http://localhost"),
-              actor,
-            );
-            return {
-              server: serverJson(store, mcp.get(name) as NonNullable<ReturnType<typeof mcp.get>>),
-              sign_in_url: url,
-            };
-          }
-          const why = await mcp.check(name);
+      audited("mcp_server_add", async (a: z.infer<typeof ServerBody>) => {
+        if (mcp.get(a.name.trim())) throw new Error(`There is a server named ${a.name} already.`);
+        mcp.put({ ...a, auth: auth.parse(a.auth) }, actor);
+        const name = a.name.trim();
+        if (a.auth === "oauth") {
+          const { url } = await mcp.startSignIn(
+            name,
+            redirectUriOf(opts.publicUrl, opts.requestUrl ?? "http://localhost"),
+            actor,
+          );
           return {
             server: serverJson(store, mcp.get(name) as NonNullable<ReturnType<typeof mcp.get>>),
-            ...(why ? { check_error: why } : {}),
+            sign_in_url: url,
           };
-        },
-        ["secret", "client_secret"],
-      ),
+        }
+        const why = await mcp.check(name);
+        return {
+          server: serverJson(store, mcp.get(name) as NonNullable<ReturnType<typeof mcp.get>>),
+          ...(why ? { check_error: why } : {}),
+        };
+      }),
     );
     server.registerTool(
       "mcp_server_change",
@@ -88,7 +84,6 @@ export function registerMcpServers(tools: ToolContext): void {
             ...(why ? { check_error: why } : {}),
           };
         },
-        ["secret", "client_secret"],
       ),
     );
     server.registerTool(

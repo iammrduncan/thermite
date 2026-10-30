@@ -196,14 +196,15 @@ export function startTrial(
       if (abort.signal.aborted && r.stopped !== "submitted") r = { ...r, stopped: "interrupted" };
       r = withProgress(sched, id, r);
       sched.o.service.trialEnded(id, r.turns > 0 || r.tokensIn > 0);
-      if (r.submitted) sched.registry.tagAttempt(r.submitted.attempt, a.family);
+      // Its attempt is the one the harness linked to the trial as it submitted, never the one its
+      // worker names: the worker runs as the lane's agent user. Also when its worker was stopped
+      // before it could say so (goal 079): an interrupted Pi trial that submitted has its attempt
+      // with the judge, and its experiment is done, not back in the queue.
+      const attempt = sched.registry.attemptOf(id);
+      if (attempt) sched.registry.tagAttempt(attempt, a.family);
       // The trial ends first (its token stops working), then its processes and dev runs.
       sched.o.service.trialWorkspaces.delete(id);
-      sched.registry.finishTrial(id, { ...r, attempt: r.submitted?.attempt }, sched.o.owner);
-      // Its attempt is the one linked to the trial as it submitted, also when its worker was
-      // stopped before it could say so (goal 079): an interrupted Pi trial that submitted has
-      // its attempt with the judge, and its experiment is done, not back in the queue.
-      const attempt = r.submitted?.attempt ?? sched.registry.attemptOf(id);
+      sched.registry.finishTrial(id, r, sched.o.owner);
       finishExperiment(sched, id, r, attempt);
       afterTrial(sched, id, run, r);
       trialLine(

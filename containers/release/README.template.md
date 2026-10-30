@@ -26,7 +26,7 @@ The commands are for Docker. With Podman, write `podman compose` in place of `do
    docker compose run --rm init
    ```
 
-3. Start Thermite. The first start downloads the images:
+3. Start Thermite. The first start downloads the images. Each start enrolls the rig with control and writes its token to `.dev/secrets/` before the rig starts:
 
    ```sh
    docker compose up -d

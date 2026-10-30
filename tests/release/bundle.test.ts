@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { promisify } from "node:util";
-import { LOCAL_TOKEN_FILES } from "../../src/cli/local-init.ts";
+import { LOCAL_RIGS, LOCAL_TOKEN_FILES } from "../../src/cli/local-init.ts";
 import { BUS_TLS_FILES, BUS_USERS_FILE } from "../../src/control/bus/index.ts";
 import {
   type BundleInput,
@@ -99,13 +99,22 @@ describe("the release bundle", () => {
     );
     assert.equal(serviceKey(compose, "init", "network_mode"), "none");
     assert.equal(serviceKey(compose, "init", "cap_drop"), "[ALL]");
-    // Every secret the services read is a file the init service writes.
-    const made = [...LOCAL_TOKEN_FILES, "model-api-key", "control-rig-tokens.json"];
+    // Every secret the services read is a file the init service writes; each rig's token for
+    // control is the one its enroll service writes in place, into the file init made empty.
+    const made: string[] = [...LOCAL_TOKEN_FILES, ...Object.values(LOCAL_RIGS), "model-api-key"];
     const files = [...compose.matchAll(/\{ file: \.\/\.dev\/secrets\/([a-z0-9.-]+) \}/g)].map(
       (m) => m[1],
     );
-    assert.equal(files.length, 10);
+    assert.equal(files.length, 9);
     for (const name of files) assert.ok(made.includes(name ?? ""), `${name} is made by init`);
+    for (const [rig, file] of Object.entries(LOCAL_RIGS)) {
+      const service = rig === "local-1" ? "enroll" : "enroll-2";
+      assert.equal(
+        serviceKey(compose, service, "command"),
+        `["thermite", "local", "enroll", "${rig}", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/${file}"]`,
+      );
+    }
+    assert.ok(!compose.includes("RIG_TOKENS_FILE"), "control reads no rig tokens file");
   });
 
   test("the template matches compose.yaml but for images and the init service", () => {

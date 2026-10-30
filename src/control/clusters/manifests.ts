@@ -191,12 +191,15 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
         },
       },
       // Neither part calls the Kubernetes API (control drives the rig's lifecycle), so neither
-      // pod gets the namespace's service-account token. Both run under the container runtime's
-      // default seccomp profile, as compose and Quadlet run them, whatever the kubelet's default.
+      // pod gets the namespace's service-account token, nor the namespace's services as
+      // variables (KUBERNETES_SERVICE_HOST stays: the isolation selftest probes it). Both run
+      // under the container runtime's default seccomp profile, as compose and Quadlet run them,
+      // whatever the kubelet's default.
       template: {
         metadata: { labels: labels(p.rig, component) },
         spec: {
           automountServiceAccountToken: false,
+          enableServiceLinks: false,
           ...pod,
           securityContext: {
             ...((pod.securityContext as Obj | undefined) ?? {}),

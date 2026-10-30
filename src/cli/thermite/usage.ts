@@ -237,7 +237,13 @@ export const USAGE = `usage: thermite <command> [options]
                                       DIR's parent folder. It says what the local rig gets
                                       (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
                                       have, writes compose.gpu.yaml next to DIR for the engine
-                                      named, or the one it finds
+                                      named, or the one it finds. Each rig's token for control
+                                      starts empty: local enroll fills it
+  local enroll RIG --control URL --token-file F --out FILE
+                                      the compose stack's enroll step: wait for control (up to
+                                      5 minutes), enroll RIG with the owner's token in F unless
+                                      control has it enrolled and FILE holds a token, and write
+                                      its token into FILE. A retired rig is left as it is
   selftest isolation [--force]        inside the harness container, as root, with the rig idle: check that role
                                       users cannot reach the ledger, kits, builds or secrets
   backup FOLDER [--state DIR] [--bus URL]

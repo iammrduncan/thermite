@@ -179,16 +179,16 @@ function attemptBody(m: Record<string, string>): string {
 }
 
 /** A research paper's next experiment's kind (goal 119), in words: the run it is for. */
-const NEXT_FOR_WORDS: Record<string, string> = {
-  hill_climb: "a hill climb, an improvement to measure against its champion",
-  goal: "a goal campaign, an outcome to prove",
-};
+const NEXT_FOR_WORDS = new Map([
+  ["hill_climb", "a hill climb, an improvement to measure against its champion"],
+  ["goal", "a goal campaign, an outcome to prove"],
+]);
 
-const MODE_WORD: Record<string, string> = {
-  hill_climb: "hill climb",
-  goal: "goal",
-  research: "research",
-};
+const MODE_WORD = new Map([
+  ["hill_climb", "hill climb"],
+  ["goal", "goal"],
+  ["research", "research"],
+]);
 
 const n = (v: unknown) => (typeof v === "number" ? v.toLocaleString("en-US") : str(v));
 
@@ -204,7 +204,7 @@ export function indexEvent(t: KbIndexTarget, event: KbEvent): void {
     case "run_created": {
       t.runCreated(e.subject, str(b.campaign));
       const seed = b.seed && typeof b.seed === "object" ? (b.seed as Row) : {};
-      const mode = MODE_WORD[str(b.mode)] ?? str(b.mode);
+      const mode = MODE_WORD.get(str(b.mode)) ?? str(b.mode);
       const briefing = typeof b.briefing === "number" ? b.briefing : 0;
       t.put(
         e.subject,
@@ -667,7 +667,7 @@ export function indexEvent(t: KbIndexTarget, event: KbEvent): void {
         const rests = Array.isArray(y.rests_on) ? y.rests_on.map(str).filter(Boolean) : [];
         // Its kind (goal 119): the run it is for, a hill climb or a goal campaign, and its measure.
         const kind = str(y.kind);
-        const forWords = NEXT_FOR_WORDS[kind] ?? "";
+        const forWords = NEXT_FOR_WORDS.get(kind) ?? "";
         const details = lines([
           str(y.details),
           rests.length

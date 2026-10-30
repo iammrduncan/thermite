@@ -9,7 +9,7 @@ import {
 } from "../../agents/model/index.ts";
 import type { Role, Runner } from "../broker/index.ts";
 import type { ResearchTrialSpec } from "./research/index.ts";
-import type { TrialResult, TrialSpec } from "./worker/index.ts";
+import { TrialResult, type TrialSpec } from "./worker/index.ts";
 
 export type AnyTrial =
   | { kind: "code"; spec: TrialSpec }
@@ -94,19 +94,33 @@ export async function spawnTrial(
       ...(spec.limits ? { nproc: spec.limits.processes } : {}),
       captureBytes: 1024 * 1024,
     });
+    // The worker runs as the lane's agent user: its last line is read as data, through the
+    // result's schema. What it says it submitted is not taken: the scheduler reads the trial's
+    // attempt from the ledger, where the harness linked it as the trial submitted.
     const last = r.stdout.trim().split("\n").pop() ?? "";
+    let said: unknown;
     try {
-      return JSON.parse(last) as TrialResult;
+      said = JSON.parse(last);
     } catch {
-      return {
-        stopped: "error",
-        turns: 0,
-        toolCalls: 0,
-        tokensIn: 0,
-        tokensOut: 0,
-        error: `worker process gave no result (${r.killedFor ?? r.exitCode ?? r.signal}): ${r.stderr.slice(-500)}`,
-      };
+      said = undefined;
     }
+    const result = TrialResult.safeParse(said);
+    if (result.success) return result.data;
+    const why =
+      said === undefined
+        ? `gave no result (${r.killedFor ?? r.exitCode ?? r.signal}): ${r.stderr.slice(-500)}`
+        : `gave a result that is not a trial's: ${result.error.issues
+            .slice(0, 3)
+            .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+            .join("; ")}`;
+    return {
+      stopped: "error",
+      turns: 0,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      error: `worker process ${why}`,
+    };
   } finally {
     signal?.removeEventListener("abort", abort);
     await runner.killRole(role).catch(() => 0);

@@ -64,6 +64,64 @@ describe("agent scheduler", () => {
     );
   });
 
+  test("a trial's attempt is the one the harness linked as it submitted, never the one its worker names", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 2 } });
+    await env.start();
+    const fake = await startFakeModel(() => ({ text: "no plan" }));
+    let first: string | undefined;
+    const scheduler = new Scheduler({
+      service: env.service,
+      runner: new LocalRunner(env.paths.scratchDir),
+      model: { baseUrl: fake.url, model: "m", apiKey: "k", contextWindow: 32000, maxTokens: 2000 },
+      owner: "s",
+      runTrial: async (spec) => {
+        if (!first) {
+          const r = await env.service.submitForTrial(String(spec.token), {
+            patch_base64: env.patch(FAST_KERNEL),
+            hypothesis: "h",
+            known_flaws: [],
+          });
+          first = r.attempt;
+          return {
+            submitted: r,
+            stopped: "submitted",
+            turns: 1,
+            toolCalls: 1,
+            tokensIn: 0,
+            tokensOut: 0,
+          };
+        }
+        // The second trial's worker submits nothing and names the first trial's attempt.
+        return {
+          submitted: { attempt: first, lifecycle: "queued" },
+          stopped: "submitted",
+          turns: 1,
+          toolCalls: 1,
+          tokensIn: 0,
+          tokensOut: 0,
+        };
+      },
+    });
+    assert.ok(await scheduler.tick());
+    await scheduler.idle();
+    await env.drain();
+    await scheduler.tick();
+    await scheduler.idle();
+    const trials = env.ledger.db
+      .prepare("select id, family, attempt from trial order by started_at, id")
+      .all() as { id: string; family: string | null; attempt: string | null }[];
+    assert.equal(trials.length, 2);
+    assert.equal(trials[0]?.attempt, first);
+    assert.equal(trials[1]?.attempt, null, "the worker's word links nothing");
+    assert.equal(env.ledger.attempts.get(String(first))?.family, trials[0]?.family);
+    const finished = env.ledger
+      .eventsAfter(0, 10_000)
+      .events.filter((e) => e.kind === "trial_finished")
+      .map((e) => (e.body as { attempt: string | null }).attempt);
+    assert.deepEqual(finished, [first, null]);
+    await fake.close();
+  });
+
   test("no time cap on a round or a trial unless one is set (goal 079)", async () => {
     const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 1 } });
     await env.start();

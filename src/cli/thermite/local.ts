@@ -5,6 +5,7 @@ import { newToken } from "../../common/secrets.ts";
 import { generateSigningKeys } from "../../core/commands.ts";
 import { parseContract } from "../../core/contract.ts";
 import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
+import { controlAt, orFail } from "../calls.ts";
 import {
   answeringEngines,
   doctor,
@@ -12,6 +13,7 @@ import {
   formatReport,
   machineProbes,
 } from "../doctor/index.ts";
+import { localEnroll } from "../local-enroll.ts";
 import {
   chooseOwner,
   localInit,
@@ -107,9 +109,10 @@ export function thermiteToken(rest: string[]): void {
   );
 }
 
-/** thermite local init: the local compose stack's .dev folder. */
+/** thermite local init and enroll: the local compose stack's .dev folder, and its rigs' tokens. */
 export async function thermiteLocal(rest: string[]): Promise<void> {
   const [sub, ...args] = rest;
+  if (sub === "enroll") return localEnrollCommand(args);
   if (sub !== "init") fail(USAGE);
   const { values, positionals } = parseArgs({
     args,
@@ -154,20 +157,45 @@ export async function thermiteLocal(rest: string[]): Promise<void> {
   process.stdout.write(`local init: ${name} ready (${made.length} made, ${kept.length} kept)\n`);
 }
 
+/**
+ * thermite local enroll RIG: the compose stack's enroll step. It waits for control, enrolls the rig
+ * unless control has it enrolled and its token file holds a token, and writes the token there.
+ */
+async function localEnrollCommand(args: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      control: { type: "string" },
+      "token-file": { type: "string" },
+      out: { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const [rig, ...extra] = positionals;
+  if (!rig || extra.length || !values.control || !values["token-file"] || !values.out) fail(USAGE);
+  await orFail(
+    localEnroll({
+      control: controlAt(values.control.replace(/\/$/, ""), values["token-file"]),
+      rig,
+      tokenFile: values.out,
+      say: (line) => process.stdout.write(`local enroll: ${line}\n`),
+    }),
+  );
+}
+
 /** thermite selftest isolation: inside the harness container, as root. */
 export async function thermiteSelftest(rest: string[]): Promise<void> {
   if (rest[0] !== "isolation") fail(USAGE);
-  const { clusterApi, isolationSelftest, oneContainerTargets, readSupervisorIsolation } =
-    await import("../../harness/selftest/index.ts");
+  const {
+    clusterApi,
+    isolationSelftest,
+    oneContainerTargets,
+    readSupervisorIsolation,
+    rigSecretFiles,
+  } = await import("../../harness/selftest/index.ts");
   const { effectiveGpuLists, savedJudgeGpus } = await import("../../harness/broker/devices.ts");
   const env = process.env;
-  const secretFiles = [
-    env.THERMITE_SUPERVISOR_TOKEN_FILE,
-    env.THERMITE_PROPOSER_TOKEN_FILE,
-    env.THERMITE_MODEL_API_KEY_FILE,
-    // In one container with the supervisor (pull mode): the keys its tunnel signs with.
-    env.THERMITE_TUNNEL_DIR ? join(env.THERMITE_TUNNEL_DIR, "keys.json") : undefined,
-  ].filter((f): f is string => Boolean(f));
+  const secretFiles = rigSecretFiles(env, env.THERMITE_STATE_DIR ?? "/var/lib/thermite");
   const report = await isolationSelftest({
     socketPath: join(env.THERMITE_BROKER_DIR ?? "/run/thermite", "broker.sock"),
     stateDir: env.THERMITE_STATE_DIR ?? "/var/lib/thermite",

@@ -8,6 +8,7 @@ import { startCampaign } from "../../../src/control/campaigns/new.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { parseContract } from "../../../src/core/contract.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 
 /**
  * The owner's additions to a campaign's roles (goal 166, decision 1): New campaign puts them in
@@ -225,7 +226,7 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
 
   test("an assignment from the operator's or an agent's token carries the saved additions and writers; the owner's is not held", async () => {
     const s = await stack();
-    s.store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(s.store, ["rig-a"]);
     const saved = s.newest();
     const assign = async (token: string, run: string, contract: Record<string, unknown>) => {
       const client = await mcpClient(s.control, token);

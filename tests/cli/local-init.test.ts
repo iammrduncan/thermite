@@ -17,6 +17,7 @@ import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import {
   chooseOwner,
+  LOCAL_RIGS,
   LOCAL_TOKEN_FILES,
   localInit,
   readStackCompose,
@@ -45,7 +46,7 @@ const secret = (root: string, name: string) =>
   readFileSync(join(root, "secrets", name), "utf8").trim();
 
 describe("thermite local init", () => {
-  test("makes every token, folder and the rig tokens map", () => {
+  test("makes every token and folder; each rig's token for control starts empty", () => {
     const root = fresh();
     const { made, kept } = localInit(root);
     assert.deepEqual(kept, []);
@@ -54,10 +55,10 @@ describe("thermite local init", () => {
     for (const t of tokens) assert.match(t, /^[A-Za-z0-9_-]{32}$/);
     assert.equal(new Set(tokens).size, tokens.length, "every token is its own");
     assert.equal(secret(root, "model-api-key"), "local-placeholder");
-    assert.deepEqual(JSON.parse(secret(root, "control-rig-tokens.json")), {
-      "local-1": secret(root, "control-rig-token"),
-      "local-2": secret(root, "control-rig-token-2"),
-    });
+    // The stack's enroll step writes each rig's token, which control makes; control reads no
+    // file of rig tokens.
+    for (const file of Object.values(LOCAL_RIGS)) assert.equal(secret(root, file), "");
+    assert.ok(!made.some((rel) => rel.includes("rig-tokens")));
     // .dev/ is its owner's alone: no other user of the computer reaches what is in it.
     assert.equal(statSync(root).mode & 0o777, 0o700);
     // Below it, the containers' own users read the tokens, and the supervisor's writes the inbox.
@@ -69,7 +70,7 @@ describe("thermite local init", () => {
       assert.ok(statSync(join(root, dir)).isDirectory());
   });
 
-  test("keeps every file that exists and writes the rig tokens map again", () => {
+  test("keeps every file that exists, a rig's token among them", () => {
     const root = fresh();
     localInit(root);
     // A .dev/ that others could enter is closed again.
@@ -79,10 +80,10 @@ describe("thermite local init", () => {
     writeFileSync(join(root, "secrets/model-api-key"), "sk-real-key\n");
     const again = localInit(root);
     assert.deepEqual(again.made, []);
-    assert.equal(again.kept.length, LOCAL_TOKEN_FILES.length + 1);
+    assert.equal(again.kept.length, LOCAL_TOKEN_FILES.length + Object.keys(LOCAL_RIGS).length + 1);
     assert.equal(secret(root, "control-admin-token"), admin);
     assert.equal(secret(root, "model-api-key"), "sk-real-key");
-    assert.equal(JSON.parse(secret(root, "control-rig-tokens.json"))["local-1"], "changed-by-hand");
+    assert.equal(secret(root, "control-rig-token"), "changed-by-hand");
     assert.equal(statSync(root).mode & 0o777, 0o700);
   });
 
@@ -128,7 +129,7 @@ describe("thermite local init", () => {
     const keptGid = statSync(join(root, "secrets/control-admin-token")).gid;
     assert.notEqual(keptGid, other);
     const { made } = localInit(root, { uid, gid: other });
-    assert.equal(made.length, 15);
+    assert.equal(made.length, 14);
     for (const rel of made) assert.equal(statSync(join(root, rel)).gid, other, rel);
     assert.equal(statSync(join(root, "secrets/control-admin-token")).gid, keptGid);
   });
@@ -140,7 +141,7 @@ describe("thermite local init", () => {
     const first = await cli("local", "init", root);
     assert.match(first.stdout, /^made \.dev\nmade \.dev\/secrets\n/);
     assert.match(first.stdout, /made \.dev\/secrets\/control-admin-token\n/);
-    assert.match(first.stdout, /local init: \.dev ready \(18 made, 0 kept\)\n$/);
+    assert.match(first.stdout, /local init: \.dev ready \(17 made, 0 kept\)\n$/);
     for (const name of LOCAL_TOKEN_FILES) assert.ok(!first.stdout.includes(secret(root, name)));
     const second = await cli("local", "init", root);
     // Before its last line, it says what the rig gets on the machine that runs the test.

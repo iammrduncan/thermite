@@ -74,7 +74,8 @@ export class RigFold {
   readonly runs = new Map<string, RunView>();
   readonly attempts = new Map<string, AttemptView>();
   readonly jobs = new Map<string, JudgeJob>();
-  readonly checks: Record<string, RigCheckView> = {};
+  /** Keyed by a name the rig's events give: no prototype, so no name reaches Object's own. */
+  readonly checks: Record<string, RigCheckView> = Object.create(null);
   /** Each attempt's step gain from its confirming verdict, for its promotion. */
   readonly confirmDelta = new Map<string, number>();
   /** The run that was running when a job without an attempt (validate, calibrate) was queued. */

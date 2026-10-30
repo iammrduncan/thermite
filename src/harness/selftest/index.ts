@@ -2,6 +2,7 @@ import { chownSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync 
 import { dirname, join } from "node:path";
 import { ADVISOR_RUNS_SOCKET } from "../../core/advisor-runs.ts";
 import type { SupervisorIsolation } from "../../core/api/harness/supervisor.ts";
+import { laneCacheDir, plannerRouteFile, ROUTE_FILE } from "../agents/index.ts";
 import {
   BrokerClient,
   builderRole,
@@ -37,6 +38,7 @@ import {
 } from "./targets.ts";
 
 export { busyReason, callsBusy, isolationBusy } from "./busy.ts";
+export { CAPS_ATTR, fileCapsCheck } from "./capabilities.ts";
 export {
   containerChecks,
   controlKeyCheck,
@@ -108,6 +110,24 @@ export interface ClusterApi {
 export function clusterApi(env: NodeJS.ProcessEnv): ClusterApi | undefined {
   const host = env.KUBERNETES_SERVICE_HOST;
   return host ? { host, port: env.KUBERNETES_SERVICE_PORT || "443" } : undefined;
+}
+
+/**
+ * The rig's secret files, which no role may read: the routes control set for the agents and for
+ * the planner (each 0600 in the state folder, with its model's key), the tokens and the model key
+ * from the harness's settings, and in one container with the supervisor (pull mode) the keys its
+ * tunnel signs with. The rig check's selftest and `thermite selftest isolation` both probe these.
+ */
+export function rigSecretFiles(env: NodeJS.ProcessEnv, stateDir: string): string[] {
+  const route = join(stateDir, ROUTE_FILE);
+  return [
+    route,
+    plannerRouteFile(route),
+    env.THERMITE_SUPERVISOR_TOKEN_FILE,
+    env.THERMITE_PROPOSER_TOKEN_FILE,
+    env.THERMITE_MODEL_API_KEY_FILE,
+    env.THERMITE_TUNNEL_DIR ? join(env.THERMITE_TUNNEL_DIR, "keys.json") : undefined,
+  ].filter((f): f is string => Boolean(f));
 }
 
 /** The probes a checker must pass where every other role is refused. */
@@ -225,6 +245,11 @@ export async function isolationSelftest(opts: {
   const fetched = firstInboxFile(opts.inboxDir);
   if (fetched) probes.push({ name: "inbox-read", op: "read", path: fetched });
   else skipped.push("inbox-read (nothing in the inbox yet)");
+  // Lane 1's compiler cache (ccache and the like), kept across its trials and the rig's starts:
+  // its lane's alone, so every other role, another lane's users among them, is refused.
+  const laneCache = laneCacheDir(join(opts.scratchDir, "thermite"), "lane-1");
+  const cached = existsSync(laneCache);
+  if (!cached) skipped.push("lane-cache (lane 1 has no cache yet)");
   const kitFile = firstKitFile(join(opts.stateDir, "kits"));
   if (kitFile) probes.push({ name: "kit-by-path", op: "read", path: kitFile });
   else skipped.push("kit-by-path (no kit checked out yet)");
@@ -333,6 +358,8 @@ export async function isolationSelftest(opts: {
       if (readsResearch(role))
         mine.push({ name: "research-read", op: "readable", path: research.claim });
       if (role !== "builder") mine.push({ name: "build-work", op: "list", path: buildWork });
+      if (cached && role !== "lane-1")
+        mine.push({ name: "lane-cache", op: "list", path: laneCache });
       // The rig's network rules hold for the whole pod: the lane's plain commands try them once.
       if (key === "lane-1" && opts.clusterApi)
         mine.push({

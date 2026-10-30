@@ -53,6 +53,7 @@ import { type ExportState, exportOnce } from "./git-export.ts";
 import { serveHealth } from "./health.ts";
 import { type KbControl, putKbFiles, relayKbAsks } from "./kb/index.ts";
 import { emptyKbSyncState, type KbSyncState, syncKnowledgeOnce } from "./kb-sync.ts";
+import { startPodBus } from "./leaf.ts";
 import {
   LiveCounts,
   type LiveRelayState,
@@ -77,7 +78,7 @@ import {
   SEAL_KEY_FILE,
 } from "./relay/index.ts";
 import { dailyReport } from "./report.ts";
-import { SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
+import { controlTokenFrom, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
 import { stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
 import { startPullMode } from "./tunnel-pod.ts";
@@ -123,8 +124,10 @@ async function main(): Promise<void> {
   // Pull mode (a rig on RunPod): this rig never connects to control. Control connects to the
   // tunnel's port; the supervisor's calls go to the tunnel's local port and wait there for it.
   const pull = await startPullMode(env, rig, home);
+  // On RunPod the bus is the pod's own server, which control's server dials as a leaf node.
+  const podBus = pull ? startPodBus(env, home) : undefined;
   const controlUrl = pull?.controlUrl ?? env.CONTROL_URL?.replace(/\/$/, "");
-  const controlToken = pull?.controlToken ?? optionalSecretFromFile("THERMITE_CONTROL_TOKEN_FILE");
+  const controlToken = pull?.controlToken ?? controlTokenFrom(env, controlUrl);
   const control =
     controlUrl && controlToken
       ? controlClient({ url: controlUrl, token: controlToken, rig })
@@ -134,8 +137,8 @@ async function main(): Promise<void> {
   // supervisor here. It signs in with the rig's own key, which control learns from the
   // supervisor's figures with the seal key its config is sealed to, over TLS, trusting the server
   // through control's authority (THERMITE_NATS_CA or THERMITE_NATS_CA_FILE).
-  const natsUrl = busUrl(env);
-  const trust = natsUrl ? busTrust(env) : undefined;
+  const natsUrl = podBus?.url ?? busUrl(env);
+  const trust = podBus?.trust ?? (natsUrl ? busTrust(env) : undefined);
   const key = natsUrl ? busKey(home) : undefined;
   const bus =
     natsUrl && key
@@ -143,6 +146,7 @@ async function main(): Promise<void> {
           seed: key.seed,
           inboxPrefix: rigInboxPrefix(rig),
           trust,
+          apiPrefix: podBus?.apiPrefix,
         })
       : undefined;
   if (natsUrl)
@@ -321,6 +325,7 @@ async function main(): Promise<void> {
       .catch((err) =>
         log("supervisor", "pull mode's ports did not close on the stop", { error: String(err) }),
       );
+    void podBus?.stop();
   };
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));

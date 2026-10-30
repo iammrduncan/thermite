@@ -93,6 +93,15 @@ describe("deployment drivers", () => {
     assert.deepEqual(await own.restart("rig-1", ["harness"]), ["ar-rig-1/harness-abc"]);
     assert.ok(seen.includes("DELETE /api/v1/namespaces/thermite-rig-1/pods/harness-abc"));
     assert.ok(seen.includes("DELETE /api/v1/namespaces/ar-rig-1/pods/harness-abc"));
+    // The token is a secret file, read as every secret file is: an empty one is refused in words
+    // that name the setting, and nothing is sent without it.
+    writeFileSync(join(dir, "token"), "\n");
+    const before = seen.length;
+    await assert.rejects(
+      KubernetesDriver.inCluster(env).restart("rig-1", ["harness"]),
+      /secret file for THERMITE_K8S_TOKEN_FILE is empty/,
+    );
+    assert.equal(seen.length, before);
     server.close();
   });
 

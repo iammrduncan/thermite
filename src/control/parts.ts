@@ -85,6 +85,8 @@ export interface PartsOptions {
   publicUrl?: string | undefined;
   rigImages?: RigImages | undefined;
   rigBus?: RigBus | undefined;
+  /** Control's authority for the bus: with it, a launch on RunPod gives the pod its leaf node. */
+  busCa?: string | undefined;
   machineSsh?: MachineSsh | undefined;
   clusterKubectl?: ClusterKubectl | undefined;
   providerFetch?: typeof fetch | undefined;
@@ -116,7 +118,8 @@ export function controlParts(
   const mcpServers = opts.mcpServers ?? new McpServers(store, secrets);
   // A rig in pull mode makes the same calls as any rig; control's end of the tunnel brings them
   // in-process, bound to the rig whose signed answer carried them.
-  const tunnels = opts.tunnels ?? new ControlTunnels(store, secrets, privateKeyPem);
+  const tunnels =
+    opts.tunnels ?? new ControlTunnels(store, secrets, privateKeyPem, { busCa: opts.busCa });
   // The rigs' events folded once and kept up to date: every view of the store reads through them.
   const folds = keepFolds(store);
   const runpodRigs =

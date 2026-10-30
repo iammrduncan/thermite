@@ -1,12 +1,12 @@
 ---
 title: "Run the message bus"
-description: "Check the message bus beside control, follow control's events to it and back, see an older store's events table moved there, open its port to rigs on other machines and clusters, follow the rigs' keys on it, give it more memory or disk, and turn the rigs off it."
+description: "Check the message bus beside control, follow control's events to it and back, see an older store's events table moved there, open its port to rigs on other machines and clusters, follow a RunPod rig's leaf node and the rigs' keys on it, give it more memory or disk, and turn the rigs off it."
 type: how-to
 sidebar:
   order: 11
 ---
 
-The message bus carries the rigs' reports and live lines to control, and control's commands and each rig's config to the rigs, as soon as each is there, and it keeps every rig's events for control, which writes its records from them. It is a NATS server with JetStream, and it runs beside control: the compose stack's `nats` service. Control needs it, and does not start without it. This page says how to tell that it works, what you see while control keeps its events there and applies them, while it moves an older store's events there, and while it makes an older reports stream again, what to open so that rigs on other machines and clusters reach it, what control keeps for its certificate, what control does with the rigs' keys on it, how to give it more memory or disk, and how to keep the rigs off it. [How the parts talk](../../explanation/how-the-parts-talk.md#reports-over-the-message-bus) explains what travels on it and why.
+The message bus carries the rigs' reports and live lines to control, and control's commands and each rig's config to the rigs, as soon as each is there, and it keeps every rig's events for control, which writes its records from them. It is a NATS server with JetStream, and it runs beside control: the compose stack's `nats` service. Control needs it, and does not start without it. This page says how to tell that it works, what you see while control keeps its events there and applies them, while it moves an older store's events there, and while it makes an older reports stream again, what to open so that rigs on other machines and clusters reach it, how it reaches a rig on RunPod, what control keeps for its certificate, what control does with the rigs' keys on it, how to give it more memory or disk, and how to keep the rigs off it. [How the parts talk](../../explanation/how-the-parts-talk.md#reports-over-the-message-bus) explains what travels on it and why.
 
 ```sh
 docker compose ps nats                      # or: podman compose ps nats
@@ -136,12 +136,37 @@ Each rig set up from then on gets the bus's address and the certificate of contr
 
 To tell that it worked: from a rig's machine, `nc -zv control.example.com 4222` connects, and the rig's page shows "Its key on the message bus registered". A rig that can't reach the port never reports: its setup ends with "no report after 10 minutes", and its supervisor's log says `following failed; trying again` or `making the stream failed; trying again`.
 
+## A rig on RunPod: its leaf node
+
+A rig on RunPod never reaches the bus's port: control's NATS server dials a small NATS server in the pod, as a leaf node, at the public address and port RunPod gives the pod's port 7422 ([A rig on RunPod](../../explanation/how-the-parts-talk.md#a-rig-on-runpod)). Nothing on control's side needs opening for it, but a way out to the internet for the `nats` service, to any TCP port: RunPod chooses the pod's port.
+
+To tell that it works:
+
+1. Read the pod's address. `GET /v1/rigs/<rig>/runpod` answers it in `bus_leaf`, such as `"203.0.113.5:40123"`, and the rig's **History** has `Control's bus dials the pod's leaf node at the address RunPod gave it: 203.0.113.5:40123.` It is `null` until RunPod gives the port a public address, and while the pod is stopped.
+2. See control's server connect to it, a few seconds later:
+
+   ```sh
+   docker compose logs nats | grep -i leafnode     # or: podman compose logs nats
+   ```
+
+   The line `Leafnode connection created for account: LEAF_<rig>` says the server reached the pod and each side took the other's certificate. Control first names the rig's account, `LEAF_<rig>`, in the bus's users file, and the pod's address only at its next look, 5 seconds later at most, once the server has taken the account.
+3. See the rig's reports arrive: its page shows its newest events, as for any rig.
+
+What you see when it does not work:
+
+- `Error trying to connect as leafnode to remote server "203.0.113.5:40123"` with `connection refused` or `i/o timeout`: nothing answers at the pod's address. The pod may still be starting, or a firewall in front of control keeps the `nats` service from that port. The server tries again about every second, and logs its tries.
+- `Error trying to connect as leafnode to remote server "<rig>.leaf.thermite.invalid:7422"`: harmless. The server's connection names that address for the pod's certificate's name alone, and it never resolves.
+- `TLS leafnode handshake error: … certificate signed by unknown authority`: the server at that address is not the rig's pod. Control's server takes only the certificate control made for that pod at its launch.
+
+A rig on RunPod launched before this version has no leaf node: it keeps to HTTP through pull mode, until you terminate it and launch a new one.
+
 ## The certificate
 
 Every connection to the bus is over TLS. Control keeps its own certificate authority for it, beside its signing key in its state folder (the `control-state` volume): `bus-ca.pem` and `bus-ca.key`. It makes them at its first start with the bus, valid for 10 years, and signs the server's certificate with them:
 
 - **The server's certificate** names the hosts control and the rigs reach the bus by: `nats`, and the host of `THERMITE_NATS_PUBLIC_URL` or of control's address for rigs. It is valid for 397 days. Control makes a new one when the names change, and when the certificate ends within 30 days; the server takes it without a restart, and the rigs' connections stay. Control's log says `the bus's server certificate made`.
 - **The rigs** trust the server through the authority's certificate alone, which control gives each rig it sets up: as a file on a machine and in the compose stack, in the supervisor's environment on a cluster. A connection that does not come from such a rig, or that trusts another authority, is refused, and so is one without TLS.
+- **The server's certificate is good for a client too.** The server shows it when it dials a RunPod pod's server, which takes no other. A certificate control made before this version, for a server alone, is made anew at control's next start.
 
 Keep `bus-ca.key` with control's other state: a backup of the `control-state` volume holds it. If it is lost, delete `bus-ca.pem` too and start control again: it makes a new authority, and every rig on the bus needs its certificate again, by moving onto new images. Until then those rigs can't connect.
 
@@ -189,6 +214,6 @@ Set it before the rigs' first start. A rig whose supervisor has registered its k
 
 A rig that control sets up on a machine or a cluster gets the bus's address with its other files, and reports over the bus: open the bus's port to it ([Let rigs on other machines reach it](#let-rigs-on-other-machines-reach-it)). A rig whose supervisor has no `THERMITE_NATS_URL`, such as one you join yourself without it, reports over HTTP.
 
-A rig on RunPod never uses the bus: control reaches it in [pull mode](../../explanation/trust.md#rigs-in-pull-mode), and keeps its events on the bus as it keeps any rig's.
+A rig on RunPod that control launches is on the bus through its leaf node ([A rig on RunPod: its leaf node](#a-rig-on-runpod-its-leaf-node)); one launched before this version reports over HTTP through [pull mode](../../explanation/trust.md#rigs-in-pull-mode). Control keeps the events of both on the bus, as it keeps any rig's.
 
 A control without `THERMITE_NATS_URL` stops at start, with `control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. …` in its log.

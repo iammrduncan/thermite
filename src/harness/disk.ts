@@ -61,6 +61,27 @@ export class DiskWatch {
     return { ...this.last, places: this.last.places.map((p) => ({ ...p })) };
   }
 
+  /**
+   * Refuses to write `bytes` more where `path` is when that would take its disk below the floor,
+   * with the reason: an import the supervisor fetched, before it is copied. A place whose free
+   * space can't be read is not refused here (check() logs it).
+   */
+  refuseBelowFloor(what: string, path: string, bytes: number): void {
+    const floor = this.o.floorGib * GIB;
+    if (floor <= 0) return;
+    let free: number;
+    try {
+      free = this.o.free(path).free;
+    } catch {
+      return;
+    }
+    if (free - bytes < floor)
+      throw new LedgerError(
+        "conflict",
+        `${what} is ${gib(bytes)} GiB, and the rig's disk has ${gib(free)} GiB free with a floor of ${this.o.floorGib} GiB: it is not copied`,
+      );
+  }
+
   /** Refuses an export at the floor, with the reason. */
   refuseAtFloor(what: string): void {
     const why = this.held;

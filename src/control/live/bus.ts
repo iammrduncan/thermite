@@ -84,8 +84,9 @@ export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
   };
   if (!subject) return refuse("not a live subject");
   if (!rig) return refuse("no rig named");
-  if (!store.enrollments.knownRig(rig)) return refuse("no such rig: control has no token for it");
+  // A retired rig's token has ended too: it is told it is retired, before control knows it not.
   if (store.retired.get(rig)) return refuse("this rig is retired in control");
+  if (!store.enrollments.knownRig(rig)) return refuse("no such rig: control has no token for it");
   if ("run" in subject && !store.runRegistry.rigsOf(subject.run).includes(rig))
     return refuse("a run control does not give this rig");
   let read: { batch: LiveBatchRead; entries: LiveEntry[]; unknown: Record<string, number> };

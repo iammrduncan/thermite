@@ -1,7 +1,8 @@
 import type { Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
-import { errorText } from "../../common/errors.ts";
+import { errorText, Refusal } from "../../common/errors.ts";
+import { LOCAL_HTTP_HOSTS } from "../../common/mcp-client.ts";
 import { MCP_SERVERS } from "../../core/api/control/rigs.ts";
 import type { PageNotes } from "../notes.ts";
 import { configOnBusRefusal } from "../rigs/index.ts";
@@ -16,8 +17,23 @@ import { MCP_AUTHS, type McpServer, type McpServers, namedBy } from "./index.ts"
 
 /** Where a server's sign-in page sends the browser back: control's address, as the owner reaches it. */
 export const OAUTH_CALLBACK = "/v1/mcp-oauth/callback";
-export const redirectUriOf = (publicUrl: string | undefined, requestUrl: string) =>
-  `${(publicUrl || new URL(requestUrl).origin).replace(/\/$/, "")}${OAUTH_CALLBACK}`;
+
+/** Why a sign-in is refused without THERMITE_CONTROL_PUBLIC_URL, in words. */
+export const PUBLIC_URL_NEEDED =
+  "An MCP server's sign-in sends your browser back to control: set THERMITE_CONTROL_PUBLIC_URL to the address you reach control at. Without it, a sign-in works only when you reach control as localhost, 127.0.0.1 or [::1].";
+
+/**
+ * The address a server's sign-in page sends the browser back to: control's public address, or,
+ * when none is set, the request's own address on control's machine (localhost, 127.0.0.1 or
+ * [::1]). Any other name the request came with is refused (Refusal): a request's Host is the
+ * caller's to choose.
+ */
+export function redirectUriOf(publicUrl: string | undefined, requestUrl: string): string {
+  if (publicUrl) return `${publicUrl.replace(/\/$/, "")}${OAUTH_CALLBACK}`;
+  const url = new URL(requestUrl);
+  if (!LOCAL_HTTP_HOSTS.includes(url.hostname)) throw new Refusal(PUBLIC_URL_NEEDED);
+  return `${url.origin}${OAUTH_CALLBACK}`;
+}
 
 /** What the owner sends to add a server, or to change one (each secret left out is kept). */
 export const ServerBody = z.strictObject({

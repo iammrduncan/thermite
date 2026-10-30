@@ -4,7 +4,6 @@ import { log, redact } from "./log.ts";
 /** Settings renamed on 2026-10-15 (unit -> rig): the old names still work, for a transition. */
 const RENAMED: Record<string, string> = {
   THERMITE_RIG_ID: "THERMITE_UNIT_ID",
-  THERMITE_CONTROL_RIG_TOKENS_FILE: "THERMITE_CONTROL_UNIT_TOKENS_FILE",
 };
 
 /** Reads a required environment variable. */
@@ -18,7 +17,14 @@ export function requireEnv(name: string, env: NodeJS.ProcessEnv = process.env): 
 
 /** Reads a secret from the file named by an environment variable, trimmed. */
 export function secretFromFile(varName: string, env: NodeJS.ProcessEnv = process.env): string {
-  const path = requireEnv(varName, env);
+  return secretFromPath(requireEnv(varName, env), varName);
+}
+
+/**
+ * Reads a secret from a file, trimmed: for a setting with a default path, such as a pod's service
+ * account token. An empty file is refused, in words that name the setting.
+ */
+export function secretFromPath(path: string, varName: string): string {
   const value = readFileSync(path, "utf8").trim();
   if (!value) throw new Error(`secret file for ${varName} is empty`);
   return value;

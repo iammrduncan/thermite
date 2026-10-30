@@ -26,10 +26,7 @@ export function rigListRoutes(app: Hono, dash: Dashboard): void {
       return back("error", `Type "retire ${rig}" to retire it.`);
     if (!store.reportedRigs.list().some((u) => u.id === rig)) return back("error", "No such rig.");
     store.retired.add(rig, "owner:ui");
-    return back(
-      "ok",
-      `${rig} is retired. ${store.enrollments.rig(rig) ? "" : "If its token is in control's settings, take it out there too."}`.trim(),
-    );
+    return back("ok", `${rig} is retired.`);
   });
   app.post("/ui/rigs/:rig/bring-back", async (c) => {
     const rig = c.req.param("rig");

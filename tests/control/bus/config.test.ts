@@ -23,6 +23,7 @@ import {
 } from "../../../src/core/link/config.ts";
 import type { McpConnection, McpUnavailable } from "../../../src/core/mcp.ts";
 import { controlOnly, RIG_TOKEN } from "../../helpers/control-stack.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 import { FakeBus } from "../../helpers/fake-bus.ts";
 
 /**
@@ -46,7 +47,7 @@ function setup(
   o: { store?: ControlStore; secrets?: SecretBox; seals?: Record<string, SealKey> } = {},
 ) {
   const store = o.store ?? new ControlStore(":memory:");
-  store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+  enrollRigs(store, ["rig-a", "rig-b"]);
   const secrets = o.secrets ?? SecretBox.ephemeral();
   const seals = o.seals ?? { "rig-a": newSealKey(), "rig-b": newSealKey() };
   for (const [rig, seal] of Object.entries(seals)) {
@@ -214,7 +215,8 @@ describe("each rig's config on the message bus", () => {
     s.store.retired.add("rig-a", "owner");
     await s.writer.write();
     assert.equal(s.bus.kept.length, 0);
-    s.store.retired.remove("rig-a");
+    // Enrolled again, it is back, and gets its config.
+    enrollRigs(s.store, ["rig-a"]);
     await s.writer.write();
     assert.deepEqual([...new Set(s.bus.kept.map((m) => m.subject.split(".")[2]))], ["rig-a"]);
   });

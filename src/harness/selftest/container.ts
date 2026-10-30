@@ -7,6 +7,7 @@ import {
   type Stats,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { LEAF_ENV } from "../../core/link/leaf.ts";
 import { keySha256 } from "../../core/tunnel.ts";
 import {
   IDS,
@@ -20,6 +21,7 @@ import {
   type SupervisorRecord,
   supervisorPaths,
 } from "../broker/index.ts";
+import { fileCapsCheck } from "./capabilities.ts";
 import { isFailure } from "./probes.ts";
 
 /**
@@ -255,24 +257,26 @@ export function runpodCheck(procDir = "/proc"): string {
     : read;
 }
 
+/** The launch's secrets that only root and the supervisor's own first process may start with. */
+const SUPERVISOR_SECRETS = ["THERMITE_TUNNEL_ENROLL_CODE", LEAF_ENV.key];
+
 /**
- * Pull mode's enrollment code in the rig's processes: only root's and the supervisor's own first
- * process may have started with it (the supervisor takes it out of its environment at start, so
- * nothing it starts has it; the controller never gets it). "none (read N of M processes)" or
- * "FOUND".
+ * Pull mode's enrollment code and the leaf node's key in the rig's processes: only root's and the
+ * supervisor's own first process may have started with them (the supervisor takes them out of
+ * its environment at start, so nothing it starts has them; the controller never gets them).
+ * "none (read N of M processes)" or "FOUND".
  */
 export function enrollCodeCheck(procDir = "/proc"): string {
   const procs = rigProcesses(procDir);
   const supervisor = new Set(pidsRunning(SUPERVISOR_SCRIPT, procDir));
-  const found = procs
-    .filter(
-      (p) =>
-        p.uid !== 0 &&
-        !supervisor.has(p.pid) &&
-        (p.environ ?? []).some((kv) => kv.startsWith("THERMITE_TUNNEL_ENROLL_CODE=")),
-    )
-    .map((p) => `pid ${p.pid} (uid ${p.uid})`);
-  if (found.length) return `FOUND THERMITE_TUNNEL_ENROLL_CODE in ${found.slice(0, 8).join(", ")}`;
+  const found = procs.flatMap((p) => {
+    if (p.uid === 0 || supervisor.has(p.pid)) return [];
+    const has = SUPERVISOR_SECRETS.filter((v) =>
+      (p.environ ?? []).some((kv) => kv.startsWith(`${v}=`)),
+    );
+    return has.length ? [`pid ${p.pid} (uid ${p.uid}): ${has.join(", ")}`] : [];
+  });
+  if (found.length) return `FOUND ${found.slice(0, 8).join("; ")}`;
   return `none (read ${procs.filter((p) => p.environ).length} of ${procs.length} processes)`;
 }
 
@@ -378,12 +382,12 @@ export function snapshotKeyCheck(procDir = "/proc"): string {
 
 /**
  * The one-container image's checks of the container as a whole: the supervisor's user, its GPU
- * access, set-id files, RunPod's variables and the enrollment code; in pull mode, also the key
- * the harness trusts; with a state snapshot, its folder and its key.
+ * access, set-id files and files with capabilities, RunPod's variables and the enrollment code;
+ * in pull mode, also the key the harness trusts; with a state snapshot, its folder and its key.
  */
 export async function containerChecks(opts: {
   brokerDir: string;
-  /** Folders the set-id check leaves out (setIdCheck). */
+  /** Folders the set-id and capabilities checks leave out (setIdCheck, fileCapsCheck). */
   skip?: string[];
   procDir?: string;
   rootDir?: string;
@@ -396,6 +400,7 @@ export async function containerChecks(opts: {
     "supervisor-user": await supervisorUserCheck(opts.procDir, opts.waitMs),
     "supervisor-gpu": supervisorGpuCheck(opts.brokerDir),
     "setid-files": setIdCheck(opts.rootDir, opts.skip),
+    "file-capabilities": fileCapsCheck(opts.rootDir, opts.skip),
     "runpod-variables": runpodCheck(opts.procDir),
     "enroll-code": enrollCodeCheck(opts.procDir),
     ...(opts.controlKey

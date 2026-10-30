@@ -36,6 +36,7 @@ docker compose up -d --build     # or: podman compose up -d --build
 ```
 
 - `npm run dev:init` needs only Node.js, not `npm ci`. It writes the same `.dev/` folder as a release's `init` service (`thermite local init`), and keeps every file that exists. A unit test (`tests/cli/local-init.test.ts`) checks that both make the same files and modes.
+- Each rig's token for control (`.dev/secrets/control-rig-token`, `control-rig-token-2`) starts empty. At each `up`, the `enroll` service (`enroll-2` with the `two-rigs` profile) enrolls the rig with control once control answers, and writes the token control made there before the supervisor starts (`thermite local enroll`). A token written before is kept while control has the rig enrolled; after `docker compose down -v`, the next `up` enrolls the rigs again. Control reads no file of rig tokens.
 - If `up` stops with `'name' does not match any of the regexes: '^x-'`, the compose program is the old Compose v1: [replace it](_site/src/content/docs/how-to/operate/troubleshoot.md#compose-wont-start-name-does-not-match-any-of-the-regexes).
 - The first build takes 20 minutes or more; later starts take seconds. After `git pull`, run `npm run dev:init` and `docker compose up -d --build` again.
 - `THERMITE_COMMIT=$(git rev-parse HEAD) docker compose build` gives the images their commit, which each service reports.

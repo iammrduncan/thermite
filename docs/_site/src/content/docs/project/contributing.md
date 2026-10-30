@@ -80,6 +80,7 @@ Changes to some parts also need a test that starts containers. Each takes from a
 | The Codex harness, the model proxy, the harness choice on **Edit rig** or in `set_rig_model`, or the model routes | `COMPOSE="podman compose" node scripts/acceptance/codex.mjs` |
 | The terminal host, a program's start in its own terminal, the trial loop's terminal mode, or node-pty's build in the harness image | `COMPOSE="podman compose" node scripts/acceptance/terminal.mjs` |
 | The message bus's users and their permissions, its streams' limits, or the consumers control makes for rigs | `COMPOSE="podman compose" node scripts/acceptance/bus.mjs`: a server of the pinned image, with 512 MiB, on host port 14480 (`BUS_CHECK_PORT`), removed at the end |
+| A RunPod rig's leaf node on the bus: its account and connection in control's users file, the launch's leaf keys, the pod's server's configuration, or the bus client's API prefix | `COMPOSE="podman compose" node scripts/acceptance/leaf.mjs`: servers of the pinned image, with 256 MiB each, on a network of their own and host ports 14490 to 14494 (`LEAF_CHECK_PORT`), removed at the end |
 | The advisors, audits, propagation, reviews, the lifecycle drivers or a full reset | `COMPOSE="podman compose" node scripts/acceptance/steering.mjs` |
 | The quick start's pages, the images or compose, the release bundle, or the sample in `examples/` | `COMPOSE="podman compose" node scripts/acceptance/quick-start.mjs` |
 

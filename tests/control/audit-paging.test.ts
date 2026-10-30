@@ -169,8 +169,10 @@ describe("paging through control's audit log (goal 015)", () => {
       ["owner:operator", "refused", 1],
       ["agent:mcp", "refused", 1],
       ["owner:operator", "refused", 3],
+      // The test's rig-a, enrolled as control started.
+      ["test", "rig_enrolled", 1],
     ]);
-    const merged = entries.at(-1);
+    const merged = entries.at(-2);
     assert.deepEqual(merged?.body, refused);
     assert.ok(merged && merged.last_at >= merged.at, "its last time is its newest");
     assert.equal(entries[0]?.last_at, entries[0]?.at, "an entry that came once has one time");

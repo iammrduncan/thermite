@@ -267,7 +267,13 @@ usage: thermite <command> [options]
                                       DIR's parent folder. It says what the local rig gets
                                       (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
                                       have, writes compose.gpu.yaml next to DIR for the engine
-                                      named, or the one it finds
+                                      named, or the one it finds. Each rig's token for control
+                                      starts empty: local enroll fills it
+  local enroll RIG --control URL --token-file F --out FILE
+                                      the compose stack's enroll step: wait for control (up to
+                                      5 minutes), enroll RIG with the owner's token in F unless
+                                      control has it enrolled and FILE holds a token, and write
+                                      its token into FILE. A retired rig is left as it is
   selftest isolation [--force]        inside the harness container, as root, with the rig idle: check that role
                                       users cannot reach the ledger, kits, builds or secrets
   backup FOLDER [--state DIR] [--bus URL]
@@ -515,7 +521,7 @@ It prints `enrolled RIG; control's key fingerprint <fingerprint>`, then `wrote` 
 | `rig.env` | 0644 | `THERMITE_RIG_ID=<rig>` and `CONTROL_URL=<control's address>`; with the message bus, also `THERMITE_NATS_URL=<the bus's address for rigs>` | The rig's settings |
 | `README.txt` | 0644 | What each file is for | You |
 
-Control refuses a name that is taken: `409 {"error":"rig <rig> is already enrolled"}`, or `rig <rig> has its token in control's rig tokens file; change it there` for a rig listed in that file.
+Control refuses a name that is taken: `409 {"error":"rig <rig> is already enrolled"}`.
 
 No token is printed. Thermite has no ready-made deployment that starts a rig from this directory; the dashboard's **Add a rig** sets rigs up for you. See [Add a rig on a machine over SSH](../how-to/install/rig-on-a-machine.md) and [Join a rig yourself](../how-to/install/join-a-rig.md).
 
@@ -523,11 +529,11 @@ No token is printed. Thermite has no ready-made deployment that starts a rig fro
 
 `thermite rig token RIG --control URL --token-file F --out FILE` gives an enrolled rig a new token (`POST /v1/rigs/RIG/token`) and writes it to `FILE` with mode 0600. The old token stops working at once.
 
-It prints `RIG has a new token, in FILE; its old token no longer works`. An existing `FILE` is never overwritten: `FILE exists; a token is never overwritten`. Control refuses a rig it did not enroll: `404 {"error":"rig <rig> is not enrolled"}`, or `409` with `rig <rig> has its token in control's rig tokens file; change it there`.
+It prints `RIG has a new token, in FILE; its old token no longer works`. An existing `FILE` is never overwritten: `FILE exists; a token is never overwritten`. Control refuses a rig it did not enroll: `404 {"error":"rig <rig> is not enrolled"}`.
 
 ### `rig retire`
 
-`thermite rig retire RIG --control URL --token-file F` retires a rig (`POST /v1/rigs/RIG/retire`): its token stops working, and its history stays on control. It works on any rig control knows: enrolled, listed in the rig tokens file, or one that has reported. It prints `RIG is retired: its token no longer works`. A rig control does not know gives `404 {"error":"no rig <rig>"}`.
+`thermite rig retire RIG --control URL --token-file F` retires a rig (`POST /v1/rigs/RIG/retire`): its token stops working, and its history stays on control. It works on any rig control knows: enrolled, or one that has reported. It prints `RIG is retired: its token no longer works`. A rig control does not know gives `404 {"error":"no rig <rig>"}`.
 
 ### `rig list`
 
@@ -947,9 +953,9 @@ It prints the harness's answer whatever its HTTP status, and exits 0 even when t
 | `DIR` itself | 0700, set again at every run | When missing. Only its owner may open it, so no other user of the computer reaches the tokens, the inbox or the advisors' keys. The containers mount the folders and files in it, which their own users reach as the modes below say |
 | `secrets/`, `outbox/`, `advisors/`, `backups/` | 0755 | When missing. The compose stack's `backup` service writes [backups](../how-to/operate/backup-and-restore.md) into `backups/` |
 | `inbox/`, `inbox/repos/`, `inbox/models/` | 0777, set again at every run | When missing. The supervisor writes into the inbox as its own user |
-| `secrets/control-admin-token`, `control-operator-token`, `control-rig-token`, `control-rig-token-2`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644, so that control's and the supervisors' users in their containers can read them | When missing: 24 random bytes each, base64url-encoded |
+| `secrets/control-admin-token`, `control-operator-token`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644, so that control's and the supervisors' users in their containers can read them | When missing: 24 random bytes each, base64url-encoded |
+| `secrets/control-rig-token`, `control-rig-token-2` | 0644 | When missing: empty. [`local enroll`](#local-enroll) writes each rig's token, which control makes, at each `up` |
 | `secrets/model-api-key` | 0644 | When missing: `local-placeholder` |
-| `secrets/control-rig-tokens.json` | 0644 | At every run, from the two rig tokens: `{"local-1": …, "local-2": …}` |
 
 Run as root, when the folder that holds `DIR` belongs to another user, it gives what it makes to that user and group, and says so. It prints `made` and the path of each folder and file it made, never a token, then what the rig gets, then `local init: <name> ready (<n> made, <m> kept)`, where `<name>` is the last part of `DIR`. Without `DIR`, it prints the usage text on standard error and exits 2.
 
@@ -976,6 +982,18 @@ Run as root, when the folder that holds `DIR` belongs to another user, it gives 
 
 A rig takes 16 GPUs at most. On a machine with more, the file names the first 16 by number in place of all of them.
 
+
+### `local enroll`
+
+`thermite local enroll RIG --control URL --token-file F --out FILE` is the local compose stack's enroll step: each `up` runs it in the `enroll` service for `local-1` (and in `enroll-2` for `local-2`, with the `two-rigs` profile), as `thermite local enroll local-1 --control http://control:8800 --token-file /run/secrets/control-admin-token --out /enroll/control-rig-token`, with `.dev/secrets/control-rig-token` mounted at `/enroll/control-rig-token`. The rig's supervisor starts only once it has finished.
+
+1. It asks control for its rigs (`GET /v1/rigs`) with the owner's token in `F`, again every 2 seconds while control does not answer or answers 503 as it starts, for 5 minutes at most. Then it stops with what the last try got, and exits 2 for an answer that refused.
+2. A rig the owner retired is left as it is: `local enroll: <rig> is retired in control: it is not enrolled again. Bring it back on its page to use it.`
+3. A rig control has enrolled, with a token in `FILE`: the token is kept. It prints `local enroll: <rig> is enrolled with control: its token is kept`.
+4. A rig control has enrolled, with `FILE` empty or missing: control gives it a new token (`POST /v1/rigs/<rig>/token`), and the old one stops working. It prints `local enroll: <rig> is enrolled with control and its token file was empty: control made it a new token`.
+5. A rig control does not have enrolled, such as on the first `up`, after control's volume was removed, or after the owner brought a retired rig back: control enrolls it (`POST /v1/rigs`). It prints `local enroll: <rig> enrolled with control`.
+
+In cases 4 and 5 it writes the token into `FILE`, in place, mode 0644 for a file it makes. It never prints a token. Control keeps only the token's SHA-256. A token you replaced with [`rig token`](#rig-token) goes into `FILE` by hand: the step keeps whatever token `FILE` holds while control has the rig enrolled.
 ### `selftest isolation`
 
 `thermite selftest isolation [--force]` runs the isolation check inside the harness container, as root: it checks that each role's user is refused the ledger, the kits, the builds, the secrets and anything else it must not reach. It prints the report as indented JSON (`ok`, `devices`, `roles`, `skipped`) and exits 1 if `ok` is false.
@@ -986,7 +1004,7 @@ A rig takes 16 GPUs at most. On a machine with more, the file names the first 16
 
 Without `--force`, a busy rig is refused, with exit 2: `the rig is busy: <n> open trial(s) and <m> judge job(s): pause the rig's runs and let the judge finish first (each probe kills its role's processes); rerun with --force to probe anyway`.
 
-It reads where the broker's socket and the rig's directories are from `THERMITE_BROKER_DIR` (default `/run/thermite`), `THERMITE_STATE_DIR` (`/var/lib/thermite`), `THERMITE_SCRATCH_DIR` (`/scratch`) and `THERMITE_OUTBOX_DIR` (`/outbox`), and probes the secret files named by `THERMITE_SUPERVISOR_TOKEN_FILE`, `THERMITE_PROPOSER_TOKEN_FILE` and `THERMITE_MODEL_API_KEY_FILE`, and, in the one-container rig image, the tunnel's `keys.json` in `THERMITE_TUNNEL_DIR`. The same check runs from the dashboard as a rig check; see [Rig checks](rig-checks.md) and [Check a rig](../how-to/operate/check-a-rig.md).
+It reads where the broker's socket and the rig's directories are from `THERMITE_BROKER_DIR` (default `/run/thermite`), `THERMITE_STATE_DIR` (`/var/lib/thermite`), `THERMITE_SCRATCH_DIR` (`/scratch`) and `THERMITE_OUTBOX_DIR` (`/outbox`), and probes the rig's secret files: the model routes control set for the agents and for the planner (`model-route.json` and `model-route-planner.json` in the state directory), the files named by `THERMITE_SUPERVISOR_TOKEN_FILE`, `THERMITE_PROPOSER_TOKEN_FILE` and `THERMITE_MODEL_API_KEY_FILE`, and, in the one-container rig image, the tunnel's `keys.json` in `THERMITE_TUNNEL_DIR`. The same check, with the same files, runs from the dashboard as a rig check; see [Rig checks](rig-checks.md) and [Check a rig](../how-to/operate/check-a-rig.md).
 
 ### `backup`
 

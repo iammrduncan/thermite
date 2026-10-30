@@ -9,6 +9,7 @@ import { issueCommand } from "../../../src/control/issue/index.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys, verifyCommand } from "../../../src/core/commands.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 
 const C = "9a41c07e0d1f2a3b4c5d6e7f8091a2b3c4d5e6f7";
 const draft: CampaignDraft = {
@@ -37,7 +38,7 @@ describe("starting a campaign from the page", () => {
   test("the kit is kept on control, the contract stored, and the first run assigned with both sources", async () => {
     const keys = generateSigningKeys();
     const store = new ControlStore(":memory:");
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const deps = { store, kits, privateKeyPem: keys.privateKeyPem };
     const target = { type: "cpu", class: "generic-cpu" };
@@ -110,7 +111,7 @@ describe("starting a campaign from the page", () => {
   test("a try runs the kit with no agents; a later run starts from the saved version and its sources", async () => {
     const keys = generateSigningKeys();
     const store = new ControlStore(":memory:");
-    store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+    enrollRigs(store, ["rig-a", "rig-b"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const deps = { store, kits, privateKeyPem: keys.privateKeyPem };
     const target = { type: "cpu", class: "generic-cpu" };
@@ -165,7 +166,7 @@ describe("starting a campaign from the page", () => {
   test("a campaign assigned outside the page starts again from its newest assignment", async () => {
     const keys = generateSigningKeys();
     const store = new ControlStore(":memory:");
-    store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+    enrollRigs(store, ["rig-a", "rig-b"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const deps = { store, kits, privateKeyPem: keys.privateKeyPem };
     // No version on control: nothing to start from yet.
@@ -293,7 +294,7 @@ describe("starting a campaign from the page", () => {
 
   test("a draft with mistakes changes nothing and says why", async () => {
     const store = new ControlStore(":memory:");
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     const kits = new KitRepos(mkdtempSync(join(tmpdir(), "thermite-kits-")));
     const r = await startCampaign(
       { store, kits, privateKeyPem: generateSigningKeys().privateKeyPem },

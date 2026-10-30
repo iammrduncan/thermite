@@ -7,7 +7,7 @@ import { sha256Hex } from "../core/canonical.ts";
 import type { CommandPayloads } from "../core/commands.ts";
 import { FINAL_LIFECYCLES } from "../core/verdicts.ts";
 import { createAttemptCommit, deleteRef, GitError, hasCommit, patchBytes, treeOf } from "./git.ts";
-import { importFile } from "./imports.ts";
+import { importFile, importRoom } from "./imports.ts";
 import { type Ledger, LedgerError } from "./ledger/index.ts";
 import type { HarnessService, SubmitResult } from "./service/index.ts";
 
@@ -51,6 +51,7 @@ export async function receivePropagation(
     rel: spec.path,
     expectedSha256: spec.sha256,
     storeDir: join(svc.paths.stateDir, "imports", "patches"),
+    room: importRoom(svc.disk, `the champion's patch ${spec.path}`),
   });
   const id = `p-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
   let rebuilt: { commit: string; ref: string };

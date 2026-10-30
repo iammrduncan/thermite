@@ -163,7 +163,7 @@ What control applies, all labelled `app.kubernetes.io/instance: rig-1`:
 | Deployments | `thermite-rig-1-harness` and `thermite-rig-1-supervisor` |
 | Network rules (created namespaces only) | `thermite-rig-1-harness-net` and `thermite-rig-1-supervisor-net` |
 
-Both deployments' pods run without a service-account token and under the container runtime's default seccomp profile (`RuntimeDefault`).
+Both deployments' pods run without a service-account token, without the namespace's services as variables (`enableServiceLinks: false`), and under the container runtime's default seccomp profile (`RuntimeDefault`).
 
 In a namespace it creates, control's network rules let the harness reach only DNS, addresses outside the private, shared and link-local ranges, and each address in **Settings › Addresses cluster rigs may reach** on its listed TCP ports, and let only its supervisor reach the harness. At every start, the harness's isolation check tries to reach the cluster's API server from a lane. Where the cluster's network plugin doesn't enforce network rules, or a slot's rules let the harness reach the cluster, the check fails with `the cluster does not hold the rig's network rules: lane-1 reached the cluster's API server (…)`, and the rig's page shows it ([The isolation check](../../reference/rig-checks.md#isolation-check)). With the message bus, the supervisor's deployment carries the bus's address (`THERMITE_NATS_URL`, from control's `THERMITE_NATS_PUBLIC_URL`) and the certificate of control's authority for the bus (`THERMITE_NATS_CA`), which is no secret, in its environment: each update and each change of size applies the deployments again with the ones control has then, so a rig set up before the bus gets it at its next update.
 

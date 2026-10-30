@@ -117,6 +117,26 @@ export interface RunpodPod {
   gpu: string;
   gpus: number;
   datacenter: string;
+  /**
+   * Its TCP ports with a public address now, as `address:port` by the pod's own port. RunPod's
+   * pod record (GET /v2/pods/{id}) has them in `runtime.ports` while the pod runs, each with its
+   * `private` port, its `public` one, its `type` and its `ip`; the list of pods has no runtime.
+   */
+  tcp: Record<number, string>;
+}
+
+/** A pod's TCP ports that have a public address and port, from its record's `runtime.ports`. */
+function tcpOf(p: Json): Record<number, string> {
+  const ports = ((p.runtime as Json | null | undefined)?.ports ?? []) as Json[];
+  const out: Record<number, string> = {};
+  for (const x of Array.isArray(ports) ? ports : []) {
+    const inside = num(x.private);
+    const outside = num(x.public);
+    const ip = str(x.ip);
+    if (str(x.type) === "tcp" && inside !== null && outside !== null && ip)
+      out[inside] = `${ip}:${outside}`;
+  }
+  return out;
 }
 
 const podOf = (p: Json): RunpodPod => ({
@@ -126,6 +146,7 @@ const podOf = (p: Json): RunpodPod => ({
   gpu: str((p.gpu as Json | undefined)?.id),
   gpus: num((p.gpu as Json | undefined)?.count) ?? 0,
   datacenter: str(p.dataCenterId),
+  tcp: tcpOf(p),
 });
 
 /** What a pod is started with (RunPod's create-a-pod body, v2). */

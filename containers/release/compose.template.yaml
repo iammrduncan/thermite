@@ -3,7 +3,7 @@
 # Works with `docker compose`, `podman compose` and podman-compose.
 #
 #   docker compose run --rm init    # first: makes .dev/ next to this file, with your tokens
-#   docker compose up -d
+#   docker compose up -d            # its enroll service enrolls the rig with control
 #
 # On Linux with NVIDIA GPUs, init also writes compose.gpu.yaml next to this file, which puts the
 # rig on the CUDA harness and every GPU. Then start with both files:
@@ -48,7 +48,6 @@ services:
       # (THERMITE_CONTROL_ADMIN_TOKEN_SHA256, from `thermite token new`).
       THERMITE_CONTROL_ADMIN_TOKEN_FILE: /run/secrets/control-admin-token
       THERMITE_CONTROL_OPERATOR_TOKEN_FILE: /run/secrets/control-operator-token
-      THERMITE_CONTROL_RIG_TOKENS_FILE: /run/secrets/control-rig-tokens
       THERMITE_CONTROL_PUBKEY_EXPORT: /keys/control-signing.pub
       THERMITE_CONTROL_STALE_SECONDS: "${THERMITE_CONTROL_STALE_SECONDS:-180}"
       THERMITE_CONTROL_OFFLINE_SECONDS: "${THERMITE_CONTROL_OFFLINE_SECONDS:-900}"
@@ -92,7 +91,7 @@ services:
       - control-state:/var/lib/thermite-control
       - control-pub:/keys
       - nats-config:/nats-config
-    secrets: [control-admin-token, control-operator-token, control-rig-tokens]
+    secrets: [control-admin-token, control-operator-token]
     ports: ["127.0.0.1:${THERMITE_CONTROL_PORT:-8800}:8800"]
     networks: [control]
     # Control lists model providers' models: a provider on this machine is at host.docker.internal
@@ -204,6 +203,26 @@ services:
     restart: "no"
     logging: *logging
 
+  # Enrolls the rig local-1 with control at each `up`, once control answers and before the rig's
+  # supervisor starts: control makes the rig's token and keeps only its hash, and the step writes
+  # the token into .dev/secrets/control-rig-token, which the supervisor reads. A token written
+  # before is kept while control has the rig enrolled; a control whose state was removed enrolls
+  # the rig again. It runs as root with only the capability to write that file, which is yours.
+  enroll:
+    image: @@CONTROL_IMAGE@@
+    command: ["thermite", "local", "enroll", "local-1", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/control-rig-token"]
+    user: "0:0"
+    volumes:
+      - ./.dev/secrets/control-rig-token:/enroll/control-rig-token
+    secrets: [control-admin-token]
+    networks: [control]
+    depends_on: [control]
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    logging: *logging
+
   harness:
     image: @@HARNESS_IMAGE@@
     environment:
@@ -297,7 +316,11 @@ services:
       - control-pub:/keys:ro
     secrets: [harness-supervisor-token, control-rig-token]
     networks: [rig, control, rig-egress]
-    depends_on: [harness, control]
+    # Its token for control, which the enroll step writes, is there before it starts.
+    depends_on:
+      harness: { condition: service_started }
+      control: { condition: service_started }
+      enroll: { condition: service_completed_successfully }
     # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
     # supervisor and each advisor's program as users of their own. The supervisor keeps none.
     cap_drop: [ALL]
@@ -314,6 +337,27 @@ services:
       start_period: 5m
 
   # A second rig: `docker compose --profile two-rigs up -d`.
+  # Enrolls the rig local-2 with control at each `up`, once control answers and before the rig's
+  # supervisor starts: control makes the rig's token and keeps only its hash, and the step writes
+  # the token into .dev/secrets/control-rig-token-2, which the supervisor reads. A token written
+  # before is kept while control has the rig enrolled; a control whose state was removed enrolls
+  # the rig again. It runs as root with only the capability to write that file, which is yours.
+  enroll-2:
+    profiles: [two-rigs]
+    image: @@CONTROL_IMAGE@@
+    command: ["thermite", "local", "enroll", "local-2", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/control-rig-token-2"]
+    user: "0:0"
+    volumes:
+      - ./.dev/secrets/control-rig-token-2:/enroll/control-rig-token-2
+    secrets: [control-admin-token]
+    networks: [control]
+    depends_on: [control]
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    logging: *logging
+
   harness-2:
     profiles: [two-rigs]
     image: @@HARNESS_IMAGE@@
@@ -397,7 +441,10 @@ services:
       - control-pub:/keys:ro
     secrets: [harness2-supervisor-token, control-rig-token-2]
     networks: [rig2, control, rig2-egress]
-    depends_on: [harness-2, control]
+    depends_on:
+      harness-2: { condition: service_started }
+      control: { condition: service_started }
+      enroll-2: { condition: service_completed_successfully }
     # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
     # supervisor and each advisor's program as users of their own. The supervisor keeps none.
     cap_drop: [ALL]
@@ -440,7 +487,6 @@ volumes:
 secrets:
   control-admin-token: { file: ./.dev/secrets/control-admin-token }
   control-operator-token: { file: ./.dev/secrets/control-operator-token }
-  control-rig-tokens: { file: ./.dev/secrets/control-rig-tokens.json }
   control-rig-token: { file: ./.dev/secrets/control-rig-token }
   harness-supervisor-token: { file: ./.dev/secrets/harness-supervisor-token }
   harness-proposer-token: { file: ./.dev/secrets/harness-proposer-token }

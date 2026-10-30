@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { notReadWords } from "../../src/control/settings.ts";
 import { fingerprint } from "../../src/control/store/index.ts";
 import { ADMIN, controlOnly } from "../helpers/control-stack.ts";
 
 const owner = { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" };
 
 function setup() {
-  const { keys, store, control } = controlOnly({
-    tokens: { rigs: { "rig-file": "file-rig-token-abcdef" } },
-  });
+  const { keys, store, control } = controlOnly({ tokens: { rigs: {} } });
   const enroll = (rig: string, headers: Record<string, string> = owner) =>
     control.request("/v1/rigs", { method: "POST", headers, body: JSON.stringify({ rig }) });
   const asRig = (rig: string, token: string) =>
@@ -61,10 +60,19 @@ describe("rig enrollment through control", () => {
       assert.equal((await enroll(bad)).status, 400, bad);
     assert.equal((await enroll("ok-1")).status, 201);
     assert.equal((await enroll("ok-1")).status, 409);
-    // A rig from the tokens file keeps its token there.
-    const fromFile = await enroll("rig-file");
-    assert.equal(fromFile.status, 409);
-    assert.match(((await fromFile.json()) as { error: string }).error, /rig tokens file/);
+  });
+
+  test("control reads no file of rig tokens: a setting still set is said at start, in words", () => {
+    assert.equal(notReadWords({}), undefined);
+    assert.equal(notReadWords({ THERMITE_CONTROL_RIG_TOKENS_FILE: "" }), undefined);
+    const said = notReadWords({
+      THERMITE_CONTROL_RIG_TOKENS_FILE: "/run/secrets/control-rig-tokens",
+    });
+    assert.match(
+      String(said),
+      /^THERMITE_CONTROL_RIG_TOKENS_FILE is set, and control no longer reads it: rigs enroll through control/,
+    );
+    assert.match(String(said), /enroll step enrolls local-1 and local-2 at each up/);
   });
 
   test("a new token replaces the old one at once; a retired rig is shut out", async () => {
@@ -85,14 +93,6 @@ describe("rig enrollment through control", () => {
     const third = ((await (await enroll("cpu-1")).json()) as { token: string }).token;
     assert.equal((await asRig("cpu-1", second)).status, 401);
     assert.equal((await asRig("cpu-1", third)).status, 200);
-    // The file's rigs keep their tokens through the API, but can be retired: control then refuses
-    // the file's token until the rig is brought back.
-    assert.equal((await post("/v1/rigs/rig-file/token")).status, 409);
-    assert.equal((await asRig("rig-file", "file-rig-token-abcdef")).status, 200);
-    assert.equal((await post("/v1/rigs/rig-file/retire")).status, 200);
-    assert.equal((await asRig("rig-file", "file-rig-token-abcdef")).status, 403);
-    assert.equal((await post("/v1/rigs/rig-file/bring-back")).status, 200);
-    assert.equal((await asRig("rig-file", "file-rig-token-abcdef")).status, 200);
     // Every change is audited.
     const audit = JSON.stringify(store.db.prepare("select action from audit").all());
     for (const a of ["rig_enrolled", "rig_token_rotated", "rig_retired"])

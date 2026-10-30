@@ -132,4 +132,17 @@ describe("a research run's report, paper, cards and decisions (goal 162)", () =>
     );
     assert.match(items.get("report:final")?.body ?? "", /\(Cut: the report has \d+ characters/);
   });
+  test("a mode or a next experiment's kind named like an object's own property is plain words", () => {
+    const { items, ev } = memory();
+    ev("run_created", { campaign: "c", mode: "constructor" }, "r-9");
+    assert.equal(items.get("run:r-9")?.title, "Run r-9: constructor, c");
+    ev("research_paper_accepted", {
+      paper: "# The paper",
+      writer: "writer-1",
+      experiments: [{ id: "x-9", title: "Next", kind: "toString", details: "d" }],
+    });
+    const x = items.get("experiment:x-9");
+    assert.equal(x?.body, "d");
+    assert.equal(metaOf(x?.meta).next_for, undefined);
+  });
 });

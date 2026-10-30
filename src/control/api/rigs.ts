@@ -15,7 +15,7 @@ import type { ApiContext } from "./context.ts";
  * control makes a rig's token; a new token; retiring a rig and bringing it back.
  */
 export function rigRoutes(app: Hono, api: ApiContext): void {
-  const { store, tokens, privateKeyPem, control, viewOpts, parts, admin } = api;
+  const { store, privateKeyPem, control, viewOpts, parts, admin } = api;
   const { runpodRigs } = parts;
 
   app.get(RIGS.path, admin, (c) =>
@@ -27,6 +27,7 @@ export function rigRoutes(app: Hono, api: ApiContext): void {
         version: rigVersions(store, u.id, control),
       })),
       enrolled: store.enrollments.rigs(),
+      retired: store.retired.list().map((r) => r.rig),
       pull: store.tunnels.list(),
       runpod: runpodRigs.list(),
     }),
@@ -37,15 +38,9 @@ export function rigRoutes(app: Hono, api: ApiContext): void {
   const publicKeyPem = createPublicKey(privateKeyPem)
     .export({ type: "spki", format: "pem" })
     .toString();
-  const inFile = (rig: string) =>
-    tokens.rigs[rig] !== undefined
-      ? `rig ${rig} has its token in control's rig tokens file; change it there`
-      : undefined;
   app.post(ENROLL.path, admin, bodyLimit({ maxSize: ENROLL.maxBytes }), async (c) => {
     const { rig } = ENROLL.body.parse(await jsonBody(c.req));
-    const taken =
-      inFile(rig) ?? (store.enrollments.rig(rig) ? `rig ${rig} is already enrolled` : undefined);
-    if (taken) return c.json({ error: taken }, 409);
+    if (store.enrollments.rig(rig)) return c.json({ error: `rig ${rig} is already enrolled` }, 409);
     const t = newToken();
     store.enrollments.enroll(rig, t.sha256, "owner:api");
     return c.json(
@@ -61,15 +56,12 @@ export function rigRoutes(app: Hono, api: ApiContext): void {
   });
   app.post(RIG_TOKEN.path, admin, (c) => {
     const rig = c.req.param("rig");
-    const fixed = inFile(rig);
-    if (fixed) return c.json({ error: fixed }, 409);
     if (!store.enrollments.rig(rig)) return c.json({ error: `rig ${rig} is not enrolled` }, 404);
     const t = newToken();
     store.enrollments.rotateToken(rig, t.sha256, "owner:api");
     return c.json({ rig, token: t.token });
   });
-  // Any rig: one control enrolled (its token ends), one in the rig tokens file (its token is
-  // refused while retired; take it out of the file too), or one that only ever reported.
+  // Any rig: one control enrolled (its token ends), or one that only ever reported.
   app.post(RETIRE.path, admin, (c) => {
     const rig = c.req.param("rig");
     if (
@@ -78,13 +70,7 @@ export function rigRoutes(app: Hono, api: ApiContext): void {
     )
       return c.json({ error: `no rig ${rig}` }, 404);
     store.retired.add(rig, "owner:api");
-    return c.json({
-      rig,
-      retired: true,
-      ...(inFile(rig)
-        ? { note: "its token is in control's rig tokens file: remove it there too" }
-        : {}),
-    });
+    return c.json({ rig, retired: true });
   });
   app.post("/v1/rigs/:rig/bring-back", admin, async (c) => {
     const rig = c.req.param("rig");

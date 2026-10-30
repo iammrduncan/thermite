@@ -12,7 +12,7 @@ import {
   reportSubject,
 } from "../../src/core/link/report.ts";
 import { buildHeaders } from "../../src/core/version.ts";
-import { busOf, controlStore, heldEvents } from "../helpers/control-store.ts";
+import { busOf, controlStore, enrollRigs, heldEvents } from "../helpers/control-store.ts";
 import { FakeBus } from "../helpers/fake-bus.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 import { appendOther } from "../helpers/kinds.ts";
@@ -20,7 +20,7 @@ import { appendOther } from "../helpers/kinds.ts";
 /** Control's store and what taking reports needs, with rig-a and rig-b given tokens. */
 function intake(): Intake {
   const store = controlStore();
-  store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+  enrollRigs(store, ["rig-a", "rig-b"]);
   return { store, control: buildInfo(), requireKeyAcceptance: false };
 }
 

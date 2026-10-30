@@ -17,23 +17,31 @@ import { GPU_OVERRIDE } from "./machine.ts";
  * the advisors' folder and the backups' folder. The release bundle's `init` service makes it with
  * `thermite local init`; a checkout makes the same layout with `npm run dev:init`
  * (scripts/dev/init.mjs, which needs no build). Files that exist are kept, so the tokens stay
- * the same from one start to the next; only the rig tokens map is written again, from the rig
- * tokens. Where the machine has NVIDIA GPUs the rig can have, the command also writes
- * compose.gpu.yaml next to `.dev/` (see machine.ts and writeGpuOverride).
+ * the same from one start to the next. Each rig's token for control starts empty: the stack's
+ * enroll step enrolls the rig with control and writes its token there (local-enroll.ts). Where the
+ * machine has NVIDIA GPUs the rig can have, the command also writes compose.gpu.yaml next to
+ * `.dev/` (see machine.ts and writeGpuOverride).
  */
 
-/** The token files, each made once: control's, then each rig's (local-1 and local-2). */
+/** The token files made once with a random token: control's, then each rig's harness's. */
 export const LOCAL_TOKEN_FILES = [
   "control-admin-token",
   // An operating agent's token for control's MCP (it may steer and message agents, never approve).
   "control-operator-token",
-  "control-rig-token",
-  "control-rig-token-2",
   "harness-supervisor-token",
   "harness-proposer-token",
   "harness2-supervisor-token",
   "harness2-proposer-token",
 ] as const;
+
+/**
+ * The local stack's rigs, each with the file in `secrets/` its supervisor reads its token for
+ * control from: made empty, and filled when the stack's enroll step enrolls the rig.
+ */
+export const LOCAL_RIGS = {
+  "local-1": "control-rig-token",
+  "local-2": "control-rig-token-2",
+} as const;
 
 /** The folders, relative to `.dev/`, which is closed to other users. The inbox's: see below. */
 export const LOCAL_FOLDERS = [
@@ -124,23 +132,10 @@ export function localInit(root: string, owner?: Owner): LocalInitResult {
     give(rel);
   };
   for (const name of LOCAL_TOKEN_FILES) write(name, token());
+  // Empty until the stack's enroll step writes the rig's token, which control made.
+  for (const name of Object.values(LOCAL_RIGS)) write(name, "");
   // A local model route's key: a placeholder to replace for a real OpenAI-compatible endpoint.
   write("model-api-key", "local-placeholder");
-  const read = (name: string) => readFileSync(join(root, "secrets", name), "utf8").trim();
-  const map = "secrets/control-rig-tokens.json";
-  const fresh = !existsSync(join(root, map));
-  writeFileSync(
-    join(root, map),
-    JSON.stringify({
-      "local-1": read("control-rig-token"),
-      "local-2": read("control-rig-token-2"),
-    }),
-    { mode: 0o644 },
-  );
-  if (fresh) {
-    made.push(map);
-    give(map);
-  }
   return { made, kept };
 }
 

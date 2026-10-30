@@ -8,7 +8,7 @@ import { goalChecks } from "../../core/goal/index.ts";
 import { type Kit, KitSchema, kitProblems } from "../../core/kit.ts";
 import { canonicalUses, type McpUse, sameUses, usesWords } from "../../core/mcp.ts";
 import { folderCommit, hasCommit, initMirror, showFile, updateRef } from "../git.ts";
-import { importBundle, importFile } from "../imports.ts";
+import { importBundle, importFile, importRoom } from "../imports.ts";
 import { ExperimentInput } from "../queue.ts";
 import { startingHypotheses } from "../research/index.ts";
 import type { HarnessService } from "./index.ts";
@@ -41,6 +41,7 @@ async function runImport(
         importId,
         expectedCommit: spec.commit,
         expectedSha256: spec.sha256,
+        room: importRoom(svc.disk, `the bundle ${spec.path}`),
       });
       svc.ledger.imports.record({
         kind: spec.kind,
@@ -59,6 +60,7 @@ async function runImport(
         rel: spec.path,
         expectedSha256: spec.sha256,
         storeDir: join(svc.paths.stateDir, "models"),
+        room: importRoom(svc.disk, `the model ${spec.name}`),
       });
       svc.ledger.imports.record({
         kind: "model",

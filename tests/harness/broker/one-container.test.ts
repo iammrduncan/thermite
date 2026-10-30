@@ -210,6 +210,10 @@ describe("pull mode in the one-container image: what root takes from enrollment"
       "THERMITE_TUNNEL_CONTROL_BOX",
       "THERMITE_TUNNEL_POD",
       "THERMITE_TUNNEL_ENROLLED_DIR",
+      // The leaf node's: the pod's key among them (core/link/leaf.ts).
+      "THERMITE_LEAF_CERT",
+      "THERMITE_LEAF_KEY",
+      "THERMITE_LEAF_CONTROL_CA",
     ])
       assert.equal(isSupervisorOnly(k), true, k);
     // The controller's isolation check reads these two; neither is secret.

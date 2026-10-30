@@ -39,9 +39,9 @@ export type {
   ProviderWait,
   SubmitOutcome,
   TrialDeps,
-  TrialResult,
   TrialSpec,
 } from "./spec.ts";
+export { TrialResult } from "./spec.ts";
 export { watchedStream, withoutPastThinking } from "./stream.ts";
 
 /**

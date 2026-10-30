@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { serve } from "@hono/node-server";
+import { newToken } from "../../../src/common/secrets.ts";
 import { createControlApi } from "../../../src/control/api/index.ts";
 import { mountDashboard } from "../../../src/control/dashboard/index.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
@@ -32,7 +33,7 @@ const { values } = parseArgs({ options: { port: { type: "string", default: "8810
 
 const store = controlStore(join(mkdtempSync(join(tmpdir(), "thermite-demo-")), "control.db"));
 const rigs = ["gpu-1", "gpu-2", "gpu-3", "cpu-1", "gpu-4"];
-store.enrollments.setConfiguredRigs(rigs);
+for (const rig of rigs) store.enrollments.enroll(rig, newToken().sha256, "demo");
 
 const { g1, g2 } = hillClimbRigs();
 const g3 = goalRig();
@@ -42,10 +43,7 @@ await reportRigs(store, { g1, g2, g3, c1, g4 });
 liveSessions(store);
 
 const keys = generateSigningKeys();
-const tokens = {
-  admin: "demo-admin-token-0123456789",
-  rigs: Object.fromEntries(rigs.map((u) => [u, `rig-${u}-token-abcdef`])),
-};
+const tokens = { admin: "demo-admin-token-0123456789" };
 for (const [rig, kind, payload] of [
   ["gpu-1", "pause_run", { run: "decode-a", reason: "owner check" }],
   ["gpu-1", "resume_run", { run: "decode-a" }],

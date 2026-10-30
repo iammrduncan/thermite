@@ -1,7 +1,6 @@
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import { buildInfo } from "../../common/build-info.ts";
 import type { Loops } from "../../common/health.ts";
-import { sameSecret } from "../../common/secrets.ts";
 import { type BuildInfo, buildFromHeaders } from "../../core/version.ts";
 import type { BusUsers, BusView, ConfigWriter } from "../bus/index.ts";
 import type { ClusterKubectl } from "../clusters/index.ts";
@@ -45,8 +44,6 @@ export interface ControlTokens {
    * stay the owner's.
    */
   operator?: string | Credential | undefined;
-  /** rig id -> token */
-  rigs: Record<string, string>;
 }
 
 /** A list size from a query string: a whole number from 1 to 5000, or the default. */
@@ -191,7 +188,6 @@ export function apiContext(
   privateKeyPem: string,
   opts: ControlOptions,
 ): ApiContext {
-  store.enrollments.setConfiguredRigs(Object.keys(tokens.rigs));
   const control = opts.build ?? buildInfo();
   // A rig refused by an earlier control may work with this one.
   recheckRefusals(store, control);
@@ -242,7 +238,7 @@ export function apiContext(
     callers.set(c, "owner:api");
     await next();
   };
-  // A rig's token is in the rig tokens file, or was made by control when the rig was enrolled.
+  // A rig's token was made by control when the rig was enrolled: control keeps its hash only.
   // A rig control reaches through a proxy has no token: its calls come in-process, from control's
   // own end of the tunnel (src/control/runpod/tunnel.ts), which verified them. Only an in-process call
   // can carry that binding; a request from the network never has it.
@@ -254,12 +250,8 @@ export function apiContext(
         return c.json({ error: "unauthorized" }, 401);
     } else {
       const token = bearer(c.req.header("authorization"));
-      const expected = tokens.rigs[rig];
-      const ok =
-        expected !== undefined
-          ? sameSecret(token, expected)
-          : store.enrollments.tokenMatches(rig, token);
-      if (!ok) return c.json({ error: "unauthorized" }, 401);
+      if (!store.enrollments.tokenMatches(rig, token))
+        return c.json({ error: "unauthorized" }, 401);
       // A retired rig is refused until the owner brings it back, whatever token it holds.
       if (store.retired.get(rig)) return c.json({ error: "this rig is retired in control" }, 403);
     }

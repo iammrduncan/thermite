@@ -1,5 +1,6 @@
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
+import { LEAF_ENV, LEAF_PORT } from "../../core/link/leaf.ts";
 import { POD_CONFIG_ENV, PodConfig } from "../../core/tunnel.ts";
 import type { SecretBox } from "../secrets.ts";
 import type { ControlStore, StoredRunpodRig } from "../store/index.ts";
@@ -319,7 +320,8 @@ export class RunpodRigs {
           datacenter: req.datacenter,
           volumeGb: volume,
           volumeMountPath: VOLUME_PATH,
-          ports: [`${minted.port}/http`],
+          // With the leaf, its port as TCP: RunPod gives it a public address and port.
+          ports: [`${minted.port}/http`, ...(minted.leaf ? [`${LEAF_PORT}/tcp`] : [])],
           env: { ...minted.env },
         },
         this.fetchImpl,
@@ -332,8 +334,9 @@ export class RunpodRigs {
           minted.env.THERMITE_STATE_SNAPSHOT_KEY,
           minted.env.THERMITE_TUNNEL_ENROLL_CODE,
           minted.env.THERMITE_TUNNEL_PREFIX,
+          minted.env[LEAF_ENV.key],
         ])
-          err.message = err.message.replaceAll(secret, "***");
+          if (secret) err.message = err.message.replaceAll(secret, "***");
       this.store.tunnels.drop(minted.rig, by);
       // RunPod's stock changes by the minute: say so, and what to do, in words.
       const busy = noFreeGpu(err);
@@ -523,6 +526,8 @@ export class RunpodRigs {
         active = false;
       } else {
         s.status = pod.status;
+        // Where control's bus reaches the pod's server: RunPod's address for it, while it runs.
+        this.store.tunnels.setLeafAddress(rig, pod.tcp[LEAF_PORT] ?? null);
         if (pod.cost_per_hr > 0) s.price_per_hr = pod.cost_per_hr;
         if (pod.datacenter) s.datacenter = pod.datacenter;
         const running = pod.status !== "EXITED" && pod.status !== "TERMINATED";

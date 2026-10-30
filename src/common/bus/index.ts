@@ -141,6 +141,8 @@ export interface BusSignIn {
   inboxPrefix?: string | undefined;
   /** The authority the server's certificate must come from; none: the system's authorities. */
   trust?: BusTrust | undefined;
+  /** Where the JetStream API answers, if not at `$JS.API`: a rig on RunPod's (core/link/leaf.ts). */
+  apiPrefix?: string | undefined;
 }
 
 /** A stream as the server has it now, with what each of its consumers has still to take. */
@@ -333,9 +335,10 @@ async function ensureConsumer(
   nc: NatsConnection,
   stream: string,
   consumer: ConsumerSettings | string,
+  api: { apiPrefix?: string },
 ): Promise<void> {
   // No check of the account's JetStream first: a rig's user may not read the account's figures.
-  const jsm = await jetstreamManager(nc, { checkAPI: false });
+  const jsm = await jetstreamManager(nc, { checkAPI: false, ...api });
   try {
     await jsm.consumers.info(stream, nameOf(consumer));
   } catch (err) {
@@ -356,9 +359,12 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const noSuchStream = (err: unknown) =>
   err instanceof JetStreamApiError && err.code === JetStreamApiCodes.StreamNotFound;
 
-/** The words for a subject no stream takes, as before control made its stream. */
-const noStreamTakes = (subject: string, cause: unknown) =>
-  new Error(`no stream on the bus takes ${subject} yet: control makes it`, { cause });
+/** No stream took a publish: none takes its subject yet, or, on a leaf node, the rig may not use it. */
+export class NoStreamTakes extends Error {
+  constructor(subject: string, cause: unknown) {
+    super(`no stream on the bus takes ${subject} yet: control makes it`, { cause });
+  }
+}
 
 /** A message from the server (to a consumer, or by its place), as the code that handles it sees it. */
 const asBusMessage = (m: JsMsg | StoredMsg, h: MsgHdrs | undefined): BusMessage => ({
@@ -408,7 +414,7 @@ async function sendBatch(nc: NatsConnection, batch: readonly Outgoing[]): Promis
       .request(m.subject, m.data, { headers: h, timeout: BUS_ACK_TIMEOUT_MS })
       .catch((err: unknown) => {
         if (err instanceof errors.RequestError && err.isNoResponders())
-          throw noStreamTakes(m.subject, err);
+          throw new NoStreamTakes(m.subject, err);
         throw err;
       });
     answer = r.data.length ? r.json<BatchAnswer>() : {};
@@ -454,6 +460,7 @@ export const connectOnce = (
  */
 export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
   const server = where(url);
+  const api = signIn?.apiPrefix ? { apiPrefix: signIn.apiPrefix } : {};
   let conn: Promise<NatsConnection> | undefined;
   let closed = false;
   let up = false;
@@ -500,15 +507,15 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
         const nc = await connection();
         const emptying = typeof stream !== "string" && (await startEmptying(nc, stream));
         if (typeof stream !== "string" && !emptying) await ensureStream(nc, stream);
-        await ensureConsumer(nc, name, consumer);
+        await ensureConsumer(nc, name, consumer, api);
         const empty = () => removeOnceEmpty(nc, name, durable);
         if (emptying && (await empty())) continue;
-        const direct = (await jetstreamManager(nc, { checkAPI: false })).direct;
+        const direct = (await jetstreamManager(nc, { checkAPI: false, ...api })).direct;
         for (const subject of latest) {
           const m = await direct.getMessage(name, { last_by_subj: subject });
           if (m) await handle(asBusMessage(m, m.header));
         }
-        const c = await jetstream(nc).consumers.get(name, durable);
+        const c = await jetstream(nc, api).consumers.get(name, durable);
         reading = await c.consume();
         readings.add(reading);
         failing = false;
@@ -554,7 +561,7 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       .catch((err: unknown) => {
         // The library's words for a subject no stream takes, as before control made it.
         if (err instanceof Error && err.name === "JetStreamNotEnabled")
-          throw noStreamTakes(m.subject, err);
+          throw new NoStreamTakes(m.subject, err);
         throw err;
       });
     return { seq: ack.seq, duplicate: ack.duplicate };
@@ -658,7 +665,7 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       return consume(stream, consumer, handle, subjects);
     },
     async makeConsumer(stream, consumer) {
-      await ensureConsumer(await connection(), stream, consumer);
+      await ensureConsumer(await connection(), stream, consumer, api);
     },
     async last(stream, subject) {
       const jsm = await jetstreamManager(await connection());

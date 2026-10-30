@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { log } from "../../common/log.ts";
-import { generateSigningKeys } from "../../core/commands.ts";
+import { fingerprint, generateSigningKeys } from "../../core/commands.ts";
 import { PROGRAM_MODE_DEFAULT } from "../../core/rig-settings.ts";
 import type { PromotionPolicy } from "../judge/index.ts";
 import { Ledger } from "../ledger/index.ts";
@@ -87,6 +87,11 @@ export function openState(ctx: ControllerContext): {
     privateKeyPem: readFileSync(rigKeyPath, "utf8"),
     publicKeyPem: readFileSync(`${rigKeyPath}.pub`, "utf8"),
   };
+  // At every start, so the owner can compare it with the fingerprint control shows for the rig.
+  log("harness", "the rig's report key", {
+    rig: ctx.rig,
+    fingerprint: fingerprint(rigKeys.publicKeyPem),
+  });
   return { ledger, rigKeys };
 }
 

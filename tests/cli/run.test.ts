@@ -11,7 +11,7 @@ import { runStartBody, runStartSaid } from "../../src/cli/run.ts";
 import { issueCommand } from "../../src/control/issue/index.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { controlOnly } from "../helpers/control-stack.ts";
-import { ingestReport } from "../helpers/control-store.ts";
+import { enrollRigs, ingestReport } from "../helpers/control-store.ts";
 
 const run = promisify(execFile);
 const CLI = join(import.meta.dirname, "../../src/cli/thermite/main.ts");
@@ -62,7 +62,7 @@ async function report(
 describe("thermite run start (goal 029)", () => {
   test("starts a run as the campaign page's Start a run does, and says its refusals", async () => {
     const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     // sort-speed was assigned over the API before: Start a run assigns it again.
     issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",

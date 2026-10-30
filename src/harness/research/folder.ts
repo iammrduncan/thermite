@@ -1,18 +1,16 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   constants,
   existsSync,
-  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
-  writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
 // The folder's files are written whole (readers never see half of one), with the modes of the
 // controller's umask (022): every role reads them, and only the controller's user changes them.
@@ -31,6 +29,7 @@ import type { Role, Runner } from "../broker/index.ts";
 import { countsText, type Knowledge } from "../knowledge.ts";
 import type { HypothesisRow, LaneFileChange, Ledger } from "../ledger/index.ts";
 import { cardFile, cardHistory } from "./cards.ts";
+import { copyTree, LaneCopyRefused, regularFiles } from "./copy.ts";
 
 /** The order hypotheses are listed in: those that need a verdict first (goal 117). */
 const HYPOTHESIS_ORDER = ["author", "promoted", "pool", "merged", "retired"];
@@ -87,41 +86,6 @@ export function readNoFollow(path: string): Buffer {
   } finally {
     closeSync(fd);
   }
-}
-
-/** Regular files under a directory, relative paths; symlinks and special files are left out. */
-function regularFiles(dir: string, skip: (rel: string) => boolean = () => false): string[] {
-  const out: string[] = [];
-  const visit = (rel: string): void => {
-    const p = rel ? join(dir, rel) : dir;
-    const st = lstatSync(p);
-    if (st.isDirectory()) {
-      for (const n of readdirSync(p).sort()) {
-        const r = rel ? join(rel, n) : n;
-        if (!skip(r)) visit(r);
-      }
-    } else if (st.isFile() && rel) out.push(rel);
-  };
-  if (existsSync(dir)) visit("");
-  return out;
-}
-
-/** Copies a tree's regular files (modes from the umask: readable by every role). */
-function copyTree(from: string, to: string): Map<string, { sha256: string; bytes: number }> {
-  const seen = new Map<string, { sha256: string; bytes: number }>();
-  mkdirSync(to, { recursive: true });
-  for (const rel of regularFiles(from)) {
-    let data: Buffer;
-    try {
-      data = readNoFollow(join(from, rel));
-    } catch {
-      continue; // changed under us into something else: left out
-    }
-    mkdirSync(dirname(join(to, rel)), { recursive: true });
-    writeFileSync(join(to, rel), data);
-    seen.set(rel, { sha256: createHash("sha256").update(data).digest("hex"), bytes: data.length });
-  }
-  return seen;
 }
 
 /** A file of a lane's saved area, in its manifest; `doc`: recorded as a document of the run. */
@@ -603,7 +567,16 @@ export class ResearchFolder {
       ? (JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, SavedFile>)
       : {};
     const tmp = `${saved}.tmp-${randomUUID().slice(0, 8)}`;
-    const now: Map<string, SavedFile> = copyTree(work, tmp);
+    let now: Map<string, SavedFile>;
+    try {
+      now = copyTree(work, tmp);
+    } catch (err) {
+      rmSync(tmp, { recursive: true, force: true });
+      if (!(err instanceof LaneCopyRefused)) throw err;
+      throw new Error(
+        `${lane}'s files are not saved: its working area holds ${err.message}. They stay in its working area for its next trials, until the rig restarts`,
+      );
+    }
     // The documents: text files, read from the saved copy (the lane can no longer change it).
     const docs = new Map<string, { text: string; clipped: boolean }>();
     for (const [rel, f] of now) {

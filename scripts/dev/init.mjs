@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Creates .dev/ for local compose runs: random tokens, inbox and outbox. Idempotent.
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(process.cwd(), ".dev");
@@ -34,23 +34,15 @@ const write = (name, value) => {
 write("control-admin-token", token());
 // An operating agent's token for control's MCP (it may steer and message agents, never approve).
 write("control-operator-token", token());
-// Rig 1 (always) and rig 2 (the compose "two-rigs" profile). Each has a control token, a
-// harness<->supervisor token and a proposer token.
-write("control-rig-token", token());
-write("control-rig-token-2", token());
+// Rig 1 (always) and rig 2 (the compose "two-rigs" profile). Each has a harness<->supervisor
+// token and a proposer token, and a token for control, empty until the stack's enroll step
+// enrolls the rig with control and writes it there.
+write("control-rig-token", "");
+write("control-rig-token-2", "");
 write("harness-supervisor-token", token());
 write("harness-proposer-token", token());
 write("harness2-supervisor-token", token());
 write("harness2-proposer-token", token());
 // A local model route's key: a placeholder to replace for a real OpenAI-compatible endpoint.
 write("model-api-key", "local-placeholder");
-const read = (name) => readFileSync(join(secrets, name), "utf8").trim();
-writeFileSync(
-  join(secrets, "control-rig-tokens.json"),
-  JSON.stringify({
-    "local-1": read("control-rig-token"),
-    "local-2": read("control-rig-token-2"),
-  }),
-  { mode: 0o644 },
-);
 console.log(`dev-init: ${root} ready`);

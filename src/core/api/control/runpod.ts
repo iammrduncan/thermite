@@ -104,6 +104,11 @@ export interface RunpodRigView extends Omit<RigState, "refusal"> {
   /** When the pod enrolled with control (pull mode); null: not yet. */
   enrolled_at: string | null;
   /**
+   * Where control's bus reaches the pod's leaf node: the public address and port RunPod gives it
+   * while the pod runs; null while it has none, or for a pod launched without the leaf.
+   */
+  bus_leaf: string | null;
+  /**
    * Since when the rig counts as idle for the idle stop (idleSince); null without an idle stop,
    * before enrollment, while the pod is not running, or while a run is at work on it.
    */

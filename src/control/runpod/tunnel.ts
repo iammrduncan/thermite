@@ -23,6 +23,7 @@ import {
   TUNNEL_SKEW_MS,
   verifyAnswer,
 } from "../../core/tunnel.ts";
+import { type MintedLeaf, mintLeaf } from "../bus/index.ts";
 import type { SecretBox } from "../secrets.ts";
 import { type ControlStore, RIG_ID } from "../store/index.ts";
 import { podPortUrl } from "./cloud.ts";
@@ -98,10 +99,15 @@ const RETRY_MAX_MS = 60_000;
 /** What a launch gets: the rig's ID, and what the pod must start with. */
 export interface MintedRig {
   rig: string;
-  /** The pod's environment: public material, the one-time code and the snapshot key, nothing else. */
-  env: PodLaunchEnv;
+  /**
+   * The pod's environment: public material, the one-time code, the snapshot key and, with the
+   * leaf, the pod's leaf node keys; nothing else.
+   */
+  env: PodLaunchEnv & Partial<MintedLeaf["env"]>;
   /** The port the pod serves for control: the launch exposes it as HTTP. */
   port: number;
+  /** Whether the pod has a leaf node on the bus: the launch exposes its port as TCP. */
+  leaf: boolean;
 }
 
 /** Reads a response's body, refusing one longer than `limit`. */
@@ -148,6 +154,8 @@ export class ControlTunnels {
   private dispatch: TunnelDispatch | undefined;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => number;
+  /** Control's authority for the bus: with it, a launch gives the pod its leaf node (bus/leaf.ts). */
+  private readonly busCa: string | undefined;
   /** Answers waiting to go back to each rig in its next exchanges, in pieces. */
   private readonly pending = new Map<string, Piece[]>();
   private readonly running = new Set<string>();
@@ -164,7 +172,11 @@ export class ControlTunnels {
     store: ControlStore,
     secrets: SecretBox,
     signPrivatePem: string,
-    opts: { fetch?: typeof fetch | undefined; now?: (() => number) | undefined } = {},
+    opts: {
+      fetch?: typeof fetch | undefined;
+      now?: (() => number) | undefined;
+      busCa?: string | undefined;
+    } = {},
   ) {
     this.store = store;
     this.secrets = secrets;
@@ -174,6 +186,7 @@ export class ControlTunnels {
       .toString();
     this.fetchImpl = opts.fetch ?? fetch;
     this.now = opts.now ?? Date.now;
+    this.busCa = opts.busCa;
   }
 
   /** How the rigs' calls are answered: control's own API, in-process (createControlApi). */
@@ -184,8 +197,9 @@ export class ControlTunnels {
   /**
    * Mints a rig in pull mode for a pod about to be launched: its ID (made here when none is
    * given), its one-time enrollment code and the pod's environment, with a new key for its state
-   * snapshot that control does not keep. The code expires only when `codeTtlMs` is given.
-   * `config` is the rig's settings, given to the pod at enrollment.
+   * snapshot that control does not keep, and, when control's bus has its authority, the pod's
+   * leaf node keys, of which control keeps the pod's authority alone. The code expires only when
+   * `codeTtlMs` is given. `config` is the rig's settings, given to the pod at enrollment.
    */
   mint(o: {
     by: string;
@@ -216,6 +230,7 @@ export class ControlTunnels {
     const code = randomBytes(32).toString("hex");
     const until =
       o.codeTtlMs !== undefined ? new Date(this.now() + o.codeTtlMs).toISOString() : null;
+    const leaf = this.busCa ? mintLeaf(rig, this.busCa, new Date(this.now())) : undefined;
     this.store.tunnels.add({
       rig,
       port,
@@ -226,11 +241,14 @@ export class ControlTunnels {
       code_expires_at: until,
       config: { env: o.config ?? {} },
       created_by: o.by,
+      leaf_ca: leaf?.podCa ?? null,
     });
     return {
       rig,
       port,
+      leaf: Boolean(leaf),
       env: {
+        ...leaf?.env,
         THERMITE_RIG_ID: rig,
         THERMITE_TUNNEL_PORT: String(port),
         THERMITE_TUNNEL_PREFIX: prefix,

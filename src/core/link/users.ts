@@ -6,6 +6,7 @@ import { CONFIG_STREAM, configConsumerName, configSubject } from "./config.ts";
 import { EVENT_STREAM } from "./events.ts";
 import { kbAskSubject } from "./kb.ts";
 import { kbFileSubject } from "./kb-files.ts";
+import { LEAF_ADDRESS, LEAF_JS_API, LEAF_PORT, leafAccount, leafTlsName } from "./leaf.ts";
 import { LIVE_RUNS_PER_RIG, liveSubject, rigLiveSubject } from "./live.ts";
 import { reportSubject } from "./report.ts";
 
@@ -187,20 +188,123 @@ export interface BusUserKeys {
   system: string;
   backup?: string | undefined;
   rigs: readonly { rig: string; key: string; runs?: readonly string[] | undefined }[];
+  /** The rigs on RunPod whose pod's server control's server dials as a leaf node, if any. */
+  leaf?: LeafRigs | undefined;
+}
+
+/** A rig on RunPod whose pod's server control's server dials as a leaf node (leaf.ts). */
+export interface LeafRig {
+  rig: string;
+  /** The runs control's run registry gives the rig, newest first, as for a rig's user. */
+  runs?: readonly string[] | undefined;
+  /**
+   * The pod's public address and the public port RunPod maps the leaf node's port to; none: the
+   * account alone, and no connection to the pod yet.
+   */
+  address?: string | undefined;
+  /** The file of the pod's own authority, as the server reads it. */
+  caFile: string;
+}
+
+/** The leaf rigs, and the certificate control's server shows them, as the server reads its files. */
+export interface LeafRigs {
+  rigs: readonly LeafRig[];
+  certFile: string;
+  keyFile: string;
+}
+
+/** A service a rig's leaf account takes from the bus's account: one subject, and its answers. */
+interface LeafService {
+  subject: string;
+  /** Its name in the leaf account, where it differs: the JetStream API's, under LEAF_JS_API. */
+  local?: string | undefined;
+  /** Many answers to one ask: a pull of a consumer's messages. */
+  stream: boolean;
+}
+
+/**
+ * What a rig's leaf account may ask of the bus's account: each subject its user may publish
+ * (rigPermissions), as a service, so that the answers come back to the asker alone. A pull of a
+ * consumer's messages gets many answers, and the others one at most. The JetStream API's subjects
+ * go by other names in the leaf account (LEAF_JS_API): the server lets no `$JS.API` subject
+ * across a leaf connection bound to an account without JetStream of its own.
+ */
+export function leafServices(rig: string, runs: readonly string[] = []): LeafService[] {
+  return rigPermissions(rig, runs).publish.allow.map((subject) => ({
+    subject,
+    ...(subject.startsWith(`${API}.`)
+      ? { local: `${LEAF_JS_API}${subject.slice(API.length)}` }
+      : {}),
+    stream: subject.startsWith(`${API}.CONSUMER.MSG.NEXT.`),
+  }));
+}
+
+/**
+ * Control's server's connection to one pod: its address, then the pod's certificate's name,
+ * which never resolves and is there for its name alone (leafTlsName); bound to the rig's leaf
+ * account, trusting only the pod's authority, and showing control's server's own certificate.
+ */
+function leafRemote(r: LeafRig & { address: string }, leaf: LeafRigs) {
+  if (!LEAF_ADDRESS.test(r.address))
+    throw new Error(`not a pod's address for a leaf node: ${JSON.stringify(r.address)}`);
+  return {
+    urls: [`tls://${r.address}`, `tls://${leafTlsName(r.rig)}:${LEAF_PORT}`],
+    account: leafAccount(r.rig),
+    tls: { ca_file: r.caFile, cert_file: leaf.certFile, key_file: leaf.keyFile },
+  };
+}
+
+/**
+ * The bus's account's services for the leaf rigs, each subject once with every account it is
+ * for; each leaf rig's account, which takes its own; and control's server's connection to each pod
+ * that has an address.
+ */
+function leafParts(leaf: LeafRigs | undefined) {
+  const rigs = [...(leaf?.rigs ?? [])].sort((a, b) => (a.rig < b.rig ? -1 : a.rig > b.rig ? 1 : 0));
+  const exports = new Map<string, { accounts: string[]; stream: boolean }>();
+  const accounts: Record<string, unknown> = {};
+  for (const r of rigs) {
+    const services = leafServices(r.rig, r.runs);
+    for (const s of services) {
+      const e = exports.get(s.subject) ?? { accounts: [], stream: s.stream };
+      e.accounts.push(leafAccount(r.rig));
+      exports.set(s.subject, e);
+    }
+    accounts[leafAccount(r.rig)] = {
+      imports: services.map((s) => ({
+        service: { account: BUS_ACCOUNT, subject: s.subject },
+        ...(s.local ? { to: s.local } : {}),
+      })),
+    };
+  }
+  return {
+    exports: [...exports].map(([service, e]) => ({
+      service,
+      accounts: e.accounts,
+      ...(e.stream ? { response_type: "stream" } : {}),
+    })),
+    accounts,
+    remotes: leaf
+      ? rigs.flatMap((r) => (r.address ? [leafRemote({ ...r, address: r.address }, leaf)] : []))
+      : [],
+  };
 }
 
 /**
  * The server's users file, which its configuration includes: control's user, which may do
  * everything in the account but what controlPermissions denies it; the backup's, which may do only
  * what backupPermissions gives it; a user for each rig, which may do only what rigPermissions gives
- * it; and control's system user. A rig with no key has no user. The values are JSON, which the
- * server's configuration reads. Throws on a key or a rig's name that is not one.
+ * it; and control's system user. A rig with no key has no user. With leaf rigs: the account of
+ * each, which takes from the bus's account only what its rig may publish (leafServices), and
+ * control's server's connection to each pod. The values are JSON, which the server's
+ * configuration reads. Throws on a key, a rig's name or a pod's address that is not one.
  */
 export function usersFile(u: BusUserKeys): string {
   const backup = u.backup === undefined ? [] : [u.backup];
   for (const key of [u.control, u.system, ...backup, ...u.rigs.map((r) => r.key)])
     if (!isUserKey(key)) throw new Error("not a NATS user key for the bus's users file");
   const rigs = [...u.rigs].sort((a, b) => (a.rig < b.rig ? -1 : a.rig > b.rig ? 1 : 0));
+  const leaf = leafParts(u.leaf);
   const accounts = {
     [BUS_ACCOUNT]: {
       jetstream: "enabled",
@@ -209,15 +313,21 @@ export function usersFile(u: BusUserKeys): string {
         ...backup.map((nkey) => ({ nkey, permissions: backupPermissions() })),
         ...rigs.map((r) => ({ nkey: r.key, permissions: rigPermissions(r.rig, r.runs) })),
       ],
+      ...(leaf.exports.length ? { exports: leaf.exports } : {}),
     },
+    ...leaf.accounts,
     [SYSTEM_ACCOUNT]: { users: [{ nkey: u.system, permissions: SYSTEM_PERMISSIONS }] },
   };
   return [
-    "# The message bus's users, written by Thermite's control: control's own, and one for each rig",
-    "# whose supervisor registered its key. Control writes it whole when one changes, and asks the",
+    "# The message bus's users, written by Thermite's control: control's own, one for each rig",
+    "# whose supervisor registered its key, and the account of each rig on RunPod, whose pod's",
+    "# server control's server dials. Control writes it whole when one changes, and asks the",
     "# server to reload it. Edits here are lost.",
     `accounts: ${JSON.stringify(accounts, null, 2)}`,
     `system_account: ${JSON.stringify(SYSTEM_ACCOUNT)}`,
+    ...(leaf.remotes.length
+      ? [`leafnodes: ${JSON.stringify({ remotes: leaf.remotes }, null, 2)}`]
+      : []),
     "",
   ].join("\n");
 }

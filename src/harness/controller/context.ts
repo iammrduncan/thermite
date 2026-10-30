@@ -7,6 +7,7 @@ import {
   waitForFile,
 } from "../../common/env.ts";
 import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
+import { ROUTE_FILE } from "../agents/index.ts";
 import type { ApiTokens } from "../api/index.ts";
 import { BrokerClient, LocalRunner, type Runner } from "../broker/index.ts";
 import type { PromotionPolicy } from "../judge/index.ts";
@@ -71,7 +72,7 @@ export async function controllerContext(env: NodeJS.ProcessEnv): Promise<Control
     controlPublicKeyPem,
     tokens,
     runner,
-    routeFile: join(paths.stateDir, "model-route.json"),
+    routeFile: join(paths.stateDir, ROUTE_FILE),
   };
 }
 

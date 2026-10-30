@@ -210,10 +210,10 @@ describe("exports sent to control", () => {
       assert.equal((await s.control.request(path, { headers: s.as(RIG_A) })).status, 401, path);
       assert.equal((await s.control.request(path)).status, 401, path);
     }
-    // A retired rig sends nothing more.
+    // A retired rig sends nothing more: the token control made for it has ended.
     s.store.retired.add("rig-a", "owner:test");
-    assert.equal((await begin(RIG_A)).status, 403);
-    assert.equal((await piece(RIG_A)).status, 403);
+    assert.equal((await begin(RIG_A)).status, 401);
+    assert.equal((await piece(RIG_A)).status, 401);
     // Through the tunnel to a rig behind a proxy: its sends only, never the owner's reads.
     assert.ok(tunnelRouteAllowed("rp-1", "POST", `/v1/rigs/rp-1/exports/${NAME}`));
     assert.ok(

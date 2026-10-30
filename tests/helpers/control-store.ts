@@ -1,4 +1,5 @@
 import { BUS_READ_MAX } from "../../src/common/bus/index.ts";
+import { newToken } from "../../src/common/secrets.ts";
 import { EventsApply, EventsMove, EventsWriter } from "../../src/control/events/index.ts";
 import { keepReport } from "../../src/control/ingest.ts";
 import { ControlStore, type IngestReport } from "../../src/control/store/index.ts";
@@ -11,6 +12,7 @@ import {
   streamEvent,
 } from "../../src/control/views/index.ts";
 import { foldEvent, readLedger } from "../../src/control/views/stream.ts";
+import { sha256Hex } from "../../src/core/canonical.ts";
 import { EVENT_STREAM, EVENT_STREAM_CONFIG } from "../../src/core/link/events.ts";
 import { FakeBus } from "./fake-bus.ts";
 
@@ -49,6 +51,19 @@ export function controlStore(path = ":memory:", bus = new FakeBus()): ControlSto
     .then(() => (apply.stopped ? undefined : writer.alone(() => move.run())));
   onBus.set(store, { bus, writer, move, apply, started });
   return store;
+}
+
+/**
+ * Rigs enrolled with control, as Add a rig and `thermite local enroll` enroll them: `rigs` names
+ * each rig, with the token it reports with, or gives only names (a random token each). A rig
+ * enrolled already keeps its token.
+ */
+export function enrollRigs(store: ControlStore, rigs: readonly string[] | Record<string, string>) {
+  const named = Array.isArray(rigs)
+    ? rigs.map((rig) => [rig, newToken().token] as const)
+    : Object.entries(rigs);
+  for (const [rig, token] of named)
+    if (!store.enrollments.rig(rig)) store.enrollments.enroll(rig, sha256Hex(token), "test");
 }
 
 /** The store's bus, its writer, its move and its apply, for a test that looks at them. */

@@ -10,7 +10,7 @@ import { serve } from "@hono/node-server";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { parseContract } from "../../../src/core/contract.ts";
 import { controlOnly } from "../../helpers/control-stack.ts";
-import { ingestReport } from "../../helpers/control-store.ts";
+import { enrollRigs, ingestReport } from "../../helpers/control-store.ts";
 
 const run = promisify(execFile);
 const CLI = join(import.meta.dirname, "../../../src/cli/thermite/main.ts");
@@ -37,7 +37,7 @@ describe("thermite campaign copy (goal 069)", () => {
   test("copies a campaign through control, and says its refusals", async () => {
     const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
     // sort-speed was assigned over the API before, with a real contract, and the rig ran it.
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     const goal = JSON.parse(
       readFileSync(
         join(import.meta.dirname, "../../../examples/contracts/goal-example.json"),

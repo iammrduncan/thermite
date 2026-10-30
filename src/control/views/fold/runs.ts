@@ -66,7 +66,8 @@ export function emptyRun(id: string): RunView {
     epoch: null,
     round_starts: [],
     trials: [],
-    at_work: {},
+    // Keyed by the lane its events name: no prototype, so no name reaches Object's own.
+    at_work: Object.create(null),
     timeline: [],
     has_agents: true,
     rules: [],
