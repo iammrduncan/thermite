@@ -178,7 +178,7 @@ describe("the release bundle", () => {
       assert.equal(serviceKey(compose, "nats-init", "image"), serviceKey(compose, "nats", "image"));
       assert.match(
         serviceKey(compose, "nats-init", "command") ?? "",
-        /chown 10001:10001 \/etc\/nats\/thermite && find \/data ! -user 10002 -exec chown 10002:10001/,
+        /touch \.keep; } && chown 10001:10001 \. && .* && find \/data ! -user 10002 -exec chown 10002:10001/,
       );
       // Its limits: connections, and the time a connection has for TLS and to sign in.
       assert.match(compose, /\n {8}max_connections: 1024\n/);
