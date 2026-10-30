@@ -309,7 +309,7 @@ try {
   );
   const why = String(audited.reasons ?? "");
   check(
-    "the auditor ran in Codex in the supervisor, in its own folder, with the read-only sandbox, no approvals asked and no shell, through the supervisor's proxy with a credential made for the call",
+    "the auditor ran in Codex in the supervisor, as an advisor user in its own folder, with the read-only sandbox, no approvals asked and no shell, through the supervisor's proxy with a credential made for the call",
     audited.decision === "clear" &&
       /Codex stand-in/.test(why) &&
       /sandbox=read-only /.test(why) &&
@@ -320,7 +320,8 @@ try {
       /compact_prompt=supervisor /.test(why) &&
       /bypass=false /.test(why) &&
       /own_folder=true /.test(why) &&
-      /uid=10001 /.test(why) &&
+      // As one of the advisor users (advisor-1..advisor-8), never the supervisor's own.
+      /uid=100(8[1-8]) /.test(why) &&
       /auth=proxy /.test(why) &&
       /proxied=200 /.test(why) &&
       /model=scripted\)/.test(why),
