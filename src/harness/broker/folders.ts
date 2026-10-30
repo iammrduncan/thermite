@@ -76,29 +76,23 @@ export function prepareDirectories(broker: Broker): void {
  * hill climb's baseline kept. No other role may enter either. Every folder under the baselines
  * keeps the group (setgid), and what is there already gets it, readable by the group. Root here
  * has no CAP_FSETID, and a folder keeps its setgid mark only when its group is the process's own:
- * the broker takes the checkers' group as its own for these calls alone.
+ * these calls run in children with the checkers' group as theirs. The broker's own group never
+ * changes, since a process whose group changed stays undumpable, its environment closed to root.
  */
 function shareWithCheckers(stateDir: string): void {
   const group = `${TU}:${IDS.checkersGroup}`;
-  const was = process.getegid?.();
+  const asCheckers = { stdio: "ignore", gid: IDS.checkersGroup } as const;
   tryDo("share the kits and the baselines with the checkers", () => {
-    process.setegid?.(IDS.checkersGroup);
-    try {
-      const kits = join(stateDir, "kits");
-      mkdirSync(kits, { recursive: true });
-      chownSync(kits, TU, IDS.checkersGroup);
-      chmodSync(kits, 0o710);
-      const baselines = join(stateDir, "baselines");
-      mkdirSync(baselines, { recursive: true });
-      execFileSync("chown", ["-R", "-P", group, baselines], { stdio: "ignore" });
-      execFileSync("chmod", ["-R", "g+rX,g-w", baselines], { stdio: "ignore" });
-      execFileSync("find", [baselines, "-type", "d", "-exec", "chmod", "g+s", "{}", "+"], {
-        stdio: "ignore",
-      });
-      chmodSync(baselines, 0o2710);
-    } finally {
-      if (was !== undefined) process.setegid?.(was);
-    }
+    const kits = join(stateDir, "kits");
+    mkdirSync(kits, { recursive: true });
+    chownSync(kits, TU, IDS.checkersGroup);
+    chmodSync(kits, 0o710);
+    const baselines = join(stateDir, "baselines");
+    mkdirSync(baselines, { recursive: true });
+    execFileSync("chown", ["-R", "-P", group, baselines], asCheckers);
+    execFileSync("chmod", ["-R", "g+rX,g-w", baselines], asCheckers);
+    execFileSync("find", [baselines, "-type", "d", "-exec", "chmod", "g+s", "{}", "+"], asCheckers);
+    execFileSync("chmod", ["2710", baselines], asCheckers);
   });
 }
 
