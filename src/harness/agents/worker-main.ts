@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { modelConfigFromEnv, UsageSender } from "../../agents/model/index.ts";
 import { type Prompt, promptRecord } from "../../agents/prompt.ts";
 import { KB_SERVER, type KbCall } from "../../agents/tools/index.ts";
@@ -136,8 +136,7 @@ async function main(): Promise<void> {
       return;
     }
     await view.finish(r);
-    // Readable by the harness, whose group may enter the folder; no other user may enter it.
-    writeFileSync(VIEW_RESULT, JSON.stringify(r), { mode: 0o644 });
+    leaveResult(JSON.stringify(r));
     process.exit(0);
   };
   // A list that can't be read gives none: the trial goes on with its own tools.
@@ -245,6 +244,16 @@ async function main(): Promise<void> {
   return give(await withUsage(result, usage));
 }
 
+/**
+ * The result of a worker in its Pi view, in its folder: readable by the harness, whose group may
+ * enter the folder, which no other user may. Its mode is set apart from the write, which the
+ * process's umask could narrow.
+ */
+function leaveResult(json: string): void {
+  writeFileSync(VIEW_RESULT, json);
+  chmodSync(VIEW_RESULT, 0o644);
+}
+
 /** The trial's result, once its usage is handed over, with the records the harness did not take. */
 async function withUsage(result: TrialResult, usage: UsageSender): Promise<TrialResult> {
   const left = await usage.finish();
@@ -260,7 +269,7 @@ main().catch((err) => {
     tokensOut: 0,
     error: String(err),
   });
-  if (process.argv[3] === VIEW_FLAG) writeFileSync(VIEW_RESULT, failed, { mode: 0o644 });
+  if (process.argv[3] === VIEW_FLAG) leaveResult(failed);
   else process.stdout.write(`\n${failed}\n`);
   process.exit(0);
 });

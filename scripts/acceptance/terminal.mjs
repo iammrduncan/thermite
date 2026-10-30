@@ -13,7 +13,10 @@
 // fake, as Claude Code, waits for its reset and goes on by itself, and the real OpenCode meets the
 // stand-in model's 429 and the loop types its continuation after the reset; each wait recorded,
 // nothing typed during it, and the owner's input queued during it typed after the reset
-// (tests/stand-ins/terminal/trials.mjs). It downloads nothing but what the image's build does,
+// (tests/stand-ins/terminal/trials.mjs); then a worker in Pi in its Pi view, run by the broker as
+// agent-1 in its own folder, one short trial to its result with the owner's inputs through its
+// console, and what lane-1 and another agent may reach of that folder
+// (tests/stand-ins/terminal/pi-view.mjs). It downloads nothing but what the image's build does,
 // and no model is called.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/terminal.mjs

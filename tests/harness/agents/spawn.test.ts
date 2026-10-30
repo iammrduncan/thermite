@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { PiConsole } from "../../../src/harness/agents/pi-view/index.ts";
 import { spawnTrial } from "../../../src/harness/agents/spawn.ts";
 import type { Runner, RunOutcome } from "../../../src/harness/broker/index.ts";
 
@@ -70,4 +71,51 @@ test("a worker's result is read through its schema: what it is, and nothing else
   const none = await run("no JSON here");
   assert.equal(none.stopped, "error");
   assert.match(none.error ?? "", /^worker process gave no result \(0\)/);
+});
+
+test("the trials' folder may be passed through, never listed; each trial's folder is its worker's alone", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "thermite-spawn-"));
+  // Made before with the old mode: set again.
+  mkdirSync(join(scratch, "agents"), { mode: 0o700 });
+  const mode = (p: string) => (statSync(p).mode & 0o777).toString(8);
+  await spawnTrial(trial, printing("{}"), scratch, 9);
+  assert.equal(mode(join(scratch, "agents")), "711");
+  assert.equal(mode(join(scratch, "agents", trial.spec.trialId)), "700");
+});
+
+test("a worker in Pi whose terminal can't start ends its trial with why, and the harness's log says so", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "thermite-spawn-"));
+  const said: string[] = [];
+  const write = process.stdout.write.bind(process.stdout);
+  // The harness's log lines are kept; anything else (the test runner's own) goes on as it came.
+  process.stdout.write = ((chunk: string | Uint8Array, ...rest: never[]) => {
+    if (String(chunk).startsWith('{"at":')) said.push(String(chunk));
+    else write(chunk, ...rest);
+    return true;
+  }) as typeof process.stdout.write;
+  let r: Awaited<ReturnType<typeof spawnTrial>>;
+  try {
+    // The host's run ends at once, with none of its lines: as a host that could not run.
+    r = await spawnTrial(
+      trial,
+      printing('{"level":"error","msg":"the host could not run","error":"listen EACCES"}'),
+      scratch,
+      9,
+      undefined,
+      undefined,
+      new PiConsole(),
+    );
+  } finally {
+    process.stdout.write = write;
+  }
+  assert.equal(r.stopped, "error");
+  assert.match(
+    r.error ?? "",
+    /^worker process could not start in its terminal: the terminal host could not run \(exit 0\): listen EACCES/,
+  );
+  const line = said.map((l) => JSON.parse(l)).find((l) => l.msg?.includes("could not start"));
+  assert.equal(line?.level, "warn");
+  assert.equal(line?.trial, trial.spec.trialId);
+  assert.match(line?.error ?? "", /listen EACCES/);
+  assert.equal((statSync(join(scratch, "agents")).mode & 0o777).toString(8), "711");
 });

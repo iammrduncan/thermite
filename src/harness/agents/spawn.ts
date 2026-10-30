@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   MODEL_ENV_NAMES,
@@ -7,6 +7,8 @@ import {
   modelEnv,
   STALL_SETTING,
 } from "../../agents/model/index.ts";
+import { errorText } from "../../common/errors.ts";
+import { logWarn } from "../../common/log.ts";
 import type { Role, Runner, RunOutcome } from "../broker/index.ts";
 import { startTerminal } from "../terminal/index.ts";
 import { type PiConsole, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
@@ -47,6 +49,23 @@ export function workerRoute(
 const RESULT_MAX = 1024 * 1024;
 /** The worker process's memory limit, with the terminal host that holds it in its Pi view. */
 const WORKER_RSS = 2 * 1024 * 1024 * 1024;
+/** The worker's entry, as Node runs it: worker-main.js when built, worker-main.ts from the source. */
+const WORKER_MAIN = fileURLToPath(
+  new URL(`./worker-main${extname(fileURLToPath(import.meta.url))}`, import.meta.url),
+);
+
+/**
+ * The folder of the trials' own folders, in the harness's scratch area: one that each worker's
+ * user may pass through to reach its own folder by its full path (its terminal host's socket is
+ * there), but may not list. Each trial's folder is its worker's alone (spawnTrial).
+ */
+function agentsFolder(scratchDir: string): string {
+  const dir = join(scratchDir, "agents");
+  mkdirSync(dir, { recursive: true });
+  // Set every time: mkdir's mode goes through the umask, and a folder made before keeps its own.
+  chmodSync(dir, 0o711);
+  return dir;
+}
 
 /**
  * Runs one trial's worker process. Under the broker it runs as the lane's own agent user
@@ -74,18 +93,17 @@ export async function spawnTrial(
   const lane = /^lane-(\d+)$/.exec(spec.lane)?.[1];
   if (!lane) throw new Error(`not a lane: ${spec.lane}`);
   const role = `agent-${lane}` as Role;
-  const dir = join(scratchDir, "agents", spec.trialId);
+  const dir = join(agentsFolder(scratchDir), spec.trialId);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const specFile = join(dir, "trial.json");
   writeFileSync(specFile, JSON.stringify(trial), { mode: 0o600 });
   const route = model ? workerRoute(model, apiPort, spec.token) : undefined;
   await runner.handOver(dir, role, view ? { harnessReads: true } : {});
-  const main = fileURLToPath(new URL("./worker-main.js", import.meta.url));
   const abort = () => void runner.killRole(role).catch(() => 0);
   if (signal?.aborted) abort();
   signal?.addEventListener("abort", abort, { once: true });
-  // Relative to its directory: the agent may not traverse the controller's scratch area.
-  const argv = [process.execPath, ...process.execArgv, main, "trial.json"];
+  // Relative to its folder, where its process starts.
+  const argv = [process.execPath, ...process.execArgv, WORKER_MAIN, "trial.json"];
   const env = {
     ...Object.fromEntries(
       (model ? ALWAYS : MODEL_ENV)
@@ -117,7 +135,17 @@ export async function spawnTrial(
       view.attach(term);
       const ended = await term.done;
       view.ended(ended.exit?.screen);
-      return resultOf(readResult(dir), ended.outcome);
+      const said = readResult(dir);
+      if (!said)
+        logWarn("harness", "a worker in Pi left no result in its terminal", {
+          trial: spec.trialId,
+          lane: spec.lane,
+          how: ended.exit?.how,
+          code: ended.exit?.code ?? ended.outcome.exitCode,
+          killedFor: ended.outcome.killedFor,
+          error: ended.exit?.error,
+        });
+      return resultOf(said, ended.outcome);
     }
     const r = await runner.run({
       role,
@@ -134,9 +162,12 @@ export async function spawnTrial(
     // The terminal host could not start: the trial ends with why, as a worker that gave nothing.
     if (!view) throw err;
     view.ended();
-    return failed(
-      `could not start in its terminal: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logWarn("harness", "a worker in Pi could not start in its terminal", {
+      trial: spec.trialId,
+      lane: spec.lane,
+      error: errorText(err),
+    });
+    return failed(`could not start in its terminal: ${errorText(err)}`);
   } finally {
     signal?.removeEventListener("abort", abort);
     await runner.killRole(role).catch(() => 0);

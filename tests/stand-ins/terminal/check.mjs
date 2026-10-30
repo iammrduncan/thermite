@@ -22,7 +22,10 @@
 //     the fake (going on by itself, as Claude Code) and by the real OpenCode (the loop's
 //     continuation after the reset), with the owner's input queued during it (trials.mjs);
 //   - for each real program, the peak memory of its run in its terminal, the host with it, as the
-//     broker recorded it: the figure its limits note states.
+//     broker recorded it: the figure its limits note states;
+//   - a worker in Pi in its Pi view, the host and the worker run as agent-1 in the worker's own
+//     folder, one short trial to its result with the owner's inputs through its console, and what
+//     lane-1 and another agent may reach of its folder (pi-view.mjs).
 // THERMITE_SRC names the code it imports: the image's build (/opt/thermite/dist), or a mounted
 // source tree (TypeScript, run as it is).
 import { execFileSync } from "node:child_process";
@@ -31,6 +34,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { startModel } from "./model.mjs";
+import { piViewTrial } from "./pi-view.mjs";
 import { loopTrials } from "./trials.mjs";
 
 const SRC = process.env.THERMITE_SRC ?? "/opt/thermite/dist";
@@ -617,6 +621,7 @@ for (const [name, part] of [
     () =>
       loopTrials({ load, runner, check, area, lines, laneProcesses, sleep, until, LANE, TOKEN }),
   ],
+  ["the Pi view", () => piViewTrial({ load, runner, check, area, sleep, until, LANE })],
 ]) {
   try {
     await part();
