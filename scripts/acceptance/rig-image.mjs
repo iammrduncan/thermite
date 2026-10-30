@@ -359,7 +359,28 @@ try {
   } catch {
     report = { ok: false, error: `${self.stdout}${self.stderr}`.slice(-3000) };
   }
-  check("the isolation selftest passes", report.ok === true, report.devices ?? report.error);
+  // What failed, as the selftest's own words mark it (selftest/probes.ts, FAILURES).
+  const failedProbes = [
+    ...Object.entries(report.container ?? {}).map(([k, v]) => [`container ${k}`, v]),
+    ...Object.entries(report.supervisor?.probes ?? {}).map(([k, v]) => [`supervisor ${k}`, v]),
+    ...Object.entries(report.roles ?? {}).flatMap(([role, r]) =>
+      Object.entries(r).map(([k, v]) => [`${role} ${k}`, v]),
+    ),
+  ].filter(([, v]) =>
+    /^(ALLOWED|UNREADABLE|UNREACHABLE|WRONG|FOUND|OPENED|MISSING|failed)/.test(String(v)),
+  );
+  check(
+    "the isolation selftest passes",
+    report.ok === true,
+    report.ok === true
+      ? report.devices
+      : (report.error ??
+          JSON.stringify({
+            devices: report.devices,
+            failed: failedProbes,
+            skipped: report.skipped,
+          })),
+  );
   const c = report.container ?? {};
   check(
     "the supervisor runs as its own user, with no_new_privs",
