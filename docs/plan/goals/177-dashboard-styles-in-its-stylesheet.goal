@@ -1,0 +1,56 @@
+---
+id: "177"
+title: "The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style"
+status: PROPOSED
+version: "0.1.2"
+depends_on: []
+created: 2026-10-30
+updated: 2026-10-30
+---
+
+# 177 · The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style
+
+**Status:** `PROPOSED` · **Version:** [v0.1.2](../roadmap.md#v012)
+
+## What
+
+A plan only; nothing of it is built.
+
+Control's dashboard sends a Content Security Policy that lets its pages use inline styles (`style-src 'unsafe-inline'`), because its pages are written with them: about 376 `style="…"` attributes in 42 files of `src/control` (counted on 2026-10-30), and a `<style>` element in each page's head. This goal moves every style into the dashboard's stylesheet and drops `'unsafe-inline'` from `style-src`:
+
+1. **Every inline style becomes a class** of the stylesheet, named for what it does, beside the classes the pages already use.
+2. **The head's styles are served** from a route of their own, or allowed by their hash in the policy; say which, and why.
+3. **The policy** then allows styles only from control itself (and the hashes, if any), with a test of the header on every page.
+4. **Nothing looks different:** a screenshot of every page before and after, in the light and the dark theme and at phone width, compared.
+
+## Why
+
+The owner, 2026-10-30, asked where this belongs: a goal of its own after v0.1.1 (it is a change across the whole dashboard, and nothing else in v0.1.1 needs it).
+
+## Constraints
+
+- **Nothing the owner sees changes** but what the screenshots show to be the same.
+- **No new dependency.**
+
+## Done when
+
+- [ ] No page of the dashboard holds an inline style, shown by a test that reads every route's page.
+- [ ] The Content Security Policy's `style-src` has no `'unsafe-inline'`, shown by a test of the header.
+- [ ] The screenshots of every page, before and after, match; the record of them is in the goal.
+- [ ] The fast checks, the docs checks and the control acceptance check pass.
+
+## Decisions
+
+- 2026-10-30, owner: a goal of its own after v0.1.1.
+
+## Open questions
+
+None.
+
+## Progress
+
+None yet.
+
+---
+
+Run with `/goal Complete docs/plan/goals/177-dashboard-styles-in-its-stylesheet.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
