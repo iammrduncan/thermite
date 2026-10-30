@@ -370,10 +370,17 @@ try {
   // Root without CAP_SYS_PTRACE reads only root's processes: PID 1 (tini) and the broker, from
   // whose environment the supervisor's and the controller's are made.
   const rp = /^none \(read (\d+) of (\d+) processes\)$/.exec(c["runpod-variables"] ?? "");
+  const rpOk = Boolean(rp) && Number(rp[1]) >= 2 && Number(rp[2]) >= 4;
   check(
     "no process of the rig holds a RunPod variable, PID 1 included",
-    Boolean(rp) && Number(rp[1]) >= 2 && Number(rp[2]) >= 4,
-    c["runpod-variables"],
+    rpOk,
+    rpOk
+      ? c["runpod-variables"]
+      : // Which processes there are, and whose, for the record of a failure.
+        `${c["runpod-variables"]}; ${inside(
+          `const fs=require("fs");for(const p of fs.readdirSync("/proc")){if(!/^\\d+$/.test(p))continue;try{const st=fs.readFileSync("/proc/"+p+"/status","utf8");const f=(k)=>(new RegExp("^"+k+":\\\\s*(.*)$","m").exec(st)||[])[1];let env="read";try{fs.readFileSync("/proc/"+p+"/environ")}catch(e){env=e.code}console.log(p,f("PPid"),f("Uid"),f("Gid"),f("CapEff"),env,fs.readFileSync("/proc/"+p+"/cmdline","utf8").split("\\0").slice(0,2).join(" "))}catch{}}`,
+          "0:0",
+        ).slice(0, 2000)}`,
   );
   check(
     "only root and the supervisor had the code; the harness's key is root's and the launch's",
