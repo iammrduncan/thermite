@@ -212,7 +212,7 @@ jobs:
       # and annotations: the source repository, which links each package to this repository, and
       # the version and commit.
       - id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         env:
           DOCKER_METADATA_SHORT_SHA_LENGTH: "12"
           # A multi-platform image is an index, and the registry reads the index's annotations.
@@ -284,7 +284,7 @@ jobs:
       # THERMITE_IMAGE_ID. Tags, labels and annotations as for the other images, under thermite-rig.
       - id: rig-meta
         if: matrix.rig
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         env:
           DOCKER_METADATA_SHORT_SHA_LENGTH: "12"
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
