@@ -4,6 +4,7 @@ import { errorText } from "../../common/errors.ts";
 import { KbLinkRel, kbAddress } from "../../core/kb.ts";
 import {
   KB_IS_DATA,
+  KB_READ_PAGE,
   KB_READ_SUBJECTS,
   KB_SEARCH_DEFAULT,
   KB_SEARCH_SUBJECTS,
@@ -15,7 +16,7 @@ import {
   kbAskOf,
 } from "../../core/link/kb.ts";
 import { rigInboxPrefix } from "../../core/link/users.ts";
-import type { ControlStore } from "../store/index.ts";
+import type { ControlStore, KbFind, KbFindAnswer } from "../store/index.ts";
 import type { KbFound, KbItem } from "./index.ts";
 
 /**
@@ -27,8 +28,11 @@ import type { KbFound, KbItem } from "./index.ts";
  * the ask names beyond its run, its words and its kinds is never a scope.
  */
 
-/** An item as a hit: where it is, who wrote it and when, and, for a search, its excerpt and why. */
-export function hitOf(x: KbItem, found?: Pick<KbFound, "excerpt" | "why">): KbHit {
+/**
+ * An item as a hit: where it is, who wrote it and when, its outcome, and, for a search, its excerpt,
+ * why and passage.
+ */
+export function hitOf(x: KbItem, found?: Pick<KbFound, "excerpt" | "why" | "passage">): KbHit {
   return {
     address: kbAddress(x),
     collection: x.campaign,
@@ -36,12 +40,53 @@ export function hitOf(x: KbItem, found?: Pick<KbFound, "excerpt" | "why">): KbHi
     slot: x.slot,
     kind: x.kind,
     title: x.title,
+    outcome: x.outcome,
     excerpt: found?.excerpt ?? "",
     why: found?.why ?? "",
+    passage: found?.passage ?? null,
     by: x.by,
     at: x.updated_at,
     version: x.version,
     file: x.file,
+  };
+}
+
+/** A search's fields as the knowledge base takes them (store/kb/index.ts): the same for everyone. */
+export function kbFindOf(s: Omit<KbSearchAsk, "run" | "q">): KbFind {
+  return {
+    mode: s.mode,
+    like: s.like,
+    seen: s.seen,
+    kinds: s.kinds,
+    outcomes: s.outcomes,
+    runs: s.runs,
+    slots: s.slots,
+    collections: s.collections,
+    offset: s.offset,
+    limit: s.limit ?? KB_SEARCH_DEFAULT,
+  };
+}
+
+/** What a search answers beside its hits: how many, the next page, its counts, words and their like. */
+export function foundOf(r: KbFindAnswer) {
+  return {
+    matched: r.matched,
+    next_offset: r.next_offset,
+    counts: r.counts,
+    words: r.words,
+    did_you_mean: r.did_you_mean,
+    ...(r.like ? { like: r.like } : {}),
+  };
+}
+
+/** One page of a text from `offset`: KB_READ_PAGE characters, its length, and where to read on. */
+export function textPage(text: string, offset = 0) {
+  const end = offset + KB_READ_PAGE;
+  return {
+    text: text.slice(offset, end),
+    offset,
+    chars: text.length,
+    next_offset: end < text.length ? end : null,
   };
 }
 
@@ -74,19 +119,20 @@ export function answerKbAsk(
   const view = { collection: campaign, fresh: scope.fresh, granted: scope.granted };
   if ("q" in ask.data) {
     const s = ask.data;
-    const r = kb.find(s.q, where, {
-      kinds: s.kinds,
-      limit: s.limit ?? KB_SEARCH_DEFAULT,
-    });
-    log("control", "knowledge base searched", { rig, run, words: s.q.length, matched: r.matched });
-    return {
-      note: KB_IS_DATA,
-      scope: view,
+    // The runs and collections it keeps only narrow what the run reads: `where` is its scope.
+    const r = kb.find([s.q, ...(s.queries ?? [])], where, kbFindOf(s));
+    if (r.refused) return { refused: r.refused };
+    log("control", "knowledge base searched", {
+      rig,
+      run,
+      words: s.q.length,
+      queries: 1 + (s.queries?.length ?? 0),
+      mode: s.mode ?? "words",
       matched: r.matched,
-      hits: r.hits.map((x) => hitOf(x, x)),
-    };
+    });
+    return { note: KB_IS_DATA, scope: view, ...foundOf(r), hits: r.hits.map((x) => hitOf(x, x)) };
   }
-  const { address, version } = ask.data;
+  const { address, version, offset } = ask.data;
   const x = kb.at(address, where);
   if (!x)
     return {
@@ -96,8 +142,8 @@ export function answerKbAsk(
   const v = version === undefined ? versions.at(-1) : versions.find((o) => o.version === version);
   if (!v)
     return { refused: `${address} has versions 1 to ${versions.length}, not version ${version}` };
-  log("control", "knowledge base item read", { rig, run, address, version: v.version });
-  const { excerpt: _e, why: _w, ...item } = hitOf(x);
+  log("control", "knowledge base item read", { rig, run, address, version: v.version, offset });
+  const { excerpt: _e, why: _w, passage: _p, ...item } = hitOf(x);
   return {
     note: KB_IS_DATA,
     item: {
@@ -105,7 +151,7 @@ export function answerKbAsk(
       title: v.title,
       version: v.version,
       at: v.at,
-      text: v.body,
+      ...textPage(v.body, offset),
       versions: versions.length,
       links: v.links.flatMap((l) => {
         const rel = KbLinkRel.safeParse(l.rel);

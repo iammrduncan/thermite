@@ -1,6 +1,6 @@
 import type { BriefingSeed, QueueSeed } from "../../core/commands.ts";
 import { RunId } from "../../core/ids.ts";
-import type { KbItemFile, KbKind } from "../../core/kb.ts";
+import type { KbItemFile, KbKind, KbOutcome } from "../../core/kb.ts";
 import { clip } from "../../core/kb-index.ts";
 
 /**
@@ -64,15 +64,24 @@ export interface KbItem {
   sub: string | null;
   /** Fields kept apart: an experiment's details, why and direction. */
   meta: Record<string, string>;
+  /** How an experiment or an attempt ended, from its records (core/kb.ts); null for other kinds. */
+  outcome: KbOutcome | null;
   /** A file item's file, by its SHA-256; null for a blurb. */
   file: KbItemFile | null;
   at: string;
   updated_at: string;
 }
 
-/** An item a search found: the item, the part of its text around the words that matched (each in
- * **bold**), and why it matched, in words (control/store/kb/search.ts). */
-export type KbFound = KbItem & { excerpt: string; why: string };
+/**
+ * An item a search found: the item, the part of its text around the words that matched (each in
+ * **bold**), why it matched, in words, and, in a long text, the passage it matched in
+ * (control/store/kb/search.ts).
+ */
+export type KbFound = KbItem & {
+  excerpt: string;
+  why: string;
+  passage: { n: number; of: number; from: number; to: number } | null;
+};
 
 /** One campaign's collection: its items by kind, its runs, its newest change and its grants. */
 export interface KbCollection {

@@ -94,9 +94,16 @@ describe("control's answers to a rig's searches and reads", () => {
   test("an ask that names another campaign or collection is answered from the run's own scope only", () => {
     const s = setup();
     s.kb().setScope("gemv", "gs-2", { fresh: true, granted: [] }, "owner:ui");
-    const a = search(s, "gs-2", { campaign: "secret", collections: ["secret", "survey"] });
+    const a = search(s, "gs-2", { campaign: "secret" });
     assert.deepEqual(a.scope, { collection: "gemv", fresh: true, granted: [] });
     assert.deepEqual(runs(a), ["gs-2"]);
+    // Collections and runs an ask keeps only narrow its scope: none of these is in it.
+    const narrowed = search(s, "gs-2", { collections: ["secret", "survey"], runs: ["secret-1"] });
+    assert.deepEqual(runs(narrowed), []);
+    assert.equal(narrowed.matched, 0);
+    // Its counts and its words are of the scope alone: the other collections are never told.
+    assert.deepEqual(narrowed.counts.collection, { gemv: 1 });
+    assert.deepEqual(narrowed.words, [{ word: "tiling", items: 1 }]);
     // A read of an item outside the scope is refused, though its address is right.
     const out = answerKbAsk(s, "rig-a", "read", {
       run: "gs-2",
@@ -112,6 +119,15 @@ describe("control's answers to a rig's searches and reads", () => {
     });
     assert.match((own as KbReadAnswer).item.text, /^In gs-2, tiling by 32 helped\./);
     assert.equal((own as KbReadAnswer).item.versions, 1);
+    // A read from an offset gives the text from there, with its whole length and no next page.
+    const on = answerKbAsk(s, "rig-a", "read", {
+      run: "gs-2",
+      address: "gemv/gs-2/records/note:1",
+      offset: 9,
+    }) as KbReadAnswer;
+    assert.match(on.item.text, /^tiling by 32 helped\./);
+    assert.deepEqual([on.item.offset, on.item.next_offset], [9, null]);
+    assert.equal(on.item.chars, on.item.text.length + 9);
   });
 
   test("a run control did not assign the rig, or a bad ask, is refused in words", () => {

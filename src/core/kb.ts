@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_LANES, NAME_PATTERN } from "./ids.ts";
 import { KB_BODY_MAX } from "./kb-index.ts";
+import { BROKEN_VERDICTS, SCREENED_VERDICTS, UNCLEAR_VERDICTS, WON_VERDICTS } from "./verdicts.ts";
 
 /**
  * Thermite's own knowledge base (goals 065 and 175), and its words. The knowledge base is on
@@ -56,6 +57,72 @@ export type KbWrittenKind = z.infer<typeof KbWrittenKind>;
 /** A kind's plural, as collections and counts say it: notes, hypotheses. */
 export const kbPlural = (kind: string): string =>
   kind === "hypothesis" ? "hypotheses" : `${kind}s`;
+
+// ---------------------------------------------------------------- an item's outcome
+
+/**
+ * How a change ended, as Thermite's code reads it from the records' own fields, never from what an
+ * agent wrote (goal 175): an attempt's from the judge's verdict, an experiment's from its result.
+ * won: confirmed better; screened: looked better, being confirmed; regress: worse than the
+ * champion; neutral: judged, and no better (neutral, not_confirmed, no_progress, tradeoff,
+ * infeasible); broken: it did not build or run, or broke a rule of the contract; unclear: no answer
+ * about the change itself (the rig failed, too noisy, evidence withdrawn, or nothing submitted);
+ * dropped: the planner dropped the experiment; open: no outcome yet. Other kinds have none.
+ */
+export const KB_OUTCOMES = [
+  "won",
+  "screened",
+  "regress",
+  "neutral",
+  "broken",
+  "unclear",
+  "dropped",
+  "open",
+] as const;
+export const KbOutcome = z.enum(KB_OUTCOMES);
+export type KbOutcome = z.infer<typeof KbOutcome>;
+
+/**
+ * An attempt's outcome from its verdict field (core/kb-index.ts: the verdict's word, then its
+ * change and why); none for the run's starting point, which is no change.
+ */
+export function verdictOutcome(verdict: string | undefined): KbOutcome | null {
+  const v = /^[a-z0-9_]+/.exec(verdict ?? "")?.[0];
+  if (!v) return "open";
+  if (v === "starting_point") return null;
+  if (WON_VERDICTS.includes(v)) return "won";
+  if (SCREENED_VERDICTS.includes(v)) return "screened";
+  if (v === "regress") return "regress";
+  if (BROKEN_VERDICTS.includes(v)) return "broken";
+  if (UNCLEAR_VERDICTS.includes(v)) return "unclear";
+  return "neutral";
+}
+
+/** The attempt an experiment's result field names ("Result: attempt a-7 (submitted)"), if any. */
+export const resultAttempt = (result: string | undefined): string | undefined =>
+  /^Result: attempt ([^\s;(]+)/.exec(result ?? "")?.[1];
+
+/**
+ * An item's outcome from its fields: an attempt's from its verdict, an experiment's from its result
+ * (dropped, its attempt's outcome, or unclear when its trial submitted nothing); none for other
+ * kinds. `attempt` gives the outcome of an attempt of the same run's records, if the knowledge
+ * base has it.
+ */
+export function kbOutcomeOf(
+  kind: string,
+  meta: Record<string, string>,
+  attempt: (ref: string) => KbOutcome | null | undefined,
+): KbOutcome | null {
+  // An attempt the static checks refused before building is broken, whether or not its verdict came.
+  if (kind === "attempt")
+    return !meta.verdict && meta.refused ? "broken" : verdictOutcome(meta.verdict);
+  if (kind !== "experiment") return null;
+  const result = meta.result ?? "";
+  if (!result) return "open";
+  if (result.startsWith("Dropped:")) return "dropped";
+  const ref = resultAttempt(result);
+  return ref ? (attempt(ref) ?? "open") : "unclear";
+}
 
 // ---------------------------------------------------------------- slots and addresses
 

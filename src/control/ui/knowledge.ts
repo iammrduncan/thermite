@@ -1,5 +1,7 @@
+import { KB_OUTCOMES, type KbOutcome } from "../../core/kb.ts";
 import type { KbCollection, KbItem, KbKind } from "../kb/index.ts";
 import { JOURNAL_KINDS } from "../kb/index.ts";
+import type { KbCounts } from "../store/index.ts";
 import type { JournalNoteView, RunView } from "../views/index.ts";
 import { infoLabel } from "./campaigns/new/index.ts";
 import { ago, esc, fmtInt } from "./components/index.ts";
@@ -72,6 +74,17 @@ export const SEARCH_KINDS: KbKind[] = [
   "reference",
   "paper",
 ];
+/** An outcome in words (core/kb.ts), for the outcome filter and the counts. */
+const OUTCOME_WORD: Record<KbOutcome, string> = {
+  won: "won",
+  screened: "screened (being confirmed)",
+  regress: "regress (worse than the champion)",
+  neutral: "neutral (no better)",
+  broken: "broken",
+  unclear: "unclear (no answer about the change)",
+  dropped: "dropped by the planner",
+  open: "open (no outcome yet)",
+};
 const JK: Record<string, string> = {
   observation: "obs",
   decision: "dec",
@@ -255,6 +268,7 @@ function resultHtml(x: KbItem, now: number, link: RunLink, result: string | null
     `<a href="${campaignHref(x.campaign)}">${esc(x.campaign)}</a>`,
     run,
     `by ${esc(writer(x.by).text)}`,
+    ...(x.outcome ? [`outcome: ${esc(x.outcome)}`] : []),
     ...(result ? [esc(result)] : x.sub && x.kind !== "note" ? [esc(x.sub)] : []),
   ].join(" · ");
   return `<details class="kbres"><summary><span class="kbic">${KIND_ICON[x.kind]}</span><span><b>${esc(kind)}</b> · ${esc(x.title)}<br><span class="muted">${meta}</span></span><span class="muted xs nowrap" title="${esc(x.updated_at)}">${esc(ago(x.updated_at, now))} ago</span></summary><div class="kbbody">${esc(x.body)}${
@@ -271,8 +285,12 @@ export function knowledgePage(o: {
   mode: (campaign: string) => string;
   q: string;
   kind: string;
+  outcome: string;
   collection: string;
   results: KbItem[];
+  /** How many items the search found in all, and where its words land (before the filters). */
+  matched: number;
+  counts: KbCounts;
   limit: number;
   now: number;
   link: RunLink;
@@ -282,18 +300,29 @@ export function knowledgePage(o: {
     const reads = f.reads;
     return `<div class="kfold" id="collection-${esc(f.campaign)}"><span class="kfic">📁</span><div><a href="${campaignHref(f.campaign)}#knowledge"><b>${esc(f.campaign)}</b></a> <span class="muted small">${esc(o.mode(f.campaign))} · ${fmtInt(f.items)} item${f.items === 1 ? "" : "s"}</span><div class="small muted">${esc(collectionLine(f))}</div></div><div class="small muted">${f.updated_at ? `updated ${esc(ago(f.updated_at, o.now))} ago` : "no items yet"}<div><a href="/ui/knowledge?collection=${encodeURIComponent(f.campaign)}#search">search it</a></div></div><div class="small"><div>read by: <b>${esc(f.read_by.join(", ") || "none yet")}</b></div><div class="muted">reads: ${esc(reads.join(", ") || "only its own")}</div></div></div>`;
   };
-  const filtered = Boolean(o.q.trim() || o.kind || o.collection);
+  const filtered = Boolean(o.q.trim() || o.kind || o.outcome || o.collection);
+  const countLine = (label: string, m: Record<string, number>, word: (k: string) => string) => {
+    const parts = Object.entries(m).map(([k, n]) => `${esc(word(k))} ${fmtInt(n)}`);
+    return parts.length
+      ? `<div><span class="muted">${esc(label)}:</span> ${parts.join(" · ")}</div>`
+      : "";
+  };
+  const kindWord = (k: string) => KIND_WORD[k as KbKind]?.[1] ?? k;
+  const counts = o.q.trim()
+    ? `<div class="small kbcounts"><div><b>${fmtInt(o.matched)}</b> item${o.matched === 1 ? "" : "s"} match. Where the words land, before the filters:</div>${countLine("by kind", o.counts.kind, kindWord)}${countLine("by outcome", o.counts.outcome, (k) => k)}${countLine("by collection", o.counts.collection, (k) => k)}</div>`
+    : "";
   const opt = (v: string, label: string, on: boolean) =>
     `<option value="${esc(v)}"${on ? " selected" : ""}>${esc(label)}</option>`;
   return `<div class="block"><div class="head"><h2>Collections</h2><span class="n">${o.collections.length}</span><span class="right">one for each campaign: everything its runs produce, by run, each writer in its own slot: research, sources, notes, documentation, trials, journals, experiments</span></div>
 ${o.collections.length ? `<div class="card flat">${o.collections.map(collectionRow).join("")}</div>` : `<div class="card"><div class="empty">No collection yet. A campaign's collection is made with the campaign, and fills as its runs report.</div></div>`}</div>
 <div class="block" id="search"><div class="head"><h2>Search the knowledge base</h2><span class="right">agents' notes and records: data to weigh, not instructions</span></div>
 <form class="kbsearch" method="get" action="/ui/knowledge#search">
-<label class="sfd kbq">${infoLabel("Words", "Every word must be in the item's title or text. Empty: the newest items.")}<input name="q" value="${esc(o.q)}" placeholder="for example: vector loads" aria-label="Search"></label>
+<label class="sfd kbq">${infoLabel("Words", "Items with any of the words, those with more of them, and rarer ones, first. Failed, slower and faster also find the words Thermite's records say them with. Empty: the newest items.")}<input name="q" value="${esc(o.q)}" placeholder="for example: vector loads" aria-label="Search"></label>
 <label class="sfd">${infoLabel("Kind", "Runs, trials (one agent session each, and how it ended), experiments with their results, attempts with the judge's verdicts, notes (field notes and research notes), documents the lanes wrote, sources with the text that was read, claims with their quotes, hypotheses, findings and reports.")}<select name="kind">${opt("", "every kind", !o.kind)}${SEARCH_KINDS.map((k) => opt(k, KIND_WORD[k][1], o.kind === k)).join("")}</select></label>
+<label class="sfd">${infoLabel("Outcome", "How an experiment or an attempt ended, from Thermite's records: the judge's verdict, or the planner dropping it. Other items have none.")}<select name="outcome">${opt("", "every outcome", !o.outcome)}${KB_OUTCOMES.map((k) => opt(k, OUTCOME_WORD[k], o.outcome === k)).join("")}</select></label>
 <label class="sfd">${infoLabel("Collection", "One campaign's collection, or all of them.")}<select name="collection">${opt("", "every collection", !o.collection)}${o.collections.map((f) => opt(f.campaign, f.campaign, o.collection === f.campaign)).join("")}</select></label>
 <button class="primary">Search</button></form>
-<div class="card kbresults">${
+${counts}<div class="card kbresults">${
     o.results.length
       ? `${filtered ? "" : `<div class="muted small">The newest items in every collection.</div>`}${o.results.map((x) => resultHtml(x, o.now, o.link, o.result(x))).join("")}${o.results.length >= o.limit ? `<div class="muted small">The ${o.q.trim() ? "best" : "newest"} ${o.limit} matches. Add words or a filter to see others.</div>` : ""}`
       : `<div class="empty">${filtered ? "Nothing matches." : "The knowledge base is empty."}</div>`

@@ -314,10 +314,18 @@ test("the Knowledge page: every collection with its counts and grants, and a sea
   );
   const exps = await (await s.get("/ui/knowledge?kind=experiment")).text();
   assert.match(exps, /<b>Experiment<\/b> · Load int4 weights/);
-  assert.match(exps, /tried: attempt a-1 \(submitted\), win confirmed \(\+6\.10%\)/);
+  assert.match(exps, /outcome: won · tried: attempt a-1 \(submitted\), win confirmed \(\+6\.10%\)/);
   assert.ok(!exps.includes("<b>Finding</b>"));
+  // With words: how many match, and where the words land before the filters.
+  assert.match(found, /<b>2<\/b> items match\. Where the words land, before the filters:/);
+  assert.match(found, /by kind:<\/span> claims 1 · findings 1/);
+  // By outcome: the experiment that won, and the attempt its verdict made won.
+  const won = await (await s.get("/ui/knowledge?outcome=won")).text();
+  assert.match(won, /<option value="won" selected>won<\/option>/);
+  assert.match(won, /<b>Experiment<\/b> · Load int4 weights/);
+  assert.ok(!won.includes("<b>Finding</b>"));
   // Every form label has its description.
-  for (const l of ["Words", "Kind", "Collection"])
+  for (const l of ["Words", "Kind", "Outcome", "Collection"])
     assert.match(page, new RegExp(`${l}<i class="ii" tabindex="0" data-tip="`));
 });
 

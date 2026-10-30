@@ -138,7 +138,10 @@ export function withKnowledgeBaseBefore175(
     runs: readonly { rig: string; ledger: string; run: string; campaign: string }[];
   },
 ): void {
-  db.exec(`drop trigger if exists kb_item_words_added;
+  db.exec(`drop view if exists kb_passage_text;
+drop table if exists kb_words_terms;
+drop table if exists kb_passage;
+drop trigger if exists kb_item_words_added;
 drop trigger if exists kb_item_words_changed;
 drop trigger if exists kb_item_words_removed;
 drop table if exists kb_words;

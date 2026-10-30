@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { RIG_ID } from "../ids.ts";
-import { KbAddress, KbItemFile, KbKind, KbLinkRel } from "../kb.ts";
+import { KbAddress, KbItemFile, KbKind, KbLinkRel, KbOutcome, KbSlot } from "../kb.ts";
 
 /**
  * A search or a read of Thermite's knowledge base, asked of control for an agent's run (goal 175).
@@ -40,6 +40,15 @@ export const KB_QUERY_MAX = 300;
 /** How many hits a search gives when not told, and at most. */
 export const KB_SEARCH_DEFAULT = 10;
 export const KB_SEARCH_MAX = 50;
+/** The most queries one search fuses (RRF), beside its `q`. */
+export const KB_QUERIES_MAX = 5;
+/** The deepest a search pages: its `offset` at most. */
+export const KB_OFFSET_MAX = 5_000;
+/** The most items a search is told to leave out (`seen`), and the most of each filter's values. */
+export const KB_SEEN_MAX = 100;
+export const KB_FILTER_MAX = 50;
+/** How many characters of an item's text one read gives, from its `offset`: the rest, in more reads. */
+export const KB_READ_PAGE = 10_000;
 /**
  * How long a supervisor waits for control's answer, on the bus or over HTTP: then the agent's tool
  * says control did not answer, and the agent goes on.
@@ -48,24 +57,48 @@ export const KB_ASK_TIMEOUT_MS = 20_000;
 
 const RunName = z.string().min(1).max(100);
 
+/** How a search reads its words: words (any of them, forgiving) or exact (FTS5's own syntax). */
+export const KbSearchMode = z.enum(["words", "exact"]);
+
+const Names = z.array(z.string().min(1).max(200)).max(KB_FILTER_MAX);
+
 /**
- * A search for an agent of a run: its words (none: the newest), the kinds it keeps, how many. Any
- * other field, such as a campaign or a collection, is dropped: control works out what the run reads
- * from its own records alone.
+ * What a search asks, the same for an agent and for the owner: its words (none: the newest), more
+ * queries to fuse with them, how to read them, an item to find more like, the items to leave out,
+ * what to keep (kinds, outcomes, runs, slots, collections), and the page.
  */
-export const KbSearchAsk = z.object({
-  run: RunName,
+export const kbSearchShape = {
   q: z.string().max(KB_QUERY_MAX),
+  queries: z.array(z.string().max(KB_QUERY_MAX)).max(KB_QUERIES_MAX).optional(),
+  mode: KbSearchMode.optional(),
+  like: KbAddress.optional(),
+  seen: z.array(KbAddress).max(KB_SEEN_MAX).optional(),
   kinds: z.array(KbKind).max(KbKind.options.length).optional(),
+  outcomes: z.array(KbOutcome).max(KbOutcome.options.length).optional(),
+  runs: Names.optional(),
+  slots: z.array(KbSlot).max(KB_FILTER_MAX).optional(),
+  collections: Names.optional(),
+  offset: z.number().int().min(0).max(KB_OFFSET_MAX).optional(),
   limit: z.number().int().min(1).max(KB_SEARCH_MAX).optional(),
-});
+};
+
+/**
+ * A search for an agent of a run (kbSearchShape). Any other field is dropped: control works out
+ * what the run reads from its own records alone, and the runs and collections an ask keeps only
+ * narrow that, never widen it.
+ */
+export const KbSearchAsk = z.object({ run: RunName, ...kbSearchShape });
 export type KbSearchAsk = z.infer<typeof KbSearchAsk>;
 
-/** A read of one item for an agent of a run: by its address; its newest version unless told. */
+/**
+ * A read of one item for an agent of a run: by its address; its newest version unless told; its
+ * text from `offset`, KB_READ_PAGE characters at most.
+ */
 export const KbReadAsk = z.object({
   run: RunName,
   address: KbAddress,
   version: z.number().int().positive().optional(),
+  offset: z.number().int().min(0).optional(),
 });
 export type KbReadAsk = z.infer<typeof KbReadAsk>;
 
@@ -84,6 +117,14 @@ export const KbScopeView = z.object({
 });
 export type KbScopeView = z.infer<typeof KbScopeView>;
 
+/** Where a hit matched in a long text: its passage, of how many, and its characters (kb_read's offset). */
+export const KbPassage = z.object({
+  n: z.number(),
+  of: z.number(),
+  from: z.number(),
+  to: z.number(),
+});
+
 /** One item a search found: where it is, who wrote it, an excerpt and why it matched. */
 export const KbHit = z.object({
   address: z.string(),
@@ -92,10 +133,14 @@ export const KbHit = z.object({
   slot: z.string(),
   kind: z.string(),
   title: z.string(),
+  /** How an experiment or an attempt ended, from Thermite's records; null for other kinds. */
+  outcome: KbOutcome.nullable(),
   /** The part of its text around the words that matched, each such word in **bold**. */
   excerpt: z.string(),
-  /** Which of the search's words it has, in its title and in its text; empty for no words. */
+  /** Which of the search's words it has, in its title, its text and its context; empty for none. */
   why: z.string(),
+  /** In a text long enough to have passages: the one it matched in; null otherwise. */
+  passage: KbPassage.nullable(),
   by: z.string(),
   at: z.string(),
   version: z.number(),
@@ -103,20 +148,52 @@ export const KbHit = z.object({
 });
 export type KbHit = z.infer<typeof KbHit>;
 
+const Counts = z.record(z.string(), z.number());
+
+/**
+ * What every search answers beside its hits: how many matched and where the next page starts,
+ * where its words land in what it reads (before its filters), how many items hold each word,
+ * words close to a word none holds, and the words "more like this" searched with.
+ */
+export const kbFoundShape = {
+  /** How many items the search keeps; `hits` holds a page of them, best first. */
+  matched: z.number(),
+  /** Where the next page starts (`offset`); null when this is the last. */
+  next_offset: z.number().nullable(),
+  counts: z.object({
+    kind: Counts,
+    outcome: Counts,
+    run: Counts,
+    slot: Counts,
+    collection: Counts,
+  }),
+  words: z.array(z.object({ word: z.string(), items: z.number() })),
+  did_you_mean: z.array(
+    z.object({ word: z.string(), try: z.array(z.object({ word: z.string(), items: z.number() })) }),
+  ),
+  like: z.array(z.string()).optional(),
+};
+
 export const KbSearchAnswer = z.object({
   note: z.string(),
   scope: KbScopeView,
-  /** How many items matched; `hits` holds the best of them. */
-  matched: z.number(),
+  ...kbFoundShape,
   hits: z.array(KbHit),
 });
 export type KbSearchAnswer = z.infer<typeof KbSearchAnswer>;
 
-/** One item read whole: one version's words, its links, and how many versions it has. */
+/**
+ * One item read: one version's words from an offset, its links, and how many versions it has. Its
+ * text is KB_READ_PAGE characters at most: `chars` is the whole text's length, and `next_offset`
+ * where the next read starts, null at its end.
+ */
 export const KbReadAnswer = z.object({
   note: z.string(),
-  item: KbHit.omit({ excerpt: true, why: true }).extend({
+  item: KbHit.omit({ excerpt: true, why: true, passage: true }).extend({
     text: z.string(),
+    offset: z.number(),
+    chars: z.number(),
+    next_offset: z.number().nullable(),
     versions: z.number(),
     links: z.array(z.object({ rel: KbLinkRel, to: z.string() })),
   }),

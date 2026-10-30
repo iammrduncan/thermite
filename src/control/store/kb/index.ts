@@ -5,6 +5,7 @@ import {
   type KbItemBody,
   type KbItemWire,
   type KbKind,
+  KbOutcome,
   type KbSync,
   readKbAddress,
   writtenRef,
@@ -30,12 +31,17 @@ import {
 import { type KbVersion, keepVersion, versionRefusal, versionsOf, writtenFields } from "./items.ts";
 import { knowledgeHierarchy } from "./schema.ts";
 import { type KbScope, keepScope, scopeOf } from "./scope.ts";
-import { findItems, type KbWhere } from "./search.ts";
+import { findItems, type KbFind, type KbFindResult, type KbWhere } from "./search.ts";
+import { knowledgeSearch } from "./words.ts";
 
 export type { KbVersion } from "./items.ts";
+export { type KbSearchMode, OUTCOME_WORDS, searchTerms } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
-export { type KbWhere, searchTerms } from "./search.ts";
+export type { KbCounts, KbFind, KbPassage, KbWhere } from "./search.ts";
+export { knowledgeSearch, passagesOf } from "./words.ts";
+/** A search's answer: its page of hits, each a found item, and what search.ts says beside them. */
+export type KbFindAnswer = Omit<KbFindResult, "found"> & { hits: KbFound[] };
 
 /**
  * The knowledge base's tables in control's store (goals 065, 125 and 175): one collection for each
@@ -85,9 +91,12 @@ export class KnowledgeBase {
 
   constructor(db: DatabaseSync) {
     this.db = db;
-    // Store migration 14 runs it; a store that waits at an older version for the move of its
-    // events table has its hierarchy here, before the apply writes its first item.
-    transaction(db, () => knowledgeHierarchy(db));
+    // Store migrations 14 and 17 run them; a store that waits at an older version for the move of
+    // its events table has its hierarchy and words index here, before the apply writes an item.
+    transaction(db, () => {
+      knowledgeHierarchy(db);
+      knowledgeSearch(db);
+    });
   }
 
   /** Runs fn in one transaction: all of it is kept, or none of it. */
@@ -522,19 +531,29 @@ export class KnowledgeBase {
 
   /**
    * Items by words within `where` (search.ts): each a campaign's whole collection, or one run's
-   * items of it. Best first by BM25, each with an excerpt and why it matched, with how many matched
-   * in all; no words: the newest. `limit`: 50 when not given.
+   * items of it. One query or several, best first, a page of hits with their excerpts, why and
+   * passages, how many matched, where the words land and how many items hold each; no words: the
+   * newest. `like` and `seen` name items by address, found within `where`.
    */
-  find(
-    q: string,
-    where: readonly KbWhere[],
-    o: { kinds?: readonly string[]; sub?: readonly string[]; limit?: number } = {},
-  ): { matched: number; hits: KbFound[] } {
-    const r = findItems(this.db, q, where, { ...o, limit: o.limit ?? 50 });
-    return {
-      matched: r.matched,
-      hits: r.found.map((f) => ({ ...itemOf(f.row), excerpt: f.excerpt, why: f.why })),
-    };
+  find(q: string | readonly string[], where: readonly KbWhere[], o: KbFind = {}): KbFindAnswer {
+    const like = o.like ? this.at(o.like, where) : undefined;
+    const lost = o.like !== undefined && !like;
+    const { found, ...r } = findItems(this.db, lost ? [] : where, {
+      ...o,
+      queries: typeof q === "string" ? [q] : q,
+      like: like && { id: like.id, title: like.title, body: like.body },
+      seen: (o.seen ?? []).flatMap((a) => this.at(a, where)?.id ?? []),
+      limit: o.limit ?? 50,
+    });
+    if (lost)
+      r.refused = `no item ${o.like} in what this search reads: like takes an address a search gave`;
+    const hits = found.map((f) => ({
+      ...itemOf(f.row),
+      excerpt: f.excerpt,
+      why: f.why,
+      passage: f.passage,
+    }));
+    return { ...r, hits };
   }
 
   /** find() over whole collections: the Knowledge page's, a campaign's and the owner's search. */
@@ -761,6 +780,7 @@ function itemOf(r: Row): KbItem {
     url: r.url ? str(r.url) : null,
     sub: r.sub ? str(r.sub) : null,
     meta,
+    outcome: KbOutcome.safeParse(r.outcome).data ?? null,
     file: r.file_sha256
       ? {
           sha256: str(r.file_sha256),

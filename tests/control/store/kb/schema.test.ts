@@ -79,7 +79,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
     const v = store.db.prepare("select max(version) as v from schema_migrations").get() as {
       v: number;
     };
-    assert.equal(v.v, 16);
+    assert.equal(v.v, 17);
     const rows = store.db
       .prepare("select id, seq, slot, version, kind, ref from kb_item order by id")
       .all() as Record<string, unknown>[];
@@ -133,13 +133,15 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
         .sort(),
       ["gemv", "only-runs", "saved", "survey"],
     );
-    // The words index holds the items from before.
+    // The words index holds the items from before, each in its passages (store migration 17).
     const words = (q: string) =>
       (
         store.db
-          .prepare("select rowid from kb_words where kb_words match ? order by rowid")
-          .all(q) as { rowid: number }[]
-      ).map((r) => r.rowid);
+          .prepare(
+            "select p.item from kb_words join kb_passage p on p.id = kb_words.rowid where kb_words match ? order by p.item",
+          )
+          .all(q) as { item: number }[]
+      ).map((r) => r.item);
     assert.deepEqual(words("loads"), [1]);
     assert.deepEqual(words("verifier"), [7]);
     // A new item takes an id after every one given before, the deleted one's too.

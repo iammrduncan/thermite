@@ -11,7 +11,7 @@ import {
   eventsTableMayGo,
 } from "./events.ts";
 import { gitAccessHost } from "./git-access.ts";
-import { knowledgeHierarchy } from "./kb/index.ts";
+import { knowledgeHierarchy, knowledgeSearch } from "./kb/index.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalTable } from "./proposals.ts";
@@ -671,6 +671,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   gitAccessHost,
   // The changes the operator proposes to a campaign's settings, for the owner to approve.
   campaignProposalTable,
+  // The knowledge base's words index anew: passages, each item's outcome and context (goal 175).
+  knowledgeSearch,
 ];
 
 /**

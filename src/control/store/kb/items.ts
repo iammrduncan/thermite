@@ -1,12 +1,20 @@
 import type { DatabaseSync } from "node:sqlite";
-import { type KbItemBody, type KbItemFile, writtenRef } from "../../../core/kb.ts";
+import { KB_RECORDS, type KbItemBody, type KbItemFile, writtenRef } from "../../../core/kb.ts";
+import {
+  campaignAbout,
+  contextOf,
+  followAttempt,
+  indexItem,
+  outcomeFor,
+  unindexItem,
+} from "./words.ts";
 
 /**
  * Items and their versions in control's knowledge base (goal 175): the one place that writes them,
  * for Thermite's code's records (store/kb/index.ts, from the reading of the runs' events) and for
  * a writer's `kb_item` event (writeItem). A new version keeps every older one (kb_version, which
- * refuses a change or a removal); the item's row holds its newest, which the words index follows
- * in the same transaction (store/kb/schema.ts).
+ * refuses a change or a removal); the item's row holds its newest, with its outcome and context,
+ * and the words index follows in the same transaction (words.ts).
  */
 
 /** Where an item is: its collection (campaign), its rig ledger and run, its slot, kind and id. */
@@ -52,23 +60,44 @@ export function keepVersion(
     )
     .get(rig, ledger, run, slot, kind, ref) as { id: number; version: number } | undefined;
   const file = [f?.sha256 ?? null, f?.name ?? null, f?.type ?? null, f?.bytes ?? null] as const;
+  // Its outcome and context come from Thermite's own records (words.ts), with each version.
+  const outcome = outcomeFor(db, place, v.meta);
+  const about = campaignAbout(db, campaign);
+  const context = contextOf(place, { outcome, sub: v.sub, about });
   let id: number;
   let version: number;
   if (had) {
     id = Number(had.id);
     version = Number(had.version) + 1;
+    unindexItem(db, id);
     db.prepare(
       `update kb_item set seq = ?, version = ?, title = ?, body = ?, by = ?, url = ?, sub = ?, meta = ?,
-         file_sha256 = ?, file_name = ?, file_type = ?, file_bytes = ?, updated_at = ? where id = ?`,
-    ).run(seq, version, v.title, v.body, v.by, v.url, v.sub, v.meta, ...file, o.at, id);
+         file_sha256 = ?, file_name = ?, file_type = ?, file_bytes = ?, updated_at = ?, outcome = ?,
+         context = ? where id = ?`,
+    ).run(
+      seq,
+      version,
+      v.title,
+      v.body,
+      v.by,
+      v.url,
+      v.sub,
+      v.meta,
+      ...file,
+      o.at,
+      outcome,
+      context,
+      id,
+    );
   } else {
     version = 1;
     id = Number(
       db
         .prepare(
           `insert into kb_item (seq, campaign, rig, ledger, run, slot, kind, ref, version, title, body,
-             by, url, sub, meta, file_sha256, file_name, file_type, file_bytes, at, updated_at)
-           values (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             by, url, sub, meta, file_sha256, file_name, file_type, file_bytes, at, updated_at,
+             outcome, context)
+           values (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           seq,
@@ -88,9 +117,14 @@ export function keepVersion(
           ...file,
           o.at,
           o.at,
+          outcome,
+          context,
         ).lastInsertRowid,
     );
   }
+  indexItem(db, id, v.body);
+  // A recorded attempt's outcome is its experiment's too.
+  if (kind === "attempt" && slot === KB_RECORDS) followAttempt(db, place, ref, outcome);
   db.prepare(
     `insert into kb_version (item, version, title, body, by, url, sub, meta, file_sha256,
        file_name, file_type, file_bytes, event, at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -28,6 +28,10 @@ describe("the supervisor asks control for the agents", () => {
       note: "data",
       scope: { collection: "c", fresh: false, granted: [] },
       matched: 0,
+      next_offset: null,
+      counts: { kind: {}, outcome: {}, run: {}, slot: {}, collection: {} },
+      words: [{ word: "x", items: 0 }],
+      did_you_mean: [],
       hits: [],
     };
     const bus = {

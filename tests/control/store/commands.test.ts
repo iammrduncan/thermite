@@ -262,7 +262,7 @@ describe("each command's run and campaign, in columns of their own", () => {
     twelve.db.close();
 
     const store = new ControlStore(path);
-    assert.equal(version(store), 16);
+    assert.equal(version(store), 17);
     const kept = store.db
       .prepare("select id, signed, run, campaign from command order by issued_at")
       .all() as { id: string; signed: string; run: string | null; campaign: string | null }[];

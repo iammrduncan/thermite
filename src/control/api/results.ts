@@ -74,26 +74,47 @@ export function resultRoutes(
       return c.json(await kbAskLimit.run(rig, () => answerKbAsk(store, rig, kind, body)));
     });
 
-  // The owner's search of the knowledge base, and one item read whole (goal 175): as MCP's kb_search
-  // and kb_read, with each list given with commas, or as a repeated parameter.
+  // The owner's search of the knowledge base, and one item read (goal 175): as MCP's kb_search and
+  // kb_read. A list of names is given with commas, or as a repeated parameter; more queries
+  // (`query`) and the addresses seen (`seen`) only as a repeated parameter.
   app.get(KB_SEARCH.path, admin, (c) => {
-    const n = c.req.query("limit");
     const list = (k: string) =>
       (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);
+    const many = (k: string) => (c.req.queries(k) ?? []).filter(Boolean);
+    const num = (k: string) => {
+      const v = c.req.query(k);
+      return v === undefined ? {} : { [k]: Number(v) };
+    };
+    const lists = {
+      collections: list("collection"),
+      kinds: list("kind"),
+      outcomes: list("outcome"),
+    };
+    const more = {
+      runs: list("run"),
+      slots: list("slot"),
+      queries: many("query"),
+      seen: many("seen"),
+    };
     const q = KbSearchQuery.safeParse({
       q: c.req.query("q") ?? "",
-      ...(list("collection").length ? { collections: list("collection") } : {}),
-      ...(list("kind").length ? { kinds: list("kind") } : {}),
-      ...(n !== undefined ? { limit: Number(n) } : {}),
+      ...Object.fromEntries(Object.entries({ ...lists, ...more }).filter(([, v]) => v.length)),
+      ...(c.req.query("mode") ? { mode: c.req.query("mode") } : {}),
+      ...(c.req.query("like") ? { like: c.req.query("like") } : {}),
+      ...num("offset"),
+      ...num("limit"),
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
-    return c.json(ownerKbSearch(store, q.data));
+    const r = ownerKbSearch(store, q.data);
+    return "error" in r ? c.json(r, 400) : c.json(r);
   });
   app.get(KB_ITEM.path, admin, (c) => {
     const v = c.req.query("version");
+    const at = c.req.query("offset");
     const q = KbReadQuery.safeParse({
       address: c.req.query("address") ?? "",
       ...(v !== undefined ? { version: Number(v) } : {}),
+      ...(at !== undefined ? { offset: Number(at) } : {}),
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
     const r = ownerKbRead(store, q.data);

@@ -354,29 +354,38 @@ No inputs. Returns `[{campaign, counts, journal, items, runs, updated_at, read_b
 
 **Search the knowledge base.** Owner and operator.
 
-> Items of the campaigns' collections that have any of the words given, best first (ranked by BM25: an item with more of the words, and rarer ones, comes first, and a word in its title counts more); no words: the newest. Each hit has its id, its address (`<campaign>/<run>/<slot>/<kind>:<id>`), its collection, run and slot (records: Thermite's own records of the run; else the agent that wrote it), its kind, title, version and time, an excerpt of its text around the words that matched (each in **bold**), why it matched, and, for an experiment, its result; matched says how many items matched in all. …
+> Items of the campaigns' collections that have any of the words given, best first (ranked by BM25 over passages of about 2,000 characters: an item with more of the words, and rarer ones, comes first; a word in its title counts three times, and in its context, which Thermite writes from its records (its kind, outcome, slot, run and campaign), twice); no words: the newest. failed, slower and faster also find the words Thermite's records say them with (dropped, regress, won, …). …
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `q` | string, up to 300 characters | `""` | The words. An item matches with any of them; common words are left out. Empty: the newest items |
+| `q` | string, up to 300 characters | `""` | The words. An item matches with any of them; common words are left out. Empty: the newest items. With `mode` `exact`, FTS5's query syntax |
+| `queries` | list of up to 5 strings, each up to 300 characters, optional | none | More searches, fused with `q`'s by reciprocal rank fusion |
+| `mode` | `words` or `exact`, optional | `words` | How the words are read ([Search](knowledge-base.md#search)) |
+| `like` | an item's address, optional | none | More like this item, by its own most telling words; the item itself is left out |
+| `seen` | list of up to 100 addresses, optional | none | Items to leave out |
 | `collections` | list of up to 100 strings, optional | every collection | The collections to search, by campaign |
 | `kinds` | list, optional | every kind | Any of `run`, `trial`, `experiment`, `attempt`, `note`, `doc`, `source`, `claim`, `hypothesis`, `finding`, `report`, `decision`, `surprise`, `journal`, `review`, `reference`, `paper` |
+| `outcomes` | list, optional | every outcome | Only experiments and attempts that ended so: any of `won`, `screened`, `regress`, `neutral`, `broken`, `unclear`, `dropped`, `open` |
+| `runs` | list of up to 50 strings, optional | every run | Only these runs' items |
+| `slots` | list of up to 50 slots, optional | every slot | Only these slots' items: `records`, `planner`, `worker-<lane>`, … |
+| `offset` | whole number, 0 to 5,000 | 0 | Where the page starts: a page's `next_offset` |
 | `limit` | whole number, 1 to 50 | 10 | How many hits |
 
-Returns `{note, collections, matched, hits}`, the same as [`GET /v1/kb/search`](rest-api.md#the-knowledge-base). Each hit is `{id, address, collection, run, slot, kind, title, excerpt, why, by, at, version, file, result}`; `result` is an experiment's result, such as `tried: attempt <id> (<result>), <verdict>` or `dropped: <why>`, and `null` for the other kinds. [Search](knowledge-base.md#search) says how it ranks, and what an excerpt and `why` hold.
+Returns `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}`, and `like` with the words "more like this" searched with, the same as [`GET /v1/kb/search`](rest-api.md#the-knowledge-base). Each hit is `{id, address, collection, run, slot, kind, title, outcome, excerpt, why, passage, by, at, version, file, result}`; `result` is an experiment's result, such as `tried: attempt <id> (<result>), <verdict>` or `dropped: <why>`, and `null` for the other kinds. An exact search FTS5 can't read is an error: `the exact search is not FTS5's query syntax: …`. [Search](knowledge-base.md#search) says how it ranks, and what each field holds.
 
 ### kb_read
 
 **Read an item of the knowledge base.** Owner and operator.
 
-> One item of Thermite's knowledge base, by its address as kb_search gives it: one version of it whole (its newest unless version is given), …
+> One item of Thermite's knowledge base, by its address as kb_search gives it: one version of it (its newest unless version is given), …
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `address` | string | | `<campaign>/<run>/<slot>/<kind>:<id>` |
 | `version` | whole number, optional | its newest | One of its versions |
+| `offset` | whole number, optional | 0 | Where its text starts, in characters: a hit's `passage.from`, or a read's `next_offset` |
 
-Returns `{note, item}`, as [`GET /v1/kb/item`](rest-api.md#the-knowledge-base): `item` is `{id, address, collection, run, slot, kind, title, by, at, version, file, text, versions, links, result}`. Errors: `the knowledge base has no item <address>`, `<address> has versions 1 to <n>, not <version>`.
+Returns `{note, item}`, as [`GET /v1/kb/item`](rest-api.md#the-knowledge-base): `item` is `{id, address, collection, run, slot, kind, title, outcome, by, at, version, file, text, offset, chars, next_offset, versions, links, result}`. `text` is at most 10,000 characters from `offset`; `chars` is the whole text's length, and `next_offset` where the next read starts (`null` at its end). Errors: `the knowledge base has no item <address>`, `<address> has versions 1 to <n>, not <version>`.
 
 ### exports
 

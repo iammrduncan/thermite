@@ -43,7 +43,7 @@ const words = (store: ControlStore, q: string) =>
   (
     store.db
       .prepare(
-        "select i.slot, i.ref from kb_words w join kb_item i on i.id = w.rowid where kb_words match ? order by i.id",
+        "select i.slot, i.ref from kb_words w join kb_passage p on p.id = w.rowid join kb_item i on i.id = p.item where kb_words match ? order by i.id",
       )
       .all(q) as { slot: string; ref: string }[]
   ).map((r) => `${r.slot}/${r.ref}`);

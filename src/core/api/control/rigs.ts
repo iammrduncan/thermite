@@ -393,7 +393,8 @@ export const KB_SEARCH_ASK = {
   what: "knowledge base search",
   body: KbSearchAsk,
   answer: KbAskAnswer,
-  maxBytes: 16 * 1024,
+  // Up to 100 addresses seen, each up to 600 characters, and 6 queries.
+  maxBytes: 64 * 1024,
 } as const satisfies Route;
 export const KB_READ_ASK = {
   method: "POST",

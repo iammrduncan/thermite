@@ -160,17 +160,24 @@ export const USAGE = `usage: thermite <command> [options]
   kit list --control URL --token-file F [--json]
                                       the kits control keeps (owner's or reader's token): each
                                       one's head, commits and kit.json's name and target
-  kb search [WORDS...] [--collection C ...] [--kind K ...] [--limit N] --control URL
-         --token-file F
+  kb search [WORDS...] [--query Q ...] [--mode words|exact] [--like ADDRESS] [--seen ADDRESS ...]
+         [--collection C ...] [--kind K ...] [--outcome O ...] [--run R ...] [--slot S ...]
+         [--offset N] [--limit N] --control URL --token-file F
                                       search Thermite's knowledge base (owner's token): items with
                                       any of the words, best first, each with its id, address,
-                                      slot, an excerpt, why it matched and, for an experiment, its
-                                      result; no words: the newest. --collection and --kind keep
-                                      those collections and kinds. It prints JSON
-  kb read ADDRESS [--version N] --control URL --token-file F
-                                      one item of the knowledge base whole, by its address
+                                      slot, outcome, an excerpt, why it matched, its passage in a
+                                      long text and, for an experiment, its result; with how many
+                                      matched, the next page, where the words land and how many
+                                      items hold each word; no words: the newest. --query adds a
+                                      search, fused with the words; --mode exact takes FTS5's
+                                      syntax; --like finds more like an item; --seen leaves items
+                                      out; --collection, --kind, --outcome, --run and --slot keep
+                                      only those. It prints JSON
+  kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
+                                      one item of the knowledge base, by its address
                                       (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
-                                      or version N, with its links. It prints JSON
+                                      or version N, with its links, and its text from --offset,
+                                      10,000 characters at most. It prints JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does

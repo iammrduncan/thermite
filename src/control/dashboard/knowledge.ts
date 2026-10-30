@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { KB_OUTCOMES } from "../../core/kb.ts";
 import { PICKABLE } from "../kb/index.ts";
 import { knowledgePage, pastWords, SEARCH_KINDS } from "../ui/knowledge.ts";
 import { runHref } from "../ui/urls.ts";
@@ -27,11 +28,16 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     const collections = kb.collections();
     const q = (c.req.query("q") ?? "").slice(0, 300);
     const kind = SEARCH_KINDS.find((k) => k === c.req.query("kind")) ?? "";
+    const outcome = KB_OUTCOMES.find((k) => k === c.req.query("outcome")) ?? "";
     const collection =
       collections.find((f) => f.campaign === c.req.query("collection"))?.campaign ?? "";
     const limit = 100;
-    const results = kb.search(q, collection ? [collection] : collections.map((f) => f.campaign), {
+    const where = (collection ? [collection] : collections.map((f) => f.campaign)).map(
+      (campaign) => ({ campaign }),
+    );
+    const found = kb.find(q, where, {
       ...(kind ? { kinds: [kind] } : {}),
+      ...(outcome ? { outcomes: [outcome] } : {}),
       limit,
     });
     return page(
@@ -47,8 +53,11 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         mode: modeWords(campaignModes(store, vs)),
         q,
         kind,
+        outcome,
         collection,
-        results,
+        results: found.hits,
+        matched: found.matched,
+        counts: found.counts,
         limit,
         now: Date.now(),
         link: runLink,

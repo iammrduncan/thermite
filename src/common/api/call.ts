@@ -71,8 +71,8 @@ export interface ApiTarget {
 /** What one call sends. */
 export interface CallInput<R extends Route> {
   params?: Record<string, string | number> | undefined;
-  /** Query parameters, in order; an undefined one is left out. */
-  query?: Record<string, string | number | boolean | undefined> | undefined;
+  /** Query parameters, in order; an undefined one is left out, and a list's values each repeat it. */
+  query?: Record<string, string | number | boolean | readonly string[] | undefined> | undefined;
   /** The JSON body, as the route's schema takes it. */
   body?: BodyOf<R> | undefined;
   /** Bytes in place of a JSON body, sent as application/octet-stream. */
@@ -88,13 +88,15 @@ export interface CallInput<R extends Route> {
 export const UPLOAD_TIMEOUT_MS = 30 * 60_000;
 
 /**
- * A query string, its parameters in order, an undefined one left out. A list's commas stay as
- * they are: the receivers split lists at them.
+ * A query string, its parameters in order, an undefined one left out, a list given as the parameter
+ * once for each value. A string's commas stay as they are: the receivers split lists at them.
  */
 function queryOf(query: CallInput<Route>["query"]): string {
   const encode = (v: string) => encodeURIComponent(v).replace(/%2C/g, ",");
   const parts = Object.entries(query ?? {}).flatMap(([k, v]) =>
-    v === undefined ? [] : [`${encode(k)}=${encode(String(v))}`],
+    v === undefined
+      ? []
+      : (typeof v === "object" ? v : [String(v)]).map((x) => `${encode(k)}=${encode(x)}`),
   );
   return parts.length ? `?${parts.join("&")}` : "";
 }

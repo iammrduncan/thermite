@@ -121,6 +121,39 @@ describe("the owner's search of the knowledge base", () => {
     assert.equal((await get("/v1/kb/search?q=x", "not-the-owner")).status, 401);
   });
 
+  test("REST: the agents' options: more queries, outcomes, exact mode, pages, and a read from an offset", async () => {
+    const { api } = control();
+    const get = async (path: string) => {
+      const r = await api.request(path, { headers: { authorization: `Bearer ${TOKENS.admin}` } });
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    const addresses = (b: Record<string, unknown>) =>
+      (b.hits as { address: string }[]).map((h) => h.address).sort();
+    // Two queries, each its own repeated parameter, fused.
+    const two = await get("/v1/kb/search?q=vector&query=tile&collection=gemv&kind=experiment");
+    assert.deepEqual(addresses(two.body), [
+      "gemv/gs-1/records/experiment:x-1",
+      "gemv/gs-1/records/experiment:x-2",
+    ]);
+    assert.deepEqual(two.body.counts && (two.body.counts as { kind: unknown }).kind, {
+      experiment: 2,
+    });
+    const open = await get("/v1/kb/search?q=&collection=gemv&outcome=open,won&limit=1");
+    assert.equal(open.body.matched, 2);
+    assert.equal(open.body.next_offset, 1);
+    const exact = await get(`/v1/kb/search?mode=exact&q=${encodeURIComponent('"tiles in" NOT x')}`);
+    assert.deepEqual(addresses(exact.body), ["gemv/gs-1/records/experiment:x-2"]);
+    const bad = await get(`/v1/kb/search?mode=exact&q=${encodeURIComponent("tiles AND (")}`);
+    assert.equal(bad.status, 400);
+    assert.match(String(bad.body.error), /^the exact search is not FTS5's query syntax/);
+    const from = await get("/v1/kb/item?address=gemv/gs-1/records/experiment:x-1&offset=4");
+    const it = from.body.item as { text: string; offset: number; chars: number; next_offset: null };
+    assert.equal(it.offset, 4);
+    assert.ok(it.text.startsWith("bit loads."), it.text);
+    assert.equal(it.chars, it.text.length + 4);
+    assert.equal(it.next_offset, null);
+  });
+
   test("thermite kb search and read print control's answer; a wrong use is refused", async () => {
     const { api } = control();
     const server = serve({ fetch: api.fetch, port: 0, hostname: "127.0.0.1" });
@@ -146,6 +179,41 @@ describe("the owner's search of the knowledge base", () => {
       const found = JSON.parse(s.stdout) as { matched: number; hits: { address: string }[] };
       assert.equal(found.matched, 1);
       assert.equal(found.hits[0]?.address, "gemv/gs-1/records/experiment:x-1");
+      // More queries, an outcome and a page, as flags.
+      const more = await cli(
+        "kb",
+        "search",
+        "vector",
+        "--query",
+        "radix sort",
+        "--outcome",
+        "open",
+        "--offset",
+        "0",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.equal(more.code, 0, more.stderr);
+      const fused = JSON.parse(more.stdout) as { hits: { address: string }[] };
+      assert.deepEqual(fused.hits.map((h) => h.address).sort(), [
+        "gemv/gs-1/records/experiment:x-1",
+        "sorting/so-1/records/experiment:x-9",
+      ]);
+      const mixed = await cli(
+        "kb",
+        "read",
+        "gemv/gs-1/records/experiment:x-1",
+        "--outcome",
+        "won",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.notEqual(mixed.code, 0);
+      assert.match(mixed.stderr, /kb read takes only an address, --version and --offset/);
       const r = await cli(
         "kb",
         "read",

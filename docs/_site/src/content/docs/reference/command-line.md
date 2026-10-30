@@ -190,17 +190,24 @@ usage: thermite <command> [options]
   kit list --control URL --token-file F [--json]
                                       the kits control keeps (owner's or reader's token): each
                                       one's head, commits and kit.json's name and target
-  kb search [WORDS...] [--collection C ...] [--kind K ...] [--limit N] --control URL
-         --token-file F
+  kb search [WORDS...] [--query Q ...] [--mode words|exact] [--like ADDRESS] [--seen ADDRESS ...]
+         [--collection C ...] [--kind K ...] [--outcome O ...] [--run R ...] [--slot S ...]
+         [--offset N] [--limit N] --control URL --token-file F
                                       search Thermite's knowledge base (owner's token): items with
                                       any of the words, best first, each with its id, address,
-                                      slot, an excerpt, why it matched and, for an experiment, its
-                                      result; no words: the newest. --collection and --kind keep
-                                      those collections and kinds. It prints JSON
-  kb read ADDRESS [--version N] --control URL --token-file F
-                                      one item of the knowledge base whole, by its address
+                                      slot, outcome, an excerpt, why it matched, its passage in a
+                                      long text and, for an experiment, its result; with how many
+                                      matched, the next page, where the words land and how many
+                                      items hold each word; no words: the newest. --query adds a
+                                      search, fused with the words; --mode exact takes FTS5's
+                                      syntax; --like finds more like an item; --seen leaves items
+                                      out; --collection, --kind, --outcome, --run and --slot keep
+                                      only those. It prints JSON
+  kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
+                                      one item of the knowledge base, by its address
                                       (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
-                                      or version N, with its links. It prints JSON
+                                      or version N, with its links, and its text from --offset,
+                                      10,000 characters at most. It prints JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does
@@ -757,10 +764,12 @@ npx thermite kit list --control https://control.example.com --token-file ~/therm
 
 ### `kb`
 
-`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item whole, as `GET /v1/kb/item` and `kb_read` do. Each prints control's answer as JSON on one line.
+`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item, as `GET /v1/kb/item` and `kb_read` do. Each prints control's answer as JSON on one line.
 
 ```sh
 npx thermite kb search which approaches failed to improve speed --collection sort-speed \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+npx thermite kb search unroll --query "loop unrolling" --kind experiment --outcome regress \
   --control https://control.example.com --token-file ~/thermite-owner-token
 npx thermite kb read sort-speed/sort-speed-1/records/experiment:x-3 \
   --control https://control.example.com --token-file ~/thermite-owner-token
@@ -770,14 +779,22 @@ npx thermite kb read sort-speed/sort-speed-1/records/experiment:x-3 \
 | --- | --- | --- | --- |
 | `search [WORDS...]` | | | The words to find: an item matches with any of them, best first. None: the newest items |
 | `read ADDRESS` | | | The item's address, `<campaign>/<run>/<slot>/<kind>:<id>`, as a search gives it |
+| `--query Q` | No, repeatable; search only | | One more search, up to 5, fused with the words by reciprocal rank fusion |
+| `--mode M` | No; search only | `words` | `words`, or `exact`: FTS5's own syntax ([Search](knowledge-base.md#search)) |
+| `--like ADDRESS` | No; search only | | More like this item, by its own most telling words |
+| `--seen ADDRESS` | No, repeatable; search only | | An item to leave out, up to 100 |
 | `--collection C` | No, repeatable; search only | every collection | A collection to search, by its campaign |
 | `--kind K` | No, repeatable; search only | every kind | Only items of this kind |
+| `--outcome O` | No, repeatable; search only | every outcome | Only experiments and attempts that ended so: `won`, `screened`, `regress`, `neutral`, `broken`, `unclear`, `dropped` or `open` |
+| `--run R` | No, repeatable; search only | every run | Only this run's items |
+| `--slot S` | No, repeatable; search only | every slot | Only this slot's items, such as `records` or `planner` |
+| `--offset N` | No | 0 | Search: where the page starts, a page's `next_offset`. Read: where the text starts, in characters |
 | `--limit N` | No; search only | 10 | How many hits, 1 to 50 |
 | `--version N` | No; read only | its newest | One of the item's versions |
 | `--control URL` | Yes | | Control's address |
 | `--token-file F` | Yes | | A file with the owner's token |
 
-A search prints `{note, collections, matched, hits}`, each hit with its `id` (`run start --past` takes it), `address`, `slot`, `excerpt`, `why` and, for an experiment, its `result`; a read prints `{note, item}`. Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address and --version: kb search takes the others` or `kb search takes no --version: kb read does`.
+A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`. Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others` or `kb search takes no --version: kb read does`.
 
 ### `agents list`
 
