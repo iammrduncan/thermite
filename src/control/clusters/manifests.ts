@@ -41,11 +41,11 @@ export interface ClusterRigPlan {
   resources?: { cpus: number; memoryGi: number } | undefined;
   controlPublicKey: string;
   /**
-   * The message bus for its supervisor; none: it keeps to HTTP. Control's authority goes in the
-   * supervisor's environment, so that every apply of the deployments (an update, a resize) carries
-   * the one control has now.
+   * The message bus for its supervisor: the one way it reaches control but its registration.
+   * Control's authority goes in the supervisor's environment, so that every apply of the
+   * deployments (an update, a resize) carries the one control has now.
    */
-  bus?: RigBus | undefined;
+  bus: RigBus;
   /** The owner's list of addresses rigs may reach, which the harness's network rule opens. */
   reach?: ReachEntry[] | undefined;
 }
@@ -339,7 +339,8 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
             CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
             THERMITE_HARNESS_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
             THERMITE_CONTROL_TOKEN_FILE: "/run/secrets/control-rig-token",
-            ...(p.bus ? { THERMITE_NATS_URL: p.bus.url, THERMITE_NATS_CA: p.bus.ca } : {}),
+            THERMITE_NATS_URL: p.bus.url,
+            THERMITE_NATS_CA: p.bus.ca,
           }),
           // Its entry runs as root to close its folders to the advisor users and to start the
           // supervisor and each advisor's program as users of their own; the supervisor keeps

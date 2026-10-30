@@ -1,3 +1,4 @@
+import { EVENT_ACTOR_MAX, whyUnreadable } from "../../../core/events/schemas.ts";
 import { frozen } from "../sharing.ts";
 import type { AttemptView, JudgeJob, RunView, StoredEvent } from "../types.ts";
 import { AGENTS } from "./agents.ts";
@@ -92,19 +93,30 @@ export class RigFold {
     return v;
   }
 
-  /** Folds one event, the next of the rig's ledger. The fold never changes an event: frozen. */
-  apply(e: StoredEvent): void {
+  /**
+   * Folds one event, the next of the rig's ledger. The fold never changes an event: frozen. An
+   * event its views can't read (core/events/schemas.ts) is folded no further: the timeline and
+   * the newest events keep it with why (`unreadable`), an empty body and its actor cut to its
+   * limit. Gives why, or undefined for an event it folded.
+   */
+  apply(e: StoredEvent): string | undefined {
     frozen(e);
-    HANDLERS.get(e.kind)?.(this, e, e.body ?? {});
+    const why = whyUnreadable(e);
+    if (why === undefined) HANDLERS.get(e.kind)?.(this, e, e.body ?? {});
+    const kept =
+      why === undefined
+        ? e
+        : frozen({ ...e, actor: e.actor.slice(0, EVENT_ACTOR_MAX), body: {}, unreadable: why });
     const run = this.runOf(e);
     // The agents' notes are kept in the journal: the timeline tells what happened.
     if (run && this.runs.has(run) && e.kind !== "journal_note" && e.kind !== "research_note") {
       const t = (this.runs.get(run) as RunView).timeline;
-      t.push(e);
+      t.push(kept);
       if (t.length > KEPT_TIMELINE) t.shift();
     }
-    this.recent.push(e);
+    this.recent.push(kept);
     if (this.recent.length > KEPT_RECENT) this.recent.shift();
+    return why;
   }
 
   /** What the fold holds now, to read. */

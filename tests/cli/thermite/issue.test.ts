@@ -13,6 +13,7 @@ import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { parseContract } from "../../../src/core/contract.ts";
+import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
 import { controlOnly } from "../../helpers/control-stack.ts";
 import { ingestReport } from "../../helpers/control-store.ts";
 import { FAKE_RUNPOD_KEY, fakeRunpod } from "../../helpers/fake-runpod.ts";
@@ -334,7 +335,7 @@ describe("thermite command on a RunPod rig whose pod is stopped (goal 022)", () 
       by: "owner:ui",
     });
     const cloud = fakeRunpod();
-    const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem);
+    const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem, { busCa: TEST_BUS_CA });
     const rigs = new RunpodRigs(store, secrets, tunnels, {
       fetch: cloud.fetch,
       image: "ghcr.io/example/thermite-rig:test-cuda",

@@ -8,8 +8,8 @@ import { inBatches, isTheRigsRun, onBus, outgoing, publishAfter, publishFailed }
 
 /**
  * The writer of the `EVENTS` stream (goal 168, step 4): control keeps each report's events on its
- * message bus first, and nowhere else. In its turn, one report at a time whichever way it came (the
- * ingest route, the reports stream, a rig in pull mode through the route), it publishes the
+ * message bus first, and nowhere else. In its turn, one report at a time from the reports stream,
+ * it publishes the
  * events after the held cursor of the report's rig ledger, in order, in atomic batches (batch.ts),
  * each event with its message id (`<rig>:<ledger>:<event id>`) and its report's (`Thermite-Report`);
  * then it waits until the apply of the stream (apply.ts) has applied them, which moves the held

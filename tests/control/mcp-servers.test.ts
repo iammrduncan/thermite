@@ -364,7 +364,7 @@ describe("what a rig gets", () => {
 
   test("only the servers its runs' kits name, with their sign-in; what it gets is audited without it", async (t) => {
     const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
-    const { store, servers, app } = await api(t, fake);
+    const { store, servers } = await api(t, fake);
     servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
     servers.put(
       { name: "github", url: "https://code.example.com/mcp", auth: "none" },
@@ -376,12 +376,13 @@ describe("what a rig gets", () => {
         { name: "gone", agents: ["planner"] },
       ],
     });
-    const ask = (rig: string, token: string) =>
-      app.request(`/v1/rigs/${rig}/mcp-servers`, { headers: { authorization: `Bearer ${token}` } });
-    const r = (await (await ask("rig-a", RIG_TOKEN)).json()) as {
-      servers: { name: string; headers: Record<string, string>; agents: string[] }[];
-      unavailable: { name: string; why: string }[];
+    // What control writes to the rig's config on the bus (bus/config.ts), audited as it writes.
+    const ask = async (rig: string) => {
+      const given = await servers.forRig(rig);
+      servers.handed(rig, given);
+      return given;
     };
+    const r = await ask("rig-a");
     assert.deepEqual(
       r.servers.map((s) => [s.name, s.headers.Authorization, s.agents]),
       [["gbrain", KEY, ["workers", "advisors"]]],
@@ -390,12 +391,11 @@ describe("what a rig gets", () => {
       r.unavailable.map((u) => u.name),
       ["gone"],
     );
-    // Another rig, whose runs name nothing, gets nothing; a wrong token, nothing at all.
-    const b = (await (await ask("rig-b", "rig-token-bbbbbb")).json()) as { servers: unknown[] };
+    // Another rig, whose runs name nothing, gets nothing.
+    const b = await ask("rig-b");
     assert.deepEqual(b.servers, []);
-    assert.equal((await ask("rig-a", "rig-token-bbbbbb")).status, 401);
     // Audited once for what changed, never with the key.
-    await ask("rig-a", RIG_TOKEN);
+    await ask("rig-a");
     const audits = store.db
       .prepare("select body from audit where action = 'mcp_servers_handed'")
       .all() as { body: string }[];
@@ -611,9 +611,7 @@ describe("control's log lines", () => {
       assigned(store, "rig-a", "pn-1", "pn", {
         mcp_servers: [{ name: "gbrain", agents: ["workers"] }],
       });
-      await app.request("/v1/rigs/rig-a/mcp-servers", {
-        headers: { authorization: `Bearer ${RIG_TOKEN}` },
-      });
+      servers.handed("rig-a", await servers.forRig("rig-a"));
     }
     // Control logs a refused page with the same words it writes to its audit (api.ts): the
     // reason is there (the server answered 401), the key is not.

@@ -7,7 +7,7 @@ import { nextRunName } from "../../src/control/run-names.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { findRun } from "../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
-import { controlStore, enrollRigs, ingestReport } from "../helpers/control-store.ts";
+import { answerCommand, controlStore, enrollRigs, ingestReport } from "../helpers/control-store.ts";
 
 /** A rig's report of these events, in `ledger`. */
 async function report(
@@ -60,7 +60,7 @@ describe("a run's name is used once on control (goal 170)", () => {
     );
     assert.equal(nextRunName(store, "sort-speed"), "sort-speed-2");
     // The rig ran it, then a full reset gave it a new ledger: the name stays used.
-    store.commands.ack("rig-a", first.id, "delivered", { source: "harness" });
+    answerCommand(store, "rig-a", first.id, "delivered", { source: "harness" });
     await report(store, "rig-a", "ledger-1", [
       ["run_created", "sort-speed-1", { campaign: "sort-speed" }],
     ]);
@@ -68,7 +68,7 @@ describe("a run's name is used once on control (goal 170)", () => {
     assert.throws(() => assign(store, "rig-a", "sort-speed-1"), /was used already, on rig-a/);
     // An assignment that failed started nothing: its name is free again.
     const failed = assign(store, "rig-b", "sort-speed-7");
-    store.commands.ack("rig-b", failed.id, "failed", { error: "staging failed" });
+    answerCommand(store, "rig-b", failed.id, "failed", { error: "staging failed" });
     assert.ok(assign(store, "rig-b", "sort-speed-7").id);
   });
 

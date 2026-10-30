@@ -394,6 +394,11 @@ export class HarnessService {
     return this.commands.checkCommand(input);
   }
 
+  /** A command whose content the supervisor could not stage, recorded as not applied (commands.ts). */
+  recordUnstaged(input: unknown, reason: string, actor = "supervisor"): CommandOutcome {
+    return this.commands.recordUnstaged(input, reason, actor);
+  }
+
   // ------------------------------------------------------------ assignment: service/assignment.ts
 
   assignLocal(input: assignment.LocalAssignment, by: string) {
@@ -664,10 +669,6 @@ export class HarnessService {
   }
 
   // ------------------------------------------------------- reports and exports: service/reports.ts
-
-  liveBatch(after: number, limit: number): unknown {
-    return reports.liveBatch(this, this.rigKeys, after, limit);
-  }
 
   liveMessages(after: number, limit: number): unknown {
     return reports.liveMessages(this, this.rigKeys, after, limit);

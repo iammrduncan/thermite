@@ -5,10 +5,9 @@ import { KbAddress, KbItemFile, KbKind, KbLinkRel, KbOutcome, KbSlot } from "../
 /**
  * A search or a read of Thermite's knowledge base, asked of control for an agent's run (goal 175).
  * An agent's tool hands it to the harness, the harness to its supervisor over the channel the
- * supervisor holds open to it (the harness never calls out), and the supervisor asks control: on
+ * supervisor holds open to it (the harness never calls out), and the supervisor asks control on
  * the message bus, as a request on the rig's own subject with its one answer (no stream keeps
- * either), or over HTTP when the rig is not on the bus (core/api/control/rigs.ts). The ask names
- * the run and what to find; control works out what the run may read from the run's scope and its
+ * either). The ask names the run and what to find; control works out what the run may read from the run's scope and its
  * campaign's grants, never from the ask, and answers with ranked excerpts, each with its address,
  * its slot and why it matched, or reads one item whole. A rig's user may publish only on its own
  * subjects (core/link/users.ts), so control knows the rig from the subject.
@@ -50,8 +49,8 @@ export const KB_FILTER_MAX = 50;
 /** How many characters of an item's text one read gives, from its `offset`: the rest, in more reads. */
 export const KB_READ_PAGE = 10_000;
 /**
- * How long a supervisor waits for control's answer, on the bus or over HTTP: then the agent's tool
- * says control did not answer, and the agent goes on.
+ * How long a supervisor waits for control's answer on the bus: then the agent's tool says control
+ * did not answer, and the agent goes on.
  */
 export const KB_ASK_TIMEOUT_MS = 20_000;
 

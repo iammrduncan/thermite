@@ -44,7 +44,7 @@ When the harness restarts during a check, it records the check as finished with 
   | --- | --- | --- | --- |
   | Not run yet | **not run yet** | None | **Run it** |
   | Sent: control queued the command, and the rig has not taken it | **sent** | `Sent to the rig at 03:41 UTC. It starts when the rig takes it.` | **Sent**, off |
-  | Running: the rig took the command (its answer names the run of the check it started), or reported `rig_check_started` | **running** and the time so far, such as `running · 1 m 12 s`, counted on each second | What the check pauses: `Its running runs are paused for it, and resumed after.` for the smoke check, `Nothing is paused for it.` for the others | **Running…**, off |
+  | Running: the rig's report brought the harness's answer to the command, which names the run of the check it started, or `rig_check_started` | **running** and the time so far, such as `running · 1 m 12 s`, counted on each second | What the check pauses: `Its running runs are paused for it, and resumed after.` for the smoke check, `Nothing is paused for it.` for the others | **Running…**, off |
   | Passed or failed | **passed** or **failed**, and how long ago | The summary sentence | **Run it** |
   | Refused: the rig did not run the command | The last result | `Not run: the rig refused it at 03:41 UTC.` and the rig's reason, such as `Not now: …` | **Run it** |
   | Expired: the rig did not take the command before its signature ran out | The last result | `Not run: the rig did not take it before 04:41 UTC.` | **Run it** |

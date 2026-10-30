@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { advisorsFileOf } from "../../../../src/control/rigs/model.ts";
 import { mcpClient } from "../../../helpers/control-stack.ts";
+import { figuresCall } from "../../../helpers/control-store.ts";
 import { stack, TOKENS, text } from "./stack.ts";
 
 /**
@@ -60,11 +61,7 @@ describe("the advisors file, as control reads it from the supervisor", () => {
   test("the supervisor's report keeps it; rig_models and GET /v1/rigs/<rig>/model give it", async () => {
     const s = await stack();
     const report = (advisors: unknown) =>
-      s.api.request("/v1/rigs/rig-a/supervisor", {
-        method: "POST",
-        headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-        body: JSON.stringify({ at: new Date().toISOString(), advisors }),
-      });
+      figuresCall(s.store, "rig-a", { at: new Date().toISOString(), advisors });
     const read = async () => (await (await s.owner("GET")).json()) as Record<string, unknown>;
     // Not reported yet.
     assert.equal((await read()).advisors_file, null);

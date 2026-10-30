@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
-import { controlClient } from "../../../src/common/api/control.ts";
 import { harnessClient } from "../../../src/common/api/harness.ts";
 import { answerKbAsk } from "../../../src/control/kb/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
@@ -14,8 +13,8 @@ import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 
 /**
  * The supervisor's part in the agents' searches and reads (goal 175): it takes them from the
- * harness, asks control on the rig's own subject on the bus, or over HTTP off the bus, and hands
- * the answers back; when control can't be reached, the agent is told so in words.
+ * harness, asks control on the rig's own subject on the bus, and hands the answers back; when
+ * control can't be reached, the agent is told so in words.
  */
 
 const RUN = "js-1";
@@ -53,25 +52,6 @@ describe("the supervisor asks control for the agents", () => {
       (away as { refused: string }).refused,
       /^control can't be reached on the message bus now \(no one answers .*\): the knowledge base can't be searched or read\. Go on without it/,
     );
-    // Over HTTP, control away; and a rig with no control at all.
-    const http = await askControl(
-      {
-        rig: "rig-a",
-        control: controlClient({
-          url: "http://control.example.com",
-          token: "t",
-          rig: "rig-a",
-          fetchImpl: async () => {
-            throw new Error("connect ECONNREFUSED");
-          },
-        }),
-      },
-      "read",
-      { run: RUN, address: "c/r/records/note:1" },
-    );
-    assert.match((http as { refused: string }).refused, /^control can't be reached over HTTP now/);
-    const none = await askControl({ rig: "rig-a" }, "search", { run: RUN, q: "x" });
-    assert.match((none as { refused: string }).refused, /reports to no control/);
   });
 
   test("a worker's kb_search goes from the harness through the supervisor to control, and back with the run's scope", async () => {

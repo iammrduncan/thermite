@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { Registry } from "../../src/harness/agents/registry.ts";
-import { relayOnce } from "../../src/supervisor/relay/index.ts";
 import { ADMIN, controlStack, mcpClient, signIn } from "./control-stack.ts";
 import { makeJudgeEnv } from "./judge-env.ts";
 
@@ -57,13 +56,11 @@ export async function setup(opts: Parameters<typeof makeJudgeEnv>[0]) {
         "proposer",
       )
     ).attempt;
-  // Control, reached through the supervisor's relay as on a rig.
-  const { control, cfg, api } = controlStack({
+  // Control, reached through the supervisor's relay on the bus, as on a rig.
+  const { control, api, relay } = controlStack({
     env,
     tokens: { agent: AGENT_TOKEN, read: READ_TOKEN },
   });
-  // Each relay starts again from the harness's first event.
-  const relay = () => relayOnce(cfg, { cursor: 0 });
   const rest = async (path: string) => (await api("GET", path)).text();
   const { page } = await signIn(control);
   const mcp = async (tool: string, args: Record<string, unknown>, token = ADMIN) => {

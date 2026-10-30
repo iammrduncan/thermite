@@ -1,6 +1,7 @@
 import { fromPublic } from "@nats-io/nkeys";
 import { sha256Hex } from "../canonical.ts";
 import { RIG_ID } from "../ids.ts";
+import { RIG_ASK_KINDS, rigAskSubject } from "./asks.ts";
 import { COMMAND_STREAM, commandConsumerName } from "./commands.ts";
 import { CONFIG_STREAM, configConsumerName, configSubject } from "./config.ts";
 import { EVENT_STREAM } from "./events.ts";
@@ -82,8 +83,9 @@ const anySource = (subject: string) => subject.replace(/\.[^.]+$/, ".*");
  * can't hold has no subject of its own. Nothing on the events stream: control publishes a rig's
  * events there, from its reports. It may put the knowledge base's files on its own subject of the
  * `KB_FILES` stream, and may not read that stream or remove from it (kb-files.ts). It may ask
- * control to search and read the knowledge base on its own subjects (kb.ts), and takes the answers
- * at its inbox.
+ * control to search and read the knowledge base on its own subjects (kb.ts), and ask control what
+ * a rig asks of it (asks.ts: its figures, screens, daily report, past research and a command's
+ * renewal), and takes the answers at its inbox.
  */
 export function rigPermissions(rig: string, runs: readonly string[] = []): Permissions {
   const consumer = `${COMMAND_STREAM}.${commandConsumerName(rig)}`;
@@ -109,6 +111,7 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
         kbFileSubject(rig),
         kbAskSubject("search", rig),
         kbAskSubject("read", rig),
+        ...RIG_ASK_KINDS.map((kind) => rigAskSubject(rig, kind)),
       ],
     },
     subscribe: { allow: [`${rigInboxPrefix(rig)}.>`] },

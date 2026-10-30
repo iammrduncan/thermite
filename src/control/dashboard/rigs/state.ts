@@ -4,7 +4,7 @@ import { BUS_KEY_CHANGE_STEPS, BUS_KEYS_SEEN_STEP } from "../../bus/index.ts";
 import { updateRigImages } from "../../clusters/index.ts";
 import { notSent } from "../../command-progress.ts";
 import { tail, updateScript } from "../../machines/index.ts";
-import { checkRigPlace, controlImages } from "../../rigs/index.ts";
+import { checkRigPlace, controlImages, NO_RIG_BUS } from "../../rigs/index.ts";
 import { rigHref } from "../../ui/urls.ts";
 import { backTo, type Dashboard, wantsJson } from "../context.ts";
 import { rigHelpers, updateFollowUrl } from "./shared.ts";
@@ -51,6 +51,7 @@ export function rigStateRoutes(app: Hono, dash: Dashboard): void {
     if (typeof images === "string") throw new Error(images);
     if (!parts.publicUrl)
       throw new Error("Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL).");
+    if (!parts.rigBus) throw new Error(NO_RIG_BUS);
     store.machines.setRigStatus(rig, "updating");
     const out = await ssh.sshScript(
       {

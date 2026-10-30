@@ -11,8 +11,8 @@ import type { KbSearchAnswer } from "../../src/core/link/kb.ts";
 import { KB_FILES_STREAM, KB_FILES_STREAM_CONFIG } from "../../src/core/link/kb-files.ts";
 import { writeKbItem } from "../../src/harness/kb/index.ts";
 import { putKbFiles } from "../../src/supervisor/kb/index.ts";
-import { controlOnly, RIG_TOKEN } from "../helpers/control-stack.ts";
-import { busOf } from "../helpers/control-store.ts";
+import { controlOnly } from "../helpers/control-stack.ts";
+import { busOf, foldOnBus } from "../helpers/control-store.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 
 /**
@@ -32,8 +32,10 @@ async function setup() {
   const env = makeHarnessEnv("rig-a");
   const out = await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));
   assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-  const { store, control } = controlOnly({ keys: env.keys });
-  const { bus } = busOf(store);
+  const { store } = controlOnly({ keys: env.keys });
+  const { bus, started } = busOf(store);
+  // Control has started on its bus before a rig's report comes.
+  await started;
   // Control makes the files' stream as it starts (followKbFiles).
   await bus.makeStream(KB_FILES_STREAM_CONFIG);
   const files = new KbFiles(mkdtempSync(join(tmpdir(), "thermite-kb-files-")), store);
@@ -47,16 +49,16 @@ async function setup() {
     files,
     write: (w: Omit<Parameters<typeof writeKbItem>[2], "run">) =>
       writeKbItem(env.service.ledger, outbox, { run: RUN, ...w }),
-    /** The rig's next report, posted as its supervisor posts it: the status control answers. */
+    /**
+     * The rig's next report, as control takes it from the reports stream: 200 once taken, 503
+     * while it is to be handed again (the bus away, or its store full), as an answer would say.
+     */
     report: async (from = cursor) => {
       const page = env.service.snapshot(from, 500) as { next: number };
-      const r = await control.request("/v1/rigs/rig-a/ingest", {
-        method: "POST",
-        headers: { authorization: `Bearer ${RIG_TOKEN}`, "content-type": "application/json" },
-        body: JSON.stringify(page),
-      });
-      if (r.status === 200) cursor = page.next;
-      return r.status;
+      const folded = await foldOnBus(store, "rig-a", page);
+      const taken = "folded" in folded || "skipped" in folded;
+      if (taken) cursor = page.next;
+      return taken ? 200 : "later" in folded ? 503 : 409;
     },
     /** The supervisor's round of puts. */
     put: () => putKbFiles({ rig: "rig-a", outboxDir: outbox, home, bus }),

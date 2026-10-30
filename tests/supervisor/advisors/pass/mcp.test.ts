@@ -14,7 +14,7 @@ import {
   emptyAdviseState,
 } from "../../../../src/supervisor/advisors/pass/index.ts";
 import { serveAdvisorTools } from "../../../../src/supervisor/advisors/tools/mcp.ts";
-import { syncMcpServers } from "../../../../src/supervisor/mcp-sync.ts";
+import { handMcpServers } from "../../../../src/supervisor/mcp-sync.ts";
 import { assigned } from "../../../helpers/assignments.ts";
 import { controlStack, SUPERVISOR_TOKEN } from "../../../helpers/control-stack.ts";
 import { startFakeMcp } from "../../../helpers/fake-mcp.ts";
@@ -33,7 +33,7 @@ async function world(t: TestContext) {
   const fake = await startFakeMcp({ kind: "bearer", token: KEY.slice(7) });
   t.after(() => fake.close());
   const secrets = SecretBox.ephemeral();
-  const { env, store, harness, fetchImpl } = controlStack({
+  const { env, store, harness, fetchImpl, rigConfig } = controlStack({
     env: makeJudgeEnv({ kitMcpServers: USES, assign: { mcp_servers: USES } }),
     tokens: { rigs: { "rig-a": "rig-token-aaaaaa" } },
     options: (store) => {
@@ -45,21 +45,18 @@ async function world(t: TestContext) {
   });
   assigned(store, "rig-a", RUN, "js", { mcp_servers: USES });
   await env.service.applyCommand(env.assign);
-  return { fake, env, harness, fetchImpl };
+  return { fake, env, harness, fetchImpl, rigConfig };
 }
 
 describe("the supervisor and the MCP servers control gives the rig", () => {
   test("the harness gets its workers' share; the advisors' stays with the supervisor", async (t) => {
-    const { harness, fetchImpl } = await world(t);
-    const sync = () =>
-      syncMcpServers({
-        rig: "rig-a",
-        controlUrl: "http://control",
-        controlToken: "rig-token-aaaaaa",
-        harnessUrl: "http://harness",
-        harnessToken: SUPERVISOR_TOKEN,
-        fetchImpl,
-      });
+    const { harness, fetchImpl, rigConfig } = await world(t);
+    // What the rig's config on the bus gives, handed to the harness.
+    const sync = async () =>
+      handMcpServers(
+        { harnessUrl: "http://harness", harnessToken: SUPERVISOR_TOKEN, fetchImpl },
+        (await rigConfig("mcp-servers")) as never,
+      );
     const r = await sync();
     assert.equal(r.handed, "set");
     assert.deepEqual(

@@ -14,20 +14,10 @@ import { neededHarness } from "./model.ts";
 
 /**
  * The model routes a rig's agents get from control, each with its provider's key or a
- * subscription's token: its workers' and its planner's, and its advisors' by role. Its supervisor
- * fetches them over HTTP (api/model-routes.ts), or control writes them to the rig's config on the
- * message bus (bus/config.ts). The key is opened only here, and nothing caches or logs it.
+ * subscription's token: its workers' and its planner's, and its advisors' by role. Control writes
+ * them to the rig's config on the message bus (bus/config.ts), sealed to the rig. The key is
+ * opened only here, and nothing caches or logs it.
  */
-
-/**
- * Why control gives a rig its config over HTTP no more, in words, or undefined: a rig on the
- * message bus (its seal key registered) gets its model routes, MCP servers and advisors' routes
- * only in its config there, sealed to its key. Its supervisor never asks for them over HTTP then.
- */
-export function configOnBusRefusal(store: ControlParts["store"], rig: string): string | undefined {
-  if (store.busKeys.rigSealKey(rig) === undefined) return undefined;
-  return `${rig} is on the message bus: control gives it its model routes, MCP servers and advisors' routes only in its config there, sealed to its key, never over HTTP. Its supervisor reads them from the bus (THERMITE_NATS_URL).`;
-}
 
 /** What a route needs of control: its store, the box that opens keys, and ChatGPT's logins. */
 export type RouteParts = Pick<ControlParts, "store" | "secrets" | "chatgpt">;

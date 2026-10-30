@@ -1,4 +1,5 @@
 import type { BuildInfo } from "../../../core/version.ts";
+import type { OffBus } from "../../bus/index.ts";
 import { rigVersionWords } from "../../rigs/index.ts";
 import type { RunpodRigView } from "../../runpod/index.ts";
 import { type RigView, runCampaign } from "../../views/index.ts";
@@ -32,6 +33,8 @@ export interface RigsListRow {
   pod?: RunpodRigView | undefined;
   /** A key from the rig waits for the owner. */
   keyPending: boolean;
+  /** Why it is off the message bus, and so broken; undefined while nothing says so. */
+  offBus?: OffBus | undefined;
 }
 
 const RIG_FILTERS = ["all", "live", "update", "refused", "lost", "runpod", "stopped"] as const;
@@ -42,14 +45,15 @@ const FILTER_WORDS: Record<RigFilter, string> = {
   live: "Live",
   update: "Needs update",
   refused: "Refused",
-  lost: "Stale or offline",
+  lost: "Stale, offline or broken",
   runpod: "On RunPod",
   stopped: "Stopped",
 };
 
-type StateKey = "live" | "stale" | "offline" | "refused" | "stopped" | "key" | "ready";
+type StateKey = "live" | "stale" | "offline" | "broken" | "refused" | "stopped" | "key" | "ready";
 const STATES: Record<StateKey, [string, string]> = {
   live: ["Live", "ok"],
+  broken: ["Broken: off the bus", "bad"],
   stale: ["Stale", "warn"],
   offline: ["Offline", "bad"],
   refused: ["Refused", "bad"],
@@ -68,10 +72,11 @@ const reported = (u: RigView | undefined) => Boolean(u && Date.parse(u.last_seen
 /** A pod control follows that is stopped at RunPod: not stale nor offline, just stopped. */
 const stoppedPod = (p: RunpodRigView | undefined) => Boolean(p?.active && p.status === "EXITED");
 
-/** The row's state: refused first, then a stopped pod, then whether it reports. */
+/** The row's state: refused first, then a stopped pod, off the bus, then whether it reports. */
 function rowState(r: RigsListRow): StateKey {
   if (r.u?.version.state === "refused") return "refused";
   if (stoppedPod(r.pod)) return "stopped";
+  if (r.offBus) return "broken";
   if (!r.u) return "ready";
   if (r.keyPending) return "key";
   return r.u.state === "reporting" ? "live" : r.u.state;
@@ -88,7 +93,12 @@ function rowFilters(r: RigsListRow): RigFilter[] {
   if (st === "live") out.push("live");
   if (needsUpdate(r)) out.push("update");
   if (st === "refused") out.push("refused");
-  if (st === "stale" || st === "offline" || (st === "key" && r.u?.state !== "reporting"))
+  if (
+    st === "stale" ||
+    st === "offline" ||
+    st === "broken" ||
+    (st === "key" && r.u?.state !== "reporting")
+  )
     out.push("lost");
   if (r.pod) out.push("runpod");
   if (st === "stopped") out.push("stopped");
@@ -101,7 +111,7 @@ function rowHref(r: RigsListRow): string {
   const at =
     st === "refused" || r.u?.version.state === "behind"
       ? "#version"
-      : st === "stale" || st === "offline"
+      : st === "stale" || st === "offline" || st === "broken"
         ? "#reporting"
         : st === "stopped"
           ? "#pod"
@@ -254,6 +264,7 @@ export function rigsSummary(rows: RigsListRow[]): string {
     update ? `${update} need${update === 1 ? "s" : ""} an update` : "",
     n("stale") ? `${n("stale")} stale` : "",
     n("offline") ? `${n("offline")} offline` : "",
+    n("broken") ? `${n("broken")} broken, off the bus` : "",
     n("stopped") ? `${n("stopped")} stopped` : "",
     `${runs} run${runs === 1 ? "" : "s"} at work`,
   ]

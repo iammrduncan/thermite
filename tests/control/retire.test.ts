@@ -42,7 +42,7 @@ describe("retiring a rig that is gone", () => {
     assert.match(rigs, /<h2>Retired<\/h2><span class="n">1<\/span>/);
     assert.match(await page("/ui/rigs/rig-a"), /Retired .* ago by owner:ui/);
     // Its token, which control made when it enrolled the rig, has ended.
-    const refused = await api.request("/v1/rigs/rig-a/commands/pending", {
+    const refused = await api.request("/v1/rigs/rig-a/git/kits/k.git/info/refs", {
       headers: { authorization: `Bearer ${RIG_TOKEN}` },
     });
     assert.equal(refused.status, 401);
@@ -51,7 +51,7 @@ describe("retiring a rig that is gone", () => {
     assert.match(await post("/ui/rigs/rig-a/bring-back", {}), /rig-a is back/);
     assert.match(await page("/ui"), /rig-a stopped reporting/);
     // Back in the lists, its old token stays ended: it is enrolled again for a new one.
-    const back = await api.request("/v1/rigs/rig-a/commands/pending", {
+    const back = await api.request("/v1/rigs/rig-a/git/kits/k.git/info/refs", {
       headers: { authorization: `Bearer ${RIG_TOKEN}` },
     });
     assert.equal(back.status, 401);

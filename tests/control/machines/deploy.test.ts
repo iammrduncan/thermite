@@ -12,7 +12,14 @@ import {
   updateScript,
 } from "../../../src/control/machines/deploy.ts";
 
+/** The bus as the rig reaches it, with control's authority: every rig control sets up gets it. */
+const BUS = {
+  url: "nats://control.example.com:4222",
+  ca: "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----\n",
+};
+
 const plan: RigPlan = {
+  bus: BUS,
   rig: "gpu-box-1-a",
   controlUrl: "https://control.example.com/",
   images: {
@@ -154,12 +161,8 @@ describe("a rig deployed on a machine", () => {
     assert.throws(() => statSync(dir));
   });
 
-  test("with the message bus, its supervisor gets the bus's address and control's authority, at setup and at each update", () => {
-    const bus = {
-      url: "nats://control.example.com:4222",
-      ca: "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----\n",
-    };
-    const withBus = { ...plan, bus };
+  test("its supervisor gets the message bus's address and control's authority, at setup and at each update", () => {
+    const withBus = plan;
     const s = rigUnits(withBus)["thermite-gpu-box-1-a-supervisor.container"] ?? "";
     assert.match(s, /^Environment=THERMITE_NATS_URL=nats:\/\/control\.example\.com:4222$/m);
     assert.match(s, /^Environment=THERMITE_NATS_CA_FILE=\/keys\/bus-ca\.pem$/m);
@@ -167,10 +170,6 @@ describe("a rig deployed on a machine", () => {
     assert.match(s, /^Volume=%h\/\.local\/share\/thermite\/rigs\/gpu-box-1-a\/bus:\/keys:ro,Z$/m);
     const h = rigUnits(withBus)["thermite-gpu-box-1-a-harness.container"] ?? "";
     assert.ok(!/NATS|\/bus:/.test(h), "the harness never reaches the bus");
-    // Without the bus: none of it.
-    assert.ok(
-      !/NATS|\/bus:/.test(rigUnits(plan)["thermite-gpu-box-1-a-supervisor.container"] ?? ""),
-    );
 
     const home = mkdtempSync(join(tmpdir(), "thermite-deploy-bus-"));
     const bin = join(home, "bin");
@@ -184,21 +183,16 @@ describe("a rig deployed on a machine", () => {
     const dir = join(home, ".local/share/thermite/rigs/gpu-box-1-a");
     const units = join(home, ".config/containers/systemd");
     execFileSync("sh", ["-s"], { input: deployScript(withBus, secrets), env });
-    assert.equal(readFileSync(join(dir, "bus", "bus-ca.pem"), "utf8"), bus.ca);
+    assert.equal(readFileSync(join(dir, "bus", "bus-ca.pem"), "utf8"), BUS.ca);
     assert.equal(statSync(join(dir, "bus")).mode & 0o777, 0o755);
     assert.equal(statSync(join(dir, "bus", "bus-ca.pem")).mode & 0o777, 0o644);
     // An update writes control's authority and its address again, as control has them now.
-    const later = { url: "nats://bus.example.com:14222", ca: bus.ca.replace("ca", "new-ca") };
+    const later = { url: "nats://bus.example.com:14222", ca: BUS.ca.replace("ca", "new-ca") };
     execFileSync("sh", ["-s"], { input: updateScript({ ...withBus, bus: later }), env });
     assert.equal(readFileSync(join(dir, "bus", "bus-ca.pem"), "utf8"), later.ca);
     assert.match(
       readFileSync(join(units, "thermite-gpu-box-1-a-supervisor.container"), "utf8"),
       /^Environment=THERMITE_NATS_URL=nats:\/\/bus\.example\.com:14222$/m,
-    );
-    // An update of a rig set up before the bus gives it the bus; one with the bus off takes it out.
-    execFileSync("sh", ["-s"], { input: updateScript(plan), env });
-    assert.ok(
-      !/NATS/.test(readFileSync(join(units, "thermite-gpu-box-1-a-supervisor.container"), "utf8")),
     );
   });
 });

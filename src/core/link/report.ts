@@ -6,8 +6,8 @@ import { RIG_ID } from "../ids.ts";
 /**
  * The link's first contract (goal 168, step 0): a rig's reports on the message bus. A message is
  * one report exactly as the rig's harness made and signed it, a page of its ledger's events with
- * the rig's summary. The supervisor publishes it and cannot change it; control reads it with the
- * same checks as a report posted to `POST /v1/rigs/<rig>/ingest`.
+ * the rig's summary, the only way a rig reports. The supervisor publishes it and cannot change it;
+ * control reads it with its checks (control/ingest.ts).
  */
 
 /** The stream that holds each rig's reports until control has taken or refused them. */
@@ -115,8 +115,8 @@ export const REPORT_CONSUMER_CONFIG = {
 } satisfies Partial<ConsumerConfig> & { durable_name: string };
 
 /**
- * Control's place in a rig's events, in its answer to the supervisor's figures
- * (`POST /v1/rigs/<rig>/supervisor`): the ledger it holds the rig's events of, null before the
+ * Control's place in a rig's events, in its answer to the supervisor's figures (asks.ts's
+ * `figures`) and to the registration of its keys: the ledger it holds the rig's events of, null before the
  * first report it took, and the cursor after the last event it holds. No answer to a report on the
  * bus comes back, so a supervisor ahead of this in the same ledger goes back to it.
  */

@@ -77,7 +77,8 @@ export const ENROLL = {
     control_fingerprint: z.string(),
     /**
      * The message bus as the rig reaches it, with the certificate of control's authority it trusts
-     * the bus's server through; null: control runs without one for rigs, and the rig keeps to HTTP.
+     * the bus's server through; null: control has no address for rigs on its bus, and `thermite rig
+     * add` writes no files, since a rig works only on the bus.
      */
     bus: z.object({ url: z.string(), ca: z.string() }).nullable().optional(),
   }),

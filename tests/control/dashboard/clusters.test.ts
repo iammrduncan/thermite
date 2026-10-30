@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { mcpClient } from "../../helpers/control-stack.ts";
-import { ingestReport } from "../../helpers/control-store.ts";
+import { answerCommand, ingestReport } from "../../helpers/control-store.ts";
 import { control, fakeCluster, KUBECONFIG } from "../../helpers/fake-cluster.ts";
 
 describe("clusters in Providers and Add a rig", () => {
@@ -513,7 +513,7 @@ describe("clusters in Providers and Add a rig", () => {
     // Taken; one report after it without the drain may have been read before it took effect.
     const first = drains()[0];
     assert.ok(first);
-    s.store.commands.ack("cpu-1", first.id, "delivered", {});
+    answerCommand(s.store, "cpu-1", first.id, "delivered", {});
     await new Promise((r) => setTimeout(r, 5));
     await report({ trials: 1, judge_jobs: 0, draining: null });
     await new Promise((r) => setTimeout(r, 100));

@@ -146,8 +146,8 @@ export class IssuedCommands extends StorePart {
   }
 
   /**
-   * A harness's own record of a command it applied, from the rig's report: authoritative (it is
-   * signed with the rig's key); the supervisor's acknowledgement is only the fast path.
+   * A harness's own record of a command it applied, from the rig's report: the only outcome
+   * control takes (signed with the rig's key).
    */
   confirmApplied(
     rig: string,
@@ -161,6 +161,19 @@ export class IssuedCommands extends StorePart {
         "update command set status = ?, outcome = ?, acked_at = coalesce(acked_at, ?) where id = ? and rig = ?",
       )
       .run(status, outcome, at, id, rig);
+  }
+
+  /**
+   * A command the rig's harness refused (its command_rejected event names it): its signature, its
+   * rig, its time or its payload. Only a command still pending: one the harness recorded an
+   * outcome for keeps it.
+   */
+  confirmRejected(rig: string, id: string, outcome: string, at: string): void {
+    this.db
+      .prepare(
+        "update command set status = 'rejected', outcome = ?, acked_at = ? where id = ? and rig = ? and status = 'pending'",
+      )
+      .run(outcome, at, id, rig);
   }
 
   /** A pending command signed again with a later expiry, while its sources still stage. */
@@ -181,28 +194,12 @@ export class IssuedCommands extends StorePart {
     return Number(r.changes) > 0;
   }
 
-  ack(
-    rig: string,
-    id: string,
-    status: "delivered" | "rejected" | "failed",
-    outcome: unknown,
-  ): boolean {
-    const r = this.db
-      .prepare(
-        "update command set status = ?, outcome = ?, acked_at = ? where id = ? and rig = ? and status = 'pending'",
-      )
-      .run(status, canonicalJson(outcome ?? {}), new Date().toISOString(), id, rig);
-    if (Number(r.changes) > 0)
-      this.store.auditLog.add(`rig:${rig}`, "command_acked", { id, status });
-    return Number(r.changes) > 0;
-  }
-
   /**
-   * Whether a live assignment of the rig names this Git access in an import: the only rigs
-   * control hands it to, and only while it lasts. Live: pending or delivered, and its run not
-   * among the rig's `closed` runs.
+   * The Git accesses the rig's live assignments name in an import: the only ones control gives the
+   * rig, and only while they last. Live: pending or delivered, and its run not among the rig's
+   * `closed` runs. Sorted, each once.
    */
-  rigUsesGitAccess(rig: string, name: string, closed: ReadonlySet<string>): boolean {
+  gitAccessesOf(rig: string, closed: ReadonlySet<string>): string[] {
     const rows = (
       this.db
         .prepare(
@@ -211,18 +208,20 @@ export class IssuedCommands extends StorePart {
         )
         .all(rig) as { run: string | null; signed: string }[]
     ).filter((r) => r.run === null || !closed.has(r.run));
-    return rows.some((r) => {
+    const names = new Set<string>();
+    for (const r of rows) {
       try {
         const imports = (
           JSON.parse(r.signed) as {
             envelope?: { payload?: { imports?: { source?: { access?: string } }[] } };
           }
         ).envelope?.payload?.imports;
-        return (imports ?? []).some((i) => i.source?.access === name);
+        for (const i of imports ?? []) if (i.source?.access) names.add(i.source.access);
       } catch {
-        return false;
+        // A row control signed is JSON: one that is not names no access.
       }
-    });
+    }
+    return [...names].sort();
   }
 
   /**

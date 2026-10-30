@@ -85,7 +85,7 @@ You can add and remove collections at any time, also while runs are at work. Ano
 
 ### What the agents then see
 
-Every few minutes, each rig's [supervisor](../../reference/glossary.md) asks control for the new and changed items of the collections that each of its running runs' campaigns may read: the campaign's own collection, without the run's own items, and each collection granted to it. Control answers only for a run it assigned to that rig, with the collections of the campaign it assigned. The [harness](../../reference/glossary.md) writes them into the run's research folder, under `knowledge/`:
+Every few minutes, each rig's [supervisor](../../reference/glossary.md) asks control, on the message bus, for the new and changed items of the collections that each of its running runs' campaigns may read: the campaign's own collection, without the run's own items, and each collection granted to it. Control answers only for a run it assigned to that rig, with the collections of the campaign it assigned. The [harness](../../reference/glossary.md) writes them into the run's research folder, under `knowledge/`:
 
 - one Markdown file for each item, which starts with where it came from: campaign, rig, run, kind, who wrote it and when;
 - `knowledge/README.md`, which says what the collection holds, collection by collection.

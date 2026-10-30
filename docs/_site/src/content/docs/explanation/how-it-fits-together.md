@@ -75,11 +75,11 @@ The judge, the scheduler and the exports run as separate loops, so a slow model 
 
 The supervisor connects the rig to the outside. It runs six loops side by side, so a slow one never holds up the others:
 
-- **Reports:** it sends the harness's new events to control, pushes the rig's results to git and uploads each new champion's patch to control, once a minute by default.
-- **Commands:** it fetches control's pending commands, fetches any project, kit or champion they name, and hands them to the harness. It asks every 5 seconds by default, so a pause or a message lands quickly. With the [message bus](how-the-parts-talk.md#commands-over-the-message-bus), each command comes as soon as control issues it.
-- **Live view:** every few seconds, it sends the harness's newest live lines to control, with lines of its own, for **Live** on the dashboard; with the message bus, it publishes them there instead ([Live lines over the message bus](how-the-parts-talk.md#live-lines-over-the-message-bus)). Control pushes each new line to the pages that show it.
-- **Model route and MCP servers:** it hands the harness the agents' model and key chosen on control, by the owner or an operator's agent. On the same beat, it hands the harness the [MCP servers](../how-to/campaigns/give-agents-mcp-tools.md) that its runs' kits give the workers and the planner, and keeps the advisors' for itself. With the message bus, they come in the rig's config there as control changes them, sealed to the rig ([Config over the message bus](how-the-parts-talk.md#config-over-the-message-bus)).
-- **Past research:** every three minutes by default, it fetches from control the new items of the collections that each running run's campaign may read, and hands them to the harness, which writes them into the run's `knowledge/` folder.
+- **Reports:** it publishes the harness's new events on control's [message bus](how-the-parts-talk.md#reports-over-the-message-bus), pushes the rig's results to git and uploads each new champion's patch to control, once a minute by default.
+- **Commands:** it takes each of control's commands from the [message bus](how-the-parts-talk.md#commands-over-the-message-bus) as soon as control issues it, fetches any project, kit or champion it names, and hands it to the harness, so a pause or a message lands at once.
+- **Live view:** every few seconds, it publishes the harness's newest live lines on the bus, with lines of its own, for **Live** on the dashboard ([Live lines over the message bus](how-the-parts-talk.md#live-lines-over-the-message-bus)). Control pushes each new line to the pages that show it.
+- **Model route and MCP servers:** it hands the harness the agents' model and key chosen on control, by the owner or an operator's agent, and the [MCP servers](../how-to/campaigns/give-agents-mcp-tools.md) that its runs' kits give the workers and the planner, and keeps the advisors' for itself. They come in the rig's config on the bus as control changes them, sealed to the rig ([Config over the message bus](how-the-parts-talk.md#config-over-the-message-bus)).
+- **Past research:** every three minutes by default, it asks control on the bus for the new items of the collections that each running run's campaign may read, and hands them to the harness, which writes them into the run's `knowledge/` folder.
 - **Advisors:** it runs **the advisors**: the teachers (one or two, and with two a merged by model that merges their advice), the auditor and the review panel, but only those the rig is given, in an advisors file or as models from control (the rig's **Edit rig** page, MCP or the REST API). The teachers set directives for the planner and add experiments to the run's queue; the auditor can add a check to it. Each advisor may also keep field notes, which the supervisor passes to the harness. The teachers can search a knowledge base in the advisors file, and the advisors get the tools of the MCP servers that the run's kit gives them, which the supervisor calls for them. Each step of an advisor round is a line in the run's Live view: what each teacher suggested, the directives set and why, the experiments added, each audit and each review. A message from the owner to the teachers starts their round at once. [Supervision](supervision.md) explains them.
 
 The supervisor does all of the rig's git work. It holds no signing key: it carries commands in and reports out, but it cannot write either one. [Trust between control and rigs](trust.md) explains how that is checked, and [the settings reference](../reference/settings.md#how-often-it-talks-to-control) lists each loop's interval.
@@ -94,21 +94,19 @@ Each kit names the one kind of target it measures on, and a rig accepts only a k
 
 ## How they talk
 
-**Everything starts from the rig.** The supervisor dials out to control: it sends reports and asks for commands. Control never opens a connection to a rig's containers, and the supervisor listens on no port. A rig only has to be able to reach control, at its address for rigs and at its message bus's port beside it, so it can sit behind a home router or a firewall that lets connections out but not in.
+**Everything starts from the rig.** The supervisor dials out to control's message bus, where it sends its reports and takes its commands, and calls control's address only to register its keys on the bus and to send large files. Control never opens a connection to a rig's containers, and the supervisor listens on no port. A rig only has to be able to reach control, at its address for rigs and at its message bus's port beside it, so it can sit behind a home router or a firewall that lets connections out but not in. A rig that can't reach the bus doesn't work, and control shows it broken.
 
 ```mermaid
 sequenceDiagram
   participant C as Control
   participant S as Supervisor
   participant H as Harness
-  S->>C: anything for me?
-  C-->>S: a command, signed by control
+  C-->>S: a command, signed by control, on the message bus
   S->>S: fetch the project or kit it names
   S->>H: the command, unchanged
   H->>H: check the signature, the rig, the expiry and who issued it
-  H-->>S: the outcome
-  S->>C: the outcome
-  S->>C: later, new events, signed by the harness
+  H->>H: record the outcome in its ledger
+  S->>C: new events with the outcome, signed by the harness, on the message bus
 ```
 
 - **Commands go in signed.** The harness checks each one before it acts on it. A command that brings content, such as a project, a kit or another rig's champion, names that content by its git commit or its hash. The supervisor fetches it, and the harness accepts it only if it matches.

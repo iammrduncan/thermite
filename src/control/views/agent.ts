@@ -61,6 +61,8 @@ export function readerRun(r: RunView): RunView {
  * other event is as the rig reported it.
  */
 export function agentEvent(e: StoredEvent): StoredEvent {
+  // An event control can't read has an empty body already: nothing to say of it.
+  if (e.unreadable !== undefined) return e;
   if (e.kind === "agent_prompt") return withoutPromptText(e);
   if (e.kind === "held_out_checked") {
     const b = e.body;

@@ -1,9 +1,7 @@
-import type { ControlClient } from "../../common/api/control.ts";
 import type { HarnessClient } from "../../common/api/harness.ts";
 import type { Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
-import { KB_READ_ASK, KB_SEARCH_ASK } from "../../core/api/control/rigs.ts";
 import { KB_ANSWERS, KB_ASKS } from "../../core/api/harness/supervisor.ts";
 import {
   KB_ASK_TIMEOUT_MS,
@@ -18,10 +16,9 @@ import {
 /**
  * The supervisor's part in the agents' searches and reads of the knowledge base (goal 175): it
  * holds a call open to its harness for the asks that wait there (the harness never calls out),
- * asks control for each, on the message bus as a request on the rig's own subject, or over HTTP
- * when the rig is not on the bus, and hands each answer back. The advisors, whose calls the
- * supervisor runs, ask control the same way (askControl). When control can't be reached, the
- * answer says so in words, and the agent goes on.
+ * asks control for each on the message bus, as a request on the rig's own subject, and hands each
+ * answer back. The advisors, whose calls the supervisor runs, ask control the same way
+ * (askControl). When control can't be reached, the answer says so in words, and the agent goes on.
  */
 
 /** How long the supervisor holds its call for the harness's asks open, in seconds. */
@@ -29,11 +26,10 @@ export const KB_ASKS_WAIT_S = 25;
 /** How long it waits after a failed call to its harness before it calls again. */
 const AGAIN_MS = 5_000;
 
-/** Where the supervisor asks control: the bus when the rig is on it, else control's HTTP API. */
+/** Where the supervisor asks control: its rig's subjects on the bus. */
 export interface KbControl {
   rig: string;
-  bus?: Pick<Bus, "request"> | undefined;
-  control?: ControlClient | undefined;
+  bus: Pick<Bus, "request">;
 }
 
 /** Control could not be reached: the words the agent gets. */
@@ -47,42 +43,21 @@ export async function askControl(
   kind: KbAskKind,
   ask: KbSearchAsk | KbReadAsk,
 ): Promise<KbAskAnswer> {
-  if (c.bus) {
-    try {
-      const data = await c.bus.request(
-        kbAskSubject(kind, c.rig),
-        JSON.stringify(ask),
-        KB_ASK_TIMEOUT_MS,
-      );
-      return KbAskAnswerSchema.parse(JSON.parse(Buffer.from(data).toString("utf8")));
-    } catch (err) {
-      log(
-        "supervisor",
-        "a knowledge base ask got no answer on the bus",
-        { run: ask.run, kind, error: errorText(err) },
-        "warn",
-      );
-      return away("on the message bus", err);
-    }
-  }
-  if (!c.control)
-    return { refused: "this rig reports to no control: it has no knowledge base to search" };
   try {
-    const route = kind === "search" ? KB_SEARCH_ASK : KB_READ_ASK;
-    const r = await c.control.call(route, {
-      params: { rig: c.rig },
-      body: ask,
-      timeoutMs: KB_ASK_TIMEOUT_MS,
-    });
-    return KbAskAnswerSchema.parse(r);
+    const data = await c.bus.request(
+      kbAskSubject(kind, c.rig),
+      JSON.stringify(ask),
+      KB_ASK_TIMEOUT_MS,
+    );
+    return KbAskAnswerSchema.parse(JSON.parse(Buffer.from(data).toString("utf8")));
   } catch (err) {
     log(
       "supervisor",
-      "a knowledge base ask got no answer over HTTP",
+      "a knowledge base ask got no answer on the bus",
       { run: ask.run, kind, error: errorText(err) },
       "warn",
     );
-    return away("over HTTP", err);
+    return away("on the message bus", err);
   }
 }
 

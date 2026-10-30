@@ -157,18 +157,17 @@ describe("full reset", () => {
     const id = store.fullResets.create("rig-a", "owner:test");
     await step();
     assert.equal(state(), "quiescing");
-    await relay(); // the pause reaches the harness; the rig reports idle
-    assert.equal(env.ledger.runs.get("js-1")?.status, "paused");
+    // Before the rig takes the pause: its queued job counts until control sees the run paused.
     await step();
     assert.equal(state(), "quiescing", "its queued job counts until control sees the run paused");
-    await relay(); // the harness's report of the pause
+    await relay(); // the pause reaches the harness, and its report of it reaches control
+    assert.equal(env.ledger.runs.get("js-1")?.status, "paused");
     await step();
     assert.equal(state(), "exporting");
     assert.equal(env.ledger.jobs.get(queued)?.state, "queued");
-    await relay(); // the full export (the supervisor's acknowledgement)
     await step();
     assert.equal(state(), "exporting", "waits for the harness's own record of the export");
-    await relay(); // the harness's signed report carries it
+    await relay(); // the full export, and the harness's signed report that carries it
     await step();
     assert.equal(state(), "verifying");
     const name = String(store.fullResets.open("rig-a")?.export_name);
@@ -183,9 +182,8 @@ describe("full reset", () => {
     confirmReset(store, id, "owner:test");
     await step();
     assert.equal(state(), "wiping");
-    await relay();
+    await relay(); // the wipe, and the harness's record of it
     assert.ok(existsSync(join(env.paths.stateDir, WIPE_MARKER)));
-    await relay(); // the harness's record of the wipe
     await step();
     assert.equal(state(), "done");
     assert.deepEqual(restarts, ["rig-a:harness,supervisor"]);

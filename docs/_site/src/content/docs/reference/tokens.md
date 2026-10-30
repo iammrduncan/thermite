@@ -35,7 +35,7 @@ A rig's settings change over MCP with `set_rig_settings`, through **Edit rig**'s
 
 | Token | Where it is kept | What it may do |
 | --- | --- | --- |
-| **Rig token** | Its SHA-256 in control's store: control makes it when it enrolls the rig, with **Add a rig**, a join command, `thermite rig add` or, for the local compose stack's `local-1` and `local-2`, the stack's enroll step at each `up` | The rig-facing routes for its own rig only: send reports, fetch commands, fetch its model route, its kits and its Git access, its advisors' models, the [MCP servers](rest-api.md#mcp-servers) the runs control assigned it name, with their sign-in, and the past research of the runs control assigned it. A retired rig is refused whatever token it holds |
+| **Rig token** | Its SHA-256 in control's store: control makes it when it enrolls the rig, with **Add a rig**, a join command, `thermite rig add` or, for the local compose stack's `local-1` and `local-2`, the stack's enroll step at each `up` | The [rig-facing routes](rest-api.md#routes-used-by-rigs) for its own rig only: register its keys on the message bus, send its champions' patches and exports, and fetch its kits. Everything else, its reports, commands, config and past research among it, goes on the message bus, where the rig signs in with its own key. A retired rig is refused whatever token it holds |
 | **Join token** | Its SHA-256 in control's store | Fetch one rig's join script or manifest, once, within one hour |
 
 ## Inside a rig

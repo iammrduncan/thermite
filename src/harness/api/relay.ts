@@ -1,9 +1,9 @@
 import type { Context, Hono } from "hono";
 import {
   COMMAND_CHECK,
+  COMMAND_UNSTAGED,
   COMMANDS,
   EXPORTS_DONE,
-  LIVE,
   LIVE_MESSAGES,
   LIVE_PAGE_DEFAULT,
   SCREENS,
@@ -43,6 +43,13 @@ export function reportRoutes(app: Hono, { service, supervisor }: ApiContext): vo
   app.post(COMMAND_CHECK.path, supervisor, limitOf(COMMAND_CHECK), async (c) =>
     c.json(service.checkCommand(await c.req.json())),
   );
+  // A command whose content the supervisor could not stage: recorded as not applied, with why.
+  app.post(COMMAND_UNSTAGED.path, supervisor, limitOf(COMMAND_UNSTAGED), async (c) => {
+    const { command, reason } = COMMAND_UNSTAGED.body.parse(await c.req.json());
+    const outcome = service.recordUnstaged(command, reason);
+    if (outcome.status === "rejected") return c.json(outcome, 403);
+    return c.json(outcome);
+  });
 }
 
 /** The live log, and the screens of the trials someone watches. */
@@ -54,13 +61,7 @@ export function liveRoutes(app: Hono, { service, supervisor }: ApiContext): void
     const good = Number.isInteger(after) && after >= 0 && Number.isInteger(limit) && limit >= 1;
     return good ? { after, limit } : undefined;
   };
-  // The live log, signed, for the supervisor to relay to control.
-  app.get(LIVE.path, supervisor, (c) => {
-    const p = pageOf(c);
-    if (!p) return c.json({ error: "bad after or limit" }, 400);
-    return c.json(service.liveBatch(p.after, p.limit) as object);
-  });
-  // The same, as the message bus's messages, for the supervisor to publish.
+  // The live log, signed, as the message bus's messages, for the supervisor to publish.
   app.get(LIVE_MESSAGES.path, supervisor, (c) => {
     const p = pageOf(c);
     if (!p) return c.json({ error: "bad after or limit" }, 400);

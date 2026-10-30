@@ -1,7 +1,7 @@
 import { inBackground } from "../background.ts";
 import { issueCommand } from "../issue/index.ts";
 import type { ControlParts } from "../parts.ts";
-import { controlAddress, controlImages } from "../rigs/index.ts";
+import { controlAddress, controlImages, NO_RIG_BUS } from "../rigs/index.ts";
 import { deploymentEnv } from "./deployment.ts";
 import { kubeError } from "./kubectl.ts";
 import { asList, clusterNames, clusterRigDeployments } from "./manifests.ts";
@@ -43,6 +43,7 @@ export async function updateRigImages(
       error:
         "Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.",
     };
+  if (!parts.rigBus) return { error: NO_RIG_BUS };
   const images = controlImages(parts, r.spec.gpus);
   if (typeof images === "string") return { error: images };
   const old = r.spec.images;

@@ -34,8 +34,9 @@ const item = (seq: number, over: Partial<KbItemWire> = {}): KbItemWire => ({
 });
 
 /**
- * A fake control that serves the items of the collections a run may read after a cursor, `page` at a
- * time (and records each ask), and the real harness API behind the supervisor's token.
+ * A fake control on the bus that serves the items of the collections a run may read after a
+ * cursor, `page` at a time (and records each ask), and the real harness API behind the
+ * supervisor's token. `answer` stands in for control's answer to an ask when a test sets it.
  */
 async function setup(items: KbItemWire[], page = 2) {
   const env = makeHarnessEnv();
@@ -45,32 +46,36 @@ async function setup(items: KbItemWire[], page = 2) {
   const asked: string[] = [];
   const collections = ["smoke-matmul", "kernels"];
   let harnessDown = false;
+  let answer: ((ask: { run: string; after: number }) => unknown) | undefined;
+  const serve = (ask: { run: string; after: number }) => {
+    const { after } = ask;
+    const next = items
+      .filter((i) => i.seq > after && collections.includes(i.campaign))
+      .slice(0, page);
+    return {
+      campaign: "smoke-matmul",
+      collections,
+      items: next,
+      next: next.at(-1)?.seq ?? after,
+      more: items.some(
+        (i) => i.seq > (next.at(-1)?.seq ?? after) && collections.includes(i.campaign),
+      ),
+    };
+  };
+  const bus = {
+    request: async (subject: string, data: string | Uint8Array) => {
+      const ask = JSON.parse(String(data)) as { run: string; after: number };
+      asked.push(`${subject} ${ask.run} after ${ask.after}`);
+      return new TextEncoder().encode(JSON.stringify((answer ?? serve)(ask)));
+    },
+  };
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
-    if (url.host === "control") {
-      asked.push(`${url.pathname}${url.search}`);
-      assert.equal(new Headers(init?.headers).get("authorization"), "Bearer rig-token");
-      const after = Number(url.searchParams.get("after"));
-      const next = items
-        .filter((i) => i.seq > after && collections.includes(i.campaign))
-        .slice(0, page);
-      return Response.json({
-        campaign: "smoke-matmul",
-        collections,
-        items: next,
-        next: next.at(-1)?.seq ?? after,
-        more: items.some(
-          (i) => i.seq > (next.at(-1)?.seq ?? after) && collections.includes(i.campaign),
-        ),
-      });
-    }
     if (harnessDown && url.pathname === "/v1/kb") return new Response("down", { status: 503 });
     return api.request(`${url.pathname}${url.search}`, init as RequestInit);
   };
   const cfg: KbSyncConfig = {
-    rig: "rig-a",
-    controlUrl: "http://control",
-    controlToken: "rig-token",
+    control: { rig: "rig-a", bus },
     harnessUrl: "http://harness",
     harnessToken: tokens.supervisor,
     fetchImpl,
@@ -84,6 +89,9 @@ async function setup(items: KbItemWire[], page = 2) {
     collections,
     down: (v: boolean) => {
       harnessDown = v;
+    },
+    answer: (a: typeof answer) => {
+      answer = a;
     },
   };
 }
@@ -101,8 +109,8 @@ describe("past research, synced from control into the run's folder", () => {
     assert.equal(r.items, 3);
     assert.deepEqual(r.state.cursors, { [RUN]: 3 });
     assert.deepEqual(s.asked, [
-      "/v1/rigs/rig-a/kb?run=smoke-1&after=0",
-      "/v1/rigs/rig-a/kb?run=smoke-1&after=2",
+      "thermite.rig.rig-a.ask.past smoke-1 after 0",
+      "thermite.rig.rig-a.ask.past smoke-1 after 2",
     ]);
     const note = readFileSync(
       join(s.dir, "kernels", "notes", `${kbFile("rig-b", "kernels-7", "1")}`),
@@ -153,7 +161,7 @@ describe("past research, synced from control into the run's folder", () => {
     s.asked.length = 0;
     const again = await syncKnowledgeOnce(s.cfg, r.state);
     assert.equal(again.items, 0);
-    assert.deepEqual(s.asked, ["/v1/rigs/rig-a/kb?run=smoke-1&after=3"]);
+    assert.deepEqual(s.asked, ["thermite.rig.rig-a.ask.past smoke-1 after 3"]);
   });
 
   test("an updated item overwrites its file; runs of the same name on two rigs stay apart", async () => {
@@ -280,18 +288,13 @@ describe("past research, synced from control into the run's folder", () => {
   test("a run control did not assign is no error, and is left alone for an hour; one control has not heard of yet is asked again", async () => {
     const s = await setup([item(1)]);
     let clock = Date.parse("2026-10-20T12:00:00.000Z");
-    // Control's 404 names its code when it did not assign the run; its words are for people.
-    let answer: { error: string; code?: string } = {
-      error: "control did not assign run smoke-1 to this rig",
+    // Control's refusal names its code when it did not assign the run; its words are for people.
+    let answer: { refused: string; code?: string } = {
+      refused: "control did not assign run smoke-1 to rig-a",
       code: "not_assigned",
     };
-    const fetchImpl: typeof fetch = async (input, init) => {
-      if (new URL(String(input)).host !== "control")
-        return (s.cfg.fetchImpl as typeof fetch)(input, init);
-      s.asked.push(String(input));
-      return Response.json(answer, { status: 404 });
-    };
-    const cfg = { ...s.cfg, fetchImpl, now: () => clock };
+    s.answer(() => answer);
+    const cfg = { ...s.cfg, now: () => clock };
     const r = await syncKnowledgeOnce(cfg, emptyKbSyncState());
     assert.deepEqual(r.errors, []);
     assert.deepEqual(r.state, {
@@ -304,20 +307,20 @@ describe("past research, synced from control into the run's folder", () => {
     assert.equal(s.asked.length, 1, "not asked again within the hour");
     assert.deepEqual(later.state, r.state);
     clock += 2 * 60_000;
-    answer = { error: "this rig has no run smoke-1" };
+    answer = { refused: "rig-a has no run smoke-1 on control yet", code: "no_run" };
     const after = await syncKnowledgeOnce(cfg, later.state);
     assert.equal(s.asked.length, 2, "asked again after the hour");
     assert.deepEqual(after.errors, []);
     assert.deepEqual(after.state, { cursors: {} }, "not heard of yet: no skip");
     await syncKnowledgeOnce(cfg, after.state);
     assert.equal(s.asked.length, 3, "so it is asked again at the next sync");
-    // Any other answer is still an error.
-    const failing: typeof fetch = async (input, init) =>
-      new URL(String(input)).host === "control"
-        ? new Response("no", { status: 500 })
-        : (s.cfg.fetchImpl as typeof fetch)(input, init);
-    const bad = await syncKnowledgeOnce({ ...cfg, fetchImpl: failing }, emptyKbSyncState());
-    assert.match(bad.errors[0] ?? "", /smoke-1: control's knowledge base: HTTP 500/);
+    // Any other refusal is still an error.
+    answer = { refused: "run smoke-1 is not of the campaign control assigned" };
+    const bad = await syncKnowledgeOnce(cfg, emptyKbSyncState());
+    assert.match(
+      bad.errors[0] ?? "",
+      /smoke-1: .*run smoke-1 is not of the campaign control assigned/,
+    );
   });
 
   test("an item of a kind this build does not know is left out and the sync goes on; once an update knows the kind, the run syncs again from the start", async () => {
@@ -360,7 +363,7 @@ describe("past research, synced from control into the run's folder", () => {
     // Nothing new next time, and the kind is still remembered.
     s.asked.length = 0;
     const again = await syncKnowledgeOnce(s.cfg, r.state);
-    assert.deepEqual(s.asked, ["/v1/rigs/rig-a/kb?run=smoke-1&after=4"]);
+    assert.deepEqual(s.asked, ["thermite.rig.rig-a.ask.past smoke-1 after 4"]);
     assert.deepEqual(again.state.unknown_kinds, ["verdict"]);
     // After an update that knows a kind it left out ("trial" stands in for it), every run starts
     // again from 0, so the items left out arrive; a kind still unknown stays remembered.
@@ -370,7 +373,7 @@ describe("past research, synced from control into the run's folder", () => {
       unknown_kinds: ["trial", "verdict"],
     });
     assert.deepEqual(updated.errors, []);
-    assert.equal(s.asked[0], "/v1/rigs/rig-a/kb?run=smoke-1&after=0");
+    assert.equal(s.asked[0], "thermite.rig.rig-a.ask.past smoke-1 after 0");
     assert.deepEqual(updated.state.cursors, { [RUN]: 4 });
     assert.deepEqual(updated.state.unknown_kinds, ["verdict"]);
   });
@@ -400,25 +403,6 @@ describe("past research, synced from control into the run's folder", () => {
     assert.match(lines[0] ?? "", /"kind":"verdict","items":2/);
     // A known kind must still be well formed.
     assert.throws(() => k.write(RUN, [{ ...item(3), seq: -1 }]));
-  });
-
-  test("without control the sync does nothing", async () => {
-    const s = await setup([item(1)]);
-    let called = 0;
-    const r = await syncKnowledgeOnce(
-      {
-        ...s.cfg,
-        controlUrl: undefined,
-        fetchImpl: async () => {
-          called++;
-          return new Response("{}");
-        },
-      },
-      emptyKbSyncState(),
-    );
-    assert.equal(called, 0);
-    assert.deepEqual(r, { state: { cursors: {} }, items: 0, errors: [], unknownKinds: {} });
-    assert.equal(s.env.service.knowledge.summary(RUN), undefined);
   });
 
   test("the harness takes past research only with the supervisor's token, for a run it has", async () => {

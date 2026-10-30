@@ -1,6 +1,6 @@
 import { harnessClient } from "../common/api/harness.ts";
-import { REPORT_MAX_CHARS } from "../core/api/control/rigs.ts";
 import { BRIEF, RUNS } from "../core/api/harness/advisors.ts";
+import { REPORT_MAX_CHARS } from "../core/link/asks.ts";
 import type { AdviseState } from "./advisors/index.ts";
 import type { UploadState } from "./export-upload.ts";
 import type { ExportState } from "./git-export.ts";

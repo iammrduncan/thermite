@@ -179,6 +179,7 @@ describe("a lane's cache folder survives a restart (goal 079)", () => {
       root: false,
       controlPublicKey: "-----PUBLIC KEY-----\nabc\n",
       controlFingerprint: "sha256:abcd",
+      bus: { url: "nats://control.example.com:4222", ca: "CA" },
     };
     const unit = rigUnits(plan)["thermite-box-1-a-harness.container"] ?? "";
     assert.match(unit, /^Volume=thermite-box-1-a-scratch:\/scratch$/m);
@@ -195,6 +196,7 @@ describe("a lane's cache folder survives a restart (goal 079)", () => {
       gpuMode: "device-plugin",
       storageGi: 20,
       controlPublicKey: "PUBLIC KEY",
+      bus: { url: "nats://control.example.com:4222", ca: "CA" },
     };
     type Obj = { kind: string; metadata: { name: string }; spec?: unknown };
     const objs = clusterRigObjects(plan, {

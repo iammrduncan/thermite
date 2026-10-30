@@ -134,12 +134,11 @@ describe("Run it on a rig's checks (goal 080)", () => {
     assert.match(row, /Its running runs are paused for it, and resumed after\./);
     assert.match(row, /<button class="" disabled>Running…<\/button>/);
     assert.match(row, /data-follow-state="running"/);
-    // Its rig_check_started event comes with the next report: still the same run of the check,
-    // and a new state, so the page shows what the check does meanwhile (its run under At work).
+    // Its rig_check_started event came with the report that carried the command's outcome: the
+    // next report changes nothing while the check runs.
     await s.relay();
     const a2b = await s.follow(url);
-    assert.match(a2b.state, /^running:\d+$/);
-    assert.notEqual(a2b.state, a2.state);
+    assert.equal(a2b.state, a2.state);
     assert.equal(a2b.final, false);
 
     // The result reaches control: the row shows it in place, and the follow ends.
@@ -171,7 +170,7 @@ describe("Run it on a rig's checks (goal 080)", () => {
         [false, false, "Sent"],
         [true, false, "Sent"],
         [false, false, "Sent"],
-        [true, false, "Sent"],
+        [false, false, "Sent"],
         [true, true, "back"],
       ],
     );
@@ -265,7 +264,7 @@ describe("Run it on a rig's checks (goal 080)", () => {
 });
 
 describe("every button that sends a command (goal 080)", () => {
-  test("Pause: sent, taken by the rig, then done once its report came; each in words", async () => {
+  test("Pause: sent, then done once the rig's report came with its outcome; each in words", async () => {
     const s = await stack();
     const sent = await s.send("/ui/commands", {
       rig: "rig-a",
@@ -279,14 +278,7 @@ describe("every button that sends a command (goal 080)", () => {
     assert.match(a.follow ?? "", /^\/ui\/commands\/[0-9a-f-]+\.json$/);
     const url = a.follow ?? "";
     await s.relay();
-    const taken = await s.follow(url);
-    assert.equal(taken.state, "taken");
-    assert.match(
-      taken.said,
-      /^rig-a took it at \d\d:\d\d UTC\. This page shows the change when the rig next reports\.$/,
-    );
     assert.equal(s.env.ledger.runs.get("js-1")?.status, "paused");
-    await s.relay();
     const done = await s.follow(url);
     assert.deepEqual([done.state, done.final, done.tone], ["done", true, "ok"]);
     assert.match(done.said, /^Done\. rig-a took it at \d\d:\d\d UTC\.$/);
@@ -298,7 +290,7 @@ describe("every button that sends a command (goal 080)", () => {
     assert.match(runs, /js-1/);
     assert.match(runs, /[Pp]aused/);
     // The script's steps for them: words each time, the button back at the end, no reload.
-    const st = core.fwStep(taken, done);
+    const st = core.fwStep({ state: a.state, final: a.final, said: a.said, tone: a.tone }, done);
     assert.deepEqual([st.redraw, st.stop, st.reload, st.tone], [true, true, false, "ok"]);
   });
 
@@ -382,8 +374,6 @@ describe("every button that sends a command (goal 080)", () => {
         `<div class="card" style="margin-bottom:16px" data-part="starting" data-follow="/ui/commands/${id}\\.json" data-follow-state="sent"><b>Starting js-2 on rig-a\\.</b> <span class="">Sent to rig-a at \\d\\d:\\d\\d UTC\\. Waiting for the rig to take it\\.</span>`,
       ),
     );
-    await s.relay();
-    assert.equal((await s.follow(`/ui/commands/${id}.json`)).state, "taken");
     await s.relay();
     const done = await s.follow(`/ui/commands/${id}.json`);
     assert.deepEqual([done.state, done.final, done.reload], ["done", true, true]);

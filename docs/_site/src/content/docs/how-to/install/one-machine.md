@@ -235,7 +235,7 @@ Put settings in a file named `.env` next to `compose.yaml` (git ignores it), the
 | --- | --- |
 | `control` | `THERMITE_CONTROL_PUBLIC_URL`, `THERMITE_CONTROL_ALLOW_PLAIN_HTTP`, `THERMITE_RIG_HARNESS_IMAGE`, `THERMITE_RIG_HARNESS_CUDA_IMAGE`, `THERMITE_RIG_SUPERVISOR_IMAGE`, `THERMITE_RUNPOD_RIG_IMAGE`, `THERMITE_RUNPOD_TEST_IMAGE`, `THERMITE_CONTROL_REQUIRE_KEY_ACCEPT`, `THERMITE_CONTROL_SESSION_DAYS`, `THERMITE_CONTROL_STALE_SECONDS`, `THERMITE_CONTROL_OFFLINE_SECONDS`, `THERMITE_LIFECYCLE`, `THERMITE_NATS_PUBLIC_URL` |
 | `harness` | `THERMITE_PROMOTION`, `THERMITE_CALIBRATION_BLOCKS`, `THERMITE_MODEL_BASE_URL`, `THERMITE_MODEL`, `THERMITE_MODEL_CONTEXT_WINDOW`, `THERMITE_MODEL_MAX_TOKENS`, `THERMITE_MODEL_REASONING_EFFORT`, `THERMITE_MAX_TRIALS`, `THERMITE_TRIAL_MINUTES`, `THERMITE_MAX_TURNS`, `THERMITE_RESEARCH_MAX_MB`, `THERMITE_LLM_USD_PER_MTOK_IN`, `THERMITE_LLM_USD_PER_MTOK_OUT`, `THERMITE_EXPORT_MINUTES` |
-| `supervisor` | `THERMITE_POLL_SECONDS`, `THERMITE_COMMAND_POLL_SECONDS`, `THERMITE_MODEL_ROUTE_POLL_SECONDS`, `THERMITE_LIVE_INTERVAL_MS`, `THERMITE_RESULTS_REMOTE`, `THERMITE_ADVISORS_FILE`, `THERMITE_KB_SYNC_SECONDS`, `THERMITE_NATS_URL` |
+| `supervisor` | `THERMITE_POLL_SECONDS`, `THERMITE_MODEL_ROUTE_POLL_SECONDS`, `THERMITE_LIVE_INTERVAL_MS`, `THERMITE_RESULTS_REMOTE`, `THERMITE_ADVISORS_FILE`, `THERMITE_KB_SYNC_SECONDS` |
 | Compose itself | `THERMITE_CONTROL_PORT`, `THERMITE_NATS_PUBLISH`, `THERMITE_NATS_MEMORY`, `THERMITE_NATS_STORE`, `THERMITE_COMMIT` for the images' builds, and `THERMITE_ENGINE_SOCKET_HOST` for `compose.lifecycle.yaml` |
 
 The [settings reference](../../reference/settings.md#the-compose-file) gives their defaults, and the few that the second rig of `two-rigs` leaves out.
@@ -261,12 +261,11 @@ services:
       THERMITE_CONTROL_READ_TOKEN_SHA256: <the token's sha256, 64 hexadecimal characters>
 ```
 
-**Name every override file you use in every later `up`,** each with `-f`, after `-f compose.yaml`. That includes the `up` after an update. Compose reads only the files it is given, so a start that leaves one out drops what that file adds. For example, with all of them:
+**Name every override file you use in every later `up`,** each with `-f`, after `-f compose.yaml`. That includes the `up` after an update. Compose reads only the files it is given, so a start that leaves one out drops what that file adds. For example, with every file above but `compose.lifecycle.yaml`, which is for development only:
 
 ```sh
 docker compose -f compose.yaml -f compose.gpu.yaml -f compose.tokens.yaml -f compose.claude.yaml \
-  -f compose.model.yaml -f compose.harness.yaml -f compose.results.yaml \
-  -f compose.lifecycle.yaml -f compose.local.yaml up -d
+  -f compose.model.yaml -f compose.harness.yaml -f compose.results.yaml -f compose.local.yaml up -d
 ```
 
 Name only the files you made. With Podman, write `podman compose` in place of `docker compose`.
@@ -287,7 +286,7 @@ The message bus is published on `127.0.0.1:4222`. If that port is taken, give an
 THERMITE_NATS_PUBLISH=127.0.0.1:4223
 ```
 
-Inside the stack, the bus keeps port 4222. Control always uses it; to keep the stack's rigs off it, reporting over HTTP, see [Keep the rigs off it](../operate/message-bus.md#keep-the-rigs-off-it).
+Inside the stack, the bus keeps port 4222. Control and the stack's rigs always use it: a rig talks to control only on the bus ([Run the message bus](../operate/message-bus.md)).
 
 ## Stop, start and update
 
@@ -310,15 +309,15 @@ Inside the stack, the bus keeps port 4222. Control always uses it; to keep the s
 
   Add your `-f` options to the last line, as in [the example above](#settings-and-override-files). An update that migrates control's store keeps a copy of it from before, and so does the harness for its ledger; the backup also holds every rig's events, and a [restore](../operate/backup-and-restore.md#restore-a-backup) puts it all back. `curl` replaces `compose.yaml` with the new release's. `init` keeps every token file that exists, the empty owner's file too, and adds any file a newer version needs. `up` downloads the new images and replaces the containers whose images changed. The volumes stay. When the harness restarts, running trials and judge jobs start again. If you built the [command line](#the-command-line), take the same release there: in `thermite-source`, `git fetch --tags`, then `git checkout` the new tag, `npm ci` and `npm run build`.
 
-After an update, run the rig's **Judge smoke** check ([Check a rig](../operate/check-a-rig.md)). This updates only the local stack. Rigs elsewhere keep the images they run:
+After an update, run the rig's **Judge smoke** check ([Check a rig](../operate/check-a-rig.md)). This updates only the local stack. Rigs elsewhere keep the images they run. A rig of v0.1.0 reports over HTTP, which this version no longer takes: it shows **Broken** until it runs this version ([A rig from before the bus](../operate/message-bus.md#a-rig-from-before-the-bus)):
 
 - a rig that control set up, on a machine or a cluster, moves onto new images from its page, with **Update to** control's version. Control deploys the new release's images once it runs from the new `compose.yaml`, unless `.env` names other images ([Move a rig onto new images](../operate/rig-lifecycle.md#move-a-rig-onto-new-images));
-- a rig you joined yourself can't be moved from control yet ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal));
+- a rig you joined yourself can't be moved from control yet ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal)): make a new join command on its page, and run it again where the rig is;
 - a rig on RunPod keeps its image: control can't move a pod onto another one. Terminate it and launch a new rig, which runs the new release's rig image ([Run a rig on RunPod](runpod-rig.md)).
 
 ## Let rigs on other machines reach control
 
-A rig on another machine or a cluster reports to control by connecting to it. That takes a name for control that the rigs reach over HTTPS, a reverse proxy on this computer, the message bus's port open to the rigs, and rig images that the rigs can pull without signing in. The release's published images are such images, and its compose file gives them to control already. **Rigs › Add a rig** (**Rigs** is in the sidebar on the left) needs the first, second and fourth below, and shows what is missing:
+A rig on another machine or a cluster reaches control by connecting to it and to its message bus. That takes a name for control that the rigs reach over HTTPS, a reverse proxy on this computer, the message bus's port open to the rigs, and rig images that the rigs can pull without signing in. The release's published images are such images, and its compose file gives them to control already. **Rigs › Add a rig** (**Rigs** is in the sidebar on the left) needs the first, second and fourth below, and shows what is missing:
 
 1. **An HTTPS address the rigs can reach.** Compose publishes control on `127.0.0.1` only, so nothing outside this computer reaches it. Put a reverse proxy on this computer in front of `127.0.0.1:8800` (or the port you chose) that serves HTTPS under a name the rigs can reach, such as `control.example.com`. Thermite doesn't include a proxy or its configuration: use one you know. Have the proxy:
    - send `X-Forwarded-Proto: https`, so control marks the dashboard's sign-in cookie as secure;
@@ -342,7 +341,7 @@ A rig on another machine or a cluster reports to control by connecting to it. Th
    ```
 
    The CUDA image is needed only for GPU rigs.
-4. **The message bus's port, open to the rigs.** Each rig control sets up reports over the bus, on its own port, 4222, over TLS, with no proxy: publish the port on this computer's addresses and let the rigs reach it, as [Let rigs on other machines reach it](../operate/message-bus.md#let-rigs-on-other-machines-reach-it) says. In `.env`:
+4. **The message bus's port, open to the rigs.** Each rig control sets up talks to control only over the bus, on its own port, 4222, over TLS, with no proxy; a rig that can't reach it doesn't work: publish the port on this computer's addresses and let the rigs reach it, as [Let rigs on other machines reach it](../operate/message-bus.md#let-rigs-on-other-machines-reach-it) says. In `.env`:
 
    ```sh title=".env (part)"
    THERMITE_NATS_PUBLISH=0.0.0.0:4222

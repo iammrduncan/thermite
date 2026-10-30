@@ -166,6 +166,7 @@ describe("the rig's config from the message bus", () => {
       "thermite.rig.rig-a.config.model-route",
       "thermite.rig.rig-a.config.advisor-routes",
       "thermite.rig.rig-a.config.mcp-servers",
+      "thermite.rig.rig-a.config.git-access",
     ]);
     assert.equal(s.h.route.revision, "r1");
   });

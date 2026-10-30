@@ -492,8 +492,8 @@ The role's context window is the provider's, or the owner's cap on the role's mo
 
 On **Edit rig**, **Runs in** shows each role's harness: **Pi**, **OpenCode v2**, **Claude Code** or **Codex**, all in the supervisor, or, greyed out, the file's program for a role with no model from control (`—` when the file gives it none). In Pi the role gets read-only tools; in Claude Code, OpenCode v2 or Codex only a read-only search of the run's past research and the kit's MCP tools for the advisors.
 
-- The supervisor asks control for these models (`GET /v1/rigs/<rig>/advisor-routes`) before every round, so a change takes effect without a restart.
-- When control cannot be reached, the models it gave last stay in use.
+- Control writes these models to the rig's config on the message bus (its `advisor-routes` key, sealed to the rig), and the supervisor takes each change as it comes; an idle advisors' round looks at once, and a running one uses them from its next round, without a restart.
+- While the bus is away, the models it gave last stay in use.
 - All other fields come from the file: `teacher_minutes`, `fetch_domains`, `max_usd_per_day` and `kb`. With no file, they keep their defaults: every 60 minutes, no fetching, no spending limit and no `kb`.
 
 ## MCP servers

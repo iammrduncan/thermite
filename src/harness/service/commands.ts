@@ -56,13 +56,20 @@ export class Commands {
     return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
   }
 
-  async applyCommand(input: unknown, actor: string): Promise<CommandOutcome> {
+  /**
+   * A command checked before it is applied or recorded: its outcome when it is refused or was
+   * recorded before, else its envelope and payload. A refusal is a `command_rejected` event.
+   */
+  private admit(
+    input: unknown,
+    actor: string,
+  ): { outcome: CommandOutcome } | { envelope: Envelope; payload: unknown } {
     const svc = this.svc;
     const verified = verifyCommand(input, this.controlPublicKeyPem, svc.rig, svc.clock());
     if (!verified.ok && verified.authenticId) {
       // Authentic but expired (or otherwise late): if it was applied before, report that.
       const prior = svc.ledger.commands.get(verified.authenticId);
-      if (prior) return { status: "replayed", ...prior };
+      if (prior) return { outcome: { status: "replayed", ...prior } };
     }
     if (!verified.ok) {
       // Its id when it has one, so control can match the refusal to the command it sent.
@@ -72,11 +79,11 @@ export class Commands {
         kind: typeof e?.kind === "string" ? e.kind : null,
         id: typeof e?.id === "string" ? e.id : null,
       });
-      return { status: "rejected", reason: verified.reason };
+      return { outcome: { status: "rejected", reason: verified.reason } };
     }
     const { envelope, payload } = verified;
     const prior = svc.ledger.commands.get(envelope.id);
-    if (prior) return { status: "replayed", ...prior };
+    if (prior) return { outcome: { status: "replayed", ...prior } };
     // After a wipe, commands signed for the old ledger are not applied to the new one.
     const notBefore = svc.ledger.notBefore();
     if (notBefore && Date.parse(envelope.issued_at) < Date.parse(notBefore)) {
@@ -85,8 +92,42 @@ export class Commands {
         kind: envelope.kind,
         id: envelope.id,
       });
-      return { status: "rejected", reason: "issued before this rig's state was wiped" };
+      return {
+        outcome: { status: "rejected", reason: "issued before this rig's state was wiped" },
+      };
     }
+    return { envelope, payload };
+  }
+
+  /**
+   * A command whose content its supervisor could not stage: checked as any command is, then
+   * recorded as not applied, with the supervisor's reason as its result, so that its `command`
+   * event tells control. One recorded before answers with its record; one being applied now
+   * waits.
+   */
+  recordUnstaged(input: unknown, reason: string, actor: string): CommandOutcome {
+    const admitted = this.admit(input, actor);
+    if ("outcome" in admitted) return admitted.outcome;
+    const { envelope } = admitted;
+    if (this.inFlight.has(envelope.id)) return { status: "in_progress" };
+    const result = { error: reason };
+    this.svc.ledger.commands.record({
+      id: envelope.id,
+      kind: envelope.kind,
+      envelope,
+      signature: (input as { signature: string }).signature,
+      accepted: false,
+      result,
+      actor: `control:${envelope.issued_by}`,
+    });
+    return { status: "applied", accepted: false, result };
+  }
+
+  async applyCommand(input: unknown, actor: string): Promise<CommandOutcome> {
+    const svc = this.svc;
+    const admitted = this.admit(input, actor);
+    if ("outcome" in admitted) return admitted.outcome;
+    const { envelope, payload } = admitted;
     if (this.inFlight.has(envelope.id)) return { status: "in_progress" };
 
     this.inFlight.add(envelope.id);

@@ -8,7 +8,7 @@ import type { TlsOptions } from "@nats-io/transport-node";
  * authority, read and checked at start, and the client's TLS options. Every connection is over TLS.
  */
 
-/** The setting that names the server. Not set: the part keeps to HTTP. */
+/** The setting that names the server: control and every rig's supervisor need it. */
 export const BUS_URL_SETTING = "THERMITE_NATS_URL";
 /** The settings that give a supervisor the authority it trusts the server through: the PEM itself… */
 export const BUS_CA_SETTING = "THERMITE_NATS_CA";

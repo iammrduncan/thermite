@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Rigs on RunPod from end to end, with no RunPod and nothing paid. Control runs in this process,
 // with its REST API, pull mode and the RunPod rigs' loop, against the fake RunPod API
-// (tests/helpers/fake-runpod.ts). Each pod the fake makes is a container of the one-container rig
+// (tests/helpers/fake-runpod.ts), and on its message bus: the bus's server in a container of its
+// pinned image (lib/control-bus.mjs), which dials each pod's leaf node, as the address the fake
+// RunPod gives for the pod's port 7422. Each pod the fake makes is a container of the one-container rig
 // image on this machine: the launch's environment, RunPod's variables (made up), a volume at
 // /workspace that a stop keeps, and the pull mode port, which the fake's stand-in for RunPod's
 // proxy reaches. A stop removes the container and keeps the volume, as RunPod empties a stopped
@@ -10,7 +12,8 @@
 //
 //   launch     the owner launches a rig over REST: the pod starts with only the launch values;
 //   enroll     control enrolls the pod through the proxy and pins its keys;
-//   report     the rig's reports reach control through control's pulls only;
+//   report     the supervisor registers its keys through the proxy, and the rig's reports reach
+//              control on the bus, through the pod's leaf node;
 //   stop       the runs are paused, an export leaves the pod for control, the stop takes a
 //              snapshot of the state onto the volume, sealed with the pod's snapshot key from
 //              the launch, then the pod stops; nothing on the volume was ever given an owner but
@@ -32,18 +35,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { addressOn, followControlBus, startControlBus } from "./lib/control-bus.mjs";
 import { cleanEngine, engine } from "./lib/smoke-env.mjs";
 
-// Control's side, in this process (Node.js strips the types of these files). Its store is on the
-// tests' fake message bus, as control needs a bus: the rigs here report over HTTP, in pull mode,
-// and only control's own copy of its events and the apply of it use the bus, in this process.
+// Control's side, in this process (Node.js strips the types of these files), on its message bus.
+const { buildInfo } = await import("../../src/common/build-info.ts");
 const { createControlApi } = await import("../../src/control/api/index.ts");
+const { controlParts } = await import("../../src/control/parts.ts");
 const { advanceResets } = await import("../../src/control/lifecycle.ts");
 const { RunpodRigs } = await import("../../src/control/runpod/rigs.ts");
 const { SecretBox } = await import("../../src/control/secrets.ts");
 const { ControlTunnels } = await import("../../src/control/runpod/tunnel.ts");
 const { generateSigningKeys } = await import("../../src/core/commands.ts");
-const { controlStore } = await import("../../tests/helpers/control-store.ts");
+const { LEAF_PORT } = await import("../../src/core/link/leaf.ts");
 const { FAKE_RUNPOD_KEY, fakeRunpod } = await import("../../tests/helpers/fake-runpod.ts");
 
 const harnessImage = "localhost/thermite-harness:runpod-check";
@@ -51,6 +55,10 @@ const rigImage = "localhost/thermite-rig:runpod-check";
 /** Each pod's container and volume: thermite-runpod-check-<pid>-<pod>[-volume]. */
 const prefix = `thermite-runpod-check-${process.pid}`;
 const OWNER = "an-owner-token-for-the-runpod-check";
+/** The bus's server's host port: RUNPOD_CHECK_BUS_PORT, 14510 unless given (never 4222). */
+const busPort = Number(process.env.RUNPOD_CHECK_BUS_PORT ?? "14510");
+/** Control's bus, once started: the pods join its network. */
+let onBus;
 // Inside the fake's hooks: control's loops go on while the engine works, as they do on RunPod.
 const run = async (args) => (await promisify(execFile)(engine, args, { encoding: "utf8" })).stdout;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -76,13 +84,18 @@ const logsOf = (name) => {
   return `${r.stdout}${r.stderr}`;
 };
 
-/** Starts a pod's container on its volume; its pull mode port is the proxy's way in. */
+/**
+ * Starts a pod's container on its volume; its pull mode port is the proxy's way in, and its leaf
+ * node's port, on the bus's network, is the address the fake RunPod gives control's server.
+ */
 async function startContainer(pod) {
   await run([
     "run",
     "-d",
     "--name",
     container(pod),
+    "--network",
+    onBus.net,
     "-v",
     `${volume(pod)}:/workspace`,
     "-p",
@@ -104,6 +117,7 @@ async function startContainer(pod) {
   ]);
   const port = (await run(["port", container(pod), "8790/tcp"])).trim().split("\n")[0];
   pod.upstream = `http://127.0.0.1:${port.split(":").at(-1)}`;
+  pod.tcp = { [LEAF_PORT]: { ip: addressOn(onBus.net, container(pod)), public: LEAF_PORT } };
 }
 
 const cloud = fakeRunpod({
@@ -127,8 +141,11 @@ const cloud = fakeRunpod({
 
 const exportsDir = mkdtempSync(join(tmpdir(), "thermite-runpod-check-"));
 const timers = [];
-const cleanup = () => {
+let followed;
+const cleanup = async () => {
   for (const t of timers) clearInterval(t);
+  followed?.stop();
+  await onBus?.remove();
   for (const pod of cloud.pods.values()) {
     spawnSync(engine, ["rm", "-f", container(pod)], { stdio: "ignore" });
     spawnSync(engine, ["volume", "rm", "-f", volume(pod)], { stdio: "ignore" });
@@ -161,10 +178,11 @@ try {
     { stdio: ["ignore", "ignore", "inherit"] },
   );
 
-  // Control, with one RunPod account in Providers: the fake's key, sealed.
+  // Control, on its bus, with one RunPod account in Providers: the fake's key, sealed.
   const keys = generateSigningKeys();
-  const store = controlStore();
   const secrets = SecretBox.ephemeral();
+  onBus = await startControlBus({ name: prefix, port: busPort, secrets });
+  const { store } = onBus;
   store.gpuClouds.add({
     name: "runpod",
     kind: "runpod",
@@ -172,14 +190,32 @@ try {
     key_hint: "…cdef",
     by: "owner:test",
   });
-  // Pull mode reaches pods only through the fake's proxy, as through RunPod's.
-  const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem, { fetch: cloud.fetch });
+  // Pull mode reaches pods only through the fake's proxy, as through RunPod's; a launch gives the
+  // pod its leaf node, which trusts control's authority for the bus.
+  const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem, {
+    fetch: cloud.fetch,
+    busCa: onBus.caCert,
+  });
   const rigs = new RunpodRigs(store, secrets, tunnels, {
     fetch: cloud.fetch,
     image: rigImage,
     staleAfterMs: 180_000,
     privateKeyPem: keys.privateKeyPem,
   });
+  const parts = controlParts(
+    store,
+    keys.privateKeyPem,
+    {
+      staleAfterMs: 180_000,
+      secrets,
+      tunnels,
+      runpodRigs: rigs,
+      cloudFetch: cloud.fetch,
+      busCa: onBus.caCert,
+    },
+    { staleAfterMs: 180_000, control: buildInfo() },
+  );
+  followed = followControlBus(onBus, parts);
   const app = createControlApi(store, { admin: OWNER, rigs: {} }, keys.privateKeyPem, {
     staleAfterMs: 180_000,
     secrets,
@@ -187,6 +223,9 @@ try {
     runpodRigs: rigs,
     cloudFetch: cloud.fetch,
     exportsDir,
+    parts,
+    busUsers: onBus.busUsers,
+    busConfig: followed.busConfig,
   });
   const api = async (path, body) => {
     const r = await app.request(path, {
@@ -231,9 +270,12 @@ try {
     pod ? container(pod) : "no pod",
   );
   check(
-    "the launch gave the pod pull mode's values and its snapshot key, and nothing else",
+    "the launch gave the pod pull mode's values, its leaf node's and its snapshot key, and nothing else",
     JSON.stringify(Object.keys(pod.env).sort()) ===
       JSON.stringify([
+        "THERMITE_LEAF_CERT",
+        "THERMITE_LEAF_CONTROL_CA",
+        "THERMITE_LEAF_KEY",
         "THERMITE_RIG_ID",
         "THERMITE_STATE_SNAPSHOT_KEY",
         "THERMITE_TUNNEL_CONTROL_BOX",
@@ -252,7 +294,11 @@ try {
   await until("report", () =>
     store.reportedRigs.list().find((u) => u.id === rig && Date.parse(u.last_seen) > 0),
   );
-  check("the rig's reports reach control through control's pulls", true);
+  check(
+    "the supervisor registered its keys through the proxy, and its reports reach control on the bus, through the pod's leaf node",
+    Boolean(store.busKeys.rigKey(rig)) && Boolean(store.tunnels.get(rig)?.leaf_address),
+    store.tunnels.get(rig)?.leaf_address ?? "no leaf address",
+  );
   await until(
     "the supervisor's export figures",
     () => store.reportedRigs.supervisor(rig)?.export?.to === "control",
@@ -475,7 +521,7 @@ try {
   for (const pod of cloud.pods.values())
     console.error(`${container(pod)}'s last output:\n${logsOf(container(pod)).slice(-3000)}`);
 } finally {
-  cleanup();
+  await cleanup();
 }
 console.log(failed() ? `runpod acceptance: ${failed()} FAILED` : "runpod acceptance: OK");
 process.exit(failed() ? 1 : 0);

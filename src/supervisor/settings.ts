@@ -15,11 +15,6 @@ export const SUPERVISOR_NUMBERS = {
     rule: { unit: "seconds", aboveMin: true },
     fallback: 60,
   },
-  commandPollSeconds: {
-    name: "THERMITE_COMMAND_POLL_SECONDS",
-    rule: { unit: "seconds", zeroMeans: "with each report" },
-    fallback: 5,
-  },
   liveIntervalMs: {
     name: "THERMITE_LIVE_INTERVAL_MS",
     rule: { unit: "milliseconds", zeroMeans: "off" },

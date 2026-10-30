@@ -61,19 +61,22 @@ describe("a rig on RunPod on the bus: its leaf node", () => {
     const v = values(podServerConfig({ files, supervisorKey: key, maxPayload: 8 }));
     assert.equal(v.listen, `127.0.0.1:${POD_BUS_PORT}`);
     assert.equal(v.max_payload, 8);
-    assert.deepEqual(v.tls, { cert_file: files.cert, key_file: files.key });
-    assert.deepEqual(v.authorization, { users: [{ nkey: key }] });
+    // A connection has 2 s for TLS and 3 s to sign in, on each port; no connection limit.
+    assert.deepEqual(v.tls, { cert_file: files.cert, key_file: files.key, timeout: 2 });
+    assert.deepEqual(v.authorization, { users: [{ nkey: key }], timeout: 3 });
     assert.deepEqual(v.leafnodes, {
       listen: `0.0.0.0:${LEAF_PORT}`,
       no_advertise: true,
       tls: {
         cert_file: files.cert,
         key_file: files.key,
+        timeout: 2,
         ca_file: files.controlCa,
         verify_and_map: true,
       },
-      authorization: { users: [{ user: `CN=${CONTROL_LEAF_NAME}` }] },
+      authorization: { users: [{ user: `CN=${CONTROL_LEAF_NAME}` }], timeout: 3 },
     });
+    assert.equal(v.max_connections, undefined);
     assert.equal(v.jetstream, undefined, "the pod keeps no stream");
   });
 

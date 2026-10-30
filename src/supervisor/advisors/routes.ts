@@ -1,9 +1,7 @@
-import { ApiError } from "../../common/api/call.ts";
-import { controlClient } from "../../common/api/control.ts";
 import { EFFORTS } from "../../core/agents.ts";
-import { ADVISOR_ROUTES, type AdvisorRoute, TEACHERS_MAX } from "../../core/api/control/rigs.ts";
-import type { AnswerOf } from "../../core/api/route.ts";
+import { TEACHERS_MAX } from "../../core/api/control/rigs.ts";
 import { COMPACT_AT_MAX, COMPACT_AT_MIN } from "../../core/compaction.ts";
+import type { AdvisorRoute, AdvisorRoutesValue } from "../../core/link/config.ts";
 import { type AdvisorRuntime, AdvisorsConfig, type RunningAdvisors } from "./config.ts";
 
 /**
@@ -12,15 +10,15 @@ import { type AdvisorRuntime, AdvisorsConfig, type RunningAdvisors } from "./con
  * replaces the supervisor's own configuration for that role; a role it gives none keeps it. Each
  * runs in the harness its route names (goal 073): Pi here with read-only tools, Claude Code (a
  * Claude subscription, and only it), OpenCode v2 (OpenCode's own models too) or the Codex CLI.
- * A ChatGPT sign-in's access token lasts an hour; control's routes are read each round, or, on
- * the message bus, taken as control writes them.
+ * A ChatGPT sign-in's access token lasts an hour; control's routes come in the rig's config on the
+ * message bus, taken as control writes them.
  *
  * The roles (goal 074): the teachers (one or two models), their merged by model, the auditor and
  * the review panel; and (goal 166) the synthesizer and the final writer, which with no model from
  * control use the first teacher's.
  */
 
-/** A route as control hands it (core/api/control/rigs.ts); its key stays in memory. */
+/** A route as control hands it (core/link/config.ts); its key stays in memory. */
 export type { AdvisorRoute };
 
 export interface ControlAdvisors {
@@ -126,40 +124,11 @@ export function runtimeOf(route: AdvisorRoute, name: string): AdvisorRuntime | u
 }
 
 /**
- * The advisors' routes from control, as runtimes by role: each teacher's model (teacher-1 and
- * teacher-2), the merged by model, the auditor, and the review panel three times (reviewer-1 to
- * reviewer-3).
- */
-export async function fetchControlAdvisors(o: {
-  rig: string;
-  controlUrl: string;
-  controlToken: string;
-  fetchImpl?: typeof fetch | undefined;
-}): Promise<ControlAdvisors> {
-  const control = controlClient({
-    url: o.controlUrl,
-    token: o.controlToken,
-    rig: o.rig,
-    fetchImpl: o.fetchImpl,
-  });
-  let r: AnswerOf<typeof ADVISOR_ROUTES>;
-  try {
-    r = await control.call(ADVISOR_ROUTES);
-  } catch (err) {
-    // An older control has no such endpoint: its rigs keep their own configuration.
-    if (err instanceof ApiError && err.code === "not_found") return {};
-    throw err;
-  }
-  return advisorsOf(r);
-}
-
-/**
- * Control's advisors' routes (from the poll, or from the rig's config on the message bus) as
- * runtimes by role: each teacher's model (teacher-1 and teacher-2), the merged by model, the
+ * Control's advisors' routes, from the rig's config on the message bus, as runtimes by role: each teacher's model (teacher-1 and teacher-2), the merged by model, the
  * auditor, the review panel three times (reviewer-1 to reviewer-3), the synthesizer and the final
  * writer.
  */
-export function advisorsOf(r: AnswerOf<typeof ADVISOR_ROUTES>): ControlAdvisors {
+export function advisorsOf(r: AdvisorRoutesValue): ControlAdvisors {
   const many = (route: AdvisorRoute | null | undefined, base: string, n: number) => {
     if (!route) return undefined;
     const list = Array.from({ length: n }, (_, i) => runtimeOf(route, `${base}-${i + 1}`)).filter(

@@ -269,7 +269,7 @@ function readOrSay(m: BusMessage): EventRead | undefined {
  * What control keeps of one event, under the current names (core/names.ts): the run registry's
  * entry for a run the rig created (ingest wrote it before it published the event, whose subject
  * the registry chose; this writes the same again), a command's outcome
- * as the harness gave it, a model call's usage (goal 075; a body that does not read as one stays
+ * as the harness gave it (applied, or refused), a model call's usage (goal 075; a body that does not read as one stays
  * an event only), and, with `toKb`, its items in the knowledge base: Thermite's reading of it into
  * its run's records slot, or a writer's `kb_item` into the writer's slot (knowledge.ts). An event
  * the knowledge base can't index is left out of it, in control's log and the audit log.
@@ -283,6 +283,12 @@ function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boo
     const status = b.accepted === false ? "failed" : "delivered";
     const outcome = canonicalJson({ source: "harness", ...(e.body as object) });
     store.commands.confirmApplied(rig, e.subject, status, outcome, now);
+  }
+  // A command the harness refused names itself in the event's body.
+  const refused = e.kind === "command_rejected" ? (e.body as { id?: unknown } | null)?.id : null;
+  if (typeof refused === "string") {
+    const outcome = canonicalJson({ source: "harness", ...(e.body as object) });
+    store.commands.confirmRejected(rig, refused, outcome, now);
   }
   const call = e.kind === MODEL_CALL_EVENT && e.subject ? ModelCallBody.safeParse(e.body) : null;
   if (call?.success) store.usage.recordCall(rig, ledger, e.id, String(e.subject), call.data);

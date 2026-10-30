@@ -15,7 +15,7 @@ import {
 } from "../../../src/core/link/live.ts";
 import { REPORT_STREAM_CONFIG } from "../../../src/core/link/report.ts";
 import { controlOnly, mcpClient, RIG_TOKEN } from "../../helpers/control-stack.ts";
-import { busOf, controlStore, ingestReport } from "../../helpers/control-store.ts";
+import { busOf, controlStore, figuresCall, ingestReport } from "../../helpers/control-store.ts";
 import { FakeBus } from "../../helpers/fake-bus.ts";
 
 /**
@@ -40,10 +40,10 @@ function setup(bus?: BusView, store?: ControlStore) {
     s.control.request(path, { headers: { authorization: `Bearer ${READ}` } });
   /** The rig's supervisor's figures, with its live counts, and its config counts when given. */
   const figures = (live: unknown, config?: unknown) =>
-    s.control.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: { authorization: `Bearer ${RIG_TOKEN}`, "content-type": "application/json" },
-      body: JSON.stringify({ at: new Date().toISOString(), live, ...(config ? { config } : {}) }),
+    figuresCall(s.store, "rig-a", {
+      at: new Date().toISOString(),
+      live,
+      ...(config ? { config } : {}),
     });
   return { ...s, read, figures };
 }
@@ -201,11 +201,16 @@ describe("the message bus's state", () => {
         ["CONFIG", 1],
       ],
     );
-    assert.deepEqual(state.config.keys, ["model-route", "advisor-routes", "mcp-servers"]);
+    assert.deepEqual(state.config.keys, [
+      "model-route",
+      "advisor-routes",
+      "mcp-servers",
+      "git-access",
+    ]);
     assert.equal(state.config.message_bytes, CONFIG_MAX_BYTES);
     assert.deepEqual(state.config.written, {
       since: b.config.since,
-      values: { "model-route": 2, "advisor-routes": 0, "mcp-servers": 1 },
+      values: { "model-route": 2, "advisor-routes": 0, "mcp-servers": 1, "git-access": 0 },
       failed: 1,
       too_large: 0,
       not_made: 0,

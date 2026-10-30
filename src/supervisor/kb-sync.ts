@@ -1,39 +1,35 @@
-import { ApiError } from "../common/api/call.ts";
-import { controlClient } from "../common/api/control.ts";
 import { harnessClient } from "../common/api/harness.ts";
 import { errorText } from "../common/errors.ts";
-import { KB_NOT_ASSIGNED, KB as KB_OF_CONTROL } from "../core/api/control/rigs.ts";
 import { RUNS } from "../core/api/harness/advisors.ts";
 import { KB } from "../core/api/harness/supervisor.ts";
 import { knownKbKind, readKbSync } from "../core/kb.ts";
+import { PAST_NO_RUN, PAST_NOT_ASSIGNED } from "../core/link/asks.ts";
+import { AskRefused, ask, type ControlOnBus } from "./ask.ts";
 
 /**
  * Past research for each running run (goal 065). Control keeps Thermite's knowledge base: a
  * collection for each campaign, and which collections a campaign may read. The supervisor asks
- * control, with its rig's token, for the items of the collections a running run's campaign may
- * read, after the run's cursor, and hands them to its harness with the list of those collections.
+ * control on the message bus (core/link/asks.ts's `past`) for the items of the collections a
+ * running run's campaign may read, after the run's cursor, and hands them to its harness with the list of those collections.
  * The harness writes the items into the run's research folder under knowledge/, and removes the
  * folder of a collection no longer on the list (a revoked grant). The cursor of each run is kept
  * in the supervisor's state; pages are fetched while control says more wait. Control replays a
  * newly granted collection's items with new seqs, so a grant needs nothing special here. The harness never reaches control itself.
  *
- * A run control did not assign (a rig check's smoke run, say) has nothing there: control answers
- * 404 with the code `not_assigned`, which is no error, and the run is not asked about again for an
- * hour. Control also answers 404 for a run it assigned but has not heard of from the rig yet (its
- * first events are still on their way): that run is asked about again at the next sync.
+ * A run control did not assign (a rig check's smoke run, say) has nothing there: control refuses
+ * with the code `not_assigned`, which is no error, and the run is not asked about again for an
+ * hour. Control also refuses a run it assigned but has not heard of from the rig yet (its first
+ * events are still on their way): that run is asked about again at the next sync.
  *
  * A newer control may send items of a kind this build does not know. They are left out, counted
  * by kind (the caller logs each kind once), and the sync goes on: a newer control never stops an
  * older rig's sync. The kinds are kept in the state; when an update of the rig teaches it one of
  * them, every run's cursor starts again from 0, so the items left out arrive then.
- *
- * Without control (no URL or token), nothing happens.
  */
 
 export interface KbSyncConfig {
-  rig: string;
-  controlUrl?: string | undefined;
-  controlToken?: string | undefined;
+  /** Where the supervisor asks control: its rig's subjects on the bus. */
+  control: ControlOnBus;
   harnessUrl: string;
   harnessToken: string;
   fetchImpl?: typeof fetch | undefined;
@@ -51,6 +47,9 @@ export interface KbSyncState {
   /** Kinds of item this build left out because it does not know them (control is newer). */
   unknown_kinds?: string[] | undefined;
 }
+
+/** Control's refusals of past research for a run that are no error. */
+const NO_ERROR = [PAST_NOT_ASSIGNED, PAST_NO_RUN];
 
 /** How long a run control did not assign is left alone. */
 export const NOT_ASSIGNED_SKIP_MS = 3_600_000;
@@ -85,7 +84,6 @@ export async function syncKnowledgeOnce(
     errors: [],
     unknownKinds: {},
   };
-  if (!cfg.controlUrl || !cfg.controlToken) return out;
   // Kinds left out before that this build now knows (the rig was updated): every run starts
   // again from 0, so the items left out arrive. The harness overwrites the items it has.
   const leftOut = state.unknown_kinds ?? [];
@@ -93,12 +91,6 @@ export async function syncKnowledgeOnce(
   const harness = harnessClient({
     url: cfg.harnessUrl,
     token: cfg.harnessToken,
-    fetchImpl: cfg.fetchImpl,
-  });
-  const control = controlClient({
-    url: cfg.controlUrl,
-    token: cfg.controlToken,
-    rig: cfg.rig,
     fetchImpl: cfg.fetchImpl,
   });
   const { runs } = await harness.call(RUNS);
@@ -118,12 +110,12 @@ export async function syncKnowledgeOnce(
         const after = out.state.cursors[run.id] ?? 0;
         let answer: unknown;
         try {
-          answer = await control.call(KB_OF_CONTROL, { query: { run: run.id, after } });
+          answer = await ask(cfg.control, "past", { run: run.id, after });
         } catch (err) {
-          if (!(err instanceof ApiError) || err.status !== 404) throw err;
+          if (!(err instanceof AskRefused) || !NO_ERROR.includes(err.code ?? "")) throw err;
           // Nothing for this run: control did not assign it (left alone for an hour), or has not
           // heard of it from the rig yet (asked again next time).
-          if (err.code === KB_NOT_ASSIGNED)
+          if (err.code === PAST_NOT_ASSIGNED)
             skipped[run.id] = new Date(now + NOT_ASSIGNED_SKIP_MS).toISOString();
           break;
         }

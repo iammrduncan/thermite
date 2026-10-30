@@ -1,33 +1,26 @@
-import type { z } from "zod";
 import { ApiError } from "../common/api/call.ts";
-import { controlClient } from "../common/api/control.ts";
 import { harnessClient } from "../common/api/harness.ts";
 import { log } from "../common/env.ts";
-import { MCP_SERVERS } from "../core/api/control/rigs.ts";
 import { MCP_SERVERS_GET, MCP_SERVERS_PUT } from "../core/api/harness/supervisor.ts";
+import type { McpServersValue } from "../core/link/config.ts";
 
 /**
  * The MCP servers control gives the rig (goal 068): those the kits of the runs it assigned the
- * rig name, each with its sign-in as headers. The supervisor reads them with its own token as it
- * reads the model route, hands the harness the servers its workers and planner use (the harness
- * makes their calls), and keeps the advisors' in memory for the calls it makes for them. Nothing
- * here writes a secret to disk or a log. An older control, with no such route, gives none. With
- * the message bus, the servers come in the rig's config there instead (config/), and are handed
- * over the same way.
+ * rig name, each with its sign-in as headers, in the rig's config on the message bus (config/).
+ * The supervisor hands the harness the servers its workers and planner use (the harness makes
+ * their calls), and keeps the advisors' in memory for the calls it makes for them. Nothing here
+ * writes a secret to disk or a log.
  */
 
-export interface McpSync {
-  rig: string;
-  controlUrl: string;
-  controlToken: string;
+export interface McpHand {
   harnessUrl: string;
   harnessToken: string;
   fetchImpl?: typeof fetch | undefined;
 }
 
-export type McpFromControl = z.infer<typeof MCP_SERVERS.answer>;
+export type McpFromControl = McpServersValue;
 
-/** A call's answer, or undefined when the route answers 404: an older control, or no agents. */
+/** A call's answer, or undefined when the route answers 404: a harness with no agents. */
 async function unlessMissing<T>(call: Promise<T>): Promise<T | undefined> {
   try {
     return await call;
@@ -38,31 +31,11 @@ async function unlessMissing<T>(call: Promise<T>): Promise<T | undefined> {
 }
 
 /**
- * One round of the poll: read control's servers; hand the harness its share when it changed.
- * Returns what control gave (all of it: the advisors' share stays with the supervisor).
- */
-export async function syncMcpServers(
-  s: McpSync,
-): Promise<McpFromControl & { handed: "unchanged" | "set" | "no_agents" }> {
-  const control = controlClient({
-    url: s.controlUrl,
-    token: s.controlToken,
-    rig: s.rig,
-    fetchImpl: s.fetchImpl,
-  });
-  const answer = await unlessMissing(control.call(MCP_SERVERS));
-  if (!answer) return { servers: [], unavailable: [], handed: "unchanged" };
-  // With what control left out filled in: no kind of agent, nothing unavailable.
-  return handMcpServers(s, MCP_SERVERS.answer.parse(answer));
-}
-
-/**
- * Hands the harness its share of the servers control gave (from the poll, or from the rig's
- * config on the message bus) when it differs from what the harness holds. Returns what control
- * gave, all of it: the advisors' share stays with the supervisor.
+ * Hands the harness its share of the servers control gave when it differs from what the harness
+ * holds. Returns what control gave, all of it: the advisors' share stays with the supervisor.
  */
 export async function handMcpServers(
-  s: Pick<McpSync, "harnessUrl" | "harnessToken" | "fetchImpl">,
+  s: McpHand,
   given: McpFromControl,
 ): Promise<McpFromControl & { handed: "unchanged" | "set" | "no_agents" }> {
   const harness = harnessClient({

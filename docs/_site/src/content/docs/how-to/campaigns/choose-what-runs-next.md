@@ -262,7 +262,7 @@ Over MCP, the owner's and an operator's tokens send the same kinds and payloads 
 
 ## How to tell it worked
 
-- On **Commands**, the row, such as **queue add**, is **delivered** within seconds. Its **Outcome** holds the rig's answer, such as `{"accepted":true,"result":{"experiment":"x-0123456789ab","position":0,"state":"queued"},"status":"applied"}`. After the rig's next report, the same answer shows with `"kind"` and `"source"` in place of `"status"`.
+- On **Commands**, the row, such as **queue add**, is **delivered** once the rig's next report reaches control, within a minute. Its **Outcome** holds the rig's answer, such as `{"accepted":true,"kind":"queue_add","result":{"experiment":"x-0123456789ab","position":0,"state":"queued"},"source":"harness"}`.
 - After the rig's next report, within a minute, and a **refresh**, **Up next** shows the experiment at its place, and **Rules** shows the rules in force.
 - The run's **History** has a line for each change, such as `You added "unroll the inner loop by 4" to the queue.`, `You moved "unroll the inner loop by 4" to place 3.`, `You edited "unroll the inner loop by 4".` or `You dropped "unroll the inner loop by 4": measured slower twice.` The planner's, the advisors' and the lanes' changes show there too, such as `The teachers added "…" to the queue.` or `lane-2 proposed "…" as an idea for the queue.`
 - When a lane takes the experiment, it moves to **In progress**, and **What the planner did** on the **Planner** tab shows the hand-out and why. When the trial ends, **Tried** shows its result.

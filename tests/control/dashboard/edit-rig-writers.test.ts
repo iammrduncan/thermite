@@ -3,8 +3,8 @@ import { describe, test } from "node:test";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { EDIT_RIG_JS } from "../../../src/control/ui/rigs/edit/client.ts";
 import { AdvisorsConfig, advisorsFileReport } from "../../../src/supervisor/advisors/index.ts";
-import { controlOnly, RIG_TOKEN, signIn } from "../../helpers/control-stack.ts";
-import { ingestReport } from "../../helpers/control-store.ts";
+import { controlOnly, signIn } from "../../helpers/control-stack.ts";
+import { figuresCall, ingestReport } from "../../helpers/control-store.ts";
 
 /**
  * Edit rig's lines for the synthesizer and the final writer (goal 166): each a line of The
@@ -16,7 +16,13 @@ import { ingestReport } from "../../helpers/control-store.ts";
 /** Control with rig-a reporting, the owner signed in, and the provider "lab" with two models. */
 async function stack() {
   const secrets = SecretBox.ephemeral();
-  const { store, control: api } = controlOnly({ options: { staleAfterMs: 600_000, secrets } });
+  const {
+    store,
+    control: api,
+    rigConfig,
+  } = controlOnly({
+    options: { staleAfterMs: 600_000, secrets },
+  });
   await ingestReport(store, {
     rig: "rig-a",
     ledger_id: "ledger-rig-a",
@@ -43,19 +49,12 @@ async function stack() {
     return decodeURIComponent(r.headers.get("location") ?? "");
   };
   const report = async (advisors: unknown) =>
-    (
-      await api.request("/v1/rigs/rig-a/supervisor", {
-        method: "POST",
-        headers: { authorization: `Bearer ${RIG_TOKEN}`, "content-type": "application/json" },
-        body: JSON.stringify({ at: new Date().toISOString(), advisors }),
-      })
-    ).status;
+    figuresCall(store, "rig-a", { at: new Date().toISOString(), advisors }).status;
   const advisorRoutes = async () =>
-    (await (
-      await api.request("/v1/rigs/rig-a/advisor-routes", {
-        headers: { authorization: `Bearer ${RIG_TOKEN}` },
-      })
-    ).json()) as Record<string, { model: string; harness: string } | null>;
+    (await rigConfig("advisor-routes")) as unknown as Record<
+      string,
+      { model: string; harness: string } | null
+    >;
   return { store, page, post, report, advisorRoutes };
 }
 

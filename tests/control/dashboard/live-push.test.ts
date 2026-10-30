@@ -1,24 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { foldLive, LiveTaken } from "../../../src/control/live/index.ts";
 import { CLIENT_JS } from "../../../src/control/ui/client.ts";
-import { LIVE_STREAM_CONFIG } from "../../../src/core/link/live.ts";
-import { LiveLog } from "../../../src/core/live.ts";
-import {
-  LiveCounts,
-  type LiveRelayState,
-  publishLiveOnce,
-  relayLiveOnce,
-} from "../../../src/supervisor/live/index.ts";
 import { signIn } from "../../helpers/control-stack.ts";
-import { asMessage, FakeBus } from "../../helpers/fake-bus.ts";
 import { type PushedEvent, pushedOf, readPushed } from "../../helpers/sse.ts";
 import { stack } from "./stack.ts";
 
 /**
  * Live's push (goal 168, step 2): a run's Live page and a rig's get their new lines as server-sent
- * events from control, under the page's own address, whether control got the lines over HTTP or
- * from the message bus. A reader that connects again goes on after the last line it had.
+ * events from control, under the page's own address, as control folds the lines from the message
+ * bus. A reader that connects again goes on after the last line it had.
  */
 
 type Lines = { entries: { id: number; html: string }[] };
@@ -40,40 +30,15 @@ async function setup() {
 const RUN = "/ui/campaigns/js-sum/runs/js-1/live";
 
 describe("Live's push", () => {
-  test("a run's page gets its new lines as control gets them, over HTTP or from the bus alike", async () => {
+  test("a run's page gets its new lines as control gets them from the bus", async () => {
     const s = await setup();
-    const reading = readPushed(await s.open(`${RUN}/stream?after=${s.newest()}`), (e) => {
-      const said = s.texts(e).join("\n");
-      return said.includes("from the bus") && said.includes("over HTTP");
-    });
-    // Over HTTP, as a rig without the bus sends them.
-    const http = {
-      rig: "rig-a",
-      harnessUrl: s.cfg.harnessUrl,
-      harnessToken: s.cfg.harnessToken,
-      controlUrl: s.cfg.controlUrl,
-      controlToken: s.cfg.controlToken,
-      fetchImpl: s.cfg.fetchImpl,
-    };
-    s.env.service.live.append({
-      source: "planner",
-      kind: "status",
-      text: "over HTTP",
-      run: "js-1",
-    });
-    const at: LiveRelayState = await relayLiveOnce(http, { cursor: 0, ownCursor: 0 });
-    // From the bus, as control's consumer folds a rig's messages.
-    const bus = new FakeBus();
-    await bus.makeStream(LIVE_STREAM_CONFIG);
+    const reading = readPushed(await s.open(`${RUN}/stream?after=${s.newest()}`), (e) =>
+      s.texts(e).join("\n").includes("from the bus"),
+    );
     s.env.service.live.append({ source: "judge", kind: "log", text: "from the bus", run: "js-1" });
-    const own = new LiveLog();
-    await publishLiveOnce({ ...http, bus, counts: new LiveCounts(), own }, at);
-    const taken = new LiveTaken();
-    for (const m of bus.kept) foldLive({ store: s.store, taken }, asMessage(m));
-    assert.equal(taken.lines, 1);
+    await s.live();
     const events = await reading;
     const said = s.texts(events);
-    assert.ok(said.some((h) => h.includes("over HTTP")));
     assert.ok(said.some((h) => h.includes("from the bus")));
     assert.ok(
       said.every((h) => h.includes("data-who=")),
@@ -131,15 +96,7 @@ describe("Live's push", () => {
       run: "js-1",
     });
     s.env.service.live.append({ source: "judge", kind: "log", text: "the judge's" });
-    const http = {
-      rig: "rig-a",
-      harnessUrl: s.cfg.harnessUrl,
-      harnessToken: s.cfg.harnessToken,
-      controlUrl: s.cfg.controlUrl,
-      controlToken: s.cfg.controlToken,
-      fetchImpl: s.cfg.fetchImpl,
-    };
-    await relayLiveOnce(http, { cursor: 0, ownCursor: 0 });
+    await s.live();
     const read = async (q: string) =>
       s.texts(
         await readPushed(await s.open(`/ui/rigs/rig-a/live/stream?after=${after}${q}`), (e) =>

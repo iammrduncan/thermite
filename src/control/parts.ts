@@ -33,7 +33,7 @@ export interface ControlParts {
   rigImages?: RigImages | undefined;
   /**
    * The message bus as the rigs control sets up reach it: its address, and control's authority
-   * they trust its server through. None: those rigs keep to HTTP.
+   * they trust its server through. None: control sets no rig up, since a rig works only on the bus.
    */
   rigBus?: RigBus | undefined;
   /** How control reaches machines over SSH. */

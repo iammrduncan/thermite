@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { COMMANDS_WAITING_MAX, sendCommandsOn } from "../../../src/control/issue/bus.ts";
+import {
+  COMMANDS_WAITING_MAX,
+  heldCommands,
+  publishHeld,
+  sendCommandsOn,
+} from "../../../src/control/issue/bus.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { verifyCommand } from "../../../src/core/commands.ts";
 import {
@@ -8,16 +13,17 @@ import {
   COMMAND_STREAM_CONFIG,
   commandSubject,
 } from "../../../src/core/link/commands.ts";
-import { controlOnly, RIG_TOKEN } from "../../helpers/control-stack.ts";
+import { controlOnly } from "../../helpers/control-stack.ts";
+import { answerCommand } from "../../helpers/control-store.ts";
 import { FakeBus, settle } from "../../helpers/fake-bus.ts";
 
 const SUBJECT = commandSubject("rig-a");
 
-/** Control with rig-a, its commands sent on a bus unless `bus` is false. */
-async function control(o: { bus?: boolean } = {}) {
+/** Control with rig-a, its commands sent on a bus. */
+async function control() {
   const c = controlOnly();
   const bus = new FakeBus();
-  if (o.bus !== false) await sendCommandsOn(c.store, bus);
+  await sendCommandsOn(c.store, bus);
   /** A pause of run-1 on rig-a, as the dashboard, MCP and the API issue a command: its id. */
   const pause = (reason = "a test") =>
     issueCommand(c.store, c.keys.privateKeyPem, {
@@ -26,19 +32,17 @@ async function control(o: { bus?: boolean } = {}) {
       payload: { run: "run-1", reason },
       issuedBy: "owner:test",
     }).id;
-  /** The ids of rig-a's pending commands, as its supervisor's poll over HTTP fetches them. */
-  const pending = async () => {
-    const r = await c.api("GET", "/v1/rigs/rig-a/commands/pending", undefined, RIG_TOKEN);
-    const body = (await r.json()) as { commands: { envelope: { id: string } }[] };
-    return body.commands.map((x) => x.envelope.id);
-  };
+  /** The ids of rig-a's pending commands, as control's store holds them. */
+  const pending = async () => c.store.commands.pending("rig-a").map((x) => x.envelope.id);
+  /** The ids of rig-a's commands control holds off the bus. */
+  const held = () => heldCommands(c.store, "rig-a").map((h) => h.id);
   /** The command as control's store records it. */
   const recorded = (id: string) =>
     String(
       (c.store.db.prepare("select signed from command where id = ?").get(id) as { signed: string })
         .signed,
     );
-  return { ...c, bus, pause, pending, recorded };
+  return { ...c, bus, pause, pending, held, recorded };
 }
 
 describe("control's commands on the message bus", () => {
@@ -54,7 +58,8 @@ describe("control's commands on the message bus", () => {
     assert.equal(m?.id, id, "its message id is the command's");
     assert.equal(m?.data, c.recorded(id), "the message is the command as control records it");
     assert.ok(verifyCommand(JSON.parse(m?.data ?? "{}"), c.keys.publicKeyPem, "rig-a").ok);
-    assert.deepEqual(await c.pending(), [id], "and the poll over HTTP still finds it");
+    assert.deepEqual(await c.pending(), [id], "pending until the rig's events give its outcome");
+    assert.deepEqual(c.held(), []);
 
     // A command issued over REST goes the same way.
     const r = await c.api("POST", "/v1/commands", {
@@ -71,26 +76,32 @@ describe("control's commands on the message bus", () => {
     );
   });
 
-  test("a publish that fails leaves the command pending, where the rig's poll finds it", async () => {
+  test("a publish that fails holds the command, pending, and publishes it again once the bus takes it", async () => {
     const c = await control();
     c.bus.failing = true;
     const lost = c.pause("the bus is away");
     await settle();
     assert.equal(c.bus.on(SUBJECT).length, 0);
     assert.equal(c.store.commands.get(lost)?.status, "pending");
-    assert.deepEqual(await c.pending(), [lost]);
-    // The bus is back: the next command goes on it, and the first still comes over HTTP.
+    assert.deepEqual(c.held(), [lost]);
+    assert.match(heldCommands(c.store)[0]?.why ?? "", /^the bus did not take it: /);
+    // The bus is back: the next command goes on it, and the one held goes again.
     c.bus.failing = false;
     const next = c.pause("the bus is back");
     await settle();
+    await publishHeld(c.store);
+    await settle();
     assert.deepEqual(
-      c.bus.on(SUBJECT).map((m) => m.id),
-      [next],
+      c.bus
+        .on(SUBJECT)
+        .map((m) => m.id)
+        .sort(),
+      [lost, next].sort(),
     );
-    assert.deepEqual(await c.pending(), [lost, next]);
+    assert.deepEqual(c.held(), []);
   });
 
-  test("a rig's commands reach the bus in the order issued, and too many waiting go over HTTP", async () => {
+  test("a rig's commands reach the bus in the order issued, and too many waiting are held", async () => {
     const c = await control();
     let answer = () => {};
     c.bus.hold = new Promise((r) => {
@@ -103,8 +114,12 @@ describe("control's commands on the message bus", () => {
     await settle();
     const published = c.bus.on(SUBJECT).map((m) => m.id);
     assert.deepEqual(published, ids.slice(0, COMMANDS_WAITING_MAX), "each in its turn, in order");
-    // The two past the limit stay off the bus, and every one is pending in the store.
+    // The two past the limit are held, and every one is pending in the store.
     assert.equal((await c.pending()).length, ids.length);
+    assert.deepEqual(c.held(), ids.slice(COMMANDS_WAITING_MAX));
+    await publishHeld(c.store);
+    await settle();
+    assert.equal(c.bus.on(SUBJECT).length, ids.length, "then published again, after the others");
   });
 
   test("a command the owner cancels is taken off the bus, even before its publish", async () => {
@@ -143,7 +158,7 @@ describe("control's commands on the message bus", () => {
     const expired = c.pause("expired");
     await settle();
     assert.ok(c.store.commands.cancel(cancelled, "owner:test"));
-    assert.ok(c.store.commands.ack("rig-a", delivered, "delivered", {}));
+    assert.ok(answerCommand(c.store, "rig-a", delivered, "delivered", {}));
     const past = new Date(Date.now() - 60_000).toISOString();
     c.store.db
       .prepare(
@@ -164,7 +179,7 @@ describe("control's commands on the message bus", () => {
       c.bus.on(SUBJECT).map((m) => m.id),
       before,
     );
-    assert.equal(c.store.commands.get(expired)?.status, "expired", "marked, as the poll marks it");
+    assert.equal(c.store.commands.get(expired)?.status, "expired", "marked as it is looked at");
 
     // On a bus whose stream was lost: the commands still pending, in the order issued.
     const lost = new FakeBus();
@@ -177,13 +192,5 @@ describe("control's commands on the message bus", () => {
     const [m] = lost.on(SUBJECT);
     assert.equal(m?.data, c.recorded(waits), "as control records it");
     assert.deepEqual(await c.pending(), [waits, taken]);
-  });
-
-  test("without the bus, control's commands stay on HTTP", async () => {
-    const c = await control({ bus: false });
-    const id = c.pause();
-    await settle();
-    assert.equal(c.bus.kept.length, 0);
-    assert.deepEqual(await c.pending(), [id]);
   });
 });

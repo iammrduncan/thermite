@@ -6,7 +6,7 @@ sidebar:
   order: 8
 ---
 
-Everything you or an agent asks a rig to do travels as a [signed command](../../reference/signed-commands.md). Control queues it as **pending** until the rig's supervisor fetches it and hands it to the rig, usually within a few seconds (the supervisor asks every five seconds). A command stays pending longer when the rig is not reporting, or while its supervisor fetches what the command needs, such as a large project or a model. While a command is pending, the owner can cancel it.
+Everything you or an agent asks a rig to do travels as a [signed command](../../reference/signed-commands.md). Control publishes it on the message bus, and it stays **pending** until the harness's outcome reaches control: the rig's supervisor takes it from the bus within a second and hands it to the harness, and the harness's record of it comes back in the rig's next report, within a minute by default. A command stays pending longer when the rig is off the bus or not reporting, while control holds it because the bus did not take it, or while its supervisor fetches what the command needs, such as a large project or a model. While a command is pending, the owner can cancel it, though one the harness has applied already takes effect all the same.
 
 Cancelling is possible only with the REST API and the owner's token. The dashboard, MCP and the `thermite` command line have no way to do it yet ([goal 029](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/029-api-mcp-coverage.goal)).
 
@@ -40,8 +40,8 @@ curl -sS -X POST -H "Authorization: Bearer $(cat .dev/secrets/control-admin-toke
   http://127.0.0.1:8800/v1/commands/0b6d3e52-6f1a-4c2e-9a57-3f4e1d2c8b90/cancel
 ```
 
-- `{"cancelled":true}`: control withdrew it. The rig will never receive it. With the message bus, control also takes it off the bus.
-- `404 {"error":"no such pending command"}`: it is no longer pending. The rig already took it, or it expired or was cancelled before. Its status says which.
+- `{"cancelled":true}`: control withdrew it, and took it off the message bus, so the rig will never receive it unless its supervisor had taken it already.
+- `404 {"error":"no such pending command"}`: it is no longer pending. The rig's report with its outcome reached control, or it expired or was cancelled before. Its status says which.
 
 ## Check the result
 
@@ -52,10 +52,10 @@ curl -sS -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" \
 
 A cancelled command shows `{"status":"failed","outcome":{"cancelled_by":"owner:api"}}` over REST and MCP: there is no separate "cancelled" status. On the **Commands** page it shows as **cancelled**, in a grey chip, with `cancelled_by` in its **Outcome**. **Audit log** has a `command_cancelled` entry.
 
-In a rare case the rig still applies it: if its supervisor was handing the command to the harness at the moment you cancelled. The command's status then changes to `delivered` at the rig's next report.
+The rig still applies it if its supervisor had taken it from the bus before you cancelled: a command is pending until the rig's report with its outcome comes, up to a minute after the harness applied it. The command's status then changes to `delivered` at that report.
 
 ## Commands also expire
 
-Each command has a lifetime: 60 minutes by default, set with `ttl_minutes` (REST, MCP) or `--ttl` (the command line), up to 7 days. Sending a champion to another rig lives 24 hours, and the steps of a full reset 30 minutes. A command still pending at the end of its lifetime is never delivered. Control marks it `expired` the next time the rig's supervisor asks for its commands; for a rig that is down, it shows `pending` until then. Cancel a command when you don't want it to run even if the rig comes back within its lifetime.
+Each command has a lifetime: 60 minutes by default, set with `ttl_minutes` (REST, MCP) or `--ttl` (the command line), up to 7 days. Sending a champion to another rig lives 24 hours, and the steps of a full reset 30 minutes. A command still pending at the end of its lifetime is never delivered: the harness refuses it, and the supervisor does not hand it over. Control marks it `expired` within 10 seconds of its expiry, as it looks at every rig's pending commands. Cancel a command when you don't want it to run even if the rig comes back within its lifetime.
 
 A pending command also holds up a [full reset](rig-lifecycle.md#fully-reset-a-rig) of its rig: cancel it to let the reset go on.

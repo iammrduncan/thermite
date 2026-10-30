@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { offBus } from "../../bus/index.ts";
 import { bringBackRig } from "../../rigs/index.ts";
 import type { RunpodRigView } from "../../runpod/index.ts";
 import { ago, esc } from "../../ui/components/index.ts";
@@ -9,6 +10,7 @@ import {
   rigsListBody,
   rigsSummary,
 } from "../../ui/rigs/list.ts";
+import { podStopped } from "../../views/index.ts";
 import type { Dashboard } from "../context.ts";
 
 /** The Rigs page, with Retire and Bring back. */
@@ -61,11 +63,22 @@ export function rigListRoutes(app: Hono, dash: Dashboard): void {
         where: whereOf(u.id, u.runpod),
         pod: u.runpod,
         keyPending: Boolean(store.reportedRigs.key(u.id).pending),
+        offBus: offBus(store, u.id, { lastSeen: u.last_seen, now, podStopped: podStopped(u) }),
       })),
       // A pod costs from its launch: it is listed before its first report too.
       ...(opts.runpodRigs?.list() ?? [])
         .filter((p) => p.active && !listed.has(p.rig))
-        .map((p) => ({ id: p.rig, where: whereOf(p.rig, p), pod: p, keyPending: false })),
+        .map((p) => ({
+          id: p.rig,
+          where: whereOf(p.rig, p),
+          pod: p,
+          keyPending: false,
+          offBus: offBus(store, p.rig, {
+            lastSeen: "",
+            now,
+            podStopped: p.active && p.status === "EXITED",
+          }),
+        })),
     ];
     const launch =
       opts.runpodRigs && store.gpuClouds.list().length

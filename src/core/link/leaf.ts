@@ -86,6 +86,14 @@ export function leafTlsName(rig: string): string {
   return `${rig}.leaf.thermite.invalid`;
 }
 
+/**
+ * How long a connection to one of the bus's servers has for its TLS handshake, and then to sign in,
+ * in seconds: control's server (compose.yaml's nats service) and each pod's (podServerConfig). The
+ * server closes one that takes longer, so a connection that never signs in holds nothing for long.
+ */
+export const BUS_TLS_SECONDS = 2;
+export const BUS_SIGN_IN_SECONDS = 3;
+
 /** A pod's address as RunPod gives it: its public address and the public port of LEAF_PORT. */
 export const LEAF_ADDRESS = /^[A-Za-z0-9.-]{1,253}:[0-9]{1,5}$/;
 
@@ -102,7 +110,10 @@ export interface PodBusFiles {
  * The pod's server's configuration: its supervisor's port on the pod's loopback, over TLS, which
  * only the supervisor's key may sign in to; and the leaf node's port on every address, over TLS,
  * which takes only a client certificate control's authority signed for control's server
- * (CONTROL_LEAF_NAME). It advertises no other address, keeps no stream (no JetStream), and takes
+ * (CONTROL_LEAF_NAME). Each port closes a connection that takes longer than BUS_TLS_SECONDS for
+ * TLS or BUS_SIGN_IN_SECONDS to sign in. It sets no connection limit, as control's server does:
+ * the leaf port's connections are not the server's clients, and its loopback port serves its
+ * supervisor alone. It advertises no other address, keeps no stream (no JetStream), and takes
  * messages as large as the bus does.
  */
 export function podServerConfig(o: {
@@ -110,19 +121,19 @@ export function podServerConfig(o: {
   supervisorKey: string;
   maxPayload: number;
 }): string {
-  const tls = { cert_file: o.files.cert, key_file: o.files.key };
+  const tls = { cert_file: o.files.cert, key_file: o.files.key, timeout: BUS_TLS_SECONDS };
   const config = {
     listen: `127.0.0.1:${POD_BUS_PORT}`,
     max_payload: o.maxPayload,
     tls,
-    authorization: { users: [{ nkey: o.supervisorKey }] },
+    authorization: { users: [{ nkey: o.supervisorKey }], timeout: BUS_SIGN_IN_SECONDS },
     // The leaf node's own users: the server's would otherwise apply, and control signs in with
     // its certificate alone, mapped to a user by its name once control's authority checked it.
     leafnodes: {
       listen: `0.0.0.0:${LEAF_PORT}`,
       no_advertise: true,
       tls: { ...tls, ca_file: o.files.controlCa, verify_and_map: true },
-      authorization: { users: [{ user: `CN=${CONTROL_LEAF_NAME}` }] },
+      authorization: { users: [{ user: `CN=${CONTROL_LEAF_NAME}` }], timeout: BUS_SIGN_IN_SECONDS },
     },
   };
   return [

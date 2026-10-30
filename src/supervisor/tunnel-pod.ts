@@ -37,8 +37,10 @@ import { SUPERVISOR_NUMBERS } from "./settings.ts";
  * proxy (a RunPod pod: docs/plan/goals/_completed/019-rig-only-entry.goal). The rig never connects to
  * control. Instead:
  *
- * - The supervisor makes its usual calls to control at a local address (127.0.0.1) that takes
- *   only the supervisor's own token. Each call waits there as a request for control.
+ * - The supervisor makes its calls to control over HTTPS at a local address (127.0.0.1) that takes
+ *   only the supervisor's own token: the registration of its keys on the message bus, and its
+ *   results (champions' patches, exports) and kits by git. Everything else goes on the bus,
+ *   through the pod's leaf node (leaf.ts). Each call waits there as a request for control.
  * - Control connects to the public port, behind the proxy, and in each exchange collects the
  *   waiting requests and returns the answers to earlier ones. Control answers them as this rig.
  *

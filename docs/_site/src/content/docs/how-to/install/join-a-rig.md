@@ -112,7 +112,7 @@ The rig's page shows **You run it yourself**, with its status:
 - "fetched its files; waiting for its first report";
 - "running", once it reports. The page then fills in: "rig-1 is live; it reported … ago."
 
-Once the command is used, control waits up to an hour for the first report, since pulling the images can take a while on a new machine. (This is a second hour: the first was how long the command worked.) After that the status says "no first report yet"; it still changes to running when the rig reports. If it doesn't report, look at the rig's logs: see [Where the logs are](../operate/troubleshoot.md#where-the-logs-are).
+The rig reports on the message bus, the only way it talks to control but for the registration of its keys and its results: a machine or pods that can't reach the bus's port never report, and 5 minutes after the rig registered its keys, its page shows it **Broken** ([A rig off the bus](../operate/message-bus.md#a-rig-off-the-bus)). Once the command is used, control waits up to an hour for the first report, since pulling the images can take a while on a new machine. (This is a second hour: the first was how long the command worked.) After that the status says "no first report yet"; it still changes to running when the rig reports. If it doesn't report, look at the rig's logs: see [Where the logs are](../operate/troubleshoot.md#where-the-logs-are).
 
 ## 4. Make a new one, or revoke it
 

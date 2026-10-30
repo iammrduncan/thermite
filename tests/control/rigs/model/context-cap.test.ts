@@ -34,7 +34,7 @@ const TOKENS = {
  */
 async function stack() {
   const secrets = SecretBox.ephemeral();
-  const { store, control, api } = controlOnly({
+  const { store, control, api, rigConfig } = controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, secrets },
   });
@@ -63,12 +63,12 @@ async function stack() {
   const give = (body: Record<string, unknown>) => api("POST", "/v1/rigs/rig-a/model", body);
   const route = async () =>
     (
-      (await (await api("GET", "/v1/rigs/rig-a/model-route", undefined, RIG_TOKEN)).json()) as {
+      (await rigConfig("model-route")) as unknown as {
         route: { context_window: number; revision: string };
       }
     ).route;
   const { page, post } = await signIn(control);
-  return { store, control, give, route, page, post };
+  return { store, control, give, route, page, post, rigConfig };
 }
 
 const text = (r: unknown) =>
@@ -374,14 +374,12 @@ describe("the compaction point of a rig's model (goal 070)", () => {
 describe("every agent's own cap and compaction point (goal 070)", () => {
   /** The rig's routes: its workers' and planner's, and its advisors'. */
   const routes = async (s: Awaited<ReturnType<typeof stack>>) => {
-    const get = async (path: string) =>
-      (await (
-        await s.control.request(path, { headers: { authorization: "Bearer rig-token-abcdef" } })
-      ).json()) as Record<string, { context_window: number; compact_at?: number } | null>;
-    return {
-      model: await get("/v1/rigs/rig-a/model-route"),
-      advisors: await get("/v1/rigs/rig-a/advisor-routes"),
-    };
+    const get = async (key: "model-route" | "advisor-routes") =>
+      (await s.rigConfig(key)) as unknown as Record<
+        string,
+        { context_window: number; compact_at?: number } | null
+      >;
+    return { model: await get("model-route"), advisors: await get("advisor-routes") };
   };
 
   test("REST: the planner and each advisor keep their own, their routes carry them, and the cap is checked", async () => {

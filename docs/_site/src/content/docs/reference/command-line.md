@@ -517,11 +517,11 @@ It prints `enrolled RIG; control's key fingerprint <fingerprint>`, then `wrote` 
 | `secrets/harness-supervisor-token` | 0600 | A new token the command makes itself. Control never sees it | The harness, as `THERMITE_SUPERVISOR_TOKEN_FILE`, and the supervisor, as `THERMITE_HARNESS_TOKEN_FILE` |
 | `keys/control-signing.pub` | 0644 | Control's public key | The harness, as `THERMITE_CONTROL_PUBKEY_FILE` |
 | `keys/control-signing.fingerprint` | 0644 | That key's fingerprint | You, to compare with the fingerprint control's dashboard shows |
-| `keys/bus-ca.pem` | 0644 | With control's message bus on for rigs: the certificate of control's authority for the bus | The supervisor, as `THERMITE_NATS_CA_FILE` |
-| `rig.env` | 0644 | `THERMITE_RIG_ID=<rig>` and `CONTROL_URL=<control's address>`; with the message bus, also `THERMITE_NATS_URL=<the bus's address for rigs>` | The rig's settings |
+| `keys/bus-ca.pem` | 0644 | The certificate of control's authority for the message bus | The supervisor, as `THERMITE_NATS_CA_FILE` |
+| `rig.env` | 0644 | `THERMITE_RIG_ID=<rig>`, `CONTROL_URL=<control's address>` and `THERMITE_NATS_URL=<the bus's address for rigs>` | The rig's settings |
 | `README.txt` | 0644 | What each file is for | You |
 
-Control refuses a name that is taken: `409 {"error":"rig <rig> is already enrolled"}`.
+Control refuses a name that is taken: `409 {"error":"rig <rig> is already enrolled"}`. When control has no address for rigs on its message bus, the command writes no file, since a rig works only on the bus: `control enrolled <rig> but has no address for rigs on its message bus (THERMITE_NATS_PUBLIC_URL, or THERMITE_CONTROL_PUBLIC_URL), and a rig works only on the bus. Set it on control, retire this rig (thermite rig retire <rig>) and add it again`.
 
 No token is printed. Thermite has no ready-made deployment that starts a rig from this directory; the dashboard's **Add a rig** sets rigs up for you. See [Add a rig on a machine over SSH](../how-to/install/rig-on-a-machine.md) and [Join a rig yourself](../how-to/install/join-a-rig.md).
 

@@ -53,7 +53,7 @@ export function emptyRun(id: string): RunView {
     champion_held_out: null,
     goal_checks: null,
     audits: [],
-    promotion_waits: {},
+    promotion_waits: Object.create(null),
     reviews: [],
     paper: null,
     conclusions: [],

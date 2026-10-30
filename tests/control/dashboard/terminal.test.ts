@@ -13,8 +13,9 @@ import { SCREENS_WATCHED_MAX } from "../../../src/core/screens.ts";
 import { TERMINAL_KEYS } from "../../../src/core/terminal-input.ts";
 import { TrialConsole } from "../../../src/harness/agents/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
+import { ask } from "../../../src/supervisor/ask.ts";
 import { relayScreensOnce } from "../../../src/supervisor/live/index.ts";
-import { ADMIN, controlStack, mcpClient, RIG_TOKEN, signIn } from "../../helpers/control-stack.ts";
+import { ADMIN, controlStack, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { type PushedEvent, readPushed } from "../../helpers/sse.ts";
 
 /**
@@ -81,11 +82,14 @@ async function setup() {
   const owner = await signIn(s.control);
   // The supervisor's calls, and those that reached the harness's screens route.
   const asked: string[] = [];
+  const fetchImpl = s.cfg.fetchImpl as typeof fetch;
   const cfg = {
-    ...s.cfg,
+    harnessUrl: s.cfg.harnessUrl,
+    harnessToken: s.cfg.harnessToken,
+    control: { rig: "rig-a", bus: s.bus },
     fetchImpl: (async (input, init) => {
       if (String(input).includes("/v1/screens")) asked.push(String(init?.body ?? ""));
-      return await s.cfg.fetchImpl(input, init);
+      return await fetchImpl(input, init);
     }) as typeof fetch,
   };
   return { ...s, owner, term, asked, screensCfg: cfg };
@@ -163,14 +167,10 @@ describe("a trial's terminal on Live", () => {
     // Nobody watches: the supervisor asks the harness for nothing, and control keeps nothing.
     assert.deepEqual(await relayScreensOnce(s.screensCfg, []), []);
     assert.deepEqual(s.asked, []);
-    const unasked = await s.control.request("/v1/rigs/rig-a/screens", {
-      method: "POST",
-      headers: { authorization: `Bearer ${RIG_TOKEN}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        frames: [{ trial: TRIAL, state: "running", cols: 1, rows: 1, data: "x", at: "now" }],
-      }),
+    const unasked = await ask(s.screensCfg.control, "screens", {
+      frames: [{ trial: TRIAL, state: "running", cols: 1, rows: 1, data: "x", at: "now" }],
     });
-    assert.deepEqual(await unasked.json(), { watch: [] });
+    assert.deepEqual(unasked, { watch: [] });
     // A page watches: control says so, the supervisor sends the screen, the page gets it.
     const page = await s.owner.get(SCREEN);
     const reading = readPushed(page, (e) => frames(e).length > 0, 5000);

@@ -1,17 +1,90 @@
-import { BUS_KEY_CHANGE_STEPS, BUS_KEYS_SEEN_STEP, busUsersOf } from "../../bus/index.ts";
+import {
+  BUS_KEY_CHANGE_STEPS,
+  BUS_KEYS_SEEN_STEP,
+  busUsersOf,
+  offBus,
+  offBusFix,
+} from "../../bus/index.ts";
 import { clockUtc } from "../../command-progress.ts";
+import { heldCommands } from "../../issue/index.ts";
 import { STEP_WORDS } from "../../rigs/index.ts";
 import type { ControlStore } from "../../store/index.ts";
-import type { RigView } from "../../views/index.ts";
+import { podStopped, type RigView } from "../../views/index.ts";
 import { card, esc, icon } from "../components/index.ts";
 import { span } from "../words/index.ts";
 import type { Need, NeedsContext } from "./index.ts";
 
 /**
- * What the message bus shows the owner, with nothing to approve: a rig's keys on the bus that
- * changed or were refused since the owner last saw them, and the bus's server that keeps not
+ * What the message bus shows the owner, with nothing to approve: a rig off the bus, which is
+ * broken; a rig's commands the bus did not take, which control holds; a rig's keys on the bus that
+ * changed or were refused since the owner last saw them; and the bus's server that keeps not
  * taking control's users file.
  */
+
+const open = (u: RigView, does: string) => ({
+  button: `<a class="btn" href="/ui/rigs/${encodeURIComponent(u.id)}">Open the rig</a>`,
+  label: "Open the rig",
+  does,
+});
+
+/** A rig off the bus: it doesn't work until it reaches the bus (bus/reach.ts). */
+export function offBusNeeds(c: NeedsContext, store: ControlStore, u: RigView): Need[] {
+  const off = offBus(store, u.id, { lastSeen: u.last_seen, now: c.now, podStopped: podStopped(u) });
+  if (!off) return [];
+  return [
+    {
+      kind: "off_bus",
+      rig: u.id,
+      at: off.since,
+      ...card({
+        tone: "bad",
+        ic: icon.x,
+        kind: "Broken",
+        question: "This rig can't reach control's message bus",
+        headline: `${esc(u.id)} is broken: it is off the message bus`,
+        why: "A rig reaches control only on the bus: until it does, control gets none of its reports and it gets no commands",
+        key: `off-bus-${u.id}-${off.since}`,
+        u,
+        since: off.since,
+        now: c.now,
+        facts: `<dt>What</dt><dd>${esc(off.words)}</dd>
+<dt>Do</dt><dd>${esc(offBusFix(store, u.id, off))}</dd>`,
+        choices: [open(u, "Where it runs, its history and its actions.")],
+      }),
+    },
+  ];
+}
+
+/** A rig's commands the bus did not take: control holds them, and publishes them again. */
+export function heldCommandNeeds(c: NeedsContext, store: ControlStore, u: RigView): Need[] {
+  const held = heldCommands(store, u.id);
+  const first = held[0];
+  if (!first) return [];
+  const n = held.length;
+  const kinds = [...new Set(held.map((h) => h.kind))].join(", ");
+  return [
+    {
+      kind: "held_commands",
+      rig: u.id,
+      at: first.since,
+      ...card({
+        tone: "warn",
+        ic: icon.clock,
+        kind: "Commands wait",
+        question: `${n === 1 ? "A command" : `${n} commands`} for this rig wait for room on the message bus`,
+        headline: `${n === 1 ? "A command" : `${n} commands`} for ${esc(u.id)} wait${n === 1 ? "s" : ""} for the message bus since ${esc(clockUtc(first.since))}`,
+        why: `${esc(first.why)}. Control holds ${n === 1 ? "it" : "them"}, and publishes ${n === 1 ? "it" : "them"} again by itself as soon as the bus takes ${n === 1 ? "it" : "them"}`,
+        key: `held-commands-${u.id}-${first.since}`,
+        u,
+        since: first.since,
+        now: c.now,
+        facts: `<dt>What</dt><dd>${esc(kinds)}, the oldest waiting ${esc(span(first.since, c.now))}.</dd>
+<dt>Check</dt><dd>A full queue means the rig has not taken its commands: is it on the bus, and does its supervisor run? Each command still expires at its own time, and you can cancel one on the Commands page.</dd>`,
+        choices: [open(u, "Its state and its history.")],
+      }),
+    },
+  ];
+}
 
 /** A rig's keys on the bus that changed, or were refused, since the owner pressed Seen. */
 export function busKeyNeeds(c: NeedsContext, store: ControlStore, u: RigView): Need[] {
@@ -58,11 +131,7 @@ export function busKeyNeeds(c: NeedsContext, store: ControlStore, u: RigView): N
             label: "Seen",
             does: "The card leaves Needs you. The changes stay in the rig's history, on its page.",
           },
-          {
-            button: `<a class="btn" href="/ui/rigs/${encodeURIComponent(u.id)}">Open the rig</a>`,
-            label: "Open the rig",
-            does: "Its keys on the bus and their history.",
-          },
+          open(u, "Its keys on the bus and their history."),
         ],
       }),
     },

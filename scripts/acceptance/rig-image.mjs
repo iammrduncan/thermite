@@ -3,11 +3,14 @@
 // machine: built on the CPU harness image, started as root with the engine's default capabilities
 // and without no-new-privileges, and given RunPod's variables (made up) and the launch values
 // control mints for pull mode. Control runs in this process and connects to the pod's port, as
-// it would through RunPod's proxy. Then:
+// it would through RunPod's proxy, and runs its message bus: the bus's server in a container of
+// its pinned image (lib/control-bus.mjs), which dials the pod's leaf node on the check's network.
+// Then:
 //   - the harness waits for enrollment; once control has enrolled the pod, root checks control's
 //     key against the launch's SHA-256 and gives the harness its own copy, and the rig's
 //     settings from control reach the controller, but not the enrollment code;
-//   - the rig's reports reach control through control's pulls only;
+//   - the supervisor registers its keys through control's connection, and the rig's reports reach
+//     control on the bus, through the pod's leaf node;
 //   - the state's snapshot folder (/workspace/thermite; on RunPod, the volume) is root's, mode
 //     0700, closed to both parts and the roles, and root takes a snapshot right after enrollment,
 //     sealed with the launch's key: the manifest and sealed files only, nothing in plain text;
@@ -28,16 +31,17 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { addressOn, followControlBus, startControlBus } from "./lib/control-bus.mjs";
 import { cleanEngine, engine } from "./lib/smoke-env.mjs";
 
-// Control's side, in this process (Node.js strips the types of these files). Its store is on the
-// tests' fake message bus, as control needs a bus: the rigs here report over HTTP, in pull mode,
-// and only control's own copy of its events and the apply of it use the bus, in this process.
+// Control's side, in this process (Node.js strips the types of these files), on its message bus.
+const { buildInfo } = await import("../../src/common/build-info.ts");
 const { createControlApi } = await import("../../src/control/api/index.ts");
+const { controlParts } = await import("../../src/control/parts.ts");
 const { SecretBox } = await import("../../src/control/secrets.ts");
 const { ControlTunnels } = await import("../../src/control/runpod/tunnel.ts");
 const { generateSigningKeys } = await import("../../src/core/commands.ts");
-const { controlStore } = await import("../../tests/helpers/control-store.ts");
+const { LEAF_PORT } = await import("../../src/core/link/leaf.ts");
 const { keySha256 } = await import("../../src/core/tunnel.ts");
 
 const harnessImage = "localhost/thermite-harness:rig-image-check";
@@ -67,8 +71,15 @@ const foreign = foreignNodesPossible();
 
 /** Control's pulls from the pod, once it is launched. */
 let pump;
-const cleanup = () => {
+/** Control's bus (lib/control-bus.mjs), and its loops. */
+let onBus;
+let followed;
+/** The bus's server's host port: RIG_IMAGE_CHECK_BUS_PORT, 14520 unless given (never 4222). */
+const busPort = Number(process.env.RIG_IMAGE_CHECK_BUS_PORT ?? "14520");
+const cleanup = async () => {
   clearInterval(pump);
+  followed?.stop();
+  await onBus?.remove();
   spawnSync(engine, ["rm", "-f", name], { stdio: "ignore" });
   spawnSync(engine, ["rmi", "-f", rigImage, harnessImage], { stdio: "ignore" });
   if (foreign) spawnSync(engine, ["machine", "ssh", `sudo rm -rf ${FOREIGN}`], { stdio: "ignore" });
@@ -158,11 +169,22 @@ try {
       `sudo sh -c 'rm -rf ${FOREIGN} && mkdir -p ${FOREIGN} && cd ${FOREIGN} && touch ${list} && chown 0:0 ${list} && chmod 666 ${list}'`,
     ]);
   }
-  // Control mints the rig, its one-time code and the pod's launch values, as a launch does.
+  // Control, on its bus, mints the rig, its one-time code and the pod's launch values, as a
+  // launch does: its leaf node's too.
   const controlKeys = generateSigningKeys();
-  const store = controlStore();
   const secrets = SecretBox.ephemeral();
-  const tunnels = new ControlTunnels(store, secrets, controlKeys.privateKeyPem);
+  onBus = await startControlBus({ name, port: busPort, secrets });
+  const { store } = onBus;
+  const tunnels = new ControlTunnels(store, secrets, controlKeys.privateKeyPem, {
+    busCa: onBus.caCert,
+  });
+  const parts = controlParts(
+    store,
+    controlKeys.privateKeyPem,
+    { staleAfterMs: 180_000, secrets, tunnels, busCa: onBus.caCert },
+    { staleAfterMs: 180_000, control: buildInfo() },
+  );
+  followed = followControlBus(onBus, parts);
   createControlApi(
     store,
     { admin: "an-admin-token-for-the-test", rigs: {} },
@@ -171,6 +193,9 @@ try {
       staleAfterMs: 180_000,
       secrets,
       tunnels,
+      parts,
+      busUsers: onBus.busUsers,
+      busConfig: followed.busConfig,
     },
   );
   const rig = "rig-image-check";
@@ -196,7 +221,10 @@ try {
     "-d",
     "--name",
     name,
-    // RunPod's proxy reaches the pod's port; here control reaches it on this machine.
+    // RunPod's proxy reaches the pod's port; here control reaches it on this machine. Its leaf
+    // node's port, on the bus's network, is what RunPod's public address stands for.
+    "--network",
+    onBus.net,
     "-p",
     "127.0.0.1::8790",
     "-e",
@@ -231,6 +259,7 @@ try {
   // Control connects to the pod and enrolls it, then exchanges with it as its loop does.
   const port = sh(["port", name, "8790/tcp"]).trim().split("\n")[0].split(":").at(-1);
   tunnels.attach(rig, "pod-test", `http://127.0.0.1:${port}`);
+  store.tunnels.setLeafAddress(rig, `${addressOn(onBus.net, name)}:${LEAF_PORT}`);
   pump = setInterval(() => {
     tunnels.advance(1000).catch((err) => console.error(`pull: ${String(err)}`));
   }, 500);
@@ -314,13 +343,16 @@ try {
       !logs().includes(minted.env.THERMITE_TUNNEL_ENROLL_CODE) &&
       !logs().includes(minted.env.THERMITE_STATE_SNAPSHOT_KEY),
   );
-  // The rig's reports reach control, through control's pulls only.
+  // The rig's reports reach control on the bus, through the pod's leaf node.
   let reported = false;
   for (let i = 0; i < 60 && !reported; i++) {
     reported = store.reportedRigs.list().some((r) => r.id === rig);
     if (!reported) await sleep(2000);
   }
-  check("the rig's reports reach control through control's pulls", reported);
+  check(
+    "the supervisor registered its keys through control's connection, and its reports reach control on the bus",
+    reported && Boolean(store.busKeys.rigKey(rig)),
+  );
 
   if (foreign) {
     const seen = sh(["exec", name, "stat", "-c", "%U %a", "/dev/nvidia0"]).trim();
@@ -495,9 +527,9 @@ try {
   );
 
   // A stop ends both parts, and the container exits with 0, even with control away. Control
-  // stops connecting first, and the supervisor's calls (its reports, its poll for commands) wait
-  // at its local port for control's next exchange, for up to two minutes each: the stop must end
-  // them at once, not wait for control. (The engine's stop below also blocks this process, so
+  // stops connecting first, and a supervisor's call through the tunnel waits at its local port for
+  // control's next exchange, for up to two minutes: the stop must end it at once, not wait for
+  // control. (The engine's stop below also blocks this process, so
   // control could not answer during it anyway.)
   clearInterval(pump);
   await sleep(8000);
@@ -532,7 +564,7 @@ try {
 } catch (err) {
   check("the script ran to its end", false, err instanceof Error ? err.message : String(err));
 } finally {
-  cleanup();
+  await cleanup();
 }
 console.log(failed() ? `rig image acceptance: ${failed()} FAILED` : "rig image acceptance: OK");
 process.exit(failed() ? 1 : 0);

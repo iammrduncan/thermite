@@ -2,8 +2,8 @@
  * One rig, wherever it runs: its setup and the steps of its history (setup.ts, setup-view.ts),
  * where it runs and control's look there (place.ts, watch.ts), its move onto control's images
  * (update.ts), its settings (settings.ts), its agents' models (agent-models.ts, model.ts), the
- * model routes they get with their keys (model-routes.ts), its GPU split (gpu-split.ts), and its
- * return from retirement (retire.ts).
+ * model routes they get with their keys (model-routes.ts), its GPU split (gpu-split.ts), its
+ * supervisor's figures (figures.ts), and its return from retirement (retire.ts).
  */
 
 export {
@@ -19,6 +19,7 @@ export {
   rigModels,
   setRigModel,
 } from "./agent-models.ts";
+export { takeFigures } from "./figures.ts";
 export { sendSplit, splitFor } from "./gpu-split.ts";
 export {
   type AdvisorSetupView,
@@ -35,7 +36,6 @@ export {
 } from "./model.ts";
 export {
   advisorRoutesOf,
-  configOnBusRefusal,
   type ModelRoutes,
   modelRoutesOf,
   type RouteParts,
@@ -62,7 +62,9 @@ export {
   controlAddress,
   controlImages,
   judgeShare,
+  NO_RIG_BUS,
   type RigImages,
+  rigBusOf,
   rigTaken,
   STEP_WORDS,
   sleep,

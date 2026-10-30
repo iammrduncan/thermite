@@ -239,7 +239,11 @@ export class FoldCache {
   private fold(rig: string, key: string, k: Kept, e: StreamEvent): void {
     try {
       const stored = foldEvent(e);
-      if (stored) k.fold.apply(stored);
+      const why = stored && k.fold.apply(stored);
+      if (why) {
+        const what = { rig, ledger: k.ledger, event: e.read.event.id, kind: stored.kind, why };
+        log("control", "an event the views can't read: kept, not folded", what, "warn");
+      }
       k.seq = e.place;
       k.through = e.place;
     } catch (err) {

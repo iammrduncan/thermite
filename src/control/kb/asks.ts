@@ -21,8 +21,8 @@ import type { KbFound, KbItem } from "./index.ts";
 
 /**
  * Control's answers to a rig's searches and reads of the knowledge base, for an agent of one of
- * its runs (goal 175): on the message bus, a request on the rig's own subject (core/link/kb.ts),
- * and over HTTP for a rig not on it (api/results.ts). Control answers only for a run it assigned to
+ * its runs (goal 175): on the message bus, a request on the rig's own subject (core/link/kb.ts).
+ * Control answers only for a run it assigned to
  * that rig, and reads only what the run may read: its own run alone when it started fresh, else its
  * campaign's whole collection, and the granted collections it includes (store/kb/scope.ts). What
  * the ask names beyond its run, its words and its kinds is never a scope.
@@ -207,7 +207,7 @@ export class KbAskLimit {
   }
 }
 
-/** Control's one limit, which the bus's asks and the HTTP route's share. */
+/** Control's one limit for the bus's asks. */
 export const kbAskLimit = new KbAskLimit();
 
 /**

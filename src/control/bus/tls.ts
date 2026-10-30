@@ -44,15 +44,15 @@ export const BUS_CA_EXPORT_SETTING = "THERMITE_NATS_CA_EXPORT";
 
 /**
  * The bus's address as control reaches it, from its setting. Control needs its bus: it keeps every
- * rig's events in the bus's events stream, and derives its records from them there, whether a rig
- * reports over the bus or over HTTP. Not set stops control at start, with the setting's name; a
- * bad one too (busUrl).
+ * rig's events in the bus's events stream, and derives its records from them there, and the rigs
+ * reach it there alone. Not set stops control at start, with the setting's name; a bad one too
+ * (busUrl).
  */
 export function controlBusUrl(env: Record<string, string | undefined>): string {
   const url = busUrl(env);
   if (!url)
     throw new Error(
-      `control needs its message bus: set ${BUS_URL_SETTING} to its NATS server, such as nats://nats:4222. Control keeps every rig's events in the bus's EVENTS stream and derives its records from them there, whether a rig reports over the bus or over HTTP`,
+      `control needs its message bus: set ${BUS_URL_SETTING} to its NATS server, such as nats://nats:4222. Control keeps every rig's events in the bus's EVENTS stream and derives its records from them there, and its rigs reach it only on the bus`,
     );
   return url;
 }

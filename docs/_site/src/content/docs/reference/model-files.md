@@ -84,7 +84,7 @@ The supervisor reports each download in four places. Its report is not signed: t
 
 ### The supervisor's report
 
-The newest 20 downloads, newest first, go to control with the supervisor's figures every round (`THERMITE_POLL_SECONDS`, 60 seconds by default). They are `supervisor.models` in `GET /v1/rigs/<rig>/view` ([REST API](rest-api.md#rigs-and-their-history)).
+The newest 20 downloads, newest first, go to control with the supervisor's figures, on the message bus, every round (`THERMITE_POLL_SECONDS`, 60 seconds by default). They are `supervisor.models` in `GET /v1/rigs/<rig>/view` ([REST API](rest-api.md#rigs-and-their-history)).
 
 | Field | Type | Meaning |
 | --- | --- | --- |

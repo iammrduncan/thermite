@@ -7,27 +7,16 @@ import { issueCommand } from "../../src/control/issue/index.ts";
 import { ControlStore, fingerprint } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { verifyExport } from "../../src/supervisor/git-export.ts";
-import { relayOnce } from "../../src/supervisor/relay/index.ts";
 import { ADMIN, controlOnly, controlStack } from "../helpers/control-stack.ts";
-import { enrollRigs, heldEvents, ingestReport } from "../helpers/control-store.ts";
+import { enrollRigs, foldOnBus, heldEvents, ingestReport } from "../helpers/control-store.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 import { appendOther } from "../helpers/kinds.ts";
 
-const rigHeaders = {
-  authorization: "Bearer rig-token-abcdef",
-  "content-type": "application/json",
-};
-
-describe("signed reports at control", () => {
+describe("signed reports at control, from the bus", () => {
   test("stale reports, gaps and reports from a ledger the rig left are refused", async () => {
     const env = makeHarnessEnv("rig-a");
-    const { store, control } = controlOnly({ keys: env.keys });
-    const post = (body: unknown) =>
-      control.request("/v1/rigs/rig-a/ingest", {
-        method: "POST",
-        headers: rigHeaders,
-        body: JSON.stringify(body),
-      });
+    const { store } = controlOnly({ keys: env.keys });
+    const post = (body: unknown) => foldOnBus(store, "rig-a", body);
     appendOther(env.service.ledger, "t", "one", null, {});
     const old = env.service.snapshot(0, 100) as Record<string, unknown>;
     await new Promise((r) => setTimeout(r, 10));
@@ -48,19 +37,19 @@ describe("signed reports at control", () => {
       created_by: "owner:ui",
     });
     store.clusters.setRigStatus("rig-a", "failed");
-    assert.equal((await post(fresh)).status, 200);
+    assert.ok("folded" in (await post(fresh)));
     assert.equal(store.clusters.rig("rig-a")?.status, "running");
     assert.ok(store.rigHistory.list("rig-a").some((x) => x.step === "report_after_images" && x.ok));
     // An older report (a replay) is refused: the rig cannot be frozen in an old state.
     const replay = await post(old);
-    assert.equal(replay.status, 409);
+    assert.ok(!("folded" in replay), JSON.stringify(replay));
     // A page that starts past what control has is a gap.
     appendOther(env.service.ledger, "t", "three", null, {});
     appendOther(env.service.ledger, "t", "four", null, {});
     const ahead = env.service.snapshot(Number(fresh.next) + 1, 100) as Record<string, unknown>;
     const gap = await post(ahead);
-    assert.equal(gap.status, 409);
-    assert.equal(((await gap.json()) as { expected_cursor: number }).expected_cursor, fresh.next);
+    assert.ok("refused" in gap);
+    assert.match((gap as { refused: string }).refused, /gap|cursor/);
     const kinds = (await heldEvents(store, "rig-a")).map((e) => e.kind);
     assert.deepEqual(kinds, ["one", "two"]);
     // A rig that moved to a new ledger never goes back to the one it left.
@@ -85,13 +74,8 @@ describe("signed reports at control", () => {
       options: { requireKeyAcceptance: true },
     });
     const snap = env.service.snapshot(0, 100);
-    const post = () =>
-      control.request("/v1/rigs/rig-a/ingest", {
-        method: "POST",
-        headers: rigHeaders,
-        body: JSON.stringify(snap),
-      });
-    assert.equal((await post()).status, 409);
+    const post = () => foldOnBus(store, "rig-a", snap, { requireKeyAcceptance: true });
+    assert.ok("refused" in (await post()));
     assert.equal(store.reportedRigs.key("rig-a").pubkey, null);
     const wrong = await control.request("/v1/rigs/rig-a/key/accept?fingerprint=0000", {
       method: "POST",
@@ -104,25 +88,21 @@ describe("signed reports at control", () => {
       headers: { authorization: `Bearer ${ADMIN}` },
     });
     assert.equal(ok.status, 200);
-    assert.equal((await post()).status, 200);
+    assert.ok("folded" in (await post()));
   });
 });
 
 describe("the command queue", () => {
   test("expired commands are not relayed; the owner can cancel one; commands go through when reporting fails", async () => {
-    const { env, store, control, cfg } = controlStack({ env: makeHarnessEnv("rig-a") });
+    const { env, store, control, cfg, relay } = controlStack({ env: makeHarnessEnv("rig-a") });
     const expired = issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
       payload: {},
-      ttlMinutes: 1,
+      ttlMinutes: 0.001,
       issuedBy: "owner:test",
     });
-    store.db
-      .prepare(
-        "update command set signed = json_set(signed, '$.envelope.expires_at', ?) where id = ?",
-      )
-      .run(new Date(Date.now() - 60_000).toISOString(), expired.id);
+    await new Promise((r) => setTimeout(r, 100));
     const cancel = issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
@@ -145,13 +125,17 @@ describe("the command queue", () => {
       [keep.id],
     );
     assert.equal(store.commands.get(expired.id)?.status, "expired");
-    // Reporting fails (control refuses every report), yet the command is relayed and applied.
-    const fetchImpl: typeof fetch = async (input, init) =>
-      new URL(String(input)).pathname.endsWith("/ingest")
-        ? new Response("{}", { status: 500 })
-        : await cfg.fetchImpl(input, init);
-    await assert.rejects(relayOnce({ ...cfg, fetchImpl }, { cursor: 0 }));
-    assert.equal(store.commands.get(keep.id)?.status, "delivered");
+    // Reporting fails (the bus takes no report), yet the command is relayed and applied.
+    const bus = cfg.bus;
+    cfg.bus = {
+      publish: async () => {
+        throw new Error("TimeoutError: no ack from the server");
+      },
+      request: (subject, data, ms) => bus.request(subject, data, ms),
+    };
+    await relay();
+    assert.equal(env.service.ledger.commands.get(keep.id)?.accepted, true);
+    assert.equal(env.service.ledger.commands.get(expired.id), undefined, "not relayed");
   });
 
   test("a command too large to deliver is refused when it is issued", () => {

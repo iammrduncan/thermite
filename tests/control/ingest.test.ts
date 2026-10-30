@@ -11,7 +11,7 @@ import {
   reportMessageId,
   reportSubject,
 } from "../../src/core/link/report.ts";
-import { buildHeaders } from "../../src/core/version.ts";
+import { type BuildInfo, buildHeaders } from "../../src/core/version.ts";
 import { busOf, controlStore, enrollRigs, heldEvents } from "../helpers/control-store.ts";
 import { FakeBus } from "../helpers/fake-bus.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
@@ -26,8 +26,12 @@ function intake(): Intake {
 
 let seq = 0;
 /** A report as it comes off the bus: on `subject`, with the supervisor's build in its headers. */
-function message(report: unknown, subject = reportSubject("rig-a")): BusMessage {
-  const h = buildHeaders(buildInfo());
+function message(
+  report: unknown,
+  subject = reportSubject("rig-a"),
+  build: BuildInfo = buildInfo(),
+): BusMessage {
+  const h = buildHeaders(build);
   return {
     subject,
     seq: ++seq,
@@ -111,7 +115,7 @@ describe("control folds rigs' reports from the message bus", () => {
     assert.deepEqual(refusals(t), []);
   });
 
-  test("a gap is refused and recorded as over HTTP, and the pages after it still fold", async () => {
+  test("a gap is refused and recorded, and the pages after it still fold", async () => {
     const t = intake();
     const { page } = harness(25);
     assert.deepEqual(await foldReport(t, message(page(0, 10))), { folded: 10 });
@@ -168,10 +172,10 @@ describe("control folds rigs' reports from the message bus", () => {
   test("a rig whose supervisor control cannot work with is refused, and its calls counted", async () => {
     const t = intake();
     const { page } = harness(2);
-    // Its supervisor said so on a call over HTTP: it works with protocol 99 or later only.
+    // Its supervisor says so in its report's headers: it works with protocol 99 or later only.
     const newer = { version: "9.0.0", commit: null, protocol: 99, oldest_protocol: 99 };
-    t.store.builds.setRig("rig-a", "supervisor", newer);
-    const refused = ((await foldReport(t, message(page(0, 10)))) as { refused?: string }).refused;
+    const m = message(page(0, 10), reportSubject("rig-a"), newer);
+    const refused = ((await foldReport(t, m)) as { refused?: string }).refused;
     assert.match(refused ?? "", /^Control cannot work with this rig: its supervisor works with/);
     assert.equal(t.store.refusals.get("rig-a")?.calls, 1);
     assert.deepEqual(await kinds(t), []);

@@ -332,10 +332,7 @@ It names no slot: the slot is the trial's or the call's, never the agent's word,
 
 The harness never calls out. A worker's or the planner's `kb_search` and `kb_read` wait in the harness; the rig's supervisor holds a call open to it (`GET /v1/kb/asks`, up to 25 seconds) that takes them as they come, at most 20 at a time, asks control for each, and hands the answers back (`POST /v1/kb/answers`). The advisors, whose calls the supervisor runs, ask control the same way.
 
-| Rig | How the supervisor asks control |
-| --- | --- |
-| On the message bus | A request on the rig's own subject, `thermite.kb.search.<rig>` or `thermite.kb.read.<rig>`, with its answer at the rig's inbox; no stream keeps either. A rig's user may publish only on its own subjects, so control knows the rig from the subject, and control answers only at that rig's inbox (`_INBOX.rig.<rig>.`): a request whose answer would go anywhere else gets none, with a line in control's log |
-| Off the bus | [`POST /v1/rigs/<rig>/kb/search` and `/kb/read`](rest-api.md#routes-used-by-rigs), with the rig's token |
+The supervisor asks control on the message bus: a request on the rig's own subject, `thermite.kb.search.<rig>` or `thermite.kb.read.<rig>`, with its answer at the rig's inbox; no stream keeps either. A rig's user may publish only on its own subjects, so control knows the rig from the subject, and control answers only at that rig's inbox (`_INBOX.rig.<rig>.`): a request whose answer would go anywhere else gets none, with a line in control's log. A rig off the bus can't search or read the knowledge base.
 
 The ask names the run and what to find; control answers only for a run it assigned to that rig, and works out the scope from its own records of the run (its campaign, the scope set when it started, and the campaign's grants), never from the ask: a campaign the ask names is not read, and the runs and collections it keeps only narrow the scope. Control answers at most 32 asks of one rig at once; one more is refused in words at once, never queued.
 
@@ -345,7 +342,7 @@ When no answer comes, the agent is told so in words, and goes on:
 | --- | --- |
 | The supervisor did not take it from the harness in 15 seconds | "the rig's supervisor did not take this from the harness: it may be restarting. The knowledge base can't be reached now; go on without it, and try again later" |
 | Control did not answer in 30 seconds after the supervisor took it | "control did not answer in 30 seconds: the knowledge base can't be reached now. Go on without it, and try again later" |
-| The supervisor could not reach control (20 seconds at most) | "control can't be reached on the message bus now (`<why>`): the knowledge base can't be searched or read. Go on without it, and try again later", or "over HTTP" |
+| The supervisor could not reach control (20 seconds at most) | "control can't be reached on the message bus now (`<why>`): the knowledge base can't be searched or read. Go on without it, and try again later" |
 | 200 asks wait in the harness already | "the knowledge base has 200 searches waiting already: try again in a minute" |
 
 ## Who writes what
@@ -465,11 +462,11 @@ Then it lists each collection's folder as `## <campaign>/`, with a line for each
 
 | | |
 | --- | --- |
-| Who | The rig's supervisor. It asks control with the rig's token (`GET /v1/rigs/<rig>/kb`, see [REST API](rest-api.md#routes-used-by-rigs)) and hands the items to its harness. The harness never calls control |
+| Who | The rig's supervisor. It asks control on the message bus, on its rig's own subject (the `past` ask: see [On the message bus](rest-api.md#on-the-message-bus)), and hands the items to its harness. The harness never calls control |
 | Which runs | Each run of the rig that is running. A paused run receives nothing until it runs again. Control answers only for a run it assigned to that rig itself, with a signed `assign_campaign` that was not refused, did not fail and did not expire, and only when the run is of the campaign it assigned |
 | What | The items of the collections the run's campaign may read, new or changed since the run's last sync, oldest change first. Never the run's own items. The answer names the collections in `collections` |
-| How often | Every `THERMITE_KB_SYNC_SECONDS`, 180 by default. `0` turns it off. Only with the supervisor's `CONTROL_URL` and rig token. See [Settings](settings.md#how-often-it-talks-to-control) |
-| How much at once | Pages of up to 500 items, as many pages as wait. The supervisor posts them to the harness in parts of at most 8 MiB, and moves its place for the run only when a whole page arrived |
+| How often | Every `THERMITE_KB_SYNC_SECONDS`, 180 by default. `0` turns it off. See [Settings](settings.md#how-often-it-talks-to-control) |
+| How much at once | Pages of up to 500 items and at most 4 MiB of them, as many pages as wait. The supervisor posts them to the harness in parts of at most 8 MiB, and moves its place for the run only when a whole page arrived |
 | Its place | One cursor for each run, in `kb-state.json` in the supervisor's home (`THERMITE_SUPERVISOR_HOME`) |
 | Changes | A changed item overwrites its file. The folder of a collection the campaign may no longer read is removed whole |
 | Kinds it does not know | A newer control may send items of a kind the rig's build does not know. The supervisor leaves them out and goes on, and its place moves past them, so the sync never stops on them. It logs `past research of an unknown kind left out` once for each kind, with the kind and how many items. It keeps the kinds in `kb-state.json`. When the rig runs images that know one of them, each run's sync starts again from the beginning, so the items left out arrive then. The harness also leaves out such an item if one reaches it, and logs the same line once for each kind. An item of a known kind that is not well formed still fails the sync |

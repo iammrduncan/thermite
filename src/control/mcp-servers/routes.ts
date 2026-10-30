@@ -3,9 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { errorText, Refusal } from "../../common/errors.ts";
 import { LOCAL_HTTP_HOSTS } from "../../common/mcp-client.ts";
-import { MCP_SERVERS } from "../../core/api/control/rigs.ts";
 import type { PageNotes } from "../notes.ts";
-import { configOnBusRefusal } from "../rigs/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { MCP_AUTHS, type McpServer, type McpServers, namedBy } from "./index.ts";
 
@@ -59,7 +57,6 @@ export function mountMcpServerRoutes(
     store: ControlStore;
     servers: McpServers;
     admin: MiddlewareHandler;
-    rigAuth: MiddlewareHandler;
     publicUrl?: string | undefined;
     /** Where the sign-in's own error words wait for Settings (notes.ts). */
     notes: PageNotes;
@@ -197,18 +194,5 @@ export function mountMcpServerRoutes(
       "ok",
       `Signed in to ${r.name}. Control sealed the sign-in and renews it. It read ${r.tools} tool${r.tools === 1 ? "" : "s"}, and called none of them.`,
     );
-  });
-
-  // What a rig's supervisor gets: the servers its runs' kits name, each with its sign-in as
-  // headers. Audited when the servers a rig gets change (McpServers.handed). A rig on the message
-  // bus gets them only in its config there.
-  app.get(MCP_SERVERS.path, o.rigAuth, async (c) => {
-    c.header("cache-control", "no-store");
-    const rig = c.req.param("rig");
-    const onBus = configOnBusRefusal(store, rig);
-    if (onBus) return c.json({ error: onBus }, 409);
-    const r = await servers.forRig(rig);
-    servers.handed(rig, r);
-    return c.json(r);
   });
 }

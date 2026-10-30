@@ -10,7 +10,6 @@ import {
   type LiveRelayState,
   publishLiveOnce,
 } from "../../../src/supervisor/live/index.ts";
-import { relayOnce } from "../../../src/supervisor/relay/index.ts";
 import { controlStack } from "../../helpers/control-stack.ts";
 import { asMessage, FakeBus } from "../../helpers/fake-bus.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
@@ -23,7 +22,7 @@ import { makeHarnessEnv } from "../../helpers/harness-env.ts";
 /** Control, a rig whose report key control pinned and whose run smoke-1 it knows, and a bus. */
 async function rig() {
   const s = controlStack({ env: makeHarnessEnv("rig-a") });
-  await relayOnce({ ...s.cfg, skipCommands: true }, { cursor: 0 });
+  await s.relay();
   const at = new Date().toISOString();
   s.store.runRegistry.registerRunCreated("rig-a", "ledger-1", {
     kind: "run_created",

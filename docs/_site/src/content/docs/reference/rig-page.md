@@ -1,6 +1,6 @@
 ---
 title: "A rig's page"
-description: "Every part of a rig's page on the dashboard: its state and version banners, Update to control's version, Check again, a drain and the trials it waits for, its facts, and a RunPod rig's pod, limits, lifecycle, pod log and history."
+description: "Every part of a rig's page on the dashboard: its state and version banners, a rig off the message bus and its commands that wait for it, Update to control's version, Check again, a drain and the trials it waits for, its facts, and a RunPod rig's pod, limits, lifecycle, pod log and history."
 type: reference
 sidebar:
   order: 21
@@ -14,7 +14,8 @@ Other pages link to these places with the address and the anchor, for example `/
 
 | Anchor | What it is | When the page has it |
 | --- | --- | --- |
-| `#reporting` | The banner for a rig that does not report: stale or offline | The rig is stale or offline, is not a stopped RunPod rig, and control does not refuse it |
+| `#reporting` | The banner for a rig that does not report: stale or offline; or for one off the message bus: broken | The rig is stale, offline or broken, is not a stopped RunPod rig, and control does not refuse it |
+| `#held` | The banner for the rig's commands that wait for the message bus | Control holds commands for the rig that the bus did not take |
 | `#version` | The banner for the rig's version, or for its last update | Its version is behind or ahead of control's, control refuses it, or an update began in the last day |
 | `#drain` | The card for a drain: since when, who asked, why, and what it waits for | The rig's last report says it drains |
 | `#pod` | The pod: its cost, its limits and its lifecycle | The rig was launched on RunPod |
@@ -34,6 +35,7 @@ The title is the rig's name. The line beside it says the rig's state:
 | `offline · no report for 3 h 12 min`, or `offline · no report yet` | No report for longer than the offline window (`THERMITE_CONTROL_OFFLINE_SECONDS`, 900 s by default), or never |
 | `refused · 0.0.7` | Control refuses the rig: its protocol and control's do not meet. The version is the rig's |
 | `stopped` | A rig on RunPod whose pod is stopped. It is not called stale or offline |
+| `broken · off the message bus` | The rig is off the message bus, so it doesn't work ([The reporting banner](#the-reporting-banner)). It says so even while reports from before still count as live |
 
 After it, the line adds `0.1.0, behind control` or `0.2.0, ahead of control` when the rig's version differs from control's. A rig on RunPod adds `RunPod`, and its price per hour while its pod runs, such as `RunPod · $0.50/h`.
 
@@ -50,7 +52,7 @@ The first lines under the title say, in a few sentences: for a RunPod rig, its p
 
 When control can't read the rig's events now, the first lines say `Control can't read its events now.`, and a card under them says why in words, such as the event its view failed on. Until control can, the page shows no runs, checks or judge's jobs for the rig; the rest of it is from the rig's last report. This lasts until the rig's next full reset gives it a new ledger. Every other rig, and every other page, shows as before.
 
-A card after an action says what happened: its words in green, or **Not done.** and the reason. A button that sends a command to the rig, such as **Export**, **Run it** or **Pause**, says at once that the click took, and the page follows the command to its outcome with no refresh: see [Signed commands](signed-commands.md#on-the-dashboard). After **Save changes** on **Edit rig**, the green line here goes on with how the settings' command stands, such as `rig-1 took it at 03:41 UTC. This page shows the change when the rig next reports.`
+A card after an action says what happened: its words in green, or **Not done.** and the reason. A button that sends a command to the rig, such as **Export**, **Run it** or **Pause**, says at once that the click took, and the page follows the command to its outcome with no refresh: see [Signed commands](signed-commands.md#on-the-dashboard). After **Save changes** on **Edit rig**, the green line here goes on with how the settings' command stands, such as `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.`, then `Done. rig-1 took it at 03:42 UTC.` once the rig's report with it reaches control.
 
 ## The reporting banner
 
@@ -58,6 +60,20 @@ A card after an action says what happened: its words in green, or **Not done.** 
 | --- | --- | --- | --- |
 | Stale | `No report for 6 minutes.` | The stale and offline windows. A stale rig may still be at work: its runs go on, and what they did arrives with its next report. Then what control found when it last checked where the rig runs, or that it has not checked yet. For a rig control can't reach: check it there | **Check again**, **Restart the rig** |
 | Offline | `Offline: no report for 3 h 12 min.` | When its last report came, in UTC, and how many lanes its runs had at work then; what control found when it last checked; that what it did since arrives with its next report | **Check again** (**Check the cluster** for a rig on a cluster), **Restart the rig**, **Retire it** |
+| Broken | `Broken: rig-1 is off the message bus.` | What control knows, such as `It registered its keys with control over HTTPS, but nothing came from it on the message bus since: it can't reach the bus's address, or the bus refuses it.`; `A rig reaches control only on the bus, so control gets none of its reports and sends it no commands until it does.`, and since when; then **To fix it:** and what to do where the rig runs. [A rig off the bus](../how-to/operate/message-bus.md#a-rig-off-the-bus) lists each cause and its fix | **Retire it** |
+
+A rig is broken, off the message bus, in three cases: it calls control over HTTPS with no keys on the bus (a rig of v0.1.0, or one set up without the bus), shown while it calls and for 15 minutes after; it registered its keys, and no report came from it on the bus within 5 minutes since; or it is a RunPod pod launched before its leaf node, or one RunPod gives no public address for the leaf node's port 7422 for 5 minutes while it runs. The banner goes once the rig's reports come on the bus again. Broken comes before stale and offline, and a stopped RunPod pod is never broken.
+
+## Commands that wait for the bus
+
+A command the message bus did not take stays pending, and control holds it ([Commands over the message bus](../explanation/how-the-parts-talk.md#commands-over-the-message-bus)). While it holds any for the rig, a banner under the reporting banner says so: `A command waits for the message bus.`, or `3 commands wait for the message bus.`, then why the oldest waits, since when, and their kinds, such as `the rig's queue on the bus holds 100 commands it has not taken, since 4 min ago: message_agent, pause_run. Control holds them, and publishes them again by itself as soon as the bus takes them. Each still expires at its own time.` Why is one of:
+
+- `the rig's queue on the bus holds 100 commands it has not taken`: the rig has not taken its commands. Is it on the bus, and does its supervisor run?
+- `the bus did not take it: <error>`: the bus is away, or refused it;
+- `100 commands wait their turn for the bus already`;
+- `the commands stream is being made`, while control starts.
+
+Control publishes the held commands again every 10 seconds, each rig's oldest first, and the banner goes once the bus has taken them all. **Needs you** shows the same as a **Commands wait** card. A held command can be cancelled like any pending one ([Cancel a pending command](../how-to/operate/cancel-a-command.md)).
 
 **Check again** and **Restart the rig** show only where control can do them:
 
@@ -168,14 +184,18 @@ A key that waits for you has a card under the banners, with its fingerprint and 
 | **Ledger** | Its ledger's id |
 | **Results**, **Models**, **Advisors** | From its supervisor's figures (unsigned) |
 
-Then the block of how it was set up, if control set it up: **Set up by control** (a machine or a cluster), **You run it yourself** (joined), or **Pull mode** (RunPod). **Pull mode** has the pod, its address through RunPod's proxy, its **Enrollment**, its **Message bus**, control's **Last exchange** with it, its **Refused requests** and its **Last error**. **Message bus** says where control's bus reaches the pod's leaf node: `Control's bus dials the pod's leaf node at 203.0.113.5:40123, the address RunPod gave it 2 min ago.`; `No address from RunPod now: the pod is starting or stopped. Its reports wait for one.`; or, for a pod launched before its leaf node, `Not on it: launched before the pod's leaf node. It reports through this connection.`
+Then the block of how it was set up, if control set it up: **Set up by control** (a machine or a cluster), **You run it yourself** (joined), or **Pull mode** (RunPod). **Pull mode** has the pod, its address through RunPod's proxy, its **Enrollment**, its **Message bus**, control's **Last exchange** with it, its **Refused requests** and its **Last error**. Its first line says `Control connects to this rig through RunPod's proxy, for its enrollment, the registration of its keys on the message bus, its results and the kits it fetches; everything else goes on the bus, through the pod's leaf node.` **Message bus** says where control's bus reaches the pod's leaf node: `Control's bus dials the pod's leaf node at 203.0.113.5:40123, the address RunPod gave it 2 min ago.`; `No address from RunPod now: the pod is starting or stopped, or RunPod gives it no public address for its port 7422. Its reports wait for one.`; or, for a pod launched before its leaf node, `Not on it: launched before the pod's leaf node, so it can't report. Terminate it and launch a new one.`
 
 **Recent** lists what happened, newest first: the rig's events, and the lines of its state:
 
 - `Control refused the rig.` and the reason, and `Control refused a call from the rig (N calls since the refusal began; shown once).`;
 - `Control runs 0.2.0, and this rig runs 0.1.0: they work together.`, at the later of control's update and the rig's report of its build;
 - `Stale: no report for 3 minutes.` and `Offline: no report for 15 minutes.`, at the time each began;
+- each registration of its keys on the message bus, at each start of its supervisor: `It registered its keys on the message bus with control: over HTTPS, at the supervisor's start.`; and, at most once a day while a rig with no keys on the bus calls control, `It calls control over HTTP with no keys on the message bus: it is broken until it is set up again: it reports over HTTP, which control no longer takes.`;
+- each change of its keys on the bus, and each one refused;
 - each check of where the rig runs, and each step of an update.
+
+An event control can't read is in **Recent**, and in its run's **History**, as `Control can't read this <kind> event: <why>. It is kept as the rig sent it; nothing in it is shown or counted here.` Control reads each event's body as its kind's: each field its pages read, of the type the harness writes it. `<why>` names the fields that are not, at most three, and what each should be, such as `files.0: Invalid input: expected object, received null`, but never what they hold. An event whose actor is longer than 200 characters is one too: `its actor is 250 characters long, longer than the 200 control takes`. Control's pages and counts take nothing else from such an event, and its log says `an event the views can't read: kept, not folded`, with the rig, the event and why. The rest of the rig's events show as before, and [`GET /v1/rigs/<rig>/events`](rest-api.md#rigs-and-their-history) gives the event as the rig sent it.
 
 ## The pod
 

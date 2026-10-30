@@ -3,10 +3,14 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { buildInfo } from "../../src/common/build-info.ts";
+import { answerRigAsk } from "../../src/control/bus/index.ts";
 import { readKnowledgeAgain } from "../../src/control/events/index.ts";
+import { Screens } from "../../src/control/live/index.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { rigView } from "../../src/control/views/index.ts";
 import { KbSync } from "../../src/core/kb.ts";
+import { PAST_NOT_ASSIGNED } from "../../src/core/link/asks.ts";
 import { assigned } from "../helpers/assignments.ts";
 import { controlOnly } from "../helpers/control-stack.ts";
 import {
@@ -363,25 +367,24 @@ test("a run's sync: its readable collections by seq, never its own items, in pag
   assert.equal(kb.sync("rig-c", "gs-3", 0), undefined, "gs-3 is rig-a's");
 });
 
-test("the rigs' route: the rig's own token, its own runs, a KbSync", async () => {
-  const { store, control } = controlOnly({
+test("a rig's ask on the bus for past research: its own runs, a KbSync, a page within its bytes", async () => {
+  const { store } = controlOnly({
     tokens: { rigs: { "rig-a": "rig-a-token-abcd", "rig-b": "rig-b-token-abcd" } },
   });
   await twoCampaigns(store);
-  const get = (path: string, token: string) =>
-    control.request(path, { headers: { authorization: `Bearer ${token}` } });
+  const deps = { store, control: buildInfo(), privateKeyPem: "", screens: new Screens() };
+  const ask = (rig: string, body: unknown) => answerRigAsk(deps, rig, "past", body);
   // A run control did not assign gets nothing, whatever its own events name.
-  assert.equal((await get("/v1/rigs/rig-b/kb?run=sv-2&after=0", "rig-b-token-abcd")).status, 404);
+  assert.deepEqual(ask("rig-b", { run: "sv-2", after: 0 }), {
+    refused: "control did not assign run sv-2 to rig-b",
+    code: PAST_NOT_ASSIGNED,
+  });
   assigned(store, "rig-b", "sv-2", "survey-study");
-  const ok = await get("/v1/rigs/rig-b/kb?run=sv-2&after=0", "rig-b-token-abcd");
-  assert.equal(ok.status, 200);
-  const body = KbSync.parse(await ok.json());
+  const body = KbSync.parse(ask("rig-b", { run: "sv-2", after: 0 }));
   assert.equal(body.campaign, "survey-study");
   assert.deepEqual(body.items, [], "a run's own items are left out: it has them");
   store.kb().grant("survey-study", "gemv-speed", "owner:ui");
-  const withGrant = KbSync.parse(
-    await (await get("/v1/rigs/rig-b/kb?run=sv-2&after=0", "rig-b-token-abcd")).json(),
-  );
+  const withGrant = KbSync.parse(ask("rig-b", { run: "sv-2", after: 0 }));
   assert.deepEqual(withGrant.collections, ["survey-study", "gemv-speed"]);
   assert.deepEqual(withGrant.items.map((x) => x.kind).sort(), [
     "attempt",
@@ -390,13 +393,19 @@ test("the rigs' route: the rig's own token, its own runs, a KbSync", async () =>
     "run",
   ]);
   assert.ok(withGrant.items.every((x) => x.rig === "rig-a"));
-  // Another rig's token, another rig's run, an unknown run, a bad cursor.
-  assert.equal((await get("/v1/rigs/rig-b/kb?run=sv-2", "rig-a-token-abcd")).status, 401);
-  assert.equal((await get("/v1/rigs/rig-a/kb?run=sv-2", "rig-a-token-abcd")).status, 404);
-  assert.equal((await get("/v1/rigs/rig-b/kb?run=nope", "rig-b-token-abcd")).status, 404);
-  assert.equal((await get("/v1/rigs/rig-b/kb", "rig-b-token-abcd")).status, 400);
-  assert.equal((await get("/v1/rigs/rig-b/kb?run=sv-2&after=-1", "rig-b-token-abcd")).status, 400);
-  assert.equal((await get("/v1/rigs/rig-b/kb?run=sv-2", "admin-token-abcdef")).status, 401);
+  // Another rig's run, an unknown run, a bad cursor.
+  assert.equal(
+    (ask("rig-a", { run: "sv-2", after: 0 }) as { code?: string }).code,
+    PAST_NOT_ASSIGNED,
+  );
+  assert.equal(
+    (ask("rig-b", { run: "nope", after: 0 }) as { code?: string }).code,
+    PAST_NOT_ASSIGNED,
+  );
+  assert.match(
+    (ask("rig-b", { run: "sv-2", after: -1 }) as { refused: string }).refused,
+    /^the past is not one control takes: after/,
+  );
 });
 
 test("a research note is a note of its own in the collection and in the run's journal", async () => {

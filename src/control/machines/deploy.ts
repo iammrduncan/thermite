@@ -30,8 +30,8 @@ export interface RigPlan {
   root: boolean;
   controlPublicKey: string;
   controlFingerprint: string;
-  /** The message bus for its supervisor; none: it keeps to HTTP. */
-  bus?: RigBus | undefined;
+  /** The message bus for its supervisor: the one way it reaches control but its registration. */
+  bus: RigBus;
 }
 
 /**
@@ -177,13 +177,14 @@ ${env({
   CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
   THERMITE_HARNESS_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
   THERMITE_CONTROL_TOKEN_FILE: "/run/secrets/control-rig-token",
-  ...(p.bus ? { THERMITE_NATS_URL: p.bus.url, THERMITE_NATS_CA_FILE: SUPERVISOR_BUS_CA } : {}),
+  THERMITE_NATS_URL: p.bus.url,
+  THERMITE_NATS_CA_FILE: SUPERVISOR_BUS_CA,
 })}
 Volume=thermite-${p.rig}-supervisor:/var/lib/thermite-supervisor
 Volume=thermite-${p.rig}-inbox:${SUPERVISOR_INBOX_DIR}
 Volume=thermite-${p.rig}-outbox:/outbox:ro
 ${secret("secrets/harness-supervisor-token")}
-${secret("secrets/control-rig-token")}${p.bus ? `\nVolume=${unitDir}/bus:/keys:ro,Z` : ""}
+${secret("secrets/control-rig-token")}\nVolume=${unitDir}/bus:/keys:ro,Z
 Network=${net}.network
 Network=${egress}.network
 DropCapability=ALL
@@ -211,14 +212,11 @@ function writeFile(path: string, content: string, mode: string): string {
  * for the harness), with the authority's certificate, which is no secret: written at each setup and
  * update, so that a rig gets control's authority again.
  */
-const busFiles = (dir: string, bus: RigBus | undefined, q: (path: string) => string) =>
-  bus
-    ? [
-        `mkdir -p ${q(`${dir}/bus`)}`,
-        `chmod 0755 ${q(`${dir}/bus`)}`,
-        writeFile(q(`${dir}/bus/bus-ca.pem`), bus.ca, "0644"),
-      ]
-    : [];
+const busFiles = (dir: string, bus: RigBus, q: (path: string) => string) => [
+  `mkdir -p ${q(`${dir}/bus`)}`,
+  `chmod 0755 ${q(`${dir}/bus`)}`,
+  writeFile(q(`${dir}/bus/bus-ca.pem`), bus.ca, "0644"),
+];
 
 /** The deploy script: the rig's files and units, then images pulled and services started. */
 export function deployScript(p: RigPlan, secrets: RigSecrets): string {

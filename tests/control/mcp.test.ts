@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Credential } from "../../src/control/credential.ts";
 import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
+import { figuresCall } from "../helpers/control-store.ts";
 
 const text = (r: unknown) =>
   JSON.parse(((r as { content: { text: string }[] }).content[0] as { text: string }).text);
@@ -157,17 +158,13 @@ describe("control over MCP", () => {
       "delivered",
     );
     // A message nothing would read, or with no words, is refused in plain words, as Live greys it.
-    await control.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-      body: JSON.stringify({
-        at: new Date().toISOString(),
-        advisors: {
-          ...{ teacher_runs: 0, directive_sets: 0, directives: 0, audits: 0, reviews: 0 },
-          ...{ errors: 0, tokens_in: 0, tokens_out: 0, usd: 0 },
-          roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0 },
-        },
-      }),
+    await figuresCall(store, "rig-a", {
+      at: new Date().toISOString(),
+      advisors: {
+        ...{ teacher_runs: 0, directive_sets: 0, directives: 0, audits: 0, reviews: 0 },
+        ...{ errors: 0, tokens_in: 0, tokens_out: 0, usd: 0 },
+        roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0 },
+      },
     });
     const refusal = async (payload: Record<string, unknown>) =>
       text(

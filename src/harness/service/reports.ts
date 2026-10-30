@@ -11,17 +11,6 @@ import type { HarnessService } from "./index.ts";
  * summary, each signed with the rig's own key (`rigKeys`, when it has one), and its exports.
  */
 
-/** Lines of the live log after `after`, signed with the rig's key like a report. */
-export function liveBatch(
-  svc: HarnessService,
-  rigKeys: KeyPairPem | undefined,
-  after: number,
-  limit: number,
-): unknown {
-  const { entries, next } = svc.live.since(after, limit);
-  return signedLines(rigKeys, { rig: svc.rig, log_id: svc.live.id, from: after, next, entries });
-}
-
 /**
  * Lines of the live log after `after`, as the message bus's messages: the lines of each run's
  * source in a batch of their own (core/link/live.ts), each signed like a whole batch.

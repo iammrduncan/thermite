@@ -35,7 +35,7 @@ A result reaches the dashboard with the rig's next report, which comes every min
    The button turns at once into **Sending…**. When control has queued the command, the check shows **sent**, its button says **Sent**, and the line under its name says, for example, `Sent to the rig at 03:41 UTC. It starts when the rig takes it.`
 
 4. Watch the row. You do not need to refresh the page:
-   - When the rig takes the command, within seconds, the check shows **running** with the time so far, such as `running · 1 m 12 s`, and its button says **Running…**. The line under its name says what the check pauses: `Its running runs are paused for it, and resumed after.` for **Judge smoke**, `Nothing is paused for it.` for the others.
+   - When the rig's report says it took the command, within a minute, the check shows **running** with the time so far, such as `running · 1 m 12 s`, and its button says **Running…**. The line under its name says what the check pauses: `Its running runs are paused for it, and resumed after.` for **Judge smoke**, `Nothing is paused for it.` for the others.
    - When its result reaches control, with the rig's next report, the row shows it in place.
 
 The check shows **passed** or **failed**, how long ago it ended, and one sentence about what it found. The same sentence goes to the rig's history. **Run it** comes back.

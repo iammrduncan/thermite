@@ -2,34 +2,20 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
 import { KB_ITEM, KB_SEARCH, PROPAGATE } from "../../core/api/control/owner.ts";
-import {
-  CHAMPION_PATCH,
-  KB,
-  KB_NOT_ASSIGNED,
-  KB_READ_ASK,
-  KB_SEARCH_ASK,
-  REPORTS,
-} from "../../core/api/control/rigs.ts";
+import { CHAMPION_PATCH } from "../../core/api/control/rigs.ts";
 import { keepChampionPatch } from "../champions.ts";
 import { type ExportFiles, mountExports } from "../exports.ts";
 import { propagateChampion } from "../issue/index.ts";
-import {
-  answerKbAsk,
-  KbReadQuery,
-  KbSearchQuery,
-  kbAskLimit,
-  ownerKbRead,
-  ownerKbSearch,
-} from "../kb/index.ts";
+import { KbReadQuery, KbSearchQuery, ownerKbRead, ownerKbSearch } from "../kb/index.ts";
 import { resultsLeft } from "../results-left.ts";
 import { leaderboard } from "../views/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 
 /**
- * What rigs' runs produce, and the owner reads: the knowledge base's items for a run's agents,
- * champions' patches as the rigs upload them (the owner reads them under the run: api/runs.ts),
- * exports (`exportFiles`: where control keeps them; none, it takes none),
- * daily reports, the leaderboard, and a champion propagated to another rig.
+ * What rigs' runs produce, and the owner reads: the knowledge base, champions' patches as the rigs
+ * upload them (the owner reads them under the run: api/runs.ts), exports (`exportFiles`: where
+ * control keeps them; none, it takes none), daily reports (the rigs send them on the message bus:
+ * bus/asks.ts), the leaderboard, and a champion propagated to another rig.
  */
 export function resultRoutes(
   app: Hono,
@@ -37,42 +23,6 @@ export function resultRoutes(
   exportFiles: ExportFiles | undefined,
 ): void {
   const { store, privateKeyPem, opts, admin, rigAuth } = api;
-
-  // Past research for a run's agents (goal 065): the items of the collections the run's campaign
-  // may read, after the supervisor's cursor. Only the rig's own runs; never a collection not granted.
-  app.get(KB.path, rigAuth, (c) => {
-    c.header("cache-control", "no-store");
-    const run = c.req.query("run") ?? "";
-    const after = Number(c.req.query("after") ?? "0");
-    if (!run) return c.json({ error: "run is required" }, 400);
-    if (!Number.isSafeInteger(after) || after < 0)
-      return c.json({ error: "after is a whole number from 0" }, 400);
-    // Only a run control assigned to this rig, of the campaign control assigned: a rig cannot
-    // read another campaign's collections by naming it in its own events.
-    const assigned = store.runRegistry.assignedCampaigns(c.req.param("rig")).get(run);
-    if (!assigned) {
-      const error = `control did not assign run ${run} to this rig`;
-      return c.json({ error, code: KB_NOT_ASSIGNED }, 404);
-    }
-    const sync = store.kb().sync(c.req.param("rig"), run, after);
-    if (!sync) return c.json({ error: `this rig has no run ${run}` }, 404);
-    if (sync.campaign !== assigned)
-      return c.json({ error: `run ${run} is not of the campaign control assigned` }, 409);
-    return c.json(sync);
-  });
-
-  // A search or a read of the knowledge base for an agent of one of the rig's runs (goal 175), for
-  // a rig not on the message bus: the answer the bus gives, a refusal in words included.
-  for (const [route, kind] of [
-    [KB_SEARCH_ASK, "search"],
-    [KB_READ_ASK, "read"],
-  ] as const)
-    app.post(route.path, rigAuth, bodyLimit({ maxSize: route.maxBytes }), async (c) => {
-      c.header("cache-control", "no-store");
-      const body = await c.req.json().catch(() => undefined);
-      const rig = c.req.param("rig");
-      return c.json(await kbAskLimit.run(rig, () => answerKbAsk(store, rig, kind, body)));
-    });
 
   // The owner's search of the knowledge base, and one item read (goal 175): as MCP's kb_search and
   // kb_read. A list of names is given with commas, or as a repeated parameter; more queries
@@ -151,11 +101,6 @@ export function resultRoutes(
   app.get("/v1/rigs/:rig/results-left", admin, (c) =>
     c.json(resultsLeft(store, c.req.param("rig"), { export: c.req.query("export") || undefined })),
   );
-
-  app.post(REPORTS.path, rigAuth, bodyLimit({ maxSize: REPORTS.maxBytes }), async (c) => {
-    const body = REPORTS.body.parse(await jsonBody(c.req));
-    return c.json({ id: store.rigReports.add(c.req.param("rig"), body.kind, body.body) }, 201);
-  });
 
   app.get("/v1/reports", admin, (c) =>
     c.json({

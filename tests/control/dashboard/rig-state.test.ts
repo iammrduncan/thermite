@@ -10,7 +10,7 @@ import { rigView } from "../../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import type { BuildInfo } from "../../../src/core/version.ts";
 import { controlOnly, RIG_TOKEN, signIn } from "../../helpers/control-stack.ts";
-import { applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
+import { answerCommand, applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
 
 const CONTROL: BuildInfo = { version: "0.1.0", commit: null, protocol: 1, oldest_protocol: 1 };
 const OLD = { version: "0.0.9", commit: null, protocol: 1, oldest_protocol: 1 };
@@ -231,7 +231,7 @@ describe("a rig's page: its version", () => {
     await s.post("/ui/rigs/gpu-1/update");
     await until(() => s.store.commands.pending("gpu-1").length === 1);
     const pause = s.store.commands.pending("gpu-1")[0]?.envelope;
-    s.store.commands.ack("gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
+    answerCommand(s.store, "gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
     await until(() => /Moving its containers/.test(s.updates.waiting("gpu-1") ?? ""));
     // Control starts again on the same store: the update it kept there ends.
     const after = new RigUpdates({
@@ -299,7 +299,7 @@ describe("a rig's page: its version", () => {
     const pause = s.store.commands.pending("gpu-1")[0]?.envelope;
     assert.equal(pause?.kind, "pause_run");
     assert.deepEqual(pause?.payload, { run: "run-1", reason: "control updates the rig to 0.1.0" });
-    s.store.commands.ack("gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
+    answerCommand(s.store, "gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
     // 2. Control's images, over SSH: pulled first, the units written again, both services restarted.
     await until(() => m.calls.some((c) => c.script.includes("echo updated")));
     const script = m.calls.find((c) => c.script.includes("echo updated"))?.script ?? "";
@@ -433,7 +433,7 @@ describe("a rig's page: its version", () => {
       s.store.commands.pending("gpu-1").some((c) => c.envelope.kind === "rig_check"),
     );
     const check = s.store.commands.pending("gpu-1").find((c) => c.envelope.kind === "rig_check");
-    s.store.commands.ack("gpu-1", check?.envelope.id ?? "", "failed", {
+    answerCommand(s.store, "gpu-1", check?.envelope.id ?? "", "failed", {
       source: "harness",
       error: "not now: 1 open trial(s) and 0 judge job(s)",
     });
@@ -468,7 +468,7 @@ describe("a rig's page: its version", () => {
     const s = await control();
     await s.report("cpu-9");
     // A rig newer than control's protocol calls: refused, and the call is counted.
-    const call = await s.api.request("/v1/rigs/cpu-9/commands/pending", {
+    const call = await s.api.request("/v1/rigs/cpu-9/git/kits/k.git/info/refs", {
       headers: {
         authorization: `Bearer ${RIG_TOKEN}`,
         "x-thermite-version": "9.0.0",
@@ -477,7 +477,7 @@ describe("a rig's page: its version", () => {
       },
     });
     assert.equal(call.status, 409);
-    await s.api.request("/v1/rigs/cpu-9/commands/pending", {
+    await s.api.request("/v1/rigs/cpu-9/git/kits/k.git/info/refs", {
       headers: {
         authorization: `Bearer ${RIG_TOKEN}`,
         "x-thermite-version": "9.0.0",

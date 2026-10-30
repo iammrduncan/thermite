@@ -180,7 +180,7 @@ describe("paging through control's audit log (goal 015)", () => {
     // Over REST: a rig's call refused three times for one reason is one entry, by the rig, and a
     // page of the log gives its count and both times.
     for (let i = 0; i < 3; i++) {
-      const r = await api("POST", "/v1/rigs/rig-a/commands/c-1/ack", { status: "done" }, RIG_TOKEN);
+      const r = await api("POST", "/v1/rigs/rig-a/supervisor", { status: "done" }, RIG_TOKEN);
       assert.equal(r.status, 400);
     }
     type Entry = { actor: string; action: string; body: { path: string }; count: number };
@@ -188,7 +188,7 @@ describe("paging through control's audit log (goal 015)", () => {
     const failed = page.audit[0] as Entry & { at: string; last_at: string };
     assert.deepEqual(
       [failed.actor, failed.action, failed.body.path, failed.count],
-      ["rig:rig-a", "failed", "/v1/rigs/rig-a/commands/c-1/ack", 3],
+      ["rig:rig-a", "failed", "/v1/rigs/rig-a/supervisor", 3],
     );
     assert.ok(failed.last_at >= failed.at);
     // The Audit log page says how often, and when the last came.
@@ -203,7 +203,7 @@ describe("paging through control's audit log (goal 015)", () => {
         headers: token ? { authorization: `Bearer ${token}` } : {},
       });
     for (const rig of ["rig-a", "rig-b", "rig-c"])
-      assert.equal((await call(`/v1/rigs/${rig}/commands/pending`, "wrong")).status, 401);
+      assert.equal((await call(`/v1/rigs/${rig}/git/kits/k.git/info/refs`, "wrong")).status, 401);
     assert.equal((await call("/v1/commands")).status, 401);
     assert.equal((await call("/v1/commands", "read-token-abcdef")).status, 401);
     assert.equal((await call("/mcp", "wrong", "POST")).status, 401);
@@ -214,7 +214,7 @@ describe("paging through control's audit log (goal 015)", () => {
       ["control", { method: "POST", route: "/mcp", token: "refused" }, 1],
       ["control", { method: "GET", route: "/v1/commands", token: "refused" }, 1],
       ["control", { method: "GET", route: "/v1/commands", token: "none" }, 1],
-      ["control", { method: "GET", route: "/v1/rigs/:rig/commands/pending", token: "refused" }, 3],
+      ["control", { method: "GET", route: "/v1/rigs/:rig/git/kits/:repo/*", token: "refused" }, 3],
     ]);
   });
 });

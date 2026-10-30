@@ -77,7 +77,6 @@ export {
 export {
   advisorsOf,
   type ControlAdvisors,
-  fetchControlAdvisors,
   mergeAdvisors,
 } from "./routes.ts";
 export { runAdvisor } from "./run.ts";

@@ -1,18 +1,19 @@
 import { createPublicKey } from "node:crypto";
 import type { ConsumerConfig, StreamConfig } from "@nats-io/jetstream";
 import { z } from "zod";
-import { ADVISOR_ROUTES, MCP_SERVERS, MODEL_ROUTE } from "../api/control/rigs.ts";
+import { MCP_SERVERS_MAX } from "../api/harness/supervisor.ts";
 import { sha256Hex } from "../canonical.ts";
 import { RIG_ID } from "../ids.ts";
+import { McpConnection, McpUnavailable } from "../mcp.ts";
 import { generateBoxKeys, open, publicKeyFromLine, publicKeyLine, seal } from "../tunnel.ts";
 
 /**
  * The link's fourth contract (goal 168, step 3): each rig's configuration on the message bus, a
- * key-value bucket. Control writes what a rig's supervisor once polled it for, one key for each
- * kind, so that a change to one rewrites only it: the agents' model route (`model-route`), the
- * advisors' routes (`advisor-routes`) and the MCP servers with their sign-ins (`mcp-servers`).
- * The bucket keeps the latest value of each key; control's store is the truth, and control writes
- * a key only when its value changes.
+ * key-value bucket. Control writes what a rig's supervisor needs of it, one key for each kind, so
+ * that a change to one rewrites only it: the agents' model route (`model-route`), the advisors'
+ * routes (`advisor-routes`), the MCP servers with their sign-ins (`mcp-servers`) and the Git
+ * accesses its live assignments name (`git-access`). The bucket keeps the latest value of each key;
+ * control's store is the truth, and control writes a key only when its value changes.
  *
  * Each value is sealed whole to the rig's own seal key: an X25519 key the supervisor makes beside
  * its key on the bus and registers with it (the bus key is an Ed25519 key, which signs and can't
@@ -27,17 +28,98 @@ export const CONFIG_STREAM = "CONFIG";
 /** Every rig's keys: the stream takes these. */
 export const CONFIG_SUBJECTS = "thermite.rig.*.config.*";
 /** The keys this build writes and reads, each a subject's last token. */
-export const CONFIG_KEYS = ["model-route", "advisor-routes", "mcp-servers"] as const;
+export const CONFIG_KEYS = ["model-route", "advisor-routes", "mcp-servers", "git-access"] as const;
 export type ConfigKey = (typeof CONFIG_KEYS)[number];
 
+/** A model route as the supervisor reads it: it passes the route on to its harness untouched. */
+const RouteSeen = z.looseObject({ name: z.string(), version: z.number(), revision: z.string() });
+
 /**
- * What each key holds, before it is sealed: the answer of the route a rig's supervisor polled for
- * it (core/api/control/rigs.ts), so a value has one schema whichever way it comes.
+ * The model route of the rig's agents, with its key (null: none, the rig's own settings), and
+ * the planner's own route when the owner gave the planner a model (core/api/model-route.ts has
+ * what a route holds).
  */
+export const ModelRouteValue = z.looseObject({
+  route: RouteSeen.nullable(),
+  planner: RouteSeen.nullable().optional(),
+});
+
+/** An advisor's route as the supervisor runs it: what it reads of a ControlRoute. */
+export const AdvisorRoute = z.looseObject({
+  name: z.string(),
+  type: z.string(),
+  base_url: z.string(),
+  model: z.string(),
+  /** The route's window: the provider's, or the owner's cap on the role's model (goal 070). */
+  context_window: z.number(),
+  /** The role's compaction point, when the owner set one (goal 070). */
+  compact_at: z.number().optional(),
+  /** The model's maximum output from the provider's list; 0 or none: none sent (goal 079). */
+  max_tokens: z.number().optional(),
+  reasoning: z.string().nullable(),
+  effort: z.string().nullable().optional(),
+  /** The harness the role runs in (older controls: none, Pi or what the model needs). */
+  harness: z.string().optional(),
+  api_key: z.string(),
+});
+export type AdvisorRoute = z.infer<typeof AdvisorRoute>;
+
+/**
+ * The advisors' routes, by role, when the owner gave them models: the teachers' one or two, their
+ * merged by model, the auditor and the review panel (null: the rig's advisors file decides), and
+ * the synthesizer and the final writer (goal 166; null: the first teacher's model).
+ */
+export const AdvisorRoutesValue = z.looseObject({
+  teacher_models: z.array(AdvisorRoute).optional(),
+  merged_by: AdvisorRoute.nullable().optional(),
+  auditor: AdvisorRoute.nullable().optional(),
+  review_panel: AdvisorRoute.nullable().optional(),
+  synthesizer: AdvisorRoute.nullable().optional(),
+  final_writer: AdvisorRoute.nullable().optional(),
+});
+export type AdvisorRoutesValue = z.infer<typeof AdvisorRoutesValue>;
+
+/** The MCP servers the kits of the rig's runs name, each with its sign-in as headers (goal 068). */
+export const McpServersValue = z.object({
+  servers: z.array(McpConnection).max(MCP_SERVERS_MAX),
+  unavailable: z.array(McpUnavailable).max(MCP_SERVERS_MAX).default([]),
+});
+export type McpServersValue = z.infer<typeof McpServersValue>;
+
+/** The most Git accesses one rig's value holds: those its live assignments name. */
+export const GIT_ACCESS_MAX = 50;
+
+/**
+ * One Git access for a private repository, with the host it is for: the rig's supervisor uses it
+ * for that host only, to stage a project. An SSH key, or a token with its user name.
+ */
+export const GitAccessSecret = z.union([
+  z.object({ name: z.string(), kind: z.literal("ssh"), host: z.string(), private_key: z.string() }),
+  z.object({
+    name: z.string(),
+    kind: z.literal("token"),
+    host: z.string(),
+    token: z.string(),
+    username: z.string().optional(),
+  }),
+]);
+export type GitAccessSecret = z.infer<typeof GitAccessSecret>;
+
+/**
+ * The Git accesses a rig may use now: each one a live assignment of the rig names in an import,
+ * and only while it lasts. Control writes the value again when one starts or ends.
+ */
+export const GitAccessValue = z.object({
+  accesses: z.array(GitAccessSecret).max(GIT_ACCESS_MAX),
+});
+export type GitAccessValue = z.infer<typeof GitAccessValue>;
+
+/** What each key holds, before it is sealed: one schema for each. */
 export const CONFIG_VALUES = {
-  "model-route": MODEL_ROUTE.answer,
-  "advisor-routes": ADVISOR_ROUTES.answer,
-  "mcp-servers": MCP_SERVERS.answer,
+  "model-route": ModelRouteValue,
+  "advisor-routes": AdvisorRoutesValue,
+  "mcp-servers": McpServersValue,
+  "git-access": GitAccessValue,
 } as const satisfies Record<ConfigKey, z.ZodType>;
 export type ConfigValue<K extends ConfigKey> = z.output<(typeof CONFIG_VALUES)[K]>;
 

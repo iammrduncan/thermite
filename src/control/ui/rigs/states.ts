@@ -1,5 +1,11 @@
 import type { BuildInfo } from "../../../core/version.ts";
-import { BUS_KEY_CHANGE_STEPS } from "../../bus/index.ts";
+import {
+  BUS_KEY_CHANGE_STEPS,
+  BUS_OFF_STEP,
+  BUS_REGISTERED_STEP,
+  type OffBus,
+} from "../../bus/index.ts";
+import type { HeldCommand } from "../../issue/index.ts";
 import { rigVersionWords, STEP_WORDS, UPDATE_STEP_WORDS } from "../../rigs/index.ts";
 import type { RigView } from "../../views/index.ts";
 import { infoLabel } from "../campaigns/new/index.ts";
@@ -52,6 +58,10 @@ export interface RigStateInput {
   updating: string | null;
   /** A RunPod rig whose pod is stopped: not stale nor offline, just stopped. */
   podStopped: boolean;
+  /** Why it is off the message bus, with what to do; undefined while nothing says so. */
+  offBus?: (OffBus & { fix: string }) | undefined;
+  /** Its commands the bus did not take, which control holds, oldest first. */
+  held?: HeldCommand[] | undefined;
   csrf: string;
   now: number;
 }
@@ -182,10 +192,31 @@ function versionBanner(o: RigStateInput): string {
 <p class="small" style="margin:6px 0 0">${esc(v.notice ?? "")}</p>${updateSteps(o, update)}</div>`;
 }
 
+/** The banner for a rig off the message bus: broken until it reaches the bus. */
+function offBusBanner(o: RigStateInput): string {
+  const off = o.offBus;
+  if (!off) return "";
+  return `<div class="card bad" style="margin-bottom:16px" id="reporting" data-state="broken"><div class="card-head">${icon.x}<span class="title">Broken: ${esc(o.u.id)} is off the message bus.</span></div>
+<p class="small" style="margin:6px 0 6px">${esc(off.words)} A rig reaches control only on the bus, so control gets none of its reports and sends it no commands until it does. This since ${esc(ago(off.since, o.now))} ago.</p>
+<p class="small" style="margin:0 0 10px"><b>To fix it:</b> ${esc(off.fix)}</p>
+<div class="act">${retireMenu(o.u.id, o.csrf)}</div></div>`;
+}
+
+/** The banner for the rig's commands the bus did not take: control holds them. */
+function heldBanner(o: RigStateInput): string {
+  const held = o.held ?? [];
+  const first = held[0];
+  if (!first) return "";
+  const n = held.length;
+  return `<div class="card warn" style="margin-bottom:16px" id="held" data-state="held"><div class="card-head">${icon.clock}<span class="title">${n === 1 ? "A command waits" : `${n} commands wait`} for the message bus.</span></div>
+<p class="small" style="margin:6px 0 0">${esc(first.why)}, since ${esc(ago(first.since, o.now))} ago: ${esc([...new Set(held.map((h) => h.kind))].join(", "))}. Control holds ${n === 1 ? "it" : "them"}, and publishes ${n === 1 ? "it" : "them"} again by itself as soon as the bus takes ${n === 1 ? "it" : "them"}. Each still expires at its own time.</p></div>`;
+}
+
 /** The banner for a rig that does not report: stale, then offline. */
 function reportingBanner(o: RigStateInput): string {
   const u = o.u;
   if (u.state === "reporting" || o.podStopped || u.version.state === "refused") return "";
+  if (o.offBus) return offBusBanner(o);
   const never = !(Date.parse(u.last_seen) > 0);
   const check = lastCheck(o);
   const checked = check
@@ -221,9 +252,13 @@ ${acts || restartNote ? `<div class="act">${acts}${restartNote}</div>` : ""}</di
 <div class="act">${acts}${retireMenu(u.id, o.csrf)}</div></div>`;
 }
 
-/** The banners a rig's state needs, in order: whether it reports, then its version. */
+/**
+ * The banners a rig's state needs, in order: whether it reports (and whether it is on the bus),
+ * its commands held off the bus, then its version.
+ */
 export function stateBanners(o: RigStateInput): string {
-  return `${reportingBanner(o)}${versionBanner(o)}`;
+  const reporting = o.offBus && o.u.state === "reporting" ? offBusBanner(o) : reportingBanner(o);
+  return `${reporting}${heldBanner(o)}${versionBanner(o)}`;
 }
 
 /** The Version fact of The rig, with its tip. */
@@ -244,18 +279,25 @@ export function versionFact(o: Pick<RigStateInput, "u" | "control">): string {
   return `<dt>${infoLabel("Version", `The Thermite version of the rig's harness and supervisor, as they report it. Control ${to} works with a rig whose protocol, the contract between control and a rig, it speaks. It refuses a rig outside that range, and says why.`)}</dt><dd data-version="${esc(v.state)}">${dd}</dd>`;
 }
 
-/** The rig's summary in the top bar: live, stale, offline or refused, and a version that differs. */
-export function stateSummary(o: Pick<RigStateInput, "u" | "control" | "podStopped" | "now">) {
+/**
+ * The rig's summary in the top bar: live, stale, offline, broken (off the bus) or refused, and a
+ * version that differs.
+ */
+export function stateSummary(
+  o: Pick<RigStateInput, "u" | "control" | "podStopped" | "now" | "offBus">,
+) {
   const u = o.u;
   const v = u.version;
   if (v.state === "refused") return `<span class="bad">refused</span> · ${esc(rigVersionWords(v))}`;
   const live = o.podStopped
     ? `<span class="muted">stopped</span>`
-    : u.state === "reporting"
-      ? `<span class="ok">live</span>`
-      : u.state === "stale"
-        ? `<span class="warn">stale</span> · no report for ${esc(since(u.last_seen, o.now))}`
-        : `<span class="bad">offline</span> · ${Date.parse(u.last_seen) > 0 ? `no report for ${esc(since(u.last_seen, o.now))}` : "no report yet"}`;
+    : o.offBus
+      ? `<span class="bad">broken</span> · off the message bus`
+      : u.state === "reporting"
+        ? `<span class="ok">live</span>`
+        : u.state === "stale"
+          ? `<span class="warn">stale</span> · no report for ${esc(since(u.last_seen, o.now))}`
+          : `<span class="bad">offline</span> · ${Date.parse(u.last_seen) > 0 ? `no report for ${esc(since(u.last_seen, o.now))}` : "no report yet"}`;
   const ver =
     v.state === "behind"
       ? ` · <span class="warn">${esc(rigVersionWords(v))}, behind control</span>`
@@ -322,11 +364,16 @@ export function stateRows(o: RigStateInput): TimelineRow[] {
         tone: s.ok ? (s.step === "update_reported" ? "ok" : "") : "bad",
         html: `${esc(UPDATE_STEP_WORDS[s.step] ?? s.step)}${s.detail ? `: ${esc(s.detail)}` : ""}.`,
       });
-    // A change of its keys on the bus took effect at once; a refused one did not.
-    else if ((BUS_KEY_CHANGE_STEPS as readonly string[]).includes(s.step))
+    // A change of its keys on the bus took effect at once; a refused one did not. Its keys
+    // registered over HTTPS, and its calls with none.
+    else if (
+      (BUS_KEY_CHANGE_STEPS as readonly string[]).includes(s.step) ||
+      s.step === BUS_REGISTERED_STEP ||
+      s.step === BUS_OFF_STEP
+    )
       rows.push({
         at: s.at,
-        tone: s.ok ? "warn" : "bad",
+        tone: s.step === BUS_REGISTERED_STEP ? "" : s.ok ? "warn" : "bad",
         html: `${esc(STEP_WORDS[s.step] ?? s.step)}${s.detail ? `: ${esc(s.detail)}` : ""}.`,
       });
   }

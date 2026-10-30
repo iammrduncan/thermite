@@ -97,7 +97,7 @@ export interface ControlOptions {
   machineSsh?: MachineSsh | undefined;
   /** The images control deploys rigs from on machines. */
   rigImages?: RigImages | undefined;
-  /** The message bus as the rigs control sets up reach it (none: they keep to HTTP). */
+  /** The message bus as the rigs control sets up reach it (none: control sets no rig up). */
   rigBus?: RigBus | undefined;
   /** How control reaches Kubernetes clusters (tests give their own). */
   clusterKubectl?: ClusterKubectl | undefined;
@@ -259,13 +259,9 @@ export function apiContext(
     // build makes is from before version checks: unknown, and never refused for it.
     const route = c.req.path.slice(`/v1/rigs/${encodeURIComponent(rig)}/`.length);
     const supervisorBuild = buildFromHeaders((h) => c.req.header(h));
-    if (supervisorBuild || ["ingest", "supervisor", "commands/pending"].includes(route))
+    if (supervisorBuild || route === "supervisor")
       store.builds.setRig(rig, "supervisor", supervisorBuild);
-    // A report brings its harness's build: the ingest route checks that one, once it verifies.
-    const refused =
-      route === "ingest"
-        ? checkRig(store, rig, control, { harness: null, endRefusal: false })
-        : checkRig(store, rig, control);
+    const refused = checkRig(store, rig, control);
     if (refused) {
       // Counted, so the rig's page can say that it still calls.
       store.refusals.countCall(rig);

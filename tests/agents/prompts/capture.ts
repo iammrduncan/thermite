@@ -187,7 +187,14 @@ export async function adviseRound(
       },
       // Thermite's knowledge base, as the advisors reach it (goal 175): asked of no control here,
       // since only what the advisors are sent is captured.
-      kb: { rig: "rig-a" },
+      kb: {
+        rig: "rig-a",
+        bus: {
+          request: async () => {
+            throw new Error("no control here");
+          },
+        },
+      },
     },
     emptyAdviseState(),
   );

@@ -32,7 +32,13 @@ describe("RunPod rigs' lifecycle: the owner's alone", () => {
     );
     assert.deepEqual(
       one.history.map((h) => [h.step, h.words]),
-      [["runpod_launched", "Launched on RunPod"]],
+      [
+        ["runpod_launched", "Launched on RunPod"],
+        [
+          "runpod_leaf_address",
+          "Control's bus dials the pod's leaf node at the address RunPod gave it",
+        ],
+      ],
     );
   });
 
@@ -63,7 +69,7 @@ describe("RunPod rigs' lifecycle: the owner's alone", () => {
     assert.equal(setupView.op.kind, "stop");
     assert.deepEqual(
       setupView.steps.map((x) => x.step),
-      ["runpod_launched", "runpod_stopping"],
+      ["runpod_launched", "runpod_leaf_address", "runpod_stopping"],
     );
 
     // A full reset over MCP: started, then confirmed, by the owner.

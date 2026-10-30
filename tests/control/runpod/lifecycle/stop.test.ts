@@ -63,6 +63,7 @@ describe("RunPod rigs: stop", () => {
     assert.ok(Math.abs((s.view(rig).spend_usd ?? 0) - (spentBefore ?? 0)) < 0.01);
     assert.deepEqual(s.steps(rig), [
       ["runpod_launched", true],
+      ["runpod_leaf_address", true],
       ["runpod_stopping", true],
       ["runpod_stopped", true],
     ]);

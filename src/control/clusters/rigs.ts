@@ -5,7 +5,15 @@ import { newToken } from "../credential.ts";
 import { issueCommand } from "../issue/index.ts";
 import { MAX_RIG_GPUS } from "../machines/index.ts";
 import type { ControlParts } from "../parts.ts";
-import { awaitFirstReport, controlAddress, judgeShare, rigTaken, sleep } from "../rigs/index.ts";
+import {
+  awaitFirstReport,
+  controlAddress,
+  judgeShare,
+  NO_RIG_BUS,
+  rigBusOf,
+  rigTaken,
+  sleep,
+} from "../rigs/index.ts";
 import { type Cluster, type ClusterRig, RIG_ID } from "../store/index.ts";
 import {
   type ClusterFacts,
@@ -130,6 +138,7 @@ export async function addClusterRig(
   const k = store.clusters.get(i.cluster);
   if (!parts.rigImages) return fail("Control has no rig images configured.");
   if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
+  if (!parts.rigBus) return fail(NO_RIG_BUS);
   if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
   if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
   if (!k) return fail("Choose a machine or a cluster.");
@@ -274,7 +283,7 @@ export const clusterPlan = (parts: ControlParts, r: ClusterRig, images = r.spec.
   storageGi: r.spec.storageGi,
   resources: r.spec.resources,
   controlPublicKey: parts.controlPublicKey,
-  bus: parts.rigBus,
+  bus: rigBusOf(parts),
   reach: parts.store.reachable.list(),
 });
 

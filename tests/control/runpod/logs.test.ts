@@ -10,6 +10,7 @@ import { type PodLogRead, RunpodRigs } from "../../../src/control/runpod/rigs.ts
 import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
+import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
 import { controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { controlStore, ingestReport } from "../../helpers/control-store.ts";
 import { FAKE_RUNPOD_KEY, fakeRunpod } from "../../helpers/fake-runpod.ts";
@@ -38,7 +39,7 @@ async function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
   });
   const cloud = fakeRunpod(o);
   const keys = generateSigningKeys();
-  const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem);
+  const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem, { busCa: TEST_BUS_CA });
   const rigs = new RunpodRigs(store, secrets, tunnels, {
     fetch: cloud.fetch,
     image: "ghcr.io/example/thermite-rig:test-cuda",

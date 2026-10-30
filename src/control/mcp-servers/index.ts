@@ -372,7 +372,7 @@ export class McpServers {
   }
 
   /**
-   * Notes what a rig was handed (forRig's answer, over HTTP or on the message bus): audited as
+   * Notes what a rig was handed (forRig's answer, in its config on the message bus): audited as
    * `mcp_servers_handed` when the servers it gets change, by name. A restart of control reads the
    * last entry back, so it writes none of its own.
    */

@@ -8,6 +8,7 @@ import {
   type Bus,
   type BusMessage,
   type BusRead,
+  type BusRequest,
   type ConsumerSettings,
   type Handled,
   NoStreamTakes,
@@ -96,10 +97,20 @@ export class FakeBus
       | "streams"
       | "last"
       | "connected"
+      | "serve"
+      | "request"
     >
 {
   /** Whether the part holds a connection to the server now, as control's health says. */
   up = true;
+  /**
+   * The inbox a request's answer goes to, as the asking part's user has it: a rig's
+   * (rigInboxPrefix) for a rig's asks. Each request gets its own subject under it.
+   */
+  inbox = "_INBOX.test";
+  /** The subjects served, by pattern, as `serve` registered them. */
+  private readonly served = new Map<string, (r: BusRequest) => Promise<string | undefined>>();
+  private requests = 0;
   connected(): boolean {
     return this.up;
   }
@@ -439,6 +450,39 @@ export class FakeBus
       }
     }
     return { acked, again };
+  }
+
+  /** As the server: each request on `subject` is answered by `answer`, until the test ends. */
+  async serve(
+    subject: string,
+    answer: (r: BusRequest) => Promise<string | undefined>,
+  ): Promise<void> {
+    this.served.set(subject, answer);
+  }
+
+  /**
+   * As the server: the request goes to the subject's server, with an answer subject under
+   * `inbox`; no server, no answer, or the bus away fails as the real one does.
+   */
+  async request(
+    subject: string,
+    data: string | Uint8Array,
+    _timeoutMs: number,
+  ): Promise<Uint8Array> {
+    if (this.failing || !this.up) throw new Error("TimeoutError: no answer from the server");
+    if (this.refuse?.(subject))
+      throw new errors.PermissionViolationError(
+        `Permissions Violation for Publish to "${subject}"`,
+        "publish",
+        subject,
+      );
+    const answer = [...this.served].find(([pattern]) => takes(pattern, subject))?.[1];
+    if (!answer) throw new Error(`503: no one serves ${subject}`);
+    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+    const reply = `${this.inbox}.${++this.requests}`;
+    const out = await answer({ subject, reply, data: bytes });
+    if (out === undefined) throw new Error("TimeoutError: no answer to the request");
+    return new TextEncoder().encode(out);
   }
 }
 

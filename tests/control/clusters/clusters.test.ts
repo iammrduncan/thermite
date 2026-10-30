@@ -13,7 +13,11 @@ import {
 } from "../../../src/control/clusters/manifests.ts";
 import { harnessKeptOffCluster } from "../../../src/control/clusters/netcheck.ts";
 
+/** The bus as the rig reaches it, with control's authority: every rig control sets up gets it. */
+const BUS = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
+
 const plan: ClusterRigPlan = {
+  bus: BUS,
   rig: "k8s-a-1",
   placement: "created",
   namespace: "thermite-k8s-a-1",
@@ -235,8 +239,8 @@ describe("rigs on Kubernetes", () => {
     );
   });
 
-  test("with the message bus, the supervisor's environment carries its address and control's authority", () => {
-    const bus = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
+  test("the supervisor's environment carries the message bus's address and control's authority", () => {
+    const bus = BUS;
     const env = (objs: Obj[], name: string) =>
       Object.fromEntries(
         (
@@ -257,11 +261,6 @@ describe("rigs on Kubernetes", () => {
     );
     const updated = clusterRigDeployments({ ...plan, bus }) as Obj[];
     assert.equal(env(updated, "thermite-k8s-a-1-supervisor").THERMITE_NATS_CA, bus.ca);
-    assert.ok(
-      !Object.keys(
-        env(clusterRigObjects(plan, secrets) as Obj[], "thermite-k8s-a-1-supervisor"),
-      ).some((k) => k.includes("NATS")),
-    );
   });
 
   test("prepare changes the owner of the folders it makes, never their trees", () => {

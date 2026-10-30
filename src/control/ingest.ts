@@ -16,11 +16,10 @@ import type { ControlStore, IngestReport } from "./store/index.ts";
 import { checkRig } from "./versions.ts";
 
 /**
- * How control takes a rig's signed report: posted to `POST /v1/rigs/<rig>/ingest` (by the rig, or
- * through the tunnel of a rig in pull mode), or read from the message bus (goal 168). Each goes
- * through takeReport, with the same checks, refusals and records, in the turn of the writer of the
- * events stream (events/writer.ts), one report at a time: its events go on the stream first, and
- * control answers once it has applied them.
+ * How control takes a rig's signed report: read from the reports stream on the message bus (goal
+ * 168), the only way a rig reports. Each goes through takeReport, with its checks, refusals and
+ * records, in the turn of the writer of the events stream (events/writer.ts), one report at a
+ * time: its events go on the stream first, and control acks it once it has applied them.
  */
 
 /** What taking a report needs: the store, control's build, and whether keys wait for the owner. */
@@ -31,7 +30,7 @@ export interface Intake {
   requireKeyAcceptance: boolean;
 }
 
-/** A refusal, as the ingest route answers it: its words, and control's cursor after a gap. */
+/** A refusal: its words, and control's cursor after a gap. */
 type Refused = { error: string; expected_cursor?: number | undefined };
 
 /** What taking a report came to: the status and the answer; 503 refuses it for now. */
@@ -225,10 +224,11 @@ function alreadyTaken(store: ControlStore, rig: string, r: SignedReport): boolea
 }
 
 /**
- * One message from the reports stream, through the checks a rig's call to the ingest route gets
- * (rigAuth in api.ts) and then takeReport. The subject's rig must be the report's signed rig. A
- * page control has already is skipped; a refusal, a gap among them, is recorded as over HTTP and
- * logged, since no answer goes back to the supervisor; a page refused for now is handed again.
+ * One message from the reports stream, through the checks of a rig's call to control (its rig
+ * known, not retired, its builds met) and then takeReport. The subject's rig must be the report's
+ * signed rig. A page control has already is skipped; a refusal, a gap among them, is recorded and
+ * logged, since no answer goes back to the supervisor (its regular call learns control's place,
+ * core/link/asks.ts); a page refused for now is handed again.
  */
 export async function foldReport(t: Intake, m: BusMessage): Promise<Folded> {
   const { store, control } = t;
@@ -253,7 +253,10 @@ export async function foldReport(t: Intake, m: BusMessage): Promise<Folded> {
     log("control", "report from the bus taken already", { rig, seq: m.seq, ...at }, "debug");
     return { skipped: "taken already" };
   }
-  // Refused while the rig's recorded builds and control's do not meet, as a call over HTTP is.
+  // The supervisor's build from the message's headers: only the rig's own user may publish on its
+  // report subject (core/link/users.ts), so they are its own, as a call with its token was.
+  store.builds.setRig(rig, "supervisor", buildFromHeaders(m.header));
+  // Refused while the rig's recorded builds and control's do not meet.
   const early = checkRig(store, rig, control, { harness: null, endRefusal: false });
   if (early) {
     store.refusals.countCall(rig);
@@ -269,9 +272,6 @@ export async function foldReport(t: Intake, m: BusMessage): Promise<Folded> {
     const why = answer as Refused;
     return refuse(why.error, { ...at, expected_cursor: why.expected_cursor });
   }
-  // The supervisor's build from the message's headers, once its report verified: the bus has no
-  // rig's token yet, so nothing else says who sent it.
-  store.builds.setRig(rig, "supervisor", buildFromHeaders(m.header));
   return { folded: (answer as { added: number }).added };
 }
 

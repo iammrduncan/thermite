@@ -61,7 +61,7 @@ Stay on the campaign's page: once the rig reports the run, within a minute or so
 
 | Reason | What to do |
 | --- | --- |
-| `Git access project-deploy: control answered 404` | Control has no Git access of that name for this rig. Check the name under **Settings** |
+| `Git access project-deploy: control gave this rig none in its config on the message bus. …` | Control gives an access to a rig, in its config on the message bus, only while an assignment of the rig names it, only when the access has a host, and only when control can open it; the rig waits up to 2 minutes for it. Check the name and its host under **Settings**, and that the rig is on the bus |
 | `Git access project-deploy is for git.example.com only, and … comes from …` | The repository is on another host than the access. Use an access for that host |
 | `… has no commit …` | The commit is not in that repository, or the access can't read it: use **Try it** on the repository |
 | git's own error, such as `Permission denied (publickey)` | The access can't read the repository: its key is not a deploy key of that repository, or the token can't read it. **Try it** shows the same error |

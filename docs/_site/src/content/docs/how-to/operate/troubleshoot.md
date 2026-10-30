@@ -83,7 +83,7 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 
 - **You see:** control keeps restarting, and its log has a `fatal` line that says `control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. …`.
 - **Why:** control keeps every rig's events on the bus, and does not start without it. The compose stack sets it for control; a deployment of your own may not.
-- **Do:** give control `THERMITE_NATS_URL`, and its bus's folder, `THERMITE_NATS_CONFIG_DIR`, with a NATS server beside it as the compose stack's `nats` service runs it. To keep a rig off the bus, leave the setting off that rig's supervisor instead: [Keep the rigs off it](message-bus.md#keep-the-rigs-off-it).
+- **Do:** give control `THERMITE_NATS_URL`, and its bus's folder, `THERMITE_NATS_CONFIG_DIR`, with a NATS server beside it as the compose stack's `nats` service runs it. Every rig needs the bus too: a rig talks to control only there ([Run the message bus](message-bus.md)).
 
 ### Control stops at start: `plain http to another host`
 
@@ -111,8 +111,8 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 
 ### Rigs' reports are refused for now: the bus is away, or its store is full
 
-- **You see:** a rig's events stop reaching its page. Its supervisor's log has `ingest -> 503:` with `the message bus did not take this report's events: …`; control's log has `a report refused for now: its events are not on the bus`, and `GET /v1/bus` says why under `events.waiting`, such as `the bus's store is full: insufficient resources`.
-- **Why:** control keeps every rig's event on its message bus first, and takes a report only once the bus has its events and control has applied them. While the bus is away, or its store is full, control takes none of a report but what the bus has, and the rig keeps its place and sends it again at its next round. A report on the bus waits on the bus and is handed again. Nothing is lost, and nothing is taken twice.
+- **You see:** a rig's events stop reaching its page. Control's log has `a report refused for now: its events are not on the bus`, and `GET /v1/bus` says why under `events.waiting`, such as `the bus's store is full: insufficient resources`.
+- **Why:** control keeps every rig's event on its message bus first, and takes a report only once the bus has its events and control has applied them. While the bus is away, or its store is full, control takes none of a report but what the bus has, and the report waits on the bus and is handed again 5 seconds later. Nothing is lost, and nothing is taken twice.
 - **Do:** bring the bus's server back, or give it more disk: [Give it more memory or disk](message-bus.md#give-it-more-memory-or-disk). The next report goes through, control's log says `reports' events go on the bus again`, and `events.waiting` is `null`.
 
 ### Control's disk is at its floor
@@ -196,25 +196,28 @@ A sign-in also ends when the owner's token changes, or after 30 days without use
 
 ### A rig is quiet
 
-- **You see:** the rig shows **Stale** or **Offline** on **Rigs**, or never appears there. Its page says `stale` or `offline`, with a banner.
-- **Why and do:** for a rig control set up on a machine or a cluster, the banner says what control found when it checked where the rig runs, which it does by itself when the rig turns stale and again when it turns offline: whether its containers run, and, on a machine, the supervisor's last log lines. **Check again** (**Check the cluster**) checks now. Otherwise read the supervisor's log. Most causes show in a `relay error` line:
+- **You see:** the rig shows **Stale** or **Offline** on **Rigs**, or never appears there. Its page says `stale` or `offline`, with a banner. A rig that shows **Broken: off the bus** has its own section: [A rig shows Broken: off the message bus](#a-rig-shows-broken-off-the-message-bus).
+- **Why and do:** for a rig control set up on a machine or a cluster, the banner says what control found when it checked where the rig runs, which it does by itself when the rig turns stale and again when it turns offline: whether its containers run, and, on a machine, the supervisor's last log lines. **Check again** (**Check the cluster**) checks now. Otherwise read the supervisor's log, and control's: no answer to a report on the bus goes back to the rig, so a report control refuses shows in control's log, as `report from the bus refused` with why, and in the supervisor's as `control is behind this rig's reports on the bus; sending again from its cursor`:
 
-| In the supervisor's log | Why | Do |
+| In the log | Why | Do |
 | --- | --- | --- |
 | `waiting for the harness` and nothing more | The harness isn't up | Read the harness's log |
-| `the rig's key waits for the owner's acceptance` or `rig key changed: the owner must accept the new key` | Control holds the rig's key | [Accept the rig's key](accept-a-rig-key.md) |
-| `this rig is retired in control` | The rig was retired | Bring it back on its page: see [Retire and bring back](rig-lifecycle.md#retire-and-bring-back) |
-| `ingest -> 401` with `unauthorized` | The supervisor's control token is wrong | Give it the rig's current token: see [Rig tokens](tokens.md#rig-tokens) |
+| Control's: `report from the bus refused` with `the rig's key waits for the owner's acceptance` or `rig key changed: the owner must accept the new key` | Control holds the rig's key | [Accept the rig's key](accept-a-rig-key.md) |
+| The supervisor's: `the rig's keys on the message bus are not registered yet`, with `HTTP 403` and `this rig is retired in control` | The rig was retired | Bring it back on its page: see [Retire and bring back](rig-lifecycle.md#retire-and-bring-back) |
+| `the rig's keys on the message bus are not registered yet`, with `HTTP 401` and `unauthorized` | The supervisor's control token is wrong, so control can't take its keys, and the bus refuses it | Give it the rig's current token: see [Rig tokens](tokens.md#rig-tokens) |
+| `the rig's keys on the message bus are not registered yet`, with another error, such as no answer | The supervisor can't reach control's address. It tries again every 30 seconds; the bus refuses the rig until control has its keys, unless control has them from an earlier start | Check that the rig reaches `CONTROL_URL`: on its machine, `thermite doctor --control` and control's address |
 | `fatal` with `the rig has no token for control yet` | Its token file is empty or missing: the rig is not enrolled yet. On the local compose stack, the `enroll` service writes it at `up` | Read the enroll step's log (`docker compose logs enroll`), which says what control answered, then `docker compose up -d` again. Elsewhere, enroll the rig and give it its token: see [Rig tokens](tokens.md#rig-tokens) |
 | `the harness reports as rig …, but this supervisor is …` | The two containers have different `THERMITE_RIG_ID` settings | Make them the same |
-| `report from the future` | The rig's clock is ahead of control's | Set the clocks right. On the rig's machine, `thermite doctor --control` and control's address compares the two clocks |
-| `Control cannot work with this rig: …` | Control refuses the rig: the protocol of its harness or supervisor and control's do not meet. The message says which part, and whether to update the rig's images or control | Do what the message says. `thermite rig list` shows each part's version ([Rig versions](../../reference/rest-api.md#rig-versions)) |
-| No `relay error`, but the rig has never appeared | The supervisor has no control token file, so it reports nothing and logs no error | Check that the file its `THERMITE_CONTROL_TOKEN_FILE` names exists and holds the rig's token |
-| `model route error` | Control or the harness did not answer when the supervisor asked for the rig's model, twice, 5 seconds apart. The rig keeps the model it has | Read the error in the line, and control's log. The supervisor logs this once, and again only after a round has worked |
+| Control's: `report from the bus refused` with `report from the future` | The rig's clock is ahead of control's | Set the clocks right. On the rig's machine, `thermite doctor --control` and control's address compares the two clocks |
+| `Control cannot work with this rig: …`, in control's log or in the supervisor's | Control refuses the rig: the protocol of its harness or supervisor and control's do not meet. The message says which part, and whether to update the rig's images or control | Do what the message says. `thermite rig list` shows each part's version ([Rig versions](../../reference/rest-api.md#rig-versions)) |
+| `fatal` with `CONTROL_URL or THERMITE_CONTROL_TOKEN_FILE is not set: …` | The supervisor has no address or token for control, so it can't register the rig's keys | Give it both: see [Rig tokens](tokens.md#rig-tokens) |
+| `fatal` with `THERMITE_NATS_URL is not set: a rig reaches control only on its message bus. …` | The supervisor has no address for the message bus: a rig set up before the bus, or by hand without it | Set it up again with this version: [A rig from before the bus](message-bus.md#a-rig-from-before-the-bus) |
+| `fatal` with `this pod was launched with no leaf node on the message bus, …` | A rig on RunPod launched before its pod had a leaf node on the bus | Terminate it, and launch a new one ([Run a rig on RunPod](../install/runpod-rig.md)) |
+| `model route error` | The supervisor could not hand its harness the model route from the rig's config on the bus: the harness did not answer, or refused it. The rig keeps the model it has | Read the error in the line, and the harness's log. The supervisor logs this once, and again only after a look has worked |
 | `following failed; trying again` or `making the stream failed; trying again`, with `ECONNREFUSED`, `ETIMEDOUT` or a timeout | The supervisor can't reach the message bus's port | Open the port to the rig's machine or cluster: [Run the message bus](message-bus.md#let-rigs-on-other-machines-reach-it) |
 | The same, with `unable to verify the first certificate` | The rig trusts another certificate authority than control's own for the bus, as after control made a new one | Move the rig onto its images again, so that it gets control's authority: [Move a rig onto new images](rig-lifecycle.md#move-a-rig-onto-new-images) |
 | The same, with `does not match certificate's altnames` | The rig reaches the bus by a name the server's certificate does not hold | Set `THERMITE_NATS_PUBLIC_URL` on control to the address the rigs use, restart control, and move the rig onto its images again |
-| The same, with `Authorization Violation` | The bus's server does not know the rig's key: control has not written it yet | Wait for the supervisor's next call to control, which registers the key |
+| The same, with `Authorization Violation` | The bus's server does not know the rig's key: control does not have it yet | The supervisor registers its keys with control at its start, and tries again every 30 seconds: look for `the rig's keys on the message bus are registered with control` in its log, or the error before it |
 
 A rig control set up on a machine or a cluster may also still be pulling its images. Its setup steps say `no report after 10 minutes: it may not have started` when it took longer than that; it may still report later. For a rig on a cluster, see [A rig on a cluster never reports](#a-rig-on-a-cluster-never-reports).
 
@@ -254,10 +257,31 @@ A rig control set up on a machine or a cluster may also still be pulling its ima
 - **Why:** a draining rig waits for every running trial to end, and a trial has no time limit unless someone set one. A trial that keeps asking for a page the run refused, such as a file larger than the run's `fetch_policy.max_bytes`, may never end by itself. The harness answers each such ask at once, so the trial costs model calls but no downloads.
 - **Do:** open the trial's row: **Same request** says which page and how many times. From its 10th ask, the trial also asks you under **Needs you**, with the same facts ([Stuck trials](../campaigns/decide-what-waits.md#stuck-trials)). If it is stuck, press **Stop this trial…**, then **Stop the trial**. It ends as interrupted, with what it found, and its experiment goes back to the top of the queue for after the drain ([The trials it waits for](../../reference/rig-page.md#the-trials-it-waits-for)). From a script, send [`stop_trial`](../../reference/signed-commands.md#stop_trial). To give the run's agents more time instead, press **End the drain**.
 
+### A rig shows Broken: off the message bus
+
+- **You see:** on **Rigs**, the rig's state is **Broken: off the bus**. Its page has the banner `Broken: <rig> is off the message bus.`, its top line says `broken · off the message bus`, and **Needs you** has a **Broken** card.
+- **Why:** a rig and control talk only on the message bus, but for the registration of the rig's keys and its large files. A rig that can't reach the bus gets no commands, and control gets none of its reports. The banner says which of three causes control sees.
+- **Do:** what the banner's **To fix it:** says, for where the rig runs:
+
+| The banner says | Why | Do |
+| --- | --- | --- |
+| `It calls control over HTTP, with no keys on the message bus: …` | The rig runs a version from before the bus was the only way, such as v0.1.0, or it was set up without the bus. Its supervisor's log shows control's refusal: `this rig has no keys on the message bus: …`. Its history has `It calls control over HTTP with no keys on the message bus: it is broken until it is set up again`, once a day | Set it up again with this version: [A rig from before the bus](message-bus.md#a-rig-from-before-the-bus) |
+| `It registered its keys with control over HTTPS, but nothing came from it on the message bus since: …` | The supervisor started and registered its keys 5 minutes ago or more, and nothing came from it on the bus since: it can't reach the bus's address and port, or the bus refuses it | Read the supervisor's log, as in [A rig is quiet](#a-rig-is-quiet): `following failed; trying again` with a refused or timed-out connection means the rig can't reach the bus's port, 4222 unless control names another; a certificate error means it trusts another authority, or reaches the bus by another name. Open the port to it through every firewall and network rule between them ([Let rigs on other machines reach it](message-bus.md#let-rigs-on-other-machines-reach-it)) |
+| `Its pod was launched before RunPod's rigs joined the message bus …` | A RunPod pod with no leaf node | Terminate it, and launch a new one |
+| `RunPod gives its pod no public address for the leaf node's port (7422) …` | RunPod has given the pod's port 7422 no public address for 5 minutes while it runs, so control's bus can't dial it | Terminate it, and launch a new one: RunPod may give the new pod an address |
+
+The banner goes by itself once the rig's reports come on the bus again. A rig whose pod is stopped shows **Stopped**, never **Broken**.
+
+### Commands wait for the message bus
+
+- **You see:** the rig's page has a banner `A command waits for the message bus.`, or how many wait, and **Needs you** a **Commands wait** card. The commands stay **pending** on **Commands**.
+- **Why:** the bus did not take them. The banner says why: `the rig's queue on the bus holds 100 commands it has not taken`, when the rig does not take its commands; `the bus did not take it: …`, while the bus is away; or `100 commands wait their turn for the bus already`. Control holds them, and publishes them again every 10 seconds, each rig's oldest first.
+- **Do:** for a full queue, check that the rig is on the bus and that its supervisor runs: its page says whether it is broken, and its log says why. For a bus that is away, bring the bus's server back. The commands go by themselves once the bus takes them, each before its own expiry; [cancel](cancel-a-command.md) one you no longer want.
+
 ### A rig on a cluster never reports
 
 - **You see:** in the rig's **Set up by control** block, the step "First report reached control" has ✕ and `no report after 10 minutes: it may not have started`, and the block says `failed`.
-- **Why:** its pods have not started, or its supervisor can't reach control. Often the nodes are still pulling the large images. A pod stays `Pending` when no node has room for what it asks, such as its GPUs, CPUs, memory or volume. It shows `ImagePullBackOff` when the nodes can't pull the images: a registry that needs a sign-in is not supported yet ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)).
+- **Why:** its pods have not started, or its supervisor can't reach control or its message bus. Often the nodes are still pulling the large images. A pod stays `Pending` when no node has room for what it asks, such as its GPUs, CPUs, memory or volume. It shows `ImagePullBackOff` when the nodes can't pull the images: a registry that needs a sign-in is not supported yet ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)).
 - **Do:** look at the pods, in the namespace the block shows:
 
   ```sh
@@ -361,13 +385,13 @@ Two causes are common on a laptop:
 
 ### A campaign doesn't start: `staging:`
 
-- **You see:** the run never appears. On **Commands**, in the sidebar, the **assign campaign** row is **failed**, and its **Outcome** holds `{"error":"staging: …"}`. The supervisor's log has a `staging failed` line with the same error, then `command not relayed`.
+- **You see:** the run never appears. On **Commands**, in the sidebar, the **assign campaign** row is **failed**, and its **Outcome** holds `"accepted":false` and `"result":{"error":"staging: …"}`. The supervisor's log has a `staging failed` line with the same error, then `command not relayed`: the supervisor gave the command to the harness with the reason, and the harness recorded it as not applied, which reached control in the rig's next report.
 - **Why:** before the rig takes a campaign, its supervisor fetches the project, the kit and any model the command names. That fetch failed. The supervisor's log line `staged sources` means it worked.
 - **Do:** read the reason:
 
 | Reason after `staging:` | Do |
 | --- | --- |
-| `Git access <name>: control answered 404` | Control has no Git access of that name for this rig. Check the name in **Settings** (the cog at the foot of the sidebar) |
+| `Git access <name>: control gave this rig none in its config on the message bus. …` | Control gives an access only while a live assignment of the rig names it, and only when it can open it; staging waits up to 2 minutes for it. Check the name in **Settings** (the cog at the foot of the sidebar), that it has a host, and control's log for `a Git access not given` |
 | `… has no commit …` | The commit is not in that repository, or the rig can't read it. For a private repository, see [Use a private repository](../campaigns/private-repository.md#5-check-that-the-rig-fetched-it) |
 | `Command failed: git …` and git's message, such as `Host key verification failed` or `Permission denied (publickey)` | The rig can't read the repository. Give the campaign a [Git access](../campaigns/private-repository.md), or check the address |
 | `<url>: HTTP <status>`, or `model <name> from <url> refused: its SHA-256 is …, not the signed …` | A model's address answered with an error, or its file is not the one the contract names |
@@ -452,7 +476,7 @@ The dashboard refuses to start a research run with agents in the last case. A ru
 
 - **You see:** after **Send** in **Live**, your message never shows in the stream, and the line under the message box says why:
   - when control refused the message, `Not sent:` and its reason show at once, what you wrote stays in the box, and the message is not on **Commands**;
-  - when the rig refused it, the line says `rig-1 refused it:` and the rig's reason, within seconds and with no refresh, and a strip above the box says **Not sent.** `The rig refused your last message:` and the reason. On **Commands**, the message's **message agent** row is **failed**, with the rig's reason in **Outcome**.
+  - when the rig refused it, the line says `rig-1 refused it:` and the rig's reason, with the rig's next report, within a minute, and with no refresh, and a strip above the box says **Not sent.** `The rig refused your last message:` and the reason. On **Commands**, the message's **message agent** row is **failed**, with the rig's reason in **Outcome**.
 
   The rig's refusal stays until a later message to the run goes through, and shows also for a message sent over MCP, the REST API or the command line. A message from **Tell the planner**, on a run's **Planner** tab, shows its refusal in that card, above the box.
 - **Why:** a message that nothing would read is refused. Control refuses, before signing it, a message with no words (`Write a message first.`), and one to a recipient that **Live** greys out, with the same words: everyone working, a lane or the planner of a run without agents, such as a try; a part that is off on **Edit rig**, such as `The planner is off on this rig (Edit rig), so nothing would read it.`; an advisor the rig's supervisor hasn't set up, such as `This rig's supervisor has no auditor set up, so nothing would read it.`; the auditor of a research run (`A research run has no attempts to audit.`); or the review panel of a run with no goal it reviews, such as a hill climb (a research run's review panel reads messages). The rig refuses what control can't check, such as a lane the run doesn't have. [Steer a run](../campaigns/steer-a-run.md#if-a-message-doesnt-arrive) lists control's reasons, and [`message_agent`](../../reference/signed-commands.md#message_agent) the rig's.
@@ -518,12 +542,12 @@ A reason about one experiment names its state, then the rule: `only queued exper
 
 ### A run gets no past research
 
-- **You see:** you expect a run to have **past research**: the records of its campaign's other runs, and of the campaigns listed under **Can read from** in the **Knowledge** section of the campaign's page. Its rig's supervisor fetches them from control, and the harness writes them into the run's `knowledge/` folder, for the workers to search. But the supervisor's log has no `past research synced` line, or it has `past research sync error`.
+- **You see:** you expect a run to have **past research**: the records of its campaign's other runs, and of the campaigns listed under **Can read from** in the **Knowledge** section of the campaign's page. Its rig's supervisor asks control for them on the message bus, and the harness writes them into the run's `knowledge/` folder, for the workers to search. But the supervisor's log has no `past research synced` line, or it has `past research sync error`.
 - **Why and do:**
   - **There is nothing to send yet.** A run never gets its own records, only those of its campaign's other runs and of the collections under **Can read from**. A campaign's first run, with nothing under **Can read from**, gets none. **Knowledge** in the sidebar shows how many items each collection holds. To add another campaign's collection, see [Use past research in a new run](../campaigns/use-past-research.md).
-  - **The sync hasn't come yet.** The supervisor syncs every 3 minutes, and only the runs that are running: a paused run gets its items once it runs again. Its setting is `THERMITE_KB_SYNC_SECONDS` (180); `0` turns the sync off ([Settings](../../reference/settings.md#how-often-it-talks-to-control)). A supervisor without control's address and token syncs nothing.
+  - **The sync hasn't come yet.** The supervisor syncs every 3 minutes, and only the runs that are running: a paused run gets its items once it runs again. Its setting is `THERMITE_KB_SYNC_SECONDS` (180); `0` turns the sync off ([Settings](../../reference/settings.md#how-often-it-talks-to-control)). A rig off the message bus syncs nothing ([A rig shows Broken](#a-rig-shows-broken-off-the-message-bus)).
   - **Control didn't assign the run.** Control sends past research only for a run it assigned to that rig. For any other run, such as the `check-smoke-…` run of a rig's **Judge smoke** check, control has nothing: the supervisor logs no error, and asks about that run again after an hour. A run control assigned but hasn't seen the rig report yet gets its items at the next sync after the rig's report.
-  - **The sync failed.** `past research sync error` names each run with its error, once until a sync works again, such as `<run>: control's knowledge base: HTTP` and the status control answered.
+  - **The sync failed.** `past research sync error` names each run with its error, once until a sync works again, such as `<run>: control refused the rig's past: …` with control's words, or the bus's error when control did not answer within 20 seconds.
   - **Control couldn't index an event of the rig's.** The **Audit log** has a `kb_failed` entry with the error, and control's log has `an event not indexed in the knowledge base`, with the event's rig, ledger, id and kind. That event is left out of the knowledge base; the events after it are indexed.
   - **Control hasn't applied the rig's events yet.** Control fills the knowledge base from its message bus's `EVENTS` stream. While the bus is away, nothing new is indexed: `GET /v1/bus` says why under `events.apply`, and its `behind` falls to 0 once the bus is back ([Follow control's events to the bus and back](message-bus.md#follow-controls-events-to-the-bus-and-back)).
 

@@ -107,7 +107,7 @@ To **end** a token, remove its setting and restart control. On the local stack, 
 
 ## Rig tokens
 
-Each rig has its own token, which its supervisor uses to report to control. The `rig` commands below need the owner's token. The examples use the owner's token file of the local stack, `.dev/secrets/control-admin-token`. If you made an owner's token of your own, use its file instead.
+Each rig has its own token, which its supervisor uses to register its keys on the message bus with control, and to send its results over HTTPS. The `rig` commands below need the owner's token. The examples use the owner's token file of the local stack, `.dev/secrets/control-admin-token`. If you made an owner's token of your own, use its file instead.
 
 - **Rigs control sets up** with **Add a rig**, or with a join command, get a token by themselves. See [Add a rig on a machine over SSH](../install/rig-on-a-machine.md) and [Join a rig yourself](../install/join-a-rig.md).
 - **Enroll a rig yourself** with the owner's token. Control makes the rig's token, and the command writes it with the rig's other files into a new folder:

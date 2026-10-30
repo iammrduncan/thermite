@@ -3,8 +3,8 @@ import { SCREENS_WATCHED_MAX, type ScreenFrame } from "../../core/screens.ts";
 /**
  * The terminal view on control (goal 169; core/screens.ts): which trials the owner's pages watch
  * now, and the newest screen of each, in memory only, while it is watched. A rig's supervisor asks
- * which of its trials are watched (POST /v1/rigs/<rig>/screens) and sends their screens; a screen
- * nobody watches is not kept, and none is ever written down.
+ * which of its trials are watched on the message bus (core/link/asks.ts's `screens`) and sends
+ * their screens; a screen nobody watches is not kept, and none is ever written down.
  */
 
 /** A frame as control keeps it, with when it came. */

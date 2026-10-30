@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { drainBanner, drainOf, drainSaid } from "../../../../src/control/ui/rigs/drain.ts";
-import { ingestReport } from "../../../helpers/control-store.ts";
+import { answerCommand, ingestReport } from "../../../helpers/control-store.ts";
 import { ev, part, researchControl, researchRunEvents } from "../../../helpers/research-reviews.ts";
 
 /**
@@ -180,7 +180,7 @@ describe("a drain on the rig's page (goal 136)", () => {
     );
     assert.match(after, /Stop sent at \d\d:\d\d UTC\. Sent to rig-a/);
     assert.doesNotMatch(after, /Stop this trial…/);
-    c.store.commands.ack("rig-a", sent?.id ?? "", "delivered", {
+    answerCommand(c.store, "rig-a", sent?.id ?? "", "delivered", {
       source: "harness",
       status: "applied",
       accepted: true,
@@ -196,7 +196,7 @@ describe("a drain on the rig's page (goal 136)", () => {
     const c = await draining();
     await c.send({ rig: "rig-a", kind: "stop_trial", run: "s-1", trial: "t-1" });
     const sent = c.store.commands.latest("rig-a", "stop_trial", 1)[0];
-    c.store.commands.ack("rig-a", sent?.id ?? "", "delivered", {
+    answerCommand(c.store, "rig-a", sent?.id ?? "", "delivered", {
       source: "harness",
       status: "applied",
       accepted: true,

@@ -9,6 +9,7 @@ import { SecretBox } from "../../../src/control/secrets.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { LEAF_ENV, LEAF_PORT } from "../../../src/core/link/leaf.ts";
 import { keySha256 } from "../../../src/core/tunnel.ts";
+import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
 import { controlOnly, mcpClient } from "../../helpers/control-stack.ts";
 import { applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
 import { FAKE_RUNPOD_KEY, fakeRunpod } from "../../helpers/fake-runpod.ts";
@@ -39,7 +40,7 @@ function setup(o: { noCapacity?: boolean; image?: string | undefined; busCa?: st
   const now = () => clock;
   const tunnels = new ControlTunnels(store, secrets, control.privateKeyPem, {
     now,
-    busCa: o.busCa,
+    busCa: "busCa" in o ? o.busCa : TEST_BUS_CA,
   });
   const rigs = new RunpodRigs(store, secrets, tunnels, {
     fetch: cloud.fetch,
@@ -109,10 +110,13 @@ describe("rigs on RunPod: the launch", () => {
     assert.equal(body.disk, 40);
     assert.deepEqual(body.mounts, { persistent: { size: 100, path: "/workspace" } });
     assert.equal(body.dataCenterIds, undefined, "RunPod chooses when none is given");
-    assert.deepEqual(body.ports, ["8790/http"]);
+    assert.deepEqual(body.ports, ["8790/http", `${LEAF_PORT}/tcp`]);
     assert.equal(body.cmd, undefined, "the image's own entry point runs");
     // Only pull mode's launch values: public material, the one-time code and the snapshot key.
     assert.deepEqual(Object.keys(body.env).sort(), [
+      "THERMITE_LEAF_CERT",
+      "THERMITE_LEAF_CONTROL_CA",
+      "THERMITE_LEAF_KEY",
       "THERMITE_RIG_ID",
       "THERMITE_STATE_SNAPSHOT_KEY",
       "THERMITE_TUNNEL_CONTROL_BOX",

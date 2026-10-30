@@ -6,7 +6,7 @@ import { describe, test } from "node:test";
 import { runNameUsed } from "../../../src/control/run-names.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
-import { controlStore, ingestReport } from "../../helpers/control-store.ts";
+import { answerCommand, controlStore, ingestReport } from "../../helpers/control-store.ts";
 import { keepOldRows, withEventsTable } from "../../helpers/old-store.ts";
 
 /**
@@ -58,8 +58,8 @@ describe("control's run registry", () => {
       "sort-speed-2",
     ]);
     // A refused assignment frees its name; a delivered one keeps it.
-    store.commands.ack("rig-a", "c-2", "failed", { error: "x" });
-    store.commands.ack("rig-a", "c-1", "delivered", {});
+    answerCommand(store, "rig-a", "c-2", "failed", { error: "x" });
+    answerCommand(store, "rig-a", "c-1", "delivered", {});
     assert.equal(runNameUsed(store, "sort-speed-2"), undefined);
     assert.deepEqual(
       store.runRegistry.assignedCampaigns("rig-a"),
@@ -159,7 +159,7 @@ describe("control's run registry", () => {
     const old = new ControlStore(path);
     old.commands.enqueue(assignment("c-1", "rig-a", "sort-speed-1"));
     old.commands.enqueue(assignment("c-2", "rig-a", "sort-speed-2"));
-    old.commands.ack("rig-a", "c-2", "failed", { error: "x" });
+    answerCommand(old, "rig-a", "c-2", "failed", { error: "x" });
     // As a store at version 5 left it: its events in its events table, no registry yet.
     withEventsTable(old.db, 5);
     keepOldRows(old.db, [

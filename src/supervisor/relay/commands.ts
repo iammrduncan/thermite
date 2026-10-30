@@ -2,33 +2,22 @@ import type { Bus, BusMessage, Handled } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import type { SignedCommand } from "../../core/commands.ts";
-import { COMMAND_STREAM, commandConsumerName, readCommand } from "../../core/link/commands.ts";
-import { SUPERVISOR_NUMBERS, supervisorMs } from "../settings.ts";
+import {
+  COMMAND_RENEW_BEFORE_MS,
+  COMMAND_STREAM,
+  commandConsumerName,
+  readCommand,
+} from "../../core/link/commands.ts";
+import { AskRefused, ask } from "../ask.ts";
 import { deliverCommand, type RelayConfig } from "./index.ts";
 
 /**
- * A rig's commands from the message bus (goal 168, step 1). The supervisor takes each from its
- * rig's consumer as soon as control issues it, and delivers it as it delivers one from control's
- * pending list (deliverCommand): staged, to the harness, and the outcome acked to control. Only
- * then is the message acked. The poll over HTTP stays, slower, for a command the bus never had.
+ * A rig's commands from the message bus (goal 168, step 1), the only way they reach it. The
+ * supervisor takes each from its rig's consumer as soon as control issues it, stages its content,
+ * and delivers it to its harness (deliverCommand). Only once the harness has its outcome is the
+ * message acked. A command whose sources still stage is asked to be signed again before it
+ * expires, so a long download never expires its assignment.
  */
-
-/**
- * How often the supervisor asks control for its pending commands over HTTP when they come over
- * the bus: for a command that reached control's store but not the bus. It stays under the ten
- * minutes before a command's expiry in which control renews one whose sources still stage.
- */
-export const COMMAND_FALLBACK_SECONDS = 180;
-
-/**
- * How often the supervisor asks control for its pending commands over HTTP, in milliseconds:
- * THERMITE_COMMAND_POLL_SECONDS (read, so that a bad value stops the supervisor all the same), or
- * with the message bus COMMAND_FALLBACK_SECONDS.
- */
-export function commandPollMs(env: Record<string, string | undefined>, onBus: boolean): number {
-  const set = supervisorMs(env, SUPERVISOR_NUMBERS.commandPollSeconds);
-  return onBus ? COMMAND_FALLBACK_SECONDS * 1000 : set;
-}
 
 /**
  * How soon the bus hands again a command that waits: its sources still stage, the harness is
@@ -37,9 +26,11 @@ export function commandPollMs(env: Record<string, string | undefined>, onBus: bo
 export const COMMAND_AGAIN_MS = 5_000;
 
 /**
- * One message from the rig's consumer. A command delivered already, one past its expiry (control
- * marks it expired) and a message that is not this rig's command are acked and not delivered. A
- * command the poll over HTTP brought too is delivered in the newer form control gave it there.
+ * One message from the rig's consumer. A command delivered already and a message that is not this
+ * rig's command are acked and not delivered. A command control signed again while its sources
+ * staged is delivered in that newer form. One past its expiry is asked of control again, which
+ * holds the newest form (the supervisor may have restarted since): one control no longer holds
+ * pending is acked and not delivered.
  */
 export async function takeCommand(cfg: RelayConfig, m: BusMessage): Promise<Handled> {
   let cmd: SignedCommand;
@@ -60,15 +51,57 @@ export async function takeCommand(cfg: RelayConfig, m: BusMessage): Promise<Hand
     log("supervisor", "a command from the bus delivered already", what, "debug");
     return undefined;
   }
-  const held = cfg.held?.get(e.id) ?? cmd;
+  let held = cfg.held?.get(e.id) ?? cmd;
   if (Date.parse(held.envelope.expires_at) < Date.now()) {
-    log("supervisor", "a command from the bus expired before delivery", what, "warn");
-    return undefined;
+    const newer = await renewal(cfg, held);
+    if (!newer || Date.parse(newer.envelope.expires_at) < Date.now()) {
+      log("supervisor", "a command from the bus expired before delivery", what, "warn");
+      cfg.held?.delete(e.id);
+      return undefined;
+    }
+    held = newer;
   }
   cfg.held?.set(e.id, held);
   if (await deliverCommand(cfg, held)) return undefined;
   log("supervisor", "a command from the bus waits", what, "debug");
+  // Sources that still stage, near the command's expiry: control signs it again with a later one.
+  const due = Date.parse(held.envelope.expires_at) - Date.now() <= COMMAND_RENEW_BEFORE_MS;
+  if (due && cfg.staging?.has(e.id)) {
+    const newer = await renewal(cfg, held).catch((err: unknown) => {
+      const why = { id: e.id, error: errorText(err).slice(0, 300) };
+      log("supervisor", "a command whose sources stage was not signed again yet", why, "warn");
+      return undefined;
+    });
+    if (newer) cfg.held?.set(e.id, newer);
+  }
   return { againInMs: COMMAND_AGAIN_MS };
+}
+
+/**
+ * Control's newest form of a pending command (core/link/asks.ts's `renew`): signed again with a
+ * later expiry while its sources stage, at most for the longest hold; or as control holds it.
+ * Undefined when control holds it pending no more. Throws when control gave no answer: the bus
+ * hands the command again.
+ */
+async function renewal(cfg: RelayConfig, cmd: SignedCommand): Promise<SignedCommand | undefined> {
+  const e = cmd.envelope;
+  let answer: Awaited<ReturnType<typeof ask<"renew">>>;
+  try {
+    answer = await ask({ rig: cfg.rig, bus: cfg.bus }, "renew", { id: e.id });
+  } catch (err) {
+    if (!(err instanceof AskRefused)) throw err;
+    log("supervisor", "control holds a command pending no more", { id: e.id, error: err.message });
+    return undefined;
+  }
+  const newer = answer.command as unknown as SignedCommand;
+  if (newer.envelope.id !== e.id)
+    throw new Error(`control answered with another command: ${newer.envelope.id}`);
+  if (newer.envelope.expires_at !== e.expires_at)
+    log("supervisor", "a command was signed again with a later expiry", {
+      id: e.id,
+      expires_at: newer.envelope.expires_at,
+    });
+  return newer;
 }
 
 /**

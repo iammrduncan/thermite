@@ -3,10 +3,10 @@ import { z } from "zod";
 /**
  * The terminal view (goal 169): a running trial's screen as its terminal host keeps it, sent only
  * for the trials someone watches on control, and held in memory on the way, never recorded. The
- * supervisor asks control which trials are watched, asks its harness for their screens, and posts
- * them to control, over HTTP, beside the message bus: the bus's LIVE stream keeps what it carries
- * on disk for an hour, and a frame is a view, not a record. A screen is what the agent's program
- * drew: no decision reads it.
+ * supervisor asks control which trials are watched, asks its harness for their screens, and sends
+ * them to control on the message bus, as a request on the rig's own subject that no stream keeps
+ * (core/link/asks.ts): the bus's LIVE stream keeps what it carries on disk for an hour, and a
+ * frame is a view, not a record. A screen is what the agent's program drew: no decision reads it.
  */
 
 /** The most characters of one screen: a running trial's screen, or an ended one's last. */
@@ -44,5 +44,5 @@ export type ScreenFrame = z.infer<typeof ScreenFrame>;
 /** The watched trials one ask names. */
 export const WatchedTrials = z.array(TrialRef).max(SCREENS_WATCHED_MAX);
 
-/** The most bytes of one post of frames: every watched screen at its largest, as JSON. */
+/** The most bytes of one ask of frames: every watched screen at its largest, as JSON. */
 export const SCREENS_MAX_BYTES = SCREENS_WATCHED_MAX * SCREEN_DATA_MAX * 6 + 64 * 1024;

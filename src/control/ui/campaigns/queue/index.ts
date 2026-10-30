@@ -384,12 +384,14 @@ export function plannerTab(o: {
     html: `${h.round !== null ? `<b>Round ${h.round}</b>: ` : ""}${h.assignments.length ? `<ul>${h.assignments.map((a) => `<li><b>${esc(a.lane)}</b>: ${esc(r.queue.find((x) => x.id === a.experiment)?.title ?? a.experiment ?? "")}${a.why ? ` <span class="muted">· ${esc(a.why)}</span>` : ""}</li>`).join("")}</ul>` : ""}${h.notes ? `<div class="muted small">${esc(clip(h.notes, 400))}</div>` : ""}`,
   }));
   // The planner's own changes to the queue and the rules it set, each with its reason. A copy
-  // back in the queue after its trial stopped is not a change of the planner's: History has it.
+  // back in the queue after its trial stopped is not a change of the planner's: History has it,
+  // as it has an event control can't read.
   const changed = (r.timeline ?? [])
     .filter(
       (e) =>
         (e.actor === "planner" || (e.kind === "family_added" && e.actor.startsWith("planner:"))) &&
-        !e.body.requeued_from,
+        !e.body.requeued_from &&
+        e.unreadable === undefined,
     )
     .map((e) => {
       const b = e.body;

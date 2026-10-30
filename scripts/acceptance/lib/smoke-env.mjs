@@ -56,22 +56,56 @@ export function cleanEngine() {
 export const secret = (n) => readFileSync(join(".dev", "secrets", n), "utf8").trim();
 
 /**
- * The message bus's server as compose.yaml runs it: its image and its command, for a stack that
- * starts the server beside a control of its own (the cluster acceptance), so that both run it
- * one way. Read from compose.yaml, where it is kept.
+ * The message bus's server as compose.yaml runs it: its image, its user and its command, for a
+ * stack that starts the server beside a control of its own (the cluster acceptance), so that both
+ * run it one way. Read from compose.yaml, where it is kept.
  */
 export function natsService() {
   const text = readFileSync("compose.yaml", "utf8");
   const service = text.slice(text.indexOf("\n  nats:\n"));
   const image = /\n {4}image: (\S+)/.exec(service)?.[1];
+  const user = /\n {4}user: "([0-9:]+)"/.exec(service)?.[1];
   const lines = [];
   for (const line of service.slice(service.indexOf("      - |\n")).split("\n").slice(1)) {
     if (!line.startsWith("        ")) break;
     lines.push(line.slice(8));
   }
-  if (!image || !lines.length) throw new Error("compose.yaml has no nats service to read");
+  if (!image || !user || !lines.length) throw new Error("compose.yaml has no nats service to read");
   // Compose writes a literal $ as $$; run as it is, the shell would read $$ as its own pid.
-  return { image, command: ["sh", "-c", lines.join("\n").replaceAll("$$", "$")] };
+  return { image, user, command: ["sh", "-c", lines.join("\n").replaceAll("$$", "$")] };
+}
+
+/**
+ * The engine's `run` of the bus's one-shot service as compose.yaml runs it (nats-init): it gives
+ * the folders on these volumes (`source:/data` and `source:/etc/nats/thermite`) to their users
+ * before the server starts, and ends. Read from compose.yaml, where it is kept.
+ */
+export function natsInitRun(volumes) {
+  const text = readFileSync("compose.yaml", "utf8");
+  const service = text.slice(text.indexOf("\n  nats-init:\n"));
+  const image = /\n {4}image: (\S+)/.exec(service)?.[1];
+  const user = /\n {4}user: "([0-9:]+)"/.exec(service)?.[1];
+  const caps = /\n {4}cap_add: \[([A-Z_, ]+)\]/.exec(service)?.[1]?.split(", ");
+  const command = /\n {4}command: (\[.*\])\n/.exec(service)?.[1];
+  if (!image || !user || !caps || !command)
+    throw new Error("compose.yaml has no nats-init service to read");
+  return [
+    "run",
+    "--rm",
+    "--pull=never",
+    "--user",
+    user,
+    "--cap-drop",
+    "ALL",
+    ...caps.flatMap((c) => ["--cap-add", c]),
+    "--security-opt",
+    "no-new-privileges:true",
+    "--network",
+    "none",
+    ...volumes.flatMap((v) => ["-v", v]),
+    image,
+    ...JSON.parse(command),
+  ];
 }
 
 export async function until(what, fn, timeoutMs = 180_000, everyMs = 1000) {

@@ -15,8 +15,8 @@ import {
   type RelayState,
   relayOnce,
 } from "../../../src/supervisor/relay/index.ts";
-import { controlStack, RIG_TOKEN } from "../../helpers/control-stack.ts";
-import { heldEvents } from "../../helpers/control-store.ts";
+import { controlStack } from "../../helpers/control-stack.ts";
+import { figuresOnBus, heldEvents } from "../../helpers/control-store.ts";
 import { FakeBus } from "../../helpers/fake-bus.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
 import { appendOther } from "../../helpers/kinds.ts";
@@ -57,17 +57,14 @@ async function rig(
     });
     return out;
   };
-  const figures = async (cursor: number): Promise<unknown> => {
-    const body = { at: new Date().toISOString(), relay: { cursor } };
-    const r = await s.api("POST", "/v1/rigs/rig-a/supervisor", body, RIG_TOKEN);
-    assert.equal(r.status, 200);
-    return await r.json();
-  };
+  /** The supervisor's regular call on the bus, and control's answer. */
+  const figures = async (cursor: number): Promise<unknown> =>
+    figuresOnBus(s.store, "rig-a", { at: new Date().toISOString(), relay: { cursor } });
   const events = (n: number, kind = "step") => {
     for (let i = 0; i < n; i++) appendOther(s.env.service.ledger, "t", kind, null, { i });
   };
   const taken = async () => (await heldEvents(s.store, "rig-a")).length;
-  return { ...s, bus, fold, figures, events, taken, cfg: { ...s.cfg, bus, skipCommands: true } };
+  return { ...s, bus, fold, figures, events, taken, cfg: { ...s.cfg, bus } };
 }
 
 describe("a report page refused on the bus heals", () => {

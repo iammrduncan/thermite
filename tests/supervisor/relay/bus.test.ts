@@ -9,18 +9,17 @@ import {
 } from "../../../src/core/link/report.ts";
 import { BUILD_HEADERS } from "../../../src/core/version.ts";
 import {
+  type RelayBus,
   RelayError,
   type RelayState,
-  type ReportBus,
   relayOnce,
 } from "../../../src/supervisor/relay/index.ts";
 import { controlStack } from "../../helpers/control-stack.ts";
-import { heldEvents } from "../../helpers/control-store.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
 import { appendOther } from "../../helpers/kinds.ts";
 
 /** A stand-in for the NATS server: it keeps each message id once, and can hold back its acks. */
-class FakeBus implements ReportBus {
+class FakeBus implements RelayBus {
   readonly kept: { subject: string; id: string; data: string; headers: Record<string, string> }[] =
     [];
   /** Set: every publish fails, as when the server's ack never comes. */
@@ -37,10 +36,14 @@ class FakeBus implements ReportBus {
     this.kept.push({ subject, id: o.id, data, headers: o.headers ?? {} });
     return { seq: this.kept.length, duplicate: false };
   }
+
+  async request(): Promise<Uint8Array> {
+    throw new Error("no one serves control's asks here");
+  }
 }
 
 /** Control, a rig's harness with `events` events, and the relay's settings for them with `bus`. */
-function rig(events: number, bus?: ReportBus) {
+function rig(events: number, bus: RelayBus) {
   const s = controlStack({ env: makeHarnessEnv("rig-a") });
   for (let i = 0; i < events; i++) appendOther(s.env.service.ledger, "t", "step", null, { i });
   // What the relay asked control for: the ingest route must stay out of it on the bus.
@@ -50,7 +53,7 @@ function rig(events: number, bus?: ReportBus) {
     if (url.host === "control") calls.push(url.pathname);
     return s.fetchImpl(input, init);
   };
-  return { ...s, calls, cfg: { ...s.cfg, fetchImpl, bus, skipCommands: true } };
+  return { ...s, calls, cfg: { ...s.cfg, fetchImpl, bus } };
 }
 
 describe("the supervisor's reports on the message bus", () => {
@@ -71,7 +74,7 @@ describe("the supervisor's reports on the message bus", () => {
       const raw = JSON.parse(m.data) as { rig_pubkey: string };
       assert.ok(reportSignedBy(readReport(raw).report, raw.rig_pubkey));
     }
-    assert.ok(!s.calls.some((p) => p.endsWith("/ingest")), "control's ingest route is not called");
+    assert.deepEqual(s.calls, [], "nothing over HTTP to control");
 
     // The server's ack does not come: the round fails and the cursor stays where it was.
     for (let i = 0; i < 3; i++) appendOther(s.env.service.ledger, "t", "late", null, { i });
@@ -118,14 +121,5 @@ describe("the supervisor's reports on the message bus", () => {
     assert.match(failed.message, /a report of 1 events is over the bus's 8388608 bytes/);
     assert.equal(failed.state.cursor, 4, "the cursor stays before the event");
     assert.equal(bus.kept.length, 3);
-  });
-
-  test("without the bus, reports go to control's ingest route as before", async () => {
-    const s = rig(5);
-    const state = await relayOnce(s.cfg, { cursor: 0 });
-    assert.equal(state.cursor, 5);
-    assert.ok(s.calls.includes("/v1/rigs/rig-a/ingest"));
-    const kinds = (await heldEvents(s.store, "rig-a")).map((e) => e.kind);
-    assert.deepEqual(kinds, ["step", "step", "step", "step", "step"]);
   });
 });

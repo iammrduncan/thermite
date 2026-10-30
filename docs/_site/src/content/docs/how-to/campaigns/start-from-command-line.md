@@ -68,7 +68,7 @@ With neither `--seed` nor `--seed-commit`, the contract's `project.commit` must 
 
 ## 3. Check that it started
 
-- On the dashboard, open **Commands** in the sidebar. The **assign campaign** row shows **delivered** once the harness took it, or **failed** with the reason: see [If it is refused](#if-it-is-refused).
+- On the dashboard, open **Commands** in the sidebar. The **assign campaign** row shows **delivered** once the rig's report says the harness took it, within a minute, or **failed** with the reason: see [If it is refused](#if-it-is-refused).
 - Open **Campaigns**. The run shows under **At work now**, and the campaign in the list below, once the rig reports the run, usually within a minute. Press **refresh** in the status bar, the line along the bottom of the page: pages don't reload by themselves.
 - From a script, ask control with the owner's token:
 

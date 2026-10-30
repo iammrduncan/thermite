@@ -3,7 +3,7 @@ import type { ControlStore } from "../../store/index.ts";
 
 /**
  * The Live pages' push (goal 168, step 2): control sends a page each new line of what it shows as
- * a server-sent event, as soon as control has the line, from the message bus or over HTTP alike.
+ * a server-sent event, as soon as control has the line from the message bus.
  * The page needs no poll, and the browser connects again on its own after a drop, from the last
  * line it has (its Last-Event-ID). A reader that falls behind, with more lines waiting than one
  * event carries, keeps what it shows: it gets the newest lines, and is told how many it missed.

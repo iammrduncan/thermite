@@ -52,7 +52,12 @@ export interface TunnelCall {
 /** Answers a rig's call in-process, as that rig (createControlApi gives it). */
 export type TunnelDispatch = (rig: string, call: TunnelCall) => Promise<Response>;
 
-/** The routes a rig may use, and only for itself. Anything else is not found. */
+/**
+ * The routes a rig may use, and only for itself; anything else is not found. Only what stays on
+ * HTTPS beside the message bus: the registration of its keys on the bus, its results (champions'
+ * patches and exports, for a rig with no results repository) and the kits control keeps, by git.
+ * Everything else reaches control on the bus, through the leaf node in the pod.
+ */
 export function tunnelRouteAllowed(rig: string, method: string, path: string): boolean {
   const base = `/v1/rigs/${encodeURIComponent(rig)}/`;
   if (!path.startsWith(base)) return false;
@@ -61,17 +66,10 @@ export function tunnelRouteAllowed(rig: string, method: string, path: string): b
   const get = method === "GET";
   const post = method === "POST";
   return (
-    (post && ["ingest", "supervisor", "live", "screens", "reports"].includes(rest)) ||
-    // The agents' searches and reads of the knowledge base, for a rig off the bus (goal 175).
-    (post && ["kb/search", "kb/read"].includes(rest)) ||
-    // mcp-servers: the MCP servers its runs' kits name, with their sign-in (goal 068).
-    (get &&
-      ["commands/pending", "model-route", "advisor-routes", "kb", "mcp-servers"].includes(rest)) ||
-    (post && /^commands\/[A-Za-z0-9._-]+\/ack$/.test(rest)) ||
+    (post && rest === "supervisor") ||
     // Results out (goal 024): champion patches and exports, for a rig with no results repository.
     (post && /^champions\/[A-Za-z0-9._-]+\/[0-9]+\/patch$/.test(rest)) ||
     (post && /^exports\/[0-9TZ]{8,20}-[0-9a-f]{8}(\/file)?$/.test(rest)) ||
-    (get && /^git-access\/[A-Za-z0-9._-]+$/.test(rest)) ||
     (get && /^git\/kits\/[A-Za-z0-9._-]+\.git\/[A-Za-z0-9._/-]+$/.test(rest))
   );
 }
@@ -100,14 +98,12 @@ const RETRY_MAX_MS = 60_000;
 export interface MintedRig {
   rig: string;
   /**
-   * The pod's environment: public material, the one-time code, the snapshot key and, with the
-   * leaf, the pod's leaf node keys; nothing else.
+   * The pod's environment: public material, the one-time code, the snapshot key and the pod's
+   * leaf node keys; nothing else.
    */
-  env: PodLaunchEnv & Partial<MintedLeaf["env"]>;
-  /** The port the pod serves for control: the launch exposes it as HTTP. */
+  env: PodLaunchEnv & MintedLeaf["env"];
+  /** The port the pod serves for control: the launch exposes it as HTTP, and the leaf's as TCP. */
   port: number;
-  /** Whether the pod has a leaf node on the bus: the launch exposes its port as TCP. */
-  leaf: boolean;
 }
 
 /** Reads a response's body, refusing one longer than `limit`. */
@@ -154,7 +150,10 @@ export class ControlTunnels {
   private dispatch: TunnelDispatch | undefined;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => number;
-  /** Control's authority for the bus: with it, a launch gives the pod its leaf node (bus/leaf.ts). */
+  /**
+   * Control's authority for the bus: a launch gives the pod its leaf node with it (bus/leaf.ts).
+   * Without it, control launches no pod: a pod reaches control only on the bus.
+   */
   private readonly busCa: string | undefined;
   /** Answers waiting to go back to each rig in its next exchanges, in pieces. */
   private readonly pending = new Map<string, Piece[]>();
@@ -197,9 +196,10 @@ export class ControlTunnels {
   /**
    * Mints a rig in pull mode for a pod about to be launched: its ID (made here when none is
    * given), its one-time enrollment code and the pod's environment, with a new key for its state
-   * snapshot that control does not keep, and, when control's bus has its authority, the pod's
-   * leaf node keys, of which control keeps the pod's authority alone. The code expires only when
-   * `codeTtlMs` is given. `config` is the rig's settings, given to the pod at enrollment.
+   * snapshot that control does not keep, and the pod's leaf node keys, of which control keeps the
+   * pod's authority alone. The code expires only when `codeTtlMs` is given. `config` is the rig's
+   * settings, given to the pod at enrollment. Refused, in words, when control has no authority for
+   * its bus.
    */
   mint(o: {
     by: string;
@@ -212,6 +212,10 @@ export class ControlTunnels {
       Boolean(this.store.tunnels.get(r)) ||
       this.store.enrollments.knownRig(r) ||
       this.store.reportedRigs.list({ withRetired: true }).some((u) => u.id === r);
+    if (!this.busCa)
+      throw new Error(
+        "control has no authority for its message bus, so a pod could not join the bus through its leaf node, and a rig works only on the bus",
+      );
     let rig = o.rig;
     if (rig !== undefined) {
       if (!RIG_ID.test(rig)) throw new Error(RIG_ID_WORDS);
@@ -230,7 +234,7 @@ export class ControlTunnels {
     const code = randomBytes(32).toString("hex");
     const until =
       o.codeTtlMs !== undefined ? new Date(this.now() + o.codeTtlMs).toISOString() : null;
-    const leaf = this.busCa ? mintLeaf(rig, this.busCa, new Date(this.now())) : undefined;
+    const leaf = mintLeaf(rig, this.busCa, new Date(this.now()));
     this.store.tunnels.add({
       rig,
       port,
@@ -241,14 +245,13 @@ export class ControlTunnels {
       code_expires_at: until,
       config: { env: o.config ?? {} },
       created_by: o.by,
-      leaf_ca: leaf?.podCa ?? null,
+      leaf_ca: leaf.podCa,
     });
     return {
       rig,
       port,
-      leaf: Boolean(leaf),
       env: {
-        ...leaf?.env,
+        ...leaf.env,
         THERMITE_RIG_ID: rig,
         THERMITE_TUNNEL_PORT: String(port),
         THERMITE_TUNNEL_PREFIX: prefix,

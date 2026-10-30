@@ -79,8 +79,10 @@ A rig keeps the images it was set up with until you move it. Before you move it,
 - **The compose stack:** rebuild its images and start it again with your compose tool, as [Stop, start and update](../install/one-machine.md#stop-start-and-update) says.
 - **Set up by control on a machine or a cluster:** when its version is behind control's, **Update to** control's version on its page moves it onto the images control deploys now, with its runs paused, then checked and resumed: see [Update to control's version](#update-to-controls-version).
 - **Set up by control on a cluster:** **Update to these images** also moves it onto the images control deploys now, whatever its version, as [A rig on a cluster](#a-rig-on-a-cluster) says.
-- **Joined yourself:** not yet ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal)). Pull the new images where it runs, and start it again.
+- **Joined yourself:** not yet ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal)). Pull the new images where it runs, and start it again. A rig joined before the message bus needs the bus's address and control's authority too: remove it there, and run a new join command.
 - **Launched on RunPod:** terminate it and launch a new rig on control's image.
+
+A rig of v0.1.0 reports over HTTP, which this version no longer takes: it shows **Broken** until it runs this version, with the bus's address and control's authority for it ([A rig from before the bus](message-bus.md#a-rig-from-before-the-bus)). Its update does not wait to pause its runs: a rig that does not report could not take the pause. Control refuses to update a rig on a machine or a cluster while it has no address for rigs on its bus.
 
 ### Update to control's version
 
@@ -281,4 +283,4 @@ Over the REST API, with the owner's token: `POST /v1/rigs/<rig>/reset` with `{"c
 | | Control's [knowledge base](../../reference/knowledge-base.md): the items of the rig's earlier runs stay in their campaigns' collections |
 | | Files outside the rig's state: the advisors file, its tokens, and its environment settings |
 
-After the wipe, the rig refuses commands issued before it. Its model route comes back from control within about half a minute, or at once with the message bus.
+After the wipe, the rig refuses commands issued before it. Its model route comes back within about half a minute: the supervisor hands its harness again the rig's config it holds from the message bus (`THERMITE_MODEL_ROUTE_POLL_SECONDS`).

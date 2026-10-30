@@ -122,6 +122,12 @@ test("a check or a lane named constructor or __proto__ is a check or a lane, and
   const [run] = state.runs;
   assert.deepEqual(Object.keys(run?.at_work ?? {}).sort(), [...names].sort());
   for (const name of names) assert.equal(run?.at_work[name]?.trial, `t-${name}`);
+  // An attempt named so waits for its promotion as any other does.
+  for (const name of names)
+    f.apply(event("promotion_pending", name, { run: "p-1", expected_seq: 2, reason: "audit" }));
+  const waits = f.state().runs[0]?.promotion_waits ?? {};
+  assert.deepEqual(Object.keys(waits).sort(), [...names].sort());
+  for (const name of names) assert.equal(waits[name]?.expected_seq, 2);
 });
 
 test("after a reset, a rig's view folds only its new ledger's events", async () => {
@@ -139,4 +145,54 @@ test("after a reset, a rig's view folds only its new ledger's events", async () 
   assert.ok(v?.recent.every((e) => e.ledger_id === "ledger-2"));
   // The old ledger's events are still in the stream: only the view leaves them out.
   assert.ok((await foldedEvents(store, "rig-a", "ledger-1")).length > 100);
+});
+
+test("an event its views can't read stays in its run's history with why, and is folded no further", () => {
+  let seq = 0;
+  const event = (
+    kind: string,
+    subject: string | null,
+    body: Record<string, unknown>,
+    actor = "harness",
+  ): StoredEvent => {
+    seq++;
+    return {
+      seq,
+      ledger_id: "l",
+      id: seq,
+      at: new Date(VIEW_NOW + seq).toISOString(),
+      actor,
+      kind,
+      subject,
+      body,
+    };
+  };
+  const f = new RigFold();
+  assert.equal(f.apply(event("run_created", "p-1", { campaign: "c" })), undefined);
+  const bad = event("attempt_recorded", "a-1", { run: "p-1", lifecycle: "x", files: [null] });
+  assert.match(f.apply(bad) ?? "", /^files\.0: /);
+  // Words the fold would make of a field: an object that can't become words.
+  f.apply(event("run_status", "p-1", { status: { toString: 1 }, reason: "x" }));
+  f.apply(event("run_status", "p-1", { status: "paused" }, "x".repeat(201)));
+  f.apply(event("attempt_recorded", "a-2", { run: "p-1", lifecycle: "submitted" }));
+  const [run] = f.state().runs;
+  assert.deepEqual(
+    run?.attempts.map((a) => a.id),
+    ["a-2"],
+  );
+  assert.equal(run?.status, "running");
+  const kept = run?.timeline.filter((e) => e.unreadable !== undefined) ?? [];
+  assert.deepEqual(
+    kept.map((e) => [e.kind, e.body, e.actor.length]),
+    [
+      ["attempt_recorded", {}, 7],
+      ["run_status", {}, 7],
+      ["run_status", {}, 200],
+    ],
+  );
+  assert.match(kept[1]?.unreadable ?? "", /^status: /);
+  assert.match(kept[2]?.unreadable ?? "", /^its actor is 201 characters long/);
+  assert.equal(f.state().recent.filter((e) => e.unreadable !== undefined).length, 3);
+  // The event itself is never changed: the fold keeps a copy.
+  assert.deepEqual(bad.body, { run: "p-1", lifecycle: "x", files: [null] });
 });

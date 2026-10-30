@@ -4,8 +4,8 @@ import { agentModelsOf } from "../../../src/control/rigs/model.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { EDIT_RIG_JS } from "../../../src/control/ui/rigs/edit/client.ts";
 import { AdvisorsConfig, advisorsFileReport } from "../../../src/supervisor/advisors/index.ts";
-import { controlOnly, RIG_TOKEN, signIn } from "../../helpers/control-stack.ts";
-import { ingestReport } from "../../helpers/control-store.ts";
+import { controlOnly, signIn } from "../../helpers/control-stack.ts";
+import { figuresCall, ingestReport } from "../../helpers/control-store.ts";
 
 /**
  * Edit rig's section "2 · The agents" (goals 070, 073 and 074, as the owner approved its revised
@@ -22,7 +22,13 @@ import { ingestReport } from "../../helpers/control-store.ts";
  */
 async function stack() {
   const secrets = SecretBox.ephemeral();
-  const { store, control: api } = controlOnly({ options: { staleAfterMs: 600_000, secrets } });
+  const {
+    store,
+    control: api,
+    rigConfig,
+  } = controlOnly({
+    options: { staleAfterMs: 600_000, secrets },
+  });
   await ingestReport(store, {
     rig: "rig-a",
     ledger_id: "ledger-rig-a",
@@ -77,10 +83,12 @@ async function stack() {
     const r = await session.post("/ui/rigs/rig-a/edit", form);
     return decodeURIComponent(r.headers.get("location") ?? "");
   };
+  // What the rig's config on the bus holds for it: `/v1/rigs/<rig>/<key>`.
   const asRig = async (path: string) =>
-    (await (
-      await api.request(path, { headers: { authorization: `Bearer ${RIG_TOKEN}` } })
-    ).json()) as Record<string, unknown>;
+    (await rigConfig(path.split("/").at(-1) as "model-route" | "advisor-routes")) as Record<
+      string,
+      unknown
+    >;
   return { store, api, page, post, asRig };
 }
 
@@ -545,13 +553,7 @@ describe("Edit rig's empty model names the real fallback (goal 074)", () => {
     usd: 0,
   };
   const report = async (s: Awaited<ReturnType<typeof stack>>, body: Record<string, unknown>) =>
-    (
-      await s.api.request("/v1/rigs/rig-a/supervisor", {
-        method: "POST",
-        headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-        body: JSON.stringify({ at: new Date().toISOString(), ...body }),
-      })
-    ).status;
+    (await figuresCall(s.store, "rig-a", { at: new Date().toISOString(), ...body })).status;
   /** A line's empty Model choice, its empty Runs in choice and its Context cell, as text. */
   const cells = (html: string, id: string) => {
     const l = lineOf(html, id);

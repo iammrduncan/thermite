@@ -1,4 +1,5 @@
 import { judgeShareOf } from "../clusters/index.ts";
+import type { RigBus } from "../machines/index.ts";
 import type { ControlParts } from "../parts.ts";
 import type { ClusterRig } from "../store/index.ts";
 
@@ -64,8 +65,24 @@ export const STEP_WORDS: Record<string, string> = {
   bus_key_refused: "Its new key on the message bus refused: another rig or control holds it",
   seal_key_refused: "Its new seal key refused: another rig holds it",
   bus_keys_seen: "You saw the change of its keys on the message bus",
+  bus_registered: "It registered its keys on the message bus with control",
+  bus_off:
+    "It calls control over HTTP with no keys on the message bus: it is broken until it is set up again",
   ...UPDATE_STEP_WORDS,
 };
+
+/**
+ * Why control can't set a rig up without its message bus's address for rigs, in words: a rig
+ * reaches control only on the bus.
+ */
+export const NO_RIG_BUS =
+  "Control has no address for rigs on its message bus (THERMITE_NATS_PUBLIC_URL, or the host of THERMITE_CONTROL_PUBLIC_URL with port 4222), so a rig could not reach it: a rig works only on the bus.";
+
+/** The bus as the rigs control sets up reach it; throws NO_RIG_BUS without one. */
+export function rigBusOf(parts: Pick<ControlParts, "rigBus">): RigBus {
+  if (!parts.rigBus) throw new Error(NO_RIG_BUS);
+  return parts.rigBus;
+}
 
 /** Whether a new rig can't take this name: a rig has it already, or it is a page's ("add"). */
 export const rigTaken = (parts: ControlParts, rig: string) =>

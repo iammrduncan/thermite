@@ -4,8 +4,8 @@ import { GIB } from "../../src/common/disk.ts";
 import { Loops } from "../../src/common/health.ts";
 import { ControlDisk } from "../../src/control/disk.ts";
 import { diskFree } from "../../src/control/ui/rigs/disk.ts";
-import { ADMIN, controlOnly, RIG_TOKEN, signIn } from "../helpers/control-stack.ts";
-import { ingestReport } from "../helpers/control-store.ts";
+import { ADMIN, controlOnly, signIn } from "../helpers/control-stack.ts";
+import { figuresCall, ingestReport } from "../helpers/control-store.ts";
 
 const DISK = {
   floor_gib: 5,
@@ -97,15 +97,10 @@ describe("control's health and the rigs' (goal 173)", () => {
         },
       },
     });
-    const fig = await api(
-      "POST",
-      "/v1/rigs/rig-a/supervisor",
-      {
-        at: new Date().toISOString(),
-        loops: { report: { age_seconds: 4500, limit_seconds: 1800, late: true } },
-      },
-      RIG_TOKEN,
-    );
+    const fig = figuresCall(store, "rig-a", {
+      at: new Date().toISOString(),
+      loops: { report: { age_seconds: 4500, limit_seconds: 1800, late: true } },
+    });
     assert.equal(fig.status, 200, await fig.clone().text());
     const text = await (await api("GET", "/metrics")).text();
     assert.match(text, /thermite_loop_age_seconds\{part="control",loop="drains"\} \d+/);

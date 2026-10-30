@@ -10,8 +10,9 @@ function setup() {
   const { keys, store, control } = controlOnly({ tokens: { rigs: {} } });
   const enroll = (rig: string, headers: Record<string, string> = owner) =>
     control.request("/v1/rigs", { method: "POST", headers, body: JSON.stringify({ rig }) });
+  // A rig's call with its token: a kit control does not keep, so 404 once the token works.
   const asRig = (rig: string, token: string) =>
-    control.request(`/v1/rigs/${rig}/commands/pending`, {
+    control.request(`/v1/rigs/${rig}/git/kits/none.git/info/refs`, {
       headers: { authorization: `Bearer ${token}` },
     });
   const post = (path: string) => control.request(path, { method: "POST", headers: owner });
@@ -36,7 +37,7 @@ describe("rig enrollment through control", () => {
     assert.equal(out.control_public_key.trim(), keys.publicKeyPem.trim());
     assert.equal(out.control_fingerprint, fingerprint(keys.publicKeyPem));
     // The new token works at once: no restart, no file.
-    assert.equal((await asRig("gpu-host-1-0", out.token)).status, 200);
+    assert.equal((await asRig("gpu-host-1-0", out.token)).status, 404);
     assert.equal((await asRig("gpu-host-1-0", "wrong-token")).status, 401);
     assert.ok(store.enrollments.knownRig("gpu-host-1-0"));
     // Control's database holds the hash, never the token.
@@ -83,7 +84,7 @@ describe("rig enrollment through control", () => {
     const second = ((await rotated.json()) as { token: string }).token;
     assert.notEqual(second, first);
     assert.equal((await asRig("cpu-1", first)).status, 401);
-    assert.equal((await asRig("cpu-1", second)).status, 200);
+    assert.equal((await asRig("cpu-1", second)).status, 404);
     assert.equal((await post("/v1/rigs/cpu-1/retire")).status, 200);
     assert.equal((await asRig("cpu-1", second)).status, 401);
     assert.equal(store.enrollments.knownRig("cpu-1"), false);
@@ -92,7 +93,7 @@ describe("rig enrollment through control", () => {
     // Enrolled again, it gets a fresh token; the old ones stay dead.
     const third = ((await (await enroll("cpu-1")).json()) as { token: string }).token;
     assert.equal((await asRig("cpu-1", second)).status, 401);
-    assert.equal((await asRig("cpu-1", third)).status, 200);
+    assert.equal((await asRig("cpu-1", third)).status, 404);
     // Every change is audited.
     const audit = JSON.stringify(store.db.prepare("select action from audit").all());
     for (const a of ["rig_enrolled", "rig_token_rotated", "rig_retired"])

@@ -1,35 +1,32 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { runEntryHtml } from "../../src/control/ui/live.ts";
-import { relayLiveOnce, supervisorLive } from "../../src/supervisor/live/index.ts";
-import { relayOnce } from "../../src/supervisor/relay/index.ts";
+import { supervisorLive } from "../../src/supervisor/live/index.ts";
 import { ADMIN, controlStack } from "../helpers/control-stack.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 
+/** The stack, with a supervisor that may alter its live lines on their way to the bus. */
 function setup() {
-  const { env, store, control, cfg: plain } = controlStack({ env: makeHarnessEnv("rig-a") });
+  const s = controlStack({ env: makeHarnessEnv("rig-a") });
   let tamper: ((body: string) => string) | undefined;
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const url = new URL(String(input));
-    const body =
-      tamper && url.pathname.endsWith("/live") && init?.body
-        ? tamper(String(init.body))
-        : init?.body;
-    return plain.fetchImpl(input, { ...(init as RequestInit), body } as RequestInit);
+  const bus = s.bus;
+  s.cfg.bus = {
+    publish: (subject, data, o) =>
+      bus.publish(subject, tamper && subject.includes(".live.") ? tamper(String(data)) : data, o),
+    request: (subject, data, timeoutMs) => bus.request(subject, data, timeoutMs),
   };
-  const cfg = { ...plain, fetchImpl };
-  return { env, store, control, cfg, setTamper: (t: typeof tamper) => (tamper = t) };
+  return { ...s, setTamper: (t: typeof tamper) => (tamper = t) };
 }
 
-describe("the live view", () => {
+describe("the live view, on the message bus", () => {
   test("the harness's lines reach control signed; the supervisor's are kept as unsigned; a tampered batch is refused", async () => {
     const s = setup();
     // The rig's key is pinned by its first report.
-    await relayOnce(s.cfg, { cursor: 0 });
+    await s.relay();
     s.env.service.live.append({ source: "planner", kind: "status", text: "planning epoch 1" });
     s.env.service.live.append({ source: "judge", kind: "log", text: "evaluate a-1: started" });
     supervisorLive.append({ source: "supervisor", kind: "status", text: "advisor round started" });
-    const st = await relayLiveOnce(s.cfg, { cursor: 0, ownCursor: 0 });
+    const st = await s.live();
     assert.equal(st.cursor, 2);
     const r = await s.control.request("/v1/rigs/rig-a/live", {
       headers: { authorization: `Bearer ${ADMIN}` },
@@ -48,30 +45,26 @@ describe("the live view", () => {
     );
     assert.equal(body.sources.length, 3);
     // Nothing new: nothing sent. Then a line the supervisor alters in transit is refused.
-    assert.deepEqual(await relayLiveOnce(s.cfg, st), st);
+    assert.deepEqual(await s.live(), st);
     s.env.service.live.append({ source: "planner", kind: "text", text: "lane-1: tiling" });
     s.setTamper((b) => b.replace("lane-1: tiling", "lane-1: something else"));
-    await assert.rejects(relayLiveOnce(s.cfg, st), /403/);
-    s.setTamper(undefined);
-    await relayLiveOnce(s.cfg, st);
-    assert.equal(s.store.liveLines.tail("rig-a", 10).at(-1)?.text, "lane-1: tiling");
+    await s.live();
+    assert.equal(s.taken.refused["bad live signature"], 1);
+    assert.notEqual(s.store.liveLines.tail("rig-a", 10).at(-1)?.text, "lane-1: something else");
   });
 
-  test("a line of a kind control does not know is left out, the rest kept, and said once (goal 171)", async (t) => {
+  test("a line of a kind control does not know is left out, the rest kept", async () => {
     const s = setup();
-    await relayOnce(s.cfg, { cursor: 0 });
+    await s.relay();
     for (const text of ["before", "a newer harness's line", "after"])
       s.env.service.live.append({ source: "planner", kind: "status", text });
     // A newer harness's kind, signed with the batch like the others.
     const kept = (s.env.service.live as unknown as { entries: { kind: string }[] }).entries;
     (kept[1] as { kind: string }).kind = "diff";
-    const said: string[] = [];
-    t.mock.method(process.stdout, "write", (chunk: string) => said.push(chunk));
-    let st = await relayLiveOnce(s.cfg, { cursor: 0, ownCursor: 0 });
+    let st = await s.live();
     s.env.service.live.append({ source: "planner", kind: "status", text: "later" });
     (kept[3] as { kind: string }).kind = "diff";
-    st = await relayLiveOnce(s.cfg, st);
-    t.mock.restoreAll();
+    st = await s.live();
     assert.equal(st.cursor, 4);
     assert.deepEqual(
       s.store.liveLines
@@ -80,15 +73,15 @@ describe("the live view", () => {
         .map((e) => e.text),
       ["before", "after"],
     );
-    const told = said.filter((l) => l.includes("control left out live lines it does not know"));
-    assert.equal(told.length, 1);
-    assert.match(told[0] ?? "", /"what":"kind diff","lines":1/);
+    assert.equal(s.taken.leftOut, 2);
   });
 
   test("before the rig's key is accepted, live lines are refused", async () => {
     const s = setup();
     s.env.service.live.append({ source: "judge", kind: "log", text: "x" });
-    await assert.rejects(relayLiveOnce(s.cfg, { cursor: 0, ownCursor: 0 }), /409/);
+    await s.live();
+    assert.equal(s.taken.refused["the rig's report key is not accepted yet"], 1);
+    assert.equal(s.store.liveLines.tail("rig-a", 10).filter((e) => e.source === "judge").length, 0);
   });
 });
 
@@ -107,7 +100,7 @@ describe("the owner's messages to agents", () => {
       payload: s.env.assignPayload(),
     });
     assert.equal(assigned.status, 201);
-    await relayOnce(s.cfg, { cursor: 0 });
+    await s.relay();
     const toLane = await issue({
       rig: "rig-a",
       kind: "message_agent",
@@ -154,7 +147,7 @@ describe("the owner's messages to agents", () => {
         .length,
       3,
     );
-    await relayOnce(s.cfg, { cursor: 0 });
+    await s.relay();
     const svc = s.env.service;
     assert.deepEqual(
       svc.takeMessages({ id: "t-0123456789abcdef", run: "smoke-1", lane: "lane-2" }),
@@ -185,24 +178,6 @@ describe("the owner's messages to agents", () => {
       ),
     );
     assert.ok(r.status === "applied" && !r.accepted, JSON.stringify(r));
-  });
-
-  test("lines past what control takes in one call go fewer at a time, and all arrive (goal 125, T2)", async () => {
-    const s = setup();
-    await relayOnce(s.cfg, { cursor: 0 });
-    // 600 lines of 8,000 characters, each of two bytes: about 9.6 MB, past control's 4 MiB.
-    for (let i = 0; i < 600; i++)
-      s.env.service.live.append({
-        source: "planner",
-        kind: "text",
-        text: `${i}:${"é".repeat(7990)}`,
-      });
-    let st = { cursor: 0, ownCursor: 0 };
-    for (let round = 0; round < 10 && st.cursor < 600; round++) st = await relayLiveOnce(s.cfg, st);
-    assert.equal(st.cursor, 600);
-    const kept = s.store.liveLines.tail("rig-a", 1000).filter((e) => e.source === "planner");
-    assert.equal(kept.length, 600);
-    assert.equal(kept.at(-1)?.text.split(":")[0], "599");
   });
 });
 

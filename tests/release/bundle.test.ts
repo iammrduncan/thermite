@@ -7,6 +7,7 @@ import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import { LOCAL_RIGS, LOCAL_TOKEN_FILES } from "../../src/cli/local-init.ts";
 import { BUS_TLS_FILES, BUS_USERS_FILE } from "../../src/control/bus/index.ts";
+import { BUS_SIGN_IN_SECONDS, BUS_TLS_SECONDS } from "../../src/core/link/leaf.ts";
 import {
   type BundleInput,
   COMPOSE_NEEDS,
@@ -146,7 +147,7 @@ describe("the release bundle", () => {
     );
   });
 
-  test("the message bus runs beside control, over TLS; control is always on it, and the rigs can be turned off it", () => {
+  test("the message bus runs beside control, over TLS; control, its backup and both rigs are always on it", () => {
     for (const compose of [COMPOSE, render(TEMPLATE, placeholders(input()), COMPOSE_NEEDS)]) {
       assert.equal(
         serviceKey(compose, "nats", "profiles"),
@@ -162,29 +163,53 @@ describe("the release bundle", () => {
         serviceKey(compose, "nats", "ports") ?? "",
         /^\["\$\{THERMITE_NATS_PUBLISH:-127\.0\.0\.1:4222\}:4222"\]$/,
       );
-      // It reads the certificate's key through control's group.
-      assert.equal(serviceKey(compose, "nats", "user"), '"0:10001"');
-      // The files control writes for it, by the names control's code gives them.
+      // A user of its own, not root, with no capability; it reads the certificate's key through
+      // control's group. A one-shot service gives the folders to their users before it starts.
+      assert.equal(serviceKey(compose, "nats", "user"), '"10002:10001"');
+      assert.equal(serviceKey(compose, "nats", "cap_drop"), "[ALL]");
+      assert.equal(serviceKey(compose, "nats", "cap_add"), undefined);
+      assert.match(
+        compose,
+        /\n {4}depends_on:\n {6}control: \{ condition: service_started \}\n {6}nats-init: \{ condition: service_completed_successfully \}\n {4}networks: \[control\]\n/,
+      );
+      assert.equal(serviceKey(compose, "nats-init", "user"), '"0:0"');
+      assert.equal(serviceKey(compose, "nats-init", "network_mode"), "none");
+      assert.equal(serviceKey(compose, "nats-init", "cap_add"), "[CHOWN, DAC_READ_SEARCH]");
+      assert.equal(serviceKey(compose, "nats-init", "image"), serviceKey(compose, "nats", "image"));
+      assert.match(
+        serviceKey(compose, "nats-init", "command") ?? "",
+        /chown 10001:10001 \/etc\/nats\/thermite && find \/data ! -user 10002 -exec chown 10002:10001/,
+      );
+      // Its limits: connections, and the time a connection has for TLS and to sign in.
+      assert.match(compose, /\n {8}max_connections: 1024\n/);
+      assert.ok(
+        compose.includes(
+          `\n          timeout: ${BUS_TLS_SECONDS}\n        }\n        authorization { timeout: ${BUS_SIGN_IN_SECONDS} }\n`,
+        ),
+      );
+      // The files control writes for it, by the names control's code gives them, included from
+      // its settings in /tmp.
       const dir = "/etc/nats/thermite";
       assert.ok(compose.includes(`cert_file: "${dir}/${BUS_TLS_FILES.cert}"`));
       assert.ok(compose.includes(`key_file: "${dir}/${BUS_TLS_FILES.key}"`));
-      assert.ok(compose.includes(`include thermite/${BUS_USERS_FILE}`));
+      assert.ok(compose.includes("cat > /tmp/thermite.conf <<EOF"));
+      assert.ok(compose.includes(`include ..${dir}/${BUS_USERS_FILE}`));
+      assert.ok(compose.includes("exec nats-server -c /tmp/thermite.conf"));
       for (const name of [BUS_USERS_FILE, BUS_TLS_FILES.cert, BUS_TLS_FILES.key])
         assert.ok(compose.includes(`[ -s ${dir}/${name} ]`), `it waits for ${name}`);
       // Its health check: the server answers, with JetStream on.
       assert.match(compose, /healthz\?js-enabled-only=true/);
-      // Control is always on it, and its backup service reaches it as control does; both rigs'
-      // supervisors are unless THERMITE_NATS_URL is set to nothing in .env.
+      // Control is always on it, and its backup service reaches it as control does; so are both
+      // rigs' supervisors, which reach control only there: nothing in .env turns one off it.
       const fixed = "\n      THERMITE_NATS_URL: nats://nats:4222\n";
-      assert.equal(compose.split(fixed).length - 1, 2);
+      assert.equal(compose.split(fixed).length - 1, 4);
       const at = compose.indexOf(fixed);
       assert.ok(compose.indexOf("\n  control:\n") < at && at < compose.indexOf("\n  nats:\n"));
       const backup = compose.indexOf(fixed, at + 1);
       assert.ok(
         compose.indexOf("\n  backup:\n") < backup && backup < compose.indexOf("\n  harness:\n"),
       );
-      const on = /THERMITE_NATS_URL: "\$\{THERMITE_NATS_URL-nats:\/\/nats:4222\}"/g;
-      assert.equal(compose.match(on)?.length, 2);
+      assert.doesNotMatch(compose, /\$\{THERMITE_NATS_URL/);
       assert.equal(compose.split("THERMITE_NATS_CA_FILE: /keys/bus-ca.pem").length - 1, 2);
       assert.match(compose, /THERMITE_NATS_CA_EXPORT: \/keys\/bus-ca\.pem/);
       assert.match(compose, /THERMITE_NATS_CONFIG_DIR: \/nats-config/);

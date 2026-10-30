@@ -25,6 +25,7 @@ import {
   dc,
   engine,
   formAnswer,
+  natsInitRun,
   natsService,
   secret,
   sh,
@@ -178,7 +179,12 @@ try {
   };
   await startControl(harnessImage, supervisorImage);
   // The bus's server, started once: it waits for control's files, and stays when control restarts.
+  // Its folders are given to their users first, as compose's nats-init gives them.
   const nats = natsService();
+  sh(
+    "podman",
+    natsInitRun([`${busVolumes.data}:/data`, `${busVolumes.config}:/etc/nats/thermite`]),
+  );
   sh("podman", [
     "run",
     "-d",
@@ -189,11 +195,9 @@ try {
     "--ip",
     busIp,
     "--user",
-    "0:10001",
+    nats.user,
     "--cap-drop",
     "ALL",
-    "--cap-add",
-    "CHOWN",
     "--security-opt",
     "no-new-privileges:true",
     "-v",

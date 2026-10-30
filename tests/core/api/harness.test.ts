@@ -74,7 +74,6 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
     assert.ok(
       supervisor.SNAPSHOT.answer.safeParse(await get("/v1/snapshot?cursor=0&limit=500")).success,
     );
-    assert.ok(supervisor.LIVE.answer.safeParse(await get("/v1/live?after=0&limit=500")).success);
     env.service.live.append({ source: "judge", kind: "log", text: "idle" });
     const messages = await get("/v1/live/messages?after=0&limit=500");
     assert.ok(supervisor.LIVE_MESSAGES.answer.safeParse(messages).success);

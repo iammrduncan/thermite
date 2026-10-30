@@ -23,7 +23,6 @@ import { editRigRoutes } from "./edit-rig.ts";
 import { gpuCloudRoutes } from "./gpu-clouds.ts";
 import { kitRoutes } from "./kits.ts";
 import { lifecycleRoutes } from "./lifecycle.ts";
-import { modelRoutes } from "./model-routes.ts";
 import { reachRoutes } from "./reach.ts";
 import { recordRoutes, rigRecordRoutes } from "./records.ts";
 import { relayRoutes } from "./relay.ts";
@@ -50,7 +49,7 @@ export function createControlApi(
 ): Hono {
   const app = new Hono();
   const api = apiContext(app, store, tokens, privateKeyPem, opts);
-  const { control, creds, parts, admin, rigAuth, callerOf } = api;
+  const { control, creds, parts, admin, callerOf } = api;
   const owner = creds.owner;
   const { secrets, chatgpt, runpodTests, mcpServers, runpodRigs, runpodDriver } = parts;
 
@@ -123,14 +122,13 @@ export function createControlApi(
   });
 
   relayRoutes(app, api);
-  modelRoutes(app, api);
 
-  // MCP servers (goal 068): the owner's routes, the OAuth callback, and what a rig gets.
+  // MCP servers (goal 068): the owner's routes and the OAuth callback. A rig gets its servers in
+  // its config on the message bus (bus/config.ts).
   mountMcpServerRoutes(app, {
     store,
     servers: mcpServers,
     admin,
-    rigAuth,
     publicUrl: parts.publicUrl,
     notes: parts.notes,
   });

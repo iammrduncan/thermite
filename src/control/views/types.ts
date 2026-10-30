@@ -31,6 +31,11 @@ export interface StoredEvent {
   kind: string;
   subject: string | null;
   body: Record<string, unknown>;
+  /**
+   * Why control's views can't read this event, in words (core/events/schemas.ts): its body is
+   * then empty and nothing is folded from it. The rig's events keep it as the rig sent it.
+   */
+  unreadable?: string | undefined;
 }
 
 /** A rig as control shows it: its report, runs, judge's jobs, checks and newest events. */

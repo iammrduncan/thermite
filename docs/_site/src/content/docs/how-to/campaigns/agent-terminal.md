@@ -22,7 +22,7 @@ To tell the agents something without typing into a program, send a message inste
 
    You can also open the rig's page, press **Live**, and choose the trial under **Sessions**.
 
-The trial's page opens, at `/ui/rigs/<rig>/live?source=trial:<trial>`. At its top, **Terminal** says `Waiting for the rig to send its screen…`, then shows the program's screen, at the size of the agent's terminal, with `Live, read only` and the time of the screen beside **Terminal**. The screen follows the program about once a second. It is only a view: a key you press on it goes nowhere, and a link in it opens nothing.
+The trial's page opens, at `/ui/rigs/<rig>/live?source=trial:<trial>`. At its top, **Terminal** says `Waiting for the rig to send its screen…`, then shows the program's screen, at the size of the agent's terminal, with `Live, read only` and the time of the screen beside **Terminal**. The screen follows the program about once a second: the rig's supervisor sends it to control on the message bus while a page watches the trial, and no screen is kept ([Live view](../../reference/live-view.md#a-trials-terminal)). It is only a view: a key you press on it goes nowhere, and a link in it opens nothing.
 
 ## 2. Type into it
 
@@ -39,7 +39,7 @@ Under the keys, the list of your inputs shows each one, newest first, with its o
 
 | It says | What happened |
 | --- | --- |
-| `sent, waiting for the rig` | Control signed it; the rig has not taken it yet |
+| `sent, waiting for the rig` | Control signed it; the rig's report with its outcome has not reached control yet, which takes up to a minute by default |
 | `typed` | The rig typed it into the program |
 | `waits for the usage window's reset (14:00 UTC)` | The program waits for its usage window, and the input waits with it: see below |
 | `typed after the usage window's reset` | It waited, and went in once the program was at work again |

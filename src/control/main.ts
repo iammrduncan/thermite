@@ -28,6 +28,7 @@ import {
   controlBusUrl,
   RigConsumers,
   reloadBus,
+  serveRigAsks,
 } from "./bus/index.ts";
 import { Credential } from "./credential.ts";
 import { mountDashboard } from "./dashboard/index.ts";
@@ -51,8 +52,8 @@ async function main(): Promise<void> {
   const env = process.env;
   startLogging("control", env);
   // The message bus (goal 168), which control needs: every rig's events are kept in its events
-  // stream, and what control derives from them is applied from there. Rigs report over the bus,
-  // or over HTTP; control publishes the events of both. Commands and live lines go over it too.
+  // stream, and what control derives from them is applied from there. Rigs report only over the
+  // bus, and control publishes their events; commands, config and live lines go over it too.
   const natsUrl = controlBusUrl(env);
   // How rigs and the machines control sets rigs up on reach control: https, or plain http only to
   // this computer, a compose service, or where the owner allows it (settings.ts).
@@ -115,7 +116,7 @@ async function main(): Promise<void> {
   const driver = driverFromEnv(env);
   // Optional: the owner accepts each rig's first report key (no trust on first use).
   const requireKeyAcceptance = env.THERMITE_CONTROL_REQUIRE_KEY_ACCEPT === "1";
-  // The bus as the rigs control sets up reach it (none: they keep to HTTP), and its TLS: control's
+  // The bus as the rigs control sets up reach it (none: control sets no rig up), and its TLS: control's
   // own authority, kept beside its signing key, and the server's certificate for the names control
   // and those rigs reach it by, written to the folder the server reads (bus/tls.ts).
   const rigBusUrl = busPublicUrl(env, publicUrl);
@@ -286,9 +287,9 @@ async function main(): Promise<void> {
     rigs: eventsApply.folds.held().length,
     ms: Math.round(performance.now() - started),
   });
-  // Reports from the bus, folded through the ingest route's checks as they arrive, each report's
-  // events published to the events stream and applied before it is acked, as over HTTP; live
-  // lines, folded into the live view as they arrive; each command
+  // Reports from the bus, folded through control's checks as they arrive, each report's events
+  // published to the events stream and applied before it is acked; live lines, folded into the
+  // live view as they arrive; each command
   // control issues, published to its rig's subject as well as kept in the store; and each rig's
   // config, written when it changes.
   void busConfig.start().then(() => busConfig.write());
@@ -317,6 +318,11 @@ async function main(): Promise<void> {
   // Searches and reads of the knowledge base for the rigs' agents, each answered from its run's scope.
   serveKbAsks(bus, store).catch((err) =>
     log("control", "knowledge base searches stopped", { error: String(err) }, "error"),
+  );
+  // What the rigs ask of control on the bus: figures, screens, daily reports, past research and a
+  // command's newest form.
+  serveRigAsks(bus, { store, control: buildInfo(), privateKeyPem, screens: parts.screens }).catch(
+    (err) => log("control", "the rigs' asks stopped", { error: String(err) }, "error"),
   );
   sendCommandsOn(store, bus).catch((err) =>
     log("control", "commands stream not made", { error: String(err) }, "error"),

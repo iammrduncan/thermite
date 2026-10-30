@@ -55,7 +55,7 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
     assert.ok(!pod.checkIssued(new X509Certificate(again.podCa)));
   });
 
-  test("with control's authority, a launch gives the pod its leaf; control keeps the pod's authority, never its key", () => {
+  test("a launch gives the pod its leaf with control's authority, and none launches without it; control keeps the pod's authority, never its key", () => {
     const store = new ControlStore(":memory:");
     const control = makeCa(new Date(), 30);
     const keys = generateSigningKeys();
@@ -63,18 +63,18 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
       busCa: control.cert,
     });
     const minted = tunnels.mint({ by: "owner:ui", rig: "rp-1" });
-    assert.equal(minted.leaf, true);
     for (const name of Object.values(LEAF_ENV)) assert.ok(minted.env[name], name);
     const kept = store.tunnels.get("rp-1");
     assert.ok(kept?.leaf_ca && kept.leaf_address === null);
     const dump = JSON.stringify(store.db.prepare("select * from tunnel_rig").all());
     assert.ok(!dump.includes("PRIVATE KEY") && !dump.includes(minted.env[LEAF_ENV.key] ?? "?"));
-    // Without control's authority: no leaf, as before.
+    // Without control's authority, no pod: it could not join the bus.
     const plain = new ControlTunnels(store, SecretBox.ephemeral(), keys.privateKeyPem);
-    const old = plain.mint({ by: "owner:ui", rig: "rp-2" });
-    assert.equal(old.leaf, false);
-    assert.ok(!Object.keys(old.env).some((k) => k.startsWith("THERMITE_LEAF_")));
-    assert.equal(store.tunnels.get("rp-2")?.leaf_ca, null);
+    assert.throws(
+      () => plain.mint({ by: "owner:ui", rig: "rp-2" }),
+      /control has no authority for its message bus/,
+    );
+    assert.equal(store.tunnels.get("rp-2"), undefined);
     store.db.close();
   });
 
@@ -99,10 +99,18 @@ describe("a RunPod pod's leaf node, as control keeps it", () => {
       steps.map((e) => e.detail),
       ["203.0.113.5:40123", "198.51.100.7:41000"],
     );
-    // A rig without a leaf keeps no address.
-    new ControlTunnels(store, SecretBox.ephemeral(), generateSigningKeys().privateKeyPem).mint({
-      by: "owner:ui",
+    // A rig launched before the leaf node, as an older store holds it, keeps no address.
+    store.tunnels.add({
       rig: "rp-2",
+      port: 8790,
+      prefix_sealed: "x",
+      box_private_sealed: "x",
+      box_public: "x",
+      code_sealed: "x",
+      code_expires_at: null,
+      config: { env: {} },
+      created_by: "owner:ui",
+      leaf_ca: null,
     });
     assert.equal(store.tunnels.setLeafAddress("rp-2", "203.0.113.9:4000"), false);
     store.db.close();

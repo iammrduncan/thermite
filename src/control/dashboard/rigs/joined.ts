@@ -100,6 +100,7 @@ export function joinedRigRoutes(app: Hono, dash: Dashboard): void {
       !r ||
       what !== (r.form === "machine" ? "script" : "manifest") ||
       !parts.publicUrl ||
+      !parts.rigBus ||
       !store.joinedRigs.useToken(rig, token)
     ) {
       if (failures.add(client, now) === JOIN_FAILURES)

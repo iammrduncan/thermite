@@ -1,4 +1,3 @@
-import { harnessConfirmed } from "./issue/index.ts";
 import { sameModel } from "./providers/index.ts";
 import type { CommandRow, ControlStore } from "./store/index.ts";
 import { type RigCheckView, type RigModelView, readModelInfo, rigChecks } from "./views/index.ts";
@@ -100,9 +99,10 @@ const startedId = (cmd: CommandRow): string | null => {
 };
 
 /**
- * A command's progress: sent, taken (the rig did it; its report with the change is still to
- * come), done (that report reached control: the page shows the change), refused or expired. A
- * started run (assign_campaign) loads its page again when done: the run's page opens.
+ * A command's progress: sent, done (the rig's harness applied it, and its report with the change
+ * reached control: the page shows it), refused or expired. The outcome comes only from the
+ * harness's events, in the rig's report on the message bus. A started run (assign_campaign) loads
+ * its page again when done: the run's page opens.
  */
 export function commandProgress(cmd: CommandRow, now: number): Progress {
   const p = commandProgressOnly(cmd, now);
@@ -114,7 +114,7 @@ export function commandProgress(cmd: CommandRow, now: number): Progress {
       said: `${p.said} ${cmd.payload.preview === true ? "What it would reach is on the attempt's page: confirm it there." : "The evidence is withdrawn."}`,
     };
   // Typed into a trial's terminal (goal 169): the rig's answer is the outcome; no report waits.
-  if (cmd.kind === "terminal_input" && (p.state === "taken" || p.state === "done")) {
+  if (cmd.kind === "terminal_input" && p.state === "done") {
     const r = (cmd.outcome as { result?: { outcome?: unknown; until?: unknown } } | null)?.result;
     const until = typeof r?.until === "string" ? ` at ${clockUtc(r.until)}` : "";
     return {
@@ -161,13 +161,6 @@ function commandProgressOnly(cmd: CommandRow, now: number): Progress {
       said: `${rig} refused it: ${sentence(why)}`,
     };
   const took = clockUtc(cmd.acked_at ?? cmd.issued_at);
-  if (!harnessConfirmed(cmd.outcome))
-    return {
-      state: "taken",
-      final: false,
-      tone: "",
-      said: `${rig} took it at ${took}. This page shows the change when the rig next reports.`,
-    };
   return {
     state: "done",
     final: true,

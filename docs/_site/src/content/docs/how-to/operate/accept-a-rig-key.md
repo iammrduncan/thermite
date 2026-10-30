@@ -19,7 +19,7 @@ While a key waits, you see it in three places:
 - **Needs you**, on **Overview**, the first page in the sidebar: a **New key** item asks "Accept a new rig's report key?" or "Accept this rig's new report key?".
 - **The rig's page**: a card titled "This rig's first report key waits for your acceptance" or "This rig now signs its reports with a different key", with the fingerprint and an **Accept this key** button.
 
-Meanwhile control takes none of the rig's reports, so it shows nothing new from the rig. A new rig says `none yet` under **Last report** on **Rigs**. A rig that reported before also shows in **Needs you** under **Not reporting**. The rig's supervisor logs `relay error` with `the rig's key waits for the owner's acceptance` or `rig key changed: the owner must accept the new key`.
+Meanwhile control takes none of the rig's reports, so it shows nothing new from the rig. A new rig says `none yet` under **Last report** on **Rigs**. A rig that reported before also shows in **Needs you** under **Not reporting**. Control's log says `report from the bus refused` with `the rig's key waits for the owner's acceptance` or `rig key changed: the owner must accept the new key`, and the rig's supervisor sends its reports again every round from where control is: its log says `control is behind this rig's reports on the bus; sending again from its cursor`.
 
 ## 1. Read the fingerprint that control shows
 

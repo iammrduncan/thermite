@@ -17,21 +17,23 @@
 //     KB_FILE_CHUNKS_WAITING_PER_RIG of one rig's chunks, each at most KB_FILE_MAX_MESSAGE_BYTES:
 //     the next is refused, and rig-b's still go;
 //   - rig-b retired (its user taken out of the users file, and the server reloaded) is cut off.
-// It needs Podman or Docker and the server's image pulled already (it pulls nothing). It runs one
-// container, thermite-bus-check, with 512 MiB of memory, and removes it at the end; it prunes no
-// image. With Podman on a machine VM it trims the VM's disk after.
+// It needs Podman or Docker and the server's image pulled already (it pulls nothing). It runs the
+// server's container, thermite-bus-check, with 512 MiB of memory, as compose's user, on a store
+// volume, thermite-bus-check-store, that a short run of compose's nats-init gives to that user
+// first; it removes both at the end, and prunes no image. With Podman on a machine VM it trims the
+// VM's disk after.
 //
 //   COMPOSE="podman compose" node scripts/acceptance/bus.mjs
 //   BUS_CHECK_PORT sets the host port (14480 by default; never 4222, which the stack uses).
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JetStreamApiError, jetstream, jetstreamManager } from "@nats-io/jetstream";
 import { createUser } from "@nats-io/nkeys";
 import { connect, errors, nkeyAuthenticator } from "@nats-io/transport-node";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { engine, natsService, sh } from "./lib/smoke-env.mjs";
+import { engine, natsInitRun, natsService, sh } from "./lib/smoke-env.mjs";
 
 // Control's own code, as control runs it (Node.js strips the types of these files).
 const { natsBus } = await import("../../src/common/bus/index.ts");
@@ -48,6 +50,8 @@ const { rigInboxPrefix, usersFile } = await import("../../src/core/link/users.ts
 
 const { check, failed } = acceptanceChecks();
 const box = "thermite-bus-check";
+/** JetStream's store: a volume of the check's own, given to the server's user as compose does. */
+const storeVolume = "thermite-bus-check-store";
 const port = Number(process.env.BUS_CHECK_PORT ?? "14480");
 if (port === 4222 || (port >= 14244 && port <= 14400)) {
   console.log(`bus check: port ${port} is kept for the stack and the other checks; choose another`);
@@ -84,6 +88,9 @@ writeFileSync(
 const cleanup = () => {
   try {
     sh(engine, ["rm", "-f", "-v", "-t", "3", box]);
+  } catch {}
+  try {
+    sh(engine, ["volume", "rm", "-f", storeVolume]);
   } catch {}
   rmSync(work, { recursive: true, force: true });
   // Images stay: they may be other projects'. The VM's disk is trimmed.
@@ -137,7 +144,10 @@ try {
   const nats = natsService();
   try {
     sh(engine, ["rm", "-f", "-v", box]);
+    sh(engine, ["volume", "rm", "-f", storeVolume]);
   } catch {}
+  // The store's folder given to the server's user first, as compose's nats-init gives it.
+  sh(engine, natsInitRun([`${storeVolume}:/data`, "/etc/nats/thermite"]));
   sh(engine, [
     "create",
     "--name",
@@ -146,21 +156,21 @@ try {
     "--memory",
     "512m",
     "--user",
-    "0:10001",
+    nats.user,
     "--cap-drop",
     "ALL",
-    "--cap-add",
-    "CHOWN",
     "--security-opt",
     "no-new-privileges:true",
     "-p",
     `127.0.0.1:${port}:4222`,
-    // JetStream's store, a volume of the container's own, removed with it.
     "-v",
-    "/data",
+    `${storeVolume}:/data`,
     nats.image,
     ...nats.command,
   ]);
+  // Readable by the server's user whichever engine copies them: Docker gives them to root.
+  for (const f of readdirSync(files, { withFileTypes: true }))
+    if (f.isFile()) chmodSync(join(files, f.name), 0o644);
   sh(engine, ["cp", `${files}/.`, `${box}:/etc/nats/thermite`]);
   sh(engine, ["start", box]);
   const deadline = Date.now() + 60_000;

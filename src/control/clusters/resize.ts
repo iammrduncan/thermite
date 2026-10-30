@@ -2,7 +2,7 @@ import { errorText } from "../../common/errors.ts";
 import { inBackground } from "../background.ts";
 import { issueCommand } from "../issue/index.ts";
 import type { ControlParts } from "../parts.ts";
-import { controlAddress } from "../rigs/index.ts";
+import { controlAddress, NO_RIG_BUS } from "../rigs/index.ts";
 import type { Cluster, ClusterRig, ClusterRigResize, ClusterRigSize } from "../store/index.ts";
 import { rigSettingsOf } from "../views/index.ts";
 import { type ClusterFacts, type SlotQuota, slotQuota } from "./facts.ts";
@@ -71,6 +71,7 @@ export async function prepareResize(
         "Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.",
       status: 409,
     };
+  if (!parts.rigBus) return { error: NO_RIG_BUS, status: 409 };
   const k = store.clusters.get(r.cluster);
   if (!k) return { error: `The cluster ${r.cluster} is no longer in Providers.`, status: 409 };
   if (r.status === "updating" || r.status === "starting")

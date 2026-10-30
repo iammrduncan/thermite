@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { advisorRoutesOf } from "../../../../src/control/rigs/model-routes.ts";
-import { ADVISOR_ROUTES } from "../../../../src/core/api/control/rigs.ts";
-import { CONFIG_VALUES } from "../../../../src/core/link/config.ts";
+import { AdvisorRoutesValue, CONFIG_VALUES } from "../../../../src/core/link/config.ts";
 import { mcpClient } from "../../../helpers/control-stack.ts";
 import { stack, TOKENS, text } from "./stack.ts";
 
@@ -106,7 +105,7 @@ describe("the synthesizer's and the final writer's models", () => {
       ["wide-model", "opencode", 65_536, "lab-key-for-tests"],
     );
     // The answer and the bus's value read alike: one schema, with the two keys.
-    const parsed = ADVISOR_ROUTES.answer.parse(adv);
+    const parsed = AdvisorRoutesValue.parse(adv);
     assert.equal(parsed.final_writer?.model, "wide-model");
     assert.equal(CONFIG_VALUES["advisor-routes"].parse(adv).final_writer?.harness, "opencode");
     // What control writes to the rig's config on the bus is the same value.

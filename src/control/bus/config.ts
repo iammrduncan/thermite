@@ -14,6 +14,7 @@ import {
   configFits,
   configMessageId,
   configSubject,
+  type GitAccessSecret,
   sealConfig,
   sealKeyFingerprint,
 } from "../../core/link/config.ts";
@@ -21,15 +22,17 @@ import type { McpConnection, McpUnavailable } from "../../core/mcp.ts";
 import type { ControlParts } from "../parts.ts";
 import { advisorRoutesOf, modelRoutesOf } from "../rigs/index.ts";
 import type { ControlStore } from "../store/index.ts";
+import { closedRuns } from "../views/index.ts";
 import { busRigs } from "./users.ts";
 
 /**
  * Each rig's configuration on the message bus (goal 168, step 3): control writes what a rig's
- * supervisor once polled it for to the rig's keys in the config bucket (core/link/config.ts),
- * each value sealed to the rig's seal key, and only when it changes. Control looks at every rig
+ * supervisor needs of it to the rig's keys in the config bucket (core/link/config.ts), each value
+ * sealed to the rig's seal key, and only when it changes: the model routes, the advisors' routes,
+ * the MCP servers and the Git accesses its live assignments name. Control looks at every rig
  * on the bus every CONFIG_WRITE_MS: a value it makes is compared, by its revision, with the one on
  * the bus, and written only when they differ. The look also renews what a value holds before it
- * ends (a ChatGPT login, an MCP server's sign-in), as the rig's poll did. Control's store stays
+ * ends (a ChatGPT login, an MCP server's sign-in). Control's store stays
  * the truth; a value control can't make (a provider's key that does not open) is not written, and
  * the rig keeps the one it has.
  */
@@ -161,14 +164,6 @@ export class ConfigWriter {
     say();
   }
 
-  /** What control gives the rig for `key` now, or why it can't. */
-  private async valueOf(rig: string, key: ConfigKey): Promise<unknown> {
-    const parts = this.o.parts;
-    if (key === "model-route") return modelRoutesOf(parts, rig);
-    if (key === "advisor-routes") return advisorRoutesOf(parts, rig);
-    return parts.mcpServers.forRig(rig);
-  }
-
   /** The revision on the bus of a subject: read back once, then as control writes it. */
   private async revisionOnBus(subject: string): Promise<string> {
     const known = this.onBus.get(subject);
@@ -192,7 +187,7 @@ export class ConfigWriter {
     const where = { rig, key };
     let value: unknown;
     try {
-      value = await this.valueOf(rig, key);
+      value = await configValueOf(this.o.parts, rig, key);
     } catch (err) {
       value = { error: errorText(err) };
     }
@@ -251,8 +246,12 @@ export class ConfigWriter {
       this.told.delete(subject);
       figures.written[key]++;
       figures.rigs.set(rig, (figures.rigs.get(rig) ?? 0) + 1);
-      // What a rig gets of the MCP servers is audited when it changes, as over HTTP.
+      // What a rig gets of the MCP servers and the Git accesses is audited when it changes.
       if (key === "mcp-servers") this.o.parts.mcpServers.handed(rig, value as McpForRig);
+      if (key === "git-access") {
+        const names = (value as { accesses: GitAccessSecret[] }).accesses.map((a) => a.name);
+        this.o.parts.store.auditLog.add(`rig:${rig}`, "git_access_handed", { names });
+      }
       log("control", "a rig's config written to the bus", { ...where, revision, seq: ack.seq });
       return true;
     } catch (err) {
@@ -277,6 +276,60 @@ export class ConfigWriter {
       return false;
     }
   }
+}
+
+/**
+ * What control gives a rig for one key of its config now, before it is sealed: its value, or
+ * `{ error }` in words when control can't make it (a provider's key that does not open).
+ */
+export async function configValueOf(
+  parts: ConfigParts,
+  rig: string,
+  key: ConfigKey,
+): Promise<unknown> {
+  if (key === "model-route") return modelRoutesOf(parts, rig);
+  if (key === "advisor-routes") return advisorRoutesOf(parts, rig);
+  if (key === "git-access") return gitAccessesOf(parts, rig);
+  return parts.mcpServers.forRig(rig);
+}
+
+/**
+ * The Git accesses a rig's live assignments name, each opened, with the host it is for: what the
+ * rig's supervisor stages their projects with. An access with no host, gone, or that does not
+ * open is left out, in control's log: staging then fails for it, in words.
+ */
+function gitAccessesOf(parts: ConfigParts, rig: string): { accesses: GitAccessSecret[] } {
+  const { store, secrets } = parts;
+  const accesses: GitAccessSecret[] = [];
+  for (const name of store.commands.gitAccessesOf(rig, closedRuns(store, rig))) {
+    const g = store.gitAccess.get(name);
+    if (!g?.host) continue;
+    let secret: string;
+    try {
+      secret = secrets.open(g.secret_sealed);
+    } catch (err) {
+      const why = { rig, name, error: errorText(err) };
+      log(
+        "control",
+        "a Git access not given: control's secrets key does not open it",
+        why,
+        "error",
+      );
+      continue;
+    }
+    accesses.push(
+      g.kind === "ssh"
+        ? { name, kind: "ssh", host: g.host, private_key: secret }
+        : {
+            name,
+            kind: "token",
+            host: g.host,
+            token: secret,
+            ...(g.username ? { username: g.username } : {}),
+          },
+    );
+  }
+  return { accesses };
 }
 
 /** A rig's config on the bus: control's writes, and its supervisor's own counts. */

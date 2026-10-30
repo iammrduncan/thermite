@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { ApiError } from "../../../src/common/api/call.ts";
-import { controlClient } from "../../../src/common/api/control.ts";
 import { tunnelRouteAllowed } from "../../../src/control/runpod/tunnel.ts";
 import * as owner from "../../../src/core/api/control/owner.ts";
 import * as rigs from "../../../src/core/api/control/rigs.ts";
 import { pathOf, type Route } from "../../../src/core/api/route.ts";
+import { REPORT_MAX_CHARS, RIG_ASKS } from "../../../src/core/link/asks.ts";
 import { ADMIN, controlOnly, RIG_TOKEN } from "../../helpers/control-stack.ts";
 
 /** The routes a contract module names: each export that is a route. */
@@ -67,33 +66,12 @@ describe("control's API has one contract (core/api/control/)", () => {
 
   test("a body past its route's limit is answered 413, the code its sender acts on", async () => {
     const { control } = controlOnly({ tokens: { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } } });
-    const res = await control.request(pathOf(rigs.REPORTS, PARAMS), {
+    const res = await control.request(pathOf(rigs.REGISTER, PARAMS), {
       method: "POST",
       headers: { authorization: `Bearer ${RIG_TOKEN}`, "content-type": "application/json" },
-      body: JSON.stringify({ kind: "daily", body: "x".repeat(rigs.REPORTS.maxBytes) }),
+      body: JSON.stringify({ at: "x".repeat(rigs.REGISTER.maxBytes) }),
     });
     assert.equal(res.status, 413);
-  });
-
-  test("a run control did not assign is answered with its code, not only its words", async () => {
-    const { control } = controlOnly({ tokens: { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } } });
-    const client = controlClient({
-      url: "http://control",
-      token: RIG_TOKEN,
-      rig: "rig-a",
-      fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(String(input));
-        return await control.request(`${url.pathname}${url.search}`, init);
-      }) as typeof fetch,
-    });
-    const err = await client.call(rigs.KB, { query: { run: "nope", after: 0 } }).then(
-      () => assert.fail("control gave past research for a run it did not assign"),
-      (e: unknown) => e,
-    );
-    assert.ok(err instanceof ApiError);
-    assert.equal(err.status, 404);
-    assert.equal(err.code, rigs.KB_NOT_ASSIGNED);
-    assert.equal(err.words, "control did not assign run nope to this rig");
   });
 
   test("its bodies take what a rig's supervisor sends today", () => {
@@ -115,16 +93,15 @@ describe("control's API has one contract (core/api/control/)", () => {
       models: [],
       advisors: null,
     };
-    assert.ok(rigs.FIGURES.body.safeParse(figures).success);
+    assert.ok(RIG_ASKS.figures.body.safeParse(figures).success);
+    const keys = { bus_key: "U".repeat(56), bus_seal_key: "k".repeat(44) };
+    assert.ok(rigs.REGISTER.body.safeParse({ ...figures, ...keys }).success);
+    assert.ok(!rigs.REGISTER.body.safeParse(figures).success, "the registration names its keys");
     // One past the limits the supervisor cuts to is refused: so it cuts to them.
     const over = { ...figures, export: { ...figures.export, last_error: "x".repeat(1001) } };
-    assert.ok(!rigs.FIGURES.body.safeParse(over).success);
+    assert.ok(!RIG_ASKS.figures.body.safeParse(over).success);
     assert.ok(
-      rigs.ACK.body.safeParse({ status: "failed", outcome: { error: "no content" } }).success,
-    );
-    assert.ok(
-      rigs.REPORTS.body.safeParse({ kind: "daily", body: "x".repeat(rigs.REPORT_MAX_CHARS) })
-        .success,
+      RIG_ASKS.daily.body.safeParse({ kind: "daily", body: "x".repeat(REPORT_MAX_CHARS) }).success,
     );
     assert.ok(
       rigs.EXPORT_BEGIN.body.safeParse({

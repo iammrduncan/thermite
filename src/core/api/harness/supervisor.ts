@@ -194,16 +194,26 @@ export const COMMAND_CHECK = {
   maxBytes: COMMAND_MAX_BYTES,
 } as const satisfies Route;
 
+/** The longest reason the supervisor gives for a command whose content it could not stage. */
+export const UNSTAGED_REASON_MAX = 2000;
+
+/**
+ * A signed command whose content (its sources, a model, a kit) the supervisor could not stage:
+ * the harness checks it as it checks any command and records it as not applied, with the
+ * supervisor's reason, in its ledger. Its `command` event carries that outcome to control, as for
+ * a command the harness applied; a command the harness has a record of already answers with it.
+ */
+export const COMMAND_UNSTAGED = {
+  method: "POST",
+  path: "/v1/commands/unstaged",
+  what: "a command not staged",
+  body: z.object({ command: SignedCommand, reason: z.string().min(1).max(UNSTAGED_REASON_MAX) }),
+  answer: z.looseObject({ status: z.string().optional(), accepted: z.boolean().optional() }),
+  maxBytes: COMMAND_MAX_BYTES + 16 * 1024,
+} as const satisfies Route;
+
 /** The live lines of a page when not told how many; the most is a batch's (LIVE_BATCH_MAX). */
 export const LIVE_PAGE_DEFAULT = 500;
-
-/** The live log's lines after `after`, signed: the supervisor passes them on to control. */
-export const LIVE = {
-  method: "GET",
-  path: "/v1/live",
-  what: "live lines",
-  answer: z.looseObject({ log_id: z.string(), next: z.number(), entries: z.array(z.unknown()) }),
-} as const satisfies Route;
 
 /**
  * The live log's lines after `after`, as the message bus's messages (core/link/live.ts's

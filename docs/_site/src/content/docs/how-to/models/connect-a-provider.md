@@ -82,7 +82,7 @@ This gives the model to the rig's workers and, unless it has its own, to its pla
 
 ### How the rig gets the model
 
-Control keeps your choice. Every 30 seconds by default, the rig's supervisor asks control for the rig's model and hands any change to the rig's harness container, with the key. Only rigs that use one of a provider's models ever receive its key. The harness checks a new model at once, and each new trial and plan uses it. A trial that is already running keeps the model it started with.
+Control keeps your choice, and writes the rig's model, with the key, to the rig's config on the message bus within about 5 seconds, sealed to the rig; the rig's supervisor hands it to the rig's harness container as it comes. Only rigs that use one of a provider's models ever receive its key. The harness checks a new model at once, and each new trial and plan uses it. A trial that is already running keeps the model it started with.
 
 ## Cap the model's context window
 

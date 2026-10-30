@@ -12,12 +12,10 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { ApiError } from "../common/api/call.ts";
-import { controlClient } from "../common/api/control.ts";
 import { log } from "../common/env.ts";
 import { git as gitRun } from "../common/git.ts";
 import { type GitAuth, gitHost, withGitAuth } from "../common/git-auth.ts";
-import { GIT_ACCESS, gitRepoPath } from "../core/api/control/rigs.ts";
+import { gitRepoPath } from "../core/api/control/rigs.ts";
 import type { SignedCommand } from "../core/commands.ts";
 import { sshCommand } from "./git-export.ts";
 import { downloadModel, ModelDownloads } from "./model-download.ts";
@@ -48,6 +46,11 @@ export interface StagingConfig {
   /** Control's address and this rig's token: kits control keeps are fetched from there. */
   controlUrl?: string | undefined;
   controlToken?: string | undefined;
+  /**
+   * A Git access by name, with the host it is for, from the rig's config on the message bus
+   * (config/git-access.ts): only while a live assignment of this rig names it.
+   */
+  gitAccess?: ((name: string) => Promise<{ auth: GitAuth; host: string }>) | undefined;
   /** Model downloads in progress, for the supervisor's report and the live view. */
   models?: ModelDownloads | undefined;
   /** The supervisor's Hugging Face token (gated models): sent to Hugging Face only. */
@@ -309,11 +312,13 @@ async function bundleFromGit(
       git(cache, ["fetch", "--quiet", "--tags", url, "+refs/heads/*:refs/sources/heads/*"], e),
     );
   };
-  // A private repository: the Git access its campaign names, handed by control for this fetch.
+  // A private repository: the Git access its campaign names, from the rig's config on the bus.
   const access = "git" in imp.source ? imp.source.access : undefined;
   if (access) {
+    if (!cfg.gitAccess)
+      throw new Error(`Git access ${access}: this supervisor has no config from control`);
     // Used only on the host control bound it to.
-    const { auth, host } = await gitAccessFromControl(cfg, access);
+    const { auth, host } = await cfg.gitAccess(access);
     const from = gitHost(url);
     if (from !== host)
       throw new Error(
@@ -346,27 +351,4 @@ async function bundleFromGit(
  */
 function bundleMode(inboxDir: string): number {
   return statSync(inboxDir).mode & 0o004 ? 0o644 : 0o640;
-}
-
-/**
- * Git access by name, from control, with the host it is for: only while a live assignment of this
- * rig names it.
- */
-async function gitAccessFromControl(
-  cfg: StagingConfig,
-  name: string,
-): Promise<{ auth: GitAuth; host: string }> {
-  if (!cfg.controlUrl || !cfg.controlToken)
-    throw new Error(`Git access ${name}: this supervisor has no control to ask`);
-  const control = controlClient({ url: cfg.controlUrl, token: cfg.controlToken, rig: cfg.rig });
-  const g = await control.call(GIT_ACCESS, { params: { name } }).catch((err: unknown) => {
-    const answered = err instanceof ApiError && err.status !== undefined;
-    throw answered ? new Error(`Git access ${name}: control answered ${err.status}`) : err;
-  });
-  if (!g.host) throw new Error(`Git access ${name}: control's answer names no host`);
-  if (g.kind === "ssh" && g.private_key)
-    return { auth: { kind: "ssh", privateKey: g.private_key }, host: g.host };
-  if (g.kind === "token" && g.token)
-    return { auth: { kind: "token", token: g.token, username: g.username }, host: g.host };
-  throw new Error(`Git access ${name}: control's answer has no key`);
 }

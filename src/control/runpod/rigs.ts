@@ -321,7 +321,7 @@ export class RunpodRigs {
           volumeGb: volume,
           volumeMountPath: VOLUME_PATH,
           // With the leaf, its port as TCP: RunPod gives it a public address and port.
-          ports: [`${minted.port}/http`, ...(minted.leaf ? [`${LEAF_PORT}/tcp`] : [])],
+          ports: [`${minted.port}/http`, `${LEAF_PORT}/tcp`],
           env: { ...minted.env },
         },
         this.fetchImpl,

@@ -14,6 +14,8 @@ import { SecretBox } from "../../src/control/secrets.ts";
 import { controlOnly, signIn } from "../helpers/control-stack.ts";
 
 const SECRETS = { controlToken: "rig-token-123", harnessSupervisorToken: "hs-token-456" };
+/** The bus as the rig reaches it, with control's authority: every rig control sets up gets it. */
+const BUS = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
 const IMAGES = {
   harness: "registry.example.com/harness:1",
   supervisor: "registry.example.com/supervisor:1",
@@ -26,6 +28,7 @@ const plan = (o: { gpus?: number[]; root?: boolean } = {}) => ({
   root: o.root ?? false,
   controlPublicKey: "PUBLIC KEY",
   controlFingerprint: "fp",
+  bus: BUS,
 });
 
 describe("join a rig yourself: what control renders", () => {
@@ -74,6 +77,7 @@ describe("join a rig yourself: what control renders", () => {
           gpuMode: "device-plugin",
           storageGi: 20,
           controlPublicKey: "PUBLIC KEY",
+          bus: BUS,
         },
         SECRETS,
       ),
@@ -124,7 +128,7 @@ async function control(o: { rigBus?: { url: string; ca: string } } = {}) {
     options: {
       secrets: SecretBox.ephemeral(),
       publicUrl: "https://control.example.com",
-      rigBus: o.rigBus,
+      rigBus: "rigBus" in o ? o.rigBus : BUS,
       rigImages: {
         harness: IMAGES.harness,
         harnessCuda: "registry.example.com/harness-cuda:1",
@@ -328,12 +332,18 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     assert.match(await s.page("/ui/rigs/box-c"), /A join command waits, until/);
   });
 
-  test("with the message bus, what a join fetches gives the supervisor the bus and control's authority", async () => {
-    const bus = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
+  test("what a join fetches gives the supervisor the message bus and control's authority; without the bus, no rig is set up", async () => {
+    const bus = BUS;
     const s = await control({ rigBus: bus });
     // Add a rig says where the rig will reach the bus.
     assert.match(await s.page("/ui/rigs/add"), /nats:\/\/control\.example\.com:4222/);
-    assert.match(await (await control()).page("/ui/rigs/add"), /off: the rig reports over HTTP/);
+    const off = await control({ rigBus: undefined });
+    assert.match(await off.page("/ui/rigs/add"), /none: control can't set a rig up/);
+    const refused = await off.post("/ui/rigs/add", { place: "join:machine", rig: "box-z" });
+    assert.match(
+      decodeURIComponent(refused.headers.get("location") ?? ""),
+      /Control has no address for rigs on its message bus/,
+    );
     const machine = s.tokenOf(
       await (await s.post("/ui/rigs/add", { place: "join:machine", rig: "box-a" })).text(),
     );

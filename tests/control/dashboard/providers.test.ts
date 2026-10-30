@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { ModelSource } from "../../../src/harness/agents/model/source.ts";
-import { syncModelRoute } from "../../../src/supervisor/model-route.ts";
+import { handModelRoute } from "../../../src/supervisor/model-route.ts";
 import { heldEvents } from "../../helpers/control-store.ts";
 import { stack } from "./stack.ts";
 
@@ -89,15 +89,8 @@ describe("control dashboard", () => {
       s.store.db.prepare("select * from audit").all(),
     ]);
     assert.ok(!everything.includes(key));
-    // Only the rig given one of its models, with its own token, receives the key.
-    const routeOf = (token: string) =>
-      s.control.request("/v1/rigs/rig-a/model-route", {
-        headers: { authorization: `Bearer ${token}` },
-      });
-    assert.deepEqual(await (await routeOf("rig-token-abcdef")).json(), {
-      route: null,
-      planner: null,
-    });
+    // Only the rig given one of its models receives the key, in its config on the bus.
+    assert.deepEqual(await s.rigConfig("model-route"), { route: null, planner: null });
     const unlisted = await s.post("/ui/settings/rigs", {
       csrf,
       rig: "rig-a",
@@ -109,8 +102,7 @@ describe("control dashboard", () => {
       rig: "rig-a",
       choice: "opencode|deepseek-v4.1-flash-free",
     });
-    assert.equal((await routeOf("admin-token-abcdef")).status, 401);
-    const given = (await (await routeOf("rig-token-abcdef")).json()) as {
+    const given = (await s.rigConfig("model-route")) as unknown as {
       route: { api_key: string; type: string; context_window: number; base_url: string };
     };
     assert.equal(given.route.api_key, key);
@@ -125,8 +117,9 @@ describe("control dashboard", () => {
     );
     // The supervisor hands it to its harness once; its agents use it from then on.
     const sync = s.cfg;
-    assert.equal(await syncModelRoute(sync), "set");
-    assert.equal(await syncModelRoute(sync), "unchanged");
+    const handed = (await s.rigConfig("model-route")) as never;
+    assert.equal(await handModelRoute(sync, handed), "set");
+    assert.equal(await handModelRoute(sync, handed), "unchanged");
     const current = s.env.service.models.current();
     assert.equal(current?.apiKey, key);
     assert.equal(current?.model, "deepseek-v4.1-flash-free");
@@ -156,7 +149,7 @@ describe("control dashboard", () => {
     assert.match(where(ant), /lists 1 model/);
     assert.equal(s.store.modelProviders.get("anthropic")?.base_url, "https://api.anthropic.com");
     await s.post("/ui/settings/rigs", { csrf, rig: "rig-a", choice: "anthropic|claude-test" });
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.current()?.api, "anthropic");
     assert.equal(s.env.service.models.current()?.baseUrl, "https://api.anthropic.com");
     // OpenCode's own provider needs no key, and its models run only in the OpenCode harness.
@@ -181,7 +174,7 @@ describe("control dashboard", () => {
       choice: "zen|free-model-free",
       harness: "opencode",
     });
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     const zen = s.env.service.models.current();
     assert.equal(zen?.harness, "opencode");
     assert.equal(zen?.api, "opencode");
@@ -194,11 +187,11 @@ describe("control dashboard", () => {
       provider: "zen",
       model: "free-model-free",
     });
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.planner()?.api, "opencode");
     assert.equal(s.env.service.models.planner()?.harness, "opencode");
     s.store.agentModels.assignRole("rig-a", "planner", null);
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.planner(), undefined);
     // A provider added as OpenAI-compatible at OpenCode's own endpoint, with its key, is OpenCode's
     // own too: under OpenCode it runs through OpenCode's built-in provider (no key sent); under Pi,
@@ -224,7 +217,7 @@ describe("control dashboard", () => {
       choice: "oc-key|free-model-free",
       harness: "opencode",
     });
-    const own = (await (await routeOf("rig-token-abcdef")).json()) as {
+    const own = (await s.rigConfig("model-route")) as unknown as {
       route: { type: string; api_key: string; harness: string };
     };
     assert.deepEqual(
@@ -237,7 +230,7 @@ describe("control dashboard", () => {
       choice: "oc-key|paid-model",
       harness: "pi",
     });
-    const paid = (await (await routeOf("rig-token-abcdef")).json()) as {
+    const paid = (await s.rigConfig("model-route")) as unknown as {
       route: { type: string; api_key: string };
     };
     assert.deepEqual([paid.route.type, paid.route.api_key], ["openai", "test-oc-key-0002"]);
@@ -248,7 +241,7 @@ describe("control dashboard", () => {
       choice: "opencode|deepseek-v4.1-flash-free",
       harness: "opencode",
     });
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models.current()?.harness, "opencode");
     assert.equal(s.env.service.models.current()?.api, undefined);
     await s.post("/ui/settings/rigs", {
@@ -257,13 +250,16 @@ describe("control dashboard", () => {
       choice: "anthropic|claude-test",
       harness: "pi",
     });
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     await s.post("/ui/settings/providers/zen/delete", { csrf });
     // Back to the rig's own settings; a provider in use cannot be deleted meanwhile.
     const busy = await s.post("/ui/settings/providers/anthropic/delete", { csrf });
     assert.match(where(busy), /still in use/);
     await s.post("/ui/settings/rigs", { csrf, rig: "rig-a", choice: "" });
-    assert.equal(await syncModelRoute(sync), "cleared");
+    assert.equal(
+      await handModelRoute(sync, (await s.rigConfig("model-route")) as never),
+      "cleared",
+    );
     assert.equal(s.env.service.models.current(), undefined);
     await s.post("/ui/settings/providers/anthropic/delete", { csrf });
     assert.equal(s.store.modelProviders.get("anthropic"), undefined);

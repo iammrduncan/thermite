@@ -65,9 +65,17 @@ function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
     },
   });
   if (!users) throw new Error("no bus users");
-  /** The supervisor's regular call, its figures with this key, and this seal key. */
-  const figures = (rig: string, busKey: unknown, sealKey?: string) =>
-    s.control.request(`/v1/rigs/${rig}/supervisor`, {
+  /** Each rig's seal key, made the first time it registers without one given. */
+  const seals = new Map<string, string>();
+  const sealOf = (rig: string) => {
+    if (!seals.has(rig)) seals.set(rig, newSealKey().publicKey);
+    return seals.get(rig);
+  };
+  /** The registration of a rig's keys, with its figures: this key, and this seal key. */
+  const given = new Set<string>();
+  const figures = (rig: string, busKey: unknown, sealKey?: string) => {
+    if (sealKey) given.add(rig);
+    return s.control.request(`/v1/rigs/${rig}/supervisor`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${rig === "rig-a" ? RIG_TOKEN : RIG_B_TOKEN}`,
@@ -76,14 +84,18 @@ function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
       body: JSON.stringify({
         at: new Date().toISOString(),
         bus_key: busKey,
-        ...(sealKey ? { bus_seal_key: sealKey } : {}),
+        bus_seal_key: sealKey ?? sealOf(rig),
       }),
     });
+  };
   const audits = (action: string) => s.store.auditLog.list(50, { action }).map((e) => e.body);
   const steps = (rig: string) =>
     s.store.rigHistory
       .list(rig)
-      .filter((e) => e.step.startsWith("bus") || e.step.startsWith("seal"));
+      .filter((e) => e.step.startsWith("bus") || e.step.startsWith("seal"))
+      // The registration's step, and the seal key each registration names but a test gave.
+      .filter((e) => e.step !== "bus_registered" && !(e.step === "seal_key" && !given.has(rig)))
+      .filter((e) => e.step !== "seal_key_changed" || given.has(rig));
   return { ...s, file, server, users, secrets, figures, audits, steps };
 }
 
@@ -163,9 +175,11 @@ describe("each rig's key on the message bus", () => {
       "the figures with it are refused whole",
     );
     assert.equal(s.server.calls.length, calls);
-    // Figures without a key are taken as before.
+    // A call with no key is a rig off the bus: refused in words, and nothing recorded either.
     const r = await s.figures("rig-a", undefined);
-    assert.equal(r.status, 200);
+    assert.equal(r.status, 409);
+    assert.match(((await r.json()) as { error: string }).error, /no keys on the message bus/);
+    assert.equal(s.store.reportedRigs.supervisor("rig-a"), null);
   });
 
   test("a key another rig or control holds is refused in words, and noted once in the rig's history", async () => {

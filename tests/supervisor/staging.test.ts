@@ -18,7 +18,6 @@ import { describe, test } from "node:test";
 import { serve } from "@hono/node-server";
 import { KitRepos } from "../../src/control/kits/repos.ts";
 import type { SignedCommand } from "../../src/core/commands.ts";
-import { relayOnce } from "../../src/supervisor/relay/index.ts";
 import { type StageResult, stageCommand, stageSigned } from "../../src/supervisor/staging.ts";
 import { controlOnly, controlStack } from "../helpers/control-stack.ts";
 import { makeJudgeEnv } from "../helpers/judge-env.ts";
@@ -395,10 +394,9 @@ describe("staging sources by reference", () => {
       sourcesDir: join(env.root, "supervisor", "sources"),
       localSources: true,
     };
-    const cfg = { ...s.cfg, stage: (cmd: SignedCommand) => stageCommand(stagingCfg, cmd) };
-    let state = { cursor: 0 };
+    s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
     for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
-      state = await relayOnce(cfg, state);
+      await s.relay();
       await new Promise((res) => setTimeout(res, 25));
     }
     assert.equal(
@@ -468,11 +466,10 @@ describe("staging sources by reference", () => {
       sourcesDir: join(env.root, "supervisor", "sources"),
       localSources: true,
     };
-    const cfg = { ...s.cfg, stage: (cmd: SignedCommand) => stageCommand(stagingCfg, cmd) };
-    let state = { cursor: 0 };
+    s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
     for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
-      state = await relayOnce(cfg, state);
-      await new Promise((r) => setTimeout(r, 25));
+      await s.relay();
+      await new Promise((res) => setTimeout(res, 25));
     }
     assert.equal(
       store.commands.get(id)?.status,

@@ -18,13 +18,23 @@
 //     values: control dials it there, and the supervisor's reports go again;
 //   - the rig retired: its connection and its account are gone.
 // It needs Podman or Docker and the server's image pulled already (it pulls nothing). It runs its
-// containers with 256 MiB of memory each and removes them, and their network, at the end; it
-// prunes no image. With Podman on a machine VM it trims the VM's disk after.
+// containers with 256 MiB of memory each, control's server as compose's user on a store volume,
+// thermite-leaf-check-store, that a short run of compose's nats-init gives to that user first, and
+// removes them, the volume and their network at the end; it prunes no image. With Podman on a
+// machine VM it trims the VM's disk after.
 //
 //   COMPOSE="podman compose" node scripts/acceptance/leaf.mjs
 //   LEAF_CHECK_PORT sets the first of the five host ports (14490 by default; never 4222).
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { connect as netConnect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,7 +43,7 @@ import { jetstreamManager } from "@nats-io/jetstream";
 import { createUser } from "@nats-io/nkeys";
 import { connect, nkeyAuthenticator } from "@nats-io/transport-node";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { engine, natsService, sh } from "./lib/smoke-env.mjs";
+import { engine, natsInitRun, natsService, sh } from "./lib/smoke-env.mjs";
 
 // Control's and the supervisor's own code, as they run it (Node.js strips the types).
 const { natsBus } = await import("../../src/common/bus/index.ts");
@@ -65,6 +75,8 @@ if (Object.values(ports).some((p) => p === 4222 || (p >= 14244 && p <= 14400) ||
 const net = "thermite-leaf-check";
 const subnet = "10.199.77";
 const box = { control: "thermite-leaf-check-control", pod: "thermite-leaf-check-pod" };
+/** Control's server's store: a volume of the check's own, given to its user as compose does. */
+const storeVolume = "thermite-leaf-check-store";
 const RIG = "rp-check";
 const url = `nats://127.0.0.1:${ports.control}`;
 const work = mkdtempSync(join(tmpdir(), "thermite-leaf-check-"));
@@ -72,6 +84,16 @@ const files = join(work, "nats");
 mkdirSync(files);
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const containers = new Set();
+
+/**
+ * Control's files for its server, into its container: readable by the server's user whichever
+ * engine copies them (Docker gives copied files to root).
+ */
+const copyBusFiles = () => {
+  for (const f of readdirSync(files, { withFileTypes: true }))
+    if (f.isFile()) chmodSync(join(files, f.name), 0o644);
+  sh(engine, ["cp", `${files}/.`, `${box.control}:/etc/nats/thermite`]);
+};
 
 const cleanup = () => {
   for (const c of containers) {
@@ -81,6 +103,9 @@ const cleanup = () => {
   }
   try {
     sh(engine, ["network", "rm", "-f", net]);
+  } catch {}
+  try {
+    sh(engine, ["volume", "rm", "-f", storeVolume]);
   } catch {}
   rmSync(work, { recursive: true, force: true });
   // Images stay: they may be other projects'. The VM's disk is trimmed.
@@ -230,7 +255,7 @@ try {
     tls,
     reload: async (seed) => {
       if (!serverUp) throw new Error("the server is not started yet");
-      sh(engine, ["cp", `${files}/.`, `${box.control}:/etc/nats/thermite`]);
+      copyBusFiles();
       await reloadBus(url, seed, trust);
     },
   });
@@ -240,14 +265,19 @@ try {
   const minted = tunnels.mint({ by: "owner:check", rig: RIG });
   check(
     "a launch gives the pod its leaf node's values",
-    minted.leaf && Object.values(leafLink.LEAF_ENV).every((k) => minted.env[k]),
+    Object.values(leafLink.LEAF_ENV).every((k) => minted.env[k]),
   );
   const values = leafValues(minted.env);
   await busUsers.sync();
 
-  // Control's server, as compose.yaml runs it.
+  // Control's server, as compose.yaml runs it: its store given to its user first, as compose's
+  // nats-init gives it.
   const nats = natsService();
   containers.add(box.control);
+  try {
+    sh(engine, ["volume", "rm", "-f", storeVolume]);
+  } catch {}
+  sh(engine, natsInitRun([`${storeVolume}:/data`, "/etc/nats/thermite"]));
   sh(engine, [
     "create",
     "--name",
@@ -256,11 +286,9 @@ try {
     "--memory",
     "256m",
     "--user",
-    "0:10001",
+    nats.user,
     "--cap-drop",
     "ALL",
-    "--cap-add",
-    "CHOWN",
     "--security-opt",
     "no-new-privileges:true",
     "--network",
@@ -270,11 +298,11 @@ try {
     "-p",
     `127.0.0.1:${ports.control}:4222`,
     "-v",
-    "/data",
+    `${storeVolume}:/data`,
     nats.image,
     ...nats.command,
   ]);
-  sh(engine, ["cp", `${files}/.`, `${box.control}:/etc/nats/thermite`]);
+  copyBusFiles();
   sh(engine, ["start", box.control]);
   serverUp = true;
   control = natsBus(url, "control", { seed: busUsers.controlSeed, trust });

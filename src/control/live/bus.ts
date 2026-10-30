@@ -14,8 +14,8 @@ import { type HarnessRefusal, harnessRefusal, type LiveBatchRead } from "./take.
 
 /**
  * Control's live view from the message bus (goal 168, step 2): each message of the LIVE stream,
- * the lines of one run's source, checked as a batch posted to `POST /v1/rigs/<rig>/live` is and
- * folded into the same live view, which the dashboard's Live pages read. A message control
+ * the lines of one run's source, checked as the harness's own (take.ts) and folded into the live
+ * view, which the dashboard's Live pages read. A message control
  * refuses is counted and logged, and passed over: no answer goes back to the supervisor, and the
  * live view is a view, so nothing waits for it.
  */

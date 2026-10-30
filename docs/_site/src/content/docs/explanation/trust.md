@@ -16,14 +16,13 @@ sequenceDiagram
   participant S as Supervisor
   participant H as Harness
   C->>C: signs the command with control's key
-  S->>C: asks for pending commands
-  C-->>S: signed command
+  C-->>S: signed command, on the message bus
   S->>H: relays it unchanged
   H->>H: checks signature, rig, time, issuer, hashes
   H->>H: signs each report with the rig's key
   S->>H: asks for new events
   H-->>S: signed report
-  S->>C: relays it unchanged
+  S->>C: relays it unchanged, on the message bus
   C->>C: checks signature, pinned key, order, freshness
 ```
 
@@ -91,23 +90,23 @@ The owner accepts a key by its **fingerprint**: the first 16 hexadecimal charact
 
 ## Rigs dial out
 
-Control never connects to a running rig, except to a rig in pull mode ([below](#rigs-in-pull-mode)). The supervisor makes every connection, out to control. It asks for pending commands every few seconds, and fetches the agents' model route and sends live lines, reports and its own figures, each on its own schedule ([How often it talks to control](../reference/settings.md#how-often-it-talks-to-control)).
+Control never connects to a running rig, except to a rig in pull mode ([below](#rigs-in-pull-mode)). The supervisor makes every connection, out to control's message bus and, for a few calls, to control's API. At its start it registers its keys on the bus with control over HTTPS; then it takes its commands and its config from the bus as control issues them, and sends its reports, live lines and figures there, each on its own schedule ([How the parts talk](how-the-parts-talk.md#control-and-a-rig), [How often it talks to control](../reference/settings.md#how-often-it-talks-to-control)).
 
 Outside pull mode, the supervisor listens on no port. The harness publishes no port to the outside, and every part of its API except a health check needs a token. The supervisor uses a **rig token** with control, which works only on its own rig's routes, and a retired rig is refused whatever token it holds.
 
-So a rig can run where nothing can reach it, such as behind a home router or a firewall, as long as it can reach control. And **rigs keep researching when control is down**: commands wait at control, and reports catch up when it is back.
+So a rig can run where nothing can reach it, such as behind a home router or a firewall, as long as it can reach control and its bus. And **rigs keep researching when control is down**: commands wait at control, and reports catch up when it is back. A rig that can't reach the bus at all is shown broken ([A rig off the bus](../how-to/operate/message-bus.md#a-rig-off-the-bus)).
 
 Control does connect to machines and clusters, over SSH or with kubectl, to set a rig up, start it, stop it and remove it, and to move a rig on a cluster onto new images, reading its deployments' status while it waits for them. It never uses those connections to talk to the running rig. What control did there, step by step, is for the people who run control: over MCP, `rig_setup` shows it to the owner's, operators' and readers' tokens, never to an agent's token, and only the owner and operators see each step's details.
 
-Some things reach a rig without a command: the agents' model route, the advisors' models, the Git access for a private repository, the past research for its running runs, and the MCP servers that the runs control assigned it name, with their sign-in. The supervisor fetches each from control with its rig token when it needs it. A Git access and the MCP servers reach a rig only while an assignment of it that names them is live: waiting for the rig or taken by it, its run not closed; and a Git access only for the host it is for. The supervisor fetches a command's sources only once its harness has checked control's signature on the command ([Who holds your keys](who-holds-your-keys.md)).
+Some things reach a rig without a command: the agents' model route, the advisors' models, the Git access for a private repository and the MCP servers that the runs control assigned it name, with their sign-in, which control writes to the rig's config on the bus, sealed to the rig's own key; and the past research for its running runs, which the supervisor asks control for on the bus. A Git access and the MCP servers reach a rig only while an assignment of it that names them is live: waiting for the rig or taken by it, its run not closed; and a Git access only for the host it is for. The supervisor fetches a command's sources only once its harness has checked control's signature on the command ([Who holds your keys](who-holds-your-keys.md)).
 
 ## Rigs in pull mode
 
-A rig on RunPod runs in **pull mode**: it never connects to control, and control connects to it. Control can then stay private, with nothing of where it runs opened to the internet, even on a laptop behind a home router, and no tunnel or VPN to set up first. The rig's supervisor serves one port, which RunPod's HTTP proxy makes reachable at `https://<pod>-<port>.proxy.runpod.net`. Control connects there, takes the rig's reports and delivers its commands, model routes and other settings. Rigs under compose, on machines and on clusters keep dialing out as above: the mode belongs to each rig. The owner launches a rig on RunPod from control ([Run a rig on RunPod](../how-to/install/runpod-rig.md)), and stops, starts and terminates it; no other token may, since a pod is billed by the hour.
+A rig on RunPod runs in **pull mode**: it never connects to control, and control connects to it. Control can then stay private, with nothing of where it runs opened to the internet, even on a laptop behind a home router, and no tunnel or VPN to set up first. The rig's supervisor serves one port, which RunPod's HTTP proxy makes reachable at `https://<pod>-<port>.proxy.runpod.net`. Control connects there for what stays on HTTPS. Rigs under compose, on machines and on clusters keep dialing out as above: the mode belongs to each rig. The owner launches a rig on RunPod from control ([Run a rig on RunPod](../how-to/install/runpod-rig.md)), and stops, starts and terminates it; no other token may, since a pod is billed by the hour.
 
-With the message bus, the rig's reports, commands, live lines, config and knowledge base do not cross the proxy: control's NATS server dials a server in the pod itself, at the public address and port RunPod gives it, over TLS with keys checked both ways, and the connection may do only what the rig's user may ([A rig on RunPod](how-the-parts-talk.md#a-rig-on-runpod)). The tunnel below carries what stays on HTTPS: the enrollment, the supervisor's regular call that registers its keys, and the large files and Git.
+The rig's reports, commands, live lines, screens, figures, config and knowledge base do not cross the proxy: they go on the message bus, whose NATS server on control dials a server in the pod itself, at the public address and port RunPod gives the pod's port 7422, over TLS with keys checked both ways, and the connection may do only what the rig's user may ([A rig on RunPod](how-the-parts-talk.md#a-rig-on-runpod)). The tunnel below carries only what stays on HTTPS: the enrollment, the registration of the rig's keys on the bus at each start of its supervisor, its champions' patches and exports, and the kits it fetches as git. A pod launched before its leaf node, or one RunPod gives no public address for port 7422, can't report, and shows broken: terminate it and launch a new one.
 
-The supervisor makes the same calls as on any rig, to a port of its own on `127.0.0.1`. Each call waits there. In each **exchange**, control hands over its answers to the calls it took last time and takes the calls that wait now, then answers each one itself, as that rig, on the same routes and with the same checks as for a rig that dials out: its reports, live lines and figures, its commands, its agents' and advisors' model routes, the MCP servers its runs name, the knowledge base, its Git access and kits, and its results going out. Only the routes a rig may use for itself are answered. An exchange with nothing to take waits at the pod for up to 20 seconds, so a call does not wait for a timer.
+The supervisor makes the same calls as on any rig, to a port of its own on `127.0.0.1`. Each call waits there. In each **exchange**, control hands over its answers to the calls it took last time and takes the calls that wait now, then answers each one itself, as that rig, on the same routes and with the same checks as for a rig that dials out: `POST /v1/rigs/<rig>/supervisor`, the registration of its keys; `POST /v1/rigs/<rig>/champions/<run>/<seq>/patch`, `POST /v1/rigs/<rig>/exports/<name>` and its `/file`, its results going out; and `GET /v1/rigs/<rig>/git/kits/…`, the kits it fetches. No other route is answered. An exchange with nothing to take waits at the pod for up to 20 seconds, so a call does not wait for a timer.
 
 ```mermaid
 sequenceDiagram
@@ -119,7 +118,7 @@ sequenceDiagram
   S-->>C: the pod's public keys, bound to the code (signed)
   C->>C: pins the pod's keys, and the code is spent
   C->>S: exchange: answers to the rig's last calls (signed, sealed)
-  S-->>C: the calls that wait now: reports, acknowledgements, requests (signed, sealed)
+  S-->>C: the calls that wait now: its keys, results, kit fetches (signed, sealed)
   C->>C: answers each call as that rig
 ```
 
@@ -129,7 +128,7 @@ RunPod's proxy ends TLS, so it, and the network it runs on, could read, change, 
 
 - **Control signs every request** with its command-signing key, in the same format as a signed command, over the method, the path, the rig, the pod, the time, a random nonce and the SHA-256 of the body. The pod refuses a request whose time is more than 60 seconds from its own clock, a nonce it has seen in the last 5 minutes (it keeps them on disk, so a restart does not forget them), and a request for another rig or pod.
 - **The pod signs every answer** with a key of its own, over the request's nonce, the status and the SHA-256 of the answer. Control drops any answer that does not verify against the keys it pinned for the rig: a changed answer, or an old one replayed for a new request. A call whose answer was dropped is offered again, so it costs only a retry.
-- **Bodies are sealed** both ways to the other side's key (X25519, HKDF-SHA256 and AES-256-GCM, a fresh key for each message). Commands, reports, model routes with their API keys, Git access and past research cross the proxy only sealed.
+- **Bodies are sealed** both ways to the other side's key (X25519, HKDF-SHA256 and AES-256-GCM, a fresh key for each message). The keys it registers, its results and the kits it fetches cross the proxy only sealed.
 - **What travels inside is checked as on every rig.** The harness still signs its reports, and control still pins the harness's report key; the harness still checks control's signature on every command.
 
 ### Only control gets an answer

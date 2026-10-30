@@ -6,7 +6,7 @@ sidebar:
   order: 8
 ---
 
-Control tells a [rig](glossary.md) what to do only through **signed commands**. Control signs each command with its own Ed25519 key. The rig's [supervisor](glossary.md) carries the command to the [harness](glossary.md), which checks the signature, the rig's name and the time before it does anything. The supervisor can carry a command, but it cannot make one or change one.
+Control tells a [rig](glossary.md) what to do only through **signed commands**. Control signs each command with its own Ed25519 key. The rig's [supervisor](glossary.md) takes the command from control's [message bus](../explanation/how-the-parts-talk.md#commands-over-the-message-bus) and carries it to the [harness](glossary.md), which checks the signature, the rig's name and the time before it does anything. The supervisor can carry a command, but it cannot make one or change one.
 
 ```json title="A signed command"
 {
@@ -47,11 +47,11 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 | Step | Where | What happens |
 | --- | --- | --- |
 | 1. Issue | Control | For a kind about one run, control finds the rig the run is on ([below](#a-command-about-one-run)). Control checks that it knows the rig (it has reported and is not retired, or is enrolled), checks the payload against the kind's schema, signs the envelope and stores the command as `pending`. For a `message_agent`, it first trims the text and refuses a message that nothing on the rig would read (see [`message_agent`](#message_agent)). A signed command larger than 3.5 MiB is refused: `the <kind> command is too large to deliver` |
-| 2. Fetch | Supervisor | The supervisor asks control for its rig's pending commands, oldest first, every `THERMITE_COMMAND_POLL_SECONDS` seconds (default 5). With the [message bus](../explanation/how-the-parts-talk.md#commands-over-the-message-bus), control also publishes the command to the rig's subject, and the supervisor takes it from there at once; it then asks control only every 3 minutes |
-| 3. Stage | Supervisor | If the command names content to fetch (a project, a kit, a model or another rig's champion), the supervisor fetches it into the rig's inbox first. The command stays `pending` while it waits |
-| 4. Apply | Harness | The supervisor posts the command to the harness, which checks it and applies it once |
-| 5. Acknowledge | Supervisor | The supervisor tells control the status and the harness's answer, which become the command's status and outcome |
-| 6. Confirm | Control | The harness records each command it applied in its ledger. When the rig's next signed report brings that record, control takes the status and outcome from it, in place of the supervisor's |
+| 2. Publish | Control | Control publishes the command to the rig's subject on the [message bus](../explanation/how-the-parts-talk.md#commands-over-the-message-bus), the only way a command reaches a rig. A command the bus did not take, because the rig's queue there holds 100 commands it has not taken, the bus is away, or 100 commands already wait their turn, stays `pending`, and control holds it: the rig's page and **Needs you** say it waits, and control publishes it again every 10 seconds, each rig's oldest first |
+| 3. Take | Supervisor | The rig's supervisor takes the command from its own consumer on the bus as soon as it is published, one command at a time, in order |
+| 4. Stage | Supervisor | If the command names content to fetch (a project, a kit, a model or another rig's champion), the supervisor fetches it into the rig's inbox first. The command stays `pending` while it waits, and the bus hands it again every 5 seconds, while the commands after it go on. Content that can't be had goes to the harness with the reason, on the harness's `POST /v1/commands/unstaged`: the harness checks the command as in step 5 and records it as not applied |
+| 5. Apply | Harness | The supervisor hands the command to the harness, which checks it, applies it once, and records it in its ledger: a `command` event with its outcome, or `command_rejected` for one it refuses. Only then does the supervisor ack it on the bus |
+| 6. Confirm | Control | When the rig's next signed report brings that record, control takes the command's status and outcome from it: the only way control learns them |
 
 `GET /v1/commands/<id>`, the MCP tool `command_status` and the dashboard's **Commands** page, which lists the newest 200 commands, show a command's status and outcome.
 
@@ -74,9 +74,8 @@ Control refuses, before it signs:
 A dashboard button that sends a command shows at once that the click took, then follows the command to its outcome. You do not need to refresh the page:
 
 1. The button turns into **Sending…**, which you cannot press again.
-2. When control has queued the command, the button says **Sent**, and a line says `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.`
-3. When the rig has applied it (step 5 above), the line says `rig-1 took it at 03:41 UTC. This page shows the change when the rig next reports.`
-4. When the rig's report with it reaches control (step 6), the line says `Done. rig-1 took it at 03:41 UTC.`, and the button comes back.
+2. When control has queued the command, the button says **Sent**, and a line says `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.` It stays so while the rig takes the command and applies it, until the rig's report with the outcome reaches control, within a minute by default.
+3. When the rig's report with it reaches control (step 6), the line says `Done. rig-1 took it at 03:41 UTC.`, and the button comes back.
 
 At each step the page draws again the parts that the command changes: the header with the run's state and its **Pause** or **Resume**, the blocks of the run, the rig or the overview, and the status bar. A part you are typing in, or that has a menu open, waits until you leave it. The line shows under a form, or at the top of the page for a button in the page's header or in a row. A rig's checks show their own state in their rows instead: see [Rig checks](rig-checks.md#where-results-show).
 
@@ -88,13 +87,13 @@ The page asks control how the command stands every 2 seconds, and every 5 second
 
 | Status | Meaning | Outcome |
 | --- | --- | --- |
-| `pending` | Waiting for the rig's supervisor to take it, or for the content it names to arrive | None |
-| `delivered` | The harness applied it | The harness's answer: `{"status": "applied", "accepted": true, "result": …}`, or `"replayed"` with the first answer |
-| `rejected` | The harness refused it before applying it (HTTP 403): signature, rig, time, payload, or issued before the rig's state was wiped | `{"status": "rejected", "reason": "…"}` |
-| `failed` | The harness applied it but it did not succeed, or the harness answered with another error, or its content could not be fetched, or the owner cancelled it | `{"status": "applied", "accepted": false, "result": {"error": "…"}}`; `{"http": <status>, "error": "…"}`; `{"error": "staging: …"}`; or `{"cancelled_by": "owner:api"}` |
+| `pending` | Waiting for the bus to take it, for the rig's supervisor to take it, for the content it names to arrive, or for the rig's report with its outcome | None |
+| `delivered` | The harness applied it | `{"source": "harness", "kind": …, "accepted": true, "result": …}` |
+| `rejected` | The harness refused it before applying it: signature, rig, time, payload, or issued before the rig's state was wiped | `{"source": "harness", "reason": "…", "kind": …, "id": …}`, from its `command_rejected` event |
+| `failed` | The harness applied it but it did not succeed, its content could not be fetched, or the owner cancelled it | `{"source": "harness", "kind": …, "accepted": false, "result": {"error": "…"}}`, with `"error": "staging: …"` for content the supervisor could not fetch; or `{"cancelled_by": "owner:api"}` |
 | `expired` | It was still `pending` after `expires_at` | None |
 
-Once control has the harness's own record of an applied command (step 6), the outcome is `{"source": "harness", "kind": …, "accepted": …, "result": …}`, and the status is `delivered` if `accepted` is true, else `failed`.
+Control takes a command's status and outcome only from the harness's events in the rig's signed report (step 6): `delivered` when the `command` event's `accepted` is true, else `failed`, and `rejected` for a `command_rejected` event that names the command's id.
 
 `delivered` means the harness carried the command out, not that what it started went well. A `rig_check`, for example, is `delivered` as soon as the check starts; its finding comes later, as a `rig_check_finished` event.
 
@@ -108,11 +107,10 @@ Once control has the harness's own record of an applied command (step 6), the ou
 | A full reset's steps (`pause_run`, `export_now`, `wipe_state`) | 30 minutes each |
 | Clock difference the harness allows between control and the rig | 5 minutes |
 
-- **Expiry at control.** When the supervisor next asks for commands, control marks each pending command past its `expires_at` as `expired` and does not hand it over.
-- **Kept alive while its content is fetched.** While the supervisor fetches a command's content (a repository bundle, a kit, a model download), it tells control so with each request. Within 10 minutes of the command's `expires_at`, control signs it again with an `expires_at` an hour later, and the audit log records `command_renewed`. It does so at most 24 hours after `issued_at`: a fetch that takes longer lets the command expire.
-- **Each command's content crosses once.** The supervisor names the commands it holds already, and control answers those with their ids alone. A command signed again is sent whole once more.
+- **Expiry at control.** Every 10 seconds, as it publishes held commands again, control looks at every rig's pending commands, marks each one past its `expires_at` as `expired`, and does not publish it again. It looks too as it starts, and when a rig's supervisor asks for a command's newest form.
+- **Kept alive while its content is fetched.** While the supervisor fetches a command's content (a repository bundle, a kit, a model download), it asks control for the command again on the bus within 10 minutes of its `expires_at` (the `renew` ask: [A rig's asks](../explanation/how-the-parts-talk.md#a-rigs-asks-on-the-message-bus)). Control signs it again with an `expires_at` an hour later, and the audit log records `command_renewed`. It does so at most 24 hours after `issued_at`: a fetch that takes longer lets the command expire. A supervisor that holds a form that expired, as after a restart, asks the same way, and delivers the newest form control holds; one control holds pending no more is not delivered.
 - **Expiry at the harness.** The harness refuses a command whose `expires_at` has passed by the rig's clock (`expired`), or whose `issued_at` is more than 5 minutes ahead of it (`issued in the future`).
-- **Cancelling.** The owner can cancel a command while it is `pending`, with `POST /v1/commands/<id>/cancel` and the owner's token. The command becomes `failed` with the outcome `{"cancelled_by": "owner:api"}`. A command that is not pending gives `404 {"error":"no such pending command"}`. With the message bus, control also takes the cancelled command off the rig's subject. The dashboard, the command line and MCP have no way to cancel. See [Cancel a pending command](../how-to/operate/cancel-a-command.md).
+- **Cancelling.** The owner can cancel a command while it is `pending`, with `POST /v1/commands/<id>/cancel` and the owner's token. The command becomes `failed` with the outcome `{"cancelled_by": "owner:api"}`. A command that is not pending gives `404 {"error":"no such pending command"}`. Control also takes the cancelled command off the rig's subject on the bus; one the supervisor took already may still be applied, and its status then becomes the harness's outcome. The dashboard, the command line and MCP have no way to cancel. See [Cancel a pending command](../how-to/operate/cancel-a-command.md).
 
 ## What the harness checks
 
@@ -129,12 +127,12 @@ The harness checks every command in this order. A command that fails a check mar
 | It has not expired | `expired` | `rejected` |
 | The payload fits the kind | `bad payload: <field>: <problem>` | `rejected` |
 | It was issued after the rig's state was last wiped | `issued before this rig's state was wiped` | `rejected` |
-| It is not being applied right now | None: the harness answers `in_progress`, and the supervisor asks again later | Stays `pending` |
+| It is not being applied right now | None: the harness answers `in_progress`, and the bus hands the command to the supervisor again 5 seconds later | Stays `pending` |
 | An owner-only kind was issued by the owner (`issued_by` is `owner` or starts with `owner:`) | `<kind> is the owner's to issue, not <issuer>'s` | `failed` |
 
 The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `invalidate_evidence`, which withdraws bad evidence, and `terminal_input`, which types into a trial's terminal. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
 
-A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`.
+A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`; its `command` event carries the same to control.
 
 ## Who may issue each kind
 

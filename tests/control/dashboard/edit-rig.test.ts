@@ -99,9 +99,7 @@ describe("control dashboard", () => {
       /error=Workers: Codex runs only with a ChatGPT subscription or an OpenAI-compatible provider: choose Pi or OpenCode v2 for this provider\./,
     );
     assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "pi");
-    const asRig = (path: string) =>
-      s.control.request(path, { headers: { authorization: "Bearer rig-token-abcdef" } });
-    const mr = (await (await asRig("/v1/rigs/rig-a/model-route")).json()) as {
+    const mr = (await s.rigConfig("model-route")) as unknown as {
       route: { type: string; reasoning: string | null };
       planner: { type: string; harness: string; effort: string; api_key: string };
     };
@@ -111,7 +109,7 @@ describe("control dashboard", () => {
     assert.equal(mr.planner.harness, "claude-code");
     assert.equal(mr.planner.effort, "xhigh");
     assert.equal(mr.planner.api_key, token);
-    const adv = (await (await asRig("/v1/rigs/rig-a/advisor-routes")).json()) as Record<
+    const adv = (await s.rigConfig("advisor-routes")) as unknown as Record<
       string,
       { type: string; effort?: string; api_key: string } | null
     >;

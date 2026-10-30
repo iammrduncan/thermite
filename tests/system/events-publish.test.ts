@@ -17,7 +17,7 @@ import {
 } from "../../src/core/link/events.ts";
 import { readReport, reportMessageId, reportSubject } from "../../src/core/link/report.ts";
 import { RelayError, type RelayState, relayOnce } from "../../src/supervisor/relay/index.ts";
-import { controlStack, RIG_TOKEN } from "../helpers/control-stack.ts";
+import { controlStack } from "../helpers/control-stack.ts";
 import {
   applied,
   busOf,
@@ -369,38 +369,30 @@ describe("control publishes each report's events first", () => {
     assert.deepEqual(store.reportedRigs.reportRow("rig-a")?.cursor, 4);
   });
 
-  test("a full store, and the bus away: the page refused for now, in words; the rig keeps its cursor", async () => {
+  test("a full store, and the bus away: the page not taken, in words; the rig keeps its cursor", async () => {
     const s = controlStack({ env: makeHarnessEnv("rig-a") });
+    await s.relay(0);
     for (let i = 0; i < 5; i++) appendOther(s.env.service.ledger, "t", "step", null, { i });
     const { bus } = busOf(s.store);
     bus.full = true;
-    let state: RelayState = { cursor: 0 };
+    const state: RelayState = { cursor: 0 };
     await assert.rejects(relayOnce(s.cfg, state), (err: unknown) => {
       assert.ok(err instanceof RelayError);
-      assert.match(err.message, /ingest -> 503: .*the bus's store is full: insufficient resources/);
+      assert.match(err.message, /insufficient resources/);
       assert.equal(err.state.cursor, 0, "the supervisor keeps its cursor");
       return true;
     });
-    // Over HTTP, the route says so, with when to try again.
-    const signedPage = s.env.service.snapshot(0, 10);
-    const r = await s.api("POST", "/v1/rigs/rig-a/ingest", signedPage, RIG_TOKEN);
-    assert.equal(r.status, 503);
-    assert.equal(r.headers.get("retry-after"), "5");
-    assert.match(((await r.json()) as { error: string }).error, /store is full/);
     assert.equal(onStream(bus).length, 0);
     assert.equal(s.store.reportedRigs.reportRow("rig-a")?.report_at ?? null, null, "nothing kept");
     // The bus away: the same.
     bus.full = false;
     bus.failing = true;
-    await assert.rejects(
-      relayOnce(s.cfg, state),
-      /ingest -> 503: .*TimeoutError: no answer from the server/,
-    );
+    await assert.rejects(relayOnce(s.cfg, state), /TimeoutError: no ack from the server/);
     // Back: the supervisor sends from its cursor, and control takes it all.
     bus.failing = false;
-    state = await relayOnce(s.cfg, state);
+    const back = await s.relay();
     await applied(s.store);
-    assert.equal(state.cursor, s.env.service.ledger.latestEventId());
+    assert.equal(back.cursor, s.env.service.ledger.latestEventId());
     assert.equal((await heldEvents(s.store, "rig-a")).length, s.env.service.ledger.latestEventId());
   });
 

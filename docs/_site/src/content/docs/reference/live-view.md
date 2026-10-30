@@ -6,7 +6,7 @@ sidebar:
   order: 23
 ---
 
-**Live** shows what a run's agents, its judge and its advisors do as they work. It is a view, never a record: what happened is in the rig's signed events, and the run's page reads those. Control pushes each new line to the page as it gets it, from the rig's supervisor or the message bus, so the page needs no reload. Only the owner signs in to the dashboard, so only the owner sees Live; the reader's token gets the same lines over REST, `GET /v1/rigs/<rig>/live`, but never a terminal.
+**Live** shows what a run's agents, its judge and its advisors do as they work. It is a view, never a record: what happened is in the rig's signed events, and the run's page reads those. Control pushes each new line to the page as it gets it from the message bus, where the rig's supervisor publishes it, so the page needs no reload. Only the owner signs in to the dashboard, so only the owner sees Live; the reader's token gets the same lines over REST, `GET /v1/rigs/<rig>/live`, but never a terminal.
 
 The rig masks its own credentials in each line before the line leaves it, wherever an agent printed them: a trial's token, the model proxy's and the MCP gateway's show as `trial.***`, `proxy.***` and `mcp.***`, and the value of any `THERMITE_*_AUTH` setting as `***`. Each line is masked before it is cut to 8,000 characters ([Limits and pacing](limits-and-pacing.md#the-rig-and-control)).
 
@@ -59,7 +59,7 @@ Once the trial has ended, the console says `The trial has ended: its terminal ta
 ### How the screen reaches the page
 
 - The page tells control it watches the trial. Every 5 seconds the rig's supervisor asks control which of its trials are watched; while one is, it asks its harness for their screens, and sends them to control, every second. Nobody watching, no screen leaves the rig.
-- The screens go over HTTP, the rig's token with each, whether or not the rig uses the message bus, whose `LIVE` stream would keep them on disk for an hour. Control keeps the newest screen of each watched trial in memory, and lets it go when the last page watching it closes. No screen is written down anywhere: not in the rig's ledger, its exports or control's records.
+- The screens go on the message bus as a request with its one answer, on the rig's own subject (`thermite.rig.<rig>.ask.screens`): no stream keeps them, where the bus's `LIVE` stream would keep them on disk for an hour ([A rig's asks](../explanation/how-the-parts-talk.md#a-rigs-asks-on-the-message-bus)). A rig off the bus sends none. Control keeps the newest screen of each watched trial in memory, and lets it go when the last page watching it closes. No screen is written down anywhere: not in the rig's ledger, its exports or control's records.
 - At most 4 of a rig's trials are watched at once. A page for a fifth says `4 of <rig>'s terminals are watched already: close one of their pages, then load this one again.`
 - A trial's last screen is the one the harness kept just before it ended the program, with up to 500 lines above it, at most 262,144 characters. The harness keeps those of its 20 most recently ended trials, in memory.
 - The screen is what the agent's program drew, as untrusted as anything the agent prints: nothing decides from it.

@@ -521,7 +521,11 @@ export interface EventBodies {
     deadline?: string | undefined;
     deadline_reached?: boolean | undefined;
   };
-  rig_settings_changed: { change: Record<string, unknown>; settings: RigSettings };
+  /** What Edit rig changed (the `rig_settings` command's fields), and the settings now. */
+  rig_settings_changed: {
+    change: Record<string, string | number | boolean | null | undefined>;
+    settings: RigSettings;
+  };
 
   // ---------------------------------------------------------------- research
   source_fetched: {

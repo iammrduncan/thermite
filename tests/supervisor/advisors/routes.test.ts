@@ -4,11 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { AdvisorsConfig, advisorsFileReport } from "../../../src/supervisor/advisors/index.ts";
-import {
-  fetchControlAdvisors,
-  mergeAdvisors,
-  runtimeOf,
-} from "../../../src/supervisor/advisors/routes.ts";
+import { advisorsOf, mergeAdvisors, runtimeOf } from "../../../src/supervisor/advisors/routes.ts";
 import { testPrompt } from "../../helpers/advisor-prompt.ts";
 
 const route = (o: Partial<Record<string, unknown>> = {}) => ({
@@ -172,15 +168,8 @@ describe("advisors from control", () => {
       merged_by: { name: "m", runtime: "cli", argv: ["z"], restricted: true },
       teacher_minutes: 15,
     });
-    const answering = (body: Record<string, unknown>) => async (): Promise<Response> =>
-      Response.json(body);
-    const from = (body: Record<string, unknown>) =>
-      fetchControlAdvisors({
-        rig: "rig-a",
-        controlUrl: "http://control",
-        controlToken: "t",
-        fetchImpl: answering(body) as typeof fetch,
-      });
+    // As the rig's config on the bus gives the advisors' routes.
+    const from = async (body: Record<string, unknown>) => advisorsOf(body as never);
     // Two teachers on two models, merged by a third: each teacher once, by its own model.
     const two = await from({
       teacher_models: [route({ model: "model-a" }), route({ type: "openai", model: "model-b" })],
@@ -216,13 +205,7 @@ describe("advisors from control", () => {
     const file = AdvisorsConfig.parse({
       teachers: [{ name: "t", runtime: "cli", argv: ["x"], restricted: true }],
     });
-    const from = (body: Record<string, unknown>) =>
-      fetchControlAdvisors({
-        rig: "rig-a",
-        controlUrl: "http://control",
-        controlToken: "t",
-        fetchImpl: (async () => Response.json(body)) as typeof fetch,
-      });
+    const from = async (body: Record<string, unknown>) => advisorsOf(body as never);
     // Their own routes, under their own names.
     const own = await from({
       teacher_models: [route({ model: "model-a" })],
@@ -269,14 +252,8 @@ describe("advisors from control", () => {
     assert.equal(AdvisorsConfig.safeParse({ teachers: [], mergedby: cli("m") }).success, false);
   });
 
-  test("control's routes by the public names only; a control with no routes changes nothing", async () => {
-    const answered = (body: Record<string, unknown>) =>
-      fetchControlAdvisors({
-        rig: "rig-a",
-        controlUrl: "http://control",
-        controlToken: "t",
-        fetchImpl: (async () => Response.json(body)) as typeof fetch,
-      });
+  test("control's routes by the public names only; no routes from control changes nothing", async () => {
+    const answered = async (body: Record<string, unknown>) => advisorsOf(body as never);
     // The names of v0.1.0's control are not read.
     const old = await answered({ teachers: route(), combiner: route(), panel: route() });
     assert.deepEqual(old, {
@@ -287,16 +264,8 @@ describe("advisors from control", () => {
       synthesizer: undefined,
       final_writer: undefined,
     });
-    // No file and nothing from control: no advisors at all. A control with no such route: its
-    // 404 changes nothing.
+    // No file and nothing from control: no advisors at all.
     assert.equal(mergeAdvisors(undefined, {}), undefined);
-    const none = await fetchControlAdvisors({
-      rig: "rig-a",
-      controlUrl: "http://control",
-      controlToken: "t",
-      fetchImpl: (async () => new Response("no", { status: 404 })) as typeof fetch,
-    });
-    assert.deepEqual(none, {});
   });
 
   test("a Claude Code advisor gets the token on file descriptor 3 and in no environment, no tools, settings or scrub, and its answer is read", async () => {

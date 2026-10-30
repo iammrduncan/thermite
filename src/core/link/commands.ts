@@ -4,11 +4,12 @@ import { COMMAND_MAX_BYTES, type SignedCommand } from "../commands.ts";
 import { RIG_ID } from "../ids.ts";
 
 /**
- * The link's second contract (goal 168, step 1): control's commands to a rig on the message bus.
- * A message is one command exactly as control signed and recorded it. Control publishes it to the
- * rig's subject; the rig's supervisor takes it from its own consumer, delivers it to its harness,
- * and acks it once control has the outcome. The signer is control's key, which the harness checks
- * (verifyCommand in core/commands.ts): the supervisor can neither sign nor change a command.
+ * The link's second contract (goal 168, step 1): control's commands to a rig on the message bus,
+ * the only way a command reaches a rig. A message is one command exactly as control signed and
+ * recorded it. Control publishes it to the rig's subject; the rig's supervisor takes it from its
+ * own consumer, delivers it to its harness, and acks it once the harness has recorded its outcome,
+ * which reaches control in the harness's events. The signer is control's key, which the harness
+ * checks (verifyCommand in core/commands.ts): the supervisor can neither sign nor change a command.
  * Control's store stays the record, and a command's status there the truth.
  */
 
@@ -34,13 +35,13 @@ export function commandMessageId(cmd: Pick<SignedCommand, "envelope">): string {
 }
 
 /**
- * How many of a rig's commands the stream holds. A full queue refuses the next one, which stays
- * pending on control: the supervisor's poll over HTTP fetches it.
+ * How many of a rig's commands the stream holds. A full queue refuses the next one: control holds
+ * it, shows it waiting, and publishes it again once the rig's queue has room.
  */
 export const COMMAND_QUEUE_MAX = 100;
 /**
  * How long the stream holds a command its rig has not taken: a week, the longest life control
- * gives a command. One still pending on control after that reaches the rig over HTTP.
+ * gives a command.
  */
 const MAX_AGE_NS = 7 * 24 * 3600 * 1e9;
 /**
@@ -85,9 +86,10 @@ export function commandConsumerName(rig: string): string {
 
 /**
  * A rig's consumer: its subject alone, from the first command, in order. A command is acked once
- * control has its outcome; one that waits (its sources still stage) is handed again later, while
- * the commands after it go on, up to as many as the rig's queue holds. Control makes it, for each
- * rig with a user on the bus; the rig's user may only read it and take from it (users.ts).
+ * the harness has recorded its outcome; one that waits (its sources still stage) is handed again
+ * later, while the commands after it go on, up to as many as the rig's queue holds. Control makes
+ * it, for each rig with a user on the bus; the rig's user may only read it and take from it
+ * (users.ts).
  */
 export function commandConsumerConfig(rig: string) {
   return {
@@ -100,6 +102,16 @@ export function commandConsumerConfig(rig: string) {
     max_deliver: -1,
   } satisfies Partial<ConsumerConfig> & { durable_name: string };
 }
+
+/**
+ * A command whose sources still stage, such as a model download, is signed again with a later
+ * expiry before its own comes (the supervisor asks, core/link/asks.ts's `renew`): this long before
+ * it expires, for this long, and at most COMMAND_STAGING_HOLD_HOURS after it was issued. A
+ * download longer than a command's life does not expire its assignment.
+ */
+export const COMMAND_RENEW_BEFORE_MS = 10 * 60_000;
+export const COMMAND_RENEW_FOR_MS = 60 * 60_000;
+export const COMMAND_STAGING_HOLD_HOURS = 24;
 
 /** What the supervisor reads of a command: its id, its rig, its kind and when it expires. */
 const CommandOnBus = z.looseObject({

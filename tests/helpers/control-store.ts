@@ -1,7 +1,10 @@
+import { buildInfo } from "../../src/common/build-info.ts";
 import { BUS_READ_MAX } from "../../src/common/bus/index.ts";
 import { newToken } from "../../src/common/secrets.ts";
+import { answerRigAsk } from "../../src/control/bus/index.ts";
 import { EventsApply, EventsMove, EventsWriter } from "../../src/control/events/index.ts";
-import { keepReport } from "../../src/control/ingest.ts";
+import { type Folded, foldReport, keepReport } from "../../src/control/ingest.ts";
+import { Screens } from "../../src/control/live/index.ts";
 import { ControlStore, type IngestReport } from "../../src/control/store/index.ts";
 import {
   FoldCache,
@@ -12,9 +15,10 @@ import {
   streamEvent,
 } from "../../src/control/views/index.ts";
 import { foldEvent, readLedger } from "../../src/control/views/stream.ts";
-import { sha256Hex } from "../../src/core/canonical.ts";
+import { canonicalJson, sha256Hex } from "../../src/core/canonical.ts";
 import { EVENT_STREAM, EVENT_STREAM_CONFIG } from "../../src/core/link/events.ts";
-import { FakeBus } from "./fake-bus.ts";
+import { reportSubject } from "../../src/core/link/report.ts";
+import { asMessage, FakeBus } from "./fake-bus.ts";
 
 /**
  * Control's store as control's main makes it (goal 168, step 4): on its message bus, here the fake
@@ -41,7 +45,14 @@ const onBus = new WeakMap<ControlStore, OnBus>();
  * the apply, the writer and the move started as control's main starts them.
  */
 export function controlStore(path = ":memory:", bus = new FakeBus()): ControlStore {
-  const store = new ControlStore(path);
+  return storeOnBus(new ControlStore(path), bus);
+}
+
+/**
+ * `store` on `bus`, as control's main puts its store there: the apply, the writer and the move
+ * started (an acceptance check gives the real bus, as `Bus` alike).
+ */
+export function storeOnBus(store: ControlStore, bus: FakeBus): ControlStore {
   const apply = new EventsApply({ store, bus, retryMs: 5 });
   const writer = new EventsWriter({ store, bus, apply, applyWaitMs: 2_000 });
   const move = new EventsMove({ store, bus, retryMs: 5, published: () => void apply.nudge() });
@@ -85,6 +96,79 @@ export async function ingestReport(store: ControlStore, report: IngestReport): P
   const kept = await o.writer.turn(() => keepReport(store, report));
   if ("later" in kept) throw new Error(`the report was refused for now: ${kept.later}`);
   return kept.added;
+}
+
+/**
+ * A report as control takes one from its rig's subject on the bus (control/ingest.ts's
+ * foldReport): `body` as the supervisor published it, on `rig`'s subject. What control made of
+ * it: folded, skipped, refused in words, or refused for now. `requireKeyAcceptance` holds a rig's
+ * first key for the owner.
+ */
+export async function foldOnBus(
+  store: ControlStore,
+  rig: string,
+  body: unknown,
+  o: { requireKeyAcceptance?: boolean } = {},
+): Promise<Folded> {
+  await busOf(store).started;
+  const m = asMessage({
+    stream: "REPORTS",
+    subject: reportSubject(rig),
+    seq: 1,
+    id: undefined,
+    data: JSON.stringify(body),
+    headers: {},
+  });
+  const intake = {
+    store,
+    control: buildInfo(),
+    requireKeyAcceptance: Boolean(o.requireKeyAcceptance),
+  };
+  const folded = await foldReport(intake, m);
+  // Applied before it answers, as control's consumer acks; a page refused for now waits.
+  if (!("later" in folded)) await applied(store);
+  return folded;
+}
+
+/**
+ * A command's outcome as control takes it from its rig's events (control/events/apply.ts):
+ * applied (`delivered`), not applied (`failed`) or refused (`rejected`), with the outcome the
+ * harness recorded. Whether the command was pending.
+ */
+export function answerCommand(
+  store: ControlStore,
+  rig: string,
+  id: string,
+  status: "delivered" | "failed" | "rejected",
+  outcome: unknown,
+): boolean {
+  const pending = store.commands.get(id)?.status === "pending";
+  const at = new Date().toISOString();
+  const kept = canonicalJson(outcome ?? {});
+  if (status === "rejected") store.commands.confirmRejected(rig, id, kept, at);
+  else store.commands.confirmApplied(rig, id, status, kept, at);
+  return pending;
+}
+
+/**
+ * A rig's supervisor's figures as control takes them in its regular call on the bus
+ * (control/bus/asks.ts): control's answer, which names its place in the rig's reports, or its
+ * refusal in words.
+ */
+export function figuresOnBus(store: ControlStore, rig: string, figures: unknown): object {
+  const deps = { store, control: buildInfo(), privateKeyPem: "", screens: new Screens() };
+  return answerRigAsk(deps, rig, "figures", figures);
+}
+
+/**
+ * The same as figuresOnBus, as a response a test reads as it read control's answer over HTTP:
+ * 200 with control's answer, or 400 with its refusal in `error`.
+ */
+export function figuresCall(store: ControlStore, rig: string, figures: unknown): Response {
+  const answer = figuresOnBus(store, rig, figures) as { refused?: string };
+  return answer.refused === undefined
+    ? Response.json(answer)
+    : Response.json({ error: answer.refused }, { status: 400 });
 }
 
 /**

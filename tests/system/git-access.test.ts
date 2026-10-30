@@ -13,9 +13,10 @@ import { startCampaign } from "../../src/control/campaigns/new.ts";
 import { cancelCommand } from "../../src/control/issue/index.ts";
 import { KitRepos } from "../../src/control/kits/repos.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
+import { gitAccessFrom, RigConfig } from "../../src/supervisor/config/index.ts";
 import { stageCommand } from "../../src/supervisor/staging.ts";
 import { controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
-import { enrollRigs } from "../helpers/control-store.ts";
+import { answerCommand, enrollRigs } from "../helpers/control-store.ts";
 
 const C = "9a41c07e0d1f2a3b4c5d6e7f8091a2b3c4d5e6f7";
 
@@ -26,6 +27,7 @@ async function control(extra: Partial<ControlOptions> = {}, tokens: Partial<Cont
     keys,
     store,
     control: api,
+    rigConfig,
   } = controlOnly({
     tokens: { rigs: { "rig-a": "rig-token-aaaaaa", "rig-b": "rig-token-bbbbbb" }, ...tokens },
     options: { kits, secrets, ...extra },
@@ -33,7 +35,7 @@ async function control(extra: Partial<ControlOptions> = {}, tokens: Partial<Cont
   const { page, csrfOf, post: send } = await signIn(api);
   const csrf = csrfOf(await page("/ui/settings"));
   const post = (path: string, form: Record<string, string>) => send(path, { csrf, ...form });
-  return { keys, store, secrets, kits, api, page, post };
+  return { keys, store, secrets, kits, api, page, post, rigConfig };
 }
 
 const draftOf = (access: string, url = "https://git.example.com/team/private.git") => ({
@@ -224,11 +226,10 @@ describe("Git access for private repositories", () => {
       username: "oauth2",
       host: "git.example.com",
     });
-    const ask = (rig: string, token: string) =>
-      s.api.request(`/v1/rigs/${rig}/git-access/gitlab-token`, {
-        headers: { authorization: `Bearer ${token}` },
-      });
-    assert.equal((await ask("rig-a", "rig-token-aaaaaa")).status, 404);
+    // What the rig's config on the bus holds of Git access, as control writes it there.
+    const ask = async (rig: string) =>
+      ((await s.rigConfig("git-access", rig)) as unknown as { accesses: unknown[] }).accesses;
+    assert.deepEqual(await ask("rig-a"), []);
     enrollRigs(s.store, ["rig-a", "rig-b"]);
     const start = (draft: ReturnType<typeof draftOf>, rig = "rig-a") =>
       startCampaign(
@@ -251,27 +252,26 @@ describe("Git access for private repositories", () => {
     assert.ok(
       signed.signed.includes('"access":"gitlab-token"') && !signed.signed.includes("glpat-secret"),
     );
-    const got = await ask("rig-a", "rig-token-aaaaaa");
-    assert.equal(got.status, 200);
-    assert.equal(got.headers.get("cache-control"), "no-store");
-    assert.deepEqual(await got.json(), {
-      kind: "token",
-      token: "glpat-secret-value-1234",
-      username: "oauth2",
-      host: "git.example.com",
-    });
-    // Another rig, or the right rig with a wrong token, gets nothing.
-    assert.equal((await ask("rig-b", "rig-token-bbbbbb")).status, 404);
-    assert.equal((await ask("rig-a", "rig-token-bbbbbb")).status, 401);
+    assert.deepEqual(await ask("rig-a"), [
+      {
+        name: "gitlab-token",
+        kind: "token",
+        host: "git.example.com",
+        token: "glpat-secret-value-1234",
+        username: "oauth2",
+      },
+    ]);
+    // Another rig gets nothing.
+    assert.deepEqual(await ask("rig-b"), []);
     // An assignment that failed, or that the owner withdrew, gives nothing: not for good.
-    s.store.commands.ack("rig-a", signed.id, "failed", { error: "the kit did not build" });
-    assert.equal((await ask("rig-a", "rig-token-aaaaaa")).status, 404);
+    answerCommand(s.store, "rig-a", signed.id, "failed", { error: "the kit did not build" });
+    assert.deepEqual(await ask("rig-a"), []);
     const again = await start({ ...draftOf("gitlab-token"), campaign: "private-speed-2" });
     assert.ok(again.ok, JSON.stringify(!again.ok && again.errors));
-    assert.equal((await ask("rig-a", "rig-token-aaaaaa")).status, 200);
+    assert.equal((await ask("rig-a")).length, 1);
     const pending = s.store.commands.pending("rig-a").map((c) => c.envelope.id);
     for (const id of pending) cancelCommand(s.store, id, "owner:ui");
-    assert.equal((await ask("rig-a", "rig-token-aaaaaa")).status, 404);
+    assert.deepEqual(await ask("rig-a"), []);
   });
 
   test("an agent's token may not name a Git access or a source; the owner's and the operator's may", async () => {
@@ -427,13 +427,15 @@ describe("Git access for private repositories", () => {
           signature: "",
         }) as never;
       const cmd = cmdFrom("c-private", repoUrl);
+      // The rig's config, as the bus gave it: the access its live assignment names.
+      const known = new RigConfig();
+      known.set("git-access", "r-1", await s.rigConfig("git-access", "rig-a"));
       const cfg = {
         rig: "rig-a",
         inboxDir: inbox,
         resultsRepo: join(root, "home", "results.git"),
         sourcesDir: join(root, "home", "sources"),
-        controlUrl: `http://127.0.0.1:${(ctl.address() as AddressInfo).port}`,
-        controlToken: "rig-token-aaaaaa",
+        gitAccess: (name: string) => gitAccessFrom(known, name, 0),
       };
       const stage = async (c: never) => {
         let res: unknown = "wait";

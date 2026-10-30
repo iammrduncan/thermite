@@ -17,7 +17,7 @@ import { controlPublicUrl } from "../../src/control/settings.ts";
  */
 
 const WORDS =
-  "control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. Control keeps every rig's events in the bus's EVENTS stream and derives its records from them there, whether a rig reports over the bus or over HTTP";
+  "control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. Control keeps every rig's events in the bus's EVENTS stream and derives its records from them there, and its rigs reach it only on the bus";
 
 describe("control and its bus", () => {
   test("the bus's address is required, and a bad one is refused", () => {

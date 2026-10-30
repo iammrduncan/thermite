@@ -11,6 +11,7 @@ import { ControlTunnels } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { assigned } from "../../helpers/assignments.ts";
+import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
 import { ADMIN, controlOnly, signIn } from "../../helpers/control-stack.ts";
 import { applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
 import { FAKE_GPUS, FAKE_RUNPOD_KEY, fakeRunpod } from "../../helpers/fake-runpod.ts";
@@ -53,7 +54,10 @@ async function setup(o: Parameters<typeof fakeRunpod>[0] = {}) {
   const keys = generateSigningKeys();
   let clock = Date.now();
   const now = () => clock;
-  const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem, { now });
+  const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem, {
+    now,
+    busCa: TEST_BUS_CA,
+  });
   const rigs = new RunpodRigs(store, secrets, tunnels, {
     fetch: cloud.fetch,
     image: IMAGE,

@@ -1,7 +1,7 @@
 import type { ControlStore, Decision } from "../../store/index.ts";
 import type { RigView } from "../../views/index.ts";
 import { stuckNeeds } from "../stuck.ts";
-import { busKeyNeeds, busUsersNeeds } from "./bus.ts";
+import { busKeyNeeds, busUsersNeeds, heldCommandNeeds, offBusNeeds } from "./bus.ts";
 import { controlDiskNeeds, diskNeeds, drainNeeds } from "./hold.ts";
 import { auditNeeds, promotionNeeds } from "./promotion.ts";
 import { proposalNeeds } from "./proposal.ts";
@@ -72,7 +72,9 @@ export interface Need {
     | "drain"
     | "proposal"
     | "bus_key"
-    | "bus_users";
+    | "bus_users"
+    | "off_bus"
+    | "held_commands";
   rig: string;
   run?: string | undefined;
   attempt?: string | undefined;
@@ -129,7 +131,11 @@ export function needs(
       out.push(...agentsNeeds(c, u, r));
       out.push(...conclusionNeeds(c, u, r));
     }
-    out.push(...staleNeeds(c, u, key));
+    // Off the message bus, which a rig needs to work at all; or its commands held off it.
+    const off = offBusNeeds(c, store, u);
+    out.push(...off);
+    if (!off.length) out.push(...staleNeeds(c, u, key));
+    out.push(...heldCommandNeeds(c, store, u));
     // Its disk at its floor, or a drain past its deadline (goal 173).
     out.push(...diskNeeds(c, u));
     out.push(...drainNeeds(c, store, u));
@@ -145,6 +151,7 @@ export function needs(
   out.push(...proposalNeeds(c, store));
   const order = [
     "key",
+    "off_bus",
     "reset",
     "bus_users",
     "disk",
@@ -157,6 +164,7 @@ export function needs(
     "conclusion",
     "proposal",
     "bus_key",
+    "held_commands",
     "stale",
   ];
   return out.sort(

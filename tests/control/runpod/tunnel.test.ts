@@ -6,8 +6,6 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { issueCommand } from "../../../src/control/issue/index.ts";
-import { McpServers } from "../../../src/control/mcp-servers/index.ts";
 import { ControlTunnels, tunnelRouteAllowed } from "../../../src/control/runpod/tunnel.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore, RIG_ID } from "../../../src/control/store/index.ts";
@@ -20,20 +18,14 @@ import {
   signRequest,
   TUNNEL_MAX_REQUEST,
 } from "../../../src/core/tunnel.ts";
-import { createHarnessApi } from "../../../src/harness/api/index.ts";
 import { readEnrollment } from "../../../src/harness/broker/one-container.ts";
-import { syncMcpServers } from "../../../src/supervisor/mcp-sync.ts";
-import { relayCommandsOnce, relayOnce } from "../../../src/supervisor/relay/index.ts";
+import { busKey, busKeyFigure } from "../../../src/supervisor/relay/index.ts";
 import { PodTunnel, pullModeOptions, startPullMode } from "../../../src/supervisor/tunnel-pod.ts";
-import { assigned } from "../../helpers/assignments.ts";
+import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
 import { controlOnly, signIn } from "../../helpers/control-stack.ts";
-import { controlStore, heldEvents } from "../../helpers/control-store.ts";
-import { makeHarnessEnv } from "../../helpers/harness-env.ts";
-import { appendOther } from "../../helpers/kinds.ts";
+import { controlStore } from "../../helpers/control-store.ts";
 
 const MARKER = "a-made-up-secret-marker-0001";
-const MODEL_KEY = "a-made-up-model-key-0001";
-const MCP_KEY = "a-made-up-mcp-key-0001";
 const CONFIG = { THERMITE_TARGET: "cpu", THERMITE_MAX_TRIALS: "2" };
 
 /**
@@ -116,6 +108,7 @@ async function setup(
   };
   const tunnels = new ControlTunnels(store, secrets, control.privateKeyPem, {
     fetch: proxy,
+    busCa: TEST_BUS_CA,
     ...(o.now ? { now: o.now } : {}),
   });
   const { control: api } = controlOnly({
@@ -251,6 +244,16 @@ const isEmpty404 = async (r: Response, what: string) => {
 
 describe("pull mode: control connects to a rig through a proxy", () => {
   test("only the paths a rig may use, only for itself", () => {
+    // What stays on HTTPS beside the bus: the keys' registration, results and kits.
+    for (const [m, p] of [
+      ["POST", "/v1/rigs/rp-1/supervisor"],
+      ["POST", "/v1/rigs/rp-1/champions/r-1/3/patch"],
+      ["POST", "/v1/rigs/rp-1/exports/20261020T120000Z-0123abcd"],
+      ["POST", "/v1/rigs/rp-1/exports/20261020T120000Z-0123abcd/file?path=a&offset=0"],
+      ["GET", "/v1/rigs/rp-1/git/kits/smoke.git/info/refs"],
+    ])
+      assert.ok(tunnelRouteAllowed("rp-1", m as string, p as string), `${m} ${p}`);
+    // What went on the bus, and what never was a rig's.
     for (const [m, p] of [
       ["POST", "/v1/rigs/rp-1/ingest"],
       ["GET", "/v1/rigs/rp-1/commands/pending"],
@@ -258,13 +261,11 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       ["GET", "/v1/rigs/rp-1/model-route"],
       ["GET", "/v1/rigs/rp-1/mcp-servers"],
       ["GET", "/v1/rigs/rp-1/kb?run=r-1&after=0"],
-      ["POST", "/v1/rigs/rp-1/champions/r-1/3/patch"],
+      ["POST", "/v1/rigs/rp-1/live"],
+      ["POST", "/v1/rigs/rp-1/screens"],
+      ["POST", "/v1/rigs/rp-1/reports"],
       ["GET", "/v1/rigs/rp-1/git-access/deploy"],
-      ["GET", "/v1/rigs/rp-1/git/kits/smoke.git/info/refs"],
-    ])
-      assert.ok(tunnelRouteAllowed("rp-1", m as string, p as string), `${m} ${p}`);
-    for (const [m, p] of [
-      ["GET", "/v1/rigs/rp-2/commands/pending"],
+      ["POST", "/v1/rigs/rp-2/supervisor"],
       ["POST", "/v1/rigs/rp-1/retire"],
       ["POST", "/v1/rigs/rp-1/token"],
       ["GET", "/v1/rigs/rp-1/events"],
@@ -287,6 +288,9 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       assert.match(s.rig, /^rp-[0-9a-f]{8}$/);
       assert.match(s.rig, RIG_ID);
       assert.deepEqual(Object.keys(s.minted.env).sort(), [
+        "THERMITE_LEAF_CERT",
+        "THERMITE_LEAF_CONTROL_CA",
+        "THERMITE_LEAF_KEY",
         "THERMITE_RIG_ID",
         "THERMITE_STATE_SNAPSHOT_KEY",
         "THERMITE_TUNNEL_CONTROL_BOX",
@@ -489,11 +493,12 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       // supervisor's local port, without the supervisor's token.
       const lane = s.signed("exchange", empty, {}, other.privateKeyPem);
       await isEmpty404(await raw(`${s.pod.url}${lane[0]}`, lane[1]), "a lane on the public port");
+      const post = { method: "POST", body: "{}" };
       await isEmpty404(
-        await s.call(`/v1/rigs/${s.rig}/model-route`, {}, "a-lane-guessing"),
+        await s.call(`/v1/rigs/${s.rig}/supervisor`, post, "a-lane-guessing"),
         "a lane on the local port",
       );
-      await isEmpty404(await s.call("/v1/rigs/rp-other/model-route"), "another rig's path");
+      await isEmpty404(await s.call("/v1/rigs/rp-other/supervisor", post), "another rig's path");
       assert.deepEqual(s.podState(), before, "no nonce, key or enrollment changed");
       assert.equal(readFileSync(join(s.opts.enrolledDir, "rig.json"), "utf8"), files);
       // The next exchange reports the refusals; control keeps the count and logs it.
@@ -503,11 +508,11 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       const page = await s.rigPage();
       assert.match(page, /Refused requests<\/dt><dd>[1-9]/);
       assert.match(page, /Enrolled .* ago/);
-      // A pod launched without the leaf node is not on the bus, and its page says so.
-      assert.match(page, /Message bus<\/dt><dd><span class="muted">Not on it: launched before/);
+      // A pod RunPod gave no address for its leaf node yet: its page says so.
+      assert.match(page, /Message bus<\/dt><dd><span class="muted">No address from RunPod now/);
       // From the network, control's rig routes still need a token: the tunnel's binding is
       // only for calls control's end of the tunnel makes in-process.
-      assert.equal((await s.api.request(`/v1/rigs/${s.rig}/commands/pending`)).status, 401);
+      assert.equal((await s.api.request(`/v1/rigs/${s.rig}/supervisor`, post)).status, 401);
     } finally {
       await s.stop();
     }
@@ -522,7 +527,12 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       await s.restart();
       await isEmpty404(await s.replayLast(), "the same replay after the pod restarted");
       // A call waits; the proxy swaps the pod's answer for an older one: control drops it.
-      const pending = s.call(`/v1/rigs/${s.rig}/commands/pending`);
+      // A call with no keys on the bus, as a rig of an older version makes it: refused in words.
+      const pending = s.call(`/v1/rigs/${s.rig}/supervisor`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ at: new Date().toISOString() }),
+      });
       await new Promise((r) => setTimeout(r, 50));
       s.setMode("old-answer");
       assert.match(await s.tunnels.step(s.rig), /did not verify/);
@@ -533,95 +543,51 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       // The pod offers the call again after a while; control then takes and answers it.
       await new Promise((r) => setTimeout(r, 5_200));
       const res = await s.pump(pending);
-      assert.equal(res.status, 200);
-      assert.deepEqual(await res.json(), { commands: [], held: [] });
+      assert.equal(res.status, 409);
+      assert.match(
+        ((await res.json()) as { error: string }).error,
+        /this rig has no keys on the message bus/,
+      );
     } finally {
       await s.stop();
     }
   });
 
-  test("a pull from start to end: the supervisor reports and takes commands through control's connections only, sealed", async () => {
-    const henv = makeHarnessEnv("rig-pull");
-    const s = await setup({ rig: "rig-pull", controlKeys: henv.keys });
+  test("a pull from start to end: the supervisor registers its keys on the bus through control's connections only, sealed", async () => {
+    const s = await setup({ rig: "rig-pull" });
     try {
       assert.equal(await s.tunnels.step(s.rig), "enrolled");
-      // The harness, as the supervisor reaches it; control only through the pod's local port.
-      const harness = createHarnessApi(henv.service, { supervisor: "sup" });
-      const fetchImpl: typeof fetch = async (input, init) => {
-        const url = new URL(String(input));
-        if (url.host === "harness")
-          return harness.request(`${url.pathname}${url.search}`, init as RequestInit);
-        assert.equal(url.origin, s.pod.local, "the supervisor calls only its local port");
-        return fetch(input, init);
+      // The registration of the rig's keys on the bus, its one call besides results and kits:
+      // made at the pod's local port, answered by control through the tunnel.
+      const key = busKey(mkdtempSync(join(tmpdir(), "thermite-pull-keys-")));
+      const body = {
+        at: new Date().toISOString(),
+        export: {
+          remote: false,
+          exports: 0,
+          pushed: [],
+          last_push_at: null,
+          last_error: MARKER,
+        },
+        ...busKeyFigure(key),
       };
-      const cfg = {
-        rig: s.rig,
-        harnessUrl: "http://harness",
-        harnessToken: "sup",
-        controlUrl: s.pod.local,
-        controlToken: s.opts.localToken,
-        fetchImpl,
-      };
-      // Reports: the harness's signed events reach control, which pins the harness's key.
-      appendOther(henv.service.ledger, "t", "first", null, { note: MARKER });
-      const state = await s.pump(relayOnce({ ...cfg, skipCommands: true }, { cursor: 0 }));
-      assert.ok(state.cursor > 0);
-      const kinds = (await heldEvents(s.store, s.rig)).map((e) => e.kind);
-      assert.ok(kinds.includes("first"));
-      assert.ok(s.store.reportedRigs.key(s.rig).pubkey, "the harness's report key is pinned");
-      // A command: issued at control, delivered to the harness, its outcome back at control.
-      const { id } = issueCommand(s.store, henv.keys.privateKeyPem, {
-        rig: s.rig,
-        kind: "rig_settings",
-        payload: { trial_minutes: 33 },
-        issuedBy: "owner:ui",
-      });
-      await s.pump(relayCommandsOnce(cfg));
-      assert.equal(s.store.commands.get(id)?.status, "delivered");
-      // A model route with its key reaches the supervisor.
-      s.store.modelProviders.put({
-        name: "models",
-        type: "openai",
-        base_url: "https://models.example.com/v1",
-        key: { sealed: s.secrets.seal(MODEL_KEY), hint: "…0001" },
-      });
-      s.store.agentModels.assignRig(s.rig, { provider: "models", model: "m-1" });
-      const route = await s.pump(s.call(`/v1/rigs/${s.rig}/model-route`));
-      assert.equal(route.status, 200);
-      assert.ok(JSON.stringify(await route.json()).includes(MODEL_KEY));
-      // The MCP servers its run's kit names, with their sign-in: the supervisor gets them through
-      // the tunnel and hands the harness its share (a 404 here would read as an older control).
-      new McpServers(s.store, s.secrets).put(
-        { name: "gbrain", url: "https://brain.example.com/mcp", auth: "key", secret: MCP_KEY },
-        "owner:test",
+      const res = await s.pump(
+        s.call(`/v1/rigs/${s.rig}/supervisor`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
       );
-      assigned(s.store, s.rig, "run-1", "camp", {
-        mcp_servers: [{ name: "gbrain", agents: ["workers"] }],
-      });
-      const mcp = await s.pump(syncMcpServers(cfg));
-      assert.equal(mcp.handed, "set");
-      assert.deepEqual(
-        mcp.servers.map((c) => [c.name, c.headers.Authorization]),
-        [["gbrain", MCP_KEY]],
-      );
-      const held = await harness.request("/v1/mcp-servers", {
-        headers: { authorization: "Bearer sup" },
-      });
-      assert.deepEqual(
-        ((await held.json()) as { servers: { name: string }[] }).servers.map((x) => x.name),
-        ["gbrain"],
-        "the harness holds the workers' server",
-      );
-      // What crossed the proxy: no marker, no key, no code, no token, no plain JSON.
+      assert.equal(res.status, 200, await res.clone().text());
+      assert.equal(s.store.busKeys.rigKey(s.rig), key.publicKey, "control holds the rig's key");
+      assert.equal(s.store.busKeys.rigSealKey(s.rig), key.seal.publicKey);
+      // What crossed the proxy: no marker, no code, no token, no plain JSON.
       const all = Buffer.concat(s.wire).toString("latin1");
       for (const secret of [
         MARKER,
-        MODEL_KEY,
-        MCP_KEY,
         s.minted.env.THERMITE_TUNNEL_ENROLL_CODE,
         s.opts.localToken,
-        '"commands"',
-        '"events"',
+        '"bus_key"',
       ])
         assert.ok(!all.includes(secret), `${secret.slice(0, 12)}… crossed in plain text`);
       // The pod never connected anywhere: every request went from control to the pod.
@@ -638,7 +604,7 @@ describe("pull mode: control connects to a rig through a proxy", () => {
       const big = randomBytes(2_500_000);
       s.tunnels.serveWith(async () => new Response(new Uint8Array(big), { status: 200 }));
       const before = s.sent.length;
-      const res = await s.pump(s.call(`/v1/rigs/${s.rig}/model-route`));
+      const res = await s.pump(s.call(`/v1/rigs/${s.rig}/supervisor`, { method: "POST" }));
       assert.equal(res.status, 200);
       assert.deepEqual(Buffer.from(await res.arrayBuffer()), big);
       const requests = s.sent.slice(before);
@@ -659,7 +625,9 @@ describe("pull mode: control connects to a rig through a proxy", () => {
     });
     const control = generateSigningKeys();
     const store = new ControlStore(":memory:");
-    const tunnels = new ControlTunnels(store, SecretBox.ephemeral(), control.privateKeyPem);
+    const tunnels = new ControlTunnels(store, SecretBox.ephemeral(), control.privateKeyPem, {
+      busCa: TEST_BUS_CA,
+    });
     const minted = tunnels.mint({ by: "owner:ui" });
     const home = mkdtempSync(join(tmpdir(), "thermite-pull-"));
     const env: NodeJS.ProcessEnv = {

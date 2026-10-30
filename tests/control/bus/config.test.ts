@@ -98,10 +98,10 @@ describe("each rig's config on the message bus", () => {
     await s.writer.write();
     t.mock.restoreAll();
     // The log says what was written, by rig, key and revision: never a value.
-    assert.equal(said.join("").match(/a rig's config written to the bus/g)?.length, 6);
+    assert.equal(said.join("").match(/a rig's config written to the bus/g)?.length, 8);
     assert.ok(!said.join("").includes("made-up-key-one"));
     for (const rig of ["rig-a", "rig-b"])
-      for (const key of ["model-route", "advisor-routes", "mcp-servers"])
+      for (const key of ["model-route", "advisor-routes", "mcp-servers", "git-access"])
         assert.equal(s.values(rig, key).length, 1, `${rig} ${key}`);
     const [route] = s.values("rig-a", "model-route");
     const value = route?.value as { route: { model: string; api_key: string }; planner: null };
@@ -120,12 +120,13 @@ describe("each rig's config on the message bus", () => {
       "model-route": 2,
       "advisor-routes": 2,
       "mcp-servers": 2,
+      "git-access": 2,
     });
-    assert.equal(s.figures.rigs.get("rig-a"), 3);
+    assert.equal(s.figures.rigs.get("rig-a"), 4);
     // A second look, a third: nothing changed, nothing written.
     await s.writer.write();
     await s.writer.write();
-    assert.equal(s.bus.kept.length, 6);
+    assert.equal(s.bus.kept.length, 8);
   });
 
   test("a change rewrites only its key: the route's key, then the MCP servers, then the seal key", async () => {
@@ -185,7 +186,7 @@ describe("each rig's config on the message bus", () => {
     one.giveModel("rig-a");
     await one.writer.start();
     await one.writer.write();
-    assert.equal(one.bus.kept.length, 3);
+    assert.equal(one.bus.kept.length, 4);
     const mcpServers = { forRig: one.mcp.forRig, handed: one.mcp.handed_ } as unknown as McpServers;
     const writer = (box: SecretBox) =>
       new ConfigWriter({
@@ -197,13 +198,13 @@ describe("each rig's config on the message bus", () => {
     const again = writer(secrets);
     await again.start();
     await again.write();
-    assert.equal(one.bus.kept.length, 3);
+    assert.equal(one.bus.kept.length, 4);
     // With another secrets key, the revisions differ: each key is written again.
     const other = writer(SecretBox.ephemeral());
     await other.start();
     await other.write();
     // The route's key does not open with it: that value is not written, and the rig keeps it.
-    assert.equal(one.bus.kept.length, 5);
+    assert.equal(one.bus.kept.length, 7);
   });
 
   test("a rig without a seal key, a retired rig and an unknown rig get nothing", async () => {
@@ -244,10 +245,10 @@ describe("each rig's config on the message bus", () => {
     await s.writer.start();
     s.bus.failing = true;
     await s.writer.write();
-    assert.equal(s.figures.failed, 3, "each key's read back failed");
+    assert.equal(s.figures.failed, 4, "each key's read back failed");
     s.bus.failing = false;
     await s.writer.write();
-    assert.equal(s.bus.kept.length, 3);
+    assert.equal(s.bus.kept.length, 4);
     assert.equal(s.figures.written["model-route"], 1);
   });
 
@@ -255,7 +256,7 @@ describe("each rig's config on the message bus", () => {
     const s = setup({ seals: { "rig-a": newSealKey() } });
     await s.writer.start();
     await s.writer.write();
-    assert.equal(s.bus.kept.length, 3);
+    assert.equal(s.bus.kept.length, 4);
     // The bus lost its store: its stream, every value and the ids it had seen with it.
     s.bus.made.clear();
     s.bus.kept.length = 0;
@@ -267,6 +268,7 @@ describe("each rig's config on the message bus", () => {
     await s.writer.write();
     assert.deepEqual(s.bus.kept.map((m) => m.subject.split(".").at(-1)).sort(), [
       "advisor-routes",
+      "git-access",
       "mcp-servers",
       "model-route",
     ]);
@@ -338,28 +340,6 @@ describe("a rig's seal key on the supervisor's call", () => {
     assert.equal("bus_seal_key" in (s.store.reportedRigs.supervisor("rig-a") ?? {}), false);
   });
 
-  test("once a rig registered its seal key, the HTTP config routes refuse it in words; a rig without one gets them", async () => {
-    const s = setupRoute();
-    const get = (rig: string, token: string, path: string) =>
-      s.control.request(`/v1/rigs/${rig}/${path}`, {
-        headers: { authorization: `Bearer ${token}` },
-      });
-    const paths = ["model-route", "advisor-routes", "mcp-servers"];
-    for (const path of paths) assert.equal((await get("rig-a", RIG_TOKEN, path)).status, 200, path);
-    const busKey = createUser().getPublicKey();
-    const seal = newSealKey().publicKey;
-    assert.equal((await s.figures({ bus_key: busKey, bus_seal_key: seal })).status, 200);
-    for (const path of paths) {
-      const r = await get("rig-a", RIG_TOKEN, path);
-      assert.equal(r.status, 409, path);
-      assert.deepEqual(await r.json(), {
-        error:
-          "rig-a is on the message bus: control gives it its model routes, MCP servers and advisors' routes only in its config there, sealed to its key, never over HTTP. Its supervisor reads them from the bus (THERMITE_NATS_URL).",
-      });
-      assert.equal((await get("rig-b", RIG_B_TOKEN, path)).status, 200, `rig-b's ${path}`);
-    }
-  });
-
   test("a value that is not a seal key, or one without the rig's key, is refused whole", async () => {
     const s = setupRoute();
     const busKey = createUser().getPublicKey();
@@ -369,9 +349,10 @@ describe("a rig's seal key on the supervisor's call", () => {
       await bad.text(),
       /bus_seal_key is not an X25519 public key: base64 of its DER form, on one line/,
     );
+    // Without the rig's key, the call is one of a rig off the bus: refused, and the rig broken.
     const alone = await s.figures({ bus_seal_key: newSealKey().publicKey });
-    assert.equal(alone.status, 400);
-    assert.match(await alone.text(), /bus_seal_key comes only with bus_key/);
+    assert.equal(alone.status, 409);
+    assert.match(await alone.text(), /this rig has no keys on the message bus/);
     assert.equal(s.store.busKeys.rigKey("rig-a"), undefined);
   });
 });
