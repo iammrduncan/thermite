@@ -88,6 +88,7 @@ The audit's lane 12 (`.internal/reviews/v0.1.1-audit/12-native-tui.md`) reviewed
   7. **Typing into a trial that waits for its window.** Recommended: the console says the trial waits until the reset, and offers to queue the input for after it (the default) or to send it now, since a program sends typed input at once and may start its wait again. Instead: send as typed, with a note.
   8. **Advisors at a full window.** Recommended: a full window is not a failed try; the advisor waits for the reset, and Live says so. Today a full window can become five failed tries and an audit for the owner. Instead: as today.
   9. **Usage credits on the Claude account.** Recommended: keep them off on the subscription Thermite uses; Thermite marks the subscription on Providers when Claude Code reports them on, and the page says that the rule depends on it. Instead: the docs only.
+- 2026-10-30 21:37 UTC, owner, on the Pi view (each question explained first): `@earendil-works/pi-tui` 1.3.0 is installed and its `native/` folder (six prebuilt helpers for its clipboard and modifier keys, which a rig never loads) is deleted in every image, so no image holds a native part from it; `/skill:<name>` is built now and answers that the run's kit carries no skills until kits carry them; text typed into a Pi worker steers by default, and the console (with REST, MCP and the command line) may queue it after the current reply instead.
 
 ## Open questions
 
