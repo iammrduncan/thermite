@@ -92,6 +92,9 @@ services:
       - control-pub:/keys
       - nats-config:/nats-config
     secrets: [control-admin-token, control-operator-token]
+    # The bus's folder is control's (nats-init) before control first writes into it.
+    depends_on:
+      nats-init: { condition: service_completed_successfully }
     ports: ["127.0.0.1:${THERMITE_CONTROL_PORT:-8800}:8800"]
     networks: [control]
     # Control lists model providers' models: a provider on this machine is at host.docker.internal
@@ -182,11 +185,13 @@ services:
   # Gives the bus's folders to their users before the bus starts, then ends: the folder of the
   # files control writes for the bus to control's user (10001), and the bus's store to the bus's
   # own (10002), each file it does not have yet. Not every engine gives a new volume the owner its
-  # first container's image has, and a store from before was root's. It runs as root with only the
-  # capabilities to read every folder of the store and to give files away, and no network.
+  # first container's image has, and a store from before was root's. Podman gives an empty volume
+  # the owner of each container that mounts it, until it holds a file: an empty folder gets `.keep` first.
+  # It runs as root with only the capabilities to read every folder of the store and to give files
+  # away, and no network.
   nats-init:
     image: docker.io/library/nats:2.15.1-alpine@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde
-    command: ["sh", "-c", "chown 10001:10001 /etc/nats/thermite && find /data ! -user 10002 -exec chown 10002:10001 {} +"]
+    command: ["sh", "-c", "cd /etc/nats/thermite && { ls -A | grep -q . || touch .keep; } && chown 10001:10001 . && { [ ! -e .keep ] || chown 10001:10001 .keep; } && find /data ! -user 10002 -exec chown 10002:10001 {} +"]
     user: "0:0"
     volumes:
       - nats-data:/data
