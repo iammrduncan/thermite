@@ -133,6 +133,14 @@ export class LedgerEvents {
     return Number(r.id ?? 0);
   }
 
+  /** When the newest event, of any kind, was recorded; none in an empty ledger. */
+  lastAt(): string | undefined {
+    const r = this.db.prepare("select at from event order by id desc limit 1").get() as
+      | { at: string }
+      | undefined;
+    return r?.at;
+  }
+
   /** The kind of the event with this id, if there is one. */
   kindOf(id: number): string | undefined {
     const r = this.db.prepare("select kind from event where id = ?").get(id) as

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { endDrainAtStart } from "../../../src/harness/service/drain.ts";
+import { AWAKE_EVERY_MS, AwakeWatch, gapAtStart } from "../../../src/harness/service/gaps.ts";
 import { researchEnv } from "../../helpers/research-run.ts";
 
 /**
  * A research run's clock: running time only, from the run's start, without the time
- * it was paused, its agents could not run or its rig drained. The harness's clock is moved by
+ * it was paused, its agents could not run, its rig drained or its harness did not run. The harness's clock is moved by
  * hand, so each check is exact.
  */
 describe("the research clock", () => {
@@ -109,5 +110,46 @@ describe("the research clock", () => {
     endDrainAtStart(ledger, "harness");
     pass(200);
     assert.equal(clock().elapsed_ms - drained.elapsed_ms, 200, "it runs again");
+  });
+
+  test("time the harness did not run does not count, in a wait for a rate limit too (issue #45)", async () => {
+    const { env, clock, pass, now } = await onClock({ min_duration: "2h", max_duration: "6h" });
+    const ledger = env.service.ledger;
+    // The awake loop's rounds while the harness runs; a new harness process starts a new one.
+    let awake = new AwakeWatch(ledger, now());
+    const run = (ms: number) => {
+      for (let t = 0; t < ms; t += AWAKE_EVERY_MS) {
+        pass(AWAKE_EVERY_MS);
+        awake.note(now());
+      }
+    };
+    run(60_000);
+    const worked = clock();
+    assert.equal(worked.elapsed_ms, 60_000);
+    // The provider's free cap is reached: the agents wait for the ten minutes it names.
+    ledger.appendEvent("scheduler", "agents_wait_for_limit", "r-1", {
+      until: new Date(now() + 10 * 60_000).toISOString(),
+      trial: "t-1",
+      reason: "Free usage limit reached",
+      in_trial: true,
+    });
+    run(10 * 60_000);
+    assert.equal(clock().elapsed_ms, worked.elapsed_ms, "the wait does not count");
+    // The host sleeps as the wait ends, for three and a half hours: the next round finds it.
+    pass(3.5 * 3_600_000);
+    awake.note(now());
+    const slept = clock();
+    assert.equal(slept.elapsed_ms, worked.elapsed_ms, "the sleep does not count");
+    // The stack is stopped overnight, and started again: the start finds that gap.
+    pass(10 * 3_600_000);
+    gapAtStart(ledger, now());
+    awake = new AwakeWatch(ledger, now());
+    const restarted = clock();
+    assert.equal(restarted.elapsed_ms, worked.elapsed_ms, "the night does not count");
+    assert.equal(restarted.done, false, "the run did not reach its maximum while away");
+    assert.ok(restarted.waited_ms >= 13.5 * 3_600_000);
+    // The cap has lifted: the agents work again, and the clock runs with them.
+    run(60_000);
+    assert.equal(clock().elapsed_ms - worked.elapsed_ms, 60_000, "it runs again");
   });
 });

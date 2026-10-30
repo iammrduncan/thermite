@@ -520,6 +520,12 @@ export interface EventBodies {
     deadline_reached?: boolean | undefined;
   };
   rig_settings_changed: { change: Record<string, unknown>; settings: RigSettings };
+  /**
+   * The harness did not run from `since` to `until`: the host slept, its container was paused or
+   * stopped, or it crashed. `restarted` when it found the gap as it started again. A research
+   * run's clock leaves the gap out.
+   */
+  harness_gap: { since: string; until: string; restarted: boolean };
 
   // ---------------------------------------------------------------- research
   source_fetched: {

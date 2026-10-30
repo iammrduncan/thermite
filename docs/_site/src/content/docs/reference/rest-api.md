@@ -80,6 +80,7 @@ Each part of Thermite answers a health route like this one: control here, the ha
 | Harness | `judge:<card>`, one for each judge card | 1 s between jobs | 30 min; never while it has a job (`busy`: `job 12`) |
 | Harness | `scheduler` | 2 s | 30 min; never during the planner's call (`busy`) |
 | Harness | `exports` (and the disk's floor, and drains' deadlines) | 5 s | 30 min |
+| Harness | `awake` (finds the time the harness did not run, which research clocks leave out) | 10 s | 30 min |
 | Supervisor | `report` | `THERMITE_POLL_SECONDS` (60 s) | 30 min |
 | Supervisor | `commands`, `live` | `THERMITE_COMMAND_POLL_SECONDS` (5 s), `THERMITE_LIVE_INTERVAL_MS` (3 s) | 30 min |
 

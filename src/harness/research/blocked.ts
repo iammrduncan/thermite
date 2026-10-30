@@ -1,5 +1,5 @@
 import type { Ledger } from "../ledger/index.ts";
-import { drainSpans } from "../service/index.ts";
+import { drainSpans, gapSpans } from "../service/index.ts";
 
 /**
  * When a run's agents could not work, merged and in order, for its research clock, which leaves
@@ -7,10 +7,12 @@ import { drainSpans } from "../service/index.ts";
  * - from each `agents_stopped` to the `agents_resumed` after it (or now);
  * - each wait for the provider's rate limit, until the time it named;
  * - each wait for the run's MCP servers (goal 068), from its start to its end;
- * - each drain of the rig (goal 136), when no new trial or plan could start.
+ * - each drain of the rig (goal 136), when no new trial or plan could start;
+ * - each gap in the harness's running time, when the host slept, the harness was stopped or it
+ *   crashed (`service/gaps.ts`).
  */
 export function blockedSpans(ledger: Ledger, run: string, now: number): [number, number][] {
-  const spans: [number, number][] = drainSpans(ledger, now);
+  const spans: [number, number][] = [...drainSpans(ledger, now), ...gapSpans(ledger)];
   let stoppedAt: number | null = null;
   for (const e of ledger.events.list(
     ["agents_stopped", "agents_resumed", "agents_wait_for_limit", "mcp_servers_wait"],

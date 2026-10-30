@@ -44,6 +44,7 @@ import { type CommandOutcome, Commands } from "./commands.ts";
 import { TrialConsoles } from "./consoles.ts";
 import * as decisions from "./decisions.ts";
 import { type Draining, drainDeadline, endDrainAtStart, type Work, workNow } from "./drain.ts";
+import { gapAtStart } from "./gaps.ts";
 import { noteModelStall, ProviderAnswers, ProxyCredentials } from "./proxy.ts";
 import * as reports from "./reports.ts";
 import * as research from "./research.ts";
@@ -57,6 +58,7 @@ export type { SubmitResult } from "./attempts.ts";
 export type { RigCheck, RigCheckName } from "./checks.ts";
 export type { CommandOutcome } from "./commands.ts";
 export { drainSpans } from "./drain.ts";
+export { AWAKE_EVERY_MS, AwakeWatch, gapSpans } from "./gaps.ts";
 export { IdeaRequest } from "./trials.ts";
 export { NOT_BEFORE_FILE, notBeforeOf, WIPE_MARKER, wipeIfRequested } from "./wipe.ts";
 
@@ -261,6 +263,8 @@ export class HarnessService {
     this.rig = input.rig;
     this.clock = input.clock ?? (() => new Date());
     this.ledger = input.ledger;
+    // The time since the harness last ran first: a drain's end is recorded at start too.
+    gapAtStart(this.ledger, this.clock().getTime());
     endDrainAtStart(this.ledger, "harness");
     this.paths = input.paths;
     this.commands = new Commands(this, input.controlPublicKeyPem, this.checkRunner);

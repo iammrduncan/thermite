@@ -1,11 +1,12 @@
 import type { ServerType } from "@hono/node-server";
+import { every } from "../../common/health.ts";
 import { log } from "../../common/log.ts";
 import type { Scheduler } from "../agents/index.ts";
 import type { Judge } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
 import { settlePropagations } from "../propagation.ts";
 import type { RigSettingsStore } from "../rig-settings.ts";
-import type { HarnessService } from "../service/index.ts";
+import { AWAKE_EVERY_MS, AwakeWatch, type HarnessService } from "../service/index.ts";
 import type { ControllerContext } from "./context.ts";
 
 /** How often each loop comes around when it has nothing to do (goal 173: its limit follows). */
@@ -14,10 +15,11 @@ const SCHEDULER_MS = 2000;
 const EXPORTS_MS = 5000;
 
 /**
- * The controller's loops: the judging loops, the scheduler's and the exports', and the stop on
- * SIGTERM or SIGINT. Each ticks the service's `loops` once a round, for the health route (goal
- * 173): a judge in a job and the scheduler in the planner's call are busy, never late. The exports
- * loop also reads the disk against its floor and ends a drain at its deadline.
+ * The controller's loops: the judging loops, the scheduler's, the exports' and the awake loop, and
+ * the stop on SIGTERM or SIGINT. Each ticks the service's `loops` once a round, for the health
+ * route (goal 173): a judge in a job and the scheduler in the planner's call are busy, never late.
+ * The exports loop also reads the disk against its floor and ends a drain at its deadline. The
+ * awake loop records the time the harness did not run (service/gaps.ts).
  */
 export function startLoops(
   ctx: ControllerContext,
@@ -124,6 +126,12 @@ export function startLoops(
     scheduling(),
     exporting(),
   ]);
+  // On a timer, so that no await of the other loops holds it: when its time jumps, the host slept
+  // or the container was paused, and the research clocks leave that out.
+  const awake = new AwakeWatch(ledger, service.clock().getTime());
+  const awakeTimer = every(loops, "harness", "awake", AWAKE_EVERY_MS, () =>
+    awake.note(service.clock().getTime()),
+  );
 
   // A stop (goal 079): running trials stop and are recorded as interrupted, with the counters
   // their workers last reported. The judge's job under way is not waited for longer than a few
@@ -132,6 +140,7 @@ export function startLoops(
   const shutdown = async (signal: string) => {
     if (stopping) return;
     stopping = true;
+    clearInterval(awakeTimer);
     log("harness", "stopping", { signal });
     server.close();
     await scheduler
