@@ -378,9 +378,8 @@ try {
       ? c["runpod-variables"]
       : // Which processes there are, and whose, for the record of a failure.
         `${c["runpod-variables"]}; ${inside(
-          `const fs=require("fs");for(const p of fs.readdirSync("/proc")){if(!/^\\d+$/.test(p))continue;try{const st=fs.readFileSync("/proc/"+p+"/status","utf8");const f=(k)=>(new RegExp("^"+k+":\\\\s*(.*)$","m").exec(st)||[])[1];let env="read";try{fs.readFileSync("/proc/"+p+"/environ")}catch(e){env=e.code}console.log(p,f("PPid"),f("Uid"),f("Gid"),f("CapEff"),env,fs.readFileSync("/proc/"+p+"/cmdline","utf8").split("\\0").slice(0,2).join(" "))}catch{}}`,
-          "0:0",
-        ).slice(0, 2000)}`,
+          `const fs=require("fs");const out=[];for(const p of fs.readdirSync("/proc")){if(!/^\\d+$/.test(p))continue;const r={p};for(const f of ["status","cmdline","environ"]){try{const t=fs.readFileSync("/proc/"+p+"/"+f,"latin1");r[f]=f==="status"?"uid "+(/^Uid:\\s*(\\d+)/m.exec(t)||[])[1]+", ppid "+(/^PPid:\\s*(\\d+)/m.exec(t)||[])[1]:f==="cmdline"?t.split("\\0").slice(0,2).join(" "):"read"}catch(e){r[f]=e.code}}out.push(r)}console.log(JSON.stringify(out))`,
+        ).slice(0, 3000)}`,
   );
   check(
     "only root and the supervisor had the code; the harness's key is root's and the launch's",

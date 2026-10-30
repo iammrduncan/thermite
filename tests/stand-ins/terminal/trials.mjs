@@ -202,8 +202,20 @@ export async function loopTrials(c) {
     ended("the fake TUI as Claude Code", fake, (t) => t.r.toolCalls === 1 && t.r.turns === 2);
 
     // The owner's input through the trial's console, into the fake mid-turn: text, then a key.
-    // The fake shows each thing it takes on its screen; its own record is lane-1's alone.
-    const fakeShows = async (con) => (await con.screen())?.data ?? "";
+    // The fake shows each thing it takes on its screen; its own record is lane-1's alone. The
+    // console's screen restores it in an emulator: read back as plain lines.
+    const { Screen } = await c.load("harness/terminal/screen");
+    const fakeShows = async (con) => {
+      const snap = await con.screen();
+      if (!snap) return "";
+      const screen = new Screen({ ...snap, scrollback: 0, reply: () => undefined });
+      try {
+        screen.write(snap.data);
+        return (await screen.text()).lines.join("\n");
+      } finally {
+        screen.dispose();
+      }
+    };
     const fakeInput = await trial(
       "fake-input",
       claudeProgram,
@@ -224,11 +236,21 @@ export async function loopTrials(c) {
       },
       async (con) => {
         // Its first message is the whole prompt, the brief inside it.
-        await c.until("its first message", async () => /user: /.test(await fakeShows(con)));
+        try {
+          await c.until(
+            "its first message",
+            async () => /user: /.test(await fakeShows(con)),
+            60_000,
+          );
+        } catch (err) {
+          return { error: err.message, seen: await fakeShows(con) };
+        }
         const text = await con.input({ text: "OWNER-INPUT-1", wait: "queue" }, () => undefined);
         const key = await con.input({ keys: ["down"], wait: "queue" }, () => undefined);
-        await c.until("the input in the program", async () =>
-          /key: down/.test(await fakeShows(con)),
+        await c.until(
+          "the input in the program",
+          async () => /key: down/.test(await fakeShows(con)),
+          60_000,
         );
         return { text: text.outcome, key: key.outcome, seen: await fakeShows(con) };
       },
@@ -243,7 +265,7 @@ export async function loopTrials(c) {
         fakeInput.r.stopped === "interrupted" &&
         fakeInput.left.length === 0,
       {
-        owner: { ...fakeInput.owner, seen: ownerSeen.match(/(?:user|key): [\w :.-]*/g) ?? [] },
+        owner: { ...fakeInput.owner, seen: ownerSeen.split("\n").slice(-8) },
         stopped: fakeInput.r.stopped,
       },
     );
