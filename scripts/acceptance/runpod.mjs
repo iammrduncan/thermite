@@ -497,9 +497,18 @@ try {
     "runpod_terminating",
     "runpod_terminated",
   ];
+  // The pod's lifecycle in order; beside it, the bus's steps: its leaf's address and the
+  // supervisor's key registration after each launch and start, and the keys it made.
+  const lifecycle = history.filter((h) => want.includes(h));
+  const count = (step) => history.filter((h) => h === step).length;
   check(
     "each change is in the rig's history",
-    JSON.stringify(history) === JSON.stringify(want),
+    JSON.stringify(lifecycle) === JSON.stringify(want) &&
+      count("runpod_leaf_address") >= 2 &&
+      count("bus_registered") >= 2 &&
+      history.includes("bus_key") &&
+      history.includes("seal_key") &&
+      history.every((h) => !h.endsWith("(not ok)")),
     history.join(", "),
   );
   const calls = cloud.calls
