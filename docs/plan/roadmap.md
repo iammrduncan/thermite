@@ -130,7 +130,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [173](goals/173-recovery-and-health.goal) Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks · `IN_PROGRESS`
 - [174](goals/174-invalidate-evidence.goal) Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows · `READY`
 - [175](goals/175-knowledge-base.goal) The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot · `READY`
-- [176](goals/176-knowledge-explorer.goal) The knowledge explorer: the owner reads, searches and sees what the knowledge base stores · `READY`
+- [176](goals/176-knowledge-explorer.goal) The knowledge explorer: the owner reads, searches and sees what the knowledge base stores · `IN_PROGRESS`
 - [160](goals/_completed/160-v010-audit.goal) The v0.1.1 audit: code, data and operations, by specialized reviewers, with the tests moved to tests/ · `VERIFIED`
 - [127](goals/_completed/127-clean-up-pre-audit.goal) Pre-audit for the code clean-up: a read-only look at the whole code, and a guide that sets up goal 125 · `VERIFIED`
 - [161](goals/_completed/161-control-bugs-from-the-audit.goal) Control's bugs found by the v0.1.1 audit: wrong states on the pages, refusals answered as server errors, errors that vanish · `VERIFIED`

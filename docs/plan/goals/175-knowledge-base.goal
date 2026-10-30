@@ -104,7 +104,7 @@ Each with a recommendation.
 3. **What "start fresh" means.** The run searches only its own run's items; its items are in the collection, and runs that continue it read them.
 4. **Which files are searched.** Markdown, plain text, HTML and PDF. Other files are kept whole but not searched.
 5. **The largest file.** Answered by the owner, 2026-10-27: no limit by default; the owner can set one in the knowledge base's settings on control (Decisions).
-6. **May the owner write items?** Yes: in an `owner` slot of the run the item concerns, from the Knowledge page.
+6. **May the owner write items?** Yes: in an `owner` slot of the run the item concerns, from the Knowledge page. *Answered by the owner, 2026-10-30 22:05 UTC: yes, as recommended (goal 176's Decisions).*
 7. **Links between items.** Supports, contradicts and follows, as fields of the writer's own item, shown on the Knowledge page.
 8. **The engine and the model.** zvec-grep's TypeScript library, the first release with the fix for its broken index, once it is two weeks old, and `potion-retrieval-32M` on the CPU, with search by words as the fall-back.
 

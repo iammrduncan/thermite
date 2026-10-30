@@ -1,25 +1,25 @@
 ---
 id: "176"
 title: "The knowledge explorer: the owner reads, searches and sees what the knowledge base stores"
-status: READY
+status: IN_PROGRESS
 version: "0.1.1"
 depends_on: ["175"]
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-30
 ---
 
 # 176 · The knowledge explorer: the owner reads, searches and sees what the knowledge base stores
 
-**Status:** `READY` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [175](175-knowledge-base.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [175](175-knowledge-base.goal)
 
 ## What
 
 The Knowledge page today lists each campaign's folder as a line of counts, and searches with every word required, newest first. It can't open an item's versions or its file, follow its links, show what a run's agents can find, or say what is stored and how much. Goal [175](175-knowledge-base.goal) replaces the store with the knowledge base: knowledge base › collection (one for each campaign) › run › slot › item. This goal makes the Knowledge page an explorer of that hierarchy, with goal 175's words and no others.
 
-1. **The hierarchy, to filter.** No column beside the list: one Filter dropdown of toggles, several picks at once in each group, each with its count: collections (those of archived campaigns marked), runs (of the collections picked; running, closed or started fresh), slots, records, blurbs or files, and kinds. In each group an item matches any pick; a group with no pick doesn't narrow. The picks show as chips, each removed with one click. The list shows what matches, newest first. Each item has a page at its own address, `/ui/knowledge/<campaign>/<run>/<slot>/<item>`, by goal [170](170-one-hierarchy.goal)'s rule, and each part of the address sets the filter to that collection, run or slot.
-2. **An item, to read.** Its kind and slot; its address, to copy; who wrote it (the slot's role and agent program, or Thermite's code for `records`, or the owner) and when; its versions, each kept, the latest shown first; its text; the mark of invalidated evidence, with its reason (goal [174](174-invalidate-evidence.goal)). For a file: its name, type, size and SHA-256, where it came from, whether its text is searched, the file itself and its extracted text. Its links (supports, contradicts, follows) and the items that link to it, across collections where a grant allows. Which running runs' agents can read it, and which can't, and why (started fresh, or the collection not included).
-3. **A collection, a run, a slot, summarised,** when the filter picks one and no item is open. A collection: its campaign, its counts and bytes, its slots across its runs, the collections it reads by grant and those that read it, with Add and Remove. A run: what its agents search (the whole collection or its own run, and the granted collections it includes), with the counts, its slots, and "Search as this run". A slot: its role and program, the kinds the campaign lets it write, what it holds, and the writes control refused it, with why.
-4. **Search.** One box, ranked by words and by meaning (goal 175). Each result shows its address, its slot, an excerpt with the words marked, and why it matched: the words, and how close in meaning. "Search as": you (every collection), or a running run's agents, which gives exactly what that run gets from `kb_search`. The filter narrows either. While the meaning index is behind, being rebuilt or not installed, the page says so, and words answer.
+1. **The hierarchy, to browse,** as a file manager does. On the left, a tree of folders: collections (those of archived campaigns greyed and marked), their runs (running, closed or started fresh) and their slots, each with its count of items. In the middle, a table of what the open folder holds, folders first: name, kind, outcome, writer, modified and size, each column sortable. Above the table, one row of dropdown filters, Kind, Outcome, Type (records, blurbs, files) and Writer, each a list of checkboxes with counts; in each an item matches any pick, and a filter with no pick doesn't narrow. The picks show as chips, each removed with one click, and Clear removes them all. A breadcrumb shows the open folder. Each item has a page at its own address, `/ui/knowledge/<campaign>/<run>/<slot>/<item>`, by goal [170](170-one-hierarchy.goal)'s rule, and each shorter address opens that collection, run or slot. At phone width the tree is a Folders menu above the table. The dashboard's left navigation collapses, on every page.
+2. **An item, to read,** in a preview pane on the right of the table, closed with ×, and on its own page. Its kind and slot; its address, to copy; who wrote it (the slot's role and agent program, or Thermite's code for `records`, or the owner) and when; its versions, each kept, the latest shown first; its text; the mark of invalidated evidence, with its reason (goal [174](174-invalidate-evidence.goal)). For a file: its name, type, size and SHA-256, where it came from, whether its text is searched, the file itself and its extracted text. Its links (supports, contradicts, follows) and the items that link to it, across collections where a grant allows. Which running runs' agents can read it, and which can't, and why (started fresh, or the collection not included).
+3. **A collection, a run, a slot, summarised,** in the pane on the right when that folder is open and no item is. A collection: its campaign, its counts and bytes, its slots across its runs, the collections it reads by grant and those that read it, with Add and Remove. A run: what its agents search (the whole collection or its own run, and the granted collections it includes), with the counts, its slots, and "Search as this run". A slot: its role and program, the kinds the campaign lets it write, what it holds, and the writes control refused it, with why.
+4. **Search.** One line in the toolbar, about 320 px wide, which searches this folder or everything, ranked by words and by meaning (goal 175). Each result shows its address, its slot, an excerpt with the words marked, and why it matched: the words, and how close in meaning. "Search as": you (every collection), or a running run's agents, which gives exactly what that run gets from `kb_search`. The filter narrows either. While the meaning index is behind, being rebuilt or not installed, the page says so, and words answer.
 5. **What's stored.** For each collection: its runs, records, blurbs, files and their bytes, older versions, the total stored, the last write, and who reads it. The largest files, and the file types, searched or kept whole. The two indexes: words (always current) and meaning (up to date, behind, rebuilding, or not installed), with Rebuild. The inserts waiting on the bus and the last one stored. The writes control refused, with why.
 6. **The owner's note,** if goal 175's question 6 is yes: from an item, a note into the owner slot of its run, linked to it.
 7. **Nothing on the page alone.** Every fact the page shows comes from a read that REST and MCP also give (goal 175, item 8), under the same scope rules.
@@ -30,7 +30,7 @@ The owner, 2026-10-27, on goal 175's design: "The UI will need a better KB explo
 
 ## Constraints
 
-- **A mockup first** ([rules for every goal](../README.md#rules-for-every-goal)). The mockup of 2026-10-27 shows the page as the owner set it: the filter of toggles above the list and the reader, with the meaning index's four states, the dashboard's own styles and sample data.
+- **A mockup first** ([rules for every goal](../README.md#rules-for-every-goal)). The mockup of 2026-10-30 shows the page as the owner approved it: the folder tree, the contents table with its dropdown filters, the one-line search with "This folder or Everything" and "As", the preview pane, and What's stored on a page of its own, in the dashboard's own styles with sample data.
 - **Agents' items are data.** Their text is escaped, never markup. A stored file never renders as a page in the dashboard's origin: an HTML, SVG or other active file is served as a download, or read as its extracted text. Links to outside sites are plain links.
 - **Nothing is destroyed.** The page changes only grants, the meaning index's rebuild and, if allowed, the owner's notes. No item, version or file is deleted or edited from it.
 - **For a person deciding things:** plain words (Simplified Technical English on cards and call-outs), an info icon with a description on every form label, and each action saying what it does before it is done.
@@ -53,7 +53,8 @@ Each green on its own, with its tests and docs in the same commit. They follow g
 ## Done when
 
 - [x] The owner's choice of layout is recorded in Decisions.
-- [ ] Every item has a page at its address, and the filter, the list and the reader show the hierarchy in goal 175's words.
+- [ ] Every item has a page at its address, and the tree, the table, its filters and the preview show the hierarchy in goal 175's words.
+- [ ] The dashboard's left navigation collapses and stays so in that browser.
 - [ ] An item's versions, file, links both ways, invalidation and readers are shown, tested on a fixture that has each.
 - [ ] "Search as a run" gives exactly what that run's `kb_search` gives, shown by a test.
 - [ ] What's stored matches the store's own counts and sizes, shown by a test, with the indexes' states and the refused writes.
@@ -64,22 +65,26 @@ Each green on its own, with its tests and docs in the same commit. They follow g
 ## Decisions
 
 - 2026-10-27, owner: the knowledge base needs an explorer on the dashboard to read it, search it and see what it stores.
-- 2026-10-27, owner, on the mockup: no left column. The hierarchy is narrowed by one dropdown filter of toggles, several at once, above the list and the reader.
+- 2026-10-27, owner, on the mockup: no left column. The hierarchy is narrowed by one dropdown filter of toggles, several at once, above the list and the reader. *Replaced on 2026-10-30, below.*
+- 2026-10-30, owner, on the first mockup in that layout: "kb explorer is way mark missed. unintuitive, you have folder structured but no folder exploring", the search box too large, counts in a paragraph, and the filter of toggles "a sub interface in another interface". The page follows the patterns people know: a file manager's tree, table and preview, and an issue list's dropdown filters.
+- 2026-10-30 21:59 UTC, owner, on the redrawn mockup: "yeah that looks better. Also allow left hand nav bar to be collapsable, and you are good to go." The layout of item 1 is set: the folder tree on the left, the contents table with one row of dropdown filters and chips, the one-line search with its scope and "As" menus, the preview pane on the right, and What's stored on a page of its own; and the dashboard's left navigation collapses.
+- 2026-10-30 22:05 UTC, owner, on the open questions (each the recommendation): access to another campaign's collection is switched on and off in the explorer, on the collection, and the campaign's page shows it and links there (question 1); access taken away leaves a running run's search at once, and access given reaches only runs started after it (question 2); the run's Journal tab stays, read from the knowledge base and linked to the run's folders in the explorer, and the campaign's Knowledge section becomes a summary of its collection, linked there (question 4); the owner writes notes from an item, into the run's `owner` slot, linked to it (goal 175's question 6, so item 6 is built). Questions 3 and 5 wait for goal 175's files and its decision on search by meaning.
 
 ## Open questions
 
 Each with a recommendation.
 
-1. **Where grants are changed.** On the collection in the explorer, with the campaign's page showing them and linking there. One place to change them.
-2. **A grant removed while a run includes it.** The collection leaves that run's search at once: the permission is gone. A grant added reaches only runs started after it, which choose to include it.
+1. **Where grants are changed.** *Answered by the owner, 2026-10-30: as recommended (Decisions).* On the collection in the explorer, with the campaign's page showing them and linking there. One place to change them.
+2. **A grant removed while a run includes it.** *Answered by the owner, 2026-10-30: as recommended (Decisions).* The collection leaves that run's search at once: the permission is gone. A grant added reaches only runs started after it, which choose to include it.
 3. **Which files the page shows inside it.** Markdown, plain text and PDF as their extracted text; every file downloads as itself; none renders as a page.
-4. **Today's Journal tab and a campaign's Knowledge section.** The run's Journal tab stays, read from the knowledge base, and opens the run's slots in the explorer. The campaign's section becomes a summary of its collection, with its grants, linked to the explorer.
+4. **Today's Journal tab and a campaign's Knowledge section.** *Answered by the owner, 2026-10-30: as recommended (Decisions).* The run's Journal tab stays, read from the knowledge base, and opens the run's slots in the explorer. The campaign's section becomes a summary of its collection, with its grants, linked to the explorer.
 5. **Rebuilding the meaning index.** Automatic when the model or the engine changes, and a button for the owner that says what it does: search by words answers meanwhile, and nothing is lost.
 
 ## Progress
 
 - 2026-10-27 04:51 UTC: Goal written from the owner's words. The mockup shows both layouts, the meaning index's states, search as a run, a reader with versions, a file, links and readers, and what's stored.
 - 2026-10-27 04:57 UTC: The owner set the layout: no left column, one dropdown filter of toggles. The mockup is redrawn so, and the goal follows it.
+- 2026-10-30 21:59 UTC: The owner rejected the filter of toggles and approved a redrawn mockup in a file manager's layout, with the left navigation to collapse. Items 1 to 4, the mockup constraint and Done when follow it. The folder summaries of item 3 were not drawn: they take the preview pane's place when a folder is open, as a file manager's info pane does.
 
 ---
 
