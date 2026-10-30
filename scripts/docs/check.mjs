@@ -313,6 +313,14 @@ const internalSettings = new Map([
   ["THERMITE_PROPOSER_TOKEN", "the broker passes the token's value to the harness's controller"],
   ["THERMITE_MODEL_API_KEY", "the broker passes the key's value to the harness's controller"],
   ["THERMITE_BROKER_SOCKET", "the broker tells the controller where its socket is"],
+  [
+    "THERMITE_ADVISOR_SOCKET",
+    "the supervisor's entry, or the broker in one container, tells the supervisor where its advisors' runner is",
+  ],
+  [
+    "THERMITE_ADVISOR_RUNS_DIR",
+    "the supervisor's entry, or the broker in one container, tells the supervisor where to make each advisor's folder",
+  ],
   ["THERMITE_HARNESS_URL", "the controller tells workers where the harness API is"],
   ["THERMITE_TRIAL_AUTH", "the controller gives a trial its token"],
   ["THERMITE_PROXY_AUTH", "the controller gives a trial its model proxy token"],

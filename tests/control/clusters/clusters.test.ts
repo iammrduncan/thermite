@@ -85,18 +85,29 @@ describe("rigs on Kubernetes", () => {
     // The harness never sees control's token; the supervisor reports to control.
     assert.ok(!JSON.stringify(harness).includes("control-rig-token"));
     const sup = pod(objs, "thermite-k8s-a-1-supervisor") as {
-      containers: { env: { name: string; value: string }[] }[];
+      containers: { env: { name: string; value: string }[]; securityContext: unknown }[];
     };
     const senv = Object.fromEntries(sup.containers[0]?.env.map((e) => [e.name, e.value]) ?? []);
     assert.equal(senv.CONTROL_URL, "https://control.example.com");
     assert.equal(senv.HARNESS_URL, "http://thermite-k8s-a-1-harness:8700");
+    // The supervisor's entry runs as root with the six capabilities it needs to close its folders
+    // and start the supervisor and each advisor's program as users of their own; nothing more.
+    assert.deepEqual(sup.containers[0]?.securityContext, {
+      runAsUser: 0,
+      runAsGroup: 0,
+      allowPrivilegeEscalation: false,
+      capabilities: {
+        drop: ["ALL"],
+        add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETGID", "SETUID"],
+      },
+    });
     // The two pods share one volume, so they stay on one node.
     assert.match(
       JSON.stringify(pod(objs, "thermite-k8s-a-1-supervisor")),
       /kubernetes\.io\/hostname/,
     );
     // Neither pod gets a service-account token: nothing in them calls the cluster's API. Both run
-    // under the runtime's default seccomp profile; the supervisor keeps its own user.
+    // under the runtime's default seccomp profile.
     for (const name of ["thermite-k8s-a-1-harness", "thermite-k8s-a-1-supervisor"]) {
       const spec = pod(objs, name) as {
         automountServiceAccountToken?: boolean;
@@ -106,8 +117,6 @@ describe("rigs on Kubernetes", () => {
       assert.deepEqual(spec.securityContext?.seccompProfile, { type: "RuntimeDefault" });
     }
     assert.deepEqual(pod(objs, "thermite-k8s-a-1-supervisor").securityContext, {
-      runAsUser: 10001,
-      runAsGroup: 10001,
       seccompProfile: { type: "RuntimeDefault" },
     });
     assert.equal(JSON.parse(asList(objs)).kind, "List");
@@ -264,7 +273,7 @@ describe("rigs on Kubernetes", () => {
     }
   });
 
-  test("the inbox is the supervisor's with the controller's group, and the harness reads it in a closed folder", () => {
+  test("the inbox is the supervisor's with the controller's group, and each part reads it in a closed folder", () => {
     const objs = clusterRigObjects(plan, secrets) as Obj[];
     const inits = JSON.stringify(objs).match(/"name":"prepare"[^}]*"command":\[[^\]]*\]/g) ?? [];
     assert.ok(inits.length > 0);
@@ -278,7 +287,7 @@ describe("rigs on Kubernetes", () => {
       mounts.map((m) => JSON.parse(m)),
       [
         { name: "data", mountPath: "/controller/inbox", subPath: "inbox", readOnly: true },
-        { name: "data", mountPath: "/inbox", subPath: "inbox" },
+        { name: "data", mountPath: "/supervisor/inbox", subPath: "inbox" },
       ],
     );
   });

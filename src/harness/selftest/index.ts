@@ -1,5 +1,7 @@
 import { chownSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { ADVISOR_RUNS_SOCKET } from "../../core/advisor-runs.ts";
+import type { SupervisorIsolation } from "../../core/api/harness/supervisor.ts";
 import {
   BrokerClient,
   builderRole,
@@ -51,6 +53,11 @@ export {
   supervisorUserCheck,
 } from "./container.ts";
 export { deviceProbes, isFailure, PROBE, type Probe } from "./probes.ts";
+export {
+  keepSupervisorIsolation,
+  readSupervisorIsolation,
+  SUPERVISOR_ISOLATION_FILE,
+} from "./supervisor.ts";
 export { firstInboxFile, readsResearch, researchProbeFolder } from "./targets.ts";
 
 /**
@@ -64,6 +71,8 @@ export { firstInboxFile, readsResearch, researchProbeFolder } from "./targets.ts
  * the supervisor's user, its GPU access, set-id files, RunPod's variables, the enrollment code, in
  * pull mode control's key, and the state snapshot (THERMITE_STATE_SNAPSHOT_DIR): its folder holds
  * nothing but sealed files, and only root has its key. Each role probes the folder and the key too.
+ * The supervisor's part, what its advisor users reached, is the one the supervisor last said
+ * (supervisor.ts): it probes at its start and before it hands over each isolation check.
  *
  * Its parts are in selftest/: probes.ts (what each role probes, and the script it runs),
  * container.ts (the one-container image's checks), targets.ts (what the probes aim at) and busy.ts
@@ -77,6 +86,8 @@ export interface IsolationReport {
   roles: Record<string, Record<string, string>>;
   /** The one-container rig image: checks of the container as a whole (containerChecks). */
   container?: Record<string, string>;
+  /** What the supervisor's advisor users reached, as the supervisor last said, and when. */
+  supervisor?: { at: string; probes: Record<string, string> };
   skipped: string[];
 }
 
@@ -151,6 +162,8 @@ export async function isolationSelftest(opts: {
   snapshotDir?: string | undefined;
   /** On Kubernetes (clusterApi): the API server, which no lane may reach. */
   clusterApi?: ClusterApi | undefined;
+  /** The supervisor's part, as it last said (readSupervisorIsolation); none: not said yet. */
+  supervisor?: SupervisorIsolation | undefined;
 }): Promise<IsolationReport> {
   const busy = opts.force ? undefined : isolationBusy(opts.stateDir);
   if (busy) throw new Error(`the rig is busy: ${busy}; rerun with --force to probe anyway`);
@@ -191,6 +204,8 @@ export async function isolationSelftest(opts: {
     probes.push(
       { name: "supervisor-home", op: "list", path: pod.supervisorHome },
       { name: "supervisor-token", op: "read", path: pod.supervisorToken },
+      // The runner that starts each advisor's program as an advisor user: the supervisor's alone.
+      { name: "advisor-runner", op: "access", path: ADVISOR_RUNS_SOCKET },
     );
     const sup = pidsRunning(SUPERVISOR_SCRIPT)[0];
     if (sup) probes.push({ name: "supervisor-environ", op: "read", path: `/proc/${sup}/environ` });
@@ -287,14 +302,18 @@ export async function isolationSelftest(opts: {
         ]
       : [{ key: role as string, role, gpu: false, card: judgeCardOf(role) ?? 0 }],
   );
+  const sup = opts.supervisor;
+  if (!sup) skipped.push("supervisor (its advisor users have not been probed yet)");
   const report: IsolationReport = {
     ok:
       card.error === undefined &&
       sharedError === undefined &&
-      !Object.values(container ?? {}).some(isFailure),
+      !Object.values(container ?? {}).some(isFailure) &&
+      !Object.values(sup?.probes ?? {}).some(isFailure),
     devices,
     roles: {},
     ...(container ? { container } : {}),
+    ...(sup ? { supervisor: { at: sup.at, probes: sup.probes } } : {}),
     skipped,
   };
   try {
@@ -366,6 +385,7 @@ export function isolationSummary(report: IsolationReport): string {
   const bad = [
     ...cluster,
     ...failed(report.container ?? {}).map(([check, v]) => `container ${check}: ${v}`),
+    ...failed(report.supervisor?.probes ?? {}).map(([probe, v]) => `supervisor ${probe}: ${v}`),
     ...Object.entries(report.roles).flatMap(([role, results]) =>
       failed(results)
         .filter(([probe]) => probe !== CLUSTER_NETWORK)

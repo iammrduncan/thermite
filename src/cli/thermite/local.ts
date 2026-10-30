@@ -157,9 +157,8 @@ export async function thermiteLocal(rest: string[]): Promise<void> {
 /** thermite selftest isolation: inside the harness container, as root. */
 export async function thermiteSelftest(rest: string[]): Promise<void> {
   if (rest[0] !== "isolation") fail(USAGE);
-  const { clusterApi, isolationSelftest, oneContainerTargets } = await import(
-    "../../harness/selftest/index.ts"
-  );
+  const { clusterApi, isolationSelftest, oneContainerTargets, readSupervisorIsolation } =
+    await import("../../harness/selftest/index.ts");
   const { effectiveGpuLists, savedJudgeGpus } = await import("../../harness/broker/devices.ts");
   const env = process.env;
   const secretFiles = [
@@ -187,6 +186,8 @@ export async function thermiteSelftest(rest: string[]): Promise<void> {
     snapshotDir: env.THERMITE_STATE_SNAPSHOT_DIR || undefined,
     // On Kubernetes: the API server, which no lane may reach.
     clusterApi: clusterApi(env),
+    // What the supervisor's advisor users reached, as it last said.
+    supervisor: readSupervisorIsolation(env.THERMITE_STATE_DIR ?? "/var/lib/thermite"),
   });
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (!report.ok) process.exit(1);

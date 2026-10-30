@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { log } from "../../common/log.ts";
 import {
   MCP_EVENTS,
   MCP_SERVERS_GET,
@@ -6,13 +7,15 @@ import {
   MODEL_ROUTE_GET,
   MODEL_ROUTE_PUT,
   SETTINGS,
+  SUPERVISOR_ISOLATION,
 } from "../../core/api/harness/supervisor.ts";
+import { isFailure, keepSupervisorIsolation } from "../selftest/index.ts";
 import { type ApiContext, limitOf } from "./context.ts";
 
 /**
  * What the supervisor hands the harness from control and reads back: the rig's settings, the
  * agents' model route, and the MCP servers control gave the rig, with how they fared for the
- * advisors.
+ * advisors; and what its advisor users reached, for the isolation check.
  */
 export function rigRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   // The rig's settings (Edit rig), for the supervisor's own parts: its advisors.
@@ -50,6 +53,21 @@ export function rigRoutes(app: Hono, { service, supervisor }: ApiContext): void 
       b.ok,
       b.error,
     );
+    return c.json({ ok: true });
+  });
+
+  // What the supervisor's advisor users reached: kept for the isolation check, which shows it.
+  app.put(SUPERVISOR_ISOLATION.path, supervisor, limitOf(SUPERVISOR_ISOLATION), async (c) => {
+    const body = SUPERVISOR_ISOLATION.body.parse(await c.req.json());
+    keepSupervisorIsolation(service.paths.stateDir, body);
+    const through = Object.entries(body.probes).filter(([, v]) => isFailure(v));
+    if (through.length || !body.separated)
+      log(
+        "harness",
+        "the supervisor's advisor users are not kept apart",
+        { separated: body.separated, probes: Object.fromEntries(through.slice(0, 12)) },
+        "warn",
+      );
     return c.json({ ok: true });
   });
 }

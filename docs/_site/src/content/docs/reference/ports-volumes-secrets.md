@@ -29,6 +29,7 @@ Two Unix sockets matter too:
 | Socket | In | Who uses it |
 | --- | --- | --- |
 | `/run/thermite/broker.sock` | The harness container | The harness's controller asks the broker, which runs as root, to start work as a role's user. Socket 0660, root and group `thermite`; directory 0750 |
+| `/run/thermite-advisors/runs.sock` | The supervisor container; the one-container rig image | The supervisor asks the advisors' runner, which runs as root, to start each advisor's program as an advisor user ([below](#the-supervisors-users)). Socket 0660, root and the supervisor's group; directory 0750 |
 | `/run/engine.sock` | Control, with `compose.lifecycle.yaml` only | Control restarts compose rigs through the container engine's socket. For development only |
 
 ### Under compose
@@ -96,10 +97,11 @@ In a **slot**, a namespace the cluster's operators made for Thermite, the operat
 | NATS, the `nats` service | `/data` | JetStream's store: the `EVENTS` stream, every rig's events, kept for good; the `REPORTS` stream, each rig's reports sent over the bus until control has taken or refused them; the `COMMANDS` stream, each rig's commands until its supervisor takes them; the `LIVE` stream, the newest live lines, an hour and 256 MiB at most; the `CONFIG` stream, the latest value of each rig's config keys, each sealed to the rig's seal key; and the `KB_FILES` stream, the knowledge base's files in chunks, each until control has taken it. Control's consumers of the reports and of the live lines, `control-reports` and `control-live`, and each rig's consumers of its commands and its config, `rig-<rig>-commands` and `rig-<rig>-config`, keep their places there |
 | NATS, the `nats` service | `/etc/nats/thermite` | What control wrote for it: `users.conf`, `server-cert.pem` and `server-key.pem`. The server's own settings, which include them, are written at its start beside the folder, in `/etc/nats/thermite.conf` |
 | Supervisor | `/var/lib/thermite-supervisor` | Its relay and export state, the exports waiting to be sent to control (`export-uploads.json`), where each run's past research sync is (`kb-state.json`), its local results repository (`results.git/`), its fetch caches, advisor records and the `ssh` home (`home/`). With the message bus also `bus-key.seed` (0600): the seed of the rig's own key on the bus, which never leaves the file; and `bus-seal.pem` (0600): the private part of the seal key that opens the rig's config from the bus, which never leaves the file either. In pull mode also `tunnel/` (`THERMITE_TUNNEL_DIR`, 0700: the pod's keys, its enrollment and the nonces it has seen) and `enrolled/` (`THERMITE_TUNNEL_ENROLLED_DIR`: `control.pub`, `rig.json` and `rig.env` for the harness) |
-| Supervisor | `/inbox` | Read and write: what it fetches for the harness |
+| Supervisor | `/supervisor/inbox` | Read and write: what it fetches for the harness. Mounted in `/supervisor`, a folder of the supervisor image that only root and the supervisor's group may enter, so no advisor's program reaches it |
 | Supervisor | `/outbox` | Read-only: the harness's exports |
 | Supervisor | `/results` | Compose only: the local results repository the rigs share |
 | Supervisor | `/etc/thermite/advisors` | Compose only, read-only: the advisors file, if there is one |
+| Supervisor | `/var/lib/thermite-advisors` | On the container's own disk: one folder for each advisor call while it runs, made by the supervisor and given to the call's advisor user for the call, then removed. The supervisor's, mode 0711, emptied at every start |
 | Supervisor | `/keys` | With the message bus, read-only: `bus-ca.pem`, control's authority's certificate, which it trusts the bus's server through (`THERMITE_NATS_CA_FILE`). Under compose, control's `control-pub` volume; on a machine, the rig's `bus/` folder. On a cluster the certificate is in the supervisor's environment instead (`THERMITE_NATS_CA`) |
 
 ### A lane's cache
@@ -126,7 +128,7 @@ A full reset empties the harness's state, scratch and outbox, keeping only the r
 | `nats-config` | control; nats | `/nats-config` in control; `/etc/nats/thermite` in nats | read-write in control; read in nats, which gives the folder to control's user as it starts |
 | `harness-state`, `harness2-state` | harness, harness-2 | `/var/lib/thermite` | read-write |
 | `harness-scratch`, `harness2-scratch` | harness, harness-2 | `/scratch` | read-write |
-| `./.dev/inbox` (a folder) | harnesses and supervisors | `/controller/inbox` in the harnesses; `/inbox` in the supervisors | read-only in the harnesses; read-write in the supervisors |
+| `./.dev/inbox` (a folder) | harnesses and supervisors | `/controller/inbox` in the harnesses; `/supervisor/inbox` in the supervisors | read-only in the harnesses; read-write in the supervisors |
 | `outbox`, `outbox2` | a harness and its supervisor | `/outbox` | read-write in the harness; read-only in the supervisor |
 | `supervisor-home`, `supervisor2-home` | supervisor, supervisor-2 | `/var/lib/thermite-supervisor` | read-write |
 | `results` | both supervisors | `/results` | read-write. The default results repository is `file:///results/results.git` |
@@ -149,7 +151,7 @@ The `init` service makes the `.dev/` folders, next to `compose.yaml`: it runs `t
 | --- | --- | --- |
 | `thermite-<rig>-state` | `/var/lib/thermite` | |
 | `thermite-<rig>-scratch` | `/scratch` | |
-| `thermite-<rig>-inbox` | `/controller/inbox`, read-only | `/inbox`, read-write |
+| `thermite-<rig>-inbox` | `/controller/inbox`, read-only | `/supervisor/inbox`, read-write |
 | `thermite-<rig>-outbox` | `/outbox`, read-write | `/outbox`, read-only |
 | `thermite-<rig>-supervisor` | | `/var/lib/thermite-supervisor` |
 
@@ -160,7 +162,7 @@ Removing a rig removes these five volumes, the two networks, the unit files and 
 | Object | What |
 | --- | --- |
 | PersistentVolumeClaim `thermite-<rig>-data` | One volume, `ReadWriteOnce`, 100 GB unless set (1 to 10,000 GB), in the cluster's default storage class unless one is named |
-| Its subpaths | `state` → `/var/lib/thermite`; `scratch` → `/scratch`; `inbox` → `/controller/inbox`, read-only, in the harness and `/inbox` in the supervisor (the supervisor's, with the controller's group `thermite`, mode 2750, as `prepare` sets it); `outbox` → `/outbox` (read-only in the supervisor); `supervisor` → `/var/lib/thermite-supervisor` |
+| Its subpaths | `state` → `/var/lib/thermite`; `scratch` → `/scratch`; `inbox` → `/controller/inbox`, read-only, in the harness and `/supervisor/inbox` in the supervisor (the supervisor's, with the controller's group `thermite`, mode 2750, as `prepare` sets it); `outbox` → `/outbox` (read-only in the supervisor); `supervisor` → `/var/lib/thermite-supervisor` |
 | Init container `prepare` | Runs the harness image to make the folders and set their owners before each pod starts: as root with the controller's group (10010), and only the `CHOWN`, `FOWNER` and `FSETID` capabilities |
 
 Both pods run on the same node, so they can share the volume. An update to control's images or address (**Update to these images**, **Try the update again** or **Give it control's new address** on the rig's page) applies the rig's two Deployments again and leaves its volume claim, its Secret and its Service as they are, so the rig keeps its state and its tokens.
@@ -177,6 +179,27 @@ A test pod has one container disk: 40 GB unless set, 10 to 2,000 GB. Control rem
 | The pod's volume | `/workspace`, 100 GB unless set (`volume_gb`), kept while the pod is stopped and removed with it | A sealed snapshot of the rig's state, in `/workspace/thermite`. The volume ignores file modes, so every user in the pod can read it: every file is encrypted and authenticated with the pod's snapshot key |
 
 The [one-container rig image](harness-image.md#where-the-state-lives) says when the snapshot is taken, how it is sealed, and how a start checks and restores it.
+
+## The supervisor's users
+
+The supervisor's container runs as root a small entry, which starts everything else as a user of its own, as the harness's broker does. In the one-container rig image the broker does it.
+
+| User | Ids | Runs | Reaches |
+| --- | --- | --- | --- |
+| root | 0 | The entry (`/opt/thermite/dist/supervisor/advisor-runs/main.js`): it closes the folders below, serves the advisors' runner and starts the supervisor, again whenever it exits. In the one-container rig image, the broker | Everything in the container |
+| `supervisor` | uid and gid 10001 | The supervisor, with no capability, and Pi advisors in its own process | Its state, its secret files, the inbox, the outbox, the results |
+| `advisor-1` to `advisor-8` | uid and gid 10081 to 10088, in none of the supervisor's groups | Each program an advisor runs in (Claude Code, OpenCode, the Codex CLI, a `cli` advisor's command): one user for each call while it runs, in a folder of `/var/lib/thermite-advisors` that is the user's for the call. Claude Code's token comes on its file descriptor 3, as before | Its prompt, its settings (its model route and the call's own credentials) and its folder. When the program exits or its time is up, every process of its user ends, and the folder is the supervisor's again, so it reads what the call left |
+
+Before the supervisor starts, the entry closes `/run/secrets` and `/etc/thermite` to root and the supervisor's group (0750), and `/supervisor`, the inbox's folder, the same way; it makes the supervisor's state and `/results` the supervisor's, mode 0700; and it gives the inbox to the supervisor where the supervisor may not write in it yet (a machine's new volume). An inbox from your computer under compose keeps its owner and modes: its closed folder keeps the advisor users out. The [isolation check](rig-checks.md#the-supervisors-part) probes all of it. A container that does not run as root stops with `fatal: not root, so advisor programs cannot run as users of their own`, unless `THERMITE_ALLOW_UNSEPARATED=1` (development only) starts the supervisor without its runner.
+
+The capabilities each placement gives the supervisor's container, for its entry only; the supervisor and the advisors' programs keep none, and nothing in the container can gain privileges:
+
+| Placement | Capabilities | No new privileges |
+| --- | --- | --- |
+| Compose, and a release's `compose.yaml` | `cap_drop: [ALL]`, `cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]` | `no-new-privileges:true` |
+| A machine (Quadlet) | `DropCapability=ALL`, `AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETGID SETUID` | `NoNewPrivileges=true` |
+| A cluster | `runAsUser: 0`, `capabilities: {drop: [ALL], add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]}` | `allowPrivilegeEscalation: false` |
+| The one-container rig image | The broker's, as before: nothing more | The broker starts the supervisor and each advisor's program with `setpriv --no-new-privs`, in the GPU fence with no card |
 
 ## Secret files
 
@@ -209,7 +232,7 @@ The [one-container rig image](harness-image.md#where-the-state-lives) says when 
 | A Hugging Face token | Supervisor | `THERMITE_HF_TOKEN_FILE` | Optional: for [gated model files](model-files.md#gated-models-on-hugging-face). Sent to Hugging Face only, never to the harness |
 | An MCP server's key, client secret or OAuth sign-in | Control | Entered in **Settings › Providers › MCP servers**, or signed in on the server's page; kept sealed in `control.db` | Optional. Control hands a rig the server's sign-in as headers (an access token for OAuth and a client, never the refresh token or the client secret) only when a run it assigned that rig names the server. The supervisor and the harness keep it in memory; no lane can read it. See [Who holds your keys](../explanation/who-holds-your-keys.md#mcp-servers) |
 
-At start, the harness's broker reads its secret files as root, gives their values only to the controller, and closes their folder to 0700. If a secret file and its folder both stay readable by other users, it stops with `fatal: a secret file stays readable by other users`.
+At start, the harness's broker reads its secret files as root, gives their values only to the controller, and closes their folder to 0700. If a secret file and its folder both stay readable by other users, it stops with `fatal: a secret file stays readable by other users`. The supervisor's entry closes the supervisor's secret files' folder to root and the supervisor's group ([The supervisor's users](#the-supervisors-users)).
 
 ### Where they come from
 

@@ -13,6 +13,7 @@ import {
   awaitEnrollment,
   prepareOneContainer,
   recordSupervisor,
+  startAdvisorRuns,
   startSupervisor,
 } from "./supervisor.ts";
 
@@ -30,8 +31,9 @@ import {
  * - runs the controller as `thermite` and restarts it if it exits, after killing anything a
  *   role left running;
  * - in the one-container rig image (THERMITE_ONE_CONTAINER=1, broker/one-container.ts), also
- *   prepares the supervisor's places and its token, and runs the supervisor as its own user,
- *   restarting it if it exits. In pull mode it starts the controller only once the supervisor's
+ *   prepares the supervisor's places and its token, serves the advisors' runner, which runs each
+ *   advisor's program as an advisor user of its own (src/common/run-as/), and runs the supervisor
+ *   as its own user, restarting it if it exits. In pull mode it starts the controller only once the supervisor's
  *   enrollment has brought control's key: it checks the key against the launch's SHA-256 and
  *   gives the harness a copy of its own, and takes the rig's settings from control as data;
  * - with THERMITE_STATE_SNAPSHOT_DIR (the one-container rig image sets it) and the launch's
@@ -138,6 +140,8 @@ if (broker.isRoot) {
   const killed = killRoles();
   if (killed) log("broker", "killed leftover role processes at start", { killed });
   if (pod) recordSupervisor(broker, pod);
+  // The advisors' runner, before the supervisor starts: it runs each advisor's program.
+  const runs = pod ? startAdvisorRuns(broker, pod) : undefined;
   let target = broker.env.THERMITE_TARGET;
   broker.beforeStart = () => {
     const next = currentLists(broker);
@@ -171,7 +175,16 @@ if (broker.isRoot) {
     startSnapshots(broker, snapshotRecord);
     // The supervisor first: in pull mode its enrollment brings control's key; and the
     // controller's isolation check at start looks for it.
-    if (pod) startSupervisor(broker, pod);
+    if (pod)
+      runs?.then(
+        () => startSupervisor(broker, pod),
+        (err) => {
+          logError("broker", "fatal: could not serve the advisors' runner", {
+            error: errorText(err),
+          });
+          fatalExit(broker);
+        },
+      );
     if (pod && pullMode(broker.env))
       awaitEnrollment(broker, pod).then(
         (enrolled) => {

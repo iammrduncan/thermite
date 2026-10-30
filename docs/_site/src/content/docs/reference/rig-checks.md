@@ -84,7 +84,7 @@ While the workers' model check fails, no trial or plan of the rig's run starts, 
 
 ## Isolation check
 
-The isolation check is the harness's **isolation selftest**. For each role, the broker runs one small probe script as that role's own user. The script tries each operation in a list and reports what happened. [Isolation inside a rig](../explanation/isolation.md) explains why each role has its own user.
+The isolation check is the harness's **isolation selftest**. For each role, the broker runs one small probe script as that role's own user. The script tries each operation in a list and reports what happened. [Isolation inside a rig](../explanation/isolation.md) explains why each role has its own user. The check also holds the supervisor's part: what an advisor user reached on the supervisor ([below](#the-supervisors-part)).
 
 The selftest also runs from a shell inside the harness container, as root:
 
@@ -150,6 +150,7 @@ In the [one-container rig image](harness-image.md#the-one-container-rig-image), 
 | --- | --- | --- |
 | `supervisor-home` | List | The supervisor's state folder |
 | `supervisor-token` | Read | The supervisor's copy of its token for the harness API |
+| `advisor-runner` | Check for write access | The socket of the advisors' runner, which only root and the supervisor's group may open |
 | `supervisor-environ` | Read | The environment of the supervisor's process. Skipped when no supervisor runs |
 | `control-key-write` | Write | Root's copy of control's key, which the harness trusts. In pull mode only |
 
@@ -187,6 +188,27 @@ In the [one-container rig image](harness-image.md#the-one-container-rig-image) (
 | `state-snapshot` | `sealed, closed to thermite, supervisor, agent-1 (owner <uid>:<gid>, mode 700)`; `open, sealed: <user> lists it and writes in it; … (owner <uid>:<gid>, mode 700)`; or `no snapshot: <why> (…)`. Each ends with `; holds the manifest and <n> sealed files` (or `no snapshot yet`) when the selftest's user can list the folder | With `THERMITE_STATE_SNAPSHOT_DIR` set. At start, the broker tried to list the snapshot folder and to write in it as the controller's user, the supervisor's and `agent-1`, and recorded what each met in `snapshot.json` in its socket's folder, with the owner and mode the volume shows and whether the launch gave the snapshot key. `sealed, closed`: each was refused. `open, sealed`: the volume lets them in, as RunPod's does; this is no failure, since everything there is sealed. `no snapshot`: the launch gave no key, so nothing is written there; this is no failure either. The check also looks into the folder where it can: `FOUND a file that is not sealed: <name>`, `FOUND an unsealed snapshot an older image left: snapshot`, or `FOUND` with any other name, fails. `failed: root …` means root could not make the folder |
 | `snapshot-key` | `none (read <n> of <m> processes)` | With `THERMITE_STATE_SNAPSHOT_DIR` set: no process of the rig but root's holds the snapshot key (`THERMITE_STATE_SNAPSHOT_KEY`). The broker takes it out of its environment before it starts anything. `FOUND THERMITE_STATE_SNAPSHOT_KEY in pid <n> (uid <u>)` fails. It reads the environments it may, as `runpod-variables` does |
 
+### The supervisor's part
+
+Each advisor's program runs as an advisor user of its own on the supervisor ([The supervisor's users](ports-volumes-secrets.md#the-supervisors-users)). At its start, and before it hands its harness each isolation check, the supervisor has its advisors' runner run a probe script as one of those users, the way it runs an advisor's program, and gives the harness the result (`PUT /v1/supervisor-isolation`, with the supervisor's token). The harness keeps the newest in `supervisor-isolation.json` in its state folder, and the check puts it in its report under `supervisor`, with when the supervisor probed (`at`). Before the supervisor has given one, the report lists `supervisor (its advisor users have not been probed yet)` under `skipped`. The supervisor logs each result too: `advisor users are kept apart`, or `advisor users are NOT kept apart` with what got through. Every probe must be refused, and only what is there is probed:
+
+| Probe | Tries to | What |
+| --- | --- | --- |
+| `state-list` | List | The supervisor's state folder (`THERMITE_SUPERVISOR_HOME`) |
+| `bus-key`, `seal-key`, `relay-state` | Read | The rig's key and seal key on the message bus, and the relay's state, in that folder |
+| `tunnel-keys` | Read | In pull mode, the pod's own keys, `keys.json` |
+| `harness-token`, `control-token`, `results-key`, `hf-token` | Read | The supervisor's secret files: its token for the harness, its token for control, the results repository's key and the Hugging Face token |
+| `advisors-file`, `advisors-folder`, `advisor-key-<n>` | Read, list, read | The advisors file, its folder, and each key file it names (`api_key_file`) |
+| `secrets-list` | List | `/run/secrets` |
+| `inbox-list`, `inbox-read` | List, read | The inbox, and a file in it by its full path |
+| `results-list` | List | `/results`, under compose |
+| `runs-list` | List | The runs' root, where each advisor call has its folder |
+| `runner-socket` | Check for write access | The runner's socket |
+| `supervisor-signal` | Send signal 0 | The supervisor's process |
+| `supervisor-environ` | Read | The supervisor's environment |
+
+Each result reads as a role's does: the error it met, such as `EACCES` or `EPERM`, or `ALLOWED`, which fails the check. Two more fail it: `advisor-users: ALLOWED: no advisors' runner, so advisor programs run as the supervisor's own user`, where the supervisor was started without its runner, and `advisor-user: ALLOWED: the runner runs each program as the supervisor's user`, where the runner is not root. `advisor-probe: failed: <error>` says the probe could not run, such as when every advisor user is busy.
+
 ### Results
 
 Each probe's result is the error the operation met (refused, as it must be), `readable` or `reachable` (succeeded, where it must), `sees <ids>` (`visible-gpus` listed exactly the role's card), or one of these failures:
@@ -205,7 +227,7 @@ Each probe's result is the error the operation met (refused, as it must be), `re
 | Summary | Meaning |
 | --- | --- |
 | `isolation holds: every probe of <n> roles came out as it must (devices: <devices>)` | Passed |
-| `isolation does NOT hold (devices: <devices>): <role> <probe>: <result>; …` | Failed. Up to 12 failures are listed, those of the container first, as `container <check>: <result>` |
+| `isolation does NOT hold (devices: <devices>): <role> <probe>: <result>; …` | Failed. Up to 12 failures are listed, those of the container first, as `container <check>: <result>`, then the supervisor's, as `supervisor <probe>: <result>` |
 | `isolation does NOT hold (devices: <devices>): the cluster does not hold the rig's network rules: lane-1 reached the cluster's API server (ALLOWED: connected to <host> port <port>); …` | Failed on Kubernetes: the cluster's network plugin does not enforce the network rules, or the slot's rules let the harness reach the cluster. This failure comes first |
 | `isolation does NOT hold (devices: <devices>): the device setup failed` | The GPU's device nodes could not be set up |
 

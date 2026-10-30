@@ -1,6 +1,6 @@
 import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
-import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
+import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 import { gpuSplit, type RigBus } from "../machines/index.ts";
 import { CLOSED_RANGES } from "./netcheck.ts";
 
@@ -322,7 +322,6 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
       ...placement,
       ...grace,
       initContainers: [prepare(p.images.harness, res?.prepare)],
-      securityContext: { runAsUser: 10001, runAsGroup: 10001 },
       containers: [
         {
           name: "supervisor",
@@ -336,12 +335,23 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
             THERMITE_CONTROL_TOKEN_FILE: "/run/secrets/control-rig-token",
             ...(p.bus ? { THERMITE_NATS_URL: p.bus.url, THERMITE_NATS_CA: p.bus.ca } : {}),
           }),
-          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } },
+          // Its entry runs as root to close its folders to the advisor users and to start the
+          // supervisor and each advisor's program as users of their own; the supervisor keeps
+          // no capability.
+          securityContext: {
+            runAsUser: 0,
+            runAsGroup: 0,
+            allowPrivilegeEscalation: false,
+            capabilities: {
+              drop: ["ALL"],
+              add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETGID", "SETUID"],
+            },
+          },
           ...probes({ exec: { command: ["node", "-e", healthProbe(HEALTH_URLS.supervisor)] } }, 5),
           ...(res ? { resources: res.supervisor } : {}),
           volumeMounts: [
             { name: "data", mountPath: "/var/lib/thermite-supervisor", subPath: "supervisor" },
-            { name: "data", mountPath: "/inbox", subPath: "inbox" },
+            { name: "data", mountPath: SUPERVISOR_INBOX_DIR, subPath: "inbox" },
             { name: "data", mountPath: "/outbox", subPath: "outbox", readOnly: true },
             secretFile("harness-supervisor-token", "/run/secrets/harness-supervisor-token"),
             secretFile("control-rig-token", "/run/secrets/control-rig-token"),

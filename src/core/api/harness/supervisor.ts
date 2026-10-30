@@ -107,6 +107,40 @@ export const MCP_EVENTS = {
   answer: z.looseObject({ ok: z.boolean() }),
 } as const satisfies Route;
 
+/** The most probes the supervisor's part of the isolation check holds, and the longest words. */
+export const SUPERVISOR_ISOLATION_MAX = { probes: 64, name: 100, result: 500 } as const;
+
+/**
+ * The supervisor's part of the isolation check (src/supervisor/advisor-runs/): what an advisor
+ * user reached of the supervisor's tokens, keys, state, inbox and results, each probe's result as
+ * the harness's own probes read ("ALLOWED": it got through), and whether the supervisor runs its
+ * advisors' programs as users of their own at all. The harness keeps the newest it was given and
+ * puts it in its isolation check.
+ */
+export const SupervisorIsolation = z.strictObject({
+  at: z.string().max(40),
+  separated: z.boolean(),
+  probes: z
+    .record(
+      z.string().min(1).max(SUPERVISOR_ISOLATION_MAX.name),
+      z.string().max(SUPERVISOR_ISOLATION_MAX.result),
+    )
+    .refine(
+      (p) => Object.keys(p).length <= SUPERVISOR_ISOLATION_MAX.probes,
+      `at most ${SUPERVISOR_ISOLATION_MAX.probes} probes`,
+    ),
+});
+export type SupervisorIsolation = z.infer<typeof SupervisorIsolation>;
+
+/** The supervisor's part of the isolation check, at its start and before each isolation check. */
+export const SUPERVISOR_ISOLATION = {
+  method: "PUT",
+  path: "/v1/supervisor-isolation",
+  body: SupervisorIsolation,
+  answer: z.looseObject({ ok: z.boolean() }),
+  maxBytes: 64 * 1024,
+} as const satisfies Route;
+
 /** The events of a page of the rig's report when not told how many, and the most. */
 export const SNAPSHOT_PAGE_DEFAULT = 500;
 export const SNAPSHOT_PAGE_MAX = 5000;

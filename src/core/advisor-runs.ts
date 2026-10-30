@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { joinPath } from "./paths.ts";
 
 /**
  * Advisor programs as users of their own: the contract between the supervisor and the small root
@@ -19,6 +20,27 @@ import { z } from "zod";
  */
 export const ADVISOR_USERS = { base: 10080, count: 8 } as const;
 
+/**
+ * Where the helper serves (root's folder for it, which only the supervisor's group may enter), and
+ * the settings it gives the supervisor it starts: its socket, and its root, the folder in which
+ * the supervisor makes each run's folder. The supervisor image's entry and, in the one-container
+ * rig image, the broker serve it; without THERMITE_ADVISOR_SOCKET the supervisor runs its
+ * advisors' programs as its own user, and says so.
+ */
+export const ADVISOR_RUNS_SOCKET = "/run/thermite-advisors/runs.sock";
+export const ADVISOR_RUNS_ENV = {
+  socket: "THERMITE_ADVISOR_SOCKET",
+  root: "THERMITE_ADVISOR_RUNS_DIR",
+} as const;
+
+/**
+ * The runs' root: `thermite-advisors` beside the supervisor's state folder, out of it (its state is
+ * closed to the advisor users), on the container's own disk: /var/lib/thermite-advisors in the
+ * supervisor image, /var/lib/thermite-rig/thermite-advisors in the one-container rig image.
+ */
+export const advisorRunsDir = (supervisorHome: string): string =>
+  joinPath(supervisorHome, "..", "thermite-advisors");
+
 /** The most a run's request and answer carry: its stdin and environment, and its output kept. */
 export const ADVISOR_RUN_LIMITS = {
   /** A request's line, its stdin and its environment included. */
@@ -30,6 +52,11 @@ export const ADVISOR_RUN_LIMITS = {
   stderrChars: 20_000,
   /** A run's time, when its request gives one: one day at most. */
   timeoutMs: 24 * 60 * 60 * 1000,
+  /**
+   * The most entries of a run's folder given back to the caller once the run has ended; the rest
+   * stay its user's until the folder is removed.
+   */
+  handBackEntries: 100_000,
 } as const;
 
 const Id = z.number().int().nonnegative();

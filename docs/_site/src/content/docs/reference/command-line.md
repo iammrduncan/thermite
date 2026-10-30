@@ -1145,7 +1145,7 @@ Each image starts one program under `tini`; none of them takes options.
 | Image | Starts | As |
 | --- | --- | --- |
 | Control | `node /opt/thermite/dist/control/main.js` | User `thermite` (10001) |
-| Supervisor | `node /opt/thermite/dist/supervisor/main.js` | User `supervisor` (10001) |
+| Supervisor | `node /opt/thermite/dist/supervisor/advisor-runs/main.js`. Its entry runs as root, serves the advisors' runner and starts the supervisor, `node /opt/thermite/dist/supervisor/main.js`, as its own user | root; the supervisor as user `supervisor` (10001), each advisor's program as `advisor-1` to `advisor-8` |
 | Harness | `node /opt/thermite/dist/harness/broker/main.js`. The broker runs as root and starts the harness's other processes, each as its own user | root |
 
 Their settings are environment variables: see [Settings](settings.md). The [harness image reference](harness-image.md) lists what else the harness image holds.

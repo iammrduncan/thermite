@@ -19,8 +19,14 @@ RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
  && apt-get install -y --no-install-recommends openssh-client \
  && rm -rf /var/lib/apt/lists/*
+# Each advisor's program runs as one of the advisor users, advisor-1..advisor-8 (uid and gid
+# 10081..10088, src/core/advisor-runs.ts), through the runner the broker serves.
 RUN groupadd -g 10001 supervisor \
  && useradd -u 10001 -g 10001 -M -d /var/lib/thermite-supervisor/home -s /usr/sbin/nologin supervisor \
+ && for n in $(seq 1 8); do \
+      groupadd -g $((10080 + n)) advisor-$n \
+      && useradd -u $((10080 + n)) -g advisor-$n -M -d /nonexistent -s /usr/sbin/nologin advisor-$n; \
+    done \
  && mkdir -p /var/lib/thermite-supervisor/home \
  && chown 10001:10001 /var/lib/thermite-supervisor /var/lib/thermite-supervisor/home \
  && chmod 0700 /var/lib/thermite-supervisor /var/lib/thermite-supervisor/home

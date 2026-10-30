@@ -41,7 +41,7 @@ A model in several files, such as a model in shards, is one entry in the contrac
 
 ## Where the file goes
 
-1. The supervisor downloads to `<path>.part` in its inbox (`THERMITE_INBOX_DIR`, `/inbox` by default), hashing the bytes as they arrive. It keeps the rig's disk floor (`THERMITE_DISK_FLOOR_GIB`) before it starts and as it writes.
+1. The supervisor downloads to `<path>.part` in its inbox (`THERMITE_INBOX_DIR`, `/supervisor/inbox` by default), hashing the bytes as they arrive. It keeps the rig's disk floor (`THERMITE_DISK_FLOOR_GIB`) before it starts and as it writes.
 2. When the last byte is in and its SHA-256 is the signed one, the file is renamed to `<path>`. Only then does the supervisor hand the assignment to the harness.
 3. The harness copies the file into its own state (`THERMITE_STATE_DIR`, under `models/`), hashing it again as it copies. The kit reads that copy as `{models:<sha256>}`, read-only. See [the kit manifest](kit-manifest.md).
 

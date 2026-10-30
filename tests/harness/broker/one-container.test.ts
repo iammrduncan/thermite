@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { restartAfter } from "../../../src/common/restart.ts";
+import { SUPERVISOR_PASSWD_HOME } from "../../../src/core/paths.ts";
 import { generateBoxKeys, keySha256, publicKeyLine } from "../../../src/core/tunnel.ts";
 import {
   ENROLLED_MAX_BYTES,
@@ -25,8 +27,6 @@ import {
   pullMode,
   readEnrollment,
   readSupervisorFile,
-  restartAfter,
-  SUPERVISOR_PASSWD_HOME,
   supervisorArgv,
   supervisorEnv,
   supervisorGpu,
@@ -91,6 +91,7 @@ describe("the one-container rig image", () => {
       tmp: "/workspace/thermite/supervisor/tmp",
       inbox: "/workspace/thermite/inbox",
       tokenFile: "/workspace/thermite/supervisor/harness-token",
+      advisorRuns: "/workspace/thermite/thermite-advisors",
     });
     const env = supervisorEnv(base, paths, SECRET_VARS);
     assert.deepEqual(
@@ -105,12 +106,16 @@ describe("the one-container rig image", () => {
     assert.equal(env.TMPDIR, paths.tmp);
     assert.equal(env.USER, "supervisor");
     assert.equal(env.THERMITE_RIG_ID, "rig-1");
+    // The advisors' runner the broker serves, and where the supervisor makes each run's folder.
+    assert.equal(env.THERMITE_ADVISOR_SOCKET, "/run/thermite-advisors/runs.sock");
+    assert.equal(env.THERMITE_ADVISOR_RUNS_DIR, paths.advisorRuns);
     // Pull mode's launch values are the supervisor's: the code is spent at its enrollment.
     assert.equal(env.THERMITE_TUNNEL_POD, "pod-1");
     assert.equal(env.THERMITE_TUNNEL_ENROLL_CODE, "c".repeat(64));
     // Defaults: the supervisor image's places.
     assert.equal(supervisorPaths({}).home, "/var/lib/thermite-supervisor");
     assert.equal(supervisorPaths({}).inbox, "/inbox");
+    assert.equal(supervisorPaths({}).advisorRuns, "/var/lib/thermite-advisors");
   });
 
   test("the supervisor starts with no_new_privs, in the GPU fence where there is one", () => {

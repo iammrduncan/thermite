@@ -5,6 +5,7 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -18,7 +19,7 @@ import { RunAsClient, RunAsServer } from "../../src/common/run-as/index.ts";
 import { ADVISOR_USERS } from "../../src/core/advisor-runs.ts";
 
 /** A helper on a socket of its own, its root, and a client. */
-async function helper(separate?: boolean) {
+async function helper(separate?: boolean, wrap?: string[]) {
   const base = mkdtempSync(join(tmpdir(), "thermite-run-as-"));
   // Advisor users pass through to their own folders, as through the supervisor's state.
   chmodSync(base, 0o711);
@@ -30,6 +31,7 @@ async function helper(separate?: boolean) {
     root,
     callerGid: process.getgid?.() ?? 0,
     separate,
+    wrap,
   }).listen();
   await new Promise((r) => server.once("listening", r));
   after(() => {
@@ -172,6 +174,23 @@ setInterval(() => {}, 1000);`,
     assert.equal(JSON.parse(answer).ok, false);
   });
 
+  test("a run's program starts under the helper's wrap, with its token still on fd 3", async () => {
+    // /usr/bin/env stands in for no_new_privs and the GPU fence: it sets a value, then runs it.
+    const h = await helper(undefined, ["/usr/bin/env", "ROUTE=wrapped"]);
+    const r = await h.client.run({
+      dir: h.folder("wrapped"),
+      argv: SAY,
+      env: {},
+      stdin: "the prompt",
+      token: "a sign-in token",
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+    const said = JSON.parse(r.stdout) as Record<string, unknown>;
+    assert.equal(said.route, "wrapped");
+    assert.equal(said.token, "a sign-in token");
+    assert.equal(said.stdin, "the prompt");
+  });
+
   // Root on Linux: each run is an advisor user, and its folder its own for the run.
   const asRoot = process.getuid?.() === 0 && process.platform === "linux";
   test("as root: a run is an advisor user that owns its folder and reads none of the caller's files", {
@@ -191,19 +210,32 @@ setInterval(() => {}, 1000);`,
         `const fs = require("node:fs");
 let read = "refused";
 try { fs.readFileSync(${JSON.stringify(secret)}); read = "read"; } catch {}
-console.log(JSON.stringify({ uid: process.getuid(), config: fs.readFileSync("config.toml", "utf8"), read }));`,
+fs.mkdirSync("private", { mode: 0o700 });
+fs.writeFileSync("private/rollout.jsonl", "kept", { mode: 0o600 });
+console.log(JSON.stringify({ uid: process.getuid(), config: fs.readFileSync("config.toml", "utf8"), read,
+  during: fs.statSync(".").uid }));`,
       ],
       env: {},
       stdin: "",
     });
-    const said = JSON.parse(r.stdout) as { uid: number; config: string; read: string };
+    const said = JSON.parse(r.stdout) as {
+      uid: number;
+      config: string;
+      read: string;
+      during: number;
+    };
     assert.ok(
       said.uid > ADVISOR_USERS.base && said.uid <= ADVISOR_USERS.base + ADVISOR_USERS.count,
     );
     assert.equal(said.config, "written by the caller");
     assert.equal(said.read, "refused");
-    assert.equal(statSync(dir).uid, said.uid, "the folder is the run's user's");
-    assert.equal(statSync(dir).mode & 0o7777, 0o2750, "and the caller's group reads it");
+    assert.equal(said.during, said.uid, "the folder was the run's user's while it ran");
+    // Once it has ended, the folder is the caller's again, a folder the run made private too.
+    const me = process.getuid?.();
+    assert.equal(statSync(dir).uid, me);
+    assert.equal(statSync(dir).mode & 0o7777, 0o2750);
+    assert.equal(statSync(join(dir, "private")).uid, me);
+    assert.equal(readFileSync(join(dir, "private", "rollout.jsonl"), "utf8"), "kept");
     // A file linked from elsewhere is never handed over.
     const linked = h.folder("linked");
     linkSync(secret, join(linked, "token"));

@@ -19,6 +19,8 @@ import {
   writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { ADVISOR_RUNS_ENV, ADVISOR_RUNS_SOCKET, advisorRunsDir } from "../../core/advisor-runs.ts";
+import { SUPERVISOR_PASSWD_HOME } from "../../core/paths.ts";
 import {
   ENROLLED_FILES,
   keySha256,
@@ -64,9 +66,6 @@ export function withoutRunpod(env: Env): Record<string, string> {
   return out;
 }
 
-/** The supervisor's home in its passwd entry, in both images: ssh finds ~/.ssh there. */
-export const SUPERVISOR_PASSWD_HOME = "/var/lib/thermite-supervisor/home";
-
 /** Where the broker records how it started the supervisor: next to its socket, for the selftest. */
 export const SUPERVISOR_RECORD = "supervisor.json";
 
@@ -91,6 +90,8 @@ export interface SupervisorPaths {
   inbox: string;
   /** Its copy of the token it uses on the harness API. Always in its home. */
   tokenFile: string;
+  /** The advisors' runs' root (core/advisor-runs.ts), beside its state, out of it. */
+  advisorRuns: string;
 }
 
 export function supervisorPaths(env: Env): SupervisorPaths {
@@ -100,6 +101,7 @@ export function supervisorPaths(env: Env): SupervisorPaths {
     tmp: join(home, "tmp"),
     inbox: env.THERMITE_INBOX_DIR ?? "/inbox",
     tokenFile: join(home, "harness-token"),
+    advisorRuns: advisorRunsDir(home),
   };
 }
 
@@ -144,7 +146,8 @@ export function makeSupervisorFiles(
 
 /**
  * The supervisor's environment: the broker's own, without RunPod's variables, the snapshot key
- * and the harness's secret files (only root reads those), with its own places and user.
+ * and the harness's secret files (only root reads those), with its own places and user, and the
+ * advisors' runner the broker serves for it.
  */
 export function supervisorEnv(
   env: Env,
@@ -161,6 +164,8 @@ export function supervisorEnv(
     THERMITE_SUPERVISOR_HOME: paths.home,
     THERMITE_INBOX_DIR: paths.inbox,
     THERMITE_HARNESS_TOKEN_FILE: paths.tokenFile,
+    [ADVISOR_RUNS_ENV.socket]: ADVISOR_RUNS_SOCKET,
+    [ADVISOR_RUNS_ENV.root]: paths.advisorRuns,
   };
 }
 
@@ -358,16 +363,4 @@ export function writeControlKey(file: string, pem: string, uid = 0): void {
   writeFileSync(tmp, pem, { mode: 0o644, flag: "wx" });
   chmodSync(tmp, 0o644);
   renameSync(tmp, file);
-}
-
-/**
- * When to start a part again after it exited (the controller, or the supervisor): after a second
- * if it had run for more than a minute, otherwise twice as long as the last time, up to 30 s.
- */
-export function restartAfter(
-  ranMs: number,
-  restarts: number,
-): { restarts: number; delayMs: number } {
-  const next = ranMs > 60_000 ? 0 : restarts + 1;
-  return { restarts: next, delayMs: Math.min(30_000, 1000 * 2 ** Math.min(next, 5)) };
 }

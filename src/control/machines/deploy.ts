@@ -4,7 +4,7 @@ import { shellQuote } from "../../common/exec.ts";
 import { gpuSplit, MAX_RIG_GPUS } from "../../core/hardware.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../core/ids.ts";
-import { HARNESS_INBOX_DIR } from "../../core/paths.ts";
+import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 
 /**
  * A rig on a machine control reaches over SSH, as files and Podman Quadlet units: the same two
@@ -180,13 +180,14 @@ ${env({
   ...(p.bus ? { THERMITE_NATS_URL: p.bus.url, THERMITE_NATS_CA_FILE: SUPERVISOR_BUS_CA } : {}),
 })}
 Volume=thermite-${p.rig}-supervisor:/var/lib/thermite-supervisor
-Volume=thermite-${p.rig}-inbox:/inbox:U
+Volume=thermite-${p.rig}-inbox:${SUPERVISOR_INBOX_DIR}
 Volume=thermite-${p.rig}-outbox:/outbox:ro
 ${secret("secrets/harness-supervisor-token")}
 ${secret("secrets/control-rig-token")}${p.bus ? `\nVolume=${unitDir}/bus:/keys:ro,Z` : ""}
 Network=${net}.network
 Network=${egress}.network
 DropCapability=ALL
+AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETGID SETUID
 NoNewPrivileges=true
 ${logAndHealth(HEALTH_URLS.supervisor)}
 

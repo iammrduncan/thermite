@@ -31,6 +31,8 @@ import { COMMAND_CHECK, EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/sup
 import { untoldKinds } from "../core/kb.ts";
 import { rigInboxPrefix } from "../core/link/users.ts";
 import type { McpConnection, McpUnavailable, McpUse } from "../core/mcp.ts";
+import { SUPERVISOR_INBOX_DIR } from "../core/paths.ts";
+import { advisorIsolation } from "./advisor-runs/index.ts";
 import {
   type AdviseState,
   AdvisorsConfig,
@@ -165,7 +167,9 @@ async function main(): Promise<void> {
   const remote = env.THERMITE_RESULTS_REMOTE || undefined;
   const sshKeyFile = env.THERMITE_RESULTS_KEY_FILE || undefined;
   const knownHostsFile = env.THERMITE_RESULTS_KNOWN_HOSTS || undefined;
-  const inboxDir = env.THERMITE_INBOX_DIR ?? "/inbox";
+  const inboxDir = env.THERMITE_INBOX_DIR ?? SUPERVISOR_INBOX_DIR;
+  // What an advisor user reaches, for the isolation check: at the start, and before each check.
+  const isolation = advisorIsolation({ env, home, inboxDir, harnessUrl, harnessToken });
   // The free space a model download leaves where it lands (goal 173): read now, so a bad value
   // stops the supervisor here.
   const floorBytes = readNumber(env, SUPERVISOR_NUMBERS.diskFloorGib) * GIB;
@@ -189,8 +193,9 @@ async function main(): Promise<void> {
     delivered: new Set<string>(),
     turn: oneAtATime(),
     // Sources are fetched only for a command the harness found control signed for this rig.
-    stage: (cmd: Parameters<typeof stageSigned>[1]) =>
-      stageSigned(
+    stage: async (cmd: Parameters<typeof stageSigned>[1]) => {
+      await isolation.before(cmd);
+      return stageSigned(
         {
           rig,
           inboxDir,
@@ -210,7 +215,8 @@ async function main(): Promise<void> {
           const r = await harness.call(COMMAND_CHECK, { body: c });
           return r.ok ? undefined : (r.reason ?? "refused");
         },
-      ),
+      );
+    },
     onDelivered: (kind: string, accepted: boolean) => {
       if (kind === "wipe_state" && accepted) wipeRequested = true;
     },
@@ -325,6 +331,7 @@ async function main(): Promise<void> {
 
   // The harness may still be starting: wait for it once, before the relays begin.
   await waitForHarness(harnessUrl, () => stopping);
+  void isolation.report("the supervisor's start");
 
   // The rig's settings and which advisors decide, from and to the harness.
   const harnessLink = harnessAdvisors(harnessUrl, harnessToken);

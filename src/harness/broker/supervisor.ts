@@ -1,8 +1,19 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  chownSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { log, logError, logWarn } from "../../common/log.ts";
+import { restartAfter } from "../../common/restart.ts";
+import { RunAsServer } from "../../common/run-as/index.ts";
+import { ADVISOR_RUNS_SOCKET } from "../../core/advisor-runs.ts";
 import { podTunnelDirs } from "../../core/tunnel.ts";
 import { type Broker, FENCE, fatalExit, SECRET_VARS, SG, SU, TG } from "./context.ts";
 import { finishIfStopped } from "./controller.ts";
@@ -11,7 +22,6 @@ import {
   makeSupervisorFiles,
   pullMode,
   readEnrollment,
-  restartAfter,
   SUPERVISOR_RECORD,
   type SupervisorPaths,
   type SupervisorRecord,
@@ -138,6 +148,43 @@ export async function awaitEnrollment(broker: Broker, paths: SupervisorPaths): P
     await new Promise((r) => setTimeout(r, 1000));
   }
   return false;
+}
+
+/**
+ * The advisors' runner (src/common/run-as/) for the supervisor in one container: each advisor's
+ * program runs as an advisor user of its own, under no_new_privs and in the GPU fence with no card
+ * as the supervisor does, in a folder of the runs' root (beside the supervisor's state, which root
+ * made at this start: the advisor users pass through it, listing nothing). Its socket is in a
+ * folder only root and the supervisor's group may enter. Resolves once it serves.
+ */
+export async function startAdvisorRuns(broker: Broker, paths: SupervisorPaths): Promise<void> {
+  rmSync(paths.advisorRuns, { recursive: true, force: true });
+  mkdirSync(paths.advisorRuns, { recursive: true });
+  chownSync(paths.advisorRuns, SU, SG);
+  chmodSync(paths.advisorRuns, 0o711);
+  const socketDir = dirname(ADVISOR_RUNS_SOCKET);
+  mkdirSync(socketDir, { recursive: true });
+  chownSync(socketDir, 0, SG);
+  chmodSync(socketDir, 0o750);
+  rmSync(ADVISOR_RUNS_SOCKET, { force: true });
+  const server = new RunAsServer({
+    socketPath: ADVISOR_RUNS_SOCKET,
+    root: paths.advisorRuns,
+    callerGid: SG,
+    wrap: supervisorCommand(broker, []),
+  }).listen();
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.once("listening", () => {
+      chownSync(ADVISOR_RUNS_SOCKET, 0, SG);
+      chmodSync(ADVISOR_RUNS_SOCKET, 0o660);
+      log("broker", "serving the advisors' runner", {
+        socket: ADVISOR_RUNS_SOCKET,
+        runs: paths.advisorRuns,
+      });
+      resolve();
+    });
+  });
 }
 
 /** The supervisor's command, once it runs as its user (one-container.ts: supervisorArgv). */

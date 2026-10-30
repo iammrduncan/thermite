@@ -38,3 +38,14 @@ export function joinPath(...paths: string[]): string {
  * Compose, the machine units and the cluster manifests mount the inbox here.
  */
 export const HARNESS_INBOX_DIR = "/controller/inbox";
+
+/**
+ * Where the supervisor fills the inbox in its own image: inside a folder of the image's own that
+ * only root and the supervisor's group may enter (containers/supervisor/Containerfile), so that no
+ * advisor's program reaches what the supervisor fetched, whatever the modes in the mounted folder.
+ * Compose, the machine units and the cluster manifests mount the inbox here.
+ */
+export const SUPERVISOR_INBOX_DIR = "/supervisor/inbox";
+
+/** The supervisor's home in its passwd entry, in both images: ssh finds ~/.ssh there. */
+export const SUPERVISOR_PASSWD_HOME = "/var/lib/thermite-supervisor/home";

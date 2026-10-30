@@ -259,7 +259,8 @@ services:
       THERMITE_NATS_CA_FILE: /keys/bus-ca.pem
     volumes:
       - supervisor-home:/var/lib/thermite-supervisor
-      - ./.dev/inbox:/inbox
+      # In the image's folder that only the supervisor's group enters: no advisor reaches the inbox.
+      - ./.dev/inbox:/supervisor/inbox
       - outbox:/outbox:ro
       - results:/results
       - ./.dev/advisors:/etc/thermite/advisors:ro
@@ -267,7 +268,10 @@ services:
     secrets: [harness-supervisor-token, control-rig-token]
     networks: [rig, control, egress]
     depends_on: [harness, control]
+    # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
+    # supervisor and each advisor's program as users of their own. The supervisor keeps none.
     cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
     logging: *logging
@@ -355,7 +359,8 @@ services:
       THERMITE_NATS_CA_FILE: /keys/bus-ca.pem
     volumes:
       - supervisor2-home:/var/lib/thermite-supervisor
-      - ./.dev/inbox:/inbox
+      # In the image's folder that only the supervisor's group enters: no advisor reaches the inbox.
+      - ./.dev/inbox:/supervisor/inbox
       - outbox2:/outbox:ro
       - results:/results
       - ./.dev/advisors:/etc/thermite/advisors:ro
@@ -363,7 +368,10 @@ services:
     secrets: [harness2-supervisor-token, control-rig-token-2]
     networks: [rig2, control, egress]
     depends_on: [harness-2, control]
+    # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
+    # supervisor and each advisor's program as users of their own. The supervisor keeps none.
     cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
     logging: *logging

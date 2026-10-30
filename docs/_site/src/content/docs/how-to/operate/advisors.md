@@ -114,7 +114,7 @@ A file with a mistake stops the supervisor: its log has a `fatal` line with the 
 
 The example uses the `openai` runtime: a model API that the supervisor calls itself, with read-only tools. Add `"api": "anthropic"` for Anthropic's API. Four other runtimes exist:
 
-- `cli`: a command-line agent that you install in the supervisor's image. It runs as the supervisor's user, so its `argv` must turn off the agent's own shell and file tools, and the file must say `"restricted": true`: your statement that the `argv` does so.
+- `cli`: a command-line agent that you install in the supervisor's image. It runs as an advisor user of its own, as every advisor's program does ([The supervisor's users](../../reference/ports-volumes-secrets.md#the-supervisors-users)), so it reads none of the supervisor's tokens or keys; still, its `argv` must turn off the agent's own shell and file tools, and the file must say `"restricted": true`: your statement that the `argv` does so.
 - `claude-code`: Claude Code with a Claude subscription. A subscription is easier to give on **Edit rig**, where control keeps its token.
 - `opencode` and `codex`: OpenCode v2 and the Codex CLI, which the supervisor image carries. Thermite sets each up with none of its own tools, only the search of the run's past research, the teachers' reads of the run's code and evidence and of its own research, and the kit's MCP tools, and reaches the model through a proxy for each call, which adds the key.
 

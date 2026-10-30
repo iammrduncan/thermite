@@ -7,6 +7,7 @@ import {
   isolationSelftest,
   isolationSummary,
   oneContainerTargets,
+  readSupervisorIsolation,
 } from "../selftest/index.ts";
 import type { HarnessService } from "../service/index.ts";
 import { checksDir, smokeCheck } from "../smoke-check.ts";
@@ -51,6 +52,7 @@ export function addIsolationCheck(ctx: ControllerContext, service: HarnessServic
           oneContainer: oneContainerTargets(env),
           snapshotDir: env.THERMITE_STATE_SNAPSHOT_DIR || undefined,
           clusterApi: clusterApi(env),
+          supervisor: readSupervisorIsolation(paths.stateDir),
         });
         return { ok: report.ok, summary: isolationSummary(report), detail: { ...report } };
       },

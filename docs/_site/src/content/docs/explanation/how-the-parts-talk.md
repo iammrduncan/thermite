@@ -17,7 +17,7 @@ flowchart LR
   C -.->|commands and config, with the bus| N -.-> S
   C <-->|every rig's events, kept and applied| N
   C -->|commands, settings, past research, kits| S
-  S -->|commands, settings, content in /inbox| H[Harness]
+  S -->|commands, settings, content in the inbox| H[Harness]
   H -->|events, live lines, exports in /outbox| S
   H <-->|one socket| K[Broker]
   K -->|starts as each role's user| P[Judge's builds and runs, lanes, agents]

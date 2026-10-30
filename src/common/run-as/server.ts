@@ -44,6 +44,11 @@ export interface RunAsServerOptions {
    * root (development, tests), every run is the helper's own user, in its own process group.
    */
   separate?: boolean | undefined;
+  /**
+   * A command each run's program starts under, its argv after it: in the one-container rig image,
+   * no_new_privs and the GPU fence, as the supervisor's own (src/harness/broker/one-container.ts).
+   */
+  wrap?: readonly string[] | undefined;
 }
 
 /** The processes of a user, from /proc (Linux). */
@@ -109,7 +114,7 @@ export class RunAsServer {
   readonly server: Server;
 
   constructor(o: RunAsServerOptions) {
-    this.o = { ...o, separate: o.separate ?? process.getuid?.() === 0 };
+    this.o = { ...o, separate: o.separate ?? process.getuid?.() === 0, wrap: o.wrap ?? [] };
     this.server = createServer((sock) => this.serve(sock));
   }
 
@@ -151,6 +156,27 @@ export class RunAsServer {
       // Its user may read and change what it now owns; the caller's group may read it.
       chmodSync(p, st.isDirectory() ? 0o2750 : (st.mode & 0o700) | 0o040);
     }
+  }
+
+  /**
+   * Gives a run's folder back to the caller once every process of its user has ended, so that it
+   * reads what the run left, a folder the program made private among it: what the run's user owns
+   * there, at most ADVISOR_RUN_LIMITS.handBackEntries entries, with no set-id bit kept. A file
+   * with a second hard link, or anything else, stays as it is until the folder is removed. Links
+   * are never followed.
+   */
+  private handBack(path: string, uid: number, caller: number): void {
+    let left = ADVISOR_RUN_LIMITS.handBackEntries;
+    const walk = (p: string) => {
+      if (left-- <= 0) return;
+      const st = lstatSync(p);
+      if (st.uid !== uid || (st.isFile() && st.nlink > 1)) return;
+      if (st.isDirectory()) for (const e of readdirSync(p)) walk(join(p, e));
+      lchownSync(p, caller, this.o.callerGid);
+      if (st.isDirectory()) chmodSync(p, 0o2750);
+      else if (st.isFile()) chmodSync(p, (st.mode & 0o700) | 0o640);
+    };
+    walk(path);
   }
 
   /** One run, as a free advisor user, from its folder's hand-over to every process's end. */
@@ -197,16 +223,30 @@ export class RunAsServer {
         done = true;
         clearTimeout(timer);
         cleanUp();
+        let back: string | undefined;
+        try {
+          if (separate) this.handBack(path, uid, caller);
+        } catch (e) {
+          back = `the run's folder was not given back: ${errorText(e)}`;
+          log(
+            "advisor-runs",
+            "a run's folder was not given back",
+            { dir: path, error: back },
+            "warn",
+          );
+        }
         release();
         sock.off("close", abandoned);
-        const stderr = error ? `${err()}${error}`.slice(-ADVISOR_RUN_LIMITS.stderrChars) : err();
+        const more = [error, back].filter(Boolean).join("\n");
+        const stderr = more ? `${err()}${more}`.slice(-ADVISOR_RUN_LIMITS.stderrChars) : err();
         resolve({ user: n, exitCode, signal, timedOut, stdout: out(), stderr });
       };
       sock.on("close", abandoned);
       const stdio: "pipe"[] = ["pipe", "pipe", "pipe"];
       if (req.token !== undefined) stdio[3] = "pipe";
+      const argv = [...this.o.wrap, ...req.argv];
       try {
-        child = spawn(req.argv[0] as string, req.argv.slice(1), {
+        child = spawn(argv[0] as string, argv.slice(1), {
           cwd: path,
           // Only what the request gives, in its own folder: nothing of the helper's.
           env: {

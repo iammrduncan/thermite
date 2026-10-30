@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { log, logWarn } from "../../common/log.ts";
+import { restartAfter } from "../../common/restart.ts";
 import { type Broker, running, SECRET_VARS, TG, TU } from "./context.ts";
 import { prepareDirectories, wipeIfMarked } from "./folders.ts";
-import { isRootOnly, isRunpodVariable, isSupervisorOnly, restartAfter } from "./one-container.ts";
+import { isRootOnly, isRunpodVariable, isSupervisorOnly } from "./one-container.ts";
 import { killScope } from "./process.ts";
 import { roleIds } from "./runner.ts";
 import { ALL_ROLES } from "./server.ts";

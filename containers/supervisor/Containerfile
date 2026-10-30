@@ -91,13 +91,23 @@ COPY --from=opencode /usr/local/share/doc/opencode/ /usr/local/share/doc/opencod
 COPY --from=codex /out/opt/ /opt/
 COPY --from=codex /out/doc/ /usr/local/share/doc/
 RUN if [ -x /opt/codex/bin/codex ]; then ln -s /opt/codex/bin/codex /usr/local/bin/codex; fi
-# The runtime user needs a passwd entry: ssh (git over SSH) refuses a uid without one, and finds
-# ~/.ssh from the entry's home, not from $HOME.
+# The supervisor's user needs a passwd entry: ssh (git over SSH) refuses a uid without one, and
+# finds ~/.ssh from the entry's home, not from $HOME. Each advisor's program runs as one of the
+# advisor users, advisor-1..advisor-8 (uid and gid 10081..10088, src/core/advisor-runs.ts), one
+# for each call while it runs, in none of the supervisor's groups.
 RUN groupadd -g 10001 supervisor \
- && useradd -u 10001 -g 10001 -M -d /var/lib/thermite-supervisor/home -s /usr/sbin/nologin supervisor
-# Mount points owned by the runtime user, so new named volumes inherit the ownership.
-RUN mkdir -p /var/lib/thermite-supervisor/home /results /outbox \
- && chown 10001:10001 /var/lib/thermite-supervisor /var/lib/thermite-supervisor/home /results \
+ && useradd -u 10001 -g 10001 -M -d /var/lib/thermite-supervisor/home -s /usr/sbin/nologin supervisor \
+ && for n in $(seq 1 8); do \
+      groupadd -g $((10080 + n)) advisor-$n \
+      && useradd -u $((10080 + n)) -g advisor-$n -M -d /nonexistent -s /usr/sbin/nologin advisor-$n; \
+    done
+# Mount points owned by the supervisor's user, so new named volumes inherit the ownership. The
+# inbox is mounted in /supervisor (src/core/paths.ts), root's folder that only the supervisor's
+# group may enter: no advisor's program reaches what the supervisor fetched (a kit's bundle among
+# it), whatever the modes in the mounted folder are.
+RUN mkdir -p /var/lib/thermite-supervisor/home /results /outbox /supervisor/inbox \
+ && chown 10001:10001 /var/lib/thermite-supervisor /var/lib/thermite-supervisor/home /results /supervisor/inbox \
+ && chown 0:10001 /supervisor && chmod 0750 /supervisor \
  && chown 10010:10001 /outbox && chmod 2750 /outbox
 # No set-id file anywhere, as in every Thermite image: no process in the container can gain
 # privileges through a setuid or setgid program. Last, after every package; the build fails if one
@@ -109,6 +119,10 @@ ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
 # Thermite's version from package.json on its calls to control, which compares them with its own.
 ARG THERMITE_COMMIT=
 ENV THERMITE_COMMIT=${THERMITE_COMMIT}
-USER 10001:10001
+# The entry runs as root, as the harness's broker does: it closes the supervisor's secrets, state,
+# inbox and results to the advisor users, serves the runner that starts each advisor's program as
+# one of them, and starts the supervisor as its own user (src/supervisor/advisor-runs/main.ts).
+# It needs only CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID and SETUID (compose.yaml drops the rest);
+# the supervisor keeps none.
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "/opt/thermite/dist/supervisor/main.js"]
+CMD ["node", "/opt/thermite/dist/supervisor/advisor-runs/main.js"]
