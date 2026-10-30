@@ -235,11 +235,11 @@ export async function loopTrials(c) {
         return { FAKE_TUI_SCRIPT: script };
       },
       async (con) => {
-        // Its first message is the whole prompt, the brief inside it.
+        // Its first message is the whole prompt: its start scrolls off, its brief stays on screen.
         try {
           await c.until(
             "its first message",
-            async () => /user: /.test(await fakeShows(con)),
+            async () => /TERMINAL-CHECK-1/.test(await fakeShows(con)),
             60_000,
           );
         } catch (err) {
