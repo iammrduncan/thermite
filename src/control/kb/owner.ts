@@ -1,22 +1,21 @@
 import { z } from "zod";
-import { KB_OUTCOMES, KbAddress, KbKind } from "../../core/kb.ts";
+import { KB_OUTCOMES, KbKind } from "../../core/kb.ts";
 import {
   KB_IS_DATA,
   KB_OFFSET_MAX,
   KB_QUERIES_MAX,
-  KB_READ_PAGE,
   KB_SEARCH_DEFAULT,
   KB_SEARCH_MAX,
   KB_SEEN_MAX,
   kbSearchShape,
 } from "../../core/link/kb.ts";
 import type { ControlStore } from "../store/index.ts";
-import { foundOf, hitOf, kbFindOf, textPage } from "./asks.ts";
+import { foundOf, hitOf, kbFindOf } from "./asks.ts";
 
 /**
- * The owner's search and read of the knowledge base (goal 175), the same on REST (`GET
- * /v1/kb/search`, `GET /v1/kb/item`), MCP (`kb_search`, `kb_read`) and the command line (`thermite
- * kb`): every collection, or those named, searched as an agent searches (store/kb/search.ts), each
+ * The owner's search of the knowledge base (goal 175), the same on REST (`GET /v1/kb/search`), MCP
+ * (`kb_search`) and the command line (`thermite kb search`); the owner's read is in read.ts. Every
+ * collection, or those named, searched as an agent searches (store/kb/search.ts), each
  * hit with its id (Start a run's `past` takes it), its address, its slot, its outcome, an excerpt,
  * why it matched, its passage and, for an experiment, its result; with how many matched, the next
  * page, where the words land and how many items hold each.
@@ -68,27 +67,6 @@ export const kbSearchFields = {
 export const KbSearchQuery = z.strictObject(kbSearchFields);
 export type KbSearchQuery = z.infer<typeof KbSearchQuery>;
 
-/** A read's fields over REST and MCP. */
-export const kbReadFields = {
-  address: KbAddress.describe("The item's address, <campaign>/<run>/<slot>/<kind>:<id>"),
-  version: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe("One of its versions; left out: its newest"),
-  offset: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe(
-      `Where its text starts, in characters: a hit's passage.from, or next_offset of the read before. A read gives ${KB_READ_PAGE.toLocaleString("en-US")} characters at most`,
-    ),
-};
-export const KbReadQuery = z.strictObject(kbReadFields);
-export type KbReadQuery = z.infer<typeof KbReadQuery>;
-
 /** The owner's search: a page of hits, best first, and what the search says beside them. */
 export function ownerKbSearch(store: ControlStore, s: KbSearchQuery) {
   const kb = store.kb();
@@ -107,34 +85,5 @@ export function ownerKbSearch(store: ControlStore, s: KbSearchQuery) {
     collections,
     ...foundOf(r),
     hits: r.hits.map((x) => ({ id: x.id, ...hitOf(x, x), result: kb.resultOf(x) })),
-  };
-}
-
-/** The owner's read of one item: one version whole, its links, and how many versions it has. */
-export function ownerKbRead(store: ControlStore, q: KbReadQuery) {
-  const kb = store.kb();
-  const x = kb.at(q.address);
-  if (!x) return { error: `the knowledge base has no item ${q.address}` } as const;
-  const versions = kb.versions(x.id);
-  const v =
-    q.version === undefined ? versions.at(-1) : versions.find((o) => o.version === q.version);
-  if (!v)
-    return {
-      error: `${q.address} has versions 1 to ${versions.length}, not ${q.version}`,
-    } as const;
-  const { excerpt: _e, why: _w, passage: _p, ...item } = hitOf(x);
-  return {
-    note: KB_IS_DATA,
-    item: {
-      id: x.id,
-      ...item,
-      title: v.title,
-      version: v.version,
-      at: v.at,
-      ...textPage(v.body, q.offset),
-      versions: versions.length,
-      links: v.links,
-      result: kb.resultOf(x),
-    },
   };
 }

@@ -9,6 +9,7 @@ import {
   KbSlot,
   kbAddress,
   kbItemType,
+  withdrawnWhy,
 } from "../../core/kb.ts";
 import { KB_FILTER_MAX, KB_IS_DATA } from "../../core/link/kb.ts";
 import type { ControlStore, KbFolderRow, KbListAt, KbListCounts } from "../store/index.ts";
@@ -226,6 +227,7 @@ export function listedItem(x: KbItem) {
     at: x.updated_at,
     version: x.version,
     file: x.file,
+    withdrawn: withdrawnWhy(x.kind, x.meta),
   };
 }
 export type KbListedItem = ReturnType<typeof listedItem>;

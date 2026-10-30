@@ -61,8 +61,13 @@ const main = (html: string) =>
   html.slice(html.indexOf('<section class="kx-main"'), html.indexOf("</section>"));
 const tree = (html: string) =>
   html.slice(html.indexOf('<nav class="kx-tree"'), html.indexOf('<section class="kx-main"'));
+/** The rows' addresses: a folder's page, or the item a row opens in the pane, as its page's. */
 const rows = (html: string) =>
-  [...main(html).matchAll(/<tr data-href="([^"]+)"/g)].map((m) => decodeURIComponent(m[1] ?? ""));
+  [...main(html).matchAll(/<tr data-(item-)?href="([^"]+)"/g)].map((m) => {
+    const href = (m[2] ?? "").replace(/&amp;/g, "&");
+    const item = new URL(href, "http://control").searchParams.get("item");
+    return item ? `/ui/knowledge/${item}` : decodeURIComponent(href);
+  });
 const count = (html: string) =>
   /<span class="kx-count" role="status">([^<]*)<\/span>/.exec(html)?.[1];
 
@@ -110,7 +115,7 @@ describe("the knowledge explorer", () => {
     ]);
     assert.match(
       main(slot.html),
-      /<a href="\/ui\/knowledge\/gemv\/gs-1\/worker-1\/reference:2">A paper on wide loads<\/a><\/span><span class="kx-addr">gemv\/gs-1\/worker-1\/reference:2<\/span>/,
+      /<a href="\/ui\/knowledge\/gemv\/gs-1\/worker-1\?item=gemv%2Fgs-1%2Fworker-1%2Freference%3A2" data-item>A paper on wide loads<\/a><\/span><span class="kx-addr">gemv\/gs-1\/worker-1\/reference:2<\/span>/,
     );
     assert.match(main(slot.html), /<td class="c-size num">50\.8 KiB<\/td>/);
     assert.match(main(slot.html), /<td class="c-writer">worker-1<\/td>/);
@@ -119,16 +124,19 @@ describe("the knowledge explorer", () => {
     const item = await s.page("/ui/knowledge/gemv/gs-1/planner/decision:1");
     assert.equal(item.status, 200);
     assert.match(item.html, /<h2>Tile next<\/h2>/);
-    assert.match(item.html, /<span class="chip">decision<\/span><span>planner<\/span>/);
+    assert.match(
+      item.html,
+      /<span class="chip">decision<\/span><span class="mono">planner<\/span><span aria-hidden="true">·<\/span><span>planner<\/span>/,
+    );
     assert.match(
       item.html,
       /<code>gemv\/gs-1\/planner\/decision:1<\/code><button type="button" class="ghost sm" data-copy="gemv\/gs-1\/planner\/decision:1" aria-label="Copy the address">/,
     );
-    assert.match(item.html, /<dt>Version<\/dt><dd>1 of 1<\/dd>/);
+    assert.match(item.html, /<summary class="kx-ddb">Version 1 of 1<svg/);
     assert.match(item.html, /<div class="kx-text">Tiling comes after the loads\.<\/div>/);
     assert.match(
       item.html,
-      /<span class="chip">follows<\/span><a href="\/ui\/knowledge\/gemv\/gs-1\/worker-1\/finding:1"><code>gemv\/gs-1\/worker-1\/finding:1<\/code><\/a>/,
+      /<a class="kx-link" href="\/ui\/knowledge\/gemv\/gs-1\/worker-1\/finding:1"><span class="chip ">follows<\/span>[\s\S]*?<span class="kx-addr">gemv\/gs-1\/worker-1\/finding:1<\/span>/,
     );
     assert.match(
       item.html,
@@ -142,10 +150,13 @@ describe("the knowledge explorer", () => {
     const exp = await s.page("/ui/knowledge/gemv/gs-1/records/experiment:x-1");
     assert.match(
       exp.html,
-      /<span>records<\/span><span aria-hidden="true">·<\/span><span>Thermite&#39;s code<\/span>|<span>Thermite's code<\/span>/,
+      /<span class="mono">records<\/span><span aria-hidden="true">·<\/span><span>Thermite's code<\/span>/,
     );
     assert.match(exp.html, /<span class="chip ok">won<\/span>/);
-    assert.match(exp.html, /<dt>Result<\/dt><dd>tried: attempt a-1 \(submitted\), win confirmed/);
+    assert.match(
+      exp.html,
+      /<span class="muted">Result:<\/span> tried: attempt a-1 \(submitted\), win confirmed/,
+    );
     // An address the knowledge base has not: said, with the tree.
     for (const [path, words] of [
       ["/ui/knowledge/nope", "the knowledge base has no collection nope"],
@@ -176,9 +187,13 @@ describe("the knowledge explorer", () => {
     assert.deepEqual(rows(records.html), [
       "/ui/knowledge/gemv/gs-1/records/doc:lane-1/drafts/outline.md",
     ]);
+    // Its preview's Open full page: its page's address keeps the slashes in one part.
+    const preview = await s.page(
+      `/ui/knowledge/gemv/gs-1/records?item=${encodeURIComponent("gemv/gs-1/records/doc:lane-1/drafts/outline.md")}`,
+    );
     assert.match(
-      main(records.html),
-      /href="\/ui\/knowledge\/gemv\/gs-1\/records\/doc:lane-1%2Fdrafts%2Foutline\.md"/,
+      preview.html,
+      /<a class="kx-full" href="\/ui\/knowledge\/gemv\/gs-1\/records\/doc:lane-1%2Fdrafts%2Foutline\.md">/,
     );
     const doc = await s.page("/ui/knowledge/gemv/gs-1/records/doc:lane-1%2Fdrafts%2Foutline.md");
     assert.equal(doc.status, 200);

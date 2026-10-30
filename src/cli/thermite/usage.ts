@@ -176,8 +176,10 @@ export const USAGE = `usage: thermite <command> [options]
   kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
                                       one item of the knowledge base, by its address
                                       (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
-                                      or version N, with its links, and its text from --offset,
-                                      10,000 characters at most. It prints JSON
+                                      or version N, with its text from --offset, 10,000
+                                      characters at most, every version, its writer, withdrawn
+                                      evidence, its file's facts, its links both ways and which
+                                      running runs can read it. It prints JSON
   kb list [PLACE] [--kind K ...] [--outcome O ...] [--type T ...] [--slot S ...]
          [--sort S] [--order asc|desc] [--offset N] [--limit N] --control URL --token-file F
                                       what one place of the knowledge base holds, as the

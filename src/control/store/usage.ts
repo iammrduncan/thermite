@@ -117,6 +117,19 @@ export class UsageRecords extends StorePart {
   }
 
   /**
+   * The program (harness) an agent of a run on a rig made its newest model call in; undefined
+   * when control has no call of it.
+   */
+  programOf(rig: string, run: string, agent: string): string | undefined {
+    const r = this.db
+      .prepare(
+        "select harness from model_call where rig = ? and run = ? and agent = ? order by at desc limit 1",
+      )
+      .get(rig, run, agent) as Row | undefined;
+    return r ? String(r.harness) : undefined;
+  }
+
+  /**
    * A run's model calls in its reviews (goal 116), by the review's number: the review panel's
    * records, whose round the supervisor names "review N".
    */

@@ -7,6 +7,7 @@ import {
   KbKind,
   type KbOutcome,
   KbSlot,
+  readKbAddress,
 } from "../../core/kb.ts";
 import { KB_OFFSET_MAX, KB_QUERY_MAX, KB_SEARCH_MAX } from "../../core/link/kb.ts";
 import {
@@ -14,6 +15,8 @@ import {
   type KbFolder,
   KbReadQuery,
   KbSearchQuery,
+  kbFileOf,
+  kbFileResponse,
   kbFolders,
   ownerKbList,
   ownerKbRead,
@@ -28,12 +31,14 @@ import {
   type ExplorerQuery,
   type ExplorerSearch,
   explorerFrame,
-  itemHtml,
+  explorerHref,
   KNOWLEDGE_JS,
   pastWords,
+  readerHtml,
+  readerMissing,
   treeList,
 } from "../ui/knowledge/index.ts";
-import { knowledgeParts } from "../ui/urls.ts";
+import { knowledgeHref, knowledgeParts } from "../ui/urls.ts";
 import { campaignModes } from "../views/index.ts";
 import { campaignHelpers } from "./campaigns/shared.ts";
 import type { Ctx, Dashboard } from "./context.ts";
@@ -46,7 +51,7 @@ import type { Ctx, Dashboard } from "./context.ts";
  * and kb_read (control/kb/), each called here as there.
  */
 export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
-  const { page, store, views } = dash;
+  const { page, store, views, opts } = dash;
   const { pastResults } = campaignHelpers(dash);
 
   /** A list in the page's address: given with commas or as a repeated parameter, each once. */
@@ -61,6 +66,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   /** What the address asks; a value the page does not know is left out. */
   const queryOf = (c: Ctx): ExplorerQuery => {
     const order = c.req.query("order");
+    const version = Math.floor(Number(c.req.query("version")));
     return {
       q: (c.req.query("q") ?? "").slice(0, KB_QUERY_MAX),
       kinds: listOf(c, "kind").filter((k): k is KbKind => KbKind.safeParse(k).success),
@@ -74,13 +80,22 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       sort: KB_LIST_SORTS.find((s) => s === c.req.query("sort")),
       order: order === "asc" || order === "desc" ? order : undefined,
       offset: Math.max(0, Math.floor(Number(c.req.query("offset")) || 0)),
+      item: readKbAddress(c.req.query("item") ?? "") ? c.req.query("item") : undefined,
+      version: version > 0 ? version : undefined,
     };
   };
 
   /** The explorer's page around its main part, with the tree open down to the open folder. */
   const explorer = (
     c: Ctx,
-    o: { parts: string[]; names?: string[]; query: ExplorerQuery; main: string; summary?: string },
+    o: {
+      parts: string[];
+      names?: string[];
+      query: ExplorerQuery;
+      main: string;
+      pane?: string;
+      summary?: string;
+    },
   ) => {
     const vs = views();
     const [campaign, run] = o.parts;
@@ -114,6 +129,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         kids,
         current: folder,
         main: o.main,
+        pane: o.pane,
       }),
       vs,
     );
@@ -142,17 +158,29 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     if (!at) return notFound(c, [], query, "This is not an address in the knowledge base.");
     const item = parts[3];
     if (item !== undefined) {
+      const address = parts.join("/");
       const read = KbReadQuery.safeParse({
-        address: parts.join("/"),
+        address,
+        ...(query.version ? { version: query.version } : {}),
         ...(query.offset ? { offset: query.offset } : {}),
       });
-      const r = read.success ? ownerKbRead(store, read.data) : { error: "not an item's address" };
+      const r = read.success
+        ? ownerKbRead(store, views(), read.data)
+        : { error: "not an item's address" };
       if ("error" in r) return notFound(c, parts, query, String(r.error));
       return explorer(c, {
         parts,
         names: [...placeParts, r.item.title || item],
-        query: { ...query, q: "", offset: 0 },
-        main: itemHtml(r.item, Date.now()),
+        query: { ...query, q: "", offset: 0, item: undefined, version: undefined },
+        main: readerHtml(
+          r.item,
+          {
+            mode: "page",
+            version: (v) => `${knowledgeHref(address)}${v ? `?version=${v}` : ""}`,
+            item: (a) => knowledgeHref(a),
+          },
+          Date.now(),
+        ),
       });
     }
     const vs = views();
@@ -174,6 +202,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     return explorer(c, {
       parts: placeParts,
       query,
+      pane: query.item ? pane(placeParts.join("/"), query, query.item) : undefined,
       main: contentsHtml({
         place: list.at,
         query,
@@ -183,6 +212,30 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         now: Date.now(),
       }),
     });
+  };
+
+  /**
+   * The preview pane of an item beside the open folder's contents, from the owner's read of it
+   * (kb_read): its links keep the folder's view, with the item and its version in the address.
+   */
+  const pane = (folder: string, query: ExplorerQuery, address: string) => {
+    const close = explorerHref(folder, { ...query, item: undefined, version: undefined });
+    const read = KbReadQuery.safeParse({
+      address,
+      ...(query.version ? { version: query.version } : {}),
+    });
+    const r = read.success ? ownerKbRead(store, views(), read.data) : { error: "not an address" };
+    if ("error" in r) return readerMissing(String(r.error), close);
+    return readerHtml(
+      r.item,
+      {
+        mode: "pane",
+        version: (v) => explorerHref(folder, { ...query, version: v }),
+        item: (a) => explorerHref(folder, { ...query, item: a, version: undefined }),
+        close,
+      },
+      Date.now(),
+    );
   };
 
   /**
@@ -227,6 +280,18 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     const at = readKbPlace(c.req.query("at") ?? "");
     if (!at?.campaign || at.slot) return c.text("no such folder", 404);
     return c.html(treeList(kbFolders(store, views(), at, { sort: "name" }), new Map(), ""));
+  });
+
+  // One version's file, downloaded: always an attachment, never a page of the dashboard's.
+  app.get("/ui/kb/file", (c) => {
+    const v = c.req.query("version");
+    const q = KbReadQuery.safeParse({
+      address: c.req.query("address") ?? "",
+      ...(v !== undefined ? { version: Number(v) } : {}),
+    });
+    if (!q.success) return c.text("not an item's address", 400);
+    const f = kbFileOf(store, opts.kbFiles, q.data.address, q.data.version);
+    return "error" in f ? c.text(f.error, f.status) : kbFileResponse(f);
   });
 
   app.get("/ui/assets/knowledge.js", (c) =>

@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
-import { KB_ITEM, KB_LIST, KB_SEARCH, PROPAGATE } from "../../core/api/control/owner.ts";
+import { KB_FILE, KB_ITEM, KB_LIST, KB_SEARCH, PROPAGATE } from "../../core/api/control/owner.ts";
 import { CHAMPION_PATCH } from "../../core/api/control/rigs.ts";
 import { keepChampionPatch } from "../champions.ts";
 import { type ExportFiles, mountExports } from "../exports.ts";
@@ -10,6 +10,8 @@ import {
   KbListQuery,
   KbReadQuery,
   KbSearchQuery,
+  kbFileOf,
+  kbFileResponse,
   ownerKbList,
   ownerKbRead,
   ownerKbSearch,
@@ -75,8 +77,20 @@ export function resultRoutes(
       ...(at !== undefined ? { offset: Number(at) } : {}),
     });
     if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
-    const r = ownerKbRead(store, q.data);
+    const r = ownerKbRead(store, rigViews(store, viewOpts), q.data);
     return "error" in r ? c.json(r, 404) : c.json(r);
+  });
+
+  // One version's file (goal 176): always an attachment, sent as bytes unless its type is passive.
+  app.get(KB_FILE.path, admin, (c) => {
+    const v = c.req.query("version");
+    const q = KbReadQuery.safeParse({
+      address: c.req.query("address") ?? "",
+      ...(v !== undefined ? { version: Number(v) } : {}),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    const f = kbFileOf(store, opts.kbFiles, q.data.address, q.data.version);
+    return "error" in f ? c.json({ error: f.error }, f.status) : kbFileResponse(f);
   });
 
   // The owner's list of one place (goal 176): as MCP's kb_list, and the Knowledge page.

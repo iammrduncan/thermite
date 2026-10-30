@@ -98,6 +98,16 @@ export function verdictOutcome(verdict: string | undefined): KbOutcome | null {
   return "neutral";
 }
 
+/**
+ * Why the owner withdrew an attempt's evidence (goal 174), from its verdict field as
+ * core/kb-index.ts writes it ("invalidated (withdrawn: <why>)"); null for any other item.
+ */
+export function withdrawnWhy(kind: string, meta: Record<string, string>): string | null {
+  const v = meta.verdict ?? "";
+  if (kind !== "attempt" || !/^invalidated\b/.test(v)) return null;
+  return /\(withdrawn: ([\s\S]*)\)$/.exec(v)?.[1] ?? "The owner withdrew its evidence.";
+}
+
 /** The attempt an experiment's result field names ("Result: attempt a-7 (submitted)"), if any. */
 export const resultAttempt = (result: string | undefined): string | undefined =>
   /^Result: attempt ([^\s;(]+)/.exec(result ?? "")?.[1];

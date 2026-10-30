@@ -26,6 +26,7 @@ export {
   kbAskLimit,
   serveKbAsks,
 } from "./asks.ts";
+export { type KbDownload, kbFileOf, kbFileResponse, safeFileType } from "./download.ts";
 export { followKbFiles, KB_ORPHANS_LOOK_MS, KbFiles } from "./files.ts";
 export {
   KB_LIST_DEFAULT,
@@ -42,14 +43,16 @@ export {
   ownerKbList,
   readKbPlace,
 } from "./list.ts";
+export { KbSearchQuery, kbSearchFields, ownerKbSearch } from "./owner.ts";
 export {
+  type KbReadAnswer,
+  type KbReader,
+  type KbReaderWhy,
   KbReadQuery,
-  KbSearchQuery,
   kbReadFields,
-  kbSearchFields,
   ownerKbRead,
-  ownerKbSearch,
-} from "./owner.ts";
+  readersOf,
+} from "./read.ts";
 
 /** What a grant of another campaign's collection opens, in words: every agent of the campaign. */
 export const GRANT_OPENS =

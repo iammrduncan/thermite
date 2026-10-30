@@ -32,6 +32,7 @@ import {
   itemOf,
   type KbVersion,
   keepVersion,
+  linksTo,
   versionRefusal,
   versionsOf,
   writtenFields,
@@ -374,6 +375,11 @@ export class KnowledgeBase {
     this.db
       .prepare("insert into kb_collection (campaign, made_at) values (?, ?) on conflict do nothing")
       .run(campaign, at);
+  }
+
+  /** The items whose newest version links to this address, and how each links. */
+  linksTo(address: string): { rel: string; item: KbItem }[] {
+    return linksTo(this.db, address);
   }
 
   /** Every version of an item, oldest first, each with its links. */

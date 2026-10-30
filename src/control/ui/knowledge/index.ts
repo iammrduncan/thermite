@@ -16,7 +16,7 @@ export {
   explorerFrame,
   explorerHref,
 } from "./explorer.ts";
-export { type ExplorerItem, itemHtml } from "./item.ts";
+export { fileHref, type ReaderLinks, readerHtml, readerMissing } from "./item.ts";
 export { treeList } from "./tree.ts";
 
 /**

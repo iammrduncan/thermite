@@ -168,6 +168,8 @@ Either way, the judge's jobs still waiting for those attempts, or under way, are
 
 **On the dashboard** the attempt's page shows its chip **Withdrawn** and a block **Its evidence was withdrawn**: when, by whom and why, what was withdrawn, the attempts it reached, the `invalidated` verdicts it recorded, the champions it reopened and where the run's champion moved. The run's **History** says `You withdrew attempt <attempt>: <why>. It and the <n> attempts built on it are withdrawn for good. Nothing is deleted.` (for a job: `You withdrew the measurements of judge job <job>: <why>. <n> attempts lose their verdicts, resting on them or built on what did: the judge measures them again unless the run is closed. Nothing is deleted.`), then `The run's champion moved back from #<n> to #<m> (<attempt>): its evidence was withdrawn. New trials build on #<m>.`, and for each job cancelled `The judge's job (…) was cancelled: its evidence was withdrawn: <why>.` The run's **Champions** list leaves the reopened ones out. Control's views hold each withdrawal in the run's `invalidations`, `{id, at, by, kind, subject, reason, attempts, verdicts, champions, champion}`, which [`get_run`](mcp-tools.md#get_run) and `GET /v1/runs/<run>` give as one of the run's lists.
 
+On the **Knowledge** page, the attempt's item has a warning mark in the table and **Withdrawn** in its reader, which says why on hover ([The Knowledge page](knowledge-base.md#the-knowledge-page)).
+
 ## Attempt states
 
 | State | Meaning | Dashboard says |

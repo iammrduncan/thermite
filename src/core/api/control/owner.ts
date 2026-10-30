@@ -360,6 +360,16 @@ export const KB_ITEM = {
   answer: z.looseObject({ item: z.looseObject({ text: z.string() }) }),
 } as const satisfies Route;
 /**
+ * One version's file of an item of the knowledge base (goal 176), by its `address` and `version`:
+ * its bytes, as an attachment that no browser shows or runs.
+ */
+export const KB_FILE = {
+  method: "GET",
+  path: "/v1/kb/file",
+  what: "knowledge base file",
+  answer: z.unknown(),
+} as const satisfies Route;
+/**
  * The owner's list of one place of the knowledge base (goal 176): `at`, the filters `kind`,
  * `outcome`, `type` and `slot` (lists, with commas), `sort`, `order`, `offset` and `limit`.
  */

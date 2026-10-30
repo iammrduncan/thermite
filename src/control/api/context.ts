@@ -5,6 +5,7 @@ import { type BuildInfo, buildFromHeaders } from "../../core/version.ts";
 import type { BusUsers, BusView, ConfigWriter } from "../bus/index.ts";
 import type { ClusterKubectl } from "../clusters/index.ts";
 import { Credential } from "../credential.ts";
+import type { KbFiles } from "../kb/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import type { DeploymentDriver } from "../lifecycle.ts";
 import type { MachineSsh, RigBus } from "../machines/index.ts";
@@ -87,6 +88,8 @@ export interface ControlOptions {
   kits?: KitRepos | undefined;
   /** Where control keeps the exports rigs send it (none: it takes none). */
   exportsDir?: string | undefined;
+  /** The knowledge base's files in control's state, which the owner downloads (none: none are served). */
+  kbFiles?: KbFiles | undefined;
   /** How the new-campaign page reads a project's repository (tests give their own). */
   probeRepo?: typeof probeRepository | undefined;
   /** How the new-campaign page reads a kit's kit.json from its repository (tests give their own). */

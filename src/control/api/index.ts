@@ -176,6 +176,7 @@ export function createControlApi(
     offlineAfterMs: opts.offlineAfterMs,
     rigUpdates: opts.rigUpdates,
     exportFiles,
+    kbFiles: opts.kbFiles,
   });
   app.get("/", (c) => c.redirect("/ui", 302));
   mountMcp(app, store, {

@@ -33,6 +33,9 @@ export interface ExplorerQuery {
   sort: KbListSort | undefined;
   order: "asc" | "desc" | undefined;
   offset: number;
+  /** The item in the preview pane, by its address, and its version (none: its newest). */
+  item?: string | undefined;
+  version?: number | undefined;
 }
 
 /** One hit of a search, as the owner's search gives it. */
@@ -45,6 +48,8 @@ export interface ExplorerHit {
   at: string;
   excerpt: string;
   file: { bytes: number } | null;
+  /** Why its evidence was withdrawn; none when it stands, or a search did not say. */
+  withdrawn?: string | null | undefined;
 }
 
 /** A search of the open folder, as the owner's search answers it, or why it was refused. */
@@ -88,7 +93,7 @@ const TYPE_WORD: Record<KbItemType, string> = {
   blurb: "blurbs",
   file: "files",
 };
-const TYPE_ICON: Record<KbItemType, string> = {
+export const TYPE_ICON: Record<KbItemType, string> = {
   record: icon.record,
   blurb: icon.blurb,
   file: icon.doc,
@@ -142,6 +147,8 @@ export function explorerHref(path: string, q: ExplorerQuery): string {
   if (q.sort) p.set("sort", q.sort);
   if (q.order) p.set("order", q.order);
   if (q.offset) p.set("offset", String(q.offset));
+  if (q.item) p.set("item", q.item);
+  if (q.item && q.version) p.set("version", String(q.version));
   const s = p.toString();
   return `${knowledgeHref(path)}${s ? `?${s}` : ""}`;
 }
@@ -190,10 +197,12 @@ export function explorerFrame(o: {
   kids: ReadonlyMap<string, readonly KbFolder[]>;
   current: string;
   main: string;
+  /** The preview pane, on the right of the table (item.ts). */
+  pane?: string | undefined;
 }): string {
   return `<div class="kx" data-folders="closed">
 <div class="kx-bar">${o.crumbs}${searchHtml(o.folder, o.query)}</div>
-<div class="kx-body">${treeHtml(o.collections, o.kids, o.current)}<section class="kx-main" aria-label="Contents">${o.main}</section></div>
+<div class="kx-body">${treeHtml(o.collections, o.kids, o.current)}<section class="kx-main" aria-label="Contents">${o.main}</section>${o.pane ?? ""}</div>
 </div><script src="/ui/assets/knowledge.js" defer></script>`;
 }
 
@@ -299,12 +308,18 @@ function folderRow(f: KbFolder, now: number): string {
 /** A search's excerpt: escaped, then each word it matched (between ** and **) marked. */
 const markedExcerpt = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, "<mark>$1</mark>");
 
-/** An item's row: its type's icon, its title linked to its page with its address under it, … */
-function itemRow(x: ExplorerHit, now: number): string {
-  const href = esc(knowledgeHref(x.address));
+/**
+ * An item's row: its type's icon, its title, which opens it in the preview pane, with its address
+ * under it, its kind, outcome, writer, newest change and a file's size.
+ */
+function itemRow(x: ExplorerHit, p: ExplorerPage): string {
+  const href = esc(explorerHref(p.place.path, { ...p.query, item: x.address, version: undefined }));
   const type = kbItemType(x);
   const out = x.outcome ? outcomeChip(x.outcome) : "";
-  return `<tr data-href="${href}"><td class="c-name"><span class="kx-cell" title="${TYPE_WORD[type]}">${TYPE_ICON[type]}<span class="kx-title"><span class="kx-line"><a href="${href}">${esc(x.title || x.address)}</a></span><span class="kx-addr">${esc(x.address)}</span>${x.excerpt ? `<span class="kx-snip">${markedExcerpt(x.excerpt)}</span>` : ""}</span></span></td><td class="c-kind">${esc(x.kind)}</td><td class="c-out">${out}</td><td class="c-writer">${esc(x.slot)}</td><td class="c-mod">${when(x.at, now)}</td><td class="c-size num">${x.file ? esc(sizeWords(x.file.bytes)) : ""}</td></tr>`;
+  const wd = x.withdrawn
+    ? `<span class="kx-wd" role="img" aria-label="Evidence withdrawn" title="${esc(x.withdrawn)}">${icon.warn}</span>`
+    : "";
+  return `<tr data-item-href="${href}"${p.query.item === x.address ? ` class="on"` : ""}><td class="c-name"><span class="kx-cell" title="${TYPE_WORD[type]}">${TYPE_ICON[type]}<span class="kx-title"><span class="kx-line"><a href="${href}" data-item>${esc(x.title || x.address)}</a>${wd}</span><span class="kx-addr">${esc(x.address)}</span>${x.excerpt ? `<span class="kx-snip">${markedExcerpt(x.excerpt)}</span>` : ""}</span></span></td><td class="c-kind">${esc(x.kind)}</td><td class="c-out">${out}</td><td class="c-writer">${esc(x.slot)}</td><td class="c-mod">${when(x.at, p.now)}</td><td class="c-size num">${x.file ? esc(sizeWords(x.file.bytes)) : ""}</td></tr>`;
 }
 
 const plural = (n: number, w: [string, string]) =>
@@ -327,7 +342,7 @@ export function contentsHtml(p: ExplorerPage): string {
     matched = p.search.matched;
     next = p.search.next_offset;
     count = `${fmtInt(matched)} ${matched === 1 ? "result" : "results"} in ${folderWords(p.place)}`;
-    rows = p.search.hits.map((h) => itemRow(h, p.now)).join("");
+    rows = p.search.hits.map((h) => itemRow(h, p)).join("");
     empty = p.search.error ?? "No items match.";
   } else if (folders && p.list) {
     const child = LEVEL_WORD[CHILD_LEVEL[p.place.level]];
@@ -340,7 +355,7 @@ export function contentsHtml(p: ExplorerPage): string {
     count = filtered
       ? `${fmtInt(matched)} of ${plural(p.list.total, ["item", "items"])}`
       : plural(p.list.total, ["item", "items"]);
-    rows = p.list.items.map((x) => itemRow({ ...x, excerpt: "" }, p.now)).join("");
+    rows = p.list.items.map((x) => itemRow({ ...x, excerpt: "" }, p)).join("");
     empty = filtered ? "No items match the filters." : "Empty.";
   }
   const sortable = !p.search;

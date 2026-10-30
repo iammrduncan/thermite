@@ -179,7 +179,11 @@ export interface KbVersion {
   version: number;
   title: string;
   body: string;
+  /** Who wrote it, as its item's `by`. */
+  by: string;
   file_sha256: string | null;
+  /** Its file, by its SHA-256; null for a blurb or a record. */
+  file: KbItemFile | null;
   /** The kb_item event that wrote it; null for a record. */
   event: number | null;
   at: string;
@@ -190,7 +194,8 @@ export interface KbVersion {
 export function versionsOf(db: DatabaseSync, id: number): KbVersion[] {
   const rows = db
     .prepare(
-      "select version, title, body, file_sha256, event, at from kb_version where item = ? order by version",
+      `select version, title, body, by, file_sha256, file_name, file_type, file_bytes, event, at
+       from kb_version where item = ? order by version`,
     )
     .all(id) as Record<string, string | number | null>[];
   const links = db.prepare(
@@ -200,7 +205,17 @@ export function versionsOf(db: DatabaseSync, id: number): KbVersion[] {
     version: Number(r.version),
     title: String(r.title),
     body: String(r.body),
+    by: String(r.by),
     file_sha256: r.file_sha256 === null ? null : String(r.file_sha256),
+    file:
+      r.file_sha256 === null
+        ? null
+        : {
+            sha256: String(r.file_sha256),
+            name: String(r.file_name),
+            type: String(r.file_type),
+            bytes: Number(r.file_bytes ?? 0),
+          },
     event: r.event === null ? null : Number(r.event),
     at: String(r.at),
     links: (links.all(id, Number(r.version)) as { rel: string; target: string }[]).map((l) => ({
@@ -208,6 +223,22 @@ export function versionsOf(db: DatabaseSync, id: number): KbVersion[] {
       to: l.target,
     })),
   }));
+}
+
+/**
+ * The items whose newest version links to an address, each with how it links (supports,
+ * contradicts or follows), oldest link first. A link names an address as its writer gave it.
+ */
+export function linksTo(db: DatabaseSync, address: string): { rel: string; item: KbItem }[] {
+  return (
+    db
+      .prepare(
+        `select l.rel as link_rel, i.* from kb_link l
+         join kb_item i on i.id = l.item and i.version = l.version
+         where l.target = ? order by i.at, i.id, l.rel`,
+      )
+      .all(address) as Record<string, unknown>[]
+  ).map((r) => ({ rel: String(r.link_rel), item: itemOf(r) }));
 }
 
 /** A writer's item as its version's words: a blurb's text, or a file's name, type and size. */

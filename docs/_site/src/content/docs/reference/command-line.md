@@ -206,8 +206,10 @@ usage: thermite <command> [options]
   kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
                                       one item of the knowledge base, by its address
                                       (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
-                                      or version N, with its links, and its text from --offset,
-                                      10,000 characters at most. It prints JSON
+                                      or version N, with its text from --offset, 10,000
+                                      characters at most, every version, its writer, withdrawn
+                                      evidence, its file's facts, its links both ways and which
+                                      running runs can read it. It prints JSON
   kb list [PLACE] [--kind K ...] [--outcome O ...] [--type T ...] [--slot S ...]
          [--sort S] [--order asc|desc] [--offset N] [--limit N] --control URL --token-file F
                                       what one place of the knowledge base holds, as the
@@ -817,7 +819,7 @@ npx thermite kb list sort-speed --outcome regress --sort name \
 | `--control URL` | Yes | | Control's address |
 | `--token-file F` | Yes | | A file with the owner's token |
 
-A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`. Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others`, `kb search takes no --version: kb read does`, `kb search takes no --type, --sort or --order: kb list does` (`kb read` for a read), `kb list takes one place: <campaign>, <campaign>/<run> or <campaign>/<run>/<slot>` or `kb list takes a place, --kind, --outcome, --type, --slot, --sort, --order, --offset and --limit`. A list prints `{note, at, folders, total, matched, next_offset, counts, items}`; a place the knowledge base has not ends it with exit code 2 and control's words, such as `the knowledge base has no collection <campaign>`.
+A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`, and what the Knowledge page's reader shows beside it: `history`, `writer`, `withdrawn`, `file`, `links`, `linked_from` and `readers` ([An item's read](knowledge-base.md#an-items-read)). Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others`, `kb search takes no --version: kb read does`, `kb search takes no --type, --sort or --order: kb list does` (`kb read` for a read), `kb list takes one place: <campaign>, <campaign>/<run> or <campaign>/<run>/<slot>` or `kb list takes a place, --kind, --outcome, --type, --slot, --sort, --order, --offset and --limit`. A list prints `{note, at, folders, total, matched, next_offset, counts, items}`; a place the knowledge base has not ends it with exit code 2 and control's words, such as `the knowledge base has no collection <campaign>`.
 
 ### `agents list`
 

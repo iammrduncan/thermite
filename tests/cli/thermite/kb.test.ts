@@ -227,8 +227,23 @@ describe("the owner's search of the knowledge base", () => {
         tokenFile,
       );
       assert.equal(r.code, 0, r.stderr);
-      const read = JSON.parse(r.stdout) as { item: { version: number; versions: number } };
+      const read = JSON.parse(r.stdout) as {
+        item: {
+          version: number;
+          versions: number;
+          history: { version: number }[];
+          writer: { words: string };
+          readers: unknown[];
+        };
+      };
       assert.deepEqual([read.item.version, read.item.versions], [1, 2]);
+      // What the Knowledge page's reader shows beside it (goal 176): every version, the writer.
+      assert.deepEqual(
+        read.item.history.map((v) => v.version),
+        [2, 1],
+      );
+      assert.equal(read.item.writer.words, "Thermite's code");
+      assert.deepEqual(read.item.readers, [], "no run is running");
       const wrong = await cli("kb", "read", "--control", url, "--token-file", tokenFile);
       assert.notEqual(wrong.code, 0);
       assert.match(wrong.stderr, /kb read takes one item's address/);

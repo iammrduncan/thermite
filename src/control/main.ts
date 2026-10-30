@@ -202,6 +202,9 @@ async function main(): Promise<void> {
   // views are built (below): its health with 503 and the bus's state, so that a check waits, and
   // every other route with 503 and the reason.
   let ready = false;
+  // The knowledge base's files, each kept once by its SHA-256 in control's state (goal 175): the
+  // owner downloads them, and control takes them from the bus once its views are built (below).
+  const kbFiles = new KbFiles(join(dir, CONTROL_STATE.kbFiles), store);
   const api = createControlApi(store, tokens, privateKeyPem, {
     staleAfterMs,
     offlineAfterMs,
@@ -213,6 +216,7 @@ async function main(): Promise<void> {
     pages: mountDashboard,
     // Exports from rigs without a results repository, kept in control's state.
     exportsDir: join(dir, CONTROL_STATE.exports),
+    kbFiles,
     // Who may use the message bus: a rig's new key gets its user there, and a new seal key its
     // config.
     busUsers,
@@ -302,10 +306,8 @@ async function main(): Promise<void> {
   followLive(bus, { store, taken: liveTaken }).catch((err) =>
     log("control", "live lines from the bus stopped", { error: String(err) }, "error"),
   );
-  // The knowledge base's files, each kept once by its SHA-256 in control's state (goal 175); a
-  // file no item names, kept for good unless the owner set how many hours it stays: then control
-  // looks at start and every hour.
-  const kbFiles = new KbFiles(join(dir, CONTROL_STATE.kbFiles), store);
+  // The knowledge base's files from the bus; a file no item names is kept for good unless the
+  // owner set how many hours it stays: then control looks at start and every hour.
   followKbFiles(bus, kbFiles).catch((err) =>
     log("control", "files for the knowledge base stopped", { error: String(err) }, "error"),
   );

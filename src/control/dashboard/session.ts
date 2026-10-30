@@ -21,10 +21,11 @@ const CSP =
  */
 export function sessionRoutes(app: Hono, dash: Dashboard): void {
   const { cookie, csrfOf, opts, sessionMs, sessionOf, store, tokenFp } = dash;
-  // Only control's own script runs: even an escaping mistake cannot become code.
+  // Only control's own script runs: even an escaping mistake cannot become code. A route that sets
+  // a stricter policy of its own keeps it, as a knowledge base file's download does.
   app.use("/ui/*", async (c, next) => {
     await next();
-    c.header("content-security-policy", CSP);
+    if (!c.res.headers.has("content-security-policy")) c.header("content-security-policy", CSP);
     c.header("x-content-type-options", "nosniff");
     c.header("referrer-policy", "no-referrer");
   });

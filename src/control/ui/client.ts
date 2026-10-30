@@ -185,9 +185,11 @@ export const CLIENT_JS = `
     tip.style.top = y + "px";
   };
   const hideTip = () => (tip.style.display = "none");
-  document.addEventListener("mouseover", (ev) => { const i = ev.target.closest && ev.target.closest(".ii"); if (i) showTip(i); });
-  document.addEventListener("mouseout", (ev) => { if (ev.target.closest && ev.target.closest(".ii")) hideTip(); });
-  document.addEventListener("focusin", (ev) => { const i = ev.target.closest && ev.target.closest(".ii"); if (i) showTip(i); });
+  // A mark with its reason (.tipped, such as withdrawn evidence) shows it the same way.
+  const tipped = (t) => t.closest && t.closest(".ii, .tipped");
+  document.addEventListener("mouseover", (ev) => { const i = tipped(ev.target); if (i) showTip(i); });
+  document.addEventListener("mouseout", (ev) => { if (tipped(ev.target)) hideTip(); });
+  document.addEventListener("focusin", (ev) => { const i = tipped(ev.target); if (i) showTip(i); });
   document.addEventListener("focusout", hideTip);
 
   // ------------------------------------------------ panels: open in place, close with Esc
