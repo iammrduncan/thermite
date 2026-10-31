@@ -137,6 +137,11 @@ export interface Work {
   judge_jobs: number;
   draining: Draining | null;
   open?: OpenTrial[];
+  /**
+   * The calls outside a trial that run in their own terminal now (goal 169): a planner's, by the
+   * id its console and screens take. Control's Live shows each one's terminal.
+   */
+  terminals?: { id: string; run: string; role: string }[];
 }
 
 /** What the harness's watch knows of a trial; none outside the service (a drain's own event). */

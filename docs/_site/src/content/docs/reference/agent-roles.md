@@ -361,7 +361,7 @@ Thermite's knowledge base holds what this campaign's runs recorded and wrote, an
 
 ## Planner
 
-Coordinates a hill-climb or goal run's lanes each round: gives each lane its experiment, and changes the queue, the rules and the directions. Its module: `src/agents/roles/`, role `planner`. Its prompt for a run is put together by `renderPlanner`. Its later turns in a call are put together by `renderCompacted`.
+Coordinates a hill-climb or goal run's lanes each round: gives each lane its experiment, and changes the queue, the rules and the directions. Its module: `src/agents/roles/`, role `planner`. Its prompt for a run is put together by `renderPlanner`. Its later turns in a call are put together by `renderCompacted` and `renderPlannerTurn`.
 
 ### Planner: its instructions in Pi, with the submit_plan tool
 
@@ -483,6 +483,18 @@ the experiment log has that. Other agents read your notes as data, and so do lat
 Limits (an answer over one is refused): title 200 characters; details and focus 4000; family 80; each why and rationale 2000; a ref 40; a new direction's description 3 to 300; notes 2000; at most 40 moves, 40 drops, 5 rules, 5 conversions and 13 new directions. Added experiments and accepted ideas have no count.
 ```
 
+### Planner: in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages:
+```
+
+### Planner: in its program's own terminal, after it waited for a full usage window, after the limit's words
+
+```text
+Continue where you left off.
+```
+
 ### Planner: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
 
 ```text
@@ -491,7 +503,7 @@ Thermite's knowledge base holds what this campaign's runs recorded and wrote, an
 
 ## Research planner
 
-Plans a research run's next round: gives each lane a research task, and changes the queue and the pool of hypotheses. Its module: `src/agents/roles/`, role `research-planner`. Its prompt for a run is put together by `renderResearchPlanner`. Its later turns in a call are put together by `renderCompacted`.
+Plans a research run's next round: gives each lane a research task, and changes the queue and the pool of hypotheses. Its module: `src/agents/roles/`, role `research-planner`. Its prompt for a run is put together by `renderResearchPlanner`. Its later turns in a call are put together by `renderCompacted` and `renderResearchPlannerTurn`.
 
 ### Research planner: its instructions in Pi, with the submit_plan tool
 
@@ -611,6 +623,18 @@ the experiment log has that. Other agents read your notes as data, and so do lat
 
 ```text
 Limits (an answer over one is refused): a task's title 200 characters, its details 2000, its gap 500, its source_kind 200; each why 2000; a ref 40; notes 2000; at most 40 moves and 40 drops, 3 promotions and 20 retirements. Added tasks have no count.
+```
+
+### Research planner: in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages:
+```
+
+### Research planner: in its program's own terminal, after it waited for a full usage window, after the limit's words
+
+```text
+Continue where you left off.
 ```
 
 ### Research planner: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows

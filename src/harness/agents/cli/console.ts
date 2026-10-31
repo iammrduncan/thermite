@@ -17,7 +17,7 @@ import type { ScreenSnapshot } from "../../terminal/index.ts";
  */
 
 /**
- * What the console needs of the trial's terminal: terminal.ts's TerminalTrial, or a worker's Pi
+ * What the console needs of the role's terminal: terminal.ts's RoleTerminal, or a worker's Pi
  * view (pi-view/console.ts).
  */
 export interface ConsoleTerminal {

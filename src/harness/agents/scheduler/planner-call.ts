@@ -3,14 +3,17 @@ import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import { type McpCaller, mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { type ModelConfig, withAgentsContext } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
+import { renderPlannerTurn, renderResearchPlannerTurn } from "../../../agents/roles/index.ts";
 import { kbAgentTools } from "../../../agents/tools/index.ts";
 import { type Harness, programForApi } from "../../../core/agents.ts";
 import type { Contract } from "../../../core/contract.ts";
 import type { NoteInput } from "../../../core/journal.ts";
+import { plannerCallId } from "../../../core/terminal-input.ts";
 import type { CallUsage } from "../../../core/usage.ts";
+import { messageText } from "../../messages.ts";
 import { keepPrompt } from "../../prompts.ts";
 import { routeOf } from "../../usage.ts";
-import type { CliHarness } from "../cli/index.ts";
+import type { CliHarness, TerminalCallLink } from "../cli/index.ts";
 import { PLANNER } from "../coordinator.ts";
 import type { Ask, PlannerCompaction, PlannerMcp, PlannerPast } from "../planner/index.ts";
 import { isCliProgram, programOf } from "../programs.ts";
@@ -47,6 +50,11 @@ export async function plannerRoute(
   run: string,
   contract: Contract,
   n: number,
+  /**
+   * Its role, for its later turns in its own terminal, and the input that holds the owner's
+   * messages its prompt gave: one that goes in inside its turn joins them (goal 169).
+   */
+  call: { role: "planner" | "research-planner"; owner: { id: number; text: string }[] },
 ): Promise<{
   m: ModelConfig | undefined;
   ask: Ask | undefined;
@@ -81,23 +89,44 @@ export async function plannerRoute(
   // A call through a program of its own (OpenCode, Claude Code or Codex) keeps its conversation
   // before each of its compactions in the run's research folder, as a Pi call does (goal 070).
   const keeping = isCliProgram(via) ? cliPlannerCompaction(sched, run, via) : undefined;
-  const withMcp = (o: Parameters<Ask>[2]): PlannerCallOptions => ({
+  // On a rig whose agents run in their own terminal, the call runs in its program's (goal 169),
+  // with a credential bound to it for the proxy, the gateway and the owner's messages.
+  const inTerminal = sched.o.service.settings.get().program_mode === "terminal";
+  const withMcp = (o: Parameters<Ask>[2], terminal?: TerminalCallLink): PlannerCallOptions => ({
     ...(o?.read !== undefined ? { read: o.read } : {}),
     ...(o?.mcp?.length || o?.kb
-      ? { mcp: { auth: sched.o.service.mintMcpToken(caller), servers: o.mcp ?? [], kb: o.kb } }
+      ? {
+          mcp: {
+            auth: terminal?.auth ?? sched.o.service.mintMcpToken(caller),
+            servers: o.mcp ?? [],
+            kb: o.kb,
+          },
+        }
       : {}),
     usage,
     ...(keeping ? { compaction: keeping() } : {}),
+    ...(terminal ? { terminal } : {}),
   });
   const through = sched.o.ask;
   const ask: Ask | undefined =
     isCliProgram(via) && m && through
       ? Object.assign(
-          (prompt: string, sig?: AbortSignal, o?: Parameters<Ask>[2]) =>
-            through(via, m, prompt, sig, withMcp(o)),
+          async (prompt: string, sig?: AbortSignal, o?: Parameters<Ask>[2]) => {
+            if (!inTerminal) return through(via, m, prompt, sig, withMcp(o));
+            const auth = sched.o.service.mintCallToken({ id: callId, caller, model: m });
+            try {
+              return await through(via, m, prompt, sig, withMcp(o, terminalLink(auth)));
+            } finally {
+              sched.o.service.endCall(auth);
+            }
+          },
           { program: via },
         )
       : undefined;
+  // Its console's and screens' id: both tries of a round take it (goal 169).
+  const callId = plannerCallId(run, n);
+  const terminalLink = (auth: string): TerminalCallLink =>
+    plannerTerminal(sched, { run, n, id: callId, auth, role: call.role, via, owner: call.owner });
   // Thermite's knowledge base (goal 175): in Pi its tools run here, for the planner's slot;
   // another program reaches them at the gateway, with the call's credential.
   const kbTools = sched.o.service.kbTools;
@@ -207,5 +236,69 @@ function cliPlannerCompaction(
       title: "The planner",
       compacted: (c) => store.fromHarness(of, harness, c),
     };
+  };
+}
+
+/**
+ * What a planner's call in its program's own terminal takes from the harness (goal 169): its
+ * console and screens under its id, its live lines, the owner's messages that go in inside its
+ * turn (each read once its program has it, and joined to the messages its prompt gave, so a rule
+ * it asks for names it), its later turns kept, and a wait for its usage window recorded as the
+ * run's.
+ */
+function plannerTerminal(
+  sched: SchedulerContext,
+  c: {
+    run: string;
+    n: number;
+    id: string;
+    auth: string;
+    role: "planner" | "research-planner";
+    /** The program it runs in, as its prompt names it. */
+    via: string;
+    owner: { id: number; text: string }[];
+  },
+): TerminalCallLink {
+  const svc = sched.o.service;
+  const run = c.run;
+  const given = new Set(c.owner.map((m) => m.id));
+  const render = c.role === "planner" ? renderPlannerTurn : renderResearchPlannerTurn;
+  return {
+    id: c.id,
+    auth: c.auth,
+    title: "The planner",
+    messages: {
+      waiting: () =>
+        svc.messages
+          .waitingForPlanner(run)
+          .filter((m) => !given.has(m.id))
+          .map((m) => ({ id: m.id, text: messageText(m) })),
+      given: (ids, how) => {
+        const now = svc.messages.waitingForPlanner(run).filter((m) => ids.includes(m.id));
+        for (const m of now) {
+          given.add(m.id);
+          c.owner.push({ id: m.id, text: messageText(m) });
+        }
+        svc.messages.read(
+          now.map((m) => m.id),
+          "planner",
+          { round: c.n, how },
+        );
+      },
+    },
+    turn: (t, turn) => render({ ...t, program: c.via, turn }),
+    sent: (p) => keepPrompt(svc.ledger, run, p, { call: `epoch ${c.n}` }),
+    live: (entries) => {
+      for (const e of entries)
+        svc.live.append({ source: "planner", kind: e.kind, text: e.text, run });
+    },
+    console: (term) =>
+      term
+        ? svc.consoles.setCall(c.id, { run, lane: "planner", source: "planner" }, term)
+        : svc.consoles.ended(c.id),
+    inTurn: (d) => svc.inTurn(c.id, d),
+    providerAnswer: (since) => svc.providerAnswerSince(c.id, since),
+    waiting: (w) => svc.trialWait({ id: c.id, run, lane: "planner", source: "planner" }, w),
+    draining: () => svc.draining !== undefined,
   };
 }

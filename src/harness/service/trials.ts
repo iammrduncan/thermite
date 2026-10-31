@@ -134,11 +134,12 @@ export function trialReport(
  * A trial waits for its provider and then goes on in the same conversation (goal 079): a line in
  * its session, and for a rate limit, a wait the scheduler and the research clock read: no new
  * trial of its run starts before it ends, at most one trial's length from now (holdUntil), and a
- * research run's clock stops meanwhile.
+ * research run's clock stops meanwhile. A planner's call in its own terminal waits the same way
+ * for its usage window (goal 169), its line in the planner's session (`source`).
  */
 export function trialWait(
   svc: HarnessService,
-  trial: { id: string; run: string; lane: string },
+  trial: { id: string; run: string; lane: string; source?: string | undefined },
   w: { until: string; kind: string; words: string },
 ): void {
   const at = new Date(w.until);
@@ -152,7 +153,7 @@ export function trialWait(
       seconds: Number(silent),
     });
   svc.live.append({
-    source: `trial:${trial.id}`,
+    source: trial.source ?? `trial:${trial.id}`,
     kind: "status",
     text:
       silent !== undefined

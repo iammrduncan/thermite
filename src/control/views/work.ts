@@ -63,6 +63,11 @@ export const Work = z.object({
     })
     .nullable(),
   open: z.array(OpenTrial).max(64).optional(),
+  // From a harness with goal 169's planner in its terminal: the calls outside a trial in theirs.
+  terminals: z
+    .array(z.object({ id: z.string().max(100), run: z.string().max(80), role: z.string().max(40) }))
+    .max(16)
+    .optional(),
 });
 export type Work = z.infer<typeof Work>;
 

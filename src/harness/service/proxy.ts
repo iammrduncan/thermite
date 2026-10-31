@@ -63,6 +63,41 @@ export class ProxyCredentials {
     const v = this.mcpTokens.get(token);
     return v && v.until >= Date.now() ? v.caller : undefined;
   }
+
+  /** The credentials of the calls that run in their own terminal now, until each ends. */
+  private callTokens = new Map<string, CallCredential>();
+
+  /**
+   * A credential bound to one call of a role in its program's own terminal (goal 169): the model
+   * proxy takes it for the call's route, the MCP gateway as the call's caller, and the turn routes
+   * for the owner's messages inside its turn. It lasts until the call ends (endCall).
+   */
+  mintCallToken(c: CallCredential): string {
+    const token = `call.${randomBytes(24).toString("hex")}`;
+    this.callTokens.set(token, c);
+    return token;
+  }
+
+  /** The call a credential is bound to, while the call runs. */
+  callOf(token: string): CallCredential | undefined {
+    return this.callTokens.get(token);
+  }
+
+  /** The call ended: its credential no longer works. */
+  endCall(token: string): void {
+    this.callTokens.delete(token);
+  }
+}
+
+/**
+ * A call of a role in its program's own terminal, as its credential binds it: its id (the console's
+ * and the screens', such as plannerCallId's), who it is to the MCP gateway (its run, its kind of
+ * agent), and the route its model calls reach, when it is not the workers'.
+ */
+export interface CallCredential {
+  id: string;
+  caller: McpCaller;
+  model?: ModelConfig | undefined;
 }
 
 /** The newest error answer the model proxy saw for each trial (or "proxy"): goal 079. */

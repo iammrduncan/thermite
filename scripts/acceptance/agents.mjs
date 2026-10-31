@@ -8,6 +8,7 @@
 //   - a lane's background work runs on across its commands and a dev run, as in a shell;
 //   - no lane process outlives its trial;
 //   - control's model check reaches the model through the rig's route with a correct tool call;
+//   - under OpenCode, the planner plans in its own terminal and takes an owner's message in its turn;
 //   - under OpenCode, a hill-climb trial runs in OpenCode's own terminal (goal 169: the default,
 //     on a rig nobody set), its server first and its terminal attached, and submits with
 //     thermite-trial; then, the rig set to headless over REST, a research run's trial runs
@@ -27,6 +28,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { opencodePlanner, opencodePlannerScene } from "./lib/planner-terminal.mjs";
 import { hostName as containersHost, scriptedModel } from "./lib/scripted-model.mjs";
 import {
   api,
@@ -127,6 +129,9 @@ function script(messages, tools) {
   // kernel and submits with thermite-trial. A request without tools names the session.
   if (names.includes("shell") && names.includes("execute")) {
     const asked = JSON.stringify(messages);
+    // The planner in OpenCode's own terminal (lib/planner-terminal.mjs).
+    const planned = opencodePlanner(messages, asked);
+    if (planned) return planned;
     const word = /run exactly this command: echo (thermite-[a-z0-9]+)/.exec(asked)?.[1];
     const tools = messages.filter((m) => m.role === "tool").length;
     if (word) {
@@ -569,6 +574,7 @@ try {
     const m = (await api("/v1/rigs/local-1/view")).body.model;
     return m?.source === "control" && m.harness === "opencode" ? m : undefined;
   });
+  await opencodePlannerScene(check);
   keysSeen.clear();
   const ocCheck = await until(
     "OpenCode's model check (run when the rig took the route)",

@@ -11,16 +11,27 @@ import type { ScreenSnapshot } from "../terminal/index.ts";
 import type { HarnessService } from "./index.ts";
 
 /**
- * The owner's consoles into the trials' terminals (goal 169), as the harness holds them: each
- * running trial's console (agents/cli/console.ts), set by its trial loop when it starts; the owner's
- * input to one (terminal_input, owner only: the command's checks are in commands.ts), recorded word
- * for word with its outcome; and the screens for control's live view, the last screen of each
- * trial that ended kept in memory, the newest LAST_SCREENS_KEPT. A worker in Pi's console is its
- * Pi view's, whose own side (`piView`) the worker asks for the owner's inputs over its trial's
- * routes.
+ * The owner's consoles into the agents' terminals (goal 169), as the harness holds them: each
+ * running trial's console (agents/cli/console.ts), set by its trial loop when it starts, and each
+ * console of a call outside a trial (a planner's call in its own terminal), set by the call; the
+ * owner's input to one (terminal_input, owner only: the command's checks are in commands.ts),
+ * recorded word for word with its outcome; and the screens for control's live view, the last
+ * screen of each that ended kept in memory, the newest LAST_SCREENS_KEPT. A worker in Pi's console
+ * is its Pi view's, whose own side (`piView`) the worker asks for the owner's inputs over its
+ * trial's routes.
  */
 
-/** How many ended trials keep their last screen: the newest; the oldest goes first. */
+/**
+ * A call outside a trial in its own terminal, as its console's records name it: its run, the lane
+ * its records give (`planner`), and the live source its lines go to.
+ */
+export interface CallConsoleOf {
+  run: string;
+  lane: string;
+  source: string;
+}
+
+/** How many ended trials and calls keep their last screen: the newest; the oldest goes first. */
 export const LAST_SCREENS_KEPT = 20;
 
 /** Why a trial that is still open has no console to type into. */
@@ -44,9 +55,11 @@ const fit = (s: ScreenSnapshot) => ({
   data: s.data.length > SCREEN_DATA_MAX ? s.data.slice(-SCREEN_DATA_MAX) : s.data,
 });
 
-export class TrialConsoles {
+export class TerminalConsoles {
   private readonly svc: Pick<HarnessService, "ledger" | "live" | "clock">;
   private readonly open = new Map<string, TrialConsole | "headless">();
+  /** The calls outside a trial, open or with their last screen kept, by their ids. */
+  private readonly calls = new Map<string, CallConsoleOf>();
   /** The Pi views' own sides, of the trials whose worker in Pi draws one. */
   private readonly piViews = new Map<string, PiConsole>();
   /** The last screens of trials that ended, oldest first. */
@@ -64,31 +77,66 @@ export class TrialConsoles {
     if (piView) this.piViews.set(trial, piView);
   }
 
+  /**
+   * A call outside a trial started in its own terminal (a planner's call): its console, under its
+   * id. A round's second try takes its first's id, whose last screen goes.
+   */
+  setCall(id: string, of: CallConsoleOf, c: TrialConsole): void {
+    this.last.delete(id);
+    this.calls.set(id, of);
+    this.open.set(id, c);
+  }
+
+  /** The calls outside a trial whose terminals run now, for the rig's report. */
+  openCalls(): { id: string; run: string; role: string }[] {
+    return [...this.calls]
+      .filter(([id]) => this.open.has(id))
+      .map(([id, of]) => ({ id, run: of.run, role: of.lane }));
+  }
+
   /** A running trial's Pi view, which its worker asks for the owner's inputs; none: undefined. */
   piView(trial: string): PiConsole | undefined {
     return this.piViews.get(trial);
   }
 
-  /** A trial ended: its console goes, its last screen stays, the newest LAST_SCREENS_KEPT. */
+  /**
+   * A trial or a call ended: its console goes, its last screen stays, the newest
+   * LAST_SCREENS_KEPT.
+   */
   ended(trial: string): void {
     const c = this.open.get(trial);
     this.open.delete(trial);
     this.piViews.delete(trial);
     this.recent.delete(trial);
     const screen = c && c !== "headless" ? c.lastScreen() : undefined;
-    if (!screen) return;
+    if (!screen) {
+      this.calls.delete(trial);
+      return;
+    }
     this.last.delete(trial);
     this.last.set(trial, screen);
     for (const old of this.last.keys()) {
       if (this.last.size <= LAST_SCREENS_KEPT) break;
       this.last.delete(old);
+      this.calls.delete(old);
     }
   }
 
+  /** Whose terminal an id names: a trial's, from the ledger, or a call's; undefined: neither. */
+  private whose(id: string, run: string) {
+    const t = this.svc.ledger.trials.get(id);
+    if (t && t.run === run)
+      return { lane: t.lane, source: `trial:${id}`, ended: Boolean(t.ended_at) };
+    const of = this.calls.get(id);
+    if (of && of.run === run) return { lane: of.lane, source: of.source, ended: false };
+    return undefined;
+  }
+
   /**
-   * terminal_input: the owner's input into one running trial's terminal, typed now or queued for
-   * its usage window's reset. Each outcome is a `terminal_input` event with the input word for
-   * word: refused (with why), typed or queued now, and later typed after the reset or dropped.
+   * terminal_input: the owner's input into one running trial's terminal, or a call's, typed now or
+   * queued for its usage window's reset. Each outcome is a `terminal_input` event with the input
+   * word for word: refused (with why), typed or queued now, and later typed after the reset or
+   * dropped.
    */
   async input(
     p: TerminalInput,
@@ -96,9 +144,8 @@ export class TrialConsoles {
     by: string,
   ): Promise<{ run: string; trial: string; lane: string; outcome: string; until?: string }> {
     const { ledger, live } = this.svc;
-    const t = ledger.trials.get(p.trial);
-    if (!t || t.run !== p.run)
-      throw new LedgerError("not_found", `run ${p.run} has no trial ${p.trial}`);
+    const t = this.whose(p.trial, p.run);
+    if (!t) throw new LedgerError("not_found", `run ${p.run} has no trial or call ${p.trial}`);
     const record = (outcome: TerminalOutcome, more: { why?: string; until?: string } = {}) =>
       ledger.appendEvent(by, "terminal_input", p.run, {
         command,
@@ -113,8 +160,8 @@ export class TrialConsoles {
       throw new LedgerError("conflict", why);
     };
     const c = this.open.get(p.trial);
-    if (t.ended_at || this.last.has(p.trial))
-      refuse(`trial ${p.trial} has ended: nothing more goes into its terminal`);
+    if (t.ended || this.last.has(p.trial))
+      refuse(`${p.trial} has ended: nothing more goes into its terminal`);
     if (!c || c === "headless")
       refuse(
         `trial ${p.trial} has no terminal to type into: ${NO_TERMINAL[c ? "headless" : "none"]}`,
@@ -123,11 +170,11 @@ export class TrialConsoles {
     const times = (this.recent.get(p.trial) ?? []).filter((at) => at > now - 60_000);
     if (times.length >= TERMINAL_INPUTS_PER_MINUTE)
       refuse(
-        `trial ${p.trial} took ${TERMINAL_INPUTS_PER_MINUTE} inputs in the last minute, the most it takes: send this one again in a moment`,
+        `${p.trial} took ${TERMINAL_INPUTS_PER_MINUTE} inputs in the last minute, the most it takes: send this one again in a moment`,
       );
     this.recent.set(p.trial, [...times, now]);
     const line = (text: string) =>
-      live.append({ source: `trial:${p.trial}`, kind: "status", text, lane: t.lane, run: p.run });
+      live.append({ source: t.source, kind: "status", text, lane: t.lane, run: p.run });
     let got: Awaited<ReturnType<TrialConsole["input"]>>;
     try {
       got = await (c as TrialConsole).input(p, (outcome, why) => {
@@ -139,7 +186,7 @@ export class TrialConsoles {
         );
       });
     } catch (err) {
-      return refuse(`not typed into trial ${p.trial}'s terminal: ${errorText(err)}`);
+      return refuse(`not typed into ${p.trial}'s terminal: ${errorText(err)}`);
     }
     const until = got.outcome === "queued" ? got.until : undefined;
     record(got.outcome, until ? { until } : {});
@@ -158,8 +205,8 @@ export class TrialConsoles {
   }
 
   /**
-   * The screens of the trials control's viewers watch, for its live view: a running trial's now,
-   * an ended one's last, or `none` for a trial with no terminal here. Only ever shown.
+   * The screens of the terminals control's viewers watch, for its live view: a running trial's or
+   * call's now, an ended one's last, or `none` for one with no terminal here. Only ever shown.
    */
   async screens(trials: readonly string[]): Promise<ScreenFrame[]> {
     const at = () => this.svc.clock().toISOString();

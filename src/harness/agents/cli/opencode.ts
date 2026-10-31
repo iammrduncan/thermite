@@ -90,7 +90,7 @@ export const opencodeProgram: CliProgram<OpencodeTally> = {
   }),
   args: (run, session) => [
     ...opencodeArgs(run.model),
-    ...(session ? ["--session", session] : ["--title", `trial ${run.trialId}`]),
+    ...(session ? ["--session", session] : ["--title", `trial ${run.id}`]),
   ],
   newTally,
   read: readOpencodeEvents,

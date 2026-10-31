@@ -49,7 +49,12 @@ export async function planEpoch(
   watch(sched);
   let p: Awaited<ReturnType<typeof plan>>;
   try {
-    const r = await plannerRoute(sched, run, contract, n);
+    // An owner's message that goes in inside its turn in its terminal joins these (goal 169).
+    input.ownerMessages ??= [];
+    const r = await plannerRoute(sched, run, contract, n, {
+      role: "planner",
+      owner: input.ownerMessages,
+    });
     input.pastResearch = r.pastLine;
     // The planner off on this rig: the fixed fallback plan, said so in the epoch's record.
     if (sched.o.plannerOn && !sched.o.plannerOn()) {

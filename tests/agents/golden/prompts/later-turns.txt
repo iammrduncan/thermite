@@ -36,6 +36,12 @@ A message from the campaign's owner: Cite page numbers.
 A message from the campaign's owner, who is watching this session:
 
 Cite page numbers.
+# planner in a program's own terminal: an owner's message inside its turn (planner, claude-code)
+A message from the campaign's owner, who is watching this session, as one more of owner_messages:
+
+{"id":7,"text":"Avoid :shared memory tiling: this round."}
+# research planner in a program's own terminal: after a full usage window (research-planner, codex)
+The model call failed (the usage window is full until 13:00 UTC). Continue where you left off.
 # worker in Pi, after a compaction with a summary (worker, pi)
 The harness compacted this conversation (compaction 1) because it neared the model's context window. Your trial goes on.
 

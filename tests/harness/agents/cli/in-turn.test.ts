@@ -63,7 +63,7 @@ describe("TurnMessages: one message at a time, offered, then read with how it we
     const lines: string[] = [];
     const t = new TurnMessages({
       inbox: box.inbox,
-      render: (text, turn) =>
+      render: ({ text }, turn) =>
         renderWorkerTurn({ program: "claude-code", turn, kind: "owner", text }),
       next: () => ++said,
       held: () => held,
@@ -267,7 +267,7 @@ describe("an owner's message inside the agent's turn, the whole way in (goal 169
     // The other trial's own way in, as its loop sets it: its inbox is its own.
     const theirs = new TurnMessages({
       inbox: env.service.trialInbox({ id: other.id, run: "js-1", lane: "lane-2" }),
-      render: (text, turn) =>
+      render: ({ text }, turn) =>
         renderWorkerTurn({ program: "claude-code", turn, kind: "owner", text }),
       next: () => 1,
       held: () => [],

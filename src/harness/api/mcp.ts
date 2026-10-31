@@ -14,7 +14,7 @@ import { type ApiContext, Unauthorized } from "./context.ts";
  */
 export function mcpRoutes(app: Hono, { service, trialOf }: ApiContext): void {
   // The MCP gateway for workers (their trial's token) and the planner (a credential the harness
-  // made for one plan): the tools their run's kit gives their kind of agent, never a secret.
+  // made for one plan, or bound to its call in its own terminal): the tools their run's kit gives their kind of agent, never a secret.
   // The caller's slot in the knowledge base comes from the trial (its lane) or the plan.
   const callers = (header: string | undefined): { mcp: McpCaller; kb: KbCaller } => {
     const h = header ?? "";
@@ -26,7 +26,12 @@ export function mcpRoutes(app: Hono, { service, trialOf }: ApiContext): void {
         kb: { run: t.run, slot: workerSlot(t.lane) },
       };
     }
-    const caller = given.startsWith("mcp.") ? service.mcpTokenCaller(given) : undefined;
+    // A credential made for a plan, or one bound to a call in its own terminal (goal 169).
+    const caller = given.startsWith("mcp.")
+      ? service.mcpTokenCaller(given)
+      : given.startsWith("call.")
+        ? service.callOf(given)?.caller
+        : undefined;
     if (!caller) throw new Unauthorized("unauthorized");
     // A credential made for a plan is the planner's; one for another caller writes nothing.
     return {

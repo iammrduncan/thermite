@@ -30,8 +30,9 @@
 // WAIT_TYPED_MS, for the owner's input queued for the reset to be typed in; without the setting, it
 // shows its menu, which waits for a key, and never goes on. Text typed while it works is taken into
 // the turn, as Claude Code takes it (a queued command); text typed during its wait is only counted.
-// It refuses to run without THERMITE_FAKE_CLAUDE=1 or its mounted folder, so it can't stand in by
-// mistake.
+// The planner in its terminal answers its plan; in a run's first round it holds its turn until one
+// of the owner's messages comes at its end, through its Stop hook (planInTerminal). It refuses to
+// run without THERMITE_FAKE_CLAUDE=1 or its mounted folder, so it can't stand in by mistake.
 const { execSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -334,6 +335,34 @@ function runHeadless() {
   })();
 }
 
+const CAMPAIGN = "The campaign, as JSON:";
+/**
+ * The planner in its terminal (goal 169): its plan, as headless. In a run's first round it holds
+ * its turn, at most WAIT_MESSAGES_MS, its Stop hook asked each second, until one of the owner's
+ * messages comes at the end of its turn, as a long turn would meet one; then it plans again, and
+ * its notes say what came.
+ */
+const planInTerminal = async (text) => {
+  const ctx = JSON.parse(text.slice(text.indexOf(CAMPAIGN) + CAMPAIGN.length));
+  const plan = (note) =>
+    JSON.stringify({
+      new_families: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
+      assignments: ctx.lanes.map((lane) => ({ lane, family: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
+      notes: `planned by the Claude Code stand-in in its terminal (${note})`,
+    });
+  const draft = plan("a first plan");
+  turn([{ type: "text", text: draft }]);
+  const end = Date.now() + (ctx.epoch === 1 ? WAIT_MESSAGES_MS : 0);
+  for (;;) {
+    if (stop(draft)) break;
+    if (Date.now() >= end) return;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const final = plan(`the owner's message came inside its turn; tools=${val("--tools") === "" ? "none" : val("--tools")} ${hookFacts()}`);
+  turn([{ type: "text", text: final }]);
+  stop(final);
+};
+
 /**
  * Its full usage window, as Claude Code meets one in its terminal; true once it went on by itself
  * after the reset, false at its menu.
@@ -390,7 +419,8 @@ function runTerminal() {
       hook("UserPromptSubmit", { prompt: text.slice(0, 2000) });
       if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
       const at = taken++;
-      if (trial && at === 0) {
+      if (!trial && at === 0 && text.includes(CAMPAIGN)) await planInTerminal(text);
+      else if (trial && at === 0) {
         if (!(await usageWindow())) return;
         // It reads the kernel. The owner's messages, when the acceptance sends two: the first goes
         // in after its command, the second at the end of its turn, which goes on with it to the

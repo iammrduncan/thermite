@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
 import { type CommandKind, signEnvelope } from "../../../src/core/commands.ts";
-import { TERMINAL_INPUTS_PER_MINUTE } from "../../../src/core/terminal-input.ts";
+import { plannerCallId, TERMINAL_INPUTS_PER_MINUTE } from "../../../src/core/terminal-input.ts";
 import { TrialConsole } from "../../../src/harness/agents/index.ts";
 import { PiConsole } from "../../../src/harness/agents/pi-view/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
@@ -150,7 +150,7 @@ describe("terminal_input, as the harness applies it", () => {
     const other = await s.env.service.applyCommand(
       s.as("owner", "terminal_input", { run: "js-1", trial: "t-unknown", text: "hello" }),
     );
-    assert.match(String(result(other).error), /has no trial t-unknown/);
+    assert.match(String(result(other).error), /has no trial or call t-unknown/);
     s.env.service.consoles.set(s.trial, new TrialConsole(fakeTerminal()));
     s.env.service.trialEnded(s.trial, true);
     new Registry(s.env.ledger).finishTrial(
@@ -370,5 +370,81 @@ describe("terminal_input, as the harness applies it", () => {
     const other = await post("/v1/trial/console/next", { wait_ms: 0 }, "tok-other");
     assert.equal(other.status, 409);
     assert.match(String(other.body.error), /this trial has no Pi view/);
+  });
+
+  test("a planner's call in its own terminal: its console under planner-RUN-N, its lines on the planner's, its id in the rig's report, and nothing more once it ends", async () => {
+    const s = await setup();
+    const t = fakeTerminal();
+    const id = plannerCallId("js-1", 3);
+    s.env.service.consoles.setCall(
+      id,
+      { run: "js-1", lane: "planner", source: "planner" },
+      new TrialConsole(t),
+    );
+    assert.deepEqual(s.env.service.work().terminals, [{ id, run: "js-1", role: "planner" }]);
+    const out = await s.type({ trial: id, text: "Plan tiling first." });
+    assert.deepEqual(result(out), { run: "js-1", trial: id, lane: "planner", outcome: "typed" });
+    assert.deepEqual(t.typed, [{ text: "Plan tiling first.", keys: undefined }]);
+    assert.deepEqual(
+      s.records().map((x) => [x.trial, x.lane, x.outcome]),
+      [[id, "planner", "typed"]],
+    );
+    const lines = s.env.service.live.since(0).entries.filter((e) => e.source === "planner");
+    assert.ok(lines.some((e) => /the owner's input went into its terminal/.test(e.text)));
+    // Another run's id of the same shape names nothing here.
+    const other = await s.type({ trial: plannerCallId("js-2", 3), text: "hello" });
+    assert.match(String(result(other).error), /has no trial or call planner-js-2-3/);
+    // Its end: its last screen is kept, it leaves the report, and it takes no more input.
+    t.last = { cols: 80, rows: 24, data: "the plan" };
+    s.env.service.consoles.ended(id);
+    assert.equal(s.env.service.work().terminals, undefined);
+    const [frame] = await s.env.service.consoles.screens([id]);
+    assert.equal(frame?.state, "ended");
+    const late = await s.type({ trial: id, text: "one more" });
+    assert.match(String(result(late).error), /has ended: nothing more goes into its terminal/);
+    // The round's second try takes the same id: its console is open again.
+    s.env.service.consoles.setCall(
+      id,
+      { run: "js-1", lane: "planner", source: "planner" },
+      new TrialConsole(t),
+    );
+    assert.equal(result(await s.type({ trial: id, text: "again" })).outcome, "typed");
+  });
+
+  test("a planner's call's credential: the turn routes give it its own messages' offers, and it stops working when the call ends", async () => {
+    const s = await setup();
+    const id = plannerCallId("js-1", 4);
+    const caller = { run: "js-1", kind: "planner" as const, source: "planner" };
+    const auth = s.env.service.mintCallToken({ id, caller });
+    assert.match(auth, /^call\.[0-9a-f]{48}$/);
+    const offered: string[] = [];
+    s.env.service.inTurn(id, {
+      offer: (at) => {
+        offered.push(at);
+        return { offer: "o-1", text: "the owner's words" };
+      },
+      taken: (offer) => (offer === "o-1" ? [12] : []),
+    });
+    const api = createHarnessApi(s.env.service, { supervisor: "s" });
+    const post = async (path: string, body: object, bearer: string) => {
+      const r = await api.request(path, {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    const offer = await post("/v1/trial/turn/offer", { at: "after-tool" }, auth);
+    assert.deepEqual(offer, { status: 200, body: { offer: "o-1", text: "the owner's words" } });
+    assert.deepEqual(offered, ["after-tool"]);
+    const taken = await post("/v1/trial/turn/taken", { offer: "o-1" }, auth);
+    assert.deepEqual(taken.body, { messages: [12] });
+    // The MCP gateway takes it as the planner's own credential.
+    assert.deepEqual(s.env.service.callOf(auth)?.caller, caller);
+    s.env.service.endCall(auth);
+    assert.equal((await post("/v1/trial/turn/offer", { at: "turn-end" }, auth)).status, 401);
+    assert.equal((await post("/v1/trial/turn/offer", { at: "turn-end" }, "call.0")).status, 401);
+    const r = await api.request("/v1/mcp-tools", { headers: { authorization: `Bearer ${auth}` } });
+    assert.equal(r.status, 401);
   });
 });

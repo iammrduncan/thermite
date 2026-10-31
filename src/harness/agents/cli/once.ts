@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { CliCompactions, type OnceKeeping, reclaim } from "../../../agents/compaction/index.ts";
 import type { McpAccess } from "../../../agents/mcp/index.ts";
@@ -10,6 +8,7 @@ import { renderModelCheck } from "../../../agents/roles/index.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, Runner } from "../../broker/index.ts";
 import type { RigCheckReport } from "../model/index.ts";
+import { callFolder, type TerminalCallLink, terminalCall } from "./call.ts";
 import { CHECK_ROLE, PLANNER_ROLE, takeUsage } from "./common.ts";
 import { setUp } from "./loop.ts";
 import type { CliCall, CliProgram, CliTally } from "./program.ts";
@@ -54,13 +53,7 @@ export async function cliOnce<T extends CliTally>(
   deps: CliOnceDeps,
   o: CliOnceOptions,
 ): Promise<T> {
-  // The program finds its home by name, so the folder must be reachable by name: under the lanes'
-  // area, not the controller's own (which only its processes may walk).
-  const parent = join(deps.scratchDir, "lanes", `${p.prefix}-ask`);
-  mkdirSync(parent, { recursive: true, mode: 0o711 });
-  chmodSync(parent, 0o711);
-  const dir = join(parent, randomUUID());
-  mkdirSync(dir, { mode: 0o700 });
+  const dir = callFolder(deps.scratchDir, p.prefix);
   const keeping = o.compaction;
   const call: CliCall = {
     model,
@@ -151,12 +144,19 @@ export interface CliAskOptions {
   usage?: ((u: CallUsage) => void) | undefined;
   /** Its subscription's usage windows, when it reports them (Claude Code). */
   windows?: ((w: PlanWindows) => void) | undefined;
+  /**
+   * On a rig whose agents run in their own terminal (goal 169): the call runs in its program's
+   * terminal (call.ts), with what the harness gives it there. Unset: headless.
+   */
+  terminal?: TerminalCallLink | undefined;
 }
 
 /**
  * The planner's call through a program, as the planner's own user: its answer. With past
  * research, the prompt names the run's knowledge/ folder, which every agent user may read and none
- * may change; a program that takes a list of tools gets the read-only file tools for it.
+ * may change; a program that takes a list of tools gets the read-only file tools for it. On a rig
+ * whose agents run in their own terminal, it runs in its program's terminal, and its answer is its
+ * last text there.
  */
 export async function cliAsk<T extends CliTally>(
   p: CliProgram<T>,
@@ -165,10 +165,25 @@ export async function cliAsk<T extends CliTally>(
   deps: CliOnceDeps,
   o: CliAskOptions = {},
 ): Promise<string> {
+  const tools = p.plannerTools?.(Boolean(o.read));
+  if (o.terminal) {
+    const t = await terminalCall(p, model, prompt, deps, {
+      role: PLANNER_ROLE,
+      link: o.terminal,
+      signal: o.signal,
+      mcp: o.mcp,
+      compaction: o.compaction,
+      tools,
+      usage: o.usage,
+      windows: o.windows,
+    });
+    if (!t.lastText) throw new Error(t.errors.at(-1) ?? `${p.name} gave no answer`);
+    return t.lastText;
+  }
   const t = await cliOnce(p, model, prompt, deps, {
     role: PLANNER_ROLE,
     signal: o.signal,
-    tools: p.plannerTools?.(Boolean(o.read)),
+    tools,
     // The MCP servers the run's kit gives the planner, at the gateway (goal 068).
     mcp: o.mcp,
     // Its conversation before each of the program's own compactions (goal 070).

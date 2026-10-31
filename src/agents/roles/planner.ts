@@ -3,7 +3,7 @@ import { NOTES_GUIDE } from "../../core/journal.ts";
 import type { OwnerAddition } from "../../core/role-additions.ts";
 import { mcpLine } from "../mcp/index.ts";
 import { type Prompt, prompt, section } from "../prompt.ts";
-import { advisorPackage, kbSections, ownerAdditionSection } from "./shared.ts";
+import { advisorPackage, kbSections, ownerAdditionSection, trialTurnSections } from "./shared.ts";
 
 /**
  * The planner (goal 166): it coordinates a hill-climb or goal run's lanes, round by round. Each
@@ -122,6 +122,47 @@ export interface PlannerInput {
   fit?: number | undefined;
   /** The owner's addition to the planner for the campaign (decision 1); none: no section. */
   addition?: OwnerAddition | undefined;
+}
+
+/**
+ * Told a planner in its program's own terminal when an owner's message goes in inside its turn
+ * (goal 169): the message follows, as JSON with its id, as owner_messages gives the others.
+ */
+export const PLANNER_OWNER_TURN =
+  "A message from the campaign's owner, who is watching this session, as one more of owner_messages:";
+
+/** A later turn in a planner's call in its program's own terminal (goal 169). */
+export type PlannerTurn =
+  /** An owner's message that went in inside its turn, through its hook or Thermite's plugin. */
+  | { kind: "owner"; id: number; text: string }
+  /** It waited for its usage window to reset; `words`: the limit's. */
+  | { kind: "failed"; words: string };
+
+export type PlannerTurnInput = PlannerTurn & {
+  /** The program it runs in: opencode, claude-code or codex. */
+  program: string;
+  /** Its place in the call, after its first message. */
+  turn: number;
+};
+
+/** A later turn in the hill climb's and goal campaign's planner call. */
+export function renderPlannerTurn(i: PlannerTurnInput): Prompt {
+  return plannerTurn("planner", i);
+}
+
+/** A later turn in a planner's call, its role's or the research planner's. */
+export function plannerTurn(role: string, i: PlannerTurnInput): Prompt {
+  const message =
+    i.kind === "owner"
+      ? [
+          section(
+            "owner",
+            "owner",
+            `${PLANNER_OWNER_TURN}\n\n${JSON.stringify({ id: i.id, text: i.text })}`,
+          ),
+        ]
+      : trialTurnSections(i);
+  return prompt(role, i.program, { turn: i.turn, message });
 }
 
 /** The hill climb's and goal campaign's planner call (goal 166). */

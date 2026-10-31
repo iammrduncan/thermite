@@ -5,7 +5,10 @@
 // provider added in Providers, its model given to the rig in Codex, then:
 //   - the rig takes the route; its model check runs one shell call through Codex, as the model
 //     check's own user;
-//   - the planner plans through Codex, as the planner's own user, with a credential minted for it;
+//   - the planner plans in Codex's own terminal (goal 169: the default), as the planner's own user,
+//     as planner-<run>-<round>, through the proxy with a credential bound to its call: one owner's
+//     message to it goes in inside its turn, through its Stop hook, and the owner's console types
+//     into it;
 //   - a worker trial runs Codex in its own terminal (goal 169: the default, on a rig nobody set),
 //     as the lane's user, with its own home and configuration, its workspace trusted (no screen
 //     waits), its approvals and sandbox off and its rollout copied for the harness, edits the
@@ -53,6 +56,7 @@ import {
   control,
   dc,
   events,
+  plannerInTerminal,
   prepare,
   secret,
   submit,
@@ -221,6 +225,20 @@ try {
     modelCheck.body.summary,
   );
   await assign(env, "smoke-1");
+  // Goal 169: the planner's call runs in Codex's own terminal (the default), as
+  // planner-<run>-<round>, with a credential bound to the call; one owner's message to the planner
+  // goes in inside its turn, at its end (the Stop hook), and the owner's console types into it.
+  const plannerCall = await plannerInTerminal();
+  await command("message_agent", {
+    run: "smoke-1",
+    to: "planner",
+    text: "OWNER-PLANNER Plan the tidy-up first.",
+  });
+  const plannerTyped = await command("terminal_input", {
+    run: "smoke-1",
+    trial: plannerCall.id,
+    text: "Plan the tidy-up first.",
+  });
   const epoch = await until(
     "the first epoch, planned",
     async () => (await events()).find((e) => e.kind === "epoch_started" && e.subject === "smoke-1"),
@@ -229,14 +247,26 @@ try {
   );
   const planned = String(epoch.body.notes ?? "");
   check(
-    "the planner planned through Codex, as the planner's user, through the proxy with a minted credential",
+    "the planner planned in Codex's own terminal, as the planner's user, through the proxy with its call's credential",
     epoch.body.source === "planner" &&
       epoch.body.planner_valid === true &&
       epoch.body.assignments?.[0]?.family === "cx-tidy" &&
+      /in its terminal/.test(planned) &&
       /uid=10040 /.test(planned) &&
-      /auth=proxy /.test(planned) &&
+      /auth=call /.test(planned) &&
       /proxied=200 /.test(planned),
     { source: epoch.body.source, valid: epoch.body.planner_valid, notes: planned },
+  );
+  const plannerRead = (await events()).find(
+    (e) => e.kind === "agent_message_read" && e.body.by === "planner",
+  );
+  check(
+    "the planner's call in its terminal took the owner's message inside its turn, at its end, and the owner's input was typed into it",
+    /^planner-smoke-1-\d+$/.test(plannerCall.id) &&
+      plannerRead?.body.how === "turn-end" &&
+      /the owner's message came inside its turn/.test(planned) &&
+      plannerTyped.outcome?.result?.outcome === "typed",
+    { call: plannerCall, read: plannerRead?.body, typed: plannerTyped.outcome },
   );
   const started = await until(
     "the Codex trial started",

@@ -62,7 +62,7 @@ const WORDS = "You've hit your session limit · resets 5:45am (UTC)";
 
 /** The run that met the limit; `pump` is called at each poll, as the loop's reads the log. */
 const runOf = (pump: () => void = () => undefined, deadline = Number.POSITIVE_INFINITY) => ({
-  trialId: "t-1",
+  id: "t-1",
   since: Date.now() - 1000,
   deadline,
   words: WORDS,

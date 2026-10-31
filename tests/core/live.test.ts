@@ -13,6 +13,8 @@ describe("the live log keeps the rig's credentials out of its lines", () => {
       'curl -H "Authorization: Bearer trial.***" http://harness/v1/mcp',
     );
     assert.equal(liveText(`key ${PROXY}, then ${MCP}.`), "key proxy.***, then mcp.***.");
+    // A planner's call's in its own terminal (goal 169).
+    assert.equal(liveText(`Bearer call.${"9e8d".repeat(12)}`), "Bearer call.***");
   });
 
   test("THERMITE_*_AUTH settings are masked as env prints them and as JSON", () => {

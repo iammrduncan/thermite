@@ -26,7 +26,7 @@ import {
 import { TrialConsole } from "./console.ts";
 import { TrialSignals, TurnMessages } from "./in-turn.ts";
 import type { CliProgram, CliRun, CliSetup, CliTally, CliTrial, CliTrialDeps } from "./program.ts";
-import { type RunEnd, TerminalTrial } from "./terminal.ts";
+import { RoleTerminal, type RunEnd } from "./terminal.ts";
 import { waitOutWindow } from "./usage-window.ts";
 
 /**
@@ -142,7 +142,7 @@ export async function runCliTrial<T extends CliTally>(
   const auth = `trial.${spec.token ?? ""}`;
   const title = `Trial ${spec.trialId} (${spec.lane})`;
   const run: CliRun = {
-    trialId: spec.trialId,
+    id: spec.trialId,
     role: spec.lane as Role,
     title,
     model: deps.model,
@@ -183,7 +183,7 @@ export async function runCliTrial<T extends CliTally>(
   if (setupError) return { ...result, stopped: "error", error: setupError };
   const cwd = code ? trial.spec.workspace : trial.folder.work;
   const term = deps.terminal
-    ? new TerminalTrial(p, run, { runner: deps.runner, cwd, env, limits, signalsFile, tally })
+    ? new RoleTerminal(p, run, { runner: deps.runner, cwd, env, limits, signalsFile, tally })
     : undefined;
   const unprepared = await term?.prepare();
   if (unprepared) return { ...result, stopped: "error", error: unprepared };
@@ -237,7 +237,7 @@ export async function runCliTrial<T extends CliTally>(
   const inTurn = p.signals
     ? new TurnMessages({
         inbox: deps.messages,
-        render: (text, turn) =>
+        render: ({ text }, turn) =>
           code
             ? renderWorkerTurn({ program: p.id, turn, kind: "owner", text })
             : renderResearchWorkerTurn({ program: p.id, turn, kind: "owner", text }),
@@ -404,7 +404,7 @@ export async function runCliTrial<T extends CliTally>(
     // In its terminal, a full usage window is waited out, or the trial ends (usage-window.ts).
     if (term?.limitShown()) {
       const w = await waitOutWindow(term, p, deps, {
-        trialId: run.trialId,
+        id: run.id,
         since: runStarted,
         deadline,
         words: tally.errors.at(-1) ?? `${p.name} shows a usage limit`,
@@ -494,7 +494,7 @@ export async function runCliTrial<T extends CliTally>(
   if (compactions.count) result.compactions = compactions.count;
   // Headless: its session log against its output. In its terminal, the log is the tally's source.
   if (!term) compareSessionLog(p, run, tally);
-  signals?.report({ trial: run.trialId, program: p.id });
+  signals?.report({ trial: run.id, program: p.id });
   if (inTurn) deps.inTurn?.(undefined);
   return result;
 }

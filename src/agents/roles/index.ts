@@ -17,14 +17,17 @@ import {
 import {
   PLAN_LIMITS_TEXT,
   PLANNER_ASK_SYSTEM,
+  PLANNER_OWNER_TURN,
   PLANNER_PI_SYSTEM,
   renderPlanner,
+  renderPlannerTurn,
 } from "./planner.ts";
 import {
   RESEARCH_PLAN_LIMITS_TEXT,
   RESEARCH_PLANNER_ASK_SYSTEM,
   RESEARCH_PLANNER_PI_SYSTEM,
   renderResearchPlanner,
+  renderResearchPlannerTurn,
 } from "./research-planner.ts";
 import {
   RESEARCH_WORKER_GO_ON,
@@ -39,7 +42,7 @@ import {
   renderResearchReviewer,
   renderReviewer,
 } from "./reviewer.ts";
-import { KB_GUIDE, TRIAL_TURN_TEXTS } from "./shared.ts";
+import { FAILED_GO_ON, KB_GUIDE, TRIAL_TURN_TEXTS } from "./shared.ts";
 import { renderSynthesizer, SYNTHESIZER_SYSTEM } from "./synthesizer.ts";
 import { RESEARCH_TEACHER_SYSTEM, renderTeacher, TEACHER_SYSTEM } from "./teacher.ts";
 import {
@@ -78,7 +81,10 @@ export {
   PLANNER_ASK_SYSTEM,
   PLANNER_PI_SYSTEM,
   type PlannerInput,
+  type PlannerTurn,
+  type PlannerTurnInput,
   renderPlanner,
+  renderPlannerTurn,
 } from "./planner.ts";
 export {
   PROMOTE_PER_ROUND,
@@ -86,6 +92,7 @@ export {
   RESEARCH_PLANNER_ASK_SYSTEM,
   RESEARCH_PLANNER_PI_SYSTEM,
   renderResearchPlanner,
+  renderResearchPlannerTurn,
 } from "./research-planner.ts";
 export {
   RESEARCH_WORKER_NOTES,
@@ -176,6 +183,23 @@ export interface RoleDefinition {
 
 /** Every role that runs in Pi with compaction goes on from renderCompacted's message after one. */
 const PI_TURNS = [renderCompacted] as const;
+
+/**
+ * The later turns of a planner's call in its program's own terminal (goal 169): an owner's message
+ * inside its turn, and what it goes on from after a usage window.
+ */
+const PLANNER_TERMINAL_TEXTS: readonly RoleText[] = [
+  {
+    id: "owner-terminal",
+    what: "in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id",
+    text: PLANNER_OWNER_TURN,
+  },
+  {
+    id: "failed-terminal",
+    what: "in its program's own terminal, after it waited for a full usage window, after the limit's words",
+    text: FAILED_GO_ON,
+  },
+];
 
 /**
  * The knowledge base's part of every role's prompt but the model check's and compaction's (goal
@@ -271,7 +295,7 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: WORKER_PROGRAMS,
     messages: true,
     render: renderPlanner,
-    turns: PI_TURNS,
+    turns: [...PI_TURNS, renderPlannerTurn],
     texts: [
       {
         id: "pi",
@@ -284,6 +308,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: PLANNER_ASK_SYSTEM,
       },
       { id: "limits", what: "the limits of its answer", text: PLAN_LIMITS_TEXT },
+      ...PLANNER_TERMINAL_TEXTS,
       KB_TEXT,
     ],
   },
@@ -296,7 +321,7 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: WORKER_PROGRAMS,
     messages: true,
     render: renderResearchPlanner,
-    turns: PI_TURNS,
+    turns: [...PI_TURNS, renderResearchPlannerTurn],
     texts: [
       {
         id: "pi",
@@ -309,6 +334,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: RESEARCH_PLANNER_ASK_SYSTEM,
       },
       { id: "limits", what: "the limits of its answer", text: RESEARCH_PLAN_LIMITS_TEXT },
+      ...PLANNER_TERMINAL_TEXTS,
       KB_TEXT,
     ],
   },

@@ -26,11 +26,12 @@ export type LiveKind = (typeof LIVE_KINDS)[number];
 export const LIVE_TEXT_MAX = 8000;
 
 /**
- * The rig's own credentials as an agent may print them: a trial's, the model proxy's and the MCP
- * gateway's tokens (`trial.`, `proxy.` or `mcp.` and hex), and any `THERMITE_*_AUTH` setting.
+ * The rig's own credentials as an agent may print them: a trial's, a call's in its terminal, the
+ * model proxy's and the MCP gateway's tokens (`trial.`, `call.`, `proxy.` or `mcp.` and hex), and
+ * any `THERMITE_*_AUTH` setting.
  */
 const RIG_CREDENTIALS =
-  /\b(?:(trial|proxy|mcp)\.[0-9a-f]{16,}|(THERMITE_[A-Z0-9_]*_AUTH(?:=|\\?["']?\s*:\s*\\?["']?))[^\s"'\\,;}&]+)/g;
+  /\b(?:(trial|call|proxy|mcp)\.[0-9a-f]{16,}|(THERMITE_[A-Z0-9_]*_AUTH(?:=|\\?["']?\s*:\s*\\?["']?))[^\s"'\\,;}&]+)/g;
 
 /**
  * A line's text as the live view keeps it: the rig's credentials in it masked as `***`, then

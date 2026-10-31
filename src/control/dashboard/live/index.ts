@@ -42,6 +42,7 @@ import {
   type RunView,
   runCampaign,
   runMessages,
+  workOf,
 } from "../../views/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { type LiveFeed, type PushedLine, pushLive, pushStart, recheckIds } from "./push.ts";
@@ -135,9 +136,14 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
             a.localeCompare(b, undefined, { numeric: true }),
           )
         : [];
-    const terminals = inTerminals.length
-      ? `<details class="lkept"><summary class="lchip" title="Each lane's agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.family)})</span></div>`).join("")}</div></details>`
-      : "";
+    // The planner's call, while it plans this run in its own terminal.
+    const planning = workOf(u.summary)?.terminals?.some(
+      (x) => x.role === "planner" && x.run === r.id,
+    );
+    const terminals =
+      inTerminals.length || planning
+        ? `<details class="lkept"><summary class="lchip" title="Each agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${planning ? `<div><a href="${liveHref(u.id, "planner")}">the planner's terminal</a></div>` : ""}${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.family)})</span></div>`).join("")}</div></details>`
+        : "";
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
       ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${kept
@@ -426,7 +432,12 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           .map((x) => `<a href="${runLiveHref(x)}">${esc(x.id)}</a>`)
           .join(", ")}.</div>`
       : `<div class="composer off">No run on this rig to message.</div>`;
-    // A trial's page has its terminal, and the owner's console into it (goal 169).
+    // A trial's page has its terminal, and the owner's console into it (goal 169); the planner's
+    // page, its call's while it plans in its own terminal.
+    const plannerCall =
+      source === "planner"
+        ? workOf(u.summary)?.terminals?.find((x) => x.role === "planner")
+        : undefined;
     const term = trial?.run
       ? terminalPanel(dash, c, {
           rig: u.id,
@@ -434,7 +445,14 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           trial: source.slice(6),
           ended: Boolean(ended.get(source)),
         })
-      : "";
+      : plannerCall
+        ? terminalPanel(dash, c, {
+            rig: u.id,
+            run: plannerCall.run,
+            trial: plannerCall.id,
+            ended: false,
+          })
+        : "";
     const title = source ? sourceName(source, sel?.lane) : "Everything";
     return page(
       c,

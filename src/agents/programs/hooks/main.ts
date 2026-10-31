@@ -13,7 +13,8 @@ import { pathToFileURL } from "node:url";
  * (THERMITE_SIGNALS), which the harness follows; each string of the payload is cut to STRING_MAX.
  * After a tool (PostToolUse) and at the end of the agent's turn (Stop), it asks the harness for
  * the owner's next message (the TURN_OFFER route), with the trial's credential that the program's
- * environment already holds for the agent's own `thermite-trial` (THERMITE_TRIAL_AUTH). It prints
+ * environment already holds for the agent's own `thermite-trial` (THERMITE_TRIAL_AUTH), or a
+ * planner's call's in its own terminal, which the same variable holds there. It prints
  * the message as the program takes it, PostToolUse's added context or a Stop that blocks with the
  * message as its reason, so the program goes on with it; then it sends the receipt (TURN_TAKEN)
  * and writes a `thermite.given` signal.
@@ -74,11 +75,11 @@ export function hookOutput(event: string, text: string): string | undefined {
 /** Where a hook's event is, as the harness's offer names it. */
 const PLACE: Record<string, string> = { PostToolUse: "after-tool", Stop: "turn-end" };
 
-/** One call to the harness's trial routes with the trial's credential; undefined if it fails. */
+/** One call to the turn routes with the trial's or the call's credential; undefined if it fails. */
 async function ask(env: NodeJS.ProcessEnv, path: string, body: Json): Promise<Json | undefined> {
   const base = env.THERMITE_HARNESS_URL;
   const auth = env.THERMITE_TRIAL_AUTH ?? "";
-  if (!base || !auth.startsWith("trial.")) return undefined;
+  if (!base || !/^(trial|call)\./.test(auth)) return undefined;
   try {
     const r = await fetch(`${base}${path}`, {
       method: "POST",

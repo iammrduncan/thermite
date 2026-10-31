@@ -295,7 +295,7 @@ function factsOf(proxied) {
     `uid=${process.getuid()}`,
     `home=${home && config.includes('model_provider = "thermite"') ? "own" : "missing"}`,
     `proxy_url=${baseUrl?.endsWith("/v1/model-proxy") ? "harness" : (baseUrl ?? "none")}`,
-    `auth=${credential.startsWith("trial.") ? "trial" : credential.startsWith("proxy.") ? "proxy" : "missing"}`,
+    `auth=${credential.startsWith("trial.") ? "trial" : credential.startsWith("proxy.") ? "proxy" : credential.startsWith("call.") ? "call" : "missing"}`,
     `proxied=${proxied}`,
     `bypass=${args.includes("--dangerously-bypass-approvals-and-sandbox")}`,
     `ignore_rules=${args.includes("--ignore-rules")}`,
@@ -434,10 +434,39 @@ async function runHeadless() {
   });
 }
 
+const CAMPAIGN = "The campaign, as JSON:";
+/**
+ * The planner in its terminal (goal 169): its plan, as headless. In a run's first round it holds
+ * its turn, at most WAIT_MESSAGES_MS, its Stop hook asked each second, until one of the owner's
+ * messages comes at the end of its turn, as a long turn would meet one; then it plans again, and
+ * its notes say what came.
+ */
+const planInTerminal = async (text, facts) => {
+  const ctx = JSON.parse(text.slice(text.indexOf(CAMPAIGN) + CAMPAIGN.length));
+  const plan = (note) =>
+    JSON.stringify({
+      new_families: [{ id: "cx-tidy", description: "Small tidy-ups proposed by the Codex stand-in." }],
+      assignments: ctx.lanes.map((lane) => ({ lane, family: "cx-tidy", focus: "tidy the kernel", parent: "champion" })),
+      notes: `planned by the Codex stand-in in its terminal (${note})`,
+    });
+  const draft = plan("a first plan");
+  say(draft);
+  const end = Date.now() + (ctx.epoch === 1 ? WAIT_MESSAGES_MS : 0);
+  for (;;) {
+    if (stop(draft)) break;
+    if (Date.now() >= end) return draft;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const final = plan(`the owner's message came inside its turn; ${facts} ${hookFacts()}`);
+  say(final);
+  stop(final);
+  return final;
+};
+
 /**
  * In its terminal: its thread from its first message (or resumed), then each message typed, one
  * turn at a time, until `/exit` or SIGTERM. A trial's first turn may meet its usage window; then
- * a turn reads the kernel, and the next submits.
+ * a turn reads the kernel, and the next submits. The planner's first turn answers its plan.
  */
 async function runTerminal() {
   let turns = Promise.resolve();
@@ -456,6 +485,7 @@ async function runTerminal() {
       show(`› ${text.split("\n")[0]}`);
       hook("UserPromptSubmit", { prompt: text.slice(0, 2000) });
       if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
+      const planning = !trial && taken === 0 && text.includes(CAMPAIGN);
       taken++;
       let lastSaid = "done";
       const full = trial && !resumed && window === "none" ? await usageWindow() : undefined;
@@ -466,7 +496,8 @@ async function runTerminal() {
         busy = false;
         return;
       }
-      if (trial && work === "read") {
+      if (planning) lastSaid = await planInTerminal(text, facts);
+      else if (trial && work === "read") {
         if (window === "met") {
           window = "went-on";
           const end = Date.now() + WAIT_TYPED_MS;

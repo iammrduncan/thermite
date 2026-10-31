@@ -1,7 +1,7 @@
 import { NOTES_GUIDE } from "../../core/journal.ts";
 import { MEASURES_NOTHING } from "../../core/research-check.ts";
 import type { Prompt } from "../prompt.ts";
-import { type PlannerInput, plannerPrompt } from "./planner.ts";
+import { type PlannerInput, type PlannerTurnInput, plannerPrompt, plannerTurn } from "./planner.ts";
 
 /**
  * The research planner (goal 166): it plans a research run's next round. It gives each lane a
@@ -88,6 +88,11 @@ const RESEARCH_PLANNER_ASK = `${RESEARCH_PLANNER_TASK} Answer with only the plan
 export const RESEARCH_PLANNER_ASK_SYSTEM = `${RESEARCH_PLANNER_ASK} Use no tools.`;
 
 /** A research run's planner call (goal 166): as the planner's, with its own texts. */
+/** A later turn in the research planner's call, in its program's own terminal (goal 169). */
+export function renderResearchPlannerTurn(i: PlannerTurnInput): Prompt {
+  return plannerTurn("research-planner", i);
+}
+
 export function renderResearchPlanner(i: PlannerInput): Prompt {
   return plannerPrompt(
     "research-planner",

@@ -30,7 +30,7 @@ import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts
 import type { ConsoleLater, TrialConsole } from "../../../../src/harness/agents/cli/console.ts";
 import { runCliTrial } from "../../../../src/harness/agents/cli/loop.ts";
 import type { CliTrialDeps } from "../../../../src/harness/agents/cli/program.ts";
-import { TerminalTrial } from "../../../../src/harness/agents/cli/terminal.ts";
+import { RoleTerminal } from "../../../../src/harness/agents/cli/terminal.ts";
 import { Registry } from "../../../../src/harness/agents/registry.ts";
 import type { TrialResult, TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import { createHarnessApi } from "../../../../src/harness/api/index.ts";
@@ -238,7 +238,7 @@ const types = (home: string) =>
 
 test("follow_up is a worker in Pi's alone: a program in its terminal refuses it, in words (any system)", async () => {
   const run = {
-    trialId: "t-1",
+    id: "t-1",
     role: "lane-1",
     title: "Trial t-1 (lane-1)",
     model: { baseUrl: "http://127.0.0.1:9", model: "m", apiKey: "k" },
@@ -252,7 +252,7 @@ test("follow_up is a worker in Pi's alone: a program in its terminal refuses it,
     wallMs: undefined,
     env: undefined,
   } as const;
-  const t = new TerminalTrial(claudeProgram, run as never, {
+  const t = new RoleTerminal(claudeProgram, run as never, {
     runner: new LocalRunner(mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "tm-"))),
     cwd: "/nowhere",
     env: {},

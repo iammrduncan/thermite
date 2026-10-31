@@ -6,7 +6,7 @@ import { KEEP_TRIAL_PROMPT } from "../../core/api/harness/prompts.ts";
 import { TURN_OFFER, TURN_TAKEN } from "../../core/api/harness/turn.ts";
 import { compactionOf, KEPT_MAX } from "../compactions.ts";
 import { LedgerError } from "../ledger/index.ts";
-import { type ApiContext, limitOf } from "./context.ts";
+import { type ApiContext, limitOf, Unauthorized } from "./context.ts";
 
 /**
  * A running trial's own routes, each bound to the trial by its token: its session's lines for the
@@ -125,17 +125,25 @@ export function trialRoutes(app: Hono, { service, trialOf }: ApiContext): void {
   });
 
   // A program's hook or plugin asks for the owner's next message inside the agent's turn (goal
-  // 169): the trial's token decides the trial, so it gets only what that trial's agent may have.
-  // The offer reads nothing; its receipt, once the program has the text, reads the message.
+  // 169): the trial's token decides the trial, and a call's credential the call (a planner's in
+  // its own terminal), so it gets only what that agent may have. The offer reads nothing; its
+  // receipt, once the program has the text, reads the message.
+  const turnOf = (header: string | undefined): string => {
+    const given = header?.startsWith("Bearer call.") ? header.slice("Bearer ".length) : undefined;
+    if (!given) return trialOf(header).trial.id;
+    const call = service.callOf(given);
+    if (!call) throw new Unauthorized("unauthorized");
+    return call.id;
+  };
   app.post(TURN_OFFER.path, limitOf(TURN_OFFER), async (c) => {
-    const { trial } = trialOf(c.req.header("authorization"));
+    const id = turnOf(c.req.header("authorization"));
     const { at } = TURN_OFFER.body.parse(await c.req.json());
-    return c.json(service.turnOffer(trial.id, at) ?? { offer: null, text: "" });
+    return c.json(service.turnOffer(id, at) ?? { offer: null, text: "" });
   });
   app.post(TURN_TAKEN.path, limitOf(TURN_TAKEN), async (c) => {
-    const { trial } = trialOf(c.req.header("authorization"));
+    const id = turnOf(c.req.header("authorization"));
     const { offer } = TURN_TAKEN.body.parse(await c.req.json());
-    return c.json({ messages: service.turnTaken(trial.id, offer) });
+    return c.json({ messages: service.turnTaken(id, offer) });
   });
 
   // A worker's idea for its run's queue: proposed by its lane (its trial decides run and lane).

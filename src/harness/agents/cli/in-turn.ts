@@ -86,10 +86,10 @@ const OFFERS_MAX = 100;
 export interface TurnMessagesDeps {
   inbox: MessageInbox | undefined;
   /**
-   * One owner's message as the agent's role puts it, a later turn of the trial, at `turn`, its
-   * place in the call; its text does not depend on the place.
+   * One owner's message as the agent's role puts it, a later turn of the trial (or the call), at
+   * `turn`, its place in the call; its text does not depend on the place.
    */
-  render(text: string, turn: number): Prompt;
+  render(m: { id: number; text: string }, turn: number): Prompt;
   /** The next later turn's place in the call, which the continuations share. */
   next(): number;
   /** The messages a continuation carries now. */
@@ -155,7 +155,7 @@ export class TurnMessages implements TurnDelivery {
     const offer = randomUUID();
     this.offers.set(offer, { id: m.id, text: m.text, at, made: now });
     if (this.offers.size > OFFERS_MAX) this.offers.delete(this.offers.keys().next().value ?? "");
-    return { offer, text: messageText(this.o.render(m.text, 0)) };
+    return { offer, text: messageText(this.o.render(m, 0)) };
   }
 
   taken(offer: string): number[] {
@@ -165,7 +165,7 @@ export class TurnMessages implements TurnDelivery {
     // Read meanwhile some other way: nothing more to record.
     if (!this.o.inbox?.waiting().some((w) => w.id === x.id)) return [];
     this.o.inbox.given([x.id], x.at);
-    this.o.sent?.(this.o.render(x.text, this.o.next()));
+    this.o.sent?.(this.o.render(x, this.o.next()));
     this.o.live([
       {
         kind: "status",

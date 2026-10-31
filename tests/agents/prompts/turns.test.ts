@@ -6,6 +6,8 @@ import { describe, test } from "node:test";
 import { messageText, type Prompt } from "../../../src/agents/prompt.ts";
 import {
   renderCompacted,
+  renderPlannerTurn,
+  renderResearchPlannerTurn,
   renderResearchWorkerTurn,
   renderWorkerTurn,
 } from "../../../src/agents/roles/index.ts";
@@ -125,6 +127,25 @@ describe("the later turns inside a call (goal 166)", () => {
           program: "pi",
           kind: "owner",
           text: "Cite page numbers.",
+        }),
+      ],
+      [
+        "planner in a program's own terminal: an owner's message inside its turn",
+        renderPlannerTurn({
+          ...at,
+          program: "claude-code",
+          kind: "owner",
+          id: 7,
+          text: "Avoid :shared memory tiling: this round.",
+        }),
+      ],
+      [
+        "research planner in a program's own terminal: after a full usage window",
+        renderResearchPlannerTurn({
+          ...at,
+          program: "codex",
+          kind: "failed",
+          words: "the usage window is full until 13:00 UTC",
         }),
       ],
       ...(

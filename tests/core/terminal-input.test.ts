@@ -11,6 +11,8 @@ import {
 } from "../../src/core/commands.ts";
 import {
   confirmFirst,
+  isPlannerCall,
+  plannerCallId,
   TERMINAL_KEYS,
   TERMINAL_KEYS_MAX,
   TERMINAL_TEXT_MAX,
@@ -49,6 +51,16 @@ describe("terminal_input's payload", () => {
     assert.ok(!parse({ keys: Array(TERMINAL_KEYS_MAX + 1).fill("down") }).success);
     assert.ok(!parse({ text: "a", wait: "later" }).success);
     assert.ok(!parse({ text: "a", more: 1 }).success, "nothing but its fields");
+  });
+
+  test("it names a trial's terminal, or a planner's call's by its run and round, and nothing else", () => {
+    const run = `r${"x".repeat(63)}`;
+    assert.equal(plannerCallId(run, 12345), `planner-${run}-12345`);
+    assert.ok(parse({ trial: plannerCallId(run, 12345), text: "a" }).success, "the longest run");
+    assert.ok(isPlannerCall(plannerCallId("js-1", 2)));
+    assert.ok(!isPlannerCall("t-0123456789abcdef"));
+    assert.match(why({ trial: "planner js-1", text: "a" }), /a trial's id, or a planner's call's/);
+    assert.ok(!parse({ trial: "x".repeat(101), text: "a" }).success);
   });
 
   test("text holds no control characters but line breaks and tabs, and a form's CR LF is kept as LF", () => {

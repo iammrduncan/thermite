@@ -123,7 +123,7 @@ export function compareSessionLog<T extends CliTally>(
     const read = p.sessionLog(run, tally);
     if (!read) return;
     const differ = tallyDifferences(tally, read.tally);
-    const fields = { trial: run.trialId, program: p.id, session: tally.session };
+    const fields = { trial: run.id, program: p.id, session: tally.session };
     if (!Object.keys(differ).length && !read.unknown.size) {
       logDebug("harness", `${p.name}'s session log agrees with its output`, fields);
       return;
@@ -135,7 +135,7 @@ export function compareSessionLog<T extends CliTally>(
     });
   } catch (err) {
     logWarn("harness", `could not compare ${p.name}'s session log with its output`, {
-      trial: run.trialId,
+      trial: run.id,
       program: p.id,
       error: errorText(err),
     });

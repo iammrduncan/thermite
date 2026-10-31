@@ -41,10 +41,10 @@ import * as attempts from "./attempts.ts";
 import * as champion from "./champion.ts";
 import * as checks from "./checks.ts";
 import { type CommandOutcome, Commands } from "./commands.ts";
-import { TrialConsoles } from "./consoles.ts";
+import { TerminalConsoles } from "./consoles.ts";
 import * as decisions from "./decisions.ts";
 import { type Draining, drainDeadline, endDrainAtStart, type Work, workNow } from "./drain.ts";
-import { noteModelStall, ProviderAnswers, ProxyCredentials } from "./proxy.ts";
+import { type CallCredential, noteModelStall, ProviderAnswers, ProxyCredentials } from "./proxy.ts";
 import * as reports from "./reports.ts";
 import * as research from "./research.ts";
 import { requireRun } from "./runs.ts";
@@ -211,7 +211,10 @@ export class HarnessService {
 
   /** What still runs, for the rig's report, with each open trial and what it is doing (workNow). */
   work(): Work {
-    return workNow(this.ledger, this.clock(), this.draining, (t) => this.watch.facts(t));
+    const w = workNow(this.ledger, this.clock(), this.draining, (t) => this.watch.facts(t));
+    // A planner's call in its own terminal, for Live (goal 169).
+    const terminals = this.consoles.openCalls();
+    return terminals.length ? { ...w, terminals } : w;
   }
 
   /** The promotion policy: what happens to a confirmed win (and to one an audit cleared). */
@@ -486,6 +489,19 @@ export class HarnessService {
     return this.credentials.mcpTokenCaller(token);
   }
 
+  /** A credential bound to one call in its own terminal, until endCall (goal 169). */
+  mintCallToken(c: CallCredential): string {
+    return this.credentials.mintCallToken(c);
+  }
+
+  callOf(token: string): CallCredential | undefined {
+    return this.credentials.callOf(token);
+  }
+
+  endCall(token: string): void {
+    this.credentials.endCall(token);
+  }
+
   // ------------------------------------------------------ audits and reviews: service/decisions.ts
 
   auditPackages() {
@@ -611,8 +627,8 @@ export class HarnessService {
     this.inboxes.trialAtWork(id);
   }
 
-  /** The owner's consoles into the trials' terminals, and their screens (goal 169). */
-  readonly consoles = new TrialConsoles(this);
+  /** The owner's consoles into the agents' terminals, and their screens (goal 169). */
+  readonly consoles = new TerminalConsoles(this);
 
   /** A running trial's way to take the owner's messages inside its turn (goal 169). */
   inTurn(id: string, d: TurnDelivery | undefined): void {
@@ -640,7 +656,7 @@ export class HarnessService {
   }
 
   trialWait(
-    trial: { id: string; run: string; lane: string },
+    trial: { id: string; run: string; lane: string; source?: string | undefined },
     w: { until: string; kind: string; words: string },
   ): void {
     trials.trialWait(this, trial, w);

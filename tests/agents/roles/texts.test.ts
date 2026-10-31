@@ -29,6 +29,7 @@ import {
 import {
   PLAN_LIMITS_TEXT,
   PLANNER_ASK_SYSTEM,
+  PLANNER_OWNER_TURN,
   PLANNER_PI_SYSTEM as PLANNER_SYSTEM,
   PLANNER_TASK,
 } from "../../../src/agents/roles/planner.ts";
@@ -94,6 +95,7 @@ const TEXTS: Record<string, string> = {
   "planner.limits": PLAN_LIMITS_TEXT,
   "planner.pi.system": PLANNER_SYSTEM,
   "planner.ask.system": PLANNER_ASK_SYSTEM,
+  "planner.owner-terminal": PLANNER_OWNER_TURN,
   "research-planner.task": RESEARCH_PLANNER_TASK,
   "research-planner.limits": RESEARCH_PLAN_LIMITS_TEXT,
   "research-planner.pi.system": RESEARCH_PLANNER_SYSTEM,

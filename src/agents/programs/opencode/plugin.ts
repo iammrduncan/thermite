@@ -27,7 +27,8 @@ import { join } from "node:path";
  * left alone.
  *
  * A trial's signals and the owner's messages (goal 169; THERMITE_SIGNALS, THERMITE_HARNESS_URL and
- * THERMITE_TRIAL_AUTH, the trial's credential that the agent's own `thermite-trial` uses):
+ * THERMITE_TRIAL_AUTH, the trial's credential that the agent's own `thermite-trial` uses, or a
+ * planner's call's in its own terminal):
  * - each event OpenCode gives the plugin (`ctx.event.subscribe()`) goes as one JSON line into the
  *   trial's signals file, which the harness follows and reads with its OpenCode adapter
  *   (session-events.ts): the event without its `location`, each string cut to STRING_MAX. The
@@ -202,7 +203,7 @@ export function eventLine(e: Json): string {
 async function ask(env: NodeJS.ProcessEnv, path: string, body: Json): Promise<Json | undefined> {
   const base = env.THERMITE_HARNESS_URL;
   const auth = env.THERMITE_TRIAL_AUTH ?? "";
-  if (!base || !auth.startsWith("trial.")) return undefined;
+  if (!base || !/^(trial|call)\./.test(auth)) return undefined;
   try {
     const r = await fetch(`${base}${path}`, {
       method: "POST",

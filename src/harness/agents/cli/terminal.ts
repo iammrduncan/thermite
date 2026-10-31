@@ -26,21 +26,23 @@ import {
 import type { CliProgram, CliRun, CliTally } from "./program.ts";
 
 /**
- * The trial loop's terminal mode (goal 169): a program in its own terminal UI, held by the
- * terminal host (src/harness/terminal/), which the broker runs as the lane's user under the lane's
- * limits, instead of one headless run for each turn. One host holds the program while it runs: its
- * first message is typed into it once it is ready, never put on its command line, which other
- * processes on the rig can read, and each later turn once the turn before has ended.
+ * The one path for a role in its program's own terminal UI (goal 169): a trial's worker, in the
+ * trial loop's terminal mode (loop.ts), or a call outside a trial, a planner's (call.ts), each a
+ * CliRun. The terminal host (src/harness/terminal/), which the broker runs as the role's user
+ * (under the lane's limits, for a trial), holds the program instead of one headless run for each
+ * turn. One host holds the program while it runs: its first message is typed into it once it is
+ * ready, never put on its command line, which other processes on the rig can read, and each later
+ * turn once the turn before has ended.
  *
  * What happened comes from the program's session log, which the host copies where the harness may
- * read it (OpenCode's events come from Thermite's plugin, in the trial's signals file), read with
+ * read it (OpenCode's events come from Thermite's plugin, in the run's signals file), read with
  * the program's adapter into the tally the headless reader fills. A turn has ended when the log
  * says so and nothing begins for SETTLE_MS: never from the screen. A program that exits by itself
  * is resumed in a new host at the next turn, as a headless run's session is continued (one going
- * on by itself after a usage window is followed: usage-window.ts). At the trial's end, a stop or
- * its submission, the loop keeps the last screen in memory (for the live view; no decision reads
- * it), and the host ends the program its own way. The owner's console (console.ts) types into the
- * same host, one input at a time with the loop's own.
+ * on by itself after a usage window is followed: usage-window.ts). At the end, a stop or a trial's
+ * submission, the path keeps the last screen in memory (for the live view; no decision reads it),
+ * and the host ends the program its own way. The owner's console (console.ts) types into the same
+ * host, one input at a time with the path's own.
  */
 
 /** How long a turn's end must stand in the log before the loop takes it: a late line reopens it. */
@@ -116,24 +118,25 @@ async function ready(host: Terminal, stopping: () => boolean): Promise<void> {
   }
 }
 
-/** What the terminal mode takes from the loop. */
-export interface TerminalTrialDeps<T extends CliTally> {
+/** What the path takes from the trial loop, or from a call. */
+export interface RoleTerminalDeps<T extends CliTally> {
   runner: Runner;
   /** Where the program works, and its environment as a headless run has it. */
   cwd: string;
   env: Record<string, string>;
-  limits: LaneLimitValues;
-  /** The trial's signals file, where OpenCode's events are. */
+  /** A trial's lane's limits; a call outside a trial has none but the broker's own. */
+  limits?: LaneLimitValues | undefined;
+  /** The run's signals file, where OpenCode's events are. */
   signalsFile: string;
   /** The tally the loop reads, which the session log fills. */
   tally: T;
 }
 
-/** One trial's program in its own terminal: one host at a time, for as long as the trial runs. */
-export class TerminalTrial<T extends CliTally> {
+/** One role's program in its own terminal: one host at a time, for as long as its run lasts. */
+export class RoleTerminal<T extends CliTally> {
   private readonly p: CliProgram<T>;
   private readonly run: CliRun;
-  private readonly o: TerminalTrialDeps<T>;
+  private readonly o: RoleTerminalDeps<T>;
   private readonly adapter: SessionLogAdapter<unknown>;
   private readonly state: unknown;
   /** The log's events added up, as the headless readers count them. */
@@ -161,7 +164,7 @@ export class TerminalTrial<T extends CliTally> {
   /** What is typed into the program, one input at a time: the loop's turns and the owner's. */
   private typing: Promise<unknown> = Promise.resolve();
 
-  constructor(p: CliProgram<T>, run: CliRun, o: TerminalTrialDeps<T>) {
+  constructor(p: CliProgram<T>, run: CliRun, o: RoleTerminalDeps<T>) {
     this.p = p;
     this.run = run;
     this.o = o;
@@ -171,13 +174,13 @@ export class TerminalTrial<T extends CliTally> {
       p.terminal.log.from === "signals" ? o.signalsFile : join(run.area, this.copyName());
   }
 
-  /** The host's copy of the session log, in the trial's area. */
+  /** The host's copy of the session log, in the run's area. */
   private copyName(): string {
     return `${this.p.prefix}-session.jsonl`;
   }
 
   private fields(more: Record<string, unknown> = {}): Record<string, unknown> {
-    return { trial: this.run.trialId, program: this.p.id, ...more };
+    return { trial: this.run.id, program: this.p.id, ...more };
   }
 
   /** Before the first run (Claude Code: its version); else why not, in words. */
@@ -279,7 +282,7 @@ export class TerminalTrial<T extends CliTally> {
       area: this.run.area,
       env: { ...this.o.env, ...plan.env },
       start: {
-        trial: this.run.trialId,
+        trial: this.run.id,
         program: p.id,
         argv: [exe, ...plan.args],
         cwd: this.o.cwd,
@@ -294,10 +297,14 @@ export class TerminalTrial<T extends CliTally> {
       ...(Number.isFinite(remaining)
         ? { timeoutMs: Math.min(MAX_RUN_MS, Math.ceil(remaining) + BACKSTOP_MS) }
         : {}),
-      rssLimitBytes: limits.runRssMib * 1024 * 1024,
       spareExe: exe,
-      disk: { path: this.run.area, limitBytes: limits.workspaceMib * 1024 * 1024 },
-      nproc: limits.processes,
+      ...(limits
+        ? {
+            rssLimitBytes: limits.runRssMib * 1024 * 1024,
+            disk: { path: this.run.area, limitBytes: limits.workspaceMib * 1024 * 1024 },
+            nproc: limits.processes,
+          }
+        : {}),
     });
     this.host = host;
     log(
@@ -421,7 +428,7 @@ export class TerminalTrial<T extends CliTally> {
   /**
    * The owner's input (terminal_input), into the program now: text, then Enter, or keys by name,
    * after what the loop is typing. Refused in words when no program runs: it is being ended, or
-   * it exited and starts again in its session at the trial's next turn; and with follow_up, which
+   * it exited and starts again in its session at its run's next turn; and with follow_up, which
    * only a worker in Pi takes.
    */
   async ownerInput(i: {
@@ -437,7 +444,7 @@ export class TerminalTrial<T extends CliTally> {
     if (this.stopping) throw new Refusal(`${this.p.name} is being ended: nothing more goes in`);
     if (!host)
       throw new Refusal(
-        `${this.p.name} is not running now: it starts again in its session at the trial's next turn`,
+        `${this.p.name} is not running now: it starts again in its session at its next turn, if it has one`,
       );
     await this.typed(() =>
       i.text !== undefined ? typeIn(host, i.text) : host.keys([...(i.keys ?? [])]),

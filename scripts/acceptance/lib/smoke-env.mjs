@@ -193,6 +193,22 @@ export function prepare() {
   return { project, kit, contractFile };
 }
 
+/**
+ * The planner's call while it runs in its own terminal (goal 169), as the rig's report lists it to
+ * control (`work.terminals`): its id (planner-RUN-ROUND) and its run.
+ */
+export async function plannerInTerminal(run = "smoke-1", { rig = "local-1", ms = 300_000 } = {}) {
+  return await until(
+    "the planner's call in its own terminal",
+    async () =>
+      ((await api(`/v1/rigs/${rig}/view`)).body.summary?.work?.terminals ?? []).find(
+        (x) => x.role === "planner" && x.run === run,
+      ),
+    ms,
+    1000,
+  );
+}
+
 /** Issues a signed command through control and waits until the supervisor delivered it. */
 export async function command(kind, payload, rig = "local-1") {
   const issued = await api("/v1/commands", {

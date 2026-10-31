@@ -114,7 +114,10 @@ async function readClaudeVersion(run: CliRun, runner: Runner): Promise<string | 
  */
 export const CLAUDE_CODE_MEMORY = "about 550 MiB";
 
-/** Claude Code's settings in a trial: its hooks, and its compaction hooks when the conversation is kept. */
+/**
+ * Claude Code's settings in a trial, or a call in its terminal: its hooks, and its compaction hooks
+ * when the conversation is kept.
+ */
 const trialSettings = (run: CliRun) =>
   claudeTrialSettings(
     run.keptAt ? { drops: join(run.area, CLAUDE_DROPS), at: run.keptAt } : undefined,
@@ -205,6 +208,8 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
       args: claudeTerminalArgs(run.model, {
         session: at.session,
         resume: at.resume,
+        // A planner's call takes its tools; a trial, all of them.
+        tools: run.tools,
         mcpConfig: run.mcp ? join(run.home, "mcp.json") : undefined,
         settings: claudeTerminalSettings(trialSettings(run)),
       }),

@@ -64,23 +64,27 @@ export interface CliTally {
   calls: CallUsage[];
 }
 
-/** One trial's run of a program, as its entry sees it. */
+/**
+ * One run of a program for a role, as its entry sees it: a trial's, or a call's in the program's
+ * own terminal outside a trial (a planner's, goal 169), which runs on the same path (cli/call.ts).
+ */
 export interface CliRun {
-  trialId: string;
-  /** The lane's user, which sets the program up and runs it. */
+  /** The trial's id, or the call's (plannerCallId): its console's and its screens'. */
+  id: string;
+  /** The user that sets the program up and runs it: the lane's, or the planner's. */
   role: Role;
-  /** The title its kept conversations get: `Trial <id> (<lane>)`. */
+  /** The title its kept conversations get: `Trial <id> (<lane>)`, or `The planner`. */
   title: string;
   model: ModelConfig;
   /** The harness API as the lane reaches it, for example http://127.0.0.1:8700. */
   apiUrl: string;
-  /** The trial's own area in the lane, and the program's home and temporary folders there. */
+  /** The run's own area (a trial's in its lane), and the program's home and temporary folders there. */
   area: string;
   home: string;
   tmp: string;
-  /** The trial's credential: `trial.<token>`. */
+  /** Its credential: the trial's, `trial.<token>`, or the call's, `call.<token>`. */
   auth: string;
-  /** The MCP servers the run's kit gives its workers (goal 068), at the gateway with `auth`. */
+  /** The MCP servers the run's kit gives its role (goal 068), at the gateway with `auth`. */
   mcp: McpAccess | undefined;
   /** Where the harness keeps the conversation before each compaction (goal 070). */
   keptAt: KeptAt | undefined;
@@ -88,6 +92,8 @@ export interface CliRun {
   wallMs: number | undefined;
   /** The lane's build caches (ccache and the like). */
   env: Record<string, string> | undefined;
+  /** The tools it may use, in a program that takes a list (Claude Code's; "": none); none: all. */
+  tools?: string | undefined;
 }
 
 /**
@@ -245,8 +251,9 @@ export interface TerminalPlan {
 }
 
 /**
- * A program in its own terminal (goal 169), as the trial loop's terminal mode runs it. Its own
- * profile (how the host interrupts and ends it) is src/agents/programs/'s; this is what the loop
+ * A program in its own terminal (goal 169), as the one path for every role runs it (terminal.ts):
+ * a trial's, in the trial loop's terminal mode, or a call's outside a trial (call.ts). Its own
+ * profile (how the host interrupts and ends it) is src/agents/programs/'s; this is what the path
  * needs besides: its start, its session log's adapter and where the log is read, and what its own
  * tally takes from the log's events.
  */
@@ -260,7 +267,7 @@ export interface CliTerminal<T extends CliTally> {
   start(run: CliRun, at: TerminalAt): TerminalPlan;
   /**
    * Its session log: the adapter that reads it, and where it is read, the host's copy of the
-   * program's own log, or the trial's signals file (OpenCode's events, which Thermite's plugin
+   * program's own log, or the run's signals file (OpenCode's events, which Thermite's plugin
    * writes there).
    */
   log: { adapter(): SessionLogAdapter<unknown>; from: "copy" | "signals" };

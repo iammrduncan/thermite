@@ -254,6 +254,23 @@ describe("Thermite's hook program (goal 169)", () => {
     assert.deepEqual(h.asked[0]?.body, { at: "turn-end" });
   });
 
+  test("a planner's call in its own terminal asks with its call's credential", async () => {
+    h.answer({ offer: "o-4", text: "to the planner" });
+    const f = file();
+    const printed = await run(["claude-code"], fixture("Stop"), env(f, "call.c0ffee"));
+    assert.deepEqual(
+      printed.map((p) => JSON.parse(p)),
+      [{ decision: "block", reason: "to the planner" }],
+    );
+    assert.deepEqual(
+      h.asked.map((a) => [a.path, a.auth]),
+      [
+        [OFFER_PATH, "Bearer call.c0ffee"],
+        [TAKEN_PATH, "Bearer call.c0ffee"],
+      ],
+    );
+  });
+
   test("it asks nothing before a tool, without an offer, without the trial's credential or in a subagent, and prints nothing", async () => {
     h.answer({ offer: null, text: "" });
     const f = file();

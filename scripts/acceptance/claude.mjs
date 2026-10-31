@@ -3,7 +3,9 @@
 // (containers/test-claude; no subscription and no download needed). Through the dashboard: a
 // Claude subscription added in Providers, its model given to the rig (in Claude Code), then:
 //   - the rig takes the route; its model check runs one Bash call through Claude Code;
-//   - the planner plans through Claude Code, with no tools;
+//   - the planner plans in Claude Code's own terminal (goal 169: the default), with no tools, as
+//     planner-<run>-<round>: one owner's message to it goes in inside its turn, through its Stop
+//     hook with the call's own credential, and the owner's console types into it;
 //   - a worker trial runs Claude Code in its own terminal (goal 169: the default, on a rig nobody
 //     set), as the lane's user, with the token on file descriptor 3 (in no environment), the
 //     safety flags, its seeds (no screen waits) and its transcript copied for the harness, edits
@@ -39,6 +41,7 @@ import {
   control,
   dc,
   events,
+  plannerInTerminal,
   prepare,
   secret,
   submit,
@@ -167,22 +170,52 @@ try {
     modelCheck.body.summary,
   );
   await assign(env, "smoke-1");
+  // Goal 169: the planner's call runs in Claude Code's own terminal (the default), as
+  // planner-<run>-<round>, with a credential bound to the call; one owner's message to the planner
+  // goes in inside its turn, at its end (the Stop hook: it has no tools), and the owner's console
+  // types into it.
+  const plannerCall = await plannerInTerminal();
+  await command("message_agent", {
+    run: "smoke-1",
+    to: "planner",
+    text: "OWNER-PLANNER Plan the tidy-up first.",
+  });
+  const plannerTyped = await command("terminal_input", {
+    run: "smoke-1",
+    trial: plannerCall.id,
+    text: "Plan the tidy-up first.",
+  });
   const epoch = await until(
     "the first epoch, planned",
     async () => (await events()).find((e) => e.kind === "epoch_started" && e.subject === "smoke-1"),
     300_000,
     2000,
   );
+  const planned = String(epoch.body.notes ?? "");
   check(
-    "the planner planned through Claude Code, with no tools",
+    "the planner planned in Claude Code's own terminal, with no tools",
     epoch.body.source === "planner" &&
       epoch.body.planner_valid === true &&
-      epoch.body.assignments?.[0]?.family === "cc-tidy",
+      epoch.body.assignments?.[0]?.family === "cc-tidy" &&
+      /in its terminal/.test(planned) &&
+      /tools=none /.test(planned),
     {
       source: epoch.body.source,
       valid: epoch.body.planner_valid,
       assignments: epoch.body.assignments,
+      notes: planned,
     },
+  );
+  const plannerRead = (await events()).find(
+    (e) => e.kind === "agent_message_read" && e.body.by === "planner",
+  );
+  check(
+    "the planner's call in its terminal took the owner's message inside its turn, at its end, and the owner's input was typed into it",
+    /^planner-smoke-1-\d+$/.test(plannerCall.id) &&
+      plannerRead?.body.how === "turn-end" &&
+      /the owner's message came inside its turn/.test(planned) &&
+      plannerTyped.outcome?.result?.outcome === "typed",
+    { call: plannerCall, read: plannerRead?.body, typed: plannerTyped.outcome },
   );
   // Goal 169: two messages to the trial while it runs; the stand-in waits for both to wait.
   const started = await until(

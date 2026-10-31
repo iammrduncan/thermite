@@ -9,6 +9,8 @@ import { SCREENS_WATCHED_MAX, type ScreenFrame } from "../../../core/screens.ts"
 import {
   confirmFirst,
   inputWords,
+  isPlannerCall,
+  TERMINAL_ID,
   TERMINAL_KEYS,
   type TerminalKey,
 } from "../../../core/terminal-input.ts";
@@ -28,7 +30,8 @@ import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { LIVE_PUSH_BEAT_MS, LIVE_PUSH_RETRY_MS } from "./push.ts";
 
 /**
- * A trial's terminal on its Live page (goal 169), the owner's alone (the dashboard signs in no
+ * A trial's terminal on its Live page (goal 169), or a planner's call's on the planner's, the
+ * owner's alone (the dashboard signs in no
  * other token): the agent's screen, pushed to the page as control gets it while the page watches
  * (control/live/screens.ts holds it in memory), and the console that sends terminal_input, a
  * signed command, with each input's outcome. xterm.js draws the screen in the browser; control
@@ -171,7 +174,7 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
     const rig = c.req.param("rig");
     const trial = c.req.query("trial") ?? "";
     if (!views().some((u) => u.id === rig)) return c.json({ error: "no such rig" }, 404);
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(trial)) return c.json({ error: "no such trial" }, 404);
+    if (!TERMINAL_ID.test(trial)) return c.json({ error: "no such trial" }, 404);
     return streamSSE(c, async (stream) => {
       const stop = parts.screens.watch(rig, trial);
       if (!stop) {
@@ -218,7 +221,8 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
     });
   });
 
-  // The console: one input into a trial's terminal, as the owner's signed command.
+  // The console: one input into a trial's or a planner's call's terminal, as the owner's signed
+  // command.
   app.post("/ui/rigs/:rig/live/terminal", async (c) => {
     const f = await c.req.parseBody();
     const rig = c.req.param("rig");
@@ -226,7 +230,8 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
     const trial = String(f.trial ?? "");
     const key = String(f.key ?? "");
     const text = String(f.text ?? "");
-    const back = liveHref(rig, `trial:${trial}`);
+    // A planner's call's terminal is on the planner's page (goal 169).
+    const back = liveHref(rig, isPlannerCall(trial) ? "planner" : `trial:${trial}`);
     const json = wantsJson(c);
     const refuse = (why: string) =>
       json

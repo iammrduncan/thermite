@@ -74,7 +74,12 @@ export async function planResearchEpoch(
     sched.planning = { run, ctrl };
     watch(sched);
     try {
-      const r = await plannerRoute(sched, run, contract, n);
+      // An owner's message that goes in inside its turn in its terminal joins these (goal 169).
+      input.ownerMessages ??= [];
+      const r = await plannerRoute(sched, run, contract, n, {
+        role: "research-planner",
+        owner: input.ownerMessages,
+      });
       input.pastResearch = r.pastLine;
       p = await planResearch(
         input,

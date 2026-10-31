@@ -13,7 +13,7 @@ import {
 import { prepareCommand } from "../../../src/control/issue/index.ts";
 import { TERMINAL_JS } from "../../../src/control/ui/terminal.ts";
 import { SCREENS_WATCHED_MAX } from "../../../src/core/screens.ts";
-import { TERMINAL_KEYS } from "../../../src/core/terminal-input.ts";
+import { plannerCallId, TERMINAL_KEYS } from "../../../src/core/terminal-input.ts";
 import { ModelSource, TrialConsole } from "../../../src/harness/agents/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { ask } from "../../../src/supervisor/ask.ts";
@@ -281,6 +281,55 @@ describe("a trial's terminal on Live", () => {
     const html = await s.owner.page(PAGE);
     assert.match(html, /<code>\/compact<\/code> · <span class="ok">typed<\/span>/);
     assert.match(html, /\[down\] · <span class="ok">typed<\/span>/);
+  });
+
+  test("a planner's call in its own terminal: the planner's page shows it while it plans, and the console types into it", async () => {
+    const s = await setup();
+    const id = plannerCallId("js-1", 2);
+    const planner = fakeTerminal();
+    s.env.service.consoles.setCall(
+      id,
+      { run: "js-1", lane: "planner", source: "planner" },
+      new TrialConsole(planner),
+    );
+    s.store.liveLines.add(
+      "rig-a",
+      "log-t",
+      [
+        {
+          seq: 2,
+          at: new Date().toISOString(),
+          source: "planner",
+          kind: "status",
+          text: "planning round 2 (1 lane)",
+          run: "js-1",
+        },
+      ],
+      false,
+    );
+    await s.relay();
+    const html = await s.owner.page("/ui/rigs/rig-a/live?source=planner");
+    assert.match(html, /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=planner-js-1-2"/);
+    const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
+    assert.match(
+      run,
+      /<a href="\/ui\/rigs\/rig-a\/live\?source=planner">the planner's terminal<\/a>/,
+    );
+    const sent = await s.owner.post("/ui/rigs/rig-a/live/terminal", {
+      csrf: s.owner.csrfOf(html),
+      run: "js-1",
+      trial: id,
+      text: "Plan the tiling first.",
+    });
+    assert.equal(sent.status, 303);
+    assert.equal(sent.headers.get("location"), "/ui/rigs/rig-a/live?source=planner");
+    await s.relay();
+    await s.relay();
+    assert.deepEqual(planner.typed, [{ text: "Plan the tiling first.", keys: undefined }]);
+    // Its call over: the page shows no terminal for it.
+    s.env.service.consoles.ended(id);
+    await s.relay();
+    assert.doesNotMatch(await s.owner.page("/ui/rigs/rig-a/live?source=planner"), /data-term=/);
   });
 
   test("a worker in Pi's view: the console offers its commands and a follow-up, sent as follow_up", async () => {

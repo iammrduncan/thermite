@@ -41,7 +41,7 @@ export const TERMINAL_WAIT_MAX_MS = 24 * 3_600_000;
  */
 export const GO_ON_GRACE_MS = 3 * 60_000;
 
-/** What the wait needs of the trial's terminal (terminal.ts's TerminalTrial). */
+/** What the wait needs of the role's terminal (terminal.ts's RoleTerminal). */
 export interface WindowTerminal {
   /** The usage limit the program's log shows now, if any, with its reset when it gave one. */
   limitShown(): { resetsAt?: string | undefined } | undefined;
@@ -60,9 +60,10 @@ export interface WindowTerminal {
  */
 export type WindowStep = { end: OwnStop } | { followed: true } | { goOn: string };
 
-/** The trial's run that met the limit, as the loop gives it. */
+/** The run that met the limit, as the loop (or a call, call.ts) gives it. */
 export interface WindowRun {
-  trialId: string;
+  /** The trial's id, or the call's. */
+  id: string;
   /** When the run began (ms): the model proxy's error answers since then are its. */
   since: number;
   /** The trial's end (ms), or Infinity. */
@@ -90,7 +91,7 @@ export async function waitOutWindow(
   const now = Date.now();
   const name = p.name;
   const goesOn = p.terminal.goesOnAfterLimit === true;
-  const fields = { trial: r.trialId, program: p.id };
+  const fields = { trial: r.id, program: p.id };
   // The model proxy's answer, for a reset the log does not give (Codex).
   const answer = deps.providerAnswer?.(r.since);
   const logged = term.limitShown()?.resetsAt;
