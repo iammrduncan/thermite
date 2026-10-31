@@ -19,6 +19,7 @@ export {
 } from "./explorer.ts";
 export { folderPaneHtml, type GrantForms } from "./folder.ts";
 export { fileHref, type ReaderLinks, readerHtml, readerMissing } from "./item.ts";
+export { KB_STORED_PAGE, storedHtml } from "./stored.ts";
 export { treeList } from "./tree.ts";
 
 /**

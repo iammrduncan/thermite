@@ -169,6 +169,12 @@ export function kbTools(writes: readonly string[]): KbToolInfo[] {
         collections: Type.Optional(
           Type.Array(Type.String(), { description: "Only these collections' items, by campaign" }),
         ),
+        types: Type.Optional(
+          Type.Array(Type.String(), {
+            description:
+              "Only items of these types: record (Thermite's own records of a run), blurb (a text an agent or the owner wrote), file",
+          }),
+        ),
         offset: Type.Optional(
           Type.Number({
             description: `Where the page starts: next_offset (at most ${KB_OFFSET_MAX})`,

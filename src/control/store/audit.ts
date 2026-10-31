@@ -138,6 +138,39 @@ export class AuditLog extends StorePart {
    * The items control refused a writer of a run (`kb_item_refused`, goal 175), by its slot: how
    * many, and the newest `limit`, newest first, each with when and why.
    */
+  /**
+   * The writes control refused into the knowledge base (kb_item_refused), newest first: a page of
+   * rows, each with how many times it came, and how many rows there are.
+   */
+  kbRefusedPage(
+    offset: number,
+    limit: number,
+  ): {
+    total: number;
+    rows: { at: string; rig: string; run: string; slot: string; why: string; count: number }[];
+  } {
+    const where = "action = 'kb_item_refused'";
+    const total = this.db.prepare(`select count(*) as n from audit where ${where}`).get() as Row;
+    const rows = this.db
+      .prepare(`select at, body, count from audit where ${where} order by id desc limit ? offset ?`)
+      .all(limit, offset) as Row[];
+    return {
+      total: Number(total.n),
+      rows: rows.map((r) => {
+        const b = JSON.parse(String(r.body)) as Record<string, unknown>;
+        const s = (v: unknown) => (typeof v === "string" ? v : "");
+        return {
+          at: String(r.at),
+          rig: s(b.rig),
+          run: s(b.run),
+          slot: s(b.slot) || s(b.writer),
+          why: s(b.why),
+          count: Number(r.count ?? 1),
+        };
+      }),
+    };
+  }
+
   kbRefusals(
     run: string,
     slot: string,

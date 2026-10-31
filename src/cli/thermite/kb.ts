@@ -5,6 +5,7 @@ import {
   KB_ITEM,
   KB_LIST,
   KB_SEARCH,
+  KB_STORED,
 } from "../../core/api/control/owner.ts";
 import { controlAt, orFail } from "../calls.ts";
 import { fail } from "./shared.ts";
@@ -44,7 +45,8 @@ export async function thermiteKb(rest: string[]): Promise<void> {
     },
   });
   const grants = sub === "grant" || sub === "revoke";
-  if (sub !== "search" && sub !== "read" && sub !== "list" && !grants) fail(USAGE);
+  if (sub !== "search" && sub !== "read" && sub !== "list" && sub !== "stored" && !grants)
+    fail(USAGE);
   if (!values.control || !values["token-file"])
     fail("give --control and --token-file: control keeps the knowledge base");
   const control = controlAt(values.control, values["token-file"]);
@@ -60,6 +62,15 @@ export async function thermiteKb(rest: string[]): Promise<void> {
         ? control.call(CAMPAIGN_KB_GRANT, { params: { campaign }, body: { reads } })
         : control.call(CAMPAIGN_KB_REVOKE, { params: { campaign, reads } }),
     );
+    process.stdout.write(`${JSON.stringify(out)}\n`);
+    return;
+  }
+  if (sub === "stored") {
+    const given = Object.entries(values).filter(
+      ([k, v]) => v !== undefined && !["control", "token-file", "offset"].includes(k),
+    );
+    if (positionals.length || given.length) fail("kb stored takes only --offset");
+    const out = await orFail(control.call(KB_STORED, { query: { offset: values.offset } }));
     process.stdout.write(`${JSON.stringify(out)}\n`);
     return;
   }

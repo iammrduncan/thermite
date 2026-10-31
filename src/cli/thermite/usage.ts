@@ -193,6 +193,13 @@ export const USAGE = `usage: thermite <command> [options]
                                       record, blurb or file; --sort is name, kind, outcome,
                                       writer, modified (the default) or size; --limit 0 to 200
                                       (default 50). It prints JSON
+  kb stored [--offset N] --control URL --token-file F
+                                      what the knowledge base stores (owner's token), as the
+                                      Knowledge page's What's stored shows it: the totals, each
+                                      collection's figures, the indexes, the largest files and
+                                      the file types, what waits on the bus for control to store,
+                                      and the writes control refused, 50 a page from --offset.
+                                      It prints JSON
   kb grant CAMPAIGN READS --control URL --token-file F
   kb revoke CAMPAIGN READS --control URL --token-file F
                                       let CAMPAIGN's agents read READS's collection in the

@@ -245,7 +245,7 @@ export function explorerFrame(o: {
   runs?: readonly ExplorerRun[] | undefined;
 }): string {
   return `<div class="kx" data-folders="closed">
-<div class="kx-bar">${o.crumbs}${searchHtml(o.folder, o.query, o.runs ?? [])}</div>
+<div class="kx-bar">${o.crumbs}${searchHtml(o.folder, o.query, o.runs ?? [])}<a class="btn sm ghost kx-storedbtn" href="/ui/kb/stored">What's stored</a></div>
 <div class="kx-body">${treeHtml(o.collections, o.kids, o.current)}<section class="kx-main" aria-label="Contents">${o.main}</section>${o.pane ?? ""}</div>
 </div><script src="/ui/assets/knowledge.js" defer></script>`;
 }

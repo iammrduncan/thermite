@@ -79,8 +79,10 @@ export type {
   KbListAt,
   KbListCounts,
   KbListed,
+  KbStoredFigures,
   KbTotals,
 } from "./kb/index.ts";
+export { KB_STORED_FILES } from "./kb/index.ts";
 export { OPEN_TRIAL_LINES } from "./live.ts";
 export type { Machine, MachineRig } from "./machines.ts";
 export type { McpServerRows } from "./mcp-servers.ts";

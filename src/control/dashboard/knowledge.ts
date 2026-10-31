@@ -20,6 +20,7 @@ import {
   kbFileOf,
   kbFileResponse,
   kbFolders,
+  kbStored,
   ownerKbList,
   ownerKbRead,
   ownerKbSearch,
@@ -28,6 +29,7 @@ import {
   revokeCollection,
 } from "../kb/index.ts";
 import { esc } from "../ui/components/index.ts";
+import { sizeWords } from "../ui/exports.ts";
 import {
   contentsHtml,
   crumbsHtml,
@@ -37,10 +39,12 @@ import {
   explorerFrame,
   explorerHref,
   folderPaneHtml,
+  KB_STORED_PAGE,
   KNOWLEDGE_JS,
   pastWords,
   readerHtml,
   readerMissing,
+  storedHtml,
   treeList,
 } from "../ui/knowledge/index.ts";
 import { KNOWLEDGE_ROOT, knowledgeHref, knowledgeParts } from "../ui/urls.ts";
@@ -336,6 +340,26 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     const f = await c.req.parseBody();
     const g = { campaign: String(f.campaign ?? ""), reads: String(f.reads ?? "") };
     return grantBack(c, f.back, revokeCollection(store, g, "owner:ui"));
+  });
+
+  // What's stored (goal 176): a page of its own, under /ui/kb/, where no campaign's name can be.
+  app.get(KB_STORED_PAGE, async (c) => {
+    const at = Math.max(0, Math.floor(Number(c.req.query("offset")) || 0));
+    const s = await kbStored(store, opts.parts.bus, { offset: at });
+    return page(
+      c,
+      {
+        title: "Knowledge",
+        summary: `What's stored · ${sizeWords(s.totals.stored_bytes)}`,
+        active: "knowledge",
+      },
+      storedHtml(
+        s,
+        Date.now(),
+        (offset) => `${KB_STORED_PAGE}${offset ? `?offset=${offset}` : ""}#refused`,
+      ),
+      views(),
+    );
   });
 
   app.get("/ui/knowledge", knowledgePage);

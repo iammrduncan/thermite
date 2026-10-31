@@ -41,6 +41,7 @@ import { KbReading } from "./reading.ts";
 import { knowledgeHierarchy } from "./schema.ts";
 import { type KbScope, keepScope, scopeOf } from "./scope.ts";
 import { findItems, type KbFind, type KbFindResult, type KbWhere } from "./search.ts";
+import { type KbStoredFigures, storedFigures } from "./stored.ts";
 import { knowledgeSearch } from "./words.ts";
 
 export type { KbFileRow } from "./files.ts";
@@ -57,6 +58,8 @@ export { type KbSearchMode, OUTCOME_WORDS, searchTerms } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
 export type { KbCounts, KbFind, KbPassage, KbWhere } from "./search.ts";
+export type { KbStoredCollection, KbStoredFigures, KbStoredFile } from "./stored.ts";
+export { KB_STORED_FILES } from "./stored.ts";
 export { knowledgeSearch, passagesOf } from "./words.ts";
 /** A search's answer: its page of hits, each a found item, and what search.ts says beside them. */
 export type KbFindAnswer = Omit<KbFindResult, "found"> & { hits: KbFound[] };
@@ -434,6 +437,11 @@ export class KnowledgeBase {
   /** How many items of each kind one run put in its collection (field notes apart). */
   runCounts(rig: string, ledger: string, run: string) {
     return runCountsOf(this.db, rig, ledger, run);
+  }
+
+  /** What the knowledge base stores, from its own tables (stored.ts). */
+  stored(): KbStoredFigures {
+    return storedFigures(this.db);
   }
 
   /** A run's field notes, newest first: at most `limit`, with how many it has (journal.ts). */

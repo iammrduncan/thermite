@@ -7,17 +7,20 @@ import {
   grantProblem,
   KB_LIST_DEFAULT,
   KB_LIST_MAX,
+  KB_REFUSED_PAGE,
   type KbListQuery,
   type KbReadQuery,
   type KbSearchQuery,
   kbListFields,
   kbReadFields,
   kbSearchFields,
+  kbStored,
   ownerKbList,
   ownerKbRead,
   ownerKbSearch,
   revokeCollection,
 } from "../kb/index.ts";
+import { KB_STORED_FILES } from "../store/index.ts";
 import { campaignModes, rigView } from "../views/index.ts";
 import type { ToolContext } from "./context.ts";
 
@@ -69,6 +72,23 @@ export function registerKnowledgeBase(tools: ToolContext): void {
         if ("error" in r) throw new Error(String(r.error));
         return r;
       }),
+    );
+  if (kbReader)
+    server.registerTool(
+      "kb_stored",
+      {
+        title: "What the knowledge base stores",
+        description: `What Thermite's knowledge base stores, as the dashboard's What's stored page shows it. totals: stored_bytes (every version's text, and each file control holds once), items, records, blurbs, files, file_bytes, older_versions (kept, never removed), collections, runs and updated_at. collections: each collection's campaign, archived, runs, records, blurbs, files, file_bytes, older_versions, stored_bytes, updated_at (its last write) and read_by (the campaigns granted to read it). indexes: words ({state: current, items: the items it holds passages of}; kept current as each item is stored) and meaning ({state: not installed}). largest_files: the ${KB_STORED_FILES} largest file items, each {address, name, type, bytes, searched (its text is in the words index), held (control holds its bytes)}. file_types: each file type with its files, bytes and how many are searched (the rest are kept whole). waiting: what the message bus holds for control to store: bus (on, off or away, with error), events (on the events stream after the place control applied through, kb_item events among them), file_chunks (on the KB_FILES stream, not taken yet), last_item ({address, version, at}: the newest version a writer's kb_item event stored) and last_file ({sha256, bytes, at}). refused: the writes control refused into the knowledge base, newest first, ${KB_REFUSED_PAGE} a page from offset: {total, offset, next_offset, rows: [{at, rig, run, slot, why, count}]}.`,
+        inputSchema: {
+          offset: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe("Where the page of refused writes starts: refused.next_offset"),
+        },
+      },
+      audited("kb_stored", (a: { offset?: number }) => kbStored(store, opts.parts.bus, a)),
     );
   if (kbReader)
     server.registerTool(

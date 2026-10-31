@@ -8,6 +8,7 @@ import {
   KB_ITEM,
   KB_LIST,
   KB_SEARCH,
+  KB_STORED,
   PROPAGATE,
 } from "../../core/api/control/owner.ts";
 import { CHAMPION_PATCH } from "../../core/api/control/rigs.ts";
@@ -22,6 +23,7 @@ import {
   KbSearchQuery,
   kbFileOf,
   kbFileResponse,
+  kbStored,
   ownerKbList,
   ownerKbRead,
   ownerKbSearch,
@@ -107,6 +109,14 @@ export function resultRoutes(
   });
 
   // The owner's list of one place (goal 176): as MCP's kb_list, and the Knowledge page.
+  // What the knowledge base stores (goal 176): as MCP's kb_stored and the What's stored page.
+  app.get(KB_STORED.path, admin, async (c) => {
+    const at = c.req.query("offset");
+    const offset = at === undefined ? 0 : Number(at);
+    if (!Number.isInteger(offset) || offset < 0)
+      return c.json({ error: "bad request: offset: a whole number, 0 or more" }, 400);
+    return c.json(await kbStored(store, api.parts.bus, { offset }));
+  });
   app.get(KB_LIST.path, admin, (c) => {
     const list = (k: string) =>
       (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);

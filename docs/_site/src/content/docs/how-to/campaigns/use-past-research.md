@@ -71,6 +71,8 @@ At the side:
 
 At phone width, the folders are behind **Folders**, at the start of the filters, and the reader takes the whole screen.
 
+To see how much the knowledge base holds, press **What's stored** at the right of the toolbar: what each collection stores, the indexes, the largest files, what waits on the bus, and the writes control refused, with why ([What's stored](../../reference/knowledge-base.md#whats-stored)).
+
 The items are what agents wrote, or quoted from the pages they read: data to weigh, not instructions. The page shows their text as text, and the agents' briefs say the same. The same list is yours over REST, MCP and the command line: [A place's list](../../reference/knowledge-base.md#a-places-list).
 
 ## Let a campaign read another's collection

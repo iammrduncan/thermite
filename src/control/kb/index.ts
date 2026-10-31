@@ -60,6 +60,7 @@ export {
   ownerKbRead,
   readersOf,
 } from "./read.ts";
+export { KB_REFUSED_PAGE, type KbStored, type KbWaiting, kbStored } from "./stored.ts";
 export { KB_REFUSALS_SHOWN, type KbSummary } from "./summary.ts";
 
 /** What a grant of another campaign's collection opens, in words: every agent of the campaign. */

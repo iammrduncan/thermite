@@ -45,6 +45,19 @@ details.jmore { display: grid; gap: 6px; } details.jmore > summary { cursor: poi
 .kx-scope { padding-left: 6px; border-left: 1px solid var(--border); }
 .kx-scope select, .kx-as select { height: 24px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; color: var(--foreground); font-size: 12px; max-width: 160px; }
 .kx-as select { border: 1px solid var(--input); height: 30px; background: var(--card); }
+.kx-storedbtn { margin-left: auto; white-space: nowrap; }
+.kx-stored { display: grid; gap: 12px; padding: 0 0 16px; }
+.kx-stored .kx-bar { padding: 0; }
+.kx-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kx-sec { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.kx-sec > summary { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none; font-weight: 600; }
+.kx-sec > summary::-webkit-details-marker { display: none; }
+.kx-sec > summary::before { content: "›"; display: inline-block; width: 10px; color: var(--muted-foreground); transition: transform 0.15s; }
+.kx-sec[open] > summary::before { transform: rotate(90deg); }
+.kx-secn { color: var(--muted-foreground); font-weight: 400; font-size: 12px; }
+.kx-secb { display: grid; gap: 12px; padding: 0 14px 14px; }
+.kx-stab td, .kx-stab th { white-space: nowrap; }
+.kx-stab tfoot td { background: var(--muted); }
 .kx-why { display: block; color: var(--muted-foreground); font-size: 11px; }
 .kx-dym { margin: 0 0 8px; font-size: 13px; }
 .kx-best { display: inline-flex; align-items: center; font-size: 12px; color: var(--muted-foreground); }
@@ -214,6 +227,7 @@ details.kx-confirm form { display: grid; gap: 6px; } details.kx-confirm p { marg
   .kx-crumbs { flex: 1 1 100%; overflow-x: auto; }
   .kx-search { flex: 1 1 100%; width: auto; flex-wrap: wrap; }
   .kx-field { flex: 1 1 100%; width: auto; }
+  .kx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kx-tree { display: none; }
   .kx[data-folders="open"] .kx-body { flex-direction: column; }
   .kx[data-folders="open"] .kx-tree { display: block; width: auto; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--border); }

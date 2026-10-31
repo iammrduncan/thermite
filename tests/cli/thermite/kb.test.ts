@@ -362,6 +362,24 @@ describe("the owner's search of the knowledge base", () => {
       );
       assert.equal(as.code, 2);
       assert.match(as.stderr, /control assigned no run nobody-1: no agents search as it/);
+      // What's stored, as one read; it takes only --offset.
+      const stored = await cli("kb", "stored", "--control", url, "--token-file", tokenFile);
+      assert.equal(stored.code, 0, stored.stderr);
+      const st = JSON.parse(stored.stdout) as { totals: { items: number }; collections: unknown[] };
+      assert.equal(st.totals.items, 5);
+      assert.equal(st.collections.length, 2);
+      const extra = await cli(
+        "kb",
+        "stored",
+        "--kind",
+        "note",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.equal(extra.code, 2);
+      assert.match(extra.stderr, /kb stored takes only --offset/);
     } finally {
       server.close();
     }

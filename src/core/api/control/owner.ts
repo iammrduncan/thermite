@@ -398,6 +398,16 @@ export const KB_FILE = {
  * The owner's list of one place of the knowledge base (goal 176): `at`, the filters `kind`,
  * `outcome`, `type` and `slot` (lists, with commas), `sort`, `order`, `offset` and `limit`.
  */
+/** What the knowledge base stores (goal 176): its totals, collections, indexes, files and waits. */
+export const KB_STORED = {
+  method: "GET",
+  path: "/v1/kb/stored",
+  what: "knowledge base storage",
+  answer: z.looseObject({
+    totals: z.looseObject({ stored_bytes: z.number() }),
+    collections: z.array(z.looseObject({})),
+  }),
+} as const satisfies Route;
 export const KB_LIST = {
   method: "GET",
   path: "/v1/kb/list",

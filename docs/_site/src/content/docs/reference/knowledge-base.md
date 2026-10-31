@@ -351,7 +351,7 @@ It answers:
 | Part | What it shows |
 | --- | --- |
 | The top bar | **Knowledge**, then how many collections and items the knowledge base holds, such as `3 collections · 412 items` |
-| The toolbar | The open folder's path, **Knowledge** › collection › run › slot (› the item's title on an item's page), each part a link; at the right, the search field with its **In** menu, and the **As** menu ([Search](#search)) |
+| The toolbar | The open folder's path, **Knowledge** › collection › run › slot (› the item's title on an item's page), each part a link; at the right, the search field with its **In** menu, the **As** menu ([Search](#search)), and **What's stored** ([What's stored](#whats-stored)) |
 | The tree, on the left | **Collections**: each collection, those of archived campaigns greyed and tagged `archived`; under an open collection its runs, a running one with a green dot and one that started fresh tagged `fresh`; under an open run its slots. Each folder shows how many items it holds, and is a link to its address; the open folder is marked. A collection or a run has a chevron that opens or closes it in place (`aria-expanded`); the folders of the open folder's path come open with the page, and the others come from control as they open. Sorted by name |
 | The filters, above the table | **Kind**, **Outcome**, **Type** and **Writer**, each a button that opens a list of checkboxes, each value with its count (the list's `counts`); each label has its description. A pick applies at once, and the list opens again on the page that comes; its **Clear** removes that filter's picks. The picks show as chips, each removed with its ×, then **Clear**, which removes them all; at the right end, the count. The filters are in the page's address (`kind`, `outcome`, `type`, `slot`), so a filtered view can be linked. Without the page's script, each list has **Apply** |
 | The table | With no filter and no search, what the open folder holds: a collection's runs, a run's slots, the knowledge base's collections, each with its name, its level (**Collection**, **Run**, **Slot**), a slot's writer (such as `worker · Claude Code`) and its newest change; the count says `<n> runs · <n> items`. In a slot, or with a filter, every item under the open folder: its type's icon, its title, which opens it in the reader beside the table, with its address under it and a warning mark when its evidence was withdrawn, its kind, its outcome as a coloured chip, its writer (its slot), its newest change and, for a file, its size; the count says `<n> items`, or `<n> of <n> items` with a filter, and **No items match the filters.** when none does. A row opens what it names. Each column's header sorts by it, again for the other way, with ▲ or ▼ on the column it sorts by (`sort` and `order` in the address); newest change first when none is chosen |
@@ -363,6 +363,21 @@ It answers:
 The table shows fewer columns when it has less room, as with the reader open: **Size** first, then **Writer**, then **Kind**.
 
 Search by meaning, what the knowledge base stores and the owner's notes come with [goal 176](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/176-knowledge-explorer.goal)'s later steps.
+
+## What's stored
+
+**What's stored**, at the right of the Knowledge page's toolbar, opens a page of its own, `/ui/kb/stored` (under `/ui/kb/`, where no campaign's name can be): **Knowledge** › **What's stored**. It shows what REST's `GET /v1/kb/stored`, MCP's `kb_stored` and `thermite kb stored` give, from the knowledge base's own tables. Bytes are counted as the info pane counts them: every version's text, and each file control holds once, by its SHA-256.
+
+| Part | What it shows | In the answer |
+| --- | --- | --- |
+| Four tiles | **Stored in all** (files and text, every version), **Items** (in how many collections), **Files** (with their bytes) and **Older versions** (kept, never removed) | `totals`: `stored_bytes`, `items`, `records`, `blurbs`, `files`, `file_bytes`, `older_versions`, `collections`, `runs`, `updated_at` |
+| **Collections** | Each collection, linked to it in the explorer and tagged `archived` when its campaign is: **Runs**, **Records**, **Blurbs**, **Files**, **File bytes**, **Older versions**, **Stored**, **Last write** and **Read by** (the campaigns granted to read it, or `none`); then **All**, the whole knowledge base, where a file two collections name counts once | `collections`: each `{campaign, archived, runs, records, blurbs, files, file_bytes, older_versions, stored_bytes, updated_at, read_by}` |
+| **Indexes** | **Words**, `Current`, with how many items it holds passages of: control keeps it current as it stores each item. **Meaning**, `Not installed`: Thermite has no search by meaning yet | `indexes`: `{words: {state: "current", items}, meaning: {state: "not installed"}}` |
+| **Largest files** | The 10 largest file items: **File**, **Type**, **Size**, **Item** (its address, linked) and **Text**, `searched` (its text is in the words index) or `kept whole`; then each file type with its **Files**, **Size**, **Searched** and **Kept whole** | `largest_files`: each `{address, name, type, bytes, searched, held}` (`held`: control holds its bytes); `file_types`: each `{type, files, bytes, searched}` |
+| **Waiting on the bus** | **Events not applied yet**: the events stream's messages after the place control applied through, writers' `kb_item` events among them; **File chunks not taken yet**: the `KB_FILES` stream's messages; **Last item stored**: the newest version a writer's `kb_item` event stored, linked, with its time; **Last file stored**: its SHA-256's first 12 characters, size and time. With no bus, `Bus off`; a server that does not answer in 5 seconds, `Bus away` and why | `waiting`: `{bus, error, events, file_chunks, last_item, last_file}`; `bus` `on`, `off` or `away`; `events` and `file_chunks` `null` unless `on` |
+| **Refused writes** | The items control did not store (`kb_item_refused` in its audit log), newest first: **When**, **Rig**, **Run**, **Slot** and **Reason**, with `×<n>` when the same refusal came again; 50 a page, with **Older ›** and **‹ Newer** (`offset` in the address) | `refused`: `{total, offset, next_offset, rows}`, each row `{at, rig, run, slot, why, count}` |
+
+Each section opens and closes from its heading, which has its ⓘ and its count; each opens with the page.
 
 ## The agents' tools
 
@@ -381,7 +396,7 @@ Each agent's instructions say what the tools do, after its role's own text ([Age
 
 ### kb_search
 
-Takes `query` (the words; empty: the newest), `queries`, `mode`, `like`, `seen`, `kinds`, `outcomes`, `runs`, `slots`, `collections`, `offset` and `limit` ([Search](#search)). Control searches the run's [scope](#a-runs-scope) and answers [`{note, scope, matched, next_offset, counts, words, did_you_mean, hits}`](#search), and `like` when it was asked; `scope` is `{collection, fresh, granted}`, what the run reads. Its description tells the agent to probe as a researcher would: other words, several queries at once, a filter, `like` on a good hit, `seen` to page past what it read.
+Takes `query` (the words; empty: the newest), `queries`, `mode`, `like`, `seen`, `kinds`, `outcomes`, `runs`, `slots`, `collections`, `types` (`record`, `blurb`, `file`), `offset` and `limit` ([Search](#search)). Control searches the run's [scope](#a-runs-scope) and answers [`{note, scope, matched, next_offset, counts, words, did_you_mean, hits}`](#search), and `like` when it was asked; `scope` is `{collection, fresh, granted}`, what the run reads. Its description tells the agent to probe as a researcher would: other words, several queries at once, a filter, `like` on a good hit, `seen` to page past what it read.
 
 ### kb_read
 
