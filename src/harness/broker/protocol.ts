@@ -10,6 +10,12 @@ export const BrokerRequest = z.discriminatedUnion("op", [
   z.object({ id: z.number().int(), op: z.literal("run"), req: RunRequest }),
   z.object({
     id: z.number().int(),
+    op: z.literal("runPair"),
+    driver: RunRequest,
+    candidate: RunRequest,
+  }),
+  z.object({
+    id: z.number().int(),
     op: z.literal("handOver"),
     path: z.string(),
     role: RoleSchema,

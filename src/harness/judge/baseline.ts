@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -9,7 +10,8 @@ import {
   rmSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { Ledger } from "../ledger.ts";
+import type { Ledger } from "../ledger/index.ts";
+import { statusEvents } from "../run-status.ts";
 
 /**
  * A hill climb's baseline (goal 115): the judge's first job for a run measures its starting point
@@ -105,34 +107,18 @@ export interface StartingPoint {
  * until then.
  */
 export function startingPoint(ledger: Ledger, run: string): StartingPoint {
-  const r = ledger.db
-    .prepare(
-      `select seq, commit_sha, attempt from champion where run = ? and reopened = 0
-         and (seq = 1 or promoted_by like ?) order by seq desc limit 1`,
-    )
-    .get(run, `%${SETUP_MARK}`) as
-    | { seq: number; commit_sha: string; attempt: string | null }
-    | undefined;
-  if (!r) {
-    const c = ledger.currentChampion(run);
-    return { seq: c.seq, commit: c.commit_sha, attempt: c.attempt };
-  }
-  return { seq: Number(r.seq), commit: String(r.commit_sha), attempt: r.attempt ?? null };
+  const c = ledger.champions.newestMarked(run, SETUP_MARK) ?? ledger.champions.current(run);
+  return { seq: c.seq, commit: c.commit_sha, attempt: c.attempt };
 }
 
 function newest<T>(
   ledger: Ledger,
-  kind: string,
+  kind: "baseline" | "baseline_failed",
   run: string,
   seq: number,
 ): (T & { id: number; at: string }) | undefined {
-  const r = ledger.db
-    .prepare(
-      `select id, at, body from event where kind = ? and subject = ?
-         and json_extract(body, '$.champion_seq') = ? order by id desc limit 1`,
-    )
-    .get(kind, run, seq) as { id: number; at: string; body: string } | undefined;
-  return r ? { ...(JSON.parse(r.body) as T), id: Number(r.id), at: String(r.at) } : undefined;
+  const e = ledger.events.newest(kind, { subject: run, body: { champion_seq: seq } });
+  return e && { ...(e.body as T), id: e.id, at: e.at };
 }
 
 /** The run's baseline: the judge's values of its starting point, if it measured them. */
@@ -166,7 +152,7 @@ export type BaselineState =
 
 /** A hill climb's baseline state; undefined for a run in another mode. */
 export function baselineState(ledger: Ledger, run: string): BaselineState | undefined {
-  if (ledger.getRun(run)?.mode !== "hill_climb") return undefined;
+  if (ledger.runs.get(run)?.mode !== "hill_climb") return undefined;
   const start = startingPoint(ledger, run);
   const baseline = baselineOf(ledger, run, start);
   if (baseline) return { state: "measured", start, baseline };
@@ -182,36 +168,33 @@ export function baselineState(ledger: Ledger, run: string): BaselineState | unde
   };
 }
 
+/** The baseline jobs of a run's starting point (not a setup change's), oldest first. */
+const startJobs = (ledger: Ledger, run: string, seq: number) =>
+  ledger.jobs
+    .ofRun(run, "baseline")
+    .filter((j) => j.attempt === null && j.spec.champion_seq === seq);
+
 /** How many baseline jobs of a run's starting point failed in the judge itself. */
 function failedStartJobs(ledger: Ledger, run: string, seq: number): number {
-  return Number(
-    (
-      ledger.db
-        .prepare(
-          `select count(*) as n from job
-             where kind = 'baseline' and attempt is null and state = 'failed'
-               and json_extract(spec, '$.run') = ? and json_extract(spec, '$.champion_seq') = ?`,
-        )
-        .get(run, seq) as { n: number }
-    ).n,
-  );
+  return startJobs(ledger, run, seq).filter((j) => j.state === "failed").length;
 }
 
-/** The newest baseline job of a run's starting point (not a setup change's). */
+/** The newest baseline job of a run's starting point. */
 function lastStartJob(
   ledger: Ledger,
   run: string,
   seq: number,
 ): { id: number; state: string; updated_at: string; error: string | null } | undefined {
-  return ledger.db
-    .prepare(
-      `select id, state, updated_at, json_extract(result, '$.error') as error from job
-         where kind = 'baseline' and attempt is null and json_extract(spec, '$.run') = ?
-           and json_extract(spec, '$.champion_seq') = ? order by id desc limit 1`,
-    )
-    .get(run, seq) as
-    | { id: number; state: string; updated_at: string; error: string | null }
-    | undefined;
+  const j = startJobs(ledger, run, seq).at(-1);
+  const error = j?.result?.error;
+  return (
+    j && {
+      id: j.id,
+      state: j.state,
+      updated_at: j.updated_at,
+      error: error == null ? null : String(error),
+    }
+  );
 }
 
 /**
@@ -229,12 +212,7 @@ export function baselineDue(ledger: Ledger, run: string, now = Date.now()): Star
   // again records a newer failure, so each resume gives one try.
   if (
     s.state === "setup" &&
-    !ledger.db
-      .prepare(
-        `select 1 from event where kind = 'run_status' and subject = ? and id > ?
-           and json_extract(body, '$.status') = 'running' limit 1`,
-      )
-      .get(run, s.failure.id)
+    !statusEvents(ledger, run, s.failure.id).some((e) => e.status === "running")
   )
     return false;
   if (
@@ -252,20 +230,45 @@ export function baselineDir(stateDir: string, run: string, job: number): string 
 }
 
 /**
- * A fresh, empty folder for a baseline job, mode 0700 and owned by the judge, as are the folders
- * above it: no run user can reach it. An earlier try of the same job's folder is removed first.
+ * A fresh, empty folder for a baseline job's kept files, mode 0700 and owned by the judge. The
+ * folders above it are the judge's, 0710: the broker gives the baselines' folder the checkers'
+ * group, which the folders and files below it keep, and no other role may enter. An earlier try
+ * of the same job's folder is removed first.
  */
 export function prepareBaselineDir(stateDir: string, run: string, job: number): string {
   const top = join(stateDir, "baselines");
-  for (const d of [top, join(top, run)]) {
-    mkdirSync(d, { recursive: true, mode: 0o700 });
-    chmodSync(d, 0o700);
-  }
+  // Made here only when missing: a chmod by the judge would take off the group the folder keeps.
+  for (const d of [top, join(top, run)]) if (!existsSync(d)) mkdirSync(d, { mode: 0o710 });
   const dir = baselineDir(stateDir, run, job);
   removeBaselineDir(dir);
+  // No chmod after: the folder keeps the group, and the mark that passes it on, from above.
   mkdirSync(dir, { mode: 0o700 });
-  chmodSync(dir, 0o700);
   return dir;
+}
+
+/**
+ * Keeps a baseline job's sealed folder (sealBaselineDir), which the job's checks wrote in the
+ * scratch folder it handed them, in its folder in the judge's state (prepareBaselineDir): files
+ * 0440 and folders 0550, in the checkers' group, so later jobs' checks read them and change
+ * nothing.
+ */
+export function keepBaselineDir(from: string, to: string): void {
+  const dirs: string[] = [to];
+  const copy = (src: string, dst: string) => {
+    for (const e of readdirSync(src)) {
+      const [s, d] = [join(src, e), join(dst, e)];
+      if (lstatSync(s).isDirectory()) {
+        mkdirSync(d, { mode: 0o700 });
+        dirs.push(d);
+        copy(s, d);
+      } else {
+        copyFileSync(s, d);
+        chmodSync(d, 0o440);
+      }
+    }
+  };
+  copy(from, to);
+  for (const d of dirs.reverse()) chmodSync(d, 0o550);
 }
 
 /** Removes a baseline folder, read-only or not. */
@@ -351,17 +354,8 @@ export function baselineValue(xs: readonly number[]): BaselineValue {
  */
 export function guardTotals(ledger: Ledger, run: string): Record<string, number> {
   const totals: Record<string, number> = {};
-  const rows = ledger.db
-    .prepare(
-      "select attempt from champion where run = ? and reopened = 0 and attempt is not null and seq > ?",
-    )
-    .all(run, startingPoint(ledger, run).seq) as { attempt: string }[];
-  for (const r of rows) {
-    const v = ledger.db
-      .prepare(
-        "select guards from verdict where attempt = ? and verdict = 'win_confirmed' order by id desc limit 1",
-      )
-      .get(r.attempt) as { guards: string } | undefined;
+  for (const attempt of ledger.champions.attemptsAfter(run, startingPoint(ledger, run).seq)) {
+    const v = ledger.verdicts.confirmedWin(attempt);
     for (const g of JSON.parse(v?.guards ?? "[]") as { metric: string; estimate: number }[]) {
       totals[g.metric] = (totals[g.metric] ?? 0) + g.estimate;
     }

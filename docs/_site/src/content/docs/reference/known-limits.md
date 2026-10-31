@@ -32,10 +32,10 @@ The agents' work is code: shell commands, builds and tests that a model chose, r
 
 ## Under compose, that code can reach your local network
 
-Compose joins the harness to a normal network, `egress`, for its way out ([Networks](ports-volumes-secrets.md#compose)). Through it, the lanes' commands, the builds and the timed runs can reach the internet, your computer (as `host.docker.internal`) and the other machines on your local network. A rig that control sets up on a machine, or that you join on one, has the same kind of way out ([Machines](ports-volumes-secrets.md#machines)).
+Compose joins each rig's harness to a normal network of its own, `rig-egress` or `rig2-egress`, for its way out ([Networks](ports-volumes-secrets.md#compose)). Through it, the lanes' commands, the builds and the timed runs can reach the internet, your computer (as `host.docker.internal`) and the other machines on your local network. A rig that control sets up on a machine, or that you join on one, has the same kind of way out ([Machines](ports-volumes-secrets.md#machines)).
 
 - A worker's research fetches are different: the harness fetches each page itself, and refuses private and local addresses.
-- On a Kubernetes cluster, in a namespace that control creates or that you join, network rules let the harness reach only DNS and addresses outside the private ranges of RFC 1918. Control refuses a slot unless its rules do the same ([Kubernetes](ports-volumes-secrets.md#kubernetes)).
+- On a Kubernetes cluster, in a namespace that control creates or that you join, network rules let the harness reach only DNS, addresses outside the private, shared and link-local ranges, and the addresses the owner lists in **Settings › Addresses cluster rigs may reach**, each on its listed TCP ports. Control refuses a slot unless its rules do the same, and opens no more of the list than its entries, and the rig's isolation check fails when a lane reaches the cluster's API server ([Kubernetes](ports-volumes-secrets.md#kubernetes)).
 
 **Removed by:** [goal 038](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/038-lane-network-rules.goal), Keep lanes off the local network (v0.3.0), under compose. Until then, run a compose rig where nothing on your local network relies on being out of reach.
 
@@ -45,7 +45,7 @@ Thermite never ends research by default. A hill climb runs until you pause or cl
 
 So with a paid model key, the agents spend for as long as the campaign runs. Before you give a rig a paid key, set a stop time or a budget ([Set a budget or a stop time](../how-to/campaigns/budget-and-stop-time.md)). Also set a spending limit with your model provider: the contract's model spend limit counts only the workers' trials, and only on a rig that has token prices.
 
-The dashboard's RunPod launch form fills in an idle stop of 30 minutes, which you can change or clear; it stops the pod only when no run is at work ([Run a rig on RunPod](../how-to/install/runpod-rig.md)).
+The dashboard's RunPod launch form fills in an idle stop of 30 minutes, which you can change or clear; it stops the pod only when no run is at work ([Run a rig on RunPod](../how-to/install/runpod-rig.md)). Control checks a pod's spend limit and idle stop only while control runs: a pod goes on costing while control is down, and control stops it when it starts again ([Run a rig on RunPod](../how-to/install/runpod-rig.md#5-watch-its-cost-and-change-its-limits)).
 
 **Removed by:** no goal. It is a decision: [Why Thermite runs until the job is done](../explanation/runs-until-done.md) says why.
 
@@ -65,7 +65,7 @@ Research workers have no search of their own: their `search` tool answers that t
 
 ## Runs of several days are not yet proven
 
-Thermite is built to run unattended for as long as a campaign takes, and to recover from crashes and restarts. Its own tests run campaigns for minutes to a few hours: the longest, `scripts/research-longrun.mjs`, runs a research campaign for about two hours by default and kills the harness's controller halfway. The test that proves runs of several days has not run yet: several campaigns in all three modes, for days, with crashes, restarts, a full disk and a lost model along the way.
+Thermite is built to run unattended for as long as a campaign takes, and to recover from crashes and restarts. Its own tests run campaigns for minutes to a few hours: the longest, `scripts/acceptance/research-longrun.mjs`, runs a research campaign for about two hours by default and kills the harness's controller halfway. The test that proves runs of several days has not run yet: several campaigns in all three modes, for days, with crashes, restarts, a full disk and a lost model along the way.
 
 **Removed by:** [goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), The multi-day test fire (v0.5.0). If a long run goes wrong for you, [report it](../project/getting-help.md).
 
@@ -86,6 +86,8 @@ A confirmed win can wait for you: under **Needs you** when you ask to decide eac
 Until version 1.0, a new version may change settings, commands, routes, files and stored data, with no way back. A newer harness upgrades the rig's ledger, so an older image may not open it again. Control can move a rig it set up, on a machine or a cluster, onto new images, but not a rig that you joined, and it has no way back to older images ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal)).
 
 Before you move to a new version, make sure that what you want to keep is in your results repository, and download the champions that you want ([Take the result](../how-to/campaigns/take-the-result.md)).
+
+Since v0.1.1, a run is addressed by its name alone, which control uses once. Two runs that shared a name before v0.1.1, on two rigs or again after a full reset, show as one: the newest of them, on its campaign's page and at its address. The older one's events stay on control, in its rig's exports and in the knowledge base.
 
 **Removed by:** no goal yet. The [roadmap](../project/roadmap.md#later-versions) says how versions count up.
 

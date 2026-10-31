@@ -20,7 +20,7 @@ A list of small faults in the dashboard's screens, found while the owner uses Th
 
 - **What is wrong.** On a campaign's page, the block **Agents' context** has the table **What applies on each rig**, with one row for each rig that *can* run the campaign: each rig with the campaign's hardware. A campaign that runs on a CPU can run on every rig, so the table lists every rig, including rigs where no run of the campaign has ever been. The owner, 2026-10-24: "this shows up on a campaigns page even though its listing rigs that have nothing to do with this campaign".
 - **What to do.** The table shows the rigs that matter to this campaign: the rigs its runs are at work on, then the rigs its earlier runs used. The other rigs that could run it are folded under one line, such as "3 other rigs can run it", which opens to show them. A campaign with no run yet says where a run can start, in one line, with the rigs folded the same way.
-- **Pages:** [Start a campaign from the dashboard](../../_site/src/content/docs/how-to/campaigns/start-from-dashboard.md#set-the-agents-context) (step 3 of "Set the agents' context"), and the ⓘ of **What applies on each rig** (`src/control/ui/campaign-context.ts`).
+- **Pages:** [Start a campaign from the dashboard](../../_site/src/content/docs/how-to/campaigns/start-from-dashboard.md#set-the-agents-context) (step 3 of "Set the agents' context"), and the ⓘ of **What applies on each rig** (`src/control/ui/campaigns/context/index.ts`).
 
 ### 2. Export shows its status and progress once it is clicked
 

@@ -1,5 +1,5 @@
-import { gpuSplit, MAX_RIG_GPUS } from "../control/machines/deploy.ts";
-import type { Probes, RunResult } from "./doctor.ts";
+import { gpuSplit, MAX_RIG_GPUS } from "../core/hardware.ts";
+import type { Probes, RunResult } from "./doctor/index.ts";
 
 /**
  * What the local rig can use on this machine: the CPUs and memory its container engine gives

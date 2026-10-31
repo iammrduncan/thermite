@@ -75,10 +75,11 @@ Every field this example leaves out takes its default. The repository has one ex
 | `budget` | object | `{"max_open_attempts": 4}` | Optional budgets and back-pressure. See [Budget](#budget) |
 | `min_duration` | duration | none | Research: required. The time the run has to collect sources and claims: a floor, never a stop. After it, at each digest, the review panel is asked about the questions and hypotheses with no decision that stands, and a review that gives every question an end ends the run, as the progress rule does ([Research](#research)). Other modes: accepted, not used yet |
 | `max_duration` | duration | none | Research: when the run ends at the latest, its questions answered or not. It may not be shorter than `min_duration`. Without it, a research run whose questions the review panel never finds answered runs until someone closes it. Other modes: accepted, not used yet |
-| `search_policy` | object | none | Rules for research search queries. See [Search policy](#search-policy) |
 | `notes` | text | none | The campaign's additional information, from its author, in Markdown, with no length limit. See [The campaign's brief](#the-campaigns-brief) |
 | `hypotheses` | list of text, each not empty | none | What the campaign's author thinks is true, one entry each. See [The campaign's brief](#the-campaigns-brief) |
 | `agents_context` | object | none: each agent keeps the rig's settings | The campaign's own context window and compaction point for all its runs' agents. See [Agents' context](#agents-context) |
+| `role_additions` | object: a role's id and its text | none: each role has its own text only | Your own words added to a role's instructions for this campaign's runs. See [Your additions to the agents' roles](#your-additions-to-the-agents-roles) |
+| `kb_writes` | object: a role and its kinds | none: [the default](knowledge-base.md#who-writes-what) | Which kinds of item each role may write in its own slot of the campaign's collection in Thermite's knowledge base: `planner`, `worker`, `teacher`, `merged-by`, `auditor`, `review-panel`, `synthesizer`, `final-writer`, each a list of `note`, `decision`, `surprise`, `journal`, `finding`, `review`, `doc`, `reference`, `report`, `paper`, each once. A role left out, or given `[]`, writes nothing. See [Who writes what](knowledge-base.md#who-writes-what) |
 
 ### Agents' context
 
@@ -94,6 +95,25 @@ The rig sets each agent's context window and compaction point with its model ([G
 | `agents_context.compact_at` | integer, 50 to 95 | none | The share of the window, in percent, at which each agent's conversation is [compacted](limits-and-pacing.md#compaction), in place of the rig's point |
 
 Both are optional and have no default, so a contract without them keeps its hash. A change is a new version: a run keeps the settings it started with. Control refuses to start a run of a campaign whose window is above what a provider lists for one of the rig's agents' models; **Agents' context** on the campaign's page, [`POST /v1/campaigns/<campaign>/context`](rest-api.md#a-campaigns-context-settings), MCP's `set_campaign_context` and `thermite campaign context` save a new version with them; **New campaign** (step 5) and the **Copy** panel set them on a new campaign; and **Start a run** and its answer say what applies to each agent ([Set the agents' context](../how-to/campaigns/start-from-dashboard.md#set-the-agents-context)). A rig whose harness is older than this field refuses a contract that has it.
+
+### Your additions to the agents' roles
+
+A role's instructions are Thermite's code ([Agent roles](agent-roles.md)). A campaign can add text of its own to a role, with no change to that code: one entry for each role, by the role's id.
+
+```json title="contract.json (part)"
+{ "role_additions": { "worker": "Keep each change small enough to read in one sitting.", "planner": "Give each lane a different direction while the queue allows it." } }
+```
+
+| Mode | The roles an addition may name |
+| --- | --- |
+| `hill_climb`, `goal` | `worker`, `planner`, `teacher`, `merged-by`, `auditor`, `reviewer` |
+| `research` | `research-worker`, `research-planner`, `research-teacher`, `research-merged-by`, `research-reviewer`, `synthesizer`, `final-writer` |
+
+Each text is from 1 to 20,000 characters. A role the mode never runs is refused: `role_additions: a hill climb campaign runs no research-worker: its roles are worker, planner, teacher, merged-by, auditor, reviewer`. The model check and compaction take none.
+
+Every prompt of the role carries its addition as a section of its own, after the role's own text, labelled as yours with the contract's version: `# The campaign owner's addition (contract version 3)`, then a line that says it adds to the role's instructions and replaces none of them, which come first where the two differ. The prompt's record shows the section's source as `owner's addition` ([What a run's agents were sent](agent-roles.md#what-a-runs-agents-were-sent)). An addition never decides a measurement, a verdict or a promotion: code does.
+
+The field is optional and has no default, so a contract without it keeps its hash. It is part of the contract, so the [signed](signed-commands.md) `assign_campaign` command carries it, and a change is a new version: a run keeps the additions it started with, and a copy takes its source's. **New campaign**, the campaign's page (**Your additions to the agents' roles**), [`POST /v1/campaigns/<campaign>/additions`](rest-api.md#the-owners-additions-to-a-campaigns-roles), MCP's [`set_campaign_additions`](mcp-tools.md#set_campaign_additions) and [`thermite campaign additions`](command-line.md#campaign-additions) set them. An assignment from the operator's or an agent's token carries the additions of the campaign's saved version, as the owner saved them, and no others ([`issue_command`](mcp-tools.md#command-kinds-for-each-role)). A rig whose harness is older than this field refuses a contract that has it.
 
 ### The campaign's brief
 
@@ -128,7 +148,7 @@ What each agent gets, and whether it gets the whole text:
 | A research run's final writer | `campaign_brief` at the end of its paper package, after the questions, verdicts, figures and rules | Whole, unless the package is cut to fit the writer's window or 200,000 characters: the cut is at the package's end, so it takes the brief first |
 | The run's folder | `BRIEF.md`, for every mode | Whole |
 
-A research run starts with the contract's `hypotheses` as its first hypotheses, the author's: each one is a `hypothesis_added` event with no lane, no supporting claim and the status `author`. They and promoted ones are the ones the review panel gives a verdict; the workers' own go to the run's pool ([Hypotheses](../explanation/campaign-modes.md#research)), and only the brief changes the author's. The run's folder lists them under `hypotheses/`, and the campaign's folder in [Thermite's knowledge base](knowledge-base.md) keeps them. **Copy** keeps the brief; a copy over REST, MCP or the command line may give its own ([Copy a campaign](rest-api.md#copy-a-campaign)). The campaign's page shows it under **The brief**.
+A research run starts with the contract's `hypotheses` as its first hypotheses, the author's: each one is a `hypothesis_added` event with no lane, no supporting claim and the status `author`. They and promoted ones are the ones the review panel gives a verdict; the workers' own go to the run's pool ([Hypotheses](../explanation/campaign-modes.md#research)), and only the brief changes the author's. The run's folder lists them under `hypotheses/`, and the campaign's collection in [Thermite's knowledge base](knowledge-base.md) keeps them. **Copy** keeps the brief; a copy over REST, MCP or the command line may give its own ([Copy a campaign](rest-api.md#copy-a-campaign)). The campaign's page shows it under **The brief**.
 
 ### Lanes
 
@@ -171,15 +191,8 @@ No budget is set unless you set one, and without one a run keeps going. A spent 
 | --- | --- | --- | --- | --- |
 | `budget.wall_hours` | number > 0 | none | Hours since the run was created, paused time included. It also shapes the search: every lane starts again from the champion at a third and two thirds of it (every 20 epochs without it) | `the wall-time budget is spent` |
 | `budget.device_hours` | number > 0 | none | Hours the judge's finished jobs for this run have taken | `the device-hours budget is spent` |
-| `budget.llm_usd` | number ≥ 0 | none | US dollars of model tokens the run's trials have used. Counted only when the rig sets both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` (prices per million tokens); without them, it has no effect | `the model budget is spent ($<amount>)` |
+| `budget.llm_usd` | number ≥ 0 | none | US dollars of model tokens the run's trials have used: for a trial in OpenCode or Codex, the tokens the provider's answers reported as the model proxy saw them. Counted only when the rig sets both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` (prices per million tokens); without them, it has no effect | `the model budget is spent ($<amount>)` |
 | `budget.max_open_attempts` | integer ≥ 1 | 4 | Back-pressure, not a budget: no new trial starts while this many of the run's attempts wait for the judge (queued, building, screening, confirming, verifying, waiting for an audit or for approval) | none: lanes wait |
-
-### Search policy
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `search_policy.allowed_purposes` | list of text | `[]` | What public search may be used for. Accepted, not used yet |
-| `search_policy.blocked_patterns` | list of regular expressions | `[]` | A research search query that matches one, ignoring case, is refused and logged with `blocked by the search policy (<pattern>)`. Rigs have no web search, so every query returns no results |
 
 ## Hill climb and goal: what a candidate may change
 
@@ -223,7 +236,7 @@ A hard constraint is one of:
 | --- | --- |
 | `{"kind": "min", "metric": "<m>", "value": <number>}` | The candidate's mean of `<m>` on each cell must be at least `value`, or the verdict is `infeasible` |
 | `{"kind": "max", "metric": "<m>", "value": <number>}` | The mean must be at most `value`, or the verdict is `infeasible` |
-| `{"kind": "check", "check": "<name>"}` | Accepted, not used yet. The kit's check runs on every run anyway |
+| `{"kind": "check", "check": "<name>"}` | Refused when the contract is checked, with `hard_constraints.<i>` and the reason: the kit's own checks run on every candidate anyway. Bound a metric with `min` or `max` instead. A contract stored before v0.1.1 that has one keeps it, and nothing checks it |
 
 `acceptance`:
 
@@ -336,7 +349,7 @@ These fields pass validation and become part of the contract and its hash, but n
 
 | Mode | Fields |
 | --- | --- |
-| Every mode | `target.class`; `search_policy.allowed_purposes` |
+| Every mode | `target.class` |
 | Hill climb and goal | `min_duration`, `max_duration` |
 | Hill climb | `objective.policy`; `objective.secondary` (checked against the kit only); `monitor_only`; hard constraints of kind `check` |
 | Goal | `independence_epochs`; `min_live_families`; each goal's `priority` and `parent` (stored only) |
@@ -350,7 +363,7 @@ These fields pass validation and become part of the contract and its hash, but n
 | `sha256 hex` | A model's `sha256` is not 64 lowercase hexadecimal characters |
 | `full git commit id (40 or 64 hex)` | A commit is short or not hexadecimal |
 | `duration like "30m" or "8h"` | `min_duration` or `max_duration` has no unit, or another unit |
-| `invalid regular expression` | A pattern in `forbidden_patterns` or `search_policy.blocked_patterns` does not compile |
+| `invalid regular expression` | A pattern in `forbidden_patterns` does not compile |
 | `Unrecognized key: "<name>"` | A field the contract does not have |
 | `duplicate goal id <id>` | Two goals have the same `id` |
 | `goal <id> has unknown parent <parent>` | A goal's `parent` names no goal in the list |

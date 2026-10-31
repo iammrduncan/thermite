@@ -1,4 +1,4 @@
-# Test only (scripts/codex-acceptance.mjs): the harness and the supervisor with a stand-in for the
+# Test only (scripts/acceptance/codex.mjs): the harness and the supervisor with a stand-in for the
 # Codex CLI mounted, so the Codex harness and an advisor in Codex run end to end without a ChatGPT
 # plan. The images are built without the real Codex (CODEX_VERSION empty), so the test downloads
 # nothing for it.

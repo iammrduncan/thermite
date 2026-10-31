@@ -1,0 +1,1 @@
+Your last reply was cut off at the output limit before it made a tool call. Think briefly, then make one tool call; keep each reply short.

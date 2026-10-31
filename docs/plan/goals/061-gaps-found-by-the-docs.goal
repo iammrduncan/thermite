@@ -32,148 +32,148 @@ The writers and verifiers of the documentation site (goal [060](_completed/060-d
 
 ### Settings
 
-- [ ] An empty variable is not always "not set": `THERMITE_CONTROL_STALE_SECONDS`, `THERMITE_MAX_TRIALS`, `THERMITE_POLL_SECONDS` and other number settings read it as 0, empty paths are used as they are, and an empty `THERMITE_GPUS` fails, while some settings take their default (`src/control/main.ts`, `src/harness/main.ts`, `src/supervisor/main.ts`).
+- [ ] An empty variable is not always "not set": `THERMITE_CONTROL_STALE_SECONDS`, `THERMITE_MAX_TRIALS`, `THERMITE_POLL_SECONDS` and other number settings read it as 0, empty paths are used as they are, and an empty `THERMITE_GPUS` fails, while some settings take their default (`src/control/main.ts`, `src/harness/controller/context.ts`, `src/supervisor/main.ts`).
 - [ ] Rig defaults from the environment (`THERMITE_MAX_TRIALS`, `THERMITE_TRIAL_MINUTES`, `THERMITE_MAX_TURNS`, `THERMITE_PROMOTION`) stop applying, with no message, once the rig's settings are first changed on Edit rig or by a campaign (`src/harness/rig-settings.ts`).
 - [ ] The old name `THERMITE_CONTROL_UNIT_TOKENS_FILE` is declared as an alias but never read, so a deployment that uses it starts with no rig tokens from the file and no warning (`src/common/env.ts`, `src/control/main.ts`).
 - [ ] A missing `THERMITE_CONTROL_RIG_TOKENS_FILE` file, or bad JSON in `THERMITE_COMPOSE_SERVICES`, stops control with a raw Node error, not a message that names the setting (`src/control/main.ts`, `src/control/lifecycle.ts`).
-- [ ] `THERMITE_ALLOW_UNSEPARATED=1` may never start the harness: the broker starts it without the secret file settings it then asks for (`src/harness/broker.ts`; inferred from the code, not run).
-- [ ] A supervisor with `CONTROL_URL` set and no control token reports nothing and logs nothing about it, so its rig never appears (`src/supervisor/main.ts`, `src/supervisor/relay.ts`).
+- [ ] `THERMITE_ALLOW_UNSEPARATED=1` may never start the harness: the broker starts it without the secret file settings it then asks for (`src/harness/broker/main.ts`, `src/harness/broker/controller.ts`; inferred from the code, not run).
+- [ ] A supervisor with `CONTROL_URL` set and no control token reports nothing and logs nothing about it, so its rig never appears (`src/supervisor/main.ts`, `src/supervisor/relay/index.ts`).
 
 ### Rigs control sets up
 
-- [x] **Rigs that control sets up on a machine, and machines joined with a join command, never report.** Fixed in `4ec8705`. The setup script (`deployScript`, `src/control/machines/deploy.ts`) runs `umask 077`, so the rig's `keys` folder is mode 0700 and the harness's controller (user `thermite`) cannot read control's public key; it times out every 2 minutes. `scripts/rig-deploy-acceptance.mjs` passed only after `chmod 0755` on that folder by hand. Clusters are not affected. Found by following the install guides.
-- [ ] After a join command's script fails its checks, the rig's page still says the rig `fetched its files; waiting for its first report` and asks for the rig to be removed (`src/control/join.ts`, `src/control/dashboard.ts`).
-- [ ] Once, in a cluster run, control stopped answering right after a joined rig's objects were removed and the rig was retired; the next run passed. Not diagnosed (`scripts/cluster-acceptance.mjs`, run with a join step added).
+- [x] **Rigs that control sets up on a machine, and machines joined with a join command, never report.** Fixed in `4ec8705`. The setup script (`deployScript`, `src/control/machines/deploy.ts`) runs `umask 077`, so the rig's `keys` folder is mode 0700 and the harness's controller (user `thermite`) cannot read control's public key; it times out every 2 minutes. `scripts/acceptance/rig-deploy.mjs` passed only after `chmod 0755` on that folder by hand. Clusters are not affected. Found by following the install guides.
+- [ ] After a join command's script fails its checks, the rig's page still says the rig `fetched its files; waiting for its first report` and asks for the rig to be removed (`src/control/join.ts`, `src/control/dashboard/rigs/joined.ts`, `src/control/dashboard/rigs/shared.ts`).
+- [ ] Once, in a cluster run, control stopped answering right after a joined rig's objects were removed and the rig was retired; the next run passed. Not diagnosed (`scripts/acceptance/cluster.mjs`, run with a join step added).
 - [ ] Control cannot give the rigs it sets up (on machines, on clusters and by join) any setting beyond a fixed few: no results repository, advisors file, model prices or `THERMITE_MAX_TRIALS` (`src/control/machines/deploy.ts`, `src/control/clusters/manifests.ts`, `src/control/join.ts`).
 - [ ] The machine check reads Podman's version but does not compare it with the 4.4 that rigs need, and the join script checks only that `podman` exists (`src/control/machines/facts.ts`, `src/control/join.ts`).
-- [ ] The machine check can test whether the machine reaches the image registry, but control never gives it the registry's address, so a machine that cannot pull the images is found only when the deploy fails (`src/control/dashboard.ts`, `src/control/machines/facts.ts`).
+- [ ] The machine check can test whether the machine reaches the image registry, but control never gives it the registry's address, so a machine that cannot pull the images is found only when the deploy fails (`src/control/dashboard/settings/machines.ts`, `src/control/machines/facts.ts`).
 - [ ] Machines and clusters cannot be changed in Providers: no way to change a machine's address, port, user or key, or to replace a cluster's kubeconfig when its token expires.
-- [ ] A machine can be deleted while rigs run on it, and control can then no longer stop, start or remove those rigs; clusters refuse this (`src/control/store.ts`).
-- [ ] A rig whose first report comes after control's 10-minute wait stays marked "failed" under "Set up by control", even after it reports (`src/control/dashboard.ts`). Fixed for rigs on a cluster in `f7424ad` (a report after a failed wait shows the rig running); rigs on machines are unchanged.
+- [ ] A machine can be deleted while rigs run on it, and control can then no longer stop, start or remove those rigs; clusters refuse this (`src/control/store/machines.ts`).
+- [ ] A rig whose first report comes after control's 10-minute wait stays marked "failed" under "Set up by control", even after it reports (`src/control/rigs/setup.ts`, `src/control/ingest.ts`, `src/control/dashboard/rigs/page.ts`). Fixed for rigs on a cluster in `f7424ad` (a report after a failed wait shows the rig running); rigs on machines are unchanged.
 - [ ] A removed rig's name cannot be used again: Add a rig answers "There is a rig named … already."
-- [ ] A joined namespace takes at most 8 GPUs, where machines and clusters take 16 (`src/control/dashboard.ts`).
-- [ ] The DRA device class field's help says it is for clusters whose classes control cannot list, but the field shows when control cannot list nodes (`src/control/dashboard.ts`).
+- [ ] A joined namespace takes at most 8 GPUs, where machines and clusters take 16 (`src/control/dashboard/rigs/add.ts`).
+- [ ] The DRA device class field's help says it is for clusters whose classes control cannot list, but the field shows when control cannot list nodes (`src/control/dashboard/rigs/add.ts`).
 - [ ] Images from a private registry work only where the machine's Podman or the cluster's nodes can already pull them: there is no registry sign-in on machines and no image pull secret on clusters.
 - [ ] A tag pushed again with new content never reaches a rig: machines pull only a missing tag, and clusters use `IfNotPresent` (`src/control/machines/deploy.ts`, `src/control/clusters/manifests.ts`).
 - [ ] The machine install recipe writes the NVIDIA CDI spec to `/var/run/cdi/nvidia.yaml`, and the join script and the rig page use `/etc/cdi/nvidia.yaml`; a spec under `/var/run` may not be there after a reboot (`src/control/machines/recipes.ts`; not confirmed).
 - [ ] Control's Quadlet units set no `LogDriver`, so where Podman gives them the `passthrough` driver, `podman logs` shows nothing for a machine rig (`src/control/machines/deploy.ts`; not confirmed).
-- [ ] Cluster acceptance runs CPU rigs only: neither the device plugin path nor the DRA path for GPUs is tested (`scripts/cluster-acceptance.mjs`).
+- [ ] Cluster acceptance runs CPU rigs only: neither the device plugin path nor the DRA path for GPUs is tested (`scripts/acceptance/cluster.mjs`).
 - [ ] A join command is used up when its script is fetched, before the script's checks run, so any missing piece on the machine means a new command (`src/control/join.ts`).
-- [ ] A RunPod test pod's cost on its card is the hourly price times the time it ran, without the storage that RunPod also bills (`src/control/runpod-tests.ts`).
+- [ ] A RunPod test pod's cost on its card is the hourly price times the time it ran, without the storage that RunPod also bills (`src/control/runpod/tests.ts`).
 
 ### Rig lifecycle and tokens
 
 - [ ] `compose.lifecycle.yaml` can't be added to a stack that has already run: control then runs as root with only `DAC_OVERRIDE`, and its `chmod` of `control-signing.key` on every start fails with `EPERM`, so control restarts for ever (`src/control/main.ts`, `compose.lifecycle.yaml`).
-- [ ] **Remove it from …** (machines and clusters) and a joined rig's **Retire the rig** end only the rig's token, so the rig stays in **Rigs** as not reporting until it is retired again from its page (`store.retireRig`, `src/control/dashboard.ts`).
-- [ ] **Restart the rig's containers** reloads the rig's page with no message, unlike the other actions (`src/control/dashboard.ts`).
+- [ ] **Remove it from …** (machines and clusters) and a joined rig's **Retire the rig** end only the rig's token, so the rig stays in **Rigs** as not reporting until it is retired again from its page (`src/control/store/enrollments.ts`, `src/control/dashboard/rigs/joined.ts`, `src/control/clusters/actions.ts`).
+- [ ] **Restart the rig's containers** reloads the rig's page with no message, unlike the other actions (`src/control/dashboard/actions.ts`).
 - [ ] Control cannot stop or start compose rigs, restarts them only with the development overlay, and `compose.yaml` maps only `local-1` and `local-2` in `THERMITE_COMPOSE_SERVICES` (`src/control/lifecycle.ts`).
-- [ ] "Restart the rig's containers" shows for every rig once a lifecycle driver is set, also for machine and cluster rigs that the driver cannot reach, and then fails (`src/control/dashboard.ts`, `src/control/lifecycle.ts`).
+- [ ] "Restart the rig's containers" shows for every rig once a lifecycle driver is set, also for machine and cluster rigs that the driver cannot reach, and then fails (`src/control/dashboard/rigs/page.ts`, `src/control/dashboard/actions.ts`, `src/control/lifecycle.ts`).
 - [ ] A new rig token from `thermite rig token` ends the old one at once, but control does not deliver it: for a rig that control set up, the owner copies it to the machine or the cluster Secret and restarts the supervisor by hand.
-- [ ] A retired rig that is brought back cannot get a token: `thermite rig token` refuses a retired rig and the dashboard offers no way, so only a new enrollment works (`src/control/store.ts`).
-- [ ] After a rig is retired, the dashboard always adds "If its token is in control's settings, take it out there too", also for enrolled rigs (`src/control/dashboard.ts`).
-- [ ] Retiring an enrolled rig writes `rig_retired` to the audit log twice (`src/control/store.ts`).
-- [ ] After a full reset, the rig's earlier runs leave the rig page, the campaign pages and the leaderboard; control still holds their events, but no page shows them (`src/control/views.ts`).
+- [ ] A retired rig that is brought back cannot get a token: `thermite rig token` refuses a retired rig and the dashboard offers no way, so only a new enrollment works (`src/control/store/enrollments.ts`).
+- [ ] After a rig is retired, the dashboard always adds "If its token is in control's settings, take it out there too", also for enrolled rigs (`src/control/dashboard/rigs/list.ts`).
+- [ ] Retiring an enrolled rig writes `rig_retired` to the audit log twice (`src/control/store/retired.ts`).
+- [ ] After a full reset, the rig's earlier runs leave the rig page, the campaign pages and the leaderboard; control still holds their events, but no page shows them (`src/control/views/rig.ts`).
 - [ ] Changing an owner, operator, agent or reader token needs a control restart; no page, API call or MCP tool does it (`src/control/main.ts`).
 
 ### Dashboard
 
-- [ ] A change submitted by hand is described as "An agent changed …", and approving a held change on a rig with no auditor is recorded as "You overrode the audit" (`src/control/ui/**`).
-- [ ] The leaderboard counts a campaign's runs as rigs (`src/control/views.ts`).
-- [x] Fixed in `5e4a7d6`. A rig that has never reported shows an age counted from 1970: `No report for 20746 days`, also on its page and in **Needs you** (`src/control/ui/**`).
-- [ ] Saving **Edit rig** is not all or nothing: it stops at the first refused role, and earlier roles stay saved (`src/control/dashboard.ts`).
+- [ ] A change submitted by hand is described as "An agent changed …", and approving a held change on a rig with no auditor is recorded as "You overrode the audit" (`src/control/ui/operator/change.ts`, `src/control/ui/words/judge.ts`).
+- [ ] The leaderboard counts a campaign's runs as rigs (`src/control/views/leaderboard.ts`).
+- [x] Fixed in `5e4a7d6`. A rig that has never reported shows an age counted from 1970: `No report for 20746 days`, also on its page and in **Needs you** (`src/control/ui/rigs/states.ts`, `src/control/ui/operator/rig.ts`).
+- [ ] Saving **Edit rig** is not all or nothing: it stops at the first refused role, and earlier roles stay saved (`src/control/dashboard/rigs/edit.ts`).
 - [ ] Small rough edges: a cluster's **Nodes** fact shows raw memory (`8095856Ki`); a joined rig's steps list `✓ First report reached control` twice; the Providers header reads `1 models are read…`; the harness list shows **Pi** for a rig that runs OpenCode v2 from its own settings; a keyless provider's edit form shows `empty keeps the key ending ` with nothing after it; a short key shows as `key …`; Edit rig's message when roles go back to the advisors file repeats itself.
-- [ ] A run started with agents shows **Agents: None** until the planner has planned its first epoch, so it looks as if no agent will work (`src/control/ui/operator.ts`). Found by running tutorial 4. Since `4e132a6` the cards say `waiting for the first round`; the run's Overview tab still says None until the first round.
-- [ ] After **Start a run** on an existing campaign, the page shows the campaign page until the rig reports the new run, with no sign that it is starting (`src/control/dashboard.ts`). Found by running tutorial 4.
-- [ ] A change refused by the static checks shows **Judging** for ever, and its page says the judge has not decided: `outcome()` looks for a `rejected_v0` verdict, but such attempts have only a `rejected_v0` lifecycle (`src/control/ui/operator.ts`, `src/harness/service.ts`). When fixed, update the tables in tutorials 1 and 2.
-- [ ] Any run whose name ends in `-try-<n>` is shown as a try of the kit, even when it was started from the command line; the name is the only check. Its card now links to **Start a run**, which also works for campaigns started from the command line (`src/control/dashboard.ts`).
+- [ ] A run started with agents shows **Agents: None** until the planner has planned its first epoch, so it looks as if no agent will work (`src/control/dashboard/campaigns/run/section.ts`). Found by running tutorial 4. Since `4e132a6` the cards say `waiting for the first round`; the run's Overview tab still says None until the first round.
+- [ ] After **Start a run** on an existing campaign, the page shows the campaign page until the rig reports the new run, with no sign that it is starting (`src/control/dashboard/campaigns/page.ts`). Found by running tutorial 4.
+- [ ] A change refused by the static checks shows **Judging** for ever, and its page says the judge has not decided: `outcome()` looks for a `rejected_v0` verdict, but such attempts have only a `rejected_v0` lifecycle (`src/control/ui/operator/outcome.ts`, `src/harness/service/attempts.ts`). When fixed, update the tables in tutorials 1 and 2.
+- [ ] Any run whose name ends in `-try-<n>` is shown as a try of the kit, even when it was started from the command line; the name is the only check. Its card now links to **Start a run**, which also works for campaigns started from the command line (`src/control/dashboard/campaigns/page.ts`).
 - [x] Gone with the run page's Steering tab (goal 063): no dashboard text describes Pause now. The Steering card said "The judge still finishes the jobs already queued", but a paused run's queued jobs wait until it resumes.
-- [ ] An attempt that the static checks refuse shows "Judging" for ever, because it never gets a verdict (`src/control/ui/operator.ts`).
-- [ ] Attempt and verdict words are incomplete: "Lost" covers six verdicts alike, `rejected_v0` and `gating` show as raw states, and `tradeoff` and `infeasible` have no plain word (`src/control/ui/words.ts`).
-- [ ] "Make it the champion" shows the hypothesis, the file names and the line counts, but not the diff, which stays on the rig until it is exported (`src/control/ui/operator.ts`).
+- [ ] An attempt that the static checks refuse shows "Judging" for ever, because it never gets a verdict (`src/control/ui/operator/outcome.ts`).
+- [ ] Attempt and verdict words are incomplete: "Lost" covers six verdicts alike, `rejected_v0` and `gating` show as raw states, and `tradeoff` and `infeasible` have no plain word (`src/control/ui/operator/outcome.ts`, `src/control/ui/words/verdicts.ts`).
+- [ ] "Make it the champion" shows the hypothesis, the file names and the line counts, but not the diff, which stays on the rig until it is exported (`src/control/ui/operator/promotion.ts`).
 - [ ] No page lists the projects and kits that a rig holds with their full commits; the dashboard shows 8-character prefixes, and full commits are only in events.
-- [ ] The Leaderboard page has no link anywhere in the dashboard (`src/control/ui/components.ts`). Since goal 063 removed the campaign page's Cross-verified column, it is the only page that shows cross-verification. Since `4e132a6` a hill climb's campaign page links it and shows `cross-verified on …`; the sidebar still has no entry.
-- [ ] The dashboard sends only avoid, try and always rules, one at a time, from the run's Planner tab, and only adds to the rules in force; `priority`, `lane_count` and `note`, and replacing the rules, need the command line, REST or MCP (`src/control/dashboard.ts`, `src/control/ui/queue.ts`).
-- [x] Fixed in part in `2b16289`: each advisor error, and a teacher that gave no review with its reason, is now a line in Live under **Advisors**. The rig's Advisors row still shows only a count (`src/control/dashboard.ts`, `src/supervisor/advise.ts`).
-- [ ] Accepting a rig's key whose fingerprint changed since the page loaded returns to the rig page with no message (`src/control/dashboard.ts`).
+- [ ] The Leaderboard page has no link anywhere in the dashboard (`src/control/ui/components/index.ts`). Since goal 063 removed the campaign page's Cross-verified column, it is the only page that shows cross-verification. Since `4e132a6` a hill climb's campaign page links it and shows `cross-verified on …`; the sidebar still has no entry.
+- [ ] The dashboard sends only avoid, try and always rules, one at a time, from the run's Planner tab, and only adds to the rules in force; `priority`, `lane_count` and `note`, and replacing the rules, need the command line, REST or MCP (`src/control/dashboard/live.ts`, `src/control/ui/commands/forms.ts`, `src/control/ui/campaigns/queue/index.ts`).
+- [x] Fixed in part in `2b16289`: each advisor error, and a teacher that gave no review with its reason, is now a line in Live under **Advisors**. The rig's Advisors row still shows only a count (`src/control/dashboard/rigs/page.ts`, `src/supervisor/advisors/pass/context.ts`).
+- [ ] Accepting a rig's key whose fingerprint changed since the page loaded returns to the rig page with no message (`src/control/dashboard/rigs/state.ts`).
 
 ### New campaign
 
-- [x] Fixed in `b233d44`. The campaign page's start card refused a rig with no model even for "a try of the kit: no agents"; the model check now runs only for a run with agents (`src/control/dashboard.ts`).
-- [ ] New campaign decides whether to start at once from the model's name alone, so the same name from another provider starts the run before the rig has the new model (`src/control/new-campaign.ts`; worked out from the code).
-- [ ] The help for **Questions** says "Every finding must answer one of them", but findings name no question; only claims do (`src/control/ui/new-campaign.ts`).
-- [ ] The try's description says it "runs every case once", but a try of a hill climb measures the starting point's noise on the measured cases only and never runs a hidden case (`src/control/ui/new-campaign.ts`). Found by running tutorial 4.
-- [ ] Plurals on the page: "1 files" and "1 agent work" (`src/control/ui/new-campaign.ts`).
-- [ ] "Agents working at once" sets the contract's lane count, not how many agents work at once; that is the rig's **Workers at a time** (default 1), so with the defaults the lanes take turns (`src/control/campaign-builder.ts`, `src/harness/agents/scheduler.ts`).
-- [ ] "Try the kit first" says the judge runs every case once, but a hill-climb try is a calibration on the visible cases only and the hidden tests never run, so a wrong expected answer for a hidden test shows up only at the first confirmation (`src/control/ui/new-campaign.ts`, `src/harness/judge/judge.ts`).
+- [x] Fixed in `b233d44`. The campaign page's start card refused a rig with no model even for "a try of the kit: no agents"; the model check now runs only for a run with agents (`src/control/campaigns/start-run.ts`).
+- [ ] New campaign decides whether to start at once from the model's name alone, so the same name from another provider starts the run before the rig has the new model (`src/control/campaigns/new.ts`; worked out from the code).
+- [ ] The help for **Questions** says "Every finding must answer one of them", but findings name no question; only claims do (`src/control/ui/campaigns/new/index.ts`).
+- [ ] The try's description says it "runs every case once", but a try of a hill climb measures the starting point's noise on the measured cases only and never runs a hidden case (`src/control/ui/campaigns/new/index.ts`). Found by running tutorial 4.
+- [ ] Plurals on the page: "1 files" and "1 agent work" (`src/control/ui/campaigns/new/index.ts`).
+- [ ] "Agents working at once" sets the contract's lane count, not how many agents work at once; that is the rig's **Workers at a time** (default 1), so with the defaults the lanes take turns (`src/control/campaigns/builder.ts`, `src/harness/agents/scheduler/context.ts`).
+- [ ] "Try the kit first" says the judge runs every case once, but a hill-climb try is a calibration on the visible cases only and the hidden tests never run, so a wrong expected answer for a hidden test shows up only at the first confirmation (`src/control/ui/campaigns/new/index.ts`, `src/harness/judge/jobs/calibrate.ts`, `src/harness/judge/jobs/confirm.ts`).
 - [ ] A project that is only on your computer cannot be used: the page reads `https://` addresses, or SSH ones with a Git access, and takes kits as archives but not projects (`src/control/repo-probe.ts`).
-- [ ] Goal campaigns with an uploaded kit or a kit in a repository: "the check passes on cases" names a verifier that such a kit does not have, so the start is refused, although the upload panel suggests that choice (`src/control/campaign-builder.ts`, `src/control/ui/new-campaign-client.ts`).
-- [ ] Goal campaigns: "the score reaches" cannot choose the kit's metric; it names `rate` for a kit in a repository and the first metric for an uploaded kit, because the metric field shows only for hill climbs (`src/control/ui/new-campaign-client.ts`).
-- [ ] A kit in a repository has no "Better is" or "Smallest gain that counts (%)" of its own; the page takes them from the hidden "Describe it here" fields (`src/control/ui/new-campaign-client.ts`).
-- [ ] Campaigns made on this page can never end as "not possible", because the builder never sets `infeasibility` (`src/control/campaign-builder.ts`).
-- [ ] The page has no money or device-hours budget, only "Stop after (hours)" (`src/control/ui/new-campaign.ts`).
-- [ ] "Look it up" keeps the first commit after the Repository or Start from field changes (`src/control/ui/new-campaign-client.ts`).
-- [ ] In "Files for the check", the tick "the run reads these too" applies when the files are chosen, not when the form is sent, so files chosen before the tick stay hidden from the run (`src/control/ui/new-campaign-client.ts`).
-- [ ] A campaign saved without a start is not on the Campaigns list until a rig reports a run of it (`src/control/views.ts`).
-- [ ] After a start, "Starting …" shows only for a campaign's first run, and it stays with no error when the assignment fails; the reason is only on the Commands page (`src/control/dashboard.ts`).
+- [ ] Goal campaigns with an uploaded kit or a kit in a repository: "the check passes on cases" names a verifier that such a kit does not have, so the start is refused, although the upload panel suggests that choice (`src/control/campaigns/builder.ts`, `src/control/ui/campaigns/new/client.ts`).
+- [ ] Goal campaigns: "the score reaches" cannot choose the kit's metric; it names `rate` for a kit in a repository and the first metric for an uploaded kit, because the metric field shows only for hill climbs (`src/control/ui/campaigns/new/client.ts`).
+- [ ] A kit in a repository has no "Better is" or "Smallest gain that counts (%)" of its own; the page takes them from the hidden "Describe it here" fields (`src/control/ui/campaigns/new/client.ts`).
+- [ ] Campaigns made on this page can never end as "not possible", because the builder never sets `infeasibility` (`src/control/campaigns/builder.ts`).
+- [ ] The page has no money or device-hours budget, only "Stop after (hours)" (`src/control/ui/campaigns/new/index.ts`).
+- [ ] "Look it up" keeps the first commit after the Repository or Start from field changes (`src/control/ui/campaigns/new/client.ts`).
+- [ ] In "Files for the check", the tick "the run reads these too" applies when the files are chosen, not when the form is sent, so files chosen before the tick stay hidden from the run (`src/control/ui/campaigns/new/client.ts`).
+- [ ] A campaign saved without a start is not on the Campaigns list until a rig reports a run of it (`src/control/views/campaigns.ts`).
+- [ ] After a start, "Starting …" shows only for a campaign's first run, and it stays with no error when the assignment fails; the reason is only on the Commands page (`src/control/dashboard/campaigns/page.ts`).
 
 ### Contracts and kits
 
-- [ ] A `kit.json` that a run's start refuses is reported as a raw JSON dump, not in sentences (`src/harness/kit.ts`, `src/control/ui/**`).
-- [ ] An uploaded kit archive made with a Mac's `tar` is refused (`the archive has no kit.json at its top`) because of the `._` files it adds; control could skip them (`src/control/kit-upload.ts`).
+- [ ] A `kit.json` that a run's start refuses is reported as a raw JSON dump, not in sentences (`src/core/kit.ts`, `src/control/command-progress.ts`, `src/control/ui/words/rig.ts`).
+- [ ] An uploaded kit archive made with a Mac's `tar` is refused (`the archive has no kit.json at its top`) because of the `._` files it adds; control could skip them (`src/control/kits/upload.ts`).
 - [ ] The smoke kit reaches a rig only through **Judge smoke**: assigning a contract that names the smoke kit's commit to a fresh or reset rig fails with `kit commit … is not in kit smoke-cpu-kit; import its bundle first` until the check has run there.
 - [ ] Contract fields that are accepted but not used: `target.class`, `search_policy.allowed_purposes`, `min_duration` and `max_duration` outside research, `objective.policy`, `objective.secondary`, `monitor_only`, a hard constraint of kind `check`, the goal fields `independence_epochs`, `min_live_families`, `priority` and `parent`, and the research fields `scope.source_types`, `scope.languages` and `report_cadence.report_hours`. Build each one or remove it (`src/core/contract.ts`).
 - [ ] `project.repo` and `project.kit.repo` accept any text, but an import needs a lowercase id of 64 characters at most, so a contract that validates can be refused at assignment (`src/core/contract.ts`, `src/core/commands.ts`).
-- [ ] A goal's hidden tests (`held_out_cells`) are not checked against the kit at assignment, as a hill climb's are; an unknown cell fails only when the goal is verified (`src/harness/kit.ts`).
-- [ ] The judge can read a goal's threshold from a field that a check prints, but the assignment check refuses any name that is not a kit metric (`src/harness/kit.ts`, `src/harness/judge/judge.ts`).
+- [ ] A goal's hidden tests (`held_out_cells`) are not checked against the kit at assignment, as a hill climb's are; an unknown cell fails only when the goal is verified (`src/core/kit.ts`).
+- [ ] The judge can read a goal's threshold from a field that a check prints, but the assignment check refuses any name that is not a kit metric (`src/core/kit.ts`, `src/harness/judge/goals.ts`).
 - [ ] A goal's threshold is an absolute number: a goal cannot ask for a gain over the seed's own measurement, so no goal on the smoke kit fits every machine (`src/core/contract.ts`).
-- [ ] `notes` reach only hill-climb and goal workers; research workers and the research plan never read them (`src/harness/agents/scheduler.ts`).
-- [ ] A research `scope` domain with capital letters never matches, because only the fetched host is lowercased (`src/harness/research/fetcher.ts`).
+- [ ] `notes` reach only hill-climb and goal workers; research workers and the research plan never read them (`src/harness/agents/scheduler/briefs.ts`).
+- [ ] A research `scope` domain with capital letters never matches, because only the fetched host is lowercased (`src/agents/tools/fetcher.ts`).
 - [ ] The CUDA smoke kit always builds for `sm_60`: its build script reads `CUDA_ARCH`, which a build never gets (`kits/smoke-cuda/bench/build.sh`, `src/harness/judge/builds.ts`).
 
 ### Budgets and run time
 
-- [ ] A run paused by a spent budget cannot go on: `wall_hours` counts from the run's creation with paused time included, a resumed run is paused again at the next step, and no command changes a run's budget (`src/harness/agents/scheduler.ts`).
-- [ ] `budget.llm_usd` does nothing unless both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` are set, nothing warns (not `thermite contract validate`, not the assignment), and rigs that control sets up cannot be given them (`src/harness/agents/scheduler.ts`).
+- [ ] A run paused by a spent budget cannot go on: `wall_hours` counts from the run's creation with paused time included, a resumed run is paused again at the next step, and no command changes a run's budget (`src/harness/agents/scheduler/gates.ts`).
+- [ ] `budget.llm_usd` does nothing unless both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` are set, nothing warns (not `thermite contract validate`, not the assignment), and rigs that control sets up cannot be given them (`src/harness/agents/scheduler/gates.ts`).
 - [ ] The model budget counts only the workers' trial tokens, at one price for every model; the planner's calls are not counted (`src/harness/agents/registry.ts`).
-- [ ] Budgets never apply to judge-only runs or runs without a model, so `device_hours` does not bound a judge-only run (`src/harness/agents/scheduler.ts`).
-- [ ] A research run without a model, or with agents off, never closes, and its window still counts the time spent waiting for a model (`src/harness/agents/scheduler.ts`, `src/harness/research/research.ts`).
-- [ ] `budget.max_open_attempts` does not count attempts in `gating` or `audit_blocked`, so a hill climb's first step does not hold back a new trial (`src/harness/agents/scheduler.ts`).
+- [ ] Budgets never apply to judge-only runs or runs without a model, so `device_hours` does not bound a judge-only run (`src/harness/agents/scheduler/gates.ts`).
+- [ ] A research run without a model, or with agents off, never closes, and its window still counts the time spent waiting for a model (`src/harness/agents/scheduler/research/end.ts`, `src/harness/research/research/clock.ts`).
+- [ ] `budget.max_open_attempts` does not count attempts in `gating` or `audit_blocked`, so a hill climb's first step does not hold back a new trial (`src/harness/agents/scheduler/gates.ts`).
 
 ### Judge and agents
 
-- [ ] A Pi research worker's tool answers are cut at 14,000 characters of JSON, so `read_file`, which returns up to 20,000 characters, can never give its whole text (`src/harness/research/**`; worked out from the code).
-- [ ] The planner's fallback plan follows **avoid** and **always assign**, but a **try** only for a direction already in use; a new direction name in a **try** is ignored until the model planner runs (`src/harness/agents/planner.ts`).
-- [x] Fixed in `9a8f803`. Under the OpenCode harness the planner never plans: `askPlanner` replaces the sentence "Answer only by calling submit_plan once.", but `SYSTEM` breaks it over two lines, so the JSON instruction never reaches the model, both tries are refused, and every epoch uses the fallback plan after several minutes. No test reads the prompt (`src/harness/agents/planner.ts`). Found by running tutorial 2.
-- [ ] A model that answers "rate limit exceeded" ends each trial at once, and the next trial starts within seconds; a user expects the rig to wait before trying again (`src/harness/agents/scheduler.ts`). Found by running tutorial 2.
-- [ ] A paused run's queued judge jobs stay queued and keep the rig busy: the isolation and smoke checks refuse to run, and on a shared device the running run's development runs wait and give up after 10 minutes (`src/harness/ledger.ts`, `src/harness/selftest.ts`, `src/harness/agents/devrun.ts`).
+- [ ] A Pi research worker's tool answers are cut at 14,000 characters of JSON, so `read_file`, which returns up to 20,000 characters, can never give its whole text (`src/agents/tools/research.ts`, `src/harness/agents/tools/files.ts`; worked out from the code).
+- [ ] The planner's fallback plan follows **avoid** and **always assign**, but a **try** only for a direction already in use; a new direction name in a **try** is ignored until the model planner runs (`src/harness/agents/planner/fallback.ts`).
+- [x] Fixed in `9a8f803`. Under the OpenCode harness the planner never plans: `askPlanner` replaces the sentence "Answer only by calling submit_plan once.", but `SYSTEM` breaks it over two lines, so the JSON instruction never reaches the model, both tries are refused, and every epoch uses the fallback plan after several minutes. No test reads the prompt (`src/harness/agents/planner/call.ts`). Found by running tutorial 2.
+- [ ] A model that answers "rate limit exceeded" ends each trial at once, and the next trial starts within seconds; a user expects the rig to wait before trying again (`src/harness/agents/scheduler/provider.ts`). Found by running tutorial 2.
+- [ ] A paused run's queued judge jobs stay queued and keep the rig busy: the isolation and smoke checks refuse to run, and on a shared device the running run's development runs wait and give up after 10 minutes (`src/harness/ledger/jobs.ts`, `src/harness/selftest/busy.ts`, `src/harness/agents/devrun.ts`).
 - [ ] On a CPU rig, a development run's background processes run on until the trial ends and can load the CPUs that the judge times on (`src/harness/agents/devrun.ts`).
-- [ ] The smoke check's refusal on a busy rig uses the isolation self-test's text about probes (`src/harness/selftest.ts`).
-- [ ] States that nothing sets: the verdicts `invalidated` and `neutral_simplify`, the job state `cancelled`, and the goal and family status `blocked` (`src/harness/ledger.ts`, `src/harness/schema.ts`).
+- [ ] The smoke check's refusal on a busy rig uses the isolation self-test's text about probes (`src/harness/selftest/busy.ts`).
+- [ ] States that nothing sets: the verdicts `invalidated` and `neutral_simplify`, the job state `cancelled`, and the goal and family status `blocked` (`src/core/verdicts.ts`, `src/harness/schema/first.ts`, `src/harness/schema/before-rename.ts`).
 
 ### Models and subscriptions
 
-- [ ] **Effort** on Edit rig does nothing under OpenCode v2: its config and command line carry no reasoning effort (`src/harness/agents/opencode.ts`).
-- [ ] Edit rig offers the `xhigh` and `max` efforts for every provider, but only a Claude subscription takes them; the others get `high` (`src/control/api.ts`, `src/control/dashboard.ts`).
-- [ ] Research mode cannot use a Claude subscription or OpenCode's own free models, and nothing warns before the run starts (`src/harness/main.ts`). Partly fixed: research trials run in OpenCode when the agents' harness is OpenCode, so its free models serve research there (`e8a557b`), and the dashboard refuses to start a research run where such a model would run in Pi (`301853e`, `d1d34e8`). Still open: a Claude subscription fails only at each trial, with nothing before the start.
-- [ ] The model check tests only the workers' model, not a planner or advisor model given on Edit rig (`src/harness/service.ts`).
-- [ ] A Claude model on an image without Claude Code fails the model check with the spawn's error, not a message that the image has no Claude Code (`src/harness/agents/claude-code.ts`).
-- [ ] An OpenAI-compatible provider needs an API key even when its model server needs none (`src/control/store.ts`, `src/harness/agents/model.ts`).
-- [ ] A ChatGPT sign-in's access token lasts an hour and only control renews it, so a rig whose control is away for longer, or that has a `chatgpt` route from its own settings, loses its model with no warning (`src/control/chatgpt.ts`, `src/harness/agents/model.ts`).
-- [ ] A ChatGPT sign-in that has started is lost when control restarts, because it is kept in memory only (`src/control/chatgpt.ts`).
-- [ ] Edit rig's model groups do not say which harness they need, as Providers does ("OpenCode harness only", "ChatGPT subscription: Pi or OpenCode"), so the rule shows only as an error on save (`src/control/dashboard.ts`).
-- [ ] Out-of-date texts on Providers: the intro names only Pi and OpenCode v2 as harnesses, and an unknown type gives "A provider is OpenAI-compatible or Anthropic." (`src/control/dashboard.ts`).
+- [ ] **Effort** on Edit rig does nothing under OpenCode v2: its config and command line carry no reasoning effort (`src/agents/programs/opencode/index.ts`).
+- [ ] Edit rig offers the `xhigh` and `max` efforts for every provider, but only a Claude subscription takes them; the others get `high` (`src/control/api/model-routes.ts`, `src/control/dashboard/rigs/edit.ts`).
+- [ ] Research mode cannot use a Claude subscription or OpenCode's own free models, and nothing warns before the run starts (`src/harness/controller/agents.ts`). Partly fixed: research trials run in OpenCode when the agents' harness is OpenCode, so its free models serve research there (`e8a557b`), and the dashboard refuses to start a research run where such a model would run in Pi (`301853e`, `d1d34e8`). Still open: a Claude subscription fails only at each trial, with nothing before the start.
+- [ ] The model check tests only the workers' model, not a planner or advisor model given on Edit rig (`src/harness/service/checks.ts`).
+- [ ] A Claude model on an image without Claude Code fails the model check with the spawn's error, not a message that the image has no Claude Code (`src/agents/programs/claude-code/index.ts`).
+- [ ] An OpenAI-compatible provider needs an API key even when its model server needs none (`src/control/store/providers.ts`, `src/agents/model/index.ts`).
+- [ ] A ChatGPT sign-in's access token lasts an hour and only control renews it, so a rig whose control is away for longer, or that has a `chatgpt` route from its own settings, loses its model with no warning (`src/control/providers/chatgpt.ts`, `src/agents/model/index.ts`).
+- [ ] A ChatGPT sign-in that has started is lost when control restarts, because it is kept in memory only (`src/control/providers/chatgpt.ts`).
+- [ ] Edit rig's model groups do not say which harness they need, as Providers does ("OpenCode harness only", "ChatGPT subscription: Pi or OpenCode"), so the rule shows only as an error on save (`src/control/dashboard/rigs/edit.ts`).
+- [ ] Out-of-date texts on Providers: the intro names only Pi and OpenCode v2 as harnesses, and an unknown type gives "A provider is OpenAI-compatible or Anthropic." (`src/control/dashboard/settings/page.ts`, `src/control/dashboard/settings/providers.ts`).
 
 ### Supervisor and advisors
 
-- [ ] Teacher rounds also advise the **Judge smoke** check's own run while it runs, which costs a round of a paid model for no use (`src/supervisor/**`).
-- [ ] An advisors file with a panel of one reviewer (or two with the same name) loads; only a posted review is refused later (`src/supervisor/advisors.ts`, `src/harness/reviews.ts`).
-- [ ] No command checks an advisors file before the supervisor reads it, so a mistake shows only after a restart, as an error in the supervisor's log (`src/supervisor/advisors.ts`).
-- [ ] The advisors' `max_usd_per_day` counts only `openai` advisors in the advisors file with prices set; advisors given a model on Edit rig, and `cli` and `claude-code` advisors, count as $0, and Edit rig has no price field (`src/supervisor/advisor-routes.ts`, `src/supervisor/advisors.ts`).
-- [ ] The spending check runs before each role's part of a round, not before each call, so one round can go past the limit (`src/supervisor/advise.ts`).
+- [ ] Teacher rounds also advise the **Judge smoke** check's own run while it runs, which costs a round of a paid model for no use (`src/supervisor/advisors/pass/teachers.ts`).
+- [ ] An advisors file with a panel of one reviewer (or two with the same name) loads; only a posted review is refused later (`src/supervisor/advisors/config.ts`, `src/harness/reviews.ts`).
+- [ ] No command checks an advisors file before the supervisor reads it, so a mistake shows only after a restart, as an error in the supervisor's log (`src/supervisor/advisors/config.ts`).
+- [ ] The advisors' `max_usd_per_day` counts only `openai` advisors in the advisors file with prices set; advisors given a model on Edit rig, and `cli` and `claude-code` advisors, count as $0, and Edit rig has no price field (`src/supervisor/advisors/routes.ts`, `src/supervisor/advisors/pass/teachers.ts`).
+- [ ] The spending check runs before each role's part of a round, not before each call, so one round can go past the limit (`src/supervisor/advisors/pass/context.ts`).
 - [ ] Advisors on rigs that control sets up come only from Edit rig, so they cannot have `fetch_domains`, a knowledge base, a spending limit or another `teacher_minutes`. Since goal 065, their teacher pair can search an outside knowledge base granted to the campaign.
-- [ ] A review goal needs a review panel of two or more: with none, or with a panel of one (which the schema accepts), its reviews are never answered and the owner cannot accept it directly (`src/harness/reviews.ts`, `src/supervisor/advisors.ts`).
-- [ ] With two teachers and no combiner, only the first answer is used, so the second call is spent for nothing; a teacher pair from Edit rig always has two (`src/supervisor/advisors.ts`, `src/supervisor/advisor-routes.ts`).
-- [ ] The combiner's prompt always says "Two independent reviewers", also when there is one teacher (`src/supervisor/advisors.ts`).
+- [ ] A review goal needs a review panel of two or more: with none, or with a panel of one (which the schema accepts), its reviews are never answered and the owner cannot accept it directly (`src/harness/reviews.ts`, `src/supervisor/advisors/config.ts`).
+- [ ] With two teachers and no combiner, only the first answer is used, so the second call is spent for nothing; a teacher pair from Edit rig always has two (`src/supervisor/advisors/teachers/round.ts`, `src/supervisor/advisors/routes.ts`).
+- [ ] The combiner's prompt always says "Two independent reviewers", also when there is one teacher (`src/agents/roles/merged-by.ts`).
 - [ ] The advisors file is read only when the supervisor starts, while Edit rig's roles are read every round (`src/supervisor/main.ts`).
 - [ ] The supervisor image has no agent command line for the `cli` advisor runtime, and nothing says how to add one (`containers/supervisor/Containerfile`).
 
@@ -190,33 +190,33 @@ The writers and verifiers of the documentation site (goal [060](_completed/060-d
 
 ### REST, MCP and command line
 
-- [ ] `thermite assign` with a contract that names no project commit, and no `--seed` or `--seed-commit`, fails with `--seed-commit must be a full commit id`, which doesn't say a commit is missing (`src/cli/thermite.ts`).
-- [ ] A refusal on a plain dashboard page (such as `bad form token`) is written to the audit log with only its status, not its reason (`src/control/api.ts`).
-- [ ] Control answers a refused request with 500 and logs it as `failed`, and a body that fails its schema gets only `invalid request`, without the schema's message (`src/control/api.ts`, `src/control/issue.ts`).
-- [ ] A pending command can be cancelled only over REST: there is no dashboard button and no `thermite` command, and the Commands page shows no command ids (`src/control/api.ts`, `src/control/dashboard.ts`).
-- [ ] A cancelled command shows as `failed`, and the Commands page styles a `cancelled` status that never occurs (`src/control/store.ts`, `src/control/dashboard.ts`).
-- [ ] A cancel can lose a race with delivery: the harness may still apply the command, and its record later sets the status to `delivered` (`src/control/store.ts`, `src/supervisor/relay.ts`).
-- [ ] An expired command for a rig that never asks again stays `pending` for ever (`src/control/store.ts`).
-- [ ] A command's time to live can run out while the supervisor fetches what it names: the dashboard always gives 60 minutes, and a `propagate` sent through `POST /v1/commands` gets 60 minutes, not the 24 hours of control's own propagate paths (`src/control/new-campaign.ts`, `src/control/api.ts`, `src/control/issue.ts`).
-- [ ] A command's outcome changes shape after the rig's next report: the harness's record replaces the supervisor's `{"status": …}` (`src/control/store.ts`, `src/supervisor/relay.ts`).
-- [ ] The harness records an owner-only refusal as a failed command, not as a `command_rejected` event like every other refusal (`src/harness/service.ts`).
-- [ ] `reset_workers.reseed_commit` is accepted by the schema and always refused (`src/core/commands.ts`, `src/harness/service.ts`).
-- [ ] The same token role reads different things over REST and MCP: the reader token reads rigs, runs and events over MCP, but only `/metrics` and the live log over REST (`src/control/api.ts`, `src/control/mcp.ts`).
-- [ ] MCP `retire_rig` finds only rigs that have reported, while REST also retires enrolled or tokens-file rigs that never reported (`src/control/mcp.ts`, `src/control/api.ts`).
-- [ ] MCP `recent_events` takes a `limit` up to 500 but returns at most 50 events (`src/control/mcp.ts`, `src/control/views.ts`).
-- [ ] Two rules for a rig's name: REST enrollment takes 2 to 40 characters that start and end with a letter or digit, and Add a rig and MCP `add_cluster_rig` take up to 63 that may end with a dash (`src/control/store.ts`, `src/control/machines/deploy.ts`).
-- [ ] `POST /v1/rigs/<rig>/reset` accepts an unknown rig and fails a step later (`src/control/api.ts`, `src/control/lifecycle.ts`).
-- [ ] `GET /v1/gpu-clouds/<name>/tests` answers `[]`, not 404, for a cloud that is not in Providers (`src/control/api.ts`).
-- [ ] `GET /v1/commands` cannot filter by rig, and `GET /v1/audit` cannot filter at all, while MCP `control_log` filters by action (`src/control/api.ts`).
+- [ ] `thermite assign` with a contract that names no project commit, and no `--seed` or `--seed-commit`, fails with `--seed-commit must be a full commit id`, which doesn't say a commit is missing (`src/cli/thermite/issue.ts`).
+- [ ] A refusal on a plain dashboard page (such as `bad form token`) is written to the audit log with only its status, not its reason (`src/control/api/index.ts`).
+- [ ] Control answers a refused request with 500 and logs it as `failed`, and a body that fails its schema gets only `invalid request`, without the schema's message (`src/control/api/index.ts`, `src/common/errors.ts`, `src/control/issue/index.ts`).
+- [ ] A pending command can be cancelled only over REST: there is no dashboard button and no `thermite` command, and the Commands page shows no command ids (`src/control/api/relay.ts`, `src/control/dashboard/commands.ts`).
+- [ ] A cancelled command shows as `failed`, and the Commands page styles a `cancelled` status that never occurs (`src/control/store/commands.ts`, `src/control/dashboard/commands.ts`).
+- [ ] A cancel can lose a race with delivery: the harness may still apply the command, and its record later sets the status to `delivered` (`src/control/store/commands.ts`, `src/supervisor/relay/index.ts`).
+- [ ] An expired command for a rig that never asks again stays `pending` for ever (`src/control/store/commands.ts`).
+- [ ] A command's time to live can run out while the supervisor fetches what it names: the dashboard always gives 60 minutes, and a `propagate` sent through `POST /v1/commands` gets 60 minutes, not the 24 hours of control's own propagate paths (`src/control/campaigns/new.ts`, `src/control/api/commands.ts`, `src/control/issue/index.ts`).
+- [ ] A command's outcome changes shape after the rig's next report: the harness's record replaces the supervisor's `{"status": …}` (`src/control/store/events.ts`, `src/supervisor/relay/index.ts`).
+- [ ] The harness records an owner-only refusal as a failed command, not as a `command_rejected` event like every other refusal (`src/harness/service/commands.ts`).
+- [ ] `reset_workers.reseed_commit` is accepted by the schema and always refused (`src/core/commands.ts`, `src/harness/service/commands.ts`).
+- [ ] The same token role reads different things over REST and MCP: the reader token reads rigs, runs and events over MCP, but only `/metrics` and the live log over REST (`src/control/api/context.ts`, `src/control/mcp/context.ts`).
+- [ ] MCP `retire_rig` finds only rigs that have reported, while REST also retires enrolled or tokens-file rigs that never reported (`src/control/mcp/rigs.ts`, `src/control/api/rigs.ts`).
+- [ ] MCP `recent_events` takes a `limit` up to 500 but returns at most 50 events (`src/control/mcp/reads.ts`, `src/control/views/fold/index.ts`).
+- [ ] Two rules for a rig's name: REST enrollment takes 2 to 40 characters that start and end with a letter or digit, and Add a rig and MCP `add_cluster_rig` take up to 63 that may end with a dash (`src/core/ids.ts`, `src/control/machines/deploy.ts`).
+- [ ] `POST /v1/rigs/<rig>/reset` accepts an unknown rig and fails a step later (`src/control/api/lifecycle.ts`, `src/control/lifecycle.ts`).
+- [ ] `GET /v1/gpu-clouds/<name>/tests` answers `[]`, not 404, for a cloud that is not in Providers (`src/control/api/gpu-clouds.ts`).
+- [ ] `GET /v1/commands` cannot filter by rig, and `GET /v1/audit` cannot filter at all, while MCP `control_log` filters by action (`src/control/api/commands.ts`, `src/control/api/records.ts`).
 - [ ] Six metric families have no `# HELP` or `# TYPE` line, among them `thermite_trials_total` and `thermite_tokens_total` (`src/control/metrics.ts`).
-- [ ] `thermite status` exits 0 when the answer is an error (`src/cli/thermite.ts`).
-- [ ] `thermite submit` cannot send `claim`, `lane` or `parent`, which the harness's proposer route takes (`src/cli/thermite.ts`).
-- [ ] `thermite assign` ignores `--seed`, `--seed-commit` and `--kit` for a research contract, with no warning (`src/cli/thermite.ts`).
-- [ ] `thermite assign` has no option to name a Git access for a private repository (`src/cli/thermite.ts`).
-- [ ] `--note` (`--direction` before 2026-10-21) is stored with the run and never read (`src/harness/service.ts`).
-- [ ] `thermite assign-payload` has no `--promotion`, which `thermite assign` has (`src/cli/thermite.ts`).
+- [ ] `thermite status` exits 0 when the answer is an error (`src/cli/thermite/proposer.ts`).
+- [ ] `thermite submit` cannot send `claim`, `lane` or `parent`, which the harness's proposer route takes (`src/cli/thermite/proposer.ts`).
+- [ ] `thermite assign` ignores `--seed`, `--seed-commit` and `--kit` for a research contract, with no warning (`src/cli/thermite/issue.ts`).
+- [ ] `thermite assign` has no option to name a Git access for a private repository (`src/cli/thermite/issue.ts`).
+- [ ] `--note` (`--direction` before 2026-10-21) is stored with the run and never read (`src/harness/service/assignment.ts`).
+- [ ] `thermite assign-payload` has no `--promotion`, which `thermite assign` has (`src/cli/thermite/issue.ts`).
 - [ ] `thermite rig add` writes a rig's files, but Thermite ships no deployment that reads them; only Add a rig on the dashboard sets rigs up (`src/cli/rig.ts`).
-- [ ] `thermite keys generate` has no use: control makes its own key pair at first start, and nothing says how a generated pair would reach control (`src/cli/thermite.ts`).
+- [ ] `thermite keys generate` has no use: control makes its own key pair at first start, and nothing says how a generated pair would reach control (`src/cli/thermite/local.ts`).
 
 ## Why
 

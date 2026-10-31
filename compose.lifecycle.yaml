@@ -7,10 +7,11 @@
 #
 # (Rootless Podman: the socket belongs to your user, so control runs as the container's root,
 # which is your user on the host, and keeps DAC_OVERRIDE to use its state volume, which belongs
-# to the image's control user.)
+# to the image's control user. Its group stays control's, 10001: the bus's server reads the key
+# control writes for it through that group.)
 services:
   control:
-    user: "0:0"
+    user: "0:10001"
     cap_add: [DAC_OVERRIDE]
     # SELinux hosts (for example a Podman machine) label the socket for the host only.
     security_opt: ["label=disable"]

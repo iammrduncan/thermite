@@ -1,31 +1,139 @@
 #!/usr/bin/env node
-// Test only (scripts/claude-acceptance.mjs): a stand-in for Claude Code's headless mode. It
-// prints the stream-json Claude Code prints (init, assistant turns, tool results, a rate-limit
-// event, the result) and does what each of Thermite's calls asks: the model check's echo, the
+// Test only (scripts/acceptance/claude.mjs): a stand-in for Claude Code, headless and in its own
+// terminal (goal 169). It does what each of Thermite's calls asks: the model check's echo, the
 // planner's JSON plan, a trial's change and its submission with thermite-trial, or an advisor's
-// answer (the prompt on stdin, as the supervisor's advisors send it). It reports
-// what it was given (its user, whether the token came and how, and the safety flags), never the
-// token itself. It refuses to run without THERMITE_FAKE_CLAUDE=1, so it can't stand in by mistake.
-const { execSync } = require("node:child_process");
-if (process.env.THERMITE_FAKE_CLAUDE !== "1" && !require("node:fs").existsSync("/opt/fake-claude/enabled")) {
+// answer (the prompt on stdin, as the supervisor's advisors send it). It reports what it was given
+// (its user, whether the token came and how, the safety flags, in a terminal its seeds and
+// settings), never the token itself. `--version` prints a version, as Claude Code prints its own.
+//
+// Headless (`-p`), it prints the stream-json Claude Code prints (init, assistant turns, tool
+// results, a rate-limit event, the result). In its terminal (no `-p`; the terminal host starts it
+// on a pseudo-terminal), it draws a screen, takes its first message after `--` and each later one
+// typed (a bracketed paste too, then Enter), Esc as an interrupt and `/exit` as its end, and writes
+// its transcript as Claude Code 2.1.308 writes one, in its home, readable by its own user only:
+// each prompt, each reply with its usage, each tool's result, a Stop hook's block, the end of each
+// turn (`turn_duration`) and its totals at `/exit` (`cost-state`).
+//
+// In both, it runs the hooks Thermite's settings name, as Claude Code does: SessionStart,
+// UserPromptSubmit, PreToolUse and PostToolUse around each command, Stop at the end of each turn
+// (a Stop that blocks sends it on with the reason) and SessionEnd, each with its input on stdin,
+// and takes a PostToolUse hook's added context in. A trial's first turn first waits, at most
+// WAIT_MESSAGES_MS, for two of the owner's messages to wait for it (as an agent may look with its
+// trial's token), so the acceptance can see one given after a tool and one at the turn's end; a
+// turn whose Stop hook does not block ends there, and the next turn (the continuation, or the
+// nudge typed into its terminal) submits.
+//
+// In its terminal, a trial's first turn meets a full 5-hour usage window that resets WINDOW_S
+// later, as Claude Code records one: its own message with the reset, StopFailure, and the turn's
+// end. With autoContinueAtUsageLimit on, as Thermite's settings turn it, it waits for the reset and
+// goes on by itself (an auto-continuation prompt in its transcript), then waits, at most
+// WAIT_TYPED_MS, for the owner's input queued for the reset to be typed in; without the setting, it
+// shows its menu, which waits for a key, and never goes on. Text typed while it works is taken into
+// the turn, as Claude Code takes it (a queued command); text typed during its wait is only counted.
+// The planner in its terminal answers its plan; in a run's first round it holds its turn until one
+// of the owner's messages comes at its end, through its Stop hook (planInTerminal). The auditor in
+// its terminal holds its turn the same way, and for one line typed into it (auditInTerminal). It refuses to
+// run without THERMITE_FAKE_CLAUDE=1 or its mounted folder, so it can't stand in by mistake.
+const { execSync, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+if (process.env.THERMITE_FAKE_CLAUDE !== "1" && !fs.existsSync("/opt/fake-claude/enabled")) {
   process.stderr.write("test-claude: not enabled\n");
   process.exit(2);
 }
 const args = process.argv.slice(2);
+if (args[0] === "--version") {
+  process.stdout.write("2.1.308 (Claude Code)\n");
+  process.exit(0);
+}
 const val = (f) => (args.includes(f) ? args[args.indexOf(f) + 1] : undefined);
-// The prompt follows -p, or comes on stdin (the advisors: `claude -p --output-format json ...`).
+const terminal = !args.includes("-p");
+const dash = args.indexOf("--");
+const first = terminal && dash >= 0 ? args.slice(dash + 1).join(" ") : undefined;
+// The prompt follows -p, or comes on stdin (the advisors: `claude -p --output-format json ...`); in
+// its terminal, the first message.
 const given = val("-p");
-const prompt = given && !given.startsWith("--") ? given : require("node:fs").readFileSync(0, "utf8");
-const session = val("--resume") ?? `s-${process.pid}`;
-const out = (e) => process.stdout.write(`${JSON.stringify({ session_id: session, ...e })}\n`);
+const prompt = terminal
+  ? (first ?? "")
+  : given && !given.startsWith("--")
+    ? given
+    : fs.readFileSync(0, "utf8");
+const resumed = val("--resume");
+const session = resumed ?? val("--session-id") ?? `s-${process.pid}`;
+const settings = (() => {
+  try {
+    return JSON.parse(val("--settings") ?? "{}");
+  } catch {
+    return {};
+  }
+})();
+// Thermite's hooks for the run, from its settings, as Claude Code runs them: without a shell, the
+// input on stdin; what a hook prints is its answer.
+const hooks = settings.hooks ?? {};
+// Its transcript: headless, under a fixed project name; in its terminal, under the workspace's path
+// with each other character a dash, as Claude Code names the folder.
+const transcript = path.join(
+  process.env.HOME ?? "/tmp",
+  ".claude",
+  "projects",
+  terminal ? process.cwd().replace(/[^A-Za-z0-9]/g, "-") : "-workspace",
+  `${session}.jsonl`,
+);
+const line = (e) => `${JSON.stringify(e)}\n`;
+/** A record of its transcript, as Claude Code writes one: 0600, in a 0700 folder. */
+const record = (e) => {
+  fs.mkdirSync(path.dirname(transcript), { recursive: true, mode: 0o700 });
+  fs.appendFileSync(
+    transcript,
+    line({ type: e.type, sessionId: session, timestamp: new Date().toISOString(), ...e }),
+    { mode: 0o600 },
+  );
+};
+// Headless, its stream-json; in its terminal, a line on its screen.
+const shown = [];
+let input = "";
+const draw = () => {
+  const lines = [`Claude Code stand-in · ${session}`, ...shown.slice(-14), `> ${input}`];
+  process.stdout.write(`\x1b[H\x1b[2J${lines.join("\r\n")}`);
+};
+const show = (text) => {
+  shown.push(String(text).split("\n")[0].slice(0, 110));
+  draw();
+};
+const out = (e) => {
+  if (terminal) show(e.type === "assistant" ? `● ${JSON.stringify(e.message.content).slice(0, 100)}` : e.type);
+  else process.stdout.write(`${JSON.stringify({ session_id: session, ...e })}\n`);
+};
 let n = 0;
-const turn = (content) =>
-  out({
-    type: "assistant",
-    message: { id: `msg_${++n}`, content, usage: { input_tokens: 100, cache_read_input_tokens: 900, output_tokens: 20 } },
+const usage = { input_tokens: 100, cache_read_input_tokens: 900, output_tokens: 20 };
+/** One reply of the model's: in its output headless, in its transcript in its terminal. */
+const turn = (content) => {
+  const message = { id: `msg_${session.slice(0, 8)}_${++n}`, model: val("--model"), role: "assistant", content, usage };
+  if (terminal) record({ type: "assistant", message });
+  out({ type: "assistant", message });
+};
+let hooksRun = 0;
+const hook = (event, fields) => {
+  const h = hooks[event]?.[0]?.hooks?.[0];
+  if (!h) return {};
+  const r = spawnSync(h.command, h.args ?? [], {
+    input: JSON.stringify({ session_id: session, transcript_path: transcript, cwd: process.cwd(), permission_mode: "bypassPermissions", hook_event_name: event, ...fields }),
+    encoding: "utf8",
+    timeout: (h.timeout ?? 60) * 1000,
   });
+  if (r.status === 0) hooksRun++;
+  try {
+    return JSON.parse(r.stdout || "{}");
+  } catch {
+    return {};
+  }
+};
+// What the hooks gave it inside its turns: a PostToolUse hook's added context, a Stop's reason.
+const steered = [];
 const bash = (command) => {
-  turn([{ type: "tool_use", id: `tu_${n + 1}`, name: "Bash", input: { command } }]);
+  const id = `tu_${session.slice(0, 8)}_${n + 1}`;
+  hook("PreToolUse", { tool_name: "Bash", tool_input: { command }, tool_use_id: id });
+  turn([{ type: "tool_use", id, name: "Bash", input: { command } }]);
   let output;
   let isError = false;
   try {
@@ -34,8 +142,40 @@ const bash = (command) => {
     output = `${e.stdout ?? ""}${e.stderr ?? ""}`;
     isError = true;
   }
-  out({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: `tu_${n}`, content: output, is_error: isError }] } });
+  const result = { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: output, is_error: isError }] };
+  if (terminal) record({ type: "user", message: result });
+  out({ type: "user", message: result });
+  const after = hook("PostToolUse", { tool_name: "Bash", tool_input: { command }, tool_response: { stdout: output, stderr: "", interrupted: false }, tool_use_id: id });
+  const context = after.hookSpecificOutput?.additionalContext;
+  if (context) steered.push(`after-tool:${/owner/.test(context) ? "owner" : "other"}`);
   return output;
+};
+/** The end of a turn: the Stop hook, which may send it on; its reason when it did, else false. */
+const stop = (last) => {
+  const said = hook("Stop", { stop_hook_active: steered.some((x) => x.startsWith("turn-end")), last_assistant_message: last });
+  if (said.decision !== "block" || !said.reason) return false;
+  steered.push(`turn-end:${/owner/.test(said.reason) ? "owner" : "other"}`);
+  // In its terminal, the block is the user's side of the turn, as Claude Code records it.
+  if (terminal) record({ type: "attachment", attachment: { type: "hook_blocking_error", blockingError: { blockingError: said.reason, command: "thermite" } } });
+  return said.reason;
+};
+/** Waits, at most `ms`, until `count` of the owner's messages wait for this trial. */
+const WAIT_MESSAGES_MS = 90_000;
+const waitMessages = async (count, ms = WAIT_MESSAGES_MS) => {
+  const url = process.env.THERMITE_HARNESS_URL;
+  const auth = process.env.THERMITE_TRIAL_AUTH ?? "";
+  if (!url || !auth.startsWith("trial.")) return 0;
+  const end = Date.now() + ms;
+  for (;;) {
+    try {
+      const r = await fetch(`${url}/v1/trial/messages`, { headers: { authorization: `Bearer ${auth}` } });
+      const got = (await r.json()).messages?.length ?? 0;
+      if (got >= count || Date.now() > end) return got;
+    } catch {
+      if (Date.now() > end) return 0;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 };
 // The token: on the file descriptor the harness or the supervisor names, as Claude Code reads it
 // there. A token in the environment as well shows as env+fd3, and alone as env.
@@ -45,12 +185,22 @@ let token = process.env.CLAUDE_CODE_OAUTH_TOKEN ?? "";
 let tokenOn = token ? "env" : "none";
 if (tokenFd) {
   try {
-    token = require("node:fs").readFileSync(Number(tokenFd), "utf8");
+    token = fs.readFileSync(Number(tokenFd), "utf8");
     tokenOn = token ? `${inEnv ? "env+" : ""}fd${tokenFd}` : "empty-fd";
   } catch {
     tokenOn = "unreadable-fd";
   }
 }
+/** In its terminal: whether its home was seeded so that no screen waits (claudeTerminalSeeds). */
+const seeded = () => {
+  try {
+    const state = JSON.parse(fs.readFileSync(path.join(process.env.HOME ?? "/", ".claude.json"), "utf8"));
+    const project = state.projects?.[process.cwd()] ?? {};
+    return state.hasCompletedOnboarding === true && project.hasTrustDialogAccepted === true ? "yes" : "no";
+  } catch {
+    return "no";
+  }
+};
 const facts = [
   `uid=${process.getuid()}`,
   `token=${token.startsWith("sk-ant-oat01-") ? "set" : "missing"}`,
@@ -58,77 +208,338 @@ const facts = [
   `scrub=${process.env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB ?? "unset"}`,
   `strict_mcp=${args.includes("--strict-mcp-config")}`,
   `no_settings=${val("--setting-sources") === ""}`,
+  ...(terminal
+    ? [
+        `mode=terminal`,
+        `tty=${process.stdin.isTTY === true && process.stdout.isTTY === true}`,
+        `seeded=${seeded()}`,
+        `bypass_warning=${settings.skipDangerousModePermissionPrompt === true ? "skipped" : "shown"}`,
+        `no_questions=${val("--disallowedTools") === "AskUserQuestion"}`,
+      ]
+    : ["mode=headless"]),
   `model=${val("--model")}`,
 ].join(" ");
+const hookFacts = () => `hooks=${hooksRun} steered=${steered.join(",") || "none"}`;
+/** Seconds from its full usage window to the reset. */
+const WINDOW_S = 30;
+/** How long, after it went on, it waits for the owner's input queued for the reset. */
+const WAIT_TYPED_MS = 20_000;
+// Its usage window in its terminal (none, waiting, went-on, or menu), the first word of each line
+// typed into a turn, and how many lines were typed during the wait.
+let window = "none";
+const typedIn = [];
+let typedInWait = 0;
+const windowFacts = () =>
+  `window=${window} typed=${typedIn.map((t) => t.split(/\s/)[0].replace(/[^A-Za-z0-9-]/g, "").slice(0, 40)).join(",") || "none"} typed_in_wait=${typedInWait}`;
 // One compaction, as Claude Code makes one (goal 070): its transcript in its home, then the
 // PreCompact hook Thermite's settings name (run without a shell, its input on stdin), the
 // PostCompact hook with the summary, which names what the first hook said, then the boundary and
-// the summary in the transcript, and the boundary in its output.
+// the summary in the transcript, and headless the boundary in its output.
 const compact = () => {
-  const settings = val("--settings");
-  if (!settings) return "no-settings";
-  const hook = JSON.parse(settings).hooks?.PreCompact?.[0]?.hooks?.[0];
-  if (!hook) return "no-hook";
-  const fs = require("node:fs");
-  const path = require("node:path");
-  const transcript = path.join(process.env.HOME, ".claude", "projects", "-workspace", `${session}.jsonl`);
+  const pre = hooks.PreCompact?.[0]?.hooks?.[0];
+  if (!val("--settings")) return "no-settings";
+  if (!pre) return "no-hook";
   fs.mkdirSync(path.dirname(transcript), { recursive: true });
-  const line = (e) => `${JSON.stringify(e)}\n`;
-  fs.appendFileSync(transcript, line({ type: "user", message: { role: "user", content: prompt.slice(0, 2000) } }));
-  const r = require("node:child_process").spawnSync(hook.command, hook.args ?? [], {
+  if (!terminal) fs.appendFileSync(transcript, line({ type: "user", message: { role: "user", content: prompt.slice(0, 2000) } }));
+  const r = spawnSync(pre.command, pre.args ?? [], {
     input: JSON.stringify({ session_id: session, transcript_path: transcript, cwd: process.cwd(), hook_event_name: "PreCompact", trigger: "auto", custom_instructions: null }),
     encoding: "utf8",
   });
   const said = (r.stdout ?? "").trim();
-  const post = JSON.parse(settings).hooks?.PostCompact?.[0]?.hooks?.[0];
+  const post = hooks.PostCompact?.[0]?.hooks?.[0];
   if (post)
-    require("node:child_process").spawnSync(post.command, post.args ?? [], {
+    spawnSync(post.command, post.args ?? [], {
       input: JSON.stringify({ session_id: session, transcript_path: transcript, cwd: process.cwd(), hook_event_name: "PostCompact", trigger: "auto", compact_summary: `The kernel needs a tidy-up. ${said}` }),
       encoding: "utf8",
     });
-  fs.appendFileSync(
-    transcript,
-    line({ type: "system", subtype: "compact_boundary", content: "Conversation compacted", compactMetadata: { trigger: "auto", preTokens: 150000 } }) +
-      line({ type: "user", isCompactSummary: true, message: { role: "user", content: `The kernel needs a tidy-up. ${said}` } }),
-  );
-  out({ type: "system", subtype: "compact_boundary", compact_metadata: { trigger: "auto", pre_tokens: 150000, post_tokens: 12000 } });
+  const boundary = { type: "system", subtype: "compact_boundary", content: "Conversation compacted", compactMetadata: { trigger: "auto", preTokens: 150000 } };
+  const summary = { type: "user", isCompactSummary: true, message: { role: "user", content: `The kernel needs a tidy-up. ${said}` } };
+  if (terminal) {
+    record(boundary);
+    record(summary);
+  } else {
+    fs.appendFileSync(transcript, line(boundary) + line(summary));
+    out({ type: "system", subtype: "compact_boundary", compact_metadata: { trigger: "auto", pre_tokens: 150000, post_tokens: 12000 } });
+  }
   return r.status === 0 && /^Thermite keeps the whole conversation/.test(said) ? "hook" : `hook-failed-${r.status}`;
 };
-out({ type: "system", subtype: "init", tools: val("--tools") === "" ? [] : ["Bash"], mcp_servers: [], model: val("--model") });
-const reset = Math.floor(Date.now() / 1000) + 3 * 3600;
-out({
-  type: "rate_limit_event",
-  rate_limit_info: {
-    status: "allowed",
-    resetsAt: reset,
-    rateLimitType: "five_hour",
-    unifiedWindows: { five_hour: { utilization: 0.42, resetsAt: reset }, seven_day: { utilization: 0.17, resetsAt: reset + 4 * 86400 } },
-  },
-});
-let answer = "done";
-const word = /run exactly this command: echo (thermite-[a-z0-9]+)/.exec(prompt)?.[1];
-if (word) {
-  answer = bash(`echo ${word}`).trim();
-} else if (/The campaign, as JSON:/.test(prompt)) {
-  const ctx = JSON.parse(prompt.slice(prompt.indexOf("The campaign, as JSON:") + "The campaign, as JSON:".length));
-  answer = JSON.stringify({
-    new_families: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
-    assignments: ctx.lanes.map((lane) => ({ lane, family: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
-    notes: `planned by the Claude Code stand-in (${facts})`,
-  });
-  turn([{ type: "text", text: answer }]);
-} else if (/You audit a candidate change/.test(prompt)) {
-  // The auditor, run by the supervisor: what it was given, as its reasons.
-  const extra = `tools=${val("--tools") === "" ? "none" : val("--tools")} effort=${val("--effort") ?? "default"}`;
-  answer = JSON.stringify({
-    decision: "clear",
-    reasons: `audited by the Claude Code stand-in (${extra} ${facts})`,
-    citations: ["diff"],
-  });
-  turn([{ type: "text", text: answer }]);
-} else if (/thermite-trial submit/.test(prompt)) {
+/** The trial's change and its submission, after a compaction, with what it was given. */
+const submitChange = () => {
   const kept = compact();
-  bash(`printf '\\n/* tidied by claude code */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'claude code harness: a tidied kernel (compacted=${kept} ${facts})'`);
+  bash(`printf '\\n/* tidied by claude code */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'claude code harness: a tidied kernel (compacted=${kept} ${hookFacts()} ${windowFacts()} ${facts})'`);
   turn([{ type: "text", text: "Submitted." }]);
+  stop("Submitted.");
+};
+// A trial's prompt names thermite-trial submit; in its terminal the first message may come typed,
+// as a real program takes it, and then decides it (runTerminal).
+let trial = /thermite-trial submit/.test(prompt);
+
+if (terminal) runTerminal();
+else runHeadless();
+
+/** Headless: one prompt, its work, and the result. */
+function runHeadless() {
+  out({ type: "system", subtype: "init", tools: val("--tools") === "" ? [] : ["Bash"], mcp_servers: [], model: val("--model") });
+  const reset = Math.floor(Date.now() / 1000) + 3 * 3600;
+  out({
+    type: "rate_limit_event",
+    rate_limit_info: {
+      status: "allowed",
+      resetsAt: reset,
+      rateLimitType: "five_hour",
+      unifiedWindows: { five_hour: { utilization: 0.42, resetsAt: reset }, seven_day: { utilization: 0.17, resetsAt: reset + 4 * 86400 } },
+    },
+  });
+  let answer = "done";
+  let working = false;
+  const word = /run exactly this command: echo (thermite-[a-z0-9]+)/.exec(prompt)?.[1];
+  if (word) {
+    answer = bash(`echo ${word}`).trim();
+  } else if (/The campaign, as JSON:/.test(prompt)) {
+    const ctx = JSON.parse(prompt.slice(prompt.indexOf("The campaign, as JSON:") + "The campaign, as JSON:".length));
+    answer = JSON.stringify({
+      new_families: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
+      assignments: ctx.lanes.map((lane) => ({ lane, family: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
+      notes: `planned by the Claude Code stand-in (${facts})`,
+    });
+    turn([{ type: "text", text: answer }]);
+  } else if (/You audit a candidate change/.test(prompt)) {
+    // The auditor, run by the supervisor: what it was given, as its reasons.
+    const extra = `tools=${val("--tools") === "" ? "none" : val("--tools")} effort=${val("--effort") ?? "default"}`;
+    answer = JSON.stringify({
+      decision: "clear",
+      reasons: `audited by the Claude Code stand-in (${extra} ${facts})`,
+      citations: ["diff"],
+    });
+    turn([{ type: "text", text: answer }]);
+  } else if (trial) {
+    working = true;
+  }
+  (async () => {
+    if (working && !resumed) {
+      // The first run: it reads the kernel. The owner's messages, when the acceptance sends two:
+      // the first goes in after its command, the second at the end of its turn, which goes on with
+      // it to the submission. With none, the run ends there, and the continuation submits.
+      hook("SessionStart", { source: "startup", model: val("--model") });
+      hook("UserPromptSubmit", { prompt: prompt.slice(0, 2000) });
+      await waitMessages(2);
+      bash("true");
+      turn([{ type: "text", text: "Read the kernel." }]);
+      if (!stop("Read the kernel.")) working = false;
+    } else if (working) {
+      hook("SessionStart", { source: "resume", model: val("--model") });
+      hook("UserPromptSubmit", { prompt: prompt.slice(0, 2000) });
+    }
+    if (working) submitChange();
+    if (Object.keys(hooks).length) hook("SessionEnd", { reason: "other" });
+    out({ type: "result", subtype: "success", is_error: false, result: answer, num_turns: n, usage: { input_tokens: 100 * n, output_tokens: 20 * n } });
+  })();
 }
-out({ type: "result", subtype: "success", is_error: false, result: answer, num_turns: n, usage: { input_tokens: 100 * n, output_tokens: 20 * n } });
+
+const CAMPAIGN = "The campaign, as JSON:";
+/**
+ * The planner in its terminal (goal 169): its plan, as headless. In a run's first round it holds
+ * its turn, at most WAIT_MESSAGES_MS, its Stop hook asked each second, until one of the owner's
+ * messages comes at the end of its turn, as a long turn would meet one; then it plans again, and
+ * its notes say what came.
+ */
+const planInTerminal = async (text) => {
+  const ctx = JSON.parse(text.slice(text.indexOf(CAMPAIGN) + CAMPAIGN.length));
+  const plan = (note) =>
+    JSON.stringify({
+      new_families: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
+      assignments: ctx.lanes.map((lane) => ({ lane, family: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
+      notes: `planned by the Claude Code stand-in in its terminal (${note})`,
+    });
+  const draft = plan("a first plan");
+  turn([{ type: "text", text: draft }]);
+  const end = Date.now() + (ctx.epoch === 1 ? WAIT_MESSAGES_MS : 0);
+  for (;;) {
+    if (stop(draft)) break;
+    if (Date.now() >= end) return;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const final = plan(`the owner's message came inside its turn; tools=${val("--tools") === "" ? "none" : val("--tools")} ${hookFacts()}`);
+  turn([{ type: "text", text: final }]);
+  stop(final);
+};
+
+/**
+ * Its full usage window, as Claude Code meets one in its terminal; true once it went on by itself
+ * after the reset, false at its menu.
+ */
+async function usageWindow() {
+  const resetsAt = Math.floor(Date.now() / 1000) + WINDOW_S;
+  const clock = new Date(resetsAt * 1000).toISOString().slice(11, 16);
+  const words = `You've hit your session limit · resets ${clock} (UTC)`;
+  const info = { status: "rejected", resetsAt, rateLimitType: "five_hour", overageStatus: "rejected" };
+  record({
+    type: "assistant",
+    isApiErrorMessage: true,
+    apiErrorStatus: 429,
+    error: "rate_limit",
+    apiError: "usage_limit_reached",
+    apiErrorParams: { rate_limit_info: info },
+    quotaLimits: info,
+    message: { id: `msg_limit_${session.slice(0, 8)}`, model: "<synthetic>", role: "assistant", content: [{ type: "text", text: words }], usage: { input_tokens: 0, output_tokens: 0 } },
+  });
+  hook("StopFailure", { error: "rate_limit", last_assistant_message: words });
+  record({ type: "system", subtype: "turn_duration", durationMs: 500, messageCount: n });
+  show(words);
+  if (settings.autoContinueAtUsageLimit !== true) {
+    window = "menu";
+    show("What do you want to do? 1. Wait for the limit to reset  2. Stop and wait for limit to reset");
+    return false;
+  }
+  window = "waiting";
+  show(`Usage limit reached · continuing automatically at ${clock} · esc to cancel`);
+  await new Promise((r) => setTimeout(r, Math.max(0, resetsAt * 1000 - Date.now()) + 1000));
+  window = "went-on";
+  show("Usage limit reset · continuing automatically");
+  record({ type: "user", isMeta: true, origin: { kind: "auto-continuation" }, promptSource: "system", promptId: `p_auto_${n}`, message: { role: "user", content: "Your usage limit has reset. Continue the task." } });
+  const end = Date.now() + WAIT_TYPED_MS;
+  while (!typedIn.length && Date.now() < end) await new Promise((r) => setTimeout(r, 250));
+  return true;
+}
+
+/**
+ * The auditor in its terminal (goal 169), run by the supervisor as an advisor user: its answer, as
+ * headless. It holds its turn, at most WAIT_MESSAGES_MS, its Stop hook asked each second, until one
+ * of the owner's messages comes at the end of its turn and one line was typed into it, as a long
+ * audit would meet them; then it answers again, answering the message by its id, and its reasons
+ * say what came.
+ */
+const auditInTerminal = async () => {
+  const extra = `tools=${val("--tools") === "" ? "none" : val("--tools")} effort=${val("--effort") ?? "default"}`;
+  const answer = (note, answers = []) =>
+    JSON.stringify({ decision: "clear", reasons: `audited by the Claude Code stand-in (${note}; ${extra} ${facts})`, citations: ["diff"], answers });
+  const draft = answer("a first look");
+  turn([{ type: "text", text: draft }]);
+  const end = Date.now() + WAIT_MESSAGES_MS;
+  let came;
+  while (!came && Date.now() < end) {
+    came = stop(draft) || undefined;
+    if (!came) await new Promise((r) => setTimeout(r, 1000));
+  }
+  while (!typedIn.length && Date.now() < end) await new Promise((r) => setTimeout(r, 250));
+  const id = Number(/\{"id":(\d+),"text":/.exec(came ?? "")?.[1] ?? 0);
+  const final = answer(
+    `the owner's message ${id || "none"} came inside its turn; ${hookFacts()} ${windowFacts()}`,
+    id ? [{ message: id, text: "The stand-in read it inside its turn." }] : [],
+  );
+  turn([{ type: "text", text: final }]);
+  stop(final);
+};
+
+/**
+ * In its terminal: its session from its first message (or resumed), then each message typed, one
+ * turn at a time, until `/exit` or SIGTERM. A trial's first turn meets its usage window and then
+ * reads the kernel; the next submits.
+ */
+function runTerminal() {
+  let turns = Promise.resolve();
+  let taken = resumed ? 1 : 0;
+  let busy = false;
+  /** One prompt: its record, its hook, and its turn's work, after the turns before it. */
+  const prompted = (text) => {
+    turns = turns.then(async () => {
+      busy = true;
+      record({ type: "user", origin: { kind: "human" }, promptId: `p_${n + 1}`, message: { role: "user", content: text } });
+      show(`> ${text.split("\n")[0]}`);
+      hook("UserPromptSubmit", { prompt: text.slice(0, 2000) });
+      if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
+      const at = taken++;
+      if (!trial && at === 0 && text.includes(CAMPAIGN)) await planInTerminal(text);
+      else if (!trial && at === 0 && /You audit a candidate change/.test(text)) await auditInTerminal();
+      else if (trial && at === 0) {
+        if (!(await usageWindow())) return;
+        // It reads the kernel. The owner's messages, when the acceptance sends two: the first goes
+        // in after its command, the second at the end of its turn, which goes on with it to the
+        // submission. With none, the turn ends there, and the nudge typed next submits.
+        await waitMessages(2);
+        bash("true");
+        turn([{ type: "text", text: "Read the kernel." }]);
+        if (stop("Read the kernel.")) submitChange();
+      } else if (trial && at === 1) submitChange();
+      else {
+        turn([{ type: "text", text: "done" }]);
+        stop("done");
+      }
+      record({ type: "system", subtype: "turn_duration", durationMs: 1000, messageCount: n });
+      busy = false;
+    });
+  };
+  const exit = (reason, code) => {
+    if (Object.keys(hooks).length) hook("SessionEnd", { reason });
+    if (reason === "prompt_input_exit")
+      record({ type: "cost-state", modelUsage: { [val("--model") ?? "claude"]: { inputTokens: 100 * n, cacheReadInputTokens: 900 * n, outputTokens: 20 * n } } });
+    process.stdout.write("\x1b[?2004l");
+    process.exit(code);
+  };
+  hook("SessionStart", { source: resumed ? "resume" : "startup", model: val("--model") });
+  // Bracketed paste on, as Claude Code turns it on.
+  process.stdout.write("\x1b[?2004h");
+  draw();
+  show(facts);
+  if (first !== undefined && !resumed) prompted(first);
+  const submit = () => {
+    const text = input;
+    input = "";
+    if (text === "/exit") return exit("prompt_input_exit", 0);
+    if (!text.trim()) return draw();
+    if (window === "waiting") {
+      typedInWait++;
+      return show(`(typed during the wait) ${text}`);
+    }
+    // Typed while it works: taken into the turn, as Claude Code records it.
+    if (busy) {
+      record({ type: "attachment", attachment: { type: "queued_command", prompt: text, commandMode: "prompt" } });
+      typedIn.push(text);
+      return show(`> ${text.split("\n")[0]}`);
+    }
+    prompted(text);
+  };
+  let pending = "";
+  let escTimer;
+  const take = () => {
+    clearTimeout(escTimer);
+    while (pending) {
+      if (pending.startsWith("\x1b[200~")) {
+        const end = pending.indexOf("\x1b[201~");
+        if (end < 0) return;
+        input += pending.slice(6, end);
+        pending = pending.slice(end + 6);
+        draw();
+        continue;
+      }
+      // A terminal's reply or a key's sequence: not text.
+      const seq = /^\x1b(\[[\d;?]*[A-Za-z~]|O[A-Za-z])/.exec(pending);
+      if (seq) {
+        pending = pending.slice(seq[0].length);
+        continue;
+      }
+      if (pending === "\x1b") {
+        // Esc by itself, unless more follows at once: it interrupts a turn under way.
+        escTimer = setTimeout(() => {
+          pending = "";
+          if (busy) record({ type: "user", message: { role: "user", content: [{ type: "text", text: "[Request interrupted by user]" }] }, interruptedMessageId: `msg_${session.slice(0, 8)}_${n}` });
+          show("interrupted");
+        }, 50);
+        return;
+      }
+      const ch = pending[0];
+      pending = pending.slice(1);
+      if (ch === "\r") submit();
+      else if (ch === "\x7f") input = input.slice(0, -1);
+      else if (ch >= " " || ch === "\n" || ch === "\t") input += ch;
+    }
+    draw();
+  };
+  process.stdin.setRawMode(true);
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (d) => {
+    pending += d;
+    take();
+  });
+  process.on("SIGTERM", () => exit("other", 143));
+}

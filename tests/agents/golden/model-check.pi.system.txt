@@ -1,0 +1,1 @@
+You are checking a tool-calling route. Answer only by calling the echo tool, once.

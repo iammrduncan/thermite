@@ -1,0 +1,3 @@
+{
+  "src/cli/thermite/local.ts": ["src/harness/broker/devices.ts", "src/harness/selftest/index.ts"]
+}

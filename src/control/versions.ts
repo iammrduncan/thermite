@@ -4,7 +4,7 @@ import {
   incompatibility,
   type ReportedBuild,
 } from "../core/version.ts";
-import type { ControlStore, RigComponent, RigRefusal, StoredBuild } from "./store.ts";
+import type { ControlStore, RigComponent, RigRefusal, StoredBuild } from "./store/index.ts";
 
 /**
  * Control's view of each rig's builds against its own: it records what the rig's harness and
@@ -70,16 +70,16 @@ const plain = (b: ReportedBuild | null | undefined) =>
 function auditDetail(store: ControlStore, rig: string, control: BuildInfo) {
   return {
     control: plain(control),
-    harness: plain(store.rigBuild(rig, "harness")),
-    supervisor: plain(store.rigBuild(rig, "supervisor")),
+    harness: plain(store.builds.ofRig(rig, "harness")),
+    supervisor: plain(store.builds.ofRig(rig, "supervisor")),
   };
 }
 
 /**
  * Refuses the rig while its recorded builds and control's do not meet, or ends its refusal when
  * they do. Returns the reason, or null. `harness` stands in for the recorded harness build, and
- * `endRefusal: false` only adds a refusal: for a report, whose own harness build the ingest route
- * checks once the report verifies.
+ * `endRefusal: false` only adds a refusal: for a report, whose own harness build control checks
+ * once the report verifies (ingest.ts).
  */
 export function checkRig(
   store: ControlStore,
@@ -88,13 +88,13 @@ export function checkRig(
   opts: { harness?: ReportedBuild | null; endRefusal?: boolean } = {},
 ): string | null {
   const reason = refusalFor(control, {
-    harness: "harness" in opts ? opts.harness : store.rigBuild(rig, "harness"),
-    supervisor: store.rigBuild(rig, "supervisor"),
+    harness: "harness" in opts ? opts.harness : store.builds.ofRig(rig, "harness"),
+    supervisor: store.builds.ofRig(rig, "supervisor"),
   });
   // Most calls change nothing: a rig that is not refused, and stays so.
-  const change = reason ? store.rigRefusal(rig)?.reason !== reason : opts.endRefusal !== false;
-  if (change && (reason || store.rigRefusal(rig)))
-    store.setRigRefusal(rig, reason, auditDetail(store, rig, control));
+  const change = reason ? store.refusals.get(rig)?.reason !== reason : opts.endRefusal !== false;
+  if (change && (reason || store.refusals.get(rig)))
+    store.refusals.set(rig, reason, auditDetail(store, rig, control));
   return reason;
 }
 
@@ -103,7 +103,7 @@ export function checkRig(
  * it can now work with is no longer refused, before the rig calls again.
  */
 export function recheckRefusals(store: ControlStore, control: BuildInfo): void {
-  for (const rig of store.refusedRigs()) checkRig(store, rig, control);
+  for (const rig of store.refusals.rigs()) checkRig(store, rig, control);
 }
 
 /** "harness 0.1.0, supervisor 0.1.0". */
@@ -114,10 +114,10 @@ function describe(builds: Record<RigComponent, StoredBuild | null>): string {
 /** A rig's builds against control's, with what the owner should know. */
 export function rigVersions(store: ControlStore, rig: string, control: BuildInfo): RigVersions {
   const builds = {
-    harness: store.rigBuild(rig, "harness") ?? null,
-    supervisor: store.rigBuild(rig, "supervisor") ?? null,
+    harness: store.builds.ofRig(rig, "harness") ?? null,
+    supervisor: store.builds.ofRig(rig, "supervisor") ?? null,
   };
-  const refused = store.rigRefusal(rig) ?? null;
+  const refused = store.refusals.get(rig) ?? null;
   const base = { refused, control, ...builds };
   if (refused) return { state: "refused", notice: refused.reason, ...base };
   const order = PARTS.map((p) => {

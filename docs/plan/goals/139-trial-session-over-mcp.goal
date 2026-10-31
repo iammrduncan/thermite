@@ -35,7 +35,7 @@ The owner, 2026-10-16: Thermite runs itself, and its operator works through cont
 
 ## Done when
 
-- [x] The tool, with a test (`src/control/trial-session.test.ts`): the sessions newest first, one run's, a session paged forward to its end, an answer kept to the budget, an unknown trial refused in words, and no tool for an agent's token.
+- [x] The tool, with a test (`tests/control/trial-session.test.ts`): the sessions newest first, one run's, a session paged forward to its end, an answer kept to the budget, an unknown trial refused in words, and no tool for an agent's token.
 - [x] The MCP tools page describes it.
 - [ ] Rolled to the lab's control, and the lane's trials read with it.
 

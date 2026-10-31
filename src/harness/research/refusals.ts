@@ -1,5 +1,6 @@
-import type { Ledger } from "../ledger.ts";
-import { FetchRefused } from "./fetcher.ts";
+import { FetchRefused } from "../../agents/tools/index.ts";
+import { errorText } from "../../common/errors.ts";
+import type { Ledger } from "../ledger/index.ts";
 
 /**
  * Fetches refused for a reason that lasts (goal 136): too large, outside the campaign's sites,
@@ -36,7 +37,7 @@ export class Refusals {
   /** The answer to a fetch that failed: kept when its reason lasts. */
   refuse(run: string, lane: string | null, url: string, key: string, err: unknown) {
     if (!(err instanceof FetchRefused)) {
-      const reason = `fetch failed: ${err instanceof Error ? err.message : String(err)}`;
+      const reason = `fetch failed: ${errorText(err)}`;
       this.event(run, lane, url, reason, 1);
       return { refused: reason };
     }

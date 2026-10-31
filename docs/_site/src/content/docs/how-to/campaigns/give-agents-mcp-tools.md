@@ -19,12 +19,16 @@ An **MCP server** gives agents tools from outside Thermite: a knowledge base suc
 
 The server's secret never reaches an agent. Control keeps it sealed and hands each rig only the servers its runs name. A [rig on RunPod](../install/runpod-rig.md) gets them the same way, through control's own connection to it, sealed like the rest of its traffic. On the rig, the harness makes the calls for the workers and the planner, and the supervisor makes them for the advisors ([Who holds your keys](../../explanation/who-holds-your-keys.md#mcp-servers)).
 
+:::note
+Every agent already has one MCP server of Thermite's own, `thermite`, with the tools of [Thermite's knowledge base](../../reference/knowledge-base.md#the-agents-tools): `kb_search`, `kb_read` and, for the roles the campaign lets write, `kb_write`. You don't add it, and a kit may not name a server `thermite`.
+:::
+
 ## Before you start
 
 - You are signed in to the dashboard as the owner.
-- The server's address. It speaks MCP over streamable HTTP or SSE, starts with `https://` (control takes `http://` only for `localhost`, `127.0.0.1` and `[::1]`), and holds no secret. Control reaches it to read its tools, and your rigs' harness and supervisor reach it over the internet to call them. On Kubernetes, a rig's harness reaches only addresses outside the private ranges ([The security model](../../explanation/security-model.md#where-a-rig-runs)).
+- The server's address. It speaks MCP over streamable HTTP or SSE, starts with `https://` (control takes `http://` only for `localhost`, `127.0.0.1` and `[::1]`), and holds no secret. Control reaches it to read its tools, and your rigs' harness and supervisor reach it over the internet to call them. On Kubernetes, a rig's harness reaches only addresses outside the private, shared and link-local ranges ([The security model](../../explanation/security-model.md#where-a-rig-runs)).
 - How the server signs a client in: OAuth, a key that goes in a header, a client ID and secret it gave you, or nothing (a public server).
-- For OAuth: your browser must reach control's callback, `/v1/mcp-oauth/callback` on control's address. That address is `THERMITE_CONTROL_PUBLIC_URL` when it is set ([Settings](../../reference/settings.md)), else the address you use for the dashboard.
+- For OAuth: your browser must reach control's callback, `/v1/mcp-oauth/callback` on control's address. That address is `THERMITE_CONTROL_PUBLIC_URL` ([Settings](../../reference/settings.md)). Without it, a sign-in works only when you use the dashboard on control's own machine, as `localhost`, `127.0.0.1` or `[::1]`; at any other address, control refuses the sign-in with `An MCP server's sign-in sends your browser back to control: set THERMITE_CONTROL_PUBLIC_URL to the address you reach control at. Without it, a sign-in works only when you reach control as localhost, 127.0.0.1 or [::1].`
 
 ## 1. Add the server in Settings
 
@@ -40,7 +44,7 @@ The server's secret never reaches an agent. Control keeps it sealed and hands ea
    | **A client ID and secret** | **Client ID**, **Client secret** and, optional, **Scopes** | "Control seals the secret, gets a token from the server with it, and reads the server's tools. It calls no tool yet." |
    | **None: a public server** | none | "Control reads the server's tools. It calls no tool yet. Anyone who can reach a server with no sign-in can use it: add only public servers this way." |
 
-   While something is wrong, the line starts with **Not yet.** and says what, for example `Use https. Over http, the sign-in or key crosses the network in plain text, so control refuses it.`, and the button stays off.
+   While something is wrong, the line starts with **Not yet.** and says what, for example `Use https. Over http, the sign-in or key crosses the network in plain text, so control refuses it.`, and the button stays off. Over `http://`, the form and control take only this machine's own addresses: `localhost`, `127.0.0.1` and `[::1]`.
 5. Press the button: **Sign in and read its tools** for OAuth, **Add and read its tools** for the others.
 
    - **A key, a client, or none.** The page comes back to the **MCP servers** block and says, for example, `gbrain is kept, sealed. Control read 31 tools, and called none of them. Next: name it in a kit, on a campaign's How to measure step.`
@@ -90,7 +94,7 @@ From the command line, `thermite assign` sends a kit's list with `--mcp-servers`
 
 ### Before the first trial
 
-The rig gets the servers on the same beat as its model route, every 30 seconds by default ([What a rig gets](../operate/mcp-servers.md#what-a-rig-gets)), so a run just started may not have them yet. Each trial lists its tools when it starts, so the run's first plan and trial wait for them: no plan or trial starts until the rig holds every server the kit gives its workers or planner, for up to 2 minutes. Live says, under **Planner**, `waiting for the MCP servers gbrain, github: control has not handed them to this rig yet. No plan or trial starts until they come, for up to 120 s.`, then `the run's MCP servers reached this rig: its plans and trials start with their tools.`, and **History** says `The run's work waited 30 s for its MCP servers to reach the rig, then started with them.` A server control says it can't give is not waited for. A run whose servers the rig already holds does not wait, and says nothing.
+The rig gets the servers in its config on the message bus, within about 5 seconds of the assignment ([What a rig gets](../operate/mcp-servers.md#what-a-rig-gets)), so a run just started may not have them yet. Each trial lists its tools when it starts, so the run's first plan and trial wait for them: no plan or trial starts until the rig holds every server the kit gives its workers or planner, for up to 2 minutes. Live says, under **Planner**, `waiting for the MCP servers gbrain, github: control has not handed them to this rig yet. No plan or trial starts until they come, for up to 120 s.`, then `the run's MCP servers reached this rig: its plans and trials start with their tools.`, and **History** says `The run's work waited 30 s for its MCP servers to reach the rig, then started with them.` A server control says it can't give is not waited for. A run whose servers the rig already holds does not wait, and says nothing.
 
 When a server is still missing as the run's work starts, the run goes on without it. Live says `the run goes on without the MCP server github (control can't sign in to it: its sign-in ended), after waiting 30 s. A later trial gets each one once the rig has it.`, and **History** says `The run's work started without the MCP server github (…), after waiting 30 s for them. A later trial gets each one once the rig has it.` (the event `mcp_servers_wait`, with `missing` and `waited_s`). The wait comes again after the harness restarts, which leaves it holding no server until the supervisor hands them over again. A research run's clock does not count it.
 

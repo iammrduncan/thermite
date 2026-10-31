@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
+import { GitError, git as gitPatch, gitText } from "../common/git.ts";
 import { sha256Hex } from "../core/canonical.ts";
 
 const run = promisify(execFile);
@@ -22,7 +23,7 @@ const IDENTITY = [
   "core.hooksPath=/dev/null",
 ];
 
-export class GitError extends Error {}
+export { GitError };
 
 /**
  * A repository Git runs in must exist: Node starts no program in a folder that does not, and
@@ -33,20 +34,12 @@ function needRepo(cwd: string, op: string): void {
     throw new GitError(`git ${op} failed: there is no repository ${basename(cwd)} on this rig`);
 }
 
+/** The most output one call returns: a mirror's patches and files are smaller. */
+const MAX_BYTES = 256 * 1024 * 1024;
+
 async function git(cwd: string, args: string[]): Promise<string> {
   needRepo(cwd, args[0] ?? "");
-  try {
-    const { stdout } = await run("git", [...IDENTITY, ...args], {
-      cwd,
-      maxBuffer: 256 * 1024 * 1024,
-      encoding: "buffer",
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1" },
-    });
-    return stdout.toString("utf8");
-  } catch (err) {
-    const e = err as { stderr?: Buffer; message: string };
-    throw new GitError(`git ${args[0]} failed: ${e.stderr?.toString("utf8").trim() || e.message}`);
-  }
+  return gitText([...IDENTITY, ...args], { cwd, maxBytes: MAX_BYTES });
 }
 
 export async function initMirror(path: string): Promise<void> {
@@ -96,17 +89,8 @@ export async function folderCommit(
     "author thermite <thermite@localhost> 0 +0000\n" +
     "committer thermite <thermite@localhost> 0 +0000\n" +
     `\n${folder} at ${commit}\n`;
-  const p = run("git", ["hash-object", "-t", "commit", "-w", "--stdin"], {
-    cwd: mirror,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1" },
-  });
-  p.child.stdin?.end(body);
-  try {
-    return (await p).stdout.trim();
-  } catch (err) {
-    const e = err as { stderr?: string; message: string };
-    throw new GitError(`git hash-object failed: ${e.stderr?.trim() || e.message}`);
-  }
+  const args = ["hash-object", "-t", "commit", "-w", "--stdin"];
+  return (await gitText(args, { cwd: mirror, input: body })).trim();
 }
 
 /**
@@ -282,31 +266,19 @@ function binaryFilesOf(numstatZ: string): string[] {
 /** The patch from parent to commit as bytes (exports and propagation: never decoded as text). */
 export async function patchBytes(mirror: string, parent: string, commit: string): Promise<Buffer> {
   needRepo(mirror, "diff");
-  try {
-    const { stdout } = await run(
-      "git",
-      [
-        ...IDENTITY,
-        "diff",
-        "--binary",
-        "--full-index",
-        "--no-color",
-        "--no-ext-diff",
-        parent,
-        commit,
-      ],
-      {
-        cwd: mirror,
-        maxBuffer: 256 * 1024 * 1024,
-        encoding: "buffer",
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1" },
-      },
-    );
-    return stdout;
-  } catch (err) {
-    const e = err as { stderr?: Buffer; message: string };
-    throw new GitError(`git diff failed: ${e.stderr?.toString("utf8").trim() || e.message}`);
-  }
+  return gitPatch(
+    [
+      ...IDENTITY,
+      "diff",
+      "--binary",
+      "--full-index",
+      "--no-color",
+      "--no-ext-diff",
+      parent,
+      commit,
+    ],
+    { cwd: mirror, maxBytes: MAX_BYTES },
+  );
 }
 
 /** The patch from parent to commit, as text (for people and models to read). */
@@ -403,18 +375,11 @@ export async function treeFile(
   if (type !== "blob") return undefined;
   const size = Number((await git(mirror, ["cat-file", "-s", spec])).trim());
   if (size > maxBytes) return { size };
-  try {
-    const { stdout } = await run("git", [...IDENTITY, "cat-file", "blob", spec], {
-      cwd: mirror,
-      maxBuffer: maxBytes + 1024,
-      encoding: "buffer",
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1" },
-    });
-    return { size, bytes: stdout };
-  } catch (err) {
-    const e = err as { stderr?: Buffer; message: string };
-    throw new GitError(`git cat-file failed: ${e.stderr?.toString("utf8").trim() || e.message}`);
-  }
+  const bytes = await gitPatch([...IDENTITY, "cat-file", "blob", spec], {
+    cwd: mirror,
+    maxBytes: maxBytes + 1024,
+  });
+  return { size, bytes };
 }
 
 /** The id of a commit's tree: the same content gives the same tree in any repository. */

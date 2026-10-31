@@ -1,9 +1,9 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { z } from "zod";
+import { shellQuote } from "../common/exec.ts";
+import { gitText } from "../common/git.ts";
 
 /**
  * The supervisor's git exporter. The harness writes exports into the outbox (read-only here):
@@ -18,8 +18,6 @@ import { z } from "zod";
  * and pushes them with the rig's deploy key. Git work is deterministic code only; no model
  * ever runs git here.
  */
-
-const run = promisify(execFile);
 
 export interface ExportConfig {
   rig: string;
@@ -49,26 +47,20 @@ export interface ExportState {
   lastError?: string | undefined;
 }
 
+/** The results repository's identity: who commits the exports. */
+const IDENTITY = {
+  GIT_AUTHOR_NAME: "thermite",
+  GIT_AUTHOR_EMAIL: "thermite@localhost",
+  GIT_COMMITTER_NAME: "thermite",
+  GIT_COMMITTER_EMAIL: "thermite@localhost",
+};
+
 async function git(
   repo: string,
   args: string[],
-  opts: { env?: Record<string, string>; input?: string } = {},
+  opts: { env?: Record<string, string> } = {},
 ): Promise<string> {
-  const { stdout } = await run("git", ["-C", repo, ...args], {
-    encoding: "utf8",
-    maxBuffer: 512 * 1024 * 1024,
-    env: {
-      ...process.env,
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_TERMINAL_PROMPT: "0",
-      GIT_AUTHOR_NAME: "thermite",
-      GIT_AUTHOR_EMAIL: "thermite@localhost",
-      GIT_COMMITTER_NAME: "thermite",
-      GIT_COMMITTER_EMAIL: "thermite@localhost",
-      ...opts.env,
-    },
-  });
-  return stdout.trim();
+  return (await gitText(["-C", repo, ...args], { env: { ...IDENTITY, ...opts.env } })).trim();
 }
 
 function sha256(path: string): string {
@@ -76,15 +68,14 @@ function sha256(path: string): string {
 }
 
 /** A single-quoted shell word (GIT_SSH_COMMAND is run by a shell). */
-const shq = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 
 /** The ssh command for the results remote: the deploy key, and the host's key when pinned. */
 export function sshCommand(keyFile?: string, knownHostsFile?: string): Record<string, string> {
   if (!keyFile) return {};
   const hostKey = knownHostsFile
-    ? `-o UserKnownHostsFile=${shq(knownHostsFile)} -o StrictHostKeyChecking=yes`
+    ? `-o UserKnownHostsFile=${shellQuote(knownHostsFile)} -o StrictHostKeyChecking=yes`
     : "-o StrictHostKeyChecking=accept-new";
-  return { GIT_SSH_COMMAND: `ssh -i ${shq(keyFile)} -o IdentitiesOnly=yes ${hostKey}` };
+  return { GIT_SSH_COMMAND: `ssh -i ${shellQuote(keyFile)} -o IdentitiesOnly=yes ${hostKey}` };
 }
 
 const Manifest = z.object({
@@ -220,6 +211,8 @@ export async function exportOnce(cfg: ExportConfig, state: ExportState): Promise
       // since the last export (goal 065), one file per export beside its events.
       const per = /^(journal|research-notes|briefing|knowledge)\.jsonl$/.exec(rel);
       if (per) files[`${per[1]}/${name}.jsonl`] = join(dir, rel);
+      // The prompts the runs' agents were sent since then (goal 166), compressed.
+      if (rel === "prompts.jsonl.gz") files[`prompts/${name}.jsonl.gz`] = join(dir, rel);
       // Attempts, and published champions (what other rigs fetch to judge them themselves).
       if (
         rel.startsWith("attempts/") ||

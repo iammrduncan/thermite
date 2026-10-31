@@ -6,7 +6,7 @@ sidebar:
   order: 6
 ---
 
-A [rig](../../reference/glossary.md) fetches your project and your [kit](../../reference/glossary.md) itself, from their git repositories. For a private repository, set up **Git access** once on control: a deploy key that control makes, or an access token you paste. Then choose it on the **New campaign** page. Control gives it only to the rigs that run a campaign that names it.
+A [rig](../../reference/glossary.md) fetches your project and your [kit](../../reference/glossary.md) itself, from their git repositories. For a private repository, set up **Git access** once on control: a deploy key that control makes, or an access token you paste. Then choose it on the **New campaign** page. Each access is for one host, such as `github.com`: control uses it for that host only, and gives it to a rig only while a run assigned to that rig that names it is live, waiting for the rig or taken by it and not closed.
 
 The **New campaign** page is the one place made for naming a Git access. From the command line, see [From the command line](#from-the-command-line).
 
@@ -26,10 +26,13 @@ The **New campaign** page is the one place made for naming a Git access. From th
 1. Open **Settings**, the cog at the foot of the sidebar. The page is **Providers**.
 2. Under **Add a provider**, set **Type** to **A deploy key (control makes it)** or **An access token (HTTPS)**.
 3. Fill in **Name**, such as `project-deploy`. Campaigns refer to the access by this name.
-4. For a token, also fill in **Token** (read-only if the host allows it) and **User name**: the name the host expects with the token. Empty means `x-access-token`, which GitHub takes. GitLab takes `oauth2`.
-5. Press **Make the key** or **Add the token**.
+4. Fill in **Host**: the git server's name alone, such as `github.com` or `git.example.com`. Control and the rigs use the access for repositories on this host only. Without one: `Name the host the Git access is for, such as github.com: the server's name alone, with no https://, user, port or path.`
+5. For a token, also fill in **Token** (read-only if the host allows it) and **User name**: the name the host expects with the token. Empty means `x-access-token`, which GitHub takes. GitLab takes `oauth2`.
+6. Press **Make the key** or **Add the token**.
 
-You see `Made the deploy key "project-deploy": add its public key, below, to the repository as a read-only deploy key.`, or `"project-deploy" is kept, sealed: choose it on the new-campaign page.` The access shows in the **Providers** list as **Git access**. Control seals the secret and never shows it again.
+You see `Made the deploy key "project-deploy": add its public key, below, to the repository as a read-only deploy key.`, or `"project-deploy" is kept, sealed: choose it on the new-campaign page.` The access shows in the **Providers** list as **Git access**, `for github.com only`. Control seals the secret and never shows it again.
+
+An access added before accesses had a host is bound, as control updates, to the one host the campaigns that name it fetch from. One they name on more hosts, or none, shows `for no host yet`: open its row, fill in **Host** and press **Set the host**. Until then, campaigns that name it can't start.
 
 ## 2. Add a deploy key to the repository
 
@@ -41,7 +44,7 @@ Many git hosts, GitHub among them, refuse one deploy key on a second repository.
 
 In the access's row, enter the repository's address under **Try it on a repository** and press **Try it**. Control reads the repository's branches, as a rig would, and keeps nothing.
 
-You see a line such as `"project-deploy" reads git@git.example.com:you/project.git: its default branch is at 1a2b3c4, with 214 files.`, or `"project-deploy" could not read …` with the reason.
+You see a line such as `"project-deploy" reads git@git.example.com:you/project.git: its default branch is at 1a2b3c4, with 214 files.`, or `"project-deploy" could not read …` with the reason. A repository on another host is not tried: `the Git access project-deploy is for git.example.com only, and <address> is on <host>`.
 
 ## 4. Choose it for a campaign
 
@@ -58,7 +61,8 @@ Stay on the campaign's page: once the rig reports the run, within a minute or so
 
 | Reason | What to do |
 | --- | --- |
-| `Git access project-deploy: control answered 404` | Control has no Git access of that name for this rig. Check the name under **Settings** |
+| `Git access project-deploy: control gave this rig none in its config on the message bus. …` | Control gives an access to a rig, in its config on the message bus, only while an assignment of the rig names it, only when the access has a host, and only when control can open it; the rig waits up to 2 minutes for it. Check the name and its host under **Settings**, and that the rig is on the bus |
+| `Git access project-deploy is for git.example.com only, and … comes from …` | The repository is on another host than the access. Use an access for that host |
 | `… has no commit …` | The commit is not in that repository, or the access can't read it: use **Try it** on the repository |
 | git's own error, such as `Permission denied (publickey)` | The access can't read the repository: its key is not a deploy key of that repository, or the token can't read it. **Try it** shows the same error |
 
@@ -66,7 +70,7 @@ When it is fixed, start the run again: press **Start a run** at the top of the c
 
 ## From the command line
 
-`thermite assign` has no option to name a Git access. To start a run on a private repository from the command line, either put its commits in the rig's inbox as git bundles ([Start it when the rig can't fetch](start-from-command-line.md#start-it-when-the-rig-cant-fetch)), or name the access in the command yourself, with the owner's token. (On a rig with a results repository, its deploy key can also read a project or kit whose source names no Git access: see [Set up the results repository](../operate/results-repository.md).)
+`thermite assign` has no option to name a Git access. To start a run on a private repository from the command line, either put its commits in the rig's inbox as git bundles ([Start it when the rig can't fetch](start-from-command-line.md#start-it-when-the-rig-cant-fetch)), or name the access in the command yourself, with the owner's or the operator's token. The repository must be on the access's host: control refuses the command otherwise, with `The Git access <name> is for <host> only, and <path> comes from <host>.` An agent's token may not name a Git access.
 
 Run `npx thermite` in your Thermite folder, after `npm ci` and `npm run build` (see [the command line](../../reference/command-line.md)). The examples use the owner's token file of the local stack, `.dev/secrets/control-admin-token`. If you made an owner's token of your own, use its file instead.
 

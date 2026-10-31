@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { shellQuote } from "./exec.ts";
 
 /**
  * Git access for a private repository: an SSH deploy key or an HTTPS token, as control keeps it
@@ -17,6 +18,22 @@ export interface GitEnv {
   env: Record<string, string>;
   /** The protocols git may use with this access. */
   protocols: string;
+}
+
+/**
+ * The host a git address names, in lowercase, without its user or port: `https://`, `ssh://` and
+ * `git://` addresses and `user@host:path`. Undefined for an address with no host (`file://`) or
+ * one that does not parse. A Git access is bound to one host (Settings), and is used only there.
+ */
+export function gitHost(url: string): string | undefined {
+  const scp = /^[\w.-]+@([\w.-]+):(?!\/\/)/.exec(url);
+  if (scp?.[1]) return scp[1].toLowerCase();
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Runs `fn` with the environment git needs for `auth`, then removes what it wrote. */
@@ -48,17 +65,16 @@ export async function withGitAuth<T>(
     });
     const known = knownHostsFile ?? join(dir, "known_hosts");
     mkdirSync(join(known, ".."), { recursive: true });
-    const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
     return await fn({
       env: {
         GIT_SSH_COMMAND: [
           "ssh",
           "-i",
-          q(key),
+          shellQuote(key),
           "-o IdentitiesOnly=yes",
           "-o BatchMode=yes",
           "-o StrictHostKeyChecking=accept-new",
-          `-o UserKnownHostsFile=${q(known)}`,
+          `-o UserKnownHostsFile=${shellQuote(known)}`,
         ].join(" "),
       },
       protocols: "ssh",

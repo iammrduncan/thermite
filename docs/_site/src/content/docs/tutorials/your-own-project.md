@@ -125,7 +125,7 @@ Fill in these fields, in the order the page shows them. Leave every field that t
 
 2. **Test cases**: in the first row, replace `default` with `100k` under **Name**, and set **Arguments** to `100000`. Press **Add a case**, and in the new row set **Name** to `80k`, **Arguments** to `80000`, and tick **Hidden test**.
 
-   The judge times every change on `100k`. It runs the hidden test, `80k`, only to double-check a change that already looks faster: the change must give the right answer there too, and must not be noticeably slower there.
+   The judge times every change on `100k`. It runs the hidden test, `80k`, only to double-check a change that already looks faster: the change must give the right answer there too, and may be slower there than the champion by no more than 1%.
 
 3. **The score**: keep **How long a run takes**. Keep **Smallest gain that counts (%)** at `5` and **Runs per case** at `3`.
 4. **Is it right?**: `grep -qxF "{args} $(cat {out}/result.txt)" {kit}/expected.txt`
@@ -152,7 +152,7 @@ On **6 Review and start**, a sentence sums up the campaign. It starts with `prim
 
 Press **Try the kit first**. This starts a run with no agents: the judge builds your project and runs it, so you see the kit work before an agent spends any time on it.
 
-The campaign's page opens and says `Starting local-1/primes-speed-try-1.`, then how the start goes, such as `Sent to local-1 at`, the time, and `Waiting for the rig to take it.` The rig fetches your project from your Git host and the kit from control, and checks both. Stay on the page: once the rig reports the run, usually within a minute, the page opens the run's own page by itself, at the same address. The line at the top reads `Campaigns › primes-speed › primes-speed-try-1`, then `on local-1 · hill climb · judge only · Running`, and below it is the note **A try of the kit.** The run's tabs follow: **Overview**, **Experiments**, **Journal**, **Attempts**, **History** and **Planner**. **Overview** is open.
+The run's own page opens and says `Starting primes-speed-try-1 on local-1.`, then how the start goes, such as `Sent to local-1 at`, the time, and `Waiting for the rig to take it.` The rig fetches your project from your Git host and the kit from control, and checks both. Stay on the page: once the rig reports the run, usually within a minute, the page shows the run by itself, at the same address. The line at the top reads `Campaigns › primes-speed › primes-speed-try-1`, then `on local-1 · hill climb · judge only · Running`, and below it is the note **A try of the kit.** The run's tabs follow: **Overview**, **Experiments**, **Journal**, **Attempts**, **History** and **Planner**. **Overview** is open.
 
 A minute or two after you pressed **Try the kit first**, press **refresh**. Under **Recent**, on the **Overview**, you see `The judge measured the starting point, champion #1, on every case:` and how long the `100k` case took. This is the run's **baseline**: the judge built your project and ran the `100k` case alone, in 3 blocks of 3 runs, and the check passed on every answer. The block **Where the run started**, on the same tab, shows the time under `seconds`, with how much it varied. Every change an agent makes is held against these values.
 
@@ -175,11 +175,11 @@ The try shows that the kit works. Now start the real run, with an agent.
    If you left the try's page, open the campaign's page instead: press **primes-speed** in the line at the top of the try's page, or open **Campaigns** in the sidebar and press `primes-speed` under **All campaigns**. Then press **Start a run** at the top right. The same panel opens.
 2. **Where it runs**: the card for `local-1` is chosen. It is marked **busy**, and says `Busy: primes-speed-try-1 is at work there, and pauses when this run starts (a rig runs one run at a time).` That is expected: the new run replaces the try.
 3. **Agents**: keep **On**. Under it, the panel says `The rig's agents, on` and the name of the free model you gave `local-1`.
-4. **From past research** searches what earlier runs of this campaign recorded, for a new run to start from ([Use past research in a new run](../how-to/campaigns/use-past-research.md)). The try recorded nothing a run can start from, so the list says `Nothing found in these folders yet.` Leave it.
+4. **From past research** searches what earlier runs of this campaign recorded, for a new run to start from ([Use past research in a new run](../how-to/campaigns/use-past-research.md)). The try recorded nothing a run can start from, so the list says `Nothing found in these collections yet.` Leave it.
 5. Open **More options**, and set **When a change is confirmed better** to **ask me every time**. Every change the judge confirms will wait for you before it becomes the new best version.
 6. At the bottom, the panel sums it up: `Starts a new run on local-1, with agents on` and your model. Press **Start the run**.
 
-The campaign's page comes back with a card at the top, `Starting local-1/primes-speed-1.`, and still shows the try under **At work now**. As in step 8, once the rig reports the new run, the page opens the run's own page, `primes-speed-1`, by itself, and its top line ends `Running`. The new run keeps what you set on the New campaign page, such as **Stop after (hours)**, whose hours count from this run's start.
+The new run's page opens with a card at the top, `Starting primes-speed-1 on local-1.`. As in step 8, once the rig reports the new run, the page shows the run, `primes-speed-1`, by itself, and its top line ends `Running`. The new run keeps what you set on the New campaign page, such as **Stop after (hours)**, whose hours count from this run's start.
 
 The try has stopped. To see it, press **primes-speed** in the line at the top: the campaign's page lists the try under **Earlier runs** as **Paused**, with `replaced by primes-speed-1` under **Why it stopped**. Press `primes-speed › primes-speed-1` under **At work now** to go back to the run's page.
 

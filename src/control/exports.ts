@@ -14,9 +14,14 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { z } from "zod";
+import {
+  EXPORT_BEGIN,
+  EXPORT_FILE,
+  EXPORT_NAME,
+  EXPORT_PIECE_MAX,
+} from "../core/api/control/rigs.ts";
 import { canonicalJson } from "../core/canonical.ts";
-import type { ControlStore, RigExport } from "./store.ts";
+import type { ControlStore, RigExport } from "./store/index.ts";
 import { type TarEntry, tarGz } from "./tar-gz.ts";
 
 /**
@@ -30,38 +35,6 @@ import { type TarEntry, tarGz } from "./tar-gz.ts";
  * still arriving as `<path>.part`. A complete export downloads as one archive (goal 103): a
  * .tar.gz of its manifest and its files under `<rig>-<export>/`, built as it streams.
  */
-
-/** An export's name, as the harness makes them: a time and 8 hexadecimal characters. */
-export const EXPORT_NAME = /^[0-9TZ]{8,20}-[0-9a-f]{8}$/;
-
-const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
-/** A file's place in an export: plain names, no "." or ".." parts (as the exporter checks). */
-const RelPath = z
-  .string()
-  .max(500)
-  .regex(/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._()-]+)*$/)
-  .refine((p) => p.split("/").every((s) => s !== "." && s !== ".."), "a plain path");
-
-const Manifest = z.looseObject({
-  rig: z.string().max(200).optional(),
-  full: z.boolean().optional(),
-  from_event: z.number().int().min(0),
-  through_event: z.number().int().min(0),
-  files: z.record(RelPath, Sha256),
-});
-
-/**
- * The start of an export. A field this control does not know is dropped (a newer supervisor may
- * send more, goal 012): the manifest's SHA-256s, checked on every file, are what guard it.
- */
-const Begin = z.object({
-  manifest: Manifest,
-  /** The files the rig sends, each with its size in bytes. */
-  files: z.record(RelPath, z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)),
-});
-
-/** The pieces a rig sends: at most this many bytes each. */
-export const EXPORT_PIECE_LIMIT = 16 * 1024 * 1024;
 
 export class ExportFiles {
   readonly dir: string;
@@ -184,7 +157,7 @@ export class ExportFiles {
         };
       }
       renameSync(part, target);
-      const { complete } = store.rigExportFileDone(e.rig, e.name, path);
+      const { complete } = store.exports.fileDone(e.rig, e.name, path);
       return { ok: true, received: want.size, done: true, complete };
     } finally {
       this.busy.delete(key);
@@ -206,13 +179,13 @@ export function archiveResponse(
   rig: string,
   name: string,
 ): Response {
-  const e = EXPORT_NAME.test(name) ? o.store.rigExport(rig, name) : undefined;
+  const e = EXPORT_NAME.test(name) ? o.store.exports.get(rig, name) : undefined;
   if (!e) return c.json({ error: "no such export" }, 404);
   if (!o.files)
     return c.json({ error: "control keeps no exports: it has no folder for them" }, 404);
   const entries = o.files.archiveEntries(e);
   if (typeof entries === "string") return c.json({ error: entries }, 404);
-  o.store.audit(o.by, "export_downloaded", { rig, export: name, files: entries.length - 1 });
+  o.store.auditLog.add(o.by, "export_downloaded", { rig, export: name, files: entries.length - 1 });
   return c.body(Readable.toWeb(tarGz(entries)) as ReadableStream, 200, {
     "content-type": "application/gzip",
     "content-disposition": `attachment; filename="${archiveName(e)}"`,
@@ -257,15 +230,15 @@ export function mountExports(
   const noFolder = "control keeps no exports: it has no folder for them";
 
   app.post(
-    "/v1/rigs/:rig/exports/:name",
+    EXPORT_BEGIN.path,
     o.rigAuth,
-    bodyLimit({ maxSize: 8 * 1024 * 1024 }),
+    bodyLimit({ maxSize: EXPORT_BEGIN.maxBytes }),
     async (c) => {
       const rig = c.req.param("rig");
       const name = c.req.param("name");
       if (!EXPORT_NAME.test(name)) return c.json({ error: "not an export's name" }, 400);
       if (!files) return c.json({ error: noFolder }, 503);
-      const body = Begin.parse(await c.req.json());
+      const body = EXPORT_BEGIN.body.parse(await c.req.json());
       const m = body.manifest;
       if (m.rig !== undefined && m.rig !== rig)
         return c.json({ error: "the manifest names another rig" }, 400);
@@ -281,7 +254,7 @@ export function mountExports(
       const promised = Object.fromEntries(
         Object.entries(body.files).map(([p, size]) => [p, { size, sha256: m.files[p] as string }]),
       );
-      const r = store.beginRigExport(rig, name, {
+      const r = store.exports.begin(rig, name, {
         manifest: m,
         files: promised,
         full: m.full === true,
@@ -291,7 +264,7 @@ export function mountExports(
       if (r === "different")
         return c.json({ error: `control has another export named ${name} from this rig` }, 409);
       if (r === "created") files.writeManifest(rig, name, m);
-      const e = store.rigExport(rig, name) as RigExport;
+      const e = store.exports.get(rig, name) as RigExport;
       return c.json({
         received: Object.fromEntries(Object.keys(e.files).map((p) => [p, files.received(e, p)])),
         done: e.done,
@@ -300,37 +273,32 @@ export function mountExports(
     },
   );
 
-  app.post(
-    "/v1/rigs/:rig/exports/:name/file",
-    o.rigAuth,
-    bodyLimit({ maxSize: EXPORT_PIECE_LIMIT }),
-    async (c) => {
-      const rig = c.req.param("rig");
-      const name = c.req.param("name");
-      if (!files) return c.json({ error: noFolder }, 503);
-      const e = EXPORT_NAME.test(name) ? store.rigExport(rig, name) : undefined;
-      if (!e) return c.json({ error: `no export ${name}: start it first` }, 404);
-      const path = c.req.query("path") ?? "";
-      if (!(path in e.files))
-        return c.json({ error: `${path} is not a file this export sends` }, 400);
-      const offset = Number(c.req.query("offset"));
-      if (!Number.isSafeInteger(offset) || offset < 0)
-        return c.json({ error: "offset is a whole number from 0" }, 400);
-      const piece = Buffer.from(await c.req.arrayBuffer());
-      const r = await files.append(store, e, path, offset, piece);
-      if (!r.ok) return c.json({ error: r.error, received: r.received }, r.status);
-      return c.json({ received: r.received, done: r.done, complete: r.complete });
-    },
-  );
+  app.post(EXPORT_FILE.path, o.rigAuth, bodyLimit({ maxSize: EXPORT_PIECE_MAX }), async (c) => {
+    const rig = c.req.param("rig");
+    const name = c.req.param("name");
+    if (!files) return c.json({ error: noFolder }, 503);
+    const e = EXPORT_NAME.test(name) ? store.exports.get(rig, name) : undefined;
+    if (!e) return c.json({ error: `no export ${name}: start it first` }, 404);
+    const path = c.req.query("path") ?? "";
+    if (!(path in e.files))
+      return c.json({ error: `${path} is not a file this export sends` }, 400);
+    const offset = Number(c.req.query("offset"));
+    if (!Number.isSafeInteger(offset) || offset < 0)
+      return c.json({ error: "offset is a whole number from 0" }, 400);
+    const piece = Buffer.from(await c.req.arrayBuffer());
+    const r = await files.append(store, e, path, offset, piece);
+    if (!r.ok) return c.json({ error: r.error, received: r.received }, r.status);
+    return c.json({ received: r.received, done: r.done, complete: r.complete });
+  });
 
   app.get("/v1/rigs/:rig/exports", o.admin, (c) =>
     c.json({
-      exports: store.rigExports(c.req.param("rig"), 1000).map((e) => exportSummary(files, e)),
+      exports: store.exports.ofRig(c.req.param("rig"), 1000).map((e) => exportSummary(files, e)),
     }),
   );
 
   app.get("/v1/rigs/:rig/exports/:name", o.admin, (c) => {
-    const e = store.rigExport(c.req.param("rig"), c.req.param("name"));
+    const e = store.exports.get(c.req.param("rig"), c.req.param("name"));
     if (!e) return c.json({ error: "no such export" }, 404);
     return c.json({
       ...exportSummary(files, e),
@@ -350,7 +318,7 @@ export function mountExports(
   );
 
   app.get("/v1/rigs/:rig/exports/:name/file", o.admin, (c) => {
-    const e = store.rigExport(c.req.param("rig"), c.req.param("name"));
+    const e = store.exports.get(c.req.param("rig"), c.req.param("name"));
     const path = c.req.query("path") ?? "";
     if (!e || !files || !e.done.includes(path) || !e.files[path])
       return c.json({ error: "no such file in that export" }, 404);

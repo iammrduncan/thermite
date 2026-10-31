@@ -1,6 +1,7 @@
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import type { Stream } from "node:stream";
 
 /**
  * Supervised child processes: wall time measured here (outside the child), memory and disk
@@ -39,12 +40,25 @@ export interface SupervisedRun {
    * breach ends the run.
    */
   spareExe?: string | undefined;
+  /**
+   * The run's own first process is spared too (the terminal host, goal 169, which holds the
+   * agent's program: it runs as `node`, as the agent's commands may, so its program's name can't
+   * tell it apart). The kernel gives it its pid, which no other process can take.
+   */
+  spareRoot?: boolean | undefined;
   /** Kill when this directory grows beyond this many bytes or entries (inodes) on disk. */
   disk?: { path: string; limitBytes: number; maxEntries?: number | undefined } | undefined;
   /** RLIMIT_NPROC for the role (only with uid; needs prlimit). */
   nproc?: number | undefined;
   /** Written to the child's stdin, then closed. */
   stdin?: string | undefined;
+  /**
+   * One of a pair (pair.ts): "first", its standard input and output are pipes the second run
+   * takes, so none of its output is kept here; or, for the second, those two pipes' other ends.
+   */
+  pair?: "first" | { stdin: Stream; stdout: Stream } | undefined;
+  /** Told of the process as soon as it is started: a pair's first run hands its pipes on. */
+  started?: ((child: ChildProcess) => void) | undefined;
   /** Bytes of stdout and stderr kept (the tail). */
   captureBytes?: number | undefined;
   /** With uid: the run is the user's processes holding this group (real, effective or extra). */
@@ -359,11 +373,17 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
       cwd: spec.cwd,
       env: spec.env,
       detached: true,
-      stdio: [spec.stdin !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
+      stdio:
+        spec.pair === "first"
+          ? ["pipe", "pipe", "pipe"]
+          : spec.pair
+            ? [spec.pair.stdin, spec.pair.stdout, "pipe"]
+            : [spec.stdin !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
       ...(uid !== undefined ? { uid } : {}),
       ...(gid !== undefined ? { gid } : {}),
     });
     const pgid = child.pid ?? -1;
+    spec.started?.(child);
     if (spec.stdin !== undefined && child.stdin) {
       child.stdin.on("error", () => undefined); // the child may exit without reading
       child.stdin.end(spec.stdin);
@@ -374,9 +394,10 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
       const next = prev + d.toString("utf8");
       return next.length > cap ? next.slice(next.length - cap) : next;
     };
-    child.stdout?.on("data", (d: Buffer) => {
-      stdout = keep(stdout, d);
-    });
+    if (spec.pair !== "first")
+      child.stdout?.on("data", (d: Buffer) => {
+        stdout = keep(stdout, d);
+      });
     child.stderr?.on("data", (d: Buffer) => {
       stderr = keep(stderr, d);
     });
@@ -413,7 +434,9 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
       spec.timeoutMs !== undefined ? setTimeout(() => kill("timeout"), spec.timeoutMs) : undefined;
     let ticks = 0;
     let memoryKills = 0;
-    // The agent's program, as it may appear on a command line: as given, and its real path.
+    // The agent's program, as it may appear on a command line: as given, and its real path; and
+    // the run's root, when it holds the program.
+    const spareRoot = spec.spareRoot ? child.pid : undefined;
     const spareNames = new Set<string>();
     if (spec.spareExe) {
       spareNames.add(spec.spareExe);
@@ -426,8 +449,10 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
     // Over the memory limit with an agent to spare: kill its commands, keep it. Only when the
     // spared processes alone are over (or none can be told apart) does the run end.
     const overMemory = (procs: Proc[]) => {
-      if (spareNames.size && existsSync("/proc/self/cmdline")) {
-        const spared = procs.filter((p) => spareNames.has(procArgv0(p.pid) ?? ""));
+      if ((spareNames.size || spareRoot !== undefined) && existsSync("/proc/self/cmdline")) {
+        const spared = procs.filter(
+          (p) => p.pid === spareRoot || spareNames.has(procArgv0(p.pid) ?? ""),
+        );
         const others = procs.filter((p) => !spared.includes(p));
         const sparedRss = spared.reduce((s, p) => s + p.rssBytes, 0);
         if (spared.length && others.length && sparedRss <= (spec.rssLimitBytes ?? 0)) {

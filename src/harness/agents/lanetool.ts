@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { errorText } from "../../common/errors.ts";
 
 /**
  * The lane's file tool. The broker runs it as the lane's own user with the workspace as the
@@ -157,7 +158,5 @@ try {
   const result = run(String(op), JSON.parse(json ?? "{}") as Record<string, unknown>);
   process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 } catch (err) {
-  process.stdout.write(
-    `${JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) })}\n`,
-  );
+  process.stdout.write(`${JSON.stringify({ ok: false, error: errorText(err) })}\n`);
 }

@@ -1,0 +1,58 @@
+---
+id: "174"
+title: "Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows"
+status: READY
+version: "0.1.1"
+depends_on: ["160"]
+created: 2026-10-27
+updated: 2026-10-27
+---
+
+# 174 · Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows
+
+**Status:** `READY` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [160](_completed/160-v010-audit.goal)
+
+## What
+
+Design invariant 3, "Nothing is destroyed", says bad evidence is invalidated, never deleted, with the invalidation propagated to whatever depended on it. The ledger has the mechanism, `ledger.verdicts.invalidate()` (`src/harness/ledger/verdicts.ts`), tested, but nothing calls it: [Verdicts](../../_site/src/content/docs/reference/verdicts.md) says the `invalidated` verdict is not recorded in this version. The v0.1.1 audit (goal [160](_completed/160-v010-audit.goal)) found it, and the owner decided to wire it to a command of their own, in a goal of its own.
+
+1. **An owner-only signed command**, "invalidate this evidence": an attempt, or a judge's job whose measurements are withdrawn, with the reason. The harness checks it as every command and calls `Ledger.invalidate()`.
+2. **The propagation, as the ledger does it:** an invalidated attempt and every attempt built on it are invalid for good; attempts whose job evidence was withdrawn may be measured again, and their descendants judged again; their verdicts are superseded by new records; a champion that rested on them is reopened, and the run's champion moves back with a recorded step. Nothing is deleted.
+3. **Shown everywhere:** the dashboard (on the attempt's page, with what the invalidation reached), REST, MCP and the command line, each with what it will reach before the owner confirms; the events reach control, the exports and the knowledge base.
+4. **The states nothing sets today** (the `neutral_simplify` verdict among them) are either set by this goal or removed with a recorded reason (goal [061](061-gaps-found-by-the-docs.goal)).
+
+## Why
+
+The owner, 2026-10-26, on the clean-up guide's question 25: "`Ledger.invalidate()` is wired to an owner's command, in a goal of its own." The audit's reviewers of the harness, the data and the tests each found it unreachable (lanes 2, 5 and 7).
+
+## Constraints
+
+- **Agents propose; code judges.** Only the owner invalidates; no agent and no advisor can.
+- **Nothing is destroyed.** Every step is a new record; the evidence stays in the ledger, marked.
+- **Commands are signed,** and the harness checks them itself, as for every owner-only kind.
+- **Docs follow the code:** the verdicts reference, the signed commands, the attempt's page and the MCP and REST references.
+
+## Done when
+
+- [ ] The command exists on the dashboard, REST, MCP and the command line, owner only, and shows what it will reach before it is confirmed.
+- [ ] Tests show an invalidated attempt, its descendants, a superseded verdict and a reopened champion, with the record whole.
+- [ ] The states nothing set are set or removed, with the docs saying which.
+- [ ] The fast checks, the docs checks, and the judge, control and steering acceptance checks pass.
+
+## Decisions
+
+- 2026-10-26, owner: wired to an owner's command, "invalidate this evidence", with its propagation, in a goal of its own.
+- 2026-10-29 17:03 UTC, owner: when results go to the project's own `thermite/<run>/champion` branch (the owner's design of 2026-10-27, not built yet), a champion withdrawn after it was pushed there is never force-moved: Thermite records the withdrawal by a new commit back to the champion that still stands, and a tag on the withdrawn one, so the branch's history keeps it.
+
+## Open questions
+
+## Progress
+
+- 2026-10-27 00:24 UTC: Goal written from the owner's decision and the audit's findings, so that goal 172 holds every finding.
+- 2026-10-29 10:45 UTC: Built whole: `invalidate_evidence` (owner only; the operator agent refused too), with a preview the harness works out and a confirmation bound to its sha, on the dashboard's attempt page (**Withdraw its evidence…**, **See what it reaches**, **Withdraw the evidence**), REST, MCP and `thermite invalidate`; the walk shared by the preview and the ledger; the open jobs of every attempt reached cancelled (`job_cancelled`), attempts judged again or settled, `champion_moved_back` with the champion's ref synced, a later change on an attempt withdrawn for good withdrawn as it arrives; control's views, History, published champion and knowledge base follow. `neutral_simplify` is removed (nothing recorded it; the judge has no measure of simpler code); `invalidated` is recorded. Docs: a how-to (Withdraw bad evidence), verdicts, signed commands, command line, REST, MCP, knowledge base; changelog. Tests: harness 4, system 3. The full suite passed with goal 173's backup work (2,097 and 154, none failing). Left: the judge, control and steering acceptance checks on this commit.
+- 2026-10-30 18:21 UTC: Verified at b48f15a0. Items 1 and 2 are met: the dashboard, REST, MCP and the command line each preview before they confirm (`tests/system/invalidate-evidence.test.ts`; new, `tests/cli/thermite/evidence.test.ts`: without --yes the command line withdraws nothing); only the owner may withdraw (`tests/harness/service/invalidation.test.ts`); the propagation keeps the record whole (`tests/harness/service/invalidation.test.ts`, `tests/harness/ledger.test.ts`). Item 3 is met for `invalidated`, `neutral_simplify` and the judge job's `cancelled`; the goal and family status `blocked` from goal 061's list is neither set nor removed, and is being removed. Item 4 waits for the judge, control and steering checks on the last commit.
+- 2026-10-30 18:35 UTC: The goal and family status `blocked` (goal 061's list), which nothing set in any version, is removed (pushed in b421d0ae): `FamilyStatus` is `live` or `exhausted`, the unused `Registry.setFamilyStatus` is gone, and `setFamilyStatus` always compares; the old migrations' checks keep `blocked` as written, commented, since old ledgers are kept. The verdicts page's Other states says nothing sets `blocked` for a goal or a family and what each takes. Test: `tests/harness/ledger/trials.test.ts`. Item 3 is met. Left: item 4's checks on the last commit.
+
+---
+
+Run with `/goal Complete docs/plan/goals/174-invalidate-evidence.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

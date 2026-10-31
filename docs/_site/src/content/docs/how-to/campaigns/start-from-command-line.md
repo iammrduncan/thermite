@@ -50,7 +50,7 @@ Run `thermite assign` as in the example at the top. Control signs the command an
 | Option | What it does |
 | --- | --- |
 | `--contract F` | The contract file. Required |
-| `--run ID` | The new run's name: lowercase letters, digits, dots, dashes and underscores. It must be new on that rig. Required |
+| `--run ID` | The new run's name: up to 64 lowercase letters, digits, dashes and underscores, starting with a letter or a digit. It must be new on control: a name used on any rig, also by a run from before a full reset, is refused. Required |
 | `--seed GIT_URL@COMMIT` | Where the project comes from, and the full commit to start from. Without `@COMMIT`, the contract's `project.commit`. The rig keeps the project under the contract's `project.repo` name |
 | `--seed-commit C` | Instead of `--seed`: a full commit already on the rig, such as an earlier run's champion |
 | `--kit GIT_URL` | Where the kit comes from. Its commit comes from the contract. Leave it out when the rig already has that kit commit |
@@ -58,7 +58,7 @@ Run `thermite assign` as in the example at the top. Control signs the command an
 | `--model NAME=URL` | A [model file](../../reference/glossary.md) the contract lists under `models`: a data file your project loads, such as a model's weights, with the address to fetch it from. Only a file with the contract's sha256 reaches the harness. Repeat for each model. For a large file, give the assignment time with `--ttl`: see [Bring a model's weights to a run](model-weights.md) |
 | `--agents off` | A run with no agents: only the judge works. See [Test a kit with known candidates](test-a-kit.md) |
 | `--promotion auto` or `owner` | `auto`: a confirmed win becomes the champion at once. `owner`: it waits for you. Unset: the rig's default |
-| `--queue-from RUN` | Start the new run's queue with the untried experiments of an earlier run on the same rig, or `RIG/RUN` on another rig. Off unless you give it. See [Start further runs](#start-further-runs) |
+| `--queue-from RUN` | Start the new run's queue with the untried experiments of an earlier run, by its name, on any rig. Off unless you give it. See [Start further runs](#start-further-runs) |
 | `--mcp-servers JSON` or `@file` | The MCP servers the kit's `kit.json` names, as it names them. Needed when it names some: the rig refuses a run whose list differs. See [Give agents MCP tools](give-agents-mcp-tools.md#3-start-the-run) |
 | `--control URL`, `--token-file F`, `--rig R` | Control's address, the owner's token file and the rig |
 | `--ttl MIN` | How long the command may wait to be delivered, in minutes: 60 unless set, at most 10080 |
@@ -68,7 +68,7 @@ With neither `--seed` nor `--seed-commit`, the contract's `project.commit` must 
 
 ## 3. Check that it started
 
-- On the dashboard, open **Commands** in the sidebar. The **assign campaign** row shows **delivered** once the harness took it, or **failed** with the reason: see [If it is refused](#if-it-is-refused).
+- On the dashboard, open **Commands** in the sidebar. The **assign campaign** row shows **delivered** once the rig's report says the harness took it, within a minute, or **failed** with the reason: see [If it is refused](#if-it-is-refused).
 - Open **Campaigns**. The run shows under **At work now**, and the campaign in the list below, once the rig reports the run, usually within a minute. Press **refresh** in the status bar, the line along the bottom of the page: pages don't reload by themselves.
 - From a script, ask control with the owner's token:
 
@@ -89,7 +89,7 @@ npx thermite assign --contract contract.json --run sort-speed-2 \
   --control http://127.0.0.1:8800 --token-file .dev/secrets/control-admin-token --rig local-1
 ```
 
-The new run's queue starts with `sort-speed-1`'s experiments up next, in their order, then its lanes' ideas, at most 500, as **Start a run** copies them. The command reads them from control, with each one's words and author from control's records, so it needs `--control` and `--token-file` even with `--print`. For a run on another rig, write `rig-2/sort-speed-1`. A run without agents (`--agents off`) can't take them. Without `--queue-from`, the new run's queue starts empty and the planner fills it.
+The new run's queue starts with `sort-speed-1`'s experiments up next, in their order, then its lanes' ideas, at most 500, as **Start a run** copies them. The command reads them from control, with each one's words and author from control's records, so it needs `--control` and `--token-file` even with `--print`. Control knows the run by its name wherever it ran: on another rig, on a retired rig or before a full reset. A run without agents (`--agents off`) can't take them. Without `--queue-from`, the new run's queue starts empty and the planner fills it.
 
 Or let control assign it again, as **Start a run** on the campaign's page does, with `thermite run start`:
 
@@ -102,7 +102,7 @@ It needs no contract and no commit: control reuses those of the campaign's newes
 
 Or open the campaign's page on the dashboard and press **Start a run**: choose the rig under **Where it runs**, **Agents** **On** or **Off: a try**, and press **Start the run**. The page is `/ui/campaigns/<name>`, such as `http://127.0.0.1:8800/ui/campaigns/sort-speed`. It opens once the **assign campaign** row on **Commands** is **pending** or **delivered**, even before the rig reports the run. Until the rig does, the **Campaigns** list doesn't show the campaign, and the page says `Assigned to a rig over the API, MCP or the CLI; no run of it reports now.` A campaign saved from the dashboard's **New campaign** page says `Saved on control, with no run yet.` instead.
 
-Control assigns the campaign again as it assigned its newest run, with the same contract, starting commit and imports, as a new run named `<campaign>-<n>`, or `<campaign>-try-<n>` without agents, with the first number not yet used on that rig, such as `sort-speed-2`. **Agents**, and **When a change is confirmed better** under **More options**, come from the panel, not from the old assignment. With **Agents** **On**, **Experiments to start with** can copy another run's untried experiments into the new run's queue: see [Choose what a run tries next](choose-what-runs-next.md#start-a-run-from-another-runs-untried-experiments). **From past research** can add experiments, and background for the agents' briefs, from the folders the campaign may read in Thermite's knowledge base: see [Use past research in a new run](use-past-research.md#start-a-run-from-past-research). `thermite assign` has no option for past research: use `thermite run start --past`, or send a payload with `thermite command`, as that page shows. A run on another rig needs that rig to get the project and the kit the same way: see [Run a campaign on several rigs](several-rigs.md).
+Control assigns the campaign again as it assigned its newest run, with the same contract, starting commit and imports, as a new run named `<campaign>-<n>`, or `<campaign>-try-<n>` without agents, with the first number not yet used on that rig, such as `sort-speed-2`. **Agents**, and **When a change is confirmed better** under **More options**, come from the panel, not from the old assignment. With **Agents** **On**, **Experiments to start with** can copy another run's untried experiments into the new run's queue: see [Choose what a run tries next](choose-what-runs-next.md#start-a-run-from-another-runs-untried-experiments). **From past research** can add experiments, and background for the agents' briefs, from the collections the campaign may read in Thermite's knowledge base: see [Use past research in a new run](use-past-research.md#start-a-run-from-past-research). `thermite assign` has no option for past research: use `thermite run start --past`, or send a payload with `thermite command`, as that page shows. A run on another rig needs that rig to get the project and the kit the same way: see [Run a campaign on several rigs](several-rigs.md).
 
 ## Send it from an agent over MCP
 
@@ -120,7 +120,7 @@ The agent sends it with the `issue_command` tool, kind `assign_campaign`, then p
 
 For the kit, give control the kit's repository instead, and start the run with `--kit control:NAME`: control keeps the kit, and the rig fetches it from control. See [Give control a kit you wrote elsewhere](write-a-kit.md#give-control-a-kit-you-wrote-elsewhere).
 
-Otherwise, put the project and the kit in the rig's inbox yourself, as git bundles that hold the commits. This works for a private repository too. The inbox is `/inbox` in the rig's containers, and `.dev/inbox` in your Thermite folder on the local stack:
+Otherwise, put the project and the kit in the rig's inbox yourself, as git bundles that hold the commits. This works for a private repository too. The inbox is `/inbox` in the rig's supervisor, and `.dev/inbox` in your Thermite folder on the local stack:
 
 ```sh
 mkdir -p .dev/inbox/repos
@@ -173,10 +173,11 @@ The command line itself prints a refusal from its own checks or from control. A 
 | `the seed commit must be a full commit id (40 or 64 hexadecimal characters)` | The terminal | Give the whole commit after `@` |
 | `--kit given, but the contract names no project.kit` | The terminal | Add `project.kit` to the contract |
 | `a run without agents has no queue: leave out --queue-from` | The terminal | Leave out `--queue-from`, or `--agents off` |
-| `-> 404 {"error":"no run sort-speed-1 on local-1"}` | The terminal | Check the run's name and its rig on the campaign's page, and write `RIG/RUN` for a run on another rig |
+| `-> 404 {"error":"no run sort-speed-1"}` | The terminal | Check the run's name on the campaign's page |
 | `-> 401 {"error":"unauthorized"}` | The terminal | Use the owner's token |
 | `bad assign_campaign payload: seed.repo: lowercase id` | The terminal | Make the contract's `project.repo` a lowercase name, such as `my-project` |
 | `-> 400 {"error":"The kit names the MCP server paper-search, and Settings has no server of that name. …"}` | The terminal | Add the server in **Settings › Providers**, or take it out of the kit |
+| `-> 400 {"error":"run sort-speed-1 was used already, on local-1: a run's name is used once on control, on every rig. Choose another, such as sort-speed-2"}` | The terminal | Use the name it suggests, or another new one |
 | **failed**, `run <id> already exists` | **Commands** | Choose a new run name |
 | **failed**, `contract <campaign> v<n> exists with other content` | **Commands** | You changed the contract: raise its `version` |
 | **pending**, then **expired** | **Commands** | The rig's supervisor is down, or a large fetch took longer than the command may wait: send it again with a longer `--ttl` |

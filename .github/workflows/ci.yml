@@ -6,7 +6,14 @@
 # campaign assigned through control, a candidate judged), the one-container rig image's
 # acceptance, rigs on RunPod against the fake RunPod API, and the quick start as a tester follows
 # it. On a version tag, and when run by hand, every job runs. The heavy jobs wait only for the
-# short job that decides which of them run (heavy); the other jobs start at once.
+# short job that decides which of them run (heavy); the other jobs start once the run is approved.
+#
+# No run uses runners until a maintainer approves it (the owner, 2026-10-29: "prs require approval
+# before running them"): the first job, approval, deploys to the repository's environment ci,
+# whose required reviewers approve it, and every other job waits for it.
+#
+# Each action is pinned by its commit, with its version in a comment; Dependabot moves both
+# (tests/release/workflows.test.ts holds every workflow to it).
 name: ci
 
 on:
@@ -26,8 +33,17 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Waits for a reviewer of the environment ci to approve the run; one approval starts every job.
+  approval:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ci
+    steps:
+      - run: echo "Approved; the run's jobs start."
+
   checks:
     name: checks (Node ${{ matrix.node }})
+    needs: approval
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -35,8 +51,8 @@ jobs:
       matrix:
         node: ["22", "24"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -47,11 +63,14 @@ jobs:
       - run: node scripts/test.mjs --part parallel
       # Generic patterns only here; maintainers' checkouts add a private denylist.
       - run: npm run check:public
+      - run: npm run check:sizes
+      - run: npm run check:imports
 
   # The judge's and the broker's tests time real processes, so they run one file at a time, on a
   # machine with nothing else on it.
   judge-tests:
     name: judge tests (Node ${{ matrix.node }})
+    needs: approval
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -59,8 +78,8 @@ jobs:
       matrix:
         node: ["22", "24"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -69,11 +88,12 @@ jobs:
 
   docs:
     name: docs site
+    needs: approval
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -91,6 +111,7 @@ jobs:
   # for the made-up keys in .gitleaks.toml. Findings are printed with their values redacted.
   secrets:
     name: secret scan
+    needs: approval
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -98,7 +119,7 @@ jobs:
       # gitleaks_8.30.1_linux_x64.tar.gz, from gitleaks_8.30.1_checksums.txt in the release.
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Install gitleaks
@@ -119,8 +140,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -138,14 +159,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # The images build Thermite themselves; the script runs control's side of pull mode itself.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: node scripts/rig-image-acceptance.mjs
+      - run: node scripts/acceptance/rig-image.mjs
         env:
           COMPOSE: docker compose
 
@@ -158,13 +179,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: node scripts/runpod-acceptance.mjs
+      - run: node scripts/acceptance/runpod.mjs
         env:
           COMPOSE: docker compose
 
@@ -173,6 +194,7 @@ jobs:
   # file's path) the change touches.
   heavy:
     name: heavy checks, needed?
+    needs: approval
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -181,7 +203,7 @@ jobs:
       runpod: ${{ steps.paths.outputs.runpod }}
       quick_start: ${{ steps.paths.outputs.quick_start }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - id: paths
@@ -190,55 +212,70 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           BASE: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
-          # The containers and compose files, the APIs and the relay, and the smoke test.
+          # The containers and compose files, the APIs and the relay, the advisors' runner, and the
+          # smoke test.
           COMPOSE: |
             ^containers/
             ^compose[^/]*\.yaml$
             ^package(-lock)?\.json$
             ^kits/smoke-cpu/
-            ^src/(control|harness)/api\.ts$
+            ^src/(control|harness)/api(\.ts|/)
             ^src/(control|harness|supervisor)/main\.ts$
-            ^src/supervisor/relay\.ts$
-            ^scripts/(compose-smoke|stage-smoke)\.mjs$
-            ^scripts/lib/
+            ^src/harness/controller/
+            ^src/supervisor/relay(\.ts|/)
+            ^src/supervisor/advisor-runs/
+            ^src/common/run-as/
+            ^scripts/acceptance/(compose-smoke|stage-smoke)\.mjs$
+            ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
-          # The rig image and the harness image under it, the broker, the isolation selftest and
-          # pull mode's enrollment.
+          # The rig image and the harness image under it, the broker, the isolation selftest, the
+          # advisors' runner and pull mode's enrollment.
           RIG_IMAGE: |
             ^containers/(rig|harness)/
             ^package(-lock)?\.json$
             ^src/harness/broker(\.ts|/)
-            ^src/harness/selftest\.ts$
-            ^src/(core|control)/tunnel\.ts$
-            ^scripts/rig-image-acceptance\.mjs$
-            ^scripts/lib/
+            ^tests/harness/broker/
+            ^src/harness/selftest(\.ts|/)
+            ^src/supervisor/advisor-runs/
+            ^src/common/run-as/
+            ^src/core/tunnel\.ts$
+            ^src/control/runpod/tunnel\.ts$
+            ^src/core/paths\.ts$
+            ^scripts/acceptance/rig-image\.mjs$
+            ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
           # Rigs on RunPod, pull mode, results sent to control, and the rig image.
           RUNPOD: |
             ^src/control/runpod
-            ^src/control/(tunnel|exports)\.ts$
-            ^src/core/tunnel\.ts$
-            ^src/supervisor/(export-upload|relay)\.ts$
-            ^src/testing/fake-runpod\.ts$
+            ^tests/control/runpod/
+            ^tests/control/dashboard/runpod\.test\.ts$
+            ^src/control/exports\.ts$
+            ^src/control/store/(runpod|tunnels|exports)\.ts$
+            ^src/core/(tunnel|paths)\.ts$
+            ^src/supervisor/export-upload\.ts$
+            ^src/supervisor/relay(\.ts|/)
+            ^tests/helpers/fake-runpod\.ts$
             ^containers/rig/
-            ^scripts/runpod-acceptance\.mjs$
-            ^scripts/lib/
+            ^scripts/acceptance/runpod\.mjs$
+            ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
           # The images and compose files, the release bundle, the quick start's pages, the sample
           # and the smoke kit the rig's check runs, and this test itself.
           QUICK_START: |
             ^containers/
             ^compose[^/]*\.yaml$
-            ^scripts/release-bundle\.ts$
+            ^scripts/release/bundle\.ts$
             ^src/release/
+            ^tests/release/
             ^docs/_site/src/content/docs/tutorials/(first-run|agents-with-a-free-model)\.md$
             ^docs/_site/src/content/docs/how-to/install/one-machine\.md$
             ^docs/_site/src/content/docs/how-to/operate/troubleshoot\.md$
             ^examples/
             ^kits/smoke-cpu/
-            ^scripts/quick-start-acceptance\.mjs$
-            ^scripts/lib/
-            ^src/testing/quick-start\.ts$
+            ^scripts/acceptance/quick-start(\.mjs$|/)
+            ^scripts/acceptance/lib/
+            ^tests/helpers/quick-start\.ts$
+            ^tests/docs/quick-start\.test\.ts$
             ^\.github/workflows/ci\.yml$
         run: |
           all=
@@ -271,8 +308,8 @@ jobs:
             fi
           done
 
-  # The quick start on a clean runner, as a tester follows it (scripts/quick-start-acceptance.mjs):
-  # this commit's images in a release bundle written by scripts/release-bundle.ts, init and up,
+  # The quick start on a clean runner, as a tester follows it (scripts/acceptance/quick-start.mjs):
+  # this commit's images in a release bundle written by scripts/release/bundle.ts, init and up,
   # the rig's checks, thermite doctor, then the sample campaign in examples/matmul-cpu to the
   # judge's first verdict, with the scripted model of the agents acceptance (no key, no network
   # model). It reads its steps from the tutorials, so a page that breaks the quick start fails it.
@@ -282,17 +319,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Node.js for the test itself, and for `npm ci` in the tester's thermite-source folder.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
-      - run: node scripts/quick-start-acceptance.mjs
+      - run: node scripts/acceptance/quick-start.mjs
         env:
           COMPOSE: docker compose
       # What each check found, and how long each step took.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: quick-start-report

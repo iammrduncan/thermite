@@ -7,10 +7,15 @@ import {
   type KeyObject,
 } from "node:crypto";
 import { z } from "zod";
-import { canonicalJson } from "./canonical.ts";
+import { canonicalJson, sha256Hex } from "./canonical.ts";
 import { CommitSchema, IdSchema, MAX_LANES, MAX_LANES_REASON, Sha256Schema } from "./contract.ts";
-import { DirectionRef, directionName } from "./directions.ts";
+import { directionName } from "./directions.ts";
+import { StructuredDirective } from "./directives.ts";
+import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
+import { InvalidateEvidence } from "./invalidation.ts";
 import { McpUses } from "./mcp.ts";
+import { PROGRAM_MODES } from "./rig-settings.ts";
+import { TerminalInput } from "./terminal-input.ts";
 
 /**
  * Control commands. Control signs every command with its Ed25519 key; the harness verifies
@@ -92,88 +97,7 @@ export const ImportSpec = z.discriminatedUnion("kind", [
 ]);
 export type ImportSpec = z.infer<typeof ImportSpec>;
 
-/**
- * Low-power steering. Strict: a directive cannot carry anything but these fields, so it cannot
- * set a verdict, a contract or text for workers. AVOID, TRY and MANDATE name a direction (goal
- * 066), in plain words or as `:name:`, kept as its name; code keeps them at every hand-out. A
- * direction the run doesn't have yet is the planner's to design at its next round. PRIORITY ranks a
- * direction; LANE_COUNT sets the lanes (up to the contract's count); TRIAL_MINUTES sets how long
- * one trial lasts, in minutes (value, 1 to 1,440), over the contract's; KEEP_WORKING turns the
- * run's lanes keeping working while the judge works on or off (value, on or off), over the
- * contract's; NOTE is free text for the
- * planner only. The planner sees rationales and notes; workers never do. A rule in words that
- * names no direction (`match`) is no longer made: one already in a ledger stays in force as
- * legacy (isLegacyRule) until the planner's next round converts it to a named direction.
- */
-/** The kinds of directive. None of them is ever a direction's name (a lane "on try"). */
-export const DIRECTIVE_KINDS = [
-  "avoid",
-  "try",
-  "mandate",
-  "priority",
-  "lane_count",
-  "trial_minutes",
-  "keep_working",
-  "note",
-] as const;
-
-export const StructuredDirective = z
-  .strictObject(
-    {
-      kind: z.enum(DIRECTIVE_KINDS),
-      /** The direction the directive is about: plain words or `:name:`, kept as its name. */
-      family: DirectionRef.optional(),
-      value: z.union([z.string().max(1000), z.number()]).optional(),
-      /** Why, with citations; shown to the planner, never to workers. */
-      rationale: z.string().min(1).max(2000),
-      citations: z.array(z.string().min(1).max(500)).max(20).default([]),
-    },
-    {
-      error: (iss) =>
-        iss.code === "unrecognized_keys" && iss.keys.includes("match")
-          ? "a rule no longer takes match: name its direction in family, in plain words or as :name:"
-          : undefined,
-    },
-  )
-  // A research run's TRY or MANDATE may name a question by its number (value) instead.
-  .refine(
-    (d) =>
-      !["avoid", "try", "mandate"].includes(d.kind) ||
-      d.family !== undefined ||
-      (d.kind !== "avoid" && d.value !== undefined),
-    {
-      message: "an avoid, try or mandate rule names a direction (family)",
-      path: ["family"],
-    },
-  )
-  .refine(
-    (d) =>
-      d.kind !== "trial_minutes" ||
-      (Number.isInteger(d.value) && Number(d.value) >= 1 && Number(d.value) <= 1440),
-    {
-      message: "a trial_minutes rule gives value: minutes, a whole number from 1 to 1440",
-      path: ["value"],
-    },
-  )
-  .refine((d) => d.kind !== "keep_working" || d.value === "on" || d.value === "off", {
-    message: "a keep_working rule gives value: on or off",
-    path: ["value"],
-  });
-export type StructuredDirective = z.infer<typeof StructuredDirective>;
-
-/**
- * A rule as a ledger holds it: a directive, the owner's message a planner's rule came from, and,
- * for an old rule in words (legacy), its words. A rule the planner converted from an old rule in
- * words names that rule and its words (`converted_from`).
- */
-export type StoredRule = StructuredDirective & {
-  from_message?: number | undefined;
-  match?: string | undefined;
-  converted_from?: { rule: number; words: string } | undefined;
-};
-
-/** An experiment in a run's queue (goal 064): `x-` and 12 hex characters. */
-export const ExperimentId = z.string().regex(/^x-[0-9a-f]{12}$/, "an experiment id (x-...)");
+export { ExperimentId };
 
 /** Where an experiment goes among the queued ones: first, last, or at an index (0 first). */
 export const QueuePosition = z.union([
@@ -217,7 +141,7 @@ export const QueueSeed = z.strictObject({
   why: z.string().max(2000).optional(),
   by: z.string().min(1).max(80),
   state: z.enum(["queued", "proposed"]),
-  from: z.object({ run: IdSchema, id: z.string().min(1).max(64) }),
+  from: z.object({ run: RunId, id: z.string().min(1).max(64) }),
 });
 export type QueueSeed = z.infer<typeof QueueSeed>;
 
@@ -229,7 +153,9 @@ export const BriefingSeed = z.strictObject({
   text: z.string().trim().min(1).max(4000),
   from: z.object({
     campaign: z.string().min(1).max(200),
-    run: IdSchema,
+    /** The rig the run ran on: a run's name is unique on its rig only (goal 162). */
+    rig: z.string().min(1).max(200).optional(),
+    run: RunId,
     kind: z.string().min(1).max(40),
     ref: z.string().min(1).max(200),
   }),
@@ -241,8 +167,9 @@ export type BriefingSeed = z.infer<typeof BriefingSeed>;
  * (all of them, the teachers, the auditor or the review panel), a lane or a worker's trial.
  * The lanes stop at MAX_LANES (lanes.test.ts checks it).
  */
-export const MESSAGE_TARGET =
-  /^(all|planner|advisors|teachers|auditor|panel|lane-([1-9]|1[0-6])|trial:t-[0-9a-f]{8,32})$/;
+export const MESSAGE_TARGET = new RegExp(
+  `^(all|planner|advisors|teachers|auditor|review_panel|lane-([1-9]|1[0-6])|trial:${inner(TRIAL_ID)})$`,
+);
 
 /**
  * What a run asks the owner about (goal 079). Thermite is hands-off by default: a win the judge
@@ -261,9 +188,12 @@ export const AskOwner = z.strictObject({
 });
 export type AskOwner = z.infer<typeof AskOwner>;
 
+/** The longest a drain may wait before its deadline, in minutes: a week. */
+export const DRAIN_MINUTES_MAX = 10_080;
+
 export const CommandPayloads = {
   assign_campaign: z.object({
-    run: IdSchema,
+    run: RunId,
     /** The full contract; the harness validates it and checks contract_sha. */
     contract: z.unknown(),
     contract_sha: Sha256Schema,
@@ -302,21 +232,21 @@ export const CommandPayloads = {
     /** Isolation and smoke want an idle rig; force runs them anyway (trials may be killed). */
     force: z.boolean().optional(),
   }),
-  pause_run: z.object({ run: IdSchema, reason: z.string().min(1) }),
-  resume_run: z.object({ run: IdSchema }),
+  pause_run: z.object({ run: RunId, reason: z.string().min(1) }),
+  resume_run: z.object({ run: RunId }),
   /**
    * The owner closes a run by hand (goal 087, owner only): it ends for good, as a run that met its
    * goals does, with the owner's reason. Its trials stop, nothing new starts, its jobs waiting for
    * the judge never run, and it can't be resumed. Its records stay.
    */
-  close_run: z.object({ run: IdSchema, reason: z.string().trim().min(1).max(2000) }),
+  close_run: z.object({ run: RunId, reason: z.string().trim().min(1).max(2000) }),
   /** A directive set; by default it replaces this author's previous set. */
   redirect: z.object({
-    run: IdSchema,
+    run: RunId,
     directives: z.array(StructuredDirective).min(1).max(40),
     replace: z.boolean().default(true),
   }),
-  reset_workers: z.object({ run: IdSchema, reseed_commit: CommitSchema.optional() }),
+  reset_workers: z.object({ run: RunId, reseed_commit: CommitSchema.optional() }),
   /**
    * The owner's message to the run's agents (owner only). `to`: everyone working (`all`: every
    * lane, and the planner of a hill-climb or goal run), a lane, a running worker's trial, the
@@ -326,7 +256,7 @@ export const CommandPayloads = {
    */
   message_agent: z
     .object({
-      run: IdSchema,
+      run: RunId,
       to: z.string().regex(MESSAGE_TARGET),
       text: z.string().min(1).max(4000),
       keep: z.boolean().optional(),
@@ -336,24 +266,24 @@ export const CommandPayloads = {
       path: ["keep"],
     }),
   /** The owner ends a message kept in force (owner only): new briefs no longer carry it. */
-  unkeep_message: z.object({ run: IdSchema, message: z.number().int().positive() }),
+  unkeep_message: z.object({ run: RunId, message: z.number().int().positive() }),
   /**
    * The run's experiment queue (goal 064), the owner's changes (owner only; an operator may issue
    * them for the owner). Add an experiment (by default at the end of up next), move a queued one,
    * edit or drop one still waiting, or queue a lane's proposed idea.
    */
   queue_add: z.strictObject({
-    run: IdSchema,
+    run: RunId,
     title: ExperimentText.title,
     details: ExperimentText.details.optional(),
     family: ExperimentText.family.optional(),
     why: ExperimentText.why.optional(),
     position: QueuePosition.default("end"),
   }),
-  queue_move: z.strictObject({ run: IdSchema, id: ExperimentId, position: QueuePosition }),
+  queue_move: z.strictObject({ run: RunId, id: ExperimentId, position: QueuePosition }),
   queue_edit: z
     .strictObject({
-      run: IdSchema,
+      run: RunId,
       id: ExperimentId,
       title: ExperimentText.title.optional(),
       details: ExperimentText.details.optional(),
@@ -369,24 +299,24 @@ export const CommandPayloads = {
       { message: "change at least one of title, details, family and why" },
     ),
   queue_drop: z.strictObject({
-    run: IdSchema,
+    run: RunId,
     id: ExperimentId,
     why: z.string().trim().min(1).max(2000),
   }),
   queue_accept: z.strictObject({
-    run: IdSchema,
+    run: RunId,
     id: ExperimentId,
     position: QueuePosition.optional(),
   }),
   /** The owner removes a rule for the plan in force (a directive), whoever set it. */
-  drop_directive: z.strictObject({ run: IdSchema, id: z.number().int().positive() }),
+  drop_directive: z.strictObject({ run: RunId, id: z.number().int().positive() }),
   /**
    * A research run's hypothesis (goal 117), the owner's to change: promote one of the pool, so it
    * needs a verdict from the review panel as the author's do; return a promoted one to the pool;
    * or retire one; each with why. The author's hypotheses can't be changed this way.
    */
   hypothesis_status: z.strictObject({
-    run: IdSchema,
+    run: RunId,
     id: z.string().trim().min(1).max(64),
     status: z.enum(["promoted", "pool", "retired"]),
     reason: z.string().trim().min(1).max(2000),
@@ -396,9 +326,9 @@ export const CommandPayloads = {
    * against its own champion. The supervisor stages the file from the results repository.
    */
   propagate: z.object({
-    run: IdSchema,
+    run: RunId,
     source_rig: z.string().min(1),
-    source_run: IdSchema,
+    source_run: RunId,
     source_seq: z.number().int().positive(),
     import: ImportSpec,
   }),
@@ -406,16 +336,19 @@ export const CommandPayloads = {
    * A full export (a full reset's) also carries the research archive and the ledger snapshot.
    * With `run`, an export of that run alone (goal 103), outside the rig's chain of exports.
    */
-  export_now: z.object({ full: z.boolean().default(false), run: IdSchema.optional() }),
+  export_now: z.object({ full: z.boolean().default(false), run: RunId.optional() }),
   /**
    * The rig drains before its images change (goal 079): no new trial, plan or judge job starts,
    * and those running end as they would. The rig's report says what still runs; control restarts
    * it once nothing does, or at once when the owner skips the wait. `drain: false` ends a drain.
-   * A drain lasts until the harness restarts.
+   * A drain lasts until the harness restarts. It waits at most `deadline_minutes` (the update's;
+   * left out: the rig's THERMITE_DRAIN_MINUTES): then it records that its deadline passed, starts
+   * nothing new still, and the owner chooses (goal 173).
    */
   drain_rig: z.strictObject({
     drain: z.boolean(),
     reason: z.string().trim().min(1).max(500).optional(),
+    deadline_minutes: z.number().int().min(1).max(DRAIN_MINUTES_MAX).optional(),
   }),
   /**
    * The owner (or an operator, for the owner) stops one running trial (goal 136), such as one a
@@ -424,10 +357,16 @@ export const CommandPayloads = {
    * Nothing else stops.
    */
   stop_trial: z.strictObject({
-    run: IdSchema,
+    run: RunId,
     trial: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "a trial's id"),
     reason: z.string().trim().min(1).max(500).optional(),
   }),
+  /**
+   * The owner (or an operator, for the owner) ends a run's wait for its provider's limit now: its
+   * new trials and plans start again at once. A trial that waits in its own conversation goes on
+   * at its own time. A run that does not wait has nothing to end.
+   */
+  end_wait: z.strictObject({ run: RunId }),
   /**
    * Owner-only full reset, after control verified that `export` (an export_now's result) was
    * pushed to the results repository. The harness refuses if research was recorded after it.
@@ -441,7 +380,7 @@ export const CommandPayloads = {
    * The owner approves a confirmed win waiting for promotion (the rig's promotion policy), or overrides
    * an audit that is pending or blocked. The judge's verdict must still be promotable.
    */
-  approve_promotion: z.object({ run: IdSchema, attempt: z.string().min(1).max(64) }),
+  approve_promotion: z.object({ run: RunId, attempt: z.string().min(1).max(64) }),
   /** The rig's own settings from its Edit page (owner only): only the fields that change. */
   rig_settings: z.strictObject({
     judge: z.boolean().optional(),
@@ -457,6 +396,8 @@ export const CommandPayloads = {
     max_turns: z.number().int().min(1).max(100_000).nullable().optional(),
     /** After how many minutes without a line a trial asks the owner (goal 143); null: never. */
     quiet_minutes: z.number().int().min(1).max(1440).nullable().optional(),
+    /** How a trial's agent program runs: in its own terminal, or headless (goal 169). */
+    program_mode: z.enum(PROGRAM_MODES).optional(),
     promotion: z.enum(["auto", "owner_approval"]).optional(),
     /** How many of the rig's GPUs are the judge's (a rig configured with its GPU set). */
     judge_gpus: z.number().int().min(1).max(8).nullable().optional(),
@@ -466,28 +407,140 @@ export const CommandPayloads = {
    * blocked by) an audit: it never becomes the champion, and stays in the record as declined.
    */
   decline_promotion: z.object({
-    run: IdSchema,
+    run: RunId,
     attempt: z.string().min(1).max(64),
     note: z.string().max(2000).optional(),
   }),
   /** The owner's final acceptance (or rejection) of a goal the review panel passed. */
   accept_review: z.object({
-    run: IdSchema,
+    run: RunId,
     review: z.number().int().positive(),
     accept: z.boolean(),
     note: z.string().max(2000).optional(),
   }),
   /** The owner accepts or rejects the harness's "not possible" conclusion for a goal campaign. */
   conclude: z.object({
-    run: IdSchema,
+    run: RunId,
     proposal: z.number().int().positive(),
     accept: z.boolean(),
     note: z.string().max(2000).optional(),
   }),
+  /** The owner withdraws bad evidence (goal 174; owner only): core/invalidation.ts. */
+  invalidate_evidence: InvalidateEvidence,
+  /** The owner types into a running trial's terminal (goal 169; owner only): core/terminal-input.ts. */
+  terminal_input: TerminalInput,
 } as const;
 
 export type CommandKind = keyof typeof CommandPayloads;
 export const COMMAND_KINDS = Object.keys(CommandPayloads) as CommandKind[];
+
+// ------------------------------------------------------------------ who may issue each kind
+
+/**
+ * Kinds an agent may issue through control's MCP. Wiping state, full resets, accepting a
+ * subjective goal and accepting a "not possible" ending stay with the owner (dashboard or REST):
+ * no model is the final gate.
+ */
+export const MCP_AGENT_KINDS = [
+  "assign_campaign",
+  "pause_run",
+  "resume_run",
+  "redirect",
+  "reset_workers",
+  "export_now",
+  "rig_check",
+] as const satisfies readonly CommandKind[];
+/**
+ * An operator (a token the owner gives an operating agent) may also message the run's agents,
+ * stop a trial (goal 136) and end a run's wait for its provider, on the owner's behalf; it never
+ * approves, accepts or wipes.
+ */
+export const MCP_OPERATOR_KINDS = [
+  ...MCP_AGENT_KINDS,
+  "message_agent",
+  "unkeep_message",
+  "stop_trial",
+  "end_wait",
+  // The experiment queue and the rules for the plan (goal 064): the owner's and operators'.
+  "queue_add",
+  "queue_move",
+  "queue_edit",
+  "queue_drop",
+  "queue_accept",
+  "drop_directive",
+] as const satisfies readonly CommandKind[];
+/**
+ * The owner (admin token) may also approve or decline promotions over MCP, and close a run for
+ * good (goal 087); operators and agents never may.
+ */
+export const MCP_OWNER_KINDS = [
+  ...MCP_OPERATOR_KINDS,
+  "approve_promotion",
+  "decline_promotion",
+  "close_run",
+  // A research run's hypotheses (goal 117): which need the review panel's verdict.
+  "hypothesis_status",
+  "invalidate_evidence",
+  "terminal_input",
+] as const satisfies readonly CommandKind[];
+
+/**
+ * Kinds the harness takes only from the owner: control records the issuer in the signed envelope,
+ * and the harness refuses these from anyone else.
+ */
+export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
+  "approve_promotion",
+  "decline_promotion",
+  "accept_review",
+  "conclude",
+  "close_run",
+  "wipe_state",
+  "message_agent",
+  "unkeep_message",
+  "rig_settings",
+  "queue_add",
+  "queue_move",
+  "queue_edit",
+  "queue_drop",
+  "queue_accept",
+  "drop_directive",
+  "hypothesis_status",
+  "stop_trial",
+  "end_wait",
+  "invalidate_evidence",
+  "terminal_input",
+]);
+
+/**
+ * The kinds about one run, which its payload's `run` names (goal 170): control sends each to the
+ * rig the run is on, so a caller may name the run alone. An assignment names the rig it starts a
+ * new run on, and every other kind is about the rig itself.
+ */
+export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
+  "pause_run",
+  "resume_run",
+  "close_run",
+  "redirect",
+  "reset_workers",
+  "message_agent",
+  "unkeep_message",
+  "queue_add",
+  "queue_move",
+  "queue_edit",
+  "queue_drop",
+  "queue_accept",
+  "drop_directive",
+  "hypothesis_status",
+  "propagate",
+  "stop_trial",
+  "end_wait",
+  "approve_promotion",
+  "decline_promotion",
+  "accept_review",
+  "conclude",
+  "invalidate_evidence",
+  "terminal_input",
+]);
 
 export const Envelope = z.object({
   v: z.literal(1),
@@ -508,6 +561,12 @@ export const SignedCommand = z.object({
 });
 export type SignedCommand = z.infer<typeof SignedCommand>;
 
+/**
+ * The largest signed command, in bytes of its JSON: control refuses to sign a larger one, and the
+ * message bus takes none larger (core/link/commands.ts). The harness takes requests up to 4 MiB.
+ */
+export const COMMAND_MAX_BYTES = 3.5 * 1024 * 1024;
+
 export interface KeyPairPem {
   privateKeyPem: string;
   publicKeyPem: string;
@@ -519,6 +578,15 @@ export function generateSigningKeys(): KeyPairPem {
     privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
   };
+}
+
+/**
+ * A signing key's short fingerprint, for logs, the dashboard and the audit log: the first 16 hex
+ * digits of the SHA-256 of its public key's PEM, trimmed. The rig's harness logs its own at start,
+ * and control shows the one it pinned, so the owner can compare the two.
+ */
+export function fingerprint(pubkeyPem: string): string {
+  return sha256Hex(pubkeyPem.trim()).slice(0, 16);
 }
 
 export function signEnvelope(envelope: Envelope, privateKeyPem: string): SignedCommand {

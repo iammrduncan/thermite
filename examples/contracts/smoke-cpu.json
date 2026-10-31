@@ -19,12 +19,7 @@
     }
   },
   "guards": [],
-  "hard_constraints": [
-    {
-      "kind": "check",
-      "check": "correctness"
-    }
-  ],
+  "hard_constraints": [],
   "cells": [
     "small",
     "large"

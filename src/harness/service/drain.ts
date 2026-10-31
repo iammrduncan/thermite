@@ -1,5 +1,5 @@
 import { MAX_LANES } from "../../core/contract.ts";
-import type { Ledger } from "../ledger.ts";
+import { type Ledger, LedgerError } from "../ledger/index.ts";
 import type { TrialFacts } from "./watch.ts";
 
 /**
@@ -15,30 +15,67 @@ export interface Draining {
   since: string;
   reason: string;
   by: string;
+  /**
+   * When it stops waiting by itself (goal 173): its command's `deadline_minutes` after `since`,
+   * else the rig's THERMITE_DRAIN_MINUTES.
+   */
+  deadline: string;
+  /** When its deadline passed; absent before. The rig then waits for the owner's choice. */
+  deadline_reached?: string | undefined;
 }
 
 /** The reason recorded for the end of a drain that a restart ended. */
 export const RESTARTED = "the harness started again";
 
-/** The drain after a `drain_rig` command: a drain under way stays as it began. */
+/**
+ * The drain after a `drain_rig` command: a drain under way stays as it began, its deadline too. A
+ * new one waits `deadline_minutes`, or the rig's `minutes`, before its deadline.
+ */
 export function drainAfter(
   now: Draining | undefined,
-  p: { drain: boolean; reason?: string | undefined },
+  p: { drain: boolean; reason?: string | undefined; deadline_minutes?: number | undefined },
   by: string,
   at: Date,
+  minutes: number,
 ): Draining | undefined {
   if (!p.drain) return undefined;
-  return (
-    now ?? { since: at.toISOString(), reason: p.reason ?? "its images are about to change", by }
-  );
+  if (now) return now;
+  const wait = (p.deadline_minutes ?? minutes) * 60_000;
+  return {
+    since: at.toISOString(),
+    reason: p.reason ?? "its images are about to change",
+    by,
+    deadline: new Date(at.getTime() + wait).toISOString(),
+  };
+}
+
+/**
+ * A drain at its deadline (goal 173) stops waiting by itself: the ledger records the step once
+ * (`rig_drain` with `deadline_reached`), with what still runs. The rig goes on starting nothing new
+ * until the owner chooses, on its page or under Needs you: the change now, which stops what still
+ * runs, or the end of the drain. Nothing is chosen for the owner. True when it recorded the step.
+ */
+export function drainDeadline(
+  svc: { ledger: Ledger; draining: Draining | undefined },
+  at: Date,
+): boolean {
+  const d = svc.draining;
+  if (!d || d.deadline_reached || at.getTime() < Date.parse(d.deadline)) return false;
+  d.deadline_reached = at.toISOString();
+  const { open: _open, ...w } = workNow(svc.ledger, at, d);
+  svc.ledger.appendEvent("harness", "rig_drain", null, {
+    drain: true,
+    reason: d.reason,
+    deadline: d.deadline,
+    deadline_reached: true,
+    ...w,
+  });
+  return true;
 }
 
 /** At start: a drain the ledger leaves open was ended by the restart. Records its end. */
 export function endDrainAtStart(ledger: Ledger, by: string): boolean {
-  const last = ledger.db
-    .prepare("select body from event where kind = 'rig_drain' order by id desc limit 1")
-    .get() as { body: string } | undefined;
-  if (!last || (JSON.parse(last.body) as { drain?: unknown }).drain !== true) return false;
+  if (ledger.events.newest("rig_drain")?.body.drain !== true) return false;
   ledger.appendEvent(by, "rig_drain", null, { drain: false, reason: RESTARTED });
   return true;
 }
@@ -50,21 +87,14 @@ export function endDrainAtStart(ledger: Ledger, by: string): boolean {
  * A drain still under way runs to `now`.
  */
 export function drainSpans(ledger: Ledger, now: number): [number, number][] {
-  const first = ledger.db
-    .prepare("select min(id) as id from event where kind = 'rig_drain'")
-    .get() as { id: number | null } | undefined;
-  if (first?.id == null) return [];
+  const first = ledger.events.list("rig_drain")[0];
+  if (!first) return [];
   const spans: [number, number][] = [];
   let since: number | null = null;
-  for (const e of ledger.db
-    .prepare(
-      "select kind, at, body from event where kind in ('rig_drain', 'trial_started') and id >= ? order by id",
-    )
-    .all(first.id) as { kind: string; at: string; body: string }[]) {
+  for (const e of ledger.events.list(["rig_drain", "trial_started"], { after: first.id - 1 })) {
     const at = Date.parse(e.at);
     // Asked again while it drains: the same drain.
-    if (e.kind === "rig_drain" && (JSON.parse(e.body) as { drain?: unknown }).drain === true)
-      since ??= at;
+    if (e.kind === "rig_drain" && "drain" in e.body && e.body.drain === true) since ??= at;
     else if (since !== null) {
       spans.push([since, at]);
       since = null;
@@ -107,6 +137,11 @@ export interface Work {
   judge_jobs: number;
   draining: Draining | null;
   open?: OpenTrial[];
+  /**
+   * The calls outside a trial that run in their own terminal now (goal 169): a planner's, by the
+   * id its console and screens take. Control's Live shows each one's terminal.
+   */
+  terminals?: { id: string; run: string; role: string }[];
 }
 
 /** What the harness's watch knows of a trial; none outside the service (a drain's own event). */
@@ -130,14 +165,9 @@ export function workNow(
   draining: Draining | undefined,
   facts: FactsOf = NO_FACTS,
 ): Work {
-  const n = (sql: string, ...params: string[]) =>
-    Number((ledger.db.prepare(sql).get(...params) as { n: number } | undefined)?.n ?? 0);
   return {
-    trials: n("select count(*) as n from trial where ended_at is null"),
-    judge_jobs: n(
-      "select count(*) as n from job where state = 'leased' and lease_until > ?",
-      at.toISOString(),
-    ),
+    trials: ledger.trials.countOpen(),
+    judge_jobs: ledger.jobs.leasedAt(at),
     draining: draining ? { ...draining } : null,
     open: openTrials(ledger, facts),
   };
@@ -148,27 +178,7 @@ export function workNow(
  * what the harness's watch knows of it.
  */
 export function openTrials(ledger: Ledger, facts: FactsOf = NO_FACTS): OpenTrial[] {
-  const rows = ledger.db
-    .prepare(
-      `select t.id, t.run, t.lane, t.started_at, t.turns, t.tool_calls, t.tokens_in,
-         r.mode, x.title, x.question
-       from trial t left join run r on r.id = t.run
-         left join experiment x on x.trial = t.id
-       where t.ended_at is null order by t.started_at limit ?`,
-    )
-    .all(OPEN_MAX) as {
-    id: string;
-    run: string;
-    lane: string;
-    started_at: string;
-    turns: number | null;
-    tool_calls: number | null;
-    tokens_in: number | null;
-    mode: string | null;
-    title: string | null;
-    question: number | null;
-  }[];
-  return rows.map((t) => ({
+  return ledger.trials.openWithTasks(OPEN_MAX).map((t) => ({
     trial: t.id,
     run: t.run,
     lane: t.lane,
@@ -179,17 +189,7 @@ export function openTrials(ledger: Ledger, facts: FactsOf = NO_FACTS): OpenTrial
     tool_calls: t.tool_calls ?? 0,
     tokens_in: t.tokens_in ?? 0,
     claims:
-      t.mode === "research"
-        ? Number(
-            (
-              ledger.db
-                .prepare(
-                  "select count(*) as n from claim where run = ? and lane = ? and verified = 1 and created_at >= ?",
-                )
-                .get(t.run, t.lane, t.started_at) as { n: number }
-            ).n,
-          )
-        : null,
+      t.mode === "research" ? ledger.claims.countVerifiedOfLane(t.run, t.lane, t.started_at) : null,
     refused_again: refusedAgain(ledger, t),
     ...facts(t.id),
   }));
@@ -200,40 +200,35 @@ function refusedAgain(
   ledger: Ledger,
   t: { run: string; lane: string; started_at: string },
 ): OpenTrial["refused_again"] {
-  const again = ledger.db
-    .prepare(
-      `select count(*) as times, max(id) as id from event
-       where kind = 'fetch_refused' and subject = ? and actor = ? and at >= ?
-         and json_extract(body, '$.asked') > 1`,
-    )
-    .get(t.run, t.lane, t.started_at) as { times: number; id: number | null };
-  if (!again.id) return null;
-  const e = ledger.db.prepare("select at, body from event where id = ?").get(again.id) as {
-    at: string;
-    body: string;
-  };
-  const b = JSON.parse(e.body) as { url?: unknown; reason?: unknown; asked?: unknown };
+  // Refusals to the trial's lane since it started, of a URL asked for more than once.
+  const again = { subject: t.run, actor: t.lane, since: t.started_at, above: { asked: 1 } };
+  const e = ledger.events.newest("fetch_refused", again);
+  if (!e) return null;
   return {
-    url: String(b.url ?? ""),
-    reason: String(b.reason ?? ""),
-    asked: Number(b.asked ?? 0),
+    url: e.body.url,
+    reason: e.body.reason,
+    asked: e.body.asked ?? 0,
     at: e.at,
-    times: Number(again.times),
+    times: ledger.events.count("fetch_refused", again),
   };
 }
 
-/** drain_rig (goal 079): the drain begins, goes on or ends, and the ledger records it. */
+/**
+ * drain_rig (goal 079): the drain begins, goes on or ends, and the ledger records it, with its
+ * deadline (goal 173). `drainMinutes`: the rig's wait when the command gives none.
+ */
 export function drainCommand(
-  svc: { ledger: Ledger; draining: Draining | undefined },
-  p: { drain: boolean; reason?: string | undefined },
+  svc: { ledger: Ledger; draining: Draining | undefined; drainMinutes: number },
+  p: { drain: boolean; reason?: string | undefined; deadline_minutes?: number | undefined },
   by: string,
   at: Date,
 ): Omit<Work, "open"> {
-  svc.draining = drainAfter(svc.draining, p, by, at);
+  svc.draining = drainAfter(svc.draining, p, by, at, svc.drainMinutes);
   const { open: _open, ...w } = workNow(svc.ledger, at, svc.draining);
   svc.ledger.appendEvent(by, "rig_drain", null, {
     drain: p.drain,
     ...(p.reason ? { reason: p.reason } : {}),
+    ...(svc.draining ? { deadline: svc.draining.deadline } : {}),
     ...w,
   });
   return w;
@@ -250,11 +245,10 @@ export function askStop(
   p: { run: string; trial: string; reason?: string | undefined },
   by: string,
 ): { run: string; trial: string; lane: string; stopping: true } {
-  const t = ledger.db.prepare("select run, lane, ended_at from trial where id = ?").get(p.trial) as
-    | { run: string; lane: string; ended_at: string | null }
-    | undefined;
-  if (!t || t.run !== p.run) throw new Error(`run ${p.run} has no trial ${p.trial}`);
-  if (t.ended_at) throw new Error(`trial ${p.trial} has ended already`);
+  const t = ledger.trials.get(p.trial);
+  if (!t || t.run !== p.run)
+    throw new LedgerError("not_found", `run ${p.run} has no trial ${p.trial}`);
+  if (t.ended_at) throw new LedgerError("conflict", `trial ${p.trial} has ended already`);
   ledger.appendEvent(by, "trial_stop_asked", p.run, {
     trial: p.trial,
     lane: t.lane,

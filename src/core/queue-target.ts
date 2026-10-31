@@ -1,3 +1,5 @@
+import { EXPERIMENT_ID, inner } from "./ids.ts";
+
 /**
  * A run's target queue depth, the sameness of two ideas, and the rules that may never be set
  * (goal 081).
@@ -155,7 +157,7 @@ const FREEZES: RegExp[] = [
 ];
 
 /** An experiment's id, as a rule might name one. */
-const ID = `x-[0-9a-f]{12}`;
+const ID = inner(EXPERIMENT_ID);
 const AN_ID = String.raw`(?:experiment\s+)?(${ID})\b`;
 
 /** Words that pin a named experiment: keep it first or in place, retry it, run it again. */

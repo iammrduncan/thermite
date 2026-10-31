@@ -3,8 +3,9 @@ import { chownSync, lstatSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { log } from "../../common/env.ts";
+import { errorText } from "../../common/errors.ts";
 import { deriveKeys, parseSnapshotKey } from "./seal.ts";
-import { backupLedger, TakeJob, takeSnapshot } from "./snapshot.ts";
+import { backupLedger, TakeJob, takeSnapshot } from "./snapshot/index.ts";
 
 /**
  * The broker's helper for the rig's state snapshot (snapshot.ts), started as its own process so
@@ -66,17 +67,27 @@ async function main(): Promise<number> {
   try {
     job = TakeJob.parse(JSON.parse(readFileSync(0, "utf8")));
   } catch (err) {
-    log("broker", "could not take a snapshot of the rig's state: the last one stays", {
-      error: `the job is not valid: ${err instanceof Error ? err.message.slice(0, 300) : String(err)}`,
-    });
+    log(
+      "broker",
+      "could not take a snapshot of the rig's state: the last one stays",
+      {
+        error: `the job is not valid: ${err instanceof Error ? err.message.slice(0, 300) : String(err)}`,
+      },
+      "warn",
+    );
     return 1;
   }
   const key = parseSnapshotKey(job.key);
   if ("why" in key) {
-    log("broker", "could not take a snapshot of the rig's state: the last one stays", {
-      dir: job.dir,
-      error: key.why,
-    });
+    log(
+      "broker",
+      "could not take a snapshot of the rig's state: the last one stays",
+      {
+        dir: job.dir,
+        error: key.why,
+      },
+      "warn",
+    );
     return 1;
   }
   try {
@@ -111,11 +122,16 @@ async function main(): Promise<number> {
     });
     return 0;
   } catch (err) {
-    log("broker", "could not take a snapshot of the rig's state: the last one stays", {
-      dir: job.dir,
-      reason: job.reason,
-      error: err instanceof Error ? err.message : String(err),
-    });
+    log(
+      "broker",
+      "could not take a snapshot of the rig's state: the last one stays",
+      {
+        dir: job.dir,
+        reason: job.reason,
+        error: errorText(err),
+      },
+      "warn",
+    );
     return 1;
   } finally {
     rmSync(job.stage, { recursive: true, force: true });

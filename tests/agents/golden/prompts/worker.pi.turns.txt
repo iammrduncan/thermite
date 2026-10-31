@@ -1,0 +1,28 @@
+# turn 1
+A message from the campaign's owner, who is watching this session:
+
+Prefer a change a reader can follow.
+# turn 2
+10 turns are left in this trial. Build and test what you have, then submit your best working change now, listing anything unfinished in known_flaws. A trial that ends without a submission is lost. If this trial measures rather than changes the code, record what you measured now as notes, with the numbers, before you start another measurement: what a trial does not record is lost when it ends.
+# turn 3
+Your last reply was cut off at the output limit before it made a tool call. Think briefly, then make one tool call; keep each reply short.
+# turn 4
+The model's context was full, so the harness compacted the conversation. Continue where you left off.
+# turn 5
+The harness compacted this conversation (compaction 1) because it neared the model's context window. Your trial goes on.
+
+The whole conversation before this point is in <path>/compactions/t-turns-1.md. Read it with the run tool when you need a detail, for example grep -n 'a word' <path>/compactions/t-turns-1.md or sed -n '1,200p' <path>/compactions/t-turns-1.md.
+
+A summary of the trial so far:
+
+## Task
+Make work() faster.
+
+## Next steps
+Try the loop.
+
+Your most recent turns follow. Go on from where they leave off.
+# turn 6
+The model call failed (429: {"message":"Rate limit reached. Please try again in 1s."}). Continue where you left off.
+# turn 7
+You have not called submit yet. Keep working with your tools: make your change, build and test it, then call submit once. If you find no change worth judging, say why in one sentence.

@@ -30,7 +30,7 @@ Answer these in order, and stop at the first yes:
 Some work fits two modes:
 
 - **A number with a line to reach:** a goal campaign whose goal is a measured threshold, such as a number of items per second, ends once the judge confirms that the line is crossed. A hill climb keeps going past it.
-- **Read first, then change the code:** run a research campaign, then let a hill climb or a goal campaign read its folder in Thermite's knowledge base. That campaign's agents can then search what the research found. See [Use past research in a new run](use-past-research.md).
+- **Read first, then change the code:** run a research campaign, then let a hill climb or a goal campaign read its collection in Thermite's knowledge base. That campaign's agents can then search what the research found. See [Use past research in a new run](use-past-research.md).
 
 ## 2. Set the mode
 

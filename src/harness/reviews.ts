@@ -1,7 +1,6 @@
-import { canonicalJson } from "../core/canonical.ts";
 import type { GoalContract } from "../core/contract.ts";
 import { ITEM_DECIDED, questionName, REVIEW_ITEMS } from "../core/research-check.ts";
-import { type Ledger, LedgerError } from "./ledger.ts";
+import { type Ledger, LedgerError } from "./ledger/index.ts";
 import {
   type CheckedReviewer,
   decideItems,
@@ -12,7 +11,7 @@ import {
   questionReasons,
   RESEARCH_REVIEW,
   type ResearchPackage,
-} from "./research/review.ts";
+} from "./research/index.ts";
 
 const clip = (s: string, n: number) => {
   const t = s.replace(/\s+/g, " ").trim();
@@ -70,9 +69,7 @@ export class Reviews {
   }
 
   get(run: string, goal: string, commit: string): Row | undefined {
-    return this.ledger.db
-      .prepare("select * from review where run = ? and goal = ? and commit_sha = ?")
-      .get(run, goal, commit) as Row | undefined;
+    return this.ledger.reviews.forCommit(run, goal, commit);
   }
 
   /** Requests a review of a champion for a goal (once per commit). Returns its id. */
@@ -100,19 +97,14 @@ export class Reviews {
       diff: input.diff.slice(0, 200_000),
     };
     return this.ledger.tx(() => {
-      const r = this.ledger.db
-        .prepare(
-          "insert into review (run, goal, attempt, commit_sha, package, requested_at) values (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          input.run,
-          input.goal,
-          input.attempt,
-          input.commit,
-          canonicalJson(pkg),
-          new Date().toISOString(),
-        );
-      const id = Number(r.lastInsertRowid);
+      const id = this.ledger.reviews.add({
+        run: input.run,
+        goal: input.goal,
+        attempt: input.attempt,
+        commit: input.commit,
+        pkg,
+        at: new Date().toISOString(),
+      });
       this.ledger.appendEvent(input.by, "review_requested", input.run, {
         review: id,
         goal: input.goal,
@@ -123,7 +115,7 @@ export class Reviews {
   }
 
   byId(id: number): Row | undefined {
-    return this.ledger.db.prepare("select * from review where id = ?").get(id) as Row | undefined;
+    return this.ledger.reviews.get(id);
   }
 
   /**
@@ -139,19 +131,14 @@ export class Reviews {
     const existing = this.get(input.run, RESEARCH_REVIEW, input.marker);
     if (existing) return Number(existing.id);
     return this.ledger.tx(() => {
-      const r = this.ledger.db
-        .prepare(
-          "insert into review (run, goal, attempt, commit_sha, package, requested_at) values (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          input.run,
-          RESEARCH_REVIEW,
-          null,
-          input.marker,
-          canonicalJson(input.pkg),
-          new Date().toISOString(),
-        );
-      const id = Number(r.lastInsertRowid);
+      const id = this.ledger.reviews.add({
+        run: input.run,
+        goal: RESEARCH_REVIEW,
+        attempt: null,
+        commit: input.marker,
+        pkg: input.pkg,
+        at: new Date().toISOString(),
+      });
       this.ledger.appendEvent(input.by, "review_requested", input.run, {
         review: id,
         goal: RESEARCH_REVIEW,
@@ -172,14 +159,8 @@ export class Reviews {
   pending(): ReviewPackage[];
   pending(kinds: readonly ReviewKind[]): (ReviewPackage | ResearchReviewPackage)[];
   pending(kinds: readonly ReviewKind[] = ["goal"]): (ReviewPackage | ResearchReviewPackage)[] {
-    return (
-      this.ledger.db
-        .prepare(
-          `select r.* from review r join run i on i.id = r.run
-           where r.panel_result is null and i.status = 'running' order by r.id`,
-        )
-        .all() as Row[]
-    )
+    return this.ledger.reviews
+      .awaitingPanel()
       .filter((r) => kinds.includes(r.goal === RESEARCH_REVIEW ? "research" : "goal"))
       .map((r): ReviewPackage | ResearchReviewPackage => {
         if (r.goal === RESEARCH_REVIEW)
@@ -219,7 +200,7 @@ export class Reviews {
     if (!row) throw new LedgerError("not_found", `no review ${id}`);
     if (row.panel_result !== null)
       throw new LedgerError("conflict", `review ${id} is already decided`);
-    const inst = this.ledger.getRun(String(row.run));
+    const inst = this.ledger.runs.get(String(row.run));
     if (inst?.status !== "running")
       throw new LedgerError("invalid", `run ${String(row.run)} is not running`);
     return row;
@@ -253,9 +234,6 @@ export class Reviews {
       const pkg = JSON.parse(String(row.package)) as ResearchPackage;
       const decided = decideItems(pkg, checked);
       const now = new Date().toISOString();
-      const insertItem = this.ledger.db.prepare(
-        "insert into review_item (review, reviewer, kind, key, card_version, verdict, certainty, reasons, claims, problems, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      );
       for (const r of checked) {
         const items = [
           ...r.questions.map((q) => ({
@@ -279,20 +257,12 @@ export class Reviews {
             problems: h.problems,
           })),
         ];
-        for (const it of items)
-          insertItem.run(
-            id,
-            r.reviewer,
-            it.kind,
-            it.key,
-            it.card_version,
-            it.verdict,
-            it.certainty,
-            it.reasons.slice(0, ITEM_REASONS_MAX),
-            JSON.stringify(it.claims),
-            JSON.stringify(it.problems),
-            now,
-          );
+        this.ledger.reviews.addItems(
+          id,
+          r.reviewer,
+          items.map((it) => ({ ...it, reasons: it.reasons.slice(0, ITEM_REASONS_MAX) })),
+          now,
+        );
         this.ledger.appendEvent(by, REVIEW_ITEMS, run, {
           review: id,
           reviewer: r.reviewer,
@@ -302,21 +272,8 @@ export class Reviews {
           })),
         });
       }
-      const insertDecision = this.ledger.db.prepare(
-        "insert into item_decision (run, kind, key, review, card_version, decision, certainty, dissent, decided_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      );
+      this.ledger.reviews.addDecisions(run, id, decided, now);
       for (const d of decided) {
-        insertDecision.run(
-          run,
-          d.kind,
-          d.key,
-          id,
-          d.card_version,
-          d.decision,
-          d.certainty,
-          JSON.stringify(d.dissent),
-          now,
-        );
         this.ledger.appendEvent(by, ITEM_DECIDED, run, {
           review: id,
           kind: d.kind,
@@ -332,9 +289,7 @@ export class Reviews {
         open.questions.length === 0 && open.hypotheses.length === 0
           ? "review_passed"
           : "review_failed";
-      this.ledger.db
-        .prepare("update review set panel = ?, panel_result = ?, panel_at = ? where id = ?")
-        .run(canonicalJson(checked), outcome, now, id);
+      this.ledger.reviews.setPanel(id, checked, outcome, now);
       // Each question decided here: how many reviewers gave it an end, and the first answer of
       // its majority, short: what the owner reads before accepting, and what the knowledge base
       // keeps. The gaps: what the reviewers who said open named, for each question decided open.
@@ -413,19 +368,17 @@ export class Reviews {
           `review ${id} is a research review: it is recorded with each reviewer's answers`,
         );
       // Only for a running campaign's current champion: a stale review is not recorded.
-      if (this.ledger.currentChampion(String(row.run)).commit_sha !== String(row.commit_sha))
+      if (this.ledger.champions.current(String(row.run)).commit_sha !== String(row.commit_sha))
         throw new LedgerError(
           "stale",
           `review ${id} is of a commit that is no longer the champion`,
         );
-      this.ledger.db
-        .prepare("update review set panel = ?, panel_result = ?, panel_at = ? where id = ?")
-        .run(
-          canonicalJson(results.map((r) => ({ ...r, reasons: r.reasons.slice(0, 4000) }))),
-          outcome,
-          new Date().toISOString(),
-          id,
-        );
+      this.ledger.reviews.setPanel(
+        id,
+        results.map((r) => ({ ...r, reasons: r.reasons.slice(0, 4000) })),
+        outcome,
+        new Date().toISOString(),
+      );
       this.ledger.appendEvent(by, "review_panel", String(row.run), {
         review: id,
         goal: row.goal,
@@ -445,9 +398,7 @@ export class Reviews {
     by: string,
   ): Row {
     return this.ledger.tx(() => {
-      const row = this.ledger.db.prepare("select * from review where id = ?").get(id) as
-        | Row
-        | undefined;
+      const row = this.ledger.reviews.get(id);
       if (!row || String(row.run) !== run)
         throw new LedgerError("not_found", `no review ${id} in ${run}`);
       if (row.panel_result !== "review_passed")
@@ -455,9 +406,12 @@ export class Reviews {
       if (row.owner_decision !== null)
         throw new LedgerError("conflict", `review ${id} is already decided`);
       const decision = accept ? "accepted" : "rejected";
-      this.ledger.db
-        .prepare("update review set owner_decision = ?, owner_note = ?, owner_at = ? where id = ?")
-        .run(decision, note?.slice(0, 2000) ?? null, new Date().toISOString(), id);
+      this.ledger.reviews.setOwnerDecision(
+        id,
+        decision,
+        note?.slice(0, 2000) ?? null,
+        new Date().toISOString(),
+      );
       this.ledger.appendEvent(by, "review_decided", run, {
         review: id,
         goal: row.goal,

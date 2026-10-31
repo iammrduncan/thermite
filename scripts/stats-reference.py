@@ -1,4 +1,4 @@
-# Generates src/testing/data/stats-reference.json, the offline reference values the TypeScript
+# Generates tests/helpers/data/stats-reference.json, the offline reference values the TypeScript
 # statistics are tested against. Run: uvx --with scipy --with numpy python -I scripts/stats-reference.py
 
 import json

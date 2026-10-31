@@ -10,14 +10,14 @@ sidebar:
 A rig on RunPod is a real RunPod pod. RunPod bills its GPU by the hour from the launch until the pod is stopped or removed, and its volume while the pod exists. Thermite sets no limit of its own: give each launch a **spend limit**, an **idle stop**, or both, as in step 2. The launch form fills in an idle stop of 30 minutes, which you can change or clear. A launch from the command line, the REST API or MCP has none unless it names one.
 :::
 
-A [rig](../../reference/glossary.md) on RunPod runs on a GPU you rent by the hour. Control launches the pod, connects to it through RunPod's proxy, follows its price and what it has cost, and stops it at the limits you set. This page launches one from the dashboard, runs it, and terminates it with every result kept on control. The command line, the REST API and MCP do each step too; each step gives the command.
+A [rig](../../reference/glossary.md) on RunPod runs on a GPU you rent by the hour. Control launches the pod, reaches it on its message bus through a small bus server in the pod and through RunPod's proxy, follows its price and what it has cost, and stops it at the limits you set. This page launches one from the dashboard, runs it, and terminates it with every result kept on control. The command line, the REST API and MCP do each step too; each step gives the command.
 
 ## Before you start
 
 - **A RunPod account in Settings › Providers**, added with an API key that may write. [Test a GPU on RunPod](runpod-test.md#1-add-the-runpod-account) gives the steps. A test pod there is a cheap way to check a GPU type first.
 - **The rig image, on control.** A pod runs the [one-container rig image](../../reference/harness-image.md#the-one-container-rig-image): the CUDA harness and the supervisor in one container. Each release publishes it on `ghcr.io` ([Published images](../../reference/harness-image.md#published-images)), and the release's `compose.yaml` gives it to control, pinned by its digest, in `THERMITE_RUNPOD_RIG_IMAGE`. With a release's `compose.yaml` there is nothing to do: a launch runs that image. A control that runs from the source code's `compose.yaml` has no rig image until you name one in `.env`: a published one, such as `ghcr.io/iammrduncan/thermite-rig:0.1.0-cuda`, or [one of your own](#use-a-rig-image-of-your-own). Without one, the launch form offers only **Your own image**.
 - **The owner's sign-in.** Only the owner may launch, stop, start or terminate a rig on RunPod. The dashboard signs in with the owner's token. For the command line, keep the token in a file: on the local compose stack it is `.dev/secrets/control-admin-token`.
-- **A way out to the internet for control.** Control needs no public address: it connects to the pod, and the pod never connects to control ([Rigs in pull mode](../../explanation/trust.md#rigs-in-pull-mode)). The local compose stack is enough.
+- **A way out to the internet for control and its message bus.** Control needs no public address: it connects to the pod through RunPod's proxy, its message bus connects to the pod's own bus server, and the pod never connects to control ([A rig on RunPod](../../explanation/how-the-parts-talk.md#a-rig-on-runpod)). The local compose stack is enough. A firewall in front of control must let the bus's `nats` service reach any TCP port on the internet: RunPod chooses the pod's public port. A rig reaches control only on the bus: a pod the bus can't reach can't report.
 
 The command-line examples run [the command line](one-machine.md#the-command-line) in your `thermite-source` folder, with the local stack's address and token file. Put yours in their place.
 
@@ -54,7 +54,7 @@ Every label has an **i**: hover it for what the field means. The price under the
 
 Press **Launch · $0.50/h**. The rig's page opens and says `Launched: RunPod bills pod … from now at $0.50 an hour. Control enrolls it once it runs.` A launch that control or RunPod refuses starts nothing and leaves no rig: the form comes back with what you typed, **Not launched.** and the reason, such as `RunPod answered 400 for POST /v2/pods (Bad Request: …)`. RunPod's stock changes by the minute: when it has none of the GPU you chose, the reason starts `RunPod has no 1 × RTX A4500 free on Secure cloud now:` and ends `No pod was started and nothing is billed. Choose another GPU, or try again in a few minutes.`
 
-The pod's settings, which RunPod's console shows, hold only what the pod needs to enroll: the rig's name, a random path, a public key for what the pod sends to control, the SHA-256 of control's command-signing key (not the key) and a one-time enrollment code. Control's RunPod key and every other secret stay on control ([Rigs in pull mode](../../explanation/trust.md#rigs-in-pull-mode)).
+The pod's settings, which RunPod's console shows, hold only what the pod needs to enroll and to join the message bus: the rig's name, a random path, a public key for what the pod sends to control, the SHA-256 of control's command-signing key (not the key), a one-time enrollment code, and the pod's own TLS certificate and key for its bus server, with control's authority's certificate. Control's RunPod key and every other secret stay on control ([Rigs in pull mode](../../explanation/trust.md#rigs-in-pull-mode)); control keeps neither the pod's key nor anything that could sign another certificate for the pod. The launch exposes the pod's port 8790 as HTTP, for control's calls through RunPod's proxy, and 7422 as TCP, for the bus.
 
 The same launch from the command line has no idle stop unless you give `--idle-stop`; this one stops after 60 minutes with no run at work:
 
@@ -79,11 +79,15 @@ Meanwhile **Rigs** lists it as **Getting ready**, with its price under **Per hou
 
 If it never enrolls, **Pull mode** shows the last error, and `npx thermite runpod list` shows `last error:` for control's last read of the pod.
 
+Once the pod runs, RunPod gives its port 7422 a public address and port, and control's bus dials the pod's bus server there: **History** shows `Control's bus dials the pod's leaf node at the address RunPod gave it: 203.0.113.5:40123.`, and `GET /v1/rigs/<rig>/runpod` answers it in `bus_leaf`. From then on the rig's reports, commands, live lines, screens, figures, config and knowledge base go over the bus; only its enrollment, the registration of its keys, its results and the kits it fetches go through RunPod's proxy. While `bus_leaf` stays `null`, RunPod has given the port no public address yet, and the rig's reports wait; after 5 minutes of that while the pod runs, the rig's page shows it **Broken**, and you terminate it and launch a new one: control's bus log, `docker compose logs nats`, names each pod it dials and why a connection failed. [A rig on RunPod](../operate/message-bus.md#a-rig-on-runpod-its-leaf-node) says what to look at.
+
 ### A pod that runs but never enrolls: read its log
 
 Before a rig enrolls, control sees nothing of it, and the pod's log is the one place that says why. **Pod log**, under **Getting it ready**, reads it from RunPod's API with the key you gave in **Settings › Providers**, so you need no RunPod console. The first time the page opens, it reads the log by itself; after that it shows the last read, and **Read again** reads the newest lines. Each line is marked `container`, for what the rig image printed, or `system`, for RunPod's own steps, such as the image pull. The newest line is at the bottom.
 
 Look for the last thing the image printed: an image that failed to pull, a crash at start, or a supervisor that could not reach control. A read that RunPod refuses says why in the block, such as `Not read: RunPod refused to show pod …'s log with this key: the key may not read pod logs.`: give control a key with read access to pods. Over the REST API, `GET /v1/rigs/<rig>/runpod/logs` gives the same lines, and so does the MCP tool [`runpod_rig_logs`](../../reference/mcp-tools.md#runpod_rig_logs).
+
+**Pod log** stays on the rig's page while the pod exists. Once the pod runs, it also shows when the pod started one of its two parts, the harness and the supervisor, again. The pod checks them itself: a part that exits, or whose health route answers 503 or nothing three times running, 30 seconds apart, is started again, and the log says `supervisor exited; restarting`, after `the supervisor is unhealthy: ending it to start it again` for one that stopped answering ([Restarts and stops](../../reference/harness-image.md#restarts-and-stops)).
 
 ## 4. Start runs on it
 
@@ -107,6 +111,8 @@ A number sets a limit, `off` clears it, and a limit you leave out stays.
 
 A pod that reaches a limit is stopped as in step 6: its runs are paused and its results sent out first. It is never removed. While the pod has cost its spend limit, control refuses to start it: raise or clear the limit first.
 
+**Control checks the limits, not the pod.** Control looks at each pod every 30 seconds while it runs, and the pod can't stop itself. While control is down, a pod goes on costing past its limits. When control starts again, its first look stops a pod that passed a limit meanwhile, and the pod's notes say `Control was not running from` the time it last looked.
+
 ## 6. Stop and start it
 
 A stopped pod costs nothing for its GPU, and keeps its volume, with the snapshot of the rig's state, until you start it again.
@@ -118,6 +124,8 @@ Under **Start, stop and end it**, press **Stop the pod**. The page says `Stoppin
 RunPod's volume lets every user in the pod read and write on it, whatever its file modes say, so the snapshot is sealed: encrypted and authenticated with a key control makes for this pod at its launch and puts in the pod's settings, where RunPod keeps it while the pod is stopped. Control keeps no copy. An agent on the rig can read nothing in the snapshot, and a snapshot that anyone changed is refused whole at the next start. [Where the state lives](../../reference/harness-image.md#where-the-state-lives) says what a snapshot holds, how it is sealed, and what sealing does not stop.
 
 Press **Start the pod** to start it again. RunPod gives a stopped pod's GPU to whoever asks next. When it has no GPU free for the pod, the start is refused and says so: `RunPod has no free GPU for pod … now, so the pod stays stopped (…). Its volume stays. Try again later, or terminate it and launch a new rig.` Once the pod runs, the rig checks the snapshot and restores its state from it onto the fresh disk, and its log says `restored the rig's state from its snapshot`. Control resumes the runs the stop paused. The rig reports again with the same keys and enrollment: it does not enroll again. If its log says `the snapshot did not verify` instead, see [A RunPod rig lost its state over a stop](../operate/troubleshoot.md#a-runpod-rig-lost-its-state-over-a-stop).
+
+RunPod may give a pod that starts again another public address. Control reads the new one, and its bus dials the pod there: **History** shows the new address. While the pod is stopped, control's bus dials nothing.
 
 **Restart the pod** stops the pod and starts it again, with no export: the snapshot it takes as it stops keeps the rig's state. It does not pause the runs. A trial in progress stops: the harness records it as interrupted, and its experiment goes back to the top of the queue. A restart can meet the same lack of a free GPU.
 
@@ -187,5 +195,7 @@ To tell that it worked: `GET /v1/rigs/<rig>/runpod` answers the launched rig wit
 - **Community cloud and spot pods.**
 - **Network volumes.** A rig's volume is its pod's, and goes with the pod.
 - **Another image for a running rig.** Control can't move a pod onto another image: terminate the rig and launch a new one.
+- **A pod RunPod gives no public address for its port 7422.** It can't join the message bus, so it can't report, and its page shows it **Broken**: terminate it and launch a new one.
+- **A pod launched before its leaf node.** A rig launched on RunPod by an earlier version has no bus server in its pod: it can't report, and its **Pull mode** block says `Not on it: launched before the pod's leaf node, so it can't report. Terminate it and launch a new one.`
 - **Gated models.** A Hugging Face token for gated models can't reach a pod yet: a rig's supervisor reads one from `THERMITE_HF_TOKEN_FILE` ([Model files on a rig](../../reference/model-files.md)), but a launch from control gives a pod no such file ([goal 108](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/108-gated-models-on-cloud-rigs.goal)).
 - **Registry sign-in.** The image must be pullable without a login.

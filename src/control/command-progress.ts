@@ -1,8 +1,6 @@
-import { harnessConfirmed } from "./issue.ts";
-import { sameModel } from "./providers.ts";
-import type { CommandRow, ControlStore } from "./store.ts";
-import { EXPORT_WHERE, exportWords } from "./ui/exports.ts";
-import { foldCheck, type RigCheckView, type RigModelView, readModelInfo } from "./views.ts";
+import { sameModel } from "./providers/index.ts";
+import type { CommandRow, ControlStore } from "./store/index.ts";
+import { type RigCheckView, type RigModelView, readModelInfo, rigChecks } from "./views/index.ts";
 
 /**
  * What became of an owner's action that control sent to a rig, in words (goal 080). The
@@ -20,12 +18,31 @@ export interface Progress {
   reload?: boolean;
 }
 
+/** An export_now's payload in words (goal 103): what was asked for, and what the rig made. */
+export function exportWords(p: { full?: unknown; run?: unknown }) {
+  const run = typeof p.run === "string" ? p.run : undefined;
+  const full = p.full === true;
+  return {
+    asked: run
+      ? `An export of ${run} alone was asked for.`
+      : full
+        ? "A full export was asked for."
+        : "An export was asked for.",
+    made: (name: string) =>
+      `It made ${run ? `the export of ${run}` : full ? "the full export" : "export"} ${name}.`,
+  };
+}
+
+/** Where an export the owner asked for shows, in words (after "Sent", and once the rig did it). */
+export const EXPORT_WHERE =
+  "When all its files reach control, it shows on the Exports page, ready to download. A rig with a results repository pushes it there instead.";
+
 /** A time of day as the dashboard writes it: "03:41 UTC". */
 export const clockUtc = (iso: string): string => `${iso.slice(11, 16)} UTC`;
 
 /**
  * How long something has run, as a running check's chip says it: "45 s", "1 m 12 s", "2 h 5 m".
- * The page script counts on with the same words (follow-client.ts, fwElapsed).
+ * The page script counts on with the same words (ui/commands/client.ts, fwElapsed).
  */
 export function elapsedWords(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -82,13 +99,36 @@ const startedId = (cmd: CommandRow): string | null => {
 };
 
 /**
- * A command's progress: sent, taken (the rig did it; its report with the change is still to
- * come), done (that report reached control: the page shows the change), refused or expired. A
- * started run (assign_campaign) loads its page again when done: the run's page opens.
+ * A command's progress: sent, done (the rig's harness applied it, and its report with the change
+ * reached control: the page shows it), refused or expired. The outcome comes only from the
+ * harness's events, in the rig's report on the message bus. A started run (assign_campaign) loads
+ * its page again when done: the run's page opens.
  */
 export function commandProgress(cmd: CommandRow, now: number): Progress {
   const p = commandProgressOnly(cmd, now);
-  if (cmd.kind !== "export_now" || p.tone === "bad") return p;
+  if (p.tone === "bad") return p;
+  // Withdraw evidence (goal 174): a preview's answer shows on the attempt's page, to confirm.
+  if (cmd.kind === "invalidate_evidence" && p.state === "done")
+    return {
+      ...p,
+      said: `${p.said} ${cmd.payload.preview === true ? "What it would reach is on the attempt's page: confirm it there." : "The evidence is withdrawn."}`,
+    };
+  // Typed into a trial's terminal (goal 169): the rig's answer is the outcome; no report waits.
+  if (cmd.kind === "terminal_input" && p.state === "done") {
+    const r = (cmd.outcome as { result?: { outcome?: unknown; until?: unknown } } | null)?.result;
+    const until = typeof r?.until === "string" ? ` at ${clockUtc(r.until)}` : "";
+    return {
+      ...p,
+      state: "done",
+      final: true,
+      tone: "ok",
+      said:
+        r?.outcome === "queued"
+          ? `It waits for the program's usage window to reset${until}, then goes in.`
+          : "Typed into the agent's terminal.",
+    };
+  }
+  if (cmd.kind !== "export_now") return p;
   // An export the owner asked for (goal 103): which kind, and where it will show.
   const words = exportWords(cmd.payload as { full?: unknown; run?: unknown });
   const made = (cmd.outcome as { result?: { export?: unknown } } | null)?.result?.export;
@@ -121,13 +161,6 @@ function commandProgressOnly(cmd: CommandRow, now: number): Progress {
       said: `${rig} refused it: ${sentence(why)}`,
     };
   const took = clockUtc(cmd.acked_at ?? cmd.issued_at);
-  if (!harnessConfirmed(cmd.outcome))
-    return {
-      state: "taken",
-      final: false,
-      tone: "",
-      said: `${rig} took it at ${took}. This page shows the change when the rig next reports.`,
-    };
   return {
     state: "done",
     final: true,
@@ -204,14 +237,11 @@ export const checkWaits = (row: CheckRow): boolean =>
 
 /**
  * Each rig check's row for one rig: its newest run on the rig's current ledger and the newest
- * command for it. Reads only the check events and the commands, so the rows can be followed
- * often without building the rig's whole view.
+ * command for it. Reads only the checks the rig's fold holds and the commands, so the rows can be
+ * followed often without building the rig's whole view.
  */
 export function checkRows(store: ControlStore, rig: string, now: number): Record<string, CheckRow> {
-  const ledger = store.rigs().find((x) => x.id === rig)?.ledger_id ?? null;
-  const runs: Record<string, RigCheckView> = {};
-  for (const e of store.rigCheckEvents(rig, ledger)) foldCheck(runs, e);
-  return checkRowsOf(store, rig, runs, now);
+  return checkRowsOf(store, rig, rigChecks(store, rig), now);
 }
 
 /** The rows from the checks' runs a caller has already (the rig's view has them). */
@@ -222,7 +252,7 @@ export function checkRowsOf(
   now: number,
 ): Record<string, CheckRow> {
   const newest: Record<string, CommandRow> = {};
-  for (const c of store.latestCommands(rig, "rig_check")) {
+  for (const c of store.commands.latest(rig, "rig_check")) {
     const k = String(c.payload.check ?? "");
     if (k && !newest[k]) newest[k] = c;
   }
@@ -271,9 +301,9 @@ export const modelFollowUrl = (rig: string): string =>
  * the model control gives it; then its model check, which the rig runs by itself, to its result.
  */
 export function modelProgress(store: ControlStore, rig: string, now: number): Progress {
-  const r = store.rigs().find((x) => x.id === rig);
+  const r = store.reportedRigs.list().find((x) => x.id === rig);
   const m = readModelInfo((r?.summary as { model?: unknown } | null)?.model);
-  if (takingModel(m, store.rigModels()[rig]))
+  if (takingModel(m, store.agentModels.byRig()[rig]))
     return { state: "taking", final: false, said: "", tone: "" };
   const chk = checkRows(store, rig, now).model;
   return {

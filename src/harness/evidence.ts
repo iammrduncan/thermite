@@ -1,7 +1,7 @@
-import { type Evidence, evidenceOf, Registry } from "./agents/registry.ts";
+import { type Evidence, evidenceOf, Registry } from "./agents/index.ts";
 import { GitError, readableDiff, treeFile, treeFiles } from "./git.ts";
-import { clipReason } from "./judge/reasons.ts";
-import { type Ledger, LedgerError } from "./ledger.ts";
+import { clipReason } from "./judge/index.ts";
+import { type Ledger, LedgerError } from "./ledger/index.ts";
 import type { ExperimentQueue } from "./queue.ts";
 import { shownViolations, violationsOf } from "./v0.ts";
 
@@ -69,15 +69,9 @@ const str = (v: unknown) => (v === null || v === undefined ? null : String(v));
 
 /** The planner's evidence of an attempt, with the judge's reasons and its experiment. */
 function withReasons(ledger: Ledger, e: Evidence, reasonChars: number): AttemptEvidence {
-  const v = ledger.currentVerdict(e.attempt);
-  const reasons = v
-    ? (ledger.db.prepare("select reasons from verdict where id = ?").get(v.id) as
-        | { reasons: string }
-        | undefined)
-    : undefined;
-  const x = ledger.db
-    .prepare("select id, title from experiment where attempt = ? order by updated_at desc limit 1")
-    .get(e.attempt) as { id: string; title: string } | undefined;
+  const v = ledger.verdicts.current(e.attempt);
+  const reasons = v ? ledger.verdicts.get(v.id) : undefined;
+  const x = ledger.experiments.ofAttempt(e.attempt);
   return {
     ...e,
     experiment: x ? { id: x.id, title: x.title } : null,
@@ -101,7 +95,7 @@ export function recentAttempts(
  * of a refused change, the judge's reasons as it kept them, its claim and its declared flaws.
  */
 export function oneAttempt(ledger: Ledger, run: string, attempt: string): AttemptEvidence {
-  const a = ledger.getAttempt(attempt);
+  const a = ledger.attempts.get(attempt);
   if (!a || String(a.run) !== run)
     throw new LedgerError("not_found", `no attempt ${attempt} in run ${run}`);
   const all = violationsOf(a.v0);
@@ -164,7 +158,7 @@ export function triedCauses(
         ledger,
         evidenceOf(
           ledger,
-          (ledger.getAttempt(x.attempt) ?? { id: x.attempt, lifecycle: "unknown" }) as Row,
+          (ledger.attempts.get(x.attempt) ?? { id: x.attempt, lifecycle: "unknown" }) as Row,
         ),
         o.causeChars,
       );
@@ -184,11 +178,7 @@ export function triedCauses(
         cause: clipReason(`${e.verdict ?? e.lifecycle}: ${said}`, o.causeChars),
       };
     }
-    const t = x.trial
-      ? (ledger.db.prepare("select stopped, error from trial where id = ?").get(x.trial) as
-          | { stopped: string | null; error: string | null }
-          | undefined)
-      : undefined;
+    const t = x.trial ? ledger.trials.get(x.trial) : undefined;
     const how = x.result ?? t?.stopped ?? "ended";
     return {
       ...base,
@@ -289,7 +279,7 @@ export async function readAttemptDiff(
   next: number | null;
   diff: string;
 }> {
-  const a = ledger.getAttempt(attempt);
+  const a = ledger.attempts.get(attempt);
   if (!a || String(a.run) !== run)
     throw new LedgerError("not_found", `no attempt ${attempt} in run ${run}`);
   let text: string;

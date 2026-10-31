@@ -1,0 +1,48 @@
+---
+id: "171"
+title: "Bugs on the wire: lost long replies, commands sent again in full, a live view stopped by one line, prompts too long for one argument"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["167"]
+created: 2026-10-26
+updated: 2026-10-27
+---
+
+# 171 · Bugs on the wire: lost long replies, commands sent again in full, a live view stopped by one line, prompts too long for one argument
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [167](167-how-the-parts-talk.goal)
+
+## What
+
+The review of how the parts talk (goal [167](167-how-the-parts-talk.goal)) and the review of the agents' definitions (goal [166](166-agent-definitions.goal)) found these bugs by reading the code. Each fix comes with a regression test that fails without it.
+
+1. **A Pi worker's long reply is lost from Live.** `harness/agents/live-session.ts:121` sends a reply uncut; the trial API refuses any entry over 8,000 characters (`harness/api.ts:676`), and `live-session.ts:81` drops the refusal. The line is cut and marked, as `core/live.ts:86` already does for other lines, and a refusal is logged.
+2. **A waiting command is sent again in full every 5 seconds.** `pendingCommands` (`control/store.ts:2549-2570`) returns every pending command whole, with no limit, and the supervisor fetches them all on each poll while an assignment's sources are still being fetched (`supervisor/relay.ts:171-183`, `supervisor/staging.ts:155-206`). The largest command is about 3.5 MiB. The supervisor fetches a command's content once.
+3. **One unknown live line stops a rig's live view.** Control parses the whole batch and refuses it if one line has a kind or source it does not know (`core/live.ts:25-42`, `control/api.ts:602-631`). The supervisor keeps its cursor and sends the same batch every 3 seconds, for good (`supervisor/live.ts:62-64`), and control writes an audit row each time. Control keeps the lines it knows and counts the rest, as the knowledge base's sync already does (`core/kb.ts:108-112`).
+4. **A prompt can be too long for one argument.** OpenCode and Claude Code get the whole prompt as one command-line argument, for worker trials, research trials and planner calls (`harness/agents/opencode.ts:677-688`, `harness/agents/claude-code.ts:681-686`). Linux allows at most 131,072 bytes in one argument, and neither a brief nor the planner's context has a size limit, so a busy run's prompt could stop the program from starting. The prompt goes in by standard input or a file, as Codex and the advisors already do.
+5. **To check: a long model download may expire its assignment.** Commands live 60 minutes by default (`control/issue.ts:360`); an assignment waits while its model downloads (`supervisor/staging.ts:155-206`), and expires at the next fetch after that (`control/store.ts:2558-2565`). A test shows whether it happens; if it does, the assignment's life is held while it stages.
+
+## Why
+
+CONVENTIONS.md: "Every bug that is found gets a regression test", and "Nothing stops silently". The reviews are in `.internal/reviews/v0.1.1-audit/` (lanes 9 and 10).
+
+## Done when
+
+- [x] Items 1 to 4 are fixed, each with a regression test that fails without the fix.
+- [x] Item 5 is tested, and fixed if the test shows it.
+- [x] The fast checks pass, and the agents, Claude Code and steering acceptance checks.
+
+## Decisions
+
+## Open questions
+
+## Progress
+
+- 2026-10-26: Goal written from the audit's lanes 9 and 10.
+
+- 2026-10-27 08:09 UTC: All five items done. Item 1: `liveText` in `src/core/live.ts` cuts a line over 8,000 characters and marks it `[cut]`, for the harness's own lines and every program's; a Pi session's refused line is logged, the first of a streak (`tests/harness/agents/live-session.test.ts`). Item 2: the supervisor names the commands it holds (`have`), and control answers those with their ids alone (`pendingFor` in `src/control/issue.ts`; `tests/supervisor/relay.test.ts` measures each fetch). Item 3: control verifies a live batch's signature over its lines as sent, keeps the lines it knows and counts the rest under `left_out`, and the supervisor logs each once (`src/control/live-in.ts`, which also shrinks `api.ts`; `tests/control/live.test.ts`). Item 4: OpenCode takes its prompt on stdin (OpenCode 2.1.4 in the harness image takes a piped message: checked offline in the image), and Claude Code reads it from a file in the run's own folder on stdin, the token staying on descriptor 3 (`tests/harness/agents/claude-code.test.ts` sends a 200,000-character prompt through the shell; `tests/harness/agents/opencode.test.ts`). Item 5: the test showed it: an assignment whose sources stage longer than its life expired. Now the supervisor names what still stages (`staging`), and control signs such a command again with a later expiry within 10 minutes of it, at most 24 hours after it was issued, with `command_renewed` in the audit log (`tests/supervisor/relay.test.ts`, which fails without it). The pages follow. The fast checks and the agents, Claude Code and steering acceptance checks are left.
+- 2026-10-27 09:12 UTC: Verified on 53c7e30e: the full fast checks, and the agents, Claude Code and steering acceptance checks passed. Moved to `_completed/`.
+
+---
+
+Run with `/goal Complete docs/plan/goals/171-bugs-on-the-wire.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

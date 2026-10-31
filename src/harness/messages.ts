@@ -1,7 +1,9 @@
+import { ADVISOR_ROLES, type AdvisorRole, type MessageHow } from "../core/agents.ts";
 import { type Contract, MAX_LANES } from "../core/contract.ts";
 import type { LiveLog } from "../core/live.ts";
-import { type Ledger, LedgerError } from "./ledger.ts";
-import type { RigSettings } from "./rig-settings.ts";
+import type { RigSettings } from "../core/rig-settings.ts";
+import { lanesAtWork } from "./agents/index.ts";
+import { type Ledger, LedgerError, type MessageRow } from "./ledger/index.ts";
 
 /**
  * The owner's messages to a run's agents (message_agent), with who read each one and when.
@@ -13,7 +15,7 @@ import type { RigSettings } from "./rig-settings.ts";
  *   next trial, which is told so;
  * - `planner`: the planner, at its next plan;
  * - `advisors`: the teachers, the auditor and the review panel, each once; `teachers`,
- *   `auditor` and `panel` (the review panel): that role.
+ *   `auditor` and `review_panel`: that role.
  *
  * A message is waiting for a reader until that reader has received it: a read is recorded only
  * when the text was given to an agent (in its brief, at its next step, in a continued session or
@@ -25,8 +27,7 @@ import type { RigSettings } from "./rig-settings.ts";
  * owner's own (a signed owner command), so it may go into the ledger.
  */
 
-export type AdvisorRole = "teachers" | "auditor" | "panel";
-export const ADVISOR_ROLES: readonly AdvisorRole[] = ["teachers", "auditor", "panel"];
+export type { AdvisorRole };
 
 export interface OwnerMessage {
   id: number;
@@ -46,24 +47,12 @@ export function messageText(m: Pick<OwnerMessage, "text" | "note">): string {
 const ROLE_NAME: Record<AdvisorRole, string> = {
   teachers: "the teachers",
   auditor: "the auditor",
-  panel: "the review panel",
+  review_panel: "the review panel",
 };
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-type Row = {
-  id: number;
-  run: string;
-  target: string;
-  text: string;
-  keep: number;
-  created_at: string;
-  unkept_at: string | null;
-};
-
-const COLS = "m.id, m.run, m.target, m.text, m.keep, m.created_at, m.unkept_at";
-
-const toMessage = (r: Row): OwnerMessage => ({
+const toMessage = (r: MessageRow): OwnerMessage => ({
   id: Number(r.id),
   to: r.target,
   text: r.text,
@@ -105,34 +94,22 @@ export class OwnerMessages {
     return this.clock().toISOString();
   }
 
-  private row(id: number): Row | undefined {
-    return this.ledger.db.prepare(`select ${COLS} from agent_message m where m.id = ?`).get(id) as
-      | Row
-      | undefined;
-  }
-
   /**
    * Who would read a message to `to` in this run, now. A recipient that would never read it is
    * refused with the reason, so control shows the message as failed rather than delivered.
    */
   private readersOf(run: string, to: string): { readers: string[]; note?: string | undefined } {
-    const status = this.ledger.getRun(run)?.status;
+    const status = this.ledger.runs.get(run)?.status;
     if (!status) throw new LedgerError("not_found", `no run ${run}`);
     if (status === "closed")
       throw new LedgerError("invalid", `run ${run} is closed: nothing will read this message`);
     const contract = this.contractFor(run);
     const s = this.settings();
     const lanes = Math.min(contract.lanes.count, MAX_LANES);
-    // The lanes at work now: a lane_count rule can run fewer than the contract's count.
-    const ruled = this.ledger
-      .activeDirectives(run)
-      .map((d) => d.body as { kind?: string; value?: unknown })
-      .filter((b) => b.kind === "lane_count" && Number.isFinite(Number(b.value)))
-      .map((b) => Number(b.value))
-      .at(-1);
-    const working = ruled !== undefined ? Math.max(1, Math.min(lanes, Math.trunc(ruled))) : lanes;
+    // The lanes at work now, as the scheduler counts them: the owner's lane count first.
+    const working = lanesAtWork(this.ledger, run, contract);
     // A run without agents (a try) has no lanes and no planner to read anything.
-    const noAgents = this.ledger.getRun(run)?.agents === false;
+    const noAgents = this.ledger.runs.get(run)?.agents === false;
     if (
       noAgents &&
       (to === "all" || to === "planner" || /^lane-\d+$/.test(to) || to.startsWith("trial:"))
@@ -175,7 +152,7 @@ export class OwnerMessages {
       if (why) throw new LedgerError("invalid", why);
       return { readers: ["planner"] };
     }
-    if (to === "teachers" || to === "auditor" || to === "panel") {
+    if (to === "teachers" || to === "auditor" || to === "review_panel") {
       const why = advisor(to);
       if (why) throw new LedgerError("invalid", why);
       return { readers: [to] };
@@ -195,10 +172,9 @@ export class OwnerMessages {
         throw new LedgerError("invalid", `run ${run} has ${lanes} lane${lanes === 1 ? "" : "s"}`);
       return { readers: [to] };
     }
-    const trial = this.ledger.db
-      .prepare("select lane, ended_at from trial where id = ? and run = ?")
-      .get(to.slice("trial:".length), run) as { lane: string; ended_at: string | null } | undefined;
-    if (!trial) throw new LedgerError("not_found", `no ${to.replace(":", " ")} in run ${run}`);
+    const trial = this.ledger.trials.get(to.slice("trial:".length));
+    if (trial?.run !== run)
+      throw new LedgerError("not_found", `no ${to.replace(":", " ")} in run ${run}`);
     return {
       readers: [trial.lane],
       ...(trial.ended_at
@@ -216,12 +192,7 @@ export class OwnerMessages {
     const keep = p.keep === true;
     const at = this.now();
     const id = this.ledger.tx(() => {
-      const r = this.ledger.db
-        .prepare(
-          "insert into agent_message (run, target, text, issued_by, created_at, keep) values (?, ?, ?, ?, ?, ?)",
-        )
-        .run(p.run, p.to, p.text, by, at, keep ? 1 : 0);
-      const id = Number(r.lastInsertRowid);
+      const id = this.ledger.messages.add({ run: p.run, to: p.to, text: p.text, by, at, keep });
       this.ledger.appendEvent(by, "agent_message", p.run, {
         id,
         to: p.to,
@@ -244,7 +215,7 @@ export class OwnerMessages {
 
   /** The owner ends a message kept in force: new briefs no longer carry it. */
   unkeep(run: string, id: number, by: string): { message: number; unkept: true } {
-    const m = this.row(id);
+    const m = this.ledger.messages.get(id);
     if (!m || m.run !== run) throw new LedgerError("not_found", `no message ${id} in run ${run}`);
     if (Number(m.keep) !== 1)
       throw new LedgerError("invalid", `message ${id} is not kept in force`);
@@ -254,9 +225,7 @@ export class OwnerMessages {
         `message ${id} was already removed from force at ${m.unkept_at}`,
       );
     this.ledger.tx(() => {
-      this.ledger.db
-        .prepare("update agent_message set unkept_at = ? where id = ?")
-        .run(this.now(), id);
+      this.ledger.messages.unkeep(id, this.now());
       this.ledger.appendEvent(by, "agent_message_unkept", run, { message: id });
     });
     this.live.append({
@@ -271,13 +240,7 @@ export class OwnerMessages {
 
   /** Messages kept in force for a new trial of this lane: to everyone working, or to the lane. */
   inForce(run: string, lane: string): OwnerMessage[] {
-    return (
-      this.ledger.db
-        .prepare(
-          `select ${COLS} from agent_message m where m.run = ? and m.keep = 1 and m.unkept_at is null and (m.target = 'all' or m.target = ?) order by m.id`,
-        )
-        .all(run, lane) as Row[]
-    ).map(toMessage);
+    return this.ledger.messages.inForce(run, lane).map(toMessage);
   }
 
   /**
@@ -286,18 +249,7 @@ export class OwnerMessages {
    * reading them (with a note that says so). A message removed from force is no longer given.
    */
   waitingForTrial(trial: { id: string; run: string; lane: string }): OwnerMessage[] {
-    const rows = this.ledger.db
-      .prepare(
-        `select ${COLS} from agent_message m
-         left join trial t on m.target = 'trial:' || t.id
-         where m.run = ? and m.unkept_at is null
-           and (m.target = ? or m.target = 'all' or m.target = ?
-                or (t.run = m.run and t.lane = ? and t.ended_at is not null))
-           and not exists (select 1 from agent_message_read r where r.message = m.id and r.reader = ?)
-         order by m.id`,
-      )
-      .all(trial.run, trial.lane, `trial:${trial.id}`, trial.lane, trial.lane) as Row[];
-    return rows.map((r) => {
+    return this.ledger.messages.unreadByTrial(trial).map((r) => {
       const m = toMessage(r);
       return r.target.startsWith("trial:") && r.target !== `trial:${trial.id}`
         ? {
@@ -310,28 +262,12 @@ export class OwnerMessages {
 
   /** Messages the planner has not read: to it, and to everyone working (hill-climb and goal). */
   waitingForPlanner(run: string): OwnerMessage[] {
-    return (
-      this.ledger.db
-        .prepare(
-          `select ${COLS} from agent_message m where m.run = ? and m.unkept_at is null and m.target in ('planner', 'all')
-           and not exists (select 1 from agent_message_read r where r.message = m.id and r.reader = 'planner')
-           order by m.id`,
-        )
-        .all(run) as Row[]
-    ).map(toMessage);
+    return this.ledger.messages.unreadByPlanner(run).map(toMessage);
   }
 
   /** Messages an advisor role has not read: to it, and to all the advisors. */
   waitingForAdvisor(run: string, role: AdvisorRole, limit = 20): OwnerMessage[] {
-    return (
-      this.ledger.db
-        .prepare(
-          `select ${COLS} from agent_message m where m.run = ? and m.target in (?, 'advisors')
-           and not exists (select 1 from agent_message_read r where r.message = m.id and r.reader = ?)
-           order by m.id limit ?`,
-        )
-        .all(run, role, role, limit) as Row[]
-    ).map(toMessage);
+    return this.ledger.messages.unreadByRole(run, role, limit).map(toMessage);
   }
 
   /**
@@ -341,17 +277,7 @@ export class OwnerMessages {
    */
   forTeachers(run: string): (OwnerMessage & { read: boolean })[] {
     const since = new Date(this.clock().getTime() - 24 * 3_600_000).toISOString();
-    const read = (
-      this.ledger.db
-        .prepare(
-          `select ${COLS} from agent_message m where m.run = ? and m.target in ('teachers', 'advisors')
-           and exists (select 1 from agent_message_read r where r.message = m.id and r.reader = 'teachers' and r.read_at >= ?)
-           order by m.id desc limit 5`,
-        )
-        .all(run, since) as Row[]
-    )
-      .map(toMessage)
-      .reverse();
+    const read = this.ledger.messages.readByTeachers(run, since).map(toMessage).reverse();
     return [
       ...read.map((m) => ({ ...m, read: true })),
       ...this.waitingForAdvisor(run, "teachers").map((m) => ({ ...m, read: false })),
@@ -363,42 +289,37 @@ export class OwnerMessages {
     return {
       teachers: this.waitingForAdvisor(run, "teachers", 50).map((m) => m.id),
       auditor: this.waitingForAdvisor(run, "auditor", 50).map((m) => m.id),
-      panel: this.waitingForAdvisor(run, "panel", 50).map((m) => m.id),
+      review_panel: this.waitingForAdvisor(run, "review_panel", 50).map((m) => m.id),
     };
   }
 
   /**
    * Records that a reader received messages (a lane in a trial, the planner, an advisor role):
    * the first read by each reader is an event, and every read a line on the reader's live
-   * source. Reading the same message twice in one trial records it once. `round`: the planner's
-   * round that read them, so control can show its answer (the rules it made, its notes) with them.
+   * source. Reading the same message twice in one trial records it once. `at.trial`: the trial a
+   * lane read them in, and `at.how`, how its agent was given them (goal 169); `at.round`: the
+   * planner's round that read them, so control can show its answer (the rules it made, its
+   * notes) with them.
    */
   read(
     ids: number[],
     reader: string,
-    trial?: { id: string; run: string; lane: string } | undefined,
-    round?: number | undefined,
+    at: {
+      trial?: { id: string; run: string; lane: string } | undefined;
+      round?: number | undefined;
+      how?: MessageHow | undefined;
+    } = {},
   ): void {
-    const at = this.now();
-    const done: Row[] = [];
+    const { trial, round, how } = at;
+    const now = this.now();
+    const done: MessageRow[] = [];
     this.ledger.tx(() => {
       for (const id of [...new Set(ids)]) {
-        const m = this.row(id);
+        const m = this.ledger.messages.get(id);
         if (!m || (trial && m.run !== trial.run)) continue;
-        const seen = this.ledger.db
-          .prepare("select trial from agent_message_read where message = ? and reader = ?")
-          .all(id, reader) as { trial: string | null }[];
-        if (seen.some((s) => s.trial === (trial?.id ?? null))) continue;
-        this.ledger.db
-          .prepare(
-            "insert into agent_message_read (message, reader, trial, read_at) values (?, ?, ?, ?)",
-          )
-          .run(id, reader, trial?.id ?? null, at);
-        this.ledger.db
-          .prepare(
-            "update agent_message set delivered_at = ?, delivered_to = ? where id = ? and delivered_at is null",
-          )
-          .run(at, trial ? `trial:${trial.id}` : reader, id);
+        const seen = this.ledger.messages.readIn(id, reader);
+        if (seen.includes(trial?.id ?? null)) continue;
+        this.ledger.messages.recordRead(id, reader, trial?.id ?? null, now);
         if (!seen.length)
           this.ledger.appendEvent(
             trial ? `trial:${trial.id}` : reader === "planner" ? "planner" : "supervisor",
@@ -409,6 +330,7 @@ export class OwnerMessages {
               by: reader,
               ...(trial ? { trial: trial.id } : {}),
               ...(round !== undefined ? { round } : {}),
+              ...(how ? { how } : {}),
             },
           );
         done.push(m);
@@ -466,7 +388,7 @@ export class OwnerMessages {
 
   /** Checks that a message is in the run and addressed to the advisor role. */
   requireFor(run: string, role: AdvisorRole, id: number): void {
-    const m = this.row(id);
+    const m = this.ledger.messages.get(id);
     if (!m || m.run !== run) throw new LedgerError("not_found", `no message ${id} in run ${run}`);
     if (m.target !== role && m.target !== "advisors")
       throw new LedgerError("invalid", `message ${id} is not for ${ROLE_NAME[role]}`);

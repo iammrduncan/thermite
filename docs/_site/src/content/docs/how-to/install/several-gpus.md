@@ -31,7 +31,7 @@ A [rig](../../reference/glossary.md) with one GPU shares it: while the judge mea
 | A machine you join yourself ([guide](join-a-rig.md)) | **GPUs on the machine**: their numbers as `nvidia-smi` lists them, such as `0,1,2,3` | **GPUs for the judge** |
 | A namespace you join yourself | **GPUs**: up to 8 | **GPUs for the judge** |
 
-Leave **GPUs for the judge** empty for half. The note under the fields says what you chose, for example "Judge: GPU 0, 1. Agents' test runs: GPU 2, 3. They never wait for each other."
+Leave **GPUs for the judge** empty for half. The note under the fields says what you chose, for example "Judge: GPU 0, 1. Agents' test runs: GPU 2, 3. They never wait for each other." A share control would refuse, such as 10 of 12 GPUs, shows control's refusal there instead: "With 12 GPUs the judge takes 1 to 8 of them, and the agents at most 8." A GPU named twice is refused with "Name each GPU once."
 
 On a machine, a GPU that another rig control set up there already uses shows "used by rig …" and can't be ticked.
 

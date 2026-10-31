@@ -1,10 +1,24 @@
-import { z } from "zod";
+import { registrableDomain } from "../../agents/tools/index.ts";
+import {
+  CARD_ANSWER_MAX,
+  CARD_CLAIMS_MAX,
+  CARD_GAP_MAX,
+  CARD_GAPS_MAX,
+  CARD_WHY_MAX,
+  CardInput,
+  type CardSubmission,
+  CERTAINTIES,
+  type Certainty,
+  GAP_KINDS,
+  type GapKind,
+} from "../../core/api/harness/research.ts";
 import type { ResearchContract } from "../../core/contract.ts";
 import { MEASURES_NOTHING, questionLabel } from "../../core/research-check.ts";
-import { type Ledger, LedgerError } from "../ledger.ts";
+import { type CardRow, type ClaimRow, type Ledger, LedgerError } from "../ledger/index.ts";
 import { checkCited } from "./checks.ts";
 
-export { questionLabel };
+/** A card's wire words and limits (their home: core/api/harness/research.ts). */
+export { CARD_ANSWER_MAX, CARD_GAP_MAX, CardInput, type CardSubmission, questionLabel };
 
 /**
  * Answer cards (goal 117): the harness keeps one card for each question of a research run, as
@@ -29,25 +43,6 @@ export { questionLabel };
  * next one.
  */
 
-type Row = Record<string, unknown>;
-
-/** The certainty scale, from the most certain to no answer. */
-export const CERTAINTIES = ["high", "moderate", "low", "insufficient", "none"] as const;
-export type Certainty = (typeof CERTAINTIES)[number];
-
-/** The kinds of gap a card names. */
-export const GAP_KINDS = ["evidence", "measurement"] as const;
-export type GapKind = (typeof GAP_KINDS)[number];
-
-/** The most characters of a card's answer: a few paragraphs. */
-export const CARD_ANSWER_MAX = 6000;
-/** The most claims a card cites. */
-export const CARD_CLAIMS_MAX = 60;
-/** The most gaps a card names, and the most characters of each. */
-export const CARD_GAPS_MAX = 12;
-export const CARD_GAP_MAX = 500;
-/** The most characters of why a card borrows a claim recorded for another question. */
-export const CARD_WHY_MAX = 500;
 /** The most characters of one run's request for cards (the synthesizer reads the rest with tools). */
 export const CARDS_PACKAGE_MAX = 150_000;
 /** The most characters of a card's answer that a worker's brief shows (the card file is whole). */
@@ -110,7 +105,7 @@ const clip = (s: string, n: number) => {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 
-const cardOfRow = (r: Row): Card => ({
+const cardOfRow = (r: CardRow): Card => ({
   question: Number(r.question),
   version: Number(r.version),
   answer: String(r.answer),
@@ -128,15 +123,7 @@ export function rubricOf(contract: Pick<ResearchContract, "questions" | "rubrics
 
 /** The newest card of each question of a run that has one, by question. */
 export function cardsOf(ledger: Ledger, run: string): Card[] {
-  return (
-    ledger.db
-      .prepare(
-        `select c.* from question_card c where c.run = ? and c.version = (
-           select max(d.version) from question_card d where d.run = c.run and d.question = c.question)
-         order by c.question`,
-      )
-      .all(run) as Row[]
-  ).map(cardOfRow);
+  return ledger.cards.newestOfEach(run).map(cardOfRow);
 }
 
 /** A question's card: its newest version, if it has one. */
@@ -148,34 +135,13 @@ export function cardsOf(ledger: Ledger, run: string): Card[] {
 export const CARD_PACE = { claims: 5, ms: 30 * 60_000 };
 
 export function cardOf(ledger: Ledger, run: string, question: number): Card | undefined {
-  const r = ledger.db
-    .prepare(
-      "select * from question_card where run = ? and question = ? order by version desc limit 1",
-    )
-    .get(run, question) as Row | undefined;
+  const r = ledger.cards.newest(run, question);
   return r ? cardOfRow(r) : undefined;
 }
 
 /** Every version of a question's card, the first first. */
 export function cardHistory(ledger: Ledger, run: string, question: number): Card[] {
-  return (
-    ledger.db
-      .prepare("select * from question_card where run = ? and question = ? order by version")
-      .all(run, question) as Row[]
-  ).map(cardOfRow);
-}
-
-/** How many verified claims each question of a run has, by question index. */
-export function verifiedByQuestion(ledger: Ledger, run: string): Map<number, number> {
-  return new Map(
-    (
-      ledger.db
-        .prepare(
-          "select question, count(*) as n from claim where run = ? and verified = 1 and question is not null group by question",
-        )
-        .all(run) as Row[]
-    ).map((r) => [Number(r.question), Number(r.n)]),
-  );
+  return ledger.cards.history(run, question).map(cardOfRow);
 }
 
 /** A claim as a request for cards shows it: its words, its sources' domains, and when. */
@@ -228,35 +194,6 @@ export interface CardsPackage {
   /** Said when claims were left out to keep the request short. */
   shortened?: string;
 }
-
-/** A gap as the supervisor posts it: its kind and words are checked in code, with words. */
-const GapInput = z.strictObject({
-  kind: z.string().max(100),
-  text: z.string().max(20_000),
-});
-
-/** One card as the supervisor posts it. Its bounds are checked in code, so a problem has words. */
-export const CardInput = z.strictObject({
-  question: z.number().int(),
-  answer: z.string().max(100_000),
-  certainty: z.string().max(100),
-  claims: z.array(z.string().max(200)).max(1000).default([]),
-  borrowed: z
-    .array(z.strictObject({ claim: z.string().max(200), why: z.string().max(20_000) }))
-    .max(1000)
-    .default([]),
-  gaps: z.array(GapInput).max(1000).default([]),
-  /** The `through` the request gave for this question; null: the card's request named none. */
-  through: z.string().max(200).nullable().default(null),
-});
-export type CardInput = z.infer<typeof CardInput>;
-
-/** What the supervisor posts for a run: the synthesizer's name and one or more cards. */
-export const CardSubmission = z.strictObject({
-  synthesizer: z.string().trim().min(1).max(100),
-  cards: z.array(CardInput).min(1).max(100),
-});
-export type CardSubmission = z.infer<typeof CardSubmission>;
 
 /** The answer for each card posted: kept, with its version, or refused, with its problems. */
 export type CardResult =
@@ -320,10 +257,8 @@ export function checkCard(ledger: Ledger, run: string, c: CardInput): string[] {
   });
   // The newest claim the card's request gave: a verified claim of this question.
   if (c.through !== null) {
-    const t = ledger.db
-      .prepare("select question, verified from claim where run = ? and id = ?")
-      .get(run, c.through) as Row | undefined;
-    if (!t || Number(t.verified) !== 1 || t.question === null || Number(t.question) !== c.question)
+    const t = ledger.claims.get(run, c.through);
+    if (!t?.verified || t.question === null || t.question !== c.question)
       problems.push(
         `through ${clip(c.through, 60)} is not a verified claim of question ${c.question + 1} (index ${c.question}): post back the through the request gave`,
       );
@@ -343,23 +278,20 @@ const withoutQuestion = (c: Card): Omit<Card, "question"> => ({
 });
 
 /** A claim of the run, with its sources' domains, for a request. */
-function claimFor(ledger: Ledger, run: string, cl: Row, min: number): CardClaim {
+function claimFor(ledger: Ledger, run: string, cl: ClaimRow, min: number): CardClaim {
   const ids = [...new Set(list<{ source: string }>(cl.quotes).map((q) => q.source))];
   const domains = new Set<string>();
   for (const id of ids) {
-    const d = (
-      ledger.db.prepare("select domain from source where run = ? and id = ?").get(run, id) as
-        | { domain: string }
-        | undefined
-    )?.domain;
-    if (d) domains.add(d);
+    const d = ledger.sources.get(run, id)?.domain;
+    // Registrable domains, as the review package and the report count them: one owner, one domain.
+    if (d) domains.add(registrableDomain(d));
   }
   return {
-    id: String(cl.id),
-    text: String(cl.text),
+    id: cl.id,
+    text: cl.text,
     domains: [...domains],
     corroborated: domains.size >= min,
-    at: String(cl.created_at),
+    at: cl.created_at,
   };
 }
 
@@ -379,68 +311,43 @@ export class Cards {
     return c;
   }
 
-  private event(kind: string, run: string, question: number): Row | undefined {
-    return this.ledger.db
-      .prepare(
-        "select id, at, body from event where kind = ? and subject = ? and json_extract(body, '$.question') = ? order by id desc limit 1",
-      )
-      .get(kind, run, question) as Row | undefined;
-  }
-
   /**
    * Where a question's new claims start: the newest claim a kept card of it was given (by time,
    * then id), or nothing when no card was given one: then every verified claim is new.
    */
   private cursor(run: string, question: number): { at: string; id: string } | undefined {
-    const r = this.ledger.db
-      .prepare(
-        "select json_extract(body, '$.through') as through from event where kind = ? and subject = ? and json_extract(body, '$.question') = ? and json_extract(body, '$.through') is not null order by id desc limit 1",
-      )
-      .get(CARD_WRITTEN, run, question) as { through: string } | undefined;
-    if (!r) return undefined;
-    const cl = this.ledger.db
-      .prepare("select created_at from claim where run = ? and id = ?")
-      .get(run, r.through) as { created_at: string } | undefined;
-    return cl ? { at: cl.created_at, id: r.through } : undefined;
+    const written = this.ledger.events.newest(CARD_WRITTEN, {
+      subject: run,
+      body: { question },
+      has: ["through"],
+    });
+    if (!written) return undefined;
+    const through = String(written.body.through);
+    const cl = this.ledger.claims.get(run, through);
+    return cl ? { at: cl.created_at, id: through } : undefined;
   }
 
   /** A question's verified claims after its cursor, the oldest first. */
-  private newClaims(run: string, question: number): Row[] {
-    const from = this.cursor(run, question);
-    return (
-      from
-        ? this.ledger.db
-            .prepare(
-              `select * from claim where run = ? and question = ? and verified = 1
-                 and (created_at > ? or (created_at = ? and id > ?)) order by created_at, id`,
-            )
-            .all(run, question, from.at, from.at, from.id)
-        : this.ledger.db
-            .prepare(
-              "select * from claim where run = ? and question = ? and verified = 1 order by created_at, id",
-            )
-            .all(run, question)
-    ) as Row[];
+  private newClaims(run: string, question: number): ClaimRow[] {
+    return this.ledger.claims.verifiedAfter(run, question, this.cursor(run, question));
   }
 
   /** The newest refusal of a card for a question, when it came after the question's card. */
   lastRefusal(run: string, question: number): { at: string; problems: string[] } | undefined {
-    const refused = this.event(CARD_REFUSED, run, question);
+    const q = { subject: run, body: { question } };
+    const refused = this.ledger.events.newest(CARD_REFUSED, q);
     if (!refused) return undefined;
-    const written = this.event(CARD_WRITTEN, run, question);
-    if (written && Number(written.id) > Number(refused.id)) return undefined;
-    const b = JSON.parse(String(refused.body)) as { problems?: unknown };
-    return {
-      at: String(refused.at),
-      problems: (Array.isArray(b.problems) ? b.problems : []).map(String),
-    };
+    const written = this.ledger.events.newest(CARD_WRITTEN, q);
+    if (written && written.id > refused.id) return undefined;
+    const p = refused.body.problems;
+    return { at: refused.at, problems: (Array.isArray(p) ? p : []).map(String) };
   }
 
   /** The questions of a run whose evidence changed since their card, as one request. */
   package(run: string, now = Date.now()): CardsPackage | undefined {
     const contract = this.contract(run);
     const min = contract.quality.min_independent_sources;
-    const counts = verifiedByQuestion(this.ledger, run);
+    const counts = this.ledger.claims.verifiedByQuestion(run);
     const items = contract.questions.flatMap((text, index) => {
       const fresh = this.newClaims(run, index);
       if (!fresh.length) return [];
@@ -455,9 +362,7 @@ export class Cards {
         return [];
       const cited = card
         ? card.claims.flatMap((id) => {
-            const cl = this.ledger.db
-              .prepare("select * from claim where run = ? and id = ?")
-              .get(run, id) as Row | undefined;
+            const cl = this.ledger.claims.get(run, id);
             return cl ? [claimFor(this.ledger, run, cl, min)] : [];
           })
         : [];
@@ -531,10 +436,7 @@ export class Cards {
 
   /** For each running research run whose evidence changed since a card, its request. */
   pending(now = Date.now()): CardsPackage[] {
-    const runs = this.ledger.db
-      .prepare("select id from run where mode = 'research' and status = 'running' order by id")
-      .all() as { id: string }[];
-    return runs.flatMap(({ id }) => {
+    return this.ledger.runs.ids("research", "running").flatMap((id) => {
       const pkg = this.package(id, now);
       return pkg ? [pkg] : [];
     });
@@ -547,7 +449,7 @@ export class Cards {
    * does not have is answered with its problem and recorded nowhere.
    */
   submit(run: string, input: CardSubmission, by: string): { results: CardResult[] } {
-    const inst = this.ledger.getRun(run);
+    const inst = this.ledger.runs.get(run);
     if (!inst) throw new LedgerError("not_found", `no run ${run}`);
     if (inst.status !== "running") throw new LedgerError("invalid", `run ${run} is ${inst.status}`);
     const contract = this.contract(run);
@@ -578,31 +480,16 @@ export class Cards {
       const claims = [...new Set(c.claims)];
       const gaps = c.gaps.map((g) => ({ kind: g.kind as GapKind, text: g.text.trim() }));
       const version = this.ledger.tx(() => {
-        const v =
-          Number(
-            (
-              this.ledger.db
-                .prepare(
-                  "select max(version) as v from question_card where run = ? and question = ?",
-                )
-                .get(run, c.question) as { v: number | null }
-            ).v ?? 0,
-          ) + 1;
-        this.ledger.db
-          .prepare(
-            "insert into question_card (run, question, version, answer, certainty, claims, gaps, by, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          )
-          .run(
-            run,
-            c.question,
-            v,
-            c.answer.trim(),
-            c.certainty,
-            JSON.stringify(claims),
-            JSON.stringify(gaps),
-            input.synthesizer,
-            new Date().toISOString(),
-          );
+        const v = this.ledger.cards.add({
+          run,
+          question: c.question,
+          answer: c.answer.trim(),
+          certainty: c.certainty,
+          claims,
+          gaps,
+          by: input.synthesizer,
+          at: new Date().toISOString(),
+        });
         // The card whole (it is bounded), so control and the run's history have it from events.
         this.ledger.appendEvent(by, CARD_WRITTEN, run, {
           question: c.question,
@@ -641,7 +528,7 @@ export function briefCards(
   contract: Pick<ResearchContract, "questions">,
 ): string {
   const cards = new Map(cardsOf(ledger, run).map((c) => [c.question, c]));
-  const counts = verifiedByQuestion(ledger, run);
+  const counts = ledger.claims.verifiedByQuestion(run);
   const lines = [
     "Answer cards: the run's current answer to each question, which the synthesizer writes from verified claims and code checks. You add claims; you never edit a card. Fill a card's open evidence gaps first. Each card is whole in cards/q<index>.md of the research folder.",
   ];
@@ -748,7 +635,7 @@ export function answersSection(
   fence: (s: string) => string,
 ): string[] {
   const cards = new Map(cardsOf(ledger, run).map((c) => [c.question, c]));
-  const counts = verifiedByQuestion(ledger, run);
+  const counts = ledger.claims.verifiedByQuestion(run);
   const lines = [
     "## Answers",
     "",

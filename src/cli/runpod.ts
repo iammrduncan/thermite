@@ -1,4 +1,6 @@
-import type { RunpodRigView } from "../control/runpod-rig-view.ts";
+import type { z } from "zod";
+import type { LaunchBody, LimitsBody } from "../core/api/control/owner.ts";
+import type { RunpodRigView } from "../core/api/control/runpod.ts";
 
 /**
  * `thermite runpod`: rigs on a GPU cloud, through control's REST API with the owner's token.
@@ -32,18 +34,20 @@ export interface LaunchOptions {
 }
 
 /** The body of POST /v1/gpu-clouds/<name>/rigs. Throws, in words, on an option it can't take. */
-export function launchBody(o: LaunchOptions): Record<string, unknown> {
+export function launchBody(o: LaunchOptions): z.input<typeof LaunchBody> {
   if (!o.gpu) throw new Error("--gpu names the GPU type: its id or name in RunPod's list");
   const cloudType = o["cloud-type"]?.toUpperCase();
   if (cloudType !== undefined && cloudType !== "SECURE" && cloudType !== "COMMUNITY")
     throw new Error(`--cloud-type is SECURE or COMMUNITY, not "${o["cloud-type"]}"`);
+  // Control checks each name: only the pod's settings it lists (POD_CONFIG_ENV) are taken.
   const settings: Record<string, string> = {};
   for (const s of o.setting ?? []) {
     const eq = s.indexOf("=");
     if (eq < 1) throw new Error(`--setting takes NAME=VALUE, not "${s}"`);
     settings[s.slice(0, eq)] = s.slice(eq + 1);
   }
-  const body: Record<string, unknown> = {
+  type Launch = z.input<typeof LaunchBody>;
+  const body: Launch = {
     gpu: o.gpu,
     ...(o.gpus !== undefined ? { gpu_count: number("--gpus", o.gpus, true) } : {}),
     ...(cloudType ? { cloud_type: cloudType } : {}),
@@ -55,7 +59,7 @@ export function launchBody(o: LaunchOptions): Record<string, unknown> {
     ...(o["enroll-within"] !== undefined
       ? { enroll_within_minutes: number("--enroll-within", o["enroll-within"], false) }
       : {}),
-    ...(Object.keys(settings).length ? { settings } : {}),
+    ...(Object.keys(settings).length ? { settings: settings as Launch["settings"] } : {}),
     ...(o["spend-limit"] !== undefined
       ? { spend_limit_usd: number("--spend-limit", o["spend-limit"], false) }
       : {}),
@@ -70,7 +74,7 @@ export function launchBody(o: LaunchOptions): Record<string, unknown> {
 export function limitsBody(o: {
   "spend-limit"?: string | undefined;
   "idle-stop"?: string | undefined;
-}): Record<string, number | null> {
+}): z.input<typeof LimitsBody> {
   const spend = limit("--spend-limit", o["spend-limit"], false);
   const idle = limit("--idle-stop", o["idle-stop"], false);
   if (spend === undefined && idle === undefined)

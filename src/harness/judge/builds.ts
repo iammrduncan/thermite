@@ -15,10 +15,10 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { canonicalJson, sha256Hex } from "../../core/canonical.ts";
-import type { Role, Runner } from "../broker/runner.ts";
+import type { Kit } from "../../core/kit.ts";
+import type { Role, Runner } from "../broker/index.ts";
 import { exportTree } from "../git.ts";
-import type { Kit } from "../kit.ts";
-import type { Ledger } from "../ledger.ts";
+import type { Ledger } from "../ledger/index.ts";
 
 /**
  * The build store. The builder user builds each (commit, kit) pair once in a fresh scratch
@@ -140,7 +140,7 @@ export class BuildStore {
 
   private async make(input: BuildInput, key: string): Promise<BuildResult> {
     const dir = join(this.storeDir, key);
-    const known = this.ledger.getBuild(key);
+    const known = this.ledger.builds.get(key);
     if (known?.ok && existsSync(dir)) {
       const manifest = known.manifest as BuildManifest;
       const bad = this.verify(dir, manifest);
@@ -185,7 +185,7 @@ export class BuildStore {
           : r.exitCode !== 0
             ? `build failed (exit ${r.exitCode ?? r.signal})`
             : `build outputs missing: ${missing.join(", ")}`;
-        this.ledger.recordBuild({
+        this.ledger.builds.record({
           key,
           repo: input.repo,
           commit: input.commit,
@@ -207,7 +207,7 @@ export class BuildStore {
       if (refused.length) {
         rmSync(staging, { recursive: true, force: true });
         const reason = `build outputs refused: ${refused.slice(0, 5).join("; ")}`;
-        this.ledger.recordBuild({
+        this.ledger.builds.record({
           key,
           repo: input.repo,
           commit: input.commit,
@@ -234,7 +234,7 @@ export class BuildStore {
       }
       renameSync(staging, dir);
       lockDown(dir);
-      this.ledger.recordBuild({
+      this.ledger.builds.record({
         key,
         repo: input.repo,
         commit: input.commit,

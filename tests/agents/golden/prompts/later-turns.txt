@@ -1,0 +1,100 @@
+# worker in Pi: it stopped without calling submit (worker, pi)
+You have not called submit yet. Keep working with your tools: make your change, build and test it, then call submit once. If you find no change worth judging, say why in one sentence.
+# worker in Pi: its turns are nearly spent (worker, pi)
+10 turns are left in this trial. Build and test what you have, then submit your best working change now, listing anything unfinished in known_flaws. A trial that ends without a submission is lost. If this trial measures rather than changes the code, record what you measured now as notes, with the numbers, before you start another measurement: what a trial does not record is lost when it ends.
+# worker in Pi: its time is nearly spent (worker, pi)
+About 18 minutes are left in this trial. Build and test what you have, then submit your best working change now, listing anything unfinished in known_flaws. A trial that ends without a submission is lost. If this trial measures rather than changes the code, record what you measured now as notes, with the numbers, before you start another measurement: what a trial does not record is lost when it ends.
+# worker in Pi: a reply cut off (worker, pi)
+Your last reply was cut off at the output limit before it made a tool call. Think briefly, then make one tool call; keep each reply short.
+# worker in Pi: a full context, compacted (worker, pi)
+The model's context was full, so the harness compacted the conversation. Continue where you left off.
+# worker in Pi: a failed model call (worker, pi)
+The model call failed (503 the server is busy). Continue where you left off.
+# worker in Pi: an owner's message (worker, pi)
+A message from the campaign's owner, who is watching this session:
+
+Prefer a change a reader can follow.
+# worker in a program: an owner's message inside its turn, through its hook or plugin (worker, claude-code)
+A message from the campaign's owner, who is watching this session:
+
+Prefer a change a reader can follow.
+# worker in a program: its run ended without a submission, with two owner's messages (worker, codex)
+You have not submitted yet. Keep working: make your change, build and test it, then run `thermite-trial submit --hypothesis "..."` once. If you find no change worth judging, say why in one sentence.
+
+A message from the campaign's owner: Try tiling.
+
+A message from the campaign's owner: Keep it small.
+# worker in a program: a failed model call, with an owner's message (worker, opencode)
+The model call failed (429 rate limited). Continue where you left off.
+
+A message from the campaign's owner: Try tiling.
+# research worker in OpenCode: its run ended while an owner's message waits (research-worker, opencode)
+Continue your research.
+
+A message from the campaign's owner: Cite page numbers.
+# research worker in Pi: an owner's message (research-worker, pi)
+A message from the campaign's owner, who is watching this session:
+
+Cite page numbers.
+# planner in a program's own terminal: an owner's message inside its turn (planner, claude-code)
+A message from the campaign's owner, who is watching this session, as one more of owner_messages:
+
+{"id":7,"text":"Avoid :shared memory tiling: this round."}
+# research planner in a program's own terminal: after a full usage window (research-planner, codex)
+The model call failed (the usage window is full until 13:00 UTC). Continue where you left off.
+# auditor in a program's own terminal: an owner's message inside its turn (auditor, claude-code)
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
+
+{"id":9,"text":"Check the timing code before you clear it."}
+# reviewer in a program's own terminal: after a full usage window (reviewer, opencode)
+The model call failed (the usage window is full until 13:00 UTC). Continue where you left off.
+# worker in Pi, after a compaction with a summary (worker, pi)
+The harness compacted this conversation (compaction 1) because it neared the model's context window. Your trial goes on.
+
+The whole conversation before this point is in /scratch/research/r-1/compactions/t-1-1.md. Read it with the run tool when you need a detail, for example grep -n 'a word' /scratch/research/r-1/compactions/t-1-1.md or sed -n '1,200p' /scratch/research/r-1/compactions/t-1-1.md.
+
+A summary of the trial so far:
+
+## Task
+The summary.
+
+Your most recent turns follow. Go on from where they leave off.
+# research-worker in Pi, after a compaction with a summary (research-worker, pi)
+The harness compacted this conversation (compaction 1) because it neared the model's context window. Your trial goes on.
+
+The whole conversation before this point is in compactions/t-1-1.md. It is in your research folder: read it with read_file (path compactions/t-1-1.md), or search it with search_files, when you need a detail.
+
+A summary of the trial so far:
+
+## Task
+The summary.
+
+Your most recent turns follow. Go on from where they leave off.
+# planner in Pi, after a compaction with a summary (planner, pi)
+The harness compacted this conversation (compaction 1) because it neared the model's context window. Your planning goes on: call submit_plan when your plan is ready.
+
+The whole conversation before this point is in the run's research folder, compactions/planner-1-1.md. You have no tool to read it here: rely on this summary.
+
+A summary of the trial so far:
+
+## Task
+The summary.
+
+Your most recent turns follow. Go on from where they leave off.
+# teacher in Pi, after a compaction with a summary (teacher, pi)
+The harness compacted this conversation (compaction 1) because it neared the model's context window. Your work goes on: call answer when your answer is ready.
+
+The whole conversation before this point is in the supervisor's records, advisors/compactions/r-1/round-1-teacher-1.md. You have no tool to read it: rely on this summary.
+
+A summary of the trial so far:
+
+## Task
+The summary.
+
+Your most recent turns follow. Go on from where they leave off.
+# worker in Pi, after a compaction whose summary failed and whose conversation was not kept (worker, pi)
+The harness compacted this conversation (compaction 2) because it neared the model's context window. Your trial goes on.
+
+The whole conversation before this point could not be kept (the conversation was not kept: no space left).
+
+The bodies of older tool results were left out to save room; each one says so.

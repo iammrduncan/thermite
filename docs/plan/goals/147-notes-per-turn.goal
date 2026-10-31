@@ -45,7 +45,7 @@ The owner, 2026-10-25: "optional limit on notes per turn, default is no limit." 
 ## Progress
 
 - 2026-10-25 21:56 UTC: Goal written from the owner's decision, after a research trial on the lab wrote 4,859 notes in two minutes.
-- 2026-10-25 22:06 UTC: Built and tested (`NoteLimit` in `src/harness/agents/notes-tool.ts`, the contract's field, `src/harness/agents/notes-limit.test.ts`). Left: the roll.
+- 2026-10-25 22:06 UTC: Built and tested (`NoteLimit` in `src/harness/agents/notes-tool.ts`, the contract's field, `tests/harness/agents/notes-limit.test.ts`). Left: the roll.
 
 ---
 

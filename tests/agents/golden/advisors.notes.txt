@@ -1,0 +1,6 @@
+Field notes: write down what you learn as you work, in short notes, each with its kind:
+an observation, a key decision and why, a surprise, an open question, or a lesson. Name what a
+note is about when it is about one thing (an experiment, an attempt, a source, a claim, a
+finding, a round, a trial or a message, by its id); a note that names nothing is about the run.
+Never write what was tried and its result:
+the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not NOTE directives for the planner.

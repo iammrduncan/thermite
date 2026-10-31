@@ -1,4 +1,4 @@
-import { ago, esc } from "./components.ts";
+import { ago, esc } from "./components/index.ts";
 
 /**
  * The live view's lines, formatted once here for the page and for its updates (live.json), so a
@@ -228,7 +228,7 @@ export function whoTags(e: LiveEntry, to?: string): string {
     tags.add("you");
     if (/^lane-\d+$/.test(to)) tags.add(to);
     else if (to === "planner") tags.add("planner");
-    else if (["advisors", "teachers", "auditor", "panel"].includes(to)) tags.add("advisors");
+    else if (["advisors", "teachers", "auditor", "review_panel"].includes(to)) tags.add("advisors");
     else if (to === "all") tags.add("all");
     else if (e.source.startsWith("trial:")) tags.add(e.lane ?? "lanes");
     return [...tags].join(" ");

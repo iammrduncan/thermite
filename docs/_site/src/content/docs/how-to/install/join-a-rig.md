@@ -23,15 +23,15 @@ Rigs that control sets up, on a machine, on a cluster or with a join command, ge
 
 ## Before you start
 
-- **Control is ready for rigs elsewhere:** its address (`THERMITE_CONTROL_PUBLIC_URL`) and the rig images, plus `THERMITE_RIG_HARNESS_CUDA_IMAGE` for GPU rigs. See [Let rigs on other machines reach control](one-machine.md#let-rigs-on-other-machines-reach-control).
+- **Control is ready for rigs elsewhere:** its address (`THERMITE_CONTROL_PUBLIC_URL`) and the rig images, plus `THERMITE_RIG_HARNESS_CUDA_IMAGE` for GPU rigs, and the message bus's port open to the rig. See [Let rigs on other machines reach control](one-machine.md#let-rigs-on-other-machines-reach-control).
 - **On a machine:**
   - Linux with systemd, Podman 4.4 or later, and `curl`;
   - a user for the rig, with lingering on (`sudo loginctl enable-linger $USER`), so the rig outlives your login. Root works too, but a user with rootless Podman is safer;
   - for GPUs, NVIDIA's container toolkit with a CDI spec, the Container Device Interface file that tells Podman which GPUs there are (`sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`);
-  - network access to control's address and to the image registry, which must let the machine pull without signing in ([Push the images to your own registry](own-registry.md)).
+  - network access to control's address, to the message bus's port (4222 on control's host, unless control names another: [Run the message bus](../operate/message-bus.md#let-rigs-on-other-machines-reach-it)) and to the image registry, which must let the machine pull without signing in ([Push the images to your own registry](own-registry.md)).
 - **In a namespace:**
   - the namespace exists, and you have rights there to create deployments, services, secrets, persistent volume claims and network policies, and resource claim templates for DRA (Kubernetes' Dynamic Resource Allocation);
-  - its pods reach control's address and the image registry.
+  - its pods reach control's address, the message bus's port and the image registry.
 
 A join command works only once, so check these before you run it. On a machine, as the user the rig will run as:
 
@@ -40,7 +40,8 @@ podman --version                                  # 4.4 or later
 systemctl --version | head -n 1                   # systemd is there
 loginctl show-user "$(id -un)" -p Linger          # Linger=yes (not needed as root)
 nvidia-ctk cdi list                               # GPUs only: nvidia.com/gpu=0, and one line for each GPU
-curl -fsS https://control.example.com/v1/health   # {"ok":true}
+curl -fsS https://control.example.com/v1/health   # {"ok":true,"bus":"connected","degraded":false}
+nc -zv control.example.com 4222                   # the message bus's port answers
 ```
 
 In a namespace, each of these must answer `yes` (add `resourceclaimtemplates.resource.k8s.io` for DRA):
@@ -84,9 +85,9 @@ Copy the command and run it within the hour. On a machine, you can first `podman
   | `thermite: lingering is off for <user>, …` | Run `sudo loginctl enable-linger <user>` |
   | `thermite: GPU <n> has no CDI device: …` | Install NVIDIA's container toolkit and generate its CDI spec |
 
-  Then it writes the rig's files and services, pulls the images, starts the rig and prints `started`. It sets the rig up the same way control does over SSH; [What control writes on the machine](rig-on-a-machine.md#what-control-writes-on-the-machine) lists the files.
+  Then it writes the rig's files and services, pulls the images, starts the rig and prints `started`. It sets the rig up the same way control does over SSH, with the message bus's address and the certificate of control's authority for the bus among the files; [What control writes on the machine](rig-on-a-machine.md#what-control-writes-on-the-machine) lists them.
 
-- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS and addresses outside the private ranges, and only its supervisor reaches the harness.
+- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS, addresses outside the private, shared and link-local ranges, and the addresses in **Settings › Addresses cluster rigs may reach** as the list is when the command runs, and only its supervisor reaches the harness. The supervisor's deployment carries the message bus's address and the certificate of control's authority in its environment.
 
   | You see | Do this |
   | --- | --- |
@@ -111,7 +112,7 @@ The rig's page shows **You run it yourself**, with its status:
 - "fetched its files; waiting for its first report";
 - "running", once it reports. The page then fills in: "rig-1 is live; it reported … ago."
 
-Once the command is used, control waits up to an hour for the first report, since pulling the images can take a while on a new machine. (This is a second hour: the first was how long the command worked.) After that the status says "no first report yet"; it still changes to running when the rig reports. If it doesn't report, look at the rig's logs: see [Where the logs are](../operate/troubleshoot.md#where-the-logs-are).
+The rig reports on the message bus, the only way it talks to control but for the registration of its keys and its results: a machine or pods that can't reach the bus's port never report, and 5 minutes after the rig registered its keys, its page shows it **Broken** ([A rig off the bus](../operate/message-bus.md#a-rig-off-the-bus)). Once the command is used, control waits up to an hour for the first report, since pulling the images can take a while on a new machine. (This is a second hour: the first was how long the command worked.) After that the status says "no first report yet"; it still changes to running when the rig reports. If it doesn't report, look at the rig's logs: see [Where the logs are](../operate/troubleshoot.md#where-the-logs-are).
 
 ## 4. Make a new one, or revoke it
 

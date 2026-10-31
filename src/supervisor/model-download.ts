@@ -1,4 +1,5 @@
 import { createHash, type Hash } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import {
   createReadStream,
   createWriteStream,
@@ -9,10 +10,21 @@ import {
   statfsSync,
   statSync,
 } from "node:fs";
+import { isIP } from "node:net";
 import { dirname } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { blockedAddress } from "../agents/tools/index.ts";
+import { gib } from "../common/disk.ts";
 import { redact } from "../common/env.ts";
+import { errorText } from "../common/errors.ts";
+import {
+  FIGURE_MODEL_FROM_MAX,
+  FIGURE_MODEL_NAME_MAX,
+  FIGURE_MODELS_MAX,
+  FIGURE_RUN_MAX,
+  FIGURE_TEXT_MAX,
+} from "../core/api/control/rigs.ts";
 
 /**
  * Model files by URL (an assignment's `model` imports with a source): the supervisor downloads
@@ -77,17 +89,17 @@ export class ModelDownloads {
   ) {
     this.live = o.live ?? (() => {});
     this.now = o.now ?? (() => new Date());
-    this.keep = o.keep ?? 20;
+    this.keep = o.keep ?? FIGURE_MODELS_MAX;
   }
 
   /** The newest downloads first, for the supervisor's report (within what control takes). */
   list(): ModelProgress[] {
     return [...this.items.values()].reverse().map((p) => ({
       ...p,
-      name: p.name.slice(0, 200),
-      path: p.path.slice(0, 1000),
-      from: p.from.slice(0, 300),
-      ...(p.run !== undefined ? { run: p.run.slice(0, 80) } : {}),
+      name: p.name.slice(0, FIGURE_MODEL_NAME_MAX),
+      path: p.path.slice(0, FIGURE_TEXT_MAX),
+      from: p.from.slice(0, FIGURE_MODEL_FROM_MAX),
+      ...(p.run !== undefined ? { run: p.run.slice(0, FIGURE_RUN_MAX) } : {}),
     }));
   }
 
@@ -172,6 +184,12 @@ export class ModelDownloadError extends Error {}
 /** A downloaded file whose SHA-256 is not the signed one (it was deleted). */
 export class ModelRefused extends ModelDownloadError {}
 
+/** A download that stopped at the rig's disk floor as it wrote (its part file was deleted). */
+class FloorReached extends ModelDownloadError {}
+
+/** How often a download looks at the free space again as it writes: after each MiB. */
+const FLOOR_CHECK_BYTES = 1024 * 1024;
+
 /** A URL for messages: its scheme, host and path, never its user, password or query. */
 export function urlForMessages(raw: string): string {
   const u = URL.parse(raw);
@@ -214,6 +232,34 @@ async function getFollowing(
   throw new Error(`${urlForMessages(start)}: more than 10 redirects`);
 }
 
+/** The addresses a host name has now (DNS), or the address it is. */
+async function addressesOf(host: string): Promise<string[]> {
+  if (isIP(host)) return [host];
+  return (await lookup(host, { all: true })).map((a) => a.address);
+}
+
+/**
+ * `inner`, for addresses on the internet only: each request, the first and each redirect's, is
+ * refused, in words, when its host has an address on a private, loopback, link-local or other
+ * special network (the research fetcher's list), as the name resolves just before it.
+ */
+export function publicFetch(
+  inner: typeof fetch = fetch,
+  resolve: (host: string) => Promise<string[]> = addressesOf,
+): typeof fetch {
+  return async (input, init) => {
+    const url = new URL(String(input instanceof Request ? input.url : input));
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+    const addresses = await resolve(host);
+    const blocked = addresses.find(blockedAddress);
+    if (!addresses.length || blocked)
+      throw new ModelDownloadError(
+        `${urlForMessages(url.toString())}: ${host} is on a private or local network (${blocked ?? "no address"}): a model file comes from the internet`,
+      );
+    return await inner(input, init);
+  };
+}
+
 /** Free bytes for an unprivileged user on the file system that holds `dir`. */
 export function freeBytes(dir: string): number {
   const s = statfsSync(dir);
@@ -241,14 +287,20 @@ export interface DownloadInput {
   hfToken?: string | undefined;
   downloads: ModelDownloads;
   fetchImpl?: typeof fetch | undefined;
+  /** Tests only: a file at a private or local address is fetched too. */
+  allowPrivate?: boolean | undefined;
   /** Free bytes where the file goes (tests give their own). */
   free?: ((dir: string) => number) | undefined;
+  /** The free space the rig keeps where the file goes, in bytes (goal 173); none: 0. */
+  floor?: number | undefined;
 }
 
 /**
  * Downloads a model file to `target`. Only a file with the signed SHA-256 lands; one that does not
  * match is deleted, and the error says so. A download that breaks keeps what it has as
- * `<target>.part`, which the next download of the same file continues.
+ * `<target>.part`, which the next download of the same file continues. One that would go below
+ * the rig's disk floor is refused before it starts, or stopped as it writes, and deletes what it
+ * had downloaded.
  */
 export async function downloadModel(input: DownloadInput): Promise<void> {
   const busy = running.get(input.target);
@@ -266,7 +318,8 @@ export async function downloadModel(input: DownloadInput): Promise<void> {
 }
 
 async function download(input: DownloadInput): Promise<void> {
-  const f = input.fetchImpl ?? fetch;
+  // Only from the internet, unless a test says so (publicFetch): never the rig's own network.
+  const f = input.fetchImpl ?? (input.allowPrivate ? fetch : publicFetch());
   const free = input.free ?? freeBytes;
   const part = `${input.target}.part`;
   mkdirSync(dirname(input.target), { recursive: true });
@@ -282,7 +335,7 @@ async function download(input: DownloadInput): Promise<void> {
   // A message for the report, the live view and the command's outcome. Messages are Thermite's
   // own; the token is taken out all the same, in case a server echoed it.
   const clean = (err: unknown) => {
-    const msg = redact(err instanceof Error ? err.message : String(err));
+    const msg = redact(errorText(err));
     return input.hfToken ? msg.replaceAll(input.hfToken, "***") : msg;
   };
   try {
@@ -330,15 +383,23 @@ async function download(input: DownloadInput): Promise<void> {
         const len = Number(res.headers.get("content-length") ?? "");
         total = res.headers.has("content-length") && Number.isSafeInteger(len) ? len : null;
       }
-      if (total !== null) {
-        const need = total - start;
-        const avail = free(dirname(part));
-        if (need > avail) {
-          await res.body.cancel();
-          throw new ModelDownloadError(
-            `not enough free space for model ${input.name}: it needs ${size(need)} more, and ${size(avail)} is free where it goes (${dirname(input.path) === "." ? "the inbox" : `the inbox's ${dirname(input.path)}`})`,
-          );
-        }
+      // The file, and the rig's disk floor after it (goal 173): a download never fills the disk.
+      // Refused in words; the owner frees space and assigns again.
+      const floor = input.floor ?? 0;
+      const need = (total ?? start) - start + floor;
+      const avail = free(dirname(part));
+      const where =
+        dirname(input.path) === "." ? "the inbox" : `the inbox's ${dirname(input.path)}`;
+      const keep = floor
+        ? `, and the rig keeps ${gib(floor)} GiB free (THERMITE_DISK_FLOOR_GIB)`
+        : "";
+      if (need > avail) {
+        await res.body.cancel();
+        throw new ModelDownloadError(
+          total === null
+            ? `not enough free space for model ${input.name}: ${size(avail)} is free where it goes (${where})${keep}`
+            : `not enough free space for model ${input.name}: it needs ${size(total - start)} more, and ${size(avail)} is free where it goes (${where})${keep}`,
+        );
       }
       input.downloads.started(input.path, {
         total,
@@ -346,11 +407,26 @@ async function download(input: DownloadInput): Promise<void> {
         ...(url.host !== from ? { via: url.host } : {}),
       });
       let bytes = start;
+      // The floor again as the bytes arrive: a server that gives no size, or more than it said,
+      // stops at the floor too.
+      let checkAt = bytes + FLOOR_CHECK_BYTES;
       const count = new Transform({
         transform(chunk: Buffer, _enc, cb) {
           hash.update(chunk);
           bytes += chunk.length;
           input.downloads.progress(input.path, bytes);
+          if (floor && bytes >= checkAt) {
+            checkAt = bytes + FLOOR_CHECK_BYTES;
+            const left = free(dirname(part));
+            if (left < floor) {
+              cb(
+                new FloorReached(
+                  `not enough free space for model ${input.name}: the download stopped after ${size(bytes)}, with ${size(left)} free where it goes (${where})${keep}. What it had downloaded was deleted`,
+                ),
+              );
+              return;
+            }
+          }
           cb(null, chunk);
         },
       });
@@ -361,6 +437,11 @@ async function download(input: DownloadInput): Promise<void> {
           createWriteStream(part, { flags: start ? "a" : "w", mode: 0o644 }),
         );
       } catch (err) {
+        // Stopped at the floor: what arrived goes, to give the space back.
+        if (err instanceof FloorReached) {
+          rmSync(part, { force: true });
+          throw err;
+        }
         // What arrived stays as the .part file: the next download continues from it.
         throw new Error(
           `${shown}: the download broke after ${size(bytes)} (${err instanceof Error ? err.message.slice(0, 200) : String(err)}). The next try continues from there`,

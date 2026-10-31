@@ -54,3 +54,37 @@ export function readHardware(x: unknown): Hardware | null {
   }
   return h as Hardware;
 }
+
+/**
+ * The judge's GPUs on a rig of `n` when no split is given: half, rounded up (the one GPU of a
+ * rig with one). Control's pages and the broker split the same way; a page's script takes this
+ * function's source.
+ */
+export const judgeGpusByDefault = (n: number): number => Math.ceil(n / 2);
+
+/** At most 8 judge GPUs and 8 for the agents (the harness image has users for that many). */
+export const MAX_RIG_GPUS = 16;
+
+/**
+ * The harness's GPU settings for a rig with `n` GPUs, as the container numbers them (0 to n-1,
+ * in the order given): none, one shared, or the GPU set with the judge's share to start with (the
+ * first `judge` for the judge, the rest for the agents' dev runs; default half, rounded up). A
+ * campaign deployed on the rig, or Edit rig, may change the share later (the rig's settings).
+ */
+export function gpuSplit(
+  n: number,
+  judge?: number | undefined,
+): { THERMITE_GPU_INDEX?: string; THERMITE_GPUS?: string; THERMITE_JUDGE_GPUS?: string } {
+  if (n > MAX_RIG_GPUS) throw new Error(`a rig takes at most ${MAX_RIG_GPUS} GPUs`);
+  if (n === 0) return {};
+  if (n === 1) return { THERMITE_GPU_INDEX: "0" };
+  const j = judge ?? judgeGpusByDefault(n);
+  if (!Number.isInteger(j) || j < 1 || j > n - 1 || j > 8 || n - j > 8)
+    throw new Error(
+      `with ${n} GPUs the judge takes 1 to ${Math.min(8, n - 1)} of them, and the agents at most 8`,
+    );
+  return {
+    THERMITE_GPUS: Array.from({ length: n }, (_, i) => i).join(","),
+    THERMITE_JUDGE_GPUS: String(j),
+  };
+}

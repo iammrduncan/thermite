@@ -1,5 +1,6 @@
-import type { RigExport } from "../store.ts";
-import { ago, esc, infoLabel } from "./components.ts";
+import { EXPORT_WHERE, exportWords } from "../command-progress.ts";
+import type { RigExport } from "../store/index.ts";
+import { ago, esc, infoLabel } from "./components/index.ts";
 
 /**
  * Export on a rig's or a run's page, and the Exports page (goal 103). Export asks the rig for an
@@ -11,20 +12,8 @@ import { ago, esc, infoLabel } from "./components.ts";
 export const EXPORT_CHOICE_TIP =
   "This run (on a run's page): the run alone, from its start: its events, attempts and notes, its research folder as it stands, with its paper when it has one, and the pages it fetched; no other run, and no ledger snapshot. What changed: what the rig recorded since its last export, with the research folders of the runs that finished since. Full: also a snapshot of the ledger, which holds every event, claim, source, finding, report and note, every run's research folder, finished or not, and each run's archive of the pages it fetched. A full export is larger and takes longer.";
 
-/** An export_now's payload in words (goal 103): what was asked for, and what the rig made. */
-export function exportWords(p: { full?: unknown; run?: unknown }) {
-  const run = typeof p.run === "string" ? p.run : undefined;
-  const full = p.full === true;
-  return {
-    asked: run
-      ? `An export of ${run} alone was asked for.`
-      : full
-        ? "A full export was asked for."
-        : "An export was asked for.",
-    made: (name: string) =>
-      `It made ${run ? `the export of ${run}` : full ? "the full export" : "export"} ${name}.`,
-  };
-}
+// An export's words are the domain's (command-progress.ts): the pages and the follow routes share them.
+export { EXPORT_WHERE, exportWords };
 
 /** Export's form: its export_now payload, this run's or the rig's, full or not, and its words. */
 export function exportForm(f: Record<string, unknown>) {
@@ -32,10 +21,6 @@ export function exportForm(f: Record<string, unknown>) {
   const payload = run ? { run } : { full: f.full === "true" };
   return { payload, asked: exportWords(payload).asked };
 }
-
-/** Where an export the owner asked for shows, in words (after "Sent", and once the rig did it). */
-export const EXPORT_WHERE =
-  "When all its files reach control, it shows on the Exports page, ready to download. A rig with a results repository pushes it there instead.";
 
 /** A path under /ui for the Exports page, for one rig or for all. */
 export const exportsHref = (rig?: string) =>

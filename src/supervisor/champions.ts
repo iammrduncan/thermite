@@ -1,11 +1,10 @@
-import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { promisify } from "node:util";
+import { ApiError, UPLOAD_TIMEOUT_MS } from "../common/api/call.ts";
+import { controlClient } from "../common/api/control.ts";
 import { log } from "../common/env.ts";
-import { buildHeaders } from "../core/version.ts";
-
-const run = promisify(execFile);
+import { git } from "../common/git.ts";
+import { CHAMPION_PATCH, CHAMPION_PATCH_MAX } from "../core/api/control/rigs.ts";
 
 /**
  * Champions' patches go to control, so an operator can download a run's result from the
@@ -49,40 +48,40 @@ export async function uploadChampions(
   },
   queue: ChampionUpload[],
 ): Promise<ChampionUpload[]> {
-  const f = cfg.fetchImpl ?? fetch;
+  const control = controlClient({
+    url: cfg.controlUrl,
+    token: cfg.controlToken,
+    rig: cfg.rig,
+    fetchImpl: cfg.fetchImpl,
+  });
   const again: ChampionUpload[] = [];
   for (const c of queue) {
     try {
-      const { stdout } = await run(
-        "git",
+      const patch = await git(
         ["-C", cfg.resultsRepo, "show", `refs/heads/thermite/${cfg.rig}/attempts:${c.path}`],
-        { encoding: "buffer", maxBuffer: 64 * 1024 * 1024 },
+        { maxBytes: CHAMPION_PATCH_MAX },
       );
-      const res = await f(
-        `${cfg.controlUrl}/v1/rigs/${encodeURIComponent(cfg.rig)}/champions/${encodeURIComponent(c.run)}/${c.seq}/patch`,
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${cfg.controlToken}`,
-            "content-type": "application/octet-stream",
-            ...buildHeaders(),
-          },
-          body: new Uint8Array(stdout),
-        },
-      );
-      if (res.status === 201) {
-        log("supervisor", "champion patch uploaded", { run: c.run, seq: c.seq });
-      } else if (res.status === 422) {
-        log("supervisor", "control refused a champion patch", {
-          run: c.run,
-          seq: c.seq,
-          error: (await res.text()).slice(0, 300),
-        });
-      } else {
-        again.push(c);
-      }
+      await control.call(CHAMPION_PATCH, {
+        params: { run: c.run, seq: c.seq },
+        bytes: new Uint8Array(patch),
+        timeoutMs: UPLOAD_TIMEOUT_MS,
+      });
+      log("supervisor", "champion patch uploaded", { run: c.run, seq: c.seq });
     } catch (err) {
-      log("supervisor", "champion upload error", { run: c.run, seq: c.seq, error: String(err) });
+      const answered = err instanceof ApiError && err.status !== undefined;
+      // 422: not the patch the rig published, so never sent again. Any other answer: again later.
+      if (answered && err.code === "unprocessable") {
+        const why = { run: c.run, seq: c.seq, error: err.text.slice(0, 300) };
+        log("supervisor", "control refused a champion patch", why, "warn");
+        continue;
+      }
+      if (!answered)
+        log(
+          "supervisor",
+          "champion upload error",
+          { run: c.run, seq: c.seq, error: String(err) },
+          "error",
+        );
       again.push(c);
     }
   }

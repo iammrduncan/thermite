@@ -1,16 +1,18 @@
+import { ApiError } from "../common/api/call.ts";
+import { harnessClient } from "../common/api/harness.ts";
 import { log } from "../common/env.ts";
-import { buildHeaders } from "../core/version.ts";
+import { MODEL_ROUTE_GET, MODEL_ROUTE_PUT } from "../core/api/harness/supervisor.ts";
+import type { ControlRoute } from "../core/api/model-route.ts";
+import type { AnswerOf } from "../core/api/route.ts";
+import type { ConfigValue } from "../core/link/config.ts";
 
 /**
  * The agents' model route comes from control: the owner sets it on the settings page, and control
- * keeps its key sealed. The supervisor fetches its rig's route over its own authenticated channel
- * and hands it to its harness when it changed. It never logs or keeps the key. Only control's
- * explicit "no route" returns the agents to the rig's own settings; an error changes nothing.
+ * keeps its key sealed. It comes in the rig's config on the message bus (config/), and the
+ * supervisor hands it to its harness when it changed. It never logs or keeps the key. Only
+ * control's explicit "no route" returns the agents to the rig's own settings.
  */
-export interface RouteSync {
-  rig: string;
-  controlUrl: string;
-  controlToken: string;
+export interface RouteHand {
   harnessUrl: string;
   harnessToken: string;
   fetchImpl?: typeof fetch | undefined;
@@ -19,44 +21,27 @@ export interface RouteSync {
 export type RouteSyncResult = "unchanged" | "set" | "cleared" | "no_agents";
 
 /**
- * One round of the supervisor's route poll. A failed sync is tried once more after `retryMs`:
- * at start, control may not answer yet ("fetch failed"), and one retry keeps that out of the
- * log. The retry's outcome stands for the round, so only a second failure reaches the caller,
- * which logs it.
+ * Hands the harness control's routes, the workers' and the planner's, when they differ from the
+ * ones it holds.
  */
-export async function syncModelRouteRound(
-  s: RouteSync,
-  retryMs: number,
-  wait: (ms: number) => Promise<void>,
+export async function handModelRoute(
+  s: RouteHand,
+  given: ConfigValue<"model-route">,
 ): Promise<RouteSyncResult> {
-  try {
-    return await syncModelRoute(s);
-  } catch {
-    await wait(retryMs);
-    return syncModelRoute(s);
-  }
-}
-
-export async function syncModelRoute(s: RouteSync): Promise<RouteSyncResult> {
-  const fetch = s.fetchImpl ?? globalThis.fetch;
-  const res = await fetch(`${s.controlUrl}/v1/rigs/${encodeURIComponent(s.rig)}/model-route`, {
-    headers: { authorization: `Bearer ${s.controlToken}`, ...buildHeaders() },
+  const harness = harnessClient({
+    url: s.harnessUrl,
+    token: s.harnessToken,
+    fetchImpl: s.fetchImpl,
   });
-  if (!res.ok) throw new Error(`control's model route: HTTP ${res.status}`);
-  const { route, planner = null } = (await res.json()) as {
-    route: { name: string; version: number; revision: string } | null;
-    /** The planner's own route, when the owner gave the planner a model (newer controls). */
-    planner?: { revision: string } | null;
-  };
-  const harness = { authorization: `Bearer ${s.harnessToken}` };
-  const cur = await fetch(`${s.harnessUrl}/v1/model-route`, { headers: harness });
-  if (cur.status === 404) return "no_agents";
-  if (!cur.ok) throw new Error(`the harness's model route: HTTP ${cur.status}`);
-  const info = (await cur.json()) as {
-    source: string;
-    revision?: string;
-    planner_revision?: string | null;
-  };
+  // The planner's own route, when the owner gave the planner a model.
+  const { route, planner = null } = given;
+  let info: AnswerOf<typeof MODEL_ROUTE_GET>;
+  try {
+    info = await harness.call(MODEL_ROUTE_GET);
+  } catch (err) {
+    if (err instanceof ApiError && err.code === "not_found") return "no_agents";
+    throw err;
+  }
   const plannerSame = (info.planner_revision ?? null) === (planner?.revision ?? null);
   if (
     plannerSame &&
@@ -65,12 +50,10 @@ export async function syncModelRoute(s: RouteSync): Promise<RouteSyncResult> {
       : info.source !== "control")
   )
     return "unchanged";
-  const put = await fetch(`${s.harnessUrl}/v1/model-route`, {
-    method: "PUT",
-    headers: { ...harness, "content-type": "application/json" },
-    body: JSON.stringify({ route, planner }),
+  // Control's routes, passed on untouched: the harness checks each whole.
+  await harness.call(MODEL_ROUTE_PUT, {
+    body: { route: route as ControlRoute | null, planner: planner as ControlRoute | null },
   });
-  if (!put.ok) throw new Error(`handing the model route to the harness: HTTP ${put.status}`);
   log("supervisor", route ? "model route handed to the harness" : "model route cleared", {
     name: route?.name ?? null,
     version: route?.version ?? null,

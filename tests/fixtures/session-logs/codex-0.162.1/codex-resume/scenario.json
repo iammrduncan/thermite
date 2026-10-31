@@ -1,0 +1,197 @@
+{
+  "argv": [
+    "/opt/codex/bin/codex",
+    "--no-daemon",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "--dangerously-bypass-hook-trust",
+    "-C",
+    "/scratch/thermite/lanes/lane-1/codex-resume/repo",
+    "--model",
+    "scripted",
+    "SPIKE-2: run pwd please."
+  ],
+  "cols": 120,
+  "rows": 40,
+  "steps": [
+    {
+      "do": "mark",
+      "label": "turn-a"
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-2",
+      "kind": "tool",
+      "step": 1,
+      "timeoutMs": 30000
+    },
+    {
+      "do": "sleep",
+      "ms": 1500
+    },
+    {
+      "do": "chars",
+      "text": "QUEUED-1: say hello after this turn",
+      "everyMs": 15
+    },
+    {
+      "do": "sleep",
+      "ms": 300
+    },
+    {
+      "do": "key",
+      "key": "tab"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 1000,
+      "timeoutMs": 5000
+    },
+    {
+      "do": "snap",
+      "label": "after tab"
+    },
+    {
+      "do": "wait",
+      "for": "log",
+      "match": "\"task_complete\"",
+      "since": "mark",
+      "timeoutMs": 30000
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2500,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after turn a (and the queued one?)"
+    },
+    {
+      "do": "key",
+      "key": "f2"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 1000,
+      "timeoutMs": 5000
+    },
+    {
+      "do": "snap",
+      "label": "warnings (F2)"
+    },
+    {
+      "do": "key",
+      "key": "esc"
+    },
+    {
+      "do": "sh",
+      "cmd": "ls /scratch/thermite/lanes/lane-1/codex-resume/codex-home/.codex/sessions/*/*/*/",
+      "extract": {
+        "thread": "rollout-.*-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.jsonl"
+      }
+    },
+    {
+      "do": "mark",
+      "label": "kill"
+    },
+    {
+      "do": "signal",
+      "pid": "program",
+      "signal": "SIGKILL"
+    },
+    {
+      "do": "wait",
+      "for": "exit",
+      "timeoutMs": 5000,
+      "afterExit": true
+    },
+    {
+      "do": "sh",
+      "cmd": "ps -o pid,user,args -u $(id -u) | grep -v 'ps -o' ",
+      "afterExit": true
+    },
+    {
+      "do": "respawn",
+      "argv": [
+        "/opt/codex/bin/codex",
+        "resume",
+        "--no-daemon",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--dangerously-bypass-hook-trust",
+        "-C",
+        "/scratch/thermite/lanes/lane-1/codex-resume/repo",
+        "--model",
+        "scripted",
+        "${thread}"
+      ],
+      "clear": true,
+      "afterExit": true
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after resume"
+    },
+    {
+      "do": "mark",
+      "label": "turn-b"
+    },
+    {
+      "do": "type",
+      "text": "SPIKE-5: run date please."
+    },
+    {
+      "do": "wait",
+      "for": "log",
+      "match": "\"task_complete\"",
+      "since": "mark",
+      "timeoutMs": 30000
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2000,
+      "timeoutMs": 10000
+    },
+    {
+      "do": "snap",
+      "label": "after turn b"
+    },
+    {
+      "do": "mark",
+      "label": "ending"
+    },
+    {
+      "do": "key",
+      "key": "ctrl-c"
+    },
+    {
+      "do": "wait",
+      "for": "exit",
+      "timeoutMs": 3000,
+      "label": "one ctrl-c on an empty composer"
+    },
+    {
+      "do": "snap",
+      "label": "after ctrl-c"
+    },
+    {
+      "do": "key",
+      "key": "ctrl-c"
+    },
+    {
+      "do": "wait",
+      "for": "exit",
+      "timeoutMs": 5000
+    }
+  ]
+}

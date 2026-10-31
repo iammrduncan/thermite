@@ -7,11 +7,18 @@ ARG BASE_IMAGE=${NODE_IMAGE}
 FROM ${NODE_IMAGE} AS build
 WORKDIR /src
 COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
-# npm ci runs it after the install: it patches Pi's streaming tool-call parse (goal 140).
+# It patches Pi's streaming tool-call parse after the install (goal 140).
 COPY scripts/patch-pi-ai.mjs ./scripts/
-RUN npm ci --no-fund --no-audit
+# No package's install script runs here: this stage has no compiler for node-pty's native part,
+# which the final stage builds (below), and no other package Thermite runs needs its own.
+RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
 COPY src ./src
-RUN npm run build && npm prune --omit=dev --no-fund --no-audit
+# node-pty's prebuilt modules, for other systems, and its Windows parts stay out of what the final
+# stage copies, which builds its own module. So do pi-tui's prebuilt helpers for its clipboard and
+# modifier keys, which a rig never loads: no image holds a native part of pi-tui (goal 169).
+RUN npm run build && npm prune --omit=dev --no-fund --no-audit \
+ && rm -rf node_modules/node-pty/prebuilds node_modules/node-pty/third_party node_modules/node-pty/deps \
+    node_modules/@earendil-works/pi-tui/native
 
 FROM ${NODE_IMAGE} AS node
 
@@ -74,13 +81,17 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 # git for the mirror; a C/C++ toolchain, CMake, Ninja and ccache for kit and lane builds of real
 # projects (an inference engine, for example); Python 3 with numpy for kit run and check scripts.
 # The broker needs prlimit (process limits), setpriv (a dedicated development card's groups) and
-# taskset (timed runs on the judge card's local CPUs). No bubblewrap: the agents and the advisors
-# run Claude Code with its own sandbox off (src/harness/agents/claude-code.ts says why).
+# taskset (timed runs on the judge card's local CPUs); the terminal host needs setsid (an agent's
+# program on its own terminal, goal 169). No bubblewrap: the agents and the advisors
+# run Claude Code with its own sandbox off (src/agents/programs/claude-code/index.ts says why).
+# The base's system packages are upgraded first, so each build takes the distribution's fixes
+# (goal 125).
 RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
  && apt-get install -y --no-install-recommends git tini ca-certificates gcc g++ libc6-dev make \
       cmake ninja-build ccache python3 python3-numpy \
  && (command -v setpriv >/dev/null || apt-get install -y --no-install-recommends setpriv) \
- && command -v setpriv && command -v prlimit && command -v taskset \
+ && command -v setpriv && command -v prlimit && command -v taskset && command -v setsid \
  && rm -rf /var/lib/apt/lists/*
 # The GPU fence: the broker starts every role's command in a Landlock rule set that leaves out
 # the GPU device nodes the role may not open (containers/harness/devfence.c).
@@ -96,7 +107,18 @@ RUN gcc -O2 -Wall -Wextra -Werror -o /usr/local/bin/thermite-devfence /tmp/devfe
 # to run-7) and gpu-d1..gpu-d7 for further development cards. Planner calls and model checks under
 # OpenCode, Claude Code or Codex run as `planner` and `model-check`, users no lane shares. Judge
 # card 0 builds as `builder`, cards 1 to 7 as builder-1..builder-7, so builds run apart at once.
+# Each card runs the kit's check as `checker` (checker-1..checker-7), which reads the kits and the
+# baselines through the `checkers` group, and a kit's driver as `driver` (driver-1..driver-7),
+# apart from the candidate's timing user.
 RUN groupadd -g 10500 gpu && groupadd -g 10501 gpudev && groupadd -g 10502 gpuctl \
+ && groupadd -g 10049 checkers \
+ && for i in $(seq 0 7); do \
+      s=$([ "$i" = 0 ] || echo "-$i") \
+      && groupadd -g $((10050 + i)) checker$s \
+      && useradd -u $((10050 + i)) -g checker$s -M -d /nonexistent -s /usr/sbin/nologin checker$s \
+      && groupadd -g $((10060 + i)) driver$s \
+      && useradd -u $((10060 + i)) -g driver$s -M -d /nonexistent -s /usr/sbin/nologin driver$s; \
+    done \
  && groupadd -g 10010 thermite && useradd -u 10010 -g thermite -M -d /nonexistent -s /usr/sbin/nologin thermite \
  && groupadd -g 10020 builder && useradd -u 10020 -g builder -M -d /nonexistent -s /usr/sbin/nologin builder \
  && for i in $(seq 1 7); do \
@@ -121,9 +143,28 @@ RUN groupadd -g 10500 gpu && groupadd -g 10501 gpudev && groupadd -g 10502 gpuct
 # The outbox mount point, as the broker keeps it: thermite writes, the supervisor's group (10001)
 # reads. A new named volume copies this ownership, whichever container mounts it first.
 RUN mkdir -p /outbox && chown 10010:10001 /outbox && chmod 2750 /outbox
+# The folder the inbox is mounted in (/controller/inbox, src/core/paths.ts): root's, with the
+# controller's group, closed to everyone else. No role reaches what the supervisor fetched (a kit's
+# bundle among it), whatever the modes in the mounted folder are.
+RUN mkdir -p /controller && chown 0:10010 /controller && chmod 0750 /controller
 WORKDIR /opt/thermite
 COPY --from=build /src/package.json ./
 COPY --from=build /src/node_modules ./node_modules
+# node-pty's native part, for the terminal host's pseudo-terminals (goal 169): built here, where
+# the compiler, make and Python are, with node-gyp and the Node.js headers of the Node stage
+# mounted for this step only, so nothing is downloaded and neither stays in the image. Only the
+# built module is kept: node-pty's sources and the build's own files, and node-addon-api's
+# headers, which only the build reads, are removed.
+RUN --mount=type=bind,from=node,source=/usr/local,target=/mnt/node \
+    cd node_modules/node-pty \
+ && node /mnt/node/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild \
+      --nodedir=/mnt/node --devdir=/tmp/node-gyp \
+ && install -D -m 0755 build/Release/pty.node /tmp/pty.node \
+ && rm -rf build node-addon-api scripts src binding.gyp /tmp/node-gyp \
+ && install -D -m 0755 /tmp/pty.node build/Release/pty.node \
+ && rm -f /tmp/pty.node \
+ && rm -rf ../node-addon-api \
+ && node -e "if (typeof require('/opt/thermite/node_modules/node-pty').native.open !== 'function') process.exit(1)"
 COPY --from=build /src/dist ./dist
 COPY --chmod=0755 containers/thermite /usr/local/bin/thermite
 # The OpenCode harness: its binary, and Thermite's tools for an agent's own shell.
@@ -136,14 +177,24 @@ COPY --from=claude /out/ /usr/local/bin/
 COPY --from=codex /out/opt/ /opt/
 RUN if [ -x /opt/codex/bin/codex ]; then ln -s /opt/codex/bin/codex /usr/local/bin/codex; fi
 COPY --chmod=0755 containers/thermite-trial /usr/local/bin/thermite-trial
-# The smoke check's kits and projects (the rig_check smoke command builds them into a campaign).
+# The smoke check's kits and projects (the rig_check smoke command builds them into a campaign),
+# with the other examples: like every kit, the judge's alone. They are root's, with the
+# controller's group (thermite), which reads them, and closed to every other user, the lanes' and
+# the agents' among them. Folders and the scripts git keeps executable are 0750, other files 0640:
+# git records only the execute bit, so the smoke kit's commit stays the one
+# examples/contracts/smoke-cpu-goal.json names. The build fails if anything there is left open to
+# other users.
 COPY kits ./checks/kits
 COPY examples ./checks/examples
+RUN chown -R 0:10010 checks \
+ && chmod -R u=rwX,g=rX,o= checks \
+ && test -z "$(find checks -perm /o=rwx -print -quit)"
 # No set-id file anywhere, as in every Thermite image: no process in the container can gain
 # privileges through a setuid or setgid program. Last, after every package; the build fails if one
-# is left.
+# is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
 RUN find / -xdev -type f -perm /6000 -exec chmod ug-s {} + \
- && test -z "$(find / -xdev -type f -perm /6000 -print -quit)"
+ && test -z "$(find / -xdev -type f -perm /6000 -print -quit)" \
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
 ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
 # The source commit the image is built from (empty: not given). The harness reports it with
 # Thermite's version from package.json; control compares them with its own.
@@ -156,4 +207,4 @@ ENV THERMITE_IMAGE_ID=${THERMITE_IMAGE_ID}
 # The broker runs as root so it can start lane, builder and run processes as separate users. It
 # needs only CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID and SETUID (compose.yaml drops the rest).
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "/opt/thermite/dist/harness/broker.js"]
+CMD ["node", "/opt/thermite/dist/harness/broker/main.js"]

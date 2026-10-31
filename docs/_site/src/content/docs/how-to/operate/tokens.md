@@ -107,7 +107,7 @@ To **end** a token, remove its setting and restart control. On the local stack, 
 
 ## Rig tokens
 
-Each rig has its own token, which its supervisor uses to report to control. The `rig` commands below need the owner's token. The examples use the owner's token file of the local stack, `.dev/secrets/control-admin-token`. If you made an owner's token of your own, use its file instead.
+Each rig has its own token, which its supervisor uses to register its keys on the message bus with control, and to send its results over HTTPS. The `rig` commands below need the owner's token. The examples use the owner's token file of the local stack, `.dev/secrets/control-admin-token`. If you made an owner's token of your own, use its file instead.
 
 - **Rigs control sets up** with **Add a rig**, or with a join command, get a token by themselves. See [Add a rig on a machine over SSH](../install/rig-on-a-machine.md) and [Join a rig yourself](../install/join-a-rig.md).
 - **Enroll a rig yourself** with the owner's token. Control makes the rig's token, and the command writes it with the rig's other files into a new folder:
@@ -135,15 +135,15 @@ Each rig has its own token, which its supervisor uses to report to control. The 
 
   For a rig control set up, **Restart them** on the rig's page then restarts the supervisor.
 
-- **Rigs in control's rig tokens file** (`THERMITE_CONTROL_RIG_TOKENS_FILE`), such as the local stack's `local-1` and `local-2`, keep their tokens there. `rig token` refuses them with `rig local-1 has its token in control's rig tokens file; change it there`. Change the token in both places, then restart control and the rig's supervisor. On the local stack, the `init` container makes a new token for a missing file and writes the tokens file again (in a checkout of the source code, `npm run dev:init` does the same):
+- **The local stack's rigs**, `local-1` and `local-2`, are enrolled by the stack's `enroll` step at each `up`, which writes each token to `.dev/secrets/control-rig-token` (`control-rig-token-2` for `local-2`). To replace `local-1`'s token, empty its file and start the stack again; the enroll step gets a new token from control, writes it there, and the old one stops working. Then restart the supervisor, so that it reads the new token:
 
   ```sh
-  rm .dev/secrets/control-rig-token
-  docker compose run --rm init
-  docker compose up -d --force-recreate control supervisor
+  : > .dev/secrets/control-rig-token
+  docker compose up -d
+  docker compose restart supervisor
   ```
 
-  Add your `-f` options to the last line if you start the stack with override files.
+  With Podman, use `podman compose`. Add your `-f` options if you start the stack with override files. A token you made with `rig token` instead goes into that file by hand: the enroll step keeps whatever token the file holds while control has the rig enrolled.
 
 - **End a rig's token** by retiring the rig: `npx thermite rig retire rig-1 --control https://control.example.com --token-file .dev/secrets/control-admin-token`, or **Retire it** on the rig's page. See [Stop, restart, remove or reset a rig](rig-lifecycle.md#retire-and-bring-back). Bringing the rig back doesn't bring its token back; enrolling it again with `rig add` gives it a new one.
 

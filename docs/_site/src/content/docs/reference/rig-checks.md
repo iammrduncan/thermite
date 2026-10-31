@@ -44,7 +44,7 @@ When the harness restarts during a check, it records the check as finished with 
   | --- | --- | --- | --- |
   | Not run yet | **not run yet** | None | **Run it** |
   | Sent: control queued the command, and the rig has not taken it | **sent** | `Sent to the rig at 03:41 UTC. It starts when the rig takes it.` | **Sent**, off |
-  | Running: the rig took the command (its answer names the run of the check it started), or reported `rig_check_started` | **running** and the time so far, such as `running · 1 m 12 s`, counted on each second | What the check pauses: `Its running runs are paused for it, and resumed after.` for the smoke check, `Nothing is paused for it.` for the others | **Running…**, off |
+  | Running: the rig's report brought the harness's answer to the command, which names the run of the check it started, or `rig_check_started` | **running** and the time so far, such as `running · 1 m 12 s`, counted on each second | What the check pauses: `Its running runs are paused for it, and resumed after.` for the smoke check, `Nothing is paused for it.` for the others | **Running…**, off |
   | Passed or failed | **passed** or **failed**, and how long ago | The summary sentence | **Run it** |
   | Refused: the rig did not run the command | The last result | `Not run: the rig refused it at 03:41 UTC.` and the rig's reason, such as `Not now: …` | **Run it** |
   | Expired: the rig did not take the command before its signature ran out | The last result | `Not run: the rig did not take it before 04:41 UTC.` | **Run it** |
@@ -84,7 +84,7 @@ While the workers' model check fails, no trial or plan of the rig's run starts, 
 
 ## Isolation check
 
-The isolation check is the harness's **isolation selftest**. For each role, the broker runs one small probe script as that role's own user. The script tries each operation in a list and reports what happened. [Isolation inside a rig](../explanation/isolation.md) explains why each role has its own user.
+The isolation check is the harness's **isolation selftest**. For each role, the broker runs one small probe script as that role's own user. The script tries each operation in a list and reports what happened. [Isolation inside a rig](../explanation/isolation.md) explains why each role has its own user. The check also holds the supervisor's part: what an advisor user reached on the supervisor ([below](#the-supervisors-part)).
 
 The selftest also runs from a shell inside the harness container, as root:
 
@@ -102,6 +102,8 @@ It prints the whole report as JSON and exits with 1 when isolation does not hold
 | `builder-<i>` | The builder of each further judge GPU, on a rig with dedicated GPUs: each card builds as its own user, at the same time as the others |
 | `run` | The user that runs timed runs on the first (or only) judge device |
 | `run-<i>` | The user of each further judge GPU, on a rig with dedicated GPUs |
+| `checker`, `checker-<i>` | The kit's check, on each judge GPU |
+| `driver`, `driver-<i>` | A kit's driver, on each judge GPU |
 | `planner` | The user of planner calls under OpenCode, Claude Code or Codex |
 | `model-check` | The user of the model check under OpenCode, Claude Code or Codex |
 | `lane-1` | A lane's plain commands |
@@ -123,18 +125,25 @@ It prints the whole report as JSON and exits with 1 when isolation does not hold
 | `broker-socket` | Check for write access | The broker's socket |
 | `outbox-write` | Check for write access | The outbox |
 | `outbox-read` | List | The outbox |
+| `inbox-list` | List | The inbox, which the supervisor fills for the controller |
+| `inbox-read` | Read | A file in the inbox, such as a kit's bundle, reached by its full path. Skipped while the inbox holds none |
 | `runs-list` | List | The directory of the judge's runs |
 | `tmp-create`, `var-tmp-create`, `shm-create` | Create a file | `/tmp`, `/var/tmp`, `/dev/shm` |
-| `kit-by-path` | Read | A checked-out `kit.json`, reached by its full path. Skipped before any kit is checked out |
-| `secret:<file>` | Read | Each secret file: the supervisor token, the proposer token and the model key files. The rig check also tries the stored model route. Where the harness shares its container with a supervisor in [pull mode](../explanation/trust.md#rigs-in-pull-mode) (`THERMITE_TUNNEL_DIR` set), also the pod's own keys, `keys.json` |
+| `kit-by-path` | Read | A checked-out `kit.json`, reached by its full path. Skipped before any kit is checked out. The checkers must read it instead (below) |
+| `image-checks-list` | List | The [smoke check](#smoke-check)'s own kits and projects, with the other examples: `/opt/thermite/checks` in the harness image, or `THERMITE_CHECKS_DIR`. Skipped, as `image-checks`, where that folder holds no kit |
+| `image-kit-read` | Read | A `kit.json` in that folder, reached by its full path. Skipped with `image-checks-list` |
+| `secret:<file>` | Read | Each secret file: the model routes control set for the agents and for the planner, and the supervisor token, the proposer token and the model key files. Where the harness shares its container with a supervisor in [pull mode](../explanation/trust.md#rigs-in-pull-mode) (`THERMITE_TUNNEL_DIR` set), also the pod's own keys, `keys.json` |
 | `build-overwrite` | Write | A file of a stored build. Skipped before any build exists |
 | `build-work` | List | A build under way, handed to `builder` as the judge hands one over. Every role but `builder` must be refused, the other cards' builders among them |
-| `baseline-by-path` | Read | A file a kit's check kept with a baseline, reached by its full path. Skipped before any baseline kept a file |
+| `lane-cache` | List | Lane 1's compiler cache (`ccache` and the like), which its trials keep across trials and restarts. Every role but lane 1's own users must be refused. Skipped before lane 1 has a cache |
+| `baseline-by-path` | Read | A file a kit's check kept with a baseline, reached by its full path. Skipped before any baseline kept a file. The checkers must read it instead (below) |
 | `run-kit-write`, `run-kit-create` | Write, create a file | A run's read-only copy of kit files, made the way the judge makes it |
 | `research-write`, `research-create` | Write, create a file | A claim's file in a run's [research folder](../explanation/campaign-modes.md#research), and its `claims/` folder, written the way the harness writes them |
 | `controller-environ` | Read | The environment of the harness's controller process |
 | `pid1-environ` | Read | The environment of the container's first process, which holds what the container was started with |
 | `device:<node>` | Open | Each GPU device node, for roles that must not use the device |
+
+On Kubernetes, `lane-1` also tries the cluster's network: `cluster-network` opens a TCP connection to the cluster's API server, at the address and port Kubernetes gives every pod (`KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`). The rig's network rules must stop it. It passes with the error it met, such as `ECONNREFUSED`, or with `no answer in 3 s`; `ALLOWED: connected to <host> port <port>` fails.
 
 One more probe must find nothing: `runpod-variables` looks for RunPod's variables (`RUNPOD_` and a name) in the role's own environment and in every process environment the role can read. Its result is `none`, or `FOUND` with each name and where it was found.
 
@@ -144,7 +153,7 @@ In the [one-container rig image](harness-image.md#the-one-container-rig-image), 
 | --- | --- | --- |
 | `supervisor-home` | List | The supervisor's state folder |
 | `supervisor-token` | Read | The supervisor's copy of its token for the harness API |
-| `inbox-list` | List | The inbox, which the supervisor fills for the controller |
+| `advisor-runner` | Check for write access | The socket of the advisors' runner, which only root and the supervisor's group may open |
 | `supervisor-environ` | Read | The environment of the supervisor's process. Skipped when no supervisor runs |
 | `control-key-write` | Write | Root's copy of control's key, which the harness trusts. In pull mode only |
 
@@ -160,6 +169,7 @@ Where the rig keeps a sealed snapshot of its state on the host's volume (`THERMI
 | Probe | Who | What |
 | --- | --- | --- |
 | `run-kit-read` | The timing users (`run`, `run-<i>`) | Read the run's copy of kit files |
+| `kit-by-path`, `baseline-by-path` | The checkers (`checker`, `checker-<i>`) | Read a checked-out `kit.json` and a file a baseline kept, by their full paths, which every other role is refused. Skipped as for the others |
 | `research-read` | The workers' users (`lane-1`, `agent-1`) and the planner's (`planner`) | Read the claim's file in that research folder |
 | `device:<own card>` and the control nodes | Each role with a GPU of its own (dedicated GPUs only) | Open its own card and the shared control nodes |
 | `visible-gpus` | Each role with a GPU of its own | `nvidia-smi -L` lists exactly that role's card |
@@ -175,11 +185,33 @@ In the [one-container rig image](harness-image.md#the-one-container-rig-image) (
 | `supervisor-user` | `uid 10001, gid 10001, no_new_privs` | Every supervisor process runs as the `supervisor` user and group (real, effective, saved and file ids), and cannot gain privileges. It waits up to 10 seconds for a supervisor that is still starting |
 | `supervisor-gpu` | `refused` or `no GPU node`, with the fence: `(fence: landlock)` or `(fence: none)` | What the supervisor's user met opening each GPU device node, started the way the supervisor is. The broker tries it when it starts, and again when it regroups the cards, and records it in `supervisor.json` in its socket's folder |
 | `setid-files` | `none` | No setuid or setgid file on the container's own filesystem. Other mounts and the scratch folder are left out. `none (<n> folders not readable)` counts the folders the selftest's user could not list |
+| `file-capabilities` | `none` | No file with capabilities (the `security.capability` attribute, which `getcap` reads) on the container's own filesystem, left out as for `setid-files`: RunPod does not stop a process from gaining privileges through one. The image's `python3` reads the attributes; without it the check is `MISSING` |
 | `runpod-variables` | `none (read <n> of <m> processes)` | No `RUNPOD_` variable in the environment of PID 1 or any process started under it. A shell opened in the container from outside is left out. Without `CAP_SYS_PTRACE` a process can read only the environments of its own user's processes: as root, PID 1 and the broker; as the controller, its own. When PID 1 is not the image's own `tini` but an init the platform runs (RunPod does, with the image's entry point as its child), PID 1 is left out, because it keeps the environment the platform gave the container, and the result adds `PID 1 is the platform's own init (<program>), not the rig's, and keeps the container's first environment`. The roles' `pid1-environ` probes show that no role can read it |
-| `enroll-code` | `none (read <n> of <m> processes)` | No process of the rig started with pull mode's enrollment code (`THERMITE_TUNNEL_ENROLL_CODE`), but root's and the supervisor's own first process. The supervisor takes the code out of its environment at start, so nothing it starts has it, and the controller never gets it |
+| `enroll-code` | `none (read <n> of <m> processes)` | No process of the rig started with pull mode's enrollment code (`THERMITE_TUNNEL_ENROLL_CODE`) or the leaf node's key (`THERMITE_LEAF_KEY`), but root's and the supervisor's own first process. The supervisor takes both out of its environment at start, so nothing it starts has them, the pod's bus server included, and the controller never gets them. A failure names each process and what it holds: `FOUND pid <pid> (uid <uid>): THERMITE_LEAF_KEY` |
 | `control-key` | `root's, the key the launch named` | In pull mode only (`THERMITE_TUNNEL_CONTROL_KEY_SHA256` set): the key the harness trusts, `THERMITE_CONTROL_PUBKEY_FILE`, is a plain file, and it and every folder above it are root's and writable by no other user, so neither the supervisor nor a role can change it. Its SHA-256 is the one the launch named |
 | `state-snapshot` | `sealed, closed to thermite, supervisor, agent-1 (owner <uid>:<gid>, mode 700)`; `open, sealed: <user> lists it and writes in it; … (owner <uid>:<gid>, mode 700)`; or `no snapshot: <why> (…)`. Each ends with `; holds the manifest and <n> sealed files` (or `no snapshot yet`) when the selftest's user can list the folder | With `THERMITE_STATE_SNAPSHOT_DIR` set. At start, the broker tried to list the snapshot folder and to write in it as the controller's user, the supervisor's and `agent-1`, and recorded what each met in `snapshot.json` in its socket's folder, with the owner and mode the volume shows and whether the launch gave the snapshot key. `sealed, closed`: each was refused. `open, sealed`: the volume lets them in, as RunPod's does; this is no failure, since everything there is sealed. `no snapshot`: the launch gave no key, so nothing is written there; this is no failure either. The check also looks into the folder where it can: `FOUND a file that is not sealed: <name>`, `FOUND an unsealed snapshot an older image left: snapshot`, or `FOUND` with any other name, fails. `failed: root …` means root could not make the folder |
 | `snapshot-key` | `none (read <n> of <m> processes)` | With `THERMITE_STATE_SNAPSHOT_DIR` set: no process of the rig but root's holds the snapshot key (`THERMITE_STATE_SNAPSHOT_KEY`). The broker takes it out of its environment before it starts anything. `FOUND THERMITE_STATE_SNAPSHOT_KEY in pid <n> (uid <u>)` fails. It reads the environments it may, as `runpod-variables` does |
+
+### The supervisor's part
+
+Each advisor's program runs as an advisor user of its own on the supervisor ([The supervisor's users](ports-volumes-secrets.md#the-supervisors-users)). At its start, and before it hands its harness each isolation check, the supervisor has its advisors' runner run a probe script as one of those users, the way it runs an advisor's program, and gives the harness the result (`PUT /v1/supervisor-isolation`, with the supervisor's token). The harness keeps the newest in `supervisor-isolation.json` in its state folder, and the check puts it in its report under `supervisor`, with when the supervisor probed (`at`). Before the supervisor has given one, the report lists `supervisor (its advisor users have not been probed yet)` under `skipped`. The supervisor logs each result too: `advisor users are kept apart`, or `advisor users are NOT kept apart` with what got through. Every probe must be refused, and only what is there is probed:
+
+| Probe | Tries to | What |
+| --- | --- | --- |
+| `state-list` | List | The supervisor's state folder (`THERMITE_SUPERVISOR_HOME`) |
+| `bus-key`, `seal-key`, `relay-state` | Read | The rig's key and seal key on the message bus, and the relay's state, in that folder |
+| `tunnel-keys` | Read | In pull mode, the pod's own keys, `keys.json` |
+| `harness-token`, `control-token`, `results-key`, `hf-token` | Read | The supervisor's secret files: its token for the harness, its token for control, the results repository's key and the Hugging Face token |
+| `advisors-file`, `advisors-folder`, `advisor-key-<n>` | Read, list, read | The advisors file, its folder, and each key file it names (`api_key_file`) |
+| `secrets-list:<folder>` | List | The folder of each of the supervisor's secret files outside its state: `/run/secrets` in the supervisor image. A `/run/secrets` the platform mounts for itself, as Podman does in every container, is not the supervisor's and is left out |
+| `inbox-list`, `inbox-read` | List, read | The inbox, and a file in it by its full path |
+| `results-list` | List | `/results`, under compose |
+| `runs-list` | List | The runs' root, where each advisor call has its folder |
+| `runner-socket` | Check for write access | The runner's socket |
+| `supervisor-signal` | Send signal 0 | The supervisor's process |
+| `supervisor-environ` | Read | The supervisor's environment |
+
+Each result reads as a role's does: the error it met, such as `EACCES` or `EPERM`, or `ALLOWED`, which fails the check. Two more fail it: `advisor-users: ALLOWED: no advisors' runner, so advisor programs run as the supervisor's own user`, where the supervisor was started without its runner, and `advisor-user: ALLOWED: the runner runs each program as the supervisor's user`, where the runner is not root. `advisor-probe: failed: <error>` says the probe could not run, such as when every advisor user is busy.
 
 ### Results
 
@@ -190,7 +222,7 @@ Each probe's result is the error the operation met (refused, as it must be), `re
 | `ALLOWED` | A probe that must be refused succeeded |
 | `UNREADABLE <error>`, `UNREACHABLE <error>` | A probe that must succeed was refused |
 | `WRONG GPUS <ids>` | `nvidia-smi` showed other cards than the role's own |
-| `FOUND <what>` | Something that must not be there: a RunPod variable, the enrollment code, the snapshot key, a set-id file, or a file in the snapshot folder that is not sealed |
+| `FOUND <what>` | Something that must not be there: a RunPod variable, the enrollment code, the snapshot key, a set-id file, a file with capabilities, or a file in the snapshot folder that is not sealed |
 | `OPENED <nodes>` | The supervisor's user opened a GPU device node |
 | `WRONG USER: <ids>`, `WRONG: <why>` | The supervisor runs as another user or group, or can gain privileges; or control's key for the harness is not root's alone, or not the launch's |
 | `MISSING: <what>` | No supervisor process, no record of it from the broker, or no key for the harness in pull mode |
@@ -199,7 +231,8 @@ Each probe's result is the error the operation met (refused, as it must be), `re
 | Summary | Meaning |
 | --- | --- |
 | `isolation holds: every probe of <n> roles came out as it must (devices: <devices>)` | Passed |
-| `isolation does NOT hold (devices: <devices>): <role> <probe>: <result>; …` | Failed. Up to 12 failures are listed, those of the container first, as `container <check>: <result>` |
+| `isolation does NOT hold (devices: <devices>): <role> <probe>: <result>; …` | Failed. Up to 12 failures are listed, those of the container first, as `container <check>: <result>`, then the supervisor's, as `supervisor <probe>: <result>` |
+| `isolation does NOT hold (devices: <devices>): the cluster does not hold the rig's network rules: lane-1 reached the cluster's API server (ALLOWED: connected to <host> port <port>); …` | Failed on Kubernetes: the cluster's network plugin does not enforce the network rules, or the slot's rules let the harness reach the cluster. This failure comes first |
 | `isolation does NOT hold (devices: <devices>): the device setup failed` | The GPU's device nodes could not be set up |
 
 `<devices>` is one of these:
@@ -216,7 +249,7 @@ The details hold every probe's result for every role, the container's checks, an
 
 The smoke check runs a small campaign with no agents on the rig's own target. The changes it submits, called candidates, each have a known right verdict. It passes when every candidate gets it, with one exception: [noisy timing](#noisy-timing).
 
-1. It picks the smoke kit for the rig's target: `smoke-cpu` for `cpu`, `smoke-cuda` for `cuda-gpu`. It reads the kits and their projects from `/opt/thermite/checks` in the harness image, or from `THERMITE_CHECKS_DIR`.
+1. It picks the smoke kit for the rig's target: `smoke-cpu` for `cpu`, `smoke-cuda` for `cuda-gpu`. It reads the kits and their projects from `/opt/thermite/checks` in the harness image, or from `THERMITE_CHECKS_DIR`. In the image, only the harness's controller may read that folder; the isolation check makes sure every role is refused it (`image-checks-list`, `image-kit-read`).
 2. It makes a git repository of the project and one of the kit (without its candidates), with fixed dates, so the same files always give the same commits.
 3. It assigns a judge-only run named `check-smoke-` and eight hexadecimal digits, of a campaign named `rig-check-<kit>-` and the first eight digits of the kit's commit. The contract is the image's `examples/contracts/smoke-cpu.json`, with the rig's target. Assigning pauses the rig's running runs, with the reason `replaced by check-smoke-…`.
 4. It submits every candidate except `good`, and waits until each is settled: `judged`, `rejected_v0`, `duplicate`, `promoted`, `awaiting_approval` or `errored`.

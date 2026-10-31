@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { apiCall } from "./api-call.ts";
 import {
   CLAIM_LIMITS_WORDS,
+  NOTE_USAGE,
   RESEARCH_TOOLS,
   researchOutput,
   researchTool,
-} from "./research-tools.ts";
+} from "../../agents/tools/index.ts";
+import { errorText } from "../../common/errors.ts";
+import { apiCall } from "./api-call.ts";
 
 /**
  * `thermite-trial`: Thermite's tools for an agent that works through its own shell (the OpenCode
@@ -20,9 +22,6 @@ import {
  *   thermite-trial note --kind KIND [--about TYPE:ID] TEXT
  *   thermite-trial research TOOL [WORDS...] [--FLAG VALUE]... [-]   (the research tools)
  */
-
-/** How to write a field note from a shell, for the workers' instructions. */
-export const NOTE_USAGE = "thermite-trial note --kind KIND [--about TYPE:ID] TEXT";
 
 const USAGE = `usage:
   thermite-trial submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
@@ -126,7 +125,7 @@ export function researchRequest(
     try {
       fields = JSON.parse(stdin ?? "");
     } catch (err) {
-      return `error: "-" reads a JSON object from stdin, and that was not one (${err instanceof Error ? err.message : String(err)}); use:\n${tool.usage}`;
+      return `error: "-" reads a JSON object from stdin, and that was not one (${errorText(err)}); use:\n${tool.usage}`;
     }
     if (!fields || typeof fields !== "object" || Array.isArray(fields))
       return `error: "-" reads a JSON object from stdin; use:\n${tool.usage}`;
@@ -263,7 +262,7 @@ async function main(): Promise<void> {
     process.stdout.write(`${out}\n`);
     if (out.startsWith("error:") || out.startsWith("usage:")) process.exitCode = 2;
   } catch (err) {
-    process.stdout.write(`error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stdout.write(`error: ${errorText(err)}\n`);
     process.exitCode = 1;
   }
 }

@@ -1,0 +1,100 @@
+---
+id: "166"
+title: "Agent definitions you can read and change: one definition for each role in code, and the prompt each run gives it"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["160"]
+created: 2026-10-26
+updated: 2026-10-29
+---
+
+# 166 · Agent definitions you can read and change: one definition for each role in code, and the prompt each run gives it
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [160](160-v010-audit.goal)
+
+## What
+
+Every agent role Thermite runs has one definition in code, in one folder, that a person can read and change: the workers, the research workers, the planners, the auditors, the teachers and the review panel, and every other role that sends a prompt to a model.
+
+1. **One definition for each role.** It holds the role's instructions, its tools, the shape of its answer, which model slot and agent program it uses, and its limits. Text that several roles share is written once.
+2. **How a run changes it.** One function for each role assembles what a given run adds: the brief, the contract, the campaign, the kit, directives, rules, field notes, past research, the queue and the owner's messages. It can render the exact prompt for any run, without calling a model.
+3. **Shown everywhere.** The dashboard, REST, MCP and the command line show each role's definition, and the prompt a chosen run gives it (for example `thermite agents show <role> --run <run>`). A docs page lists the roles and what each one does.
+
+## Why
+
+The owner, 2026-10-26: "Agent definitions. I want to be able to see these in code and modify them (workers, researchers, auditors, teachers, etc) and how they are modified for a given brief etc..."
+
+## Constraints
+
+- **Agents propose; code judges.** The definitions live in code the agents cannot write. A role's text never decides a measurement, a verdict, completion or promotion.
+- **No default caps.** A definition holds only the limits that exist today; it adds none.
+- **One fact, one home.** A definition is the only place a role's text or tool list is kept; the adapters for Pi, OpenCode, Claude Code and Codex read it.
+- **Docs follow the code,** in the same commit.
+
+## Done when
+
+- [x] Every role has one definition in one folder, and every prompt Thermite sends comes from one of them. A test fails when a prompt is built outside a definition.
+- [x] Each role's assembly for a run is one function, and a golden test holds the rendered prompt of each role for a sample run.
+- [x] The dashboard, REST, MCP and the command line show each definition and a run's rendered prompt.
+- [x] A docs page lists the roles, and the reference pages name the new routes, tools and command.
+- [x] The fast checks, the docs build and check, and the agents, steering, Claude Code and Codex acceptance checks pass.
+
+## What the review found
+
+The audit's lane 9 (`.internal/reviews/v0.1.1-audit/09-agent-definitions.md`) mapped every role on 2026-10-26.
+
+- **No role has one definition.** Thermite runs 15 roles. Their text is spread over about 35 files, and prompts are sent from 37 places in 13 files. Part of the code worker's instructions is in the scheduler's brief builder, not with the role.
+- **The prompt a run sent is not kept,** apart from the conversation kept after a compaction, and nothing shows a role's text: no page, route, tool, command or docs page.
+- **Variants are made by editing text.** The Claude Code and Codex prompts are OpenCode's, changed with `.replace`.
+- **Each answer and tool schema is written two or three times** (zod, TypeBox, the prompt's example).
+- **A prompt can't be previewed:** building one also reads the ledger by hand and has side effects (it marks the owner's messages as given and writes `BRIEF.md`).
+- **Names:** the code worker calls itself a research worker; the final writer's calls are recorded as the teachers'; the synthesizer and the final writer have no model slot of their own.
+- **A bug,** in goal [171](171-bugs-on-the-wire.goal): OpenCode and Claude Code get the whole prompt as one command-line argument.
+
+## Design (proposed by the review)
+
+```
+src/agents/            the shared part (decisions.md, 2026-10-26)
+  prompt.ts            Prompt, Section, Source; the exact text sent to a program
+  roles/               one module for each role, and shared.ts for text several roles share
+  tools/               one table of tools, one zod schema each
+  programs/            the table of agent programs (the guide's theme T7)
+src/harness/prompts/   what a run adds, read from the ledger, with no side effects
+```
+
+- Each role has a pure `render(input)` that returns its prompt as sections, each labelled with its source: the role, the contract, an owner's message, a queue item, field notes. So the owner sees what each brief added.
+- Every prompt sent is recorded by code, kept out of the agents' research folder.
+- The dashboard, REST, MCP, `thermite agents show <role> --run <run>` and a generated docs page show a role and the prompts a run sent.
+- The steps, in goal 125's order: the role names (T1); golden tests of every role's prompt today; the program table, with every prompt sent by standard input; one table of tools; the roles moved byte for byte, then fixed one commit at a time; the record of each prompt; the surfaces; per-campaign additions last.
+
+## Decisions
+
+- 2026-10-26: the audit's lane 9 maps every role and proposes the shape above.
+- 2026-10-26, owner: every recommendation of the review is taken:
+
+  1. **May the owner add text to a role for one campaign, without a code change?** Recommended: yes, as additions only, in the contract (signed, versioned, labelled in the prompt), per role; not per kit, and never replacing the role's text. Built last.
+  2. **TypeScript modules or Markdown files for the role texts?** Recommended: TypeScript modules, with the prose at the top of each, and a generated docs page that shows it as prose. No build step, and typed names and limits in the text.
+  3. **Keep the whole text of every prompt sent?** Recommended: yes, compressed, in the harness's state and the run's exports, never in the agents' research folder; control gets an event with the sections and their sources. Measure the space at 1,000 trials first.
+  4. **Model slots of their own for the synthesizer and the final writer?** Recommended: yes, each defaulting to the first teacher's model, with their calls recorded under their own names.
+  5. **A preview of a role's next prompt, from control?** Recommended: not in the first pass. Show the prompts sent; serve previews on the rig's own API; add control's preview with the request and reply of goal [168](../168-message-bus.goal).
+  6. **How the programs receive the role's text.** Recommended: decided in goal [169](../169-agents-in-their-terminal.goal); the definitions render a prompt that does not depend on delivery, and until then it goes by standard input or a file, never one argument.
+  7. **Should an agent program read the project's own instruction files (such as `AGENTS.md` or `CLAUDE.md` in the workspace)?** Recommended: not by default; turned off where a program allows it. If a project's instructions are wanted, they are rendered as a labelled section, so they show in the record and every program gets the same prompt.
+  8. **Cut a worker's or a planner's first message to fit the model's window?** Recommended: yes, with the advisors' rule: fit the window at the compaction point less 30%, keep the owner's messages and the role's own text whole, and say what was left out and where to read it. It is a mechanical limit on one payload, not a cap on research.
+- 2026-10-29 04:33 UTC, owner: OpenCode's one path that no setting turns off (its read tool adds an `AGENTS.md` from the folder of a file the agent reads, below the workspace's top) is accepted, documented on the Agent roles page: decision 7 turns the files off where a program allows it.
+
+## Open questions
+
+## Progress
+
+- 2026-10-26 21:03 UTC: Goal written from the owner's words. Lane 9 of the audit reviews the roles.
+- 2026-10-26 23:16 UTC: Every role's fixed texts are in `src/agents/roles/`, one module for each role, with `index.ts` as the table of the 15 roles (what each does, where it runs, its model and programs, whether the owner's messages reach it, and its texts). The tools' names and the research tools are in `src/agents/tools/`, and the paper's parts in `core`. A golden test holds every text byte for byte, written before the move and unchanged by it; a second test fails when a role module exports a text the table leaves out. The site's [Agent roles](../../../_site/src/content/docs/reference/agent-roles.md) page is written from the table (`npm run docs:agents`), and the docs check holds them equal. Still to do: each role's assembly for a run as one function with no side effects, the record of every prompt sent, and the dashboard, REST, MCP and command line.
+- 2026-10-27 19:38 UTC: Golden tests of every role's prompt today (goal 125's step 4): `tests/agents/prompts.test.ts` captures what each of the 15 roles' models is sent in Pi for a sample run, where it is sent (the scheduler, the trial, the supervisor's round against the harness's API, the summary call, the model check), and holds the system text, the first message and the tools in `tests/agents/golden/prompts/`, with what differs between runs as placeholders (ids, commits, times, paths, ports, what the judge measured, the model check's word). Each role is found by the role whose text its system text starts with. Still to capture: the variants in the other programs (the worker in OpenCode, Claude Code and Codex, the planners and the advisors run as programs), which take each program's stand-in; then the program table, with every prompt by standard input.
+- 2026-10-27 20:21 UTC: Every assembly path of a role's prompt has its golden in `tests/agents/prompts/` (fd811aa6, 957df435): the 15 roles in Pi, the worker in OpenCode, Claude Code and Codex, the research worker in OpenCode, the planners asked through a program, and an advisor run as a program (whose standard input is every program advisor's). Next in this goal's order: the program table, with every prompt by standard input, in goal 125's step 5.
+- 2026-10-28 21:37 UTC: The record of every prompt and its surfaces, in goal 172's step 8. Each role's prompt for a run is one render function in `src/agents/roles/` (`RoleDefinition.render`), and a `Prompt` can be made only there: a test fails when code outside the roles makes or casts one, and the golden tests check that each request sent is, byte for byte, a kept record of its role. Every prompt sent is kept whole, gzipped, in the ledger's `prompt` table (migration 24) and in each export's `prompts.jsonl.gz`, never in the research folder; control gets an `agent_prompt` event with its sections, their sources and sums, and up to 8,000 characters of text. The dashboard (`/ui/agents`, each role's page, a run's **Prompts** tab and each prompt's page), REST (`/v1/agents`, `/v1/runs/<run>/prompts`), MCP (`agent_roles`, `agent_prompts`) and `thermite agents` show the definitions and a run's prompts; the rig previews a worker's or a planner's next prompt (`GET /v1/runs/<run>/prompt-preview`), and control's own preview waits for goal 168's request and reply. Decision 8 is built (`windowFit`, one rule: a worker's first message and the planner's state are cut to the window, saying what was left out); decision 7 where the programs allow it (Claude Code's `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, Codex's `project_doc_max_bytes = 0`, each checked against a newer binary than the pinned one; OpenCode not yet, with no switch verified); decision 4 in part (the final writer's usage under its own name; its and the synthesizer's model slots are left); decision 1 is left. Later turns inside a call (nudges, warnings, continuations) are still written where they are sent. Measured at 1,000 kept worker prompts: a sample-size prompt (4,286 characters) takes 2.1 MB gzipped in the ledger, 3.7 MB of event bodies and 0.13 MB in an export; a large one (about 38,000 characters) 18.1 MB, 10.2 MB and 15.6 MB. Text repeated in every prompt (the role's own text, the campaign's brief) is most of it: keeping it once per version is the saving left.
+- 2026-10-29 01:34 UTC: Decisions 4 and 1 built. Decision 4: the synthesizer and the final writer have model slots of their own. Control's store schema 10 makes the agents' models table again with `synthesizer` and `final_writer` in its check. Edit rig has lines **Synthesizer** and **Final writer** under The advisors, with its page script; `set_rig_model` (REST, MCP) and `rig_models` take `agent` `synthesizer` and `final_writer`; and the advisors' routes carry both keys, over HTTP and in the bus's `advisor-routes`. With none, each uses the first teacher's model; with one, it runs with the teachers switched off too. Decision 1: the contract's `role_additions` (`core/role-additions.ts`) takes one text per role id of the campaign's mode, at most 20,000 characters; a role the mode never runs is refused. Every role's render function takes it as a section of its own after the role's text, from `owner's addition`, labelled with the contract's version. The harness gives it to the workers and planners, and lists it with each run for the advisors. New campaign, the campaign's page, `POST /v1/campaigns/<campaign>/additions`, `set_campaign_additions` and `thermite campaign additions` set it; each saves a new signed version. Golden prompts with an addition (worker, planner, teacher in Pi) sit beside the unchanged ones. Left in this goal: the agents, steering, Claude Code and Codex acceptance checks; OpenCode's switch for decision 7; the later turns inside a call, still written where they are sent; control's own preview (goal 168).
+- 2026-10-29 04:20 UTC: Decision 7 for OpenCode, and the later turns, built. OpenCode starts with `OPENCODE_DISABLE_PROJECT_CONFIG=1`, for a worker, a planner call, a model check and an advisor: at v2.1.4 its server reads that variable (`packages/cli/src/server-process.ts`) and then reads no project `AGENTS.md`, `opencode.json` or `.opencode/`. Its read tool still adds an `AGENTS.md` it finds below the workspace's top when the agent reads a file there (`packages/core/src/tool/plugin/read.ts`), and no setting turns that off: the owner decides. Every later turn in a call comes from its role's definition: the nudge, the warning that turns or time are nearly spent, the lines after a cut-off reply, a full context or a failed call, an owner's message to a running trial, and the message after a compaction in Pi. `renderWorkerTurn`, `renderResearchWorkerTurn` and `renderCompacted` render them, the roles table's `turns` names them, and the words are as before (150 renders checked against the old templates). Each later turn is kept as the first message is, with `turn`, its place in the call (ledger migration 25, the `agent_prompt` event, the exports); a Pi worker sends its later turns over `POST /v1/trial/prompt`. `one-home.test.ts` now fails on a copy of a role's text outside the roles and on a Pi send of text that is not from a Prompt; `turns.test.ts` checks that the model received the kept record, in a Pi trial, an OpenCode trial and a planner call; new goldens sit beside the old, which did not change. Done when 1 to 4 are met; left: the agents, steering, Claude Code and Codex acceptance checks, control showing `turn`, and control's own preview (goal 168).
+- 2026-10-29 05:05 UTC: Verified. On a502148e the agents, Claude Code, Codex and steering acceptance checks passed; on be9d9662 the full suite passed (1,940 tests side by side with one skipped, 153 alone, none failing), with the typecheck, the lint, the public, size and import checks and the docs build and check before each commit. Moved to `_completed/`. Left for later goals: control showing a later turn's place (`turn`), and control's own preview of a role's next prompt (goal 168's request and reply).
+
+---
+
+Run with `/goal Complete docs/plan/goals/166-agent-definitions.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

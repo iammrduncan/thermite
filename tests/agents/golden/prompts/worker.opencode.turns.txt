@@ -1,0 +1,4 @@
+# turn 1
+You have not submitted yet. Keep working: make your change, build and test it, then run `thermite-trial submit --hypothesis "..."` once. If you find no change worth judging, say why in one sentence.
+
+A message from the campaign's owner: Prefer a change a reader can follow.

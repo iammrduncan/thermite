@@ -12,3 +12,11 @@ export const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+/;
 export const TABLE_ROW = /^\s*\|/;
 /** A citation: [c-…], or several in one pair of brackets, [c-…, c-…]. */
 export const CITE = /\[\s*(c-[A-Za-z0-9_-]+(?:\s*[,;]\s*c-[A-Za-z0-9_-]+)*)\s*\]/g;
+
+/** Words of a heading, folded for matching: "## Appendix A: Data" -> "appendix a data". */
+export const fold = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();

@@ -1,0 +1,116 @@
+---
+title: "Watch and steer an agent in its terminal"
+description: "Open a trial's, the planner's or an advisor's terminal on Live, watch its agent program's screen as it works, and type into it: words, a slash command, a skill or a key."
+type: how-to
+sidebar:
+  order: 18
+---
+
+A worker in Claude Code, Codex or OpenCode works in that program's own terminal, as a person would use it, when its rig runs its agent programs in their own terminal ([Agents in their own terminal](../../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)). A worker in Pi draws Thermite's Pi view there instead ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). The planner plans in that program's terminal too, or, in Pi, in its own Pi view ([The planner's terminal](#the-planners-terminal)), and so do the teachers, the auditor and the review panel's reviewers, in their program's terminal or, in Pi, in their own Pi view ([An advisor's terminal](#an-advisors-terminal)). You can watch that terminal from the dashboard and type into it: words for the agent, a slash command such as `/compact`, a skill, or a key for one of the program's menus. Each input is a signed command, [`terminal_input`](../../reference/signed-commands.md#terminal_input), that only you can send, and the rig records it word for word with what became of it.
+
+To tell the agents something without typing into a program, send a message instead: every agent reads one ([Send the agents a message](steer-a-run.md#send-the-agents-a-message)).
+
+## What you need
+
+- The dashboard, signed in as the owner. No other token sees an agent's terminal or types into one: not the operator's, an agent's or the reader's.
+- A run at work on a rig whose **Agent programs run** setting is **In their own terminal**, the default (**Edit rig**, under **Advanced** in **2 · The agents**). Its workers may be in Claude Code, Codex, OpenCode or Pi. A trial that started while the rig ran its programs **Headless** has no terminal.
+
+## 1. Open the trial's terminal
+
+1. Open **Live** in the sidebar, and choose the run in the list on the left.
+2. Press **⌨ Terminals**, above the stream, and choose the lane, such as `lane-1's terminal`.
+
+   You can also open the rig's page, press **Live**, and choose the trial under **Sessions**.
+
+The trial's page opens, at `/ui/rigs/<rig>/live?source=trial:<trial>`. At its top, **Terminal** says `Waiting for the rig to send its screen…`, then shows the program's screen, at the size of the agent's terminal, with `Live, read only` and the time of the screen beside **Terminal**. The screen follows the program about once a second: the rig's supervisor sends it to control on the message bus while a page watches the trial, and no screen is kept ([Live view](../../reference/live-view.md#a-trials-terminal)). It is only a view: a key you press on it goes nowhere, and a link in it opens nothing.
+
+## 2. Type into it
+
+1. Write in the field under the screen: words, a slash command such as `/compact` or `/mcp`, or a skill's command.
+2. Press **Send**, or Enter.
+
+The rig types the text into the program, then presses Enter there, as you would. A line that starts with `!` runs a shell command in Claude Code and Codex, and `/login`, `/logout`, `/config` and `/permissions` change the program's sign-in or settings: for these, tick **Confirm an input that starts with !…** under the field first, or the dashboard says `Not sent: Confirm it first: …`.
+
+To answer one of the program's menus, press the keys under the field: **Enter**, **Esc**, **Tab**, the arrows, **PgUp**, **PgDn** and the digits. Each press is one input. There is no Ctrl+C: to stop the agent, [stop its trial](decide-what-waits.md#stuck-trials) or [pause the run](steer-a-run.md).
+
+## 3. See what became of each input
+
+Under the keys, the list of your inputs shows each one, newest first, with its outcome:
+
+| It says | What happened |
+| --- | --- |
+| `sent, waiting for the rig` | Control signed it; the rig's report with its outcome has not reached control yet, which takes up to a minute by default |
+| `typed` | The rig typed it into the program |
+| `waits for the usage window's reset (14:00 UTC)` | The program waits for its usage window, and the input waits with it: see below |
+| `typed after the usage window's reset` | It waited, and went in once the reset had come and the program was at work again |
+| `dropped: the trial ended before the program's usage window reset` | It waited, and the trial ended first |
+| `not typed: <why>` | The rig refused it, such as `trial <trial> has ended: nothing more goes into its terminal` |
+
+The trial's stream says `the owner's input went into its terminal`, and the run's **History** tab records each input in words, such as `You typed “/compact” into lane-1's terminal (trial t-0123456789abcdef).`.
+
+## A worker in Pi: the Pi view
+
+A worker in Pi has no program of its own to type into: its screen is the Pi view, which Thermite draws of the worker's own session. Its first line says `Thermite's view of a worker in Pi`, with the trial, the lane and the model, and its last line is the status: `● at work`, `● the model is replying`, `◷ waiting for the provider until <time> UTC` or `■ the trial ended`, with the trial's turns, tool calls, tokens, compactions and time left. Under the field, the console then shows the view's commands and a **Follow-up** box. Nothing is typed into a terminal: each input is one call in the trial's own loop, and the view says what it did.
+
+| You send | What the worker does |
+| --- | --- |
+| Words | Steers the agent: your words go into its conversation before its next model call, as a message from you |
+| Words, with **Follow-up: give my words when the agent would stop…** ticked | Your words wait until the agent ends a reply that calls no tool, and go in then, instead of its stopping |
+| **Esc** | Stops the agent's reply. A tool call under way finishes first. The trial goes on at once with your words that wait, or with its nudge to keep working: your stop is not the agent's, and counts as none of its nudges |
+| `/compact` | Compacts the conversation before the agent's next model call, as the harness does near the model's window, kept and recorded the same way |
+| `/mcp` | Shows the trial's MCP tools, server by server, and the servers that failed |
+| `/mcp reconnect`, or `/mcp reconnect <server>` | Lists the tools of every server, or of one, again from the servers, and gives the agent the new list from its next turn |
+| `/status` | Shows the trial's model, turns, tool calls, tokens, compactions and time left |
+| `/skill:NAME` | Says `this run's kit carries no skills, so /skill:NAME has nothing to load`: kits carry no agent skills yet |
+
+Anything else is refused, and the list says why: another key (`the Pi view takes one key, Esc, which interrupts the agent's reply: it has no menu for other keys`), a command the view has not, such as `/model` (`/model is not a command of the Pi view: …`), words after `/status` or `/compact`, a follow-up that is a command, Esc while no reply is under way (`the agent has no reply under way to stop: …`), and words after the trial submitted its change. A follow-up shows in the list as `typed, as a follow-up`. The usage window's choice does not apply: a worker in Pi waits for its provider in its own loop, and your words go in at its next model call after the wait.
+
+## While the program waits for its usage window
+
+When the program's own log shows that its usage window is full, the trial waits for the reset in the program's terminal, and the rig types nothing into it meanwhile: Claude Code waits and goes on by itself; Codex and OpenCode stop their turn, and the rig types the trial's continuation into them after the reset. The same holds while the rig waits out a rate limit that the model proxy saw. The console says `The program waits for its usage window to reset at 2026-10-30 14:00 UTC.`, with the time when the program or the proxy gave one, and offers a choice for your next input:
+
+- **waits for the reset**, the default: the input goes in, in order with any others that wait, once the reset has come and the program is at work again. The list then says `typed after the usage window's reset`.
+- **goes in now**: it is typed at once. The program may start its wait again, and an input that waits still waits for the reset.
+
+An input still waiting when the trial ends is dropped, and the list says so. The trial ends without waiting when the reset is more than a day away (a weekly window), when it comes after the trial's own end, or when the program gives no time it resets: the rig types nothing of its own into a program whose screen may show a menu that waits for a key. [Use a Claude subscription](../models/claude-subscription.md#watch-the-usage-windows) and [Limits and pacing](../../reference/limits-and-pacing.md#the-model-provider) say more.
+
+## The planner's terminal
+
+While the planner plans a round on a rig that runs its agent programs in their own terminal, its call has a terminal of its own, named `planner-<run>-<round>`, such as `planner-matmul-1-3`. In Claude Code, Codex or OpenCode it is that program's terminal; in Pi it is the planner's Pi view, which Thermite draws of the planner's own session as it draws a worker's. Both tries of a round have the same name.
+
+1. Open **Live**, choose the run, and press **⌨ Terminals**: while the planner plans this run, the list starts with `the planner's terminal`.
+
+   You can also open the rig's page, press **Live**, and choose **Planner** under **Sessions**.
+
+The planner's page shows its terminal and console at its top, as a trial's page does, while the call runs. Type into it the same way: what you type goes into the planner's program, and the list under the console shows each input's outcome. In the planner's Pi view, nothing is typed: each input is one call in its session, as in a worker's Pi view, and the same inputs work there ([In a worker in Pi's view](../../reference/signed-commands.md#in-a-worker-in-pis-view)). Words steer the planner before its next model call, and **Esc** stops its reply, which ends that try: the round's next try starts, if it has one. The planner's stream shows its session as it works: its text, its tools and their results.
+
+A message to the planner (**To the planner**, under the run's message box) sent while it plans goes in inside its turn, as a worker's does: in Claude Code, Codex or OpenCode after a tool, or at the end of its turn, and the planner goes on with it; in Pi before its next model call. It joins the owner's messages the planner was given, with its number, so a rule it asks for names it. A full usage window is waited out in the planner's terminal as in a trial's, and the run waits with it.
+
+When the round's plan is in, the call ends: its page no longer shows a terminal, and the console takes no more input.
+
+## An advisor's terminal
+
+The advisors the owner's messages reach (the teachers, the auditor and the review panel's reviewers) run in the supervisor, each call in its program's own terminal when it runs in Claude Code, Codex or OpenCode, and in its own Pi view when it runs in Pi, on a rig that runs its agent programs in their own terminal. Each call has a terminal of its own, named `advisor-<advisor>-<run>-<n>`, such as `advisor-auditor-matmul-1-4`. The teachers' merged by model, the synthesizer and the final writer take no message, and an advisor that runs a command (`cli`) runs as before, with no terminal. Each terminal takes about 550 MiB in Claude Code's, so on a Kubernetes cluster control gives the supervisor 4 GiB of the rig's memory while its agent programs run in their own terminal, rather than 2 GiB headless; compose, a machine over SSH and RunPod set no limit on it ([The supervisor's share](../install/rig-on-a-cluster.md#the-supervisors-share)).
+
+1. Open **Live**, choose the run, and press **⌨ Terminals**: while an advisor works on this run, the list shows `auditor's terminal`, `teacher-1's terminal` or `reviewer-2's terminal`, each marked `(advisor)`.
+
+   You can also open the rig's page, press **Live**, and choose **Supervisor** under **Sessions**: the page shows the first advisor's terminal that runs.
+
+The page shows the advisor's terminal and console at its top while its call runs. Type into it as into a trial's: your input is checked and recorded by the rig's harness, as every input is, then handed to the supervisor, which types it into the advisor's program; the list under the console shows its outcome. The advisor's session shows in the supervisor's stream as it works, each line with the advisor's name.
+
+An advisor in Pi shows its Pi view, which Thermite draws of the advisor's own session in a process of its own, run as an advisor user: its first line says `Thermite's view of an advisor in Pi`, with the advisor, the run and the model. Nothing is typed into a terminal: its console takes what a worker's Pi view takes, each input one call in the advisor's session ([A worker in Pi: the Pi view](#a-worker-in-pi-the-pi-view)). Words steer it before its next model call, or, as a **Follow-up**, wait until it would stop; **Esc** stops its reply, which ends its call with no answer once it stops.
+
+A message to the advisor's role (**To the auditor**, **To the teachers** or **To the review panel**, under the run's message box) sent while it works goes in inside its turn, as a worker's does: after a tool, or at the end of its turn, and the advisor goes on with it and answers it with the others. In Pi, a message goes in before its next model call, as a worker in Pi reads one. A full usage window is waited out in the advisor's terminal: it is not a failed try, and the supervisor's stream says until when it waits. In Pi, a limit whose reset the provider gives, less than a day away, is waited out the same way, and the call goes on in the same session.
+
+When the advisor answers, the call ends: the page no longer shows its terminal. The supervisor keeps the last screens of its 20 most recently ended advisors' calls, in memory only.
+
+## After the trial ends
+
+The page keeps the program's last screen, with the lines above it, and says `Its last screen, kept when the trial ended`. The console takes no more input. The rig's harness keeps the last screens of its 20 most recently ended trials, in memory only; after it restarts, the page says the trial has no terminal.
+
+## How to tell that it worked
+
+- Your input shows `typed` in the list under the console, and the program's screen shows what it did with it. In the Pi view, your words show as `owner ›`, then, once in the conversation, as `→ A message from the campaign's owner…`; a command's answer shows as a line of the view's own.
+- `GET /v1/commands/<id>` with the owner's token, or MCP's `command_status`, gives the command's outcome, such as `"result": {"outcome": "typed"}`.
+
+The same input goes over the REST API (`POST /v1/commands` with `"kind": "terminal_input"`) and MCP (`issue_command`), with the owner's token only. [Signed commands](../../reference/signed-commands.md#terminal_input) lists every field and refusal, and [The Live view](../../reference/live-view.md#a-trials-terminal) every part of the page.

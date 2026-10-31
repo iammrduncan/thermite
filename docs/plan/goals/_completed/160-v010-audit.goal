@@ -1,0 +1,82 @@
+---
+id: "160"
+title: "The v0.1.1 audit: code, data and operations, by specialized reviewers, with the tests moved to tests/"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["026"]
+created: 2026-10-26
+updated: 2026-10-26
+---
+
+# 160 · The v0.1.1 audit: code, data and operations, by specialized reviewers, with the tests moved to tests/
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [026](026-ship-v0.1.0.goal)
+
+## What
+
+A complete audit of Thermite as v0.1.0 shipped it: its code, its data and storage, and how it runs. Specialized reviewers, each a subagent with one area, read the code and its history and write everything they find, with its evidence, in `.internal/reviews/v0.1.1-audit/`. The architecture review of 2026-10-26, also in `.internal/`, is where they start.
+
+1. **The code against [CONVENTIONS.md](../../../../CONVENTIONS.md),** in every area.
+2. **Less to maintain:** knowledge kept in more than one place, code repeated, complexity that a simpler shape removes, and optimizations that cut maintenance or chances for bugs.
+3. **Data and storage formats:** the rig's ledger, control's store, events, exports, logs and the files each part keeps on disk.
+4. **Knowledge storage:** Thermite's knowledge base, research folders and journals, and how they are organized.
+5. **The infrastructure stack:** SQLite and the other parts Thermite runs on, and whether each still fits.
+6. **The folder structure.**
+7. **The tests move out of `src/` into `tests/`,** in folders that mirror `src/`, with their helpers, fakes and stand-ins, as CONVENTIONS.md asks. `npm test`, the typecheck, the lint, CI and the pages that name a test's path follow them. This goal makes the move; goal [125](../125-code-to-the-conventions.goal) no longer has to.
+8. **Design decisions, code documentation and the style of functions.**
+9. **Goal [127](127-clean-up-pre-audit.goal), the pre-audit, is done as part of this one:** its guide, `docs/plan/code-clean-up-guide.md`, comes from the reviewers' findings.
+
+## Why
+
+The owner, 2026-10-26, who wrote this goal's brief:
+
+> You are going to perform a complete code, data, and operational audit of thermite.
+>
+> see architecture review: .internal/reviews/2026-10-26-architecture.html
+>
+> 1. Review all code and hold it against our CONVENTIONS.md.
+> 2. Look for optimizations, DRY, complexity reduction. We want to reduce maintenance effort and bug ooportunities.
+> 3. Review all database and storage formats, logs, etc.
+> 4. Review thermite knowledge storage, organization, etc.
+> 5. Review infra stack (sqlite still? something else?)
+> 6. Review folder structure.
+> 7. Move all tests out of next to source code... make it easier to read folder structure.
+> 8. Review design decisions, code docs, function styles, etc.
+> 9. Complete: docs/plan/goals/127-clean-up-pre-audit.goal
+>
+> You will fan out specialized subagents to complete this wholistic review.
+>
+> You will write your entire corpus of findings, all subagent outputs etc in .internal/reviews/v0.1.1-audit/**.
+
+## Constraints
+
+- **Read-only, apart from item 7 and the guide.** The reviewers change no code, test, script, setting, container, kit or page. The move of the tests changes no behaviour: every check that passed before passes after.
+- **Security findings stay private.** They are kept in `.internal/`, which Git ignores, and handled as [SECURITY.md](../../../../SECURITY.md) says; never in a tracked file, an issue or a commit message.
+- **Public files stay public.** The guide names no host, address, account or secret, as for every tracked file.
+- **Evidence:** each finding names the file it is in, and a guess is marked as a guess.
+- **No time estimates,** as CONVENTIONS.md says: the size of a change is given in files.
+
+## Done when
+
+- [x] Each reviewer's report is in `.internal/reviews/v0.1.1-audit/`, with an index and a synthesis.
+- [x] Goal 127 is verified: its guide is at `docs/plan/code-clean-up-guide.md`, with its seven parts.
+- [x] The tests are in `tests/`, mirroring `src/`, and `npm test`, the typecheck, the lint, CI and the pages find them there. The full `npm run check` and the docs build and check pass.
+- [x] Goal 125 is updated from the audit: its scope without the tests' move, and its order from the guide.
+
+## Decisions
+
+- 2026-10-26: the bugs the reviewers found become goals [161](161-control-bugs-from-the-audit.goal) to [165](165-results-kept-through-remove-and-reset.goal), each fixed with a regression test before goal 125's splits. Findings that need the owner's choice first (backups, health checks, retention, Node 24) are questions in the guide, not goals yet. The security findings stay in `.internal/`.
+- 2026-10-26, owner: the audit is done by specialized subagents, and all their output is kept in `.internal/reviews/v0.1.1-audit/`.
+
+## Open questions
+
+## Progress
+
+- 2026-10-26 05:52 UTC: Goal written from the owner's brief, in the format of every goal.
+- 2026-10-26 06:35 UTC: The eight reviewers' reports are in `.internal/reviews/v0.1.1-audit/`. Item 7 is done: 245 files moved with `git mv` (228 tests to `tests/`, the quick-start test to `tests/docs/`, the 15 helpers and their data to `tests/helpers/`), with their imports rewritten. `scripts/test.mjs` reads `tests/` and stops on a test file in `src/`; the typecheck, Biome, CI's path lists, the secret scan's allowlist, the ignore files and the pages follow. The typecheck sees the same 229 tests, Biome the same 563 files, and the build writes the same 564 files.
+- 2026-10-26 06:48 UTC: The move is committed with its checks: `npm test` gives the baseline's totals (1,422 side by side with 1 skipped; 142 alone, run with the machine to itself), the public check, the docs build (93 pages) and the docs check pass, and the secret scan finds nothing in the branch's history. The [guide](../../code-clean-up-guide.md) is written from the eight reports, with its seven parts; goals 161 to 165 hold the bugs; goal 125 takes the guide's order. Goal 127 waits for the owner to read the guide and answer or defer its questions.
+- 2026-10-26 20:41 UTC: The owner answered the guide's questions: every recommendation is accepted, except that v0.1.1 breaks compatibility with v0.1.0 and renames to the public names everywhere ([decisions](../../decisions.md#releases-and-planning)). Goal 127 is verified. CI passed every job on the pushed commits. Verified.
+
+---
+
+Run with `/goal Complete docs/plan/goals/160-v010-audit.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

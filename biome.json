@@ -3,6 +3,7 @@
   "files": {
     "includes": [
       "src/**",
+      "tests/**",
       "scripts/**",
       "*.json",
       "!package-lock.json",

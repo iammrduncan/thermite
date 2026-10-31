@@ -1,0 +1,2 @@
+Use your Bash tool to run exactly this command: echo WORD
+Then reply with only the word it printed.

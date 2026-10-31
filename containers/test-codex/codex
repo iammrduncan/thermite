@@ -1,14 +1,40 @@
 #!/usr/bin/env node
-// Test only (scripts/codex-acceptance.mjs): a stand-in for the Codex CLI's headless mode
-// (`codex exec --json`, the prompt on stdin). It prints the JSON events Codex prints (the thread,
-// its items, the turn's tokens) and does what each of Thermite's calls asks: the model check's
-// echo, the planner's JSON plan, a trial's change and its submission with thermite-trial, or the
-// auditor's answer in the supervisor (what its configuration and its call gave it, as reasons). It
-// sends one request to the provider its configuration names, as Codex would, to show the route
-// goes through the harness's proxy with the run's own credential. It reports what it was given
-// (its user, its home, the flags, the proxy's answer), never a credential itself. It refuses to
-// run without THERMITE_FAKE_CODEX=1 or its mounted folder, so it can't stand in by mistake.
-const { execSync } = require("node:child_process");
+// Test only (scripts/acceptance/codex.mjs): a stand-in for the Codex CLI, headless (`codex exec
+// --json`, the prompt on stdin) and in its own terminal (goal 169). It does what each of Thermite's
+// calls asks: the model check's echo, the planner's JSON plan, a trial's change and its submission
+// with thermite-trial, or the auditor's answer in the supervisor (what its configuration and its
+// call gave it, as reasons). It sends one request to the provider its configuration names, as
+// Codex would, to show the route goes through the harness's proxy with the run's own credential.
+// It reports what it was given (its user, its home, the flags, the proxy's answer, in a terminal
+// whether its workspace was trusted), never a credential itself.
+//
+// Headless, it prints the JSON events Codex prints (the thread, its items, the turn's tokens). In
+// its terminal (no `exec`; the terminal host starts it on a pseudo-terminal), it draws a screen,
+// takes its first message as its last argument and each later one typed (a bracketed paste too,
+// then Enter), Esc as an interrupt, `/stop` and `/exit`, and writes its rollout as Codex 0.162.1
+// writes one, in $CODEX_HOME/sessions/YYYY/MM/DD/, line by line: the thread, each turn's start and
+// end, the user's words, the model's messages, each tool call and its output, each response's
+// usage, a Stop hook's block and a compaction. After a crash, `resume` goes on in the same rollout.
+//
+// With --dangerously-bypass-hook-trust it runs the hooks of $CODEX_HOME/hooks.json, as Codex does
+// (without the flag an untrusted hook does not run): SessionStart, UserPromptSubmit, PreToolUse
+// and PostToolUse around each command and Stop at the end of each turn, each through a shell with
+// its input on stdin; it takes a PostToolUse hook's added context in, a Stop that blocks sends it
+// on with the reason, and it runs its configuration's notify at the end of each turn. A trial's
+// first turn first waits, at most WAIT_MESSAGES_MS, for two of the owner's messages to wait for it
+// (as an agent may look with its trial's token), so the acceptance can see one given after a
+// command and one at the turn's end; a turn whose Stop hook does not block ends there, and the next
+// (the continuation, or the nudge typed into its terminal) submits. It refuses to run without
+// THERMITE_FAKE_CODEX=1 or its mounted folder, so it can't stand in by mistake.
+//
+// In its terminal, a trial's first turn first calls the provider through the proxy (`usage-window`
+// as its input): when the provider answers 429, its usage window is full, and, as Codex 0.162.1
+// does, it says so ("You've hit your usage limit. Try again at …"), ends the turn with that error in
+// its rollout (`usage_limit_exceeded`) and does not wait. The next message typed in (the harness's
+// continuation after the reset) does the turn's work, after waiting, at most WAIT_TYPED_MS, for the
+// owner's input queued for the reset. Text typed while it works is taken into the turn, as Codex
+// takes it; text typed before the reset is counted, and starts a turn, as in Codex.
+const { execSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 if (process.env.THERMITE_FAKE_CODEX !== "1" && !fs.existsSync("/opt/fake-codex/enabled")) {
@@ -17,14 +43,25 @@ if (process.env.THERMITE_FAKE_CODEX !== "1" && !fs.existsSync("/opt/fake-codex/e
 }
 const args = process.argv.slice(2);
 const val = (f) => (args.includes(f) ? args[args.indexOf(f) + 1] : undefined);
-if (args[0] !== "exec" || args.at(-1) !== "-") {
+const terminal = args[0] !== "exec";
+if (!terminal && args.at(-1) !== "-") {
   process.stderr.write(`test-codex: expected exec ... -, got ${args.join(" ")}\n`);
   process.exit(2);
 }
-const prompt = fs.readFileSync(0, "utf8");
-const resumed = val("resume");
+// In its terminal: `[resume] <flags> [<first message> | <thread>]`, each flag's value after it.
+const TAKES_VALUE = new Set(["-C", "--model", "-m", "-c"]);
+const last = (() => {
+  if (!terminal) return undefined;
+  for (let i = args[0] === "resume" ? 1 : 0; i < args.length; i++) {
+    if (TAKES_VALUE.has(args[i])) i++;
+    else if (!args[i].startsWith("-") && i === args.length - 1) return args[i];
+  }
+  return undefined;
+})();
+const resumed = terminal ? (args[0] === "resume" ? last : undefined) : val("resume");
+const first = terminal && !resumed ? last : undefined;
+const prompt = terminal ? (first ?? "") : fs.readFileSync(0, "utf8");
 const thread = resumed ?? `0199a213-0000-7000-8000-${String(process.pid).padStart(12, "0")}`;
-const out = (e) => process.stdout.write(`${JSON.stringify(e)}\n`);
 // Its configuration, as Codex reads it: $CODEX_HOME/config.toml (one provider, the proxy).
 const home = process.env.CODEX_HOME ?? "";
 const config = fs.existsSync(path.join(home, "config.toml"))
@@ -36,7 +73,142 @@ const envKey = setting("env_key");
 const credential = envKey ? (process.env[envKey] ?? "") : "";
 let n = 0;
 const item = (type, fields) => ({ id: `item_${n++}`, type, ...fields });
+// Its rollout in its terminal: one file for the thread, the one it had when resumed.
+const rollout = (() => {
+  if (!terminal) return undefined;
+  const sessions = path.join(home, "sessions");
+  if (resumed) {
+    const found = (dir, depth) => {
+      for (const e of fs.existsSync(dir) ? fs.readdirSync(dir, { withFileTypes: true }) : []) {
+        const at = path.join(dir, e.name);
+        if (e.isFile() && e.name.endsWith(`-${thread}.jsonl`)) return at;
+        if (e.isDirectory() && depth > 0) {
+          const f = found(at, depth - 1);
+          if (f) return f;
+        }
+      }
+      return undefined;
+    };
+    const f = found(sessions, 3);
+    if (f) return f;
+  }
+  const now = new Date().toISOString();
+  const [y, m, d] = now.slice(0, 10).split("-");
+  return path.join(sessions, y, m, d, `rollout-${now.slice(0, 19).replace(/:/g, "-")}-${thread}.jsonl`);
+})();
+/** A record of its rollout, as Codex writes one: `{timestamp, type, payload}`, 0644. */
+const record = (type, payload) => {
+  fs.mkdirSync(path.dirname(rollout), { recursive: true });
+  fs.appendFileSync(rollout, `${JSON.stringify({ timestamp: new Date().toISOString(), type, payload })}\n`, { mode: 0o644 });
+};
+// Headless, its JSON events; in its terminal, a line on its screen.
+const shown = [];
+let input = "";
+const draw = () => {
+  const lines = [`Codex stand-in · ${thread}`, ...shown.slice(-14), `› ${input}`];
+  process.stdout.write(`\x1b[H\x1b[2J${lines.join("\r\n")}`);
+};
+const show = (text) => {
+  shown.push(String(text).split("\n")[0].slice(0, 110));
+  draw();
+};
+const out = (e) => {
+  if (terminal) show(e.item ? `${e.item.type}: ${e.item.command ?? e.item.text ?? ""}` : e.type);
+  else process.stdout.write(`${JSON.stringify(e)}\n`);
+};
+// Thermite's hooks, run only as Codex runs them: trusted, here by the flag.
+const hooks = (() => {
+  if (!args.includes("--dangerously-bypass-hook-trust")) return {};
+  try {
+    return JSON.parse(fs.readFileSync(path.join(home, "hooks.json"), "utf8")).hooks ?? {};
+  } catch {
+    return {};
+  }
+})();
+const notify = (() => {
+  const m = /^notify = (\[.*\])$/m.exec(config);
+  try {
+    return m ? JSON.parse(m[1]) : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+let hooksRun = 0;
+const hook = (event, fields) => {
+  const h = hooks[event]?.[0]?.hooks?.[0];
+  if (!h) return {};
+  const r = spawnSync("/bin/sh", ["-c", h.command], {
+    input: JSON.stringify({ session_id: thread, cwd: process.cwd(), hook_event_name: event, model: val("--model"), permission_mode: "bypassPermissions", ...fields }),
+    encoding: "utf8",
+    timeout: (h.timeout ?? 60) * 1000,
+  });
+  if (r.status === 0) hooksRun++;
+  try {
+    return JSON.parse(r.stdout || "{}");
+  } catch {
+    return {};
+  }
+};
+// What the hooks gave it inside its turns: a PostToolUse hook's added context, a Stop's reason.
+const steered = [];
+const hookFacts = () => `hooks=${hooksRun} steered=${steered.join(",") || "none"}`;
+/** How long, after the wait, its next turn waits for the owner's input queued for the reset. */
+const WAIT_TYPED_MS = 20_000;
+// Its usage window in its terminal (none, open, met, or went-on), the first word of each line typed
+// into a turn, and how many lines were typed during the wait.
+let window = "none";
+const typedIn = [];
+let typedInWait = 0;
+/** When its usage window resets (ms), as the provider's Retry-After said. */
+let windowUntil = 0;
+const windowFacts = () =>
+  `window=${window} typed=${typedIn.map((t) => t.split(/\s/)[0].replace(/[^A-Za-z0-9-]/g, "").slice(0, 40)).join(",") || "none"} typed_in_wait=${typedInWait}`;
+/** One response's usage in its rollout, once for its id. */
+let responses = 0;
+const used = () => {
+  if (terminal)
+    record("token_usage_record", {
+      response_id: `resp_${thread.slice(-6)}_${++responses}`,
+      usage: { input_tokens: 1200, cached_input_tokens: 600, output_tokens: 40, reasoning_output_tokens: 10 },
+    });
+};
+/** The end of a turn: the Stop hook, which may send it on (true), and notify. */
+const stop = (lastSaid) => {
+  const said = hook("Stop", { stop_hook_active: steered.some((x) => x.startsWith("turn-end")), last_assistant_message: lastSaid });
+  if (said.decision === "block" && said.reason) {
+    steered.push(`turn-end:${/owner/.test(said.reason) ? "owner" : "other"}`);
+    // In its terminal, the block is the user's side of the turn, as Codex records it.
+    if (terminal) record("event_msg", { type: "item_completed", item: { type: "HookPrompt", fragments: [{ text: said.reason }] } });
+    return true;
+  }
+  if (notify?.length)
+    spawnSync(notify[0], [
+      ...notify.slice(1),
+      JSON.stringify({ type: "agent-turn-complete", "thread-id": thread, cwd: process.cwd(), "last-assistant-message": lastSaid }),
+    ]);
+  return false;
+};
+/** Waits, at most `ms`, until `count` of the owner's messages wait for this trial. */
+const WAIT_MESSAGES_MS = 90_000;
+const waitMessages = async (count, ms = WAIT_MESSAGES_MS) => {
+  const url = process.env.THERMITE_HARNESS_URL;
+  const auth = process.env.THERMITE_TRIAL_AUTH ?? "";
+  if (!url || !auth.startsWith("trial.")) return 0;
+  const end = Date.now() + ms;
+  for (;;) {
+    try {
+      const r = await fetch(`${url}/v1/trial/messages`, { headers: { authorization: `Bearer ${auth}` } });
+      const got = (await r.json()).messages?.length ?? 0;
+      if (got >= count || Date.now() > end) return got;
+    } catch {
+      if (Date.now() > end) return 0;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+};
 const shell = (command) => {
+  const callId = `call_${thread.slice(-6)}_${n}`;
+  hook("PreToolUse", { tool_name: "Bash", tool_input: { command }, tool_use_id: callId });
   const started = item("command_execution", {
     command,
     aggregated_output: "",
@@ -44,6 +216,10 @@ const shell = (command) => {
     status: "in_progress",
   });
   out({ type: "item.started", item: started });
+  if (terminal) {
+    used();
+    record("response_item", { type: "function_call", call_id: callId, name: "exec_command", arguments: JSON.stringify({ cmd: command }) });
+  }
   let output;
   let code = 0;
   try {
@@ -56,36 +232,149 @@ const shell = (command) => {
     type: "item.completed",
     item: { ...started, aggregated_output: output, exit_code: code, status: code ? "failed" : "completed" },
   });
+  if (terminal) {
+    record("event_msg", { type: "item_completed", item: { type: "CommandExecution", id: callId, status: code ? "failed" : "completed", exit_code: code } });
+    record("response_item", { type: "function_call_output", call_id: callId, output });
+  }
+  const after = hook("PostToolUse", { tool_name: "Bash", tool_input: { command }, tool_response: output, tool_use_id: callId });
+  const context = after.hookSpecificOutput?.additionalContext;
+  if (context) steered.push(`after-tool:${/owner/.test(context) ? "owner" : "other"}`);
   return output;
 };
-const say = (text) => out({ type: "item.completed", item: item("agent_message", { text }) });
+const say = (text) => {
+  if (terminal) {
+    used();
+    record("response_item", { type: "message", id: `msg_${thread.slice(-6)}_${n}`, role: "assistant", content: [{ type: "output_text", text }] });
+  }
+  out({ type: "item.completed", item: item("agent_message", { text }) });
+};
 
-(async () => {
-  // One Responses call to the configured provider, with the run's credential, as Codex makes it.
-  let proxied = "none";
-  if (baseUrl && credential)
-    try {
-      const r = await fetch(`${baseUrl}/responses`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${credential}` },
-        body: JSON.stringify({ model: val("--model"), input: "ping", stream: true }),
-      });
-      await r.text();
-      proxied = String(r.status);
-    } catch (e) {
-      proxied = `error:${String(e?.cause?.code ?? e?.message ?? e).replace(/\s+/g, "-")}`;
-    }
-  const facts = [
+/** One Responses call to the configured provider, with the run's credential, as Codex makes it. */
+async function proxiedCall() {
+  if (!baseUrl || !credential) return "none";
+  try {
+    const r = await fetch(`${baseUrl}/responses`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${credential}` },
+      body: JSON.stringify({ model: val("--model"), input: "ping", stream: true }),
+    });
+    await r.text();
+    return String(r.status);
+  } catch (e) {
+    return `error:${String(e?.cause?.code ?? e?.message ?? e).replace(/\s+/g, "-")}`;
+  }
+}
+
+/**
+ * A trial's first turn's call to the provider, through the proxy: Codex's own words for a full
+ * usage window when the provider answers 429, else undefined.
+ */
+async function usageWindow() {
+  window = "open";
+  if (!baseUrl || !credential) return undefined;
+  try {
+    const r = await fetch(`${baseUrl}/responses`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${credential}` },
+      body: JSON.stringify({ model: val("--model"), input: "usage-window", stream: true }),
+    });
+    await r.text();
+    if (r.status !== 429) return undefined;
+    const at = new Date(Date.now() + Number(r.headers.get("retry-after") ?? "0") * 1000);
+    windowUntil = at.getTime();
+    window = "met";
+    return `You’ve hit your usage limit. Try again at ${at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" })}.`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** What it was given, as its words say it. */
+function factsOf(proxied) {
+  return [
     `uid=${process.getuid()}`,
     `home=${home && config.includes('model_provider = "thermite"') ? "own" : "missing"}`,
     `proxy_url=${baseUrl?.endsWith("/v1/model-proxy") ? "harness" : (baseUrl ?? "none")}`,
-    `auth=${credential.startsWith("trial.") ? "trial" : credential.startsWith("proxy.") ? "proxy" : "missing"}`,
+    `auth=${credential.startsWith("trial.") ? "trial" : credential.startsWith("proxy.") ? "proxy" : credential.startsWith("call.") ? "call" : "missing"}`,
     `proxied=${proxied}`,
     `bypass=${args.includes("--dangerously-bypass-approvals-and-sandbox")}`,
     `ignore_rules=${args.includes("--ignore-rules")}`,
     `resumed=${resumed ? "yes" : "no"}`,
+    ...(terminal
+      ? [
+          "mode=terminal",
+          `tty=${process.stdin.isTTY === true && process.stdout.isTTY === true}`,
+          `trusted=${config.includes(`[projects.${JSON.stringify(process.cwd())}]\ntrust_level = "trusted"`) ? "yes" : "no"}`,
+          `no_daemon=${args.includes("--no-daemon")}`,
+          `hook_trust=${args.includes("--dangerously-bypass-hook-trust")}`,
+        ]
+      : ["mode=headless"]),
     `model=${val("--model")}`,
   ].join(" ");
+}
+
+/**
+ * One compaction, as Codex makes one (goal 070): the thread in its rollout, with the summary its
+ * compaction prompt asked for (naming where Thermite keeps the conversation); headless, in a rollout
+ * of its own, then the warning it gives after each compaction.
+ */
+function compact() {
+  const set = /^compact_prompt = (".*")$/m.exec(config);
+  const where = set
+    ? /before this point in (\S+?)\/(?: \([^)]*\))?, as the newest file named (\S+)-<number>\.md/.exec(JSON.parse(set[1]))
+    : null;
+  if (!where) return "no-prompt";
+  const message = `Tidied the kernel. Kept in ${where[1]}/${where[2]}-1.md.`;
+  if (terminal) {
+    record("compacted", { message });
+    return "rollout";
+  }
+  const day = path.join(home, "sessions", "2026", "10", "21");
+  fs.mkdirSync(day, { recursive: true });
+  const line = (e) => `${JSON.stringify(e)}\n`;
+  fs.appendFileSync(
+    path.join(day, `rollout-2026-10-21T00-00-00-${thread}.jsonl`),
+    line({ type: "session_meta", payload: { id: thread } }) +
+      line({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: prompt.slice(0, 2000) }] } }) +
+      line({ type: "compacted", payload: { message } }),
+  );
+  out({
+    type: "item.completed",
+    item: item("error", {
+      message:
+        "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.",
+    }),
+  });
+  return "rollout";
+}
+
+/** The trial's change and its submission, after a compaction, with what it was given. */
+function submitChange(facts) {
+  const compacted = compact();
+  shell(
+    `printf '\\n/* tidied by codex */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'codex harness: a tidied kernel (compacted=${compacted} ${hookFacts()} ${windowFacts()} ${facts})'`,
+  );
+  say("Submitted.");
+  stop("Submitted.");
+}
+
+/** A trial's first turn: it reads the kernel; true when its Stop hook sends it on. */
+async function readTurn() {
+  await waitMessages(2);
+  shell("true");
+  say("Read the kernel.");
+  return stop("Read the kernel.");
+}
+
+// A trial's prompt names thermite-trial submit; in its terminal the first message may come typed,
+// as a real program takes it, and then decides it (runTerminal).
+let trial = /thermite-trial submit/.test(prompt);
+if (terminal) runTerminal();
+else runHeadless();
+
+/** Headless: one prompt, its work, and the turn's tokens. */
+async function runHeadless() {
+  const facts = factsOf(await proxiedCall());
   out({ type: "thread.started", thread_id: thread });
   out({ type: "turn.started" });
   out({ type: "item.completed", item: item("reasoning", { text: "**Reading the task**" }) });
@@ -123,43 +412,16 @@ const say = (text) => out({ type: "item.completed", item: item("agent_message", 
         notes: `planned by the Codex stand-in (${facts})`,
       }),
     );
-  } else if (/thermite-trial submit/.test(prompt)) {
-    // One compaction, as Codex makes one (goal 070): the thread in its rollout, with the summary
-    // its compaction prompt asked for (naming where Thermite keeps the conversation), then the
-    // warning it gives after each compaction.
-    const set = /^compact_prompt = (".*")$/m.exec(config);
-    const where = set
-      ? /before this point in (\S+?)\/(?: \([^)]*\))?, as the newest file named (\S+)-<number>\.md/.exec(
-          JSON.parse(set[1]),
-        )
-      : null;
-    let compacted = "no-prompt";
-    if (where) {
-      const day = path.join(home, "sessions", "2026", "10", "21");
-      fs.mkdirSync(day, { recursive: true });
-      const line = (e) => `${JSON.stringify(e)}\n`;
-      fs.appendFileSync(
-        path.join(day, `rollout-2026-10-21T00-00-00-${thread}.jsonl`),
-        line({ type: "session_meta", payload: { id: thread } }) +
-          line({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: prompt.slice(0, 2000) }] } }) +
-          line({ type: "compacted", payload: { message: `Tidied the kernel. Kept in ${where[1]}/${where[2]}-1.md.` } }),
-      );
-      out({
-        type: "item.completed",
-        item: item("error", {
-          message:
-            "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.",
-        }),
-      });
-      compacted = "rollout";
-    }
-    shell(
-      `printf '\\n/* tidied by codex */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'codex harness: a tidied kernel (compacted=${compacted} ${facts})'`,
-    );
-    say("Submitted.");
+  } else if (trial) {
+    hook("SessionStart", { source: resumed ? "resume" : "startup" });
+    hook("UserPromptSubmit", { prompt: prompt.slice(0, 2000) });
+    // The first run reads the kernel; a run whose Stop hook did not send it on ends there, and
+    // the continuation submits.
+    if (resumed || (await readTurn())) submitChange(facts);
   } else {
     say("done");
   }
+  if (Object.keys(hooks).length) hook("SessionEnd", { reason: "other" });
   out({
     type: "turn.completed",
     usage: {
@@ -170,4 +432,164 @@ const say = (text) => out({ type: "item.completed", item: item("agent_message", 
       reasoning_output_tokens: 10 * n,
     },
   });
-})();
+}
+
+const CAMPAIGN = "The campaign, as JSON:";
+/**
+ * The planner in its terminal (goal 169): its plan, as headless. In a run's first round it holds
+ * its turn, at most WAIT_MESSAGES_MS, its Stop hook asked each second, until one of the owner's
+ * messages comes at the end of its turn, as a long turn would meet one; then it plans again, and
+ * its notes say what came.
+ */
+const planInTerminal = async (text, facts) => {
+  const ctx = JSON.parse(text.slice(text.indexOf(CAMPAIGN) + CAMPAIGN.length));
+  const plan = (note) =>
+    JSON.stringify({
+      new_families: [{ id: "cx-tidy", description: "Small tidy-ups proposed by the Codex stand-in." }],
+      assignments: ctx.lanes.map((lane) => ({ lane, family: "cx-tidy", focus: "tidy the kernel", parent: "champion" })),
+      notes: `planned by the Codex stand-in in its terminal (${note})`,
+    });
+  const draft = plan("a first plan");
+  say(draft);
+  const end = Date.now() + (ctx.epoch === 1 ? WAIT_MESSAGES_MS : 0);
+  for (;;) {
+    if (stop(draft)) break;
+    if (Date.now() >= end) return draft;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const final = plan(`the owner's message came inside its turn; ${facts} ${hookFacts()}`);
+  say(final);
+  stop(final);
+  return final;
+};
+
+/**
+ * In its terminal: its thread from its first message (or resumed), then each message typed, one
+ * turn at a time, until `/exit` or SIGTERM. A trial's first turn may meet its usage window; then
+ * a turn reads the kernel, and the next submits. The planner's first turn answers its plan.
+ */
+async function runTerminal() {
+  let turns = Promise.resolve();
+  let taken = resumed ? 1 : 0;
+  // What a trial's next turn does: read the kernel, then submit.
+  let work = resumed ? "submit" : "read";
+  let busy = false;
+  let facts = "";
+  /** One prompt: its turn in the rollout, its hook, and its work, after the turns before it. */
+  const prompted = (text) => {
+    turns = turns.then(async () => {
+      busy = true;
+      const turnId = `turn_${taken + 1}`;
+      record("event_msg", { type: "task_started", turn_id: turnId });
+      record("event_msg", { type: "item_completed", item: { type: "UserMessage", content: [{ type: "text", text }] } });
+      show(`› ${text.split("\n")[0]}`);
+      hook("UserPromptSubmit", { prompt: text.slice(0, 2000) });
+      if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
+      const planning = !trial && taken === 0 && text.includes(CAMPAIGN);
+      taken++;
+      let lastSaid = "done";
+      const full = trial && !resumed && window === "none" ? await usageWindow() : undefined;
+      if (full) {
+        // Its usage window is full: the turn ends with Codex's own error, and it does not wait.
+        show(full);
+        record("event_msg", { type: "task_complete", turn_id: turnId, last_agent_message: null, error: { message: full, codex_error_info: "usage_limit_exceeded" } });
+        busy = false;
+        return;
+      }
+      if (planning) lastSaid = await planInTerminal(text, facts);
+      else if (trial && work === "read") {
+        if (window === "met") {
+          window = "went-on";
+          const end = Date.now() + WAIT_TYPED_MS;
+          while (!typedIn.length && Date.now() < end) await new Promise((r) => setTimeout(r, 250));
+        }
+        // The owner's messages, when the acceptance sends two: the first goes in after its
+        // command, the second at the end of its turn, which goes on with it to the submission.
+        // With none, the turn ends there, and the nudge typed next submits.
+        if (await readTurn()) submitChange(facts);
+        work = "submit";
+        lastSaid = "Read the kernel.";
+      } else if (trial && work === "submit") {
+        submitChange(facts);
+        lastSaid = "Submitted.";
+      } else {
+        say("done");
+        stop("done");
+      }
+      record("event_msg", { type: "task_complete", turn_id: turnId, last_agent_message: lastSaid });
+      busy = false;
+    });
+  };
+  const exit = (reason, code) => {
+    if (Object.keys(hooks).length) hook("SessionEnd", { reason });
+    process.stdout.write("\x1b[?2004l");
+    process.exit(code);
+  };
+  const submit = () => {
+    const text = input;
+    input = "";
+    if (text === "/exit") return exit("other", 0);
+    if (text === "/stop") return show("background terminals stopped");
+    if (!text.trim()) return draw();
+    // Typed while it works: taken into the turn, as Codex takes it (a steer).
+    if (busy) {
+      record("event_msg", { type: "item_completed", item: { type: "UserMessage", content: [{ type: "text", text }] } });
+      typedIn.push(text);
+      return show(`› ${text.split("\n")[0]}`);
+    }
+    // Typed before the reset: the harness's continuation comes after it.
+    if (window === "met" && Date.now() < windowUntil) typedInWait++;
+    prompted(text);
+  };
+  let pending = "";
+  let escTimer;
+  const take = () => {
+    clearTimeout(escTimer);
+    while (pending) {
+      if (pending.startsWith("\x1b[200~")) {
+        const end = pending.indexOf("\x1b[201~");
+        if (end < 0) return;
+        input += pending.slice(6, end);
+        pending = pending.slice(end + 6);
+        continue;
+      }
+      // A terminal's reply or a key's sequence: not text.
+      const seq = /^\x1b(\[[\d;?]*[A-Za-z~]|O[A-Za-z])/.exec(pending);
+      if (seq) {
+        pending = pending.slice(seq[0].length);
+        continue;
+      }
+      if (pending === "\x1b") {
+        // Esc by itself, unless more follows at once: it interrupts a turn under way.
+        escTimer = setTimeout(() => {
+          pending = "";
+          if (busy) record("event_msg", { type: "turn_aborted", reason: "interrupted" });
+          hook("Interrupt", {});
+          show("interrupted");
+        }, 50);
+        return;
+      }
+      const ch = pending[0];
+      pending = pending.slice(1);
+      if (ch === "\r") submit();
+      else if (ch === "\x7f") input = input.slice(0, -1);
+      else if (ch >= " " || ch === "\n" || ch === "\t") input += ch;
+    }
+    draw();
+  };
+  process.stdin.setRawMode(true);
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (d) => {
+    pending += d;
+    take();
+  });
+  process.on("SIGTERM", () => exit("other", 143));
+  // Bracketed paste on, as Codex turns it on.
+  process.stdout.write("\x1b[?2004h");
+  draw();
+  facts = factsOf(await proxiedCall());
+  if (!resumed) record("session_meta", { id: thread, originator: "codex-tui", cwd: process.cwd() });
+  hook("SessionStart", { source: resumed ? "resume" : "startup" });
+  show(facts);
+  if (first !== undefined) prompted(first);
+}

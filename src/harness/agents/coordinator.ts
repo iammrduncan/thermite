@@ -1,7 +1,8 @@
-import type { StoredRule } from "../../core/commands.ts";
-import { type Contract, type LaneLimitValues, laneLimits } from "../../core/contract.ts";
+import { type Contract, type LaneLimitValues, laneLimits, MAX_LANES } from "../../core/contract.ts";
+import type { StoredRule } from "../../core/directives.ts";
 import { ideaWords, ruleRefusal } from "../../core/queue-target.ts";
-import { type Ledger, LedgerError } from "../ledger.ts";
+import { JUDGED_LIFECYCLES } from "../../core/verdicts.ts";
+import { type Ledger, LedgerError } from "../ledger/index.ts";
 import {
   directionOf,
   type Experiment,
@@ -9,7 +10,7 @@ import {
   inFamily,
   type TaskYield,
 } from "../queue.ts";
-import type { NewFamily, QueuePlan } from "./planner.ts";
+import type { NewFamily, QueuePlan } from "./planner/index.ts";
 import type { Assignment, Registry } from "./registry.ts";
 
 /**
@@ -61,22 +62,33 @@ export function focusOf(x: Pick<Experiment, "title" | "details">): string {
 }
 
 /**
- * The rules for the plan in force. The owner's (issued through control) come first: a supervisor
- * directive about a family the owner has a directive for, or a supervisor lane count when the
- * owner set one, does not apply.
+ * Who set a rule, as the planner reads it: `owner` for the owner (or an operator on the owner's
+ * behalf), else its author as the ledger records it, such as a teacher, the planner or an agent.
  */
-export function rulesInForce(ledger: Ledger, run: string): { id: number; body: StoredRule }[] {
+export const ruleBy = (author: string): string =>
+  author === "control:owner" || author.startsWith("control:owner:") ? "owner" : author;
+
+/**
+ * The rules for the plan in force, each with who set it (ruleBy). The owner's (issued through
+ * control) come first: a supervisor directive about a family the owner has a directive for, or a
+ * supervisor lane count when the owner set one, does not apply.
+ */
+export function rulesInForce(
+  ledger: Ledger,
+  run: string,
+): { id: number; body: StoredRule; by: string }[] {
   // An old rule in words (legacy, goal 066) stays in force for the planner's model until its
   // round converts it; it has no family, so the code below and the fixed rules never keep it.
   // An advisor's rule that freezes the queue's size or pins an experiment, set before code
   // refused them (goal 081), never reaches the plan.
-  const all = ledger
-    .activeDirectives(run)
+  const all = ledger.directives
+    .active(run)
     .filter((d) => !d.author.startsWith("supervisor") || !ruleRefusal(d.body as StoredRule))
     .map((d) => ({
       id: d.id,
       owner: d.author.startsWith("control:"),
       body: d.body as StoredRule,
+      by: ruleBy(d.author),
     }));
   const ownerFamilies = new Set(
     all.filter((d) => d.owner && d.body.family).map((d) => d.body.family),
@@ -89,25 +101,27 @@ export function rulesInForce(ledger: Ledger, run: string): { id: number; body: S
         ((!d.body.family || !ownerFamilies.has(d.body.family)) &&
           !(d.body.kind === "lane_count" && ownerLanes)),
     )
-    .map((d) => ({ id: d.id, body: d.body }));
+    .map((d) => ({ id: d.id, body: d.body, by: d.by }));
 }
 
-/** An attempt's lifecycles in which the judge is done with it, for now or for good. */
-const SETTLED = new Set([
-  "judged",
-  "promoted",
-  "rejected_v0",
-  "duplicate",
-  "errored",
-  "awaiting_approval",
-  "awaiting_audit",
-  "audit_blocked",
-  "not_judged",
-]);
+/**
+ * How many lanes work now (goal 162): the contract's count, at most MAX_LANES (a contract stored
+ * before the cap may ask for more, and lanes past it have no user to run as), or the lane count
+ * of the rules in force, the owner's first. The scheduler starts this many, and a message to
+ * everyone waits for the reads of this many.
+ */
+export function lanesAtWork(ledger: Ledger, run: string, contract: Contract): number {
+  const cap = Math.min(contract.lanes.count, MAX_LANES);
+  const ruled = rulesInForce(ledger, run)
+    .map((d) => d.body)
+    .filter((b) => b.kind === "lane_count" && Number.isFinite(Number(b.value)))
+    .at(-1);
+  return Math.max(1, Math.min(cap, Math.trunc(Number(ruled?.value ?? cap))));
+}
 
 /** Whether the judge is done with an attempt (none: nothing to wait for). */
 export function attemptSettled(ledger: Ledger, attempt: string | null): boolean {
-  return !attempt || SETTLED.has(String(ledger.getAttempt(attempt)?.lifecycle));
+  return !attempt || JUDGED_LIFECYCLES.has(String(ledger.attempts.get(attempt)?.lifecycle));
 }
 
 /**
@@ -132,14 +146,9 @@ export function limitsInForce(ledger: Ledger, run: string, contract: Contract): 
 
 /** The experiments the run's newest hand-out gave its lanes. */
 export function handedOut(ledger: Ledger, run: string): Set<string> {
-  const e = ledger.db
-    .prepare(
-      "select body from event where kind = 'planner_handout' and subject = ? order by id desc limit 1",
-    )
-    .get(run) as { body: string } | undefined;
-  const b = (e ? JSON.parse(e.body) : {}) as { assignments?: { experiment?: unknown }[] };
+  const b = ledger.events.newest("planner_handout", { subject: run })?.body;
   return new Set(
-    (b.assignments ?? []).flatMap((a) => (typeof a.experiment === "string" ? [a.experiment] : [])),
+    (b?.assignments ?? []).flatMap((a) => (typeof a.experiment === "string" ? [a.experiment] : [])),
   );
 }
 
@@ -161,18 +170,8 @@ export class Coordinator {
   ): Record<string, { direction: string | null; experiment: string | null }> {
     const out: Record<string, { direction: string | null; experiment: string | null }> = {};
     for (const lane of lanes) {
-      const x = this.ledger.db
-        .prepare(
-          "select title, family from experiment where run = ? and lane = ? order by updated_at desc, rowid desc limit 1",
-        )
-        .get(run, lane) as { title: string; family: string } | undefined;
-      const t = x
-        ? undefined
-        : (this.ledger.db
-            .prepare(
-              "select family from trial where run = ? and lane = ? order by started_at desc limit 1",
-            )
-            .get(run, lane) as { family: string | null } | undefined);
+      const x = this.ledger.experiments.lastOfLane(run, lane);
+      const t = x ? undefined : this.ledger.trials.lastOfLane(run, lane);
       out[lane] = {
         direction: x ? x.family || null : (t?.family ?? null),
         experiment: x?.title ?? null,
@@ -353,7 +352,7 @@ export class Coordinator {
         this.queue.move(run, m.id, { by: PLANNER, position: m.position, why: m.why }, PLANNER),
       );
     if (plan.rules.length)
-      this.ledger.addDirectiveSet(
+      this.ledger.directives.addSet(
         run,
         PLANNER,
         plan.rules.map((r) => ({
@@ -368,7 +367,7 @@ export class Coordinator {
     // Each old rule in words becomes a rule on the direction the model named (goal 066).
     for (const c of plan.convert)
       tryIt(`convert rule ${c.rule}`, () => {
-        this.ledger.convertRule(run, c.rule, c.family, PLANNER);
+        this.ledger.directives.convertRule(run, c.rule, c.family, PLANNER);
       });
     const handout: (Handout & { parent: "champion" | "lane_best" })[] = [];
     for (const h of plan.handout) {
@@ -471,18 +470,7 @@ export class Coordinator {
    * their trial ended (interrupted), and go back to the queue.
    */
   finishOrphans(actor: string): void {
-    const rows = this.ledger.db
-      .prepare(
-        `select e.trial as trial, t.stopped as stopped, t.attempt as attempt, t.error as error
-         from experiment e left join trial t on t.id = e.trial
-         where e.state = 'assigned' and (t.id is null or t.ended_at is not null)`,
-      )
-      .all() as {
-      trial: string;
-      stopped: string | null;
-      attempt: string | null;
-      error: string | null;
-    }[];
+    const rows = this.ledger.experiments.orphans();
     for (const r of rows)
       this.finish(
         r.trial,

@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { z } from "zod";
+import { BadInput, Refusal } from "../common/errors.ts";
 import { sha256Hex } from "../core/canonical.ts";
 import type { CommandPayloads } from "../core/commands.ts";
+import { FINAL_LIFECYCLES } from "../core/verdicts.ts";
 import { createAttemptCommit, deleteRef, GitError, hasCommit, patchBytes, treeOf } from "./git.ts";
-import { importFile } from "./imports.ts";
-import { type Ledger, LedgerError } from "./ledger.ts";
-import type { HarnessService, SubmitResult } from "./service.ts";
+import { importFile, importRoom } from "./imports.ts";
+import { type Ledger, LedgerError } from "./ledger/index.ts";
+import type { HarnessService, SubmitResult } from "./service/index.ts";
 
 /**
  * Propagation across rigs. A rig's champion is published in its exports as a binary patch
@@ -22,34 +24,26 @@ import type { HarnessService, SubmitResult } from "./service.ts";
 type Propagate = z.infer<(typeof CommandPayloads)["propagate"]>;
 
 /** Lifecycles after which a propagated attempt's outcome is known. */
-const SETTLED = new Set([
-  "promoted",
-  "judged",
-  "rejected_v0",
-  "duplicate",
-  "errored",
-  "audit_blocked",
-  "not_judged",
-]);
+const SETTLED = FINAL_LIFECYCLES;
 
 export async function receivePropagation(
   svc: HarnessService,
   p: Propagate,
   by: string,
 ): Promise<unknown> {
-  const inst = svc.ledger.getRun(p.run);
+  const inst = svc.ledger.runs.get(p.run);
   if (!inst) throw new LedgerError("not_found", `no run ${p.run}`);
-  if (inst.mode === "research") throw new Error("research campaigns do not take propagations");
+  if (inst.mode === "research") throw new Refusal("research campaigns do not take propagations");
   const spec = p.import;
   if (spec.kind !== "champion_patch") {
-    throw new Error("propagate takes a champion_patch import (a published champion)");
+    throw new BadInput("propagate takes a champion_patch import (a published champion)");
   }
   if (spec.repo !== inst.seed_repo) {
-    throw new Error(`the champion is in ${spec.repo}; this run works on ${inst.seed_repo}`);
+    throw new Refusal(`the champion is in ${spec.repo}; this run works on ${inst.seed_repo}`);
   }
   const mirror = svc.mirrorFor(inst.seed_repo);
   if (!(await hasCommit(mirror, spec.base_commit))) {
-    throw new Error(`base commit ${spec.base_commit} is not in this rig's repository`);
+    throw new Refusal(`base commit ${spec.base_commit} is not in this rig's repository`);
   }
   // Copied into the harness's own store and hashed as copied; the sha256 is the signed one.
   const stored = await importFile({
@@ -57,6 +51,7 @@ export async function receivePropagation(
     rel: spec.path,
     expectedSha256: spec.sha256,
     storeDir: join(svc.paths.stateDir, "imports", "patches"),
+    room: importRoom(svc.disk, `the champion's patch ${spec.path}`),
   });
   const id = `p-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
   let rebuilt: { commit: string; ref: string };
@@ -71,16 +66,16 @@ export async function receivePropagation(
       refPrefix: "refs/thermite/propagations",
     });
   } catch (err) {
-    throw new Error(
+    throw new Refusal(
       `the champion patch does not apply to the base: ${err instanceof GitError ? err.message : String(err)}`,
     );
   }
   const tree = await treeOf(mirror, rebuilt.commit);
   if (tree !== spec.tree) {
     await deleteRef(mirror, rebuilt.ref).catch(() => undefined);
-    throw new Error(`tree mismatch: the signed tree is ${spec.tree}, the patch gives ${tree}`);
+    throw new Refusal(`tree mismatch: the signed tree is ${spec.tree}, the patch gives ${tree}`);
   }
-  svc.ledger.recordImport({
+  svc.ledger.imports.record({
     kind: "champion_patch",
     name: `${p.source_rig}/${p.source_run}/${p.source_seq}`,
     sha256: spec.sha256,
@@ -89,7 +84,7 @@ export async function receivePropagation(
     storedPath: stored,
     actor: by,
   });
-  const champion = svc.ledger.currentChampion(p.run);
+  const champion = svc.ledger.champions.current(p.run);
   const source = {
     source_rig: p.source_rig,
     source_run: p.source_run,
@@ -123,24 +118,19 @@ export async function receivePropagation(
   // The candidate judged here must be exactly the source champion's tree.
   const got = await treeOf(mirror, r.commit);
   if (got !== tree) {
-    svc.ledger.setAttemptLifecycle(r.attempt, "errored", by);
+    svc.ledger.attempts.setLifecycle(r.attempt, "errored", by);
     throw new Error(`the propagated attempt has tree ${got}, not ${tree}`);
   }
   svc.ledger.tx(() => {
-    svc.ledger.db
-      .prepare(
-        `insert into propagation (attempt, run, source_rig, source_run, source_seq, tree, created_at)
-         values (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        r.attempt,
-        p.run,
-        p.source_rig,
-        p.source_run,
-        p.source_seq,
-        tree,
-        new Date().toISOString(),
-      );
+    svc.ledger.propagations.add({
+      attempt: r.attempt,
+      run: p.run,
+      sourceRig: p.source_rig,
+      sourceRun: p.source_run,
+      sourceSeq: p.source_seq,
+      tree,
+      at: new Date().toISOString(),
+    });
     svc.ledger.appendEvent(by, "propagation_received", p.run, {
       ...source,
       attempt: r.attempt,
@@ -157,25 +147,26 @@ export async function receivePropagation(
  */
 export function settlePropagations(ledger: Ledger, by: string): number {
   // Open ones, and rejected ones whose attempt the owner promoted later (an audit override).
-  const open = (
-    ledger.db
-      .prepare("select * from propagation where result is null or result like 'rejected:%'")
-      .all() as Record<string, unknown>[]
-  ).filter(
-    (r) =>
-      r.result === null || String(ledger.getAttempt(String(r.attempt))?.lifecycle) === "promoted",
-  );
+  const open = ledger.propagations
+    .unsettledOrRejected()
+    .filter(
+      (r) =>
+        r.result === null ||
+        String(ledger.attempts.get(String(r.attempt))?.lifecycle) === "promoted",
+    );
   let settled = 0;
   for (const row of open) {
     const attempt = String(row.attempt);
-    const lifecycle = String(ledger.getAttempt(attempt)?.lifecycle);
+    const lifecycle = String(ledger.attempts.get(attempt)?.lifecycle);
     if (!SETTLED.has(lifecycle)) continue;
-    const verdict = ledger.currentVerdict(attempt)?.verdict ?? lifecycle;
+    const verdict = ledger.verdicts.current(attempt)?.verdict ?? lifecycle;
     const accepted = lifecycle === "promoted";
     ledger.tx(() => {
-      ledger.db
-        .prepare("update propagation set result = ?, decided_at = ? where attempt = ?")
-        .run(accepted ? "accepted" : `rejected:${verdict}`, new Date().toISOString(), attempt);
+      ledger.propagations.settle(
+        attempt,
+        accepted ? "accepted" : `rejected:${verdict}`,
+        new Date().toISOString(),
+      );
       ledger.appendEvent(
         by,
         accepted ? "propagation_accepted" : "propagation_rejected",
@@ -222,15 +213,14 @@ export async function championFiles(input: {
     sha256: string;
     path: string;
   }[] = [];
-  for (const inst of input.ledger.listRuns()) {
+  for (const inst of input.ledger.runs.list()) {
     if (inst.mode === "research") continue;
-    const champ = input.ledger.currentChampion(inst.id);
+    const champ = input.ledger.champions.current(inst.id);
     if (champ.seq <= 1 || !champ.attempt) continue;
-    const published = input.ledger.db
-      .prepare(
-        "select 1 from event where kind = 'champion_published' and subject = ? and json_extract(body, '$.seq') = ? limit 1",
-      )
-      .get(inst.id, champ.seq);
+    const published = input.ledger.events.newest("champion_published", {
+      subject: inst.id,
+      body: { seq: champ.seq },
+    });
     if (published) continue;
     const mirror = input.mirrorFor(inst.seed_repo);
     const patch = await patchBytes(mirror, inst.seed_commit, champ.commit_sha);

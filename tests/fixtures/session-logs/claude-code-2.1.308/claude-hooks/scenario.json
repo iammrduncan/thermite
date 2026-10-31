@@ -1,0 +1,77 @@
+{
+  "argv": [
+    "/usr/local/bin/claude",
+    "--model",
+    "claude-opus-5-5",
+    "--permission-mode",
+    "bypassPermissions",
+    "--session-id",
+    "50fe0432-f129-4806-b38f-1b3a6bb5511f",
+    "--strict-mcp-config",
+    "--debug-file",
+    "/scratch/thermite/lanes/lane-1/claude-hooks/out/claude-debug.log",
+    "--setting-sources",
+    "user",
+    "--disallowedTools",
+    "AskUserQuestion",
+    "--",
+    "SPIKE-2: run pwd please."
+  ],
+  "cols": 120,
+  "rows": 40,
+  "steps": [
+    {
+      "do": "mark",
+      "label": "turn-a"
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-2",
+      "kind": "tool",
+      "step": 1,
+      "timeoutMs": 30000
+    },
+    {
+      "do": "sh",
+      "cmd": "mkdir -p /scratch/thermite/lanes/lane-1/claude-hooks/steer && printf 'STEER-CTX: a note added by the PostToolUse hook: mention apples.' > /scratch/thermite/lanes/lane-1/claude-hooks/steer/post-tool-context.txt && printf 'SPIKE-5: before you stop, run date (this came from the Stop hook).' > /scratch/thermite/lanes/lane-1/claude-hooks/steer/stop-block.txt"
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-5",
+      "kind": "text",
+      "timeoutMs": 40000,
+      "label": "the Stop hook's reason became a turn"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 1000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2000,
+      "timeoutMs": 10000
+    },
+    {
+      "do": "snap",
+      "label": "after the hooks"
+    },
+    {
+      "do": "mark",
+      "label": "ending"
+    },
+    {
+      "do": "type",
+      "text": "/exit"
+    },
+    {
+      "do": "wait",
+      "for": "exit",
+      "timeoutMs": 10000
+    }
+  ]
+}

@@ -9,26 +9,95 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { gzipSync } from "node:zlib";
 import { canonicalJson } from "../core/canonical.ts";
 import { patchBytes } from "./git.ts";
 import { knowledgePart } from "./kb-part.ts";
-import type { Ledger } from "./ledger.ts";
+import type { Ledger } from "./ledger/index.ts";
 import { championFiles } from "./propagation.ts";
+
+/** Where an export keeps the prompts sent (goal 166). */
+export const PROMPTS_FILE = "prompts.jsonl.gz";
+
+/**
+ * Where each of the ledger's tables goes in an export's copy of the ledger (ledger.sqlite). Every
+ * table is on one of the two lists, on purpose: a test fails on a table that is on neither, so a
+ * new table is placed when it is made. The held_out table, the judge's whole record of each
+ * held-out check, never goes into an export. The copy goes to the results repository and to
+ * control: a table that holds a secret goes on `dropped`.
+ */
+export const LEDGER_COPY = {
+  dropped: ["held_out"],
+  copied: [
+    "agent_message",
+    "agent_message_read",
+    "attempt",
+    "audit",
+    "budget_ledger",
+    "build",
+    "champion",
+    "claim",
+    "command",
+    "conclusion",
+    "contract",
+    "directive",
+    "epoch",
+    "event",
+    "experiment",
+    "export",
+    "family",
+    "finding",
+    "goal",
+    "goal_check",
+    "hypothesis",
+    "import",
+    "invalidation",
+    "invocation",
+    "item_decision",
+    "job",
+    "journal_note",
+    "lane",
+    "measurement",
+    "meta",
+    "note",
+    "prompt",
+    "propagation",
+    "question_card",
+    "receipt",
+    "report_section",
+    "report_version",
+    "research_file",
+    "research_query",
+    "review",
+    "review_item",
+    "run",
+    "run_briefing",
+    "schema_migrations",
+    "source",
+    // A trial keeps only its token's SHA-256, and the token stops working when its trial ends.
+    "trial",
+    "verdict",
+  ],
+} as const;
+
+/** Whether an event is a run's (goal 170): the run the ledger recorded with it. */
+export function runEvents(run: string): (e: { run: string | null }) => boolean {
+  return (e) => e.run === run;
+}
 
 /**
  * Outbox export. The harness has no git credentials and no remote access: it writes exports
  * into the shared outbox, and the supervisor pushes them to the results repository as packed
  * commits. An export holds patches and manifests for attempts recorded since the last export,
- * the events since then, the runs' field notes, research notes and briefings since then, the
- * runs' part of their campaigns' folders in the knowledge base that changed since then, a
+ * the events since then, the runs' field notes, research notes, briefings and prompts sent since
+ * then, the runs' part of their campaigns' collections in the knowledge base that changed since then, a
  * consistent ledger snapshot, each new run champion as a patch against its seed (what other rigs
  * need to judge it themselves), and the research folder of each run that finished. A full export
  * also holds the research archive and the research folder of every run, finished or not.
  *
  * A run's export (goal 103: Export on a run's page) holds that run alone, from its start: its
- * events, attempts, field notes, research notes, briefing and part of its campaign's folder, its
- * research folder as it stands and the pages it fetched. It holds no ledger snapshot (the ledger is
+ * events, attempts, field notes, research notes, briefing, prompts sent and part of its campaign's
+ * folder, its research folder as it stands and the pages it fetched. It holds no ledger snapshot (the ledger is
  * every run's) and publishes no champion, and it stays outside the rig's chain of exports: the
  * next export still starts where the last one of the chain ended, and a full reset never takes it.
  */
@@ -61,7 +130,7 @@ export async function writeExport(input: {
   run?: string | undefined;
 }): Promise<ExportResult> {
   const { ledger, run: only } = input;
-  const since = only ? 0 : (ledger.lastExport()?.through_event ?? 0);
+  const since = only ? 0 : (ledger.exports.last()?.through_event ?? 0);
   const through = ledger.latestEventId();
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "");
   const name = `${stamp}-${randomUUID().slice(0, 8)}`;
@@ -69,12 +138,10 @@ export async function writeExport(input: {
   const final = join(input.outboxDir, name);
   mkdirSync(join(tmp, "attempts"), { recursive: true });
   try {
+    const ofRun = only ? runEvents(only) : () => true;
     const events = ledger
       .eventsAfter(since, Number.MAX_SAFE_INTEGER)
-      .events.filter((e) => e.id <= through)
-      .filter(
-        (e) => !only || e.subject === only || (e.body as { run?: unknown } | null)?.run === only,
-      );
+      .events.filter((e) => e.id <= through && ofRun(e));
     writeFileSync(
       join(tmp, "events.jsonl"),
       events.map((e) => canonicalJson(e)).join("\n") + (events.length ? "\n" : ""),
@@ -84,15 +151,15 @@ export async function writeExport(input: {
       ...new Set(events.filter((e) => e.kind === "attempt_recorded").map((e) => String(e.subject))),
     ];
     for (const id of attemptIds) {
-      const a = ledger.getAttempt(id);
+      const a = ledger.attempts.get(id);
       if (!a || (only && String(a.run) !== only)) continue;
-      const run = ledger.getRun(String(a.run));
+      const run = ledger.runs.get(String(a.run));
       const mirror = input.mirrorFor(run?.seed_repo ?? "");
       const patch = await patchBytes(mirror, String(a.parent_commit), String(a.commit_sha));
       writeFileSync(join(tmp, "attempts", `${id}.patch`), patch);
       writeFileSync(
         join(tmp, "attempts", `${id}.json`),
-        `${canonicalJson({ attempt: a, verdict: ledger.currentVerdict(id) ?? null })}\n`,
+        `${canonicalJson({ attempt: a, verdict: ledger.verdicts.current(id) ?? null })}\n`,
       );
     }
 
@@ -132,17 +199,9 @@ export async function writeExport(input: {
         .filter((e) => e.kind === kind)
         .map((e) => Number((e.body as Record<string, unknown>)[field]))
         .filter((n) => Number.isInteger(n));
-    const rowsOf = (table: string, list: number[]) =>
-      list.length
-        ? (ledger.db
-            .prepare(
-              `select * from ${table} where id in (${list.map(() => "?").join(", ")}) order by id`,
-            )
-            .all(...list) as Record<string, unknown>[])
-        : [];
     const jsonl = (rows: unknown[]) =>
       rows.map((r) => canonicalJson(r)).join("\n") + (rows.length ? "\n" : "");
-    const journal = rowsOf("journal_note", ids("journal_note", "id")).map((r) => ({
+    const journal = ledger.journal.byIds(ids("journal_note", "id")).map((r) => ({
       id: Number(r.id),
       run: String(r.run),
       by: String(r.by),
@@ -155,13 +214,13 @@ export async function writeExport(input: {
     }));
     writeFileSync(join(tmp, "journal.jsonl"), jsonl(journal));
     const notesRel: string[] = [];
-    const researchNotes = rowsOf("note", ids("research_note", "note")).map((r) => ({
-      id: Number(r.id),
-      run: String(r.run),
-      lane: r.lane === null ? null : String(r.lane),
-      text: String(r.text),
-      sources: JSON.parse(String(r.sources)) as string[],
-      at: String(r.created_at),
+    const researchNotes = ledger.claims.notesById(ids("research_note", "note")).map((r) => ({
+      id: r.id,
+      run: r.run,
+      lane: r.lane,
+      text: r.text,
+      sources: JSON.parse(r.sources) as string[],
+      at: r.created_at,
     }));
     if (researchNotes.length) {
       writeFileSync(join(tmp, "research-notes.jsonl"), jsonl(researchNotes));
@@ -171,13 +230,23 @@ export async function writeExport(input: {
       ...new Set(events.filter((e) => e.kind === "run_created").map((e) => String(e.subject))),
     ];
     const briefing = created.flatMap((run) =>
-      ledger.briefing(run).map((b, i) => ({ run, seq: i + 1, ...b })),
+      ledger.runs.briefing(run).map((b, i) => ({ run, seq: i + 1, ...b })),
     );
     if (briefing.length) {
       writeFileSync(join(tmp, "briefing.jsonl"), jsonl(briefing));
       notesRel.push("briefing.jsonl");
     }
-    // The runs' part of their campaigns' folders (knowledge.jsonl): each item that an event
+    // The whole text of each prompt the runs' agents were sent since then (goal 166), its
+    // sections and their sources, one JSON line each, compressed (prompts.jsonl.gz).
+    const prompts = ids("agent_prompt", "id").flatMap((id) => {
+      const p = ledger.prompts.get(id);
+      return p ? [p] : [];
+    });
+    if (prompts.length) {
+      writeFileSync(join(tmp, PROMPTS_FILE), gzipSync(jsonl(prompts)));
+      notesRel.push(PROMPTS_FILE);
+    }
+    // The runs' part of their campaigns' collections (knowledge.jsonl): each item that an event
     // since the last export added or changed, as it stands now, with its origin, read as
     // control reads it into the knowledge base.
     const part = knowledgePart(ledger, input.rig, since, through).filter(
@@ -193,18 +262,7 @@ export async function writeExport(input: {
     // final report is written. A hill-climb or goal run that recorded sources, claims or notes,
     // or compacted a conversation, exports its folder when it is closed.
     if (input.researchFolder) {
-      const recorded = (run: string) =>
-        Number(
-          (
-            ledger.db
-              .prepare(
-                `select (select count(*) from source where run = ?) + (select count(*) from claim where run = ?)
-                   + (select count(*) from note where run = ?)
-                   + (select count(*) from event where kind = 'context_compacted' and subject = ?) as n`,
-              )
-              .get(run, run, run, run) as { n: number }
-          ).n,
-        ) > 0;
+      const recorded = (run: string) => ledger.claims.recorded(run, { compactions: true }) > 0;
       const finished = new Set([
         ...events.filter((e) => e.kind === "research_final").map((e) => String(e.subject)),
         ...events
@@ -212,7 +270,7 @@ export async function writeExport(input: {
             (e) =>
               e.kind === "run_status" &&
               (e.body as { status?: string }).status === "closed" &&
-              ledger.getRun(String(e.subject))?.mode !== "research" &&
+              ledger.runs.get(String(e.subject))?.mode !== "research" &&
               recorded(String(e.subject)),
           )
           .map((e) => String(e.subject)),
@@ -228,7 +286,7 @@ export async function writeExport(input: {
       // final one, under the export's name: a results repository never replaces a file it has,
       // so the folder the run's end exports must not be taken already.
       if (input.full && !only)
-        for (const r of ledger.listRuns())
+        for (const r of ledger.runs.list())
           if (!at.has(r.id) && (r.mode === "research" || recorded(r.id)))
             at.set(r.id, `research/${r.id}/folder-${name}`);
       for (const [run, place] of at) {
@@ -247,17 +305,12 @@ export async function writeExport(input: {
       }
     }
 
-    const snapshotPath = join(tmp, "ledger.sqlite");
-    if (!only) ledger.db.exec(`vacuum into '${snapshotPath.replace(/'/g, "''")}'`);
-    // The held_out table, the judge's whole record of each held-out check, never goes into an
-    // export. The owner's record of one does (goal 082): the held_out_checked event, with each
-    // held-out cell's name, kind of failure and value against its threshold (at most 50 cells),
-    // is in the events table and events.jsonl, as it reaches control. No agent reads events.
-    if (!only) {
-      const snapshot = new DatabaseSync(snapshotPath);
-      snapshot.exec("drop table if exists held_out; vacuum;");
-      snapshot.close();
-    }
+    // A copy of the ledger (ledger.sqlite). The held_out table, the judge's whole record of each
+    // held-out check, never goes into an export. The owner's record of one does (goal 082): the
+    // held_out_checked event, with each held-out cell's name, kind of failure and value against
+    // its threshold (at most 50 cells), is in the events table and events.jsonl, as it reaches
+    // control. No agent reads events.
+    if (!only) ledger.copyTo(join(tmp, "ledger.sqlite"), LEDGER_COPY.dropped);
 
     const files = [
       "events.jsonl",
@@ -288,11 +341,11 @@ export async function writeExport(input: {
     renameSync(tmp, final);
     const id = only
       ? 0
-      : ledger.recordExport({ throughEvent: through, path: name, manifest, actor: input.actor });
+      : ledger.exports.record({ throughEvent: through, path: name, manifest, actor: input.actor });
     // Announced after the export exists: control can then offer it for propagation, and the
     // receiving supervisor finds the patch in the results repository once this export is pushed.
     for (const c of published) {
-      const inst = ledger.getRun(c.run);
+      const inst = ledger.runs.get(c.run);
       ledger.appendEvent(input.actor, "champion_published", c.run, {
         seq: c.seq,
         repo: inst?.seed_repo ?? null,

@@ -1,6 +1,11 @@
-import type { Ledger } from "../../ledger.ts";
+import type { Ledger } from "../../ledger/index.ts";
 import type { StandingDecision } from "../progress.ts";
-import type { CheckedHypothesis, CheckedQuestion, Dissent, requiredHypotheses } from "../review.ts";
+import type {
+  CheckedHypothesis,
+  CheckedQuestion,
+  Dissent,
+  requiredHypotheses,
+} from "../review/index.ts";
 import { CITE, clip, FENCE } from "./markdown.ts";
 
 /**
@@ -50,19 +55,13 @@ export function numberCitations(
   const numbers = new Map<string, number[]>();
   const bySource = new Map<string, number>();
   for (const id of cited) {
-    const cl = ledger.db
-      .prepare("select quotes from claim where run = ? and id = ? and verified = 1")
-      .get(run, id) as { quotes: string } | undefined;
-    if (!cl) continue;
+    const cl = ledger.claims.get(run, id);
+    if (!cl?.verified) continue;
     const ns: number[] = [];
     for (const s of new Set((JSON.parse(cl.quotes) as { source: string }[]).map((q) => q.source))) {
       let n = bySource.get(s);
       if (n === undefined) {
-        const row = ledger.db
-          .prepare("select url, title, domain, fetched_at from source where run = ? and id = ?")
-          .get(run, s) as
-          | { url: string; title: string | null; domain: string; fetched_at: string }
-          | undefined;
+        const row = ledger.sources.get(run, s);
         if (!row) continue;
         n = references.length + 1;
         references.push({
@@ -72,7 +71,7 @@ export function numberCitations(
             url: row.url,
             title: row.title?.trim() ? clip(row.title, 200) : "",
             domain: row.domain,
-            archived: String(row.fetched_at).slice(0, 10),
+            archived: row.fetched_at.slice(0, 10),
           },
         });
         bySource.set(s, n);
@@ -204,11 +203,9 @@ export function claimsAppendix(
     "| Claim | What it says | References |",
     "| --- | --- | --- |",
     ...cited.flatMap((id) => {
-      const row = ledger.db
-        .prepare("select text from claim where run = ? and id = ? and verified = 1")
-        .get(run, id) as { text: string } | undefined;
+      const row = ledger.claims.get(run, id);
       const ns = numbers.get(id);
-      return row && ns ? [`| ${id} | ${tableCell(row.text)} | [${ns.join(", ")}] |`] : [];
+      return row?.verified && ns ? [`| ${id} | ${tableCell(row.text)} | [${ns.join(", ")}] |`] : [];
     }),
   ];
 }

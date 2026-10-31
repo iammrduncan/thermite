@@ -1,4 +1,4 @@
-// Test only (scripts/claude-real-acceptance.mjs): a stand-in for Anthropic's Messages API, which
+// Test only (scripts/acceptance/claude-real.mjs): a stand-in for Anthropic's Messages API, which
 // the real Claude Code calls (POST /v1/messages, streamed as server-sent events, as Claude Code
 // asks). It plays the model from the prompt alone:
 //   - "run exactly this command: X" (the model check's words): a Bash call of X, then the

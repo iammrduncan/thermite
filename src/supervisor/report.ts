@@ -1,4 +1,7 @@
-import type { AdviseState } from "./advise.ts";
+import { harnessClient } from "../common/api/harness.ts";
+import { BRIEF, RUNS } from "../core/api/harness/advisors.ts";
+import { REPORT_MAX_CHARS } from "../core/link/asks.ts";
+import type { AdviseState } from "./advisors/index.ts";
 import type { UploadState } from "./export-upload.ts";
 import type { ExportState } from "./git-export.ts";
 
@@ -16,28 +19,15 @@ export async function dailyReport(input: {
   adviseState: AdviseState;
   fetchImpl?: typeof fetch | undefined;
 }): Promise<string> {
-  const f = input.fetchImpl ?? fetch;
-  const get = async (path: string) => {
-    const res = await f(`${input.harnessUrl}${path}`, {
-      headers: { authorization: `Bearer ${input.harnessToken}` },
-    });
-    if (!res.ok) throw new Error(`GET ${path} -> ${res.status}`);
-    return res.json() as Promise<unknown>;
-  };
-  const { runs } = (await get("/v1/runs")) as {
-    runs: { id: string; campaign: string; mode: string; status: string }[];
-  };
+  const harness = harnessClient({
+    url: input.harnessUrl,
+    token: input.harnessToken,
+    fetchImpl: input.fetchImpl,
+  });
+  const { runs } = await harness.call(RUNS);
   const lines = [`# Daily report: ${input.rig}`, "", `Generated ${new Date().toISOString()}.`, ""];
   for (const inst of runs.filter((i) => i.status !== "closed")) {
-    const b = (await get(`/v1/brief?run=${encodeURIComponent(inst.id)}`)) as {
-      champion: { seq: number };
-      families: { id: string; status: string; attempts: number; best_delta: number | null }[];
-      evidence: { verdict: string | null; lifecycle: string }[];
-      epochs: { n: number; planner_valid: boolean }[];
-      directives: unknown[];
-      goals?: { id: string; status: string }[];
-      budget: { device_hours_used: number; tokens: { in: number; out: number } };
-    };
+    const b = await harness.call(BRIEF, { query: { run: inst.id } });
     const verdicts: Record<string, number> = {};
     for (const e of b.evidence) {
       const k = e.verdict ?? e.lifecycle;
@@ -71,5 +61,10 @@ export async function dailyReport(input: {
     `- Exports: ${e.done.length} committed; ${u ? `${u.uploaded.length ? `last sent to control ${u.lastUploadAt ?? "?"}` : "none sent to control yet"}; ${u.queue.length} waiting to go` : `last push ${e.lastPushAt ?? "never"}`}${error ? `; last error: ${error}` : ""}.`,
     `- Advisors: ${a.teacher_runs} teacher rounds, ${a.directive_sets} directive sets (${a.directives} directives), ${a.audits} audits, ${a.reviews} reviews by the review panel, ${a.errors} errors; $${a.usd.toFixed(2)}.`,
   );
-  return lines.join("\n");
+  // Control keeps REPORT_MAX_CHARS of a report at most: a longer one is cut, and says so.
+  const text = lines.join("\n");
+  const cut = "\n\n(Cut: the whole report is longer than control keeps.)";
+  return text.length > REPORT_MAX_CHARS
+    ? `${text.slice(0, REPORT_MAX_CHARS - cut.length)}${cut}`
+    : text;
 }

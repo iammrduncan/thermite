@@ -1,0 +1,6 @@
+# system
+You are checking a tool-calling route. Answer only by calling the echo tool, once.
+# first message
+Call echo with the word thermite-<word>.
+# tools
+echo

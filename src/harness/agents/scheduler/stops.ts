@@ -1,4 +1,4 @@
-import type { Ledger } from "../../ledger.ts";
+import type { Ledger } from "../../ledger/index.ts";
 
 /**
  * Trials that stop before their end (goals 079 and 136): each trial of a run that is no longer
@@ -22,15 +22,12 @@ export interface Stopping {
 
 /** The newest `trial_stop_asked` event: asks recorded before this process started are past. */
 export function lastStopAsked(ledger: Ledger): number {
-  const r = ledger.db
-    .prepare("select max(id) as id from event where kind = 'trial_stop_asked'")
-    .get() as { id: number | null };
-  return Number(r.id ?? 0);
+  return ledger.events.lastId("trial_stop_asked");
 }
 
 /** Stops what must stop now. Returns the newest `trial_stop_asked` event read. */
 export function stopTrials(ledger: Ledger, o: Stopping): number {
-  const running = (id: string) => ledger.getRun(id)?.status === "running";
+  const running = (id: string) => ledger.runs.get(id)?.status === "running";
   for (const [lane, ctrl] of o.aborts) {
     const run = o.laneRun.get(lane);
     if (run && !running(run) && !ctrl.signal.aborted) {
@@ -39,20 +36,14 @@ export function stopTrials(ledger: Ledger, o: Stopping): number {
     }
   }
   let seen = o.seen;
-  const asks = ledger.db
-    .prepare(
-      "select id, actor, subject, body from event where kind = 'trial_stop_asked' and id > ? order by id",
-    )
-    .all(seen) as { id: number; actor: string; subject: string; body: string }[];
-  for (const e of asks) {
+  for (const e of ledger.events.list("trial_stop_asked", { after: seen })) {
     seen = e.id;
-    const b = JSON.parse(e.body) as { trial: string; lane: string; reason?: string };
+    const b = e.body;
     const ctrl = o.aborts.get(b.lane);
     // Only the trial asked for, while it runs: a lane runs one trial at a time, so an open trial
     // on the lane is the one its abort stops. One that ended meanwhile is left as it ended.
-    const open = ledger.db
-      .prepare("select 1 from trial where id = ? and lane = ? and ended_at is null")
-      .get(b.trial, b.lane);
+    const t = ledger.trials.get(b.trial);
+    const open = t?.lane === b.lane && t.ended_at === null;
     if (!ctrl || ctrl.signal.aborted || o.laneRun.get(b.lane) !== e.subject || !open) continue;
     ledger.appendEvent(e.actor, "trial_stopped", e.subject, {
       lane: b.lane,

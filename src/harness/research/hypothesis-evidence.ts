@@ -1,9 +1,14 @@
 import { EXPERIMENT_DETAILS } from "../../core/commands.ts";
-import { questionLabel, REQUIRED_HYPOTHESES } from "../../core/research-check.ts";
-import type { Ledger } from "../ledger.ts";
+import {
+  GAP_LINE,
+  questionLabel,
+  REQUIRED_HYPOTHESES,
+  SATURATION_TASKS,
+} from "../../core/research-check.ts";
+import type { Ledger } from "../ledger/index.ts";
 import type { Experiment, ExperimentQueue } from "../queue.ts";
-import { SATURATION_TASKS, type StandingDecision, standingDecisions } from "./progress.ts";
-import { GAP_LINE, gapOf, taskDetails } from "./shares.ts";
+import { type StandingDecision, standingDecisions } from "./progress.ts";
+import { gapOf, taskDetails } from "./shares.ts";
 
 /**
  * Evidence for or against a research run's required hypotheses (goal 117): the author's and the
@@ -13,8 +18,6 @@ import { GAP_LINE, gapOf, taskDetails } from "./shares.ts";
  * task to find some, as a question's gap gets one, until SATURATION_TASKS of its tasks are done;
  * each one done shows the panel the hypothesis again (itemsMarker).
  */
-
-type Row = Record<string, unknown>;
 
 /** A required hypothesis with no evidence for or against it yet. */
 export interface UnevidencedHypothesis {
@@ -40,20 +43,11 @@ export function hypothesisEvidence(ledger: Ledger, run: string): Map<string, num
     for (const c of ids) s.add(c);
     claims.set(id, s);
   };
-  for (const h of ledger.db
-    .prepare(
-      `select id, supporting from hypothesis where run = ? and status in (${REQUIRED_HYPOTHESES.map(() => "?").join(", ")})`,
-    )
-    .all(run, ...REQUIRED_HYPOTHESES) as Row[])
-    add(String(h.id), list(h.supporting));
+  for (const h of ledger.hypotheses.withStatus(run, REQUIRED_HYPOTHESES))
+    add(h.id, list(h.supporting));
   // A reviewer's verdict that passed the check, with the claims it cites.
-  for (const r of ledger.db
-    .prepare(
-      `select i.key as key, i.claims as claims from review_item i join review r on r.id = i.review
-         where r.run = ? and i.kind = 'hypothesis' and i.verdict != 'none' and i.problems = '[]'`,
-    )
-    .all(run) as Row[])
-    if (claims.has(String(r.key))) add(String(r.key), list(r.claims));
+  for (const r of ledger.reviews.hypothesisCitations(run))
+    if (claims.has(r.key)) add(r.key, list(r.claims));
   return new Map([...claims].map(([id, s]) => [id, s.size]));
 }
 
@@ -72,22 +66,13 @@ export function unevidencedHypotheses(
   standing: Map<string, StandingDecision>,
 ): UnevidencedHypothesis[] {
   const evidence = hypothesisEvidence(ledger, run);
-  return (
-    ledger.db
-      .prepare(
-        `select id, text, question from hypothesis where run = ? and status in (${REQUIRED_HYPOTHESES.map(() => "?").join(", ")}) order by created_at, rowid`,
-      )
-      .all(run, ...REQUIRED_HYPOTHESES) as Row[]
-  )
+  return ledger.hypotheses
+    .withStatus(run, REQUIRED_HYPOTHESES)
     .filter((h) => {
-      const d = standing.get(`hypothesis:${String(h.id)}`);
-      return d?.decision === "undecided" && (evidence.get(String(h.id)) ?? 0) === 0;
+      const d = standing.get(`hypothesis:${h.id}`);
+      return d?.decision === "undecided" && (evidence.get(h.id) ?? 0) === 0;
     })
-    .map((h) => ({
-      id: String(h.id),
-      text: String(h.text),
-      question: h.question === null ? null : Number(h.question),
-    }));
+    .map((h) => ({ id: h.id, text: h.text, question: h.question }));
 }
 
 /** The gap a hypothesis's task closes: its line in the task's details names the hypothesis. */
@@ -97,7 +82,8 @@ export function hypothesisGap(h: UnevidencedHypothesis): string {
 
 /** How many of the plan's tasks for hypotheses are done: each shows the panel them again. */
 export function hypothesisTasksDone(ledger: Ledger, run: string): number {
-  return ledger.experiments(run).filter((x) => x.state === "done" && forAnyHypothesis(x)).length;
+  return ledger.experiments.list(run).filter((x) => x.state === "done" && forAnyHypothesis(x))
+    .length;
 }
 
 /** Whether a task closes a hypothesis's gap; this one's, given its id. */

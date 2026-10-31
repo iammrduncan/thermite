@@ -4,11 +4,18 @@ ARG NODE_IMAGE=docker.io/library/node:22.23.4-bookworm-slim@sha256:de170b39439eb
 FROM ${NODE_IMAGE} AS build
 WORKDIR /src
 COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
-# npm ci runs it after the install: it patches Pi's streaming tool-call parse (goal 140).
+# It patches Pi's streaming tool-call parse after the install (goal 140).
 COPY scripts/patch-pi-ai.mjs ./scripts/
-RUN npm ci --no-fund --no-audit
+# No package's install script runs: this stage has no compiler for node-pty's native part, and no
+# other package Thermite runs needs its own. node-pty, the one optional dependency, is the
+# terminal host's (goal 169), which control does not run, so it is left out here with what it
+# alone needs.
+RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
 COPY src ./src
-RUN npm run build && npm prune --omit=dev --no-fund --no-audit
+# pi-tui's prebuilt helpers for its clipboard and modifier keys, which nothing here loads, stay out:
+# no image holds a native part of pi-tui (goal 169).
+RUN npm run build && npm prune --omit=dev --omit=optional --no-fund --no-audit \
+ && rm -rf node_modules/@earendil-works/pi-tui/native
 # kubectl, for rigs control sets up on Kubernetes clusters: a pinned release, checked by sha256.
 # The final stage carries its Apache License 2.0, the LICENSE of kubernetes/kubernetes at this
 # tag (containers/control/kubectl/; update it with the version).
@@ -25,13 +32,23 @@ RUN set -eu; arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
     echo "$sum  /kubectl" | sha256sum -c -; chmod 0755 /kubectl
 
 FROM ${NODE_IMAGE}
+# The base's system packages are upgraded first, so each build takes the distribution's fixes
+# (goal 125).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tini ca-certificates git openssh-client unzip \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends tini ca-certificates git openssh-client \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/thermite
 COPY --from=build /src/package.json ./
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/dist ./dist
+# xterm.js, which draws a trial's terminal on Live (goal 169): the copy kept in the repository, with
+# its MIT licence. Control serves it only when its SHA-256 is the pinned one.
+COPY vendor/xterm ./vendor/xterm
+# PDF.js's legacy build, which reads the text of the knowledge base's PDF files (goal 175): the two
+# JavaScript files kept in the repository, with its Apache-2.0 licence. Control loads them only
+# when their SHA-256 values are the pinned ones, in a child process with no native module.
+COPY vendor/pdfjs ./vendor/pdfjs
 COPY containers/thermite /usr/local/bin/thermite
 COPY --from=build /kubectl /usr/local/bin/kubectl
 COPY containers/control/kubectl/LICENSE /usr/local/share/doc/kubectl/LICENSE
@@ -39,13 +56,17 @@ COPY containers/control/kubectl/LICENSE /usr/local/share/doc/kubectl/LICENSE
 # Podman adds the entry by itself; Kubernetes doesn't. Its home is on the state volume.
 RUN groupadd -g 10001 thermite \
  && useradd -u 10001 -g 10001 -d /var/lib/thermite-control -M -s /usr/sbin/nologin thermite
-# Mount points owned by the runtime user, so new named volumes inherit the ownership.
-RUN mkdir -p /var/lib/thermite-control /keys && chown 10001:10001 /var/lib/thermite-control /keys
+# Mount points owned by the runtime user, so new named volumes inherit the ownership: its state,
+# its public key and the message bus's authority for the rigs, and the files it writes for the
+# message bus's server (its users, its certificate and key).
+RUN mkdir -p /var/lib/thermite-control /keys /nats-config \
+ && chown 10001:10001 /var/lib/thermite-control /keys /nats-config
 # No set-id file anywhere, as in every Thermite image: no process in the container can gain
 # privileges through a setuid or setgid program. Last, after every package; the build fails if one
-# is left.
+# is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
 RUN find / -xdev -type f -perm /6000 -exec chmod ug-s {} + \
- && test -z "$(find / -xdev -type f -perm /6000 -print -quit)"
+ && test -z "$(find / -xdev -type f -perm /6000 -print -quit)" \
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
 ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning HOME=/var/lib/thermite-control
 # The source commit the image is built from (empty: not given). Control reports it with
 # Thermite's version from package.json, and compares rigs' builds with its own.

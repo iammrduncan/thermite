@@ -1,7 +1,8 @@
+import { errorText } from "../../common/errors.ts";
 import { EXPERIMENT_DETAILS } from "../../core/commands.ts";
 import { readableDiff } from "../git.ts";
-import type { Ledger } from "../ledger.ts";
-import type { HarnessService } from "../service.ts";
+import type { Ledger } from "../ledger/index.ts";
+import type { HarnessService } from "../service/index.ts";
 import { startingPoint } from "./baseline.ts";
 
 /**
@@ -42,23 +43,10 @@ export function olderChampion(
   attempt: string,
   currentSeq: number,
 ): number | undefined {
-  if (crowned(ledger, attempt)) return undefined;
-  const parentCommit = String(ledger.getAttempt(attempt)?.parent_commit ?? "");
-  const r = ledger.db
-    .prepare(
-      "select seq from champion where run = ? and commit_sha = ? and seq < ? and seq >= ? order by seq desc limit 1",
-    )
-    .get(run, parentCommit, currentSeq, startingPoint(ledger, run).seq) as
-    | { seq: number }
-    | undefined;
-  return r ? Number(r.seq) : undefined;
-}
-
-/** Whether a change is, or was, one of its run's champions: its change is in them already. */
-function crowned(ledger: Ledger, attempt: string): boolean {
-  return !!ledger.db
-    .prepare("select 1 from champion where attempt = ? and reopened = 0")
-    .get(attempt);
+  if (ledger.champions.holds(attempt)) return undefined;
+  const parentCommit = String(ledger.attempts.get(attempt)?.parent_commit ?? "");
+  const from = startingPoint(ledger, run).seq;
+  return ledger.champions.seqOfCommit(run, parentCommit, from, currentSeq);
 }
 
 /**
@@ -71,16 +59,15 @@ export async function queuePort(
   p: PortFound,
 ): Promise<string | undefined> {
   const ledger = service.ledger;
-  const champion = ledger.currentChampion(p.run);
-  const done = ledger.db
-    .prepare(
-      "select 1 from event where kind = 'port_queued' and subject = ? and json_extract(body, '$.onto_seq') = ?",
-    )
-    .get(p.attempt, champion.seq);
+  const champion = ledger.champions.current(p.run);
+  const done = ledger.events.newest("port_queued", {
+    subject: p.attempt,
+    body: { onto_seq: champion.seq },
+  });
   // The current champion's change is in it already.
   if (done || p.attempt === champion.attempt) return undefined;
-  const a = ledger.getAttempt(p.attempt);
-  const inst = ledger.getRun(p.run);
+  const a = ledger.attempts.get(p.attempt);
+  const inst = ledger.runs.get(p.run);
   if (!a || !inst) return undefined;
   const head = [
     `Port of ${p.attempt} onto champion #${champion.seq} (commit ${champion.commit_sha.slice(0, 12)}).`,
@@ -97,7 +84,7 @@ export async function queuePort(
       String(a.commit_sha),
     );
   } catch (err) {
-    diff = `(its diff could not be read: ${err instanceof Error ? err.message : String(err)})`;
+    diff = `(its diff could not be read: ${errorText(err)})`;
   }
   const room = EXPERIMENT_DETAILS - head.length - 40;
   const body =
@@ -130,13 +117,9 @@ export async function queuePort(
  * it replaced, the replaced champion's change is not in it, and is ported onto it.
  */
 export async function portReplaced(service: HarnessService, run: string): Promise<void> {
-  const [cur, prev] = service.ledger.db
-    .prepare(
-      "select seq, attempt, commit_sha from champion where run = ? and reopened = 0 order by seq desc limit 2",
-    )
-    .all(run) as { seq: number; attempt: string | null; commit_sha: string }[];
+  const [cur, prev] = service.ledger.champions.newest(run, 2);
   if (!cur?.attempt || !prev?.attempt) return;
-  const parent = String(service.ledger.getAttempt(cur.attempt)?.parent_commit ?? "");
+  const parent = String(service.ledger.attempts.get(cur.attempt)?.parent_commit ?? "");
   if (parent === prev.commit_sha) return;
   await queuePort(service, {
     run,
@@ -148,12 +131,7 @@ export async function portReplaced(service: HarnessService, run: string): Promis
 
 /** The gain a change was promoted with: its confirmed win's. */
 function winDelta(ledger: Ledger, attempt: string): number | undefined {
-  const r = ledger.db
-    .prepare(
-      "select delta from verdict where attempt = ? and verdict = 'win_confirmed' order by id desc limit 1",
-    )
-    .get(attempt) as { delta: number | null } | undefined;
-  return r?.delta ?? undefined;
+  return ledger.verdicts.confirmedWin(attempt)?.delta ?? undefined;
 }
 
 /**
@@ -172,7 +150,7 @@ export function parentScreened(
   const body = { verdict, delta, champion_seq: olderSeq ?? null, effect };
   return {
     result: { parent_screen: body },
-    events: [{ kind: "parent_screened", subject: attempt, body }],
+    events: [{ kind: "parent_screened" as const, subject: attempt, body }],
     ...(verdict === "win_screened" ? { port: { run, attempt, effect, why: PORT_WHY } } : {}),
   };
 }

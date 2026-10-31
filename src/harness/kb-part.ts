@@ -5,13 +5,13 @@ import {
   type KbIndexTarget,
   type KbStored,
   mergeItem,
+  metaOf,
   sameItem,
 } from "../core/kb-index.ts";
-import { currentEvent, eventKinds } from "../core/names.ts";
-import type { Ledger } from "./ledger.ts";
+import type { Ledger } from "./ledger/index.ts";
 
 /**
- * A rig's runs' part of their campaigns' folders (goal 065), for an export: the items this
+ * A rig's runs' part of their campaigns' collections (goal 065), for an export: the items this
  * ledger's events make, read the same way control reads them (core/kb-index.ts), so an export
  * holds what its runs put in Thermite's knowledge base. Each item keeps its origin: campaign,
  * rig, run, who wrote it and when.
@@ -44,7 +44,7 @@ interface Held {
   changed: number;
 }
 
-/** Events read per query while reading the ledger. */
+/** Event ids read per query while reading the ledger: at most this many events at once. */
 const PAGE = 5000;
 
 /**
@@ -66,14 +66,17 @@ export function knowledgePart(
   const target: KbIndexTarget = {
     // The run's campaign as its own ledger records it (the contract it was assigned).
     runCreated: (run, named) => {
-      const campaign = ledger.getRun(run)?.campaign || named;
+      const campaign = ledger.runs.get(run)?.campaign || named;
       if (campaign) campaigns.set(run, campaign);
     },
-    body: (run, kind, ref) => items.get(key(run, kind, ref))?.stored.body,
+    item: (run, kind, ref) => {
+      const s = items.get(key(run, kind, ref))?.stored;
+      return s && { body: s.body, meta: metaOf(s.meta) };
+    },
     attempt: (ref) => {
       const run = attempts.get(ref);
-      const body = run ? items.get(key(run, "attempt", ref))?.stored.body : undefined;
-      return run && body !== undefined ? { run, body } : undefined;
+      const s = run ? items.get(key(run, "attempt", ref))?.stored : undefined;
+      return run && s ? { run, body: s.body, meta: metaOf(s.meta) } : undefined;
     },
     put: (run, kind, ref, f, at) => {
       if (!campaigns.has(run) || !ref) return;
@@ -93,35 +96,21 @@ export function knowledgePart(
       if (kind === "attempt") attempts.set(ref, run);
     },
   };
-  const kinds = KB_EVENT_KINDS.flatMap((k) => eventKinds(k));
-  const query = ledger.db.prepare(
-    `select id, at, actor, kind, subject, body from event
-     where id > ? and id <= ? and kind in (${kinds.map(() => "?").join(", ")})
-     order by id limit ?`,
-  );
-  for (let after = 0; ; ) {
-    const rows = query.all(after, through, ...kinds, PAGE) as Record<string, unknown>[];
-    for (const r of rows) {
-      current = Number(r.id);
-      let body: unknown;
-      try {
-        body = JSON.parse(String(r.body));
-      } catch {
-        // the ledger writes every body as JSON; anything else adds no item
-        continue;
-      }
-      if (!body || typeof body !== "object") continue;
-      const e = currentEvent({
-        at: String(r.at),
-        actor: String(r.actor),
-        kind: String(r.kind),
-        subject: r.subject === null ? "" : String(r.subject),
-        body: body as Record<string, unknown>,
+  // A page of ids at a time, up to the last event that may change an item.
+  const last = ledger.events.lastId(KB_EVENT_KINDS, { through });
+  for (let after = 0; after < last; after += PAGE) {
+    const page = { after, through: Math.min(after + PAGE, last) };
+    for (const e of ledger.events.list(KB_EVENT_KINDS, page)) {
+      current = e.id;
+      if (!e.body || typeof e.body !== "object") continue;
+      indexEvent(target, {
+        at: e.at,
+        actor: e.actor,
+        kind: e.kind,
+        subject: e.subject ?? "",
+        body: e.body as Record<string, unknown>,
       });
-      indexEvent(target, e);
     }
-    if (rows.length < PAGE) break;
-    after = current;
   }
   return [...items.values()]
     .filter((x) => x.changed > since)

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 /**
  * A credential control checks without holding it: only the token's SHA-256 is kept. The owner
@@ -42,8 +42,5 @@ export class Credential {
   }
 }
 
-/** A new token: 32 random bytes, base64url, with its hash for control's configuration. */
-export function newToken(): { token: string; sha256: string } {
-  const token = randomBytes(32).toString("base64url");
-  return { token, sha256: Credential.ofToken(token).hex };
-}
+// A new token, as control and the command line make one (common/secrets.ts).
+export { newToken } from "../common/secrets.ts";

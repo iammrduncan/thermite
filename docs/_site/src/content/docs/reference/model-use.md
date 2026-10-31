@@ -68,7 +68,7 @@ A run that has made no model call yet says `No model call recorded yet. Code cou
 **By agent and model** has its rows in groups, as [Edit rig](../how-to/models/model-per-agent.md) names the agents:
 
 - **The work**: **Workers**, then the **Planner**.
-- **The advisors**: **Teachers** (with `teacher 1` or `teacher 2` under it when the run has two teachers and the rig's settings say which model is which, and `merged by` for the model that merges their advice), the **Auditor**, the **Review panel** and the **Synthesizer** (with `answer cards` under it), whose calls write a research run's answer cards. A research run's final writer has no row of its own: its calls count under **Teachers**, whose model it uses.
+- **The advisors**: **Teachers** (with `teacher 1` or `teacher 2` under it when the run has two teachers and the rig's settings say which model is which, and `merged by` for the model that merges their advice), the **Auditor**, the **Review panel**, the **Synthesizer** (with `answer cards` under it), whose calls write a research run's answer cards, and the **Final writer** (with `research paper` under it), whose calls write a research run's paper. The synthesizer and the final writer use their own models from **Edit rig**, or else the first teacher's; their calls are recorded under their own names (`synthesizer` and `final_writer`), not the teachers'.
 - **The rig**: on a rig launched on RunPod, the row **GPU time on RunPod**: the pod's spend while this run was at work, with its time at the pod's price an hour, such as `5 h 36 m at $1.65/h`.
 
 | Column | What it shows |

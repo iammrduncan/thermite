@@ -58,7 +58,7 @@ Control serves the same patch over the REST API, with the owner's token. The exa
 ```sh
 curl -sS -D headers.txt -o champion.patch \
   -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" \
-  http://127.0.0.1:8800/v1/rigs/local-1/champions/sort-speed-1/3/patch
+  http://127.0.0.1:8800/v1/runs/sort-speed-1/champions/3/patch
 ```
 
 The headers name the full starting commit in `x-thermite-base-commit` and the patch's SHA-256 in `x-thermite-sha256`. For a project in a folder, the starting commit is the run's own: the folder's files, with no parent, which only the rig has. Apply the patch to the repository's commit that the dashboard's note names, as above. Compare the SHA-256 with the file's own: `sha256sum champion.patch` on Linux, `shasum -a 256 champion.patch` on a Mac. Before the patch is there, control answers `404` with `{"error":"no patch for that champion"}`.

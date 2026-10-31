@@ -1,7 +1,10 @@
+import { NAV_COOKIE } from "./components/index.ts";
+
 /**
  * The dashboard's only script, served from control itself (CSP script-src 'self'; nothing inline
- * runs). It streams the live view; pages never reload by themselves. Live lines are built with
- * DOM text nodes only: rig data never becomes markup here either.
+ * runs). It streams the live view, from control's push of new lines (server-sent events, on
+ * connect-src 'self'); pages never reload by themselves. Each line comes formatted and escaped
+ * from control (ui/live.ts); a line the script makes itself is built with DOM text nodes only.
  */
 export const CLIENT_JS = `
 (() => {
@@ -10,7 +13,8 @@ export const CLIENT_JS = `
   // ------------------------------------------------ the live view
   const tr = $("#transcript");
   if (tr) {
-    const rig = tr.dataset.rig, source = tr.dataset.source || "", run = tr.dataset.run || "";
+    // Where the page's new lines come from (control's push of them), and whose they are.
+    const lines = tr.dataset.stream || "", source = tr.dataset.source || "", run = tr.dataset.run || "";
     let after = Number(tr.dataset.after || "0");
     let follow = true;
     const near = () => tr.scrollHeight - tr.scrollTop - tr.clientHeight < 120;
@@ -60,22 +64,32 @@ export const CLIENT_JS = `
         }
       }
     };
-    const poll = async () => {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const q = new URLSearchParams({ after: String(after) });
-        let url;
-        // Lines waiting for their event, to be drawn again once control has it.
-        const waiting = run ? [...tr.querySelectorAll("[data-recheck]")].map((el) => el.dataset.id).filter(Boolean).slice(-50) : [];
-        if (waiting.length) q.set("recheck", waiting.join(","));
-        if (run) { q.set("run", rig + "/" + run); url = "/ui/live.json?" + q; }
-        else { if (source) q.set("source", source); url = "/ui/rigs/" + encodeURIComponent(rig) + "/live.json?" + q; }
-        const res = await fetch(url, { credentials: "same-origin" });
-        if (!res.ok) return;
-        const body = await res.json();
+    // New lines are pushed as control gets them. The browser connects again on its own after a
+    // drop, and control goes on after the last line the page has (its last event's id).
+    const q = new URLSearchParams({ after: String(after) });
+    // Lines waiting for their event, drawn again once control has it.
+    const waiting = run ? [...tr.querySelectorAll("[data-recheck]")].map((el) => el.dataset.id).filter(Boolean).slice(-50) : [];
+    if (waiting.length) q.set("recheck", waiting.join(","));
+    if (!run && source) q.set("source", source);
+    const pushed = lines && window.EventSource ? new EventSource(lines + "?" + q) : null;
+    const said = (ev) => { try { return JSON.parse(ev.data); } catch { return {}; } };
+    const stamp = () => {
+      const st = $("#live-state .sub");
+      if (st) st.textContent = "live · " + new Date().toISOString().slice(11, 19) + " UTC";
+    };
+    if (pushed) {
+      // The status bar says when the page last heard from control: a line, or a quiet beat.
+      pushed.addEventListener("open", stamp);
+      pushed.addEventListener("beat", stamp);
+      pushed.addEventListener("lines", (ev) => {
+        const body = said(ev);
         const stick = follow && near();
-        for (const e of body.entries || []) { add(e); after = Math.max(after, e.id); }
-        for (const r of body.redrawn || []) {
+        for (const e of body.entries || []) { if (e.id <= after) continue; add(e); after = e.id; }
+        if (stick && (body.entries || []).length) tr.scrollTop = tr.scrollHeight;
+        stamp();
+      });
+      pushed.addEventListener("redrawn", (ev) => {
+        for (const r of said(ev).redrawn || []) {
           const old = tr.querySelector('[data-id="' + r.id + '"]');
           if (!old) continue;
           old.insertAdjacentHTML("afterend", r.html);
@@ -83,12 +97,20 @@ export const CLIENT_JS = `
           old.remove();
           if (el && el.dataset && el.dataset.who !== undefined) el.hidden = !shows(el);
         }
-        if (stick && (body.entries || []).length) tr.scrollTop = tr.scrollHeight;
-        const st = $("#live-state .sub");
-        if (st) st.textContent = "live · " + new Date().toISOString().slice(11, 19) + " UTC";
-      } catch {}
-    };
-    setInterval(poll, 2000);
+      });
+      // The page fell behind: it keeps what it shows, and says how many lines it did not get.
+      pushed.addEventListener("missed", (ev) => {
+        const n = Number(said(ev).lines) || 0;
+        if (!n) return;
+        const row = document.createElement("div");
+        row.className = "lv-div lv-missed";
+        if (run) row.dataset.who = "all";
+        const text = document.createElement("span");
+        text.textContent = n + (n === 1 ? " line is" : " lines are") + " not shown here: they came faster than this page could take them.";
+        row.append(text);
+        tr.append(row);
+      });
+    }
 
     // The filters and the message box go together: the lane you watch is the one you write to.
     const box = $("form.lcomposer");
@@ -128,7 +150,7 @@ export const CLIENT_JS = `
     if (sel) sel.addEventListener("change", () => {
       hint();
       const t = sel.value;
-      const w = ["advisors", "teachers", "auditor", "panel"].includes(t) ? "advisors" : t;
+      const w = ["advisors", "teachers", "auditor", "review_panel"].includes(t) ? "advisors" : t;
       if (document.querySelector('.lchip[data-w="' + CSS.escape(w) + '"]')) view(w);
     });
     const fb = $(".lfollow");
@@ -163,9 +185,11 @@ export const CLIENT_JS = `
     tip.style.top = y + "px";
   };
   const hideTip = () => (tip.style.display = "none");
-  document.addEventListener("mouseover", (ev) => { const i = ev.target.closest && ev.target.closest(".ii"); if (i) showTip(i); });
-  document.addEventListener("mouseout", (ev) => { if (ev.target.closest && ev.target.closest(".ii")) hideTip(); });
-  document.addEventListener("focusin", (ev) => { const i = ev.target.closest && ev.target.closest(".ii"); if (i) showTip(i); });
+  // A mark with its reason (.tipped, such as withdrawn evidence) shows it the same way.
+  const tipped = (t) => t.closest && t.closest(".ii, .tipped");
+  document.addEventListener("mouseover", (ev) => { const i = tipped(ev.target); if (i) showTip(i); });
+  document.addEventListener("mouseout", (ev) => { if (tipped(ev.target)) hideTip(); });
+  document.addEventListener("focusin", (ev) => { const i = tipped(ev.target); if (i) showTip(i); });
   document.addEventListener("focusout", hideTip);
 
   // ------------------------------------------------ panels: open in place, close with Esc
@@ -270,7 +294,7 @@ export const CLIENT_JS = `
         if (!list.children.length) {
           const d = document.createElement("div");
           d.className = "muted small";
-          d.textContent = "Nothing found in these folders.";
+          d.textContent = "Nothing found in these collections.";
           list.append(d);
         }
       } catch {}
@@ -303,6 +327,25 @@ export const CLIENT_JS = `
     chips("#jk [data-jk]", (b) => (jk = b.dataset.jk));
     if (words) words.addEventListener("input", apply);
   }
+
+  // ------------------------------------------------ the left navigation: open, or only its icons
+  // This browser keeps the choice in a cookie control reads (NAV_COOKIE), so every page is drawn
+  // as the navigation was left, before this script runs.
+  const tog = $("#side-tog");
+  if (tog) tog.addEventListener("click", () => {
+    const app = $(".app");
+    const rail = !app.classList.contains("rail");
+    app.classList.toggle("rail", rail);
+    const words = rail ? "Expand the navigation" : "Collapse the navigation";
+    tog.setAttribute("aria-expanded", String(!rail));
+    tog.setAttribute("aria-label", words);
+    tog.title = words;
+    document.querySelectorAll(".sidebar .nav a").forEach((a) => {
+      const t = a.querySelector("span");
+      if (rail && t) a.title = t.textContent; else a.removeAttribute("title");
+    });
+    document.cookie = ${JSON.stringify(NAV_COOKIE)} + "=" + (rail ? "rail" : "open") + "; path=/ui; max-age=31536000; samesite=strict";
+  });
 
   // ------------------------------------------------ the navigation's campaigns and folders (goal 077)
   // A folder folds and opens, and this browser remembers which are folded. A campaign dragged

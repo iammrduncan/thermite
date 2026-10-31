@@ -74,13 +74,15 @@ It answers `{"restarted":["supervisor"]}`, or `409 {"error":"no deployment drive
 
 ## Move a rig onto new images
 
-A rig keeps the images it was set up with until you move it. What you can do depends on the kind of rig:
+A rig keeps the images it was set up with until you move it. Before you move it, keep its ledger: a **Full export** takes it off the rig, to its results repository or to control ([Keep a rig's ledger](backup-and-restore.md#keep-a-rigs-ledger)). The new harness also copies the ledger before it migrates it. What you can do depends on the kind of rig:
 
 - **The compose stack:** rebuild its images and start it again with your compose tool, as [Stop, start and update](../install/one-machine.md#stop-start-and-update) says.
 - **Set up by control on a machine or a cluster:** when its version is behind control's, **Update to** control's version on its page moves it onto the images control deploys now, with its runs paused, then checked and resumed: see [Update to control's version](#update-to-controls-version).
 - **Set up by control on a cluster:** **Update to these images** also moves it onto the images control deploys now, whatever its version, as [A rig on a cluster](#a-rig-on-a-cluster) says.
-- **Joined yourself:** not yet ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal)). Pull the new images where it runs, and start it again.
+- **Joined yourself:** not yet ([goal 035](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/035-rig-upgrades.goal)). Pull the new images where it runs, and start it again. A rig joined before the message bus needs the bus's address and control's authority too: remove it there, and run a new join command.
 - **Launched on RunPod:** terminate it and launch a new rig on control's image.
+
+A rig of v0.1.0 reports over HTTP, which this version no longer takes: it shows **Broken** until it runs this version, with the bus's address and control's authority for it ([A rig from before the bus](message-bus.md#a-rig-from-before-the-bus)). Its update does not wait to pause its runs: a rig that does not report could not take the pause. Control refuses to update a rig on a machine or a cluster while it has no address for rigs on its bus.
 
 ### Update to control's version
 
@@ -103,7 +105,7 @@ Steps:
    - "Its runs resumed".
 3. When every step has its ✓, the banner says "Updated. It runs Thermite 0.2.0, as control does."
 
-If a step fails, it gets ✕ with the reason, the banner shows "The update stopped", and the runs it paused resume. When the images could not move, the rig keeps the images it had. The rig's volumes, tokens, key, ledger, runs and results stay in every case. [A rig's page](../../reference/rig-page.md#update-to-controls-version) describes each step and its limits.
+If a step fails, it gets ✕ with the reason, the banner shows "The update stopped", and the runs it paused resume. Control keeps an update's step and the runs it paused in its store: if control restarts in the middle of an update, it ends the update when it starts again, resumes those runs, and the history says `control restarted while it was` and the step. Press **Update to** again to finish it. When the images could not move, the rig keeps the images it had. The rig's volumes, tokens, key, ledger, runs and results stay in every case. [A rig's page](../../reference/rig-page.md#update-to-controls-version) describes each step and its limits.
 
 ### A rig on a cluster
 
@@ -130,6 +132,8 @@ Steps:
    - **Call the update off** ends the drain: the rig goes back to work on its images, and its status says `running`.
 
    A card at the top of the page says since when the rig drains, who asked and what it waits for, and, under **At work**, each trial it waits for has a row under its lane: how long it has run, what it last did, a page it keeps asking for that the run refused, and its work so far. A trial stuck on such a page has `repeats a refused request` beside it. To stop one and let the drain go on, press **Stop this trial…**, then **Stop the trial**: it ends as interrupted, and its experiment goes back to the top of the queue, for after the update ([The trials it waits for](../../reference/rig-page.md#the-trials-it-waits-for)). The other trials keep running.
+
+   The drain waits at most 60 minutes by default: the rig's [`THERMITE_DRAIN_MINUTES`](../../reference/settings.md#places-exports-and-the-broker), or the `drain_minutes` an update over MCP or REST gives. The card says when, such as `Its deadline is 05:10 UTC, in 46 min.` At the deadline it stops waiting by itself: a step reads "its deadline passed after 60 min, with 1 trial and the judge's job still at work: it starts nothing new until you choose, under Needs you or on its page", and **Needs you** asks you to choose **Update it now**, which stops what still runs, or **End the drain**, which sends the rig back to work on its images and calls the update off. Nothing is chosen for you: until you choose, the rig still starts nothing new ([At its deadline](../../reference/rig-page.md#at-its-deadline)).
 
    Once the rig reports that nothing runs, within a minute or two of its last trial's end, control restarts its pods: a step reads "nothing runs any more: its pods restart now". A rig with nothing at work, or whose harness is too old to report its work, restarts at once. A harness keeps the drain in memory only: if it starts again during the drain, its reports have no drain, and after two such reports control sends the drain again, with a step that reads "its harness started again and was not draining: asked again". As it starts, the harness records that the restart ended the drain (the event `rig_drain`, with `drain: false` and the reason `the harness started again`). A research run's clock stops while the rig drains, so its durations and its progress rule leave the drain out.
 
@@ -166,7 +170,7 @@ Over MCP, the owner's and an operator's tokens do the same with `update_rig_imag
 
 ### Try again after a failure
 
-When a change to the rig's pods failed, its status says `failed`. This happens after a new rig's first wait, a start, a restart or an update. When the rig already has control's images, the block offers to apply them again; when control deploys other images, it offers **Update to these images** instead.
+When a change to the rig's pods failed, its status says `failed`. This happens after a new rig's first wait, a start, a restart or an update. It also happens when control's own work on the rig stopped with an error, such as kubectl that could not be reached: the rig's steps then show the step that failed, with the error, and control's log has `background work failed` with the rig's name. A rig never stays `deploying`, `starting`, `updating` or `draining` because of such an error. When the rig already has control's images, the block offers to apply them again; when control deploys other images, it offers **Update to these images** instead.
 
 1. Fix the cause first: see [A rig on a cluster never reports](troubleshoot.md#a-rig-on-a-cluster-never-reports).
 2. On the rig's page, the block says "The last change to its pods failed (see the steps above). Try it again on control's images:", with the two image names. Press **Try the update again**.
@@ -185,7 +189,7 @@ When you move control to a new address, set `THERMITE_CONTROL_PUBLIC_URL` to it 
 
    The page says `rig-1's pods restart with control's new address.`, and the status says `updating`. Control waits for the pods and a report, as after an update. For a stopped rig, the page says `rig-1 gets control's new address when it starts again.` The new step "Its deployments applied with new images" has the detail `control's address for rigs →` and the new address.
 
-Before it restarts anything, control reads the address in the rig's supervisor deployment. When it is already the new one, the answer is `rig-1 already runs control's images.` and nothing changes. When control can't read the deployment, it refuses with `Control could not read rig-1's deployment to compare control's address:` and kubectl's error: check that the cluster is reachable and that the deployment is still there.
+Before it restarts anything, control reads the address in the rig's supervisor deployment. When it is already the new one, the answer is `rig-1 already runs control's images.` and nothing changes. When control can't read the deployment, it refuses with `Control could not read rig-1's deployment to compare control's address:` and kubectl's error, or `kubectl's answer is not a deployment` when kubectl printed something else, never taking it for an unchanged rig: check that the cluster is reachable and that the deployment is still there.
 
 Control records the address it gives each rig. A rig set up by a control too old to record it shows no button. On the dashboard, it gets the new address with its next **Update to these images**. To give it the address now, call `update_rig_images` over MCP: control reads the deployment in the same way and applies it again with the new address.
 
@@ -198,27 +202,28 @@ Control records the address it gives each rig. A rig set up by a control too old
 
 Then, in the **Set up by control** block, open "Remove it from …", type `remove rig-1`, and press **Remove the rig**. On a machine, control stops the services and deletes the rig's units, files and volumes. On a cluster, it deletes the namespace it made, or the rig's objects in its slot. Either way it retires the rig, so its token stops working.
 
+Control refuses the remove while any result waits on the rig: the page says `rig-1 still holds results:`, what waits, and to export first. A rig whose results can't leave, such as one whose supervisor is broken, is removed with `discard rig-1` typed instead of `remove rig-1`: what it held is lost, and the audit log's `machine_rig_remove` or `cluster_rig_remove` entry says what had not left (`discarded`).
+
 **Joined:** run the **Remove** command from the rig's page, there. Then retire it.
 
 **The compose stack:** `docker compose down` stops it. `docker compose down -v` also deletes its volumes, with control's state and every result not pushed elsewhere.
 
 ## Retire and bring back
 
-Retire a rig that is gone. It leaves the rig lists, its campaigns' pages and **Needs you** (on **Overview**, the first page in the sidebar), and control refuses its reports. Its records stay. **Retiring stops nothing on the machine.**
+Retire a rig that is gone. It leaves the rig lists and **Needs you** (on **Overview**, the first page in the sidebar), and control refuses its reports. Its records stay: its runs stay on their campaigns' pages, under **Earlier runs**, marked `on <rig>, retired`, and each opens like any run. **Retiring stops nothing on the machine.**
 
 1. On the rig's page, open the **⋯** menu. A rig control refuses, or one that is offline, also has **Retire it** in its banner.
 2. Under **Retire it**, type `retire rig-1` and press **Retire it**.
 
 The page says `rig-1 is retired.` The rig is listed under **Retired** on **Rigs**. A token control made for the rig, with **Add a rig**, a join command or `thermite rig add`, stops working.
 
-A rig whose token is in control's rig tokens file (`THERMITE_CONTROL_RIG_TOKENS_FILE`), such as the compose stack's `local-1` and `local-2`, keeps its token: the page adds "If its token is in control's settings, take it out there too." Do so only to end the rig for good: take its line out of that file (`.dev/secrets/control-rig-tokens.json` on the local stack) and restart control. Leave it in if you may bring the rig back.
+The local compose stack's enroll step leaves a retired `local-1` or `local-2` retired: at each `up` it says `local enroll: local-1 is retired in control: it is not enrolled again. Bring it back on its page to use it.`
 
 You can also retire a rig with `thermite rig retire`, `POST /v1/rigs/<rig>/retire`, or the MCP tool `retire_rig` with `confirm: "retire rig-1"`. Only the owner's token can.
 
 To **bring it back**, open its page and press **Bring it back**, or use `POST /v1/rigs/<rig>/bring-back` or the MCP tool `bring_back_rig`. It shows again, and its reports are taken again:
 
-- A rig with its token still in the rig tokens file reports again at once.
-- **A token control made for it stays ended.** To let such a rig report again, enroll it again with `thermite rig add`, which also brings it back, and give the rig the new token. See [Make and change tokens](tokens.md).
+- **A token control made for it stays ended.** To let such a rig report again, enroll it again with `thermite rig add`, which also brings it back, and give the rig the new token. See [Make and change tokens](tokens.md). For the local compose stack's `local-1` and `local-2`, the next `docker compose up -d` (or `podman compose up -d`) enrolls the rig again and writes its new token; then restart its supervisor (`docker compose restart supervisor`).
 
 ## Fully reset a rig
 
@@ -228,7 +233,7 @@ A full reset gives a rig a clean start: it exports everything, checks that the e
 
 - The rig's exports leave it: to its results repository (the compose stack has one), or to control (every other rig). See [Exports](../../reference/exports.md#where-exports-go).
 - No commands wait for the rig. A pending command holds the reset at its `quiescing` step. [Cancel](cancel-a-command.md) those you don't need.
-- During the reset, `issue_command` refuses an agent's token for the rig, with `rig-1 is being reset by the owner`.
+- During the reset, `issue_command` and `propagate_champion` refuse an agent's token for the rig, with `rig-1 is being reset by the owner`.
 - A rig launched on RunPod: its pod runs, and no stop, start, restart or terminate is under way. Otherwise the reset fails at once, for example with `rp-1a2b3c4d's pod is stopped: start it first, so its results can leave it before the wipe`. Its reset also waits until no other export or champion's patch waits on the pod, and its pod and GPU stay: the harness and the supervisor restart themselves in it.
 
 ### Steps
@@ -242,7 +247,7 @@ A full reset gives a rig a clean start: it exports everything, checks that the e
    | State | What happens | Limit |
    | --- | --- | --- |
    | `start` | Control pauses the rig's running runs, with the reason "full reset" | |
-   | `quiescing` | Control waits until no judge job is queued or running, and no command waits for the rig | 1 hour |
+   | `quiescing` | Control waits until the rig reports its runs paused, the judge has no job under way and none queued for a run that still runs, and no command waits for the rig. A paused run's queued jobs stay in the queue, and the export carries them | 1 hour |
    | `exporting` | The rig takes a [full export](../../reference/exports.md#normal-and-full-exports): what is new since its last export, plus its research archive, every run's research folder and a copy of its ledger | 30 minutes |
    | `verifying` | Control waits until the supervisor reports that export pushed to the results repository, or, for a rig without one, until control holds every file of it | 1 hour |
    | `awaiting_owner` | Control waits for you | 24 hours |
@@ -262,7 +267,7 @@ A full reset gives a rig a clean start: it exports everything, checks that the e
 
 4. Press **Confirm the wipe**, on **Reports** or in the **Wipe** item of **Needs you**. To stop instead, press **Cancel** on **Reports** or **Cancel the reset** in **Needs you**. You can cancel until the wipe starts.
 
-5. When the reset is `done`, the rig starts again with an empty ledger. Its old runs no longer show on its page or on the leaderboard: they are in the results repository, or on control. Start new campaigns on it as usual, and check **Edit rig**: the choices made there are wiped, and the rig is back to its defaults.
+5. When the reset is `done`, the rig starts again with an empty ledger. Its old runs no longer show on its page or on the leaderboard. They stay on their campaigns' pages, under **Earlier runs**, marked `before <rig>'s full reset`: each opens like any run, with its attempts, its history and its champions' patches, from the events control keeps. They take no more commands. Start new campaigns on it as usual, and check **Edit rig**: the choices made there are wiped, and the rig is back to its defaults.
 
 If the reset fails or is cancelled, nothing is wiped and the runs stay paused. The **Detail** says why, for example `the rig has no results repository, and its supervisor does not send exports to control (an older version): its export cannot be verified` or `timed out while quiescing`.
 
@@ -274,8 +279,8 @@ Over the REST API, with the owner's token: `POST /v1/rigs/<rig>/reset` with `{"c
 | --- | --- |
 | The harness's state: its ledger, git mirrors, kits, imports, models, builds, research archive and research folders with their copies of past research (`knowledge/`), the **Edit rig** settings and the model route it was handed | The rig's signing key, so control still trusts it (no key to accept) |
 | Its scratch space and outbox | Everything in the results repository or on control, with the full export |
-| The supervisor's state: its copy of the results, its fetch caches, its known hosts for Git access, its advisors' records, the day's spending and where each run's past research sync had got to | Control's records: the rig's past events, its commands, champion patches and daily reports. The dashboard shows only what the rig records after the reset |
-| | Control's [knowledge base](../../reference/knowledge-base.md): the items of the rig's earlier runs stay in their campaigns' folders |
+| The supervisor's state: its copy of the results, its fetch caches, its known hosts for Git access, its advisors' records, the day's spending and where each run's past research sync had got to | Control's records: the rig's past events, its commands, champion patches and daily reports. The rig's page shows only what the rig records after the reset; its earlier runs are under their campaigns' **Earlier runs** |
+| | Control's [knowledge base](../../reference/knowledge-base.md): the items of the rig's earlier runs stay in their campaigns' collections |
 | | Files outside the rig's state: the advisors file, its tokens, and its environment settings |
 
-After the wipe, the rig refuses commands issued before it. Its model route comes back from control within about half a minute.
+After the wipe, the rig refuses commands issued before it. Its model route comes back within about half a minute: the supervisor hands its harness again the rig's config it holds from the message bus (`THERMITE_MODEL_ROUTE_POLL_SECONDS`).

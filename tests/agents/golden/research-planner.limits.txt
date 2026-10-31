@@ -1,0 +1,1 @@
+Limits (an answer over one is refused): a task's title 200 characters, its details 2000, its gap 500, its source_kind 200; each why 2000; a ref 40; notes 2000; at most 40 moves and 40 drops, 3 promotions and 20 retirements. Added tasks have no count.

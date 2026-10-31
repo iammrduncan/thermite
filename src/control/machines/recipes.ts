@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
+import { shellQuote } from "../../common/exec.ts";
 import type { MachineFacts } from "./facts.ts";
-import { shq } from "./ssh.ts";
 
 /**
  * The only things control installs on a machine, and only when the owner says yes to that
@@ -57,7 +57,7 @@ export function recipeScript(
     return { error: "the user can't sudo without a password, so control can't install it" };
   const os = family(f);
   const s = (lines: string[]) => ({ script: ["set -eu", ...lines].join("\n") });
-  if (id === "linger") return s([`sudo -n loginctl enable-linger ${shq(f.user)}`]);
+  if (id === "linger") return s([`sudo -n loginctl enable-linger ${shellQuote(f.user)}`]);
   if (!os) return { error: `control has no recipe for ${f.os}: install it yourself` };
   if (id === "podman")
     return os === "debian"

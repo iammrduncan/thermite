@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { readNumber } from "../../common/settings.ts";
+import { judgeGpusByDefault } from "../../core/hardware.ts";
+import { HARNESS_NUMBERS } from "../settings.ts";
 import { IDS, type Role, roleIds } from "./runner.ts";
 
 /**
@@ -43,6 +46,10 @@ export const devGroup = (k: number) => (k === 0 ? IDS.gpuDevGroup : IDS.gpuDevBa
 export const runRole = (i: number): Role => (i === 0 ? "run" : (`run-${i}` as Role));
 /** The user judge card i builds as: each card's builds run apart, at the same time (goal 135). */
 export const builderRole = (i: number): Role => (i === 0 ? "builder" : (`builder-${i}` as Role));
+/** The user judge card i runs the kit's check as. */
+export const checkerRole = (i: number): Role => (i === 0 ? "checker" : (`checker-${i}` as Role));
+/** The user judge card i runs a kit's driver as, apart from the candidate's (runRole). */
+export const driverRole = (i: number): Role => (i === 0 ? "driver" : (`driver-${i}` as Role));
 /** Which judge card a timing role uses, or undefined for any other role. */
 export const judgeCardOf = (role: Role): number | undefined =>
   role === "run" ? 0 : /^run-([1-7])$/.test(role) ? Number(role.slice(4)) : undefined;
@@ -74,12 +81,12 @@ export function effectiveGpuLists(
     j <= cards.length - 1 &&
     j <= IDS.maxCards &&
     cards.length - j <= IDS.maxCards;
-  const fromEnv = env.THERMITE_JUDGE_GPUS ? Number(env.THERMITE_JUDGE_GPUS) : undefined;
+  const fromEnv = readNumber(env, HARNESS_NUMBERS.judgeGpus);
   const j = fits(savedJudge)
     ? (savedJudge as number)
     : fits(fromEnv)
       ? (fromEnv as number)
-      : Math.ceil(cards.length / 2);
+      : judgeGpusByDefault(cards.length);
   return {
     judge: cards.slice(0, j).join(","),
     dev: cards.slice(j).join(","),
@@ -278,6 +285,8 @@ export function identityFor(
   devCard = 0,
 ): Identity {
   const ids = roleIds(role);
+  // A kit's check reads the kits and the baselines through the checkers' group; it has no card.
+  if (/^checker(-[1-7])?$/.test(role)) return { ...ids, groups: [IDS.checkersGroup] };
   const devUser = gpu || /^lane-\d+-dev$/.test(role);
   const judgeCard = judgeCardOf(role);
   if (!layout) {

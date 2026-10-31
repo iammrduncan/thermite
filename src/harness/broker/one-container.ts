@@ -1,8 +1,12 @@
+import { execFileSync } from "node:child_process";
 import { createPublicKey } from "node:crypto";
 import {
   chmodSync,
+  chownSync,
   closeSync,
   constants,
+  fchmodSync,
+  fchownSync,
   fstatSync,
   lstatSync,
   mkdirSync,
@@ -10,9 +14,14 @@ import {
   readSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { ADVISOR_RUNS_ENV, ADVISOR_RUNS_SOCKET, advisorRunsDir } from "../../core/advisor-runs.ts";
+import { LEAF_ENV } from "../../core/link/leaf.ts";
+import { SUPERVISOR_PASSWD_HOME } from "../../core/paths.ts";
 import {
   ENROLLED_FILES,
   keySha256,
@@ -58,9 +67,6 @@ export function withoutRunpod(env: Env): Record<string, string> {
   return out;
 }
 
-/** The supervisor's home in its passwd entry, in both images: ssh finds ~/.ssh there. */
-export const SUPERVISOR_PASSWD_HOME = "/var/lib/thermite-supervisor/home";
-
 /** Where the broker records how it started the supervisor: next to its socket, for the selftest. */
 export const SUPERVISOR_RECORD = "supervisor.json";
 
@@ -85,6 +91,8 @@ export interface SupervisorPaths {
   inbox: string;
   /** Its copy of the token it uses on the harness API. Always in its home. */
   tokenFile: string;
+  /** The advisors' runs' root (core/advisor-runs.ts), beside its state, out of it. */
+  advisorRuns: string;
 }
 
 export function supervisorPaths(env: Env): SupervisorPaths {
@@ -94,12 +102,53 @@ export function supervisorPaths(env: Env): SupervisorPaths {
     tmp: join(home, "tmp"),
     inbox: env.THERMITE_INBOX_DIR ?? "/inbox",
     tokenFile: join(home, "harness-token"),
+    advisorRuns: advisorRunsDir(home),
   };
 }
 
 /**
+ * The supervisor's files: its home and temporary directory (its own, closed to every other user),
+ * the inbox it shares with the controller, and its copy of the token it uses on the harness API.
+ * The broker makes them at start and again before each start of the supervisor (goal 165): a full
+ * reset's wipe empties its home. Only while none of the supervisor's processes runs, so nothing
+ * can swap a path in its home for a link meanwhile.
+ */
+export function makeSupervisorFiles(
+  paths: SupervisorPaths,
+  ids: { uid: number; gid: number; inboxGid: number },
+  token: string,
+): void {
+  const { uid, gid, inboxGid } = ids;
+  mkdirSync(paths.home, { recursive: true });
+  if (statSync(paths.home).uid !== uid)
+    execFileSync("chown", ["-R", "-P", `${uid}:${gid}`, paths.home], { stdio: "ignore" });
+  chmodSync(paths.home, 0o700);
+  rmSync(paths.tmp, { recursive: true, force: true });
+  mkdirSync(paths.tmp, { mode: 0o700 });
+  chownSync(paths.tmp, uid, gid);
+  // The inbox: the supervisor writes, the controller's group reads (setgid keeps the group on
+  // what is added); roles are in neither.
+  mkdirSync(paths.inbox, { recursive: true });
+  const inbox = statSync(paths.inbox);
+  if (inbox.uid !== uid || inbox.gid !== inboxGid)
+    execFileSync("chown", ["-R", "-P", `${uid}:${inboxGid}`, paths.inbox], { stdio: "ignore" });
+  chmodSync(paths.inbox, 0o2750);
+  // Its copy of the token: a new file (whatever was at the path goes), owned by it, 0600.
+  rmSync(paths.tokenFile, { recursive: true, force: true });
+  const fd = openSync(paths.tokenFile, "wx", 0o600);
+  try {
+    fchownSync(fd, uid, gid);
+    fchmodSync(fd, 0o600);
+    writeSync(fd, token);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * The supervisor's environment: the broker's own, without RunPod's variables, the snapshot key
- * and the harness's secret files (only root reads those), with its own places and user.
+ * and the harness's secret files (only root reads those), with its own places and user, and the
+ * advisors' runner the broker serves for it.
  */
 export function supervisorEnv(
   env: Env,
@@ -116,6 +165,8 @@ export function supervisorEnv(
     THERMITE_SUPERVISOR_HOME: paths.home,
     THERMITE_INBOX_DIR: paths.inbox,
     THERMITE_HARNESS_TOKEN_FILE: paths.tokenFile,
+    [ADVISOR_RUNS_ENV.socket]: ADVISOR_RUNS_SOCKET,
+    [ADVISOR_RUNS_ENV.root]: paths.advisorRuns,
   };
 }
 
@@ -174,16 +225,18 @@ export function pullMode(env: Env): boolean {
 }
 
 /**
- * Pull mode's launch values reach the supervisor alone: the enrollment code above all. The
- * controller keeps two public ones, for its isolation check: the tunnel's folder (no role may
- * read the pod's keys) and the SHA-256 of control's key (the key it trusts must be that one).
+ * Pull mode's launch values reach the supervisor alone: the enrollment code above all, and the
+ * leaf node's, the pod's key among them (core/link/leaf.ts). The controller keeps two public
+ * ones, for its isolation check: the tunnel's folder (no role may read the pod's keys) and the
+ * SHA-256 of control's key (the key it trusts must be that one).
  */
 const CONTROLLER_TUNNEL_VARS = new Set([
   "THERMITE_TUNNEL_DIR",
   "THERMITE_TUNNEL_CONTROL_KEY_SHA256",
 ]);
+const LEAF_VARS = new Set<string>(Object.values(LEAF_ENV));
 export const isSupervisorOnly = (name: string): boolean =>
-  name.startsWith("THERMITE_TUNNEL_") && !CONTROLLER_TUNNEL_VARS.has(name);
+  (name.startsWith("THERMITE_TUNNEL_") && !CONTROLLER_TUNNEL_VARS.has(name)) || LEAF_VARS.has(name);
 
 /** The names rig.env may set: the rig's ID, and the settings control gives a rig at enrollment. */
 export const ENROLLED_SETTINGS: readonly string[] = ["THERMITE_RIG_ID", ...POD_CONFIG_ENV];
@@ -313,16 +366,4 @@ export function writeControlKey(file: string, pem: string, uid = 0): void {
   writeFileSync(tmp, pem, { mode: 0o644, flag: "wx" });
   chmodSync(tmp, 0o644);
   renameSync(tmp, file);
-}
-
-/**
- * When to start a part again after it exited (the controller, or the supervisor): after a second
- * if it had run for more than a minute, otherwise twice as long as the last time, up to 30 s.
- */
-export function restartAfter(
-  ranMs: number,
-  restarts: number,
-): { restarts: number; delayMs: number } {
-  const next = ranMs > 60_000 ? 0 : restarts + 1;
-  return { restarts: next, delayMs: Math.min(30_000, 1000 * 2 ** Math.min(next, 5)) };
 }

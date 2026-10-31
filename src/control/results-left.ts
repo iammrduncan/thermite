@@ -1,4 +1,4 @@
-import type { ControlStore } from "./store.ts";
+import type { ControlStore } from "./store/index.ts";
 
 /**
  * Whether a rig's results have left it: what a terminate (goal 023) or a full reset waits for.
@@ -47,7 +47,7 @@ interface SupervisorExport {
 }
 
 function exportFigures(store: ControlStore, rig: string) {
-  const sup = store.supervisor(rig);
+  const sup = store.reportedRigs.supervisor(rig);
   const ex = (sup?.export ?? null) as SupervisorExport | null;
   const to: ResultsDestination | null =
     ex?.remote === true ? "repository" : ex?.to === "control" ? "control" : null;
@@ -82,7 +82,7 @@ export function exportLeft(store: ControlStore, rig: string, name: string): Expo
   }
   if (to === "control") {
     // Control's own copy is the evidence, not the supervisor's word.
-    const e = store.rigExport(rig, name);
+    const e = store.exports.get(rig, name);
     if (!e?.complete_at)
       return {
         left: false,
@@ -158,4 +158,29 @@ export function resultsLeft(
     true,
     `every export has left the rig: they are ${to === "repository" ? "in the results repository" : "on control"}`,
   );
+}
+
+/** What a remove waits for, as a rig's page says it. */
+export const removeWords = (rig: string) =>
+  `Control removes it only once every result has left it: use Export first, and wait until the export has left. If its results can't leave, type "discard ${rig}" instead, and they are lost.`;
+
+/** What a typed confirmation lets a remove do: refused, or go on, discarding what had not left. */
+export type RemoveCheck = { refused: string } | { discarded: string | null };
+
+/**
+ * Whether a rig control set up may be removed, with its volumes and files (goal 165): only once
+ * every result has left it, as a terminate or a full reset waits for. `discard <rig>` removes a
+ * rig whose results can't leave, such as one whose supervisor is broken; `discarded` then says
+ * what had not left, for the audit log.
+ */
+export function removeCheck(store: ControlStore, rig: string, typed: string): RemoveCheck {
+  const discard = typed === `discard ${rig}`;
+  if (!discard && typed !== `remove ${rig}`)
+    return { refused: `Type "remove ${rig}" to remove it.` };
+  const all = resultsLeft(store, rig);
+  if (all.left) return { discarded: null };
+  if (discard) return { discarded: all.why };
+  return {
+    refused: `${rig} still holds results: ${all.why}. Use Export on its page, and remove it once they have left. If they can't leave, such as when its supervisor is broken, type "discard ${rig}" to remove it and lose them.`,
+  };
 }

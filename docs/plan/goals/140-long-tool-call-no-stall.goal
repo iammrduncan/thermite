@@ -36,7 +36,7 @@ One long tool call stopped a rig's supervisor for 75 minutes. During that time, 
 
 ## Done when
 
-- [x] The install script, the images' builds and the test (`src/core/pi-ai-patch.test.ts`).
+- [x] The install script, the images' builds and the test (`tests/scripts/patch-pi-ai.test.ts`).
 - [x] CREDITS says that Thermite patches pi-ai's parser.
 - [ ] Rolled to the lab's rigs. The rig's supervisor does not stall again on a long tool call.
 
@@ -51,7 +51,7 @@ One long tool call stopped a rig's supervisor for 75 minutes. During that time, 
 ## Progress
 
 - 2026-10-25 13:34 UTC: Goal written from the supervisor's CPU profile on the lab, taken before its restart at 13:28.
-- 2026-10-25 14:49 UTC: Built and tested (`scripts/patch-pi-ai.mjs`, `src/core/pi-ai-patch.test.ts`, the three Containerfiles, CREDITS). The lab's rig images carry the patch: each image's `json-parse.js` was read from its layers. Two of the lab's four rigs run it, the one whose supervisor stalled among them. The two rigs with research runs keep their images until a move costs their lanes little: control can't yet update a rig's supervisor alone.
+- 2026-10-25 14:49 UTC: Built and tested (`scripts/patch-pi-ai.mjs`, `tests/core/pi-ai-patch.test.ts`, the three Containerfiles, CREDITS). The lab's rig images carry the patch: each image's `json-parse.js` was read from its layers. Two of the lab's four rigs run it, the one whose supervisor stalled among them. The two rigs with research runs keep their images until a move costs their lanes little: control can't yet update a rig's supervisor alone.
 
 ---
 

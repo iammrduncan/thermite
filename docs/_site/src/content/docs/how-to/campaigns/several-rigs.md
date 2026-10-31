@@ -31,7 +31,7 @@ This works for a campaign made on the **New campaign** page, which runs its late
 
 Every run must start from the same commit, as **Start a run** does: a rig can take another rig's champion only when it has the commit that champion started from.
 
-The campaign's page then shows each running run as a card under **At work now**, and paused, completed and finished runs under **Earlier runs**. Each run has its own page: press its name.
+The campaign's page then shows each running run as a card under **At work now**, and paused, completed and finished runs under **Earlier runs**, with the runs of a retired rig and those from before a rig's full reset. Each run has its own page: press its name.
 
 ## 2. Publish a champion
 
@@ -40,12 +40,12 @@ A champion beyond the starting point can be sent once its rig has published it, 
 ## 3. Send the champion to another rig
 
 1. Open the page of the run that has the champion, and its **Planner** tab. Its **Other rigs** card shows once the run has published a champion.
-2. Beside **Send champion #N**, choose the receiving run, shown as `<rig> / <run>`. The list holds other rigs' runs of the same campaign.
+2. Beside **Send champion #N**, choose the receiving run, shown as `<run> on <rig>`. The list holds other rigs' runs of the same campaign.
 3. Press **Send champion #N**.
 
 The dashboard opens the receiving run's page. The receiving run must be running when the champion arrives: if it is paused or finished, the command fails, and **Commands** in the sidebar shows the reason, such as `run sort-speed-1 is paused`. Resume the run, then send the champion again.
 
-You can also send it with the owner's token over the REST API, `POST /v1/propagate` with `{"from_rig": "local-1", "run": "sort-speed-1", "to_rig": "local-2", "to_run": "sort-speed-1"}`, or with the MCP tool `propagate_champion` and the same four fields. `run` and `to_run` are each run's name on its own rig, as the list beside **Send champion #N** shows them. **Start a run** numbers runs on each rig on its own, so the campaign's first run on `local-2` is `sort-speed-1` too.
+You can also send it with the owner's token over the REST API, `POST /v1/propagate` with `{"run": "sort-speed-1", "to_run": "sort-speed-2"}`, or with the MCP tool `propagate_champion` and the same two fields. `run` and `to_run` are the two runs' names, as the list beside **Send champion #N** shows them. A run's name is used once on control, on every rig: **Start a run** numbers a campaign's runs across all its rigs, so the run on `local-2` is `sort-speed-2`, and control knows the rig each run is on.
 
 ## 4. Check the result
 

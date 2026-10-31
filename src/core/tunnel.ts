@@ -11,10 +11,10 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
-import { join } from "node:path";
 import { z } from "zod";
 import { canonicalJson } from "./canonical.ts";
 import { signJson, verifyJson } from "./commands.ts";
+import { joinPath } from "./paths.ts";
 
 /**
  * The tunnel between control and a rig in pull mode: a rig control connects to, through a public
@@ -153,11 +153,20 @@ export function verifyAnswer(
 const rawX25519 = (pem: string) =>
   createPublicKey(pem).export({ type: "spki", format: "der" }).subarray(-32);
 
+/** What the tunnel's sealed bodies are bound to: a body sealed for another use never opens here. */
+const TUNNEL_SEAL_LABEL = `${TUNNEL_VERSION} seal`;
+
 /**
  * Seals bytes to a recipient's X25519 public key: a fresh key for each message, so only the
  * recipient's private key opens it. Out: ephemeral public (32) | iv (12) | tag (16) | ciphertext.
+ * `label` binds it to its use: `open` needs the same label, so a body sealed for one use can't
+ * pass for another's (the tunnel's own by default; the message bus's config has its own).
  */
-export function seal(plain: Buffer, recipientBoxPublicPem: string): Buffer {
+export function seal(
+  plain: Buffer,
+  recipientBoxPublicPem: string,
+  label: string = TUNNEL_SEAL_LABEL,
+): Buffer {
   const eph = generateKeyPairSync("x25519");
   const shared = diffieHellman({
     privateKey: eph.privateKey,
@@ -169,7 +178,7 @@ export function seal(plain: Buffer, recipientBoxPublicPem: string): Buffer {
       "sha256",
       shared,
       Buffer.concat([ephRaw, rawX25519(recipientBoxPublicPem)]),
-      `${TUNNEL_VERSION} seal`,
+      label,
       32,
     ),
   );
@@ -179,8 +188,15 @@ export function seal(plain: Buffer, recipientBoxPublicPem: string): Buffer {
   return Buffer.concat([ephRaw, iv, cipher.getAuthTag(), ct]);
 }
 
-/** Opens what `seal` made for this key. Throws when it was changed or meant for another key. */
-export function open(sealed: Buffer, boxPrivatePem: string): Buffer {
+/**
+ * Opens what `seal` made for this key, with the same label. Throws when it was changed, or meant
+ * for another key or another use.
+ */
+export function open(
+  sealed: Buffer,
+  boxPrivatePem: string,
+  label: string = TUNNEL_SEAL_LABEL,
+): Buffer {
   if (sealed.length < 60) throw new Error("sealed data is too short");
   const priv = createPrivateKey(boxPrivatePem);
   const ownRaw = createPublicKey(priv).export({ type: "spki", format: "der" }).subarray(-32);
@@ -191,9 +207,7 @@ export function open(sealed: Buffer, boxPrivatePem: string): Buffer {
     privateKey: priv,
     publicKey: createPublicKey({ key: ephDer, format: "der", type: "spki" }),
   });
-  const key = Buffer.from(
-    hkdfSync("sha256", shared, Buffer.concat([ephRaw, ownRaw]), `${TUNNEL_VERSION} seal`, 32),
-  );
+  const key = Buffer.from(hkdfSync("sha256", shared, Buffer.concat([ephRaw, ownRaw]), label, 32));
   const decipher = createDecipheriv("aes-256-gcm", key, sealed.subarray(32, 44));
   decipher.setAuthTag(sealed.subarray(44, 60));
   return Buffer.concat([decipher.update(sealed.subarray(60)), decipher.final()]);
@@ -339,7 +353,7 @@ export interface PodLaunchEnv {
 export const ENROLLED_FILES = {
   /**
    * Control's command-signing public key. In the one-container rig image, root checks it against
-   * the launch's SHA-256 and gives the harness a copy of its own (src/harness/broker.ts).
+   * the launch's SHA-256 and gives the harness a copy of its own (src/harness/broker/).
    */
   controlKey: "control.pub",
   /** The rig and its settings from control, as JSON. */
@@ -358,7 +372,7 @@ export function podTunnelDirs(
   home: string,
 ): { dir: string; enrolledDir: string } {
   return {
-    dir: env.THERMITE_TUNNEL_DIR || join(home, "tunnel"),
-    enrolledDir: env.THERMITE_TUNNEL_ENROLLED_DIR || join(home, "enrolled"),
+    dir: env.THERMITE_TUNNEL_DIR || joinPath(home, "tunnel"),
+    enrolledDir: env.THERMITE_TUNNEL_ENROLLED_DIR || joinPath(home, "enrolled"),
   };
 }

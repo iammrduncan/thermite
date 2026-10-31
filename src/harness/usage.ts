@@ -1,3 +1,4 @@
+import type { ModelConfig } from "../agents/model/index.ts";
 import {
   type CallContext,
   CallUsage,
@@ -6,8 +7,7 @@ import {
   type UsageHarness,
   type UsageRoute,
 } from "../core/usage.ts";
-import type { ModelConfig } from "./agents/model.ts";
-import { type Ledger, LedgerError } from "./ledger.ts";
+import { type Ledger, LedgerError } from "./ledger/index.ts";
 
 /**
  * The rig's record of its agents' model usage (goal 075): one `model_call` event for each record,
@@ -91,7 +91,7 @@ export class ModelUsage {
 
   /** The supervisor's records of one advisor's calls in a run; returns how many were recorded. */
   fromSupervisor(run: string, ctx: CallContext, calls: readonly CallUsage[]): number {
-    if (!this.ledger.getRun(run)) throw new LedgerError("not_found", `no run ${run}`);
+    if (!this.ledger.runs.get(run)) throw new LedgerError("not_found", `no run ${run}`);
     this.ledger.tx(() => {
       for (const u of calls) this.record("supervisor", run, ctx, u);
     });

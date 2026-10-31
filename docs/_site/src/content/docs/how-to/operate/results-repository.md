@@ -82,7 +82,7 @@ From now on, name every override file you use, each with its own `-f`, on every 
 `THERMITE_RESULTS_KNOWN_HOSTS` works only together with `THERMITE_RESULTS_KEY_FILE`. With the key file but no known hosts file, the supervisor trusts the first key the host shows and keeps it in its volume. With no key file, git uses plain SSH defaults, and a host it doesn't know fails. There is no setting for an HTTPS token.
 :::
 
-The deploy key has a second use: the supervisor also fetches a campaign's project or kit over SSH with it, and with the known hosts file, when their source names no [Git access](../campaigns/private-repository.md). If you add this key to a project's or kit's repository for that, give it read access only there. For private repositories, a Git access is the usual way.
+The deploy key is for the results repository alone: the supervisor fetches a campaign's project or kit whose source names no Git access with no key. For a private project or kit, add a [Git access](../campaigns/private-repository.md).
 
 ## 4. See that pushes work
 
@@ -118,7 +118,7 @@ Each rig has two branches. Commits are made by `thermite <thermite@localhost>`.
 | | `journal/<export>.jsonl` | The [field notes](../../explanation/journals-and-knowledge.md) the agents recorded since the last export, one per line: the short notes the workers, the planner and the advisors keep as they work. Every export has this file, empty when there are none |
 | | `research-notes/<export>.jsonl` | The research notes recorded since the last export, each with the sources it cites. Only when there are some |
 | | `briefing/<export>.jsonl` | For each run created since the last export, its briefing: the background from past research that you picked when you started it ([Use past research in a new run](../campaigns/use-past-research.md)). Only when there is one |
-| | `knowledge/<export>.jsonl` | The runs' part of their campaigns' folders in the [knowledge base](../../reference/knowledge-base.md#the-export): each item added or changed since the last export, with its run, its writer and its time. Only when there are some |
+| | `knowledge/<export>.jsonl` | The runs' part of their campaigns' collections in the [knowledge base](../../reference/knowledge-base.md#the-export): each item added or changed since the last export, with its run, its writer and its time. Only when there are some |
 | | `exports/<export>.json` | The export's manifest: each file with its SHA-256 |
 | | `research/<run>/folder/…` | The [research folder](../../explanation/campaign-modes.md#research) of each run that finished in that export: a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation. The past research in the folder's `knowledge/` is left out: those records are in their own runs' exports |
 | | `research/<run>/folder-<export>/…` | Only from a full export: the research folder of every other run that has one, finished or not, as it stood then ([Normal and full exports](../../reference/exports.md#normal-and-full-exports)) |

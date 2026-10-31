@@ -1,0 +1,448 @@
+import {
+  KB_ITEM_TYPES,
+  KB_OUTCOMES,
+  KB_OWNER,
+  type KbItemType,
+  type KbKind,
+  type KbListSort,
+  type KbOutcome,
+  kbItemType,
+} from "../../../core/kb.ts";
+import type { KbFolder, KbListAnswer } from "../../kb/index.ts";
+import type { KbCounts } from "../../store/index.ts";
+import { ago, esc, fmtInt, icon, infoLabel } from "../components/index.ts";
+import { sizeWords } from "../exports.ts";
+import { knowledgeHref } from "../urls.ts";
+import { treeHtml } from "./tree.ts";
+
+/**
+ * The Knowledge page (goal 176): an explorer of the knowledge base, laid out as a file manager.
+ * The toolbar holds the open folder's path and a one-line search; on the left, the tree of
+ * folders (tree.ts); in the middle, what the open folder holds, folders first, under one row of
+ * dropdown filters. Every fact on it comes from the owner's reads that REST and MCP also give:
+ * kb_list for the folders, the items and the counts, kb_search for a search, kb_read for an item.
+ * Agents' text is escaped, never markup, and the only links an item gets here are to its own page.
+ */
+
+/** What the page's address asks: a search's words, the filters, the sort and the page. */
+export interface ExplorerQuery {
+  q: string;
+  kinds: KbKind[];
+  outcomes: KbOutcome[];
+  types: KbItemType[];
+  slots: string[];
+  sort: KbListSort | undefined;
+  order: "asc" | "desc" | undefined;
+  offset: number;
+  /** Where a search looks: the open folder (the default), or everything. */
+  scope?: "folder" | "everything" | undefined;
+  /** Search as this run's agents do (its kb_search); none: as the owner. */
+  as?: string | undefined;
+  /** The item in the preview pane, by its address, and its version (none: its newest). */
+  item?: string | undefined;
+  version?: number | undefined;
+}
+
+/** An address that asks for nothing: the open folder's list, as it comes. */
+export const EMPTY_QUERY: ExplorerQuery = {
+  q: "",
+  kinds: [],
+  outcomes: [],
+  types: [],
+  slots: [],
+  sort: undefined,
+  order: undefined,
+  offset: 0,
+};
+
+/** One hit of a search, as the owner's search gives it. */
+export interface ExplorerHit {
+  address: string;
+  title: string;
+  kind: string;
+  outcome: string | null;
+  slot: string;
+  at: string;
+  excerpt: string;
+  /** Why it matched, in words (the words search's own: which words, in its title, text or context). */
+  why?: string | undefined;
+  file: { bytes: number } | null;
+  /** Why its evidence was withdrawn; none when it stands, or a search did not say. */
+  withdrawn?: string | null | undefined;
+}
+
+/** A search of the open folder, as the owner's search answers it, or why it was refused. */
+export interface ExplorerSearch {
+  matched: number;
+  next_offset: number | null;
+  counts: Pick<KbCounts, "kind" | "outcome" | "slot">;
+  hits: ExplorerHit[];
+  /** For each word no item holds: words close to it that some do. */
+  did_you_mean?: { word: string; try: { word: string; items: number }[] }[] | undefined;
+  error?: string | undefined;
+}
+
+/** A run the search can be made as: a running run, by its name, with its collection. */
+export interface ExplorerRun {
+  run: string;
+  collection: string;
+}
+
+/** The contents' facts: the open folder, and its list or its search. */
+export interface ExplorerPage {
+  /** The open folder, as kb_list gives it (the whole knowledge base at the root). */
+  place: KbFolder;
+  query: ExplorerQuery;
+  list?: KbListAnswer | undefined;
+  search?: ExplorerSearch | undefined;
+  /** How many items a page holds: the list's, or the search's. */
+  pageSize: number;
+  now: number;
+}
+
+const FACETS = ["kind", "outcome", "type", "slot"] as const;
+type Facet = (typeof FACETS)[number];
+const FACET_LABEL: Record<Facet, string> = {
+  kind: "Kind",
+  outcome: "Outcome",
+  type: "Type",
+  slot: "Writer",
+};
+const FACET_TIP: Record<Facet, string> = {
+  kind: "What the item is, such as an experiment, an attempt, a note or a finding. Pick one or more: an item of any of them shows.",
+  outcome:
+    "How an experiment or an attempt ended, from Thermite's records: won, screened (being confirmed), regress (worse than the champion), neutral (no better), broken, unclear (no answer about the change), dropped by the planner, or open (no outcome yet). Other items have none.",
+  type: "Records: what Thermite's code wrote about a run. Blurbs: short texts an agent wrote. Files: documents kept whole.",
+  slot: "Who wrote the item: records (Thermite's code), or the agent's slot, such as planner or worker-1.",
+};
+const TYPE_WORD: Record<KbItemType, string> = {
+  record: "records",
+  blurb: "blurbs",
+  file: "files",
+};
+export const TYPE_ICON: Record<KbItemType, string> = {
+  record: icon.record,
+  blurb: icon.blurb,
+  file: icon.doc,
+};
+const LEVEL_WORD: Record<KbFolder["level"], [string, string]> = {
+  knowledge_base: ["Knowledge base", "knowledge bases"],
+  collection: ["Collection", "collections"],
+  run: ["Run", "runs"],
+  slot: ["Slot", "slots"],
+};
+/** The folders a level holds. */
+const CHILD_LEVEL: Record<KbFolder["level"], KbFolder["level"]> = {
+  knowledge_base: "collection",
+  collection: "run",
+  run: "slot",
+  slot: "slot",
+};
+/** An outcome's chip tone, as the dashboard's other chips say good, bad and waiting. */
+const OUTCOME_TONE: Record<string, string> = {
+  won: "ok",
+  screened: "info",
+  regress: "bad",
+  broken: "bad kx-broken",
+  unclear: "warn",
+  dropped: "kx-dim",
+};
+/** An item's outcome as a small coloured chip. */
+export const outcomeChip = (outcome: string) =>
+  `<span class="chip ${OUTCOME_TONE[outcome] ?? ""}">${esc(outcome)}</span>`;
+
+const SORT_WORD: Record<KbListSort, string> = {
+  name: "Name",
+  kind: "Kind",
+  outcome: "Outcome",
+  writer: "Writer",
+  modified: "Modified",
+  size: "Size",
+};
+/** The order a column sorts in when first pressed. */
+const firstOrder = (k: KbListSort): "asc" | "desc" =>
+  k === "modified" || k === "size" ? "desc" : "asc";
+
+const values = (q: ExplorerQuery, f: Facet): readonly string[] =>
+  f === "kind" ? q.kinds : f === "outcome" ? q.outcomes : f === "type" ? q.types : q.slots;
+
+/** The page's address for a folder (or an item) with these words, filters, sort and page. */
+export function explorerHref(path: string, q: ExplorerQuery): string {
+  const p = new URLSearchParams();
+  if (q.q.trim()) p.set("q", q.q);
+  if (q.scope === "everything") p.set("scope", "everything");
+  if (q.as) p.set("as", q.as);
+  for (const f of FACETS) if (values(q, f).length) p.set(f, values(q, f).join(","));
+  if (q.sort) p.set("sort", q.sort);
+  if (q.order) p.set("order", q.order);
+  if (q.offset) p.set("offset", String(q.offset));
+  if (q.item) p.set("item", q.item);
+  if (q.item && q.version) p.set("version", String(q.version));
+  const s = p.toString();
+  return `${knowledgeHref(path)}${s ? `?${s}` : ""}`;
+}
+
+const withFacet = (q: ExplorerQuery, f: Facet, vs: string[]): ExplorerQuery => ({
+  ...q,
+  offset: 0,
+  ...(f === "kind"
+    ? { kinds: vs as KbKind[] }
+    : f === "outcome"
+      ? { outcomes: vs as KbOutcome[] }
+      : f === "type"
+        ? { types: vs as KbItemType[] }
+        : { slots: vs }),
+});
+
+/** A path's crumbs: Knowledge, then each part of the open folder, each a link. */
+export function crumbsHtml(parts: { path: string; name: string }[], current: string): string {
+  const all = [{ path: "", name: "Knowledge" }, ...parts];
+  return `<nav class="kx-crumbs" aria-label="Folder path">${all
+    .map(
+      (c, i) =>
+        `${i ? `<span class="kx-sep" aria-hidden="true">›</span>` : ""}<a href="${esc(knowledgeHref(c.path))}"${c.path === current ? ` aria-current="page"` : ""}>${esc(c.name)}</a>`,
+    )
+    .join("")}</nav>`;
+}
+
+const SCOPE_TIP =
+  "This folder: the open collection, run or slot, and what is under it. Everything: every collection, or, searching as a run, all that the run reads.";
+const AS_TIP =
+  "You: every collection, as the owner reads them. A running run: what its agents' kb_search gives, from the run's own scope (its collection, or its own run when it started fresh, and the grants it includes), the same answer, in the same order.";
+
+/**
+ * The toolbar's search: one line, which searches the open folder or everything, as the owner or as
+ * a running run's agents; the filters stay.
+ */
+function searchHtml(folder: string, q: ExplorerQuery, runs: readonly ExplorerRun[]): string {
+  const kept = FACETS.filter((f) => values(q, f).length)
+    .map((f) => `<input type="hidden" name="${f}" value="${esc(values(q, f).join(","))}">`)
+    .join("");
+  const searching = q.q.trim() || q.as;
+  const clear = searching
+    ? `<a class="kx-qx" href="${esc(explorerHref(folder, { ...q, q: "", as: undefined, scope: undefined, offset: 0 }))}" aria-label="Clear the search">${icon.x}</a>`
+    : "";
+  const opt = (v: string, label: string, on: boolean) =>
+    `<option value="${esc(v)}"${on ? " selected" : ""}>${esc(label)}</option>`;
+  const everything = q.scope === "everything";
+  const scope = `<label class="kx-scope">${infoLabel("In", SCOPE_TIP)}<select name="scope" aria-label="Where to search">${opt("folder", "This folder", !everything)}${opt("everything", "Everything", everything)}</select></label>`;
+  const listed = runs.some((r) => r.run === q.as);
+  const as = `<label class="kx-as">${infoLabel("As", AS_TIP)}<select name="as" aria-label="Search as">${opt("", "you", !q.as)}${runs.map((r) => opt(r.run, `${r.run} (${r.collection})`, r.run === q.as)).join("")}${q.as && !listed ? opt(q.as, `${q.as} (not running)`, true) : ""}</select></label>`;
+  return `<form class="kx-search" role="search" method="get" action="${esc(knowledgeHref(folder))}"><span class="kx-field">${icon.search}<input type="search" name="q" value="${esc(q.q)}" placeholder="Search" aria-label="Search" maxlength="300" autocomplete="off">${clear}${scope}</span>${as}${kept}<noscript><button class="sm">Search</button></noscript></form>`;
+}
+
+/** The page around its main part: the toolbar, the tree, and the main part. */
+export function explorerFrame(o: {
+  crumbs: string;
+  folder: string;
+  query: ExplorerQuery;
+  collections: readonly KbFolder[];
+  kids: ReadonlyMap<string, readonly KbFolder[]>;
+  current: string;
+  main: string;
+  /** The preview pane, on the right of the table (item.ts). */
+  pane?: string | undefined;
+  /** The running runs the search can be made as. */
+  runs?: readonly ExplorerRun[] | undefined;
+}): string {
+  return `<div class="kx" data-folders="closed">
+<div class="kx-bar">${o.crumbs}${searchHtml(o.folder, o.query, o.runs ?? [])}<a class="btn sm ghost kx-storedbtn" href="/ui/kb/stored">What's stored</a></div>
+<div class="kx-body">${treeHtml(o.collections, o.kids, o.current)}<section class="kx-main" aria-label="Contents">${o.main}</section>${o.pane ?? ""}</div>
+</div><script src="/ui/assets/knowledge.js" defer></script>`;
+}
+
+/** One dropdown filter: its button, and a popover with a checkbox for each value and its count. */
+function facetHtml(
+  p: ExplorerPage,
+  f: Facet,
+  options: { value: string; label: string; n?: number | undefined }[],
+): string {
+  const picked = values(p.query, f);
+  const clear = picked.length
+    ? `<a class="kx-clear" href="${esc(explorerHref(p.place.path, withFacet(p.query, f, [])))}">Clear</a>`
+    : "";
+  const rows = options
+    .map(
+      (o) =>
+        `<label class="kx-opt${o.n === 0 ? " zero" : ""}"><input type="checkbox" name="${f}" value="${esc(o.value)}"${picked.includes(o.value) ? " checked" : ""}><span class="${f === "outcome" ? `chip ${OUTCOME_TONE[o.value] ?? ""}` : "lbl"}">${esc(o.label)}</span><span class="n">${o.n === undefined ? "" : fmtInt(o.n)}</span></label>`,
+    )
+    .join("");
+  return `<details class="kx-dd" data-dd="${f}"><summary class="kx-ddb${picked.length ? " on" : ""}">${esc(FACET_LABEL[f])}${picked.length ? `<span class="kx-badge">${picked.length}</span>` : ""}${icon.down}</summary><div class="menu-pop kx-pop" role="group" aria-label="Filter by ${esc(FACET_LABEL[f].toLowerCase())}"><div class="kx-pophead">${infoLabel(FACET_LABEL[f], FACET_TIP[f])}${clear}</div>${rows || `<div class="muted small">None here</div>`}<noscript><button class="sm">Apply</button></noscript></div></details>`;
+}
+
+/** Each filter's values and counts, picked ones too: the list's, or where a search's words land. */
+function facetOptions(
+  p: ExplorerPage,
+  f: Facet,
+): { value: string; label: string; n?: number | undefined }[] {
+  const counts: Record<string, number> =
+    (p.search ? p.search.counts[f as "kind" | "outcome" | "slot"] : p.list?.counts[f]) ?? {};
+  const picked = values(p.query, f);
+  if (f === "outcome") return KB_OUTCOMES.map((v) => ({ value: v, label: v, n: counts[v] ?? 0 }));
+  // A search counts no types: its Type filter shows none.
+  if (f === "type")
+    return KB_ITEM_TYPES.map((v) => ({
+      value: v,
+      label: TYPE_WORD[v],
+      n: p.search ? undefined : (counts[v] ?? 0),
+    }));
+  const names = [...new Set([...Object.keys(counts), ...picked])].filter((v) => v !== "other");
+  const sorted =
+    f === "slot"
+      ? names.sort(
+          (a, b) =>
+            Number(b === "records") - Number(a === "records") ||
+            a.localeCompare(b, "en", { numeric: true }),
+        )
+      : names.sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b));
+  return sorted.map((v) => ({ value: v, label: v, n: counts[v] ?? 0 }));
+}
+
+/** The row of filters: Folders (at phone width), the dropdowns, the picks as chips, the count. */
+function filterRow(p: ExplorerPage, count: string): string {
+  const q = p.query;
+  const shown = FACETS;
+  const chips = shown
+    .flatMap((f) =>
+      values(q, f).map((v) => {
+        const label = `${FACET_LABEL[f]}: ${f === "type" ? TYPE_WORD[v as KbItemType] : v}`;
+        const href = explorerHref(
+          p.place.path,
+          withFacet(
+            q,
+            f,
+            values(q, f).filter((x) => x !== v),
+          ),
+        );
+        return `<a class="kx-chip" href="${esc(href)}" aria-label="Remove the filter ${esc(label)}"><span>${esc(label)}</span>${icon.x}</a>`;
+      }),
+    )
+    .join("");
+  const any = shown.some((f) => values(q, f).length);
+  const none: ExplorerQuery = { ...q, kinds: [], outcomes: [], types: [], slots: [], offset: 0 };
+  const keep = [
+    q.q.trim() ? `<input type="hidden" name="q" value="${esc(q.q)}">` : "",
+    q.sort ? `<input type="hidden" name="sort" value="${esc(q.sort)}">` : "",
+    q.order ? `<input type="hidden" name="order" value="${esc(q.order)}">` : "",
+    q.scope === "everything" ? `<input type="hidden" name="scope" value="everything">` : "",
+    q.as ? `<input type="hidden" name="as" value="${esc(q.as)}">` : "",
+  ].join("");
+  const best = p.search
+    ? `<span class="kx-best">${infoLabel("Best match", "A search lists the best match first: an item with more of the words, and rarer ones, comes first, and a word in its title counts most. The columns sort a folder's list, not a search.")}</span>`
+    : "";
+  return `<form class="kx-filters" method="get" action="${esc(knowledgeHref(p.place.path))}">${keep}<button type="button" class="kx-foldbtn" aria-controls="kx-tree" aria-expanded="false">${icon.folder}<span>Folders</span>${icon.down}</button><button type="button" class="kx-infobtn" aria-controls="kx-prev" aria-expanded="false">${icon.file}<span>Info</span></button>${shown.map((f) => facetHtml(p, f, facetOptions(p, f))).join("")}${chips}${any ? `<a class="kx-clearall" href="${esc(explorerHref(p.place.path, none))}">Clear</a>` : ""}${best}<span class="kx-count" role="status">${esc(count)}</span></form>`;
+}
+
+/** A column's header: a link that sorts by it, with ▲ or ▼ on the column it sorts by now. */
+function head(p: ExplorerPage, k: KbListSort, cls: string, sortable: boolean): string {
+  if (!sortable) return `<th class="${cls}">${SORT_WORD[k]}</th>`;
+  const sort = p.query.sort ?? "modified";
+  const order = p.query.order ?? firstOrder(sort);
+  const on = sort === k;
+  const next: ExplorerQuery = {
+    ...p.query,
+    sort: k,
+    order: on ? (order === "asc" ? "desc" : "asc") : firstOrder(k),
+    offset: 0,
+  };
+  return `<th class="${cls}" aria-sort="${on ? (order === "asc" ? "ascending" : "descending") : "none"}"><a href="${esc(explorerHref(p.place.path, next))}">${SORT_WORD[k]}${on ? `<span class="kx-arrow" aria-hidden="true">${order === "asc" ? "▲" : "▼"}</span>` : ""}</a></th>`;
+}
+
+const when = (iso: string | null, now: number) =>
+  iso ? `<span title="${esc(iso)}">${esc(ago(iso, now))} ago</span>` : "";
+
+/** A folder's row: its name with its tags, its level, and its newest change. */
+function folderRow(f: KbFolder, now: number): string {
+  const href = esc(knowledgeHref(f.path));
+  const tags = [
+    f.archived ? `<span class="kx-tag">archived</span>` : "",
+    f.running ? `<span class="dot ok" role="img" aria-label="running"></span>` : "",
+    f.fresh ? `<span class="kx-tag">fresh</span>` : "",
+  ].join("");
+  return `<tr data-href="${href}"${f.archived ? ` class="dim"` : ""}><td class="c-name"><span class="kx-cell">${icon.folder}<span class="kx-title"><span class="kx-line"><a href="${href}">${esc(f.name)}</a>${tags}</span></span></span></td><td class="c-kind">${LEVEL_WORD[f.level][0]}</td><td class="c-out"></td><td class="c-writer">${f.writer ? esc(f.writer) : ""}</td><td class="c-mod">${when(f.updated_at, now)}</td><td class="c-size num"></td></tr>`;
+}
+
+/** A search's excerpt: escaped, then each word it matched (between ** and **) marked. */
+const markedExcerpt = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, "<mark>$1</mark>");
+
+/**
+ * An item's row: its type's icon, its title, which opens it in the preview pane, with its address
+ * under it, its kind, outcome, writer, newest change and a file's size.
+ */
+function itemRow(x: ExplorerHit, p: ExplorerPage): string {
+  const href = esc(explorerHref(p.place.path, { ...p.query, item: x.address, version: undefined }));
+  const type = kbItemType(x);
+  const out = x.outcome ? outcomeChip(x.outcome) : "";
+  const wd = x.withdrawn
+    ? `<span class="kx-wd" role="img" aria-label="Evidence withdrawn" title="${esc(x.withdrawn)}">${icon.warn}</span>`
+    : "";
+  return `<tr data-item-href="${href}"${p.query.item === x.address ? ` class="on"` : ""}><td class="c-name"><span class="kx-cell" title="${TYPE_WORD[type]}">${TYPE_ICON[type]}<span class="kx-title"><span class="kx-line"><a href="${href}" data-item>${esc(x.title || x.address)}</a>${wd}</span><span class="kx-addr">${esc(x.address)}</span>${x.excerpt ? `<span class="kx-snip">${markedExcerpt(x.excerpt)}</span>` : ""}${x.why ? `<span class="kx-why">${esc(x.why)}</span>` : ""}</span></span></td><td class="c-kind">${esc(x.kind)}</td><td class="c-out">${out}</td><td class="c-writer">${x.slot === KB_OWNER ? "you" : esc(x.slot)}</td><td class="c-mod">${when(x.at, p.now)}</td><td class="c-size num">${x.file ? esc(sizeWords(x.file.bytes)) : ""}</td></tr>`;
+}
+
+const plural = (n: number, w: [string, string]) =>
+  `${fmtInt(n)} ${n === 1 ? w[0].toLowerCase() : w[1]}`;
+
+/** Where the open folder is, in words, for a search's count. */
+const folderWords = (f: KbFolder) => (f.level === "knowledge_base" ? "the knowledge base" : f.path);
+
+/** The open folder's contents: the filter row, the table, and the pages. */
+export function contentsHtml(p: ExplorerPage): string {
+  const q = p.query;
+  const filtered = FACETS.some((f) => values(q, f).length);
+  const folders = !p.search && !filtered && p.place.level !== "slot" ? p.list?.folders : undefined;
+  let count = "";
+  let rows = "";
+  let empty = "";
+  let matched = 0;
+  let next: number | null = null;
+  if (p.search) {
+    matched = p.search.matched;
+    next = p.search.next_offset;
+    const where = q.scope === "everything" ? "everything" : folderWords(p.place);
+    count = `${fmtInt(matched)} ${matched === 1 ? "result" : "results"} in ${where}${q.as ? ` as ${q.as}` : ""}`;
+    rows = p.search.hits.map((h) => itemRow(h, p)).join("");
+    empty = p.search.error ?? "No items match.";
+  } else if (folders && p.list) {
+    const child = LEVEL_WORD[CHILD_LEVEL[p.place.level]];
+    count = `${plural(folders.length, child)} · ${plural(p.list.total, ["item", "items"])}`;
+    rows = folders.map((f) => folderRow(f, p.now)).join("");
+    empty = "Empty.";
+  } else if (p.list) {
+    matched = p.list.matched;
+    next = p.list.next_offset;
+    count = filtered
+      ? `${fmtInt(matched)} of ${plural(p.list.total, ["item", "items"])}`
+      : plural(p.list.total, ["item", "items"]);
+    rows = p.list.items.map((x) => itemRow({ ...x, excerpt: "" }, p)).join("");
+    empty = filtered ? "No items match the filters." : "Empty.";
+  }
+  const sortable = !p.search;
+  const table = `<div class="kx-scroll"><table class="kx-table"><thead><tr>${head(p, "name", "c-name", sortable)}${head(p, "kind", "c-kind", sortable && !folders)}${head(p, "outcome", "c-out", sortable && !folders)}${head(p, "writer", "c-writer", sortable && !folders)}${head(p, "modified", "c-mod", sortable)}${head(p, "size", "c-size num", sortable && !folders)}</tr></thead><tbody>${rows || `<tr><td colspan="6" class="empty">${esc(empty)}</td></tr>`}</tbody></table>${folders ? "" : pager(p, matched, next)}</div>`;
+  return `${filterRow(p, count)}${p.search ? didYouMean(p) : ""}${table}`;
+}
+
+/**
+ * "Did you mean …?": the search's words with each word no item holds put as the closest word
+ * some do, one click away; none when every word is held.
+ */
+function didYouMean(p: ExplorerPage): string {
+  const swaps = new Map(
+    (p.search?.did_you_mean ?? []).flatMap((d) =>
+      d.try[0] ? [[d.word.toLowerCase(), d.try[0].word] as const] : [],
+    ),
+  );
+  if (!swaps.size || !p.query.q.trim()) return "";
+  const q = p.query.q.replace(/[\p{L}\p{N}_]+/gu, (w) => swaps.get(w.toLowerCase()) ?? w);
+  if (q === p.query.q) return "";
+  const href = explorerHref(p.place.path, { ...p.query, q, offset: 0, item: undefined });
+  return `<div class="kx-dym">Did you mean <a href="${esc(href)}">${esc(q)}</a>?</div>`;
+}
+
+/** The pages of a long list: where this one is, its size, and the pages before and after it. */
+function pager(p: ExplorerPage, matched: number, next: number | null): string {
+  const from = p.query.offset;
+  const shown = (p.search?.hits.length ?? p.list?.items.length ?? 0) + from;
+  if (!matched || (from === 0 && next === null)) return "";
+  const prev = Math.max(0, from - p.pageSize);
+  return `<div class="kx-pager"><span class="muted">${fmtInt(from + 1)}–${fmtInt(shown)} of ${fmtInt(matched)} · ${p.pageSize} a page</span>${from > 0 ? `<a href="${esc(explorerHref(p.place.path, { ...p.query, offset: prev }))}">‹ Previous</a>` : ""}${next !== null ? `<a href="${esc(explorerHref(p.place.path, { ...p.query, offset: next }))}">Next ›</a>` : ""}</div>`;
+}

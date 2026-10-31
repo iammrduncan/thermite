@@ -1,5 +1,5 @@
 # A stand-in machine with systemd and rootless Podman, for testing a rig control deploys end to
-# end (scripts/rig-deploy-acceptance.mjs). Run privileged, with systemd as init, on a developer's
+# end (scripts/acceptance/rig-deploy.mjs). Run privileged, with systemd as init, on a developer's
 # machine. Tests only; never deployed. The id-mapping tools get their setuid bit back (an image
 # layer drops their file capabilities), so the user's rootless Podman can map its containers.
 FROM quay.io/fedora/fedora:41

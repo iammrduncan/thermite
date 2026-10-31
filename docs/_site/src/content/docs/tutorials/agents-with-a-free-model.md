@@ -116,7 +116,7 @@ On **4 How to measure**:
 
 1. Choose the card **Upload a kit**.
 2. Under **Kit archive**, choose the file `matmul-cpu-kit.tar.gz` in your `thermite-source` folder. Control unpacks it and checks it. The page says `matmul-cpu-kit.tar.gz: checked.`, then sums the kit up: `matmul-cpu: measures on cpu, 3 cases, scores flops_per_s.`
-3. Under **The kit's cases**, keep `small` and `large` at **Measured**, and set `held` to **Hidden test**. The judge measures every change on `small` and `large`. It runs the hidden test, `held`, only to double-check a change that already looks faster. So a change can't win by helping only the cases the agents can see.
+3. Under **The kit's cases**, keep `small` and `large` at **Measured**, and set `held` to **Hidden test**. The judge measures every change on `small` and `large`. It runs the hidden test, `held`, only to double-check a change that already looks faster: the change must give the right answer there too, and may be slower there than the champion by no more than 1%.
 4. **The score** shows `flops_per_s: a rate (FLOP/s)`: the speed of the matrix multiply, in floating-point operations a second. Keep **Better is** at **higher**, and **Smallest gain that counts (%)** at `5`. A change must be at least 5% faster to count.
 5. Press **Next**.
 
@@ -134,7 +134,7 @@ On **6 Review and start**, a sentence sums up the campaign. It starts with `matm
 
 Press **Start the campaign**. Control keeps the kit, saves the campaign, and sends its first **run** to `local-1`: this campaign at work on that rig.
 
-The campaign's page opens and says `Starting local-1/matmul-agents-1.`, then `Sent to local-1 at`, the time, and `Waiting for the rig to take it.` The rig fetches Thermite's repository from GitHub and the kit from control, and checks both. Stay on the page: once the rig reports the run, usually within a minute, the page opens the run's own page by itself, at the same address. The line at the top reads `Campaigns › matmul-agents › matmul-agents-1`, then `on local-1 · hill climb · Running`.
+The run's own page opens and says `Starting matmul-agents-1 on local-1.`, then `Sent to local-1 at`, the time, and `Waiting for the rig to take it.` The rig fetches Thermite's repository from GitHub and the kit from control, and checks both. Stay on the page: once the rig reports the run, usually within a minute, the page shows the run by itself, at the same address. The line at the top reads `Campaigns › matmul-agents › matmul-agents-1`, then `on local-1 · hill climb · Running`.
 
 Open **Campaigns** in the sidebar. Under **At work now**, a card shows `matmul-agents › matmul-agents-1`, on `local-1`: the campaign, then its run. Under **All campaigns**, the row `matmul-agents` shows your title, `Make the sample's matrix multiply faster`, and `1 at work` under **Runs**.
 
@@ -234,4 +234,5 @@ You gave a rig a free model and checked it, and started a hill climb from the **
 - [Agents, lanes and the planner](../explanation/agents-lanes-planner.md): how the planner and the workers share the work.
 - [Why agents never judge](../explanation/why-agents-never-judge.md): how the judge decides, step by step.
 - [Choose a model](../how-to/models/choose-a-model.md): other free and paid models, and models on your own machine.
+- [Free Inferencing](https://freeinferencing.com/): a list of services that give free access to models, to find more free models for your agents. A service there can need an account and a key: [Connect a model provider](../how-to/models/connect-a-provider.md) says how to add one. Free limits change often, and a free service can keep what you send it, so read its own terms before you give it your code.
 - [Verdicts and states](../reference/verdicts.md): every verdict the judge can give.

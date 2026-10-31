@@ -11,7 +11,7 @@ import {
   usageReport,
   usageSince,
 } from "../core/usage.ts";
-import type { ControlStore } from "./store.ts";
+import type { ControlStore } from "./store/index.ts";
 
 /**
  * The agents' model usage as control sums it (goal 075): for one run, for a campaign (all its runs
@@ -30,18 +30,19 @@ import type { ControlStore } from "./store.ts";
 
 const TZ_WORDS = "The time zone is a name such as Europe/Paris, America/Chicago or UTC.";
 
-/** What a reader asks for: a run (on one rig, or on any), a campaign, or neither (the system). */
+/**
+ * What a reader asks for: a run, by its name alone (goal 170), a campaign, or neither (the
+ * system).
+ */
 export const UsageQuery = z
   .strictObject({
     run: z.string().trim().min(1).max(100).optional(),
-    rig: z.string().trim().min(1).max(100).optional(),
     campaign: z.string().trim().min(1).max(200).optional(),
     period: UsagePeriod.default("all"),
     /** The time zone whose midnight starts today: an IANA name, such as Europe/Paris. */
     tz: z.string().trim().min(1).max(64).refine(knownTimeZone, { message: TZ_WORDS }).optional(),
   })
-  .refine((q) => !(q.run && q.campaign), { message: "Give a run or a campaign, not both." })
-  .refine((q) => !q.rig || q.run, { message: "A rig goes with a run: give the run too." });
+  .refine((q) => !(q.run && q.campaign), { message: "Give a run or a campaign, not both." });
 export type UsageQuery = z.input<typeof UsageQuery>;
 
 /** A query's problem in words, or undefined when it reads. */
@@ -50,7 +51,7 @@ export function usageQueryRefusal(raw: unknown): string | undefined {
   if (q.success) return undefined;
   const issue = q.error.issues[0];
   if (issue?.code === "unrecognized_keys")
-    return `It takes run, rig, campaign, period and tz, not ${issue.keys.join(", ")}.`;
+    return `It takes run, campaign, period and tz, not ${issue.keys.join(", ")}.`;
   if (issue?.code === "custom") return issue.message;
   const field = String(issue?.path[0] ?? "");
   if (field === "period") return "The period is today, 7d or all.";
@@ -66,8 +67,8 @@ export function usageQueryRefusal(raw: unknown): string | undefined {
 export function pricingOf(
   store: ControlStore,
 ): (provider: string | null, model: string, harness: string) => Pricing {
-  const providers = new Map(store.providers().map((p) => [p.name, p]));
-  const owner = new Map(store.modelPrices().map((x) => [`${x.provider}\n${x.model}`, x.price]));
+  const providers = new Map(store.modelProviders.list().map((p) => [p.name, p]));
+  const owner = new Map(store.usage.prices().map((x) => [`${x.provider}\n${x.model}`, x.price]));
   return (provider, model, harness) => {
     const p = provider ? providers.get(provider) : undefined;
     if (p?.type === "claude" || p?.type === "chatgpt" || harness === "claude-code")
@@ -98,17 +99,17 @@ export function usageData(
   if (refused) throw new Error(refused);
   const q = UsageQuery.parse(raw);
   const scope: UsageScope = q.run
-    ? { kind: "run", run: q.run, rig: q.rig ?? null }
+    ? { kind: "run", run: q.run }
     : q.campaign
       ? { kind: "campaign", campaign: q.campaign }
       : { kind: "system" };
   const tz = q.tz ?? "UTC";
   const since = usageSince(q.period, now, tz);
   const price = pricingOf(store);
-  const rows = store
-    .usageRows(scope, since)
+  const rows = store.usage
+    .rows(scope, since)
     .map((r) => ({ ...r, pricing: price(r.provider, r.model, r.harness) }));
-  const pods = store.podSpend(scope, since);
+  const pods = store.usage.podSpend(scope, since);
   return { report: usageReport(rows, scope, q.period, since, pods, tz), rows, pods };
 }
 
@@ -136,10 +137,10 @@ export interface PriceView {
 /** Every price model usage uses: the providers' listed ones, then the owner's. */
 export function modelPrices(store: ControlStore): PriceView[] {
   const out: PriceView[] = [];
-  for (const p of store.providers())
+  for (const p of store.modelProviders.list())
     for (const m of p.models)
       if (m.price) out.push({ provider: p.name, model: m.id, price: m.price, source: "list" });
-  for (const x of store.modelPrices())
+  for (const x of store.usage.prices())
     if (!out.some((o) => o.provider === x.provider && o.model === x.model))
       out.push({ provider: x.provider, model: x.model, price: x.price, source: "owner" });
   return out;
@@ -178,7 +179,7 @@ export function setModelPrice(
     };
   }
   const q = r.data;
-  const p = store.provider(q.provider);
+  const p = store.modelProviders.get(q.provider);
   if (!p) return { ok: false, status: 404, error: `Providers has no provider ${q.provider}.` };
   if (p.type === "claude" || p.type === "chatgpt")
     return {
@@ -202,7 +203,7 @@ export function setModelPrice(
   if (q.clear) {
     if (q.input !== undefined || q.output !== undefined || q.cached_input !== undefined)
       return { ok: false, status: 400, error: "Give clear: true alone, or a price." };
-    store.setModelPrice(p.name, q.model, null, by);
+    store.usage.setPrice(p.name, q.model, null, by);
     return {
       ok: true,
       answer: {
@@ -224,7 +225,7 @@ export function setModelPrice(
     cached_input: q.cached_input ?? null,
     output: q.output,
   };
-  store.setModelPrice(p.name, q.model, price, by);
+  store.usage.setPrice(p.name, q.model, price, by);
   return {
     ok: true,
     answer: {

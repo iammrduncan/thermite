@@ -1,4 +1,4 @@
-# Test only (scripts/claude-acceptance.mjs): the harness and the supervisor with a stand-in for
+# Test only (scripts/acceptance/claude.mjs): the harness and the supervisor with a stand-in for
 # Claude Code mounted, so the Claude Code harness and an advisor in Claude Code run end to end
 # without a subscription or a download.
 services:

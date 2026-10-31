@@ -6,20 +6,22 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { runSupervised } from "../broker/process.ts";
-import { type Role, type Runner, type RunOutcome, walk } from "../broker/runner.ts";
-import { cellParams, cellTimeoutS, expandArgv, type Kit, paramsText } from "../kit.ts";
+import { cellParams, cellTimeoutS, type Kit, paramsText } from "../../core/kit.ts";
+import { type Role, type Runner, type RunOutcome, walk } from "../broker/index.ts";
 import type { BuildManifest, BuildStore } from "./builds.ts";
+import { expandArgv } from "./kits.ts";
 import { clipReason } from "./reasons.ts";
 
 /**
  * One timed run of one arm on one cell. The run user executes the arm's verified build with
- * the cell's parameters; the judge measures the wall time around the process and runs the
- * kit's check on the outputs. The score is computed here from the judge's own clock.
+ * the cell's parameters, beside the kit's driver where the kit has one (run.driver, as the
+ * driver's user); the judge measures the wall time around the run, and the kit's check, as the
+ * checker's user, reads the outputs. The score is computed here from the judge's own clock.
  */
 
 export interface Arm {
@@ -75,10 +77,14 @@ export interface MeasureContext {
   note?: ((arm: string, cell: string, outcome: string) => void) | undefined;
   /** The user that times runs on this executor's judge card: run, or run-1 to run-7. */
   runRole?: Role | undefined;
+  /** The user of the kit's check on this card: checker, or checker-1 to checker-7. */
+  checkerRole?: Role | undefined;
+  /** The user of the kit's driver on this card: driver, or driver-1 to driver-7. */
+  driverRole?: Role | undefined;
   /**
    * A hill climb's baseline folder (goal 115): the kit's check gets it as THERMITE_BASELINE_DIR,
-   * writable during the baseline job and read-only (sealed) in every later job of the run. The
-   * kit's run command never gets it, and the folder is the judge's, mode 0700.
+   * writable during the baseline job (a folder the job hands the checker) and read-only (sealed)
+   * in every later job of the run. The kit's run command and driver never get it.
    */
   baselineDir?: string | undefined;
 }
@@ -151,41 +157,65 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
   const tampered = ctx.store.verify(arm.dir, arm.manifest);
   if (tampered.length) throw new Error(`build store tampered: ${arm.manifest.key} ${tampered}`);
 
-  // <run>/ (0711, unguessable name) holds the judge's own copy of the parameters (0600), which
-  // the check uses; <run>/work/ is handed to the run user with a copy of them and its out/;
-  // <run>/kit/ is the run's read-only copy of the kit's run.copy paths, which stays the judge's.
+  // <run>/ (0711, unguessable name) holds <run>/work/, handed to the run user with a copy of the
+  // parameters and its out/; with a driver, <run>/drive/, handed to the driver's user with its
+  // own copy and the out/; <run>/kit/, the run's read-only copy of the kit's run.copy paths,
+  // which stays the judge's; and then <run>/check/, handed to the checker's user with the judge's
+  // own copy of the parameters and the outputs, taken from the run's folder.
   const dir = join(ctx.runsDir, randomUUID());
   const work = join(dir, "work");
-  const out = join(work, "out");
+  const driver = ctx.kit.run.driver;
+  const drive = join(dir, "drive");
+  const writer = driver ? drive : work;
+  const out = join(writer, "out");
   const kit = join(dir, "kit");
+  const checkDir = join(dir, "check");
+  mkdirSync(work, { recursive: true });
   mkdirSync(out, { recursive: true });
+  mkdirSync(checkDir);
   chmodSync(dir, 0o711);
   const text = paramsText(params);
   const json = `${JSON.stringify(params)}\n`;
-  writeFileSync(join(dir, "params.txt"), text, { mode: 0o600 });
-  writeFileSync(join(dir, "params.json"), json, { mode: 0o600 });
-  writeFileSync(join(work, "params.txt"), text, { mode: 0o600 });
-  writeFileSync(join(work, "params.json"), json, { mode: 0o600 });
+  for (const at of [work, checkDir, ...(driver ? [drive] : [])]) {
+    writeFileSync(join(at, "params.txt"), text, { mode: 0o600 });
+    writeFileSync(join(at, "params.json"), json, { mode: 0o600 });
+  }
   try {
     if (ctx.kit.run.copy.length) copyForRun(ctx.kitDir, ctx.kit.run.copy, kit);
-    await ctx.runner.handOver(work, ctx.runRole ?? "run");
-    const outcome = await ctx.runner.run({
-      role: ctx.runRole ?? "run",
-      argv: expandArgv(ctx.kit.run.command, {
-        build: arm.dir,
-        params: join(work, "params.txt"),
-        params_json: join(work, "params.json"),
-        out,
-        kit: ctx.kit.run.copy.length ? kit : "/nonexistent",
-        models: ctx.modelsDir,
-      }),
-      cwd: work,
+    const vars = (at: string) => ({
+      build: arm.dir,
+      params: join(at, "params.txt"),
+      params_json: join(at, "params.json"),
+      out,
+      kit: ctx.kit.run.copy.length ? kit : "/nonexistent",
+      models: ctx.modelsDir,
+    });
+    // The cell's own limit when it sets one, else the kit's; the driver's run has the same.
+    const limits = (at: string) => ({
+      cwd: at,
       env: {},
-      // The cell's own limit when it sets one, else the kit's.
       timeoutMs: cellTimeoutS(ctx.kit, cell) * 1000,
       rssLimitBytes: ctx.kit.run.rss_mib * 1024 * 1024,
-      disk: { path: work, limitBytes: ctx.kit.run.disk_mib * 1024 * 1024 },
+      disk: { path: at, limitBytes: ctx.kit.run.disk_mib * 1024 * 1024 },
     });
+    const runRole = ctx.runRole ?? "run";
+    await ctx.runner.handOver(work, runRole);
+    const candidate = {
+      role: runRole,
+      argv: expandArgv(ctx.kit.run.command, vars(work)),
+      ...limits(work),
+    };
+    let outcome: RunOutcome;
+    if (driver) {
+      const driverRole = ctx.driverRole ?? "driver";
+      await ctx.runner.handOver(drive, driverRole);
+      const pair = await ctx.runner.runPair(
+        { role: driverRole, argv: expandArgv(driver, vars(drive)), ...limits(drive) },
+        candidate,
+      );
+      await ctx.runner.reclaim(drive);
+      outcome = pairOutcome(pair.driver, pair.candidate);
+    } else outcome = await ctx.runner.run(candidate);
     await ctx.runner.reclaim(work);
     if (outcome.killedFor) {
       return {
@@ -215,11 +245,15 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
       };
     }
 
-    const check = await runCheck(ctx, {
+    // The outputs go to the check's folder, which the checker's user alone may then enter.
+    renameSync(out, join(checkDir, "out"));
+    const checkerRole = ctx.checkerRole ?? "checker";
+    await ctx.runner.handOver(checkDir, checkerRole);
+    const check = await runCheck(ctx, checkerRole, checkDir, {
       build: arm.dir,
-      params: join(dir, "params.txt"),
-      params_json: join(dir, "params.json"),
-      out,
+      params: join(checkDir, "params.txt"),
+      params_json: join(checkDir, "params.json"),
+      out: join(checkDir, "out"),
       kit: ctx.kitDir,
       models: ctx.modelsDir,
     });
@@ -267,14 +301,35 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
   }
 }
 
-async function runCheck(ctx: MeasureContext, vars: Record<string, string>): Promise<CheckResult> {
-  const r = await (ctx.runner.check ?? runSupervised)({
+/**
+ * One run of a kit's driver and the candidate, as one: the driver's time and how it ended, unless
+ * the candidate was stopped for a limit, which ends the run as a crash of its own.
+ */
+function pairOutcome(driver: RunOutcome, candidate: RunOutcome): RunOutcome {
+  if (candidate.killedFor && !driver.killedFor)
+    return { ...driver, killedFor: candidate.killedFor, stderr: candidate.stderr };
+  return {
+    ...driver,
+    stderr: `${driver.stderr}${candidate.stderr ? `\ncandidate: ${candidate.stderr}` : ""}`,
+  };
+}
+
+/**
+ * The kit's check, as the checker's user, in its own folder (`cwd`): it reads the outputs, the
+ * parameters, the kit, the build and the models, and writes only its folder and, in a baseline
+ * job, the baseline's.
+ */
+async function runCheck(
+  ctx: MeasureContext,
+  role: Role,
+  cwd: string,
+  vars: Record<string, string>,
+): Promise<CheckResult> {
+  const r = await ctx.runner.run({
+    role,
     argv: expandArgv(ctx.kit.check.command, vars),
-    cwd: ctx.kitDir,
-    env: {
-      PATH: process.env.PATH ?? "/usr/bin:/bin",
-      ...(ctx.baselineDir ? { THERMITE_BASELINE_DIR: ctx.baselineDir } : {}),
-    },
+    cwd,
+    env: ctx.baselineDir ? { THERMITE_BASELINE_DIR: ctx.baselineDir } : {},
     timeoutMs: ctx.kit.check.timeout_s * 1000,
   });
   const last = r.stdout.trim().split("\n").pop() ?? "";

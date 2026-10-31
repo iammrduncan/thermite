@@ -1,8 +1,12 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join } from "node:path";
 import { log } from "../common/env.ts";
+import { errorText } from "../common/errors.ts";
+import { writeAtomic } from "../common/fs.ts";
+import { sameSecret } from "../common/secrets.ts";
+import { readNumber } from "../common/settings.ts";
 import {
   controlCodeProof,
   ENROLLED_FILES,
@@ -26,14 +30,17 @@ import {
   verifyRequest,
 } from "../core/tunnel.ts";
 import { BUILD_HEADERS } from "../core/version.ts";
+import { SUPERVISOR_NUMBERS } from "./settings.ts";
 
 /**
  * The rig's end of the tunnel, for a rig in pull mode: one control connects to, through a public
  * proxy (a RunPod pod: docs/plan/goals/_completed/019-rig-only-entry.goal). The rig never connects to
  * control. Instead:
  *
- * - The supervisor makes its usual calls to control at a local address (127.0.0.1) that takes
- *   only the supervisor's own token. Each call waits there as a request for control.
+ * - The supervisor makes its calls to control over HTTPS at a local address (127.0.0.1) that takes
+ *   only the supervisor's own token: the registration of its keys on the message bus, and its
+ *   results (champions' patches, exports) and kits by git. Everything else goes on the bus,
+ *   through the pod's leaf node (leaf.ts). Each call waits there as a request for control.
  * - Control connects to the public port, behind the proxy, and in each exchange collects the
  *   waiting requests and returns the answers to earlier ones. Control answers them as this rig.
  *
@@ -121,13 +128,6 @@ const CARRIED = [
   ...Object.values(BUILD_HEADERS),
 ];
 
-/** Writes a file whole or not at all. */
-function writeAtomic(path: string, text: string, mode: number): void {
-  writeFileSync(`${path}.tmp`, text, { mode });
-  chmodSync(`${path}.tmp`, mode);
-  renameSync(`${path}.tmp`, path);
-}
-
 /** This rig's keys: made once, at the first start, then read back (mode 0600). */
 export function podKeys(dir: string): TunnelKeys {
   const path = join(dir, "keys.json");
@@ -155,12 +155,6 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer | undefin
     req.on("error", () => resolve(undefined));
   });
 }
-
-const sameText = (a: string, b: string) => {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-};
 
 export class PodTunnel {
   private readonly o: PodTunnelOptions;
@@ -327,9 +321,14 @@ export class PodTunnel {
       });
       res.end(out);
     } catch (err) {
-      log("supervisor", "pull mode: a request from control failed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      log(
+        "supervisor",
+        "pull mode: a request from control failed",
+        {
+          error: errorText(err),
+        },
+        "error",
+      );
       this.nothing(res);
     }
   }
@@ -485,7 +484,7 @@ export class PodTunnel {
     const path = req.url ?? "";
     // Anyone but the supervisor (a lane in the same pod, say) gets the public port's 404.
     if (
-      !sameText(auth, `Bearer ${this.o.localToken}`) ||
+      !sameSecret(auth, `Bearer ${this.o.localToken}`) ||
       !path.startsWith(`/v1/rigs/${encodeURIComponent(this.o.rig)}/`)
     )
       return this.refuse(req, res);
@@ -565,9 +564,7 @@ export function pullModeOptions(
     if (!v) throw new Error(`pull mode needs ${name}`);
     return v;
   };
-  const port = Number(env.THERMITE_TUNNEL_PORT);
-  if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new Error(`THERMITE_TUNNEL_PORT must be a port number, not ${env.THERMITE_TUNNEL_PORT}`);
+  const port = readNumber(env, SUPERVISOR_NUMBERS.tunnelPort) ?? 0;
   const until = env.THERMITE_TUNNEL_ENROLL_UNTIL
     ? Date.parse(env.THERMITE_TUNNEL_ENROLL_UNTIL)
     : Number.NaN;

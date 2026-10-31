@@ -1,4 +1,25 @@
+import type { EventToRecord } from "../../core/events/bodies.ts";
+import {
+  HELD_OUT_EVENT_CELLS,
+  HELD_OUT_KINDS,
+  HELD_OUT_OWNER_WORDS,
+  HELD_OUT_WORDS,
+  type HeldOutCell,
+  type HeldOutKind,
+  heldOutKinds,
+  heldOutWords,
+} from "../../core/held-out.ts";
 import type { ArmRun } from "./measure.ts";
+
+export {
+  HELD_OUT_KINDS,
+  HELD_OUT_OWNER_WORDS,
+  HELD_OUT_WORDS,
+  type HeldOutCell,
+  type HeldOutKind,
+  heldOutKinds,
+  heldOutWords,
+};
 
 /**
  * What a confirmation found on its held-out cells (goal 082), named safely.
@@ -10,55 +31,11 @@ import type { ArmRun } from "./measure.ts";
  * here, only a kind from a closed list.
  */
 
-/** How one held-out cell failed. A closed list: nothing a run printed becomes a kind. */
-export const HELD_OUT_KINDS = [
-  "threshold_missed",
-  "timed_out",
-  "crashed",
-  "check_failed",
-  "non_finite",
-  "no_cell",
-] as const;
-export type HeldOutKind = (typeof HELD_OUT_KINDS)[number];
-
-/** One held-out cell's result, as the owner sees it. */
-export interface HeldOutCell {
-  cell: string;
-  /** Goal campaigns: the threshold goal it was checked for, or the kit's verifier it ran in. */
-  goal?: string | undefined;
-  verifier?: string | undefined;
-  ok: boolean;
-  /** How it failed, when it did. */
-  kind?: HeldOutKind | undefined;
-  /**
-   * The measured value and the threshold it is held to, where the check gives one: a goal's
-   * metric threshold (its mean, and its interval), or a hill climb's ratio to the champion.
-   */
-  value?: number | undefined;
-  low?: number | undefined;
-  high?: number | undefined;
-  threshold?: number | undefined;
-  op?: ">=" | ">" | "<=" | "<" | undefined;
-  /** What the value measures, in words, and its unit. */
-  measure?: string | undefined;
-  unit?: string | undefined;
-}
-
 /** A held-out record: whether every cell passed, and each cell's result. */
 export interface HeldOutResult {
   pass: boolean;
   cells: HeldOutCell[];
 }
-
-/** The agents' words for each kind: that a held-out check failed, and how, never which or why. */
-export const HELD_OUT_WORDS: Record<HeldOutKind, string> = {
-  threshold_missed: "a held-out check missed its threshold",
-  timed_out: "a held-out check timed out",
-  crashed: "a held-out check crashed",
-  check_failed: "a held-out check failed the kit's check",
-  non_finite: "a held-out check gave no finite value",
-  no_cell: "a held-out check names a cell the kit does not have",
-};
 
 /**
  * The agents' words when a held-out pass could not finish: an error in the judge's own work (a
@@ -67,16 +44,6 @@ export const HELD_OUT_WORDS: Record<HeldOutKind, string> = {
  * the rig's log, for the owner.
  */
 export const HELD_OUT_INFRA = "a held-out check could not finish (an infrastructure failure)";
-
-/** The owner's words for each kind, after the cell's name. */
-export const HELD_OUT_OWNER_WORDS: Record<HeldOutKind, string> = {
-  threshold_missed: "missed its threshold",
-  timed_out: "timed out",
-  crashed: "crashed",
-  check_failed: "failed the kit's check",
-  non_finite: "gave no finite value",
-  no_cell: "is not in the kit",
-};
 
 /**
  * What a hill climb's held-out ratio measures: the change over the champion when higher is better,
@@ -109,21 +76,6 @@ export function heldOutKindOf(r: Exclude<ArmRun, { kind: "ok" }>): HeldOutKind {
   }
 }
 
-/** The kinds a record holds, each once, in the list's order. */
-export function heldOutKinds(cells: readonly HeldOutCell[]): HeldOutKind[] {
-  const found = new Set(cells.filter((c) => !c.ok && c.kind).map((c) => c.kind as HeldOutKind));
-  return HELD_OUT_KINDS.filter((k) => found.has(k));
-}
-
-/**
- * The agents' words for a failed held-out check: each kind once, such as "a held-out check
- * timed out; a held-out check missed its threshold". A record from before goal 082 has no
- * kinds: "a held-out check failed".
- */
-export function heldOutWords(kinds: readonly HeldOutKind[]): string {
-  return kinds.length ? kinds.map((k) => HELD_OUT_WORDS[k]).join("; ") : "a held-out check failed";
-}
-
 /**
  * A held-out record of these cells, with any value that is not a finite number left out: the
  * ledger's JSON has no form for one, and a record must never fail for it.
@@ -146,4 +98,31 @@ export function heldOutCellsOf(detail: unknown): HeldOutCell[] {
     (c): c is HeldOutCell =>
       !!c && typeof c === "object" && typeof (c as HeldOutCell).cell === "string",
   );
+}
+
+/**
+ * The owner's event for a held-out record (goal 082): each cell's name, its kind of failure, and
+ * its value against its threshold where there is one. It reaches control and the rig's exports;
+ * no agent reads events, and the knowledge base does not take this one. Its subject is the
+ * attempt, or, for a goal run's champion (goal 086), the run, with `champion_seq`.
+ */
+export function heldOutEvent(
+  job: number,
+  run: string,
+  subject: string,
+  ho: HeldOutResult,
+  championSeq?: number,
+): EventToRecord {
+  return {
+    kind: "held_out_checked",
+    subject,
+    body: {
+      run,
+      job,
+      ...(championSeq !== undefined ? { champion_seq: championSeq } : {}),
+      pass: ho.pass,
+      cells: ho.cells.slice(0, HELD_OUT_EVENT_CELLS),
+      cells_total: ho.cells.length,
+    },
+  };
 }

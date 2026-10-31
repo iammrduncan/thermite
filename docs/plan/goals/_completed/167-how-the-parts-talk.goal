@@ -1,0 +1,66 @@
+---
+id: "167"
+title: "How the parts talk: a review of every interface between control, rigs, kits, campaigns, runs and agents"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["160"]
+created: 2026-10-26
+updated: 2026-10-26
+---
+
+# 167 · How the parts talk: a review of every interface between control, rigs, kits, campaigns, runs and agents
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [160](160-v010-audit.goal)
+
+## What
+
+A review of every way two of Thermite's parts exchange data: control, a rig's supervisor, harness, broker and judge, kits, campaigns and runs, and the agents.
+
+1. **A catalogue of every channel:** its two ends, its transport, who starts it, each message type, where the message's schema lives, how it is authenticated, how often it runs and how large its messages are, what each end logs, and what happens when one end is down.
+2. **Performance:** the polling loops in every process, the delay they add end to end (an agent's step to the live view, a command from the dashboard to a rig, an event from the harness to control's pages), and the work each poll does.
+3. **Findings,** with evidence, in the audit's folder. Bugs become goals; the rest feeds goal [168](../168-message-bus.goal), the message bus, and goal [125](../125-code-to-the-conventions.goal)'s contracts.
+4. **A public page** that explains how the parts talk, as Thermite's design. It names no deployment, host or address.
+
+## Why
+
+The owner, 2026-10-26: "I want a review of all cross communication between control<>rigs<>kits<>campaigns<>runs<>agents. Interfaces, message types, logs, performance etc."
+
+## Constraints
+
+- **Read-only,** apart from the page. Security findings stay in `.internal/`, as [SECURITY.md](../../../../SECURITY.md) says.
+- **Evidence,** and no time estimates, as for the audit of goal [160](160-v010-audit.goal).
+
+## Done when
+
+- [x] The review and its catalogue are in `.internal/reviews/v0.1.1-audit/` (lane 10), with an entry in the audit's index.
+- [x] Each bug it finds is in a goal, and its other findings are in goal 168 or goal 125.
+- [x] The explanation page on how the parts talk is on the docs site, and the docs build and check pass.
+
+## What the review found
+
+The audit's lane 10 (`.internal/reviews/v0.1.1-audit/10-communication.md`, with a catalogue of 45 channels in `10-communication-catalogue.json`) reviewed every channel on 2026-10-26.
+
+- **Every channel between control and a rig is a poll, and the polls chain.** 35 polling loops run in five processes and the browser. An agent's step reaches the dashboard's live view 0–5 s later; a command reaches the harness 0–5 s after it is issued; its effect, and every verdict, reaches control's pages only with the next report, 0–60 s later; the browser shows it only on a reload or a redraw. The dashboard has no push.
+- **Polling costs delay, not CPU.** Measured at control: an empty report round 0.6 ms, an empty command poll 0.06 ms, 500 live lines 3–7 ms, a page of 1,000 events 16–47 ms. An idle rig makes about 19 calls a minute to control. The slow paths are the views' full replays (the clean-up guide's T12), which two waits call every few seconds.
+- **Bugs on the wire,** now goal [171](171-bugs-on-the-wire.goal): a Pi worker's long reply lost from Live, a waiting command sent again in full every 5 s, and one unknown live line that stops a rig's live view for good.
+- **An audit waits behind the teachers.** The advisors run one role after another in one loop, so a promotion held for its audit waits for every teacher call of the round.
+- **Answers mostly have no schema.** Of 45 channels, 6 have one schema that both ends import, 20 are checked only by the receiver, 10 have none, and 9 are formats of other programs. The supervisor parses 2 of about 16 answer shapes it acts on with a schema.
+- **A rig's configuration comes in three polls,** with three rules for what changed: the model route, the MCP servers and the advisors' routes.
+- **Failure handling differs on every channel.** One backs off; the others retry at their fixed interval for good. Outside pull mode, no HTTP client on a rig sets a timeout. Six places drop a channel's errors with no log.
+- **Only a command's ID crosses from one process to the next.** Reports, live batches, advisor calls and trials can't be followed from control's log to the rig's.
+- **Five changes without a bus remove most of the delay** (goal [168](../168-message-bus.goal)'s first part).
+
+## Decisions
+
+## Open questions
+
+Moved to goal [168](../168-message-bus.goal), whose first part builds what they decide.
+
+## Progress
+
+- 2026-10-26 21:03 UTC: Goal written from the owner's words. Lane 10 of the audit makes the review.
+- 2026-10-26 21:46 UTC: The review and its catalogue of 45 channels are in the audit's folder, with an entry in its index. The bugs it found are goal [171](171-bugs-on-the-wire.goal); its other findings are in goal 168's design and the clean-up guide's section 8. The explanation page, [How the parts talk](../../../_site/src/content/docs/explanation/how-the-parts-talk.md), is on the docs site; the docs build and check pass. Its seven questions moved to goal 168. Verified.
+
+---
+
+Run with `/goal Complete docs/plan/goals/167-how-the-parts-talk.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

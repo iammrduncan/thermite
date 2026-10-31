@@ -1,12 +1,11 @@
 import { clockUtc, commandProgress } from "../command-progress.ts";
-import type { ControlStore } from "../store.ts";
-import { workOf } from "../views/work.ts";
-import type { RigView, RunView } from "../views.ts";
-import { ago, esc, fmtInt, icon, runHref } from "./components.ts";
-import { lastDone } from "./drain.ts";
-import { card } from "./need-card.ts";
-import type { Forms, Need } from "./operator.ts";
-import { clip, span } from "./words.ts";
+import type { ControlStore } from "../store/index.ts";
+import { type RigView, type RunView, workOf } from "../views/index.ts";
+import { ago, card, esc, fmtInt, icon } from "./components/index.ts";
+import type { Forms, Need } from "./operator/index.ts";
+import { lastDone } from "./rigs/drain.ts";
+import { leaveTrialHref, runHref } from "./urls.ts";
+import { clip, span } from "./words/index.ts";
 
 /**
  * A stuck trial (goal 143): one quiet for longer than its rig's quiet setting (none by default),
@@ -58,14 +57,14 @@ export function stuckTrials(u: Pick<RigView, "settings">, r: RunView, now: numbe
 }
 
 /** The chip on a stuck trial's lane: it leads to its card under Needs you on the run's page. */
-export function stuckChip(s: StuckTrial, u: Pick<RigView, "id">, r: RunView, now: number): string {
+export function stuckChip(s: StuckTrial, r: RunView, now: number): string {
   const said =
     s.kind === "quiet"
       ? `quiet for ${span(s.since, now)}`
       : s.kind === "refused"
         ? "repeats a refused request"
         : "repeats the same calls";
-  return ` <a class="chip warn" href="${runHref(u.id, r)}#needs" title="Its card is under Needs you">${esc(said)}</a>`;
+  return ` <a class="chip warn" href="${runHref(r)}#needs" title="Its card is under Needs you">${esc(said)}</a>`;
 }
 
 /** What a Pi worker's open model call has sent so far, in words; "" when nothing. */
@@ -89,9 +88,9 @@ export function stuckNeeds(
   back: string,
 ): Need[] {
   const open = workOf(u.summary)?.open ?? [];
-  const stops = store.latestCommands(u.id, "stop_trial", 20);
+  const stops = store.commands.latest(u.id, "stop_trial", 20);
   return stuckTrials(u, r, now).flatMap((s): Need[] => {
-    if (store.trialLeft(u.id, s.trial, s.kind) === s.since) return [];
+    if (store.liveLines.trialLeft(u.id, s.trial, s.kind) === s.since) return [];
     // A stop sent for it: the card leaves at once, and comes back with the reason if refused.
     const stop = stops.find((c) => c.payload.trial === s.trial);
     const progress = stop ? commandProgress(stop, now) : undefined;
@@ -180,7 +179,7 @@ export function stuckNeeds(
     }[s.kind];
     const stopConfirm = `<div class="stuck-stop"><div class="small"><b>Stop ${lane}'s trial now?</b> It ends as interrupted. Its sources, claims and counters stay. Its task goes back to the top of the run's queue, so a lane takes it up again.</div>${f.cmd({ rig: u.id, kind: "stop_trial", fields: { run: r.id, trial: s.trial, reason: words.reason }, label: "Stop the trial", cls: "danger sm", back })}</div>`;
     const hidden = (k: string, v: string) => `<input type="hidden" name="${k}" value="${esc(v)}">`;
-    const leaveForm = `<form class="inline" method="post" action="/ui/trials/leave">${hidden("csrf", f.csrf)}${hidden("rig", u.id)}${hidden("run", r.id)}${hidden("trial", s.trial)}${hidden("kind", s.kind)}${hidden("since", s.since)}${hidden("back", back)}<button class="sm">Leave it running</button></form>`;
+    const leaveForm = `<form class="inline" method="post" action="${esc(leaveTrialHref(r, s.trial))}">${hidden("csrf", f.csrf)}${hidden("kind", s.kind)}${hidden("since", s.since)}${hidden("back", back)}<button class="sm">Leave it running</button></form>`;
     const c = card({
       tone: "warn",
       ic: icon.warn,

@@ -10,14 +10,14 @@
 // separate jobs, on separate machines, at the same time.
 //
 // Usage: node scripts/test.mjs [--part parallel|alone] [files or globs]; with no files, every
-// src/**/*.test.ts. THERMITE_TEST_JOBS sets how many files run side by side.
+// tests/**/*.test.ts. THERMITE_TEST_JOBS sets how many files run side by side.
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 
 /** The files that run alone, one at a time. */
-const ALONE = /^src\/harness\/(judge|broker)\//;
+const ALONE = /^tests\/harness\/(judge|broker)\//;
 
 const args = process.argv.slice(2);
 const at = args.indexOf("--part");
@@ -27,9 +27,15 @@ if (!["all", "parallel", "alone"].includes(part)) {
   process.exit(2);
 }
 
+// Tests live in tests/, in folders that mirror src/. A test file left in src/ would never run.
+const stray = readdirSync("src", { recursive: true }).filter((p) => String(p).endsWith(".test.ts"));
+if (stray.length) {
+  console.error(`test.mjs: test files go in tests/, not src/: ${stray.join(", ")}`);
+  process.exit(2);
+}
 // Every test file, as a path from the repository's root.
-const every = readdirSync("src", { recursive: true })
-  .map((p) => `src/${String(p).split("\\").join("/")}`)
+const every = readdirSync("tests", { recursive: true })
+  .map((p) => `tests/${String(p).split("\\").join("/")}`)
   .filter((p) => p.endsWith(".test.ts"))
   .sort();
 // A glob as a regular expression: ** any folders, * any name within one.

@@ -5,6 +5,7 @@
 .claude
 node_modules
 dist
+tests
 coverage
 *.log
 docs/_site/node_modules

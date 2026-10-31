@@ -1,5 +1,5 @@
 #!/bin/sh
-# Test only (scripts/claude-real-acceptance.mjs): writes the supervisor token and control's public
+# Test only (scripts/acceptance/claude-real.mjs): writes the supervisor token and control's public
 # key as compose's secrets and volumes would, then starts the harness as usual (the broker as root,
 # which closes /tmp to the roles and runs each one's work under the GPU fence).
 set -eu
@@ -7,4 +7,4 @@ mkdir -p /run/secrets /keys
 (umask 077 && printf '%s' "$TEST_SUPERVISOR_TOKEN" > /run/secrets/harness-supervisor-token)
 printf '%s\n' "$TEST_CONTROL_PUBKEY" > /keys/control-signing.pub
 unset TEST_SUPERVISOR_TOKEN TEST_CONTROL_PUBKEY
-exec /usr/bin/tini -- node /opt/thermite/dist/harness/broker.js
+exec /usr/bin/tini -- node /opt/thermite/dist/harness/broker/main.js

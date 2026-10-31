@@ -43,6 +43,8 @@ This guide covers providers reached with an API key, or with no key for OpenCode
 
    For a model server on the same computer as Thermite, use `http://host.docker.internal:PORT/v1`, or `host.containers.internal` with Podman. Inside a container, `localhost` is the container itself. An OpenAI-compatible provider always needs a key: if your server checks none, type any word without spaces.
 
+   When the server's model list names no longest reply for the model, Thermite sends no reply limit, and the server's own default applies: it may cut replies short. To set the server's limits yourself, give the rig the model from [its own settings](#use-the-rigs-own-settings-instead), with `THERMITE_MODEL_MAX_TOKENS` and `THERMITE_MODEL_CONTEXT_WINDOW`.
+
 4. Press **Add and list its models**.
 
    Control seals the key and reads the provider's model list at once. The page shows `"my-litellm" is saved and lists 12 models. Choose one for a rig below.` with your name and count.
@@ -82,7 +84,7 @@ This gives the model to the rig's workers and, unless it has its own, to its pla
 
 ### How the rig gets the model
 
-Control keeps your choice. Every 30 seconds by default, the rig's supervisor asks control for the rig's model and hands any change to the rig's harness container, with the key. Only rigs that use one of a provider's models ever receive its key. The harness checks a new model at once, and each new trial and plan uses it. A trial that is already running keeps the model it started with.
+Control keeps your choice, and writes the rig's model, with the key, to the rig's config on the message bus within about 5 seconds, sealed to the rig; the rig's supervisor hands it to the rig's harness container as it comes. Only rigs that use one of a provider's models ever receive its key. The harness checks a new model at once, and each new trial and plan uses it. A trial that is already running keeps the model it started with.
 
 ## Cap the model's context window
 
@@ -210,6 +212,8 @@ The rig needs the base URL, the model and a key, or its agents have no model. On
 THERMITE_MODEL_BASE_URL=http://host.docker.internal:8000/v1 THERMITE_MODEL=my-model \
   docker compose up -d
 ```
+
+For a model server on the same computer, such as llama.cpp's `llama-server`, vLLM or Ollama, set `THERMITE_MODEL_MAX_TOKENS` and `THERMITE_MODEL_CONTEXT_WINDOW` to the server's limits too: Thermite sends no reply limit by default, and the server's own default may cut replies short.
 
 If the rig has a model from control, choose **its own settings** for it in **Harness and model for each rig** and press **Use**. Within a minute the rig's row says "Its agents use the rig's own settings (my-model, under Pi)", followed by the model check's result.
 

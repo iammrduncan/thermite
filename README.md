@@ -89,7 +89,7 @@ With Podman, write `podman compose` in place of `docker compose`. The first star
 
 The [tutorials](https://usethermite.com/tutorials/first-run/) walk through every step, up to taking the winning patch back to your project ([Your own project](https://usethermite.com/tutorials/your-own-project/)). To build Thermite from its source code instead, see [Contributing](https://usethermite.com/project/contributing/#set-up).
 
-**Just want to look around?** `npm ci && node --experimental-strip-types scripts/dashboard-demo.ts` serves the dashboard with synthetic campaigns and rigs at <http://127.0.0.1:8810/ui>, with no containers. It prints the token to sign in with.
+**Just want to look around?** `npm ci && node --experimental-strip-types scripts/dev/dashboard-demo/main.ts` serves the dashboard with synthetic campaigns and rigs at <http://127.0.0.1:8810/ui>, with no containers. It prints the token to sign in with.
 
 ## Architecture
 

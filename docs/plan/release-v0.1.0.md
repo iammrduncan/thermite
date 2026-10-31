@@ -43,7 +43,7 @@ Since 2026-10-25, only this list holds the tag:
 1. **Goal 135's pages.** Done, 2026-10-25: they describe all of it, and goal [135](goals/_completed/135-lanes-and-judge-throughput.goal) is verified.
 2. **The CUDA 13 image, labelled untested.** It has never run on a GPU. The release publishes it, and its README, the pages and the known limits say it is untested (the owner, 2026-10-25). Goal [132](goals/132-cuda-images-per-gpu.goal) moves to v0.1.2.
 3. **Goal [117](goals/117-research-that-answers.goal)'s acceptance runs.** v0.1.0 doesn't ship until research mode is solid (the owner, 2026-10-24). One of the three runs passed; the second failed and was fixed; the second and third run again. On 2026-10-26 the chunking test started again, and the rerun of the 35-hour brief, which could not end because any rewrite of a card kept its question from saturating, waits for that fix on its rig to close and write its paper. The owner tagged v0.1.0 the same day without waiting for these two ("Its good enough... we can push tags and do release."): they finish on the lab after the release. They also check goals [112](goals/112-research-ends-when-answered.goal) and [047](goals/047-research-planner.goal).
-4. **Goal [026](goals/026-ship-v0.1.0.goal)'s steps:** the full checks and acceptance suites on `main`'s tip, the changelog's date, the tag (it closes goal [010](goals/010-published-images.goal)), the bundle on clean machines (it closes goal [011](goals/011-release-bundle.goal)), the release notes and the `v0.1.1` branch.
+4. **Goal [026](goals/_completed/026-ship-v0.1.0.goal)'s steps:** the full checks and acceptance suites on `main`'s tip, the changelog's date, the tag (it closes goal [010](goals/010-published-images.goal)), the bundle on clean machines (it closes goal [011](goals/011-release-bundle.goal)), the release notes and the `v0.1.1` branch.
 
 **Ships as built, checked on the lab after the tag:** goals 103, 136, 139, 140, 142, 144 and 147. Their code is on `main`; each one's only open item is a check on the lab. Goal [143](goals/_completed/143-stuck-and-looping-trials.goal) is verified on the lab, 2026-10-26. So is goal [151](goals/_completed/151-plan-usage-on-providers.goal), 2026-10-26.
 
@@ -150,7 +150,7 @@ The owner launches a GPU rig on RunPod from control, runs campaigns on it, and s
 
 | Goal | Status | Depends on |
 | --- | --- | --- |
-| [026 · Ship v0.1.0](goals/026-ship-v0.1.0.goal) | `READY` | every other goal |
+| [026 · Ship v0.1.0](goals/_completed/026-ship-v0.1.0.goal) | `VERIFIED` | every other goal |
 
 ## Order of work
 
@@ -170,7 +170,7 @@ The owner launches a GPU rig on RunPod from control, runs campaigns on it, and s
 | Where a pod's results go | The project's results repository when it has one, otherwise an upload to control (2026-10-20) | [024](goals/_completed/024-runpod-models-and-results.goal) |
 | Terms in the community files | No contributor agreement, no sign-off rule, the Contributor Covenant (2026-10-20) | [008](goals/_completed/008-community-files.goal) |
 | Subscription sign-in tests | Before the tag (2026-10-20) | [009](goals/_completed/009-subscription-sign-in-tests.goal) |
-| How the code reaches `main` | A pull request merged as a fast-forward (2026-10-20) | [026](goals/026-ship-v0.1.0.goal) |
+| How the code reaches `main` | A pull request merged as a fast-forward (2026-10-20) | [026](goals/_completed/026-ship-v0.1.0.goal) |
 | The docs site's address | usethermite.com, on Cloudflare Pages, built from `main` (2026-10-20) | [060](goals/_completed/060-docs-site.goal) |
 
 One step needs the owner's GitHub account: the repository settings ([002](goals/_completed/002-ci-and-repository-settings.goal)). The image packages are public ([010](goals/010-published-images.goal)).

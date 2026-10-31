@@ -1,0 +1,57 @@
+---
+id: "164"
+title: "Settings that fail loudly: a bad value stops the part at start, and no failure passes as success"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["160"]
+created: 2026-10-26
+updated: 2026-10-27
+---
+
+# 164 · Settings that fail loudly: a bad value stops the part at start, and no failure passes as success
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [160](160-v010-audit.goal)
+
+## What
+
+Four reviewers of the v0.1.1 audit (goal [160](160-v010-audit.goal)) found settings and readings whose failure passes as a valid value, with no line in the log. This goal makes each one fail at once, with words.
+
+1. **Numeric settings read with no check.** 19 reads of the form `Number(env.X ?? "60") * 1000` with no check: `src/control/main.ts:76-78, 112`, `src/harness/main.ts:236, 358, 447, 766-769, 796`, `src/supervisor/main.ts:114, 363, 386, 406, 460`, `src/harness/broker.ts:129, 180`. From reading the code:
+   - `THERMITE_EXPORT_MINUTES=6O` gives `NaN`, and the rig never exports again; an empty value gives 0 and an export every 5 seconds.
+   - `THERMITE_POLL_SECONDS=abc` makes the supervisor's report loop run with no pause.
+   - `THERMITE_MODEL_ROUTE_POLL_SECONDS=30s` stops the rig from taking its model route from control.
+   - `THERMITE_CONTROL_STALE_SECONDS=3m` shows every rig as offline, and the RunPod idle stop reads the same value.
+
+   One helper in `src/common/` reads a setting by its kind (seconds, minutes, count, path), its default and its bounds, and stops the part at start with the setting's name and what it wants. The snapshot settings' `positive()` (`src/harness/broker/snapshot.ts:108-115`) already does this and becomes a use of it.
+2. **A corrupt `rig-settings.json` is ignored.** `RigSettingsStore` (`src/harness/rig-settings.ts:89, 116`) has two empty `catch {}`. The owner's settings fall back to the defaults with no log, and the next change writes a file with only that change. The harness logs and reports a file it can't read, and keeps it for the owner to look at.
+3. **`thermite status` exits 0 on an error.** `src/cli/thermite.ts:1223-1241` prints what the harness sends and exits 0 on a 404 or 500. It exits non-zero.
+4. **The supervisor drops the harness's refusals.** `rigSettings` and `tellAdvisors` (`src/supervisor/main.ts:243, 265`) catch every error and never read the answer's status. Each failure is logged once, with its status, as the supervisor's loops already do for control.
+
+## Why
+
+CONVENTIONS.md: "Validate every input that crosses a trust boundary", and "Nothing stops silently". An operator's setting is such an input, and a typo must not switch a part off.
+
+## Constraints
+
+- A deployment with a value that was ignored before now fails at start. That is the point; the changelog says so.
+
+## Done when
+
+- [x] Every numeric setting in `src/` is read through the one helper, and a test for each kind shows a bad value stopping the part at start with words.
+- [x] Items 2 to 4 are fixed, each with a regression test.
+- [x] The pages that list settings say what each setting takes; the docs check passes.
+- [x] The fast checks pass, and the compose smoke check.
+
+## Decisions
+
+## Open questions
+
+## Progress
+
+- 2026-10-26: Goal written from the v0.1.1 audit's harness, supervisor, cross-cutting and operations reports.
+- 2026-10-27 07:41 UTC: Items 1 to 4 fixed. Item 1: `src/common/settings.ts` reads every numeric setting by what it takes (a unit, bounds, whole or not, and what 0 means where it means something) and stops the part at start with `<NAME> takes <what it takes>, not "<value>"`; an empty value takes the default. Every `Number(env…)` read in `src/` uses it, the snapshot settings' `positive()` and the lanes and compaction readers included; the harness's and the broker's numbers are read in `src/harness/env-numbers.ts` and `src/harness/broker/settings.ts` (`tests/common/settings.test.ts`). The supervisor's intervals whose 0 turns a loop off keep that. Item 2: a settings file the harness can't read is renamed `rig-settings.json.unreadable-<time>`, logged and reported as `settings_unreadable` (`tests/harness/rig-settings.test.ts`). Item 3: `thermite status` exits 1 on an error answer (`tests/cli/status.test.ts`). Item 4: the supervisor's two calls to the harness about the advisors moved to `src/supervisor/harness-advisors.ts`, which logs the first failure of a streak with its status (`tests/supervisor/harness-advisors.test.ts`). Settings says what each number setting takes; the changelog says a bad value now stops the part at start. The fast checks and the compose smoke check are left, with goal 163's acceptance checks.
+- 2026-10-27 09:12 UTC: Verified on 53c7e30e: the full fast checks and the compose smoke check passed. Moved to `_completed/`.
+
+---
+
+Run with `/goal Complete docs/plan/goals/164-settings-that-fail-loudly.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

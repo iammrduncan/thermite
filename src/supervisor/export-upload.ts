@@ -1,5 +1,15 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
+import type { z } from "zod";
+import { ApiError } from "../common/api/call.ts";
+import { controlClient } from "../common/api/control.ts";
+import {
+  EXPORT_BEGIN,
+  EXPORT_FILE,
+  EXPORT_NAME,
+  EXPORT_PIECE_MAX,
+  FIGURE_EXPORTS_MAX,
+} from "../core/api/control/rigs.ts";
 import { verifyExport } from "./git-export.ts";
 
 /**
@@ -15,7 +25,7 @@ import { verifyExport } from "./git-export.ts";
 export interface UploadState {
   /** Exports waiting to go to control, oldest first. */
   queue: string[];
-  /** The newest exports control holds in full (at most 50). */
+  /** The newest exports control holds in full (FIGURE_EXPORTS_MAX at most: the figures show them). */
   uploaded: string[];
   lastUploadAt?: string | undefined;
   /** When the last ledger snapshot went. */
@@ -31,20 +41,18 @@ export interface UploadConfig {
   fetchImpl?: typeof fetch | undefined;
   /** The ledger snapshot goes at most this often, except with a full export (default a day). */
   ledgerEveryMs?: number | undefined;
-  /** Bytes per request (default 8 MiB; control takes at most 16 MiB). */
+  /** Bytes per request (PIECE_BYTES by default). */
   chunkBytes?: number | undefined;
   now?: (() => Date) | undefined;
 }
 
-/** An export's name, as the harness makes them (control takes no other). */
-export const EXPORT_NAME = /^[0-9TZ]{8,20}-[0-9a-f]{8}$/;
+/** The bytes of a file one request carries: half of the most control takes (EXPORT_PIECE_MAX). */
+const PIECE_BYTES = EXPORT_PIECE_MAX / 2;
 
-/** Control's answer about one export: what it has of each file, and whether it has them all. */
-interface Have {
-  received: Record<string, number>;
-  done: string[];
-  complete: boolean;
-}
+/** An export's manifest, as the harness wrote it. */
+type Manifest = z.input<typeof EXPORT_BEGIN.body>["manifest"];
+/** What control has of a file, in its refusal of a piece sent at another place. */
+const HaveOfFile = EXPORT_FILE.answer;
 
 class UploadError extends Error {
   /** True: this export can never go (control refuses it); false: try again later. */
@@ -56,47 +64,55 @@ class UploadError extends Error {
   }
 }
 
-async function answer(res: Response, what: string): Promise<Record<string, unknown>> {
-  const text = await res.text();
-  let body: Record<string, unknown> = {};
+/**
+ * Control's answer to a call, or its refusal (409), which says what control has. Any other answer
+ * is an UploadError: 400, control refuses the request itself, so sending it again would not help;
+ * anything else (a file whose bytes arrived wrong, control restarting) is tried again, as is a
+ * call that got no answer.
+ */
+async function answer<T>(
+  what: string,
+  call: Promise<T>,
+): Promise<{ ok: true; answer: T } | { ok: false; refused: ApiError }> {
   try {
-    body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  } catch {
-    body = { error: text.slice(0, 300) };
+    return { ok: true, answer: await call };
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    // No answer came: why, in its own words, and tried again.
+    if (err.status === undefined) throw new Error(err.words);
+    if (err.code === "refused") return { ok: false, refused: err };
+    const words = err.words.slice(0, 300);
+    throw new UploadError(`${what}: control answered ${err.status}: ${words}`, err.status === 400);
   }
-  // 400: control refuses the request itself, so sending it again would not help. Anything
-  // else (control unreachable or restarting, a file whose bytes arrived wrong) is tried again.
-  if (res.status >= 400 && res.status !== 409)
-    throw new UploadError(
-      `${what}: control answered ${res.status}: ${String(body.error ?? "").slice(0, 300)}`,
-      res.status === 400,
-    );
-  return body;
 }
 
 /** Sends one export; resolves when control holds all of it, saying whether the ledger went. */
 async function uploadOne(cfg: UploadConfig, name: string, ledgerDue: boolean): Promise<boolean> {
-  const f = cfg.fetchImpl ?? fetch;
+  const control = controlClient({
+    url: cfg.controlUrl,
+    token: cfg.controlToken,
+    rig: cfg.rig,
+    fetchImpl: cfg.fetchImpl,
+  });
   const dir = join(cfg.outboxDir, name);
   if (!existsSync(dir)) throw new UploadError(`export ${name} is no longer in the outbox`, true);
   const { problems, manifest } = verifyExport(dir);
   if (!manifest) throw new UploadError(`export ${name} refused: ${problems.join("; ")}`, true);
   // The manifest as the harness wrote it (verified above), with its rig and time.
-  const raw = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as unknown;
+  const raw = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as Manifest;
   const withLedger = ledgerDue || manifest.full === true;
   const rels = Object.keys(manifest.files).filter((rel) => rel !== "ledger.sqlite" || withLedger);
   const files = Object.fromEntries(rels.map((rel) => [rel, statSync(join(dir, rel)).size]));
-  const base = `${cfg.controlUrl}/v1/rigs/${encodeURIComponent(cfg.rig)}/exports/${name}`;
-  const auth = { authorization: `Bearer ${cfg.controlToken}` };
-  const begin = await f(base, {
-    method: "POST",
-    headers: { ...auth, "content-type": "application/json" },
-    body: JSON.stringify({ manifest: raw, files }),
-  });
-  const started = await answer(begin, `export ${name}`);
-  if (begin.status === 409) throw new UploadError(`export ${name}: ${String(started.error)}`, true);
-  let have = started as unknown as Have;
-  const chunk = cfg.chunkBytes ?? 8 * 1024 * 1024;
+  const begin = () =>
+    answer(
+      `export ${name}`,
+      control.call(EXPORT_BEGIN, { params: { name }, body: { manifest: raw, files } }),
+    );
+  const started = await begin();
+  // Control has another export of that name from the rig.
+  if (!started.ok) throw new UploadError(`export ${name}: ${started.refused.words}`, true);
+  let have = started.answer;
+  const chunk = cfg.chunkBytes ?? PIECE_BYTES;
   for (const rel of rels) {
     if (have.done.includes(rel)) continue;
     const total = files[rel] as number;
@@ -115,21 +131,20 @@ async function uploadOne(cfg: UploadConfig, name: string, ledgerDue: boolean): P
         }
         if (read !== n)
           throw new UploadError(`export ${name}: ${rel} changed while it was sent`, false);
-        const res = await f(`${base}/file?path=${encodeURIComponent(rel)}&offset=${offset}`, {
-          method: "POST",
-          headers: { ...auth, "content-type": "application/octet-stream" },
-          body: new Uint8Array(buf),
-        });
-        const body = (await answer(res, `export ${name}, ${rel}`)) as {
-          received?: number;
-          complete?: boolean;
-          error?: string;
-        };
-        if (typeof body.received !== "number")
-          throw new UploadError(`export ${name}, ${rel}: control did not say what it has`, false);
-        if (res.status === 409 && body.received === offset)
-          throw new UploadError(`export ${name}, ${rel}: ${String(body.error)}`, false);
+        const sent = await answer(
+          `export ${name}, ${rel}`,
+          control.call(EXPORT_FILE, {
+            params: { name },
+            query: { path: rel, offset },
+            bytes: new Uint8Array(buf),
+          }),
+        );
         // 409: control has another amount of this file: go on from there.
+        const body = sent.ok ? sent.answer : HaveOfFile.safeParse(sent.refused.answer).data;
+        if (body === undefined)
+          throw new UploadError(`export ${name}, ${rel}: control did not say what it has`, false);
+        if (!sent.ok && body.received === offset)
+          throw new UploadError(`export ${name}, ${rel}: ${sent.refused.words}`, false);
         offset = body.received;
         if (body.complete) have = { ...have, complete: true };
       } while (offset < total);
@@ -139,13 +154,8 @@ async function uploadOne(cfg: UploadConfig, name: string, ledgerDue: boolean): P
   }
   if (!have.complete) {
     // Every file is sent: control's own answer says whether it holds them all.
-    const check = await f(base, {
-      method: "POST",
-      headers: { ...auth, "content-type": "application/json" },
-      body: JSON.stringify({ manifest: raw, files }),
-    });
-    const now = (await answer(check, `export ${name}`)) as unknown as Have;
-    if (!now.complete)
+    const now = await begin();
+    if (!now.ok || !now.answer.complete)
       throw new UploadError(`export ${name}: control does not hold every file yet`, false);
   }
   return rels.includes("ledger.sqlite");
@@ -187,7 +197,7 @@ export async function uploadExportsOnce(
       break;
     }
     next.queue.shift();
-    next.uploaded = [...next.uploaded, name].slice(-50);
+    next.uploaded = [...next.uploaded, name].slice(-FIGURE_EXPORTS_MAX);
     next.lastUploadAt = now().toISOString();
     if (ledger) next.lastLedgerAt = next.lastUploadAt;
     if (next.lastError?.startsWith("upload failed")) next.lastError = undefined;

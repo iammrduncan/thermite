@@ -1,3 +1,4 @@
+import { PLAN_PROVIDER_TYPES } from "../../core/agents.ts";
 import {
   isFree,
   type ModelPrice,
@@ -8,9 +9,10 @@ import {
   type UsageRow,
   type UsageSums,
 } from "../../core/usage.ts";
-import { HARNESS_NAMES } from "../rig-model.ts";
-import type { Harness, ProviderModel } from "../store.ts";
-import { campaignHref, esc, icon, infoLabel, modeAvatar } from "./components.ts";
+import { HARNESS_NAMES } from "../rigs/index.ts";
+import type { Harness, ProviderModel } from "../store/index.ts";
+import { esc, icon, infoLabel, modeAvatar } from "./components/index.ts";
+import { campaignHref } from "./urls.ts";
 
 /**
  * Model use and cost on the dashboard (goal 075, as the owner approved the mockup `v010-usage`):
@@ -90,10 +92,11 @@ const AGENT: Record<string, [string, string]> = {
   workers: ["Workers", ""],
   planner: ["Planner", ""],
   teachers: ["Teachers", ""],
-  combiner: ["Teachers", "merged by"],
+  merged_by: ["Teachers", "merged by"],
   auditor: ["Auditor", ""],
-  panel: ["Review panel", ""],
+  review_panel: ["Review panel", ""],
   synthesizer: ["Synthesizer", "answer cards"],
+  final_writer: ["Final writer", "research paper"],
 };
 const WORK = new Set(["workers", "planner"]);
 export const harnessWord = (h: string) => HARNESS_NAMES[h as Harness] ?? h;
@@ -602,7 +605,7 @@ export const PRICE_WORDS = {
 } as const;
 
 /** Provider types whose calls are on a plan: their models have no price. */
-const PLAN_TYPES = new Set(["claude", "chatgpt"]);
+const PLAN_TYPES = new Set<string>(PLAN_PROVIDER_TYPES);
 
 const MP_TIP = {
   model:

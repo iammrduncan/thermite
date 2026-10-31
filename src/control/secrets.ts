@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -44,6 +44,16 @@ export class SecretBox {
     const c = createCipheriv("aes-256-gcm", this.key, iv);
     const ct = Buffer.concat([c.update(plain, "utf8"), c.final()]);
     return `s1:${Buffer.concat([iv, c.getAuthTag(), ct]).toString("base64")}`;
+  }
+
+  /**
+   * A digest of `text` that only this box's key makes (HMAC-SHA256 with a key drawn from it), in
+   * hex: it changes when the text does, and tells nothing of the text to anyone without the key.
+   * A rig's config value on the message bus carries one as its revision.
+   */
+  digest(text: string): string {
+    const key = Buffer.from(hkdfSync("sha256", this.key, Buffer.alloc(0), "thermite digest", 32));
+    return createHmac("sha256", key).update(text, "utf8").digest("hex").slice(0, 32);
   }
 
   open(sealed: string): string {

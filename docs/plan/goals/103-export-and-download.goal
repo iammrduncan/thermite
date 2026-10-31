@@ -30,12 +30,12 @@ On 2026-10-23 the owner wanted to take a research run's whole record (knowledge,
 
 ## Done when
 
-- [x] **Export** on a rig's page and a run's page sends `export_now` with `full: true` or `false` as chosen, and says where the export will show. Test: `src/control/exports.test.ts`.
-- [x] A full export holds a running research run's folder, and a running hill climb's that recorded a note; a normal export does not; the run's end still exports its folder at `research/<run>/folder/`. Test: `src/harness/export-notes.test.ts`.
-- [x] The archive route gives a `.tar.gz` whose files match the export's kept files and their SHA-256, with the manifest; it refuses without the owner's token, and answers 404 for an unknown or incomplete export. Test: `src/control/exports.test.ts`.
-- [x] The Exports page lists each export with its fields, and **Download** only for a complete one; the dashboard's download needs the owner's session. Test: `src/control/exports.test.ts`.
+- [x] **Export** on a rig's page and a run's page sends `export_now` with `full: true` or `false` as chosen, and says where the export will show. Test: `tests/control/exports.test.ts`.
+- [x] A full export holds a running research run's folder, and a running hill climb's that recorded a note; a normal export does not; the run's end still exports its folder at `research/<run>/folder/`. Test: `tests/system/export-notes.test.ts`.
+- [x] The archive route gives a `.tar.gz` whose files match the export's kept files and their SHA-256, with the manifest; it refuses without the owner's token, and answers 404 for an unknown or incomplete export. Test: `tests/control/exports.test.ts`.
+- [x] The Exports page lists each export with its fields, and **Download** only for a complete one; the dashboard's download needs the owner's session. Test: `tests/control/exports.test.ts`.
 - [x] The pages match the code: Get a rig's results from control, Exports, REST API, MCP tools, signed commands, the rig's page, glossary, Set up the results repository, Stop, restart, remove or reset a rig, Take the result, Several rigs, Automate over REST, Your own project; the changelog has the change.
-- [x] **Export** on a run's page exports that run alone (**This run**, chosen there), outside the rig's chain of exports; the rig's choices stay beside it. Tests: `src/harness/export-notes.test.ts`, `src/control/exports.test.ts`.
+- [x] **Export** on a run's page exports that run alone (**This run**, chosen there), outside the rig's chain of exports; the rig's choices stay beside it. Tests: `tests/system/export-notes.test.ts`, `tests/control/exports.test.ts`.
 - [ ] On the deployment: a run's export of a closed research run holds its folder with its paper, and no other run; and a full export of a rig holding a research run reaches control, shows on the Exports page, and its download unpacks with the run's research folder and the ledger snapshot.
 
 ## Decisions
@@ -58,8 +58,8 @@ On 2026-10-23 the owner wanted to take a research run's whole record (knowledge,
 ## Progress
 
 - 2026-10-23: Goal written from the owner's words and the build brief, and built.
-  - Code: `src/harness/outbox.ts` (every run's folder in a full export), `src/control/tar-gz.ts` (the archive writer), `src/control/exports.ts` (`archiveEntries`, `archiveResponse`, the REST route), `src/control/store.ts` (`allRigExports`), `src/control/ui/exports.ts` (the **Export** menu and the Exports page), `src/control/dashboard.ts` (the routes, the rig's and the run's headers, `export_now`'s `full`), `src/control/command-progress.ts` (the words after **Export**), `src/control/mcp.ts` (`exports`), `src/control/ui/components.ts` (the sidebar).
-  - Tests: `src/control/exports.test.ts` (the archive, unpacked by the system's `tar`, with a long path; token rules; 404s; the Exports page; the dashboard's download; the Export form's choice on a rig's page and a run's), `src/control/tar-gz.test.ts` (the tar writer's blocks, checksum and pax records), `src/harness/export-notes.test.ts` (a full export's folders). Each new test of a change fails without it.
+  - Code: `src/harness/outbox.ts` (every run's folder in a full export), `src/control/tar-gz.ts` (the archive writer), `src/control/exports.ts` (`archiveEntries`, `archiveResponse`, the REST route), `src/control/store/exports.ts` (`all`), `src/control/ui/exports.ts` (the **Export** menu and the Exports page), `src/control/dashboard/records.ts`, `rigs/page.ts` and `campaigns/page.ts` (the routes, the rig's and the run's headers, `export_now`'s `full`), `src/control/command-progress.ts` (the words after **Export**), `src/control/mcp/kb.ts` (`exports`), `src/control/ui/components/index.ts` (the sidebar).
+  - Tests: `tests/control/exports.test.ts` (the archive, unpacked by the system's `tar`, with a long path; token rules; 404s; the Exports page; the dashboard's download; the Export form's choice on a rig's page and a run's), `tests/control/tar-gz.test.ts` (the tar writer's blocks, checksum and pax records), `tests/system/export-notes.test.ts` (a full export's folders). Each new test of a change fails without it.
   - Checks before the commit: typecheck, Biome, the touched test files and their neighbours, `npm run docs:build`, `npm run docs:check`, and the public check. No compose acceptance was run, as the owner asked.
 - 2026-10-23: Deployed. On the deployment, a full export of a rig that runs a research run was asked for with `export_now {full: true}`: 1,670 files, 454.5 MiB, complete on control about 8 minutes later, listed on the **Exports** page with **Download**. Left: the owner downloads it and checks that it unpacks with the run's research folder and the ledger snapshot (the last box).
 

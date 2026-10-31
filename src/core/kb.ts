@@ -1,9 +1,16 @@
 import { z } from "zod";
+import { MAX_LANES, NAME_PATTERN } from "./ids.ts";
+import { KB_BODY_MAX } from "./kb-index.ts";
+import { BROKEN_VERDICTS, SCREENED_VERDICTS, UNCLEAR_VERDICTS, WON_VERDICTS } from "./verdicts.ts";
 
 /**
- * Thermite's own knowledge base (goal 065): what control sends a rig's supervisor so a run's
- * agents can read the past research of the folders its campaign may read. Items are the agents'
- * and the judge's records: data, never instructions.
+ * Thermite's own knowledge base (goals 065 and 175), and its words. The knowledge base is on
+ * control. It holds one collection for each campaign; a collection holds the campaign's runs; a run
+ * holds slots, one for each writer; a slot holds items, and each item its versions. Thermite's code
+ * writes each run's `records` slot from the run's signed events; an agent writes only its own slot,
+ * with a `kb_item` event that its harness records signed. Control also sends a rig's supervisor the
+ * items of the collections a run's campaign may read. Items are the agents' and the judge's
+ * records: data, never instructions.
  */
 export const KbKind = z.enum([
   "run",
@@ -17,14 +24,401 @@ export const KbKind = z.enum([
   "hypothesis",
   "finding",
   "report",
+  "decision",
+  "surprise",
+  "journal",
+  "review",
+  "reference",
+  "paper",
 ]);
 export type KbKind = z.infer<typeof KbKind>;
 
-/** A kind's plural, as folders and counts say it: notes, hypotheses. */
+/**
+ * The kinds a `kb_item` event writes: blurbs (a short text) or files (a document kept whole). The
+ * records slot's runs, trials, experiments, attempts, sources, claims and hypotheses come only from
+ * Thermite's reading of the run's signed events (core/kb-index.ts). Which role may write which of
+ * them is set on the campaign (KbWrites).
+ */
+export const KB_WRITTEN_KINDS = [
+  "note",
+  "decision",
+  "surprise",
+  "journal",
+  "finding",
+  "review",
+  "doc",
+  "reference",
+  "report",
+  "paper",
+] as const satisfies readonly KbKind[];
+export const KbWrittenKind = z.enum(KB_WRITTEN_KINDS);
+export type KbWrittenKind = z.infer<typeof KbWrittenKind>;
+
+/** A kind's plural, as collections and counts say it: notes, hypotheses. */
 export const kbPlural = (kind: string): string =>
   kind === "hypothesis" ? "hypotheses" : `${kind}s`;
 
-/** One item of a campaign's folder, as control sends it. */
+// ---------------------------------------------------------------- an item's outcome
+
+/**
+ * How a change ended, as Thermite's code reads it from the records' own fields, never from what an
+ * agent wrote (goal 175): an attempt's from the judge's verdict, an experiment's from its result.
+ * won: confirmed better; screened: looked better, being confirmed; regress: worse than the
+ * champion; neutral: judged, and no better (neutral, not_confirmed, no_progress, tradeoff,
+ * infeasible); broken: it did not build or run, or broke a rule of the contract; unclear: no answer
+ * about the change itself (the rig failed, too noisy, evidence withdrawn, or nothing submitted);
+ * dropped: the planner dropped the experiment; open: no outcome yet. Other kinds have none.
+ */
+export const KB_OUTCOMES = [
+  "won",
+  "screened",
+  "regress",
+  "neutral",
+  "broken",
+  "unclear",
+  "dropped",
+  "open",
+] as const;
+export const KbOutcome = z.enum(KB_OUTCOMES);
+export type KbOutcome = z.infer<typeof KbOutcome>;
+
+/**
+ * An attempt's outcome from its verdict field (core/kb-index.ts: the verdict's word, then its
+ * change and why); none for the run's starting point, which is no change.
+ */
+export function verdictOutcome(verdict: string | undefined): KbOutcome | null {
+  const v = /^[a-z0-9_]+/.exec(verdict ?? "")?.[0];
+  if (!v) return "open";
+  if (v === "starting_point") return null;
+  if (WON_VERDICTS.includes(v)) return "won";
+  if (SCREENED_VERDICTS.includes(v)) return "screened";
+  if (v === "regress") return "regress";
+  if (BROKEN_VERDICTS.includes(v)) return "broken";
+  if (UNCLEAR_VERDICTS.includes(v)) return "unclear";
+  return "neutral";
+}
+
+/**
+ * Why the owner withdrew an attempt's evidence (goal 174), from its verdict field as
+ * core/kb-index.ts writes it ("invalidated (withdrawn: <why>)"); null for any other item.
+ */
+export function withdrawnWhy(kind: string, meta: Record<string, string>): string | null {
+  const v = meta.verdict ?? "";
+  if (kind !== "attempt" || !/^invalidated\b/.test(v)) return null;
+  return /\(withdrawn: ([\s\S]*)\)$/.exec(v)?.[1] ?? "The owner withdrew its evidence.";
+}
+
+/** The attempt an experiment's result field names ("Result: attempt a-7 (submitted)"), if any. */
+export const resultAttempt = (result: string | undefined): string | undefined =>
+  /^Result: attempt ([^\s;(]+)/.exec(result ?? "")?.[1];
+
+/**
+ * An item's outcome from its fields: an attempt's from its verdict, an experiment's from its result
+ * (dropped, its attempt's outcome, or unclear when its trial submitted nothing); none for other
+ * kinds. `attempt` gives the outcome of an attempt of the same run's records, if the knowledge
+ * base has it.
+ */
+export function kbOutcomeOf(
+  kind: string,
+  meta: Record<string, string>,
+  attempt: (ref: string) => KbOutcome | null | undefined,
+): KbOutcome | null {
+  // An attempt the static checks refused before building is broken, whether or not its verdict came.
+  if (kind === "attempt")
+    return !meta.verdict && meta.refused ? "broken" : verdictOutcome(meta.verdict);
+  if (kind !== "experiment") return null;
+  const result = meta.result ?? "";
+  if (!result) return "open";
+  if (result.startsWith("Dropped:")) return "dropped";
+  const ref = resultAttempt(result);
+  return ref ? (attempt(ref) ?? "open") : "unclear";
+}
+
+// ---------------------------------------------------------------- slots and addresses
+
+/** The slot Thermite's code writes in each run: the records it reads from the run's events. */
+export const KB_RECORDS = "records";
+
+/**
+ * The agents' slots, one for each writer, as goal 166's roles name them; a worker's has its lane,
+ * `worker-<lane>` (workerSlot). A writer writes only its own slot.
+ */
+export const KB_AGENT_SLOTS = [
+  "planner",
+  "teacher",
+  "merged-by",
+  "auditor",
+  "review-panel",
+  "synthesizer",
+  "final-writer",
+] as const;
+
+const WORKER_SLOT = /^worker-([1-9][0-9]?)$/;
+
+/** A worker's slot: `worker-` and its lane's number (`lane-3` or 3 give `worker-3`). */
+export function workerSlot(lane: string | number): string {
+  const n = typeof lane === "number" ? lane : Number(/^lane-(\d+)$/.exec(lane)?.[1]);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_LANES)
+    throw new Error(`not a lane of a worker's slot: ${lane}`);
+  return `worker-${n}`;
+}
+
+/** Whether a slot is an agent's: a role's, or a worker's with a lane a rig can have. */
+export function isAgentSlot(slot: string): boolean {
+  const lane = WORKER_SLOT.exec(slot)?.[1];
+  if (lane !== undefined) return Number(lane) <= MAX_LANES;
+  return (KB_AGENT_SLOTS as readonly string[]).includes(slot);
+}
+
+/**
+ * The owner's slot in a run (goal 176): the notes the owner writes from an item, through control
+ * alone. No event's writer has it (slotOfWriter), so no rig writes there.
+ */
+export const KB_OWNER = "owner";
+
+export const KbSlot = z
+  .string()
+  .refine((s) => s === KB_RECORDS || s === KB_OWNER || isAgentSlot(s), {
+    message: `a slot is ${KB_RECORDS}, ${KB_OWNER}, worker-<lane> or one of ${KB_AGENT_SLOTS.join(", ")}`,
+  });
+
+/**
+ * The slot an event's writer writes in, from the event the harness signed: Thermite's code (the
+ * harness) writes the records slot, an agent its own slot, named for its role and lane. Undefined:
+ * the writer has no slot, and writes no item.
+ */
+export function slotOfWriter(actor: string): string | undefined {
+  if (actor === CODE_WRITER) return KB_RECORDS;
+  return isAgentSlot(actor) ? actor : undefined;
+}
+
+/** The event's writer for a slot: slotOfWriter's other way. */
+export const writerOfSlot = (slot: string): string => (slot === KB_RECORDS ? CODE_WRITER : slot);
+
+/** The actor of Thermite's code's events, the writer of the records slot. */
+const CODE_WRITER = "harness";
+
+/**
+ * A written item's id in its slot: its number. In the records slot, where Thermite's reading of the
+ * run's events names each record by its id in the run (an experiment's, a note's number), a written
+ * item's number takes a `w` before it, so the two never meet.
+ */
+export const writtenRef = (slot: string, item: number): string =>
+  slot === KB_RECORDS ? `w${item}` : String(item);
+
+/** An item's place: its campaign's collection, its run, its writer's slot, its kind and its id. */
+export interface KbPlace {
+  campaign: string;
+  run: string;
+  slot: string;
+  kind: string;
+  ref: string;
+}
+
+/**
+ * An item's address, through what owns it (goal 170): `<campaign>/<run>/<slot>/<kind>:<ref>`. An
+ * agent's items are numbered in its slot (`gemv/gs-3/worker-1/finding:2`); the records slot's
+ * items keep their ids in the run (`gemv/gs-3/records/experiment:x-1`).
+ */
+export const kbAddress = (p: KbPlace): string =>
+  `${p.campaign}/${p.run}/${p.slot}/${p.kind}:${p.ref}`;
+
+const ADDRESS = /^([^/\s]+)\/([^/\s]+)\/([a-z0-9-]+)\/([a-z]+):([^\n]+)$/;
+
+/** An address read back into its parts; undefined for text that is not an item's address. */
+export function readKbAddress(text: string): KbPlace | undefined {
+  const m = ADDRESS.exec(text);
+  if (!m) return undefined;
+  const [, campaign = "", run = "", slot = "", kind = "", ref = ""] = m;
+  if (!NAME_PATTERN.test(campaign) || !NAME_PATTERN.test(run)) return undefined;
+  if (!KbSlot.safeParse(slot).success || !KbKind.safeParse(kind).success) return undefined;
+  return { campaign, run, slot, kind, ref };
+}
+
+export const KbAddress = z
+  .string()
+  .max(600)
+  .refine((s) => readKbAddress(s) !== undefined, {
+    message: "an item's address is <campaign>/<run>/<slot>/<kind>:<id>",
+  });
+
+// ---------------------------------------------------------------- the owner's list of a place
+
+/**
+ * What an item is, as the owner's list of a place (goal 176) sorts and filters it: a record,
+ * which Thermite's code writes in a run's records slot; a blurb, a short text an agent wrote; or a
+ * file, a document kept whole, whoever wrote it.
+ */
+export const KB_ITEM_TYPES = ["record", "blurb", "file"] as const;
+export type KbItemType = (typeof KB_ITEM_TYPES)[number];
+export const kbItemType = (x: { slot: string; file: unknown }): KbItemType =>
+  x.file ? "file" : x.slot === KB_RECORDS ? "record" : "blurb";
+
+/**
+ * What the list sorts by: an item's title, kind, outcome, writer (its slot), last change or file
+ * size. Folders sort by name or last change, and by name for the others.
+ */
+export const KB_LIST_SORTS = ["name", "kind", "outcome", "writer", "modified", "size"] as const;
+export type KbListSort = (typeof KB_LIST_SORTS)[number];
+
+// ---------------------------------------------------------------- who writes what
+
+/**
+ * The roles the agents' slots are named for, as a campaign says which kinds each may write: a
+ * worker's slots (`worker-<lane>`) are the worker's. The research roles write in the same slots
+ * (the research planner in `planner`, a research teacher in `teacher`).
+ */
+export const KB_WRITER_ROLES = [
+  "planner",
+  "worker",
+  "teacher",
+  "merged-by",
+  "auditor",
+  "review-panel",
+  "synthesizer",
+  "final-writer",
+] as const;
+export const KbWriterRole = z.enum(KB_WRITER_ROLES);
+export type KbWriterRole = z.infer<typeof KbWriterRole>;
+
+/** The role a slot is named for; undefined for the records slot, which only Thermite's code writes. */
+export function roleOfSlot(slot: string): KbWriterRole | undefined {
+  if (WORKER_SLOT.test(slot)) return isAgentSlot(slot) ? "worker" : undefined;
+  return KbWriterRole.safeParse(slot).data;
+}
+
+const KindList = z
+  .array(KbWrittenKind)
+  .max(KB_WRITTEN_KINDS.length)
+  .refine((k) => new Set(k).size === k.length, "a kind is named twice");
+
+/**
+ * Which kinds each role may write in its own slot, as a campaign sets it (the contract's
+ * `kb_writes`, goal 175): a role left out, or given none, writes nothing. A run keeps what its
+ * contract said when it started.
+ */
+export const KbWrites = z.partialRecord(KbWriterRole, KindList);
+export type KbWrites = z.infer<typeof KbWrites>;
+
+/**
+ * What a campaign that sets nothing lets each role write: the planner its decisions, surprises and
+ * notes; a worker its journal entries, surprises, notes and findings, and the files it writes
+ * (doc) or downloads (reference); a teacher notes, findings and docs; the auditor and the review
+ * panel reviews and decisions; the synthesizer reports; the final writer the paper and reports.
+ * The merged-by model, the model check and compaction write nothing.
+ */
+export const KB_WRITES_DEFAULT: KbWrites = {
+  planner: ["decision", "surprise", "note"],
+  worker: ["journal", "surprise", "note", "finding", "doc", "reference"],
+  teacher: ["note", "finding", "doc"],
+  auditor: ["review", "decision"],
+  "review-panel": ["review", "decision"],
+  synthesizer: ["report"],
+  "final-writer": ["paper", "report"],
+};
+
+/** What a contract lets each role write: its `kb_writes`, or KB_WRITES_DEFAULT when it sets none. */
+export function kbWritesOf(contract: unknown): KbWrites {
+  const set = (contract as { kb_writes?: unknown } | null | undefined)?.kb_writes;
+  const r = KbWrites.safeParse(set);
+  return set !== undefined && r.success ? r.data : KB_WRITES_DEFAULT;
+}
+
+/** The kinds a slot's writer may write under `writes`: none for the records slot. */
+export function kindsForSlot(writes: KbWrites, slot: string): KbWrittenKind[] {
+  const role = roleOfSlot(slot);
+  return role ? [...(writes[role] ?? [])] : [];
+}
+
+// ---------------------------------------------------------------- the kb_item event
+
+/** How one item stands to another: it supports it, contradicts it, or follows on from it. */
+export const KB_LINKS = ["supports", "contradicts", "follows"] as const;
+export const KbLinkRel = z.enum(KB_LINKS);
+export type KbLinkRel = z.infer<typeof KbLinkRel>;
+
+/** The most links one version of an item has: a write's own limit, refused past it. */
+export const KB_LINKS_MAX = 20;
+
+/** The longest text of a blurb, in characters: the longest item text (KB_BODY_MAX). Longer: a file. */
+export const KB_TEXT_MAX = KB_BODY_MAX;
+
+/**
+ * Where a rig's items' files wait in its outbox, each named by its SHA-256: the harness writes them,
+ * and the supervisor, which reads the outbox, puts each on the message bus once
+ * (core/link/kb-files.ts). The dot keeps them apart from the exports there.
+ */
+export const KB_OUTBOX_FILES = ".kb-files";
+
+/**
+ * An item's file, kept whole by its SHA-256: once in the rig's outbox, until the supervisor puts
+ * it on the message bus (core/link/kb-files.ts), then once in control's state. No size limit.
+ */
+export const KbItemFile = z.object({
+  sha256: z.string().regex(/^[0-9a-f]{64}$/, "a file's SHA-256 is 64 hex digits"),
+  /** Its name, as its writer gave it. */
+  name: z.string().trim().min(1).max(200),
+  /** Its media type: text/markdown, application/pdf, … */
+  type: z
+    .string()
+    .max(100)
+    .regex(/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/, "a media type, such as text/markdown"),
+  bytes: z.number().int().min(0),
+});
+export type KbItemFile = z.infer<typeof KbItemFile>;
+
+/**
+ * The files whose text control extracts and searches, by media type, and how it reads each: as
+ * text, as a web page with no markup, scripts or styles, or with PDF.js. Any other file is kept
+ * whole, and not searched.
+ */
+const KB_TEXT_READERS = {
+  "text/markdown": "text",
+  "text/x-markdown": "text",
+  "text/plain": "text",
+  "text/html": "html",
+  "application/xhtml+xml": "html",
+  "application/pdf": "pdf",
+} as const;
+export type KbTextReader = (typeof KB_TEXT_READERS)[keyof typeof KB_TEXT_READERS];
+/** The media types control extracts text from. */
+export const KB_TEXT_TYPES = Object.keys(KB_TEXT_READERS);
+/** How control reads a file's text, by its media type; undefined: it is kept whole. */
+export const kbTextReader = (type: string): KbTextReader | undefined =>
+  KB_TEXT_READERS[type.toLowerCase() as keyof typeof KB_TEXT_READERS];
+
+/**
+ * The body of a `kb_item` event (goal 175): one version of one item, in its writer's slot of the
+ * event's run (its subject). `item` is the item's number in its slot; `version` 1 makes the item,
+ * and each later version adds to the writer's own item, whose older versions stay. An item holds a
+ * text (a blurb) or a file, and links to other items by their addresses. The harness records it
+ * with the writer as the event's actor (slotOfWriter), and control stores it in that slot only.
+ */
+export const KbItemBody = z
+  .object({
+    slot: KbSlot,
+    item: z.number().int().positive(),
+    version: z.number().int().positive(),
+    kind: KbWrittenKind,
+    title: z.string().trim().min(1).max(300),
+    text: z.string().min(1).max(KB_TEXT_MAX).optional(),
+    file: KbItemFile.optional(),
+    links: z.array(z.object({ rel: KbLinkRel, to: KbAddress })).max(KB_LINKS_MAX),
+  })
+  .refine((b) => (b.text === undefined) !== (b.file === undefined), {
+    message: "an item holds a text or a file: one of the two",
+  });
+export type KbItemBody = z.infer<typeof KbItemBody>;
+
+/** A `kb_item` event's body, read and checked; or why it is not one, in words. */
+export function readKbItem(raw: unknown): { body: KbItemBody } | { refused: string } {
+  const r = KbItemBody.safeParse(raw);
+  if (r.success) return { body: r.data };
+  const words = r.error.issues.map((i) => `${i.path.join(".") || "the item"}: ${i.message}`);
+  return { refused: words.join("; ") };
+}
+
+/** One item of a campaign's collection, as control sends it. */
 export const KbItemWire = z.object({
   /** Increases on every change of any item: the sync's cursor. */
   seq: z.number().int().positive(),
@@ -49,11 +443,11 @@ export const KbItemWire = z.object({
 });
 export type KbItemWire = z.infer<typeof KbItemWire>;
 
-/** Control's answer to a supervisor's sync of one run's readable folders. */
+/** Control's answer to a supervisor's sync of one run's readable collections. */
 export const KbSync = z.object({
   campaign: z.string(),
-  /** The folders the run's campaign may read: its own first, then those the owner granted. */
-  folders: z.array(z.string()),
+  /** The collections the run's campaign may read: its own first, then those the owner granted. */
+  collections: z.array(z.string()),
   items: z.array(KbItemWire),
   /** The cursor for the next call (the last item's seq, or the one given when none came). */
   next: z.number().int().min(0),

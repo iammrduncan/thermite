@@ -1,6 +1,6 @@
 /**
  * Statistics for the judge: Student-t intervals on paired log ratios. Pure functions, tested
- * against reference values generated offline (src/testing/data/stats-reference.json).
+ * against reference values generated offline (tests/helpers/data/stats-reference.json).
  */
 
 const LANCZOS = [

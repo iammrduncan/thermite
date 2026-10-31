@@ -1,0 +1,243 @@
+import { buildInfo } from "../../src/common/build-info.ts";
+import { BUS_READ_MAX } from "../../src/common/bus/index.ts";
+import { newToken } from "../../src/common/secrets.ts";
+import { answerRigAsk } from "../../src/control/bus/index.ts";
+import { EventsApply, EventsMove, EventsWriter } from "../../src/control/events/index.ts";
+import { type Folded, foldReport, keepReport } from "../../src/control/ingest.ts";
+import { Screens } from "../../src/control/live/index.ts";
+import { ControlStore, type IngestReport } from "../../src/control/store/index.ts";
+import {
+  FoldCache,
+  keepFolds,
+  type RawEvent,
+  rigEventsPage,
+  type StoredEvent,
+  streamEvent,
+} from "../../src/control/views/index.ts";
+import { foldEvent, readLedger } from "../../src/control/views/stream.ts";
+import { canonicalJson, sha256Hex } from "../../src/core/canonical.ts";
+import { EVENT_STREAM, EVENT_STREAM_CONFIG } from "../../src/core/link/events.ts";
+import { reportSubject } from "../../src/core/link/report.ts";
+import { asMessage, FakeBus } from "./fake-bus.ts";
+
+/**
+ * Control's store as control's main makes it (goal 168, step 4): on its message bus, here the fake
+ * one, with the writer of the events stream, which publishes each report's events first, the move
+ * of the events table a store from before the stream holds, and the apply of the stream, which
+ * writes what control derives from the events (a command's outcome as the harness gave it, a model
+ * call's usage, the knowledge base) and hands them to control's views. A test takes a report with
+ * ingestReport(), which answers once its events are applied.
+ */
+
+interface OnBus {
+  bus: FakeBus;
+  writer: EventsWriter;
+  move: EventsMove;
+  apply: EventsApply;
+  /** The stream made, the apply's check of the store's place, then the move, as main.ts runs them. */
+  started: Promise<void>;
+}
+
+const onBus = new WeakMap<ControlStore, OnBus>();
+
+/**
+ * A store at `path` (in memory unless given) on `bus` (a fake bus of its own unless given), with
+ * the apply, the writer and the move started as control's main starts them.
+ */
+export function controlStore(path = ":memory:", bus = new FakeBus()): ControlStore {
+  return storeOnBus(new ControlStore(path), bus);
+}
+
+/**
+ * `store` on `bus`, as control's main puts its store there: the apply, the writer and the move
+ * started (an acceptance check gives the real bus, as `Bus` alike).
+ */
+export function storeOnBus(store: ControlStore, bus: FakeBus): ControlStore {
+  const apply = new EventsApply({ store, bus, retryMs: 5 });
+  const writer = new EventsWriter({ store, bus, apply, applyWaitMs: 2_000 });
+  const move = new EventsMove({ store, bus, retryMs: 5, published: () => void apply.nudge() });
+  const started = bus
+    .makeStream(EVENT_STREAM_CONFIG)
+    .then(() => apply.start())
+    .then(() => (apply.stopped ? undefined : writer.alone(() => move.run())));
+  onBus.set(store, { bus, writer, move, apply, started });
+  return store;
+}
+
+/**
+ * Rigs enrolled with control, as Add a rig and `thermite local enroll` enroll them: `rigs` names
+ * each rig, with the token it reports with, or gives only names (a random token each). A rig
+ * enrolled already keeps its token.
+ */
+export function enrollRigs(store: ControlStore, rigs: readonly string[] | Record<string, string>) {
+  const named = Array.isArray(rigs)
+    ? rigs.map((rig) => [rig, newToken().token] as const)
+    : Object.entries(rigs);
+  for (const [rig, token] of named)
+    if (!store.enrollments.rig(rig)) store.enrollments.enroll(rig, sha256Hex(token), "test");
+}
+
+/** The store's bus, its writer, its move and its apply, for a test that looks at them. */
+export function busOf(store: ControlStore): OnBus {
+  const o = onBus.get(store);
+  if (!o) throw new Error("a store controlStore() did not make has no bus");
+  return o;
+}
+
+/**
+ * A rig's report taken as control takes one that passed its checks (control/ingest.ts), in the
+ * writer's turn: its events after the held cursor of its ledger published to the events stream
+ * and applied, and the rig's row noting it. How many events it added. A report refused for now
+ * fails the test.
+ */
+export async function ingestReport(store: ControlStore, report: IngestReport): Promise<number> {
+  const o = busOf(store);
+  await o.started;
+  const kept = await o.writer.turn(() => keepReport(store, report));
+  if ("later" in kept) throw new Error(`the report was refused for now: ${kept.later}`);
+  return kept.added;
+}
+
+/**
+ * A report as control takes one from its rig's subject on the bus (control/ingest.ts's
+ * foldReport): `body` as the supervisor published it, on `rig`'s subject. What control made of
+ * it: folded, skipped, refused in words, or refused for now. `requireKeyAcceptance` holds a rig's
+ * first key for the owner.
+ */
+export async function foldOnBus(
+  store: ControlStore,
+  rig: string,
+  body: unknown,
+  o: { requireKeyAcceptance?: boolean } = {},
+): Promise<Folded> {
+  await busOf(store).started;
+  const m = asMessage({
+    stream: "REPORTS",
+    subject: reportSubject(rig),
+    seq: 1,
+    id: undefined,
+    data: JSON.stringify(body),
+    headers: {},
+  });
+  const intake = {
+    store,
+    control: buildInfo(),
+    requireKeyAcceptance: Boolean(o.requireKeyAcceptance),
+  };
+  const folded = await foldReport(intake, m);
+  // Applied before it answers, as control's consumer acks; a page refused for now waits.
+  if (!("later" in folded)) await applied(store);
+  return folded;
+}
+
+/**
+ * A command's outcome as control takes it from its rig's events (control/events/apply.ts):
+ * applied (`delivered`), not applied (`failed`) or refused (`rejected`), with the outcome the
+ * harness recorded. Whether the command was pending.
+ */
+export function answerCommand(
+  store: ControlStore,
+  rig: string,
+  id: string,
+  status: "delivered" | "failed" | "rejected",
+  outcome: unknown,
+): boolean {
+  const pending = store.commands.get(id)?.status === "pending";
+  const at = new Date().toISOString();
+  const kept = canonicalJson(outcome ?? {});
+  if (status === "rejected") store.commands.confirmRejected(rig, id, kept, at);
+  else store.commands.confirmApplied(rig, id, status, kept, at);
+  return pending;
+}
+
+/**
+ * A rig's supervisor's figures as control takes them in its regular call on the bus
+ * (control/bus/asks.ts): control's answer, which names its place in the rig's reports, or its
+ * refusal in words.
+ */
+export function figuresOnBus(store: ControlStore, rig: string, figures: unknown): object {
+  const deps = { store, control: buildInfo(), privateKeyPem: "", screens: new Screens() };
+  return answerRigAsk(deps, rig, "figures", figures);
+}
+
+/**
+ * The same as figuresOnBus, as a response a test reads as it read control's answer over HTTP:
+ * 200 with control's answer, or 400 with its refusal in `error`.
+ */
+export function figuresCall(store: ControlStore, rig: string, figures: unknown): Response {
+  const answer = figuresOnBus(store, rig, figures) as { refused?: string };
+  return answer.refused === undefined
+    ? Response.json(answer)
+    : Response.json({ error: answer.refused }, { status: 400 });
+}
+
+/**
+ * Waits until the apply has applied every event the stream holds: the move of an old store's
+ * table first, as control's start runs it.
+ */
+export async function applied(store: ControlStore): Promise<void> {
+  const o = busOf(store);
+  await o.started;
+  await o.apply.nudge();
+}
+
+/** Stops the store's move and apply, for a test that opens the same store again. */
+export function closeBus(store: ControlStore): void {
+  const o = busOf(store);
+  o.move.close();
+  o.apply.close();
+}
+
+/**
+ * A rig's events as control holds them, oldest first, under the current names, read from its
+ * events stream as `GET /v1/rigs/<rig>/events` reads them (each one's seq is its place there),
+ * once the apply has applied it.
+ */
+export async function heldEvents(store: ControlStore, rig: string): Promise<RawEvent[]> {
+  await applied(store);
+  return await rigEventsPage(store, { rig, after: 0, limit: BUS_READ_MAX });
+}
+
+/**
+ * Folds of the store's events made now, in one pass over its events stream from the first
+ * message, as control's start makes them: what the folds control kept must give the same views
+ * as.
+ */
+export async function freshFolds(store: ControlStore): Promise<FoldCache> {
+  await applied(store);
+  const { bus } = busOf(store);
+  const folds = new FoldCache(store, bus);
+  for (let from = 1; ; ) {
+    const read = await bus.read(EVENT_STREAM, { from, limit: BUS_READ_MAX });
+    if (read.next <= from) return folds;
+    folds.take(
+      read.messages.flatMap((m) => streamEvent(m) ?? []),
+      read.next - 1,
+    );
+    if (read.done) return folds;
+    from = read.next;
+  }
+}
+
+/**
+ * A rig ledger's events as its fold takes them (views/stream.ts), oldest first: from the store's
+ * events stream, once the apply has applied it.
+ */
+export async function foldedEvents(
+  store: ControlStore,
+  rig: string,
+  ledger: string,
+): Promise<StoredEvent[]> {
+  await applied(store);
+  const out: StoredEvent[] = [];
+  for (let from = 1; ; ) {
+    const subjects = keepFolds(store).subjectsOf(rig);
+    const page = await readLedger(busOf(store).bus, { rig, ledger, subjects, from });
+    for (const e of page.events) {
+      const stored = foldEvent(e);
+      if (stored) out.push(stored);
+    }
+    if (page.done || page.next <= from) return out;
+    from = page.next;
+  }
+}

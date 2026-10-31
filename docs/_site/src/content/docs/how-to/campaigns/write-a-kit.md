@@ -112,9 +112,11 @@ These are a `kit.json`'s placeholders. The **New campaign** page has a shorter s
 
 A run stopped at a limit, or that exits with an error, makes the change `crash_candidate`.
 
+When the measurement needs a program of the kit's beside the candidate, such as one that sends it requests and times each answer, put that program in `run.driver`. The judge starts it with `run.command`, as a user of its own that the candidate's code can't reach, and joins the two by their standard input and output: the driver writes to the candidate and reads its answers. The driver writes `{out}`; it gets no `{build}`, and the candidate's command gets no `{out}`. The run ends when the driver does ([A kit's driver](../../reference/kit-manifest.md#a-kits-driver)).
+
 ## 6. Write the check
 
-The check runs after every run that ended well, as the judge, in the kit's folder. There `{kit}` is the whole kit, `{params}` and `{params_json}` are the judge's own copies of the cell's parameters, and `{out}` holds the run's results. Its last line of output is one JSON object:
+The check runs after every run that ended well, as a checker user of its own, in a folder of its own. There `{kit}` is the whole kit, which it reads, `{params}` and `{params_json}` are the judge's own copies of the cell's parameters, and `{out}` holds the run's results. It can't write to the kit or to `/tmp`: reach the kit's files through `{kit}` or `{kit:<path>}`, not by a path relative to the working folder, and write temporary files to the check's own folder, its `TMPDIR`. Its last line of output is one JSON object:
 
 ```json
 {"pass": false, "reasons": ["max abs error 0.31 above 0.002"], "max_err": 0.31}

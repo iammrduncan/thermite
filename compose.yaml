@@ -1,7 +1,14 @@
 # Thermite local deployment: one rig (harness + supervisor) and the control service.
-# Run `npm run dev:init` first; it writes local tokens to .dev/secrets/ (git-ignored).
+# Run `npm run dev:init` first; it writes local tokens to .dev/secrets/ (git-ignored). At each `up`,
+# the enroll service enrolls the rig with control and writes its token there.
 # Works with `docker compose`, `podman compose` and podman-compose.
 name: thermite
+
+# Every container's log, bounded (goal 173): with Docker, at most three files of 50 MB each; with
+# Podman, which reads only max-size, one file of at most 50 MB, started again when it is full.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "50m", max-file: "3" }
 
 services:
   control:
@@ -13,12 +20,13 @@ services:
       # (THERMITE_CONTROL_ADMIN_TOKEN_SHA256, from `thermite token new`).
       THERMITE_CONTROL_ADMIN_TOKEN_FILE: /run/secrets/control-admin-token
       THERMITE_CONTROL_OPERATOR_TOKEN_FILE: /run/secrets/control-operator-token
-      THERMITE_CONTROL_RIG_TOKENS_FILE: /run/secrets/control-rig-tokens
       THERMITE_CONTROL_PUBKEY_EXPORT: /keys/control-signing.pub
       THERMITE_CONTROL_STALE_SECONDS: "${THERMITE_CONTROL_STALE_SECONDS:-180}"
       THERMITE_CONTROL_OFFLINE_SECONDS: "${THERMITE_CONTROL_OFFLINE_SECONDS:-900}"
       # Control's address as rigs and the machines it sets rigs up on reach it.
       THERMITE_CONTROL_PUBLIC_URL: "${THERMITE_CONTROL_PUBLIC_URL:-}"
+      # "1": that address may be plain http to another host, on a network you trust.
+      THERMITE_CONTROL_ALLOW_PLAIN_HTTP: "${THERMITE_CONTROL_ALLOW_PLAIN_HTTP:-}"
       # The images control deploys rigs from on machines (Rigs › Add a rig).
       THERMITE_RIG_HARNESS_IMAGE: "${THERMITE_RIG_HARNESS_IMAGE:-}"
       THERMITE_RIG_HARNESS_CUDA_IMAGE: "${THERMITE_RIG_HARNESS_CUDA_IMAGE:-}"
@@ -35,11 +43,29 @@ services:
       THERMITE_LIFECYCLE: "${THERMITE_LIFECYCLE:-}"
       THERMITE_COMPOSE_PROJECT: thermite
       THERMITE_COMPOSE_SERVICES: '{"local-1":{"harness":"harness","supervisor":"supervisor"},"local-2":{"harness":"harness-2","supervisor":"supervisor-2"}}'
+      # The message bus (the nats service below), as control reaches it. Control needs it: it keeps
+      # every rig's events there, and the rigs reach it only there.
+      THERMITE_NATS_URL: nats://nats:4222
+      # The bus as rigs on other machines and clusters reach it (empty: the host of
+      # THERMITE_CONTROL_PUBLIC_URL, port 4222). Control gives it to the rigs it sets up.
+      THERMITE_NATS_PUBLIC_URL: "${THERMITE_NATS_PUBLIC_URL:-}"
+      # Control writes the bus's users (each rig's key) and its TLS certificate here; the server
+      # reads them.
+      THERMITE_NATS_CONFIG_DIR: /nats-config
+      # The certificate of control's own authority for the bus, which the supervisors trust.
+      THERMITE_NATS_CA_EXPORT: /keys/bus-ca.pem
+      # The free space control keeps on its state and in the bus's store (GiB; empty: 5): below it,
+      # new runs wait.
+      THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
 
     volumes:
       - control-state:/var/lib/thermite-control
       - control-pub:/keys
-    secrets: [control-admin-token, control-operator-token, control-rig-tokens]
+      - nats-config:/nats-config
+    secrets: [control-admin-token, control-operator-token]
+    # The bus's folder is control's (nats-init) before control first writes into it.
+    depends_on:
+      nats-init: { condition: service_completed_successfully }
     ports: ["127.0.0.1:${THERMITE_CONTROL_PORT:-8800}:8800"]
     networks: [control]
     # Control lists model providers' models: a provider on this machine is at host.docker.internal
@@ -48,6 +74,150 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+    logging: *logging
+    # Control's health: 503 while it starts, and while one of its loops is late (/v1/health).
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8800/v1/health',{signal:AbortSignal.timeout(5000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+
+  # The message bus (goal 168): NATS with JetStream, beside control. The supervisors send their
+  # reports and live lines here and take their commands and their rig's config from here; control
+  # folds the reports and the live lines, keeps every rig's events here, however they came,
+  # publishes the commands and writes each rig's config, sealed to the rig. Every connection is over TLS, with the certificate that control's own
+  # authority signs, and signs in with a key the server knows from the users control writes:
+  # control's own, and one for each rig whose supervisor registered its key. The harness never
+  # reaches it. Its port, NATS's own, is published on this machine's loopback only, unless
+  # THERMITE_NATS_PUBLISH names an address and port of its own: rigs on other machines reach it
+  # there.
+  nats:
+    image: docker.io/library/nats:2.15.1-alpine@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde
+    # Its settings are written as it starts, in its own /tmp: the largest message (REPORT_MAX_BYTES
+    # in src/core/link/report.ts), at most 1,024 connections, 2 s for a connection's TLS and 3 s
+    # to sign in, monitoring on its own loopback for the health check, JetStream's store on its
+    # volume (at most THERMITE_NATS_STORE, when set), TLS with control's certificate, and the users
+    # (BUS_TLS_FILES and BUS_USERS_FILE in src/control/bus/), included from the folder control
+    # writes them to. It starts once control has written them, and reads them again when control
+    # asks.
+    command:
+      - sh
+      - -c
+      - |
+        store="store_dir: /data"
+        [ -z "$$THERMITE_NATS_STORE" ] || store="$$store, max_file_store: $$THERMITE_NATS_STORE"
+        cat > /tmp/thermite.conf <<EOF
+        max_payload: 8388608
+        max_connections: 1024
+        http: 127.0.0.1:8222
+        jetstream { $$store }
+        tls {
+          cert_file: "/etc/nats/thermite/server-cert.pem"
+          key_file: "/etc/nats/thermite/server-key.pem"
+          timeout: 2
+        }
+        authorization { timeout: 3 }
+        include ../etc/nats/thermite/users.conf
+        EOF
+        trap 'exit 0' TERM INT
+        [ -s /etc/nats/thermite/users.conf ] || echo "waiting for control to write the bus's users and certificate"
+        until [ -s /etc/nats/thermite/users.conf ] && [ -s /etc/nats/thermite/server-cert.pem ] && [ -s /etc/nats/thermite/server-key.pem ]; do sleep 1; done
+        # Go frees the blocks a read loaded only when it collects: told the container's limit, less
+        # a fifth, it collects in time, where without it a read gets the server stopped.
+        limit=$$(cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null)
+        case "$$limit" in ''|max) ;; *) export GOMEMLIMIT=$$((limit / 100 * 78)) ;; esac
+        exec nats-server -c /tmp/thermite.conf
+    environment:
+      THERMITE_NATS_STORE: "${THERMITE_NATS_STORE:-}"
+    # Its memory: the index of each stream's subjects, and the blocks a read loads.
+    mem_limit: "${THERMITE_NATS_MEMORY:-256m}"
+    # A user of its own, in control's group: it reads the certificate's key through the group.
+    user: "10002:10001"
+    volumes:
+      - nats-data:/data
+      - nats-config:/etc/nats/thermite
+    ports: ["${THERMITE_NATS_PUBLISH:-127.0.0.1:4222}:4222"]
+    # Control writes the users and the certificate; nats-init gives the folders to their users.
+    depends_on:
+      control: { condition: service_started }
+      nats-init: { condition: service_completed_successfully }
+    networks: [control]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    logging: *logging
+
+  # Gives the bus's folders to their users before the bus starts, then ends: the folder of the
+  # files control writes for the bus to control's user (10001), and the bus's store to the bus's
+  # own (10002), each file it does not have yet. Not every engine gives a new volume the owner its
+  # first container's image has, and a store from before was root's. Podman gives an empty volume
+  # the owner of each container that mounts it, until it holds a file: an empty folder gets `.keep` first.
+  # It runs as root with only the capabilities to read every folder of the store and to give files
+  # away, and no network.
+  nats-init:
+    image: docker.io/library/nats:2.15.1-alpine@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde
+    command: ["sh", "-c", "cd /etc/nats/thermite && { ls -A | grep -q . || touch .keep; } && chown 10001:10001 . && { [ ! -e .keep ] || chown 10001:10001 .keep; } && find /data ! -user 10002 -exec chown 10002:10001 {} +"]
+    user: "0:0"
+    volumes:
+      - nats-data:/data
+      - nats-config:/etc/nats/thermite
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_READ_SEARCH]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    logging: *logging
+
+  # Backups of control's state and of every rig's events, and their restore (goal 173), with
+  # control's image: never started by `up`. It mounts control's state, the bus's store (to set it
+  # aside before a restore) and .dev/backups, reaches the bus as control does, and runs as root
+  # with only the capabilities to read control's files and give what it writes to their owners:
+  #   docker compose --profile backup run --rm backup thermite backup /backups
+  #   docker compose --profile backup run --rm backup thermite restore --control http://control:8800 /backups/<name>
+  backup:
+    profiles: [backup]
+    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    command: ["thermite", "help"]
+    environment:
+      THERMITE_CONTROL_DIR: /var/lib/thermite-control
+      THERMITE_NATS_URL: nats://nats:4222
+    user: "0:0"
+    volumes:
+      - control-state:/var/lib/thermite-control
+      - nats-data:/bus-store
+      - ./.dev/backups:/backups
+    networks: [control]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    logging: *logging
+
+  # Enrolls the rig local-1 with control at each `up`, once control answers and before the rig's
+  # supervisor starts: control makes the rig's token and keeps only its hash, and the step writes
+  # the token into .dev/secrets/control-rig-token, which the supervisor reads. A token written
+  # before is kept while control has the rig enrolled; a control whose state was removed enrolls
+  # the rig again. It runs as root with only the capability to write that file, which is yours.
+  enroll:
+    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    command: ["thermite", "local", "enroll", "local-1", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/control-rig-token"]
+    user: "0:0"
+    volumes:
+      - ./.dev/secrets/control-rig-token:/enroll/control-rig-token
+    secrets: [control-admin-token]
+    networks: [control]
+    depends_on: [control]
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    logging: *logging
 
   harness:
     build: { context: ., dockerfile: containers/harness/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
@@ -76,22 +246,35 @@ services:
       THERMITE_LLM_USD_PER_MTOK_IN: "${THERMITE_LLM_USD_PER_MTOK_IN:-}"
       THERMITE_LLM_USD_PER_MTOK_OUT: "${THERMITE_LLM_USD_PER_MTOK_OUT:-}"
       THERMITE_EXPORT_MINUTES: "${THERMITE_EXPORT_MINUTES:-60}"
+      # The free space the rig keeps (GiB; empty: 5), and how long a drain waits before it asks
+      # the owner (minutes; empty: 60).
+      THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
+      THERMITE_DRAIN_MINUTES: "${THERMITE_DRAIN_MINUTES:-}"
     # A model server on this machine (native Linux Docker lacks the name otherwise).
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - harness-state:/var/lib/thermite
       - harness-scratch:/scratch
-      - ./.dev/inbox:/inbox:ro
+      # In the image's folder that only the controller enters: no role reaches the inbox.
+      - ./.dev/inbox:/controller/inbox:ro
       - outbox:/outbox
       - control-pub:/keys:ro
     secrets: [harness-supervisor-token, harness-proposer-token, model-api-key]
     # No published ports: only the rig's supervisor reaches the harness.
-    networks: [rig, egress]
+    networks: [rig, rig-egress]
     # The broker's needs only: separate users for roles, ownership of scratch, killing leftovers.
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+    logging: *logging
+    # The harness's health: 503 while one of its loops is late (judge, scheduler, exports).
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8700/v1/health',{signal:AbortSignal.timeout(5000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
 
   supervisor:
     build: { context: ., dockerfile: containers/supervisor/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
@@ -100,32 +283,74 @@ services:
       HARNESS_URL: http://harness:8700
       CONTROL_URL: http://control:8800
       THERMITE_POLL_SECONDS: "${THERMITE_POLL_SECONDS:-60}"
-      # Commands (pause, messages, checks) are fetched on their own, shorter interval.
-      THERMITE_COMMAND_POLL_SECONDS: "${THERMITE_COMMAND_POLL_SECONDS:-5}"
       THERMITE_MODEL_ROUTE_POLL_SECONDS: "${THERMITE_MODEL_ROUTE_POLL_SECONDS:-30}"
       THERMITE_LIVE_INTERVAL_MS: "${THERMITE_LIVE_INTERVAL_MS:-3000}"
       # How often past research comes from control into each running run's knowledge/ (0: off).
       THERMITE_KB_SYNC_SECONDS: "${THERMITE_KB_SYNC_SECONDS:-180}"
+      # The free space a model download leaves where it lands (GiB; empty: 5).
+      THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
       THERMITE_HARNESS_TOKEN_FILE: /run/secrets/harness-supervisor-token
       THERMITE_CONTROL_TOKEN_FILE: /run/secrets/control-rig-token
       # Locally, both rigs' supervisors push to one results repository on a shared volume.
       THERMITE_RESULTS_REMOTE: "${THERMITE_RESULTS_REMOTE:-file:///results/results.git}"
       # The advisors: teachers, their merged by model, auditor and review panel (off unless a config file is given).
       THERMITE_ADVISORS_FILE: "${THERMITE_ADVISORS_FILE:-}"
+      # The message bus, the one way the rig and control talk but for the registration of its
+      # keys and its results: over TLS, trusting control's authority.
+      THERMITE_NATS_URL: nats://nats:4222
+      THERMITE_NATS_CA_FILE: /keys/bus-ca.pem
     volumes:
       - supervisor-home:/var/lib/thermite-supervisor
-      - ./.dev/inbox:/inbox
+      # In the image's folder that only the supervisor's group enters: no advisor reaches the inbox.
+      - ./.dev/inbox:/supervisor/inbox
       - outbox:/outbox:ro
       - results:/results
       - ./.dev/advisors:/etc/thermite/advisors:ro
+      - control-pub:/keys:ro
     secrets: [harness-supervisor-token, control-rig-token]
-    networks: [rig, control, egress]
-    depends_on: [harness, control]
+    networks: [rig, control, rig-egress]
+    # Its token for control, which the enroll step writes, is there before it starts.
+    depends_on:
+      harness: { condition: service_started }
+      control: { condition: service_started }
+      enroll: { condition: service_completed_successfully }
+    # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
+    # supervisor and each advisor's program as users of their own. The supervisor keeps none.
     cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+    logging: *logging
+    # The supervisor's health, in its container only: 503 while its report, command or live loop is late.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8701/v1/health',{signal:AbortSignal.timeout(5000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
 
   # A second rig for multi-rig checks: `docker compose --profile two-rigs up`.
+  # Enrolls the rig local-2 with control at each `up`, once control answers and before the rig's
+  # supervisor starts: control makes the rig's token and keeps only its hash, and the step writes
+  # the token into .dev/secrets/control-rig-token-2, which the supervisor reads. A token written
+  # before is kept while control has the rig enrolled; a control whose state was removed enrolls
+  # the rig again. It runs as root with only the capability to write that file, which is yours.
+  enroll-2:
+    profiles: [two-rigs]
+    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    command: ["thermite", "local", "enroll", "local-2", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/control-rig-token-2"]
+    user: "0:0"
+    volumes:
+      - ./.dev/secrets/control-rig-token-2:/enroll/control-rig-token-2
+    secrets: [control-admin-token]
+    networks: [control]
+    depends_on: [control]
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    logging: *logging
+
   harness-2:
     profiles: [two-rigs]
     build: { context: ., dockerfile: containers/harness/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
@@ -148,19 +373,32 @@ services:
       THERMITE_TRIAL_MINUTES: "${THERMITE_TRIAL_MINUTES:-}"
       THERMITE_MAX_TURNS: "${THERMITE_MAX_TURNS:-}"
       THERMITE_EXPORT_MINUTES: "${THERMITE_EXPORT_MINUTES:-60}"
+      # The free space the rig keeps (GiB; empty: 5), and how long a drain waits before it asks
+      # the owner (minutes; empty: 60).
+      THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
+      THERMITE_DRAIN_MINUTES: "${THERMITE_DRAIN_MINUTES:-}"
     extra_hosts: ["host.docker.internal:host-gateway"]
     volumes:
       - harness2-state:/var/lib/thermite
       - harness2-scratch:/scratch
-      - ./.dev/inbox:/inbox:ro
+      # In the image's folder that only the controller enters: no role reaches the inbox.
+      - ./.dev/inbox:/controller/inbox:ro
       - outbox2:/outbox
       - control-pub:/keys:ro
     secrets: [harness2-supervisor-token, harness2-proposer-token, model-api-key]
-    networks: [rig2, egress]
+    networks: [rig2, rig2-egress]
     cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+    logging: *logging
+    # The harness's health: 503 while one of its loops is late (judge, scheduler, exports).
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8700/v1/health',{signal:AbortSignal.timeout(5000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
 
   supervisor-2:
     profiles: [two-rigs]
@@ -170,33 +408,55 @@ services:
       HARNESS_URL: http://harness-2:8700
       CONTROL_URL: http://control:8800
       THERMITE_POLL_SECONDS: "${THERMITE_POLL_SECONDS:-60}"
-      # Commands (pause, messages, checks) are fetched on their own, shorter interval.
-      THERMITE_COMMAND_POLL_SECONDS: "${THERMITE_COMMAND_POLL_SECONDS:-5}"
       THERMITE_MODEL_ROUTE_POLL_SECONDS: "${THERMITE_MODEL_ROUTE_POLL_SECONDS:-30}"
       THERMITE_LIVE_INTERVAL_MS: "${THERMITE_LIVE_INTERVAL_MS:-3000}"
       THERMITE_KB_SYNC_SECONDS: "${THERMITE_KB_SYNC_SECONDS:-180}"
+      # The free space a model download leaves where it lands (GiB; empty: 5).
+      THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
       THERMITE_HARNESS_TOKEN_FILE: /run/secrets/harness2-supervisor-token
       THERMITE_CONTROL_TOKEN_FILE: /run/secrets/control-rig-token-2
       THERMITE_RESULTS_REMOTE: "${THERMITE_RESULTS_REMOTE:-file:///results/results.git}"
       THERMITE_ADVISORS_FILE: "${THERMITE_ADVISORS_FILE:-}"
+      # The message bus, the one way the rig and control talk but for the registration of its
+      # keys and its results: over TLS, trusting control's authority.
+      THERMITE_NATS_URL: nats://nats:4222
+      THERMITE_NATS_CA_FILE: /keys/bus-ca.pem
     volumes:
       - supervisor2-home:/var/lib/thermite-supervisor
-      - ./.dev/inbox:/inbox
+      # In the image's folder that only the supervisor's group enters: no advisor reaches the inbox.
+      - ./.dev/inbox:/supervisor/inbox
       - outbox2:/outbox:ro
       - results:/results
       - ./.dev/advisors:/etc/thermite/advisors:ro
+      - control-pub:/keys:ro
     secrets: [harness2-supervisor-token, control-rig-token-2]
-    networks: [rig2, control, egress]
-    depends_on: [harness-2, control]
+    networks: [rig2, control, rig2-egress]
+    depends_on:
+      harness-2: { condition: service_started }
+      control: { condition: service_started }
+      enroll-2: { condition: service_completed_successfully }
+    # Its entry's needs only, as root: closing its folders to the advisor users, and starting the
+    # supervisor and each advisor's program as users of their own. The supervisor keeps none.
     cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
+    logging: *logging
+    # The supervisor's health, in its container only: 503 while its report, command or live loop is late.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8701/v1/health',{signal:AbortSignal.timeout(5000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
 
 networks:
   rig: { internal: true }
   rig2: { internal: true }
   control: {}
-  egress: {}
+  # Each rig's own way out: one rig's containers reach no other rig's on it.
+  rig-egress: {}
+  rig2-egress: {}
 
 volumes:
   control-state: {}
@@ -210,11 +470,12 @@ volumes:
   outbox2: {}
   supervisor2-home: {}
   results: {}
+  nats-data: {}
+  nats-config: {}
 
 secrets:
   control-admin-token: { file: ./.dev/secrets/control-admin-token }
   control-operator-token: { file: ./.dev/secrets/control-operator-token }
-  control-rig-tokens: { file: ./.dev/secrets/control-rig-tokens.json }
   control-rig-token: { file: ./.dev/secrets/control-rig-token }
   harness-supervisor-token: { file: ./.dev/secrets/harness-supervisor-token }
   harness-proposer-token: { file: ./.dev/secrets/harness-proposer-token }

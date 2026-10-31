@@ -1,8 +1,11 @@
 import { chmodSync, lstatSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { z } from "zod";
+import type { RoleRunner } from "../../agents/runner.ts";
 import { MAX_LANES } from "../../core/contract.ts";
-import { killScope, runSupervised, type SupervisedResult, type SupervisedRun } from "./process.ts";
+import { MAX_RUN_MS } from "../../core/kit.ts";
+import { type PairOutcome, runPairSupervised } from "./pair.ts";
+import { killScope, runSupervised, type SupervisedResult } from "./process.ts";
 
 /**
  * Roles and the runner interface. Inside the harness container the broker (root) runs each
@@ -45,15 +48,24 @@ export const IDS = {
   planner: { uid: 10040, gid: 10040 },
   /** Model checks through OpenCode or Claude Code, apart from the lanes and the planner. */
   modelCheck: { uid: 10041, gid: 10041 },
+  /** The kit's check on judge card 0's jobs; card i's runs as checker-i (uid and gid 10050 + i). */
+  checker: { uid: 10050, gid: 10050 },
+  /** A kit's driver (run.driver) on judge card 0; card i's runs as driver-i (uid and gid 10060 + i). */
+  driver: { uid: 10060, gid: 10060 },
+  /**
+   * The checkers' group, which every checker's runs hold and the controller too: through it they
+   * read the kits and the baselines the controller keeps, which no other role may enter.
+   */
+  checkersGroup: 10049,
   /** Lanes with users in the image: the most a contract or a rig's settings may ask for. */
   maxLanes: MAX_LANES,
 } as const;
 
-/** The lane numbers below stop at IDS.maxLanes (src/core/lanes.test.ts checks it). */
+/** The lane numbers below stop at IDS.maxLanes (tests/system/lanes.test.ts checks it). */
 export const RoleSchema = z
   .string()
   .regex(
-    /^(builder|builder-[1-7]|run|run-[1-7]|planner|model-check|lane-([1-9]|1[0-6])|lane-([1-9]|1[0-6])-dev|agent-([1-9]|1[0-6]))$/,
+    /^(builder|builder-[1-7]|run|run-[1-7]|checker|checker-[1-7]|driver|driver-[1-7]|planner|model-check|lane-([1-9]|1[0-6])|lane-([1-9]|1[0-6])-dev|agent-([1-9]|1[0-6]))$/,
     "unknown role",
   );
 export type Role = z.infer<typeof RoleSchema>;
@@ -66,6 +78,11 @@ export function roleIds(role: Role): { uid: number; gid: number } {
   if (role === "run") return IDS.run;
   if (role === "planner") return IDS.planner;
   if (role === "model-check") return IDS.modelCheck;
+  const kitRole = /^(checker|driver)(?:-([1-7]))?$/.exec(role);
+  if (kitRole) {
+    const base = IDS[kitRole[1] as "checker" | "driver"].uid + Number(kitRole[2] ?? 0);
+    return { uid: base, gid: base };
+  }
   const judge = /^run-([1-7])$/.exec(role);
   if (judge) {
     const i = Number(judge[1]);
@@ -85,9 +102,6 @@ export function roleIds(role: Role): { uid: number; gid: number } {
     : { uid: IDS.laneBase + n, gid: IDS.laneBase + n };
 }
 
-/** The longest time limit a run may have: a day. A kit's time limits are held to it too. */
-export const MAX_RUN_MS = 24 * 3_600_000;
-
 export const RunRequest = z.object({
   role: RoleSchema,
   argv: z.array(z.string()).min(1),
@@ -102,6 +116,8 @@ export const RunRequest = z.object({
    * it alone is over the limit does the run end.
    */
   spareExe: z.string().min(1).startsWith("/").optional(),
+  /** The run's own first process is spared too: the terminal host, which holds the program. */
+  spareRoot: z.boolean().optional(),
   disk: z.object({ path: z.string().min(1), limitBytes: z.number().int().positive() }).optional(),
   /**
    * The role's processes and threads at once (RLIMIT_NPROC): a contract's lanes.limits.processes
@@ -140,7 +156,8 @@ export type RunRequest = z.input<typeof RunRequest>;
 
 export type RunOutcome = SupervisedResult;
 
-export interface Runner {
+/** The runner the agent runtimes share (agents/runner.ts), with what only the harness asks of it. */
+export interface Runner extends RoleRunner {
   /** True when roles really run as separate users. */
   readonly separated: boolean;
   run(req: RunRequest): Promise<RunOutcome>;
@@ -158,8 +175,12 @@ export interface Runner {
    * runs), leaving its plain commands running.
    */
   killRole(role: Role, opts?: { gpu?: boolean }): Promise<number>;
-  /** Runs a kit's check, a process of the harness itself; runSupervised when absent (tests). */
-  check?: ((spec: SupervisedRun) => Promise<SupervisedResult>) | undefined;
+  /**
+   * Runs a kit's driver and the candidate's command at once, each as its role's user (pair.ts):
+   * the driver's output is the candidate's input, and the candidate's output the driver's input.
+   * The pair ends when the driver does, and the candidate's processes with it.
+   */
+  runPair(driver: RunRequest, candidate: RunRequest): Promise<PairOutcome>;
 }
 
 /** Resolves `path` and checks it lies strictly inside `root` (symlinks resolved). */
@@ -194,22 +215,33 @@ export class LocalRunner implements Runner {
     this.scratchDir = scratchDir;
   }
 
-  async run(input: RunRequest): Promise<RunOutcome> {
+  /** A run's supervision here: the request's command and limits, as the current user. */
+  private spec(input: RunRequest) {
     const req = RunRequest.parse(input);
     insideRoot(this.scratchDir, req.cwd);
     const keep = req.keepBackground === true && /^lane-\d+$/.test(req.role) && !req.gpu;
-    const r = await runSupervised({
+    return {
       argv: req.argv,
       cwd: req.cwd,
       env: { PATH: process.env.PATH ?? "/usr/bin:/bin", TMPDIR: req.cwd, ...req.env },
       timeoutMs: req.timeoutMs,
       rssLimitBytes: req.rssLimitBytes,
       spareExe: req.spareExe,
+      spareRoot: req.spareRoot,
       disk: req.disk,
       stdin: req.stdin,
       captureBytes: req.captureBytes,
       leaveBackground: keep,
-    });
+    };
+  }
+
+  async runPair(driver: RunRequest, candidate: RunRequest): Promise<PairOutcome> {
+    return runPairSupervised(this.spec(driver), this.spec(candidate));
+  }
+
+  async run(input: RunRequest): Promise<RunOutcome> {
+    const req = RunRequest.parse(input);
+    const r = await runSupervised(this.spec(req));
     // Without users, a role's background work is known by its process groups.
     if (r.pgid !== undefined) {
       const groups = this.background.get(req.role) ?? new Set<number>();

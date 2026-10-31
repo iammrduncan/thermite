@@ -20,7 +20,7 @@ A contract is frozen: to change anything, you write a new version. The [contract
 | Field | What to write |
 | --- | --- |
 | `schema_version` | `1` |
-| `campaign` | The campaign's name: lowercase letters, digits, dots, dashes and underscores |
+| `campaign` | The campaign's name: up to 64 lowercase letters, digits, dashes and underscores, starting with a letter or a digit. No dot |
 | `version` | `1` for a new campaign. Raise it for every change |
 | `title` | One sentence for people. Agents see it too |
 | `mode` | `hill_climb`, `goal` or `research` |
@@ -69,7 +69,7 @@ Optional, in every mode:
 - `target` is required in a hill climb, and optional in the other modes. `type` is `cpu` or `cuda-gpu`. `class` is a free name for the kind of device, such as `generic-cpu`: it is required with `type`, but nothing checks it yet.
 - `editable_paths` are the files a change may touch: `**` matches any folders, `*` any part of a name. `forbidden_patterns` are regular expressions. A change outside the paths, or one that adds a matching line, is refused before it is built.
 - `objective.primary` names one of the kit's metrics, which way is better (`max` or `min`), and `min_effect`, the smallest gain that counts, as a fraction: `0.05` is 5%.
-- `cells` are measured for every change. `held_out_cells` run only when the judge confirms a change that already looked better, so a change can't win by helping only the cells agents see.
+- `cells` are measured for every change. `held_out_cells` run only when the judge confirms a change that already looked better. On each, the change's output must pass the kit's check, and its primary metric may be worse than the champion's by no more than twice `acceptance.equivalence_band`. In a goal campaign, a goal checked on a held-out cell must be met there too.
 - `acceptance.runs_per_cell` (1 to 9; 1 unless set) runs each cell several times per measurement and keeps the middle value. The **New campaign** page's **Runs per case** sets 3 unless changed, so write `3` to judge as a campaign made there does. `acceptance.equivalence_band` (0.005) is how close counts as "no change". On a noisy machine, such as a shared CPU, raise both: Thermite's own smoke check uses 3 and 0.05.
 - `acceptance.audit` sets when a confirmed win goes to the rig's auditor, if it has one: a gain above `absolute` (0.15, that is 15%), or above `ratio_to_median` (3) times the median of the run's earlier wins, once it has three. See [Decide what waits for you](decide-what-waits.md#audits).
 
@@ -199,7 +199,7 @@ A valid contract prints `ok <mode> <campaign> v<version> sha256=<hash>`. Otherwi
 
 - `lanes.count: Invalid input: expected number, received undefined`: add `count` to `lanes`.
 - `(root): Unrecognized key: "<field>"`: remove the field or fix its spelling. Contracts accept only known fields.
-- `campaign: lowercase id`: use lowercase letters, digits, dots, dashes and underscores.
+- `campaign: a campaign's name is lowercase letters, digits, dashes and underscores, …`: use only those, with no dot.
 
 The [contract reference](../../reference/contract.md#validation-messages) lists every message. Validation checks the contract alone. When a run starts, the rig also checks it against the kit: every cell, metric and verifier it names must be in the kit, and the kit's target must be the rig's. [If it is refused](start-from-command-line.md#if-it-is-refused) says what to do when that check fails.
 

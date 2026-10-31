@@ -1,6 +1,6 @@
 # How Thermite is planned
 
-Thermite's plans are public. Four kinds of file hold them:
+Thermite's plans are public. These files hold them:
 
 | File | What it holds |
 | --- | --- |
@@ -8,6 +8,7 @@ Thermite's plans are public. Four kinds of file hold them:
 | [release-v0.1.0.md](release-v0.1.0.md) | The plan for v0.1.0, the first release: its scope, its goals, its decisions and the steps to ship it. |
 | [decisions.md](decisions.md) | Settled decisions that shape the whole product, with dates. |
 | [goals/](goals/) | One goal per roadmap item: what it delivers, why, when it is done, its decisions and its progress. |
+| [code-clean-up-guide.md](code-clean-up-guide.md) | The guide for the code clean-up of v0.1.1 (goal 125), from the v0.1.1 audit: the map of the code, the themes of change, the rules of shape, the order of work, what to leave, the review guide and the owner's questions. |
 
 The roadmap says what comes next. A goal says what one piece of work is and when it is done. A release plan says how a version ships.
 

@@ -135,7 +135,9 @@ export function blockEffects(
 export function hardConstraintFailures(policy: Policy, blocks: readonly Block[]): string[] {
   const failures: string[] = [];
   for (const h of policy.hard_constraints) {
-    if (h.kind === "check") continue; // named checks are gates, decided before measurement
+    // A `check` constraint is refused at validation (goal 163); one in a contract stored before
+    // was never checked, and is not now.
+    if (h.kind === "check") continue;
     for (const cell of policy.cells) {
       const values = blocks.map((b) => b.candidate[h.metric]?.[cell]);
       if (values.some((v) => v === undefined || !Number.isFinite(v))) {

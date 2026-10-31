@@ -1,4 +1,4 @@
-import type { Ledger } from "../../ledger.ts";
+import type { Ledger } from "../../ledger/index.ts";
 import { attemptSettled } from "../coordinator.ts";
 import type { Registry } from "../registry.ts";
 

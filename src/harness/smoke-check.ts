@@ -1,13 +1,12 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
-import type { RigCheckReport } from "./agents/model-check.ts";
-import type { HarnessService } from "./service.ts";
-
-const run = promisify(execFile);
+import { git as gitRun, gitText } from "../common/git.ts";
+import { RIG_CHECK_PREFIX } from "../core/ids.ts";
+import { JUDGED_LIFECYCLES } from "../core/verdicts.ts";
+import type { RigCheckReport } from "./agents/index.ts";
+import type { HarnessService } from "./service/index.ts";
 
 /**
  * The smoke check: a judge-only campaign on the rig's own target, from the smoke kit and project
@@ -30,9 +29,6 @@ interface Candidate {
   accept?: string[];
 }
 
-/** Lifecycles after which a candidate's outcome no longer changes (as the judge acceptance has). */
-const SETTLED = ["judged", "rejected_v0", "duplicate", "promoted", "awaiting_approval", "errored"];
-
 /** The same files always make the same commit, so repeated smokes reuse their repositories. */
 const FIXED = {
   GIT_AUTHOR_NAME: "thermite",
@@ -45,12 +41,8 @@ const FIXED = {
 };
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
-  const { stdout } = await run("git", ["-c", "commit.gpgsign=false", ...args], {
-    cwd,
-    env: { ...process.env, ...FIXED },
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  return stdout.trim();
+  const out = await gitText(["-c", "commit.gpgsign=false", ...args], { cwd, env: FIXED });
+  return out.trim();
 }
 
 async function seedRepo(from: string, to: string, skip: string[]): Promise<string> {
@@ -127,7 +119,7 @@ export async function smokeCheck(o: {
     readFileSync(join(o.checksDir, "examples", "contracts", "smoke-cpu.json"), "utf8"),
   ) as Record<string, unknown>;
   // A campaign per kit commit: a newer image's smoke never collides with an older contract.
-  contract.campaign = `rig-check-${kitName}-${kit.slice(0, 8)}`;
+  contract.campaign = `${RIG_CHECK_PREFIX}${kitName}-${kit.slice(0, 8)}`;
   contract.version = 1;
   contract.title = `Rig check: smoke (${kitName})`;
   contract.project = {
@@ -140,8 +132,8 @@ export async function smokeCheck(o: {
 
   const runId = `check-smoke-${randomUUID().replace(/-/g, "").slice(0, 8)}`;
   // Assigning pauses the rig's other runs; the ones running now are resumed afterwards.
-  const wereRunning = ledger
-    .listRuns()
+  const wereRunning = ledger.runs
+    .list()
     .filter((r) => r.status === "running")
     .map((r) => r.id);
   await o.service.assignLocal(
@@ -173,11 +165,7 @@ export async function smokeCheck(o: {
     await git(work, "clone", "--quiet", join(work, "project"), wt);
     cpSync(join(kitDir, "candidates", name), wt, { recursive: true });
     await git(wt, "add", "-A");
-    const { stdout } = await run("git", ["diff", "--cached", "--binary"], {
-      cwd: wt,
-      encoding: "buffer",
-      maxBuffer: 64 * 1024 * 1024,
-    });
+    const stdout = await gitRun(["diff", "--cached", "--binary"], { cwd: wt });
     rmSync(wt, { recursive: true, force: true });
     const r = await o.service.submitAttempt(
       {
@@ -190,7 +178,8 @@ export async function smokeCheck(o: {
     );
     ids[name] = r.attempt;
   };
-  const settled = (id: string) => SETTLED.includes(String(ledger.getAttempt(id)?.lifecycle ?? ""));
+  const settled = (id: string) =>
+    JUDGED_LIFECYCLES.has(String(ledger.attempts.get(id)?.lifecycle ?? ""));
   const timeoutMs = o.timeoutMs ?? 3 * 3_600_000;
   const deadline = Date.now() + timeoutMs;
   const waitFor = async (which: string[]) => {
@@ -212,10 +201,10 @@ export async function smokeCheck(o: {
       await waitFor(["good"]);
     }
   } finally {
-    ledger.setRunStatus(runId, "closed", "the smoke check is done", by);
+    ledger.runs.setStatus(runId, "closed", "the smoke check is done", by);
     for (const r of wereRunning)
-      if (ledger.getRun(r)?.status === "paused")
-        ledger.setRunStatus(r, "running", "resumed after the smoke check", by);
+      if (ledger.runs.get(r)?.status === "paused")
+        ledger.runs.setStatus(r, "running", "resumed after the smoke check", by);
   }
 
   const results = Object.fromEntries(
@@ -224,8 +213,10 @@ export async function smokeCheck(o: {
       const id = ids[n] as string;
       const got =
         c.expect === "rejected_v0"
-          ? String(ledger.getAttempt(id)?.lifecycle ?? "")
-          : String(ledger.currentVerdict(id)?.verdict ?? ledger.getAttempt(id)?.lifecycle ?? "");
+          ? String(ledger.attempts.get(id)?.lifecycle ?? "")
+          : String(
+              ledger.verdicts.current(id)?.verdict ?? ledger.attempts.get(id)?.lifecycle ?? "",
+            );
       const ok = c.accept ? c.accept.includes(got) : got === c.expect;
       return [n, { expect: c.accept ? c.accept.join("|") : c.expect, got, ok, attempt: id }];
     }),

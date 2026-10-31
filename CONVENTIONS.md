@@ -84,6 +84,7 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 - Write code for its readers. Break a complex expression into named intermediate values. Choose clarity and easy debugging over brevity.
 - Simple repeated code often beats a clever shared abstraction with callbacks or an elaborate object model.
 - When a thing is hard to name, it may not be one coherent concept.
+- A comment gives its reason in words. Name a goal only where the sentence needs it, as in "decided in goal 074": a number alone doesn't tell the reader why, and commits already name their goals.
 - When a reviewer says that code is not obvious, it is not obvious. Fix it.
 - Closures are good for operations on collections, and bad in excess, as in long callback chains. Don't use the Visitor pattern. Limit generics to container types where you can.
 
@@ -116,10 +117,46 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 ### The dashboard
 
 - The dashboard is HTML from the server with small client scripts, and no frontend framework. Keep it that way. Frontend complexity grows faster than backend complexity, so resist it.
+- A browser script stays a string in its page module. Server constants go into it with `JSON.stringify`, and a lint and a parse test cover it.
 
 ### New tools and patterns
 
 - Don't adopt a framework, a library or a pattern because it is new. Most new ideas were tried before, and complexity hides behind novelty.
+
+## The parts and their shape
+
+These rules give the code one shape, so a reader knows where a thing lives before opening a file. The owner accepted them on 2026-10-26, from the [code clean-up guide](docs/plan/code-clean-up-guide.md#3-the-rules-of-shape).
+
+### The parts and how they import
+
+- **`src/core`** holds contracts: schemas, words, limits, signing and protocols. It does no I/O, apart from `node:crypto`.
+- **`src/common`** holds runtime tools: settings, logs, errors, files, git, subprocesses and HTTP.
+- **`src/agents`** holds the agent runtimes that the harness and the supervisor share: the agent programs' adapters, the model client, the MCP tools and the roles' definitions.
+- **The parts** (`harness`, `supervisor`, `control`, `cli`, `release`) import `core`, `common` and `agents`, never each other. Code that two parts need goes to one of those three, or to a shared folder named for what it is.
+- **Domain modules never import page code** (`control/ui/` and `control/dashboard/`). REST, MCP and the dashboard call the domain modules. Only control's `main.ts`, which makes control, hands the API its pages.
+- **Tests and scripts may import any part.** Production code never imports them.
+- `npm run check` enforces these imports. Today's exceptions are listed by file in the check, and each is removed when its code moves.
+
+### Contracts, events and names
+
+- **A wire contract has one home.** Each body that crosses a process boundary has one schema in `core`: a route's request and answer, a signed command, an event, a file that one container hands to another, an environment variable. Route paths and limits are named constants beside it.
+- **Event kinds are constants with schemas.** A new kind goes into `core/events/` with the schema of its body, and `appendEvent` takes it typed.
+- **One name map.** Where a public name differs from a stored or wire name, the mapping lives in `core/names.ts` or in the module that owns the word, never in a caller. v0.1.1 keeps no old names: it breaks compatibility with v0.1.0, and older ledgers and databases are kept, never deleted.
+- **A thing is addressed through what owns it.** Each thing has an ID that is unique where it is used, and every interface addresses it through its owner: an attempt through its run, a run through its campaign. Where a thing ran, such as its rig, is a fact about it, not its parent.
+
+### Shared tools, errors, settings and timeouts
+
+- **Shared tools live in `common`.** Use its helpers for error text, atomic writes, git, subprocesses, HTTP, secret comparison and loops that repeat. A program that must import nothing of Thermite's says so in its header, and only it keeps its own copy.
+- **Errors:** a small set of typed errors in `common/errors.ts`. Each API maps errors to statuses in one function. A refused input gets the same words from REST, MCP and the command line.
+- **Settings:** each part reads its environment in one module, from one table that gives each setting's name, default, unit, bounds and what 0 or empty means. A bad value stops the part at start, with the reason.
+- **Timeouts:** every outbound call (HTTP, git, SSH, `kubectl`, a subprocess) has a named timeout, set in its client module, which says what happens when it is reached.
+
+### Files, names and scripts
+
+- **A file that names another by path** keeps the path in one named constant, so a move changes one line.
+- **Entry programs:** an entry program is its folder's `main.ts`, or its name ends in `-main.ts`.
+- **One job, one name:** two files in different parts with the same name and different jobs go into folders that say which.
+- **Scripts reach the code one way:** they import `src/**/*.ts`, never `dist/`.
 
 ## Files and their size
 
@@ -133,7 +170,8 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 ## Folders and names
 
 - Hierarchy goes in folders, not in file names. Files whose names share a word at the start or the end belong in a folder named for that word: `model.ts`, `model-check.ts`, `model-source.ts` and `model-stall.ts` become `model/index.ts`, `model/check.ts`, `model/source.ts` and `model/stall.ts`; the sixteen `scripts/*-acceptance.mjs` become `scripts/acceptance/`.
-- A folder that is a module has an `index.ts`: its interface. Code outside the folder imports from `index.ts`, not from the files inside it.
+- A folder that is a module has an `index.ts`: its interface. Code outside the folder imports from `index.ts`, not from the files inside it. Where a module holds another, code outside both imports the outer one's `index.ts`. Inside a folder, files import each other directly.
+- A folder whose files are each an entry or a contract of their own is a namespace, with no `index.ts`: its files are imported one by one. The namespaces are the APIs' routes and clients (`core/api/`, `common/api/`), the events' kinds and bodies (`core/events/`), the message bus's contracts (`core/link/`), control's pages and route sections (`control/ui/`, `control/dashboard/`, apart from their folders with an `index.ts`) and the command line's commands (`cli/thermite/`). `npm run check:imports` holds production code to this rule, with no exceptions, and lists the namespaces; tests may import any file.
 - New code follows this now. Add a module to a folder; never add another `<name>-<part>.ts` beside the rest. Goal [125](docs/plan/goals/125-code-to-the-conventions.goal) moves the existing files.
 
 ## Limits and state
@@ -174,7 +212,11 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 
 ## Testing
 
-- **Tests live in `tests/`,** never beside the code, so that the code is quick to read and to find. Its folders mirror `src/`: the tests of `src/control/store.ts` are in `tests/control/store.test.ts`. Test helpers, fakes and stand-ins live in `tests/` too. Goal [125](docs/plan/goals/125-code-to-the-conventions.goal) moves the existing tests and points `npm test`, the typecheck and the docs at `tests/`. Until it does, `npm test` finds tests only beside the code, so a new test goes there too.
+- **Tests live in `tests/`,** never beside the code, so that the code is quick to read and to find. Its folders mirror `src/`: the tests of `src/control/store/runs.ts` are in `tests/control/store/runs.test.ts`. `npm test` runs every `tests/**/*.test.ts`, and stops if it finds a test file in `src/`.
+  - Shared scaffolding, fakes and helpers live in `tests/helpers/`.
+  - A test that wires two or more parts together lives in `tests/system/`. A test of control's pages that is named for a feature lives in `tests/control/dashboard/`.
+  - The stand-ins that run inside images (for agent programs, model APIs and devices) live in `tests/stand-ins/<name>/`.
+  - A test of the docs' own steps lives in `tests/docs/`.
 - Test observable behaviour and important failure transitions. Tests must be able to fail.
 - Tests at the system's cut-points and on the users' critical paths give the most value, and they survive refactoring. Keep fine-grained unit tests for what needs exact reference values, such as the statistics and state machines below.
 - Mock only at system boundaries, with stand-ins such as the fake RunPod API, the scripted model and the stand-in agent programs.

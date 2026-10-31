@@ -9,7 +9,6 @@ import {
   type Hmac,
   hkdfSync,
   randomBytes,
-  timingSafeEqual,
 } from "node:crypto";
 
 /**
@@ -207,11 +206,4 @@ export class FileOpener {
       digest: { name: this.mac.digest("hex"), sha256: this.hash.digest("hex"), size: this.size },
     };
   }
-}
-
-/** Two hexadecimal digests, compared in constant time. */
-export function sameDigest(a: string, b: string): boolean {
-  const x = Buffer.from(a, "utf8");
-  const y = Buffer.from(b, "utf8");
-  return x.length === y.length && timingSafeEqual(x, y);
 }

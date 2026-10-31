@@ -1,11 +1,9 @@
-import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
+import { errorText } from "../common/errors.ts";
+import { gitText } from "../common/git.ts";
 import { type GitAuth, withGitAuth } from "../common/git-auth.ts";
-
-const run = promisify(execFile);
 
 /**
  * What the new-campaign page shows about a project before it starts: the commit a branch or tag
@@ -21,12 +19,15 @@ export interface Probe {
   suggest: string[];
 }
 
-const env = {
-  PATH: process.env.PATH ?? "/usr/bin:/bin",
-  GIT_TERMINAL_PROMPT: "0",
-  GIT_ALLOW_PROTOCOL: "https",
-  GIT_CONFIG_NOSYSTEM: "1",
-};
+/** A probe's git: PATH alone of control's environment, over https only, a minute at most. */
+const probe = (extra: Record<string, string>, maxBytes: number) => (args: string[], cwd?: string) =>
+  gitText(args, {
+    cwd,
+    only: true,
+    env: { GIT_ALLOW_PROTOCOL: "https", ...extra },
+    timeoutMs: 60_000,
+    maxBytes,
+  });
 
 export async function probeRepository(
   url: string,
@@ -58,21 +59,15 @@ async function probeWith(
 ): Promise<Probe> {
   if (!/^[\w./-]{1,200}$/.test(ref) || ref.startsWith("-"))
     throw new Error("the branch, tag or commit has characters git does not allow");
-  const git = (args: string[], cwd?: string) =>
-    run("git", args, {
-      cwd,
-      env: { ...env, ...extra },
-      timeout: 60_000,
-      maxBuffer: 64 * 1024 * 1024,
-    });
+  const git = probe(extra, 64 * 1024 * 1024);
   let commit: string | undefined;
   if (/^[0-9a-f]{40}$/.test(ref)) commit = ref;
   else {
     let out: string;
     try {
-      out = (await git(["ls-remote", "--", url, ref, `${ref}^{}`])).stdout;
+      out = await git(["ls-remote", "--", url, ref, `${ref}^{}`]);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorText(err);
       throw new Error(
         /could not read Username|Authentication|403|401/.test(msg)
           ? "control cannot read it without a key: is the repository private?"
@@ -96,7 +91,7 @@ async function probeWith(
   try {
     await git(["init", "--quiet", "--bare", dir]);
     await git(["fetch", "--quiet", "--depth", "1", "--filter=blob:none", "--", url, commit], dir);
-    const all = (await git(["ls-tree", "-r", "--name-only", commit], dir)).stdout
+    const all = (await git(["ls-tree", "-r", "--name-only", commit], dir))
       .split("\n")
       .filter(Boolean);
     const paths = folder ? inFolder(all, folder) : all;
@@ -132,13 +127,7 @@ export async function readKitManifest(
         : "the kit's repository must be an https:// URL, or choose Git access for a private one",
     );
   return withGitAuth(access?.auth, access?.knownHostsFile, async (g) => {
-    const git = (args: string[], cwd?: string) =>
-      run("git", args, {
-        cwd,
-        env: { ...env, ...(access ? { ...g.env, GIT_ALLOW_PROTOCOL: g.protocols } : {}) },
-        timeout: 60_000,
-        maxBuffer: 4 * 1024 * 1024,
-      });
+    const git = probe(access ? { ...g.env, GIT_ALLOW_PROTOCOL: g.protocols } : {}, 4 * 1024 * 1024);
     const dir = mkdtempSync(join(tmpdir(), "thermite-kit-probe-"));
     try {
       await git(["init", "--quiet", "--bare", dir]);
@@ -148,7 +137,7 @@ export async function readKitManifest(
           dir,
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = errorText(err);
         throw new Error(
           /could not read Username|Authentication|403|401/.test(msg)
             ? "control cannot read the kit's repository without a key: is it private?"
@@ -157,7 +146,7 @@ export async function readKitManifest(
       }
       let text: string;
       try {
-        text = (await git(["show", `${commit}:kit.json`], dir)).stdout;
+        text = await git(["show", `${commit}:kit.json`], dir);
       } catch {
         throw new Error("the kit's commit has no kit.json at its top");
       }

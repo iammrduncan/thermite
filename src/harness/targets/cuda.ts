@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { promisify } from "node:util";
-import type { Role, Runner } from "../broker/runner.ts";
+import type { Role, Runner } from "../broker/index.ts";
 import type { Readiness, TargetDriver, TargetIdentity } from "./driver.ts";
 
 /**
@@ -171,7 +171,8 @@ export class CudaDriver implements TargetDriver {
     return ["unknown"];
   }
 
-  private async apps(): Promise<{ pid: number; used_mib: number }[]> {
+  /** The GPU's compute processes; null when nvidia-smi can't say, which is never "none" (goal 163). */
+  private async apps(): Promise<{ pid: number; used_mib: number }[] | null> {
     try {
       const out = await this.smi([
         "--query-compute-apps=pid,used_memory",
@@ -184,7 +185,7 @@ export class CudaDriver implements TargetDriver {
         .filter((f) => f.length === 2 && f[0] !== "")
         .map(([pid, mem]) => ({ pid: Number(pid), used_mib: Number(mem) }));
     } catch {
-      return [];
+      return null;
     }
   }
 
@@ -214,7 +215,9 @@ export class CudaDriver implements TargetDriver {
       if (!Number.isFinite(Number(r[f]))) why.push(`nvidia-smi gave no ${f} (${r[f]})`);
     }
     if (reasons.includes("unknown")) why.push("clock event reasons unavailable");
-    if (apps.length) why.push(`compute processes on the GPU: ${apps.map((a) => a.pid).join(", ")}`);
+    if (apps === null) why.push("the GPU's compute processes could not be read");
+    else if (apps.length)
+      why.push(`compute processes on the GPU: ${apps.map((a) => a.pid).join(", ")}`);
     if (Number(r["utilization.gpu"]) > this.limits.maxIdleUtilization) {
       why.push(`GPU ${r["utilization.gpu"]}% busy before timing`);
     }

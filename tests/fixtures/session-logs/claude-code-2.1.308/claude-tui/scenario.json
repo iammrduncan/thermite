@@ -1,0 +1,288 @@
+{
+  "argv": [
+    "/usr/local/bin/claude",
+    "--model",
+    "claude-opus-5-5",
+    "--permission-mode",
+    "bypassPermissions",
+    "--session-id",
+    "a3880d5c-b282-4d24-900c-3a12985e03e1",
+    "--strict-mcp-config",
+    "--debug-file",
+    "/scratch/thermite/lanes/lane-1/claude-tui/out/claude-debug.log",
+    "--setting-sources",
+    "user",
+    "--disallowedTools",
+    "AskUserQuestion",
+    "--messaging-socket-path",
+    "/scratch/thermite/lanes/lane-1/claude-tui/claude-inbox/inbox.sock",
+    "--",
+    "SPIKE-1: please read notes.txt, then run the slow command, then reply."
+  ],
+  "cols": 120,
+  "rows": 40,
+  "steps": [
+    {
+      "do": "mark",
+      "label": "startup"
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-1",
+      "kind": "tool",
+      "step": 2,
+      "timeoutMs": 60000,
+      "label": "turn 1: slow command handed out"
+    },
+    {
+      "do": "mark",
+      "label": "turn1"
+    },
+    {
+      "do": "sleep",
+      "ms": 2000
+    },
+    {
+      "do": "type",
+      "text": "STEER-1: when you reply, also mention bananas."
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-1",
+      "kind": "text",
+      "timeoutMs": 60000,
+      "label": "turn 1 reply handed out"
+    },
+    {
+      "do": "wait",
+      "for": "signal",
+      "event": "Stop",
+      "since": "mark",
+      "timeoutMs": 30000,
+      "label": "turn 1 ended"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after turn 1"
+    },
+    {
+      "do": "mark",
+      "label": "idle1"
+    },
+    {
+      "do": "sleep",
+      "ms": 15000
+    },
+    {
+      "do": "mark",
+      "label": "turn2"
+    },
+    {
+      "do": "type",
+      "text": "SPIKE-2: run pwd please."
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-2",
+      "kind": "tool",
+      "step": 1,
+      "timeoutMs": 60000,
+      "label": "turn 2: sleep 6 handed out"
+    },
+    {
+      "do": "sleep",
+      "ms": 1500
+    },
+    {
+      "do": "uds",
+      "path": "/scratch/thermite/lanes/lane-1/claude-tui/claude-inbox/inbox.sock",
+      "lines": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "STEER-2 through the messaging socket, mid-turn."
+          }
+        }
+      ]
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-2",
+      "kind": "text",
+      "timeoutMs": 60000,
+      "label": "turn 2 reply handed out"
+    },
+    {
+      "do": "wait",
+      "for": "signal",
+      "event": "Stop",
+      "since": "mark",
+      "timeoutMs": 30000,
+      "label": "turn 2 ended"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 30000
+    },
+    {
+      "do": "snap",
+      "label": "after turn 2"
+    },
+    {
+      "do": "mark",
+      "label": "idle-socket"
+    },
+    {
+      "do": "uds",
+      "path": "/scratch/thermite/lanes/lane-1/claude-tui/claude-inbox/inbox.sock",
+      "lines": [
+        {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "SPIKE-5 through the messaging socket while idle: run date."
+          }
+        }
+      ]
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-5",
+      "kind": "text",
+      "timeoutMs": 30000,
+      "label": "an idle socket message starts a turn?"
+    },
+    {
+      "do": "wait",
+      "for": "signal",
+      "event": "Stop",
+      "since": "mark",
+      "timeoutMs": 20000,
+      "label": "turn 5 ended"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "mark",
+      "label": "turn3"
+    },
+    {
+      "do": "type",
+      "text": "SPIKE-3: run the very slow command."
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-3",
+      "kind": "tool",
+      "step": 1,
+      "timeoutMs": 60000,
+      "label": "turn 3: sleep 40 handed out"
+    },
+    {
+      "do": "sleep",
+      "ms": 3000
+    },
+    {
+      "do": "snap",
+      "label": "before interrupt"
+    },
+    {
+      "do": "key",
+      "key": "esc"
+    },
+    {
+      "do": "mark",
+      "label": "interrupted"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after interrupt"
+    },
+    {
+      "do": "sleep",
+      "ms": 3000
+    },
+    {
+      "do": "mark",
+      "label": "turn4"
+    },
+    {
+      "do": "type",
+      "text": "SPIKE-4: this call hits the usage limit."
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-4",
+      "kind": "error429",
+      "timeoutMs": 60000,
+      "label": "429 handed out"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after 429"
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-4",
+      "kind": "text",
+      "timeoutMs": 100000,
+      "label": "after the limit: reply"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after limit"
+    },
+    {
+      "do": "mark",
+      "label": "ending"
+    },
+    {
+      "do": "type",
+      "text": "/exit"
+    },
+    {
+      "do": "wait",
+      "for": "exit",
+      "timeoutMs": 15000
+    }
+  ]
+}

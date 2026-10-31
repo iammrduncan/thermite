@@ -1,11 +1,9 @@
-import type { Ledger } from "../ledger.ts";
+import type { ClaimRow, Ledger } from "../ledger/index.ts";
 
 /**
  * The checks research text shares (goal 112): a finding a worker records and an answer the review
  * panel gives are both held to them. Code runs them; the agents cannot.
  */
-
-type Row = Record<string, unknown>;
 
 /** Whitespace folded, typographic quotes and dashes made plain: "verbatim" up to layout. */
 export function normalizeQuote(s: string): string {
@@ -61,11 +59,11 @@ export function statedNumbers(text: string): string[] {
 }
 
 /** Every number a verified claim states: in its text or in its quotes. */
-export function claimNumbers(claims: Row[]): Set<string> {
+export function claimNumbers(claims: Pick<ClaimRow, "text" | "quotes">[]): Set<string> {
   return new Set(
     claims.flatMap((cl) => [
-      ...numbersIn(String(cl.text)),
-      ...(JSON.parse(String(cl.quotes)) as { quote: string }[]).flatMap((q) => numbersIn(q.quote)),
+      ...numbersIn(cl.text),
+      ...(JSON.parse(cl.quotes) as { quote: string }[]).flatMap((q) => numbersIn(q.quote)),
     ]),
   );
 }
@@ -82,15 +80,13 @@ export function checkCited(
   cited: string[],
   texts: string[],
   also: Iterable<string> = [],
-): { claims: Row[]; problems: string[] } {
+): { claims: ClaimRow[]; problems: string[] } {
   const problems: string[] = [];
-  const claims: Row[] = [];
+  const claims: ClaimRow[] = [];
   for (const id of [...new Set(cited)]) {
-    const cl = ledger.db.prepare("select * from claim where run = ? and id = ?").get(run, id) as
-      | Row
-      | undefined;
+    const cl = ledger.claims.get(run, id);
     if (!cl) problems.push(`no claim ${id}`);
-    else if (Number(cl.verified) !== 1) problems.push(`claim ${id} is a draft, not verified`);
+    else if (!cl.verified) problems.push(`claim ${id} is a draft, not verified`);
     else claims.push(cl);
   }
   const known = claimNumbers(claims);

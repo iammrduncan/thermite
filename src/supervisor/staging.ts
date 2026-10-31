@@ -1,6 +1,6 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   createReadStream,
   existsSync,
   mkdirSync,
@@ -12,11 +12,11 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { promisify } from "node:util";
 import { log } from "../common/env.ts";
-import { type GitAuth, withGitAuth } from "../common/git-auth.ts";
+import { git as gitRun } from "../common/git.ts";
+import { type GitAuth, gitHost, withGitAuth } from "../common/git-auth.ts";
+import { gitRepoPath } from "../core/api/control/rigs.ts";
 import type { SignedCommand } from "../core/commands.ts";
-import { buildHeaders } from "../core/version.ts";
 import { sshCommand } from "./git-export.ts";
 import { downloadModel, ModelDownloads } from "./model-download.ts";
 
@@ -33,8 +33,6 @@ import { downloadModel, ModelDownloads } from "./model-download.ts";
  * Deterministic code only: no model ever runs git here.
  */
 
-const run = promisify(execFile);
-
 export interface StagingConfig {
   rig: string;
   inboxDir: string;
@@ -48,12 +46,24 @@ export interface StagingConfig {
   /** Control's address and this rig's token: kits control keeps are fetched from there. */
   controlUrl?: string | undefined;
   controlToken?: string | undefined;
+  /**
+   * A Git access by name, with the host it is for, from the rig's config on the message bus
+   * (config/git-access.ts): only while a live assignment of this rig names it.
+   */
+  gitAccess?: ((name: string) => Promise<{ auth: GitAuth; host: string }>) | undefined;
   /** Model downloads in progress, for the supervisor's report and the live view. */
   models?: ModelDownloads | undefined;
   /** The supervisor's Hugging Face token (gated models): sent to Hugging Face only. */
   hfToken?: string | undefined;
   /** How model files are fetched (tests give their own). */
   fetchImpl?: typeof fetch | undefined;
+  /** The free space a model download leaves where it lands, in bytes (goal 173); none: 0. */
+  floorBytes?: number | undefined;
+  /**
+   * Tests only: `file://` git sources, and model files at private or local addresses, are
+   * fetched. Otherwise they are refused, in words.
+   */
+  localSources?: boolean | undefined;
 }
 
 /** What staging says about a command: relay it, wait, or report that its content failed. */
@@ -63,20 +73,49 @@ function sshEnv(cfg: StagingConfig): Record<string, string> {
   return sshCommand(cfg.sshKeyFile, cfg.knownHostsFile);
 }
 
-async function git(
-  repo: string,
-  args: string[],
-  env: Record<string, string> = {},
-): Promise<Buffer> {
-  const { stdout } = await run("git", ["-C", repo, ...args], {
-    encoding: "buffer",
-    maxBuffer: 512 * 1024 * 1024,
-    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0", ...env },
-  });
-  return stdout;
-}
+/** SSH for a source that names no Git access: no key, no agent, so none is ever offered. */
+const NO_KEY_SSH =
+  "ssh -o BatchMode=yes -o PubkeyAuthentication=no -o IdentityAgent=none -o StrictHostKeyChecking=accept-new";
+
+const git = (repo: string, args: string[], env: Record<string, string> = {}) =>
+  gitRun(["-C", repo, ...args], { env });
 
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+
+/** The kinds of command whose content the supervisor stages: it fetches something for them. */
+const STAGED_KINDS: readonly string[] = ["assign_campaign", "propagate"];
+/** Commands whose signature the harness has checked, by id: each is asked about once. */
+const checked = new Set<string>();
+/** At most this many are kept; past it, the set starts again. */
+const CHECKED_MAX = 1000;
+
+/**
+ * A command's content staged only once control's signature on it is checked: `check` asks the
+ * harness, which holds control's public key in every placement (the supervisor never chooses the
+ * key it trusts), and answers why it refused it, or nothing. A command it refuses is never staged:
+ * it goes on to the harness as it is, which refuses it again as it applies it, and its outcome
+ * says why. Kinds with no content are relayed as they are.
+ */
+export async function stageSigned(
+  cfg: StagingConfig,
+  cmd: SignedCommand,
+  check: (cmd: SignedCommand) => Promise<string | undefined>,
+): Promise<StageResult> {
+  if (!STAGED_KINDS.includes(cmd.envelope.kind)) return "ready";
+  if (!checked.has(cmd.envelope.id)) {
+    const refused = await check(cmd);
+    if (refused) {
+      log("supervisor", "a command's sources not staged: the harness refused it", {
+        command: cmd.envelope.id,
+        why: refused,
+      });
+      return "ready";
+    }
+    if (checked.size >= CHECKED_MAX) checked.clear();
+    checked.add(cmd.envelope.id);
+  }
+  return await stageCommand(cfg, cmd);
+}
 
 /**
  * Makes a command's content available in the inbox. "ready": relay it now. "wait": the content
@@ -186,6 +225,8 @@ async function stageSources(cfg: StagingConfig, cmd: SignedCommand): Promise<Sta
             hfToken: cfg.hfToken,
             downloads: cfg.models ?? new ModelDownloads(),
             fetchImpl: cfg.fetchImpl,
+            allowPrivate: cfg.localSources,
+            floor: cfg.floorBytes,
           });
         else await bundleFromGit(cfg, imp, target);
       }
@@ -193,7 +234,7 @@ async function stageSources(cfg: StagingConfig, cmd: SignedCommand): Promise<Sta
       return "ready";
     } catch (err) {
       const error = err instanceof Error ? err.message.slice(0, 500) : String(err);
-      log("supervisor", "staging failed", { command: id, error });
+      log("supervisor", "staging failed", { command: id, error }, "error");
       return { failed: `staging: ${error}` };
     }
   })();
@@ -236,8 +277,10 @@ async function bundleFromGit(
     throw new Error(`${imp.path}: a kit from control, but this supervisor has no control to ask`);
   const url =
     "control" in imp.source
-      ? `${cfg.controlUrl}/v1/rigs/${encodeURIComponent(cfg.rig)}/git/${imp.source.control}.git`
+      ? `${cfg.controlUrl}${gitRepoPath(cfg.rig, imp.source.control)}`
       : imp.source.git;
+  if (!fromControl && /^file:/i.test(url) && !cfg.localSources)
+    throw new Error(`${imp.path}: a file:// source is refused: a source is a repository on a host`);
   const dir = cfg.sourcesDir ?? join(dirname(cfg.resultsRepo), "sources");
   const cache = join(dir, `${createHash("sha256").update(url).digest("hex").slice(0, 16)}.git`);
   if (!existsSync(join(cache, "HEAD"))) {
@@ -245,6 +288,7 @@ async function bundleFromGit(
     await git(cache, ["init", "--quiet", "--bare"]);
   }
   // Never git's ext:: or other command transports: a URL in a command only names a repository.
+  // A source that names no Git access is fetched with no key: never the results repository's.
   const env: Record<string, string> = fromControl
     ? {
         GIT_ALLOW_PROTOCOL: "http:https",
@@ -252,7 +296,10 @@ async function bundleFromGit(
         GIT_CONFIG_KEY_0: "http.extraHeader",
         GIT_CONFIG_VALUE_0: `Authorization: Bearer ${cfg.controlToken}`,
       }
-    : { ...sshEnv(cfg), GIT_ALLOW_PROTOCOL: "https:ssh:git:file" };
+    : {
+        GIT_SSH_COMMAND: NO_KEY_SSH,
+        GIT_ALLOW_PROTOCOL: cfg.localSources ? "https:ssh:git:file" : "https:ssh:git",
+      };
   const has = () =>
     git(cache, ["cat-file", "-e", `${imp.commit}^{commit}`]).then(
       () => true,
@@ -265,10 +312,18 @@ async function bundleFromGit(
       git(cache, ["fetch", "--quiet", "--tags", url, "+refs/heads/*:refs/sources/heads/*"], e),
     );
   };
-  // A private repository: the Git access its campaign names, handed by control for this fetch.
+  // A private repository: the Git access its campaign names, from the rig's config on the bus.
   const access = "git" in imp.source ? imp.source.access : undefined;
   if (access) {
-    const auth = await gitAccessFromControl(cfg, access);
+    if (!cfg.gitAccess)
+      throw new Error(`Git access ${access}: this supervisor has no config from control`);
+    // Used only on the host control bound it to.
+    const { auth, host } = await cfg.gitAccess(access);
+    const from = gitHost(url);
+    if (from !== host)
+      throw new Error(
+        `Git access ${access} is for ${host} only, and ${imp.path} comes from ${from ?? "an address with no host"}`,
+      );
     await withGitAuth(auth, join(dirname(dir), "known_hosts", access), (g) =>
       fetchWith({ ...g.env, GIT_ALLOW_PROTOCOL: g.protocols }),
     );
@@ -280,28 +335,20 @@ async function bundleFromGit(
   const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
   try {
     await git(cache, ["bundle", "create", tmp, ref]);
+    chmodSync(tmp, bundleMode(cfg.inboxDir));
     renameSync(tmp, target);
   } finally {
     rmSync(tmp, { force: true });
   }
 }
 
-/** Git access by name, from control: only for a campaign assigned to this rig that names it. */
-async function gitAccessFromControl(cfg: StagingConfig, name: string): Promise<GitAuth> {
-  if (!cfg.controlUrl || !cfg.controlToken)
-    throw new Error(`Git access ${name}: this supervisor has no control to ask`);
-  const res = await fetch(
-    `${cfg.controlUrl}/v1/rigs/${encodeURIComponent(cfg.rig)}/git-access/${encodeURIComponent(name)}`,
-    { headers: { authorization: `Bearer ${cfg.controlToken}`, ...buildHeaders() } },
-  );
-  if (!res.ok) throw new Error(`Git access ${name}: control answered ${res.status}`);
-  const g = (await res.json()) as {
-    kind?: string;
-    private_key?: string;
-    token?: string;
-    username?: string;
-  };
-  if (g.kind === "ssh" && g.private_key) return { kind: "ssh", privateKey: g.private_key };
-  if (g.kind === "token" && g.token) return { kind: "token", token: g.token, username: g.username };
-  throw new Error(`Git access ${name}: control's answer has no key`);
+/**
+ * A bundle's mode: its owner and the inbox's group read it, and other users only where the inbox
+ * lets them in. Where the inbox is closed to others, its group is the harness's controller's (the
+ * one-container image, a cluster's volume), and the bundle is 0640. Under compose and on a machine,
+ * the controller reads the inbox as another user, in a folder of the harness image that only it
+ * may enter, and the bundle is 0644.
+ */
+function bundleMode(inboxDir: string): number {
+  return statSync(inboxDir).mode & 0o004 ? 0o644 : 0o640;
 }

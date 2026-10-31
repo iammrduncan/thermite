@@ -1,5 +1,5 @@
-import type { Finding, Probes } from "../doctor.ts";
 import { ENGINE_LABEL, type EngineName } from "../machine.ts";
+import type { Finding, Probes } from "./index.ts";
 
 /**
  * The doctor's compose check: which compose program works with each engine that answers.

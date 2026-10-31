@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "thermite": "dist/cli/thermite.js"
+    "thermite": "dist/cli/thermite/main.js"
   },
   "engines": {
     "node": ">=22.19"
@@ -18,24 +18,36 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "node scripts/test.mjs",
-    "check:public": "node scripts/check-public.mjs",
+    "check:public": "node scripts/checks/public.mjs",
+    "check:sizes": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/checks/sizes.ts",
+    "check:imports": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/checks/imports.ts",
     "docs:install": "npm --prefix docs/_site ci",
     "docs:dev": "npm --prefix docs/_site run dev",
     "docs:build": "npm --prefix docs/_site run build",
-    "docs:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/docs-check.mjs",
-    "docs:credits": "node scripts/credits-page.mjs",
-    "check": "npm run typecheck && npm run lint && npm test && npm run check:public",
-    "dev:init": "node scripts/dev-init.mjs",
-    "smoke:compose": "node scripts/compose-smoke.mjs",
-    "acceptance:judge": "node scripts/judge-acceptance.mjs"
+    "docs:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/docs/check.mjs",
+    "docs:credits": "node scripts/docs/credits-page.mjs",
+    "docs:agents": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/docs/agents-page.mjs",
+    "check": "npm run typecheck && npm run lint && npm test && npm run check:public && npm run check:sizes && npm run check:imports",
+    "dev:init": "node scripts/dev/init.mjs",
+    "smoke:compose": "node scripts/acceptance/compose-smoke.mjs",
+    "acceptance:judge": "node scripts/acceptance/judge.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "1.3.0",
     "@earendil-works/pi-ai": "1.3.0",
+    "@earendil-works/pi-tui": "1.3.0",
     "@hono/node-server": "2.1.5",
     "@modelcontextprotocol/sdk": "1.32.1",
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/nkeys": "2.0.3",
+    "@nats-io/transport-node": "3.4.0",
+    "@xterm/addon-serialize": "0.14.0",
+    "@xterm/headless": "6.0.0",
     "hono": "4.13.13",
     "zod": "4.6.7"
+  },
+  "optionalDependencies": {
+    "node-pty": "1.1.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
+
 /**
  * The release bundle: a compose file that pins the published images by digest, and a short
- * readme. The release workflow (.github/workflows/release.yml) pushes the images, then
- * scripts/release-bundle.ts fills in the templates in containers/release/ with their digests.
- * These functions do the filling and the checks, with no files or network of their own.
+ * readme, which is also the release's notes and gives the compose file's SHA-256. The release
+ * workflow (.github/workflows/release.yml) pushes the images, then scripts/release/bundle.ts
+ * fills in the templates in containers/release/ with their digests. These functions do the
+ * filling and the checks, with no files or network of their own.
  */
 
 const BOTH = ["linux/amd64", "linux/arm64"] as const;
@@ -138,6 +141,7 @@ export const README_NEEDS = [
   "VERSION",
   "TAG",
   "REPO_URL",
+  "COMPOSE_SHA256",
   "CONTROL_IMAGE",
   "HARNESS_IMAGE",
   "HARNESS_CUDA_IMAGE",
@@ -145,6 +149,25 @@ export const README_NEEDS = [
   "SUPERVISOR_IMAGE",
   "RIG_CUDA_IMAGE",
 ];
+
+/**
+ * The bundle's two files from their templates: the compose file, and the readme, which gives the
+ * compose file's SHA-256 (hexadecimal), so whoever downloads it can check it is this release's.
+ */
+export function bundleFiles(
+  input: BundleInput,
+  templates: { compose: string; readme: string },
+): { compose: string; readme: string; composeSha256: string } {
+  const values = placeholders(input);
+  const compose = render(templates.compose, values, COMPOSE_NEEDS);
+  const composeSha256 = createHash("sha256").update(compose).digest("hex");
+  const readme = render(
+    templates.readme,
+    { ...values, COMPOSE_SHA256: composeSha256 },
+    README_NEEDS,
+  );
+  return { compose, readme, composeSha256 };
+}
 
 // --- Keeping the template in step with compose.yaml -------------------------------------------
 

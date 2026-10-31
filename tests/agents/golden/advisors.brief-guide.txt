@@ -1,0 +1,1 @@
+campaign_brief, when there is one, comes from the campaign's author: background, links, what was tried, limits and what good looks like (additional_information), starting_links, ideas_to_try and hypotheses. Take it into account as the author's view: starting points, not rules.

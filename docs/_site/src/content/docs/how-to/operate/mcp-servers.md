@@ -31,6 +31,8 @@ Press **Read tools again** on the row. Control reads the server's tools with its
 
 An OAuth server shows **Sign in ↗** until it is first signed in, **Sign in again ↗** when its sign-in ended (the server refused to renew it), and **Sign in again with another account ↗** inside its row when it works. Press it: a new tab opens the server's sign-in page. Allow Thermite there; the tab comes back to **Settings**. Control renews an OAuth sign-in by itself while the server lets it, when less than five minutes of its access token are left.
 
+Control holds each address a sign-in leads it to, from the server's own documents and its sign-in server's, to the rules of an MCP URL: `https://`, or `http://` for this machine alone, with no user, password or secret in it. It waits 30 seconds at most for each answer, and reads 1 MiB of it at most. Otherwise the sign-in stops, with why, such as `the sign-in leads to http://auth.example.com, which control does not call: Use https. …`.
+
 ## Change a server
 
 Open its row, change the fields and press **Save and read its tools**:
@@ -68,11 +70,11 @@ It prints the server's line, `gbrain  key …c41b  ok  31 tools  https://brain.e
 
 ## What a rig gets
 
-A rig's supervisor asks control for its MCP servers on the same beat as its model route (`THERMITE_MODEL_ROUTE_POLL_SECONDS`, 30 seconds by default). Control answers with the servers that the runs it assigned that rig name, each with its sign-in as headers, and the servers they name that it can't give, with why (`Settings has no MCP server of that name now`, or `control can't sign in to it: …`). The supervisor hands the harness the servers its workers and planner use, and keeps the advisors' in memory. Control writes `mcp_servers_handed` to its audit log, with the servers' names, when what a rig gets changes. A run's first plan and trial wait up to 2 minutes for the harness to hold its servers: see [Before the first trial](../campaigns/give-agents-mcp-tools.md#before-the-first-trial).
+A rig gets its MCP servers in its config on the [message bus](../../explanation/how-the-parts-talk.md#config-over-the-message-bus): control looks every 5 seconds and writes the rig's servers there when they change, sealed to the rig, and the supervisor hands them over as soon as they come. Every `THERMITE_MODEL_ROUTE_POLL_SECONDS` (30 seconds by default) the supervisor also hands its harness again what the harness lost of them, as after a restart. Control gives the servers that the live runs it assigned that rig name (their assignment waiting for the rig or taken by it, the run not closed), each with its sign-in as headers. Once the last such run closes, or its assignment failed or was withdrawn, the rig no longer gets the server, and its supervisor drops the sign-in. Control also gives the servers they name that it can't give, with why (`Settings has no MCP server of that name now`, or `control can't sign in to it: …`). Only the owner's and the operator's tokens may name MCP servers in an assignment; an agent's token may not. The supervisor hands the harness the servers its workers and planner use, and keeps the advisors' in memory. Control writes `mcp_servers_handed` to its audit log, with the servers' names, when what a rig gets changes. A run's first plan and trial wait up to 2 minutes for the harness to hold its servers: see [Before the first trial](../campaigns/give-agents-mcp-tools.md#before-the-first-trial).
 
 ## After the update from an outside knowledge base
 
-Before 0.1.0, control could keep an **outside knowledge base**: an MCP server it copied campaign folders to, and that a campaign's teachers could search. At the update to 0.1.0, control changed each one, once, when it first started:
+Before 0.1.0, control could keep an **outside knowledge base**: an MCP server it copied campaign collections to, and that a campaign's teachers could search. At the update to 0.1.0, control changed each one, once, when it first started:
 
 - It became an MCP server with a key: the header `Authorization`, with the value `Bearer` and its token. The token is kept. Its name became lowercase letters, digits and dashes (`team.brain` became `team-brain`).
 - Control stopped copying campaign folders to it. The pages it wrote there stay on the server.

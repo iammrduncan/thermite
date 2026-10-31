@@ -1,0 +1,56 @@
+---
+id: "161"
+title: "Control's bugs found by the v0.1.1 audit: wrong states on the pages, refusals answered as server errors, errors that vanish"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["160"]
+created: 2026-10-26
+updated: 2026-10-27
+---
+
+# 161 · Control's bugs found by the v0.1.1 audit: wrong states on the pages, refusals answered as server errors, errors that vanish
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [160](160-v010-audit.goal)
+
+## What
+
+The control reviewer of the v0.1.1 audit (goal [160](160-v010-audit.goal)) found these bugs by reading the code. Each was checked against the code, but none was reproduced by a run. Each fix comes with a regression test that fails without it.
+
+1. **An errored attempt shows "Judging".** `src/control/ui/operator.ts:1186-1221`. It shows its error state.
+2. **A cancelled command shows a red "failed" chip.** `cancelCommand` (`src/control/store.ts:2573`) writes the status `failed` with `cancelled_by` in the outcome. The commands table (`src/control/dashboard.ts:3983`) looks for a status `cancelled`, which is never written. A cancelled command shows as cancelled, in a neutral chip.
+3. **The MCP-server form refuses `http://[::1]`.** The character class `[[]::1[]]` in `src/control/ui/providers-client.ts:107` never matches. The form takes the same local addresses as the server's own check.
+4. **Refusals on several REST routes answer HTTP 500.** Malformed JSON and ordinary refusals on `/v1/propagate`, a reset's confirm and cancel, and a second reset (`src/control/api.ts:453-458`). Each answers 400 or 409 with the refusal's words.
+5. **An image update reports success when kubectl's answer can't be read.** `src/control/dashboard.ts:6130`. It reports the update as failed, with the reason.
+6. **`POST /ui/rigs/add` takes the GPU list `0,0`.** `src/control/dashboard.ts:5818`. A GPU listed twice is refused, as the other rig forms refuse it.
+7. **The add-rig preview lacks the limit of 8 judge GPUs** that `src/control/machines/deploy.ts:40` states. The preview refuses what the deploy refuses.
+8. **Background deploys and updates drop their errors.** Seven `void …().catch(() => {})` in `src/control/dashboard.ts` (5862, 5994, 6204, 6424, 6533, 6827, 6901). A rig can stay "updating" for good. Each failure is logged, recorded in the rig's history and ends the state it started.
+
+## Why
+
+CONVENTIONS.md: "Every bug that is found gets a regression test", "Nothing stops silently", and errors answered as what they are. The audit's guide, [the code clean-up guide](../../code-clean-up-guide.md), puts these fixes before goal [125](../125-code-to-the-conventions.goal)'s splits, so that each split is a pure move.
+
+## Done when
+
+- [x] Each of the eight bugs is fixed, with a regression test that fails without the fix.
+- [x] The pages that describe a changed state or answer follow, in the same commit.
+- [x] The fast checks pass, and the control acceptance check for items 4 to 8.
+
+## Decisions
+
+## Open questions
+
+## Progress
+
+- 2026-10-26: Goal written from the v0.1.1 audit's control report.
+- 2026-10-27 05:48 UTC: Started by goal 172, step 2. Bug 1 fixed: an attempt whose judge's job was set aside (`errored`) shows **Errored**, not **Judging** (`tests/control/ui/operator.test.ts`, which fails without the fix). `outcome()` moved to `src/control/ui/operator/outcome.ts`, so `operator.ts` doesn't grow.
+- 2026-10-27 05:50 UTC: Bug 2 fixed: a cancelled command shows **cancelled** in a grey chip on the Commands page (`tests/control/ui/commands.test.ts`, through the store's own cancel). The page's row moved to `src/control/ui/commands.ts`, out of `dashboard.ts`.
+- 2026-10-27 05:51 UTC: Bug 3 fixed: the MCP server form takes `http://[::1]`. Its URL check is one piece of browser code (`MCP_URL_CHECK_JS`) given control's own list of local hosts (`LOCAL_HTTP_HOSTS` in `src/common/mcp-client.ts`), and a test holds it to control's `mcpUrlProblem` on each kind of URL (`tests/control/mcp-ui.test.ts`).
+- 2026-10-27 05:55 UTC: Bug 4 fixed: control's REST API answers a body that is not JSON with 400, and the refusals of `/v1/propagate`, a reset's confirm and cancel, and a second reset with 409, each in its own words (`tests/control/api-refusals.test.ts`; three of its tests fail without the fix). The first typed errors of the rules of shape are in `src/common/errors.ts` (`Refusal`, `BadInput`, and `answerOf`, which maps them to statuses in one place). The REST reference's statuses follow.
+- 2026-10-27 05:58 UTC: Bug 5 fixed: **Update to these images** reports `kubectl's answer is not a deployment` as a failure when kubectl's answer can't be read, never `already runs control's images` (`tests/control/dashboard/cluster-images.test.ts`, which fails without the fix). The reading is `deploymentEnv` in `src/control/clusters/deployment.ts`. The fake cluster of `tests/control/clusters-ui.test.ts` moved to `tests/helpers/fake-cluster.ts` for it.
+- 2026-10-27 06:01 UTC: Bugs 6 and 7 fixed: Add a rig refuses a GPU named twice ("Name each GPU once.", as the join form says; `tests/control/machines.test.ts`), and its preview applies control's own rule for the judge's share, at most 8 on each side, showing control's refusal (`JUDGE_SHARE_JS`, held to `judgeShareOf` for 0 to 17 GPUs in `tests/control/ui/add-rig-client.test.ts`). The dashboard's own copy of the rule now calls `judgeShareOf`.
+- 2026-10-27 06:03 UTC: Bug 8 fixed: the seven background deploys, updates, resizes and waits go through `inBackground` (`src/control/background.ts`). A failure is logged with its rig, recorded as a failed step in the rig's history, and a state that lasts only while the work goes on (deploying, starting, updating, draining, joining) becomes `failed` (`tests/control/background.test.ts`). The rig-history step words moved to `src/control/ui/setup-steps.ts`, so `dashboard.ts` shrinks. All eight bugs are fixed; the control acceptance check for items 4 to 8 is still to run.
+- 2026-10-27 06:49 UTC: Verified. The full fast checks passed on e33b4436 (1,524 tests side by side and 142 alone), and the control acceptance check passed after bug 8 (62b992e1). Moved to `_completed/`.
+
+---
+
+Run with `/goal Complete docs/plan/goals/161-control-bugs-from-the-audit.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

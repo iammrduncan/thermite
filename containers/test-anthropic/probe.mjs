@@ -1,4 +1,4 @@
-// Test only (scripts/claude-real-acceptance.mjs): an agent's command in a trial in Claude Code. It
+// Test only (scripts/acceptance/claude-real.mjs): an agent's command in a trial in Claude Code. It
 // prints its user and whether the sign-in token, given in parts as its arguments, is in any
 // environment it can read: its own, and those of the processes above it up to the broker's
 // (Claude Code's among them). It never prints the token.

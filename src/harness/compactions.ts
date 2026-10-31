@@ -1,15 +1,17 @@
+import type { CliCompacted, KeptAt } from "../agents/compaction/index.ts";
+import { errorText } from "../common/errors.ts";
+import type { Harness } from "../core/agents.ts";
 import { COMPACTIONS_DIR, compactionFile } from "../core/compaction.ts";
 import { KB_BODY_MAX } from "../core/kb-index.ts";
 import type { LiveLog } from "../core/live.ts";
-import type { CliCompacted, KeptAt } from "./agents/cli-compaction.ts";
-import type { Ledger } from "./ledger.ts";
+import type { Ledger } from "./ledger/index.ts";
 
 /**
  * The harness's record of each compaction (goal 070), whichever harness the agent runs in. The
  * conversation before it is kept in the run's research folder (compactions/), where every agent
  * of the run may read it and none may change it, and where the run keeps it: the harness's state
  * holds it whole, it is exported with the run's folder, and its text, cut to an item's length, is
- * a document of the run's folder in the knowledge base. Each compaction is one
+ * a document of the run's records in the knowledge base. Each compaction is one
  * `context_compacted` event and lines in the live view, with the summary when there is one.
  */
 
@@ -33,8 +35,6 @@ export const compactionOf = (t: { id: string; run: string; lane: string }): Comp
   source: `trial:${t.id}`,
 });
 
-export type CompactionHarness = "pi" | "opencode" | "codex" | "claude-code";
-
 /** How the conversation was compacted: Pi's summary or its fallback, or the harness's own. */
 export type CompactionHow = "summary" | "trimmed" | "harness";
 
@@ -44,14 +44,14 @@ export interface CompactionRecord {
   tokensBefore: number | null;
   tokensAfter: number | null;
   how: CompactionHow;
-  harness: CompactionHarness;
+  harness: Harness;
   summary?: string | undefined;
   error?: string | undefined;
   /** Whether the conversation was kept (by `keep`, under the same number). */
   kept: boolean;
 }
 
-const HARNESS: Record<CompactionHarness, string> = {
+const HARNESS: Record<Harness, string> = {
   pi: "The harness",
   opencode: "OpenCode",
   codex: "Codex",
@@ -180,7 +180,7 @@ export class Compactions {
    */
   fromHarness(
     of: CompactionOf,
-    harness: Exclude<CompactionHarness, "pi">,
+    harness: Exclude<Harness, "pi">,
     c: Pick<CliCompacted, "number" | "tokensBefore" | "tokensAfter" | "markdown" | "summary">,
   ): void {
     let kept = false;
@@ -189,7 +189,7 @@ export class Compactions {
       this.keep(of, c.number, c.markdown);
       kept = true;
     } catch (err) {
-      error = `the conversation was not kept: ${err instanceof Error ? err.message : String(err)}`;
+      error = `the conversation was not kept: ${errorText(err)}`;
     }
     this.record(of, {
       number: c.number,

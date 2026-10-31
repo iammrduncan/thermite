@@ -1,4 +1,10 @@
+import { ApiError } from "../common/api/call.ts";
+import { harnessClient } from "../common/api/harness.ts";
 import { log } from "../common/env.ts";
+import { HEALTH } from "../core/api/harness/supervisor.ts";
+
+/** How long one look at the harness may take before it counts as no answer. */
+const HEALTH_TIMEOUT_MS = 5000;
 
 /**
  * At start the harness may still be coming up. The supervisor waits for it once, saying so once,
@@ -9,16 +15,24 @@ export async function waitForHarness(
   stopped: () => boolean,
   opts: { pollMs?: number; fetchImpl?: typeof fetch } = {},
 ): Promise<boolean> {
-  const get = opts.fetchImpl ?? fetch;
+  const harness = harnessClient({
+    url: harnessUrl,
+    token: "",
+    fetchImpl: opts.fetchImpl,
+    timeoutMs: HEALTH_TIMEOUT_MS,
+  });
   let said = false;
   while (!stopped()) {
     try {
-      const r = await get(`${harnessUrl}/v1/health`, { signal: AbortSignal.timeout(5000) });
-      if (r.ok) {
-        if (said) log("supervisor", "the harness answers");
+      await harness.call(HEALTH);
+      if (said) log("supervisor", "the harness answers");
+      return true;
+    } catch (err) {
+      // Up, with a loop late (503): the supervisor starts, so that its reports say so.
+      if (err instanceof ApiError && err.status !== undefined) {
+        if (said) log("supervisor", "the harness answers", { status: err.status });
         return true;
       }
-    } catch {
       // not up yet
     }
     if (!said) {

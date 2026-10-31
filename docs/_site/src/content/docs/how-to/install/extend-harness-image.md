@@ -37,7 +37,7 @@ Keep these as they are, or the rig won't start or won't be safe to judge on:
 | **`ENTRYPOINT` and `CMD`.** Don't set them | They start the harness |
 | **Thermite's users and groups.** Don't remove, renumber or reuse them | Their ids are fixed in Thermite's code. The [harness image reference](../../reference/harness-image.md) lists them |
 | **`/outbox`**, owned by user 10010 and group 10001, mode 2750 | The harness writes exports there and the supervisor reads them |
-| **`/opt/thermite`** | Thermite itself, and in `/opt/thermite/checks` the kits and projects of the smoke check |
+| **`/opt/thermite`** | Thermite itself, and in `/opt/thermite/checks` the kits and projects of the smoke check. Keep that folder root's, with group `thermite` (10010) and nothing in it open to other users: only the harness may read a kit, and the [isolation check](../../reference/rig-checks.md#isolation-check) fails when a role can |
 
 ## 2. Put tools where every user finds them
 

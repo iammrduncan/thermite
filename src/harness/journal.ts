@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { NOTE_KINDS, type NoteAbout, NoteInput, type NoteKind } from "../core/journal.ts";
 import type { LiveLog } from "../core/live.ts";
-import { type Ledger, LedgerError } from "./ledger.ts";
-import { foldText } from "./research/checks.ts";
+import { type JournalNoteRow, type Ledger, LedgerError } from "./ledger/index.ts";
+import { foldText } from "./research/index.ts";
 
 /**
  * A run's field notes (goal 065): what its workers, its planner and its advisors write down as
@@ -41,20 +41,7 @@ export interface NoteWriter {
   trial?: string | undefined;
 }
 
-type Row = {
-  id: number;
-  run: string;
-  by: string;
-  kind: string;
-  text: string;
-  about_type: string;
-  about_id: string;
-  lane: string | null;
-  trial: string | null;
-  at: string;
-};
-
-const toNote = (r: Row): JournalNote => ({
+const toNote = (r: JournalNoteRow): JournalNote => ({
   id: Number(r.id),
   run: r.run,
   by: r.by,
@@ -71,17 +58,18 @@ const clip = (s: string, n: number) => {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 
-/** Where each kind of record a note may be about is kept, by run (a run: the run itself). */
-const ABOUT_SQL: Record<NoteAbout["type"], string> = {
-  run: "select 1 from run where id = ? and id = ?",
-  experiment: "select 1 from experiment where id = ? and run = ?",
-  attempt: "select 1 from attempt where id = ? and run = ?",
-  source: "select 1 from source where id = ? and run = ?",
-  claim: "select 1 from claim where id = ? and run = ?",
-  finding: "select 1 from finding where id = ? and run = ?",
-  trial: "select 1 from trial where id = ? and run = ?",
-  round: "select 1 from epoch where n = ? and run = ?",
-  message: "select 1 from agent_message where id = ? and run = ?",
+/** Whether a run has each kind of record a note may be about, by its id (a run: the run itself). */
+const ABOUT: Record<NoteAbout["type"], (ledger: Ledger, run: string, id: string) => boolean> = {
+  run: (l, run, id) => id === run && l.runs.get(run) !== undefined,
+  experiment: (l, run, id) => l.experiments.get(id)?.run === run,
+  attempt: (l, run, id) => l.attempts.get(id)?.run === run,
+  source: (l, run, id) => l.sources.get(run, id) !== undefined,
+  claim: (l, run, id) => l.claims.get(run, id) !== undefined,
+  finding: (l, run, id) => l.claims.finding(run, id) !== undefined,
+  trial: (l, run, id) => l.trials.get(id)?.run === run,
+  // A round and a message are named by their numbers.
+  round: (l, run, id) => l.trials.hasEpoch(run, Number(id)),
+  message: (l, run, id) => l.messages.get(Number(id))?.run === run,
 };
 
 export class Journal {
@@ -114,11 +102,11 @@ export class Journal {
         "invalid",
         `about: a note is about its own run (${run}), not run ${about.id}`,
       );
-    const id =
-      about.type === "round" || about.type === "message" ? Number(about.id) : about.id.trim();
-    if (typeof id === "number" && (!Number.isInteger(id) || id < 1))
+    const id = about.id.trim();
+    const n = Number(id);
+    if ((about.type === "round" || about.type === "message") && (!Number.isInteger(n) || n < 1))
       throw new LedgerError("invalid", `about: a ${about.type} is named by its number`);
-    if (!this.ledger.db.prepare(ABOUT_SQL[about.type]).get(id, run))
+    if (!ABOUT[about.type](this.ledger, run, id))
       throw new LedgerError("invalid", `about: no ${about.type} ${about.id} in run ${run}`);
   }
 
@@ -128,18 +116,22 @@ export class Journal {
    */
   write(run: string, input: unknown, w: NoteWriter): JournalNote {
     const n = Journal.parse(input);
-    if (!this.ledger.getRun(run)) throw new LedgerError("not_found", `no run ${run}`);
+    if (!this.ledger.runs.get(run)) throw new LedgerError("not_found", `no run ${run}`);
     const about: NoteAbout = n.about ?? { type: "run", id: run };
     this.checkAbout(run, about);
     const at = this.clock().toISOString();
     const id = this.ledger.tx(() => {
-      const r = this.ledger.db
-        .prepare(
-          `insert into journal_note (run, by, kind, text, about_type, about_id, lane, trial, at)
-           values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(run, w.by, n.kind, n.text, about.type, about.id, w.lane ?? null, w.trial ?? null, at);
-      const id = Number(r.lastInsertRowid);
+      const id = this.ledger.journal.add({
+        run,
+        by: w.by,
+        kind: n.kind,
+        text: n.text,
+        aboutType: about.type,
+        aboutId: about.id,
+        lane: w.lane ?? null,
+        trial: w.trial ?? null,
+        at,
+      });
       this.ledger.appendEvent(w.actor, "journal_note", run, {
         id,
         by: w.by,
@@ -195,9 +187,7 @@ export class Journal {
   }
 
   get(id: number): JournalNote | undefined {
-    const r = this.ledger.db.prepare("select * from journal_note where id = ?").get(id) as
-      | Row
-      | undefined;
+    const r = this.ledger.journal.get(id);
     return r ? toNote(r) : undefined;
   }
 
@@ -217,23 +207,7 @@ export class Journal {
     limit: number,
     o: { by?: string | undefined; notBy?: string | undefined; kinds?: NoteKind[] | undefined } = {},
   ): JournalNote[] {
-    const where = [
-      "run = ?",
-      ...(o.by !== undefined ? ["by = ?"] : []),
-      ...(o.notBy !== undefined ? ["by <> ?"] : []),
-      ...(o.kinds?.length ? [`kind in (${o.kinds.map(() => "?").join(", ")})`] : []),
-    ].join(" and ");
-    return (
-      this.ledger.db
-        .prepare(`select * from journal_note where ${where} order by id desc limit ?`)
-        .all(
-          run,
-          ...(o.by !== undefined ? [o.by] : []),
-          ...(o.notBy !== undefined ? [o.notBy] : []),
-          ...(o.kinds ?? []),
-          limit,
-        ) as Row[]
-    ).map(toNote);
+    return this.ledger.journal.newest(run, limit, o).map(toNote);
   }
 
   /**
@@ -250,14 +224,7 @@ export class Journal {
 
   /** Notes by id (an export's window), oldest first. */
   byIds(ids: number[]): JournalNote[] {
-    if (!ids.length) return [];
-    return (
-      this.ledger.db
-        .prepare(
-          `select * from journal_note where id in (${ids.map(() => "?").join(", ")}) order by id`,
-        )
-        .all(...ids) as Row[]
-    ).map(toNote);
+    return this.ledger.journal.byIds(ids).map(toNote);
   }
 }
 

@@ -56,5 +56,14 @@
       "inconclusive",
       "regress"
     ]
+  },
+  "cache": {
+    "hypothesis": "reuse the last call's rows of the result",
+    "expect": "completes",
+    "accept": [
+      "neutral",
+      "inconclusive",
+      "regress"
+    ]
   }
 }

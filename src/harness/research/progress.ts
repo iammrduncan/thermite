@@ -1,28 +1,13 @@
-import type { Ledger } from "../ledger.ts";
+import { PROGRESS_SHARE, SATURATION_TASKS } from "../../core/research-check.ts";
+import type { Ledger } from "../ledger/index.ts";
 import type { TaskYield } from "../queue.ts";
 
 /**
  * Where a research run stands with its items (goal 117): the panel's standing decision on each
  * question and each required hypothesis, whether each question is saturated, and when the run
  * last improved. The review (part B2), the plan (part B1) and the end rules read these; nothing
- * here writes.
+ * here writes. The rule's limits are in core/research-check.ts.
  */
-
-/** A question's decision: answered at a certainty, the best that sources allow, or still open. */
-export const QUESTION_DECISIONS = ["answered", "insufficient", "open"] as const;
-export type QuestionDecision = (typeof QUESTION_DECISIONS)[number];
-/** The certainty of an answered question. */
-export const ANSWER_CERTAINTIES = ["high", "moderate", "low"] as const;
-export type AnswerCertainty = (typeof ANSWER_CERTAINTIES)[number];
-/** A required hypothesis's verdict. */
-export const HYPOTHESIS_DECISIONS = ["supported", "refuted", "undecided"] as const;
-export type HypothesisDecision = (typeof HYPOTHESIS_DECISIONS)[number];
-
-/** A question's last tasks that show it saturated: this many in a row that added nothing new. */
-export const SATURATION_TASKS = 4;
-
-/** The progress rule (the owner, 2026-10-24): no improvement for this share of the running time. */
-export const PROGRESS_SHARE = 0.25;
 
 /**
  * How good a decision is, to tell an improvement: for a question, open 0, insufficient 1,
@@ -54,47 +39,24 @@ export interface StandingDecision {
   decided_at: string;
 }
 
-/** The newest card version of each question of a run, by question index. */
-function newestCards(ledger: Ledger, run: string): Map<number, number> {
-  return new Map(
-    (
-      ledger.db
-        .prepare(
-          "select question, max(version) as v from question_card where run = ? group by question",
-        )
-        .all(run) as { question: number; v: number }[]
-    ).map((r) => [Number(r.question), Number(r.v)]),
-  );
-}
-
 /**
  * The panel's decisions that still stand, by `kind:key`: the newest decision of each item, unless
  * it is a question's and the question has a newer card than the one it decided on. A question
  * with a newer card is an item to review again.
  */
 export function standingDecisions(ledger: Ledger, run: string): Map<string, StandingDecision> {
-  const cards = newestCards(ledger, run);
-  const rows = ledger.db
-    .prepare(
-      `select d.* from item_decision d
-         join (select kind, key, max(id) as id from item_decision where run = ? group by kind, key) n
-           on n.id = d.id`,
-    )
-    .all(run) as Record<string, unknown>[];
+  const cards = ledger.cards.newestVersions(run);
   const out = new Map<string, StandingDecision>();
-  for (const r of rows) {
-    const kind = String(r.kind) as "question" | "hypothesis";
-    const key = String(r.key);
-    const version = r.card_version === null ? null : Number(r.card_version);
-    if (kind === "question" && (cards.get(Number(key)) ?? 0) > (version ?? 0)) continue;
-    out.set(`${kind}:${key}`, {
-      kind,
-      key,
-      decision: String(r.decision),
-      certainty: r.certainty === null ? null : String(r.certainty),
-      review: Number(r.review),
-      card_version: version,
-      decided_at: String(r.decided_at),
+  for (const d of ledger.reviews.newestDecisions(run)) {
+    if (d.kind === "question" && (cards.get(Number(d.key)) ?? 0) > (d.card_version ?? 0)) continue;
+    out.set(`${d.kind}:${d.key}`, {
+      kind: d.kind,
+      key: d.key,
+      decision: d.decision,
+      certainty: d.certainty,
+      review: d.review,
+      card_version: d.card_version,
+      decided_at: d.decided_at,
     });
   }
   return out;
@@ -114,13 +76,7 @@ export function questionEnded(d: StandingDecision | undefined): boolean {
  * not saturated.
  */
 export function questionSaturated(ledger: Ledger, run: string, question: number): boolean {
-  const tasks = ledger.db
-    .prepare(
-      `select yield, created_at from experiment
-         where run = ? and question = ? and state = 'done' and yield is not null
-         order by updated_at desc, rowid desc limit ?`,
-    )
-    .all(run, question, SATURATION_TASKS) as { yield: string; created_at: string }[];
+  const tasks = ledger.experiments.yields(run, question, SATURATION_TASKS);
   if (tasks.length < SATURATION_TASKS) return false;
   for (const t of tasks) {
     let y: TaskYield | undefined;
@@ -136,13 +92,8 @@ export function questionSaturated(ledger: Ledger, run: string, question: number)
     (a, t) => (t.created_at < a ? t.created_at : a),
     tasks[0]?.created_at ?? "",
   );
-  const cards = ledger.db
-    .prepare(
-      "select certainty, created_at from question_card where run = ? and question = ? order by version",
-    )
-    .all(run, question) as { certainty: string; created_at: string }[];
   let before = 0;
-  for (const c of cards) {
+  for (const c of ledger.cards.history(run, question)) {
     const rank = certaintyRank(c.certainty);
     if (c.created_at >= since && rank > before) return false;
     before = rank;
@@ -160,31 +111,15 @@ export function lastImprovement(ledger: Ledger, run: string): string | null {
   const later = (at: string) => {
     if (last === null || at > last) last = at;
   };
-  const decisions = ledger.db
-    .prepare(
-      "select kind, key, decision, certainty, decided_at from item_decision where run = ? order by id",
-    )
-    .all(run) as {
-    kind: "question" | "hypothesis";
-    key: string;
-    decision: string;
-    certainty: string | null;
-    decided_at: string;
-  }[];
   const before = new Map<string, number>();
-  for (const d of decisions) {
+  for (const d of ledger.reviews.decisions(run)) {
     const k = `${d.kind}:${d.key}`;
     const rank = decisionRank(d.kind, d.decision, d.certainty);
     if (rank > (before.get(k) ?? 0)) later(d.decided_at);
     before.set(k, rank);
   }
-  const cards = ledger.db
-    .prepare(
-      "select question, certainty, created_at from question_card where run = ? order by question, version",
-    )
-    .all(run) as { question: number; certainty: string; created_at: string }[];
   const card = new Map<number, number>();
-  for (const c of cards) {
+  for (const c of ledger.cards.versions(run)) {
     const rank = certaintyRank(c.certainty);
     if (rank > (card.get(c.question) ?? 0)) later(c.created_at);
     card.set(c.question, rank);

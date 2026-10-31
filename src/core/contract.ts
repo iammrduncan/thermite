@@ -2,7 +2,12 @@ import { z } from "zod";
 import { canonicalSha } from "./canonical.ts";
 import { AgentsContext } from "./compaction.ts";
 import { DURATION_PATTERN, parseDuration } from "./duration.ts";
+import { CampaignId, MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
+import { KbWrites } from "./kb.ts";
 import { McpUses } from "./mcp.ts";
+import { additionRefusals, RoleAdditions } from "./role-additions.ts";
+
+export { MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
 
 /**
  * Campaign contract, schema version 1.
@@ -34,21 +39,6 @@ const RegexSchema = z
       return false;
     }
   }, "invalid regular expression");
-
-const SearchPolicy = z.strictObject({
-  /** What public search may be used for, stated for agents and auditors. */
-  allowed_purposes: z.array(z.string().min(1)).default([]),
-  /** Regular expressions; matching queries are refused and logged. */
-  blocked_patterns: z.array(RegexSchema).default([]),
-});
-
-/**
- * The most lanes a rig can run: its harness image has a user for each of lanes 1 to 16
- * (containers/harness/Containerfile; IDS.maxLanes in src/harness/broker/runner.ts). A contract's
- * lanes.count, a rig's workers at a time and the campaign builder refuse more, with this reason.
- */
-export const MAX_LANES = 16;
-export const MAX_LANES_REASON = `at most ${MAX_LANES}: a rig has users for lanes 1 to ${MAX_LANES} only`;
 
 /**
  * What a worker's lane may use. Optional and without schema defaults, so contracts written
@@ -111,7 +101,7 @@ export const FolderSchema = z
 
 const Common = {
   schema_version: z.literal(1),
-  campaign: IdSchema,
+  campaign: CampaignId,
   version: z.number().int().positive(),
   title: z.string().min(1),
   project: z.strictObject({
@@ -159,7 +149,6 @@ const Common = {
     .default({ max_open_attempts: 4 }),
   min_duration: DurationSchema.optional(),
   max_duration: DurationSchema.optional(),
-  search_policy: SearchPolicy.optional(),
   /**
    * The campaign's additional information, from its author (goal 078): background, links, what
    * was tried, limits and what good looks like, in Markdown, with no length limit. The planner,
@@ -178,6 +167,20 @@ const Common = {
    * rig's. Optional and without a default, so contracts written before it keep their hash.
    */
   agents_context: AgentsContext.optional(),
+  /**
+   * The owner's additions to a role's instructions for this campaign (goal 166): one text for
+   * each role, by its id, added to every prompt of that role and labelled as the owner's; the
+   * role's own text stays whole. Optional and without a default, so contracts written before it
+   * keep their hash.
+   */
+  role_additions: RoleAdditions.optional(),
+  /**
+   * Which kinds of item each role may write in its own slot of Thermite's knowledge base (goal
+   * 175): planner, worker, teacher, merged-by, auditor, review-panel, synthesizer and
+   * final-writer, each with its kinds. Left out: core/kb.ts's KB_WRITES_DEFAULT. Optional and
+   * without a default, so contracts written before it keep their hash.
+   */
+  kb_writes: KbWrites.optional(),
 };
 
 const EditPolicy = {
@@ -240,7 +243,7 @@ const Guard = z.strictObject({
 const HardConstraint = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("min"), metric: MetricSchema, value: z.number() }),
   z.strictObject({ kind: z.literal("max"), metric: MetricSchema, value: z.number() }),
-  /** A named check in the project kit that must pass. */
+  /** Refused by parseContract (goal 163); kept here so a contract stored before still reads. */
   z.strictObject({ kind: z.literal("check"), check: z.string().min(1) }),
 ]);
 
@@ -430,6 +433,8 @@ export const ContractSchema = z
         message: `rubrics has ${c.rubrics.length} entries for ${c.questions.length} questions: give one for each question, in order`,
       });
     }
+    for (const why of additionRefusals(c.mode, c.role_additions))
+      ctx.addIssue({ code: "custom", path: ["role_additions"], message: why });
     if (c.mode === "hill_climb" && !c.target) {
       ctx.addIssue({ code: "custom", message: "hill_climb campaigns need a target" });
     }
@@ -466,8 +471,22 @@ export function parseContract(input: unknown): ContractParse {
       errors: r.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`),
     };
   }
+  // A `check` hard constraint was accepted and never checked; it is refused (the owner,
+  // 2026-10-27, goal 163). A contract stored before keeps it, and nothing reads it.
+  const checks = ("hard_constraints" in r.data ? r.data.hard_constraints : []).flatMap((h, i) =>
+    h.kind === "check" ? [i] : [],
+  );
+  if (checks.length)
+    return {
+      ok: false,
+      errors: checks.map((i) => `hard_constraints.${i}: ${CHECK_CONSTRAINT_REFUSED}`),
+    };
   return { ok: true, contract: r.data, sha: contractSha(r.data) };
 }
+
+/** Why a `check` hard constraint is refused, and what to use. */
+export const CHECK_CONSTRAINT_REFUSED =
+  "a `check` hard constraint is not supported: the kit's own checks run on every candidate anyway. Remove it, or bound a metric with `min` or `max`";
 
 export interface LaneLimitValues {
   /** Unset: a lane command runs until it ends (no default time limit; owner, 2026-10-16). */
