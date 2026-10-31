@@ -170,9 +170,17 @@ export function isAgentSlot(slot: string): boolean {
   return (KB_AGENT_SLOTS as readonly string[]).includes(slot);
 }
 
-export const KbSlot = z.string().refine((s) => s === KB_RECORDS || isAgentSlot(s), {
-  message: `a slot is ${KB_RECORDS}, worker-<lane> or one of ${KB_AGENT_SLOTS.join(", ")}`,
-});
+/**
+ * The owner's slot in a run (goal 176): the notes the owner writes from an item, through control
+ * alone. No event's writer has it (slotOfWriter), so no rig writes there.
+ */
+export const KB_OWNER = "owner";
+
+export const KbSlot = z
+  .string()
+  .refine((s) => s === KB_RECORDS || s === KB_OWNER || isAgentSlot(s), {
+    message: `a slot is ${KB_RECORDS}, ${KB_OWNER}, worker-<lane> or one of ${KB_AGENT_SLOTS.join(", ")}`,
+  });
 
 /**
  * The slot an event's writer writes in, from the event the harness signed: Thermite's code (the

@@ -15,6 +15,8 @@ import {
   grantCollection,
   KB_LIST_DEFAULT,
   type KbFolder,
+  type KbNoteOutcome,
+  KbNoteQuery,
   KbReadQuery,
   KbSearchQuery,
   kbFileOf,
@@ -27,6 +29,7 @@ import {
   PICKABLE,
   readKbPlace,
   revokeCollection,
+  writeOwnerNote,
 } from "../kb/index.ts";
 import { esc } from "../ui/components/index.ts";
 import { sizeWords } from "../ui/exports.ts";
@@ -201,6 +204,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
             mode: "page",
             version: (v) => `${knowledgeHref(address)}${v ? `?version=${v}` : ""}`,
             item: (a) => knowledgeHref(a),
+            note: noteForm(c, knowledgeHref(address)),
           },
           Date.now(),
         ),
@@ -226,7 +230,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       parts: placeParts,
       query,
       pane: query.item
-        ? pane(placeParts.join("/"), query, query.item)
+        ? pane(c, placeParts.join("/"), query, query.item)
         : folderPaneHtml({
             place: list.at,
             summary: list.summary,
@@ -263,7 +267,15 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
    * The preview pane of an item beside the open folder's contents, from the owner's read of it
    * (kb_read): its links keep the folder's view, with the item and its version in the address.
    */
-  const pane = (folder: string, query: ExplorerQuery, address: string) => {
+  /** The reader's Add a note: its form token, the page it comes back to, and what was said. */
+  const noteForm = (c: Ctx, back: string) => ({
+    csrf: csrf(c),
+    back,
+    ok: c.req.query("ok"),
+    error: c.req.query("error"),
+  });
+
+  const pane = (c: Ctx, folder: string, query: ExplorerQuery, address: string) => {
     const close = explorerHref(folder, { ...query, item: undefined, version: undefined });
     const read = KbReadQuery.safeParse({
       address,
@@ -278,6 +290,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         version: (v) => explorerHref(folder, { ...query, version: v }),
         item: (a) => explorerHref(folder, { ...query, item: a, version: undefined }),
         close,
+        note: noteForm(c, explorerHref(folder, { ...query, version: undefined })),
       },
       Date.now(),
     );
@@ -325,7 +338,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
    * A grant given or ended on a collection's pane (goal 176), as REST and MCP do it: back to the
    * explorer's page it came from, which says what changed, or why not.
    */
-  const grantBack = (c: Ctx, back: unknown, o: GrantOutcome) => {
+  const grantBack = (c: Ctx, back: unknown, o: GrantOutcome | KbNoteOutcome) => {
     const to = String(back ?? "");
     const base = to.startsWith(KNOWLEDGE_ROOT) && !to.startsWith("//") ? to : KNOWLEDGE_ROOT;
     const said = o.ok ? `ok=${encodeURIComponent(o.said)}` : `error=${encodeURIComponent(o.error)}`;
@@ -335,6 +348,15 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     const f = await c.req.parseBody();
     const g = { campaign: String(f.campaign ?? ""), reads: String(f.reads ?? "") };
     return grantBack(c, f.back, grantCollection(store, views(), g, "owner:ui"));
+  });
+  // The owner's note on an item, from the reader's Add a note: back to the item, which says so.
+  app.post("/ui/kb/note", async (c) => {
+    const f = await c.req.parseBody();
+    const n = KbNoteQuery.safeParse({ address: f.address, text: f.text });
+    const o: KbNoteOutcome = n.success
+      ? writeOwnerNote(store, n.data, "owner:ui")
+      : { ok: false, error: "Write the note: 1 to 2,000 characters." };
+    return grantBack(c, f.back, o);
   });
   app.post("/ui/kb/revoke", async (c) => {
     const f = await c.req.parseBody();

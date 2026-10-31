@@ -99,7 +99,7 @@ describe("a write to the knowledge base, recorded in the run's ledger", () => {
     );
     assert.throws(
       () => write({ writer: "worker-99", kind: "note", title: "x", text: "x" }),
-      /a slot is records, worker-<lane> or one of/,
+      /a slot is records, owner, worker-<lane> or one of/,
     );
     assert.throws(
       () =>

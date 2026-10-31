@@ -157,7 +157,7 @@ export class KnowledgeBase {
    * the caller's transaction.
    */
   write(
-    src: { rig: string; ledger: string; run: string; event: number; at: string },
+    src: { rig: string; ledger: string; run: string; event?: number | undefined; at: string },
     b: KbItemBody,
   ): string | undefined {
     const { rig, ledger, run } = src;
@@ -437,6 +437,16 @@ export class KnowledgeBase {
   /** How many items of each kind one run put in its collection (field notes apart). */
   runCounts(rig: string, ledger: string, run: string) {
     return runCountsOf(this.db, rig, ledger, run);
+  }
+
+  /** The number the next item of a run's slot takes: one past its highest (the owner's notes). */
+  nextItem(src: { rig: string; ledger: string; run: string }, slot: string): number {
+    const r = this.db
+      .prepare(
+        "select coalesce(max(cast(ref as integer)), 0) + 1 as n from kb_item where rig = ? and ledger = ? and run = ? and slot = ?",
+      )
+      .get(src.rig, src.ledger, src.run, slot) as { n: number };
+    return Number(r.n);
   }
 
   /** What the knowledge base stores, from its own tables (stored.ts). */

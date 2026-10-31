@@ -7,11 +7,14 @@ import {
   grantProblem,
   KB_LIST_DEFAULT,
   KB_LIST_MAX,
+  KB_NOTE_MAX,
   KB_REFUSED_PAGE,
   type KbListQuery,
+  type KbNoteQuery,
   type KbReadQuery,
   type KbSearchQuery,
   kbListFields,
+  kbNoteFields,
   kbReadFields,
   kbSearchFields,
   kbStored,
@@ -19,6 +22,7 @@ import {
   ownerKbRead,
   ownerKbSearch,
   revokeCollection,
+  writeOwnerNote,
 } from "../kb/index.ts";
 import { KB_STORED_FILES } from "../store/index.ts";
 import { campaignModes, rigView } from "../views/index.ts";
@@ -71,6 +75,21 @@ export function registerKnowledgeBase(tools: ToolContext): void {
         const r = ownerKbList(store, views(), a);
         if ("error" in r) throw new Error(String(r.error));
         return r;
+      }),
+    );
+  // An operator acts for the owner, as on its other writes; its note is audited as its own.
+  if (kbReader)
+    server.registerTool(
+      "kb_note",
+      {
+        title: "Write a note on an item",
+        description: `Writes the owner's note on one item of Thermite's knowledge base, by the item's address: a note in the owner slot of the item's run, linked to the item (follows), as the owner. The run's agents find it with kb_search and kb_read, as they find any item of what their run reads; the reader shows it as written by you, and among the item's links (followed by). text: 1 to ${KB_NOTE_MAX.toLocaleString("en-US")} characters; title: left out, its first line. Returns {ok, address (the note's own, <campaign>/<run>/owner/note:<n>), follows, said}. A note is never changed or removed. An address the knowledge base has not is an error: the knowledge base has no item <address>.`,
+        inputSchema: kbNoteFields,
+      },
+      audited("kb_note", (a: KbNoteQuery) => {
+        const o = writeOwnerNote(store, a, actor);
+        if (!o.ok) throw new Error(o.error);
+        return o;
       }),
     );
   if (kbReader)

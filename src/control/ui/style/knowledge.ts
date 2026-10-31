@@ -45,17 +45,23 @@ details.jmore { display: grid; gap: 6px; } details.jmore > summary { cursor: poi
 .kx-scope { padding-left: 6px; border-left: 1px solid var(--border); }
 .kx-scope select, .kx-as select { height: 24px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; color: var(--foreground); font-size: 12px; max-width: 160px; }
 .kx-as select { border: 1px solid var(--input); height: 30px; background: var(--card); }
+.kx-noteform { display: grid; gap: 6px; padding: 0 0 10px; } .kx-noteform p { margin: 0; } .kx-noteform button { justify-self: start; }
+.kx-noteform textarea { width: 100%; min-height: 80px; resize: vertical; }
 .kx-storedbtn { margin-left: auto; white-space: nowrap; }
 .kx-stored { display: grid; gap: 12px; padding: 0 0 16px; }
 .kx-stored .kx-bar { padding: 0; }
 .kx-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.kx-sec { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
-.kx-sec > summary { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none; font-weight: 600; }
-.kx-sec > summary::-webkit-details-marker { display: none; }
-.kx-sec > summary::before { content: "›"; display: inline-block; width: 10px; color: var(--muted-foreground); transition: transform 0.15s; }
-.kx-sec[open] > summary::before { transform: rotate(90deg); }
+.kx-ssec { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.kx-ssec > summary { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none; font-weight: 600; }
+.kx-ssec > summary::-webkit-details-marker { display: none; }
+.kx-ssec > summary::before { content: "›"; display: inline-block; width: 10px; color: var(--muted-foreground); transition: transform 0.15s; }
+.kx-ssec[open] > summary::before { transform: rotate(90deg); }
 .kx-secn { color: var(--muted-foreground); font-weight: 400; font-size: 12px; }
 .kx-secb { display: grid; gap: 12px; padding: 0 14px 14px; }
+.kx-stored { grid-template-columns: minmax(0, 1fr); }
+.kx-ssec, .kx-secb { min-width: 0; }
+.kx-secb .kx-scroll { overflow-x: auto; }
+.kx-table.kx-stab { table-layout: auto; width: max-content; min-width: 100%; }
 .kx-stab td, .kx-stab th { white-space: nowrap; }
 .kx-stab tfoot td { background: var(--muted); }
 .kx-why { display: block; color: var(--muted-foreground); font-size: 11px; }

@@ -1,6 +1,7 @@
 import {
   KB_ITEM_TYPES,
   KB_OUTCOMES,
+  KB_OWNER,
   type KbItemType,
   type KbKind,
   type KbListSort,
@@ -375,7 +376,7 @@ function itemRow(x: ExplorerHit, p: ExplorerPage): string {
   const wd = x.withdrawn
     ? `<span class="kx-wd" role="img" aria-label="Evidence withdrawn" title="${esc(x.withdrawn)}">${icon.warn}</span>`
     : "";
-  return `<tr data-item-href="${href}"${p.query.item === x.address ? ` class="on"` : ""}><td class="c-name"><span class="kx-cell" title="${TYPE_WORD[type]}">${TYPE_ICON[type]}<span class="kx-title"><span class="kx-line"><a href="${href}" data-item>${esc(x.title || x.address)}</a>${wd}</span><span class="kx-addr">${esc(x.address)}</span>${x.excerpt ? `<span class="kx-snip">${markedExcerpt(x.excerpt)}</span>` : ""}${x.why ? `<span class="kx-why">${esc(x.why)}</span>` : ""}</span></span></td><td class="c-kind">${esc(x.kind)}</td><td class="c-out">${out}</td><td class="c-writer">${esc(x.slot)}</td><td class="c-mod">${when(x.at, p.now)}</td><td class="c-size num">${x.file ? esc(sizeWords(x.file.bytes)) : ""}</td></tr>`;
+  return `<tr data-item-href="${href}"${p.query.item === x.address ? ` class="on"` : ""}><td class="c-name"><span class="kx-cell" title="${TYPE_WORD[type]}">${TYPE_ICON[type]}<span class="kx-title"><span class="kx-line"><a href="${href}" data-item>${esc(x.title || x.address)}</a>${wd}</span><span class="kx-addr">${esc(x.address)}</span>${x.excerpt ? `<span class="kx-snip">${markedExcerpt(x.excerpt)}</span>` : ""}${x.why ? `<span class="kx-why">${esc(x.why)}</span>` : ""}</span></span></td><td class="c-kind">${esc(x.kind)}</td><td class="c-out">${out}</td><td class="c-writer">${x.slot === KB_OWNER ? "you" : esc(x.slot)}</td><td class="c-mod">${when(x.at, p.now)}</td><td class="c-size num">${x.file ? esc(sizeWords(x.file.bytes)) : ""}</td></tr>`;
 }
 
 const plural = (n: number, w: [string, string]) =>

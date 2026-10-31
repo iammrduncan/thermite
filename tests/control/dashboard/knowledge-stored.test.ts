@@ -138,7 +138,7 @@ describe("What's stored", () => {
       assert.match(
         page,
         new RegExp(
-          `<details class="kx-sec" id="${id}" open><summary><span class="kx-sech"><span class="lb">[^<]+<i class="ii"`,
+          `<details class="kx-ssec" id="${id}" open><summary><span class="kx-sech"><span class="lb">[^<]+<i class="ii"`,
         ),
       );
     assert.match(page, /<td>Meaning<\/td><td><span class="chip">Not installed<\/span><\/td>/);
@@ -146,7 +146,10 @@ describe("What's stored", () => {
     // Agents' words are escaped; the refused writes page on.
     assert.match(page, /not a &lt;paper&gt; 51/);
     assert.ok(!page.includes("not a <paper>"));
-    assert.match(page, /href="\/ui\/kb\/stored\?offset=50#refused">Older ›<\/a>/);
+    assert.match(
+      page,
+      /<span class="muted">1–50 of 52<\/span><a href="\/ui\/kb\/stored\?offset=50#refused">Older ›<\/a>/,
+    );
     // The explorer's toolbar links here.
     assert.match(
       await s.html("/ui/knowledge"),

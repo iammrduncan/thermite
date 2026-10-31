@@ -204,7 +204,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.deepEqual(s.refusals().reverse(), [
       "worker-2 writes only in its own slot, worker-2: not in worker-1, another writer's",
       "worker-1 writes only in its own slot, worker-1: not in records, another writer's",
-      "not an item: slot: a slot is records, worker-<lane> or one of planner, teacher, merged-by, auditor, review-panel, synthesizer, final-writer",
+      "not an item: slot: a slot is records, owner, worker-<lane> or one of planner, teacher, merged-by, auditor, review-panel, synthesizer, final-writer",
       "run someone-elses-run is not this rig's: control's run registry has no such run of this ledger",
       "not an item: title: Too small: expected string to have >=1 characters",
       "item 1 of slot worker-1 exists already: a new version of it is version 2",

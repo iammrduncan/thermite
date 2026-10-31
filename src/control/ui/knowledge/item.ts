@@ -1,5 +1,5 @@
 import { KB_READ_PAGE } from "../../../core/link/kb.ts";
-import type { KbReadAnswer } from "../../kb/index.ts";
+import { KB_NOTE_MAX, type KbReadAnswer, NOTE_WORDS } from "../../kb/index.ts";
 import { ago, esc, fmtInt, icon, infoLabel } from "../components/index.ts";
 import { sizeWords } from "../exports.ts";
 import { knowledgeHref } from "../urls.ts";
@@ -26,6 +26,23 @@ export interface ReaderLinks {
   item: (address: string) => string;
   /** Where × goes: the folder without the pane. */
   close?: string | undefined;
+  /** Add a note: the form token, the page it comes back to, and what the last save said. */
+  note?:
+    | { csrf: string; back: string; ok?: string | undefined; error?: string | undefined }
+    | undefined;
+}
+
+const NOTE_TIP =
+  "Your note on this item, in your own words. It is kept in the owner slot of the item's run, linked to the item, and the run's agents find it.";
+
+/** Add a note: what a save said, then the form, which says what it does before its button. */
+function noteHtml(x: ReaderItem, n: NonNullable<ReaderLinks["note"]>): string {
+  const said = n.ok
+    ? `<div class="kx-note ok" role="status">${esc(n.ok)}</div>`
+    : n.error
+      ? `<div class="kx-note bad" role="alert"><b>Not kept.</b> ${esc(n.error)}</div>`
+      : "";
+  return `${said}<details class="kx-sec kx-addnote"${n.error ? " open" : ""}><summary>${icon.chevron}<span>Add a note</span></summary><form method="post" action="/ui/kb/note" class="kx-noteform"><input type="hidden" name="csrf" value="${esc(n.csrf)}"><input type="hidden" name="back" value="${esc(n.back)}"><input type="hidden" name="address" value="${esc(x.address)}"><label class="sfd">${infoLabel("Your note", NOTE_TIP)}<textarea name="text" rows="4" maxlength="${KB_NOTE_MAX}" required></textarea></label><p class="small">${esc(NOTE_WORDS(x.run))}</p><button class="sm primary">Save the note</button></form></details>`;
 }
 
 /** How another item links to this one, said from this one's side. */
@@ -149,7 +166,7 @@ export function readerHtml(x: ReaderItem, links: ReaderLinks, now: number): stri
   const meta = `<div class="kx-meta"><span class="chip">${esc(x.kind)}</span>${x.outcome ? outcomeChip(x.outcome) : ""}${withdrawn}<span class="mono">${esc(x.slot)}</span><span aria-hidden="true">·</span><span>${esc(x.writer.words)}</span><span aria-hidden="true">·</span><span title="${esc(x.at)}">written ${esc(ago(x.at, now))} ago</span></div>`;
   const body = `<h2>${esc(x.title || x.address)}</h2>${meta}${x.result ? `<div class="small"><span class="muted">Result:</span> ${esc(x.result)}</div>` : ""}
 <div class="kx-addrline"><code>${esc(x.address)}</code><button type="button" class="ghost sm" data-copy="${esc(x.address)}" aria-label="Copy the address">${icon.copy}<span>Copy</span></button></div>
-${versionsHtml(x, links, now)}${x.file ? fileCard(x, x.file) : ""}${textHtml(x, links)}${linksHtml(x, links)}${readersHtml(x)}`;
+${versionsHtml(x, links, now)}${x.file ? fileCard(x, x.file) : ""}${textHtml(x, links)}${linksHtml(x, links)}${readersHtml(x)}${links.note ? noteHtml(x, links.note) : ""}`;
   if (links.mode === "page")
     return `<div class="kx-scroll"><article class="kx-item">${body}</article></div>`;
   const id = x.address.split("/").slice(3).join("/");

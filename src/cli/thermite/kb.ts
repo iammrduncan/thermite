@@ -4,6 +4,7 @@ import {
   CAMPAIGN_KB_REVOKE,
   KB_ITEM,
   KB_LIST,
+  KB_NOTE,
   KB_SEARCH,
   KB_STORED,
 } from "../../core/api/control/owner.ts";
@@ -40,13 +41,14 @@ export async function thermiteKb(rest: string[]): Promise<void> {
       sort: { type: "string" },
       order: { type: "string" },
       as: { type: "string" },
+      title: { type: "string" },
       control: { type: "string" },
       "token-file": { type: "string" },
     },
   });
   const grants = sub === "grant" || sub === "revoke";
-  if (sub !== "search" && sub !== "read" && sub !== "list" && sub !== "stored" && !grants)
-    fail(USAGE);
+  const subs = ["search", "read", "list", "stored", "note"];
+  if (!subs.includes(sub ?? "") && !grants) fail(USAGE);
   if (!values.control || !values["token-file"])
     fail("give --control and --token-file: control keeps the knowledge base");
   const control = controlAt(values.control, values["token-file"]);
@@ -62,6 +64,24 @@ export async function thermiteKb(rest: string[]): Promise<void> {
         ? control.call(CAMPAIGN_KB_GRANT, { params: { campaign }, body: { reads } })
         : control.call(CAMPAIGN_KB_REVOKE, { params: { campaign, reads } }),
     );
+    process.stdout.write(`${JSON.stringify(out)}\n`);
+    return;
+  }
+  if (sub !== "note" && values.title !== undefined)
+    fail(`kb ${sub} takes no --title: kb note does`);
+  if (sub === "note") {
+    const [address, ...words] = positionals;
+    const given = Object.entries(values).filter(
+      ([k, v]) => v !== undefined && !["control", "token-file", "title"].includes(k),
+    );
+    if (!address || !words.length || given.length)
+      fail("kb note takes an item's address, the note's words, and --title");
+    const body = {
+      address,
+      text: words.join(" "),
+      ...(values.title ? { title: values.title } : {}),
+    };
+    const out = await orFail(control.call(KB_NOTE, { body }));
     process.stdout.write(`${JSON.stringify(out)}\n`);
     return;
   }

@@ -7,6 +7,7 @@ import {
   KB_FILE,
   KB_ITEM,
   KB_LIST,
+  KB_NOTE,
   KB_SEARCH,
   KB_STORED,
   PROPAGATE,
@@ -19,6 +20,7 @@ import {
   type GrantOutcome,
   grantCollection,
   KbListQuery,
+  KbNoteQuery,
   KbReadQuery,
   KbSearchQuery,
   kbFileOf,
@@ -28,6 +30,7 @@ import {
   ownerKbRead,
   ownerKbSearch,
   revokeCollection,
+  writeOwnerNote,
 } from "../kb/index.ts";
 import { resultsLeft } from "../results-left.ts";
 import { leaderboard, rigViews } from "../views/index.ts";
@@ -169,6 +172,13 @@ export function resultRoutes(
       return granted(c, grantCollection(store, rigViews(store, viewOpts), g, "owner:api"), true);
     },
   );
+  // The owner's note on an item (goal 176): as MCP's kb_note and the reader's Add a note.
+  app.post(KB_NOTE.path, admin, bodyLimit({ maxSize: KB_NOTE.maxBytes }), async (c) => {
+    const body = KbNoteQuery.safeParse(await c.req.json().catch(() => undefined));
+    if (!body.success) return c.json({ error: queryRefusal(body.error) }, 400);
+    const o = writeOwnerNote(store, body.data, "owner:api");
+    return o.ok ? c.json(o, 201) : c.json({ error: o.error }, 400);
+  });
   app.delete(CAMPAIGN_KB_REVOKE.path, admin, (c) =>
     granted(
       c,

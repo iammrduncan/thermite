@@ -398,6 +398,15 @@ export const KB_FILE = {
  * The owner's list of one place of the knowledge base (goal 176): `at`, the filters `kind`,
  * `outcome`, `type` and `slot` (lists, with commas), `sort`, `order`, `offset` and `limit`.
  */
+/** The owner's note on an item (goal 176): kept in the item's run's owner slot, following it. */
+export const KB_NOTE = {
+  method: "POST",
+  path: "/v1/kb/notes",
+  what: "knowledge base note",
+  body: z.looseObject({ address: z.string(), text: z.string() }),
+  answer: z.looseObject({ address: z.string(), follows: z.string(), said: z.string() }),
+  maxBytes: 16_384,
+} as const satisfies Route;
 /** What the knowledge base stores (goal 176): its totals, collections, indexes, files and waits. */
 export const KB_STORED = {
   method: "GET",

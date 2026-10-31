@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Harness } from "../../core/agents.ts";
 import {
+  KB_OWNER,
   KB_RECORDS,
   KbAddress,
   type KbWriterRole,
@@ -65,6 +66,7 @@ const USAGE_AGENT: Record<KbWriterRole, UsageAgent> = {
  */
 export function slotWriter(store: ControlStore, p: { run: string; slot: string; rig?: string }) {
   if (p.slot === KB_RECORDS) return { role: null, program: null, words: "Thermite's code" };
+  if (p.slot === KB_OWNER) return { role: null, program: null, words: "you" };
   const role = roleOfSlot(p.slot) ?? null;
   const harness = role ? store.usage.programOf(p.run, USAGE_AGENT[role], p.rig) : undefined;
   const program = harness ? (HARNESS_NAMES[harness as Harness] ?? harness) : null;

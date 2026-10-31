@@ -193,6 +193,10 @@ export const USAGE = `usage: thermite <command> [options]
                                       record, blurb or file; --sort is name, kind, outcome,
                                       writer, modified (the default) or size; --limit 0 to 200
                                       (default 50). It prints JSON
+  kb note ADDRESS WORDS... [--title T] --control URL --token-file F
+                                      write your note on an item (owner's token): it is kept in
+                                      the owner slot of the item's run, linked to the item, and
+                                      the run's agents find it. It prints JSON
   kb stored [--offset N] --control URL --token-file F
                                       what the knowledge base stores (owner's token), as the
                                       Knowledge page's What's stored shows it: the totals, each

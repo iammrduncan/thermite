@@ -380,6 +380,36 @@ describe("the owner's search of the knowledge base", () => {
       );
       assert.equal(extra.code, 2);
       assert.match(extra.stderr, /kb stored takes only --offset/);
+      // The owner's note on an item, kept in the run's owner slot.
+      const noted = await cli(
+        "kb",
+        "note",
+        "gemv/gs-1/records/experiment:x-1",
+        "Try",
+        "it",
+        "again",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.equal(noted.code, 0, noted.stderr);
+      assert.equal(
+        (JSON.parse(noted.stdout) as { address: string }).address,
+        "gemv/gs-1/owner/note:1",
+      );
+      const titled = await cli(
+        "kb",
+        "search",
+        "x",
+        "--title",
+        "t",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.match(titled.stderr, /kb search takes no --title: kb note does/);
     } finally {
       server.close();
     }

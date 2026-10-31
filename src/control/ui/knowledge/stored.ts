@@ -23,7 +23,7 @@ const when = (iso: string | null, now: number) =>
 
 /** A collapsible section, open at first: its heading with its ⓘ and its count. */
 function section(id: string, title: string, tip: string, count: string, body: string): string {
-  return `<details class="kx-sec" id="${id}" open><summary><span class="kx-sech">${infoLabel(title, tip)}</span><span class="kx-secn">${esc(count)}</span></summary><div class="kx-secb">${body}</div></details>`;
+  return `<details class="kx-ssec" id="${id}" open><summary><span class="kx-sech">${infoLabel(title, tip)}</span><span class="kx-secn">${esc(count)}</span></summary><div class="kx-secb">${body}</div></details>`;
 }
 
 /** A table: its headers, a "#" before a figure's header right-aligns that column. */
@@ -48,7 +48,7 @@ export function storedHtml(s: KbStored, now: number, page: (offset: number) => s
       esc(n(t.items)),
       `in ${esc(n(t.collections))} ${t.collections === 1 ? "collection" : "collections"}`,
     ),
-    kpi("Files", esc(n(t.files)), esc(bytes(t.file_bytes))),
+    kpi("Files", esc(n(t.files)), `${esc(bytes(t.file_bytes))} held`),
     kpi("Older versions", esc(n(t.older_versions)), "kept, never removed"),
   ].join("")}</div>`;
   const collections = section(
@@ -166,7 +166,7 @@ export function storedHtml(s: KbStored, now: number, page: (offset: number) => s
   const r = s.refused;
   const pager =
     r.total > r.rows.length
-      ? `<div class="kx-pager"><span class="muted">${n(r.offset + 1)}–$n(r.offset + r.rows.length)of $n(r.total)</span>${r.offset > 0 ? `<a href="${esc(page(Math.max(0, r.offset - KB_REFUSED_PAGE)))}">‹ Newer</a>` : ""}${r.next_offset !== null ? `<a href="${esc(page(r.next_offset))}">Older ›</a>` : ""}</div>`
+      ? `<div class="kx-pager"><span class="muted">${n(r.offset + 1)}–${n(r.offset + r.rows.length)} of ${n(r.total)}</span>${r.offset > 0 ? `<a href="${esc(page(Math.max(0, r.offset - KB_REFUSED_PAGE)))}">‹ Newer</a>` : ""}${r.next_offset !== null ? `<a href="${esc(page(r.next_offset))}">Older ›</a>` : ""}</div>`
       : "";
   const refused = section(
     "refused",

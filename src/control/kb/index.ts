@@ -50,6 +50,14 @@ export {
   ownerKbList,
   readKbPlace,
 } from "./list.ts";
+export {
+  KB_NOTE_MAX,
+  type KbNoteOutcome,
+  KbNoteQuery,
+  kbNoteFields,
+  NOTE_WORDS,
+  writeOwnerNote,
+} from "./note.ts";
 export { KbSearchQuery, kbSearchFields, ownerKbSearch } from "./owner.ts";
 export {
   type KbReadAnswer,

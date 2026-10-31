@@ -51,7 +51,7 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `list_rigs`, `get_run`, `get_attempt`, `run_queue`, `recent_events`, `leaderboard`, `model_usage`, `rig_reports`, `list_commands`, `command_status` | Yes | Yes | Yes | Yes |
 | `issue_command` | Yes, the owner's kinds | Yes, the operator's kinds | Yes, the agent's kinds | No |
 | `propagate_champion` | Yes | Yes | Yes | No |
-| `kb_collections`, `kb_list`, `kb_search`, `kb_read`, `kb_stored`, `exports` | Yes | Yes | No | No |
+| `kb_collections`, `kb_list`, `kb_search`, `kb_read`, `kb_stored`, `kb_note`, `exports` | Yes | Yes | No | No |
 | `kb_grant` | Yes | Yes, as a proposal the owner approves | No | No |
 | `kb_revoke` | Yes | No | No | No |
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
@@ -356,6 +356,20 @@ Returns `{status, outcome}`. Error: `no command <id>`.
 > Thermite's own knowledge base: one collection for each campaign, made with the campaign, holding everything its runs produced (the runs, their trials, field notes, experiments with their results, attempts with their verdicts, research notes, the documents lanes wrote, sources with the text that was read, claims, hypotheses, findings, reports), each item under its run, in its writer's slot (records: Thermite's own records of the run), with its time. For each collection: its mode, its counts by kind, how many of its notes are field notes, its runs, its newest change, the campaigns granted to read it (read_by) and the collections it reads besides its own (reads).
 
 No inputs. Returns `[{campaign, counts, journal, items, runs, updated_at, read_by, reads, mode}]`, newest change first. `counts` is `{"<kind>": <n>}`; `journal` is how many of the notes are field notes; `mode` is `hill_climb`, `goal`, `research` or `null`. [The knowledge base](knowledge-base.md#collections) describes the collections.
+
+### kb_note
+
+**Write a note on an item.** Owner and operator.
+
+> Writes the owner's note on one item of Thermite's knowledge base, by the item's address: a note in the owner slot of the item's run, linked to the item (follows), as the owner. …
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `address` | an item's address | required | The item the note is on: the note follows it |
+| `text` | string, 1 to 2,000 characters | required | The note |
+| `title` | string, up to 300 characters, optional | the note's first line | Its title |
+
+Returns `{ok, address, follows, said}`, as [`POST /v1/kb/notes`](rest-api.md#the-knowledge-base) does ([The owner's notes](knowledge-base.md#the-owners-notes)). An operator's note is kept as the owner's; the audit log names the operator.
 
 ### kb_stored
 

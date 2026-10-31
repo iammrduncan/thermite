@@ -223,6 +223,10 @@ usage: thermite <command> [options]
                                       record, blurb or file; --sort is name, kind, outcome,
                                       writer, modified (the default) or size; --limit 0 to 200
                                       (default 50). It prints JSON
+  kb note ADDRESS WORDS... [--title T] --control URL --token-file F
+                                      write your note on an item (owner's token): it is kept in
+                                      the owner slot of the item's run, linked to the item, and
+                                      the run's agents find it. It prints JSON
   kb stored [--offset N] --control URL --token-file F
                                       what the knowledge base stores (owner's token), as the
                                       Knowledge page's What's stored shows it: the totals, each
@@ -799,7 +803,7 @@ npx thermite kit list --control https://control.example.com --token-file ~/therm
 
 ### `kb`
 
-`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item, as `GET /v1/kb/item` and `kb_read` do; `thermite kb list` lists what one place holds, as `GET /v1/kb/list`, MCP's `kb_list` and the dashboard's **Knowledge** page do ([A place's list](knowledge-base.md#a-places-list)); `thermite kb stored` says what the knowledge base stores, as `GET /v1/kb/stored`, MCP's `kb_stored` and the **What's stored** page do ([What's stored](knowledge-base.md#whats-stored)), and takes only `--offset` (`kb stored takes only --offset`); `thermite kb grant` and `thermite kb revoke` give and end a [grant](knowledge-base.md#grants), as `POST` and `DELETE /v1/campaigns/<campaign>/kb-grants`, MCP's `kb_grant` and `kb_revoke` and a collection's pane on the Knowledge page do. Each prints control's answer as JSON on one line.
+`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item, as `GET /v1/kb/item` and `kb_read` do; `thermite kb list` lists what one place holds, as `GET /v1/kb/list`, MCP's `kb_list` and the dashboard's **Knowledge** page do ([A place's list](knowledge-base.md#a-places-list)); `thermite kb note` writes your note on an item, as `POST /v1/kb/notes`, MCP's `kb_note` and the reader's **Add a note** do ([The owner's notes](knowledge-base.md#the-owners-notes)), and prints `{ok, address, follows, said}`; it takes an address, the note's words and `--title` (`kb note takes an item's address, the note's words, and --title`), and another command refuses `--title` (`kb search takes no --title: kb note does`); `thermite kb stored` says what the knowledge base stores, as `GET /v1/kb/stored`, MCP's `kb_stored` and the **What's stored** page do ([What's stored](knowledge-base.md#whats-stored)), and takes only `--offset` (`kb stored takes only --offset`); `thermite kb grant` and `thermite kb revoke` give and end a [grant](knowledge-base.md#grants), as `POST` and `DELETE /v1/campaigns/<campaign>/kb-grants`, MCP's `kb_grant` and `kb_revoke` and a collection's pane on the Knowledge page do. Each prints control's answer as JSON on one line.
 
 ```sh
 npx thermite kb search which approaches failed to improve speed --collection sort-speed \
