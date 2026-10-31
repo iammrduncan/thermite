@@ -15,4 +15,4 @@ export {
   advisorProbes,
   probeAdvisorUsers,
 } from "./isolation.ts";
-export { type AdvisorRunner, advisorRunner } from "./runner.ts";
+export { AdvisorRoleRunner, type AdvisorRunner, advisorRunner } from "./runner.ts";
