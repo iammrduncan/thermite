@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { PiConsole, PiView, ViewInputs } from "../../../../src/agents/pi-view/index.ts";
+import { OWNER_TURN_HEAD } from "../../../../src/agents/roles/shared.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
 import type { McpToolInfo } from "../../../../src/core/mcp.ts";
 import { runResearchTrial } from "../../../../src/harness/agents/research/index.ts";
@@ -9,6 +10,7 @@ import { prepareWorkspace } from "../../../../src/harness/agents/workspace.ts";
 import { LocalRunner } from "../../../../src/harness/broker/runner.ts";
 import { startFakeModel } from "../../../helpers/fake-model.ts";
 import { FAST_KERNEL, makeJudgeEnv } from "../../../helpers/judge-env.ts";
+import { HOLD_MS, MESSAGE, ownerWaits, TYPED } from "../../../helpers/owner-waits.ts";
 import { laneTool } from "../worker/setup.ts";
 
 /**
@@ -17,7 +19,8 @@ import { laneTool } from "../worker/setup.ts";
  * owner's words steer the agent before its next model call, or wait until it would stop; Esc
  * stops its reply, which is not the agent's own stop and counts no nudge; /compact compacts at
  * its next call; /mcp reconnect gives it the servers' new tools from its next turn; after its
- * submission nothing more goes in. What the model was sent shows each.
+ * submission nothing more goes in. The owner's words and an owner's message that wait together
+ * go in together, before its next model call. What the model was sent shows each.
  */
 
 const tool = (name: string): McpToolInfo => ({
@@ -216,5 +219,110 @@ describe("the Pi view's console in a trial's loop", () => {
     assert.equal(r.stopped, "finished", JSON.stringify(r));
     assert.equal(sent.length, 2, "it went on after the interrupt, once");
     assert.match(sent[1] ?? "", /Continue your research\./);
+  });
+
+  test("the owner's words and an owner's message that wait together go into its next model call, though it submits on that call", async () => {
+    const env = makeJudgeEnv();
+    await env.service.applyCommand(env.assign);
+    const runner = new LocalRunner(env.paths.scratchDir);
+    const champion = env.ledger.champions.current("js-1");
+    const ws = await prepareWorkspace({
+      runner,
+      scratchDir: env.paths.scratchDir,
+      mirror: env.service.mirrorFor("proj"),
+      commit: champion.commit_sha,
+      lane: "lane-1",
+    });
+    const calls: string[] = [];
+    const model = await startFakeModel(({ messages }) => {
+      calls.push(JSON.stringify(messages));
+      if (calls.length === 1)
+        return {
+          toolCalls: [
+            { name: "write_file", args: { path: "src/kernel/work.mjs", content: FAST_KERNEL } },
+          ],
+          delayMs: HOLD_MS,
+        };
+      return {
+        toolCalls: [{ name: "submit", args: { hypothesis: "less work", known_flaws: [] } }],
+      };
+    });
+    const owner = ownerWaits(model);
+    const running = runTrial(
+      {
+        trialId: "t-both",
+        run: "js-1",
+        lane: "lane-1",
+        workspace: ws.repo,
+        parentCommit: champion.commit_sha,
+        editablePaths: ["src/kernel/**"],
+        brief: "Make work() faster without changing its result.",
+        wallMs: 120_000,
+      },
+      {
+        runner,
+        laneTool,
+        model: {
+          baseUrl: model.url,
+          model: "test",
+          apiKey: "k",
+          contextWindow: 32000,
+          maxTokens: 2000,
+        },
+        submit: (req) => env.service.submitAttempt({ ...req, lane: req.lane }, "proposer") as never,
+        status: async (id) => env.service.attemptStatus(id),
+        view: owner.inputs,
+        link: owner.link,
+        sent: owner.keep,
+      },
+    );
+    await owner.typeAndWrite();
+    const r = await running;
+    await owner.close();
+    await model.close();
+    assert.equal(r.stopped, "submitted", JSON.stringify(r));
+    assert.equal(calls.length, 2, "it submitted on the model call after the held reply");
+    owner.heldBoth(calls[1], {
+      typed: `${OWNER_TURN_HEAD}\n\n${TYPED}`,
+      message: `${OWNER_TURN_HEAD}\n\n${MESSAGE.text}`,
+    });
+  });
+
+  test("in a research trial, the owner's words and an owner's message that wait together go into its next model call, though the trial ends after it", async () => {
+    const calls: string[] = [];
+    const model = await startFakeModel(({ messages }) => {
+      calls.push(JSON.stringify(messages));
+      return calls.length === 1
+        ? { text: "I look around first.", delayMs: HOLD_MS }
+        : { text: "I have recorded what I found." };
+    });
+    const owner = ownerWaits(model);
+    const running = runResearchTrial(
+      // Two turns: the trial ends after the model call that follows the held reply.
+      { trialId: "t-both", run: "r-1", lane: "lane-1", brief: "Find out.", maxTurns: 2 },
+      {
+        model: {
+          baseUrl: model.url,
+          model: "test",
+          apiKey: "k",
+          contextWindow: 32_000,
+          maxTokens: 2000,
+        },
+        call: async () => ({}),
+        view: owner.inputs,
+        link: owner.link,
+        sent: owner.keep,
+      },
+    );
+    await owner.typeAndWrite();
+    const r = await running;
+    await owner.close();
+    await model.close();
+    assert.equal(r.stopped, "turns", JSON.stringify(r));
+    assert.equal(calls.length, 2, "no model call after its last turn");
+    owner.heldBoth(calls[1], {
+      typed: `${OWNER_TURN_HEAD}\n\n${TYPED}`,
+      message: `${OWNER_TURN_HEAD}\n\n${MESSAGE.text}`,
+    });
   });
 });

@@ -117,6 +117,10 @@ export async function callPlanner(
       tools: toolsWith(mcp?.tools ?? []),
     },
     streamFn: meter ? meter.streamFn(models) : models.streamSimple.bind(models),
+    // Every later turn that waits goes in before its next model call: the owner's words typed into
+    // its view and the owner's messages alike. Pi's default takes one a call, and a plan sent on
+    // that call would end it with the rest never sent and never read.
+    steeringMode: "all",
   });
   meter?.watch(agent);
   // Its later turns (goal 166), numbered after its first message.

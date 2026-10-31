@@ -145,6 +145,10 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     // One tool call at a time: lane processes are killed by user when a tool finishes, so parallel
     // calls would kill each other, and a submission must end the trial before anything else runs.
     toolExecution: "sequential",
+    // Every later turn that waits goes in before its next model call: the owner's words typed into
+    // its view and the owner's messages alike. Pi's default takes one a call, and a submission on
+    // that call would end the trial with the rest never sent and never read.
+    steeringMode: "all",
   });
   meter?.watch(agent);
   // Near the model's window the conversation is compacted and the trial goes on (goal 070): a

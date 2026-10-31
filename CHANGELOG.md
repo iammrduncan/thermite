@@ -163,6 +163,7 @@ Each release of Thermite, newest first. Versions 0.x make no upgrade promise: re
 - Each release's notes and its bundle's `README.md` give the SHA-256 of its `compose.yaml`, with the command that checks it after download; the install pages say to check it.
 - A rig on RunPod checks its own parts: the pod's broker asks the harness's and the supervisor's health routes every 30 seconds, and a part that answers 503 or nothing three times running is ended and started again, as a machine rig's unit does; the pod's log says why (`the supervisor's health route failed`, then `the supervisor is unhealthy: ending it to start it again`). Until a part first answers, its failures count only after 10 minutes for the harness and 5 for the supervisor.
 - Nothing sets the status `blocked` for a goal or an approach family, and the code no longer names it for a family: a family is `live` or `exhausted`, and a goal's status follows its checks on the champion. Older ledgers' tables still allow it; the verdicts page says so.
+- A worker or planner in Pi takes all the owner's words and messages that wait before its next model call, not one a call, so a message that waited with the owner's typed words is no longer dropped unread when the trial submits, or the planner sends its plan, on that call.
 
 ## [0.1.0] 2026-10-26: the first public release
 

@@ -234,6 +234,10 @@ export async function runResearchTrial(
     convertToLlm: withoutPastThinking,
     // One tool call at a time: each is a request to the harness, in the order the model chose.
     toolExecution: "sequential",
+    // Every later turn that waits goes in before its next model call: the owner's words typed into
+    // its view and the owner's messages alike. Pi's default takes one a call, and a trial that
+    // ends after that call would leave the rest never sent and never read.
+    steeringMode: "all",
   });
   meter?.watch(agent);
   // The later turns of this trial (goal 166), numbered after its first message.
