@@ -1,5 +1,6 @@
 import { cutSaid } from "../../../core/kb-index.ts";
 import { hypothesisStatusWords, questionLabel } from "../../../core/research-check.ts";
+import { kbFileFacts, keepKbFile } from "../../kb/index.ts";
 import { type ClaimRow, type FindingRow, LedgerError } from "../../ledger/index.ts";
 import { answersSection } from "../cards.ts";
 import { claimNumbers, numbersIn } from "../checks.ts";
@@ -44,7 +45,7 @@ export function report(
   opts: { noPaper?: string | undefined } = {},
 ) {
   const c = ctx.contract(run);
-  const papers = new Papers(ctx.ledger, () => c);
+  const papers = new Papers(ctx.ledger, () => c, ctx.outboxDir);
   const paper = kind === "final" ? papers.accepted(run) : undefined;
   const noPaper =
     kind === "final" && !paper && researchEnd(ctx.ledger, run)
@@ -173,6 +174,12 @@ export function report(
         ...lines.slice(1),
       ].join("\n")
     : lines.join("\n");
+  // The report whole, for the campaign's collection in the knowledge base: kept in the outbox by
+  // its SHA-256, which the supervisor puts on the message bus (goal 175).
+  const bytes = new TextEncoder().encode(body);
+  const name = kind === "final" ? "final-report.md" : "digest.md";
+  const file = kbFileFacts(bytes, { name, type: "text/markdown" });
+  keepKbFile(ctx.outboxDir, bytes, file);
   ctx.ledger.tx(() => {
     ctx.ledger.reports.add(run, kind, body);
     ctx.ledger.appendEvent(
@@ -191,6 +198,7 @@ export function report(
         ...(noPaper ? { no_paper: noPaper } : {}),
         unsupported_numbers: unsupported.length,
         report: cutSaid(body, 60_000, "report"),
+        file,
       },
     );
   });

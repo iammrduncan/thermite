@@ -148,7 +148,9 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
     // experiment of the campaign's collection, which a goal or hill-climb run can take into its queue.
     // Its details say what it rests on, in words: a run that takes it cannot read this run.
     case PAPER_ACCEPTED: {
-      // The paper itself, an item of its own (the owner, goal 162).
+      // The paper itself, an item of its own (the owner, goal 162): whole, as its file, after a
+      // line of its figures; an event from before that cut to an item's length.
+      const file = kbFileOf(b.file);
       if (str(b.paper))
         t.put(
           run,
@@ -156,8 +158,11 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
           "paper",
           {
             title: "Research paper",
-            body: cutSaid(str(b.paper), KB_BODY_MAX, "paper"),
+            body: file
+              ? `${n(b.chars)} characters, ${n(b.cited_claims)} claims cited, ${n(b.references)} references.`
+              : cutSaid(str(b.paper), KB_BODY_MAX, "paper"),
             by: `writer:${str(b.writer) || "final writer"}`,
+            ...(file ? { file } : {}),
           },
           e.at,
         );
@@ -205,8 +210,11 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
       }
       return;
     }
+    // A report: whole, as its file, after a line of its figures; an event from before that cut to
+    // an item's length.
     case "research_final":
-    case "research_digest":
+    case "research_digest": {
+      const file = kbFileOf(b.file);
       if (str(b.report))
         t.put(
           run,
@@ -214,12 +222,16 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
           e.kind === "research_final" ? "final" : "digest",
           {
             title: e.kind === "research_final" ? "Final report" : "Latest digest",
-            body: cutSaid(str(b.report), KB_BODY_MAX, "report"),
+            body: file
+              ? `${n(b.sources)} sources from ${n(b.domains)} domains; ${n(b.verified)} verified claims, ${n(b.findings)} findings.`
+              : cutSaid(str(b.report), KB_BODY_MAX, "report"),
             by: "research",
+            ...(file ? { file } : {}),
           },
           e.at,
         );
       return;
+    }
     // Each answer card and the review panel's decisions are items of their own, as the paper is
     // (the owner, goal 162), so a later run reads them whole, not at the end of a cut report.
     case "card_written":

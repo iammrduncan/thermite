@@ -355,7 +355,7 @@ export class HarnessService {
 
   /** Research runs' final papers (goal 112). */
   get papers(): Papers {
-    return new Papers(this.ledger, (run) => this.contractFor(run));
+    return new Papers(this.ledger, (run) => this.contractFor(run), this.paths.outboxDir);
   }
 
   paperPackages() {

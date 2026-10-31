@@ -676,6 +676,8 @@ export interface EventBodies {
     experiments: unknown[];
     chars: number;
     paper: string;
+    /** The paper whole, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
   };
 }
 
@@ -735,7 +737,10 @@ interface ResearchReport {
   paper?: boolean | undefined;
   no_paper?: string | undefined;
   unsupported_numbers: number;
+  /** The report cut to 60,000 characters (cutSaid); the knowledge base gets it whole as `file`. */
   report: string;
+  /** The report whole, as the knowledge base keeps its item's file (goal 175). */
+  file?: KbItemFile | undefined;
 }
 
 /** A kind's body. */

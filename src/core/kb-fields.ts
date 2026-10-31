@@ -13,8 +13,10 @@ export const str = (v: unknown) =>
 export const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**
- * The longest text an item keeps of its own, in characters. A source's text and a lane's document
- * go whole, as the item's file (KbItemFile); a report, the paper and an answer card are cut to it.
+ * The longest text of a blurb an agent writes, in characters (core/kb.ts, KB_TEXT_MAX); longer, a
+ * file. A source's text, a lane's document, the paper and a report go whole, as their items'
+ * files (KbItemFile); the events of a rig from before them were cut to it, and so was a kept
+ * conversation's.
  */
 export const KB_BODY_MAX = 20_000;
 
@@ -57,7 +59,9 @@ export function mergeItem(ref: string, old: KbStored | undefined, f: KbFields): 
   const sub = f.sub !== undefined ? f.sub : (old?.sub ?? null);
   return {
     title: clip(f.title ?? old?.title ?? "", 300) || ref,
-    body: clip(f.body ?? old?.body ?? "", KB_BODY_MAX),
+    // A record's own words are whole: each is bounded by its event's fields (an attempt's, the
+    // longest, by its hypothesis, claim and 50 declared flaws). A document is its file.
+    body: f.body ?? old?.body ?? "",
     by: clip(f.by ?? (old?.by || "harness"), 200),
     url: url && url.length <= 2000 ? url : null,
     sub: sub ? clip(sub, 40) : null,

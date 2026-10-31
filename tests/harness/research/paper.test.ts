@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, type TestContext, test } from "node:test";
 import { sha256Hex } from "../../../src/core/canonical.ts";
+import { KB_OUTBOX_FILES } from "../../../src/core/kb.ts";
 import type { ResearchTrialSpec } from "../../../src/harness/agents/research/worker.ts";
 import { Scheduler } from "../../../src/harness/agents/scheduler/index.ts";
 import { createHarnessApi } from "../../../src/harness/api/index.ts";
@@ -614,6 +615,16 @@ describe("a research run whose questions are answered waits for its paper (goal 
       .replaceAll(`[${s.ids.claims.verified}]`, "[1]")
       .replaceAll(`[${s.ids.claims.clock}]`, "[2]");
     assert.ok(whole.startsWith(`${numbered}\n\n## References\n`));
+    // The same paper whole, in the outbox for the knowledge base, by its SHA-256 (goal 175).
+    const file = accepted.file as { sha256: string; name: string; type: string; bytes: number };
+    assert.deepEqual(file, {
+      sha256: sha256Hex(whole),
+      name: "paper.md",
+      type: "text/markdown",
+      bytes: Buffer.byteLength(whole),
+    });
+    const outbox = join(s.env.service.paths.outboxDir, KB_OUTBOX_FILES, file.sha256);
+    assert.equal(readFileSync(outbox, "utf8"), whole);
     assert.doesNotMatch(whole.slice(0, numbered.length), /\[c-/);
     const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const day = "\\d{4}-\\d{2}-\\d{2}";
@@ -715,6 +726,10 @@ describe("a research run whose questions are answered waits for its paper (goal 
         inFinal("## The review panel's decisions"),
     );
     assert.equal(s.ledger.latestEventBody("research_final", RUN)?.paper, true);
+    // The final report whole, in the outbox for the knowledge base (goal 175).
+    const report = s.ledger.latestEventBody("research_final", RUN)?.file as { sha256: string };
+    const reportFile = join(s.env.service.paths.outboxDir, KB_OUTBOX_FILES, report.sha256);
+    assert.equal(readFileSync(reportFile, "utf8"), s.ledger.reports.newest(RUN)?.body);
     // The run's next export carries the folder with its paper (main.ts gives the export the folder).
     s.env.service.researchFolder = (run) => s.folder.exportFiles(run);
     const ex = await s.env.service.export("test");

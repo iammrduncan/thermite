@@ -72,8 +72,8 @@ export class Papers {
   /** What the papers' parts share (paper/context.ts). */
   private readonly ctx: PapersContext;
 
-  constructor(ledger: Ledger, contractFor: (run: string) => unknown) {
-    this.ctx = papersContext(ledger, contractFor);
+  constructor(ledger: Ledger, contractFor: (run: string) => unknown, outboxDir: string) {
+    this.ctx = papersContext(ledger, contractFor, outboxDir);
   }
 
   /** The run's accepted paper, as its event keeps it: the paper whole, with its references and appendices. */
