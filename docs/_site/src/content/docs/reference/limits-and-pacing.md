@@ -286,6 +286,7 @@ Memory is the sum over all the processes the build or run started, sampled every
 | Judge and development GPUs | 8 of each |
 | A rig's GPU set (`THERMITE_GPUS`) | 16. A longer list stops the harness: `THERMITE_GPUS names <n> GPUs; a rig takes at most 16` ([Settings](settings.md#gpus-and-cpus)) |
 | GPUs on a rig control sets up on a machine or cluster | 16; 8 on a namespace joined with a join command |
+| CPUs and memory of a rig control sets up on a cluster, when they are set | At least 1.5 CPUs and 8 GiB while its agent programs run in their own terminal, the default, or 6 GiB headless: the supervisor takes half a CPU and 4 GiB (2 GiB headless), the harness the rest, at least 1 CPU and 4 GiB. Less is refused in words ([The supervisor's share](../how-to/install/rig-on-a-cluster.md#the-supervisors-share)). The local stack and other compose rigs, a rig on a machine over SSH and a rig on RunPod set no limit on the supervisor |
 | GPUs on the local stack's rig | 16: on a machine with more, `compose.gpu.yaml` gives it the first 16 ([Use the machine's NVIDIA GPUs](../how-to/install/one-machine.md#use-the-machines-nvidia-gpus)) |
 | GPUs in a RunPod pod | 1 to 8 |
 

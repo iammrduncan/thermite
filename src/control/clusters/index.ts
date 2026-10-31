@@ -18,9 +18,16 @@ export {
 export { type ClusterFacts, clusterLine } from "./facts.ts";
 export { updateRigImages } from "./images.ts";
 export { type ClusterKubectl, inspectKubeconfig, KUBE_NAME, realKubectl } from "./kubectl.ts";
-export { asList, type ClusterRigPlan, clusterRigObjects } from "./manifests.ts";
+export {
+  asList,
+  type ClusterRigPlan,
+  clusterRigObjects,
+  HARNESS_LEAST,
+  leastRigSize,
+  SUPERVISOR_SHARE,
+} from "./manifests.ts";
 export { reachListOf, setReachableAddresses } from "./reach.ts";
-export { prepareResize, setClusterRigResources } from "./resize.ts";
+export { prepareModeChange, prepareResize, setClusterRigResources } from "./resize.ts";
 export {
   asksNothing,
   ClusterResourcesBody,
@@ -28,6 +35,7 @@ export {
   clusterResourcesFields,
   clusterResourcesRequest,
   judgeShareOf,
+  MODE_WORDS,
   resourcesWords,
   sizeWords,
 } from "./resources.ts";

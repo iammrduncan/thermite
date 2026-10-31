@@ -1,10 +1,11 @@
 import { errorText } from "../../common/errors.ts";
+import type { ProgramMode } from "../../core/rig-settings.ts";
 import { inBackground } from "../background.ts";
 import { issueCommand } from "../issue/index.ts";
 import type { ControlParts } from "../parts.ts";
 import { controlAddress, NO_RIG_BUS } from "../rigs/index.ts";
 import type { Cluster, ClusterRig, ClusterRigResize, ClusterRigSize } from "../store/index.ts";
-import { rigSettingsOf } from "../views/index.ts";
+import { programModeOf, rigSettingsOf } from "../views/index.ts";
 import { type ClusterFacts, type SlotQuota, slotQuota } from "./facts.ts";
 import { kubeError } from "./kubectl.ts";
 import { asList, clusterNames, clusterRigResized } from "./manifests.ts";
@@ -13,6 +14,7 @@ import {
   type ClusterResourcesRequest,
   planClusterResize,
   type ResizeRefusal,
+  shareMoveWords,
   sizeChangeWords,
   sizeOf,
   sizeWords,
@@ -85,6 +87,13 @@ export async function prepareResize(
       status: 409,
     };
   const pending = r.status === "draining" ? r.pending : undefined;
+  // A new size asked during its drain is planned from the size the rig has now, and replaces the
+  // one it waits for: a new mode from its settings would drop that change unseen.
+  if (pending && want.programMode !== undefined)
+    return {
+      error: `${rig} is draining for a change to its GPUs, CPUs or memory, and a new way for its agent programs to run moves its supervisor's memory: wait until its page shows it running, or call the change off first.`,
+      status: 409,
+    };
   // During its own drain, a call that names nothing goes on with the change it waits for.
   if (pending && asksNothing(want))
     return o.wait === false
@@ -96,6 +105,7 @@ export async function prepareResize(
     owner: o.owner,
     facts: k.facts as ClusterFacts | null,
     quota: await slotQuotaNow(parts, r, k),
+    mode: programModeOf(store, rig),
   });
   if ("error" in plan) return plan;
   if ("same" in plan)
@@ -116,10 +126,11 @@ export async function prepareResize(
       // Drain first (goal 079): the rig starts nothing new, and the drain watch (drain.ts)
       // applies the change once nothing runs. A drain under way takes the new size instead.
       store.clusters.setRigPending(rig, next);
+      const lead = shareMoveWords(sizeOf(now), next);
       if (now.status === "draining" || !work) {
         store.rigHistory.add(rig, "drain", true, `now for ${sizeChangeWords(sizeOf(now), next)}`);
         return {
-          ok: `${rig} is draining: its pods restart with ${sizeWords(next)} once its trials and the judge's job end. Change now skips the wait.`,
+          ok: `${lead}${rig} is draining: its pods restart with ${sizeWords(next)} once its trials and the judge's job end. Change now skips the wait.`,
         };
       }
       issueCommand(store, parts.privateKeyPem, {
@@ -136,7 +147,7 @@ export async function prepareResize(
       store.rigHistory.add(rig, "drain", true, `waiting for ${workWords(work)} to finish`);
       store.auditLog.add(by, "cluster_rig_drain", { rig, to: sizeChangeWords(sizeOf(now), next) });
       return {
-        ok: `${rig} drains first: it starts nothing new, and its pods restart with ${sizeWords(next)} once ${workWords(work)} ${work.trials + work.judge_jobs === 1 ? "finishes" : "finish"}. Change now, on its page or with set_cluster_rig_resources and wait false, skips the wait.`,
+        ok: `${lead}${rig} drains first: it starts nothing new, and its pods restart with ${sizeWords(next)} once ${workWords(work)} ${work.trials + work.judge_jobs === 1 ? "finishes" : "finish"}. Change now, on its page or with set_cluster_rig_resources and wait false, skips the wait.`,
       };
     },
   };
@@ -165,6 +176,7 @@ export async function applyResize(
     gpus: size.gpus,
     judgeGpus: size.judgeGpus,
     resources: size.resources,
+    programMode: size.programMode,
   };
   const stopped = r.status === "stopped";
   const draining = r.status === "draining";
@@ -182,7 +194,10 @@ export async function applyResize(
   let objects: string;
   try {
     objects = asList(
-      clusterRigResized(clusterPlan(parts, { ...r, spec: { ...r.spec, ...to } }), stopped),
+      clusterRigResized(
+        clusterPlan(parts, { ...r, spec: { ...r.spec, ...to } }, r.spec.images, to.programMode),
+        stopped,
+      ),
     );
   } catch (err) {
     return failed(errorText(err));
@@ -211,7 +226,7 @@ export async function applyResize(
         target,
         ["apply", "-f", "-"],
         asList(
-          clusterRigResized(clusterPlan(parts, r), stopped).filter(
+          clusterRigResized(clusterPlan(parts, r, r.spec.images, from.programMode), stopped).filter(
             (x) => x.kind === "ResourceClaimTemplate",
           ),
         ),
@@ -250,7 +265,8 @@ export async function applyResize(
   }
   store.rigHistory.add(rig, "resources", true, stopped ? `${words}; at its next start` : words);
   store.auditLog.add(by, "cluster_rig_resources", { rig, from, to });
-  if (stopped) return { ok: `${rig} has ${sizeWords(to)} when it starts again.` };
+  const lead = shareMoveWords(from, to);
+  if (stopped) return { ok: `${lead}${rig} has ${sizeWords(to)} when it starts again.` };
   store.clusters.setRigStatus(rig, "updating");
   void inBackground(
     store,
@@ -259,7 +275,29 @@ export async function applyResize(
     "resources_running",
     awaitNewPods(parts, r, k, "resources"),
   );
-  return { ok: `${rig}'s pods restart with ${sizeWords(to)}.` };
+  return { ok: `${lead}${rig}'s pods restart with ${sizeWords(to)}.` };
+}
+
+/**
+ * A new mode for the agent programs of a rig control set up on a cluster, from its settings
+ * (REST's POST /v1/rigs/<rig>/settings and MCP's set_rig_settings; Edit rig adds it to its own
+ * request; goal 169), moves its supervisor's share of its memory, so it is a change of size, made
+ * as set_cluster_rig_resources makes one: checked now, before the settings are sent; applied by
+ * `go` once they are, draining first while the rig works. Undefined when nothing moves: a rig not
+ * set up on a cluster by control, one on the namespace's defaults (no share is set), or one whose
+ * deployments have that share already.
+ */
+export async function prepareModeChange(
+  parts: ControlParts,
+  rig: string,
+  programMode: ProgramMode,
+  by: string,
+  o: { owner: boolean },
+): Promise<ResizeRefusal | { go: () => Promise<Resize> } | undefined> {
+  const r = parts.store.clusters.rig(rig);
+  if (!r || r.status === "removed" || !r.spec.resources) return undefined;
+  const p = await prepareResize(parts, rig, { programMode }, by, { owner: o.owner });
+  return "ok" in p ? undefined : p;
 }
 
 /**

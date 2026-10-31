@@ -314,7 +314,13 @@ describe("a cluster rig's GPUs, CPUs and memory, changed from control (goal 118)
     );
     let r = s.store.clusters.rig("gpu-3");
     assert.equal(r?.status, "draining");
-    assert.deepEqual(r?.pending, { gpus: 4, judgeGpus: 2, by: "owner:ui" });
+    // Its report gives no mode (an older harness), so its supervisor's share is the headless one.
+    assert.deepEqual(r?.pending, {
+      gpus: 4,
+      judgeGpus: 2,
+      programMode: "headless",
+      by: "owner:ui",
+    });
     assert.equal(r?.spec.gpus, 3);
     assert.ok(!f.calls.some((c) => c.args[0] === "apply"), "no restart yet");
     assert.deepEqual(
@@ -379,6 +385,200 @@ describe("a cluster rig's GPUs, CPUs and memory, changed from control (goal 118)
         .join("\n"),
       /drain: nothing runs any more: its pods restart now\nresources: GPUs 4 → 5 \(3 for the judge, 2 for the agents\)/,
     );
+  });
+
+  test("a new mode for the agent programs moves the supervisor's share: REST, MCP, Edit rig and an image update carry it to the deployments; too little memory is refused in words (goal 169)", async () => {
+    const { f, s, report } = await slotRig("cpu-m", 0, {
+      quota: { "thermite-slot-1": { "limits.cpu": "16", "limits.memory": "52Gi" } },
+    });
+    const both = (cpu: string, memory: string) => ({
+      requests: { cpu, memory },
+      limits: { cpu, memory },
+    });
+    const shares = () => {
+      const list = applied(f);
+      return [container(list, "supervisor")?.resources, container(list, "harness")?.resources];
+    };
+    const settingsSent = () =>
+      s.store.commands
+        .pending("cpu-m")
+        .map((c) => c.envelope)
+        .filter((e) => e.kind === "rig_settings")
+        .map((e) => e.payload);
+    const running = async (mode: string) => {
+      s.store.clusters.setRigStatus("cpu-m", "running");
+      await report({ settings: { program_mode: mode } });
+    };
+    const rest = async (path: string, body: unknown) => {
+      const r = await s.api.request(path, {
+        method: "POST",
+        headers: { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    const TOO_SMALL =
+      "a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals: its supervisor takes 4 GiB for the advisors' terminals, and its harness at least 4 GiB";
+    // Added, sized by its slot's quota: a new rig's agent programs run in their own terminals, so
+    // its supervisor has 4 GiB of the 52 for the advisors' terminals.
+    assert.deepEqual(shares(), [both("500m", "4096Mi"), both("15500m", "49152Mi")]);
+    assert.equal(s.store.clusters.rig("cpu-m")?.spec.programMode, "terminal");
+    await running("terminal");
+
+    // Headless over REST: the setting goes first, then its pods restart with the supervisor's
+    // headless share. Only its deployments are applied.
+    f.calls.length = 0;
+    const toHeadless = await rest("/v1/rigs/cpu-m/settings", { program_mode: "headless" });
+    assert.equal(toHeadless.status, 200);
+    assert.deepEqual(toHeadless.body.sent, { program_mode: "headless" });
+    assert.equal(
+      toHeadless.body.said,
+      "Control sent 1 setting to cpu-m. The rig takes the change in less than one minute. Its supervisor gets 2 GiB, as its agent programs run headless: cpu-m's pods restart with 16 CPUs and 52 GiB of memory.",
+    );
+    assert.deepEqual(settingsSent(), [{ program_mode: "headless" }]);
+    assert.deepEqual(
+      applied(f).items.map((o) => o.kind),
+      ["Deployment", "Deployment"],
+    );
+    assert.deepEqual(shares(), [both("500m", "2048Mi"), both("15500m", "51200Mi")]);
+    assert.equal(s.store.clusters.rig("cpu-m")?.spec.programMode, "headless");
+    assert.deepEqual(s.store.clusters.rig("cpu-m")?.spec.resources, { cpus: 16, memoryGi: 52 });
+    assert.match(
+      s.store.rigHistory
+        .list("cpu-m")
+        .map((e) => `${e.step}: ${e.detail ?? ""}`)
+        .join("\n"),
+      /resources: its supervisor's memory: 4 → 2 GiB, as its agent programs run headless/,
+    );
+
+    // Back to the terminals over MCP, as an operator.
+    await running("headless");
+    const op = await mcpWith(s.api, OPERATOR);
+    f.calls.length = 0;
+    const toTerminal = await op.call("set_rig_settings", {
+      rig: "cpu-m",
+      program_mode: "terminal",
+    });
+    assert.equal(toTerminal.error, false);
+    assert.equal(toTerminal.body.restarts, false);
+    assert.match(
+      String(toTerminal.body.said),
+      /Its supervisor gets 4 GiB, as its agent programs run in their own terminals: cpu-m's pods restart with 16 CPUs and 52 GiB of memory\.$/,
+    );
+    assert.deepEqual(shares(), [both("500m", "4096Mi"), both("15500m", "49152Mi")]);
+
+    // In their own terminals, 6 GiB is too little: refused in words, and nothing is applied.
+    await running("terminal");
+    f.calls.length = 0;
+    const small = await rest("/v1/rigs/cpu-m/cluster/resources", { cpus: 2, memory_gib: 6 });
+    assert.deepEqual(small, { status: 400, body: { error: TOO_SMALL } });
+    // Headless, it fits; then the terminals are refused before any setting is sent.
+    await rest("/v1/rigs/cpu-m/settings", { program_mode: "headless" });
+    await running("headless");
+    f.calls.length = 0;
+    assert.equal(
+      (await rest("/v1/rigs/cpu-m/cluster/resources", { cpus: 2, memory_gib: 6 })).body.said,
+      "cpu-m's pods restart with 2 CPUs and 6 GiB of memory.",
+    );
+    assert.deepEqual(shares(), [both("500m", "2048Mi"), both("1500m", "4096Mi")]);
+    s.store.clusters.setRigStatus("cpu-m", "running");
+    f.calls.length = 0;
+    const sent = settingsSent().length;
+    const refused = await op.call("set_rig_settings", { rig: "cpu-m", program_mode: "terminal" });
+    assert.ok(refused.error);
+    assert.equal(refused.body.error, `Not saved: ${TOO_SMALL}`);
+    assert.equal(settingsSent().length, sent, "no setting sent");
+    assert.ok(!f.calls.some((c) => c.args[0] === "apply"), "nothing applied");
+    await op.close();
+
+    // An image update gives the supervisor the share of the mode its report gives now: a rig set
+    // to its terminals elsewhere (here, its report) is refused before it drains.
+    await report({ settings: { program_mode: "terminal" } });
+    const later = await control(f.k, { store: s.store, secrets: s.secrets, tag: "2" });
+    assert.match(
+      await later.page(await later.post("/ui/rigs/cpu-m/cluster/images", {})),
+      /cpu-m has 2 CPUs, 6 GiB, and a rig needs at least 1\.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals/,
+    );
+    assert.ok(!f.calls.some((c) => c.args[0] === "apply"), "nothing applied");
+    assert.equal(
+      s.store.clusters.rig("cpu-m")?.spec.images.harness,
+      "registry.example.com/harness:1",
+    );
+    await report({ settings: { program_mode: "headless" } });
+    assert.match(
+      await later.post("/ui/rigs/cpu-m/cluster/images", {}),
+      /ok=cpu-m's pods restart on the new images\./,
+    );
+    assert.deepEqual(shares(), [both("500m", "2048Mi"), both("1500m", "4096Mi")]);
+    assert.equal(s.store.clusters.rig("cpu-m")?.spec.programMode, "headless");
+
+    // Edit rig: Memory says the share for the mode it runs, a new mode is said with the restart of
+    // its pods, and one Save gives it 8 GiB and the terminals.
+    await running("headless");
+    const edit = await s.page("/ui/rigs/cpu-m/edit");
+    assert.match(
+      edit,
+      /the supervisor gets 2 GiB while its agent programs run headless \(4 GiB in their own terminals\), the harness the rest\. At least 6 GiB\./,
+    );
+    assert.match(
+      edit,
+      /<select name="program_mode" data-label="how agent programs run" data-moves>/,
+    );
+    f.calls.length = 0;
+    const parts = ["judge", "workers", "planner", "teachers", "auditor", "review", "exports"];
+    const saved = await s.post("/ui/rigs/cpu-m/edit", {
+      ...Object.fromEntries(parts.map((p) => [p, "1"])),
+      k_cpus: "2",
+      k_mem: "8",
+      program_mode: "terminal",
+    });
+    assert.match(
+      saved,
+      /ok=Control sent 1 setting to cpu-m\. The rig takes the change in less than one minute\. Its supervisor gets 4 GiB, as its agent programs run in their own terminals: cpu-m's pods restart with 2 CPUs and 8 GiB of memory\./,
+    );
+    assert.deepEqual(settingsSent().at(-1), { program_mode: "terminal" });
+    assert.deepEqual(shares(), [both("500m", "4096Mi"), both("1500m", "4096Mi")]);
+    assert.equal(s.store.clusters.rig("cpu-m")?.spec.programMode, "terminal");
+
+    // A rig at work drains first, and the change it waits for carries the new mode.
+    s.store.clusters.setRigStatus("cpu-m", "running");
+    await report({
+      settings: { program_mode: "terminal" },
+      work: { trials: 1, judge_jobs: 0, draining: null },
+    });
+    f.calls.length = 0;
+    const busy = await rest("/v1/rigs/cpu-m/settings", { program_mode: "headless" });
+    assert.match(
+      String(busy.body.said),
+      /Its supervisor gets 2 GiB, as its agent programs run headless: cpu-m drains first: it starts nothing new, and its pods restart with 2 CPUs and 8 GiB of memory once 1 trial finishes\./,
+    );
+    assert.equal(s.store.clusters.rig("cpu-m")?.status, "draining");
+    assert.deepEqual(s.store.clusters.rig("cpu-m")?.pending, {
+      gpus: 0,
+      resources: { cpus: 2, memoryGi: 8 },
+      programMode: "headless",
+      by: "owner:api",
+    });
+    assert.ok(!f.calls.some((c) => c.args[0] === "apply"), "no restart yet");
+    // Another mode meanwhile would replace the change it waits for: refused, nothing sent.
+    await report({
+      settings: { program_mode: "headless" },
+      work: { trials: 1, judge_jobs: 0, draining: { since: "x", reason: "r" } },
+    });
+    const sentBefore = settingsSent().length;
+    const meanwhile = await rest("/v1/rigs/cpu-m/settings", { program_mode: "terminal" });
+    assert.equal(meanwhile.status, 409);
+    assert.match(
+      String(meanwhile.body.error),
+      /^Not saved: cpu-m is draining for a change to its GPUs, CPUs or memory/,
+    );
+    assert.equal(settingsSent().length, sentBefore);
+    // Change now applies the change it waits for, with the supervisor's headless share.
+    assert.match(
+      await s.post("/ui/rigs/cpu-m/cluster/resources-now", {}),
+      /ok=Its supervisor gets 2 GiB, as its agent programs run headless: cpu-m's pods restart with 2 CPUs and 8 GiB of memory\./,
+    );
+    assert.deepEqual(shares(), [both("500m", "2048Mi"), both("1500m", "6144Mi")]);
   });
 
   test("DRA: a new claim template for the new count, the old one deleted first; a stopped rig stays stopped; a CPU rig takes no GPUs", async () => {

@@ -43,6 +43,7 @@ export {
 } from "./metric-values.ts";
 export {
   OFFLINE_AFTER_MS,
+  programModeOf,
   type ReportingState,
   type RigModelView,
   readModelInfo,

@@ -90,7 +90,7 @@ When the round's plan is in, the call ends: its page no longer shows a terminal,
 
 ## An advisor's terminal
 
-The advisors the owner's messages reach (the teachers, the auditor and the review panel's reviewers) run in the supervisor, each call in its program's own terminal when it runs in Claude Code, Codex or OpenCode on a rig that runs its agent programs in their own terminal. Each call has a terminal of its own, named `advisor-<advisor>-<run>-<n>`, such as `advisor-auditor-matmul-1-4`. The teachers' merged by model, the synthesizer and the final writer take no message, and an advisor in Pi or a command (`cli`) runs as before, with no terminal.
+The advisors the owner's messages reach (the teachers, the auditor and the review panel's reviewers) run in the supervisor, each call in its program's own terminal when it runs in Claude Code, Codex or OpenCode on a rig that runs its agent programs in their own terminal. Each call has a terminal of its own, named `advisor-<advisor>-<run>-<n>`, such as `advisor-auditor-matmul-1-4`. The teachers' merged by model, the synthesizer and the final writer take no message, and an advisor in Pi or a command (`cli`) runs as before, with no terminal. Each terminal takes about 550 MiB in Claude Code's, so on a Kubernetes cluster control gives the supervisor 4 GiB of the rig's memory while its agent programs run in their own terminal, rather than 2 GiB headless; compose, a machine over SSH and RunPod set no limit on it ([The supervisor's share](../install/rig-on-a-cluster.md#the-supervisors-share)).
 
 1. Open **Live**, choose the run, and press **⌨ Terminals**: while an advisor works on this run, the list shows `auditor's terminal`, `teacher-1's terminal` or `reviewer-2's terminal`, each marked `(advisor)`.
 

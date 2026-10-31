@@ -6,12 +6,20 @@ import {
   compactAtRefusal,
 } from "../../../core/compaction.ts";
 import { MAX_LANES } from "../../../core/contract.ts";
-import { PROGRAM_MODE_DEFAULT, type RigSettingsChange } from "../../../core/rig-settings.ts";
+import {
+  PROGRAM_MODE_DEFAULT,
+  PROGRAM_MODES,
+  type ProgramMode,
+  type RigSettingsChange,
+} from "../../../core/rig-settings.ts";
 import {
   asksNothing,
   type ClusterFacts,
   type ClusterResourcesRequest,
+  leastRigSize,
+  MODE_WORDS,
   prepareResize,
+  SUPERVISOR_SHARE,
 } from "../../clusters/index.ts";
 import { issueCommand } from "../../issue/index.ts";
 import { MAX_RIG_GPUS } from "../../machines/index.ts";
@@ -56,6 +64,7 @@ import {
   EDIT_RIG_JS,
 } from "../../ui/rigs/edit/index.ts";
 import { listText } from "../../ui/words/index.ts";
+import { programModeOf } from "../../views/index.ts";
 import type { Dashboard } from "../context.ts";
 import { modelPrefix } from "../settings/shared.ts";
 
@@ -102,9 +111,11 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
   /**
    * Edit rig's fields for a rig control set up on a cluster (goal 118): its GPUs (a GPU rig only:
    * none and some don't mix), its CPUs and its memory, with what its place allows. Save changes
-   * them as set_cluster_rig_resources does.
+   * them as set_cluster_rig_resources does. The supervisor's share of the memory follows how the
+   * rig's agent programs run (`mode`, goal 169). The field's least is the headless one, so that a
+   * Save that also sets the rig headless can give it that; the server checks the mode's.
    */
-  const clusterSizeFields = (r: ClusterRig): string => {
+  const clusterSizeFields = (r: ClusterRig, mode: ProgramMode): string => {
     if (r.status === "removed" || r.status === "deploying") return "";
     const s = r.spec;
     const way =
@@ -119,8 +130,13 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
       "Its pods restart with the new GPUs, CPUs and memory, on the images it runs. A rig at work drains first: running trials and the judge's job finish, and it starts nothing new meanwhile. Its volume, tokens, runs and results stay.";
     return `<div class="g3" style="margin-top:10px" data-moves-say="${esc(moves)}">${gpus}
 <label class="fd">${infoLabel("CPUs", "The rig's CPUs: the supervisor gets half a CPU, the harness the rest. At least 1.5. Empty, with Memory empty too: the namespace's defaults apply.")}<input name="k_cpus" type="number" min="1.5" step="any" value="${s.resources?.cpus ?? ""}" placeholder="the namespace's defaults" data-label="its CPUs" data-empty="the namespace's defaults" data-moves></label>
-<label class="fd">${infoLabel("Memory (GiB)", "The rig's memory: the supervisor gets 2 GiB, the harness the rest. At least 6 GiB. Empty, with CPUs empty too: the namespace's defaults apply.")}<input name="k_mem" type="number" min="6" step="any" value="${s.resources?.memoryGi ?? ""}" placeholder="the namespace's defaults" data-label="its memory" data-unit=" GiB" data-empty="the namespace's defaults" data-moves></label>
+<label class="fd">${infoLabel("Memory (GiB)", memoryTip(mode))}<input name="k_mem" type="number" min="${leastRigSize("headless").memoryGi}" step="any" value="${s.resources?.memoryGi ?? ""}" placeholder="the namespace's defaults" data-label="its memory" data-unit=" GiB" data-empty="the namespace's defaults" data-moves></label>
 </div><div class="muted small" style="margin-top:6px">${s.gpus ? "" : "It measures on the CPU: a rig on the CPU can't take GPUs, so add a rig with GPUs for that. "}${limits ? `${esc(limits)} ` : ""}A change here restarts its pods; a rig at work drains first.</div>`;
+  };
+  /** The Memory field's description: the supervisor's share for how the rig's agent programs run. */
+  const memoryTip = (mode: ProgramMode): string => {
+    const other: ProgramMode = mode === "terminal" ? "headless" : "terminal";
+    return `The rig's memory: the supervisor gets ${SUPERVISOR_SHARE[mode].memoryGi} GiB while its agent programs run ${MODE_WORDS[mode]} (${SUPERVISOR_SHARE[other].memoryGi} GiB ${MODE_WORDS[other]}), the harness the rest. At least ${leastRigSize(mode).memoryGi} GiB. A new Agent programs run, under Advanced, moves the supervisor's share and restarts the pods too. Empty, with CPUs empty too: the namespace's defaults apply, and no share is set.`;
   };
   /** A model as a form's choice names it: "provider|model", each part URI-encoded. */
   const modelValue = (provider: string, model: string) =>
@@ -271,7 +287,10 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
         ? `The machine ${esc(placed.machine)}, set up by control. Stop, start or remove it from the rig's page.`
         : `The cluster ${esc(placed.cluster)}, namespace ${esc(placed.namespace)}, set up by control.`
       : "Set up outside control (for example by your own infrastructure tooling). Its GPUs and version change with a roll.";
-    const sized = placed && !("machine" in placed) ? clusterSizeFields(placed) : "";
+    const mode = programModeOf(store, u.id);
+    const sized = placed && !("machine" in placed) ? clusterSizeFields(placed, mode) : "";
+    // On a rig set up on a cluster with its CPUs and memory set, a new mode restarts its pods.
+    const modeMoves = !!placed && !("machine" in placed) && placed.spec.resources !== undefined;
     return page(
       c,
       {
@@ -294,7 +313,7 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
 <label class="fd">${infoLabel("Turns per trial", "How many model turns a worker can take in one trial. Empty: no limit.")}<input name="max_turns" type="number" min="1" value="${s?.max_turns ?? ""}" placeholder="no limit"${s ? "" : " disabled"}></label>
 <label class="fd">${infoLabel("Ask me after a quiet spell of (minutes)", QUIET_TIP)}${quietField(u, s?.quiet_minutes ?? null)}</label>
 </div>
-<details class="adv"><summary>Advanced</summary><div class="g3"><label class="fd">${infoLabel("Agent programs run", PROGRAM_MODE_TIP)}${programModeField(u, s?.program_mode ?? PROGRAM_MODE_DEFAULT)}</label></div></details></div>
+<details class="adv"><summary>Advanced</summary><div class="g3"><label class="fd">${infoLabel("Agent programs run", PROGRAM_MODE_TIP)}${programModeField(u, s?.program_mode ?? PROGRAM_MODE_DEFAULT, modeMoves)}</label></div></details></div>
 <div class="sec"><h2>3 · When a change becomes the champion</h2><div class="g2">
 <label class="ch${s?.promotion === "auto" ? " on" : ""}"><input type="radio" name="promotion" value="auto"${s?.promotion === "auto" ? " checked" : ""}${s ? "" : " disabled"} style="margin:2px 8px 0 0"><span><b>Automatically</b><br><span class="muted small">The judge confirms the change on new runs, and it becomes the champion with no step of yours. When the campaign calls for an audit and this rig has an auditor, the auditor's clear comes first; its block stops the change. A run can still ask you about some changes (Ask me first, when you start it).</span></span></label>
 <label class="ch${s?.promotion === "owner_approval" ? " on" : ""}"><input type="radio" name="promotion" value="owner_approval"${s?.promotion === "owner_approval" ? " checked" : ""}${s ? "" : " disabled"} style="margin:2px 8px 0 0"><span><b>Ask me for each change</b><br><span class="muted small">Each confirmed change waits for you in Needs you.</span></span></label>
@@ -454,7 +473,12 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
     const onCluster = store.clusters.rig(rig);
     let resize: Awaited<ReturnType<typeof prepareResize>> | undefined;
     let gpusMoved = false;
-    if (onCluster && ("k_gpus" in f || "k_cpus" in f || "k_mem" in f)) {
+    // A new mode for its agent programs moves the supervisor's share of set CPUs and memory
+    // (goal 169), so it is checked and applied with the size.
+    const modeTo = PROGRAM_MODES.find(
+      (m) => m === f.program_mode && m !== u.settings?.program_mode,
+    );
+    if (onCluster && ("k_gpus" in f || "k_cpus" in f || "k_mem" in f || modeTo)) {
       const field = (k: string) => {
         if (!(k in f)) return undefined;
         const v = String(f[k] ?? "").trim();
@@ -479,6 +503,8 @@ ${s ? "" : `<div class="card warn" style="margin-bottom:16px">This rig's harness
         want.cpus = cpus;
         want.memoryGi = memoryGi;
       }
+      // With the namespace's defaults and no new size, a new mode moves nothing.
+      if (modeTo && (cur.resources || !asksNothing(want))) want.programMode = modeTo;
       if (!asksNothing(want)) {
         resize = await prepareResize(parts, rig, want, "owner:ui", { owner: true });
         if ("error" in resize) return back("error", `Not saved: ${resize.error}`);

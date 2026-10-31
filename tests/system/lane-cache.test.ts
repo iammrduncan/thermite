@@ -193,6 +193,7 @@ describe("a lane's cache folder survives a restart (goal 079)", () => {
       controlUrl: "https://control.example.com/",
       images: { harness: "registry.example.com/h:1", supervisor: "registry.example.com/s:1" },
       gpus: 0,
+      programMode: "terminal",
       gpuMode: "device-plugin",
       storageGi: 20,
       controlPublicKey: "PUBLIC KEY",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { leastRigSize, SUPERVISOR_SHARE } from "../clusters/index.ts";
 import {
   bringBackRig,
   type RigSettingsBody,
@@ -40,12 +41,12 @@ export function registerRigSettings(tools: ToolContext): void {
       "set_rig_settings",
       {
         title: "Change a rig's settings",
-        description: `As Save changes on a rig's Edit rig page does, with the same checks and refusals in words: switch the rig's parts on or off (judge, workers, planner, teachers, auditor, review for the review panel, exports), and set lanes (workers at a time), trial_minutes, max_turns, quiet_minutes, program_mode, promotion and judge_gpus; each agent's model is set_rig_model's. Give only what to change; a field left out stays as the rig has it. Control compares each field with what the rig reports (rig_settings) and sends only what differs, as one signed rig_settings command, which the rig takes within a minute; a part turned off keeps all its data. Nothing differing sends nothing: said is "Nothing changed." and id null. judge_gpus is for a rig set up with its set of GPUs (gpu_split in rig_settings): 1 to min(8, set - 1) for the judge, the rest the agents', at most 8; a new split restarts the rig's harness, so running trials and judge jobs start again, and restarts is true. Returns {rig, id, sent, restarts, said}: id, the command's (follow it with command_status); sent, the fields sent. Refused in words: no such rig, a rig whose harness is older and reports no settings, a judge's share out of range or on a rig with no GPU set, and a value the rig_settings command refuses (such as lanes above 16).${owner ? "" : " promotion and judge_gpus are the owner's alone: a change to either is refused."}`,
+        description: `As Save changes on a rig's Edit rig page does, with the same checks and refusals in words: switch the rig's parts on or off (judge, workers, planner, teachers, auditor, review for the review panel, exports), and set lanes (workers at a time), trial_minutes, max_turns, quiet_minutes, program_mode, promotion and judge_gpus; each agent's model is set_rig_model's. Give only what to change; a field left out stays as the rig has it. Control compares each field with what the rig reports (rig_settings) and sends only what differs, as one signed rig_settings command, which the rig takes within a minute; a part turned off keeps all its data. Nothing differing sends nothing: said is "Nothing changed." and id null. judge_gpus is for a rig set up with its set of GPUs (gpu_split in rig_settings): 1 to min(8, set - 1) for the judge, the rest the agents', at most 8; a new split restarts the rig's harness, so running trials and judge jobs start again, and restarts is true. On a rig control set up on a cluster with its CPUs and memory set, a new program_mode moves its supervisor's share of the memory (${SUPERVISOR_SHARE.terminal.memoryGi} GiB terminal, ${SUPERVISOR_SHARE.headless.memoryGi} GiB headless, the harness the rest), as set_cluster_rig_resources moves a size: checked first, so a rig with less than ${leastRigSize("terminal").memoryGi} GiB can't go to terminal, then its pods restart, draining first while it works, and said says so. Returns {rig, id, sent, restarts, said}: id, the command's (follow it with command_status); sent, the fields sent. Refused in words: no such rig, a rig whose harness is older and reports no settings, a judge's share out of range or on a rig with no GPU set, a value the rig_settings command refuses (such as lanes above 16), and a new program_mode on a cluster rig that can't change its size now (too little memory, or a rig being set up, updated, started or drained for another change).${owner ? "" : " promotion and judge_gpus are the owner's alone: a change to either is refused."}`,
         inputSchema: { rig: z.string().min(1), ...rigSettingsFields },
       },
-      audited("set_rig_settings", (a: RigSettingsBody & { rig: string }) => {
+      audited("set_rig_settings", async (a: RigSettingsBody & { rig: string }) => {
         const { rig, ...body } = a;
-        const out = setRigSettings(store, opts.privateKeyPem, rig, body, actor, owner);
+        const out = await setRigSettings(opts.parts, rig, body, actor, owner);
         if (out.state === "refused") throw new Error(out.error);
         return rigSettingsAnswer(rig, out);
       }),

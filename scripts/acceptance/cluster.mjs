@@ -530,12 +530,41 @@ try {
     });
     return { status: r.status, body: await r.json() };
   };
-  const tooBig = await resize({ cpus: 4, memory_gib: 6 });
+  const tooBig = await resize({ cpus: 4, memory_gib: 8 });
   check(
     "a size above the slot's quota, read again, is refused in words",
     tooBig.status === 400 && tooBig.body.error === "The slot thermite-slot-1 allows 3 CPUs.",
     tooBig,
   );
+  // A rig nobody set runs its agent programs in their own terminal, so its supervisor takes 4 GiB
+  // for the advisors' terminals (goal 169): 6 GiB is too little for that and a harness. Headless,
+  // the supervisor takes 2 GiB, so the rig fits in 6 GiB, which a kind node holds more easily.
+  const terminalTooSmall = await resize({ cpus: 2, memory_gib: 6 });
+  check(
+    "in their own terminals, a size too small for the supervisor's 4 GiB and a harness is refused in words",
+    terminalTooSmall.status === 400 &&
+      String(terminalTooSmall.body.error).startsWith(
+        "a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals",
+      ),
+    terminalTooSmall,
+  );
+  const settings = async (body) => {
+    const r = await fetch(`${control}/v1/rigs/slot-rig-1/settings`, {
+      method: body ? "POST" : "GET",
+      headers: { authorization: `Bearer ${admin}`, "content-type": "application/json" },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    return { status: r.status, body: await r.json() };
+  };
+  // On the namespace's defaults no share is set, so the new mode is a setting alone.
+  const headless = await settings({ program_mode: "headless" });
+  const reportsHeadless =
+    headless.status === 200 &&
+    (await until(
+      "slot-rig-1 reports its agent programs headless",
+      async () => (await settings()).body.settings?.program_mode === "headless",
+    ).catch(() => false));
+  check("the rig takes headless, and reports it", reportsHeadless === true, headless);
   const sized = await resize({ cpus: 2, memory_gib: 6 });
   const resized =
     sized.status === 200 &&
@@ -570,6 +599,17 @@ try {
     before,
     after: kept(),
   });
+  // Back to the terminals, 6 GiB is too little: refused before any setting is sent.
+  const backToTerminal = await settings({ program_mode: "terminal" });
+  check(
+    "a new mode its size can't hold is refused in words, and nothing is sent",
+    backToTerminal.status === 400 &&
+      String(backToTerminal.body.error).startsWith(
+        "Not saved: a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals",
+      ) &&
+      (await settings()).body.settings?.program_mode === "headless",
+    backToTerminal,
+  );
   check(
     "remove takes its objects out of the slot, and leaves the slot",
     /ok=Removed from the cluster/.test(

@@ -1,4 +1,5 @@
 import { shellQuote } from "../common/exec.ts";
+import { PROGRAM_MODE_DEFAULT } from "../core/rig-settings.ts";
 import { asList, type ClusterRigPlan, clusterRigObjects } from "./clusters/index.ts";
 import { deployScript, manageScript, type RigPlan, type RigSecrets } from "./machines/index.ts";
 
@@ -62,9 +63,18 @@ export function joinMachineScript(p: RigPlan, s: RigSecrets): string {
   return `${checks.join("\n")}\n${deployScript(p, s)}\n`;
 }
 
-/** The manifest a namespace's operator applies: the cluster path's objects, with network rules. */
-export function joinNamespaceManifest(p: Omit<ClusterRigPlan, "placement">, s: RigSecrets): string {
-  return asList(clusterRigObjects({ ...p, placement: "joined" }, s));
+/**
+ * The manifest a namespace's operator applies: the cluster path's objects, with network rules. It
+ * sets no CPUs or memory (the namespace's defaults apply), so how the agent programs run sets no
+ * share of them in it.
+ */
+export function joinNamespaceManifest(
+  p: Omit<ClusterRigPlan, "placement" | "resources" | "programMode">,
+  s: RigSecrets,
+): string {
+  return asList(
+    clusterRigObjects({ ...p, placement: "joined", programMode: PROGRAM_MODE_DEFAULT }, s),
+  );
 }
 
 /** The one command the owner runs where the rig goes. */

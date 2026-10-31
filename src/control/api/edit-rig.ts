@@ -27,7 +27,7 @@ import type { ApiContext } from "./context.ts";
  * refusals in words.
  */
 export function editRigRoutes(app: Hono, api: ApiContext): void {
-  const { store, privateKeyPem, parts, admin } = api;
+  const { store, parts, admin } = api;
 
   // Give one of a rig's agents a model, or clear it (goals 029 and 070): the twin of MCP's
   // set_rig_model, through Edit rig's own code (rigs/agent-models.ts), with its refusals in words.
@@ -60,13 +60,14 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
 
   // A rig's own settings (goal 029): the twin of Save changes on Edit rig and of MCP's
   // set_rig_settings. Only what differs from what the rig reports is sent, as one signed
-  // rig_settings command; nothing differing sends nothing. Refused in Edit rig's words.
+  // rig_settings command; nothing differing sends nothing. Refused in Edit rig's words. A new
+  // program_mode on a cluster rig with its CPUs and memory set moves its supervisor's share too.
   app.post("/v1/rigs/:rig/settings", admin, bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
     const rig = c.req.param("rig");
     const raw: unknown = await c.req.json().catch(() => undefined);
     const body = RigSettingsBody.safeParse(raw);
     const out = body.success
-      ? setRigSettings(store, privateKeyPem, rig, body.data, "owner:api", true)
+      ? await setRigSettings(parts, rig, body.data, "owner:api", true)
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
       store.auditLog.refusal("owner:api", "refused", {

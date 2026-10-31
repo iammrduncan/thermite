@@ -2,6 +2,7 @@ import { HEALTH } from "../../core/api/harness/supervisor.ts";
 import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
 import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
 import type { ReachEntry } from "../../core/reach.ts";
+import type { ProgramMode } from "../../core/rig-settings.ts";
 import { gpuSplit, type RigBus } from "../machines/index.ts";
 import { CLOSED_RANGES, reachEgress } from "./netcheck.ts";
 
@@ -39,6 +40,8 @@ export interface ClusterRigPlan {
   storageGi: number;
   /** The rig's CPUs and memory (a slot's quota, say); none: the namespace's defaults apply. */
   resources?: { cpus: number; memoryGi: number } | undefined;
+  /** How the rig's agent programs run, which sets the supervisor's share of its resources. */
+  programMode: ProgramMode;
   controlPublicKey: string;
   /**
    * The message bus for its supervisor: the one way it reaches control but its registration.
@@ -56,27 +59,50 @@ const amount = (cpus: number, mi: number): Resources => {
   const memory = `${Math.round(mi)}Mi`;
   return { requests: { cpu, memory }, limits: { cpu, memory } };
 };
-/** The supervisor's fixed share of a rig: it relays, fetches and exports, and computes little. */
-export const SUPERVISOR_SHARE = { cpus: 0.5, memoryGi: 2 };
+/**
+ * The supervisor's share of a rig, by how the rig's agent programs run. It relays, fetches and
+ * exports, and computes little; but its advisors in their programs' own terminals take about
+ * 550 MiB each in Claude Code's, and two teachers and three reviewers can run at once, so there it
+ * has 4 GiB (the owner's choice, 2026-10-31).
+ */
+export const SUPERVISOR_SHARE: Record<ProgramMode, { cpus: number; memoryGi: number }> = {
+  terminal: { cpus: 0.5, memoryGi: 4 },
+  headless: { cpus: 0.5, memoryGi: 2 },
+};
+/** The least the harness keeps beside the supervisor's share: it takes the rest of the rig. */
+export const HARNESS_LEAST = { cpus: 1, memoryGi: 4 };
+
+/** The least CPUs and memory of a rig whose agent programs run so. */
+export const leastRigSize = (mode: ProgramMode) => ({
+  cpus: SUPERVISOR_SHARE[mode].cpus + HARNESS_LEAST.cpus,
+  memoryGi: SUPERVISOR_SHARE[mode].memoryGi + HARNESS_LEAST.memoryGi,
+});
 
 /**
- * A rig's CPUs and memory as its containers get them: the supervisor its small share, the
- * harness the rest, and each pod's preparing step a little (a quota counts it as well). Requests
- * equal limits, so the rig keeps what it was given.
+ * A rig's CPUs and memory as its containers get them: the supervisor its share for how the rig's
+ * agent programs run, the harness the rest, and each pod's preparing step a little (a quota counts
+ * it as well). Requests equal limits, so the rig keeps what it was given. Too little for the
+ * supervisor's share and the harness's least is refused in words.
  */
-export function rigResources(r: { cpus: number; memoryGi: number }): {
+export function rigResources(
+  r: { cpus: number; memoryGi: number },
+  mode: ProgramMode,
+): {
   harness: Resources;
   supervisor: Resources;
   prepare: Resources;
 } {
-  if (!(r.cpus >= 1.5) || !(r.memoryGi >= 6))
-    throw new Error("a rig needs at least 1.5 CPUs and 6 GiB of memory");
+  const share = SUPERVISOR_SHARE[mode];
+  const least = leastRigSize(mode);
+  if (!(r.cpus >= least.cpus) || !(r.memoryGi >= least.memoryGi))
+    throw new Error(
+      mode === "terminal"
+        ? `a rig needs at least ${least.cpus} CPUs and ${least.memoryGi} GiB of memory while its agent programs run in their own terminals: its supervisor takes ${share.memoryGi} GiB for the advisors' terminals, and its harness at least ${HARNESS_LEAST.memoryGi} GiB`
+        : `a rig needs at least ${least.cpus} CPUs and ${least.memoryGi} GiB of memory`,
+    );
   return {
-    harness: amount(
-      r.cpus - SUPERVISOR_SHARE.cpus,
-      (r.memoryGi - SUPERVISOR_SHARE.memoryGi) * 1024,
-    ),
-    supervisor: amount(SUPERVISOR_SHARE.cpus, SUPERVISOR_SHARE.memoryGi * 1024),
+    harness: amount(r.cpus - share.cpus, (r.memoryGi - share.memoryGi) * 1024),
+    supervisor: amount(share.cpus, share.memoryGi * 1024),
     prepare: amount(0.25, 256),
   };
 }
@@ -138,7 +164,7 @@ const prepare = (image: string, resources?: Resources): Obj => ({
 /** The objects for one rig, in the order they are applied. */
 export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[] {
   const split = gpuSplit(p.gpus, p.judgeGpus);
-  const res = p.resources ? rigResources(p.resources) : undefined;
+  const res = p.resources ? rigResources(p.resources, p.programMode) : undefined;
   if (p.gpus > 0 && p.gpuMode === "dra" && !p.deviceClass)
     throw new Error("a DRA rig needs its device class");
   const n = clusterNames(p.rig);
@@ -452,9 +478,12 @@ export function clusterRigResized(p: ClusterRigPlan, stopped = false): Obj[] {
   return clusterRigParts(p, ["ResourceClaimTemplate", "Deployment"], stopped);
 }
 
-/** The rig's network rules alone, as a change of the list of addresses rigs may reach applies them. */
+/**
+ * The rig's network rules alone, as a change of the list of addresses rigs may reach applies them.
+ * They don't depend on its CPUs and memory, which are left out so that no size check stops them.
+ */
 export function clusterRigNetwork(p: ClusterRigPlan): Obj[] {
-  return clusterRigParts(p, ["NetworkPolicy"], false);
+  return clusterRigParts({ ...p, resources: undefined }, ["NetworkPolicy"], false);
 }
 
 function clusterRigParts(p: ClusterRigPlan, kinds: string[], stopped: boolean): Obj[] {

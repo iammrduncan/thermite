@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { redact } from "../../common/log.ts";
+import type { ProgramMode } from "../../core/rig-settings.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
@@ -52,6 +53,12 @@ export interface ClusterRig {
     storageGi: number;
     /** The rig's CPUs and memory; none: the namespace's defaults. */
     resources?: { cpus: number; memoryGi: number } | undefined;
+    /**
+     * How its agent programs ran as control last wrote its deployments, which set its supervisor's
+     * share of those CPUs and memory (clusters/manifests.ts). None: written before the share
+     * followed it, with 2 GiB, the headless share.
+     */
+    programMode?: ProgramMode | undefined;
     images: { harness: string; supervisor: string };
     /** Control's address the rig's supervisor reports to, as last deployed (older rigs: unknown). */
     controlUrl?: string | undefined;
@@ -73,13 +80,17 @@ export interface ClusterRig {
   pending?: ClusterRigResize | undefined;
 }
 
-/** A cluster rig's GPUs, the judge's share of them and its CPUs and memory, as control deploys them. */
+/**
+ * A cluster rig's GPUs, the judge's share of them and its CPUs and memory, as control deploys them,
+ * with how its agent programs run, which sets its supervisor's share of the memory.
+ */
 export interface ClusterRigSize {
   gpus: number;
   /** With two or more GPUs, how many are the judge's. */
   judgeGpus?: number | undefined;
   /** None: the namespace's defaults. */
   resources?: { cpus: number; memoryGi: number } | undefined;
+  programMode: ProgramMode;
 }
 
 /** A new size that waits for the rig's drain, and who asked for it. */
@@ -248,6 +259,7 @@ export class Clusters extends StorePart {
       gpus: size.gpus,
       judgeGpus: size.judgeGpus,
       resources: size.resources,
+      programMode: size.programMode,
       ...(controlUrl ? { controlUrl } : {}),
     };
     this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
@@ -266,16 +278,24 @@ export class Clusters extends StorePart {
     this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
   }
 
-  /** The images a rig on a cluster now runs, after an image update. */
+  /**
+   * The images a rig on a cluster now runs, after an image update, and how its agent programs ran
+   * as its deployments were written.
+   */
   setRigImages(
     rig: string,
     images: ClusterRig["spec"]["images"],
+    programMode: ProgramMode,
     controlUrl?: string | undefined,
   ): void {
     const r = this.rig(rig);
     if (!r) return;
-    this.db
-      .prepare("update cluster_rig set spec = ? where rig = ?")
-      .run(JSON.stringify({ ...r.spec, images, ...(controlUrl ? { controlUrl } : {}) }), rig);
+    const spec: ClusterRig["spec"] = {
+      ...r.spec,
+      images,
+      programMode,
+      ...(controlUrl ? { controlUrl } : {}),
+    };
+    this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
   }
 }

@@ -1,5 +1,6 @@
 import { errorText } from "../../common/errors.ts";
 import { RIG_ID_SENTENCE } from "../../core/ids.ts";
+import { PROGRAM_MODE_DEFAULT, type ProgramMode } from "../../core/rig-settings.ts";
 import { inBackground } from "../background.ts";
 import { newToken } from "../credential.ts";
 import { issueCommand } from "../issue/index.ts";
@@ -15,6 +16,7 @@ import {
   sleep,
 } from "../rigs/index.ts";
 import { type Cluster, type ClusterRig, RIG_ID } from "../store/index.ts";
+import { programModeOf } from "../views/index.ts";
 import {
   type ClusterFacts,
   type ClusterSlot,
@@ -211,6 +213,9 @@ export async function addClusterRig(
     if (!NS.test(namespace)) return fail(`"${namespace}" is not a namespace name.`);
   }
   // CPUs and memory: as given, else what the slot's quota allows; none: the namespace's defaults.
+  // A new rig has not reported, so its agent programs run the default way until someone sets
+  // another, and its supervisor's share is that way's.
+  const programMode = PROGRAM_MODE_DEFAULT;
   const cpus = i.cpus ?? slotQuota?.cpus;
   const memoryGi = i.memoryGi ?? slotQuota?.memoryGi;
   let resources: { cpus: number; memoryGi: number } | undefined;
@@ -218,7 +223,7 @@ export async function addClusterRig(
     if (cpus === undefined || memoryGi === undefined)
       return fail("Give the rig both its CPUs and its memory, or neither.");
     try {
-      rigResources({ cpus, memoryGi });
+      rigResources({ cpus, memoryGi }, programMode);
     } catch (err) {
       return fail(errorText(err));
     }
@@ -251,6 +256,7 @@ export async function addClusterRig(
       storageClass,
       storageGi,
       resources,
+      programMode,
       images: {
         harness: gpus ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
         supervisor: parts.rigImages.supervisor,
@@ -267,8 +273,17 @@ export async function addClusterRig(
   return { rig };
 }
 
-/** What a rig control set up on a cluster is deployed with, with its images or others. */
-export const clusterPlan = (parts: ControlParts, r: ClusterRig, images = r.spec.images) => ({
+/**
+ * What a rig control set up on a cluster is deployed with, with its images or others. Its
+ * supervisor's share follows how its agent programs run: as its report says, unless a caller
+ * gives the mode (a new one, or the one its deployments have).
+ */
+export const clusterPlan = (
+  parts: ControlParts,
+  r: ClusterRig,
+  images = r.spec.images,
+  programMode: ProgramMode = programModeOf(parts.store, r.rig),
+) => ({
   rig: r.rig,
   placement: r.placement,
   namespace: r.namespace,
@@ -282,6 +297,7 @@ export const clusterPlan = (parts: ControlParts, r: ClusterRig, images = r.spec.
   storageClass: r.spec.storageClass,
   storageGi: r.spec.storageGi,
   resources: r.spec.resources,
+  programMode,
   controlPublicKey: parts.controlPublicKey,
   bus: rigBusOf(parts),
   reach: parts.store.reachable.list(),
@@ -296,7 +312,7 @@ async function deployClusterRig(
 ) {
   const { store } = parts;
   try {
-    const objects = clusterRigObjects(clusterPlan(parts, r), {
+    const objects = clusterRigObjects(clusterPlan(parts, r, r.spec.images, r.spec.programMode), {
       controlToken,
       harnessSupervisorToken: newToken().token,
     });

@@ -124,4 +124,4 @@ Control can move a rig it set up, on a machine or a cluster, onto the images it 
 - The oldest Kubernetes that runs a rig, and whether GPU rigs work on a real cluster.
 - The oldest NVIDIA driver that works.
 - Windows, and whether the arm64 images work: no test runs them.
-- How much memory and disk the stack needs. Lane build caches can reach 8 GB each. A cluster rig with resources set needs at least 1.5 CPUs and 6 GiB of memory.
+- How much memory and disk the stack needs. Lane build caches can reach 8 GB each. A cluster rig with resources set needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminal, the default, or 6 GiB headless ([The supervisor's share](../how-to/install/rig-on-a-cluster.md#the-supervisors-share)).

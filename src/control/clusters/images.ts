@@ -1,10 +1,13 @@
+import { errorText } from "../../common/errors.ts";
 import { inBackground } from "../background.ts";
 import { issueCommand } from "../issue/index.ts";
 import type { ControlParts } from "../parts.ts";
 import { controlAddress, controlImages, NO_RIG_BUS } from "../rigs/index.ts";
+import { programModeOf } from "../views/index.ts";
 import { deploymentEnv } from "./deployment.ts";
 import { kubeError } from "./kubectl.ts";
-import { asList, clusterNames, clusterRigDeployments } from "./manifests.ts";
+import { asList, clusterNames, clusterRigDeployments, rigResources } from "./manifests.ts";
+import { resourcesWords } from "./resources.ts";
 import {
   awaitNewPods,
   clusterPlan,
@@ -21,7 +24,8 @@ import {
  * volume claim, service and network rules stay. Then, in the background, waits for its new pods
  * and a report from them. It drains the rig first (goal 079): running trials and the judge's job
  * under way finish, then its pods restart. `wait: false` restarts them now, also while a drain is
- * under way.
+ * under way. Its supervisor's share of its CPUs and memory follows how its agent programs run now,
+ * as its report says (goal 169), so a rig too small for that share is refused before it drains.
  */
 export async function updateRigImages(
   parts: ControlParts,
@@ -86,6 +90,22 @@ export async function updateRigImages(
     if (was === undefined || was === parts.publicUrl.replace(/\/$/, ""))
       return { ok: `${rig} already runs control's images.` };
   }
+  // The new deployments give its supervisor the share for how its agent programs run now.
+  const programMode = programModeOf(store, rig);
+  if (r.spec.resources) {
+    try {
+      rigResources(r.spec.resources, programMode);
+    } catch (err) {
+      const why = `${rig} has ${resourcesWords(r.spec.resources)}, and ${errorText(err)}. Give it more memory on Edit rig first, or set Agent programs run to Headless there.`;
+      // A rig that drained for it goes back to work: the update did not happen.
+      if (r.status === "draining") {
+        store.rigHistory.add(rig, "images", false, why);
+        undrain(parts, rig, by);
+        store.clusters.setRigStatus(rig, "failed");
+      }
+      return { error: why };
+    }
+  }
   const stopped = r.status === "stopped";
   // Drain first (goal 079): while trials run or the judge has a job under way, the rig starts
   // nothing new and lets those end; the drain watch (drain.ts) restarts its pods once nothing
@@ -118,7 +138,7 @@ export async function updateRigImages(
   const out = await parts.kube.kubectl(
     clusterTarget(parts, k),
     ["apply", "-f", "-"],
-    asList(clusterRigDeployments(clusterPlan(parts, r, images), stopped)),
+    asList(clusterRigDeployments(clusterPlan(parts, r, images, programMode), stopped)),
     120_000,
   );
   if (out.code !== 0) {
@@ -130,7 +150,7 @@ export async function updateRigImages(
     }
     return { error: kubeError(out) };
   }
-  store.clusters.setRigImages(rig, images, controlAddress(parts));
+  store.clusters.setRigImages(rig, images, programMode, controlAddress(parts));
   const changed =
     [
       old.harness !== images.harness ? `harness ${old.harness} → ${images.harness}` : "",

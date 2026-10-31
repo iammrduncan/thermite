@@ -9,7 +9,9 @@ import {
   asList,
   type ClusterRigPlan,
   clusterRigDeployments,
+  clusterRigNetwork,
   clusterRigObjects,
+  rigResources,
 } from "../../../src/control/clusters/manifests.ts";
 import { harnessKeptOffCluster } from "../../../src/control/clusters/netcheck.ts";
 
@@ -30,6 +32,7 @@ const plan: ClusterRigPlan = {
   gpuMode: "device-plugin",
   storageGi: 100,
   storageClass: "local-path",
+  programMode: "terminal",
   controlPublicKey: "PUBLIC KEY",
 };
 const secrets = { controlToken: "rig-token", harnessSupervisorToken: "sup-token" };
@@ -261,6 +264,56 @@ describe("rigs on Kubernetes", () => {
     );
     const updated = clusterRigDeployments({ ...plan, bus }) as Obj[];
     assert.equal(env(updated, "thermite-k8s-a-1-supervisor").THERMITE_NATS_CA, bus.ca);
+  });
+
+  test("the supervisor's share of the rig's memory follows how its agent programs run (goal 169)", () => {
+    type Res = { requests?: Record<string, unknown>; limits?: Record<string, unknown> };
+    const res = (objs: Obj[], part: "harness" | "supervisor") =>
+      (pod(objs, `thermite-k8s-a-1-${part}`).containers as { resources: Res }[])[0]?.resources;
+    const both = (cpu: string, memory: string) => ({
+      requests: { cpu, memory },
+      limits: { cpu, memory },
+    });
+    const sized = { ...plan, gpus: 0, resources: { cpus: 16, memoryGi: 52 } };
+    // In their own terminals: the advisors' terminals run in the supervisor, so it has 4 GiB.
+    const terminal = clusterRigObjects(sized, secrets) as Obj[];
+    assert.deepEqual(res(terminal, "supervisor"), both("500m", "4096Mi"));
+    assert.deepEqual(res(terminal, "harness"), both("15500m", "49152Mi"));
+    // Headless: 2 GiB, as before the terminals; the harness takes the rest.
+    const headless = clusterRigObjects({ ...sized, programMode: "headless" }, secrets) as Obj[];
+    assert.deepEqual(res(headless, "supervisor"), both("500m", "2048Mi"));
+    assert.deepEqual(res(headless, "harness"), both("15500m", "51200Mi"));
+    // The deployments an image update or a new size applies carry the same shares.
+    assert.deepEqual(
+      res(clusterRigDeployments(sized) as Obj[], "supervisor"),
+      both("500m", "4096Mi"),
+    );
+    // A GPU rig's harness keeps its GPUs beside its share.
+    assert.deepEqual(res(clusterRigObjects({ ...sized, gpus: 2 }, secrets) as Obj[], "harness"), {
+      requests: { cpu: "15500m", memory: "49152Mi" },
+      limits: { cpu: "15500m", memory: "49152Mi", "nvidia.com/gpu": 2 },
+    });
+    // The least size: the supervisor's share and the harness's 4 GiB.
+    assert.deepEqual(
+      rigResources({ cpus: 1.5, memoryGi: 8 }, "terminal").harness,
+      both("1000m", "4096Mi"),
+    );
+    assert.deepEqual(
+      rigResources({ cpus: 1.5, memoryGi: 6 }, "headless").harness,
+      both("1000m", "4096Mi"),
+    );
+    const small = { ...sized, resources: { cpus: 2, memoryGi: 6 } };
+    assert.throws(() => clusterRigObjects(small, secrets), {
+      message:
+        "a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals: its supervisor takes 4 GiB for the advisors' terminals, and its harness at least 4 GiB",
+    });
+    assert.throws(() => rigResources({ cpus: 1, memoryGi: 8 }, "headless"), {
+      message: "a rig needs at least 1.5 CPUs and 6 GiB of memory",
+    });
+    assert.ok(clusterRigObjects({ ...small, programMode: "headless" }, secrets).length > 0);
+    // The network rules alone don't depend on the size, so a rig too small for its share still
+    // gets a new list of addresses.
+    assert.deepEqual(kinds(clusterRigNetwork(small) as Obj[]), ["NetworkPolicy", "NetworkPolicy"]);
   });
 
   test("prepare changes the owner of the folders it makes, never their trees", () => {
