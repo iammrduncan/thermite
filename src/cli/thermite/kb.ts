@@ -38,6 +38,7 @@ export async function thermiteKb(rest: string[]): Promise<void> {
       type: { type: "string", multiple: true },
       sort: { type: "string" },
       order: { type: "string" },
+      as: { type: "string" },
       control: { type: "string" },
       "token-file": { type: "string" },
     },
@@ -62,7 +63,7 @@ export async function thermiteKb(rest: string[]): Promise<void> {
     process.stdout.write(`${JSON.stringify(out)}\n`);
     return;
   }
-  const listOnly = [values.type, values.sort, values.order];
+  const listOnly = [values.sort, values.order];
   if (sub === "list") {
     const [at, ...extra] = positionals;
     if (extra.length)
@@ -74,6 +75,7 @@ export async function thermiteKb(rest: string[]): Promise<void> {
       values.seen,
       values.collection,
       values.run,
+      values.as,
     ];
     if ([...searchOnly, values.version].some((v) => v !== undefined))
       fail(
@@ -98,7 +100,7 @@ export async function thermiteKb(rest: string[]): Promise<void> {
     return;
   }
   if (listOnly.some((v) => v !== undefined))
-    fail(`kb ${sub} takes no --type, --sort or --order: kb list does`);
+    fail(`kb ${sub} takes no --sort or --order: kb list does`);
   if (sub === "search") {
     if (values.version !== undefined) fail("kb search takes no --version: kb read does");
     const out = await orFail(
@@ -114,6 +116,8 @@ export async function thermiteKb(rest: string[]): Promise<void> {
           outcome: values.outcome?.join(","),
           run: values.run?.join(","),
           slot: values.slot?.join(","),
+          type: values.type?.join(","),
+          as: values.as,
           offset: values.offset,
           limit: values.limit,
         },
@@ -126,7 +130,15 @@ export async function thermiteKb(rest: string[]): Promise<void> {
   if (!address || more.length)
     fail("kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>");
   const searchOnly = [values.query, values.mode, values.like, values.seen, values.collection];
-  const filters = [values.kind, values.outcome, values.run, values.slot, values.limit];
+  const filters = [
+    values.kind,
+    values.outcome,
+    values.run,
+    values.slot,
+    values.limit,
+    values.type,
+    values.as,
+  ];
   if ([...searchOnly, ...filters].some((v) => v !== undefined))
     fail("kb read takes only an address, --version and --offset: kb search takes the others");
   const out = await orFail(

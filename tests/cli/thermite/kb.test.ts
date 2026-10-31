@@ -329,7 +329,39 @@ describe("the owner's search of the knowledge base", () => {
         "--token-file",
         tokenFile,
       );
-      assert.match(sortWrong.stderr, /kb search takes no --type, --sort or --order: kb list does/);
+      assert.match(sortWrong.stderr, /kb search takes no --sort or --order: kb list does/);
+      // --type keeps a type of item; --as reaches control, which searches as that run.
+      const typed = async (type: string) =>
+        JSON.parse(
+          (
+            await cli(
+              "kb",
+              "search",
+              "speed",
+              "--type",
+              type,
+              "--control",
+              url,
+              "--token-file",
+              tokenFile,
+            )
+          ).stdout,
+        ) as { matched: number };
+      assert.ok((await typed("record")).matched > 0);
+      assert.equal((await typed("blurb")).matched, 0);
+      const as = await cli(
+        "kb",
+        "search",
+        "speed",
+        "--as",
+        "nobody-1",
+        "--control",
+        url,
+        "--token-file",
+        tokenFile,
+      );
+      assert.equal(as.code, 2);
+      assert.match(as.stderr, /control assigned no run nobody-1: no agents search as it/);
     } finally {
       server.close();
     }

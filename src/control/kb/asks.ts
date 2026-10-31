@@ -62,6 +62,7 @@ export function kbFindOf(s: Omit<KbSearchAsk, "run" | "q">): KbFind {
     runs: s.runs,
     slots: s.slots,
     collections: s.collections,
+    types: s.types,
     offset: s.offset,
     limit: s.limit ?? KB_SEARCH_DEFAULT,
   };

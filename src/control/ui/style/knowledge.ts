@@ -38,8 +38,16 @@ details.jmore { display: grid; gap: 6px; } details.jmore > summary { cursor: poi
 .kx-crumbs a:hover { background: var(--accent); color: var(--foreground); text-decoration: none; }
 .kx-crumbs a[aria-current] { color: var(--foreground); font-weight: 600; }
 .kx-sep { color: var(--muted-foreground); }
-.kx-search { display: flex; align-items: center; gap: 2px; width: 320px; flex: none; height: 30px; padding: 0 3px 0 8px; border: 1px solid var(--input); border-radius: var(--control-radius); background: var(--card); color: var(--muted-foreground); }
-.kx-search:focus-within { outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 1px; }
+.kx-search { display: flex; align-items: center; gap: 8px; flex: none; color: var(--muted-foreground); }
+.kx-field { display: flex; align-items: center; gap: 2px; width: 400px; height: 30px; padding: 0 3px 0 8px; border: 1px solid var(--input); border-radius: var(--control-radius); background: var(--card); }
+.kx-field:focus-within { outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 1px; }
+.kx-scope, .kx-as { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+.kx-scope { padding-left: 6px; border-left: 1px solid var(--border); }
+.kx-scope select, .kx-as select { height: 24px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; color: var(--foreground); font-size: 12px; max-width: 160px; }
+.kx-as select { border: 1px solid var(--input); height: 30px; background: var(--card); }
+.kx-why { display: block; color: var(--muted-foreground); font-size: 11px; }
+.kx-dym { margin: 0 0 8px; font-size: 13px; }
+.kx-best { display: inline-flex; align-items: center; font-size: 12px; color: var(--muted-foreground); }
 .kx-search input { flex: 1; min-width: 0; height: 26px; padding: 0 6px; border: 0; background: transparent; color: var(--foreground); font-size: 13px; }
 .kx-search input:focus { outline: none; }
 .kx-search input::-webkit-search-cancel-button { display: none; }
@@ -192,7 +200,6 @@ details.kx-confirm form { display: grid; gap: 6px; } details.kx-confirm p { marg
 .kx-refused { font-size: 12.5px; overflow-wrap: anywhere; }
 .kx-note { padding: 8px 10px; border-radius: 8px; font-size: 12.5px; }
 .kx-note.ok { background: var(--success-surface); color: var(--success-foreground); } .kx-note.bad { background: var(--error-surface); color: var(--error-foreground); }
-.kx-soon { display: inline-flex; align-items: center; gap: 6px; }
 .kx-infobtn { display: none; height: 28px; padding: 0 10px; font-size: 12.5px; }
 .kx-phead .kx-infox { display: none; }
 /* The table's columns fit the room it has, with the preview pane open or not. */
@@ -205,7 +212,8 @@ details.kx-confirm form { display: grid; gap: 6px; } details.kx-confirm p { marg
 @media (max-width: 760px) {
   .kx-bar { flex-wrap: wrap; gap: 8px; padding: 8px 14px; }
   .kx-crumbs { flex: 1 1 100%; overflow-x: auto; }
-  .kx-search { flex: 1 1 100%; width: auto; }
+  .kx-search { flex: 1 1 100%; width: auto; flex-wrap: wrap; }
+  .kx-field { flex: 1 1 100%; width: auto; }
   .kx-tree { display: none; }
   .kx[data-folders="open"] .kx-body { flex-direction: column; }
   .kx[data-folders="open"] .kx-tree { display: block; width: auto; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--border); }

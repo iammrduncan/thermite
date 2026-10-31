@@ -10,6 +10,7 @@
  * in its address, takes its pane, and puts that address in the browser's history, so Back and
  * Forward step through what was open; × and Esc close it the same way, and the folder's own pane
  * comes back. At phone width, Info shows the folder's pane as a sheet, and × or Esc hides it.
+ * The search's In and As menus search again as soon as one changes.
  */
 export const KNOWLEDGE_JS = `
 (() => {
@@ -23,6 +24,9 @@ export const KNOWLEDGE_JS = `
   document.addEventListener("click", (ev) => {
     if (!(ev.target instanceof Element) || !ev.target.closest("details.kx-dd")) closeAll();
   });
+  kx.querySelectorAll(".kx-search select").forEach((s) =>
+    s.addEventListener("change", () => s.form && s.form.requestSubmit()),
+  );
   const foldBtn = kx.querySelector(".kx-foldbtn");
   const folders = (open) => {
     kx.dataset.folders = open ? "open" : "closed";

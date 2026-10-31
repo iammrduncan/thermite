@@ -395,8 +395,10 @@ In each filter an item matches any value given; together, an item must pass each
 | `outcomes` | list, optional | every outcome | Only experiments and attempts that ended so: any of `won`, `screened`, `regress`, `neutral`, `broken`, `unclear`, `dropped`, `open` |
 | `runs` | list of up to 50 strings, optional | every run | Only these runs' items |
 | `slots` | list of up to 50 slots, optional | every slot | Only these slots' items: `records`, `planner`, `worker-<lane>`, … |
+| `types` | list, optional | every type | Only items of these types: `record`, `blurb`, `file` |
 | `offset` | whole number, 0 to 5,000 | 0 | Where the page starts: a page's `next_offset` |
 | `limit` | whole number, 1 to 50 | 10 | How many hits |
+| `as` | a run's name, optional | none | Search as that run's agents do: the answer their `kb_search` gets, from the run's own scope, with `scope`, `as` and `rig`; its hits have no `id` or `result`. A run control did not assign is an error: `control assigned no run <run>: no agents search as it` |
 
 Returns `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}`, and `like` with the words "more like this" searched with, the same as [`GET /v1/kb/search`](rest-api.md#the-knowledge-base). Each hit is `{id, address, collection, run, slot, kind, title, outcome, excerpt, why, passage, by, at, version, file, result}`; `result` is an experiment's result, such as `tried: attempt <id> (<result>), <verdict>` or `dropped: <why>`, and `null` for the other kinds. An exact search FTS5 can't read is an error: `the exact search is not FTS5's query syntax: …`. [Search](knowledge-base.md#search) says how it ranks, and what each field holds.
 

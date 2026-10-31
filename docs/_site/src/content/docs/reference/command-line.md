@@ -192,7 +192,7 @@ usage: thermite <command> [options]
                                       one's head, commits and kit.json's name and target
   kb search [WORDS...] [--query Q ...] [--mode words|exact] [--like ADDRESS] [--seen ADDRESS ...]
          [--collection C ...] [--kind K ...] [--outcome O ...] [--run R ...] [--slot S ...]
-         [--offset N] [--limit N] --control URL --token-file F
+         [--type T ...] [--as RUN] [--offset N] [--limit N] --control URL --token-file F
                                       search Thermite's knowledge base (owner's token): items with
                                       any of the words, best first, each with its id, address,
                                       slot, outcome, an excerpt, why it matched, its passage in a
@@ -201,8 +201,10 @@ usage: thermite <command> [options]
                                       items hold each word; no words: the newest. --query adds a
                                       search, fused with the words; --mode exact takes FTS5's
                                       syntax; --like finds more like an item; --seen leaves items
-                                      out; --collection, --kind, --outcome, --run and --slot keep
-                                      only those. It prints JSON
+                                      out; --collection, --kind, --outcome, --run, --slot and
+                                      --type (record, blurb or file) keep only those. --as RUN
+                                      searches as that run's agents do: their kb_search's answer,
+                                      from the run's own scope, with that scope. It prints JSON
   kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
                                       one item of the knowledge base, by its address
                                       (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
@@ -829,7 +831,7 @@ npx thermite kb grant sort-speed merge-speed \
 | `--control URL` | Yes | | Control's address |
 | `--token-file F` | Yes | | A file with the owner's token |
 
-A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`, and what the Knowledge page's reader shows beside it: `history`, `writer`, `withdrawn`, `file`, `links`, `linked_from` and `readers` ([An item's read](knowledge-base.md#an-items-read)). Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others`, `kb search takes no --version: kb read does`, `kb search takes no --type, --sort or --order: kb list does` (`kb read` for a read), `kb list takes one place: <campaign>, <campaign>/<run> or <campaign>/<run>/<slot>` or `kb list takes a place, --kind, --outcome, --type, --slot, --sort, --order, --offset and --limit`. A list prints `{note, at, folders, total, matched, next_offset, counts, items, summary}`; a grant or a revoke prints `{campaign, changed, reads, read_by, said}`, or ends with exit code 2 and control's words, such as `A campaign always reads its own collection: choose another campaign's.`, and before it sends anything with `kb grant takes a campaign and the other campaign whose collection it reads` (`kb revoke` the same); a place the knowledge base has not ends it with exit code 2 and control's words, such as `the knowledge base has no collection <campaign>`.
+A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; with `--as RUN`, the run's agents' answer, `{note, scope, matched, next_offset, counts, words, did_you_mean, hits, as, rig}`, whose hits have no `id` or `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`, and what the Knowledge page's reader shows beside it: `history`, `writer`, `withdrawn`, `file`, `links`, `linked_from` and `readers` ([An item's read](knowledge-base.md#an-items-read)). Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others`, `kb search takes no --version: kb read does`, `kb search takes no --sort or --order: kb list does` (`kb read` for a read), `kb list takes one place: <campaign>, <campaign>/<run> or <campaign>/<run>/<slot>` or `kb list takes a place, --kind, --outcome, --type, --slot, --sort, --order, --offset and --limit`. A list prints `{note, at, folders, total, matched, next_offset, counts, items, summary}`; a grant or a revoke prints `{campaign, changed, reads, read_by, said}`, or ends with exit code 2 and control's words, such as `A campaign always reads its own collection: choose another campaign's.`, and before it sends anything with `kb grant takes a campaign and the other campaign whose collection it reads` (`kb revoke` the same); a place the knowledge base has not ends it with exit code 2 and control's words, such as `the knowledge base has no collection <campaign>`.
 
 ### `agents list`
 

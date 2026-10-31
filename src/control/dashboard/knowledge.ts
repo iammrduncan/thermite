@@ -31,6 +31,7 @@ import { esc } from "../ui/components/index.ts";
 import {
   contentsHtml,
   crumbsHtml,
+  EMPTY_QUERY,
   type ExplorerQuery,
   type ExplorerSearch,
   explorerFrame,
@@ -84,6 +85,8 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       sort: KB_LIST_SORTS.find((s) => s === c.req.query("sort")),
       order: order === "asc" || order === "desc" ? order : undefined,
       offset: Math.max(0, Math.floor(Number(c.req.query("offset")) || 0)),
+      scope: c.req.query("scope") === "everything" ? "everything" : undefined,
+      as: (c.req.query("as") ?? "").trim().slice(0, 100) || undefined,
       item: readKbAddress(c.req.query("item") ?? "") ? c.req.query("item") : undefined,
       version: version > 0 ? version : undefined,
     };
@@ -115,6 +118,17 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       name: o.names?.[i] ?? p,
     }));
     const items = collections.reduce((n, f) => n + f.items, 0);
+    // The runs a search can be made as: each running run, as the rigs report it.
+    const runs = vs
+      .flatMap((u) =>
+        u.runs
+          .filter((r) => r.status === "running")
+          .map((r) => ({
+            run: r.id,
+            collection: store.kb().runCampaign(u.id, r.id) ?? r.campaign ?? "",
+          })),
+      )
+      .sort((a, b) => a.run.localeCompare(b.run, "en", { numeric: true }));
     return page(
       c,
       {
@@ -134,6 +148,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
         current: folder,
         main: o.main,
         pane: o.pane,
+        runs,
       }),
       vs,
     );
@@ -188,7 +203,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       });
     }
     const vs = views();
-    const searching = query.q.trim() !== "";
+    const searching = query.q.trim() !== "" || query.as !== undefined;
     const list = ownerKbList(store, vs, {
       at: placeParts.join("/"),
       ...(query.kinds.length ? { kinds: query.kinds } : {}),
@@ -217,6 +232,16 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
               collections: [...campaignModes(store, vs).keys()].sort(),
             },
             note: { ok: c.req.query("ok"), error: c.req.query("error") },
+            // A run's pane searches as the run: its agents' search, over all that it reads.
+            ...(list.at.level === "run"
+              ? {
+                  searchAs: explorerHref(list.at.path, {
+                    ...EMPTY_QUERY,
+                    as: list.at.name,
+                    scope: "everything",
+                  }),
+                }
+              : {}),
             now: Date.now(),
           }),
       main: contentsHtml({
@@ -255,8 +280,9 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   };
 
   /**
-   * A search of the open folder, as the owner's search answers it (kb_search): its collection,
-   * its run and its slot, with the filters it takes (kinds, outcomes and slots).
+   * A search of the open folder, or of everything, as the owner's search answers it (kb_search):
+   * its collection, its run and its slot, with the filters it takes (kinds, outcomes, types and
+   * slots); as a run, the answer its agents' kb_search gets, narrowed the same way.
    */
   const searchFolder = (
     at: { campaign?: string | undefined; run?: string | undefined; slot?: string | undefined },
@@ -268,23 +294,27 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
       counts: { kind: {}, outcome: {}, slot: {} },
       hits: [],
     };
+    const place = query.scope === "everything" ? {} : at;
     // In a slot, a writer's filter that leaves the slot out keeps nothing.
-    if (at.slot && query.slots.length && !query.slots.includes(at.slot)) return none;
-    const slots = at.slot ? [at.slot] : query.slots;
+    if (place.slot && query.slots.length && !query.slots.includes(place.slot)) return none;
+    const slots = place.slot ? [place.slot] : query.slots;
     const s = KbSearchQuery.safeParse({
       q: query.q,
-      ...(at.campaign ? { collections: [at.campaign] } : {}),
-      ...(at.run ? { runs: [at.run] } : {}),
+      ...(place.campaign ? { collections: [place.campaign] } : {}),
+      ...(place.run ? { runs: [place.run] } : {}),
       ...(slots.length ? { slots } : {}),
       ...(query.kinds.length ? { kinds: query.kinds } : {}),
       ...(query.outcomes.length ? { outcomes: query.outcomes } : {}),
+      ...(query.types.length ? { types: query.types } : {}),
+      ...(query.as ? { as: query.as } : {}),
       offset: Math.min(query.offset, KB_OFFSET_MAX),
       limit: KB_SEARCH_MAX,
     });
     if (!s.success) return { ...none, error: "The search can't read these words." };
     const r = ownerKbSearch(store, s.data);
     if ("error" in r) return { ...none, error: r.error };
-    return { matched: r.matched, next_offset: r.next_offset, counts: r.counts, hits: r.hits };
+    const { matched, next_offset, counts, hits, did_you_mean } = r;
+    return { matched, next_offset, counts, hits, did_you_mean };
   };
 
   /**

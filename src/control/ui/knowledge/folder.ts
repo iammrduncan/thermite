@@ -102,7 +102,7 @@ export function folderPaneHtml(o: {
   place: KbFolder;
   summary: KbSummary;
   grants: GrantForms;
-  /** "Search as this run": its link once search as a run is on the page, else none. */
+  /** "Search as this run": the search as the run's agents, in everything (a run's pane). */
   searchAs?: string | undefined;
   note?: { ok?: string | undefined; error?: string | undefined } | undefined;
   now: number;
@@ -136,11 +136,11 @@ export function folderPaneHtml(o: {
       ["Rig", s.rig ? esc(s.rig) : ""],
       ...holds(s, o.now),
       ["Slots", chips(s.slots)],
-    ])}<div class="kx-psec">${
+    ])}${
       o.searchAs
-        ? `<a class="btn sm" href="${esc(o.searchAs)}">${icon.search}<span>Search as this run</span></a>`
-        : `<span class="kx-soon"><button type="button" class="sm" disabled>${icon.search}<span>Search as this run</span></button>${infoLabel("", "Searches the knowledge base as this run's agents do. It comes with search as a run, the explorer's next step.")}</span>`
-    }</div>`;
+        ? `<div class="kx-psec"><a class="btn sm" href="${esc(o.searchAs)}">${icon.search}<span>Search as this run</span></a></div>`
+        : ""
+    }`;
   }
   if (s.level === "slot") {
     const refused = s.refused.newest

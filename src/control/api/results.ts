@@ -64,6 +64,7 @@ export function resultRoutes(
     const more = {
       runs: list("run"),
       slots: list("slot"),
+      types: list("type"),
       queries: many("query"),
       seen: many("seen"),
     };
@@ -72,6 +73,7 @@ export function resultRoutes(
       ...Object.fromEntries(Object.entries({ ...lists, ...more }).filter(([, v]) => v.length)),
       ...(c.req.query("mode") ? { mode: c.req.query("mode") } : {}),
       ...(c.req.query("like") ? { like: c.req.query("like") } : {}),
+      ...(c.req.query("as") ? { as: c.req.query("as") } : {}),
       ...num("offset"),
       ...num("limit"),
     });

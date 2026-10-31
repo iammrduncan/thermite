@@ -356,7 +356,7 @@ describe("the knowledge explorer", () => {
     const found = await s.page("/ui/knowledge/gemv?q=vector&kind=experiment");
     assert.match(
       found.html,
-      /<form class="kx-search" role="search" method="get" action="\/ui\/knowledge\/gemv">[\s\S]*?<input type="search" name="q" value="vector" placeholder="Search" aria-label="Search this folder"[^>]*><input type="hidden" name="kind" value="experiment"><a class="kx-qx" href="\/ui\/knowledge\/gemv\?kind=experiment" aria-label="Clear the search">/,
+      /<form class="kx-search" role="search" method="get" action="\/ui\/knowledge\/gemv"><span class="kx-field">[\s\S]*?<input type="search" name="q" value="vector" placeholder="Search" aria-label="Search"[^>]*><a class="kx-qx" href="\/ui\/knowledge\/gemv\?kind=experiment" aria-label="Clear the search">[\s\S]*?<\/span><label class="kx-as">[\s\S]*?<\/label><input type="hidden" name="kind" value="experiment">/,
     );
     assert.equal(count(found.html), "2 results in gemv");
     // Both experiments say vector, in the order the search ranks them.
@@ -369,9 +369,9 @@ describe("the knowledge explorer", () => {
       main((await s.page("/ui/knowledge/gemv?q=packed")).html),
       /<span class="kx-snip">128-bit loads of the <mark>packed<\/mark> weights/,
     );
-    // Best first: the headers sort nothing, and a type is the list's filter alone.
+    // Best first: the headers sort nothing; the Type filter works while searching too.
     assert.match(main(found.html), /<th class="c-name">Name<\/th>/);
-    assert.ok(!main(found.html).includes('data-dd="type"'));
+    assert.ok(main(found.html).includes('data-dd="type"'));
     assert.equal(count((await s.page("/ui/knowledge/attic?q=vector")).html), "0 results in attic");
     assert.equal(
       count((await s.page("/ui/knowledge?q=vector")).html),

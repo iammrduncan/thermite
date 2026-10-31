@@ -162,7 +162,7 @@ export const USAGE = `usage: thermite <command> [options]
                                       one's head, commits and kit.json's name and target
   kb search [WORDS...] [--query Q ...] [--mode words|exact] [--like ADDRESS] [--seen ADDRESS ...]
          [--collection C ...] [--kind K ...] [--outcome O ...] [--run R ...] [--slot S ...]
-         [--offset N] [--limit N] --control URL --token-file F
+         [--type T ...] [--as RUN] [--offset N] [--limit N] --control URL --token-file F
                                       search Thermite's knowledge base (owner's token): items with
                                       any of the words, best first, each with its id, address,
                                       slot, outcome, an excerpt, why it matched, its passage in a
@@ -171,8 +171,10 @@ export const USAGE = `usage: thermite <command> [options]
                                       items hold each word; no words: the newest. --query adds a
                                       search, fused with the words; --mode exact takes FTS5's
                                       syntax; --like finds more like an item; --seen leaves items
-                                      out; --collection, --kind, --outcome, --run and --slot keep
-                                      only those. It prints JSON
+                                      out; --collection, --kind, --outcome, --run, --slot and
+                                      --type (record, blurb or file) keep only those. --as RUN
+                                      searches as that run's agents do: their kb_search's answer,
+                                      from the run's own scope, with that scope. It prints JSON
   kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
                                       one item of the knowledge base, by its address
                                       (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,

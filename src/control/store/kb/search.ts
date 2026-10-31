@@ -52,6 +52,8 @@ export interface KbFindOptions {
   runs?: readonly string[] | undefined;
   slots?: readonly string[] | undefined;
   collections?: readonly string[] | undefined;
+  /** Only items of these types: record, blurb or file (core/kb.ts, kbItemType). */
+  types?: readonly string[] | undefined;
   /** Items left out, by id: those the caller has seen already. */
   seen?: readonly number[] | undefined;
   offset?: number | undefined;
@@ -124,6 +126,10 @@ const SUGGESTED_WORDS_MAX = 3;
 /** How many runs and slots the counts name at most: the rest are summed under "other". */
 const COUNTED_MAX = 20;
 
+/** An item's type in SQL on `i`, as kbItemType (core/kb.ts) says it. */
+const ITEM_TYPE =
+  "(case when i.file_sha256 is not null then 'file' when i.slot = 'records' then 'record' else 'blurb' end)";
+
 const marks = (n: number) => Array.from({ length: n }, () => "?").join(", ");
 
 /** The SQL that keeps an item of table `i` within `where`, with its values. */
@@ -150,6 +156,10 @@ function kept(o: KbFindOptions): ScopeSql {
   keep("run", o.runs);
   keep("slot", o.slots);
   keep("campaign", o.collections);
+  if (o.types?.length) {
+    parts.push(`${ITEM_TYPE} in (${marks(o.types.length)})`);
+    args.push(...o.types);
+  }
   keep("id", [...(o.seen ?? []), ...(o.like ? [o.like.id] : [])], true);
   return { sql: parts.map((s) => ` and ${s}`).join(""), args };
 }
@@ -307,7 +317,8 @@ export function findItems(
          where kb_words match ? and ${w.sql} group by 1, 2, 3, 4, 5`,
       )
       .all(all, ...w.args) as Record<string, unknown>[];
-    const left = o.seen?.length || o.like || o.sub?.length;
+    // The counts' groups know no type: a search that keeps some types counts its items.
+    const left = o.seen?.length || o.like || o.sub?.length || o.types?.length;
     const matched = left
       ? itemsMatching(db, all, scope)
       : groups.filter((r) => passes(o, r)).reduce((s, r) => s + Number(r.n), 0);

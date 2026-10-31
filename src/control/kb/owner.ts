@@ -10,7 +10,7 @@ import {
   kbSearchShape,
 } from "../../core/link/kb.ts";
 import type { ControlStore } from "../store/index.ts";
-import { foundOf, hitOf, kbFindOf } from "./asks.ts";
+import { answerKbAsk, foundOf, hitOf, kbFindOf } from "./asks.ts";
 
 /**
  * The owner's search of the knowledge base (goal 175), the same on REST (`GET /v1/kb/search`), MCP
@@ -50,6 +50,9 @@ export const kbSearchFields = {
     `Only experiments and attempts that ended so: ${KB_OUTCOMES.join(", ")}`,
   ),
   runs: kbSearchShape.runs.describe("Only these runs' items"),
+  types: kbSearchShape.types.describe(
+    "Only items of these types: record (Thermite's own records of a run), blurb (a text an agent or the owner wrote) or file",
+  ),
   slots: kbSearchShape.slots.describe(
     "Only these slots' items: records (Thermite's own records of a run), planner, worker-<lane>, teacher, merged-by, auditor, review-panel, synthesizer, final-writer",
   ),
@@ -63,12 +66,37 @@ export const kbSearchFields = {
     .max(KB_SEARCH_MAX)
     .optional()
     .describe(`How many hits, 1 to ${KB_SEARCH_MAX} (default ${KB_SEARCH_DEFAULT})`),
+  as: z
+    .string()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      "A run control assigned: search as its agents do. The answer is the one their kb_search gets, from the run's own scope (its collection, or its own run when it started fresh, and the grants it includes), with that scope; collections, runs and slots only narrow it",
+    ),
 };
 export const KbSearchQuery = z.strictObject(kbSearchFields);
 export type KbSearchQuery = z.infer<typeof KbSearchQuery>;
 
+/**
+ * The owner's search as one run's agents search: the answer their kb_search gets, from the code
+ * that answers their rig's ask (asks.ts), with the run and its rig. Undefined fields are left out,
+ * as an ask leaves them.
+ */
+export function searchAsRun(store: ControlStore, run: string, s: Omit<KbSearchQuery, "as">) {
+  const rig = store.runRegistry.assigned(run)?.rig;
+  if (!rig) return { error: `control assigned no run ${run}: no agents search as it` } as const;
+  const ask = Object.fromEntries(Object.entries({ ...s, run }).filter(([, v]) => v !== undefined));
+  const a = answerKbAsk(store, rig, "search", ask);
+  if ("refused" in a) return { error: a.refused } as const;
+  if (!("hits" in a)) return { error: "the run's search gave no hits" } as const;
+  return { as: run, rig, ...a };
+}
+
 /** The owner's search: a page of hits, best first, and what the search says beside them. */
-export function ownerKbSearch(store: ControlStore, s: KbSearchQuery) {
+export function ownerKbSearch(store: ControlStore, query: KbSearchQuery) {
+  const { as, ...s } = query;
+  if (as) return searchAsRun(store, as, s);
   const kb = store.kb();
   const collections = s.collections?.length
     ? s.collections

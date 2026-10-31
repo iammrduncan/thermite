@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { RIG_ID } from "../ids.ts";
-import { KbAddress, KbItemFile, KbKind, KbLinkRel, KbOutcome, KbSlot } from "../kb.ts";
+import {
+  KB_ITEM_TYPES,
+  KbAddress,
+  KbItemFile,
+  KbKind,
+  KbLinkRel,
+  KbOutcome,
+  KbSlot,
+} from "../kb.ts";
 
 /**
  * A search or a read of Thermite's knowledge base, asked of control for an agent's run (goal 175).
@@ -77,6 +85,7 @@ export const kbSearchShape = {
   runs: Names.optional(),
   slots: z.array(KbSlot).max(KB_FILTER_MAX).optional(),
   collections: Names.optional(),
+  types: z.array(z.enum(KB_ITEM_TYPES)).max(KB_ITEM_TYPES.length).optional(),
   offset: z.number().int().min(0).max(KB_OFFSET_MAX).optional(),
   limit: z.number().int().min(1).max(KB_SEARCH_MAX).optional(),
 };

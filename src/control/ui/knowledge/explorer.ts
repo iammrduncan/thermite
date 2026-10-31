@@ -33,10 +33,26 @@ export interface ExplorerQuery {
   sort: KbListSort | undefined;
   order: "asc" | "desc" | undefined;
   offset: number;
+  /** Where a search looks: the open folder (the default), or everything. */
+  scope?: "folder" | "everything" | undefined;
+  /** Search as this run's agents do (its kb_search); none: as the owner. */
+  as?: string | undefined;
   /** The item in the preview pane, by its address, and its version (none: its newest). */
   item?: string | undefined;
   version?: number | undefined;
 }
+
+/** An address that asks for nothing: the open folder's list, as it comes. */
+export const EMPTY_QUERY: ExplorerQuery = {
+  q: "",
+  kinds: [],
+  outcomes: [],
+  types: [],
+  slots: [],
+  sort: undefined,
+  order: undefined,
+  offset: 0,
+};
 
 /** One hit of a search, as the owner's search gives it. */
 export interface ExplorerHit {
@@ -47,6 +63,8 @@ export interface ExplorerHit {
   slot: string;
   at: string;
   excerpt: string;
+  /** Why it matched, in words (the words search's own: which words, in its title, text or context). */
+  why?: string | undefined;
   file: { bytes: number } | null;
   /** Why its evidence was withdrawn; none when it stands, or a search did not say. */
   withdrawn?: string | null | undefined;
@@ -58,7 +76,15 @@ export interface ExplorerSearch {
   next_offset: number | null;
   counts: Pick<KbCounts, "kind" | "outcome" | "slot">;
   hits: ExplorerHit[];
+  /** For each word no item holds: words close to it that some do. */
+  did_you_mean?: { word: string; try: { word: string; items: number }[] }[] | undefined;
   error?: string | undefined;
+}
+
+/** A run the search can be made as: a running run, by its name, with its collection. */
+export interface ExplorerRun {
+  run: string;
+  collection: string;
 }
 
 /** The contents' facts: the open folder, and its list or its search. */
@@ -143,6 +169,8 @@ const values = (q: ExplorerQuery, f: Facet): readonly string[] =>
 export function explorerHref(path: string, q: ExplorerQuery): string {
   const p = new URLSearchParams();
   if (q.q.trim()) p.set("q", q.q);
+  if (q.scope === "everything") p.set("scope", "everything");
+  if (q.as) p.set("as", q.as);
   for (const f of FACETS) if (values(q, f).length) p.set(f, values(q, f).join(","));
   if (q.sort) p.set("sort", q.sort);
   if (q.order) p.set("order", q.order);
@@ -176,16 +204,30 @@ export function crumbsHtml(parts: { path: string; name: string }[], current: str
     .join("")}</nav>`;
 }
 
-/** The toolbar's search: one line, which searches the open folder; the filters stay. */
-function searchHtml(folder: string, q: ExplorerQuery): string {
-  const kept = (["kind", "outcome", "slot"] as const)
-    .filter((f) => values(q, f).length)
+const SCOPE_TIP =
+  "This folder: the open collection, run or slot, and what is under it. Everything: every collection, or, searching as a run, all that the run reads.";
+const AS_TIP =
+  "You: every collection, as the owner reads them. A running run: what its agents' kb_search gives, from the run's own scope (its collection, or its own run when it started fresh, and the grants it includes), the same answer, in the same order.";
+
+/**
+ * The toolbar's search: one line, which searches the open folder or everything, as the owner or as
+ * a running run's agents; the filters stay.
+ */
+function searchHtml(folder: string, q: ExplorerQuery, runs: readonly ExplorerRun[]): string {
+  const kept = FACETS.filter((f) => values(q, f).length)
     .map((f) => `<input type="hidden" name="${f}" value="${esc(values(q, f).join(","))}">`)
     .join("");
-  const clear = q.q.trim()
-    ? `<a class="kx-qx" href="${esc(explorerHref(folder, { ...q, q: "", offset: 0 }))}" aria-label="Clear the search">${icon.x}</a>`
+  const searching = q.q.trim() || q.as;
+  const clear = searching
+    ? `<a class="kx-qx" href="${esc(explorerHref(folder, { ...q, q: "", as: undefined, scope: undefined, offset: 0 }))}" aria-label="Clear the search">${icon.x}</a>`
     : "";
-  return `<form class="kx-search" role="search" method="get" action="${esc(knowledgeHref(folder))}">${icon.search}<input type="search" name="q" value="${esc(q.q)}" placeholder="Search" aria-label="Search this folder" maxlength="300" autocomplete="off">${kept}${clear}</form>`;
+  const opt = (v: string, label: string, on: boolean) =>
+    `<option value="${esc(v)}"${on ? " selected" : ""}>${esc(label)}</option>`;
+  const everything = q.scope === "everything";
+  const scope = `<label class="kx-scope">${infoLabel("In", SCOPE_TIP)}<select name="scope" aria-label="Where to search">${opt("folder", "This folder", !everything)}${opt("everything", "Everything", everything)}</select></label>`;
+  const listed = runs.some((r) => r.run === q.as);
+  const as = `<label class="kx-as">${infoLabel("As", AS_TIP)}<select name="as" aria-label="Search as">${opt("", "you", !q.as)}${runs.map((r) => opt(r.run, `${r.run} (${r.collection})`, r.run === q.as)).join("")}${q.as && !listed ? opt(q.as, `${q.as} (not running)`, true) : ""}</select></label>`;
+  return `<form class="kx-search" role="search" method="get" action="${esc(knowledgeHref(folder))}"><span class="kx-field">${icon.search}<input type="search" name="q" value="${esc(q.q)}" placeholder="Search" aria-label="Search" maxlength="300" autocomplete="off">${clear}${scope}</span>${as}${kept}<noscript><button class="sm">Search</button></noscript></form>`;
 }
 
 /** The page around its main part: the toolbar, the tree, and the main part. */
@@ -199,9 +241,11 @@ export function explorerFrame(o: {
   main: string;
   /** The preview pane, on the right of the table (item.ts). */
   pane?: string | undefined;
+  /** The running runs the search can be made as. */
+  runs?: readonly ExplorerRun[] | undefined;
 }): string {
   return `<div class="kx" data-folders="closed">
-<div class="kx-bar">${o.crumbs}${searchHtml(o.folder, o.query)}</div>
+<div class="kx-bar">${o.crumbs}${searchHtml(o.folder, o.query, o.runs ?? [])}</div>
 <div class="kx-body">${treeHtml(o.collections, o.kids, o.current)}<section class="kx-main" aria-label="Contents">${o.main}</section>${o.pane ?? ""}</div>
 </div><script src="/ui/assets/knowledge.js" defer></script>`;
 }
@@ -210,7 +254,7 @@ export function explorerFrame(o: {
 function facetHtml(
   p: ExplorerPage,
   f: Facet,
-  options: { value: string; label: string; n: number }[],
+  options: { value: string; label: string; n?: number | undefined }[],
 ): string {
   const picked = values(p.query, f);
   const clear = picked.length
@@ -219,20 +263,28 @@ function facetHtml(
   const rows = options
     .map(
       (o) =>
-        `<label class="kx-opt${o.n ? "" : " zero"}"><input type="checkbox" name="${f}" value="${esc(o.value)}"${picked.includes(o.value) ? " checked" : ""}><span class="${f === "outcome" ? `chip ${OUTCOME_TONE[o.value] ?? ""}` : "lbl"}">${esc(o.label)}</span><span class="n">${fmtInt(o.n)}</span></label>`,
+        `<label class="kx-opt${o.n === 0 ? " zero" : ""}"><input type="checkbox" name="${f}" value="${esc(o.value)}"${picked.includes(o.value) ? " checked" : ""}><span class="${f === "outcome" ? `chip ${OUTCOME_TONE[o.value] ?? ""}` : "lbl"}">${esc(o.label)}</span><span class="n">${o.n === undefined ? "" : fmtInt(o.n)}</span></label>`,
     )
     .join("");
   return `<details class="kx-dd" data-dd="${f}"><summary class="kx-ddb${picked.length ? " on" : ""}">${esc(FACET_LABEL[f])}${picked.length ? `<span class="kx-badge">${picked.length}</span>` : ""}${icon.down}</summary><div class="menu-pop kx-pop" role="group" aria-label="Filter by ${esc(FACET_LABEL[f].toLowerCase())}"><div class="kx-pophead">${infoLabel(FACET_LABEL[f], FACET_TIP[f])}${clear}</div>${rows || `<div class="muted small">None here</div>`}<noscript><button class="sm">Apply</button></noscript></div></details>`;
 }
 
 /** Each filter's values and counts, picked ones too: the list's, or where a search's words land. */
-function facetOptions(p: ExplorerPage, f: Facet): { value: string; label: string; n: number }[] {
+function facetOptions(
+  p: ExplorerPage,
+  f: Facet,
+): { value: string; label: string; n?: number | undefined }[] {
   const counts: Record<string, number> =
     (p.search ? p.search.counts[f as "kind" | "outcome" | "slot"] : p.list?.counts[f]) ?? {};
   const picked = values(p.query, f);
   if (f === "outcome") return KB_OUTCOMES.map((v) => ({ value: v, label: v, n: counts[v] ?? 0 }));
+  // A search counts no types: its Type filter shows none.
   if (f === "type")
-    return KB_ITEM_TYPES.map((v) => ({ value: v, label: TYPE_WORD[v], n: counts[v] ?? 0 }));
+    return KB_ITEM_TYPES.map((v) => ({
+      value: v,
+      label: TYPE_WORD[v],
+      n: p.search ? undefined : (counts[v] ?? 0),
+    }));
   const names = [...new Set([...Object.keys(counts), ...picked])].filter((v) => v !== "other");
   const sorted =
     f === "slot"
@@ -248,8 +300,7 @@ function facetOptions(p: ExplorerPage, f: Facet): { value: string; label: string
 /** The row of filters: Folders (at phone width), the dropdowns, the picks as chips, the count. */
 function filterRow(p: ExplorerPage, count: string): string {
   const q = p.query;
-  // A search keeps kinds, outcomes and slots; a type is the list's alone.
-  const shown = FACETS.filter((f) => !(p.search && f === "type"));
+  const shown = FACETS;
   const chips = shown
     .flatMap((f) =>
       values(q, f).map((v) => {
@@ -272,8 +323,13 @@ function filterRow(p: ExplorerPage, count: string): string {
     q.q.trim() ? `<input type="hidden" name="q" value="${esc(q.q)}">` : "",
     q.sort ? `<input type="hidden" name="sort" value="${esc(q.sort)}">` : "",
     q.order ? `<input type="hidden" name="order" value="${esc(q.order)}">` : "",
+    q.scope === "everything" ? `<input type="hidden" name="scope" value="everything">` : "",
+    q.as ? `<input type="hidden" name="as" value="${esc(q.as)}">` : "",
   ].join("");
-  return `<form class="kx-filters" method="get" action="${esc(knowledgeHref(p.place.path))}">${keep}<button type="button" class="kx-foldbtn" aria-controls="kx-tree" aria-expanded="false">${icon.folder}<span>Folders</span>${icon.down}</button><button type="button" class="kx-infobtn" aria-controls="kx-prev" aria-expanded="false">${icon.file}<span>Info</span></button>${shown.map((f) => facetHtml(p, f, facetOptions(p, f))).join("")}${chips}${any ? `<a class="kx-clearall" href="${esc(explorerHref(p.place.path, none))}">Clear</a>` : ""}<span class="kx-count" role="status">${esc(count)}</span></form>`;
+  const best = p.search
+    ? `<span class="kx-best">${infoLabel("Best match", "A search lists the best match first: an item with more of the words, and rarer ones, comes first, and a word in its title counts most. The columns sort a folder's list, not a search.")}</span>`
+    : "";
+  return `<form class="kx-filters" method="get" action="${esc(knowledgeHref(p.place.path))}">${keep}<button type="button" class="kx-foldbtn" aria-controls="kx-tree" aria-expanded="false">${icon.folder}<span>Folders</span>${icon.down}</button><button type="button" class="kx-infobtn" aria-controls="kx-prev" aria-expanded="false">${icon.file}<span>Info</span></button>${shown.map((f) => facetHtml(p, f, facetOptions(p, f))).join("")}${chips}${any ? `<a class="kx-clearall" href="${esc(explorerHref(p.place.path, none))}">Clear</a>` : ""}${best}<span class="kx-count" role="status">${esc(count)}</span></form>`;
 }
 
 /** A column's header: a link that sorts by it, with ▲ or ▼ on the column it sorts by now. */
@@ -319,7 +375,7 @@ function itemRow(x: ExplorerHit, p: ExplorerPage): string {
   const wd = x.withdrawn
     ? `<span class="kx-wd" role="img" aria-label="Evidence withdrawn" title="${esc(x.withdrawn)}">${icon.warn}</span>`
     : "";
-  return `<tr data-item-href="${href}"${p.query.item === x.address ? ` class="on"` : ""}><td class="c-name"><span class="kx-cell" title="${TYPE_WORD[type]}">${TYPE_ICON[type]}<span class="kx-title"><span class="kx-line"><a href="${href}" data-item>${esc(x.title || x.address)}</a>${wd}</span><span class="kx-addr">${esc(x.address)}</span>${x.excerpt ? `<span class="kx-snip">${markedExcerpt(x.excerpt)}</span>` : ""}</span></span></td><td class="c-kind">${esc(x.kind)}</td><td class="c-out">${out}</td><td class="c-writer">${esc(x.slot)}</td><td class="c-mod">${when(x.at, p.now)}</td><td class="c-size num">${x.file ? esc(sizeWords(x.file.bytes)) : ""}</td></tr>`;
+  return `<tr data-item-href="${href}"${p.query.item === x.address ? ` class="on"` : ""}><td class="c-name"><span class="kx-cell" title="${TYPE_WORD[type]}">${TYPE_ICON[type]}<span class="kx-title"><span class="kx-line"><a href="${href}" data-item>${esc(x.title || x.address)}</a>${wd}</span><span class="kx-addr">${esc(x.address)}</span>${x.excerpt ? `<span class="kx-snip">${markedExcerpt(x.excerpt)}</span>` : ""}${x.why ? `<span class="kx-why">${esc(x.why)}</span>` : ""}</span></span></td><td class="c-kind">${esc(x.kind)}</td><td class="c-out">${out}</td><td class="c-writer">${esc(x.slot)}</td><td class="c-mod">${when(x.at, p.now)}</td><td class="c-size num">${x.file ? esc(sizeWords(x.file.bytes)) : ""}</td></tr>`;
 }
 
 const plural = (n: number, w: [string, string]) =>
@@ -341,7 +397,8 @@ export function contentsHtml(p: ExplorerPage): string {
   if (p.search) {
     matched = p.search.matched;
     next = p.search.next_offset;
-    count = `${fmtInt(matched)} ${matched === 1 ? "result" : "results"} in ${folderWords(p.place)}`;
+    const where = q.scope === "everything" ? "everything" : folderWords(p.place);
+    count = `${fmtInt(matched)} ${matched === 1 ? "result" : "results"} in ${where}${q.as ? ` as ${q.as}` : ""}`;
     rows = p.search.hits.map((h) => itemRow(h, p)).join("");
     empty = p.search.error ?? "No items match.";
   } else if (folders && p.list) {
@@ -360,7 +417,24 @@ export function contentsHtml(p: ExplorerPage): string {
   }
   const sortable = !p.search;
   const table = `<div class="kx-scroll"><table class="kx-table"><thead><tr>${head(p, "name", "c-name", sortable)}${head(p, "kind", "c-kind", sortable && !folders)}${head(p, "outcome", "c-out", sortable && !folders)}${head(p, "writer", "c-writer", sortable && !folders)}${head(p, "modified", "c-mod", sortable)}${head(p, "size", "c-size num", sortable && !folders)}</tr></thead><tbody>${rows || `<tr><td colspan="6" class="empty">${esc(empty)}</td></tr>`}</tbody></table>${folders ? "" : pager(p, matched, next)}</div>`;
-  return `${filterRow(p, count)}${table}`;
+  return `${filterRow(p, count)}${p.search ? didYouMean(p) : ""}${table}`;
+}
+
+/**
+ * "Did you mean …?": the search's words with each word no item holds put as the closest word
+ * some do, one click away; none when every word is held.
+ */
+function didYouMean(p: ExplorerPage): string {
+  const swaps = new Map(
+    (p.search?.did_you_mean ?? []).flatMap((d) =>
+      d.try[0] ? [[d.word.toLowerCase(), d.try[0].word] as const] : [],
+    ),
+  );
+  if (!swaps.size || !p.query.q.trim()) return "";
+  const q = p.query.q.replace(/[\p{L}\p{N}_]+/gu, (w) => swaps.get(w.toLowerCase()) ?? w);
+  if (q === p.query.q) return "";
+  const href = explorerHref(p.place.path, { ...p.query, q, offset: 0, item: undefined });
+  return `<div class="kx-dym">Did you mean <a href="${esc(href)}">${esc(q)}</a>?</div>`;
 }
 
 /** The pages of a long list: where this one is, its size, and the pages before and after it. */

@@ -9,6 +9,7 @@ export { KNOWLEDGE_JS } from "./client.ts";
 export {
   contentsHtml,
   crumbsHtml,
+  EMPTY_QUERY,
   type ExplorerHit,
   type ExplorerPage,
   type ExplorerQuery,

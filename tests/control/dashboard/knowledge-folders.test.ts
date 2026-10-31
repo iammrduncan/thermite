@@ -68,7 +68,7 @@ describe("a folder's info pane", () => {
     );
     assert.match(
       gs1,
-      /<button type="button" class="sm" disabled>[\s\S]*?<span>Search as this run<\/span><\/button><span class="lb"><i class="ii" tabindex="0" data-tip="/,
+      /<a class="btn sm" href="\/ui\/knowledge\/gemv\/gs-1\?scope=everything&amp;as=gs-1">[\s\S]*?<span>Search as this run<\/span><\/a>/,
     );
     assert.match(
       await s.pane("/ui/knowledge/gemv/gs-2"),
