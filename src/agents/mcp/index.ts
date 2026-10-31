@@ -9,6 +9,7 @@ export {
   claudeMcpConfig,
   gatewayUrl,
   type McpAccess,
+  type McpForAgent,
   mcpAgentTools,
   mcpLine,
   opencodeMcp,

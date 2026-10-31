@@ -1,5 +1,7 @@
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import type { ReplyNow, TrialProgress } from "../../agents/live-session.ts";
 import { modelConfigFromEnv, UsageSender } from "../../agents/model/index.ts";
+import { startView, VIEW_FLAG } from "../../agents/pi-view/index.ts";
 import { type Prompt, promptRecord } from "../../agents/prompt.ts";
 import { KB_SERVER, type KbCall } from "../../agents/tools/index.ts";
 import { type McpCallResult, resultText } from "../../common/mcp-client.ts";
@@ -8,10 +10,8 @@ import type { McpToolInfo } from "../../core/mcp.ts";
 import type { Runner, RunOutcome, RunRequest } from "../broker/index.ts";
 import { KEPT_MAX } from "../compactions.ts";
 import { apiCall } from "./api-call.ts";
-import type { ReplyNow, TrialProgress } from "./live-session.ts";
-import { endWords, startView, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
 import { runResearchTrial } from "./research/index.ts";
-import type { AnyTrial } from "./spawn.ts";
+import { type AnyTrial, VIEW_RESULT } from "./spawn.ts";
 import {
   type CompactionLink,
   type McpForAgent,
@@ -201,7 +201,7 @@ async function main(): Promise<void> {
       modelUsage: usage.add,
       waiting,
       sent,
-      view: view?.trial,
+      view: view?.inputs,
     });
     return give(await withUsage(result, usage));
   }
@@ -239,7 +239,7 @@ async function main(): Promise<void> {
     modelUsage: usage.add,
     waiting,
     sent,
-    view: view?.trial,
+    view: view?.inputs,
   });
   return give(await withUsage(result, usage));
 }
@@ -252,6 +252,12 @@ async function main(): Promise<void> {
 function leaveResult(json: string): void {
   writeFileSync(VIEW_RESULT, json);
   chmodSync(VIEW_RESULT, 0o644);
+}
+
+/** The trial's end, in its Pi view's words. */
+function endWords(r: TrialResult): string {
+  if (r.submitted) return `submitted ${r.submitted.attempt} (${r.submitted.lifecycle})`;
+  return `${r.stopped.replace("_", " ")}${r.error ? `: ${r.error.slice(0, 200)}` : ""}`;
 }
 
 /** The trial's result, once its usage is handed over, with the records the harness did not take. */

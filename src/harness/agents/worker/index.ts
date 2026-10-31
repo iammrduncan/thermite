@@ -1,6 +1,9 @@
-import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent } from "@earendil-works/pi-agent-core";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
+import { lastAssistant, linkSession, steerTurn } from "../../../agents/live-session.ts";
+import type { McpForAgent } from "../../../agents/mcp/index.ts";
 import { buildModel, PiMeter } from "../../../agents/model/index.ts";
+import { swappableTools } from "../../../agents/pi-view/index.ts";
 import { messageText, type Prompt, systemText } from "../../../agents/prompt.ts";
 import {
   renderCompacted,
@@ -13,7 +16,6 @@ import {
 import { NoteLimit } from "../../../agents/tools/index.ts";
 import { errorText } from "../../../common/errors.ts";
 import { laneLimits } from "../../../core/contract.ts";
-import { linkSession, steerTurn } from "../live-session.ts";
 import {
   classifyProviderError,
   type FailureCount,
@@ -22,28 +24,24 @@ import {
 } from "../provider-errors.ts";
 import { guardRepeats } from "../repeats.ts";
 import { TrialClock } from "../trial-clock.ts";
-import { keepGoing, lastAssistant } from "./keep-going.ts";
-import type { McpForAgent, TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
+import { keepGoing } from "./keep-going.ts";
+import type { TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
 import { watchedStream, withoutPastThinking } from "./stream.ts";
 import { trialTools } from "./tools.ts";
 
+export type { McpForAgent } from "../../../agents/mcp/index.ts";
 export {
   type KeepGoingOptions,
   keepGoing,
-  lastAssistant,
   stopNudging,
   type TrialEnd,
 } from "./keep-going.ts";
 export type {
   CompactionLink,
-  McpForAgent,
   ProviderWait,
   SubmitOutcome,
   TrialDeps,
-  TrialLevers,
   TrialSpec,
-  TrialStatus,
-  TrialView,
 } from "./spec.ts";
 export { TrialResult } from "./spec.ts";
 export { watchedStream, withoutPastThinking } from "./stream.ts";
@@ -85,25 +83,6 @@ export function piTrialPrompt(
     fit,
     addition: spec.addition,
   });
-}
-
-/**
- * Lets a trial give its agent new tools while it runs (the owner's /mcp reconnect in its Pi view,
- * goal 169): from the agent's next turn in the run under way, declared to the model as Pi declares
- * a change of tools, and for its later runs. Set up before the agent's first run: Pi reads its
- * next-turn hook when a run starts.
- */
-export function swappableTools(agent: Agent): (tools: AgentTool[]) => void {
-  let next: AgentTool[] | undefined;
-  agent.prepareNextTurnWithContext = (turn) => {
-    const tools = next;
-    next = undefined;
-    return tools ? { context: { ...turn.context, tools } } : undefined;
-  };
-  return (tools) => {
-    agent.state.tools = tools;
-    next = tools;
-  };
 }
 
 export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialResult> {

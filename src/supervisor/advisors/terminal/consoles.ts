@@ -21,7 +21,10 @@ import type { ScreenFrame } from "../../../core/screens.ts";
 export const LAST_SCREENS_KEPT = 20;
 
 export class AdvisorConsoles {
-  private readonly open = new Map<string, { of: AdvisorTerminal; console: TrialConsole }>();
+  private readonly open = new Map<
+    string,
+    { of: AdvisorTerminal; console: TrialConsole; piView: boolean }
+  >();
   private readonly last = new Map<string, ScreenSnapshot>();
   private readonly heard: (() => void)[] = [];
 
@@ -34,10 +37,13 @@ export class AdvisorConsoles {
     for (const f of this.heard) f();
   }
 
-  /** A call started in its terminal: its console, its run and its advisor's name. */
-  set(of: AdvisorTerminal, console: TrialConsole): void {
+  /**
+   * A call started in its terminal: its console, its run and its advisor's name. `piView`: its
+   * screen is an advisor in Pi's view, whose console takes the Pi view's commands.
+   */
+  set(of: AdvisorTerminal, console: TrialConsole, piView = false): void {
     this.last.delete(of.id);
-    this.open.set(of.id, { of, console });
+    this.open.set(of.id, { of, console, piView });
     this.changed();
   }
 
@@ -76,6 +82,7 @@ export class AdvisorConsoles {
           id,
           console: this.open.get(id)?.console,
           last: this.last.get(id),
+          piView: this.open.get(id)?.piView,
           at: new Date().toISOString(),
         }),
       );
@@ -94,7 +101,11 @@ export class AdvisorConsoles {
         new Refusal(`${i.call} is not running in its terminal now: nothing more goes into it`),
       );
     return c.console.input(
-      { ...(i.text !== undefined ? { text: i.text } : { keys: i.keys }), wait: i.wait },
+      {
+        ...(i.text !== undefined ? { text: i.text } : { keys: i.keys }),
+        wait: i.wait,
+        ...(i.follow_up ? { follow_up: true as const } : {}),
+      },
       later,
     );
   }

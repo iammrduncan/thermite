@@ -1,5 +1,4 @@
 import type { z } from "zod";
-import type { Prompt } from "../../../agents/prompt.ts";
 import { renderMergedBy, renderTeacher } from "../../../agents/roles/index.ts";
 import { StructuredDirective } from "../../../core/directives.ts";
 import type { NoteInput } from "../../../core/journal.ts";
@@ -12,6 +11,7 @@ import type {
   AdvisorResult,
   AdvisorTools,
   AdvisorUsage,
+  SentPrompt,
 } from "../call.ts";
 import { type AdvisorsConfig, packageFit } from "../config.ts";
 import { runAdvisor } from "../run.ts";
@@ -62,7 +62,7 @@ export interface TeacherRun {
   /** Each call's model usage in this round, by whose it was (goal 075). */
   usage: ({ agent: AdvisorAgent } & AdvisorUsage)[];
   /** The prompts the round's calls sent (goal 166), for the harness to keep. */
-  sent: Prompt[];
+  sent: SentPrompt[];
   /** The owner's messages the teachers' terminals took inside their turns (goal 169). */
   given: number[];
 }

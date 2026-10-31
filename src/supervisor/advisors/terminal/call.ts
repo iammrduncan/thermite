@@ -63,19 +63,19 @@ export interface AdvisorInTerminal {
 /** The runtimes whose programs run in their own terminal. */
 export type TerminalRuntime = Extract<AdvisorRuntime, { runtime: AdvisorProgramId }>;
 
-/** Whether an advisor's runtime runs in its own terminal on a rig set so (Pi's does not yet). */
+/** Whether an advisor's runtime runs in its program's own terminal on a rig set so (Pi: pi.ts). */
 export const runsInTerminal = (rt: AdvisorRuntime): rt is TerminalRuntime =>
   rt.runtime === "claude-code" || rt.runtime === "codex" || rt.runtime === "opencode";
 
 /** How often the owner's messages for a call are read again from the harness while it runs. */
-const MESSAGES_EVERY_MS = 5_000;
+export const MESSAGES_EVERY_MS = 5_000;
 
 /**
  * The owner's messages for one call in its terminal: those the harness says wait for its role in
  * its run, read again every MESSAGES_EVERY_MS while the call runs, but those its prompt gave. The
  * ones its hook or plugin takes are given, and go with its answer to the harness.
  */
-class CallInbox implements MessageInbox {
+export class CallInbox implements MessageInbox {
   private seen: { id: number; text: string }[] = [];
   readonly taken: number[] = [];
   private timer: NodeJS.Timeout | undefined;
@@ -152,6 +152,10 @@ function modelOf(rt: TerminalRuntime): { model: ModelConfig; key?: string | unde
 /** The supervisor's count of its advisors' calls in their terminals, for their ids. */
 let count = 0;
 
+/** A new call's id for the console and the screens (advisorCallId). */
+export const nextCallId = (advisor: string, run: string): string =>
+  advisorCallId(advisor, run, ++count);
+
 /** One advisor call in its program's own terminal; it answers as runAdvisor's other runtimes do. */
 export async function runInTerminal<S extends z.ZodType>(
   rt: TerminalRuntime,
@@ -163,7 +167,7 @@ export async function runInTerminal<S extends z.ZodType>(
   if (typeof route === "string") return fail(route);
   const { model, key } = route;
   const t = at.terminals;
-  const id = advisorCallId(rt.name, at.run, ++count);
+  const id = nextCallId(rt.name, at.run);
   const fields = { advisor: rt.name, run: at.run, call: id };
   const tools = input.tools;
   const usage: CallUsage[] = [];

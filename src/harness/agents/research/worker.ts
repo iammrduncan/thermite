@@ -1,8 +1,10 @@
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { type TSchema, Type } from "@earendil-works/pi-ai";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
+import { linkSession, type SessionLink } from "../../../agents/live-session.ts";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { buildModel, type ModelConfig, PiMeter } from "../../../agents/model/index.ts";
+import { type RoleView, swappableTools } from "../../../agents/pi-view/index.ts";
 import { messageText, type Prompt, type Section, systemText } from "../../../agents/prompt.ts";
 import {
   renderCompacted,
@@ -26,7 +28,6 @@ import { errorText } from "../../../common/errors.ts";
 import { type LaneLimitValues, laneLimits } from "../../../core/contract.ts";
 import type { OwnerAddition } from "../../../core/role-additions.ts";
 import type { CallUsage } from "../../../core/usage.ts";
-import { linkSession, type SessionLink } from "../live-session.ts";
 import { type FailureCount, failingOf, ProviderWatch } from "../provider-errors.ts";
 import { guardRepeats } from "../repeats.ts";
 import {
@@ -41,20 +42,8 @@ import {
   writeFile,
 } from "../tools/index.ts";
 import { TrialClock } from "../trial-clock.ts";
-import type {
-  CompactionLink,
-  McpForAgent,
-  ProviderWait,
-  TrialResult,
-  TrialView,
-} from "../worker/index.ts";
-import {
-  keepGoing,
-  PI_TRIAL,
-  swappableTools,
-  watchedStream,
-  withoutPastThinking,
-} from "../worker/index.ts";
+import type { CompactionLink, McpForAgent, ProviderWait, TrialResult } from "../worker/index.ts";
+import { keepGoing, PI_TRIAL, watchedStream, withoutPastThinking } from "../worker/index.ts";
 
 /**
  * A research trial in Pi: a fresh agent session with the research tools and file tools over its
@@ -112,7 +101,7 @@ export interface ResearchDeps {
   /** Keeps each later turn the trial sends its worker (goal 166; see TrialDeps). */
   sent?: ((p: Prompt) => void) | undefined;
   /** The trial's Pi view, when its worker draws one in its terminal (goal 169; see TrialDeps). */
-  view?: TrialView | undefined;
+  view?: RoleView | undefined;
 }
 
 const out = (value: unknown) => ({

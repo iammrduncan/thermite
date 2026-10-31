@@ -274,10 +274,17 @@ export function advisorPromptOf(
 export const ADVISOR_OWNER_TURN =
   "A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.";
 
+/** The same in Pi, whose advisor answers with its `answer` tool, before its next model call. */
+export const ADVISOR_OWNER_TURN_PI =
+  "A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others when you call answer.";
+
 /** A later turn in an advisor's call in its program's own terminal (goal 169). */
 export type AdvisorTurn =
-  /** An owner's message that went in inside its turn, through its hook or Thermite's plugin. */
-  | { kind: "owner"; id: number; text: string }
+  /**
+   * An owner's message that went in inside its turn, through its hook, Thermite's plugin or its Pi
+   * view; with no id, words the owner typed into its Pi view's console.
+   */
+  | { kind: "owner"; id?: number | undefined; text: string }
   /** It waited for its usage window to reset; `words`: the limit's. */
   | { kind: "failed"; words: string };
 
@@ -290,12 +297,12 @@ export function renderAdvisorTurn(
   i: AdvisorTurn & { program: string; turn: number },
 ): Prompt {
   const message =
-    i.kind === "owner"
+    i.kind === "owner" && i.id !== undefined
       ? [
           section(
             "owner",
             "owner",
-            `${ADVISOR_OWNER_TURN}\n\n${JSON.stringify({ id: i.id, text: i.text })}`,
+            `${i.program === "pi" ? ADVISOR_OWNER_TURN_PI : ADVISOR_OWNER_TURN}\n\n${JSON.stringify({ id: i.id, text: i.text })}`,
           ),
         ]
       : trialTurnSections(i);

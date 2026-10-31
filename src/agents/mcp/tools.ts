@@ -77,6 +77,14 @@ export function mcpLine(servers: readonly string[] | undefined): string {
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }], details: {} });
 
+/** An agent's MCP tools in Pi: what the gateway listed for it, and a call through the gateway. */
+export interface McpForAgent {
+  tools: McpToolInfo[];
+  /** The servers whose tools could not be listed, and why. */
+  unavailable?: { server: string; why: string }[] | undefined;
+  call(server: string, tool: string, args: Record<string, unknown>): Promise<McpCallResult>;
+}
+
 /**
  * Pi's tools for the MCP tools an agent was given: each named mcp__<server>__<tool>, with the
  * server's own description and input schema, and called through `call`. A failed call is a tool

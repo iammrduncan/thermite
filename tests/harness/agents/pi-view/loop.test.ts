@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { PiConsole, PiView, ViewInputs } from "../../../../src/agents/pi-view/index.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
 import type { McpToolInfo } from "../../../../src/core/mcp.ts";
-import { PiConsole, PiView, ViewInputs } from "../../../../src/harness/agents/pi-view/index.ts";
 import { runResearchTrial } from "../../../../src/harness/agents/research/index.ts";
 import { type McpForAgent, runTrial } from "../../../../src/harness/agents/worker/index.ts";
 import { prepareWorkspace } from "../../../../src/harness/agents/workspace.ts";

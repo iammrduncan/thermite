@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { Terminal } from "../../../../src/agents/terminal/index.ts";
-import { PiConsole } from "../../../../src/harness/agents/pi-view/index.ts";
+import { PiConsole } from "../../../src/agents/pi-view/index.ts";
+import type { Terminal } from "../../../src/agents/terminal/index.ts";
 
 /**
  * The harness's side of a worker's Pi view (goal 169): an input waits until the worker asks for

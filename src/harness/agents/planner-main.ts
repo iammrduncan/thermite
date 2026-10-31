@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
+import type { McpForAgent } from "../../agents/mcp/index.ts";
 import { mcpAgentTools } from "../../agents/mcp/index.ts";
 import { modelConfigFromEnv, UsageSender } from "../../agents/model/index.ts";
+import { startView } from "../../agents/pi-view/index.ts";
 import { type Prompt, promptRecord } from "../../agents/prompt.ts";
 import { KB_SERVER, type KbCall, kbAgentTools } from "../../agents/tools/index.ts";
 import { errorText } from "../../common/errors.ts";
@@ -14,7 +16,6 @@ import { KEEP_TRIAL_PROMPT } from "../../core/api/harness/prompts.ts";
 import type { McpToolInfo } from "../../core/mcp.ts";
 import { KEPT_MAX } from "../compactions.ts";
 import { apiCall } from "./api-call.ts";
-import { startView } from "./pi-view/index.ts";
 import {
   callPlanner,
   PLAN_SPEC,
@@ -25,7 +26,6 @@ import {
   type PlannerViewSpec,
 } from "./planner/index.ts";
 import { RESEARCH_PLAN_SPEC } from "./research/index.ts";
-import type { McpForAgent } from "./worker/index.ts";
 
 /**
  * A planner in Pi in its own process, in its Pi view (goal 169; planner/view.ts starts it): the
@@ -157,7 +157,7 @@ async function main(): Promise<void> {
       usage: usage.add,
       spec: SPECS[file.spec],
       kept,
-      view: view.trial,
+      view: view.inputs,
       // Its lines for Live, and the owner's messages, each read once its agent has it.
       link: {
         live: (entries) => call("POST", "/v1/trial/live", { entries }),

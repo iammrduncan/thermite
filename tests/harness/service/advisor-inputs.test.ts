@@ -157,7 +157,7 @@ describe("the advisors' terminals, as the harness knows them", () => {
     );
   });
 
-  test("an input the supervisor does not take in time, or a follow_up, is refused in words", async () => {
+  test("an input the supervisor does not take in time is refused in words; a follow_up goes on to it", async () => {
     const inputs = new AdvisorInputs({ untakenMs: 50, unansweredMs: 50 });
     const later = () => undefined;
     await assert.rejects(
@@ -169,9 +169,12 @@ describe("the advisors' terminals, as the harness knows them", () => {
     assert.equal(one?.wait, "now");
     await assert.rejects(taken, /did not say in 0 seconds whether it typed it/);
     assert.equal(inputs.outcome({ id: one?.id ?? "", outcome: "typed" }), false, "too late");
-    assert.throws(
-      () => inputs.forward("advisor-a-r-1", { text: "hi", wait: "queue", follow_up: true }, later),
-      /follow_up is for a worker in Pi/,
-    );
+    // The supervisor decides: an advisor in Pi's view takes it, the other programs refuse it.
+    void inputs
+      .forward("advisor-a-r-1", { text: "later", wait: "queue", follow_up: true }, later)
+      .catch(() => undefined);
+    const [follow] = await inputs.take(1000);
+    assert.equal(follow?.follow_up, true);
+    assert.equal(follow?.text, "later");
   });
 });

@@ -5,7 +5,7 @@ import type { Route } from "../route.ts";
 /**
  * The Pi view's console (goal 169; the harness answers in src/harness/api/trials.ts): the owner's
  * input to a worker in Pi (terminal_input), which the harness turns into one call of the Pi view
- * (src/harness/agents/pi-view/commands.ts), and which the worker's own code takes over its trial's
+ * (src/agents/pi-view/commands.ts), and which the worker's own code takes over its trial's
  * routes, with its trial's token, and makes in its trial's loop. Nothing is typed into a terminal:
  * the screen is only drawn. One input at a time: the worker asks for the next, makes its call,
  * and says what became of it.

@@ -2,13 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Agent, AgentEvent } from "@earendil-works/pi-agent-core";
 import xterm from "@xterm/headless";
-import {
-  endWords,
-  mcpWords,
-  PiView,
-  viewText,
-} from "../../../../src/harness/agents/pi-view/index.ts";
-import type { TrialStatus } from "../../../../src/harness/agents/worker/index.ts";
+import { mcpWords, PiView, type ViewCounts, viewText } from "../../../src/agents/pi-view/index.ts";
 
 /**
  * The Pi view's screen (goal 169): a scripted agent's events drawn with pi-tui into a headless
@@ -34,7 +28,7 @@ function agent() {
 }
 
 /** A view drawn into a headless terminal: what was written to it, and its lines. */
-function drawn(counts?: () => TrialStatus) {
+function drawn(counts?: () => ViewCounts) {
   const term = new xterm.Terminal({
     cols: 100,
     rows: 40,
@@ -65,7 +59,7 @@ function drawn(counts?: () => TrialStatus) {
   return { view, emit: a.emit, out, lines };
 }
 
-const status = (more: Partial<TrialStatus> = {}): TrialStatus => ({
+const status = (more: Partial<ViewCounts> = {}): ViewCounts => ({
   turns: 3,
   toolCalls: 5,
   tokensIn: 12_345,
@@ -117,7 +111,7 @@ describe("the Pi view's screen", () => {
     const screen = await v.lines();
     assert.match(screen, /Thermite's view of a worker in Pi · trial t-1/);
     assert.match(screen, /it is not Pi's program/);
-    assert.match(screen, /the trial's first message:\s+You are a worker\.\s+Your brief\./);
+    assert.match(screen, /the first message:\s+You are a worker\.\s+Your brief\./);
     assert.match(screen, /one\s+two\s+three\s+… \(2 more lines\)/, "thinking, folded");
     assert.match(screen, /Plan/);
     assert.match(screen, /• read the kernel|- read the kernel/);
@@ -130,8 +124,8 @@ describe("the Pi view's screen", () => {
       /turn 3 · 5 tool calls · 12,345 tokens in, 678 out ·\s+15 min left/,
       "the status line",
     );
-    v.view.finish(endWords({ stopped: "wall", turns: 3, toolCalls: 5, tokensIn: 1, tokensOut: 1 }));
-    assert.match(await v.lines(), /■ the trial ended: wall/);
+    v.view.finish("wall");
+    assert.match(await v.lines(), /■ ended: wall/);
     v.view.stop();
   });
 

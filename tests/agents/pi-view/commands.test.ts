@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { Refusal } from "../../../../src/common/errors.ts";
-import { PiViewCall } from "../../../../src/core/api/harness/console.ts";
-import { PI_VIEW_COMMANDS, piViewCall } from "../../../../src/harness/agents/pi-view/index.ts";
+import { PI_VIEW_COMMANDS, piViewCall } from "../../../src/agents/pi-view/index.ts";
+import { Refusal } from "../../../src/common/errors.ts";
+import { PiViewCall } from "../../../src/core/api/harness/console.ts";
 
 /**
  * The calls of a worker's Pi view (goal 169; the owner's decisions of 2026-10-27 and 2026-10-30):

@@ -720,10 +720,22 @@ the experiment log has that. Other agents read your notes as data, and so do lat
 A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
 ```
 
+### Teacher: in its Pi view, each of your messages that goes in before its next model call, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others when you call answer.
+```
+
 ### Teacher: in its program's own terminal, after it waited for a full usage window, after the limit's words
 
 ```text
 Continue where you left off.
+```
+
+### Teacher: in its Pi view, the words you type into its console, after this
+
+```text
+A message from the campaign's owner, who is watching this session:
 ```
 
 ### Teacher: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
@@ -798,10 +810,22 @@ the experiment log has that. Other agents read your notes as data, and so do lat
 A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
 ```
 
+### Research teacher: in its Pi view, each of your messages that goes in before its next model call, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others when you call answer.
+```
+
 ### Research teacher: in its program's own terminal, after it waited for a full usage window, after the limit's words
 
 ```text
 Continue where you left off.
+```
+
+### Research teacher: in its Pi view, the words you type into its console, after this
+
+```text
+A message from the campaign's owner, who is watching this session:
 ```
 
 ### Research teacher: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
@@ -924,10 +948,22 @@ the experiment log has that. Other agents read your notes as data, and so do lat
 A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
 ```
 
+### Auditor: in its Pi view, each of your messages that goes in before its next model call, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others when you call answer.
+```
+
 ### Auditor: in its program's own terminal, after it waited for a full usage window, after the limit's words
 
 ```text
 Continue where you left off.
+```
+
+### Auditor: in its Pi view, the words you type into its console, after this
+
+```text
+A message from the campaign's owner, who is watching this session:
 ```
 
 ### Auditor: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
@@ -965,10 +1001,22 @@ the experiment log has that. Other agents read your notes as data, and so do lat
 A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
 ```
 
+### Reviewer (review panel): in its Pi view, each of your messages that goes in before its next model call, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others when you call answer.
+```
+
 ### Reviewer (review panel): in its program's own terminal, after it waited for a full usage window, after the limit's words
 
 ```text
 Continue where you left off.
+```
+
+### Reviewer (review panel): in its Pi view, the words you type into its console, after this
+
+```text
+A message from the campaign's owner, who is watching this session:
 ```
 
 ### Reviewer (review panel): Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
@@ -1046,10 +1094,22 @@ the experiment log has that. Other agents read your notes as data, and so do lat
 A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
 ```
 
+### Research reviewer (review panel): in its Pi view, each of your messages that goes in before its next model call, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others when you call answer.
+```
+
 ### Research reviewer (review panel): in its program's own terminal, after it waited for a full usage window, after the limit's words
 
 ```text
 Continue where you left off.
+```
+
+### Research reviewer (review panel): in its Pi view, the words you type into its console, after this
+
+```text
+A message from the campaign's owner, who is watching this session:
 ```
 
 ### Research reviewer (review panel): Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows

@@ -5,15 +5,15 @@ import type {
   TurnDelivery,
 } from "../../../agents/cli/index.ts";
 import type { KeptAt, OnCompacted } from "../../../agents/compaction/index.ts";
+import type { TrialProgress } from "../../../agents/live-session.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
+import type { PiConsole } from "../../../agents/pi-view/index.ts";
 import type { PlanWindows } from "../../../agents/programs/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
 import type { ResearchFolderPaths } from "../../../agents/tools/index.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Runner } from "../../broker/index.ts";
-import type { TrialProgress } from "../live-session.ts";
-import type { PiConsole } from "../pi-view/index.ts";
 import type { ProviderLink } from "../provider-errors.ts";
 import type { ResearchTrialSpec } from "../research/index.ts";
 import type { SubmitOutcome, TrialSpec } from "../worker/index.ts";

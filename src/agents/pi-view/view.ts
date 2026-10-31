@@ -8,15 +8,15 @@ import {
   Text,
   TuiMainScreen,
 } from "@earendil-works/pi-tui";
-import { summarizeArgs } from "../../../core/live.ts";
-import type { ProviderWait, TrialStatus } from "../worker/index.ts";
+import { summarizeArgs } from "../../core/live.ts";
+import type { ViewCounts, ViewWait } from "./levers.ts";
 import { OutputTerminal } from "./terminal.ts";
 import { headOf, viewText } from "./text.ts";
 
 /**
- * The Pi view's screen (goal 169): Thermite's drawing of a worker's own Pi session with pi-tui,
- * Pi's terminal library, in the worker's process, on the terminal the terminal host holds. It
- * draws what the trial's own events say (the agent's replies, its thinking, each tool call with
+ * The Pi view's screen (goal 169): Thermite's drawing of a role's own Pi session with pi-tui,
+ * Pi's terminal library, in the role's process (a worker's, a planner's or an advisor's), on the
+ * terminal the terminal host holds. It draws what the call's own events say (the agent's replies, its thinking, each tool call with
  * the head of its result, each later turn, the owner's input) and a status line from the trial's
  * counts, and nothing it draws decides anything: a screen that fails to draw stops drawing, and
  * the trial goes on. No images, no links (OSC 8) and no clipboard writes: the view turns pi-tui's
@@ -88,7 +88,7 @@ export class PiView {
   private readonly screen: SafeScreen;
   private readonly entries = new Container();
   private readonly status = new Text("", 1, 0);
-  private counts: (() => TrialStatus) | undefined;
+  private counts: (() => ViewCounts) | undefined;
   /** Characters of the reply the model is streaming, while it streams one. */
   private replying: number | undefined;
   private waitUntil: string | undefined;
@@ -103,7 +103,7 @@ export class PiView {
     rows: number;
     /** The view's first line: what it is a view of. */
     heading: string;
-    /** Where pi-tui writes the log of a failed drawing: the worker's own folder. */
+    /** Where pi-tui writes the log of a failed drawing: the process's own folder. */
     logDir?: string | undefined;
   }) {
     setCapabilities({ images: null, trueColor: false, hyperlinks: false });
@@ -132,8 +132,8 @@ export class PiView {
     });
   }
 
-  /** The trial's agent, whose events the view draws, and its counts for the status line. */
-  attach(agent: Agent, counts: () => TrialStatus): void {
+  /** The call's agent, whose events the view draws, and its counts for the status line. */
+  attach(agent: Agent, counts: () => ViewCounts): void {
     this.counts = counts;
     agent.subscribe((e) => this.guard(() => this.on(e)));
     this.refresh();
@@ -160,7 +160,7 @@ export class PiView {
   }
 
   /** A wait for the provider, until its time. */
-  waiting(w: ProviderWait): void {
+  waiting(w: ViewWait): void {
     this.guard(() => {
       this.waitUntil = w.until;
       this.add(
@@ -174,7 +174,7 @@ export class PiView {
     });
   }
 
-  /** The trial's end, in words. */
+  /** The call's end, in words. */
   finish(words: string): void {
     this.guard(() => {
       this.ended = viewText(words, 300);
@@ -232,9 +232,9 @@ export class PiView {
         }
         if (m.role !== "user") return;
         const text = viewText(blocks(m.content, "text"));
-        // The first is the trial's first message: its brief, of which the head is enough.
+        // The first is the call's first message: its brief, of which the head is enough.
         if (this.users++ === 0)
-          this.add(new Text(dim(`the trial's first message:\n${headOf(text, 6, 800)}`), 1, 0));
+          this.add(new Text(dim(`the first message:\n${headOf(text, 6, 800)}`), 1, 0));
         else this.add(new Text(`${magenta("→")} ${headOf(text, 8, 1200)}`, 1, 0));
         return;
       }
@@ -290,7 +290,7 @@ export class PiView {
     this.statusAt = Date.now();
     const c = this.counts?.();
     const state = this.ended
-      ? `■ the trial ended: ${this.ended}`
+      ? `■ ended: ${this.ended}`
       : this.waitUntil
         ? `◷ waiting for the provider until ${this.waitUntil.slice(11, 16)} UTC`
         : this.replying !== undefined

@@ -262,7 +262,7 @@ test("follow_up is a worker in Pi's alone: a program in its terminal refuses it,
   });
   await assert.rejects(
     t.ownerInput({ text: "then run the tests", follow_up: true }),
-    /follow_up is for a worker in Pi: Claude Code takes what is typed into it as it comes/,
+    /follow_up is for an agent in its Pi view: Claude Code takes what is typed into it as it comes/,
   );
 });
 

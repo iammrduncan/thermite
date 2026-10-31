@@ -1,8 +1,9 @@
 import type { z } from "zod";
-import { messageText, type Prompt } from "../../agents/prompt.ts";
-import type { AdvisorCall, AdvisorResult } from "./call.ts";
-import { runClaudeCode, runCli, runCliHarness, runPi } from "./runtimes/index.ts";
-import { runInTerminal, runsInTerminal } from "./terminal/index.ts";
+import { messageText } from "../../agents/prompt.ts";
+import type { AdvisorCall, AdvisorResult, SentPrompt } from "./call.ts";
+import { runPi } from "./pi/index.ts";
+import { runClaudeCode, runCli, runCliHarness } from "./runtimes/index.ts";
+import { runInPiView, runInTerminal, runsInTerminal } from "./terminal/index.ts";
 
 /**
  * Runs one advisor call: a role prompt, the tools, and an output schema. The model answers by
@@ -14,7 +15,7 @@ export async function runAdvisor<S extends z.ZodType>(
 ): Promise<AdvisorResult<z.infer<S>>> {
   // Each prompt its runtime renders and sends, its later turns too, for the harness to keep
   // (goal 166).
-  const sent: Prompt[] = [];
+  const sent: SentPrompt[] = [];
   const input: AdvisorCall<S> = {
     ...call,
     prompt: (f) => {
@@ -38,7 +39,9 @@ function dispatch<S extends z.ZodType>(input: AdvisorCall<S>): Promise<AdvisorRe
       ),
       input.schema,
     );
-  // On a rig whose agents run in their own terminal (goal 169).
+  // On a rig whose agents run in their own terminal (goal 169): Pi in its Pi view, the other
+  // programs in their own terminal UI.
+  if (input.terminal && rt.runtime === "openai") return runInPiView(rt, input, input.terminal);
   if (input.terminal && runsInTerminal(rt)) return runInTerminal(rt, input, input.terminal);
   if (rt.runtime === "claude-code") return runClaudeCode(rt, input);
   if (rt.runtime === "opencode" || rt.runtime === "codex") return runCliHarness(rt, input);

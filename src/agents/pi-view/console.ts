@@ -1,23 +1,24 @@
-import type { ConsoleTerminal } from "../../../agents/cli/index.ts";
+import { Refusal } from "../../common/errors.ts";
+import type { PiViewCall, PiViewInput } from "../../core/api/harness/console.ts";
+import { SCREEN_DATA_MAX } from "../../core/screens.ts";
+import type { TerminalInput } from "../../core/terminal-input.ts";
+import type { ConsoleTerminal } from "../cli/index.ts";
 import {
   DEFAULT_COLS,
   DEFAULT_ROWS,
   type ScreenSnapshot,
   type Terminal,
-} from "../../../agents/terminal/index.ts";
-import { Refusal } from "../../../common/errors.ts";
-import type { PiViewCall, PiViewInput } from "../../../core/api/harness/console.ts";
-import { SCREEN_DATA_MAX } from "../../../core/screens.ts";
-import type { TerminalInput } from "../../../core/terminal-input.ts";
+} from "../terminal/index.ts";
 import { piViewCall } from "./commands.ts";
 
 /**
- * The harness's side of a worker's Pi view (goal 169): the owner's console into it, as the trial's
- * TrialConsole types into it (console.ts in cli/), and its screen for Live. An input becomes one
- * call (commands.ts), which waits here until the worker, running as the lane's agent user, asks
- * for it over its trial's routes (core/api/harness/console.ts) and says what became of it: typed,
- * once its call is made in the trial's loop, or refused, with why. The screen comes from the
- * terminal host that holds the worker's process, and is only ever shown.
+ * The caller's side of a role's Pi view (goal 169), in the harness for a worker or a planner, in
+ * the supervisor for an advisor: the owner's console into it, as TrialConsole types into it
+ * (console.ts in cli/), and its screen for Live. An input becomes one call (commands.ts), which
+ * waits here until the role's process, running as the role's user, asks for it over its call's
+ * routes (core/api/harness/console.ts) and says what became of it: typed, once its call is made in
+ * the role's loop, or refused, with why. The screen comes from the terminal host that holds the
+ * process, and is only ever shown.
  */
 
 /** How long the worker has to take an input and make its call: then it is refused, in words. */

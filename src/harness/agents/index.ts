@@ -6,10 +6,11 @@
  * process of its own.
  */
 
+export type { ReplyNow } from "../../agents/live-session.ts";
+export type { PiConsole } from "../../agents/pi-view/index.ts";
 export type { CliOnceDeps } from "./cli/index.ts";
 export { handedOut, lanesAtWork, rulesInForce } from "./coordinator.ts";
 export { DevRuns } from "./devrun.ts";
-export type { ReplyNow } from "./live-session.ts";
 export {
   type ControlRoute,
   type ModelInfo,
@@ -18,7 +19,6 @@ export {
   type RigCheckReport,
   ROUTE_FILE,
 } from "./model/index.ts";
-export type { PiConsole } from "./pi-view/index.ts";
 export { plannerInView } from "./planner/index.ts";
 export {
   CLI_PROGRAMS,

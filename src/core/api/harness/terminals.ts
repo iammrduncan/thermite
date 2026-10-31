@@ -50,6 +50,8 @@ export const AdvisorInput = z.strictObject({
   text: z.string().max(TERMINAL_TEXT_MAX).optional(),
   keys: z.array(z.enum(TERMINAL_KEYS)).min(1).max(TERMINAL_KEYS_MAX).optional(),
   wait: z.enum(TERMINAL_WAITS),
+  /** Words for an advisor in Pi's view, given when it would stop: refused by every other program. */
+  follow_up: z.literal(true).optional(),
 });
 export type AdvisorInput = z.infer<typeof AdvisorInput>;
 

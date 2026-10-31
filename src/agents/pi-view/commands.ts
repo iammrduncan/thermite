@@ -1,6 +1,6 @@
-import { Refusal } from "../../../common/errors.ts";
-import type { PiViewCall } from "../../../core/api/harness/console.ts";
-import type { TerminalInput } from "../../../core/terminal-input.ts";
+import { Refusal } from "../../common/errors.ts";
+import type { PiViewCall } from "../../core/api/harness/console.ts";
+import type { TerminalInput } from "../../core/terminal-input.ts";
 
 /**
  * What one of the owner's inputs does in a worker's Pi view (goal 169; the owner's decisions of

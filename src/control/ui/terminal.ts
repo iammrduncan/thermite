@@ -6,7 +6,7 @@ import {
 } from "../../core/terminal-input.ts";
 import { esc } from "./components/index.ts";
 
-/** The Pi view's commands, as the harness's Pi view takes them (src/harness/agents/pi-view/). */
+/** The Pi view's commands, as every Pi view takes them (src/agents/pi-view/). */
 const PI_VIEW_COMMANDS = "/status, /compact, /mcp, /mcp reconnect [server] and /skill:NAME";
 
 /**

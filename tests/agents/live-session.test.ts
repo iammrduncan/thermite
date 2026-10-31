@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Agent } from "@earendil-works/pi-agent-core";
-import { linkSession } from "../../../src/harness/agents/live-session.ts";
+import { linkSession } from "../../src/agents/live-session.ts";
 
 type Listener = (event: Record<string, unknown>, signal: AbortSignal) => Promise<void> | void;
 

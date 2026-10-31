@@ -1,19 +1,15 @@
-import { errorText } from "../../../common/errors.ts";
-import type { PiViewCall, PiViewInput } from "../../../core/api/harness/console.ts";
-import { steerTurn } from "../live-session.ts";
-import {
-  lastAssistant,
-  type McpForAgent,
-  type TrialLevers,
-  type TrialView,
-} from "../worker/index.ts";
+import { errorText } from "../../common/errors.ts";
+import type { PiViewCall, PiViewInput } from "../../core/api/harness/console.ts";
+import { lastAssistant, steerTurn } from "../live-session.ts";
+import type { McpForAgent } from "../mcp/index.ts";
+import type { RoleView, ViewLevers } from "./levers.ts";
 import type { PiView } from "./view.ts";
 
 /**
- * The worker's side of its Pi view's console (goal 169): it asks the harness for the owner's next
- * input over its trial's routes, makes its one call in the trial's loop through the trial's
- * levers, draws what it did, and says what became of it. Every failure here is said in words and
- * stops nothing: the trial goes on whatever its console does.
+ * The role's side of its Pi view's console (goal 169): it asks for the owner's next input over its
+ * call's routes (a worker's trial's, a planner's or an advisor's call's), makes its one call in
+ * the call's loop through its levers, draws what it did, and says what became of it. Every failure
+ * here is said in words and stops nothing: the call goes on whatever its console does.
  */
 
 /** How long one ask for the next input waits, and the pause after an ask that failed. */
@@ -49,9 +45,9 @@ export function mcpWords(mcp: McpForAgent | undefined, servers: readonly string[
   return `the MCP tools of this trial:\n${lines.join("\n")}`;
 }
 
-export class ViewInputs implements TrialView {
+export class ViewInputs implements RoleView {
   private readonly o: ViewInputsDeps;
-  private levers: TrialLevers | undefined;
+  private levers: ViewLevers | undefined;
   private stopped = false;
   /** Tool calls under way: an interrupt waits for them to end. */
   private tools = 0;
@@ -65,7 +61,7 @@ export class ViewInputs implements TrialView {
   }
 
   /** The trial's levers, once its agent is built: from now on the console takes inputs. */
-  attach(levers: TrialLevers): void {
+  attach(levers: ViewLevers): void {
     this.levers = levers;
     const agent = levers.agent;
     this.o.view.attach(agent, levers.status);
@@ -100,7 +96,7 @@ export class ViewInputs implements TrialView {
     this.stopped = true;
   }
 
-  private stop(agent: TrialLevers["agent"]): void {
+  private stop(agent: ViewLevers["agent"]): void {
     if (!agent.signal) return;
     this.stoppedByOwner = true;
     agent.abort();

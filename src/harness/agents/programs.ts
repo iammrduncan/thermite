@@ -9,6 +9,7 @@ import {
 } from "../../agents/cli/index.ts";
 import type { CliCompacted } from "../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../agents/model/index.ts";
+import { PiConsole } from "../../agents/pi-view/index.ts";
 import { type TrialProgram, windowFit } from "../../agents/roles/index.ts";
 import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
 import {
@@ -28,7 +29,6 @@ import {
   runCliTrial,
 } from "./cli/index.ts";
 import { checkModel, type RigCheckReport } from "./model/index.ts";
-import { PiConsole } from "./pi-view/index.ts";
 import { piResearchPrompt, type ResearchTrialSpec } from "./research/index.ts";
 import { spawnTrial } from "./spawn.ts";
 import { PI_TRIAL, piTrialPrompt, type TrialResult, type TrialSpec } from "./worker/index.ts";

@@ -12,7 +12,7 @@ import type { TerminalKey } from "../../core/terminal-input.ts";
 
 /**
  * The programs that run in a terminal: every agent program. Pi's is its worker's own process,
- * which draws Thermite's Pi view of its session (src/harness/agents/pi-view/).
+ * which draws Thermite's Pi view of its session (src/agents/pi-view/).
  */
 export type TerminalProgram = Harness;
 

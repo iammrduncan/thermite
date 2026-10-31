@@ -7,6 +7,8 @@
 //   - rig 1's champion is propagated to rig 2, judged there, and shown cross-verified;
 //   - the supervisor's token cannot submit attempts, and a forged command is refused;
 //   - daily reports and supervisor figures reach control;
+//   - an advisor in Pi in its Pi view in the supervisor (lib/pi-advisor-view.mjs): one input typed
+//     into a teacher's view and one owner's message, both in its next model call;
 //   - with the engine socket (compose.lifecycle.yaml): control restarts a rig's supervisor;
 //   - a full reset of rig 2: pause, export, verified push, wipe, fresh ledger.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/steering.mjs
@@ -15,6 +17,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { piAdvisorScene } from "./lib/pi-advisor-view.mjs";
 import {
   api,
   assign,
@@ -30,9 +33,10 @@ import {
 
 let requests = 0;
 const seen = { teacher: 0, merged_by: 0, auditor: 0, planner: 0 };
+const piView = piAdvisorScene();
 
 /** The scripted model: planner (falls back), teachers, their merged by model, auditor. */
-function script(messages, tools) {
+function script(messages, tools, model) {
   const system = JSON.stringify(messages.find((m) => m.role === "system")?.content ?? "");
   const prompt = JSON.stringify(messages.filter((m) => m.role === "user"));
   const answer = (args) => ({ toolCalls: [{ name: "answer", args }] });
@@ -55,12 +59,13 @@ function script(messages, tools) {
   }
   if (system.includes("You review an automated research campaign")) {
     seen.teacher++;
-    return answer({
+    const advice = answer({
       summary: "try cache blocking",
       recommendations: [
         { kind: "try", family: "tiling", rationale: "blocking", citations: ["acceptance"] },
       ],
     });
+    return piView.turn(model, messages, advice) ?? advice;
   }
   if (system.includes("You audit a candidate change")) {
     seen.auditor++;
@@ -78,10 +83,11 @@ const model = createServer((req, res) => {
   req.on("data", (d) => {
     body += d;
   });
-  req.on("end", () => {
+  req.on("end", async () => {
     requests++;
     const p = JSON.parse(body);
-    const turn = script(p.messages ?? [], p.tools ?? []);
+    // A turn may take its time: the Pi view scene holds one teacher's first reply.
+    const turn = await script(p.messages ?? [], p.tools ?? [], p.model);
     const id = `c${requests}`;
     const chunk = (delta, finish) =>
       `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created: 0, model: p.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
@@ -384,7 +390,11 @@ try {
     { rigs: reports.map((r) => r.rig), sup },
   );
 
-  // 6. Lifecycle: restart through the compose driver.
+  // 6. An advisor in Pi in its Pi view in the supervisor (goal 169): one teacher's call, with one
+  // input typed into its view and one owner's message, both in its next model call.
+  await piView.run(check, rigEvents);
+
+  // 7. Lifecycle: restart through the compose driver.
   if (socket) {
     const r = await api("/v1/rigs/local-2/restart", {
       method: "POST",
@@ -409,7 +419,7 @@ try {
     check("lifecycle restart (no engine socket here: skipped)", true, "skipped");
   }
 
-  // 7. Full reset of rig 2.
+  // 8. Full reset of rig 2.
   const before = (await view("local-2")).ledger_id;
   const reset = await api("/v1/rigs/local-2/reset", {
     method: "POST",

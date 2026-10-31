@@ -9,7 +9,7 @@ import { toolText } from "./code.ts";
  * `check_paper` runs the harness's code checks on a draft (the same checks that decide whether
  * the paper is accepted), and `ste_check` runs the rig's STE checker on a text, when the
  * supervisor has one. Neither records anything. In Pi they are tools of the call
- * (runtimes/pi.ts); in Claude Code, OpenCode and the Codex CLI the supervisor serves them on
+ * (pi/tools.ts); in Claude Code, OpenCode and the Codex CLI the supervisor serves them on
  * localhost for the call (mcp.ts), as it serves the research tools.
  */
 

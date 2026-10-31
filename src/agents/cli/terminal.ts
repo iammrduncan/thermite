@@ -468,7 +468,7 @@ export class RoleTerminal<T extends CliTally> {
     const host = this.host;
     if (i.follow_up)
       throw new Refusal(
-        `follow_up is for a worker in Pi: ${this.p.name} takes what is typed into it as it comes`,
+        `follow_up is for an agent in its Pi view: ${this.p.name} takes what is typed into it as it comes`,
       );
     if (this.stopping) throw new Refusal(`${this.p.name} is being ended: nothing more goes in`);
     if (!host)

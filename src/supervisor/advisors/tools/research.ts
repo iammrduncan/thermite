@@ -15,7 +15,7 @@ import { toolNumber, toolText } from "./code.ts";
  * hypotheses, findings, notes and files, a page at a time; a source's archived text; a file of its
  * research folder; and a search of all of it. Each call goes to the harness API with the
  * supervisor's token, which reads; nothing here writes. In Pi they are tools of the call
- * (runtimes/pi.ts); in Claude Code, OpenCode and the Codex CLI the supervisor serves them on
+ * (pi/tools.ts); in Claude Code, OpenCode and the Codex CLI the supervisor serves them on
  * localhost for the call (mcp.ts), as it serves the code tools.
  *
  * The teachers get them when the run's brief has `research`: a research run always, a hill-climb or

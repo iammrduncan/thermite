@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { PiConsole } from "../../../src/harness/agents/pi-view/index.ts";
+import { PiConsole } from "../../../src/agents/pi-view/index.ts";
 import { spawnTrial } from "../../../src/harness/agents/spawn.ts";
 import type { Runner, RunOutcome } from "../../../src/harness/broker/index.ts";
 

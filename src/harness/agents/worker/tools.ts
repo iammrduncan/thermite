@@ -1,5 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { type TSchema, Type } from "@earendil-works/pi-ai";
+import type { McpForAgent } from "../../../agents/mcp/index.ts";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";
 import {
   CODE_RESEARCH_TOOLS,
@@ -11,7 +12,7 @@ import { errorText } from "../../../common/errors.ts";
 import { type LaneLimitValues, SHARED_DEV_RUN_S } from "../../../core/contract.ts";
 import { IDEA_TOOL, proposeIdea, researchAgentTools } from "../tools/index.ts";
 import type { TrialClock } from "../trial-clock.ts";
-import type { McpForAgent, TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
+import type { TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
 
 /**
  * A worker trial's tools in Pi (runTrial, worker.ts): each acts as the lane's user through the

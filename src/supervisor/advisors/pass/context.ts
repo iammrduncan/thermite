@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { McpCaller } from "../../../agents/mcp/index.ts";
-import { type Prompt, promptRecord } from "../../../agents/prompt.ts";
+import { promptRecord } from "../../../agents/prompt.ts";
 import { kbCall } from "../../../agents/tools/index.ts";
 import { log, redact } from "../../../common/env.ts";
 import { errorText } from "../../../common/errors.ts";
@@ -41,7 +41,7 @@ import type { LiveKind } from "../../../core/live.ts";
 import type { RunAdditions } from "../../../core/role-additions.ts";
 import { type AdvisorAgent, AGENT_WORDS } from "../../../core/usage.ts";
 import { askControl } from "../../kb/index.ts";
-import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage } from "../call.ts";
+import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage, SentPrompt } from "../call.ts";
 import { type RunningAdvisors, withRunContext } from "../config.ts";
 import { advisorFetcher } from "../fetcher.ts";
 import type { AdvisorInTerminal } from "../terminal/index.ts";
@@ -216,6 +216,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
       tools,
       call: (s, t, a) => m.gateway.call(caller, s, t, a),
       serverFor: (s) => m.gateway.serverFor(caller, s),
+      relist: (fresh) => m.gateway.tools(caller, fresh),
     };
   };
   // A daily spending limit for all advisors of the rig, when the owner set one.
@@ -265,11 +266,16 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
    * The prompts an advisor's call sent (goal 166), handed to the harness to keep with its run,
    * whole. A failure is the advisor's error line; the advisor's work stands.
    */
-  const promptsOut = async (run: string | undefined, call: string, sent: Prompt[] | undefined) => {
+  const promptsOut = async (
+    run: string | undefined,
+    call: string,
+    sent: SentPrompt[] | undefined,
+  ) => {
     if (!run) return;
     for (const p of sent ?? []) {
       try {
-        const record = promptRecord(p, { call });
+        const record =
+          "sections" in p ? { ...p, lane: null, trial: null, call } : promptRecord(p, { call });
         await harness.call(KEEP_PROMPT, {
           body: { ...record, run, role: record.role as (typeof ADVISOR_PROMPT_ROLES)[number] },
         });

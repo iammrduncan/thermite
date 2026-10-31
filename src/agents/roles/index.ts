@@ -44,6 +44,7 @@ import {
 } from "./reviewer.ts";
 import {
   ADVISOR_OWNER_TURN,
+  ADVISOR_OWNER_TURN_PI,
   FAILED_GO_ON,
   KB_GUIDE,
   OWNER_TURN_HEAD,
@@ -229,9 +230,19 @@ const ADVISOR_TERMINAL_TEXTS: readonly RoleText[] = [
     text: ADVISOR_OWNER_TURN,
   },
   {
+    id: "owner-pi",
+    what: "in its Pi view, each of your messages that goes in before its next model call, after this, as JSON with its id",
+    text: ADVISOR_OWNER_TURN_PI,
+  },
+  {
     id: "failed-terminal",
     what: "in its program's own terminal, after it waited for a full usage window, after the limit's words",
     text: FAILED_GO_ON,
+  },
+  {
+    id: "owner-typed",
+    what: "in its Pi view, the words you type into its console, after this",
+    text: OWNER_TURN_HEAD,
   },
 ];
 

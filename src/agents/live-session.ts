@@ -1,8 +1,8 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
-import { type Prompt, userMessage } from "../../agents/prompt.ts";
-import { renderWorkerTurn } from "../../agents/roles/index.ts";
-import { log } from "../../common/env.ts";
-import { type LiveKind, liveText, summarizeArgs } from "../../core/live.ts";
+import { log } from "../common/env.ts";
+import { type LiveKind, liveText, summarizeArgs } from "../core/live.ts";
+import { type Prompt, userMessage } from "./prompt.ts";
+import { renderWorkerTurn } from "./roles/index.ts";
 
 /**
  * Links an agent session to control's live view: its turns go to the live log, and the owner's
@@ -93,6 +93,29 @@ export function steerTurn(
   });
   if (when === "follow-up") agent.followUp(message);
   else agent.steer(message);
+}
+
+/** The agent's last reply that ended: how it stopped, and its tokens. */
+export function lastAssistant(
+  agent: Agent,
+): { stopReason: string; errorMessage?: string; input: number; output: number } | undefined {
+  const messages = agent.state.messages as {
+    role?: string;
+    stopReason?: string;
+    errorMessage?: string;
+    usage?: { input?: number; output?: number };
+  }[];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m?.role === "assistant" && m.stopReason)
+      return {
+        stopReason: m.stopReason,
+        ...(m.errorMessage ? { errorMessage: m.errorMessage } : {}),
+        input: m.usage?.input ?? 0,
+        output: m.usage?.output ?? 0,
+      };
+  }
+  return undefined;
 }
 
 export function linkSession(agent: Agent, link: SessionLink): void {

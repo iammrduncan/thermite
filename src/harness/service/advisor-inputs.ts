@@ -78,10 +78,6 @@ export class AdvisorInputs {
     i: Pick<TerminalInput, "text" | "keys" | "wait" | "follow_up">,
     later: ConsoleLater,
   ): Promise<ConsoleNow> {
-    if (i.follow_up)
-      throw new Refusal(
-        "follow_up is for a worker in Pi: an advisor takes what is typed into it as it comes",
-      );
     if (this.waiting.size >= WAITING_MAX)
       throw new Refusal(
         `${WAITING_MAX} inputs wait for the advisors' terminals already: send this one again in a moment`,
@@ -113,6 +109,8 @@ export class AdvisorInputs {
         call,
         ...(i.text !== undefined ? { text: i.text } : { keys: [...(i.keys ?? [])] }),
         wait: i.wait,
+        // An advisor in Pi's view takes it; the supervisor's other terminals refuse it in words.
+        ...(i.follow_up ? { follow_up: true as const } : {}),
       };
       this.waiting.set(id, { out, taken: false, done, timer });
       for (const wake of this.takers.splice(0)) wake();

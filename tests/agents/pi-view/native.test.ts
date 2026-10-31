@@ -13,7 +13,7 @@ import { pathToFileURL } from "node:url";
  * child process resolves pi-tui to such a copy, refuses every native module, and draws the view.
  */
 
-const ROOT = join(import.meta.dirname, "..", "..", "..", "..");
+const ROOT = join(import.meta.dirname, "..", "..", "..");
 const PKG = join(ROOT, "node_modules", "@earendil-works", "pi-tui");
 const scratch = mkdtempSync(join(tmpdir(), "thermite-pitui-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -52,7 +52,7 @@ process.dlopen = (_module, file) => { throw new Error("a native module was loade
   const run = join(scratch, "run.mjs");
   writeFileSync(
     run,
-    `const { PiView } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/harness/agents/pi-view/view.ts")).href)});
+    `const { PiView } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/agents/pi-view/view.ts")).href)});
 let written = "";
 const view = new PiView({ out: (d) => { written += d; }, cols: 80, rows: 24, heading: "VIEW-WITHOUT-NATIVE" });
 view.start();

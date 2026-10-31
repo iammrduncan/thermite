@@ -9,11 +9,11 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { z } from "zod";
 import { OFFER_PATH, TAKEN_PATH } from "../../../../src/agents/programs/hooks/main.ts";
-import type { Prompt } from "../../../../src/agents/prompt.ts";
 import { renderAuditor } from "../../../../src/agents/roles/index.ts";
 import type { RoleRunner, RoleRunOutcome, RoleRunRequest } from "../../../../src/agents/runner.ts";
 import { TERMINAL_HOST, TERMINAL_SOCKET } from "../../../../src/agents/terminal/index.ts";
 import { serveTerminal } from "../../../../src/agents/terminal/server.ts";
+import type { SentPrompt } from "../../../../src/supervisor/advisors/call.ts";
 import { runAdvisor } from "../../../../src/supervisor/advisors/index.ts";
 import {
   AdvisorConsoles,
@@ -202,7 +202,7 @@ test("an advisor in its terminal: its prompt typed in, an owner's message inside
     live: (l) => lines.push(l),
     pollMs: 25,
   };
-  const sent: Prompt[] = [];
+  const sent: SentPrompt[] = [];
   const running = runAdvisor({
     runtime: { name: "auditor", runtime: "claude-code", model: "claude-test", token: "made-up" },
     prompt: (f) => renderAuditor({ pkg: { attempt: "a-1" } }, f),

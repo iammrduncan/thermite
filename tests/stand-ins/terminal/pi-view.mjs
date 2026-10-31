@@ -137,7 +137,7 @@ s.on("error", (e) => { r.socket = e.code; done(); });
 /** Runs the Pi view's scene; `c` is check.mjs's: its loader, runner, checks and lane helpers. */
 export async function piViewTrial(c) {
   const { spawnTrial } = await c.load("harness/agents/spawn");
-  const { PiConsole } = await c.load("harness/agents/pi-view/index");
+  const { PiConsole } = await c.load("agents/pi-view/index");
   const model = await heldModel();
   const view = new PiConsole();
   const api = await trialRoutes(view);

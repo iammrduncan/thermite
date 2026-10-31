@@ -7,11 +7,10 @@ import {
   modelEnv,
   STALL_SETTING,
 } from "../../agents/model/index.ts";
-import { startTerminal, type TerminalEnded } from "../../agents/terminal/index.ts";
+import { PI_PROCESS_RSS, type PiConsole, runInView } from "../../agents/pi-view/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { logWarn } from "../../common/log.ts";
 import type { Role, Runner, RunOutcome } from "../broker/index.ts";
-import { type PiConsole, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
 import type { ResearchTrialSpec } from "./research/index.ts";
 import { TrialResult, type TrialSpec } from "./worker/index.ts";
 
@@ -61,11 +60,10 @@ export function piEnv(
   };
 }
 
+/** The file in a worker's folder that holds its result, in its Pi view (goal 169). */
+export const VIEW_RESULT = "result.json";
 /** The most bytes of a result a worker in its Pi view leaves in its folder that are read. */
 const RESULT_MAX = 1024 * 1024;
-/** A Pi process's memory limit, with the terminal host that holds it in its Pi view. */
-export const PI_PROCESS_RSS = 2 * 1024 * 1024 * 1024;
-
 /** How Node runs one of the harness's entries: `name`.js when built, `name`.ts from the source. */
 export function entryArgv(name: string): string[] {
   const file = fileURLToPath(
@@ -74,42 +72,6 @@ export function entryArgv(name: string): string[] {
   return [process.execPath, ...process.execArgv, file];
 }
 
-/**
- * A Pi process in its Pi view (goal 169), a worker's or a planner's: the terminal host runs it as
- * `role`, in `dir`, on a terminal of its own, where it draws its view; `view` is its console, given
- * the host to show the screen. Resolves when the process has ended. The host and the process are
- * both Node: neither is the agent's commands, so both are spared at the memory limit, which ends
- * the run as it would headless. Throws when the host can't start.
- */
-export async function runInView(
-  runner: Runner,
-  o: {
-    role: Role;
-    dir: string;
-    env: Record<string, string>;
-    /** The trial's id, or the call's. */
-    id: string;
-    argv: string[];
-    timeoutMs?: number | undefined;
-    nproc?: number | undefined;
-  },
-  view: PiConsole,
-): Promise<TerminalEnded> {
-  const term = await startTerminal(runner, {
-    role: o.role,
-    area: o.dir,
-    env: o.env,
-    start: { trial: o.id, program: "pi", argv: [...o.argv, VIEW_FLAG], cwd: o.dir },
-    timeoutMs: o.timeoutMs,
-    rssLimitBytes: PI_PROCESS_RSS,
-    spareExe: process.execPath,
-    nproc: o.nproc,
-  });
-  view.attach(term);
-  const ended = await term.done;
-  view.ended(ended.exit?.screen);
-  return ended;
-}
 /**
  * The folder of the trials' own folders, in the harness's scratch area: one that each worker's
  * user may pass through to reach its own folder by its full path (its terminal host's socket is

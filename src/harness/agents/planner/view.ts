@@ -2,14 +2,14 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { callFolder, TrialConsole } from "../../../agents/cli/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
+import { PiConsole, runInView } from "../../../agents/pi-view/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
 import { errorText } from "../../../common/errors.ts";
 import { logWarn } from "../../../common/log.ts";
 import type { PlannerAnswer } from "../../../core/api/harness/planner.ts";
 import type { Runner } from "../../broker/index.ts";
 import { PLANNER_ROLE, type TerminalCallLink } from "../cli/index.ts";
-import { PiConsole } from "../pi-view/index.ts";
-import { entryArgv, piEnv, runInView } from "../spawn.ts";
+import { entryArgv, piEnv } from "../spawn.ts";
 import { PlannerCallError } from "./causes.ts";
 import type { PlannerCallSpec } from "./submit.ts";
 

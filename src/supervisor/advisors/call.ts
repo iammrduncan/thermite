@@ -5,6 +5,7 @@ import type { Prompt } from "../../agents/prompt.ts";
 import type { AdvisorFrame } from "../../agents/roles/index.ts";
 import type { McpCallResult } from "../../common/mcp-client.ts";
 import type { McpToolInfo } from "../../core/mcp.ts";
+import type { PromptSection } from "../../core/prompts.ts";
 import type { CallUsage, UsageRoute } from "../../core/usage.ts";
 import type { AdvisorRuntime } from "./config.ts";
 import type { AdvisorInTerminal } from "./terminal/index.ts";
@@ -29,9 +30,10 @@ export interface AdvisorCall<S extends z.ZodType> {
   prompt(f: AdvisorFrame): Prompt;
   /**
    * Keeps a later turn the call sent inside it (goal 166): in Pi, the message the advisor goes on
-   * from after a compaction. runAdvisor sets it.
+   * from after a compaction; from its own process in its Pi view, that turn's record. runAdvisor
+   * sets it.
    */
-  later?: ((p: Prompt) => void) | undefined;
+  later?: ((p: SentPrompt) => void) | undefined;
   schema: S;
   answerSchema: TSchema;
   tools?: AdvisorTools | undefined;
@@ -65,13 +67,21 @@ export interface AdvisorResult<T> {
    * The prompts the call sent, as its role rendered them (goal 166), for the harness to keep: its
    * first message, then its later turns.
    */
-  sent?: Prompt[] | undefined;
+  sent?: SentPrompt[] | undefined;
   /**
    * The owner's messages it took inside its turn, in its program's own terminal (goal 169): given
    * to it, as those of its prompt are, for its receipts.
    */
   given?: number[] | undefined;
 }
+
+/**
+ * A prompt an advisor's call sent: as its role rendered it, or, for a later turn its own process
+ * rendered and sent in its Pi view (goal 169), as that turn's record.
+ */
+export type SentPrompt =
+  | Prompt
+  | { role: string; program: string; turn: number; sections: PromptSection[] };
 
 /** An advisor call's model usage (goal 075): where it ran, and each record. */
 export interface AdvisorUsage extends UsageRoute {
@@ -158,4 +168,9 @@ export interface AdvisorTools {
 export interface AdvisorMcp extends AdvisorServers {
   tools: McpToolInfo[];
   call(server: string, tool: string, args: Record<string, unknown>): Promise<McpCallResult>;
+  /** Its tools listed again from the servers, every one or one by name (a Pi view's /mcp reconnect). */
+  relist?(fresh: true | string): Promise<{
+    tools: McpToolInfo[];
+    unavailable: { server: string; why: string }[];
+  }>;
 }

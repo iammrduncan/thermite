@@ -1,8 +1,11 @@
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import { type CompactionReport, Compactor, summarizer } from "../../../agents/compaction/index.ts";
+import { linkSession, type SessionLink } from "../../../agents/live-session.ts";
+import type { McpForAgent } from "../../../agents/mcp/index.ts";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { buildModel, type ModelConfig, PiMeter } from "../../../agents/model/index.ts";
+import { type RoleView, swappableTools } from "../../../agents/pi-view/index.ts";
 import { messageText, type Prompt, systemText } from "../../../agents/prompt.ts";
 import {
   renderCompacted,
@@ -12,9 +15,7 @@ import {
 import { routeRefusal } from "../../../core/agents.ts";
 import { canonicalJson } from "../../../core/canonical.ts";
 import type { CallUsage } from "../../../core/usage.ts";
-import { linkSession, type SessionLink } from "../live-session.ts";
 import { classifyProviderError, KIND_WORDS } from "../provider-errors.ts";
-import { type McpForAgent, swappableTools, type TrialView } from "../worker/index.ts";
 import { PlannerCallError } from "./causes.ts";
 import { PLAN_SPEC, type PlannerCallSpec } from "./submit.ts";
 
@@ -72,7 +73,7 @@ export interface PlannerPiOptions {
    * and the session's link, which sends its lines to Live and brings the owner's messages in
    * before its next model call.
    */
-  view?: TrialView | undefined;
+  view?: RoleView | undefined;
   link?: Pick<SessionLink, "live" | "messages" | "read"> | undefined;
 }
 
