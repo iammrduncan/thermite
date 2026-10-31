@@ -59,6 +59,10 @@ async function serve() {
   const server = new RunAsServer({ socketPath: SOCKET, root: ROOT, callerGid: SUPERVISOR });
   server.listen();
   await new Promise((r) => server.server.once("listening", r));
+  // The socket as the image's entry and the broker leave it: root's, the supervisor's group may
+  // connect (src/supervisor/advisor-runs/main.ts). Bound by root, it is root's alone until then.
+  chownSync(SOCKET, 0, SUPERVISOR);
+  chmodSync(SOCKET, 0o660);
   const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "--client"], {
     uid: SUPERVISOR,
     gid: SUPERVISOR,
