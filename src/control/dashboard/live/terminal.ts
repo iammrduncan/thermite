@@ -9,7 +9,6 @@ import { SCREENS_WATCHED_MAX, type ScreenFrame } from "../../../core/screens.ts"
 import {
   confirmFirst,
   inputWords,
-  isPlannerCall,
   TERMINAL_ID,
   TERMINAL_KEYS,
   type TerminalKey,
@@ -25,7 +24,7 @@ import {
 import { issueCommand } from "../../issue/index.ts";
 import type { CommandRow } from "../../store/index.ts";
 import { TERMINAL_JS, type TermInputRow, terminalHtml } from "../../ui/terminal.ts";
-import { liveHref, rigHref } from "../../ui/urls.ts";
+import { rigHref, terminalHref } from "../../ui/urls.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { LIVE_PUSH_BEAT_MS, LIVE_PUSH_RETRY_MS } from "./push.ts";
 
@@ -230,8 +229,8 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
     const trial = String(f.trial ?? "");
     const key = String(f.key ?? "");
     const text = String(f.text ?? "");
-    // A planner's call's terminal is on the planner's page (goal 169).
-    const back = liveHref(rig, isPlannerCall(trial) ? "planner" : `trial:${trial}`);
+    // A planner's call's terminal is on the planner's page, an advisor's on the advisors' (goal 169).
+    const back = terminalHref(rig, trial);
     const json = wantsJson(c);
     const refuse = (why: string) =>
       json

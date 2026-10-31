@@ -14,6 +14,7 @@ import { proxyRoutes } from "./proxy.ts";
 import { refusalWords } from "./refusal.ts";
 import { exportRoutes, liveRoutes, reportRoutes } from "./relay.ts";
 import { rigRoutes } from "./rig.ts";
+import { advisorTerminalRoutes } from "./terminals.ts";
 import { trialRoutes } from "./trials.ts";
 import { usageRoutes } from "./usage.ts";
 import { workRoutes } from "./work.ts";
@@ -73,6 +74,7 @@ export function createHarnessApi(
   rigRoutes(app, api);
   mcpRoutes(app, api);
   kbRoutes(app, api);
+  advisorTerminalRoutes(app, api);
   reportRoutes(app, api);
   advisorRoutes(app, api);
   liveRoutes(app, api);

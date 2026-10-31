@@ -4,6 +4,6 @@
  */
 
 export { runClaudeCode } from "./claude-code.ts";
-export { lastJsonObject, runCli } from "./cli.ts";
-export { runCliHarness } from "./opencode-codex.ts";
+export { callId, lastJsonObject, parseAnswer, runCli } from "./cli.ts";
+export { cliHarnessModel, runCliHarness } from "./opencode-codex.ts";
 export { runPi } from "./pi.ts";

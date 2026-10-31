@@ -67,7 +67,7 @@ export async function piPlannerScene(check) {
     /^planner-smoke-1-\d+$/.test(call.id) &&
       read.body.how === "next-call" &&
       piPlanner.came &&
-      typed.outcome?.outcome === "typed",
+      typed.outcome?.result?.outcome === "typed",
     { call, read: read.body, came: piPlanner.came, typed: typed.outcome },
   );
   check("Live shows the planner's Pi view", frame?.pi_view === true || frame?.state === "ended", {

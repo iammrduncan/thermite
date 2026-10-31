@@ -1,7 +1,9 @@
 import type { Hono } from "hono";
 import { z } from "zod";
+import { ADVISOR_ROLES } from "../../core/agents.ts";
 import {
   ADVISOR_MESSAGES,
+  ADVISOR_MESSAGES_WAITING,
   AUDITS,
   AUDITS_PENDING,
   BRIEF,
@@ -243,6 +245,17 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
   app.post(ADVISOR_MESSAGES.path, supervisor, limitOf(ADVISOR_MESSAGES), async (c) =>
     c.json(service.advisorMessages(ADVISOR_MESSAGES.body.parse(await c.req.json()))),
   );
+
+  // The owner's messages that wait for an advisor role in a run, as its package gives them: an
+  // advisor's call in its program's own terminal takes them inside its turn (goal 169).
+  app.get(ADVISOR_MESSAGES_WAITING.path, supervisor, (c) => {
+    const role = z.enum(ADVISOR_ROLES).safeParse(c.req.query("role"));
+    if (!role.success) return c.json({ error: "role is teachers, auditor or review_panel" }, 400);
+    const messages = service.messages
+      .waitingForAdvisor(c.req.query("run") ?? "", role.data)
+      .map((m) => ({ id: m.id, text: m.text }));
+    return c.json({ messages });
+  });
 
   // The advisors' additions and moves for a run's experiment queue, each recorded with the
   // advisor role as who made it. Advisors add and reorder; they don't drop or give out work.

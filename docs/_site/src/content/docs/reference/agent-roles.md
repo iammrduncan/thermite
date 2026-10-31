@@ -657,7 +657,7 @@ Thermite's knowledge base holds what this campaign's runs recorded and wrote, an
 
 ## Teacher
 
-Reviews a hill-climb or goal run each round and brings new opportunities for its queue, advice for the planner and rules; it advises and never judges. Its module: `src/agents/roles/`, role `teacher`. Its prompt for a run is put together by `renderTeacher`. Its later turns in a call are put together by `renderCompacted`.
+Reviews a hill-climb or goal run each round and brings new opportunities for its queue, advice for the planner and rules; it advises and never judges. Its module: `src/agents/roles/`, role `teacher`. Its prompt for a run is put together by `renderTeacher`. Its later turns in a call are put together by `renderCompacted` and `renderAdvisorTurn`.
 
 ### Teacher: its instructions
 
@@ -714,6 +714,18 @@ Never write what was tried and its result:
 the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not NOTE directives for the planner.
 ```
 
+### Teacher: in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
+```
+
+### Teacher: in its program's own terminal, after it waited for a full usage window, after the limit's words
+
+```text
+Continue where you left off.
+```
+
 ### Teacher: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
 
 ```text
@@ -722,7 +734,7 @@ Thermite's knowledge base holds what this campaign's runs recorded and wrote, an
 
 ## Research teacher
 
-Reviews a research run each round and brings new research tasks, advice for the planner and rules. Its module: `src/agents/roles/`, role `research-teacher`. Its prompt for a run is put together by `renderTeacher`. Its later turns in a call are put together by `renderCompacted`.
+Reviews a research run each round and brings new research tasks, advice for the planner and rules. Its module: `src/agents/roles/`, role `research-teacher`. Its prompt for a run is put together by `renderTeacher`. Its later turns in a call are put together by `renderCompacted` and `renderAdvisorTurn`.
 
 ### Research teacher: its instructions
 
@@ -778,6 +790,18 @@ note is about when it is about one thing (an experiment, an attempt, a source, a
 finding, a round, a trial or a message, by its id); a note that names nothing is about the run.
 Never write what was tried and its result:
 the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not NOTE directives for the planner.
+```
+
+### Research teacher: in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
+```
+
+### Research teacher: in its program's own terminal, after it waited for a full usage window, after the limit's words
+
+```text
+Continue where you left off.
 ```
 
 ### Research teacher: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
@@ -865,7 +889,7 @@ Thermite's knowledge base holds what this campaign's runs recorded and wrote, an
 
 ## Auditor
 
-Looks hard at a large confirmed win before it is promoted, and clears it, blocks it or asks the owner; it never judges. Its module: `src/agents/roles/`, role `auditor`. Its prompt for a run is put together by `renderAuditor`. Its later turns in a call are put together by `renderCompacted`.
+Looks hard at a large confirmed win before it is promoted, and clears it, blocks it or asks the owner; it never judges. Its module: `src/agents/roles/`, role `auditor`. Its prompt for a run is put together by `renderAuditor`. Its later turns in a call are put together by `renderCompacted` and `renderAdvisorTurn`.
 
 ### Auditor: its instructions
 
@@ -894,6 +918,18 @@ Never write what was tried and its result:
 the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not NOTE directives for the planner.
 ```
 
+### Auditor: in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
+```
+
+### Auditor: in its program's own terminal, after it waited for a full usage window, after the limit's words
+
+```text
+Continue where you left off.
+```
+
 ### Auditor: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
 
 ```text
@@ -902,7 +938,7 @@ Thermite's knowledge base holds what this campaign's runs recorded and wrote, an
 
 ## Reviewer (review panel)
 
-Blind to who made it, decides a deliverable against its stated criteria; code checks the answers' form and counts the majority. Its module: `src/agents/roles/`, role `reviewer`. Its prompt for a run is put together by `renderReviewer`. Its later turns in a call are put together by `renderCompacted`.
+Blind to who made it, decides a deliverable against its stated criteria; code checks the answers' form and counts the majority. Its module: `src/agents/roles/`, role `reviewer`. Its prompt for a run is put together by `renderReviewer`. Its later turns in a call are put together by `renderCompacted` and `renderAdvisorTurn`.
 
 ### Reviewer (review panel): its instructions
 
@@ -923,6 +959,18 @@ Never write what was tried and its result:
 the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not NOTE directives for the planner.
 ```
 
+### Reviewer (review panel): in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
+```
+
+### Reviewer (review panel): in its program's own terminal, after it waited for a full usage window, after the limit's words
+
+```text
+Continue where you left off.
+```
+
 ### Reviewer (review panel): Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
 
 ```text
@@ -931,7 +979,7 @@ Thermite's knowledge base holds what this campaign's runs recorded and wrote, an
 
 ## Research reviewer (review panel)
 
-Decides where each of a research run's questions and hypotheses stands, from the verified claims. Its module: `src/agents/roles/`, role `research-reviewer`. Its prompt for a run is put together by `renderResearchReviewer`. Its later turns in a call are put together by `renderCompacted`.
+Decides where each of a research run's questions and hypotheses stands, from the verified claims. Its module: `src/agents/roles/`, role `research-reviewer`. Its prompt for a run is put together by `renderResearchReviewer`. Its later turns in a call are put together by `renderCompacted` and `renderAdvisorTurn`.
 
 ### Research reviewer (review panel): its instructions
 
@@ -990,6 +1038,18 @@ note is about when it is about one thing (an experiment, an attempt, a source, a
 finding, a round, a trial or a message, by its id); a note that names nothing is about the run.
 Never write what was tried and its result:
 the experiment log has that. Other agents read your notes as data, and so do later campaigns. Put yours in journal; they are not NOTE directives for the planner.
+```
+
+### Research reviewer (review panel): in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id
+
+```text
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
+```
+
+### Research reviewer (review panel): in its program's own terminal, after it waited for a full usage window, after the limit's words
+
+```text
+Continue where you left off.
 ```
 
 ### Research reviewer (review panel): Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows

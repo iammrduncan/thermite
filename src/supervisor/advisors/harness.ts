@@ -3,11 +3,15 @@ import { harnessClient } from "../../common/api/harness.ts";
 import { log } from "../../common/env.ts";
 import { ADVISORS, SETTINGS } from "../../core/api/harness/supervisor.ts";
 
-/** The advisors' switches in the rig's settings (Edit rig). */
+/**
+ * The advisors' switches in the rig's settings (Edit rig), and whether the agent programs run in
+ * their own terminals (goal 169): the advisors' calls do so too.
+ */
 export interface AdvisorSwitches {
   teachers: boolean;
   auditor: boolean;
   review: boolean;
+  terminal: boolean;
 }
 
 /** Which advisors decide, as the harness is told. */
@@ -44,12 +48,21 @@ export function harnessAdvisors(harnessUrl: string, harnessToken: string, say: t
     };
   };
 
-  /** The last settings the harness gave; all advisors on until it gives some (an older harness). */
-  let last: AdvisorSwitches = { teachers: true, auditor: true, review: true };
+  /**
+   * The last settings the harness gave; all advisors on, headless, until it gives some (an older
+   * harness).
+   */
+  let last: AdvisorSwitches = { teachers: true, auditor: true, review: true, terminal: false };
   const settingsCall = streak("the harness did not give the rig's settings: the last ones stand");
   const settings = async (): Promise<AdvisorSwitches> => {
     const r = await settingsCall(() => harness.call(SETTINGS));
-    if (r) last = { ...last, ...r };
+    if (r)
+      last = {
+        teachers: r.teachers ?? last.teachers,
+        auditor: r.auditor ?? last.auditor,
+        review: r.review ?? last.review,
+        terminal: r.program_mode !== undefined ? r.program_mode === "terminal" : last.terminal,
+      };
     return last;
   };
 

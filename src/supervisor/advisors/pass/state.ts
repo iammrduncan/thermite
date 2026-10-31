@@ -3,6 +3,7 @@ import type { LiveKind } from "../../../core/live.ts";
 import type { McpUse } from "../../../core/mcp.ts";
 import type { KbControl } from "../../kb/index.ts";
 import type { RunningAdvisors } from "../config.ts";
+import type { AdvisorTerminals } from "../terminal/index.ts";
 
 export interface AdviseConfig {
   harnessUrl: string;
@@ -29,6 +30,11 @@ export interface AdviseConfig {
    * API. None: the advisors get no knowledge base tools.
    */
   kb?: KbControl | undefined;
+  /**
+   * On a rig whose agents run in their own terminal (goal 169): what the teachers', the auditor's
+   * and the reviewers' calls take there. None: they run headless.
+   */
+  terminals?: AdvisorTerminals | undefined;
 }
 
 export interface AdviseState {

@@ -16,12 +16,16 @@
 // (tests/stand-ins/terminal/trials.mjs); then a worker in Pi in its Pi view, run by the broker as
 // agent-1 in its own folder, one short trial to its result with the owner's inputs through its
 // console, and what lane-1 and another agent may reach of that folder
-// (tests/stand-ins/terminal/pi-view.mjs). It downloads nothing but what the image's build does,
-// and no model is called.
+// (tests/stand-ins/terminal/pi-view.mjs). Then the supervisor image: root serves the advisors'
+// runner as the image's entry does, and the supervisor's user starts the host through it on the
+// fake TUI, as an advisor user in a folder of its own, as an advisor's call in its terminal runs
+// it; another advisor user may reach none of it (tests/stand-ins/terminal/supervisor.mjs). It
+// downloads nothing but what the images' builds do, and no model is called.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/terminal.mjs
 //   IMAGE      an image already built: no build, and it is kept (one built with
 //              CLAUDE_CODE_VERSION, such as claude-real.mjs's, checks Claude Code too)
+//   SUPERVISOR_IMAGE  a supervisor image already built: no build, and it is kept
 //   SOURCE=1   the check runs this working copy's code (src/, as TypeScript) with the image's
 //              packages, instead of the image's build: no build is needed for a change to src/
 //   KEEP=1     leave the container and the image
@@ -32,6 +36,9 @@ import { cleanEngine, engine } from "./lib/smoke-env.mjs";
 
 const image = process.env.IMAGE ?? "localhost/thermite-harness:terminal-check";
 const name = "thermite-terminal";
+const supervisorImage =
+  process.env.SUPERVISOR_IMAGE ?? "localhost/thermite-supervisor:terminal-check";
+const supervisorName = "thermite-terminal-supervisor";
 const source = process.env.SOURCE === "1";
 const sh = (args, opts = {}) =>
   execFileSync(engine, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
@@ -148,6 +155,97 @@ try {
   if (process.env.KEEP !== "1") {
     spawnSync(engine, ["rm", "-f", name], { stdio: "ignore" });
     if (!process.env.IMAGE) spawnSync(engine, ["rmi", "-f", image], { stdio: "ignore" });
+  }
+}
+
+// The supervisor image: the host as an advisor's call in its terminal runs it (goal 169).
+try {
+  if (!process.env.SUPERVISOR_IMAGE) {
+    console.log("building the supervisor image ...");
+    execFileSync(
+      engine,
+      ["build", "-q", "-t", supervisorImage, "-f", "containers/supervisor/Containerfile", "."],
+      { stdio: ["ignore", "ignore", "inherit"] },
+    );
+  }
+  spawnSync(engine, ["rm", "-f", supervisorName], { stdio: "ignore" });
+  const sourceMounts = source
+    ? ["src", "package.json"].flatMap((p) => ["-v", `${resolve(p)}:/opt/thermite-src/${p}:ro`])
+    : [];
+  // As compose runs it: only the entry's capabilities, no new privileges, here no network at all.
+  // The image's entry is not started: the check serves the runner itself, as the entry does.
+  sh([
+    "run",
+    "-d",
+    "--name",
+    supervisorName,
+    "--network",
+    "none",
+    "--memory",
+    "1g",
+    "--cap-drop",
+    "ALL",
+    ...["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETGID", "SETUID"].flatMap((c) => [
+      "--cap-add",
+      c,
+    ]),
+    "--security-opt",
+    "no-new-privileges",
+    "-v",
+    `${resolve("tests/stand-ins/terminal")}:/opt/test-terminal:ro`,
+    "-v",
+    `${resolve("tests/helpers/fake-tui.ts")}:/opt/fake-tui/fake-tui.ts:ro`,
+    ...sourceMounts,
+    supervisorImage,
+    "node",
+    "-e",
+    "setInterval(() => {}, 1 << 30)",
+  ]);
+  if (source)
+    sh([
+      "exec",
+      supervisorName,
+      "ln",
+      "-s",
+      "/opt/thermite/node_modules",
+      "/opt/thermite-src/node_modules",
+    ]);
+  const r = spawnSync(
+    engine,
+    [
+      "exec",
+      "--user",
+      "0:0",
+      ...(source ? ["-e", "THERMITE_SRC=/opt/thermite-src/src"] : []),
+      supervisorName,
+      "node",
+      "/opt/test-terminal/supervisor.mjs",
+    ],
+    { encoding: "utf8", timeout: 360_000 },
+  );
+  const line = r.stdout.trim().split("\n").at(-1) ?? "";
+  let out;
+  try {
+    out = JSON.parse(line);
+  } catch {
+    out = {
+      checks: [
+        { name: "supervisor.mjs ran", ok: false, detail: `${r.stdout}${r.stderr}`.slice(-2000) },
+      ],
+    };
+  }
+  for (const c of out.checks) report({ ...c, name: `supervisor image: ${c.name}` });
+} catch (err) {
+  report({
+    name: "the supervisor image's part ran",
+    ok: false,
+    detail: err instanceof Error ? err.message : String(err),
+  });
+} finally {
+  if (process.env.KEEP !== "1") {
+    spawnSync(engine, ["rm", "-f", supervisorName], { stdio: "ignore" });
+    if (!process.env.SUPERVISOR_IMAGE)
+      spawnSync(engine, ["rmi", "-f", supervisorImage], { stdio: "ignore" });
     cleanEngine();
   }
 }

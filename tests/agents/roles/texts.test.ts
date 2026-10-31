@@ -47,6 +47,7 @@ import {
 import { RESEARCH_REVIEWER_SYSTEM, REVIEWER_SYSTEM } from "../../../src/agents/roles/reviewer.ts";
 import {
   ADVISOR_NOTES,
+  ADVISOR_OWNER_TURN,
   AT_WORK_GUIDE,
   BRIEF_GUIDE,
   CONTEXT_FULL_TURN,
@@ -105,6 +106,7 @@ const TEXTS: Record<string, string> = {
   "advisors.at-work-guide": AT_WORK_GUIDE,
   "advisors.past-guide": PAST_GUIDE,
   "advisors.research-guide": RESEARCH_GUIDE,
+  "advisors.owner-terminal": ADVISOR_OWNER_TURN,
   // The knowledge base's part of every role's prompt (goal 175), and kb_write's line.
   "shared.kb-guide": KB_GUIDE,
   "shared.kb-write": kbWriteLine(["note", "finding"]),

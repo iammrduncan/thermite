@@ -14,6 +14,7 @@ import type { AdvisorKeeper, AdvisorMcp, AdvisorResult, AdvisorUsage } from "./c
 import { type AdvisorRuntime, packageFit } from "./config.ts";
 import { OwnerAnswers, OwnerAnswersSchema } from "./owner-answers.ts";
 import { runAdvisor } from "./run.ts";
+import type { AdvisorInTerminal } from "./terminal/index.ts";
 import type { AdvisorKb, AdvisorResearch } from "./tools/index.ts";
 
 /**
@@ -232,6 +233,8 @@ export async function reviewOne(input: {
   keeper?: AdvisorKeeper | undefined;
   /** The owner's additions to the run's roles (goal 166): the reviewer's goes in its prompt. */
   additions?: RunAdditions;
+  /** On a rig whose agents run in their own terminal (goal 169): the call runs in its program's. */
+  terminal?: AdvisorInTerminal | undefined;
 }): Promise<AdvisorResult<ReviewOutput>> {
   // A research run's package (goal 112): its own prompt and answer, which says, for each
   // question, if it is answered, and for each hypothesis, its verdict.
@@ -253,6 +256,7 @@ export async function reviewOne(input: {
         schema: ResearchPanelAnswer,
         answerSchema: ResearchPanelAnswerSchema,
         keeper: input.keeper,
+        terminal: input.terminal,
         ...(Object.keys(tools).length ? { tools } : {}),
       });
     const pkg = input.pkg as ItemsPackage;
@@ -282,6 +286,7 @@ export async function reviewOne(input: {
           ? { compactions: [...(r.compactions ?? []), ...(again.compactions ?? [])] }
           : {}),
         ...(r.sent || again.sent ? { sent: [...(r.sent ?? []), ...(again.sent ?? [])] } : {}),
+        ...(r.given || again.given ? { given: [...(r.given ?? []), ...(again.given ?? [])] } : {}),
         ...(r.usage || again.usage
           ? {
               usage: {
@@ -320,6 +325,7 @@ export async function reviewOne(input: {
     schema: PanelAnswer,
     answerSchema: PanelAnswerSchema,
     keeper: input.keeper,
+    terminal: input.terminal,
     ...(input.kb || input.mcp
       ? {
           tools: {

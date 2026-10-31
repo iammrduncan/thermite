@@ -42,6 +42,12 @@ A message from the campaign's owner, who is watching this session, as one more o
 {"id":7,"text":"Avoid :shared memory tiling: this round."}
 # research planner in a program's own terminal: after a full usage window (research-planner, codex)
 The model call failed (the usage window is full until 13:00 UTC). Continue where you left off.
+# auditor in a program's own terminal: an owner's message inside its turn (auditor, claude-code)
+A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.
+
+{"id":9,"text":"Check the timing code before you clear it."}
+# reviewer in a program's own terminal: after a full usage window (reviewer, opencode)
+The model call failed (the usage window is full until 13:00 UTC). Continue where you left off.
 # worker in Pi, after a compaction with a summary (worker, pi)
 The harness compacted this conversation (compaction 1) because it neared the model's context window. Your trial goes on.
 

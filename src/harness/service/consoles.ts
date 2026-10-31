@@ -1,14 +1,17 @@
-import type { TrialConsole } from "../../agents/cli/index.ts";
+import { screenFrame, type TrialConsole } from "../../agents/cli/index.ts";
 import type { ScreenSnapshot } from "../../agents/terminal/index.ts";
 import { errorText } from "../../common/errors.ts";
-import { SCREEN_DATA_MAX, type ScreenFrame } from "../../core/screens.ts";
+import type { AdvisorTerminal } from "../../core/api/harness/terminals.ts";
+import type { ScreenFrame } from "../../core/screens.ts";
 import {
   TERMINAL_INPUTS_PER_MINUTE,
   type TerminalInput,
   type TerminalOutcome,
+  terminalSource,
 } from "../../core/terminal-input.ts";
 import type { PiConsole } from "../agents/index.ts";
 import { LedgerError } from "../ledger/index.ts";
+import type { OwnerConsole } from "./advisor-inputs.ts";
 import type { HarnessService } from "./index.ts";
 
 /**
@@ -19,7 +22,8 @@ import type { HarnessService } from "./index.ts";
  * recorded word for word with its outcome; and the screens for control's live view, the last
  * screen of each that ended kept in memory, the newest LAST_SCREENS_KEPT. A worker in Pi's console
  * is its Pi view's, whose own side (`piView`) the worker asks for the owner's inputs over its
- * trial's routes.
+ * trial's routes. An advisor's call runs in the supervisor: its console here hands the owner's
+ * input on to the supervisor (advisor-inputs.ts), which sends its screens itself.
  */
 
 /**
@@ -49,16 +53,11 @@ const words = (p: TerminalInput) => ({
   ...(p.follow_up ? { follow_up: true as const } : {}),
 });
 
-/** A screen cut to SCREEN_DATA_MAX characters, its newest kept. */
-const fit = (s: ScreenSnapshot) => ({
-  cols: s.cols,
-  rows: s.rows,
-  data: s.data.length > SCREEN_DATA_MAX ? s.data.slice(-SCREEN_DATA_MAX) : s.data,
-});
-
 export class TerminalConsoles {
   private readonly svc: Pick<HarnessService, "ledger" | "live" | "clock">;
-  private readonly open = new Map<string, TrialConsole | "headless">();
+  private readonly open = new Map<string, OwnerConsole | "headless">();
+  /** The advisors' calls that run in their terminals in the supervisor, by their ids. */
+  private advisors = new Set<string>();
   /** The calls outside a trial, open or with their last screen kept, by their ids. */
   private readonly calls = new Map<string, CallConsoleOf>();
   /** The Pi views' own sides, of the trials whose worker in Pi draws one. */
@@ -88,6 +87,27 @@ export class TerminalConsoles {
     this.calls.set(id, of);
     this.open.set(id, c);
     if (piView) this.piViews.set(id, piView);
+  }
+
+  /**
+   * The advisors' calls that run in their terminals now (goal 169), as the supervisor says: each
+   * one's console here hands the owner's input on to the supervisor (`consoleOf`); one left out has
+   * ended. Only an advisor's call's id is taken.
+   */
+  setAdvisors(calls: readonly AdvisorTerminal[], consoleOf: (id: string) => OwnerConsole): void {
+    const now = calls.filter((c) => terminalSource(c.id) === "supervisor");
+    const ids = new Set(now.map((c) => c.id));
+    for (const id of this.advisors) {
+      if (ids.has(id)) continue;
+      this.open.delete(id);
+      this.calls.delete(id);
+      this.recent.delete(id);
+    }
+    for (const c of now) {
+      if (!this.advisors.has(c.id)) this.open.set(c.id, consoleOf(c.id));
+      this.calls.set(c.id, { run: c.run, lane: c.role, source: "supervisor" });
+    }
+    this.advisors = ids;
   }
 
   /** The calls outside a trial whose terminals run now, for the rig's report. */
@@ -183,7 +203,7 @@ export class TerminalConsoles {
       live.append({ source: t.source, kind: "status", text, lane: t.lane, run: p.run });
     let got: Awaited<ReturnType<TrialConsole["input"]>>;
     try {
-      got = await (c as TrialConsole).input(p, (outcome, why) => {
+      got = await (c as OwnerConsole).input(p, (outcome, why) => {
         record(outcome, why ? { why } : {});
         line(
           outcome === "typed_after_reset"
@@ -215,25 +235,18 @@ export class TerminalConsoles {
    * call's now, an ended one's last, or `none` for one with no terminal here. Only ever shown.
    */
   async screens(trials: readonly string[]): Promise<ScreenFrame[]> {
-    const at = () => this.svc.clock().toISOString();
     const out: ScreenFrame[] = [];
     for (const trial of trials) {
       const c = this.open.get(trial);
-      const ended = this.last.get(trial);
-      if (c && c !== "headless") {
-        const s = await c.screen().catch(() => undefined);
-        const limit = c.limit();
-        out.push({
-          trial,
-          state: s ? "running" : "none",
-          ...(s ? fit(s) : {}),
-          ...(limit ? { limit: limit.resetsAt ? { resets_at: limit.resetsAt } : {} } : {}),
-          ...(c.queued ? { queued: c.queued } : {}),
-          ...(this.piViews.has(trial) ? { pi_view: true as const } : {}),
-          at: at(),
-        });
-      } else if (ended) out.push({ trial, state: "ended", ...fit(ended), at: at() });
-      else out.push({ trial, state: "none", at: at() });
+      out.push(
+        await screenFrame({
+          id: trial,
+          console: c && c !== "headless" ? c : undefined,
+          last: this.last.get(trial),
+          piView: this.piViews.has(trial),
+          at: this.svc.clock().toISOString(),
+        }),
+      );
     }
     return out;
   }

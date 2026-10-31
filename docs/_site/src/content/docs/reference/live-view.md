@@ -1,6 +1,6 @@
 ---
 title: "The Live view"
-description: "Every part of the dashboard's Live view: a run's stream with its filters and message box, a rig's sessions, and a trial's or the planner's terminal with the owner's console."
+description: "Every part of the dashboard's Live view: a run's stream with its filters and message box, a rig's sessions, and a trial's, the planner's or an advisor's terminal with the owner's console."
 type: reference
 sidebar:
   order: 23
@@ -10,7 +10,7 @@ sidebar:
 
 The rig masks its own credentials in each line before the line leaves it, wherever an agent printed them: a trial's token, a planner's call's in its own terminal, the model proxy's and the MCP gateway's show as `trial.***`, `call.***`, `proxy.***` and `mcp.***`, and the value of any `THERMITE_*_AUTH` setting as `***`. Each line is masked before it is cut to 8,000 characters ([Limits and pacing](limits-and-pacing.md#the-rig-and-control)).
 
-Live has three pages: one run at a time, a rig's sessions, and one session: a trial's, which has the trial's terminal, or the planner's, which has its call's terminal while it plans in one.
+Live has three pages: one run at a time, a rig's sessions, and one session: a trial's, which has the trial's terminal; the planner's, which has its call's terminal while it plans in one; or the supervisor's, which has an advisor's call's terminal while one works in its own.
 
 ## One run at a time
 
@@ -21,7 +21,7 @@ Live has three pages: one run at a time, a rig's sessions, and one session: a tr
 | The list of runs, on the left | **At work**: each running run, with its rig, its mode, how many of its lanes work, and how many decisions wait for you. **Idle rigs**: rigs with no run at work. **Ended in the last day**: runs that paused or finished lately. On a narrow screen, **☰** shows and hides it |
 | The header | The run, its state, its rig, its round and its progress, **Open the run**, and, while it runs, **Pause** and **⋯** (with **Restart the lanes**), or **Resume** for a paused run |
 | The filters | **Everyone**, each lane (a green dot while it works; a lane that starts while the page is open gets one too), **Planner**, **Judge** (not in a research run), **Advisors** and **You**: your messages and who read them |
-| **⌨ Terminals** | While the run is running on a rig that runs its agent programs in their own terminal, each lane at work, with its direction: `lane-1's terminal` opens that trial's page, with its [terminal](#a-trials-terminal). While the planner plans the run in its own terminal, `the planner's terminal` comes first, and opens the planner's page ([The planner's terminal](#the-planners-terminal)) |
+| **⌨ Terminals** | While the run is running on a rig that runs its agent programs in their own terminal, each lane at work, with its direction: `lane-1's terminal` opens that trial's page, with its [terminal](#a-trials-terminal). While the planner plans the run in its own terminal, `the planner's terminal` comes first, and opens the planner's page ([The planner's terminal](#the-planners-terminal)); then, while an advisor works on the run in its own terminal, `auditor's terminal`, `teacher-1's terminal` or `reviewer-2's terminal`, marked `(advisor)`, each opening the supervisor's page with that call ([An advisor's terminal](#an-advisors-terminal)) |
 | **📌 &lt;n&gt; kept** | Your messages kept in force, each with **Remove** |
 | **↓ Follow** | On: the stream scrolls to each new line |
 | The stream | The lines of the filter chosen: the agents' text, thinking, tool calls with their results, status lines, your messages and the advisors' answers. Empty: `No live lines yet. They appear here as the run's agents and judge work.` |
@@ -61,10 +61,14 @@ Once the trial has ended, the console says `The trial has ended: its terminal ta
 
 The planner's page, `/ui/rigs/<rig>/live?source=planner`, has its call's terminal at its top while the planner plans a round in its own terminal: Claude Code's, Codex's or OpenCode's, or, in Pi, its Pi view ([The Pi view](../explanation/agents-lanes-planner.md#the-pi-view)). It has the same parts as a trial's, for the call named `planner-<run>-<round>`. The rig's report lists the call while it runs (`work.terminals` in its summary), and the page shows the terminal from it; once the round's plan is in, the page shows none. The planner's stream shows its session, read from its program's log as a trial's is, or sent by its process in Pi: its text, its tools and their results, and your inputs' outcomes.
 
+## An advisor's terminal
+
+The supervisor's page, `/ui/rigs/<rig>/live?source=supervisor`, has an advisor's call's terminal at its top while the teachers, the auditor or a reviewer of the review panel works in its program's own terminal (Claude Code's, Codex's or OpenCode's) in the supervisor: the call `call=<id>` names, such as `&call=advisor-auditor-matmul-1-4`, else the first that runs. It has the same parts as a trial's, for the call named `advisor-<advisor>-<run>-<n>`. The supervisor tells its harness which of its advisors' calls run in their terminals, so the rig's report lists them (`work.terminals`, with the advisor's name as `role`), and the page shows the terminal from it; once the advisor answers, the page shows none. Your input goes to the rig's harness, which checks and records it as for a trial's, then hands it to the supervisor, which types it into the advisor's program. The supervisor's stream shows the advisor's session, each line with the advisor's name, and your inputs' outcomes.
+
 ### How the screen reaches the page
 
-- The page tells control it watches the trial. Every 5 seconds the rig's supervisor asks control which of its trials are watched; while one is, it asks its harness for their screens, and sends them to control, every second. Nobody watching, no screen leaves the rig.
+- The page tells control it watches the trial. Every 5 seconds the rig's supervisor asks control which of its trials are watched; while one is, it asks its harness for their screens, takes its own advisors' from its own consoles, and sends them to control, every second. Nobody watching, no screen leaves the rig.
 - The screens go on the message bus as a request with its one answer, on the rig's own subject (`thermite.rig.<rig>.ask.screens`): no stream keeps them, where the bus's `LIVE` stream would keep them on disk for an hour ([A rig's asks](../explanation/how-the-parts-talk.md#a-rigs-asks-on-the-message-bus)). A rig off the bus sends none. Control keeps the newest screen of each watched trial in memory, and lets it go when the last page watching it closes. No screen is written down anywhere: not in the rig's ledger, its exports or control's records.
-- At most 4 of a rig's terminals, its trials' and its planner's, are watched at once. A page for a fifth says `4 of <rig>'s terminals are watched already: close one of their pages, then load this one again.`
-- A trial's last screen is the one the harness kept just before it ended the program, with up to 500 lines above it, at most 262,144 characters; a worker in Pi's is the one its view showed as the trial ended, kept when the worker said it was ending. The harness keeps those of its 20 most recently ended trials and planner's calls, in memory.
+- At most 4 of a rig's terminals, its trials', its planner's and its advisors', are watched at once. A page for a fifth says `4 of <rig>'s terminals are watched already: close one of their pages, then load this one again.`
+- A trial's last screen is the one the harness kept just before it ended the program, with up to 500 lines above it, at most 262,144 characters; a worker in Pi's is the one its view showed as the trial ended, kept when the worker said it was ending. The harness keeps those of its 20 most recently ended trials and planner's calls, and the supervisor those of its 20 most recently ended advisors' calls, in memory.
 - The screen is what the agent's program drew, as untrusted as anything the agent prints: nothing decides from it.

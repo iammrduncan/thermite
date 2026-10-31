@@ -1,3 +1,4 @@
+import { terminalSource } from "../../core/terminal-input.ts";
 import { type RunView, runCampaign } from "../views/index.ts";
 
 /**
@@ -97,6 +98,15 @@ export const rigHref = (rig: string) => `/ui/rigs/${enc(rig)}`;
 /** A rig's Live: its sessions over every run, or one source's. */
 export const liveHref = (rig: string, source?: string) =>
   `${rigHref(rig)}/live${source ? `?source=${enc(source)}` : ""}`;
+
+/**
+ * The Live page that shows a terminal (goal 169): a trial's own, the planner's, or the advisors'
+ * page with the advisor's call it names.
+ */
+export function terminalHref(rig: string, id: string): string {
+  const source = terminalSource(id);
+  return `${liveHref(rig, source)}${source === "supervisor" ? `&call=${enc(id)}` : ""}`;
+}
 
 /** A rig's new Live lines, pushed to its page as they come (server-sent events). */
 export const rigLiveStreamHref = (rig: string) => `${rigHref(rig)}/live/stream`;

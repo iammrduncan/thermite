@@ -31,7 +31,8 @@
 // shows its menu, which waits for a key, and never goes on. Text typed while it works is taken into
 // the turn, as Claude Code takes it (a queued command); text typed during its wait is only counted.
 // The planner in its terminal answers its plan; in a run's first round it holds its turn until one
-// of the owner's messages comes at its end, through its Stop hook (planInTerminal). It refuses to
+// of the owner's messages comes at its end, through its Stop hook (planInTerminal). The auditor in
+// its terminal holds its turn the same way, and for one line typed into it (auditInTerminal). It refuses to
 // run without THERMITE_FAKE_CLAUDE=1 or its mounted folder, so it can't stand in by mistake.
 const { execSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -149,14 +150,14 @@ const bash = (command) => {
   if (context) steered.push(`after-tool:${/owner/.test(context) ? "owner" : "other"}`);
   return output;
 };
-/** The end of a turn: the Stop hook, which may send it on; true when it did. */
+/** The end of a turn: the Stop hook, which may send it on; its reason when it did, else false. */
 const stop = (last) => {
   const said = hook("Stop", { stop_hook_active: steered.some((x) => x.startsWith("turn-end")), last_assistant_message: last });
   if (said.decision !== "block" || !said.reason) return false;
   steered.push(`turn-end:${/owner/.test(said.reason) ? "owner" : "other"}`);
   // In its terminal, the block is the user's side of the turn, as Claude Code records it.
   if (terminal) record({ type: "attachment", attachment: { type: "hook_blocking_error", blockingError: { blockingError: said.reason, command: "thermite" } } });
-  return true;
+  return said.reason;
 };
 /** Waits, at most `ms`, until `count` of the owner's messages wait for this trial. */
 const WAIT_MESSAGES_MS = 90_000;
@@ -402,6 +403,35 @@ async function usageWindow() {
 }
 
 /**
+ * The auditor in its terminal (goal 169), run by the supervisor as an advisor user: its answer, as
+ * headless. It holds its turn, at most WAIT_MESSAGES_MS, its Stop hook asked each second, until one
+ * of the owner's messages comes at the end of its turn and one line was typed into it, as a long
+ * audit would meet them; then it answers again, answering the message by its id, and its reasons
+ * say what came.
+ */
+const auditInTerminal = async () => {
+  const extra = `tools=${val("--tools") === "" ? "none" : val("--tools")} effort=${val("--effort") ?? "default"}`;
+  const answer = (note, answers = []) =>
+    JSON.stringify({ decision: "clear", reasons: `audited by the Claude Code stand-in (${note}; ${extra} ${facts})`, citations: ["diff"], answers });
+  const draft = answer("a first look");
+  turn([{ type: "text", text: draft }]);
+  const end = Date.now() + WAIT_MESSAGES_MS;
+  let came;
+  while (!came && Date.now() < end) {
+    came = stop(draft) || undefined;
+    if (!came) await new Promise((r) => setTimeout(r, 1000));
+  }
+  while (!typedIn.length && Date.now() < end) await new Promise((r) => setTimeout(r, 250));
+  const id = Number(/\{"id":(\d+),"text":/.exec(came ?? "")?.[1] ?? 0);
+  const final = answer(
+    `the owner's message ${id || "none"} came inside its turn; ${hookFacts()} ${windowFacts()}`,
+    id ? [{ message: id, text: "The stand-in read it inside its turn." }] : [],
+  );
+  turn([{ type: "text", text: final }]);
+  stop(final);
+};
+
+/**
  * In its terminal: its session from its first message (or resumed), then each message typed, one
  * turn at a time, until `/exit` or SIGTERM. A trial's first turn meets its usage window and then
  * reads the kernel; the next submits.
@@ -420,6 +450,7 @@ function runTerminal() {
       if (taken === 0 && /thermite-trial submit/.test(text)) trial = true;
       const at = taken++;
       if (!trial && at === 0 && text.includes(CAMPAIGN)) await planInTerminal(text);
+      else if (!trial && at === 0 && /You audit a candidate change/.test(text)) await auditInTerminal();
       else if (trial && at === 0) {
         if (!(await usageWindow())) return;
         // It reads the kernel. The owner's messages, when the acceptance sends two: the first goes

@@ -9,6 +9,7 @@ import type { AdvisorKeeper, AdvisorResult, AdvisorTools } from "./call.ts";
 import { type AdvisorsConfig, packageFit } from "./config.ts";
 import { OwnerAnswers, OwnerAnswersSchema } from "./owner-answers.ts";
 import { runAdvisor } from "./run.ts";
+import type { AdvisorInTerminal } from "./terminal/index.ts";
 
 export const AuditAnswer = z.strictObject({
   decision: z.enum(["clear", "block", "needs_owner"]),
@@ -55,6 +56,8 @@ export async function auditOne(input: {
   keeper?: AdvisorKeeper | undefined;
   /** The owner's additions to the run's roles (goal 166): the auditor's goes in its prompt. */
   additions?: RunAdditions;
+  /** On a rig whose agents run in their own terminal (goal 169): the call runs in its program's. */
+  terminal?: AdvisorInTerminal | undefined;
 }): Promise<AdvisorResult<z.infer<typeof AuditAnswer>>> {
   if (!input.config.auditor)
     return { output: undefined, error: "no auditor", tokensIn: 0, tokensOut: 0, usd: 0 };
@@ -73,6 +76,7 @@ export async function auditOne(input: {
     schema: AuditAnswer,
     answerSchema: AuditAnswerSchema,
     keeper: input.keeper,
+    terminal: input.terminal,
     // The auditor reads private diffs: it fetches only from listed domains, never anywhere. It
     // may search the knowledge base, from the run's scope.
     tools: {
