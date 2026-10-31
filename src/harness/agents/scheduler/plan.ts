@@ -79,6 +79,7 @@ export async function planEpoch(
         plannerCompaction(sched, run),
         r.usage,
         r.sent,
+        r.view,
       );
   } finally {
     sched.planning = undefined;

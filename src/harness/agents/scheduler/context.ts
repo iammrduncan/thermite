@@ -1,5 +1,6 @@
 import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
+import type { Prompt } from "../../../agents/prompt.ts";
 import type { Contract } from "../../../core/contract.ts";
 import type { StoredRule } from "../../../core/directives.ts";
 import type { CallUsage } from "../../../core/usage.ts";
@@ -9,6 +10,7 @@ import type { Research } from "../../research/index.ts";
 import type { HarnessService } from "../../service/index.ts";
 import type { CliHarness } from "../cli/index.ts";
 import { Coordinator, lanesAtWork, rulesInForce } from "../coordinator.ts";
+import type { PlannerCallSpec, PlannerViewCall } from "../planner/index.ts";
 import { Registry } from "../registry.ts";
 import type { ResearchTrialSpec } from "../research/index.ts";
 import type { TrialResult, TrialSpec } from "../worker/index.ts";
@@ -56,6 +58,18 @@ export interface SchedulerOptions {
         signal?: AbortSignal,
         o?: PlannerCallOptions,
       ) => Promise<string>)
+    | undefined;
+  /**
+   * A planner call in Pi in a process of its own, in its Pi view (goal 169), on a rig whose agents
+   * run in their own terminal (planner/view.ts); none: in this process.
+   */
+  planInView?:
+    | ((
+        c: Omit<PlannerViewCall, "runner" | "scratchDir" | "port">,
+        sent: Prompt,
+        spec: PlannerCallSpec,
+        signal?: AbortSignal,
+      ) => Promise<unknown>)
     | undefined;
   /** The planner's own model route, when control gave the planner one. */
   plannerModel?: (() => ModelConfig | undefined) | undefined;
@@ -109,6 +123,7 @@ export const MCP_WAIT_MS = 2 * 60_000;
 
 type Optional =
   | "model"
+  | "planInView"
   | "research"
   | "runResearchTrial"
   | "devRuns"

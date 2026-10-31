@@ -6,7 +6,11 @@ import {
   type ProviderErrorAnswer,
   stallWords,
 } from "../../agents/model/index.ts";
-import type { LiveLog } from "../../core/live.ts";
+import type { PlannerAnswer } from "../../core/api/harness/planner.ts";
+import type { LiveKind, LiveLog } from "../../core/live.ts";
+import type { CallUsage } from "../../core/usage.ts";
+import type { MessageInbox } from "../agents/index.ts";
+import type { CompactionOf } from "../compactions.ts";
 
 /**
  * What the model proxy and the MCP gateway take from the service besides trials' tokens: the
@@ -98,6 +102,29 @@ export interface CallCredential {
   id: string;
   caller: McpCaller;
   model?: ModelConfig | undefined;
+  /** What its own process hands over, when it runs apart from the harness (a planner in Pi). */
+  own?: OwnCall | undefined;
+}
+
+/**
+ * What a call's own process hands the harness over its credential (goal 169): a planner in Pi in
+ * its Pi view, which runs apart from the harness as a worker in Pi does, and reaches the same
+ * routes as a worker's trial (api/trials.ts), each bound to the call instead.
+ */
+export interface OwnCall {
+  run: string;
+  /** The call's name in the run's records: "epoch 3". */
+  call: string;
+  /** Its session's lines, for its live source. */
+  live(entries: { kind: LiveKind; text: string }[]): void;
+  /** The owner's messages for it, each read once its agent has it, before its next model call. */
+  messages: MessageInbox;
+  /** Each model call's usage, as its own code measured it (goal 075). */
+  usage?: ((u: CallUsage) => void) | undefined;
+  /** Where its compactions are kept and recorded (goal 070); none: it keeps none. */
+  compaction?: CompactionOf | undefined;
+  /** Its answer: the first one counts. */
+  answer(a: PlannerAnswer): void;
 }
 
 /** The newest error answer the model proxy saw for each trial (or "proxy"): goal 079. */

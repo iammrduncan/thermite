@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 
 /**
  * Starts the server. `script(messages, tools)` returns `{ text }` or `{ toolCalls: [{ name,
- * args }] }` for each request. `observe(messages)`, when given, sees every request's messages
+ * args }] }` for each request, or a promise of one (a turn that takes its time). `observe(messages)`, when given, sees every request's messages
  * first. `other(req)`, when given, sees each request that is neither a chat completion nor the
  * model list, which gets a 404. `keys` holds the Authorization header of every request.
  */
@@ -19,7 +19,7 @@ export async function scriptedModel(script, { observe, other } = {}) {
     req.on("data", (d) => {
       body += d;
     });
-    req.on("end", () => {
+    req.on("end", async () => {
       // The provider's model list, as control reads it.
       if (req.method === "GET" && req.url === "/v1/models") {
         res.writeHead(200, { "content-type": "application/json" });
@@ -35,7 +35,7 @@ export async function scriptedModel(script, { observe, other } = {}) {
       requests++;
       const p = JSON.parse(body);
       observe?.(p.messages ?? []);
-      const turn = script(p.messages ?? [], p.tools ?? []);
+      const turn = await script(p.messages ?? [], p.tools ?? []);
       const id = `c${requests}`;
       const chunk = (delta, finish) =>
         `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created: 0, model: p.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;

@@ -6,6 +6,7 @@
 export {
   plannerHypotheses,
   planResearch,
+  RESEARCH_PLAN_SPEC,
   type ResearchPlannerInput,
   type ResearchPlanResult,
 } from "./planner.ts";

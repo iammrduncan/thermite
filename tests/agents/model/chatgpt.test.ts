@@ -7,7 +7,7 @@ import {
   usageLimitRetry,
 } from "../../../src/agents/model/index.ts";
 import { CHATGPT_API } from "../../../src/core/agents.ts";
-import { workerRoute } from "../../../src/harness/agents/spawn.ts";
+import { piRoute } from "../../../src/harness/agents/spawn.ts";
 
 /** One Responses API stream that says "hello" and completes. */
 function helloStream(): Response {
@@ -165,12 +165,12 @@ describe("a ChatGPT sign-in", () => {
       contextWindow: 0,
       maxTokens: 8192,
     };
-    const w = workerRoute(m, 8700, "tok");
+    const w = piRoute(m, 8700, "trial.tok");
     assert.equal(w.baseUrl, "http://127.0.0.1:8700/v1/model-proxy");
     assert.equal(w.apiKey, "trial.tok");
     assert.equal(w.keyNow, undefined);
     const other = { ...m, api: undefined, keyNow: undefined };
-    assert.equal(workerRoute(other, 8700, "tok"), other);
+    assert.equal(piRoute(other, 8700, "trial.tok"), other);
     const now = Date.parse("2026-10-18T12:00:00Z");
     assert.equal(
       usageLimitRetry('429 {"error":{"code":"subscription_sharing_usage_limit_exceeded"}}', now),

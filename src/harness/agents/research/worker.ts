@@ -288,8 +288,8 @@ export async function runResearchTrial(
   if (deps.link)
     linkSession(agent, {
       ...deps.link,
-      ownerTurn: (text) =>
-        renderResearchWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+      ownerTurn: (m) =>
+        renderResearchWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text: m.text }),
       sent: deps.sent,
     });
   // Its Pi view's console (goal 169): each of the owner's calls is one of these levers.

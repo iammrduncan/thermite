@@ -1,7 +1,80 @@
-// The agents acceptance's planner in OpenCode's own terminal (goal 169): the scripted model's
-// answers to the planner's call there, and the scene that gives the planner the model in OpenCode
-// over REST and sends it one owner's message while it plans.
+// The agents acceptance's planner in its own terminal (goal 169): in Pi, the first epoch's plan in
+// its Pi view, in a process of its own, which takes one owner's message and one input typed into
+// its console while it plans; in OpenCode's own terminal, the scripted model's answers to the
+// planner's call there, and the scene that gives the planner the model in OpenCode over REST and
+// sends it one owner's message while it plans.
 import { api, command, events, plannerInTerminal, until } from "./smoke-env.mjs";
+import { screenOnLive, typeInto } from "./terminals.mjs";
+
+/** The planner in Pi in its Pi view: how often it waited, and whether the owner's message came. */
+const piPlanner = { waited: 0, came: false, plans: 0 };
+/** The most short tool calls its first plan makes while it waits for the owner's message. */
+const PI_PLANNER_WAITS = 90;
+
+/**
+ * The scripted model's turn for the planner in Pi (`tools`: the request's tools, submit_plan among
+ * them), or undefined when it should plan now. Its first plan searches the knowledge base, a call
+ * every 2 s, so that its process can take the owner's message in before its next model call,
+ * until the message comes (at most PI_PLANNER_WAITS); then it plans, as every later plan does.
+ */
+export function piPlannerTurn(messages, tools) {
+  if (!tools.some((t) => t.function.name === "submit_plan")) return undefined;
+  const came = JSON.stringify(messages).includes("OWNER-PI-PLANNER");
+  if (came) piPlanner.came = true;
+  const search = tools.some((t) => t.function.name === "kb_search");
+  if (piPlanner.plans || came || !search || piPlanner.waited >= PI_PLANNER_WAITS) {
+    piPlanner.plans++;
+    return undefined;
+  }
+  piPlanner.waited++;
+  return new Promise((r) =>
+    setTimeout(() => r({ toolCalls: [{ name: "kb_search", args: { query: "kernel" } }] }), 2000),
+  );
+}
+
+/**
+ * The first epoch's planner, in Pi on a rig nobody set: its call runs in its Pi view as
+ * planner-<run>-<round>, in a process of its own. One owner's message goes in before its next
+ * model call, `/status` typed into its console is typed, and Live shows its Pi view.
+ */
+export async function piPlannerScene(check) {
+  const call = await plannerInTerminal("smoke-1", { ms: 300_000 });
+  const since = (await events()).length;
+  await command("message_agent", {
+    run: "smoke-1",
+    to: "planner",
+    text: "OWNER-PI-PLANNER Spread the lanes wider.",
+  });
+  const typed = await typeInto(call.id, { text: "/status" });
+  const frame = await screenOnLive(call.id);
+  const read = await until(
+    "the planner in Pi read the owner's message during its call",
+    async () =>
+      (await events())
+        .slice(since)
+        .find((e) => e.kind === "agent_message_read" && e.body.by === "planner"),
+    240_000,
+    2000,
+  );
+  await until(
+    "the planner in Pi's model got the owner's message",
+    async () => piPlanner.came,
+    60_000,
+  );
+  check(
+    "the planner in Pi planned in its Pi view, took the owner's message before its next model call, and its console typed /status",
+    /^planner-smoke-1-\d+$/.test(call.id) &&
+      read.body.how === "next-call" &&
+      piPlanner.came &&
+      typed.outcome?.outcome === "typed",
+    { call, read: read.body, came: piPlanner.came, typed: typed.outcome },
+  );
+  check("Live shows the planner's Pi view", frame?.pi_view === true || frame?.state === "ended", {
+    state: frame?.state,
+    pi_view: frame?.pi_view,
+    chars: frame?.data?.length,
+  });
+}
 
 /** Whether one of the owner's messages came inside the planner's turn, and its plans answered. */
 const plannerSeen = { came: false, plans: 0 };
@@ -55,6 +128,7 @@ export async function opencodePlannerScene(check) {
   check("the planner is given the model in OpenCode over REST", given.status === 200, given.body);
   // Its next round may wait for the trial planned before it took the model.
   const call = await plannerInTerminal("smoke-1", { ms: 900_000 });
+  const since = (await events()).length;
   await command("message_agent", {
     run: "smoke-1",
     to: "planner",
@@ -63,9 +137,9 @@ export async function opencodePlannerScene(check) {
   const read = await until(
     "the planner read the owner's message inside its turn",
     async () =>
-      (await events()).find(
-        (e) => e.kind === "agent_message_read" && e.body.by === "planner" && e.body.how,
-      ),
+      (await events())
+        .slice(since)
+        .find((e) => e.kind === "agent_message_read" && e.body.by === "planner" && e.body.how),
     300_000,
     2000,
   );

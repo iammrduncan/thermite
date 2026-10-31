@@ -4,6 +4,7 @@ import type { StoredRule } from "../../../core/directives.ts";
 import type { NoteInput } from "../../../core/journal.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Assignment } from "../registry.ts";
+import type { PlannerView } from "./call.ts";
 import { type Ask, type PlannerTries, plannerTries } from "./call.ts";
 import type { PlanTry } from "./causes.ts";
 import { type NewFamily, type QueuePlan, validatePlan } from "./check.ts";
@@ -15,6 +16,7 @@ import { PLAN_SPEC } from "./submit.ts";
 export {
   type Ask,
   type PlannerTries,
+  type PlannerView,
   plannerTries,
 } from "./call.ts";
 export {
@@ -35,8 +37,19 @@ export {
   toDesign,
 } from "./context.ts";
 export { fallbackPlan, goalsNamed } from "./fallback.ts";
-export type { PlannerCompaction, PlannerMcp } from "./pi.ts";
-export type { PlannerCallSpec } from "./submit.ts";
+export {
+  callPlanner,
+  type PlannerCompaction,
+  type PlannerMcp,
+  type PlannerPiOptions,
+} from "./pi.ts";
+export { PLAN_SPEC, type PlannerCallSpec } from "./submit.ts";
+export {
+  PLANNER_SPEC_FILE,
+  type PlannerViewCall,
+  type PlannerViewSpec,
+  plannerInView,
+} from "./view.ts";
 
 /**
  * The planner: the coordinator of a run's lanes. One stateless model call per round, with
@@ -113,6 +126,8 @@ export async function plan(
   usage?: (u: CallUsage) => void,
   /** Keeps each try's prompt, as it is sent (goal 166). */
   sent?: (p: Prompt) => void,
+  /** In Pi, in its own process and its Pi view (goal 169). */
+  view?: PlannerView,
 ): Promise<PlanResult> {
   let r: PlannerTries<ReturnType<typeof validatePlan>["plan"]> | undefined;
   if (model) {
@@ -129,6 +144,7 @@ export async function plan(
       compaction,
       usage,
       sent,
+      view,
     });
     const p = r.plan;
     if (p) {

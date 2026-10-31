@@ -79,12 +79,14 @@ export class TerminalConsoles {
 
   /**
    * A call outside a trial started in its own terminal (a planner's call): its console, under its
-   * id. A round's second try takes its first's id, whose last screen goes.
+   * id, and a planner in Pi's own side of its Pi view. A round's second try takes its first's id,
+   * whose last screen goes.
    */
-  setCall(id: string, of: CallConsoleOf, c: TrialConsole): void {
+  setCall(id: string, of: CallConsoleOf, c: TrialConsole, piView?: PiConsole): void {
     this.last.delete(id);
     this.calls.set(id, of);
     this.open.set(id, c);
+    if (piView) this.piViews.set(id, piView);
   }
 
   /** The calls outside a trial whose terminals run now, for the rig's report. */
@@ -94,9 +96,12 @@ export class TerminalConsoles {
       .map(([id, of]) => ({ id, run: of.run, role: of.lane }));
   }
 
-  /** A running trial's Pi view, which its worker asks for the owner's inputs; none: undefined. */
-  piView(trial: string): PiConsole | undefined {
-    return this.piViews.get(trial);
+  /**
+   * A running trial's or call's Pi view, which its process asks for the owner's inputs; none:
+   * undefined.
+   */
+  piView(id: string): PiConsole | undefined {
+    return this.piViews.get(id);
   }
 
   /**

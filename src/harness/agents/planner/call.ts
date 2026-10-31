@@ -10,8 +10,8 @@ import { callPlanner, type PlannerCompaction, type PlannerMcp } from "./pi.ts";
 import type { PlannerCallSpec } from "./submit.ts";
 
 /**
- * A planner call, in Pi (pi.ts) or through another harness (askPlanner): its tries, each answer
- * checked, and why each try gave no plan.
+ * A planner call, in Pi (pi.ts, or its own process: view.ts) or through another harness
+ * (askPlanner): its tries, each answer checked, and why each try gave no plan.
  */
 
 /**
@@ -32,6 +32,16 @@ export type Ask = ((
   /** The program it asks through (its prompt names it); none: a program like OpenCode. */
   program?: string | undefined;
 };
+
+/**
+ * The planner in Pi in a process of its own, in its Pi view (goal 169; view.ts): its prompt and its
+ * call's spec in, submit_plan's arguments out, or a PlannerCallError that says why it gave none.
+ */
+export type PlannerView = (
+  sent: Prompt,
+  spec: PlannerCallSpec,
+  signal?: AbortSignal,
+) => Promise<unknown>;
 
 /** What the tries of a planner call gave: the checked plan, or why each try gave none. */
 export interface PlannerTries<T> {
@@ -60,6 +70,8 @@ export async function plannerTries<T>(o: {
   check: (raw: unknown) => { errors: string[]; plan?: T | undefined };
   signal?: AbortSignal | undefined;
   ask?: Ask | undefined;
+  /** In Pi, in its own process and its Pi view, on a rig whose agents run in their terminal. */
+  view?: PlannerView | undefined;
   past?: PlannerPast | undefined;
   mcp?: PlannerMcp | undefined;
   compaction?: PlannerCompaction | undefined;
@@ -102,7 +114,16 @@ export async function plannerTries<T>(o: {
             o.mcp?.servers,
             o.mcp?.kb !== undefined,
           )
-        : await callPlanner(o.model, sent, o.signal, o.mcp, o.compaction, o.usage, o.spec, o.sent);
+        : o.view
+          ? await o.view(sent, o.spec, o.signal)
+          : await callPlanner(o.model, sent, {
+              signal: o.signal,
+              mcp: o.mcp,
+              compaction: o.compaction,
+              usage: o.usage,
+              spec: o.spec,
+              kept: o.sent,
+            });
     } catch (err) {
       const why = err instanceof PlannerCallError ? err : causeOf(err);
       causes.push({ try: tries, cause: why.planCause, detail: why.message.slice(0, 600) });

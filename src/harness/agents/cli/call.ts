@@ -10,6 +10,7 @@ import type { LiveKind } from "../../../core/live.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Role } from "../../broker/index.ts";
 import type { MessageInbox, TurnDelivery } from "../live-session.ts";
+import type { PiConsole } from "../pi-view/index.ts";
 import type { ProviderLink } from "../provider-errors.ts";
 import { takeUsage } from "./common.ts";
 import { TrialConsole } from "./console.ts";
@@ -22,7 +23,8 @@ import { waitOutWindow } from "./usage-window.ts";
 
 /**
  * A call of a role outside a trial in its program's own terminal (goal 169; the owner's decision
- * of 2026-10-31): a planner's, on the one path every role takes there (terminal.ts). It is a CliRun
+ * of 2026-10-31): a planner's, on the one path every role takes there (terminal.ts; a planner in
+ * Pi takes the same link to its Pi view, planner/view.ts). It is a CliRun
  * of the program's own entry, as a trial is, in a folder of its own under the lanes' area, run as
  * the role's user: its prompt is typed in, the owner's messages go in inside its turn through its
  * hooks or Thermite's plugin, the owner's console types into it, Live shows its screen, and a full
@@ -66,8 +68,11 @@ export interface TerminalCallLink extends ProviderLink {
   sent?: ((p: Prompt) => void) | undefined;
   /** Lines for its live source, from its session log. */
   live(entries: { kind: LiveKind; text: string }[]): void;
-  /** Given its console when its terminal starts, and undefined when it ends. */
-  console(c: TrialConsole | undefined): void;
+  /**
+   * Given its console when its terminal starts, and undefined when it ends; in Pi, its Pi view's
+   * own side too, which its process asks for the owner's inputs (planner/view.ts).
+   */
+  console(c: TrialConsole | undefined, piView?: PiConsole): void;
   /** Lets its hooks or plugin take the owner's messages inside its turn; undefined at its end. */
   inTurn(d: TurnDelivery | undefined): void;
   /** Whether the rig drains: a call that waits for its usage window ends. */

@@ -495,6 +495,12 @@ A message from the campaign's owner, who is watching this session, as one more o
 Continue where you left off.
 ```
 
+### Planner: in its Pi view, the words you type into its console, after this
+
+```text
+A message from the campaign's owner, who is watching this session:
+```
+
 ### Planner: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows
 
 ```text
@@ -635,6 +641,12 @@ A message from the campaign's owner, who is watching this session, as one more o
 
 ```text
 Continue where you left off.
+```
+
+### Research planner: in its Pi view, the words you type into its console, after this
+
+```text
+A message from the campaign's owner, who is watching this session:
 ```
 
 ### Research planner: Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows

@@ -10,7 +10,7 @@ import {
 import { errorText } from "../../common/errors.ts";
 import { logWarn } from "../../common/log.ts";
 import type { Role, Runner, RunOutcome } from "../broker/index.ts";
-import { startTerminal } from "../terminal/index.ts";
+import { startTerminal, type TerminalEnded } from "../terminal/index.ts";
 import { type PiConsole, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
 import type { ResearchTrialSpec } from "./research/index.ts";
 import { TrialResult, type TrialSpec } from "./worker/index.ts";
@@ -27,33 +27,89 @@ const ALWAYS = ["NODE_OPTIONS", "LANG", STALL_SETTING];
 const MODEL_ENV = [...MODEL_ENV_NAMES, ...ALWAYS];
 
 /**
- * The route a worker process gets. A ChatGPT sign-in's token is renewed hourly and stays in the
- * harness: the worker reaches the model through the harness's proxy with its trial's own token,
- * which stops working when the trial ends.
+ * The route a Pi process gets, a worker's or a planner's. A ChatGPT sign-in's token is renewed
+ * hourly and stays in the harness: the process reaches the model through the harness's proxy with
+ * `credential`, its trial's token or its call's, which stops working when the trial or call ends.
  */
-export function workerRoute(
-  model: ModelConfig,
-  apiPort: number,
-  trialToken: string | undefined,
-): ModelConfig {
+export function piRoute(model: ModelConfig, apiPort: number, credential: string): ModelConfig {
   if (model.api !== "chatgpt") return model;
   return {
     ...model,
     baseUrl: `http://127.0.0.1:${apiPort}/v1/model-proxy`,
-    apiKey: `trial.${trialToken ?? ""}`,
+    apiKey: credential,
     keyNow: undefined,
+  };
+}
+
+/**
+ * A Pi process's environment: its route, when it has one (else the harness's own model settings
+ * pass through), and the harness's URL. Only the process's own user can read it.
+ */
+export function piEnv(
+  model: ModelConfig | undefined,
+  apiPort: number,
+  credential: string,
+): Record<string, string> {
+  return {
+    ...Object.fromEntries(
+      (model ? ALWAYS : MODEL_ENV)
+        .filter((k) => process.env[k] !== undefined)
+        .map((k) => [k, process.env[k] as string]),
+    ),
+    ...(model ? modelEnv(piRoute(model, apiPort, credential)) : {}),
+    THERMITE_HARNESS_URL: `http://127.0.0.1:${apiPort}`,
   };
 }
 
 /** The most bytes of a result a worker in its Pi view leaves in its folder that are read. */
 const RESULT_MAX = 1024 * 1024;
-/** The worker process's memory limit, with the terminal host that holds it in its Pi view. */
-const WORKER_RSS = 2 * 1024 * 1024 * 1024;
-/** The worker's entry, as Node runs it: worker-main.js when built, worker-main.ts from the source. */
-const WORKER_MAIN = fileURLToPath(
-  new URL(`./worker-main${extname(fileURLToPath(import.meta.url))}`, import.meta.url),
-);
+/** A Pi process's memory limit, with the terminal host that holds it in its Pi view. */
+export const PI_PROCESS_RSS = 2 * 1024 * 1024 * 1024;
 
+/** How Node runs one of the harness's entries: `name`.js when built, `name`.ts from the source. */
+export function entryArgv(name: string): string[] {
+  const file = fileURLToPath(
+    new URL(`./${name}${extname(fileURLToPath(import.meta.url))}`, import.meta.url),
+  );
+  return [process.execPath, ...process.execArgv, file];
+}
+
+/**
+ * A Pi process in its Pi view (goal 169), a worker's or a planner's: the terminal host runs it as
+ * `role`, in `dir`, on a terminal of its own, where it draws its view; `view` is its console, given
+ * the host to show the screen. Resolves when the process has ended. The host and the process are
+ * both Node: neither is the agent's commands, so both are spared at the memory limit, which ends
+ * the run as it would headless. Throws when the host can't start.
+ */
+export async function runInView(
+  runner: Runner,
+  o: {
+    role: Role;
+    dir: string;
+    env: Record<string, string>;
+    /** The trial's id, or the call's. */
+    id: string;
+    argv: string[];
+    timeoutMs?: number | undefined;
+    nproc?: number | undefined;
+  },
+  view: PiConsole,
+): Promise<TerminalEnded> {
+  const term = await startTerminal(runner, {
+    role: o.role,
+    area: o.dir,
+    env: o.env,
+    start: { trial: o.id, program: "pi", argv: [...o.argv, VIEW_FLAG], cwd: o.dir },
+    timeoutMs: o.timeoutMs,
+    rssLimitBytes: PI_PROCESS_RSS,
+    spareExe: process.execPath,
+    nproc: o.nproc,
+  });
+  view.attach(term);
+  const ended = await term.done;
+  view.ended(ended.exit?.screen);
+  return ended;
+}
 /**
  * The folder of the trials' own folders, in the harness's scratch area: one that each worker's
  * user may pass through to reach its own folder by its full path (its terminal host's socket is
@@ -97,44 +153,25 @@ export async function spawnTrial(
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const specFile = join(dir, "trial.json");
   writeFileSync(specFile, JSON.stringify(trial), { mode: 0o600 });
-  const route = model ? workerRoute(model, apiPort, spec.token) : undefined;
   await runner.handOver(dir, role, view ? { harnessReads: true } : {});
   const abort = () => void runner.killRole(role).catch(() => 0);
   if (signal?.aborted) abort();
   signal?.addEventListener("abort", abort, { once: true });
   // Relative to its folder, where its process starts.
-  const argv = [process.execPath, ...process.execArgv, WORKER_MAIN, "trial.json"];
-  const env = {
-    ...Object.fromEntries(
-      (model ? ALWAYS : MODEL_ENV)
-        .filter((k) => process.env[k] !== undefined)
-        .map((k) => [k, process.env[k] as string]),
-    ),
-    // Only the worker's own user can read its environment; the lane's commands run as another.
-    ...(route ? modelEnv(route) : {}),
-    THERMITE_HARNESS_URL: `http://127.0.0.1:${apiPort}`,
-  };
+  const argv = [...entryArgv("worker-main"), "trial.json"];
+  // Only the worker's own user can read its environment; the lane's commands run as another.
+  const env = piEnv(model, apiPort, `trial.${spec.token ?? ""}`);
   // The trial's own length, when it has one, and two minutes to hand its result over.
   const timeoutMs = spec.wallMs !== undefined ? spec.wallMs + 120_000 : undefined;
   // The contract's process limit for the lane's users; without it, the broker's default.
   const nproc = spec.limits?.processes;
   try {
     if (view) {
-      const term = await startTerminal(runner, {
-        role,
-        area: dir,
-        env,
-        start: { trial: spec.trialId, program: "pi", argv: [...argv, VIEW_FLAG], cwd: dir },
-        timeoutMs,
-        rssLimitBytes: WORKER_RSS,
-        // The host and the worker are both Node: neither is the agent's commands, which run as
-        // the lane's user, so both are spared, and the limit ends the run as it would headless.
-        spareExe: process.execPath,
-        nproc,
-      });
-      view.attach(term);
-      const ended = await term.done;
-      view.ended(ended.exit?.screen);
+      const ended = await runInView(
+        runner,
+        { role, dir, env, id: spec.trialId, argv, timeoutMs, nproc },
+        view,
+      );
       const said = readResult(dir);
       if (!said)
         logWarn("harness", "a worker in Pi left no result in its terminal", {
@@ -153,7 +190,7 @@ export async function spawnTrial(
       cwd: dir,
       env,
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-      rssLimitBytes: WORKER_RSS,
+      rssLimitBytes: PI_PROCESS_RSS,
       ...(nproc !== undefined ? { nproc } : {}),
       captureBytes: 1024 * 1024,
     });

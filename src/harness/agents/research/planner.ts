@@ -36,6 +36,7 @@ import {
   type PlannerCompaction,
   type PlannerMcp,
   type PlannerPast,
+  type PlannerView,
   type PlanTry,
   plannerTries,
   type QueuePlan,
@@ -630,6 +631,7 @@ const Change = Type.Object({
 
 /** The research planner's call: its prompts and its tool. */
 export const RESEARCH_PLAN_SPEC: PlannerCallSpec = {
+  id: "research",
   render: renderResearchPlanner,
   description:
     "Submit this round's research plan: each lane's task, your changes to the queue, and the hypotheses you promote or retire.",
@@ -715,6 +717,8 @@ export async function planResearch(
   usage?: (u: CallUsage) => void,
   /** Keeps each try's prompt, as it is sent (goal 166). */
   sent?: (p: Prompt) => void,
+  /** In Pi, in its own process and its Pi view (goal 169). */
+  view?: PlannerView,
 ): Promise<ResearchPlanResult> {
   if (!model) return { source: "fallback", tries: 0, valid: false, rawViolations: [] };
   const r = await plannerTries({
@@ -730,6 +734,7 @@ export async function planResearch(
     compaction,
     usage,
     sent,
+    view,
   });
   return {
     source: r.plan ? "planner" : "fallback",

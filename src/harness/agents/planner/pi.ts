@@ -1,19 +1,27 @@
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import { type CompactionReport, Compactor, summarizer } from "../../../agents/compaction/index.ts";
+import { mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { buildModel, type ModelConfig, PiMeter } from "../../../agents/model/index.ts";
 import { messageText, type Prompt, systemText } from "../../../agents/prompt.ts";
-import { renderCompacted } from "../../../agents/roles/index.ts";
+import {
+  renderCompacted,
+  renderPlannerTurn,
+  renderResearchPlannerTurn,
+} from "../../../agents/roles/index.ts";
 import { routeRefusal } from "../../../core/agents.ts";
 import { canonicalJson } from "../../../core/canonical.ts";
 import type { CallUsage } from "../../../core/usage.ts";
+import { linkSession, type SessionLink } from "../live-session.ts";
 import { classifyProviderError, KIND_WORDS } from "../provider-errors.ts";
+import { type McpForAgent, swappableTools, type TrialView } from "../worker/index.ts";
 import { PlannerCallError } from "./causes.ts";
 import { PLAN_SPEC, type PlannerCallSpec } from "./submit.ts";
 
 /**
  * The planner in Pi: one agent with submit_plan, the knowledge base's tools and the MCP servers'
- * tools, compacted near its window.
+ * tools, compacted near its window. It runs in the controller, or, on a rig whose agents run in
+ * their own terminal, in a process of its own in its Pi view (planner-main.ts, goal 169).
  */
 
 /**
@@ -24,6 +32,11 @@ export interface PlannerMcp {
   servers: string[];
   tools: AgentTool[];
   /**
+   * In its own process: the gateway's list its tools came from, which its Pi view's /mcp shows
+   * and /mcp reconnect lists again.
+   */
+  listed?: McpForAgent | undefined;
+  /**
    * Thermite's knowledge base (goal 175): the kinds the planner may write, and in Pi its tools
    * (kb_search, kb_read, and kb_write when it may write). None: no knowledge base tools.
    */
@@ -33,24 +46,43 @@ export interface PlannerMcp {
 /**
  * Where the planner's compactions go (goal 070): in Pi, a planner call's conversation grows with
  * what its tools return (past research, MCP servers) and is compacted near the window as a
- * worker's is. The harness keeps each conversation in the run's research folder and records it.
+ * worker's is. The harness keeps each conversation in the run's research folder and records it;
+ * a planner in its own process asks the harness over its call's routes.
  */
 export interface PlannerCompaction {
-  keep(n: number, markdown: string): { path: string; rel: string };
-  done(r: CompactionReport): void;
+  keep(
+    n: number,
+    markdown: string,
+  ): { path: string; rel: string } | Promise<{ path: string; rel: string }>;
+  done(r: CompactionReport): unknown;
+}
+
+/** What a planner call in Pi takes besides its route and its prompt. */
+export interface PlannerPiOptions {
+  signal?: AbortSignal | undefined;
+  mcp?: PlannerMcp | undefined;
+  compaction?: PlannerCompaction | undefined;
+  /** Each model call's usage (goal 075). */
+  usage?: ((u: CallUsage) => void) | undefined;
+  spec?: PlannerCallSpec | undefined;
+  /** Keeps each later turn the call sends, as its first prompt is kept (goal 166). */
+  kept?: ((p: Prompt) => void) | undefined;
+  /**
+   * In its own process, in its Pi view (goal 169): the view's console, given the call's levers,
+   * and the session's link, which sends its lines to Live and brings the owner's messages in
+   * before its next model call.
+   */
+  view?: TrialView | undefined;
+  link?: Pick<SessionLink, "live" | "messages" | "read"> | undefined;
 }
 
 export async function callPlanner(
   cfg: ModelConfig,
   sent: Prompt,
-  signal?: AbortSignal,
-  mcp?: PlannerMcp,
-  compaction?: PlannerCompaction,
-  usage?: (u: CallUsage) => void,
-  spec: PlannerCallSpec = PLAN_SPEC,
-  /** Keeps each later turn the call sends, as its first prompt is kept (goal 166). */
-  kept?: (p: Prompt) => void,
+  o: PlannerPiOptions = {},
 ): Promise<unknown> {
+  const { signal, mcp, compaction, usage, kept } = o;
+  const spec = o.spec ?? PLAN_SPEC;
   if (routeRefusal(cfg.api, "pi") === "claude-code")
     throw new Error(
       "a Claude subscription runs only in Claude Code, and none is set up for the planner",
@@ -59,37 +91,36 @@ export async function callPlanner(
   // Each model call's usage, the compaction summaries' included (goal 075).
   const meter = usage ? new PiMeter(usage) : undefined;
   let captured: unknown;
+  const submit: AgentTool = {
+    name: "submit_plan",
+    label: "submit_plan",
+    description: spec.description,
+    parameters: spec.parameters,
+    execute: async (_id, params) => {
+      captured = params;
+      return {
+        content: [{ type: "text", text: "plan received" }],
+        details: {},
+        terminate: true,
+      };
+    },
+  };
+  // Thermite's knowledge base (goal 175), run by the harness for the planner's slot; the MCP
+  // servers the run's kit gives the planner, through the harness's gateway; and submit_plan.
+  const toolsWith = (mcpTools: AgentTool[]) => [...(mcp?.kb?.tools ?? []), ...mcpTools, submit];
   const agent = new Agent({
     initialState: {
       systemPrompt: systemText(sent),
       model,
       thinkingLevel,
-      tools: [
-        // Thermite's knowledge base (goal 175), run by the harness for the planner's slot.
-        ...(mcp?.kb?.tools ?? []),
-        // The MCP servers the run's kit gives the planner, through the harness's gateway.
-        ...(mcp?.tools ?? []),
-        {
-          name: "submit_plan",
-          label: "submit_plan",
-          description: spec.description,
-          parameters: spec.parameters,
-          execute: async (_id, params) => {
-            captured = params;
-            return {
-              content: [{ type: "text", text: "plan received" }],
-              details: {},
-              terminate: true,
-            };
-          },
-        },
-      ],
+      tools: toolsWith(mcp?.tools ?? []),
     },
     streamFn: meter ? meter.streamFn(models) : models.streamSimple.bind(models),
   });
   meter?.watch(agent);
   // Its later turns (goal 166), numbered after its first message.
   let said = 0;
+  const turnOf = sent.role === "research-planner" ? renderResearchPlannerTurn : renderPlannerTurn;
   // Near the window its conversation is compacted and the call goes on (goal 070). The planner
   // has no file tool: the run keeps the conversation, and the summary says where.
   let tooBig: string | undefined;
@@ -107,10 +138,12 @@ export async function callPlanner(
     summarize: summarizer(cfg, meter),
     keep: async (n, markdown) => {
       if (!compaction) throw new Error("this planner has no place to keep it");
-      const { rel } = compaction.keep(n, markdown);
+      const { rel } = await compaction.keep(n, markdown);
       return { path: `the run's research folder, ${rel}` };
     },
-    done: async (r) => compaction?.done(r),
+    done: async (r) => {
+      await compaction?.done(r);
+    },
     stop: (reason) => {
       tooBig = reason;
       agent.abort();
@@ -140,6 +173,47 @@ export async function callPlanner(
     }
     refused.add(args);
   });
+  // In its Pi view (goal 169): the owner's console reaches the call through these levers, and the
+  // owner's messages come in before its next model call, until it has sent its plan.
+  const closed = () =>
+    captured === undefined ? undefined : "the planner has sent its plan: nothing more goes in";
+  if (o.link) {
+    const waiting = o.link.messages;
+    linkSession(agent, {
+      ...o.link,
+      messages: waiting ? async () => (closed() ? [] : waiting()) : undefined,
+      ownerTurn: (m) =>
+        turnOf({ program: "pi", turn: ++said, kind: "owner", id: m.id, text: m.text }),
+      sent: kept,
+    });
+  }
+  if (o.view) {
+    const counts = { turns: 0, toolCalls: 0, tokensIn: 0, tokensOut: 0 };
+    agent.subscribe((e) => {
+      if (e.type === "turn_end") counts.turns++;
+      else if (e.type === "tool_execution_start") counts.toolCalls++;
+      else if (e.type === "message_end" && e.message.role === "assistant") {
+        const u = (e.message as { usage?: { input?: number; output?: number } }).usage;
+        counts.tokensIn += u?.input ?? 0;
+        counts.tokensOut += u?.output ?? 0;
+      }
+    });
+    const swap = swappableTools(agent);
+    let listed = mcp?.listed;
+    o.view.attach({
+      agent,
+      compact: () => compactor.force("asked"),
+      ownerTurn: (text) => turnOf({ program: "pi", turn: ++said, kind: "owner", text }),
+      sent: kept,
+      mcp: () => listed,
+      setMcp: (m) => {
+        listed = m;
+        swap(toolsWith(mcpAgentTools(m.tools, m.call)));
+      },
+      status: () => ({ ...counts, compactions: compactor.count, model: cfg.model }),
+      closed,
+    });
+  }
   // No time limit (goal 079): the call ends when the planner answers, or when its run is paused
   // or closed (the scheduler cancels it).
   const cancel = () => agent.abort();
@@ -172,7 +246,12 @@ export async function callPlanner(
       );
     }
     if (last?.stopReason === "aborted")
-      throw new PlannerCallError("cancelled", "the call was stopped");
+      throw new PlannerCallError(
+        "cancelled",
+        o.view?.interrupted()
+          ? "the owner stopped its reply from its Pi view"
+          : "the call was stopped",
+      );
     throw new PlannerCallError("text_only", "it answered in text and did not call submit_plan");
   }
   return captured;

@@ -59,7 +59,7 @@ Once the trial has ended, the console says `The trial has ended: its terminal ta
 
 ## The planner's terminal
 
-The planner's page, `/ui/rigs/<rig>/live?source=planner`, has its call's terminal at its top while the planner plans a round in Claude Code, Codex or OpenCode in that program's own terminal: the same parts as a trial's, for the call named `planner-<run>-<round>`. The rig's report lists the call while it runs (`work.terminals` in its summary), and the page shows the terminal from it; once the round's plan is in, the page shows none. The planner's stream shows its session, read from its program's log as a trial's is: its text, its tools and their results, and your inputs' outcomes.
+The planner's page, `/ui/rigs/<rig>/live?source=planner`, has its call's terminal at its top while the planner plans a round in its own terminal: Claude Code's, Codex's or OpenCode's, or, in Pi, its Pi view ([The Pi view](../explanation/agents-lanes-planner.md#the-pi-view)). It has the same parts as a trial's, for the call named `planner-<run>-<round>`. The rig's report lists the call while it runs (`work.terminals` in its summary), and the page shows the terminal from it; once the round's plan is in, the page shows none. The planner's stream shows its session, read from its program's log as a trial's is, or sent by its process in Pi: its text, its tools and their results, and your inputs' outcomes.
 
 ### How the screen reaches the page
 

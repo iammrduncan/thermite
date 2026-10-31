@@ -6,7 +6,7 @@ sidebar:
   order: 18
 ---
 
-A worker in Claude Code, Codex or OpenCode works in that program's own terminal, as a person would use it, when its rig runs its agent programs in their own terminal ([Agents in their own terminal](../../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)). A worker in Pi draws Thermite's Pi view there instead ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). The planner, when it plans in Claude Code, Codex or OpenCode, plans in that program's terminal too ([The planner's terminal](#the-planners-terminal)). You can watch that terminal from the dashboard and type into it: words for the agent, a slash command such as `/compact`, a skill, or a key for one of the program's menus. Each input is a signed command, [`terminal_input`](../../reference/signed-commands.md#terminal_input), that only you can send, and the rig records it word for word with what became of it.
+A worker in Claude Code, Codex or OpenCode works in that program's own terminal, as a person would use it, when its rig runs its agent programs in their own terminal ([Agents in their own terminal](../../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)). A worker in Pi draws Thermite's Pi view there instead ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). The planner plans in that program's terminal too, or, in Pi, in its own Pi view ([The planner's terminal](#the-planners-terminal)). You can watch that terminal from the dashboard and type into it: words for the agent, a slash command such as `/compact`, a skill, or a key for one of the program's menus. Each input is a signed command, [`terminal_input`](../../reference/signed-commands.md#terminal_input), that only you can send, and the rig records it word for word with what became of it.
 
 To tell the agents something without typing into a program, send a message instead: every agent reads one ([Send the agents a message](steer-a-run.md#send-the-agents-a-message)).
 
@@ -76,17 +76,17 @@ An input still waiting when the trial ends is dropped, and the list says so. The
 
 ## The planner's terminal
 
-While the planner plans a round in Claude Code, Codex or OpenCode on a rig that runs its agent programs in their own terminal, its call has a terminal of its own, named `planner-<run>-<round>`, such as `planner-matmul-1-3`. Both tries of a round have the same name.
+While the planner plans a round on a rig that runs its agent programs in their own terminal, its call has a terminal of its own, named `planner-<run>-<round>`, such as `planner-matmul-1-3`. In Claude Code, Codex or OpenCode it is that program's terminal; in Pi it is the planner's Pi view, which Thermite draws of the planner's own session as it draws a worker's. Both tries of a round have the same name.
 
 1. Open **Live**, choose the run, and press **⌨ Terminals**: while the planner plans this run, the list starts with `the planner's terminal`.
 
    You can also open the rig's page, press **Live**, and choose **Planner** under **Sessions**.
 
-The planner's page shows its terminal and console at its top, as a trial's page does, while the call runs. Type into it the same way: what you type goes into the planner's program, and the list under the console shows each input's outcome. The planner's stream shows its session as it works: its text, its tools and their results.
+The planner's page shows its terminal and console at its top, as a trial's page does, while the call runs. Type into it the same way: what you type goes into the planner's program, and the list under the console shows each input's outcome. In the planner's Pi view, nothing is typed: each input is one call in its session, as in a worker's Pi view, and the same inputs work there ([In a worker in Pi's view](../../reference/signed-commands.md#in-a-worker-in-pis-view)). Words steer the planner before its next model call, and **Esc** stops its reply, which ends that try: the round's next try starts, if it has one. The planner's stream shows its session as it works: its text, its tools and their results.
 
-A message to the planner (**To the planner**, under the run's message box) sent while it plans goes in inside its turn, as a worker's does: after a tool, or at the end of its turn, and the planner goes on with it. It joins the owner's messages the planner was given, with its number, so a rule it asks for names it. A full usage window is waited out in the planner's terminal as in a trial's, and the run waits with it.
+A message to the planner (**To the planner**, under the run's message box) sent while it plans goes in inside its turn, as a worker's does: in Claude Code, Codex or OpenCode after a tool, or at the end of its turn, and the planner goes on with it; in Pi before its next model call. It joins the owner's messages the planner was given, with its number, so a rule it asks for names it. A full usage window is waited out in the planner's terminal as in a trial's, and the run waits with it.
 
-When the round's plan is in, the call ends: its page no longer shows a terminal, and the console takes no more input. A planner in Pi has no terminal yet.
+When the round's plan is in, the call ends: its page no longer shows a terminal, and the console takes no more input.
 
 ## After the trial ends
 

@@ -12,6 +12,7 @@ import {
   DevRuns,
   laneCacheEnv,
   ModelSource,
+  plannerInView,
   programOf,
   researchProgramOf,
   researchRefusal,
@@ -107,6 +108,8 @@ export interface AgentLinks {
   modelFor: (run: string) => ModelConfig | undefined;
   /** What a one-prompt call (a planner call, a model check) takes from the harness. */
   once: CliOnceDeps;
+  /** The harness API's port, which a Pi process reaches. */
+  port: number;
   /** Takes the subscription's windows into the rig's report. */
   windows: (u: PlanWindows) => void;
   /** What a trial takes from the harness. */
@@ -211,7 +214,7 @@ export function agentLinks(
       signal,
     };
   };
-  return { models, model, modelFor, once, windows, link };
+  return { models, model, modelFor, once, port, windows, link };
 }
 
 /**
@@ -261,6 +264,15 @@ export function createScheduler(
     // The planner through OpenCode, Claude Code or Codex, as the planner's own user (cli/once.ts).
     ask: (via, m, prompt, signal, o) =>
       CLI_PROGRAMS[via].ask(m, prompt, once, { ...o, signal, windows }),
+    // A planner in Pi on a rig whose agents run in their own terminal: in a process of its own,
+    // in its Pi view, as the planner's user (goal 169).
+    planInView: (c, sent, spec, signal) =>
+      plannerInView(
+        { ...c, runner, scratchDir: once.scratchDir, port: links.port },
+        sent,
+        spec,
+        signal,
+      ),
     // The planner's own model, when control gave it one.
     plannerModel: () => models.planner(),
     research,

@@ -237,7 +237,8 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     linkSession(agent, {
       ...link,
       messages: waiting ? async () => (result.submitted ? [] : waiting()) : undefined,
-      ownerTurn: (text) => renderWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+      ownerTurn: (m) =>
+        renderWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text: m.text }),
       sent: deps.sent,
     });
   // Its Pi view's console (goal 169): each of the owner's calls is one of these levers.

@@ -10,6 +10,8 @@ import { JOURNAL_FIELD } from "../../../agents/tools/index.ts";
  * and the research plan (research/planner.ts) each have their own.
  */
 export interface PlannerCallSpec {
+  /** Which call it is, as a planner's own process names it (goal 169). */
+  id: "plan" | "research";
   render(i: PlannerInput): Prompt;
   description: string;
   parameters: TSchema;
@@ -143,6 +145,7 @@ const PLAN_PARAMETERS = Type.Object({
 
 /** The hill climb's and goal campaign's planner call. */
 export const PLAN_SPEC: PlannerCallSpec = {
+  id: "plan",
   render: renderPlanner,
   description: "Submit this round's plan: each lane's experiment, and your changes to the queue.",
   parameters: PLAN_PARAMETERS,

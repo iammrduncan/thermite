@@ -9,7 +9,7 @@ import type { Runner, RunOutcome, RunRequest } from "../broker/index.ts";
 import { KEPT_MAX } from "../compactions.ts";
 import { apiCall } from "./api-call.ts";
 import type { ReplyNow, TrialProgress } from "./live-session.ts";
-import { startView, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
+import { endWords, startView, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
 import { runResearchTrial } from "./research/index.ts";
 import type { AnyTrial } from "./spawn.ts";
 import {
@@ -135,7 +135,7 @@ async function main(): Promise<void> {
       process.stdout.write(`\n${JSON.stringify(r)}\n`);
       return;
     }
-    await view.finish(r);
+    await view.finish(endWords(r));
     leaveResult(JSON.stringify(r));
     process.exit(0);
   };

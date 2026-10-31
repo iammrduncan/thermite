@@ -6,16 +6,25 @@ import type { Prompt } from "../../../agents/prompt.ts";
 import { renderPlannerTurn, renderResearchPlannerTurn } from "../../../agents/roles/index.ts";
 import { kbAgentTools } from "../../../agents/tools/index.ts";
 import { type Harness, programForApi } from "../../../core/agents.ts";
+import type { PlannerAnswer } from "../../../core/api/harness/planner.ts";
 import type { Contract } from "../../../core/contract.ts";
 import type { NoteInput } from "../../../core/journal.ts";
 import { plannerCallId } from "../../../core/terminal-input.ts";
 import type { CallUsage } from "../../../core/usage.ts";
+import type { CompactionOf } from "../../compactions.ts";
 import { messageText } from "../../messages.ts";
 import { keepPrompt } from "../../prompts.ts";
 import { routeOf } from "../../usage.ts";
 import type { CliHarness, TerminalCallLink } from "../cli/index.ts";
 import { PLANNER } from "../coordinator.ts";
-import type { Ask, PlannerCompaction, PlannerMcp, PlannerPast } from "../planner/index.ts";
+import type { MessageInbox } from "../live-session.ts";
+import type {
+  Ask,
+  PlannerCompaction,
+  PlannerMcp,
+  PlannerPast,
+  PlannerView,
+} from "../planner/index.ts";
 import { isCliProgram, programOf } from "../programs.ts";
 import { pastResearch } from "./briefs.ts";
 import { modelNow, type PlannerCallOptions, type SchedulerContext } from "./context.ts";
@@ -58,6 +67,8 @@ export async function plannerRoute(
 ): Promise<{
   m: ModelConfig | undefined;
   ask: Ask | undefined;
+  /** In Pi, in its own process and its Pi view, on a rig whose agents run in their terminal. */
+  view: PlannerView | undefined;
   mcp: PlannerMcp | undefined;
   usage: ((u: CallUsage) => void) | undefined;
   past: PlannerPast | undefined;
@@ -125,8 +136,9 @@ export async function plannerRoute(
       : undefined;
   // Its console's and screens' id: both tries of a round take it (goal 169).
   const callId = plannerCallId(run, n);
-  const terminalLink = (auth: string): TerminalCallLink =>
-    plannerTerminal(sched, { run, n, id: callId, auth, role: call.role, via, owner: call.owner });
+  const side = () =>
+    plannerTerminal(sched, { run, n, id: callId, role: call.role, via, owner: call.owner });
+  const terminalLink = (auth: string): TerminalCallLink => ({ ...side(), auth });
   // Thermite's knowledge base (goal 175): in Pi its tools run here, for the planner's slot;
   // another program reaches them at the gateway, with the call's credential.
   const kbTools = sched.o.service.kbTools;
@@ -152,7 +164,52 @@ export async function plannerRoute(
   const past: PlannerPast | undefined = pastLine ? { dir: knowledge.dir(run) } : undefined;
   // Each try's prompt, kept whole in the ledger (goal 166).
   const sent = (p: Prompt) => keepPrompt(sched.o.service.ledger, run, p, { call: `epoch ${n}` });
-  return { m, ask, mcp, usage, past, pastLine, sent };
+  // In Pi on a rig whose agents run in their own terminal, each try runs in a process of its own,
+  // in its Pi view (goal 169), which reaches the harness with a credential bound to the call: its
+  // tools, compactions, usage, later turns, lines and the owner's messages, and its answer.
+  const inView = sched.o.planInView;
+  const view: PlannerView | undefined =
+    inTerminal && via === "pi" && m && inView
+      ? async (prompt, spec, signal) => {
+          let answer: PlannerAnswer | undefined;
+          const s = side();
+          const store = sched.o.service.compactions;
+          const auth = sched.o.service.mintCallToken({
+            id: callId,
+            caller,
+            model: m,
+            own: {
+              run,
+              call: `epoch ${n}`,
+              live: s.live,
+              messages: s.messages,
+              usage,
+              compaction: store ? plannerOf(run) : undefined,
+              answer: (a) => {
+                answer ??= a;
+              },
+            },
+          });
+          try {
+            return await inView(
+              {
+                model: m,
+                link: { ...s, auth },
+                mcpServers: mcp.tools.length ? mcpServers : [],
+                kbWrites: writes,
+                heading: `Thermite's view of the ${call.role === "planner" ? "planner" : "research planner"} in Pi · run ${run} · round ${n} · ${m.model}`,
+                answer: () => answer,
+              },
+              prompt,
+              spec,
+              signal,
+            );
+          } finally {
+            sched.o.service.endCall(auth);
+          }
+        }
+      : undefined;
+  return { m, ask, view, mcp, usage, past, pastLine, sent };
 }
 
 /** The planner's field notes, recorded as the planner's; a problem is a line in its live view. */
@@ -177,6 +234,20 @@ export function plannerNotes(
 }
 
 /**
+ * A planner call's place for its compactions (goal 070): in the run's research folder, named for
+ * the call, recorded as the planner's.
+ */
+function plannerOf(run: string): CompactionOf {
+  return {
+    run,
+    lane: "planner",
+    trial: null,
+    who: `planner-${randomUUID().replace(/-/g, "").slice(0, 12)}`,
+    source: "planner",
+  };
+}
+
+/**
  * Where a planner call's compactions go in Pi (goal 070): the run's research folder keeps each
  * conversation, numbered within the call, and each is recorded as a worker's is.
  */
@@ -186,13 +257,7 @@ export function plannerCompaction(
 ): PlannerCompaction | undefined {
   const store = sched.o.service.compactions;
   if (!store) return undefined;
-  const of = {
-    run,
-    lane: "planner",
-    trial: null,
-    who: `planner-${randomUUID().replace(/-/g, "").slice(0, 12)}`,
-    source: "planner",
-  };
+  const of = plannerOf(run);
   let n = 0;
   return {
     keep: (_n, markdown) => store.keep(of, ++n, markdown),
@@ -224,13 +289,7 @@ function cliPlannerCompaction(
   const store = sched.o.service.compactions;
   if (!store) return undefined;
   return () => {
-    const of = {
-      run,
-      lane: "planner",
-      trial: null,
-      who: `planner-${randomUUID().replace(/-/g, "").slice(0, 12)}`,
-      source: "planner",
-    };
+    const of = plannerOf(run);
     return {
       keptAt: store.keptAt(of, false),
       title: "The planner",
@@ -240,11 +299,11 @@ function cliPlannerCompaction(
 }
 
 /**
- * What a planner's call in its program's own terminal takes from the harness (goal 169): its
- * console and screens under its id, its live lines, the owner's messages that go in inside its
- * turn (each read once its program has it, and joined to the messages its prompt gave, so a rule
- * it asks for names it), its later turns kept, and a wait for its usage window recorded as the
- * run's.
+ * What a planner's call in its program's own terminal, or in its Pi view, takes from the harness
+ * (goal 169), but its credential: its console and screens under its id, its live lines, the
+ * owner's messages that go in inside its turn (each read once its program has it, and joined to
+ * the messages its prompt gave, so a rule it asks for names it), its later turns kept, and a wait
+ * for its usage window recorded as the run's.
  */
 function plannerTerminal(
   sched: SchedulerContext,
@@ -252,20 +311,18 @@ function plannerTerminal(
     run: string;
     n: number;
     id: string;
-    auth: string;
     role: "planner" | "research-planner";
     /** The program it runs in, as its prompt names it. */
     via: string;
     owner: { id: number; text: string }[];
   },
-): TerminalCallLink {
+): Omit<TerminalCallLink, "auth"> & { messages: MessageInbox } {
   const svc = sched.o.service;
   const run = c.run;
   const given = new Set(c.owner.map((m) => m.id));
   const render = c.role === "planner" ? renderPlannerTurn : renderResearchPlannerTurn;
   return {
     id: c.id,
-    auth: c.auth,
     title: "The planner",
     messages: {
       waiting: () =>
@@ -292,9 +349,9 @@ function plannerTerminal(
       for (const e of entries)
         svc.live.append({ source: "planner", kind: e.kind, text: e.text, run });
     },
-    console: (term) =>
+    console: (term, piView) =>
       term
-        ? svc.consoles.setCall(c.id, { run, lane: "planner", source: "planner" }, term)
+        ? svc.consoles.setCall(c.id, { run, lane: "planner", source: "planner" }, term, piView)
         : svc.consoles.ended(c.id),
     inTurn: (d) => svc.inTurn(c.id, d),
     providerAnswer: (since) => svc.providerAnswerSince(c.id, since),

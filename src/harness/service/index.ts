@@ -57,6 +57,7 @@ export type { SubmitResult } from "./attempts.ts";
 export type { RigCheck, RigCheckName } from "./checks.ts";
 export type { CommandOutcome } from "./commands.ts";
 export { drainSpans } from "./drain.ts";
+export type { CallCredential, OwnCall } from "./proxy.ts";
 export { IdeaRequest } from "./trials.ts";
 export { NOT_BEFORE_FILE, notBeforeOf, WIPE_MARKER, wipeIfRequested } from "./wipe.ts";
 

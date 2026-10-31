@@ -5,9 +5,10 @@
  * (terminal.ts, with the owner's console.ts): a trial's, or a call's outside a trial (call.ts).
  */
 
-export type { CallTurn, TerminalCallLink } from "./call.ts";
+export { type CallTurn, callFolder, type TerminalCallLink } from "./call.ts";
 export { claudeProgram } from "./claude-code.ts";
 export { codexProgram } from "./codex.ts";
+export { PLANNER_ROLE } from "./common.ts";
 export {
   type ConsoleLater,
   type ConsoleNow,

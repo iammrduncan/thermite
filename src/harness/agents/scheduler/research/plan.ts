@@ -91,6 +91,7 @@ export async function planResearchEpoch(
         plannerCompaction(sched, run),
         r.usage,
         r.sent,
+        r.view,
       );
     } finally {
       sched.planning = undefined;

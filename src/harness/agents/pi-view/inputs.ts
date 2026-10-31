@@ -73,10 +73,12 @@ export class ViewInputs implements TrialView {
       if (e.type === "tool_execution_start") this.tools++;
       if (e.type !== "tool_execution_end") return;
       this.tools = Math.max(0, this.tools - 1);
-      // A submission ends the trial: the owner's words that wait never go in after it.
-      if (levers.closed() && agent.hasQueuedMessages()) {
+      // A submission ends the trial (or the planner's call): the owner's words that wait never
+      // go in after it.
+      const closed = levers.closed();
+      if (closed && agent.hasQueuedMessages()) {
         agent.clearAllQueues();
-        this.o.view.note("the trial has submitted: the owner's words that waited do not go in");
+        this.o.view.note(`the owner's words that waited do not go in: ${closed}`);
       }
       if (this.pending && this.tools === 0) {
         this.pending = false;

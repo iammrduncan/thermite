@@ -133,13 +133,16 @@ export const PLANNER_OWNER_TURN =
 
 /** A later turn in a planner's call in its program's own terminal (goal 169). */
 export type PlannerTurn =
-  /** An owner's message that went in inside its turn, through its hook or Thermite's plugin. */
-  | { kind: "owner"; id: number; text: string }
+  /**
+   * An owner's message that went in inside its turn, through its hook, Thermite's plugin or its
+   * Pi view; with no id, words the owner typed into its Pi view's console.
+   */
+  | { kind: "owner"; id?: number | undefined; text: string }
   /** It waited for its usage window to reset; `words`: the limit's. */
   | { kind: "failed"; words: string };
 
 export type PlannerTurnInput = PlannerTurn & {
-  /** The program it runs in: opencode, claude-code or codex. */
+  /** The program it runs in: pi, opencode, claude-code or codex. */
   program: string;
   /** Its place in the call, after its first message. */
   turn: number;
@@ -153,7 +156,7 @@ export function renderPlannerTurn(i: PlannerTurnInput): Prompt {
 /** A later turn in a planner's call, its role's or the research planner's. */
 export function plannerTurn(role: string, i: PlannerTurnInput): Prompt {
   const message =
-    i.kind === "owner"
+    i.kind === "owner" && i.id !== undefined
       ? [
           section(
             "owner",

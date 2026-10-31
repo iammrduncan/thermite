@@ -28,7 +28,7 @@ export interface SessionLink {
    * An owner's message as the agent's role puts it to the agent, a later turn of its call (goal
    * 166); by default, a worker's.
    */
-  ownerTurn?: ((text: string) => Prompt) | undefined;
+  ownerTurn?: ((m: { id: number; text: string }) => Prompt) | undefined;
   /** Keeps a later turn once it enters the conversation (goal 166). */
   sent?: ((p: Prompt) => void) | undefined;
 }
@@ -142,7 +142,8 @@ export function linkSession(agent: Agent, link: SessionLink): void {
   let owned = 0;
   const ownerTurn =
     link.ownerTurn ??
-    ((text: string) => renderWorkerTurn({ program: "pi", turn: ++owned, kind: "owner", text }));
+    ((m: { text: string }) =>
+      renderWorkerTurn({ program: "pi", turn: ++owned, kind: "owner", text: m.text }));
   agent.subscribe(async (event, signal) => {
     switch (event.type) {
       case "turn_start":
@@ -207,7 +208,7 @@ export function linkSession(agent: Agent, link: SessionLink): void {
           offered.add(msg.id);
           // It enters the conversation for the next model call: it is read and kept then, unless
           // the session is being stopped (then that call never happens).
-          const p = ownerTurn(msg.text);
+          const p = ownerTurn(msg);
           steerTurn(agent, p, () => {
             link.read?.([msg.id]).catch(() => undefined);
             link.sent?.(p);

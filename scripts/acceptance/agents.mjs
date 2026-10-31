@@ -8,6 +8,8 @@
 //   - a lane's background work runs on across its commands and a dev run, as in a shell;
 //   - no lane process outlives its trial;
 //   - control's model check reaches the model through the rig's route with a correct tool call;
+//   - in Pi, the first epoch's planner plans in its Pi view, in a process of its own, takes an
+//     owner's message before its next model call and /status typed into its console;
 //   - under OpenCode, the planner plans in its own terminal and takes an owner's message in its turn;
 //   - under OpenCode, a hill-climb trial runs in OpenCode's own terminal (goal 169: the default,
 //     on a rig nobody set), its server first and its terminal attached, and submits with
@@ -28,7 +30,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { opencodePlanner, opencodePlannerScene } from "./lib/planner-terminal.mjs";
+import {
+  opencodePlanner,
+  opencodePlannerScene,
+  piPlannerScene,
+  piPlannerTurn,
+} from "./lib/planner-terminal.mjs";
 import { hostName as containersHost, scriptedModel } from "./lib/scripted-model.mjs";
 import {
   api,
@@ -46,6 +53,7 @@ import {
   sleep,
   until,
 } from "./lib/smoke-env.mjs";
+import { screenOnLive, typeInto } from "./lib/terminals.mjs";
 
 const GOOD = readFileSync("kits/smoke-cpu/candidates/good/src/kernel/matmul.c", "utf8");
 /** lane-2's trial in its Pi view (goal 169): when it held, and what its model was sent. */
@@ -181,6 +189,8 @@ function script(messages, tools) {
     return { toolCalls: [{ name: "echo", args: { word } }] };
   }
   if (tools.some((t) => t.function.name === "submit_plan")) {
+    const held = piPlannerTurn(messages, tools);
+    if (held) return held;
     return {
       toolCalls: [
         {
@@ -275,56 +285,6 @@ function piSteps(messages, done) {
   return steps[done - 1] ? { toolCalls: [steps[done - 1]] } : { text: "done" };
 }
 
-/** One of the owner's inputs to a trial's terminal, as REST sends it: its command, once settled. */
-async function typeInto(trial, input) {
-  const issued = await api("/v1/commands", {
-    method: "POST",
-    body: JSON.stringify({ kind: "terminal_input", payload: { run: "smoke-1", trial, ...input } }),
-  });
-  if (issued.status !== 201) return { status: "not issued", outcome: issued.body };
-  return until(
-    "the input's outcome",
-    async () => {
-      const c = await api(`/v1/commands/${issued.body.id}`);
-      return c.body.status !== "pending" ? c.body : undefined;
-    },
-    120_000,
-  );
-}
-
-/** The first frame of a trial's terminal that Live gets, as the owner's page watches it. */
-async function screenOnLive(trial) {
-  const login = await fetch(`${control}/ui/login`, {
-    method: "POST",
-    body: new URLSearchParams({ token: secret("control-admin-token") }),
-    redirect: "manual",
-  });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const stop = new AbortController();
-  const timer = setTimeout(() => stop.abort(), 60_000);
-  try {
-    const res = await fetch(`${control}/ui/rigs/local-1/live/screen?trial=${trial}`, {
-      headers: { cookie },
-      signal: stop.signal,
-    });
-    const reader = res.body.getReader();
-    let text = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) return undefined;
-      text += new TextDecoder().decode(value);
-      const at = text.indexOf("event: frame\ndata: ");
-      const end = at < 0 ? -1 : text.indexOf("\n", at + 19);
-      if (end > 0) return JSON.parse(text.slice(at + 19, end));
-    }
-  } catch {
-    return undefined;
-  } finally {
-    clearTimeout(timer);
-    stop.abort();
-  }
-}
-
 /**
  * The owner's console into lane-2's Pi view (goal 169), while its trial holds in a command: each
  * input in turn, then the screen as Live shows it.
@@ -410,6 +370,8 @@ try {
   await assign(env, "smoke-1");
   // lane-2's Pi view, while the epoch runs (goal 169).
   const piRun = piConsoleScene().catch((err) => ({ error: String(err?.stack ?? err) }));
+  // The first epoch's planner in its Pi view (lib/planner-terminal.mjs).
+  await piPlannerScene(check);
   const evs = await until(
     "both lanes judged",
     async () => {
@@ -574,8 +536,10 @@ try {
     const m = (await api("/v1/rigs/local-1/view")).body.model;
     return m?.source === "control" && m.harness === "opencode" ? m : undefined;
   });
-  await opencodePlannerScene(check);
+  // Cleared before the planner's scene: OpenCode's trial may run, and ask with its key, while the
+  // scene waits for the planner's next round.
   keysSeen.clear();
+  await opencodePlannerScene(check);
   const ocCheck = await until(
     "OpenCode's model check (run when the rig took the route)",
     async () =>

@@ -42,7 +42,7 @@ import {
   renderResearchReviewer,
   renderReviewer,
 } from "./reviewer.ts";
-import { FAILED_GO_ON, KB_GUIDE, TRIAL_TURN_TEXTS } from "./shared.ts";
+import { FAILED_GO_ON, KB_GUIDE, OWNER_TURN_HEAD, TRIAL_TURN_TEXTS } from "./shared.ts";
 import { renderSynthesizer, SYNTHESIZER_SYSTEM } from "./synthesizer.ts";
 import { RESEARCH_TEACHER_SYSTEM, renderTeacher, TEACHER_SYSTEM } from "./teacher.ts";
 import {
@@ -186,7 +186,8 @@ const PI_TURNS = [renderCompacted] as const;
 
 /**
  * The later turns of a planner's call in its program's own terminal (goal 169): an owner's message
- * inside its turn, and what it goes on from after a usage window.
+ * inside its turn, what it goes on from after a usage window, and in its Pi view the words the
+ * owner types into its console.
  */
 const PLANNER_TERMINAL_TEXTS: readonly RoleText[] = [
   {
@@ -198,6 +199,11 @@ const PLANNER_TERMINAL_TEXTS: readonly RoleText[] = [
     id: "failed-terminal",
     what: "in its program's own terminal, after it waited for a full usage window, after the limit's words",
     text: FAILED_GO_ON,
+  },
+  {
+    id: "owner-typed",
+    what: "in its Pi view, the words you type into its console, after this",
+    text: OWNER_TURN_HEAD,
   },
 ];
 

@@ -2,7 +2,8 @@
  * The rig's agents: the scheduler (scheduler/) that runs the planner (planner/, research/) and the
  * workers' trials (worker/, cli/) in their workspaces, the coordinator's queue, the agent programs
  * they run in, the model route (model/), dev runs, and agent state in the ledger (registry.ts).
- * worker-main.ts, trial-cli.ts and lanetool.ts are programs, each run in a process of its own.
+ * worker-main.ts, planner-main.ts, trial-cli.ts and lanetool.ts are programs, each run in a
+ * process of its own.
  */
 
 export {
@@ -23,6 +24,7 @@ export {
   ROUTE_FILE,
 } from "./model/index.ts";
 export type { PiConsole } from "./pi-view/index.ts";
+export { plannerInView } from "./planner/index.ts";
 export {
   CLI_PROGRAMS,
   programOf,

@@ -369,7 +369,7 @@ describe("terminal_input, as the harness applies it", () => {
     });
     const other = await post("/v1/trial/console/next", { wait_ms: 0 }, "tok-other");
     assert.equal(other.status, 409);
-    assert.match(String(other.body.error), /this trial has no Pi view/);
+    assert.match(String(other.body.error), /this trial or call has no Pi view/);
   });
 
   test("a planner's call in its own terminal: its console under planner-RUN-N, its lines on the planner's, its id in the rig's report, and nothing more once it ends", async () => {
