@@ -28,6 +28,7 @@ import { CpuDriver } from "../../../src/harness/targets/cpu.ts";
 import {
   CRASH_KERNEL,
   FAST_KERNEL,
+  FAST_KERNEL_RESTATED,
   makeJudgeEnv,
   SEED_KERNEL,
   WRONG_KERNEL,
@@ -267,10 +268,13 @@ describe("a hill climb's baseline (goal 115)", () => {
   });
 
   test("a setup change measured after the run left setup is screened as any change is", async () => {
-    const env = await setup({ seedKernel: CRASH_KERNEL });
+    // The stand-in runner times the kernels: b screened against a, a change with the same effect,
+    // is an A/A comparison, which real runs on a loaded machine can show as a win, and then b is
+    // confirmed too. The test is about where b's measurement goes, not about the timing.
+    const env = await setup({ seedKernel: CRASH_KERNEL, realRuns: false });
     await env.drain();
     const a = await env.submit(FAST_KERNEL, "make it run");
-    const b = await env.submit(`${FAST_KERNEL}// restated\n`, "make it run, restated");
+    const b = await env.submit(FAST_KERNEL_RESTATED, "make it run, restated");
     await env.drain();
     assert.equal(env.ledger.verdicts.current(a)?.verdict, "starting_point", env.explain(a));
     // b was queued as a setup change; once a is the starting point, it is judged against it.
