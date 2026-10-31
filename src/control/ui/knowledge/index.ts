@@ -1,5 +1,5 @@
 import type { KbCollection, KbItem, KbKind } from "../../kb/index.ts";
-import { GRANT_OPENS, JOURNAL_KINDS } from "../../kb/index.ts";
+import { JOURNAL_KINDS } from "../../kb/index.ts";
 import type { JournalNoteView, RunView } from "../../views/index.ts";
 import { ago, esc, fmtInt, infoLabel } from "../components/index.ts";
 import { attemptHref, campaignHref, knowledgeHref, runHref } from "../urls.ts";
@@ -16,6 +16,7 @@ export {
   explorerFrame,
   explorerHref,
 } from "./explorer.ts";
+export { folderPaneHtml, type GrantForms } from "./folder.ts";
 export { fileHref, type ReaderLinks, readerHtml, readerMissing } from "./item.ts";
 export { treeList } from "./tree.ts";
 
@@ -115,20 +116,49 @@ function noteHtml(r: RunView, n: JournalNoteView): string {
 }
 
 /** The newest field notes the tab shows at once (the rest are in the knowledge base). */
-const JOURNAL_SHOWN = 500;
+export const JOURNAL_SHOWN = 500;
 
-/** The Journal tab: the agents' field notes, newest first, filtered by writer and by kind. */
+/**
+ * A field note as the knowledge base keeps it (core/kb-index.ts): its words, then what it is about
+ * on a line of its own, which its fields keep too, with its lane and trial. A note about nothing
+ * named is about its run, as on the run's events.
+ */
+export function fieldNote(x: KbItem): JournalNoteView {
+  const cut = x.body.lastIndexOf("\nAbout: ");
+  const named = cut >= 0 ? x.body.slice(cut + 8).trim() : "";
+  const space = named.indexOf(" ");
+  const type = x.meta.about_type ?? (space > 0 ? named.slice(0, space) : named);
+  const id = x.meta.about_id ?? (space > 0 ? named.slice(space + 1) : "");
+  return {
+    id: Number(x.ref) || x.id,
+    by: x.by,
+    kind: x.sub || "note",
+    text: cut >= 0 ? x.body.slice(0, cut) : x.body,
+    about: type ? { type, id } : { type: "run", id: x.run },
+    lane: x.meta.lane || null,
+    trial: x.meta.trial || null,
+    at: x.at,
+  };
+}
+
+/**
+ * The Journal tab: the agents' field notes, newest first, filtered by writer and by kind, read from
+ * the run's records in the knowledge base (goal 176).
+ */
 export function journalTab(o: {
   r: RunView;
   now: number;
+  /** The run's field notes in the knowledge base, newest first, and how many it has. */
+  field: { total: number; items: KbItem[] };
   /** The run's items in the knowledge base, by kind. */
   counts: Partial<Record<KbKind, number>>;
   /** The other collections the run's campaign reads. */
   reads: string[];
 }): string {
   const { r } = o;
-  // Field notes have the ledger's ids; research notes negative ones (views.ts), whatever the kind.
-  const field = r.journal.filter((n) => n.id > 0).reverse();
+  const field = o.field.items.map(fieldNote);
+  const total = Math.max(o.field.total, field.length);
+  // Research notes have negative ids on the run's events (views.ts), whatever the kind.
   const notes = r.journal.filter((n) => n.id < 0).reverse();
   const writers = [...new Map(field.map((n) => [writer(n.by).key, writer(n.by)])).values()].sort(
     (a, b) => {
@@ -166,14 +196,14 @@ ${
         .map((n) => noteHtml(r, n))
         .join(
           "",
-        )}</div>${field.length > JOURNAL_SHOWN ? `<div class="muted small" style="margin-top:8px">The newest ${JOURNAL_SHOWN} of ${field.length}. All of them are in the run's records on <a href="${knowledgeHref(`${r.campaign ?? r.id}/${r.id}/records`)}?kind=note">Knowledge</a> and in the run's export.</div>` : ""}`
+        )}</div>${total > field.length ? `<div class="muted small" style="margin-top:8px">The newest ${fmtInt(field.length)} of ${fmtInt(total)}. All of them are in the run's records on <a href="${knowledgeHref(`${r.campaign ?? r.id}/${r.id}/records`)}?kind=note">Knowledge</a> and in the run's export.</div>` : ""}`
     : `<div class="card"><div class="empty">No field notes yet. The lanes, the planner and the advisors write them as they work.</div></div>`
 }
 </div><div class="jside">
-<div class="card qcard"><h3>This run's corpus</h3><div class="jstat">${stat("Field notes", field.length)}${stat("Notes", notes.length)}${stat("Sources read", o.counts.source ?? 0)}${stat("Experiments tried", tried)}${o.counts.claim ? stat("Claims", o.counts.claim) : ""}${stat("Findings", o.counts.finding ?? 0)}</div><div class="small muted">Everything here goes into the run's export, with the final report.</div></div>
+<div class="card qcard"><h3>This run's corpus</h3><div class="jstat">${stat("Field notes", total)}${stat("Notes", notes.length)}${stat("Sources read", o.counts.source ?? 0)}${stat("Experiments tried", tried)}${o.counts.claim ? stat("Claims", o.counts.claim) : ""}${stat("Findings", o.counts.finding ?? 0)}</div><div class="small muted">Everything here goes into the run's export, with the final report.</div></div>
 ${
   r.campaign
-    ? `<div class="card qcard"><h3>The campaign's collection</h3><div class="small">Everything here goes into <b>${esc(r.campaign)}</b>'s collection in Thermite's knowledge base, under this run, with its writer and time.</div><div class="small muted">${others.length ? `Its agents also read: ${others.map((f) => `<b>${esc(f)}</b>`).join(", ")}.` : "Its agents read only this campaign's collection."}</div><a class="btn sm ghost" href="${campaignHref(r.campaign)}#knowledge" style="justify-self:start">What it can read</a></div>`
+    ? `<div class="card qcard"><h3>The campaign's collection</h3><div class="small">Everything here goes into <b>${esc(r.campaign)}</b>'s collection in Thermite's knowledge base, under this run, with its writer and time.</div><div class="small muted">${others.length ? `Its agents also read: ${others.map((f) => `<b>${esc(f)}</b>`).join(", ")}.` : "Its agents read only this campaign's collection."}</div><div class="kbbtns"><a class="btn sm" href="${knowledgeHref(`${r.campaign}/${r.id}`)}">Open the run's folders</a><a class="btn sm ghost" href="${campaignHref(r.campaign)}#knowledge">What it can read</a></div></div>`
     : ""
 }
 <div class="card qcard"><h3>Notes</h3>${
@@ -185,39 +215,26 @@ ${
 }
 
 // ---------------------------------------------------------------- a campaign's Knowledge section
+/**
+ * A campaign's Knowledge section: a short summary of its collection (what it holds, its last
+ * write, its grants both ways), read only, with Open the collection: the explorer, where the owner
+ * gives and ends grants (goal 176, question 4).
+ */
 export function campaignKnowledge(o: {
   campaign: string;
   collection: KbCollection;
-  /** Every collection, for the grants' names and the Add list. */
-  collections: KbCollection[];
-  mode: (campaign: string) => string;
-  csrf: string;
   now: number;
-  /** Why the owner's last grant or removal was refused, if it was. */
-  error?: string | undefined;
 }): string {
   const f = o.collection;
-  const action = (what: "grant" | "revoke") =>
-    `/ui/campaigns/${encodeURIComponent(o.campaign)}/kb/${what}`;
-  const byName = new Map(o.collections.map((x) => [x.campaign, x]));
   const stat = (k: string, v: number) => `<span>${esc(k)}</span><b>${fmtInt(v)}</b>`;
-  const readRow = (name: string) => {
-    const x = byName.get(name);
-    return `<div class="readrow"><span>📁</span><div><b>${esc(name)}</b> <span class="muted small">${x ? `${esc(o.mode(name))} · ${fmtInt(x.items)} items${x.updated_at ? ` · ${esc(ago(x.updated_at, o.now))} ago` : ""}` : "no items yet"}</span></div><form class="inline" method="post" action="${action("revoke")}"><input type="hidden" name="csrf" value="${esc(o.csrf)}"><input type="hidden" name="reads" value="${esc(name)}"><button class="sm ghost">Remove</button></form></div>`;
-  };
-  const addable = o.collections.filter(
-    (x) => x.campaign !== o.campaign && !f.reads.includes(x.campaign),
-  );
-  return `<div class="block" id="knowledge"><div class="cols kbcols"><div>
-<div class="head"><h2>Knowledge</h2><span class="right">${esc(o.campaign)}'s collection in Thermite's knowledge base</span></div>
-${o.error ? `<div class="card warn" style="margin-bottom:12px"><b class="bad">Not changed.</b> ${esc(o.error)}</div>` : ""}
-<div class="card kbcard"><div class="jstat">${stat("Field notes", f.journal)}${stat("Experiments", f.counts.experiment ?? 0)}${stat("Attempts", f.counts.attempt ?? 0)}${stat("Notes and documentation", (f.counts.note ?? 0) - f.journal + (f.counts.doc ?? 0))}${stat("Sources read", f.counts.source ?? 0)}${f.counts.trial ? stat("Trials", f.counts.trial) : ""}${f.counts.claim ? stat("Claims", f.counts.claim) : ""}${f.counts.hypothesis ? stat("Hypotheses", f.counts.hypothesis) : ""}${f.counts.finding ? stat("Findings", f.counts.finding) : ""}${f.counts.report ? stat("Reports", f.counts.report) : ""}</div><div class="small muted">Every run of this campaign writes here, each item under its run, in its writer's slot, with its time. Agents read it; Thermite's records of each run write to it.</div><div class="kbbtns"><a class="btn sm" href="${knowledgeHref(o.campaign)}">Open the collection</a></div></div>
-<div class="head" style="margin-top:18px"><h2>Can read from</h2><span class="right">other collections this campaign's agents may search and read; change it any time</span></div>
-<div class="card flat kbreads">${f.reads.map(readRow).join("") || `<div class="readrow"><span></span><div class="muted small">None: its agents read only this campaign's collection.</div><span></span></div>`}</div>
-<form class="kbadd" method="post" action="${action("grant")}"><input type="hidden" name="csrf" value="${esc(o.csrf)}"><label class="sfd">${infoLabel("Add a collection", `Another campaign's collection this campaign's agents may search and read: its experiments with their results, journals, notes, sources and findings. ${GRANT_OPENS} Its runs at work get it at their next sync, and new runs start with it.`)}<select name="reads" required><option value="">Add a collection…</option>${addable.map((x) => `<option value="${esc(x.campaign)}">${esc(x.campaign)} (${esc(o.mode(x.campaign))} · ${fmtInt(x.items)} items)</option>`).join("")}</select></label><button class="sm">Add</button><span class="muted small">${esc(GRANT_OPENS)} Runs at work see the change at their next sync.</span></form>
-</div><div class="side">
-<div class="card qcard"><h3>Who reads ${esc(o.campaign)}'s collection</h3><div class="small">${f.read_by.length ? f.read_by.map((x) => `<a href="${campaignHref(x)}#knowledge"><b>${esc(x)}</b></a>`).join(", ") : "No other campaign."}</div><div class="small muted">Granted from that campaign's page. A campaign never writes to another's collection.</div></div>
-</div></div></div>`;
+  const names = (xs: string[], none: string) =>
+    xs.length
+      ? xs.map((x) => `<a href="${knowledgeHref(x)}"><b>${esc(x)}</b></a>`).join(", ")
+      : `<span class="muted">${esc(none)}</span>`;
+  return `<div class="block" id="knowledge"><div class="head"><h2>Knowledge</h2><span class="right">${esc(o.campaign)}'s collection in Thermite's knowledge base</span></div>
+<div class="card kbcard"><div class="jstat">${stat("Items", f.items)}${stat("Runs", f.runs)}${stat("Field notes", f.journal)}${stat("Experiments", f.counts.experiment ?? 0)}${stat("Attempts", f.counts.attempt ?? 0)}${stat("Notes and documentation", (f.counts.note ?? 0) - f.journal + (f.counts.doc ?? 0))}${stat("Sources read", f.counts.source ?? 0)}${f.counts.finding ? stat("Findings", f.counts.finding) : ""}${f.counts.report ? stat("Reports", f.counts.report) : ""}</div>
+<dl class="kx-facts"><dt>Last write</dt><dd>${f.updated_at ? `<span title="${esc(f.updated_at)}">${esc(ago(f.updated_at, o.now))} ago</span>` : "none yet"}</dd><dt>Reads</dt><dd>${names(f.reads, "None: its agents read only this campaign's collection.")}</dd><dt>Read by</dt><dd>${names(f.read_by, "No other campaign.")}</dd></dl>
+<div class="kbbtns"><a class="btn sm" href="${knowledgeHref(o.campaign)}">Open the collection</a><span class="muted small">Grants are added and removed there.</span></div></div></div>`;
 }
 
 // ---------------------------------------------------------------- Start a run: from past research

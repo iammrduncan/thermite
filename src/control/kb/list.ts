@@ -15,6 +15,8 @@ import { KB_FILTER_MAX, KB_IS_DATA } from "../../core/link/kb.ts";
 import type { ControlStore, KbFolderRow, KbListAt, KbListCounts } from "../store/index.ts";
 import type { RigView } from "../views/index.ts";
 import type { KbItem } from "./index.ts";
+import { slotWriter } from "./read.ts";
+import { type KbSummary, placeSummary } from "./summary.ts";
 
 /**
  * The owner's list of one place of the knowledge base (goal 176), the same on REST (`GET
@@ -123,6 +125,8 @@ export interface KbFolder {
   running?: boolean;
   /** A run: it started fresh, so its agents read only its own items. */
   fresh?: boolean;
+  /** A slot: who writes it, Thermite's code or its role and agent program (read.ts). */
+  writer?: string;
 }
 
 /** Folders in the list's order: by name, or by newest change, as the items sort; else by name. */
@@ -173,6 +177,8 @@ export function kbFolders(
         folder.running = running.has(f.name);
         folder.fresh = f.fresh;
       }
+      if (childLevel === "slot" && at.run)
+        folder.writer = slotWriter(store, { run: at.run, slot: f.name }).words;
       return folder;
     });
   return sorted(folders, o.sort ?? "modified", o.order);
@@ -242,6 +248,7 @@ export interface KbListAnswer {
   next_offset: number | null;
   counts: KbListCounts;
   items: KbListedItem[];
+  summary: KbSummary;
 }
 
 /** The owner's list of a place: the place, its folders, and a page of the items under it. */
@@ -275,5 +282,6 @@ export function ownerKbList(
     next_offset: limit > 0 && offset + r.items.length < r.matched ? offset + r.items.length : null,
     counts: r.counts,
     items: r.items.map(listedItem),
+    summary: placeSummary(store, vs, at, place),
   };
 }

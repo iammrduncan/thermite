@@ -375,7 +375,7 @@ No inputs. Returns `[{campaign, counts, journal, items, runs, updated_at, read_b
 | `offset` | whole number, from 0 | 0 | Where the page starts: a page's `next_offset`. It has no end |
 | `limit` | whole number, 0 to 200 | 50 | How many items; 0 gives the place, its folders and the counts |
 
-In each filter an item matches any value given; together, an item must pass each. Returns `{note, at, folders, total, matched, next_offset, counts, items}`, the same as [`GET /v1/kb/list`](rest-api.md#the-knowledge-base): `at` is the place, `{name, path, level, items, updated_at}`; each folder is a collection (with `archived`), a run (with `running` and `fresh`) or a slot in it, as `at`; `counts` is `{kind, outcome, type, slot}`, each counted with the other three filters only; each item is `{id, address, collection, run, slot, kind, type, title, outcome, by, at, version, file, withdrawn}`. Errors: `the knowledge base has no collection <campaign>`, `<campaign> has no run <run>`, `<campaign>/<run> has no slot <slot>`. [A place's list](knowledge-base.md#a-places-list) describes it.
+In each filter an item matches any value given; together, an item must pass each. Returns `{note, at, folders, total, matched, next_offset, counts, items, summary}`, the same as [`GET /v1/kb/list`](rest-api.md#the-knowledge-base): `at` is the place, `{name, path, level, items, updated_at}`; each folder is a collection (with `archived`), a run (with `running` and `fresh`) or a slot (with `writer`) in it, as `at`; `summary` is what the place holds and its facts by level: a collection's mode, runs, slots and grants both ways, a run's state and what its agents search, a slot's writer, the kinds it may write and the writes control refused it; `counts` is `{kind, outcome, type, slot}`, each counted with the other three filters only; each item is `{id, address, collection, run, slot, kind, type, title, outcome, by, at, version, file, withdrawn}`. Errors: `the knowledge base has no collection <campaign>`, `<campaign> has no run <run>`, `<campaign>/<run> has no slot <slot>`. [A place's list](knowledge-base.md#a-places-list) describes it.
 
 ### kb_search
 
@@ -440,7 +440,7 @@ That is the owner's description. The operator's begins `Proposes to the owner th
 | `campaign` | string | | "The campaign whose agents read" |
 | `reads` | string | | "The other campaign whose collection they read" |
 
-Returns `{granted, reads}`: `granted` is false when the campaign read that collection already, and `reads` is every collection it reads now besides its own. With the operator's token, it grants nothing: it returns `{campaign, proposal, state: "proposed", said}`, or `{campaign, state: "unchanged", said}` when the campaign reads the collection already, and the owner approves or declines the proposal on the campaign's page ([A proposed grant](knowledge-base.md#a-proposed-grant)). Errors, for both tokens: `no campaign <name>` (a campaign control does not know, for either input), `a campaign always reads its own collection: name another campaign`. Control writes a new grant to its audit log as `kb_grant`, and a proposal as `campaign_setting_proposed`. [Grants](knowledge-base.md#grants) says what a grant gives.
+Returns `{granted, reads, read_by, said}`: `granted` is false when the campaign read that collection already, `reads` every collection it reads now besides its own, `read_by` the campaigns that read it, and `said` what changed, in the words REST and the Knowledge page use ([Messages](knowledge-base.md#messages)). Errors: `Control has no campaign named <name>.`, `A campaign always reads its own collection: choose another campaign's.` With the operator's token, it grants nothing: it returns `{campaign, proposal, state: "proposed", said}`, or `{campaign, state: "unchanged", said}` when the campaign reads the collection already, and the owner approves or declines the proposal on the campaign's page ([A proposed grant](knowledge-base.md#a-proposed-grant)). Errors, for both tokens: `no campaign <name>` (a campaign control does not know, for either input), `a campaign always reads its own collection: name another campaign`. Control writes a new grant to its audit log as `kb_grant`, and a proposal as `campaign_setting_proposed`. [Grants](knowledge-base.md#grants) says what a grant gives.
 
 An outside knowledge base is no longer a grant: a campaign's kit names an [MCP server](#mcp_servers) instead.
 
@@ -448,9 +448,9 @@ An outside knowledge base is no longer a grant: a campaign's kit names an [MCP s
 
 **Stop a campaign reading another's collection.** Owner only.
 
-> The campaign's agents no longer read the other campaign's collection. New runs start without it.
+> The campaign's agents no longer read the other campaign's collection: their searches leave it out at once, also those of runs started with it.
 
-The same inputs as `kb_grant`. Returns `{revoked: true, reads}`. Error: `<campaign> does not read <reads>`. Control writes it to its audit log as `kb_revoke`. Each running run of the campaign loses the collection from its `knowledge/` at its supervisor's next sync.
+The same inputs as `kb_grant`. Returns `{revoked: true, reads, read_by, said}`. Error: `<campaign> does not read <reads>.` Control writes it to its audit log as `kb_revoke`. Each running run of the campaign loses the collection from its `knowledge/` at its supervisor's next sync.
 
 ### rig_setup
 
@@ -904,7 +904,7 @@ Errors, in the words of **Start a run**:
 - `A try (agents off) takes no model, no experiments and no background: leave them out, or start the run with agents.`
 - `<campaign> has no run <run>: copy from a run of this campaign.`
 - `An item from past research is not one this campaign may read and start from: search again.`
-- `<campaign> may not read <collections>: grant it on the campaign's page under Can read from, or leave it out.` (`granted`)
+- `<campaign> may not read <collections>: grant it under Reads on the campaign's collection in Knowledge, or leave it out.` (`granted`)
 - `That provider does not list that model.`, and the other refusals of [`set_rig_model`](#set_rig_model)
 - `This campaign sets a context window of <n> tokens. <model>, the model of the <agent> on <rig>, takes at most <m> tokens. Set the campaign's window to <m> or less, or give that agent another model.`: the campaign's window is above what a provider lists for the model control gives one of the rig's agents. Above a rig's cap, the lower wins instead
 - `<rig> has no GPU set to split: its GPUs are set where it is deployed.`, or `With <n> GPUs the judge takes 1 to <m> of them, and the agents at most 8.`

@@ -258,7 +258,7 @@ The new run's page opens, with a card at the top such as `Starting sort-speed-2 
 
 - `rig-1 has no model for its agents, so they could not work: choose one under "The agents' model", or give it one on its Edit rig page.`
 - `rig-1 has not taken my-model yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then): start the run after that.`: see [When the rig doesn't have the model yet](#when-the-rig-doesnt-have-the-model-yet).
-- `<campaign> may not read <collections>: grant it on the campaign's page under Can read from, or leave it out.`: a collection named for its agents to search is not one the campaign may read now.
+- `<campaign> may not read <collections>: grant it under Reads on the campaign's collection in Knowledge, or leave it out.`: a collection named for its agents to search is not one the campaign may read now.
 - `An item from past research is not one this campaign may read and start from: search again.`: an item ticked under **From past research** is no longer in a collection the campaign may read, for example because its collection was removed after the panel opened. Search again, and tick the items again.
 - `sort-speed has no run sort-speed-1: copy from a run of this campaign.`: control no longer finds the run chosen under **Copy the untried experiments of**. Open the panel again and choose another run. A run of a retired rig, or from before its rig's full reset, stays in the list, marked, such as `sort-speed-1 (before rig-1's full reset, 3 up next)`.
 - `This campaign sets a context window of 150,000 tokens. narrow-model, the model of the teachers on rig-1, takes at most 131,072 tokens. Set the campaign's window to 131,072 or less, or give that agent another model.`: lower the window under [Agents' context](#set-the-agents-context), choose another rig, or give that agent another model on the rig's **Edit rig** page.
@@ -357,9 +357,9 @@ You need a campaign that control keeps (one saved on the **New campaign** page, 
 7. Give each rig its model, on its **Edit rig** page, or under **The agents' model** in the next step: see [When the rig doesn't have the model yet](#when-the-rig-doesnt-have-the-model-yet).
 8. On each copy's page, press **Start a run of sort-speed-model-b** (or **Start a run** at the top), choose the copy's own rig under **Where it runs**, and press **Start the run**, as [Start a run later](#start-a-run-later) says.
 
-Don't let one copy read the other's collection: leave **Can read from** empty on each copy's page.
+Don't let one copy read the other's collection: leave **Reads** empty on each copy's collection in **Knowledge**.
 
-To tell it worked, open each copy's page: on **Campaigns** once its run reports, or at its address, `/ui/campaigns/sort-speed-model-b`. It says where the copy came from, such as `Copied from sort-speed version 2 by you, 5m ago. Its collection in the knowledge base started empty.`, or `Copied from sort-speed as assigned for sort-speed-1 on rig-1 by you, …` for a campaign that was only assigned before. A copy made with the operator's token over MCP says `by the operator`. Its **Knowledge** section counts only its own run's records, and **Can read from** says `None: its agents read only this campaign's collection.` Then compare the two runs' results on their pages.
+To tell it worked, open each copy's page: on **Campaigns** once its run reports, or at its address, `/ui/campaigns/sort-speed-model-b`. It says where the copy came from, such as `Copied from sort-speed version 2 by you, 5m ago. Its collection in the knowledge base started empty.`, or `Copied from sort-speed as assigned for sort-speed-1 on rig-1 by you, …` for a campaign that was only assigned before. A copy made with the operator's token over MCP says `by the operator`. Its **Knowledge** section counts only its own run's records, and **Reads** says `None: its agents read only this campaign's collection.` Then compare the two runs' results on their pages.
 
 ### When the panel refuses
 

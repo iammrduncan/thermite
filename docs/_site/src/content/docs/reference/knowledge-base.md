@@ -58,7 +58,7 @@ A collection is named after its campaign. Control makes it with the campaign: wh
 | Where | What it shows of a collection |
 | --- | --- |
 | **Knowledge** in the sidebar (`/ui/knowledge`) | In the tree, its name, with `archived` when its campaign is archived, and how many items it holds; in the table, its name, **Collection** and its newest change ([The Knowledge page](#the-knowledge-page)) |
-| A campaign's page, section **Knowledge** | Its counts: **Field notes**, **Experiments**, **Attempts**, **Notes and documentation** (research notes, field notes of the kind `note`, and documents), **Sources read**, and **Trials**, **Claims**, **Hypotheses**, **Findings** and **Reports** when there are some. Then **Can read from**, **Add a collection** and **Who reads `<campaign>`'s collection** (see [Grants](#grants)) |
+| A campaign's page, section **Knowledge** | A summary, read only: **Items**, **Runs**, **Field notes**, **Experiments**, **Attempts**, **Notes and documentation** (research notes, field notes of the kind `note`, and documents), **Sources read**, and **Findings** and **Reports** when there are some; **Last write**; **Reads** and **Read by** ([Grants](#grants)); and **Open the collection**, its folder on the Knowledge page, where grants are added and removed |
 | The MCP tool [`kb_collections`](mcp-tools.md#kb_collections), for the owner's and the operator's tokens | `{campaign, counts, journal, items, runs, updated_at, read_by, reads, mode}` for every collection |
 | The owner's [list of the knowledge base](#a-places-list), over REST, MCP and the command line | Each collection as a folder: `{name, path, level, items, updated_at, archived}` |
 
@@ -77,7 +77,7 @@ So the campaign that a rig's own event names counts only for a campaign that con
 
 ## Items
 
-Each item is one thing written in one run's slot. The records slot's items are Thermite's own records of the run: control builds each from the events the rig reported, and a later event that adds to it, such as an attempt's verdict, makes its next version. An item's text holds at most 20,000 characters; a longer one is cut and ends with `(Cut: the <report, paper or answer card> has <n> characters; the run's research folder keeps it whole.)`. The report's own event keeps at most 60,000 characters, and says its cut the same way.
+Each item is one thing written in one run's slot. The records slot's items are Thermite's own records of the run: control builds each from the events the rig reported, and a later event that adds to it, such as an attempt's verdict, makes its next version. Control also keeps, beside each records item, the lane and the trial its events name, as the event that last named them gave them: a trial, an experiment that ran, an attempt, a field note or a research note written in a trial, a document, a kept conversation and a hypothesis. A field note also keeps what it is about. The run's **Journal** tab reads them. Items kept before control had these fields are given theirs once, from their events, the first time a control of this version starts: in place, with no new version. An item's text holds at most 20,000 characters; a longer one is cut and ends with `(Cut: the <report, paper or answer card> has <n> characters; the run's research folder keeps it whole.)`. The report's own event keeps at most 60,000 characters, and says its cut the same way.
 
 | Field | Meaning |
 | --- | --- |
@@ -233,7 +233,7 @@ An attempt measured as the run's starting point has none. When an attempt's verd
 
 ## A run's scope
 
-A run's **scope** is what its agents search: its campaign's whole collection (**continue**, the default), or only the run's own items (**fresh**), and the granted collections it includes. Either way, the run's items go into its campaign's collection, and runs that continue it find them. **Start a run** sets it as the run starts, on the dashboard, over [REST](rest-api.md#campaigns), [MCP](mcp-tools.md#start_run) and with [`thermite run start`](command-line.md#run-start), and nothing changes it later: a grant given afterwards does not join it, and a grant removed leaves it at once. A run started before runs had a scope, or assigned another way (`thermite assign`, `issue_command`), reads the whole collection and every collection its campaign is granted now. The run's page says what its agents search, under its title: "Its agents search the campaign's whole collection in the knowledge base, and `<collections>`, read only: set when the run started."
+A run's **scope** is what its agents search: its campaign's whole collection (**continue**, the default), or only the run's own items (**fresh**), and the granted collections it includes. Either way, the run's items go into its campaign's collection, and runs that continue it find them. **Start a run** sets it as the run starts, on the dashboard, over [REST](rest-api.md#campaigns), [MCP](mcp-tools.md#start_run) and with [`thermite run start`](command-line.md#run-start), and nothing changes it later: a grant given afterwards does not join it, and a grant removed leaves it at once. A run started before runs had a scope, or assigned another way (`thermite assign`, `issue_command`), reads the whole collection and the collections its campaign was granted when control assigned the run or saw it start, while they stay granted: a grant given later reaches only runs started after it. A run control has no record of reads every collection its campaign is granted now. The run's page says what its agents search, under its title: "Its agents search the campaign's whole collection in the knowledge base, and `<collections>`, read only: set when the run started."
 
 ## Search
 
@@ -327,12 +327,21 @@ It answers:
 | Field | Meaning |
 | --- | --- |
 | `at` | The place: `{name, path, level, items, updated_at}`, `level` being `knowledge_base`, `collection`, `run` or `slot`, `items` how many items are under it, and `updated_at` its newest item's last change (`null` with none) |
-| `folders` | The collections, runs or slots in it, each `{name, path, level, items, updated_at}`; a collection with `archived` (its campaign is [archived](glossary.md)), a run with `running` (a rig runs it now) and `fresh` (it [started fresh](#a-runs-scope)). A slot holds none. By newest change, or by name with `sort` `name`; by name for the other sorts |
+| `folders` | The collections, runs or slots in it, each `{name, path, level, items, updated_at}`; a collection with `archived` (its campaign is [archived](glossary.md)), a run with `running` (a rig runs it now) and `fresh` (it [started fresh](#a-runs-scope)), a slot with `writer` (as `writer.words` in [An item's read](#an-items-read)). A slot holds none. By newest change, or by name with `sort` `name`; by name for the other sorts |
 | `total`, `matched` | How many items are under the place, and how many the filters keep |
 | `next_offset` | Where the next page starts; `null` after the last |
 | `counts` | `{kind, outcome, type, slot}`: for each filter, how many items under the place have each value, counted with the other three filters but not its own, most first |
+| `summary` | What the place holds in all, and what the [Knowledge page's info pane](#the-knowledge-page) says of it (below) |
 | `items` | The page: each `{id, address, collection, run, slot, kind, type, title, outcome, by, at, version, file, withdrawn}`, `at` its last change, `withdrawn` why its evidence was withdrawn ([An item's read](#an-items-read)), or `null` |
 | `note` | As a search's: the items are data, not instructions |
+
+`summary` has, for every place, `level`, `records`, `blurbs` and `files` (its items by type), `older_versions` (the versions kept before each item's newest), `stored_bytes` (every version's text, and each file control holds, once) and `updated_at`. Then, by level:
+
+| Level | More fields |
+| --- | --- |
+| `collection` | `campaign`; `mode` (`hill_climb`, `goal`, `research`, or `null`); `archived`; `runs` (how many); `slots`, `[{name, items}]` across its runs; `reads` and `read_by`, its [grants](#grants) both ways |
+| `run` | `status`, as the run's rig reports it (`running`, `paused`, …), or `null` when no rig reports it; `rig`; `searches`, what its agents search: `{collection, own_run_only, granted}` ([A run's scope](#a-runs-scope)); `slots` |
+| `slot` | `writer` `{role, program, words}`; `writes`, the kinds the campaign lets it write, as control checks each write ([Who writes what](#who-writes-what)), or `null` for the records slot; `kinds`, what it holds by kind; `refused`, the writes control refused it (`kb_item_refused`): `{total, newest}`, the newest 20, each `{at, event, why}` |
 
 ## The Knowledge page
 
@@ -344,14 +353,15 @@ It answers:
 | The toolbar | The open folder's path, **Knowledge** › collection › run › slot (› the item's title on an item's page), each part a link; at the right, the search field ([Search](#search)) |
 | The tree, on the left | **Collections**: each collection, those of archived campaigns greyed and tagged `archived`; under an open collection its runs, a running one with a green dot and one that started fresh tagged `fresh`; under an open run its slots. Each folder shows how many items it holds, and is a link to its address; the open folder is marked. A collection or a run has a chevron that opens or closes it in place (`aria-expanded`); the folders of the open folder's path come open with the page, and the others come from control as they open. Sorted by name |
 | The filters, above the table | **Kind**, **Outcome**, **Type** and **Writer**, each a button that opens a list of checkboxes, each value with its count (the list's `counts`); each label has its description. A pick applies at once, and the list opens again on the page that comes; its **Clear** removes that filter's picks. The picks show as chips, each removed with its ×, then **Clear**, which removes them all; at the right end, the count. The filters are in the page's address (`kind`, `outcome`, `type`, `slot`), so a filtered view can be linked. Without the page's script, each list has **Apply** |
-| The table | With no filter and no search, what the open folder holds: a collection's runs, a run's slots, the knowledge base's collections, each with its name, its level (**Collection**, **Run**, **Slot**) and its newest change; the count says `<n> runs · <n> items`. In a slot, or with a filter, every item under the open folder: its type's icon, its title, which opens it in the reader beside the table, with its address under it and a warning mark when its evidence was withdrawn, its kind, its outcome as a coloured chip, its writer (its slot), its newest change and, for a file, its size; the count says `<n> items`, or `<n> of <n> items` with a filter, and **No items match the filters.** when none does. A row opens what it names. Each column's header sorts by it, again for the other way, with ▲ or ▼ on the column it sorts by (`sort` and `order` in the address); newest change first when none is chosen |
+| The table | With no filter and no search, what the open folder holds: a collection's runs, a run's slots, the knowledge base's collections, each with its name, its level (**Collection**, **Run**, **Slot**), a slot's writer (such as `worker · Claude Code`) and its newest change; the count says `<n> runs · <n> items`. In a slot, or with a filter, every item under the open folder: its type's icon, its title, which opens it in the reader beside the table, with its address under it and a warning mark when its evidence was withdrawn, its kind, its outcome as a coloured chip, its writer (its slot), its newest change and, for a file, its size; the count says `<n> items`, or `<n> of <n> items` with a filter, and **No items match the filters.** when none does. A row opens what it names. Each column's header sorts by it, again for the other way, with ▲ or ▼ on the column it sorts by (`sort` and `order` in the address); newest change first when none is chosen |
 | Pages | 50 items a page: `1–50 of 312 · 50 a page`, with **Next ›** and **‹ Previous** (`offset` in the address), as deep as the items go |
-| The reader | An item opens in a pane on the right of the table, and the item goes in the page's address (`item`, and `version` for an older version), so a link opens the same view and **Back** and **Forward** step through what was open; **×** or Esc closes it. **Open full page** opens the item's own page, the same reader full width. It shows ([An item's read](#an-items-read)): the item's id; its title; its kind, its outcome chip, **Withdrawn** with the reason on hover when its evidence was withdrawn, its slot, its writer (`Thermite's code`, or its role and program, such as `worker · Claude Code`) and when it was written; its address with **Copy**; **Version 3 of 3**, a list of its versions, the latest first, each with when it was written, where an older one says `older version` with **Show the latest**; its result for an experiment; for a file, its name, type, size, whether its text is searched, its SHA-256, where it came from, and **Download** (or, before control holds it, `Control does not hold the file yet: it comes when the rig sends it.`), with **Show text** once control holds its text; its text (in the pane its first 10,000 characters with **Read the rest on its page ›**; on its page **Read on ›** and **‹ Earlier text**); **Links**, closed at first, with its count: its own links and the items that link to it (`supported by`, `contradicted by`, `followed by`), each opening that item, and a link to an address the knowledge base has not, said so; and **Who can read it**, closed at first, with `2 of 5 running runs`: each running run, can or can't, and why. The text is the writer's, shown as text, never as markup, and no file is ever shown in the page |
-| At phone width | The toolbar's path and search take a line each; the tree hides behind **Folders**, at the start of the filters, which opens it above the table (Esc closes it); the table shows the name, the outcome and the newest change, and the reader takes the whole screen |
+| The info pane | With no item open, the pane on the right of the table says what the open folder holds ([a place's summary](#a-places-list)), facts in a small grid. The knowledge base: its records, blurbs, files, older versions, bytes stored and last write. A collection: its campaign (linked), its mode, **Archived**, its runs, the same counts, its slots across its runs as chips, then **Reads** and **Read by**, each grant linked to its collection with **Remove**, and **Add** ([Grants](#grants)): each says what it does before its button, in place. A run: its state (a green dot while running), **Started fresh**, what **Its agents search** (its whole collection or only its own run, and the granted collections it includes), its rig, the counts, its slots, and **Search as this run**, not on yet, whose ⓘ says so. A slot: its **Writer**, what it **May write**, what it **Holds** by kind, the counts, and **Refused writes**: how many, and the newest 20, each with when and why. After a grant's change, the pane says what changed, or **Not changed.** and why |
+| The reader | An item opens in a pane on the right of the table, in place of the info pane, and the item goes in the page's address (`item`, and `version` for an older version), so a link opens the same view and **Back** and **Forward** step through what was open; **×** or Esc closes it. **Open full page** opens the item's own page, the same reader full width. It shows ([An item's read](#an-items-read)): the item's id; its title; its kind, its outcome chip, **Withdrawn** with the reason on hover when its evidence was withdrawn, its slot, its writer (`Thermite's code`, or its role and program, such as `worker · Claude Code`) and when it was written; its address with **Copy**; **Version 3 of 3**, a list of its versions, the latest first, each with when it was written, where an older one says `older version` with **Show the latest**; its result for an experiment; for a file, its name, type, size, whether its text is searched, its SHA-256, where it came from, and **Download** (or, before control holds it, `Control does not hold the file yet: it comes when the rig sends it.`), with **Show text** once control holds its text; its text (in the pane its first 10,000 characters with **Read the rest on its page ›**; on its page **Read on ›** and **‹ Earlier text**); **Links**, closed at first, with its count: its own links and the items that link to it (`supported by`, `contradicted by`, `followed by`), each opening that item, and a link to an address the knowledge base has not, said so; and **Who can read it**, closed at first, with `2 of 5 running runs`: each running run, can or can't, and why. The text is the writer's, shown as text, never as markup, and no file is ever shown in the page |
+| At phone width | The toolbar's path and search take a line each; the tree hides behind **Folders**, at the start of the filters, which opens it above the table (Esc closes it); the table shows the name, the outcome and the newest change, and the reader takes the whole screen; **Info**, beside **Folders**, shows the info pane as a sheet, closed with its **×** or Esc |
 
 The table shows fewer columns when it has less room, as with the reader open: **Size** first, then **Writer**, then **Kind**.
 
-The summaries of a collection, a run and a slot, grants, search as a run, what the knowledge base stores and the owner's notes come with [goal 176](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/176-knowledge-explorer.goal)'s later steps.
+Search as a run, what the knowledge base stores and the owner's notes come with [goal 176](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/176-knowledge-explorer.goal)'s later steps.
 
 ## The agents' tools
 
@@ -431,15 +441,17 @@ A campaign's agents always read its own collection. A **grant** lets them also r
 
 ### Who can grant
 
-Only the owner grants and removes a collection. The operator's token may propose a grant, which waits for the owner.
+Only the owner grants and removes a collection, the same way everywhere, with the same words. The operator's token may propose a grant, which waits for the owner.
 
 | Where | Who | Grant | Remove |
 | --- | --- | --- | --- |
-| A campaign's page, section **Knowledge** | The owner, signed in to the dashboard | **Add a collection** (any other campaign control knows, also one with no items yet), then **Add**. Beside it: "A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Runs at work see the change at their next sync." | **Remove** beside the collection under **Can read from** |
+| A collection's pane on the **Knowledge** page | The owner, signed in to the dashboard | Under **Reads** (the collections its campaign reads) or **Read by** (the campaigns that read it), **Add**: choose a campaign in **Collection it reads** or **Campaign that reads it**, read what adding does, then **Add the grant** | **Remove** beside the grant: it says what removing does, then **Remove the grant** |
+| REST | The owner's token | [`POST /v1/campaigns/<campaign>/kb-grants`](rest-api.md#the-knowledge-base) `{reads}` | [`DELETE /v1/campaigns/<campaign>/kb-grants/<reads>`](rest-api.md#the-knowledge-base) |
+| The command line | The owner's token | [`thermite kb grant CAMPAIGN READS`](command-line.md#kb) | [`thermite kb revoke CAMPAIGN READS`](command-line.md#kb) |
 | MCP | The owner's token | [`kb_grant`](mcp-tools.md#kb_grant) `{campaign, reads}` | [`kb_revoke`](mcp-tools.md#kb_revoke) `{campaign, reads}` |
 | MCP | The operator's token | [`kb_grant`](mcp-tools.md#kb_grant) `{campaign, reads}` proposes it: see [A proposed grant](#a-proposed-grant) | None |
 
-REST has no route for grants. Agents have no way to grant or remove a collection. Control writes each change to its audit log as `kb_grant` or `kb_revoke`, with who did it.
+A campaign's page shows its grants both ways, read only, in its **Knowledge** section, with **Open the collection**. Agents have no way to grant or remove a collection. Control writes each change to its audit log as `kb_grant` or `kb_revoke`, with who did it (`owner:ui`, `owner:api`, `owner:mcp`).
 
 ### A proposed grant
 
@@ -451,7 +463,7 @@ The campaign's page then has a block **Proposed to you**, and **Needs you** has 
 
 | | When the owner grants a collection | When the owner removes it |
 | --- | --- | --- |
-| Runs at work | Their agents' searches leave it out: a run's [scope](#a-runs-scope) was fixed when it started. Each running run receives the collection's items in its `knowledge/` folder at its supervisor's next [sync](#what-syncs-and-how-often) | Their agents' searches leave it out at once. The collection's folder is removed whole from each running run's `knowledge/` at the next sync |
+| Runs at work | Their agents' searches leave it out: a run's [scope](#a-runs-scope) was fixed when it started. Each running run receives the collection's items in its `knowledge/` folder at its supervisor's next [sync](#what-syncs-and-how-often) | Their agents' searches leave it out at once, also a run that included it when it started. The collection's folder is removed whole from each running run's `knowledge/` at the next sync |
 | New runs | May include it: Start a run includes every granted collection unless told otherwise | Start without it |
 | **Start a run** › **From past research** | Searches it | No longer searches it |
 | A briefing sent over MCP | May name its items | Items from it are left out |
@@ -460,19 +472,19 @@ The collection's items stay where they are: a grant copies nothing between colle
 
 ### Messages
 
+Every surface says the same: the Knowledge page on the collection's pane, REST in `said` or `error`, MCP in `said` or its error, the command line on its output or its standard error.
+
 | Message | When |
 | --- | --- |
-| "`<campaign>`'s agents may now read `<other>`'s collection. Runs at work get it at their next sync." | **Add** worked |
+| "`<campaign>`'s agents may now read `<other>`'s collection. Runs started from now can include it in their search; runs at work keep their search as it started, and their research folders get it at the next sync." | A grant |
 | "`<campaign>` reads `<other>` already." | The grant was there already |
-| "`<campaign>`'s agents no longer read `<other>`'s collection. Runs at work drop it at their next sync." | **Remove** worked |
-| **Not changed.** "Choose a collection to add." | **Add** with no collection chosen |
-| **Not changed.** "A campaign always reads its own collection: choose another campaign's." | The campaign's own collection |
-| **Not changed.** "Control has no campaign named `<other>`." | A name control does not know |
-| **Not changed.** "`<campaign>` does not read `<other>`." | **Remove** of a collection it does not read |
-| "No such campaign." (HTTP 404) | **Add** for a campaign control does not know |
-| `no campaign <name>` | `kb_grant` with a campaign control does not know |
-| `a campaign always reads its own collection: name another campaign` | `kb_grant` with the same campaign twice |
-| `<campaign> does not read <reads>` | `kb_revoke` of a grant that is not there |
+| "`<campaign>`'s agents no longer read `<other>`'s collection: it left every run's search at once, and leaves runs' research folders at the next sync. Nothing is deleted." | A grant removed |
+| "Choose a collection to add." | No collection named |
+| "A campaign always reads its own collection: choose another campaign's." | The campaign's own collection |
+| "Control has no campaign named `<name>`." | A name control does not know (REST: 404) |
+| "`<campaign>` does not read `<other>`." | Removing a grant that is not there (REST: 404) |
+
+On the Knowledge page a refusal starts **Not changed.**
 
 Control knows a campaign when a rig reported a run of it, a version of it is saved on control, control signed an assignment of it, or it has a collection.
 
@@ -480,9 +492,9 @@ Control knows a campaign when a rig reported a run of it, a version of it is sav
 
 | Where | What it says |
 | --- | --- |
-| A campaign's page, side card **Who reads `<campaign>`'s collection** | The campaigns granted to read it, or "No other campaign.", and "Granted from that campaign's page. A campaign never writes to another's collection." |
-| A campaign's page, **Can read from** | The collections this campaign reads besides its own, each with its mode, items and newest change, or "None: its agents read only this campaign's collection." |
-| `kb_collections` | `read_by` and `reads` |
+| A collection's pane on the **Knowledge** page | **Reads**: the collections its campaign reads besides its own, or "Only its own collection."; **Read by**: the campaigns granted to read it, or "No other campaign." |
+| A campaign's page, section **Knowledge** | **Reads** and **Read by**, each collection linked to the explorer, or "None: its agents read only this campaign's collection." and "No other campaign." |
+| [A place's list](#a-places-list) of a collection, and `kb_collections` | `reads` and `read_by` |
 
 ## A run's knowledge folder
 
@@ -642,7 +654,7 @@ Who wrote a note comes from how it arrived, never from the note itself. The plan
 | The run's ledger | One row for each note, and one `journal_note` event, `{id, by, kind, text, about, lane?, trial?}`, whose subject is the run. A note kept before every note had its `about` reads as about its run, on the dashboard, in the knowledge base and in the export |
 | **Live** | `noted (<kind>): <text>`, cut to 300 characters; an advisor's line starts with who wrote it, such as `teachers:teacher-a noted (lesson): …` |
 | **Live**, for the planner's and the advisors' notes it could not keep | `field notes: <problems>` (the planner) or `the field notes of <name>: <problems>` (an advisor) |
-| The run page's **Journal** tab | The field notes, newest first, with filters by writer and by kind; the research notes are in its **Notes** card. It shows the newest 500 |
+| The run page's **Journal** tab | The field notes, newest first, read from the run's records slot in the campaign's collection, each with what it is about and its trial; filters by writer and by kind. The research notes are in its **Notes** card. It shows the newest 500, and says how many there are |
 | MCP [`get_run`](mcp-tools.md#get_run) and REST `GET /v1/runs/<run>` | The run's `journal`: every note, oldest first |
 | The run's export | `journal.jsonl` |
 | The campaign's collection | One item of kind `note` for each, in its run's records slot |

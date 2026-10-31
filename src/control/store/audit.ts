@@ -134,6 +134,36 @@ export class AuditLog extends StorePart {
     };
   }
 
+  /**
+   * The items control refused a writer of a run (`kb_item_refused`, goal 175), by its slot: how
+   * many, and the newest `limit`, newest first, each with when and why.
+   */
+  kbRefusals(
+    run: string,
+    slot: string,
+    limit: number,
+  ): { total: number; newest: { at: string; event: number | null; why: string }[] } {
+    const where = `action = 'kb_item_refused' and json_extract(body, '$.run') = ?
+      and (json_extract(body, '$.slot') = ? or json_extract(body, '$.writer') = ?)`;
+    const total = this.db
+      .prepare(`select coalesce(sum(count), 0) as n from audit where ${where}`)
+      .get(run, slot, slot) as Row;
+    const rows = this.db
+      .prepare(`select at, body from audit where ${where} order by id desc limit ?`)
+      .all(run, slot, slot, limit) as Row[];
+    return {
+      total: Number(total.n),
+      newest: rows.map((r) => {
+        const b = JSON.parse(String(r.body)) as { event?: unknown; why?: unknown };
+        return {
+          at: String(r.at),
+          event: typeof b.event === "number" ? b.event : null,
+          why: String(b.why ?? ""),
+        };
+      }),
+    };
+  }
+
   /** The body of the newest audit entry by this actor with this action, if there is one. */
   last(actor: string, action: string): unknown {
     const r = this.db

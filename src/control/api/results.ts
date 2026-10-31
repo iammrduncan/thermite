@@ -1,12 +1,22 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
-import { KB_FILE, KB_ITEM, KB_LIST, KB_SEARCH, PROPAGATE } from "../../core/api/control/owner.ts";
+import {
+  CAMPAIGN_KB_GRANT,
+  CAMPAIGN_KB_REVOKE,
+  KB_FILE,
+  KB_ITEM,
+  KB_LIST,
+  KB_SEARCH,
+  PROPAGATE,
+} from "../../core/api/control/owner.ts";
 import { CHAMPION_PATCH } from "../../core/api/control/rigs.ts";
 import { keepChampionPatch } from "../champions.ts";
 import { type ExportFiles, mountExports } from "../exports.ts";
 import { propagateChampion } from "../issue/index.ts";
 import {
+  type GrantOutcome,
+  grantCollection,
   KbListQuery,
   KbReadQuery,
   KbSearchQuery,
@@ -15,6 +25,7 @@ import {
   ownerKbList,
   ownerKbRead,
   ownerKbSearch,
+  revokeCollection,
 } from "../kb/index.ts";
 import { resultsLeft } from "../results-left.ts";
 import { leaderboard, rigViews } from "../views/index.ts";
@@ -120,6 +131,43 @@ export function resultRoutes(
     const r = ownerKbList(store, rigViews(store, viewOpts), q.data);
     return "error" in r ? c.json(r, 404) : c.json(r);
   });
+
+  // Grants (goal 176): as MCP's kb_grant and kb_revoke and the Knowledge page, the same code.
+  const granted = (c: Context, o: GrantOutcome, created: boolean) =>
+    o.ok
+      ? c.json(
+          {
+            campaign: o.campaign,
+            changed: o.changed,
+            reads: o.reads,
+            read_by: o.read_by,
+            said: o.said,
+          },
+          created && o.changed ? 201 : 200,
+        )
+      : c.json({ error: o.error }, o.status);
+  app.post(
+    CAMPAIGN_KB_GRANT.path,
+    admin,
+    bodyLimit({ maxSize: CAMPAIGN_KB_GRANT.maxBytes }),
+    async (c) => {
+      const body = CAMPAIGN_KB_GRANT.body.safeParse(await c.req.json().catch(() => undefined));
+      if (!body.success) return c.json({ error: queryRefusal(body.error) }, 400);
+      const g = { campaign: c.req.param("campaign"), reads: body.data.reads };
+      return granted(c, grantCollection(store, rigViews(store, viewOpts), g, "owner:api"), true);
+    },
+  );
+  app.delete(CAMPAIGN_KB_REVOKE.path, admin, (c) =>
+    granted(
+      c,
+      revokeCollection(
+        store,
+        { campaign: c.req.param("campaign"), reads: c.req.param("reads") },
+        "owner:api",
+      ),
+      false,
+    ),
+  );
 
   // A champion's patch, uploaded by the rig's supervisor once its export is published. It is
   // kept only if its sha256 is the one the rig's signed champion_published event names.

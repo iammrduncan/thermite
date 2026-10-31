@@ -50,7 +50,6 @@ import { listText } from "../../ui/words/index.ts";
 import { usageData } from "../../usage.ts";
 import {
   type CampaignView,
-  campaignModes,
   campaignViews,
   leaderboard,
   type RigView,
@@ -60,7 +59,7 @@ import type { Ctx, Dashboard } from "../context.ts";
 import { type CopyTry, campaignPanels } from "./panels.ts";
 import { proposalRoutes, proposalsBlock } from "./proposals.ts";
 import { runHelpers } from "./run/section.ts";
-import { campaignHelpers, headline, modeWords } from "./shared.ts";
+import { campaignHelpers, headline } from "./shared.ts";
 
 /**
  * A campaign's page: its runs from control's run registry, wherever they ran, with the earlier
@@ -224,26 +223,9 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
   });
 
   // ---------------------------------------------------------------- the knowledge base (goal 065)
-  /** A campaign's Knowledge section: its collection, the collections it reads, who reads it. */
-  const knowledgeSection = (c: Ctx, name: string, vs: RigView[], error?: string) => {
-    const kb = store.kb();
-    const collections = kb.collections();
-    const have = new Set(collections.map((f) => f.campaign));
-    const modes = campaignModes(store, vs);
-    return campaignKnowledge({
-      campaign: name,
-      collection: kb.collection(name, collections),
-      collections: [
-        ...collections,
-        // A campaign control knows only by a rig's runs can be granted too.
-        ...[...modes.keys()].filter((x) => !have.has(x)).map((x) => kb.collection(x, collections)),
-      ],
-      mode: modeWords(modes),
-      csrf: csrf(c),
-      now: Date.now(),
-      error,
-    });
-  };
+  /** A campaign's Knowledge section: a summary of its collection, and its grants both ways. */
+  const knowledgeSection = (name: string) =>
+    campaignKnowledge({ campaign: name, collection: store.kb().collection(name), now: Date.now() });
 
   // ---------------------------------------------------------------- a campaign's agents' context
   // Goal 070: a campaign's own context window and compaction point for all its runs' agents, kept
@@ -442,14 +424,11 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     const k: CampaignView | undefined = runs.length
       ? { name, mode: runs[0]?.run.mode ?? null, runs }
       : undefined;
-    // A refused grant shows in the Knowledge section, not as a run that did not start.
-    const kbFailed = c.req.query("on") === "kb" ? c.req.query("error") : undefined;
-    // So does what the Agents' context's Save did, in its own block.
+    // What the Agents' context's Save did shows in its own block, not as a run that did not start.
     // So do the owner's additions' (goal 166), and a decision on a proposal.
     const onContext = ["context", "additions", "proposals"].includes(c.req.query("on") ?? "");
     // Archive and Move to folder (on=shelf) say what they refused at the top of every page.
-    const failed =
-      kbFailed || onContext || c.req.query("on") === "shelf" ? undefined : c.req.query("error");
+    const failed = onContext || c.req.query("on") === "shelf" ? undefined : c.req.query("error");
     const okNote = onContext ? undefined : c.req.query("ok");
     const context = () => contextSection(c, name, vs, c.req.query("on") === "context");
     // The campaign's brief from its contract (goal 078): what its agents know.
@@ -497,7 +476,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
           active: "campaigns",
           actions: buttons,
         },
-        `${note}${copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}${kbWritesSection(c, name)}${drawer}`,
+        `${note}${copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(name)}${kbWritesSection(c, name)}${drawer}`,
         vs,
       );
     }
@@ -616,7 +595,7 @@ ${waitingRuns.map((w) => `<div class="kneed">${icon.warn}<span class="grow"><b>$
                     now,
                   )}</div>`
                 : ""
-            }</div>${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}${kbWritesSection(c, name)}
+            }</div>${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(name)}${kbWritesSection(c, name)}
 </div><div class="side">${campaignUsage(k)}</div></div>`
       }${drawer}`,
       vs,

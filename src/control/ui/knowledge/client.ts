@@ -8,7 +8,8 @@
  * Folders shows the tree at phone width, and Esc hides it again; Copy copies an item's address.
  * An item opens in the preview pane in place: the script asks control for the page with the item
  * in its address, takes its pane, and puts that address in the browser's history, so Back and
- * Forward step through what was open; × and Esc close it the same way.
+ * Forward step through what was open; × and Esc close it the same way, and the folder's own pane
+ * comes back. At phone width, Info shows the folder's pane as a sheet, and × or Esc hides it.
  */
 export const KNOWLEDGE_JS = `
 (() => {
@@ -34,30 +35,30 @@ export const KNOWLEDGE_JS = `
     const item = itemOf(href);
     kx.querySelectorAll("tr[data-item-href]").forEach((r) => r.classList.toggle("on", !!item && itemOf(r.dataset.itemHref) === item));
   };
-  const close = (href, push) => {
-    const pane = kx.querySelector("#kx-prev");
-    if (pane) pane.remove();
-    mark(href);
-    if (push) history.pushState(null, "", href);
-  };
+  // The page at href, in place: its pane (an item's, or the folder's) in place of this one's.
   const preview = async (href, push) => {
-    let pane = null;
+    let page = null;
     try {
       const res = await fetch(href, { credentials: "same-origin" });
-      if (res.ok) pane = new DOMParser().parseFromString(await res.text(), "text/html").querySelector("#kx-prev");
+      if (res.ok) page = new DOMParser().parseFromString(await res.text(), "text/html");
     } catch {
       // Control did not answer: the address opens as a page instead, below.
     }
-    if (!pane) { location.href = href; return; }
+    if (!page) { location.href = href; return; }
+    const pane = page.querySelector("#kx-prev");
     const old = kx.querySelector("#kx-prev");
-    if (old) old.replaceWith(pane); else body.append(pane);
+    if (pane && old) old.replaceWith(pane); else if (pane) body.append(pane); else if (old) old.remove();
     mark(href);
     if (push) history.pushState(null, "", href);
-    pane.focus({ preventScroll: true });
+    if (pane && itemOf(href)) pane.focus({ preventScroll: true });
   };
-  window.addEventListener("popstate", () => {
-    if (itemOf(location.href)) preview(location.href, false); else close(location.href, false);
-  });
+  const close = (href, push) => preview(href, push);
+  window.addEventListener("popstate", () => preview(location.href, false));
+  const info = (open) => {
+    kx.dataset.info = open ? "open" : "closed";
+    const b = kx.querySelector(".kx-infobtn");
+    if (b) b.setAttribute("aria-expanded", String(open));
+  };
   const plain = (ev) => ev.button === 0 && !ev.metaKey && !ev.ctrlKey && !ev.shiftKey && !ev.altKey;
 
   document.addEventListener("keydown", (ev) => {
@@ -66,6 +67,7 @@ export const KNOWLEDGE_JS = `
     const pclose = kx.querySelector("#kx-prev [data-pclose]");
     if (open) { open.open = false; open.querySelector("summary").focus(); }
     else if (kx.dataset.folders === "open") { folders(false); if (foldBtn) foldBtn.focus(); }
+    else if (kx.dataset.info === "open") info(false);
     else if (pclose) close(pclose.getAttribute("href"), true);
   });
   const form = kx.querySelector("form.kx-filters");
@@ -108,6 +110,10 @@ export const KNOWLEDGE_JS = `
     }
     if (t.closest(".kx-foldbtn")) {
       folders(kx.dataset.folders !== "open");
+      return;
+    }
+    if (t.closest(".kx-infobtn") || t.closest("[data-info-close]")) {
+      info(!!t.closest(".kx-infobtn") && kx.dataset.info !== "open");
       return;
     }
     const shut = t.closest("a[data-pclose]");

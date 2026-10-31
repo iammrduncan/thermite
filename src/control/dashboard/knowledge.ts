@@ -11,6 +11,8 @@ import {
 } from "../../core/kb.ts";
 import { KB_OFFSET_MAX, KB_QUERY_MAX, KB_SEARCH_MAX } from "../../core/link/kb.ts";
 import {
+  type GrantOutcome,
+  grantCollection,
   KB_LIST_DEFAULT,
   type KbFolder,
   KbReadQuery,
@@ -23,6 +25,7 @@ import {
   ownerKbSearch,
   PICKABLE,
   readKbPlace,
+  revokeCollection,
 } from "../kb/index.ts";
 import { esc } from "../ui/components/index.ts";
 import {
@@ -32,13 +35,14 @@ import {
   type ExplorerSearch,
   explorerFrame,
   explorerHref,
+  folderPaneHtml,
   KNOWLEDGE_JS,
   pastWords,
   readerHtml,
   readerMissing,
   treeList,
 } from "../ui/knowledge/index.ts";
-import { knowledgeHref, knowledgeParts } from "../ui/urls.ts";
+import { KNOWLEDGE_ROOT, knowledgeHref, knowledgeParts } from "../ui/urls.ts";
 import { campaignModes } from "../views/index.ts";
 import { campaignHelpers } from "./campaigns/shared.ts";
 import type { Ctx, Dashboard } from "./context.ts";
@@ -51,7 +55,7 @@ import type { Ctx, Dashboard } from "./context.ts";
  * and kb_read (control/kb/), each called here as there.
  */
 export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
-  const { page, store, views, opts } = dash;
+  const { page, store, views, opts, csrf } = dash;
   const { pastResults } = campaignHelpers(dash);
 
   /** A list in the page's address: given with commas or as a repeated parameter, each once. */
@@ -202,7 +206,19 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     return explorer(c, {
       parts: placeParts,
       query,
-      pane: query.item ? pane(placeParts.join("/"), query, query.item) : undefined,
+      pane: query.item
+        ? pane(placeParts.join("/"), query, query.item)
+        : folderPaneHtml({
+            place: list.at,
+            summary: list.summary,
+            grants: {
+              csrf: csrf(c),
+              back: explorerHref(placeParts.join("/"), query),
+              collections: [...campaignModes(store, vs).keys()].sort(),
+            },
+            note: { ok: c.req.query("ok"), error: c.req.query("error") },
+            now: Date.now(),
+          }),
       main: contentsHtml({
         place: list.at,
         query,
@@ -270,6 +286,27 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
     if ("error" in r) return { ...none, error: r.error };
     return { matched: r.matched, next_offset: r.next_offset, counts: r.counts, hits: r.hits };
   };
+
+  /**
+   * A grant given or ended on a collection's pane (goal 176), as REST and MCP do it: back to the
+   * explorer's page it came from, which says what changed, or why not.
+   */
+  const grantBack = (c: Ctx, back: unknown, o: GrantOutcome) => {
+    const to = String(back ?? "");
+    const base = to.startsWith(KNOWLEDGE_ROOT) && !to.startsWith("//") ? to : KNOWLEDGE_ROOT;
+    const said = o.ok ? `ok=${encodeURIComponent(o.said)}` : `error=${encodeURIComponent(o.error)}`;
+    return c.redirect(`${base}${base.includes("?") ? "&" : "?"}${said}`, 303);
+  };
+  app.post("/ui/kb/grant", async (c) => {
+    const f = await c.req.parseBody();
+    const g = { campaign: String(f.campaign ?? ""), reads: String(f.reads ?? "") };
+    return grantBack(c, f.back, grantCollection(store, views(), g, "owner:ui"));
+  });
+  app.post("/ui/kb/revoke", async (c) => {
+    const f = await c.req.parseBody();
+    const g = { campaign: String(f.campaign ?? ""), reads: String(f.reads ?? "") };
+    return grantBack(c, f.back, revokeCollection(store, g, "owner:ui"));
+  });
 
   app.get("/ui/knowledge", knowledgePage);
   app.get("/ui/knowledge/*", knowledgePage);

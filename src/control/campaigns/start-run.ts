@@ -305,7 +305,7 @@ export async function startARun(
   const notGranted = granted.filter((c) => !reads.includes(c));
   if (notGranted.length)
     return refuse(
-      `${campaign} may not read ${notGranted.join(", ")}: grant it on the campaign's page under Can read from, or leave it out.`,
+      `${campaign} may not read ${notGranted.join(", ")}: grant it under Reads on the campaign's collection in Knowledge, or leave it out.`,
       400,
     );
   const scope = { collection: req.collection ?? "continue", granted: [...new Set(granted)] };

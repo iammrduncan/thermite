@@ -176,10 +176,11 @@ test("a run's Journal tab: field notes newest first, by writer and kind, linked 
   // Agents' words are escaped.
   assert.match(page, /Kept the old path below n = 4096 &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.ok(!page.includes("<script>alert(1)</script>"));
-  // What a note is about: the attempt, and the experiment by its title.
+  // What a note is about: the attempt, and the experiment by its title; then its trial, all from
+  // the run's records in the knowledge base.
   assert.match(
     page,
-    /href="\/ui\/campaigns\/gemv-speed\/runs\/gs-3\/attempts\/a-1"><code>a-1<\/code><\/a> vector loads/,
+    /href="\/ui\/campaigns\/gemv-speed\/runs\/gs-3\/attempts\/a-1"><code>a-1<\/code><\/a> vector loads[^<]* · trial t-1<\/div>/,
   );
   assert.match(page, /\/experiments">Tile the vector in shared memory<\/a>/);
   // Filters by writer and by kind.
@@ -200,97 +201,144 @@ test("a run's Journal tab: field notes newest first, by writer and kind, linked 
   assert.match(page, /<span>Experiments tried<\/span><b>1<\/b>/);
 });
 
-test("a campaign's read grants: forms with the form token, refused for itself, audited", async () => {
+test("grants: given and ended on the collection's pane in the explorer, said first, with the form token, audited; the campaign's page shows them", async () => {
   const s = await stack();
-  let page = await (await s.get("/ui/campaigns/gemv-speed")).text();
-  assert.match(page, /id="knowledge"/);
+  const pane = async (path: string) => {
+    const html = await (await s.get(path)).text();
+    const at = html.indexOf('<aside class="kx-prev kx-info"');
+    return at < 0 ? "" : html.slice(at, html.indexOf("</aside>", at));
+  };
+  let p = await pane("/ui/knowledge/gemv-speed");
+  assert.match(p, /<span class="lb">Reads<i class="ii" tabindex="0" data-tip="/);
+  assert.match(p, /<li class="muted small">Only its own collection\.<\/li>/);
+  // Add says what it does before it is done, then asks for the button, in place.
   assert.match(
-    page,
-    /None: its agents read only this campaign&#39;s collection|None: its agents read only this campaign's collection/,
+    p,
+    /<details class="kx-confirm"><summary class="btn sm">Add<\/summary><form method="post" action="\/ui\/kb\/grant" class="kx-grantform"><input type="hidden" name="csrf" value="[0-9a-f]+"><input type="hidden" name="back" value="\/ui\/knowledge\/gemv-speed"><input type="hidden" name="campaign" value="gemv-speed"><label class="sfd"><span class="lb">Collection it reads<i class="ii" tabindex="0" data-tip="[^"]+">i<\/i><\/span><select name="reads" required><option value="">Choose…<\/option><option value="survey-study">survey-study<\/option><\/select><\/label><p class="small">The campaign(&#39;|')s agents may then read the collection you choose, read only, and never write to it\./,
   );
-  assert.match(
-    page,
-    /<select name="reads" required><option value="">Add a collection…<\/option><option value="survey-study">/,
-  );
-  assert.ok(!/<option value="gemv-speed">gemv-speed \(/.test(page), "never itself in the Add list");
-  assert.match(page, /Add a collection<i class="ii" tabindex="0" data-tip="/);
-  // Runs at work get a change at their supervisor's next sync, as the tip says; and the form says
-  // what a grant opens.
-  assert.match(page, /Runs at work see the change at their next sync\./);
-  assert.match(
-    page,
-    /<span class="muted small">A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it\. Runs at work/,
-  );
-  assert.doesNotMatch(page, /at their next trial/);
+  assert.ok(!p.includes('<option value="gemv-speed">'), "never itself");
   // Without the form token: refused.
-  const forged = await s.post("/ui/campaigns/gemv-speed/kb/grant", { reads: "survey-study" });
+  const forged = await s.post("/ui/kb/grant", { campaign: "gemv-speed", reads: "survey-study" });
   assert.equal(forged.status, 403);
   assert.deepEqual(s.store.kb().reads("gemv-speed"), []);
-  // Itself, or a campaign control does not know: refused, and said in the Knowledge section.
-  const self = await s.post("/ui/campaigns/gemv-speed/kb/grant", {
+  // Itself, or a campaign control does not know: refused, said on the pane.
+  const back = "/ui/knowledge/gemv-speed";
+  const self = await s.post("/ui/kb/grant", {
     csrf: s.csrf,
+    back,
+    campaign: "gemv-speed",
     reads: "gemv-speed",
   });
-  assert.match(s.where(self), /on=kb/);
-  assert.match(s.where(self), /always reads its own collection/);
-  page = await (await s.get((self.headers.get("location") ?? "").replace(/#.*$/, ""))).text();
+  assert.equal(self.status, 303);
   assert.match(
-    page,
-    /<b class="bad">Not changed\.<\/b> A campaign always reads its own collection/,
+    s.where(self),
+    /^\/ui\/knowledge\/gemv-speed\?error=A campaign always reads its own collection/,
   );
-  assert.ok(!page.includes("Not started."));
+  p = await pane(self.headers.get("location") ?? "");
   assert.match(
-    s.where(await s.post("/ui/campaigns/gemv-speed/kb/grant", { csrf: s.csrf, reads: "nope" })),
+    p,
+    /<div class="kx-note bad"><b>Not changed\.<\/b> A campaign always reads its own collection/,
+  );
+  assert.match(
+    s.where(
+      await s.post("/ui/kb/grant", { csrf: s.csrf, back, campaign: "gemv-speed", reads: "nope" }),
+    ),
     /Control has no campaign named nope/,
   );
-  // A grant: the collection is read from now on, and the audit log says who.
-  const ok = await s.post("/ui/campaigns/gemv-speed/kb/grant", {
+  // Somewhere outside the explorer: back to the explorer, never another page.
+  assert.match(
+    s.where(
+      await s.post("/ui/kb/grant", {
+        csrf: s.csrf,
+        back: "https://example.com/",
+        campaign: "gemv-speed",
+        reads: "nope",
+      }),
+    ),
+    /^\/ui\/knowledge\?error=/,
+  );
+  // A grant: read from now on, said, and audited with who.
+  const ok = await s.post("/ui/kb/grant", {
     csrf: s.csrf,
+    back,
+    campaign: "gemv-speed",
     reads: "survey-study",
   });
-  assert.equal(ok.status, 303);
-  assert.match(s.where(ok), /may now read survey-study's collection/);
+  assert.match(
+    s.where(ok),
+    /\?ok=gemv-speed's agents may now read survey-study's collection\. Runs started from now can include it in their search/,
+  );
   assert.deepEqual(s.store.kb().reads("gemv-speed"), ["survey-study"]);
-  const audit = s.store.auditLog.list(50);
   assert.ok(
-    audit.some(
-      (a) =>
-        a.actor === "owner:ui" &&
-        a.action === "kb_grant" &&
-        JSON.stringify(a.body) ===
-          JSON.stringify({ campaign: "gemv-speed", reads: "survey-study" }),
+    s.store.auditLog
+      .list(50)
+      .some(
+        (a) =>
+          a.actor === "owner:ui" &&
+          a.action === "kb_grant" &&
+          JSON.stringify(a.body) ===
+            JSON.stringify({ campaign: "gemv-speed", reads: "survey-study" }),
+      ),
+  );
+  p = await pane(ok.headers.get("location") ?? "");
+  assert.match(p, /<div class="kx-note ok">gemv-speed(&#39;|')s agents may now read/);
+  // Remove says what it does, then asks for the button, in place.
+  assert.match(
+    p,
+    /<li class="kx-grant"><a href="\/ui\/knowledge\/survey-study">[\s\S]*?<span>survey-study<\/span><\/a><details class="kx-confirm"><summary class="btn sm ghost">Remove<\/summary><form method="post" action="\/ui\/kb\/revoke">[\s\S]*?<p class="small">gemv-speed(&#39;|')s agents stop reading survey-study(&#39;|')s collection: it leaves every run(&#39;|')s search at once/,
+  );
+  // The other side: survey-study's pane says gemv-speed reads it, with Remove there too.
+  const other = await pane("/ui/knowledge/survey-study");
+  assert.match(other, /Read by<i[\s\S]*?<span>gemv-speed<\/span><\/a><details class="kx-confirm">/);
+  // The campaign's page shows its grants, read only, and links to the collection.
+  const page = await (await s.get("/ui/campaigns/gemv-speed")).text();
+  const section = page.slice(page.indexOf('<div class="block" id="knowledge">'));
+  assert.match(
+    section,
+    /<dt>Reads<\/dt><dd><a href="\/ui\/knowledge\/survey-study"><b>survey-study<\/b><\/a><\/dd>/,
+  );
+  assert.match(
+    section,
+    /<a class="btn sm" href="\/ui\/knowledge\/gemv-speed">Open the collection<\/a>/,
+  );
+  assert.ok(
+    !/action="\/ui\/(campaigns\/gemv-speed\/)?kb\//.test(
+      section.slice(0, section.indexOf("</div></div>")),
     ),
+    "no grant form on the campaign's page",
   );
-  page = await (await s.get("/ui/campaigns/gemv-speed")).text();
-  assert.match(page, /<b>survey-study<\/b> <span class="muted small">research · 4 items/);
-  assert.match(
-    page,
-    /action="\/ui\/campaigns\/gemv-speed\/kb\/revoke"><input type="hidden" name="csrf" value="[0-9a-f]+"><input type="hidden" name="reads" value="survey-study">/,
-  );
-  const other = await (await s.get("/ui/campaigns/survey-study")).text();
-  assert.match(
-    other,
-    /Who reads survey-study&#39;s collection|Who reads survey-study's collection/,
-  );
-  assert.match(other, /#knowledge"><b>gemv-speed<\/b><\/a>/);
-  // The Journal's collection card follows the grant.
+  // The Journal's collection card follows the grant, and opens the run's folders.
   const journal = await (await s.get("/ui/campaigns/gemv-speed/runs/gs-3/journal")).text();
   assert.match(journal, /Its agents also read: <b>survey-study<\/b>/);
-  // Removing it: audited too.
-  const rm = await s.post("/ui/campaigns/gemv-speed/kb/revoke", {
+  assert.match(
+    journal,
+    /<a class="btn sm" href="\/ui\/knowledge\/gemv-speed\/gs-3">Open the run(&#39;|')s folders<\/a>/,
+  );
+  // Removed: audited too; once more, refused in words.
+  const rm = await s.post("/ui/kb/revoke", {
     csrf: s.csrf,
+    back,
+    campaign: "gemv-speed",
     reads: "survey-study",
   });
-  assert.match(s.where(rm), /no longer read survey-study's collection/);
+  assert.match(
+    s.where(rm),
+    /no longer read survey-study's collection: it left every run's search at once/,
+  );
   assert.deepEqual(s.store.kb().reads("gemv-speed"), []);
   assert.ok(
     s.store.auditLog.list(50).some((a) => a.action === "kb_revoke" && a.actor === "owner:ui"),
   );
   assert.match(
     s.where(
-      await s.post("/ui/campaigns/gemv-speed/kb/revoke", { csrf: s.csrf, reads: "survey-study" }),
+      await s.post("/ui/kb/revoke", {
+        csrf: s.csrf,
+        back,
+        campaign: "gemv-speed",
+        reads: "survey-study",
+      }),
     ),
-    /does not read survey-study/,
+    /\?error=gemv-speed does not read survey-study\./,
   );
 });
 
@@ -553,7 +601,12 @@ test("MCP: the owner and an operator read and search the collections; the owner 
       arguments: { campaign: "gemv-speed", reads: "survey-study" },
     }),
   );
-  assert.deepEqual(v, { revoked: true, reads: [] });
+  assert.deepEqual(v, {
+    revoked: true,
+    reads: [],
+    read_by: [],
+    said: "gemv-speed's agents no longer read survey-study's collection: it left every run's search at once, and leaves runs' research folders at the next sync. Nothing is deleted.",
+  });
   assert.ok(
     s.store.auditLog.list(50).some((a) => a.action === "kb_revoke" && a.actor === "owner:mcp"),
   );

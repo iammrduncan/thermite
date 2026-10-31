@@ -1,13 +1,20 @@
 import { parseArgs } from "node:util";
-import { KB_ITEM, KB_LIST, KB_SEARCH } from "../../core/api/control/owner.ts";
+import {
+  CAMPAIGN_KB_GRANT,
+  CAMPAIGN_KB_REVOKE,
+  KB_ITEM,
+  KB_LIST,
+  KB_SEARCH,
+} from "../../core/api/control/owner.ts";
 import { controlAt, orFail } from "../calls.ts";
 import { fail } from "./shared.ts";
 import { USAGE } from "./usage.ts";
 
 /**
- * thermite kb: the owner's search of Thermite's knowledge base, one item read (goal 175), and one
- * place's list (goal 176), through control's `GET /v1/kb/search`, `GET /v1/kb/item` and `GET
- * /v1/kb/list`, as MCP's kb_search, kb_read and kb_list, with the same options. It prints
+ * thermite kb: the owner's search of Thermite's knowledge base, one item read (goal 175), one
+ * place's list, and a grant given or ended (goal 176), through control's `GET /v1/kb/search`, `GET
+ * /v1/kb/item`, `GET /v1/kb/list` and `POST` or `DELETE /v1/campaigns/<campaign>/kb-grants`, as
+ * MCP's kb_search, kb_read, kb_list, kb_grant and kb_revoke, with the same options. It prints
  * control's answer as JSON on standard output.
  */
 export async function thermiteKb(rest: string[]): Promise<void> {
@@ -35,10 +42,26 @@ export async function thermiteKb(rest: string[]): Promise<void> {
       "token-file": { type: "string" },
     },
   });
-  if (sub !== "search" && sub !== "read" && sub !== "list") fail(USAGE);
+  const grants = sub === "grant" || sub === "revoke";
+  if (sub !== "search" && sub !== "read" && sub !== "list" && !grants) fail(USAGE);
   if (!values.control || !values["token-file"])
     fail("give --control and --token-file: control keeps the knowledge base");
   const control = controlAt(values.control, values["token-file"]);
+  if (grants) {
+    const [campaign, reads, ...extra] = positionals;
+    const given = Object.entries(values).filter(
+      ([k, v]) => v !== undefined && k !== "control" && k !== "token-file",
+    );
+    if (!campaign || !reads || extra.length || given.length)
+      fail(`kb ${sub} takes a campaign and the other campaign whose collection it reads`);
+    const out = await orFail(
+      sub === "grant"
+        ? control.call(CAMPAIGN_KB_GRANT, { params: { campaign }, body: { reads } })
+        : control.call(CAMPAIGN_KB_REVOKE, { params: { campaign, reads } }),
+    );
+    process.stdout.write(`${JSON.stringify(out)}\n`);
+    return;
+  }
   const listOnly = [values.type, values.sort, values.order];
   if (sub === "list") {
     const [at, ...extra] = positionals;

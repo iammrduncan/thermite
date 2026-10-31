@@ -17,7 +17,7 @@ import { fillKnowledge, KB_RIG } from "./kb-places.ts";
  * - attempt a-2 of gs-1, whose evidence the owner withdrew;
  * - worker calls of gs-1 made in Claude Code;
  * - runs at work: gs-1 and gs-2 (fresh) of gemv, at-1 of attic, and sv-1 and sv-2 of survey on
- *   rig-b, sv-2 started without the grant.
+ *   rig-b, sv-1 started with the grant and sv-2 without it.
  */
 export const HTML_PAGE = "<!doctype html><title>x</title><script>alert(document.cookie)</script>";
 export const SVG_IMAGE =
@@ -112,6 +112,8 @@ export async function fillReader(store: ControlStore, files?: KbFiles): Promise<
   ]);
   await report(RIG_B, [created("sv-1", "survey"), created("sv-2", "survey")]);
   store.kb().grant("survey", "gemv", "owner:ui");
+  // Each run's scope as Start a run sets it: sv-1 includes the grant, sv-2 does not.
+  store.kb().setScope("survey", "sv-1", { fresh: false, granted: ["gemv"] }, "owner:ui");
   store.kb().setScope("survey", "sv-2", { fresh: false, granted: [] }, "owner:ui");
   write(RIG_B, "sv-1", {
     slot: "worker-1",

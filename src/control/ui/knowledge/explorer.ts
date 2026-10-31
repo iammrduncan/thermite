@@ -273,7 +273,7 @@ function filterRow(p: ExplorerPage, count: string): string {
     q.sort ? `<input type="hidden" name="sort" value="${esc(q.sort)}">` : "",
     q.order ? `<input type="hidden" name="order" value="${esc(q.order)}">` : "",
   ].join("");
-  return `<form class="kx-filters" method="get" action="${esc(knowledgeHref(p.place.path))}">${keep}<button type="button" class="kx-foldbtn" aria-controls="kx-tree" aria-expanded="false">${icon.folder}<span>Folders</span>${icon.down}</button>${shown.map((f) => facetHtml(p, f, facetOptions(p, f))).join("")}${chips}${any ? `<a class="kx-clearall" href="${esc(explorerHref(p.place.path, none))}">Clear</a>` : ""}<span class="kx-count" role="status">${esc(count)}</span></form>`;
+  return `<form class="kx-filters" method="get" action="${esc(knowledgeHref(p.place.path))}">${keep}<button type="button" class="kx-foldbtn" aria-controls="kx-tree" aria-expanded="false">${icon.folder}<span>Folders</span>${icon.down}</button><button type="button" class="kx-infobtn" aria-controls="kx-prev" aria-expanded="false">${icon.file}<span>Info</span></button>${shown.map((f) => facetHtml(p, f, facetOptions(p, f))).join("")}${chips}${any ? `<a class="kx-clearall" href="${esc(explorerHref(p.place.path, none))}">Clear</a>` : ""}<span class="kx-count" role="status">${esc(count)}</span></form>`;
 }
 
 /** A column's header: a link that sorts by it, with ▲ or ▼ on the column it sorts by now. */
@@ -302,7 +302,7 @@ function folderRow(f: KbFolder, now: number): string {
     f.running ? `<span class="dot ok" role="img" aria-label="running"></span>` : "",
     f.fresh ? `<span class="kx-tag">fresh</span>` : "",
   ].join("");
-  return `<tr data-href="${href}"${f.archived ? ` class="dim"` : ""}><td class="c-name"><span class="kx-cell">${icon.folder}<span class="kx-title"><span class="kx-line"><a href="${href}">${esc(f.name)}</a>${tags}</span></span></span></td><td class="c-kind">${LEVEL_WORD[f.level][0]}</td><td class="c-out"></td><td class="c-writer"></td><td class="c-mod">${when(f.updated_at, now)}</td><td class="c-size num"></td></tr>`;
+  return `<tr data-href="${href}"${f.archived ? ` class="dim"` : ""}><td class="c-name"><span class="kx-cell">${icon.folder}<span class="kx-title"><span class="kx-line"><a href="${href}">${esc(f.name)}</a>${tags}</span></span></span></td><td class="c-kind">${LEVEL_WORD[f.level][0]}</td><td class="c-out"></td><td class="c-writer">${f.writer ? esc(f.writer) : ""}</td><td class="c-mod">${when(f.updated_at, now)}</td><td class="c-size num"></td></tr>`;
 }
 
 /** A search's excerpt: escaped, then each word it matched (between ** and **) marked. */

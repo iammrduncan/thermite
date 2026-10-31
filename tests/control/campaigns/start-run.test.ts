@@ -290,7 +290,7 @@ describe("Start a run over REST (goal 029)", () => {
     assert.equal(refused.status, 400);
     assert.match(
       (await json<{ error: string }>(refused)).error,
-      /gemv-speed may not read secret-study: grant it on the campaign's page under Can read from, or leave it out\./,
+      /gemv-speed may not read secret-study: grant it under Reads on the campaign's collection in Knowledge, or leave it out\./,
     );
     assert.equal(s.assigned().length, before);
     // On the panel: Start fresh, with the granted collection left unticked.

@@ -5,7 +5,9 @@ import type { DatabaseSync } from "node:sqlite";
  * run alone when it starts fresh, and the granted collections it includes. Start a run sets it as
  * the run starts, and it stays so: nothing changes it later. A grant revoked since leaves it, as it
  * leaves the campaign; one given since does not join it. A run with none set (one started before
- * runs had a scope) reads the whole collection and every grant its campaign has now.
+ * runs had a scope, or assigned another way) reads the whole collection and the grants its
+ * campaign had when control assigned or saw the run, and still has (goal 176, question 2); a run
+ * control has no record of, every grant its campaign has now.
  */
 export interface KbScope {
   /** True: its own run's items alone, of its campaign's collection. */
@@ -24,7 +26,24 @@ export function scopeOf(
   const r = db
     .prepare("select fresh, granted from kb_scope where campaign = ? and run = ?")
     .get(campaign, run) as { fresh: number; granted: string } | undefined;
-  if (!r) return { fresh: false, granted: [...reads] };
+  if (!r) {
+    const started = (
+      db
+        .prepare(
+          "select min(coalesce(assigned_at, created_at)) as at from run_registry where run = ?",
+        )
+        .get(run) as { at: string | null } | undefined
+    )?.at;
+    if (!started) return { fresh: false, granted: [...reads] };
+    const before = new Set(
+      (
+        db
+          .prepare("select reads from kb_read where campaign = ? and granted_at <= ?")
+          .all(campaign, started) as { reads: string }[]
+      ).map((g) => g.reads),
+    );
+    return { fresh: false, granted: reads.filter((c) => before.has(c)) };
+  }
   const named = JSON.parse(r.granted) as string[];
   // A grant removed since stays out: a scope never reads past what the campaign may read.
   return { fresh: r.fresh === 1, granted: named.filter((c) => reads.includes(c)) };

@@ -30,7 +30,10 @@ const assignment = (id: string, run: string, campaign: string) =>
     signature: "not checked by the store",
   }) as unknown as SignedCommand;
 
-/** gemv's two runs on rig-a, each with a note on tiling; survey's and secret's, one each. */
+/**
+ * gemv's two runs on rig-a, each with a note on tiling; survey's and secret's, one each. gemv may
+ * read survey, granted before control assigned the runs.
+ */
 function setup(): ControlStore {
   const s = new ControlStore(":memory:");
   s.commands.enqueue(assignment("c-1", "gs-1", "gemv"));
@@ -59,6 +62,8 @@ function setup(): ControlStore {
     });
   }
   s.kb().grant("gemv", "survey", "owner:ui");
+  // Granted before control assigned the runs.
+  s.db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
   return s;
 }
 
@@ -89,6 +94,23 @@ describe("control's answers to a rig's searches and reads", () => {
       () => t.kb().setScope("gemv", "gs-2", { fresh: false, granted: [] }, "owner:ui"),
       /set when it started, and stays so/,
     );
+  });
+
+  test("a grant removed leaves a run's search at once; one given after the run started never joins it", () => {
+    const s = setup();
+    // gs-1 has no scope of its own: it reads the grants gemv had when control assigned it.
+    assert.deepEqual(runs(search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
+    assert.equal(s.kb().revoke("gemv", "survey"), true);
+    const cut = search(s, "gs-1");
+    assert.deepEqual(cut.scope.granted, []);
+    assert.deepEqual(runs(cut), ["gs-1", "gs-2"], "the next search finds nothing of survey");
+    // Granted again, after gs-1 started: it reaches runs started from now, not gs-1.
+    assert.equal(s.kb().grant("gemv", "survey", "owner:ui"), true);
+    assert.deepEqual(runs(search(s, "gs-1")), ["gs-1", "gs-2"]);
+    // A run that included it when it started, whose grant was removed, reads none of it meanwhile.
+    s.kb().setScope("gemv", "gs-2", { fresh: false, granted: ["survey"] }, "owner:ui");
+    s.kb().revoke("gemv", "survey");
+    assert.deepEqual(runs(search(s, "gs-2")), ["gs-1", "gs-2"]);
   });
 
   test("an ask that names another campaign or collection is answered from the run's own scope only", () => {

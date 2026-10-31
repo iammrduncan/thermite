@@ -44,7 +44,7 @@ To narrow the list, press a writer above it (**Everyone**, then one button for e
 At the side:
 
 - **This run's corpus** counts what the run recorded: **Field notes**, **Notes**, **Sources read**, **Experiments tried**, **Claims** (when it has some) and **Findings**.
-- **The campaign's collection** says that all of it goes into the campaign's collection in Thermite's knowledge base. Below, it names the other collections the campaign's agents read, such as `Its agents also read: merge-speed.`, or says `Its agents read only this campaign's collection.` **What it can read** opens the campaign's **Knowledge** section: see [Let a campaign read another's collection](#let-a-campaign-read-anothers-collection).
+- **The campaign's collection** says that all of it goes into the campaign's collection in Thermite's knowledge base. Below, it names the other collections the campaign's agents read, such as `Its agents also read: merge-speed.`, or says `Its agents read only this campaign's collection.` **Open the run's folders** opens the run in **Knowledge**, with its slots; **What it can read** opens the campaign's **Knowledge** section: see [Let a campaign read another's collection](#let-a-campaign-read-anothers-collection).
 - **Notes** lists the run's research notes: facts an agent recorded, with the sources it found them in. It shows the newest 5, then **All 12 notes** for the rest.
 
 **Live** also shows each field note as it is written, such as `noted (observation): …`, or `teachers:teacher-a noted (lesson): …` for an advisor. Field notes stay out of **History**.
@@ -75,18 +75,17 @@ The items are what agents wrote, or quoted from the pages they read: data to wei
 
 A campaign's agents always read its own collection: what the campaign's other runs recorded. To let them read another campaign's collection too:
 
-1. Open the campaign's page: **Campaigns** in the sidebar, then the campaign. (**What it can read** on a run's **Journal** tab opens the same place.)
-2. Go down to **Knowledge**, after the runs. It counts what the campaign's own collection holds, with the button **Open the collection**, which opens it on the **Knowledge** page. At the side, **Who reads sort-speed's collection** names the campaigns that may read this campaign's collection, or says `No other campaign.`
-3. Under **Can read from**, choose a campaign in **Add a collection**. Each is listed with its mode and items, such as `merge-speed (hill climb · 86 items)`. A campaign whose runs haven't reported yet is listed too: its items come as its runs report.
-4. Press **Add**. Beside it, the form says `A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Runs at work see the change at their next sync.`
+1. Open the campaign's collection: **Knowledge** in the sidebar, then the campaign's collection in the tree, such as **sort-speed**. (**Open the collection** in the **Knowledge** section of the campaign's page opens the same place.) The pane on the right says what the collection holds; **Reads** lists the collections its agents read besides its own, or says `Only its own collection.`, and **Read by** the campaigns that read it.
+2. Under **Reads**, press **Add**, and choose a campaign in **Collection it reads**, such as `merge-speed`. A campaign whose runs haven't reported yet is listed too: its items come as its runs report.
+3. Read what adding does, under the list: `The campaign's agents may then read the collection you choose, read only, and never write to it. Runs started from then can include it in their search. Runs at work keep their search as it started; their research folders get it at the next sync.` Then press **Add the grant**.
 
-The campaign's page comes back at its **Knowledge** section, and the top of the page says `sort-speed's agents may now read merge-speed's collection. Runs at work get it at their next sync.` The collection shows under **Can read from**, with its mode, its items and when it last changed. On **merge-speed**'s page, **Who reads merge-speed's collection** now names `sort-speed`.
+The pane says `sort-speed's agents may now read merge-speed's collection. Runs started from now can include it in their search; runs at work keep their search as it started, and their research folders get it at the next sync.`, and the collection shows under **Reads**. On **merge-speed**'s pane, **Read by** now names `sort-speed`. You can add a grant from the other side too: under **Read by** on **merge-speed**'s pane, **Add** with **Campaign that reads it**.
 
-If control can't add it, the **Knowledge** section says **Not changed.** and why, such as `Choose a collection to add.` or `A campaign always reads its own collection: choose another campaign's.` A collection the campaign reads already changes nothing, and the top of the page says `sort-speed reads merge-speed already.`
+If control can't add it, the pane says **Not changed.** and why, such as `Choose a collection to add.` or `A campaign always reads its own collection: choose another campaign's.` A collection the campaign reads already changes nothing, and the pane says `sort-speed reads merge-speed already.`
 
-Only you grant and remove a collection. With the operator's token, `kb_grant` proposes a grant instead: it waits for you under **Proposed to you** on the campaign's page and under **Needs you**, where **Approve** grants it and **Decline** changes nothing ([A proposed grant](../../reference/knowledge-base.md#a-proposed-grant)).
+Only you grant and remove a collection: here, over REST, with `thermite kb grant` and `thermite kb revoke`, or over MCP ([Over MCP and the command line](#over-mcp-and-the-command-line)). With the operator's token, `kb_grant` proposes a grant instead: it waits for you under **Proposed to you** on the campaign's page and under **Needs you**, where **Approve** grants it and **Decline** changes nothing ([A proposed grant](../../reference/knowledge-base.md#a-proposed-grant)).
 
-To stop it, press **Remove** beside the collection under **Can read from**. The page says `sort-speed's agents no longer read merge-speed's collection. Runs at work drop it at their next sync.` New runs start without it. Experiments and a briefing that a run already took from that collection stay with the run.
+To stop it, press **Remove** beside the collection under **Reads**: it says `sort-speed's agents stop reading merge-speed's collection: it leaves every run's search at once, and runs' research folders at the next sync. Nothing is deleted, and you can add it again.` Press **Remove the grant**. The pane says `sort-speed's agents no longer read merge-speed's collection: it left every run's search at once, and leaves runs' research folders at the next sync. Nothing is deleted.` Experiments and a briefing that a run already took from that collection stay with the run.
 
 You can add and remove collections at any time, also while runs are at work. Another knowledge base you run, such as GBrain, is not a collection here: a campaign's kit names it as an MCP server ([Give agents MCP tools](give-agents-mcp-tools.md)).
 
@@ -130,14 +129,14 @@ What the new run gets:
 
 With **Agents** on **Off: a try**, **From past research** hides, and nothing ticked in it is sent: a try takes neither experiments nor a briefing.
 
-If an item can no longer be used, for example because you removed its collection from **Can read from** after the panel opened, the campaign's page says **Not started.** `An item from past research is not one this campaign may read and start from: search again.`, with the panel open again.
+If an item can no longer be used, for example because you removed its collection from **Reads** after the panel opened, the campaign's page says **Not started.** `An item from past research is not one this campaign may read and start from: search again.`, with the panel open again.
 
 ## Past research for a new campaign
 
-The **New campaign** page sets neither grants nor past research. Its last step, **Review and start**, says so under **Past research**, with a link to **Knowledge**: both are set on the campaign's page once it is saved. A run that **Start the campaign** starts reads only the campaign's own collection, and has no briefing. To start a new campaign's first run from past research:
+The **New campaign** page sets neither grants nor past research. Its last step, **Review and start**, says so under **Past research**, with a link to **Knowledge**: both are set once it is saved: grants on its collection in **Knowledge**, past research in **Start a run**. A run that **Start the campaign** starts reads only the campaign's own collection, and has no briefing. To start a new campaign's first run from past research:
 
 1. On **New campaign**, at **Review and start**, press **Save without starting**. The campaign's page opens and says `Saved on control, with no run yet.`
-2. Under **Knowledge** › **Can read from**, choose a collection in **Add a collection** and press **Add**, as in [Let a campaign read another's collection](#let-a-campaign-read-anothers-collection). Do it for each collection its agents should read.
+2. Press **Open the collection**, under **Knowledge** on the campaign's page, then **Add** under **Reads**, as in [Let a campaign read another's collection](#let-a-campaign-read-anothers-collection). Do it for each collection its agents should read.
 3. Press **Start a run**. Under **From past research**, tick the experiments and findings to start from, as in [Start a run from past research](#start-a-run-from-past-research), and press **Start the run**.
 
 The run's agents then read the granted collections in `knowledge/`, and the planner and the advisors search them; its queue starts with the experiments you ticked.
@@ -154,7 +153,7 @@ The [MCP tools](../../reference/mcp-tools.md) for the knowledge base:
 | [`kb_grant`](../../reference/mcp-tools.md#kb_grant) | The owner's; an operator's proposes it | Takes `campaign` and `reads`, as **Add** does: from now on, every agent of `campaign` may read the collection of `reads`. With the operator's token, a proposal that waits for your approval |
 | [`kb_revoke`](../../reference/mcp-tools.md#kb_revoke) | The owner's | Takes the same, as **Remove** does |
 
-The agent's and the reader's tokens don't have these tools. `kb_grant` refuses `no campaign <name>`, and `a campaign always reads its own collection: name another campaign`. `kb_revoke` refuses `<campaign> does not read <reads>`.
+The agent's and the reader's tokens don't have these tools. `kb_grant` refuses `Control has no campaign named <name>.` and `A campaign always reads its own collection: choose another campaign's.`; `kb_revoke` refuses `<campaign> does not read <reads>.` REST (`POST` and `DELETE /v1/campaigns/<campaign>/kb-grants`) and `thermite kb grant` and `kb revoke` do the same, with the same words.
 
 To start another run of a campaign that control keeps, call [`start_run`](../../reference/mcp-tools.md#start_run) with `past`: the `id` of each item that `kb_search` returned, such as `{"campaign": "sort-speed", "rig": "rig-1", "past": [12, 40]}`. It takes them as **From past research** does: experiments join the queue, and findings, claims, notes and reports go to the briefing, each with control's own words for it. It refuses an item from a collection the campaign may not read: `An item from past research is not one this campaign may read and start from: search again.` From the command line, `thermite run start sort-speed --rig rig-1 --past 12 --past 40` does the same with the owner's token: see [Start a run from a script or an agent](start-from-dashboard.md#start-a-run-from-a-script-or-an-agent).
 
@@ -191,6 +190,6 @@ A run without agents (`"agents": false`) refuses a briefing: `a run without agen
 
 ## How to tell it worked
 
-- **A grant:** the collection is under **Can read from** on the campaign's page, and the other campaign's page names this one under **Who reads `<campaign>`'s collection**. A run's **Journal** tab says `Its agents also read:` and the collection.
+- **A grant:** the collection is under **Reads** on the campaign's collection in **Knowledge**, and under **Reads** in the **Knowledge** section of the campaign's page; the other collection's pane names this campaign under **Read by**. A run's **Journal** tab says `Its agents also read:` and the collection. A run's pane in **Knowledge** says what its agents search, under **Its agents search**.
 - **The sync:** the rig's supervisor writes `past research synced` to its log, with how many items it handed over, and `past research sync error` once when a sync fails.
 - **A run from past research:** on **Commands**, the **assign campaign** row is **delivered**. On the run's **Experiments** tab, the past experiments are in **Up next**, each marked `from` and its run. The dashboard doesn't show a run's briefing. Over MCP, `command_status` or `list_commands` gives the rig's whole answer to the command, which counts what the run took, such as `"queue": 1` and `"briefing": 2`. The rig's next export holds the briefing, in `briefing.jsonl`.

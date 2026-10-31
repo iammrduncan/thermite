@@ -221,6 +221,13 @@ usage: thermite <command> [options]
                                       record, blurb or file; --sort is name, kind, outcome,
                                       writer, modified (the default) or size; --limit 0 to 200
                                       (default 50). It prints JSON
+  kb grant CAMPAIGN READS --control URL --token-file F
+  kb revoke CAMPAIGN READS --control URL --token-file F
+                                      let CAMPAIGN's agents read READS's collection in the
+                                      knowledge base, read only (owner's token), or stop them:
+                                      a grant reaches runs started from then that include it;
+                                      a revoke leaves every run's search at once. It prints the
+                                      campaign's grants both ways, as JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does
@@ -783,7 +790,7 @@ npx thermite kit list --control https://control.example.com --token-file ~/therm
 
 ### `kb`
 
-`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item, as `GET /v1/kb/item` and `kb_read` do; `thermite kb list` lists what one place holds, as `GET /v1/kb/list`, MCP's `kb_list` and the dashboard's **Knowledge** page do ([A place's list](knowledge-base.md#a-places-list)). Each prints control's answer as JSON on one line.
+`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item, as `GET /v1/kb/item` and `kb_read` do; `thermite kb list` lists what one place holds, as `GET /v1/kb/list`, MCP's `kb_list` and the dashboard's **Knowledge** page do ([A place's list](knowledge-base.md#a-places-list)); `thermite kb grant` and `thermite kb revoke` give and end a [grant](knowledge-base.md#grants), as `POST` and `DELETE /v1/campaigns/<campaign>/kb-grants`, MCP's `kb_grant` and `kb_revoke` and a collection's pane on the Knowledge page do. Each prints control's answer as JSON on one line.
 
 ```sh
 npx thermite kb search which approaches failed to improve speed --collection sort-speed \
@@ -794,6 +801,8 @@ npx thermite kb read sort-speed/sort-speed-1/records/experiment:x-3 \
   --control https://control.example.com --token-file ~/thermite-owner-token
 npx thermite kb list sort-speed --outcome regress --sort name \
   --control https://control.example.com --token-file ~/thermite-owner-token
+npx thermite kb grant sort-speed merge-speed \
+  --control https://control.example.com --token-file ~/thermite-owner-token
 ```
 
 | Option | Required | Default | Meaning |
@@ -801,6 +810,7 @@ npx thermite kb list sort-speed --outcome regress --sort name \
 | `search [WORDS...]` | | | The words to find: an item matches with any of them, best first. None: the newest items |
 | `read ADDRESS` | | | The item's address, `<campaign>/<run>/<slot>/<kind>:<id>`, as a search gives it |
 | `list [PLACE]` | | the whole knowledge base | The place: `<campaign>`, `<campaign>/<run>` or `<campaign>/<run>/<slot>` |
+| `grant CAMPAIGN READS`, `revoke CAMPAIGN READS` | | | The campaign whose agents read, and the other campaign whose collection they read; they take no other option but `--control` and `--token-file` |
 | `--query Q` | No, repeatable; search only | | One more search, up to 5, fused with the words by reciprocal rank fusion |
 | `--mode M` | No; search only | `words` | `words`, or `exact`: FTS5's own syntax ([Search](knowledge-base.md#search)) |
 | `--like ADDRESS` | No; search only | | More like this item, by its own most telling words |
@@ -819,7 +829,7 @@ npx thermite kb list sort-speed --outcome regress --sort name \
 | `--control URL` | Yes | | Control's address |
 | `--token-file F` | Yes | | A file with the owner's token |
 
-A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`, and what the Knowledge page's reader shows beside it: `history`, `writer`, `withdrawn`, `file`, `links`, `linked_from` and `readers` ([An item's read](knowledge-base.md#an-items-read)). Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others`, `kb search takes no --version: kb read does`, `kb search takes no --type, --sort or --order: kb list does` (`kb read` for a read), `kb list takes one place: <campaign>, <campaign>/<run> or <campaign>/<run>/<slot>` or `kb list takes a place, --kind, --outcome, --type, --slot, --sort, --order, --offset and --limit`. A list prints `{note, at, folders, total, matched, next_offset, counts, items}`; a place the knowledge base has not ends it with exit code 2 and control's words, such as `the knowledge base has no collection <campaign>`.
+A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`, and what the Knowledge page's reader shows beside it: `history`, `writer`, `withdrawn`, `file`, `links`, `linked_from` and `readers` ([An item's read](knowledge-base.md#an-items-read)). Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others`, `kb search takes no --version: kb read does`, `kb search takes no --type, --sort or --order: kb list does` (`kb read` for a read), `kb list takes one place: <campaign>, <campaign>/<run> or <campaign>/<run>/<slot>` or `kb list takes a place, --kind, --outcome, --type, --slot, --sort, --order, --offset and --limit`. A list prints `{note, at, folders, total, matched, next_offset, counts, items, summary}`; a grant or a revoke prints `{campaign, changed, reads, read_by, said}`, or ends with exit code 2 and control's words, such as `A campaign always reads its own collection: choose another campaign's.`, and before it sends anything with `kb grant takes a campaign and the other campaign whose collection it reads` (`kb revoke` the same); a place the knowledge base has not ends it with exit code 2 and control's words, such as `the knowledge base has no collection <campaign>`.
 
 ### `agents list`
 

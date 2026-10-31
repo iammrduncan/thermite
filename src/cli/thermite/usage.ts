@@ -191,6 +191,13 @@ export const USAGE = `usage: thermite <command> [options]
                                       record, blurb or file; --sort is name, kind, outcome,
                                       writer, modified (the default) or size; --limit 0 to 200
                                       (default 50). It prints JSON
+  kb grant CAMPAIGN READS --control URL --token-file F
+  kb revoke CAMPAIGN READS --control URL --token-file F
+                                      let CAMPAIGN's agents read READS's collection in the
+                                      knowledge base, read only (owner's token), or stop them:
+                                      a grant reaches runs started from then that include it;
+                                      a revoke leaves every run's search at once. It prints the
+                                      campaign's grants both ways, as JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does

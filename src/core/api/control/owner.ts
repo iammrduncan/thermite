@@ -360,6 +360,31 @@ export const KB_ITEM = {
   answer: z.looseObject({ item: z.looseObject({ text: z.string() }) }),
 } as const satisfies Route;
 /**
+ * A grant of another campaign's collection to a campaign's agents, read only (goal 176), and its
+ * end: each answers the campaign's grants both ways after it, and what changed, in words.
+ */
+const GrantAnswer = z.looseObject({
+  campaign: z.string(),
+  changed: z.boolean(),
+  reads: z.array(z.string()),
+  read_by: z.array(z.string()),
+  said: z.string(),
+});
+export const CAMPAIGN_KB_GRANT = {
+  method: "POST",
+  path: "/v1/campaigns/:campaign/kb-grants",
+  what: "knowledge base grant",
+  body: z.strictObject({ reads: z.string().max(200) }),
+  answer: GrantAnswer,
+  maxBytes: 4096,
+} as const satisfies Route;
+export const CAMPAIGN_KB_REVOKE = {
+  method: "DELETE",
+  path: "/v1/campaigns/:campaign/kb-grants/:reads",
+  what: "knowledge base grant",
+  answer: GrantAnswer,
+} as const satisfies Route;
+/**
  * One version's file of an item of the knowledge base (goal 176), by its `address` and `version`:
  * its bytes, as an attachment that no browser shows or runs.
  */

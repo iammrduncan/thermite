@@ -138,7 +138,8 @@ test("each campaign's collection is built from its runs' events; collections are
   assert.deepEqual(pn?.counts, { attempt: 1, experiment: 1, note: 1, run: 1 });
   assert.equal(pn?.journal, 1, "the observation is a field note");
   assert.equal(pn?.runs, 1);
-  // The experiment carries its result, the attempt its verdict, the note its kind.
+  // The experiment carries its result, the attempt its verdict, the note its kind; each the lane
+  // and the trial its events name.
   const [exp] = kb.search("vector", ["gemv-speed"], { kinds: ["experiment"] });
   assert.match(
     String(exp?.body),
@@ -149,6 +150,8 @@ test("each campaign's collection is built from its runs' events; collections are
     why: "the guide says twice the bandwidth",
     family: "memory-layout",
     result: "Result: attempt a-1 (submitted)",
+    lane: "lane-1",
+    trial: "t-1",
   });
   assert.equal(exp && kb.resultOf(exp), "tried: attempt a-1 (submitted), win confirmed (+6.10%)");
   const [att] = kb.search("vector", ["gemv-speed"], { kinds: ["attempt"] });
@@ -706,7 +709,7 @@ test("a store built by an earlier reading rebuilds its experiments and attempts 
   const reading = store.db.prepare("select value from kb_meta where key = 'reading'").get() as {
     value: string;
   };
-  assert.equal(reading.value, "3");
+  assert.equal(reading.value, "4");
 });
 
 test("control reads a run recorded under its names from before 2026-10-15, as the harness does (goal 162)", async () => {

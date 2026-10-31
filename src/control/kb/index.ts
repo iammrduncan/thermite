@@ -29,6 +29,13 @@ export {
 export { type KbDownload, kbFileOf, kbFileResponse, safeFileType } from "./download.ts";
 export { followKbFiles, KB_ORPHANS_LOOK_MS, KbFiles } from "./files.ts";
 export {
+  GRANT_WORDS,
+  type GrantOutcome,
+  grantCollection,
+  grantProblem,
+  revokeCollection,
+} from "./grants.ts";
+export {
   KB_LIST_DEFAULT,
   KB_LIST_MAX,
   type KbFolder,
@@ -53,6 +60,7 @@ export {
   ownerKbRead,
   readersOf,
 } from "./read.ts";
+export { KB_REFUSALS_SHOWN, type KbSummary } from "./summary.ts";
 
 /** What a grant of another campaign's collection opens, in words: every agent of the campaign. */
 export const GRANT_OPENS =
@@ -84,7 +92,10 @@ export interface KbItem {
   url: string | null;
   /** For a note: observation, decision, surprise, question, lesson or note. */
   sub: string | null;
-  /** Fields kept apart: an experiment's details, why and direction. */
+  /**
+   * Fields kept apart: an experiment's details, why and direction; in the records slot, the lane
+   * and the trial its events name (goal 176).
+   */
   meta: Record<string, string>;
   /** How an experiment or an attempt ended, from its records (core/kb.ts); null for other kinds. */
   outcome: KbOutcome | null;

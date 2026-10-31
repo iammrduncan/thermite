@@ -192,11 +192,35 @@ const MODE_WORD = new Map([
 
 const n = (v: unknown) => (typeof v === "number" ? v.toLocaleString("en-US") : str(v));
 
+/**
+ * The target with each item it puts given the lane and the trial its event names, as fields
+ * (goal 176), beside the fields it had.
+ */
+function withOrigin(t: KbIndexTarget, b: Row): KbIndexTarget {
+  const from = {
+    ...(str(b.lane) ? { lane: str(b.lane) } : {}),
+    ...(str(b.trial) ? { trial: str(b.trial) } : {}),
+  };
+  if (!Object.keys(from).length) return t;
+  return {
+    ...t,
+    put: (run, kind, ref, f, at) =>
+      t.put(
+        run,
+        kind,
+        ref,
+        { ...f, meta: { ...(f.meta ?? t.item(run, kind, ref)?.meta), ...from } },
+        at,
+      ),
+  };
+}
+
 /** Reads one event into the items it adds or changes. */
-export function indexEvent(t: KbIndexTarget, event: KbEvent): void {
+export function indexEvent(target: KbIndexTarget, event: KbEvent): void {
   // Events written before the 2026-10-15 renames, read under their new names, for every caller.
   const e = currentEvent(event);
   const b = e.body;
+  const t = withOrigin(target, b);
   const run = str(b.run) || e.subject;
   const ref = (x: unknown) => clip(str(x), 200);
   switch (e.kind) {
@@ -349,6 +373,7 @@ export function indexEvent(t: KbIndexTarget, event: KbEvent): void {
           by: str(b.by) || e.actor,
           url: b.source ? str((b.source as Row).url) || null : null,
           sub: str(b.kind) || "note",
+          meta: { about_type: str(about.type), about_id: str(about.id) },
         },
         e.at,
       );

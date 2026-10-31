@@ -59,13 +59,16 @@ const USAGE_AGENT: Record<KbWriterRole, UsageAgent> = {
   "final-writer": "final_writer",
 };
 
-/** Who wrote an item: Thermite's code for the records slot, else its slot's role and program. */
-function writerOf(store: ControlStore, x: KbItem) {
-  if (x.slot === KB_RECORDS) return { role: null, program: null, words: "Thermite's code" };
-  const role = roleOfSlot(x.slot) ?? null;
-  const harness = role ? store.usage.programOf(x.rig, x.run, USAGE_AGENT[role]) : undefined;
+/**
+ * Who writes a run's slot: Thermite's code for the records slot, else the slot's role and the
+ * agent program its newest model call in the run ran in (on `rig` when given), when control has one.
+ */
+export function slotWriter(store: ControlStore, p: { run: string; slot: string; rig?: string }) {
+  if (p.slot === KB_RECORDS) return { role: null, program: null, words: "Thermite's code" };
+  const role = roleOfSlot(p.slot) ?? null;
+  const harness = role ? store.usage.programOf(p.run, USAGE_AGENT[role], p.rig) : undefined;
   const program = harness ? (HARNESS_NAMES[harness as Harness] ?? harness) : null;
-  return { role, program, words: [role ?? x.slot, program].filter(Boolean).join(" · ") };
+  return { role, program, words: [role ?? p.slot, program].filter(Boolean).join(" · ") };
 }
 
 /** Why a running run's agents can or can't read an item, in a few words. */
@@ -150,7 +153,7 @@ export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbRe
         at: o.at,
         file: o.file,
       })),
-      writer: writerOf(store, x),
+      writer: slotWriter(store, x),
       withdrawn: withdrawnWhy(x.kind, x.meta),
       file: v.file && {
         ...v.file,

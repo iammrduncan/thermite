@@ -175,6 +175,26 @@ a.kx-link:hover { background: var(--accent); text-decoration: none; }
 .kx-reader:last-child { border-bottom: 0; }
 .kx-reader .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kx-reader > span:first-child { display: inline-flex; }
+/* A folder's info pane: its facts, its grants with Add and Remove confirmed in place */
+.kx-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; margin: 0; font-size: 12.5px; }
+.kx-facts dt { color: var(--muted-foreground); }
+.kx-facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.kx-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.kx-psec { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.kx-psh { display: flex; align-items: center; gap: 6px; } .kx-psh .n { margin-left: auto; font-size: 12px; color: var(--muted-foreground); }
+.kx-grants, .kx-refused { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.kx-grant { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.kx-grant > a { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.kx-grant > a .icon { color: var(--muted-foreground); flex: none; }
+details.kx-confirm > summary { list-style: none; justify-self: start; } details.kx-confirm > summary::-webkit-details-marker { display: none; }
+details.kx-confirm[open] { display: grid; gap: 6px; flex-basis: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); }
+details.kx-confirm form { display: grid; gap: 6px; } details.kx-confirm p { margin: 0; } details.kx-confirm button { justify-self: start; }
+.kx-refused { font-size: 12.5px; overflow-wrap: anywhere; }
+.kx-note { padding: 8px 10px; border-radius: 8px; font-size: 12.5px; }
+.kx-note.ok { background: var(--success-surface); color: var(--success-foreground); } .kx-note.bad { background: var(--error-surface); color: var(--error-foreground); }
+.kx-soon { display: inline-flex; align-items: center; gap: 6px; }
+.kx-infobtn { display: none; height: 28px; padding: 0 10px; font-size: 12.5px; }
+.kx-phead .kx-infox { display: none; }
 /* The table's columns fit the room it has, with the preview pane open or not. */
 .kx-main { container-type: inline-size; }
 @container (max-width: 720px) { .kx-table .c-size { display: none; } }
@@ -195,4 +215,6 @@ a.kx-link:hover { background: var(--accent); text-decoration: none; }
   .menu-pop.kx-pop { position: fixed; top: auto; right: 0; bottom: 0; left: 0; width: auto; max-height: 70vh; border-radius: 14px 14px 0 0; }
   .kx-item { padding: 16px 14px 24px; }
   .kx-prev { position: fixed; inset: 0; z-index: 70; width: auto; border-left: 0; }
+  .kx-info { display: none; } .kx[data-info="open"] .kx-info { display: flex; }
+  .kx:has(.kx-info) .kx-infobtn { display: inline-flex; } .kx-phead .kx-infox { display: inline-grid; padding: 0; border: 0; background: transparent; }
 }`;

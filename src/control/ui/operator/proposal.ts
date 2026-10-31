@@ -88,7 +88,7 @@ function grantCard(
       {
         button: form("approve", "Approve", "primary"),
         label: "Approve",
-        does: `Control grants it, as your own grant: every agent of ${esc(p.campaign)} may search and read ${esc(reads)}'s collection. Runs started from now may search it; runs at work get it at their next sync. You can remove it under Can read from on the campaign's page.`,
+        does: `Control grants it, as your own grant: every agent of ${esc(p.campaign)} may search and read ${esc(reads)}'s collection. Runs started from now may search it; runs at work get it at their next sync. You can remove it under Reads on the campaign's collection in Knowledge.`,
       },
       {
         button: form("decline", "Decline", ""),

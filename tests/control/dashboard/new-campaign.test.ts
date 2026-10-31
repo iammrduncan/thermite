@@ -294,7 +294,7 @@ describe("the new-campaign page", () => {
     const note = /<div class="nc-does" id="nc-past">([\s\S]*?)<\/div>/.exec(page)?.[1] ?? "";
     assert.match(note, /<a href="\/ui\/knowledge">Thermite's knowledge base<\/a>/);
     assert.match(note, /press <b>Save without starting<\/b>/);
-    assert.match(note, /add collections under <b>Can read from<\/b>/);
+    assert.match(note, /press <b>Open the collection<\/b> and add collections under <b>Reads<\/b>/);
     assert.match(note, /press <b>Start a run<\/b> and pick items under <b>From past research<\/b>/);
     // Saved without starting: the campaign's page has both, as the note says.
     const res = await s.post("/ui/campaigns/new", {
@@ -308,7 +308,10 @@ describe("the new-campaign page", () => {
     assert.equal(res.headers.get("location"), "/ui/campaigns/matmul-speed");
     const campaign = await (await s.get("/ui/campaigns/matmul-speed")).text();
     assert.match(campaign, /<div class="block" id="knowledge">/);
-    assert.match(campaign, /<h2>Can read from<\/h2>/);
+    assert.match(
+      campaign,
+      /<a class="btn sm" href="\/ui\/knowledge\/matmul-speed">Open the collection<\/a>/,
+    );
     assert.match(campaign, /From past research/);
     assert.equal(s.store.commands.list(10).filter((c) => c.kind === "assign_campaign").length, 0);
   });

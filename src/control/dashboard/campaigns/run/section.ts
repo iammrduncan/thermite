@@ -23,7 +23,7 @@ import {
   stackBar,
   startWords,
 } from "../../../ui/components/index.ts";
-import { journalTab } from "../../../ui/knowledge/index.ts";
+import { JOURNAL_SHOWN, journalTab } from "../../../ui/knowledge/index.ts";
 import {
   attemptRows,
   baselineBlock,
@@ -441,6 +441,9 @@ export function runHelpers(dash: Dashboard) {
                 ? journalTab({
                     r: i,
                     now,
+                    field: u.ledger_id
+                      ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, JOURNAL_SHOWN)
+                      : { total: 0, items: [] },
                     counts: u.ledger_id ? store.kb().runCounts(u.id, u.ledger_id, i.id) : {},
                     reads: i.campaign ? store.kb().reads(i.campaign) : [],
                   })
@@ -479,7 +482,7 @@ ${goals}${championHeldOutBlock(i, now)}${research}${baselineBlock(i, now)}${ladd
 <div class="block" data-part="recent"><div class="head"><h2>Recent</h2><span class="right"><a href="${runHref(i, "history")}">Full history</a></span></div>${recent}</div>
 </div></div>`;
     return `${usage ? runUsageTop(usage) : ""}<section class="block" id="run-${esc(i.id)}">
-<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${n} note${n === 1 ? "" : "s"}`)(i.journal.filter((n) => n.id > 0).length)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}</nav>
+<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${fmtInt(n)} note${n === 1 ? "" : "s"}`)(u.ledger_id ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, 0).total : 0)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}</nav>
 ${body}
 </section>`;
   };

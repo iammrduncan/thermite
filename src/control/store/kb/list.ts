@@ -85,8 +85,8 @@ const SORTS: Record<KbListSort, string> = {
 
 const marks = (n: number) => Array.from({ length: n }, () => "?").join(", ");
 
-/** The SQL that keeps the items under a place. */
-function under(at: KbListAt): Sql {
+/** The SQL that keeps the items under a place, of kb_item as `alias` when given. */
+function under(at: KbListAt, alias = ""): Sql {
   const parts: string[] = [];
   const args: string[] = [];
   for (const [column, v] of [
@@ -95,7 +95,7 @@ function under(at: KbListAt): Sql {
     ["slot", at.slot],
   ] as const) {
     if (v === undefined) break;
-    parts.push(`${column} = ?`);
+    parts.push(`${alias ? `${alias}.` : ""}${column} = ?`);
     args.push(v);
   }
   return { sql: parts.length ? parts.join(" and ") : "1 = 1", args };
@@ -156,6 +156,46 @@ export function listItems(db: DatabaseSync, at: KbListAt, o: KbListOptions): KbL
         ).map(itemOf)
       : [];
   return { total, matched, counts, items };
+}
+
+/** What a place holds in all: its items by type, kind and slot, older versions, and bytes stored. */
+export interface KbTotals {
+  types: Record<string, number>;
+  kinds: Record<string, number>;
+  slots: Record<string, number>;
+  /** The versions kept before each item's newest. */
+  older_versions: number;
+  /** Every version's text, and each file control holds once, in bytes. */
+  stored_bytes: number;
+}
+
+/** A place's totals (KbTotals), of every item under it. */
+export function placeTotals(db: DatabaseSync, at: KbListAt): KbTotals {
+  const w = under(at);
+  const grouped = (column: string) =>
+    Object.fromEntries(
+      (
+        db
+          .prepare(
+            `select ${column} as v, count(*) as n from kb_item where ${w.sql} group by v order by n desc, v`,
+          )
+          .all(...w.args) as Row[]
+      ).map((r) => [String(r.v), Number(r.n)]),
+    );
+  const versions = `kb_version v join kb_item i on i.id = v.item where ${under(at, "i").sql}`;
+  const one = (sql: string) => Number((db.prepare(sql).get(...w.args) as Row).n);
+  return {
+    types: grouped(TYPE_SQL),
+    kinds: grouped("kind"),
+    slots: grouped("slot"),
+    older_versions: one(`select count(*) as n from ${versions} and v.version < i.version`),
+    stored_bytes:
+      one(`select coalesce(sum(length(cast(v.body as blob))), 0) as n from ${versions}`) +
+      one(
+        `select coalesce(sum(f.bytes), 0) as n from kb_file f where f.sha256 in (
+           select v.file_sha256 from ${versions} and v.file_sha256 is not null)`,
+      ),
+  };
 }
 
 /** The collections, runs or slots a place holds, in no order; none in a slot. */

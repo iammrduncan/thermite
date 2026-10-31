@@ -79,6 +79,7 @@ export type {
   KbListAt,
   KbListCounts,
   KbListed,
+  KbTotals,
 } from "./kb/index.ts";
 export { OPEN_TRIAL_LINES } from "./live.ts";
 export type { Machine, MachineRig } from "./machines.ts";

@@ -37,13 +37,16 @@ import {
   versionsOf,
   writtenFields,
 } from "./items.ts";
+import { fieldNotesOf, ORIGIN_KINDS, originTarget, runCountsOf } from "./journal.ts";
 import {
   type KbFolderRow,
   type KbListAt,
   type KbListed,
   type KbListOptions,
+  type KbTotals,
   listItems,
   placeFolders,
+  placeTotals,
 } from "./list.ts";
 import { knowledgeHierarchy } from "./schema.ts";
 import { type KbScope, keepScope, scopeOf } from "./scope.ts";
@@ -52,7 +55,14 @@ import { knowledgeSearch } from "./words.ts";
 
 export type { KbFileRow } from "./files.ts";
 export type { KbVersion } from "./items.ts";
-export type { KbFolderRow, KbListAt, KbListCounts, KbListed, KbListOptions } from "./list.ts";
+export type {
+  KbFolderRow,
+  KbListAt,
+  KbListCounts,
+  KbListed,
+  KbListOptions,
+  KbTotals,
+} from "./list.ts";
 export { type KbSearchMode, OUTCOME_WORDS, searchTerms } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
@@ -76,9 +86,12 @@ type Row = Record<string, unknown>;
  * reading reads those events once more, so the runs before an upgrade have them too. Reading 2
  * added runs, trials, documents and hypotheses; reading 3 keeps an experiment's result and an
  * attempt's verdict in fields, and an experiment's edits, says a cut, and gives the paper, each
- * answer card and the review panel's decisions items of their own (goal 162).
+ * answer card and the review panel's decisions items of their own (goal 162). Reading 4 gives each
+ * item the lane and the trial its events name, as fields (goal 176): the events of ORIGIN_KINDS
+ * that no earlier reading reads anew are read again for that alone (journal.ts, originTarget).
  */
-const READING = "3";
+const READING = "4";
+const READ_FOR_ORIGIN = "4";
 const READ_ANEW: Record<string, string[]> = {
   "2": [
     "run_created",
@@ -159,7 +172,11 @@ export class KnowledgeBase {
   ): void {
     if (!e.body || typeof e.body !== "object") return;
     const { at, actor, kind } = e;
-    indexEvent(this.target(src, { keepRuns: o.again === true }), {
+    const target =
+      o.again && !this.readAnew(this.reading()).includes(kind)
+        ? originTarget(this.db, src)
+        : this.target(src, { keepRuns: o.again === true });
+    indexEvent(target, {
       at,
       actor,
       kind,
@@ -177,6 +194,13 @@ export class KnowledgeBase {
    */
   kindsToReadAgain(): string[] {
     const at = this.reading();
+    if (at === READING) return [];
+    const origin = READ_FOR_ORIGIN > (at ?? "1") ? ORIGIN_KINDS.flatMap((k) => eventKinds(k)) : [];
+    return [...new Set([...this.readAnew(at), ...origin])];
+  }
+
+  /** The kinds of event a store at reading `at` reads anew in full, under every name each had. */
+  private readAnew(at: string | undefined): string[] {
     if (at === READING) return [];
     return Object.entries(READ_ANEW)
       .flatMap(([v, k]) => (v > (at ?? "1") ? k : []))
@@ -588,6 +612,11 @@ export class KnowledgeBase {
     return listItems(this.db, at, o);
   }
 
+  /** What a place holds in all (list.ts): by type and kind, older versions, bytes stored. */
+  totals(at: KbListAt): KbTotals {
+    return placeTotals(this.db, at);
+  }
+
   /**
    * What a run of a campaign reads, as find() takes it: its own run alone when it started fresh,
    * else the campaign's whole collection; and the granted collections it includes.
@@ -616,23 +645,13 @@ export class KnowledgeBase {
   }
 
   /** How many items of each kind one run put in its collection (field notes apart). */
-  runCounts(
-    rig: string,
-    ledger: string,
-    run: string,
-  ): Partial<Record<KbKind, number>> & { journal: number } {
-    const out: Partial<Record<KbKind, number>> & { journal: number } = { journal: 0 };
-    for (const r of this.db
-      .prepare(
-        `select kind, count(*) as n,
-           sum(case when kind = 'note' and sub in (${JOURNAL_KINDS.map(() => "?").join(", ")}) then 1 else 0 end) as journal
-         from kb_item where rig = ? and ledger = ? and run = ? group by kind`,
-      )
-      .all(...JOURNAL_KINDS, rig, ledger, run) as Row[]) {
-      out[str(r.kind) as KbKind] = Number(r.n);
-      out.journal += Number(r.journal);
-    }
-    return out;
+  runCounts(rig: string, ledger: string, run: string) {
+    return runCountsOf(this.db, rig, ledger, run);
+  }
+
+  /** A run's field notes, newest first: at most `limit`, with how many it has (journal.ts). */
+  fieldNotes(rig: string, ledger: string, run: string, limit: number) {
+    return fieldNotesOf(this.db, { rig, ledger, run }, limit);
   }
 
   item(id: number): KbItem | undefined {
