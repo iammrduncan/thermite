@@ -172,7 +172,7 @@ describe("a campaign's brief (goal 078)", () => {
       );
       assert.doesNotMatch(b, /Notes from the campaign's author/);
     }
-    const file = join(x.env.service.knowledge.folder("js-1"), BRIEF_FILE);
+    const file = join(x.env.service.researchRoot("js-1"), BRIEF_FILE);
     assert.ok(existsSync(file), "the run's folder has BRIEF.md");
     assert.ok(readFileSync(file, "utf8").includes(NOTES));
   });
@@ -180,7 +180,7 @@ describe("a campaign's brief (goal 078)", () => {
   test("a brief longer than a worker's brief carries: cut there, with where the whole text is; the planner gets all of it", async (t) => {
     const notes = `${"Background line.\n".repeat(2500)}The last line of the brief.`;
     const x = await hillClimb(t, { notes });
-    const file = join(x.env.service.knowledge.folder("js-1"), BRIEF_FILE);
+    const file = join(x.env.service.researchRoot("js-1"), BRIEF_FILE);
     for (const b of x.briefs) {
       assert.ok(b.includes(`The whole brief is in ${file}: read the rest there.`), b.slice(0, 600));
       assert.doesNotMatch(b, /The last line of the brief\./);
@@ -194,7 +194,7 @@ describe("a campaign's brief (goal 078)", () => {
     assert.ok(x.briefs.length > 0);
     for (const b of x.briefs) assert.doesNotMatch(b, /# The campaign's brief/);
     assert.doesNotMatch(x.prompts[0] ?? "", /campaign_brief\\"/);
-    assert.ok(!existsSync(join(x.env.service.knowledge.folder("js-1"), BRIEF_FILE)));
+    assert.ok(!existsSync(join(x.env.service.researchRoot("js-1"), BRIEF_FILE)));
   });
 
   test("a research run: its hypotheses are the run's first, its starting links are archived when it starts, and each research trial's brief has the brief and the questions whole", async (t) => {
@@ -315,7 +315,7 @@ describe("a campaign's brief (goal 078)", () => {
       /## Starting links\n\nThe harness fetches and archives these when the run starts: read them under sources\/\.\n\n- http:\/\/127\.0\.0\.1:\d+\/start\.html\n- http:\/\/127\.0\.0\.1:1\/gone\.html/,
     );
     assert.doesNotMatch(b, /Starting URLs:/);
-    assert.ok(existsSync(join(env.service.knowledge.folder("r-1"), BRIEF_FILE)));
+    assert.ok(existsSync(join(env.service.researchRoot("r-1"), BRIEF_FILE)));
   });
 
   test("a question longer than an experiment's details: the research task is cut, and says where the whole question is", () => {

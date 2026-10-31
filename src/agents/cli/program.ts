@@ -194,8 +194,8 @@ export interface CliProgram<T extends CliTally> {
   call: CliCallEntry<T>;
   /** Its answer to a one-prompt call (else its last text). */
   answer?(t: T): string | undefined;
-  /** The tools a planner call may use, in a program that takes a list (`read`: past research). */
-  plannerTools?(read: boolean): string;
+  /** The tools a planner call may use, in a program that takes a list. */
+  plannerTools?: string | undefined;
   /**
    * The model check in it: the tool its prompt names (else its shell tool), where its route goes
    * in the report, and why it failed when its output says more than an error.

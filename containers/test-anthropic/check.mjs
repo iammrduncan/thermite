@@ -13,7 +13,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -67,26 +66,18 @@ async function harness() {
     mc.summary,
   );
 
-  // A planner call with past research: Claude Code's Grep (its own ripgrep) reads a folder
-  // outside its own, as the planner's user, which may read it.
-  const kdir = join(scratchDir, "claude-real-knowledge");
-  mkdirSync(kdir, { recursive: true });
-  chmodSync(kdir, 0o755);
-  writeFileSync(join(kdir, "notes.md"), "aligned loads made the kernel 12% faster\n", {
-    mode: 0o644,
+  // A planner call as the planner's user, with none of Claude Code's own tools, as the harness
+  // makes it (plannerTools): past research is the knowledge base's, which it searches over MCP,
+  // with no folder of it on the rig to read. The stand-in answers it with no tool call.
+  const pl = await claudeOnce(model, "Plan the next round.", deps, {
+    tools: "",
+    timeoutMs: 120_000,
+    role: "planner",
   });
-  const grep = { pattern: "aligned", path: kdir, output_mode: "content" };
-  const pl = await claudeOnce(
-    model,
-    `Plan the next round. First call the Grep tool with input ${JSON.stringify(grep)}END`,
-    deps,
-    { tools: "Read,Grep,Glob", timeoutMs: 120_000, role: "planner" },
-  );
-  const found = pl.tools.find((t) => t.tool === "Grep");
   check(
-    "a planner call's Grep read past research outside its folder, as the planner's user",
-    found?.ok && /aligned loads/.test(found.output),
-    found ?? pl.errors.at(-1) ?? pl.notes,
+    "a planner call with none of Claude Code's own tools answers, and calls no tool",
+    pl.result === "ok" && pl.tools.length === 0,
+    pl.errors.at(-1) ?? pl.notes ?? pl.result,
   );
 
   // A trial: Claude Code edits the workspace with its Write tool, runs a command that looks for

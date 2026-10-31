@@ -2,12 +2,10 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { buildInfo } from "../../../src/common/build-info.ts";
 import type { BusRequest } from "../../../src/common/bus/index.ts";
-import { fitPage } from "../../../src/control/bus/asks.ts";
 import { answerRigAsk, answerStaysWithRig, serveRigAsks } from "../../../src/control/bus/index.ts";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { Screens } from "../../../src/control/live/index.ts";
 import {
-  PAST_PAGE_BYTES,
   RIG_ASK_KINDS,
   RIG_ASK_SUBJECTS,
   rigAskOf,
@@ -52,11 +50,13 @@ describe("a rig's asks of control on the bus", () => {
       assert.deepEqual(rigAskOf(subject), { rig: "rig-a", kind });
     }
     assert.equal(rigAskOf("thermite.rig.rig-a.ask.wipe"), undefined);
+    // Past research is no longer copied to rigs: control serves no ask for it.
+    assert.deepEqual(RIG_ASK_KINDS, ["figures", "screens", "daily", "renew"]);
+    assert.equal(rigAskOf("thermite.rig.rig-a.ask.past"), undefined);
     assert.equal(rigAskOf("thermite.rig.rig-a.report"), undefined);
     assert.throws(() => rigAskSubject("Rig A", "figures"), /not a rig's name/);
     // What a rig asks fits one of the bus's messages: the screens, at their largest, too.
     assert.ok(SCREENS_MAX_BYTES < REPORT_MAX_BYTES);
-    assert.ok(PAST_PAGE_BYTES < REPORT_MAX_BYTES);
   });
 
   test("figures are kept and answered with control's place; a field control knows keeps its check", async () => {
@@ -101,19 +101,6 @@ describe("a rig's asks of control on the bus", () => {
     const s = setup();
     const r = s.ask("daily", { kind: "daily", body: "# The day" }) as { id: number };
     assert.equal(s.store.rigReports.list(5, "rig-a")[0]?.id, r.id);
-  });
-
-  test("past research: a page ends before an item that would pass the bytes one answer carries", () => {
-    const item = (seq: number) => ({ seq, body: "x".repeat(100) });
-    const page = { items: [1, 2, 3, 4].map(item), next: 4, more: false };
-    const one = Buffer.byteLength(JSON.stringify(item(1)));
-    assert.deepEqual(fitPage(page, one * 4), page, "all of it fits");
-    const two = fitPage(page, one * 2 + 1);
-    assert.deepEqual([two.items.map((x) => x.seq), two.next, two.more], [[1, 2], 2, true]);
-    // One item larger than the page still goes, alone.
-    const first = fitPage(page, 1);
-    assert.deepEqual([first.items.length, first.next, first.more], [1, 1, true]);
-    assert.ok(PAST_PAGE_BYTES < REPORT_MAX_BYTES);
   });
 
   test("a command's newest form: renewed near its expiry, as control holds it otherwise, none once it is not pending", async () => {

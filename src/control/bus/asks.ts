@@ -2,9 +2,6 @@ import type { Bus, BusRequest } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import {
-  PAST_NO_RUN,
-  PAST_NOT_ASSIGNED,
-  PAST_PAGE_BYTES,
   RIG_ASK_SUBJECTS,
   RIG_ASKS,
   type RigAskKind,
@@ -23,10 +20,9 @@ import { leafRigsOf } from "./leaf.ts";
 
 /**
  * Control's answers to what a rig asks of it on the message bus (core/link/asks.ts): its
- * supervisor's figures, the screens of the trials watched, its daily report, past research for one
- * of its runs, and a command's newest form. Each ask comes on the rig's own subject, which only its
- * user may publish to, and is answered at the rig's own inbox alone. A refusal is an answer in
- * words.
+ * supervisor's figures, the screens of the trials watched, its daily report, and a command's
+ * newest form. Each ask comes on the rig's own subject, which only its user may publish to, and is
+ * answered at the rig's own inbox alone. A refusal is an answer in words.
  */
 
 /** What answering needs of control: its store, its build, its signing key, the screens watched. */
@@ -38,40 +34,6 @@ export interface RigAsksDeps {
 }
 
 type Answer = object;
-
-/** Past research for a run, as the rig asks it: the page after its cursor, within PAST_PAGE_BYTES. */
-function pastPage(store: ControlStore, rig: string, run: string, after: number): Answer {
-  // Only a run control assigned to this rig, of the campaign control assigned: a rig cannot read
-  // another campaign's collections by naming it in its own events.
-  const assigned = store.runRegistry.assignedCampaigns(rig).get(run);
-  if (!assigned)
-    return { refused: `control did not assign run ${run} to ${rig}`, code: PAST_NOT_ASSIGNED };
-  const sync = store.kb().sync(rig, run, after);
-  if (!sync) return { refused: `${rig} has no run ${run} on control yet`, code: PAST_NO_RUN };
-  if (sync.campaign !== assigned)
-    return { refused: `run ${run} is not of the campaign control assigned` };
-  return fitPage(sync, PAST_PAGE_BYTES);
-}
-
-/**
- * A page of past research within `maxBytes` of items, as JSON: it ends before an item that would
- * pass them, and then says more wait, from the last item it holds. One item always goes.
- */
-export function fitPage<T extends { items: { seq: number }[]; next: number; more: boolean }>(
-  page: T,
-  maxBytes: number,
-): T {
-  let bytes = 0;
-  let n = 0;
-  for (const item of page.items) {
-    bytes += Buffer.byteLength(JSON.stringify(item));
-    if (n > 0 && bytes > maxBytes) break;
-    n++;
-  }
-  if (n === page.items.length) return page;
-  const items = page.items.slice(0, n);
-  return { ...page, items, next: items.at(-1)?.seq ?? page.next, more: true };
-}
 
 /** Control's answer to one ask of a rig, a refusal in words included. `raw` is its body. */
 export function answerRigAsk(
@@ -107,10 +69,6 @@ export function answerRigAsk(
     case "daily": {
       const b = RIG_ASKS.daily.body.parse(raw);
       return { id: store.rigReports.add(rig, b.kind, b.body) };
-    }
-    case "past": {
-      const b = RIG_ASKS.past.body.parse(raw);
-      return pastPage(store, rig, b.run, b.after);
     }
     case "renew": {
       const b = RIG_ASKS.renew.body.parse(raw);

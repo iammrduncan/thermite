@@ -80,13 +80,11 @@ export async function planResearchEpoch(
         role: "research-planner",
         owner: input.ownerMessages,
       });
-      input.pastResearch = r.pastLine;
       p = await planResearch(
         input,
         r.m,
         ctrl.signal,
         r.ask,
-        r.past,
         r.mcp,
         plannerCompaction(sched, run),
         r.usage,

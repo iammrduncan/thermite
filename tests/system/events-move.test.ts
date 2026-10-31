@@ -28,6 +28,7 @@ import {
   ingestReport,
 } from "../helpers/control-store.ts";
 import { asMessage, FakeBus } from "../helpers/fake-bus.ts";
+import { itemsBySeq } from "../helpers/kb-items.ts";
 import { keepOldRows, type OldRow, withEventsTable } from "../helpers/old-store.ts";
 
 /**
@@ -371,7 +372,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
         { at: "2026-10-29T07:00:00.000Z", actor: "harness", subject: "gs-1", ...e },
       );
     s.db.exec("update kb_cursor set seq = 13");
-    const before = kbOld.changedAfter(["gemv"], 0).map((x) => [x.seq, x.ref]);
+    const before = itemsBySeq(s, ["gemv"]).map((x) => [x.seq, x.ref]);
     assert.deepEqual(before, [
       [1, "gs-1"],
       [2, "2"],
@@ -390,37 +391,12 @@ describe("a store's events table, moved to the events stream once, and dropped",
         [4, 14],
       ],
     );
-    const kb = store.kb();
     assert.deepEqual(
-      kb.changedAfter(["gemv"], 0).map((x) => [x.seq, x.ref]),
+      itemsBySeq(store, ["gemv"]).map((x) => [x.seq, x.ref]),
       [...before, [4, "4"]],
       "the third lesson alone is new",
     );
-    assert.equal(kb.indexedFromTable(), 13, "the table's cursor does not move");
-    // A rig's cursor counts the items: a run's sync after item 3 has the third lesson alone.
-    assigned(store, "rig-b", "gs-2", "gemv");
-    await ingestReport(store, {
-      rig: "rig-b",
-      ledger_id: "l-b",
-      cursor: 0,
-      next: 1,
-      summary: {},
-      events: [
-        {
-          id: 1,
-          at: "2026-10-29T08:00:00.000Z",
-          actor: "harness",
-          kind: "run_created",
-          subject: "gs-2",
-          run: "gs-2",
-          body: { campaign: "gemv" },
-        },
-      ],
-    });
-    assert.deepEqual(
-      kb.sync("rig-b", "gs-2", 3)?.items.map((x) => x.ref),
-      ["4"],
-    );
+    assert.equal(store.kb().indexedFromTable(), 13, "the table's cursor does not move");
     // The views' seq is each event's place in the stream, across the gap: 1 to 4, not 13 and 14.
     const held = await heldEvents(store, "rig-a");
     assert.deepEqual(

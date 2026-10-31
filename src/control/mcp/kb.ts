@@ -226,7 +226,7 @@ export function registerKnowledgeBase(tools: ToolContext): void {
           proposing
             ? "Proposes to the owner that the campaign's agents may search and read the other campaign's collection in Thermite's knowledge base. Control checks it as it would the owner's grant, keeps it, and grants nothing until the owner approves it on the campaign's page (Needs you lists it); it returns {campaign, proposal, state: \"proposed\", said}, or state \"unchanged\" when the campaign reads it already. A newer proposal of the same collection replaces one still waiting. Once approved: "
             : "From now on, "
-        }the campaign's agents may search and read the other campaign's collection, read only: they never write to it. ${GRANT_OPENS} Runs started from now may include it in what they search (Start a run's granted collections); a run's scope is fixed when it starts. Until the copies of past research leave the rigs, the campaign's runs at work also receive the collection in their research folder at their supervisor's next sync. A campaign always reads its own collection.`,
+        }the campaign's agents may search and read the other campaign's collection, read only: they never write to it. ${GRANT_OPENS} Runs started from now may include it in what they search (Start a run's granted collections); a run's scope is fixed when it starts. A campaign always reads its own collection.`,
         inputSchema: grantInput,
       },
       audited("kb_grant", (a: { campaign: string; reads: string }) => {

@@ -1,21 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import { transaction } from "../../../common/sqlite.ts";
-import {
-  type KbItemBody,
-  type KbItemWire,
-  type KbKind,
-  type KbSync,
-  readKbAddress,
-  writtenRef,
-} from "../../../core/kb.ts";
-import { clip, KB_BODY_MAX, str } from "../../../core/kb-index.ts";
-import {
-  JOURNAL_KINDS,
-  type KbCollection,
-  type KbFound,
-  type KbItem,
-  SYNC_PAGE,
-} from "../../kb/index.ts";
+import { type KbItemBody, type KbKind, readKbAddress, writtenRef } from "../../../core/kb.ts";
+import { str } from "../../../core/kb-index.ts";
+import { JOURNAL_KINDS, type KbCollection, type KbFound, type KbItem } from "../../kb/index.ts";
 import { KbFileRows, KbSettingRows, keepFileText, knowledgeFiles } from "./files.ts";
 import {
   itemOf,
@@ -115,11 +102,11 @@ export class KnowledgeBase {
     return transaction(this.db, fn);
   }
 
-  /** The next n item seqs (returns the last of them). */
-  private nextSeq(n = 1): number {
+  /** The next item seq. */
+  private nextSeq(): number {
     const r = this.db
-      .prepare("update kb_cursor set item_seq = item_seq + ? where id = 1 returning item_seq")
-      .get(n) as { item_seq: number };
+      .prepare("update kb_cursor set item_seq = item_seq + 1 where id = 1 returning item_seq")
+      .get() as { item_seq: number };
     return Number(r.item_seq);
   }
 
@@ -339,56 +326,30 @@ export class KnowledgeBase {
   }
 
   /**
-   * Lets a campaign read another's collection, read only. Its runs at work receive the collection's
-   * items at their next sync, with seqs given now. False: nothing changed (already granted, or its
-   * own collection).
+   * Lets a campaign read another's collection, read only. False: nothing changed (already granted,
+   * or its own collection).
    */
   grant(campaign: string, reads: string, by: string): boolean {
     if (!campaign || !reads || campaign === reads) return false;
-    return this.tx(() => {
-      const added =
-        Number(
-          this.db
-            .prepare(
-              "insert or ignore into kb_read (campaign, reads, granted_by, granted_at) values (?, ?, ?, ?)",
-            )
-            .run(campaign, reads, by, new Date().toISOString()).changes,
-        ) > 0;
-      if (!added) return added;
-      const n = Number(
-        (
-          this.db.prepare("select count(*) as n from kb_item where campaign = ?").get(reads) as {
-            n: number;
-          }
-        ).n,
-      );
-      if (n) {
-        const base = this.nextSeq(n) - n;
+    return (
+      Number(
         this.db
           .prepare(
-            `insert into kb_grant_item (campaign, reads, item, seq)
-             select ?, ?, id, ? + row_number() over (order by seq) from kb_item where campaign = ?`,
+            "insert or ignore into kb_read (campaign, reads, granted_by, granted_at) values (?, ?, ?, ?)",
           )
-          .run(campaign, reads, base, reads);
-      }
-      return true;
-    });
+          .run(campaign, reads, by, new Date().toISOString()).changes,
+      ) > 0
+    );
   }
 
   /** Ends a grant. False: there was none. */
   revoke(campaign: string, reads: string): boolean {
-    return this.tx(() => {
-      this.db
-        .prepare("delete from kb_grant_item where campaign = ? and reads = ?")
-        .run(campaign, reads);
-      return (
-        Number(
-          this.db
-            .prepare("delete from kb_read where campaign = ? and reads = ?")
-            .run(campaign, reads).changes,
-        ) > 0
-      );
-    });
+    return (
+      Number(
+        this.db.prepare("delete from kb_read where campaign = ? and reads = ?").run(campaign, reads)
+          .changes,
+      ) > 0
+    );
   }
 
   /**
@@ -542,18 +503,6 @@ export class KnowledgeBase {
     return `${m[1] === "Dropped" ? "dropped" : "tried"}: ${m[2]}${verdict ? `, ${verdict.replace(/_/g, " ")}` : ""}`;
   }
 
-  /** Items of the given collections changed after a seq, in seq order. */
-  changedAfter(campaigns: string[], after: number, limit = SYNC_PAGE): KbItem[] {
-    if (!campaigns.length) return [];
-    return (
-      this.db
-        .prepare(
-          `select * from kb_item where campaign in (${campaigns.map(() => "?").join(", ")}) and seq > ? order by seq limit ?`,
-        )
-        .all(...campaigns, after, limit) as Row[]
-    ).map(itemOf);
-  }
-
   /** The campaign of a rig's run in its current ledger, if control has seen the run start. */
   runCampaign(rig: string, run: string): string | undefined {
     const ledger = (
@@ -562,75 +511,5 @@ export class KnowledgeBase {
         | undefined
     )?.ledger_id;
     return ledger ? this.campaignOf(rig, ledger, run) : undefined;
-  }
-
-  /**
-   * What a run's supervisor syncs into the run's knowledge/ folder: the items of the collections
-   * its campaign may read, changed after `after`, in seq order, at most SYNC_PAGE at once, without
-   * the run's own items (it has them). Undefined: the rig has no such run in its current ledger.
-   * A grant's copy of an item comes only to a cursor already past the item's own seq; a run that
-   * pages through both may still get an item twice, and keeps the newer.
-   */
-  sync(rig: string, run: string, after: number, limit = SYNC_PAGE): KbSync | undefined {
-    const ledger = (
-      this.db.prepare("select ledger_id from rig where id = ?").get(rig) as
-        | { ledger_id: string | null }
-        | undefined
-    )?.ledger_id;
-    const campaign = ledger ? this.campaignOf(rig, ledger, run) : undefined;
-    if (!ledger || !campaign) return undefined;
-    const collections = this.readable(campaign);
-    const granted = collections.slice(1);
-    const marks = (xs: string[]) => xs.map(() => "?").join(", ");
-    const notOwn = "not (i.rig = ? and i.ledger = ? and i.run = ?)";
-    const own = [rig, ledger, run];
-    const rows = this.db
-      .prepare(
-        `select i.*, i.seq as s from kb_item i
-         where i.campaign in (${marks(collections)}) and i.seq > ? and ${notOwn}
-         ${
-           granted.length
-             ? `union all
-         select i.*, g.seq as s from kb_grant_item g join kb_item i on i.id = g.item
-         where g.campaign = ? and g.reads in (${marks(granted)}) and g.seq > ? and i.seq <= ?
-           and ${notOwn}`
-             : ""
-         }
-         order by s limit ?`,
-      )
-      .all(
-        ...collections,
-        after,
-        ...own,
-        ...(granted.length ? [campaign, ...granted, after, after, ...own] : []),
-        limit + 1,
-      ) as Row[];
-    const page = rows.slice(0, limit);
-    const items: KbItemWire[] = page.map((r) => {
-      const x = itemOf(r);
-      return {
-        seq: Number(r.s),
-        campaign: x.campaign,
-        rig: x.rig,
-        run: x.run,
-        kind: x.kind,
-        ref: x.ref,
-        title: x.title,
-        // A file's text may be long: a rig's copy holds as much of it as a blurb's.
-        body: clip(x.body, KB_BODY_MAX),
-        by: x.by,
-        url: x.url,
-        sub: x.sub,
-        at: x.at,
-        updated_at: x.updated_at,
-      };
-    });
-    return {
-      campaign,
-      collections,
-      items,
-      next: items.at(-1)?.seq ?? after,
-      more: rows.length > limit,
-    };
   }
 }

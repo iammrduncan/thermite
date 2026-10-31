@@ -78,7 +78,7 @@ export const LiveBatchWire = LiveBatch.extend({
 /**
  * A batch's lines as control reads them (goal 171): those it knows, and a count of the rest by
  * the kind or source it does not know, so one line from a newer rig never stops the rig's live
- * view. The knowledge base's sync reads items the same way (core/kb.ts: readKbItems).
+ * view.
  */
 export function readLiveEntries(raw: unknown[]): {
   entries: LiveEntry[];

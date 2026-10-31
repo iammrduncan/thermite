@@ -53,7 +53,7 @@ test("a role's next prompt is previewed on the rig with no side effect (goal 166
   // Nothing kept, no message given, no file written.
   assert.deepEqual(env.service.ledger.prompts.list(run), []);
   assert.equal(env.service.ledger.events.newest("agent_message_read", {}), undefined);
-  assert.ok(!existsSync(join(env.service.knowledge.folder(run), BRIEF_FILE)));
+  assert.ok(!existsSync(join(env.service.researchRoot(run), BRIEF_FILE)));
 
   const planner = scheduler.preview(run, { role: "planner" });
   assert.equal(planner.role, "planner");

@@ -571,7 +571,6 @@ describe("the one-prompt call, in each program's entry", () => {
       const usage: CallUsage[] = [];
       const windows: PlanWindows[] = [];
       const answer = await cliAsk(p.entry, p.model, "Plan the round.", d, {
-        read: "/knowledge/r-1",
         usage: (u) => usage.push(u),
         windows: (w) => windows.push(w),
       });
@@ -592,11 +591,11 @@ describe("the one-prompt call, in each program's entry", () => {
       assert.equal(f.programRuns().length, 1, name);
       const run = f.programRuns()[0] as RunRequest;
       // The prompt on its stdin; Claude Code's in a file the controller wrote, with the token
-      // on stdin, and the read-only file tools for past research.
+      // on stdin, and none of its own tools.
       if (p.program === "claude-code") {
         assert.equal(run.stdin, p.model.apiKey, name);
         assert.equal(readFileSync(join(dir, "claude-prompt.txt"), "utf8"), "Plan the round.");
-        assert.equal(run.argv[run.argv.indexOf("--tools") + 1], "Read,Grep,Glob", name);
+        assert.equal(run.argv[run.argv.indexOf("--tools") + 1], "", name);
       } else {
         assert.equal(run.stdin, "Plan the round.", name);
         assert.equal(run.argv[0], p.entry.exe() ?? p.entry.bin(), `${name}: by its path`);

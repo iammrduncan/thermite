@@ -13,7 +13,7 @@ export interface ResearchFolderPaths {
 
 /** How the research folder is laid out, for a worker's prompt. */
 export function researchFolderNote(f: ResearchFolderPaths): string {
-  return `Everything this campaign has learned so far is in its research folder, ${f.root}. Start with INDEX.md there. The harness writes it from its records, and keeps it current while you work:
+  return `Everything this run has learned so far is in its research folder, ${f.root}. Start with INDEX.md there. The harness writes it from its records, and keeps it current while you work:
 - INDEX.md: the questions, what is known, and where everything is
 - REPORT.md: the newest report
 - BRIEF.md, when there is one: the campaign's brief from its author, whole
@@ -22,7 +22,6 @@ export function researchFolderNote(f: ResearchFolderPaths): string {
 - claims/, findings/, hypotheses/, notes/, report/: every claim (verified or draft), finding, hypothesis, note and report section
 - lanes/: the files each lane wrote, as they were when its last trial ended
 - compactions/, when there is one: conversations the harness kept whole before each compaction
-- knowledge/, when there is one: past research from the collections this campaign may read (its README.md says what is there)
 
 You can read and search all of it, but change none of it. Your own working area is ${f.work}: write anything there that helps (syntheses, outlines, drafts, lists of what to read next). It is kept for this lane's next trial, and the other lanes see it in lanes/ when this trial ends. Files there are working material, not results: only claims recorded with add_claim are verified, and only findings recorded with add_finding are reported.`;
 }

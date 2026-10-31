@@ -35,7 +35,6 @@ import {
   type PlannerCallSpec,
   type PlannerCompaction,
   type PlannerMcp,
-  type PlannerPast,
   type PlannerView,
   type PlanTry,
   plannerTries,
@@ -168,7 +167,6 @@ export interface ResearchPlannerInput {
   campaignBrief?: BriefData | undefined;
   notes?: ReturnType<typeof notesData> | undefined;
   briefing?: BriefingItem[] | undefined;
-  pastResearch?: string | undefined;
   /** The owner's addition to the research planner (goal 166; see PlannerInput). */
   addition?: OwnerAddition | undefined;
 }
@@ -599,7 +597,6 @@ export function researchPlannerContext(input: ResearchPlannerInput): string {
     ...(input.campaignBrief ? { campaign_brief: input.campaignBrief } : {}),
     ...(input.notes?.length ? { field_notes: { note: NOTES_ARE_DATA, notes: input.notes } } : {}),
     ...(input.briefing?.length ? { background: briefingData(input.briefing) } : {}),
-    ...(input.pastResearch ? { past_research: input.pastResearch } : {}),
   });
 }
 
@@ -711,7 +708,6 @@ export async function planResearch(
   model?: ModelConfig,
   signal?: AbortSignal,
   ask?: Ask,
-  past?: PlannerPast,
   mcp?: PlannerMcp,
   compaction?: PlannerCompaction,
   usage?: (u: CallUsage) => void,
@@ -729,7 +725,6 @@ export async function planResearch(
     check: (raw) => validateResearchPlan(raw, input),
     signal,
     ask,
-    past,
     mcp,
     compaction,
     usage,

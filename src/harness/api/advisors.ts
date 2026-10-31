@@ -36,14 +36,14 @@ import {
   SourceQuery,
 } from "../../core/api/harness/advisors.ts";
 import { RESEARCH_KINDS } from "../../core/api/harness/research.ts";
-import { ADVISORS, KB } from "../../core/api/harness/supervisor.ts";
+import { ADVISORS } from "../../core/api/harness/supervisor.ts";
 import { additionsOf } from "../../core/role-additions.ts";
 import { type ApiContext, limitOf } from "./context.ts";
 
 /**
  * The supervisor's advisors (the teachers, the auditor, the review panel, the synthesizer and the
  * final writer): their reads of a run, the packages they decide on, and where their rules,
- * decisions, cards, papers, receipts, queue changes, notes and past research go.
+ * decisions, cards, papers, receipts, queue changes and notes go.
  */
 export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   app.post(DIRECTIVES.path, supervisor, limitOf(DIRECTIVES), async (c) => {
@@ -268,12 +268,4 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
   app.post(JOURNAL.path, supervisor, limitOf(JOURNAL), async (c) =>
     c.json(service.advisorNotes(JOURNAL.body.parse(await c.req.json()))),
   );
-
-  // Past research for a run's folder, from control's knowledge base (the supervisor syncs it):
-  // each item a file under the run's knowledge/. `collections` (those the run's campaign may read
-  // now) removes the folder of a collection whose grant was revoked.
-  app.post(KB.path, supervisor, limitOf(KB), async (c) => {
-    const body = KB.body.parse(await c.req.json());
-    return c.json(service.writeKnowledge(body.run, body.items, body.collections));
-  });
 }

@@ -52,8 +52,7 @@ export interface VersionFields {
 
 /**
  * A new item at `place`, or a new version of the one there, with its links: the item's row holds
- * the newest version, with a new seq (the rigs' syncs read after it); every version, the newest
- * too, is kept in kb_version. `event`: the kb_item event that wrote it. A file item's row holds
+ * the newest version, with a new seq; every version, the newest too, is kept in kb_version. `event`: the kb_item event that wrote it. A file item's row holds
  * its file's text, when control has it, for the words index; its version keeps its writer's words.
  * Returns the item's id and its version. In the caller's transaction.
  */

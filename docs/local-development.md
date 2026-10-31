@@ -53,7 +53,7 @@ The stack, its settings and how to operate it are described on the site:
 
 The `two-rigs` profile adds a second rig (`local-2`), which the control and steering acceptance tests use. The stack always runs the message bus, a NATS server with JetStream (`nats`): the supervisors send their reports and live lines over it and control reads them from it, and control sends its commands and each rig's config over it and the supervisors take them from it. Each connects over TLS, trusting control's own certificate authority, and signs in with its own key: control writes the server's users, certificate and key to the `nats-config` volume, and the server waits for them before it starts ([The compose file](_site/src/content/docs/reference/settings.md#the-compose-file)). A rig reaches control only on the bus, and nothing in `.env` turns the stack's rigs off it ([Run the message bus](_site/src/content/docs/how-to/operate/message-bus.md)). `compose.lifecycle.yaml` lets control restart containers through the engine's socket; it is for development only.
 
-`compose.yaml` passes the optional settings through from your shell or `.env`, each with its default. That includes the knowledge base's timer, `THERMITE_KB_SYNC_SECONDS`, for both rigs' supervisors (180). Set it lower to see past research move sooner, or to `0` to turn it off.
+`compose.yaml` passes the optional settings through from your shell or `.env`, each with its default.
 
 ## The dashboard demo
 

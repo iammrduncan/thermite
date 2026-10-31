@@ -260,7 +260,7 @@ export class KbReading {
         }
       : undefined;
     const next = mergeItem(ref, old, f);
-    // Nothing changed: the item keeps its seq, so no rig syncs it again.
+    // Nothing changed: the item keeps its seq.
     if (old && sameItem(old, next)) return;
     // A change is the item's next version: the one before stays.
     const place = { campaign, rig, ledger, run, slot: KB_RECORDS, kind, ref };

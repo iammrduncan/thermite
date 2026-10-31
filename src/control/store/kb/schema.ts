@@ -38,7 +38,7 @@ create table if not exists kb_run (
 );
 -- seq: the seq in control's events table of the last event indexed from it, before the apply of
 -- the events stream fed the knowledge base (it no longer moves); item_seq: the last seq given to
--- an item's version or a grant's copy, which the rigs' cursors count.
+-- an item's version.
 create table if not exists kb_cursor (
   id integer primary key check (id = 1),
   seq integer not null,
@@ -53,8 +53,8 @@ create table if not exists kb_read (
   granted_at text not null,
   primary key (campaign, reads)
 );
--- A grant gives the granted collection's items seqs of their own for the grantee, so a run at
--- work, whose cursor is past those items' seqs, still receives the collection it may now read.
+-- Each grant's copies of the granted collection's items, for the rigs' copies of past research,
+-- which are gone (goal 175): no longer written, and kept for the stores that have it.
 create table if not exists kb_grant_item (
   campaign text not null,
   reads text not null,

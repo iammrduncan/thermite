@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -132,7 +132,6 @@ describe("research in every mode", () => {
       scratchRoot: join(scratchDir, "research"),
       stateRoot: join(stateDir, "research-work"),
       runner: new LocalRunner(scratchDir),
-      knowledge: env.service.knowledge,
     });
     const research = new Research(env.service.ledger, stateDir, {
       allowPrivate: true,
@@ -186,29 +185,13 @@ describe("research in every mode", () => {
     assert.ok(!existsSync(join(root, "REPORT.md")), "a hill climb has no research report");
     assert.ok(!existsSync(join(root, "work")), "nor working areas");
     assert.match(readFileSync(join(root, "INDEX.md"), "utf8"), /- claims\/: 1 claims, 1 verified/);
-    // Past research shows in the folder and its index, and stays out of the run's export.
-    env.service.writeKnowledge("smoke-1", [
-      {
-        seq: 4,
-        campaign: "kernels",
-        rig: "rig-b",
-        run: "kernels-7",
-        kind: "note",
-        ref: "12",
-        title: "Vector loads need aligned pointers",
-        body: "Vector loads need 16-byte aligned pointers.",
-        by: "lane-2",
-        url: null,
-        sub: "lesson",
-        at: "2026-10-16T00:00:00.000Z",
-        updated_at: "2026-10-16T00:00:00.000Z",
-      },
-    ]);
+    // Past research is the knowledge base's, on control: nothing writes it in the run's folder,
+    // its index names none, and what an older harness left in knowledge/ stays out of the export.
     folder.sync("smoke-1");
-    assert.match(
-      readFileSync(join(root, "INDEX.md"), "utf8"),
-      /- knowledge\/: past research .*1 note, from kernels/,
-    );
+    assert.ok(!existsSync(join(root, "knowledge")));
+    assert.doesNotMatch(readFileSync(join(root, "INDEX.md"), "utf8"), /knowledge/);
+    mkdirSync(join(root, "knowledge"));
+    writeFileSync(join(root, "knowledge", "README.md"), "# Past research\n");
     const exported = folder.exportFiles("smoke-1").files;
     assert.ok(exported.includes("INDEX.md"));
     assert.ok(exported.some((f) => f.startsWith("sources/")));

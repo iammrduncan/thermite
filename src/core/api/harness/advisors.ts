@@ -103,7 +103,6 @@ export const RunBrief = z.looseObject({
   }),
   owner_messages: OwnerMessages,
   background: z.unknown().optional(),
-  past_research: z.unknown().optional(),
   /** What the run's own research holds (goal 098): its tools read the rest. */
   research: z.unknown().optional(),
 });
@@ -230,7 +229,6 @@ const AuditPackage = z.looseObject({
   attempt: AttemptId,
   run: RunId.optional(),
   owner_messages: OwnerMessages,
-  past_research: z.string().optional(),
 });
 export const AUDITS_PENDING = {
   method: "GET",
@@ -267,7 +265,6 @@ const ReviewPackage = z.looseObject({
   goal: z.string().optional(),
   kind: z.string().optional(),
   owner_messages: OwnerMessages,
-  past_research: z.string().optional(),
 });
 /** The kinds of review a supervisor asks for (`?kinds=goal,research`); none named: goal only. */
 export const REVIEW_KINDS = ["goal", "research"] as const;

@@ -25,7 +25,6 @@ export const SUPERVISOR_NUMBERS = {
     rule: OFF_AT_ZERO,
     fallback: 30,
   },
-  kbSyncSeconds: { name: "THERMITE_KB_SYNC_SECONDS", rule: OFF_AT_ZERO, fallback: 180 },
   tunnelPort: { name: "THERMITE_TUNNEL_PORT", rule: { integer: true, min: 1, max: 65535 } },
   /** The free space a model download leaves where it lands (common/disk.ts; goal 173). */
   diskFloorGib: DISK_FLOOR,

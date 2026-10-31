@@ -26,7 +26,6 @@ import {
   REQUIRED_HYPOTHESES,
 } from "../../core/research-check.ts";
 import type { Role, Runner } from "../broker/index.ts";
-import { countsText, type Knowledge } from "../knowledge.ts";
 import type { HypothesisRow, LaneFileChange, Ledger } from "../ledger/index.ts";
 import { cardFile, cardHistory } from "./cards.ts";
 import { copyTree, LaneCopyRefused, regularFiles } from "./copy.ts";
@@ -131,21 +130,16 @@ export class ResearchFolder {
   /** Contents last written for files that do change. */
   private readonly last = new Map<string, string>();
 
-  /** Past research shown under knowledge/ (the harness keeps its own copy, knowledge.ts). */
-  private readonly knowledge: Pick<Knowledge, "show" | "summary"> | undefined;
-
   constructor(o: {
     ledger: Ledger;
     scratchRoot: string;
     stateRoot: string;
     runner: Runner;
-    knowledge?: Pick<Knowledge, "show" | "summary"> | undefined;
   }) {
     this.ledger = o.ledger;
     this.scratchRoot = o.scratchRoot;
     this.stateRoot = o.stateRoot;
     this.runner = o.runner;
-    this.knowledge = o.knowledge;
   }
 
   root(run: string): string {
@@ -168,8 +162,8 @@ export class ResearchFolder {
 
   /**
    * Brings the folder's harness-written part up to date with the records. A hill-climb or goal
-   * run's folder holds what its trials recorded (sources, claims, notes) and past research; a
-   * research run's holds everything above.
+   * run's folder holds what its trials recorded (sources, claims, notes); a research run's holds
+   * everything above.
    */
   sync(run: string): string {
     const root = this.root(run);
@@ -192,13 +186,6 @@ export class ResearchFolder {
     const brief = briefFile(contract);
     if (brief) this.changed(join(root, BRIEF_FILE), brief);
     const briefLine = brief ? [`- ${BRIEF_FILE}: the campaign's brief from its author, whole`] : [];
-    this.knowledge?.show(run);
-    const knowledge = this.knowledge?.summary(run);
-    const knowledgeLine = knowledge
-      ? [
-          `- knowledge/: past research from the collections this campaign may read (${countsText(knowledge.counts)}, from ${knowledge.collections.join(", ")}); README.md there says what is where`,
-        ]
-      : [];
 
     const sources = this.ledger.sources.list(run);
     const urlOf = new Map(sources.map((s) => [s.id, s.url]));
@@ -333,13 +320,13 @@ export class ResearchFolder {
 
     const verified = claims.filter((c) => c.verified).length;
     if (!research) {
-      // A hill-climb or goal run: what its trials recorded, and past research.
+      // A hill-climb or goal run: what its trials recorded.
       this.changed(
         join(root, "INDEX.md"),
         [
           `# ${contract.title ?? run}`,
           "",
-          "This folder holds the sources, claims and notes this run's workers recorded, and past research from the collections its campaign may read. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
+          "This folder holds the sources, claims and notes this run's workers recorded. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
           "",
           "## What is here",
           "",
@@ -347,7 +334,6 @@ export class ResearchFolder {
           `- claims/: ${claims.length} claims, ${verified} verified and ${claims.length - verified} drafts (the first line says which)`,
           `- notes/: ${notes.length}`,
           ...briefLine,
-          ...knowledgeLine,
           "",
         ].join("\n"),
       );
@@ -433,7 +419,6 @@ export class ResearchFolder {
         `- report/: ${sections.length} report sections`,
         `- cards/: one answer card for each question, whole with its earlier versions (cards/q0.md for question 1 (index 0), and so on); workers never edit them`,
         `- lanes/: the files each lane wrote, as they were when its last trial ended (${files.length} files)`,
-        ...knowledgeLine,
         "",
         "## Answer cards",
         "",
@@ -648,9 +633,10 @@ export class ResearchFolder {
   }
 
   /**
-   * The folder for an export, without the working areas and without past research (knowledge/
-   * holds other runs' records, which their own exports carry): rebuilt from the records and the
-   * saved files when scratch was cleared. Relative paths of its regular files.
+   * The folder for an export, without the working areas and without knowledge/, where an older
+   * harness copied past research (other runs' records, which their own exports carry): rebuilt
+   * from the records and the saved files when scratch was cleared. Relative paths of its regular
+   * files.
    */
   exportFiles(run: string): { root: string; files: string[] } {
     const root = this.sync(run);

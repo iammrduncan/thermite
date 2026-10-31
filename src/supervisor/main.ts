@@ -26,7 +26,6 @@ import {
   type SupervisorFigures,
 } from "../core/api/control/rigs.ts";
 import { COMMAND_CHECK, EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/supervisor.ts";
-import { untoldKinds } from "../core/kb.ts";
 import { rigInboxPrefix } from "../core/link/users.ts";
 import type { McpConnection, McpUnavailable, McpUse } from "../core/mcp.ts";
 import { SUPERVISOR_INBOX_DIR } from "../core/paths.ts";
@@ -59,7 +58,6 @@ import { type UploadState, uploadExportsOnce } from "./export-upload.ts";
 import { type ExportState, exportOnce } from "./git-export.ts";
 import { serveHealth } from "./health.ts";
 import { putKbFiles, relayKbAsks } from "./kb/index.ts";
-import { emptyKbSyncState, type KbSyncState, syncKnowledgeOnce } from "./kb-sync.ts";
 import { startPodBus } from "./leaf.ts";
 import {
   LiveCounts,
@@ -592,47 +590,6 @@ async function main(): Promise<void> {
   );
   const routingDone = keepConfig(keep);
 
-  // Past research for each running run, from control's knowledge base on the bus into the run's
-  // research folder (knowledge/), every few minutes. The cursor of each run is kept here.
-  const kbPath = join(home, "kb-state.json");
-  let kbState: KbSyncState = load(kbPath, emptyKbSyncState());
-  const kbMs = supervisorMs(env, SUPERVISOR_NUMBERS.kbSyncSeconds);
-  const syncingKb = async () => {
-    let failing = false;
-    // Kinds of item from a newer control that this build left out: each is logged once.
-    const toldKinds = new Set<string>();
-    while (!stopping && kbMs > 0) {
-      try {
-        const r = await syncKnowledgeOnce({ control: onBus, harnessUrl, harnessToken }, kbState);
-        if (JSON.stringify(r.state) !== JSON.stringify(kbState)) save(kbPath, r.state);
-        kbState = r.state;
-        if (r.items) log("supervisor", "past research synced", { items: r.items });
-        for (const [kind, items] of untoldKinds(toldKinds, r.unknownKinds))
-          log(
-            "supervisor",
-            "past research of an unknown kind left out",
-            {
-              kind,
-              items,
-              why: "control is newer than this rig: update the rig's images to get these items",
-            },
-            "warn",
-          );
-        if (r.errors.length && !failing)
-          log("supervisor", "past research sync error", { errors: r.errors.slice(0, 5) }, "error");
-        failing = r.errors.length > 0;
-      } catch (err) {
-        if (!failing)
-          log("supervisor", "past research sync error", { error: String(err) }, "error");
-        failing = true;
-      }
-      const until = Date.now() + kbMs;
-      while (!stopping && !wipeRequested && Date.now() < until)
-        await new Promise((r) => setTimeout(r, 250));
-    }
-  };
-  const syncingKbDone = syncingKb();
-
   // The agents' searches and reads of the knowledge base (goal 175): taken from the harness as
   // they come, and asked of control on the bus.
   // Not waited for at a stop: its call held open to the harness ends with the process.
@@ -764,7 +721,6 @@ async function main(): Promise<void> {
   await livingDone;
   await screensDone;
   await routingDone;
-  await syncingKbDone;
   process.exit(0);
 }
 

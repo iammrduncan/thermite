@@ -335,8 +335,8 @@ async function main(): Promise<void> {
   serveKbAsks(bus, store).catch((err) =>
     log("control", "knowledge base searches stopped", { error: String(err) }, "error"),
   );
-  // What the rigs ask of control on the bus: figures, screens, daily reports, past research and a
-  // command's newest form.
+  // What the rigs ask of control on the bus: figures, screens, daily reports and a command's
+  // newest form.
   serveRigAsks(bus, { store, control: buildInfo(), privateKeyPem, screens: parts.screens }).catch(
     (err) => log("control", "the rigs' asks stopped", { error: String(err) }, "error"),
   );

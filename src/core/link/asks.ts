@@ -6,15 +6,15 @@ import { ReportPlace } from "./report.ts";
 
 /**
  * A rig's asks of control on the message bus (goal 168, step 5c): the supervisor's regular call
- * with its figures, the screens of the trials someone watches, its daily report, past research for
- * one of its runs, and a command signed again while its sources stage. Each is a request on the
- * rig's own subject with its one answer, NATS's request and reply: no stream keeps either, and the
- * answer goes to the rig's inbox alone. A rig's user may publish only on its own subjects
+ * with its figures, the screens of the trials someone watches, its daily report, and a command
+ * signed again while its sources stage. Each is a request on the rig's own subject with its one
+ * answer, NATS's request and reply: no stream keeps either, and the answer goes to the rig's inbox
+ * alone. A rig's user may publish only on its own subjects
  * (users.ts), so control knows the rig from the subject. A refusal comes back in words.
  */
 
 /** What a rig asks control, each the last token of its subject. */
-export const RIG_ASK_KINDS = ["figures", "screens", "daily", "past", "renew"] as const;
+export const RIG_ASK_KINDS = ["figures", "screens", "daily", "renew"] as const;
 export type RigAskKind = (typeof RIG_ASK_KINDS)[number];
 
 /** Every rig's asks, as control serves them: `thermite.rig.<rig>.ask.<kind>`. No stream takes them. */
@@ -45,25 +45,8 @@ export const RIG_ASK_TIMEOUT_MS = 20_000;
 export const RigAskRefusal = z.object({ refused: z.string(), code: z.string().optional() });
 export type RigAskRefusal = z.infer<typeof RigAskRefusal>;
 
-/**
- * Past research's refusals that are no error: a run control did not assign to the rig (not asked
- * about again for an hour), and a run control has not heard of from the rig yet (asked about again
- * at the next sync). Any other refusal is one.
- */
-export const PAST_NOT_ASSIGNED = "not_assigned";
-export const PAST_NO_RUN = "no_run";
-
 /** The longest daily report, in characters: a longer one is cut to it. */
 export const REPORT_MAX_CHARS = 200_000;
-
-/**
- * The most bytes of items one answer of past research carries, as JSON: a page ends before an item
- * that would pass it, and says more wait. One item is always given, the longest well under the
- * bus's largest message.
- */
-export const PAST_PAGE_BYTES = 4 * 1024 * 1024;
-
-const RunName = z.string().min(1).max(100);
 
 /**
  * What each ask carries and what control answers it with, a refusal aside:
@@ -73,7 +56,6 @@ const RunName = z.string().min(1).max(100);
  * - `screens`: the screens of the trials watched (none when nobody watches, core/screens.ts);
  *   control answers with the trials watched now, whose screens the supervisor sends next.
  * - `daily`: the rig's daily report in Markdown; control answers with its id.
- * - `past`: the items of past research after a run's cursor (core/kb.ts reads a page).
  * - `renew`: a command whose sources still stage, by its id; control answers with it signed again
  *   with a later expiry (`command`), or refuses in words.
  */
@@ -89,10 +71,6 @@ export const RIG_ASKS = {
   daily: {
     body: z.object({ kind: z.enum(["daily"]), body: z.string().min(1).max(REPORT_MAX_CHARS) }),
     answer: z.looseObject({ id: z.number() }),
-  },
-  past: {
-    body: z.object({ run: RunName, after: z.number().int().min(0) }),
-    answer: z.looseObject({ items: z.array(z.unknown()) }),
   },
   renew: {
     body: z.object({ id: z.uuid() }),

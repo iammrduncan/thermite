@@ -21,12 +21,11 @@ export const BRIEF_REASON_CHARS = 1200;
 export const BRIEF_GOAL_CHARS = 600;
 
 /**
- * A planner call through another harness: a folder it may read (its past research), the MCP
- * servers it may call with the gateway's credential made for this call (goal 068), and where its
- * model usage goes, as the program's output reports it (goal 075).
+ * A planner call through another harness: the MCP servers it may call with the gateway's
+ * credential made for this call (goal 068), and where its model usage goes, as the program's
+ * output reports it (goal 075).
  */
 export interface PlannerCallOptions {
-  read?: string | undefined;
   /** The kit's MCP servers, and Thermite's own with the knowledge base's tools (goal 175). */
   mcp?: { auth: string; servers: string[]; kb?: boolean | undefined } | undefined;
   usage?: ((u: CallUsage) => void) | undefined;
@@ -47,8 +46,7 @@ export interface SchedulerOptions {
   model?: ModelConfig | (() => ModelConfig | undefined) | undefined;
   /**
    * A planner call through a program other than Pi (`via`: OpenCode, Claude Code or Codex, as
-   * plannerHarness picks it): the answer's text. `read`: a folder it may read and search (the
-   * run's past research), which its user may read and not change.
+   * plannerHarness picks it): the answer's text.
    */
   ask?:
     | ((

@@ -40,7 +40,6 @@ A rig and control talk on the message bus, below, but for three things that go o
 | Live lines: what the lanes, the planner, the judge and the advisors are doing | the bus's `LIVE` stream | rig → control | every 3 seconds, when there are new lines | `THERMITE_LIVE_INTERVAL_MS` |
 | The screens of the trials the owner watches | the bus, an ask | rig → control | every second while one is watched; every 5 seconds, to ask whether one is | — |
 | The agents' model route, the advisors' routes, the MCP servers they may use, and the Git accesses the rig's assignments name | the bus's `CONFIG` bucket | control → rig | as control changes them | — |
-| Past research for each running run, from the knowledge base | the bus, an ask | control → rig | every 180 seconds | `THERMITE_KB_SYNC_SECONDS` |
 | The agents' searches and reads of the knowledge base | the bus, an ask | rig → control, and back | as an agent asks | — |
 | The knowledge base's files | the bus's `KB_FILES` stream | rig → control | every 60 seconds, before the events | `THERMITE_POLL_SECONDS` |
 | The daily report | the bus, an ask | rig → control | once a day | — |
@@ -197,7 +196,6 @@ What needs an answer at once goes on the bus as a request with its one answer, N
 | `figures` | Its figures: its relay's cursor, its exports, its model downloads, its advisors, its loops, and the live lines and config updates it counted | Its place in the rig's events, which the supervisor goes back to after a page control refused (above). A rig whose builds control refuses gets the place, and its figures are not kept | every `THERMITE_POLL_SECONDS` |
 | `screens` | The screens of the trials watched, none when nobody watches | The trials watched now, whose screens it sends next ([Live view](../reference/live-view.md#a-trials-terminal)) | every second while a trial is watched; every 5 seconds otherwise |
 | `daily` | The rig's daily report, in Markdown, at most 200,000 characters | Its id | once a day |
-| `past` | A running run and its cursor | The items of past research after it, a page of at most 4 MiB of items ([A run's knowledge folder](../reference/knowledge-base.md#what-syncs-and-how-often)) | every `THERMITE_KB_SYNC_SECONDS` |
 | `renew` | A pending command's id | The command, signed again with a later expiry when it is due, as above | within 10 minutes of its expiry while its content stages, and when the form it holds expired |
 
 The agents' searches and reads of the knowledge base go the same way, on their own subjects ([Searches of the knowledge base](#searches-of-the-knowledge-base)).
@@ -286,7 +284,7 @@ Because each hop waits for its timer, the time a change takes to show is the sum
 | A step of an agent, in Live | agent → harness → supervisor → control → Live | about 3 seconds; Live shows it as soon as control has it |
 | A verdict, on the run's page | judge → ledger → supervisor → control | 60 seconds, then a reload of the page |
 | A new model route | control → supervisor → harness | 5 seconds |
-| New items in the knowledge base, for a running run | control → supervisor → the run's folder | 180 seconds |
+| A new item in the knowledge base, for every run's search | harness → ledger → supervisor → control | 60 seconds |
 
 The research itself never waits on these channels. A rig runs its trials and judges its attempts on its own, and keeps working while control is away; the channels only carry what happened and what the owner decided.
 

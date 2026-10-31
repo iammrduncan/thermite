@@ -157,8 +157,6 @@ export function planJson(text: string): unknown {
 /** A planner call through a program: what it may read, use and keep, and where its usage goes. */
 export interface CliAskOptions {
   signal?: AbortSignal | undefined;
-  /** A folder it may read and search (the run's past research), read only. */
-  read?: string | undefined;
   mcp?: Omit<McpAccess, "apiUrl"> | undefined;
   compaction?: OnceKeeping | undefined;
   /** Each model usage its output reports (goal 075). */
@@ -173,11 +171,10 @@ export interface CliAskOptions {
 }
 
 /**
- * The planner's call through a program, as the planner's own user: its answer. With past
- * research, the prompt names the run's knowledge/ folder, which every agent user may read and none
- * may change; a program that takes a list of tools gets the read-only file tools for it. On a rig
- * whose agents run in their own terminal, it runs in its program's terminal, and its answer is the
- * newest text that ends one of its turns and holds a plan there (else its last text).
+ * The planner's call through a program, as the planner's own user: its answer. A program that
+ * takes a list of tools gets the planner's (plannerTools). On a rig whose agents run in their own
+ * terminal, it runs in its program's terminal, and its answer is the newest text that ends one of
+ * its turns and holds a plan there (else its last text).
  */
 export async function cliAsk<T extends CliTally>(
   p: CliProgram<T>,
@@ -186,7 +183,7 @@ export async function cliAsk<T extends CliTally>(
   deps: CliOnceDeps,
   o: CliAskOptions = {},
 ): Promise<string> {
-  const tools = p.plannerTools?.(Boolean(o.read));
+  const tools = p.plannerTools;
   if (o.terminal) {
     const t = await terminalCall(p, model, prompt, deps, {
       role: PLANNER_ROLE,

@@ -15,8 +15,8 @@ import type { QueueBrief } from "../../queue.ts";
 import type { Evidence, FamilyView } from "../registry.ts";
 
 /**
- * What the planner reads each round: its input from the ledger, the run's past research and the
- * judge's goal report, and the context the prompt carries, as JSON.
+ * What the planner reads each round: its input from the ledger and the judge's goal report, and
+ * the context the prompt carries, as JSON.
  */
 
 export interface PlannerInput {
@@ -50,8 +50,6 @@ export interface PlannerInput {
   notes?: ReturnType<typeof notesData> | undefined;
   /** The background the owner picked from past research when starting the run. */
   briefing?: BriefingItem[] | undefined;
-  /** Where the run's past research is and how to search it, when its folder has some (one line). */
-  pastResearch?: string | undefined;
   /**
    * The run's target queue depth (goal 081): how many experiments up next should hold after the
    * round's hand-out. Below it, the planner is asked to top the queue up with distinct ideas.
@@ -78,16 +76,6 @@ export function queueTargetContext(
     up_next: upNext,
     add_at_least: Math.max(0, input.queueTarget - Math.max(0, upNext - input.laneCount)),
   };
-}
-
-/**
- * The run's past research for the planner through OpenCode, Claude Code or Codex: the folder its
- * files are in, which the planner reads with its own read tools. In every program it searches the
- * knowledge base with kb_search (PlannerMcp's kb).
- */
-export interface PlannerPast {
-  /** The run's knowledge/ folder. */
-  dir: string;
 }
 
 /** The judge's validation of a goal campaign's champion: what it meets and what it does not. */
@@ -178,6 +166,5 @@ export function plannerContext(input: PlannerInput): string {
     // The agents' own words and the owner's picks from past research: data, never instructions.
     ...(input.notes?.length ? { field_notes: { note: NOTES_ARE_DATA, notes: input.notes } } : {}),
     ...(input.briefing?.length ? { background: briefingData(input.briefing) } : {}),
-    ...(input.pastResearch ? { past_research: input.pastResearch } : {}),
   });
 }

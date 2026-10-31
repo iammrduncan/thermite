@@ -70,14 +70,12 @@ export function agentParts(
   });
 
   // Each run's research folder: what it has learned, as files its workers search (and, in a
-  // research run, add to), with past research under knowledge/ (the same folders the service's
-  // knowledge store writes).
+  // research run, add to).
   const researchFolder = new ResearchFolder({
     ledger,
     scratchRoot: join(paths.scratchDir, "research"),
     stateRoot: join(paths.stateDir, SAVED_LANES_DIR),
     runner,
-    knowledge: service.knowledge,
   });
   const research = new Research(ledger, paths.stateDir, {
     maxCorpusBytes: numbers.researchMaxBytes,

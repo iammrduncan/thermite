@@ -84,12 +84,13 @@ describe("who may do what on the message bus", () => {
           "thermite.rig.rig-a.ask.figures",
           "thermite.rig.rig-a.ask.screens",
           "thermite.rig.rig-a.ask.daily",
-          "thermite.rig.rig-a.ask.past",
           "thermite.rig.rig-a.ask.renew",
         ],
       },
       subscribe: { allow: ["_INBOX.rig.rig-a.>"] },
     });
+    // Past research is no longer copied to rigs: a rig may not ask for it.
+    assert.ok(!rigPermissions("rig-a").publish.allow.some((x) => x.endsWith(".ask.past")));
     // It puts the knowledge base's files on its own subjects; it may not read or remove any.
     const kbFiles = rigPermissions("rig-a").publish.allow.filter((x) => x.includes("KB_FILES"));
     assert.deepEqual(kbFiles, [], "no call of the JetStream API on the KB_FILES stream");

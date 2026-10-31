@@ -26,7 +26,6 @@ import type { Compactions } from "../compactions.ts";
 import type { DiskWatch } from "../disk.ts";
 import { Journal } from "../journal.ts";
 import { KbAsks, KbTools } from "../kb/index.ts";
-import { Knowledge } from "../knowledge.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
 import { type AdvisorRole, OwnerMessages } from "../messages.ts";
 import type { PreviewAsk } from "../prompts.ts";
@@ -127,8 +126,6 @@ export class HarnessService {
   readonly journal: Journal;
   /** The model usage of each run's agents, one record for each call (goal 075). */
   readonly usage: ModelUsage;
-  /** Past research in each run's research folder (knowledge/), as the supervisor syncs it. */
-  readonly knowledge: Knowledge;
   /**
    * Each run's own research, read only, for its teachers (goal 098): sources, claims, hypotheses,
    * findings, notes and the files of its research folder, from the ledger and the lanes' saved
@@ -280,11 +277,6 @@ export class HarnessService {
     this.queue = new ExperimentQueue(this.ledger);
     this.journal = new Journal({ ledger: this.ledger, live: this.live, clock: this.clock });
     this.usage = new ModelUsage(this.ledger);
-    // The same folders as the research folder's (main.ts): scratch/research/<run>/knowledge.
-    this.knowledge = new Knowledge({
-      stateRoot: join(this.paths.stateDir, "knowledge"),
-      folderRoot: (run) => folderRootOf(join(this.paths.scratchDir, "research"), run),
-    });
     // The lanes' files where the research folder saves them (main.ts): stateDir/research-work.
     this.runResearch = new RunResearch({
       ledger: this.ledger,
@@ -572,8 +564,9 @@ export class HarnessService {
     return steering.advisorNotes(this, input);
   }
 
-  writeKnowledge(run: string, items: unknown[], collections?: string[] | undefined) {
-    return steering.writeKnowledge(this, run, items, collections);
+  /** Where a run's research folder is, as main.ts lays it out: scratch/research/<run>. */
+  researchRoot(run: string): string {
+    return folderRootOf(join(this.paths.scratchDir, "research"), run);
   }
 
   advisorMessages(input: steering.AdvisorReceipts) {

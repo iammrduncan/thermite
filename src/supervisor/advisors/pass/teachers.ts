@@ -129,14 +129,11 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
       try {
         const briefOf = () => harness.call(BRIEF, { query: { run: inst.id } });
         const brief = await briefOf();
-        // Teachers with an open web fetch get no records of other campaigns: past research and
-        // the briefing stay out of their brief (and its tool), as the knowledge-base search does.
+        // Teachers with an open web fetch get no records of other campaigns: the briefing stays
+        // out of their brief (and its tool), as the knowledge base's tools do.
         const openFetch = domains.includes("*");
-        const closed = <T extends { background?: unknown; past_research?: unknown }>(b: T): T => {
-          if (openFetch) {
-            delete b.background;
-            delete b.past_research;
-          }
+        const closed = <T extends { background?: unknown }>(b: T): T => {
+          if (openFetch) delete b.background;
           return b;
         };
         closed(brief);

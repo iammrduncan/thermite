@@ -68,7 +68,7 @@ export function grantCollection(
     store,
     g.campaign,
     true,
-    `${g.campaign}'s agents may now read ${reads}'s collection. Runs started from now can include it in their search; runs at work keep their search as it started, and their research folders get it at the next sync.`,
+    `${g.campaign}'s agents may now read ${reads}'s collection. Runs started from now can include it in their search; runs at work keep their search as it started.`,
   );
 }
 
@@ -85,13 +85,13 @@ export function revokeCollection(
     store,
     g.campaign,
     true,
-    `${g.campaign}'s agents no longer read ${g.reads}'s collection: it left every run's search at once, and leaves runs' research folders at the next sync. Nothing is deleted.`,
+    `${g.campaign}'s agents no longer read ${g.reads}'s collection: it left every run's search at once. Nothing is deleted.`,
   );
 }
 
 /** What a grant opens and what removing one does, said before either is done. */
 export const GRANT_WORDS = {
-  add: "The campaign's agents may then read the collection you choose, read only, and never write to it. Runs started from then can include it in their search. Runs at work keep their search as it started; their research folders get it at the next sync.",
+  add: "The campaign's agents may then read the collection you choose, read only, and never write to it. Runs started from then can include it in their search. Runs at work keep their search as it started.",
   remove: (campaign: string, reads: string) =>
-    `${campaign}'s agents stop reading ${reads}'s collection: it leaves every run's search at once, and runs' research folders at the next sync. Nothing is deleted, and you can add it again.`,
+    `${campaign}'s agents stop reading ${reads}'s collection: it leaves every run's search at once. Nothing is deleted, and you can add it again.`,
 };

@@ -49,6 +49,17 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
     }
   });
 
+  test("no route takes past research to copy into a run's folder: the knowledge base is control's", async () => {
+    const api = createHarnessApi(makeHarnessEnv().service, tokens);
+    const res = await api.request("/v1/kb", {
+      method: "POST",
+      headers: { authorization: `Bearer ${tokens.supervisor}`, "content-type": "application/json" },
+      body: JSON.stringify({ run: "smoke-1", items: [] }),
+    });
+    assert.equal(res.status, 404);
+    assert.ok(!Object.values(supervisor).some((r) => (r as { path?: string }).path === "/v1/kb"));
+  });
+
   test("a body past its route's limit is answered 413, the code its sender acts on", async () => {
     const api = createHarnessApi(makeHarnessEnv().service, tokens);
     const res = await api.request(supervisor.ADVISORS.path, {
@@ -86,7 +97,6 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
       [supervisor.ADVISORS, { auditor: true, review_panel: 0, writer: false }],
       [supervisor.EXPORTS_DONE, { names: ["20261020T120000Z-0123abcd"] }],
       [supervisor.MCP_EVENTS, { run: "smoke-1", server: "gbrain", ok: false, error: "it failed" }],
-      [supervisor.KB, { run: "smoke-1", items: [{ seq: 1 }], collections: ["smoke-matmul"] }],
       [
         advisors.AUDITS,
         {

@@ -40,7 +40,7 @@ const item = (
 });
 
 describe("the knowledge base's hierarchy (store migration 14)", () => {
-  test("a store's items go into their runs' records slots, with their ids and seqs; the rigs' cursors read on as before", () => {
+  test("a store's items go into their runs' records slots, with their ids and seqs", () => {
     const path = fresh();
     const old = new ControlStore(path);
     // A campaign saved on control with no run yet, and one known only by a rig's runs.
@@ -105,25 +105,19 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
       item_seq: number;
     };
     assert.equal(cursor.item_seq, 15);
-    // A rig's cursor past seq 4 reads the rest, as it would have before.
+    // The rig's runs are known as before.
     store.db
       .prepare(
         "insert into rig (id, first_seen, last_seen, ledger_id, summary) values ('rig-a', 'x', 'x', 'ledger-a', '{}')",
       )
       .run();
-    const page = store.kb().sync("rig-a", "other-run", 4);
-    assert.equal(page, undefined, "a run control has no record of has no sync");
+    assert.equal(store.kb().runCampaign("rig-a", "other-run"), undefined);
     store.db
       .prepare(
         "insert into kb_run (rig, ledger, run, campaign) values ('rig-a', 'ledger-a', 'gs-2', 'gemv')",
       )
       .run();
-    const after4 = store.kb().sync("rig-a", "gs-2", 4);
-    assert.deepEqual(
-      after4?.items.map((i) => [i.seq, i.ref]),
-      [[9, "1"]],
-    );
-    assert.deepEqual(after4?.collections, ["gemv"]);
+    assert.equal(store.kb().runCampaign("rig-a", "gs-2"), "gemv");
     // Every campaign control knows has its collection: one saved, ones with runs or items.
     assert.deepEqual(
       store

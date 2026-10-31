@@ -39,11 +39,11 @@ describe("numeric settings stop the part at start with words (goal 164)", () => 
   });
 
   test("an interval whose 0 turns its loop off takes 0, and nothing below", () => {
-    const kb = SUPERVISOR_NUMBERS.kbSyncSeconds;
-    assert.equal(supervisorMs({ THERMITE_KB_SYNC_SECONDS: "0" }, kb), 0);
+    const route = SUPERVISOR_NUMBERS.modelRoutePollSeconds;
+    assert.equal(supervisorMs({ THERMITE_MODEL_ROUTE_POLL_SECONDS: "0" }, route), 0);
     assert.throws(
-      () => supervisorMs({ THERMITE_KB_SYNC_SECONDS: "-1" }, kb),
-      /^Error: THERMITE_KB_SYNC_SECONDS takes a number of seconds from 0 \(0: off\), not "-1"$/,
+      () => supervisorMs({ THERMITE_MODEL_ROUTE_POLL_SECONDS: "-1" }, route),
+      /^Error: THERMITE_MODEL_ROUTE_POLL_SECONDS takes a number of seconds from 0 \(0: off\), not "-1"$/,
     );
     const live = SUPERVISOR_NUMBERS.liveIntervalMs;
     assert.equal(supervisorMs({ THERMITE_LIVE_INTERVAL_MS: "250" }, live), 250);

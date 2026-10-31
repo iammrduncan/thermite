@@ -18,15 +18,8 @@ import { keepPrompt } from "../../prompts.ts";
 import { routeOf } from "../../usage.ts";
 import type { TerminalCallLink } from "../cli/index.ts";
 import { PLANNER } from "../coordinator.ts";
-import type {
-  Ask,
-  PlannerCompaction,
-  PlannerMcp,
-  PlannerPast,
-  PlannerView,
-} from "../planner/index.ts";
+import type { Ask, PlannerCompaction, PlannerMcp, PlannerView } from "../planner/index.ts";
 import { isCliProgram, programOf } from "../programs.ts";
-import { pastResearch } from "./briefs.ts";
 import { modelNow, type PlannerCallOptions, type SchedulerContext } from "./context.ts";
 
 /**
@@ -51,8 +44,8 @@ export function plannerHarness(m: ModelConfig | undefined, own: boolean): Harnes
 /**
  * How the planner is called this round (goals 068, 070, 073, 075): its model, the harness it
  * runs in (`ask` when not Pi), the MCP servers the run's kit gives it, where its model calls are
- * recorded, where its prompts are kept, and the run's past research it may read. The hill climb's and goal campaign's plan
- * and the research plan share it.
+ * recorded and where its prompts are kept. The hill climb's and goal campaign's plan and the
+ * research plan share it.
  */
 export async function plannerRoute(
   sched: SchedulerContext,
@@ -71,8 +64,6 @@ export async function plannerRoute(
   view: PlannerView | undefined;
   mcp: PlannerMcp | undefined;
   usage: ((u: CallUsage) => void) | undefined;
-  past: PlannerPast | undefined;
-  pastLine: string | undefined;
   /** Keeps each try's prompt (goal 166). */
   sent: (p: Prompt) => void;
 }> {
@@ -104,7 +95,6 @@ export async function plannerRoute(
   // with a credential bound to it for the proxy, the gateway and the owner's messages.
   const inTerminal = sched.o.service.settings.get().program_mode === "terminal";
   const withMcp = (o: Parameters<Ask>[2], terminal?: TerminalCallLink): PlannerCallOptions => ({
-    ...(o?.read !== undefined ? { read: o.read } : {}),
     ...(o?.mcp?.length || o?.kb
       ? {
           mcp: {
@@ -157,11 +147,6 @@ export async function plannerRoute(
           ),
     kb,
   };
-  // The run's past research, read only: kb_search searches it in every program; through
-  // OpenCode, Claude Code or Codex, the planner may also read the run's knowledge/ files.
-  const knowledge = sched.o.service.knowledge;
-  const pastLine = pastResearch(sched, run, ask ? "files" : "tool");
-  const past: PlannerPast | undefined = pastLine ? { dir: knowledge.dir(run) } : undefined;
   // Each try's prompt, kept whole in the ledger (goal 166).
   const sent = (p: Prompt) => keepPrompt(sched.o.service.ledger, run, p, { call: `epoch ${n}` });
   // In Pi on a rig whose agents run in their own terminal, each try runs in a process of its own,
@@ -209,7 +194,7 @@ export async function plannerRoute(
           }
         }
       : undefined;
-  return { m, ask, view, mcp, usage, past, pastLine, sent };
+  return { m, ask, view, mcp, usage, sent };
 }
 
 /** The planner's field notes, recorded as the planner's; a problem is a line in its live view. */

@@ -11,7 +11,7 @@ import type { Route } from "../route.ts";
 /**
  * The harness's API as its rig's supervisor uses it for itself (src/harness/api/ answers it):
  * the rig's reports and live lines to relay, the commands it delivers, the model route and the MCP
- * servers control gives the rig, past research for the runs' folders, the outbox, the rig's
+ * servers control gives the rig, the knowledge base's asks and writes, the outbox, the rig's
  * settings and which advisors decide. The advisors' own routes are in advisors.ts beside this.
  * Every route but the health check takes the supervisor's token.
  */
@@ -253,22 +253,6 @@ export const SCREENS = {
   body: z.object({ trials: WatchedTrials }),
   answer: z.looseObject({ screens: z.array(ScreenFrame) }),
   maxBytes: 16 * 1024,
-} as const satisfies Route;
-
-/**
- * Past research for a run's folder, from control's knowledge base: its items, and the collections
- * the run's campaign may read now (one no longer listed is removed).
- */
-export const KB = {
-  method: "POST",
-  path: "/v1/kb",
-  body: z.strictObject({
-    run: z.string().min(1).max(100),
-    items: z.array(z.unknown()),
-    collections: z.array(z.string().min(1).max(200)).optional(),
-  }),
-  answer: z.unknown(),
-  maxBytes: 32 * 1024 * 1024,
 } as const satisfies Route;
 
 /**

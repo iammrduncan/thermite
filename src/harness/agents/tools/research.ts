@@ -25,7 +25,6 @@ const PARAMS: Record<string, TSchema> = {
       Type.Number({ description: `How many characters, at most ${READ_MAX} (6000 by default)` }),
     ),
   }),
-  search: Type.Object({ query: Type.String() }),
   search_corpus: Type.Object({
     text: Type.String(),
     skip: Type.Optional(

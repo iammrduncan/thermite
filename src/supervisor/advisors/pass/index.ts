@@ -24,10 +24,9 @@ export { overSpendLimit, teachersCalled } from "./teachers.ts";
  * advisor has run with them, the supervisor tells the harness which it was given and what it
  * answered, and the harness records the reads and the answers.
  *
- * The teachers, the auditor and the review panel may search the run's past research (the
- * folders its campaign may read in Thermite's knowledge base), read only, through the harness's
- * copy of the run's knowledge/: the same items the workers search. A teacher that may fetch any
- * web page gets no past research at all.
+ * The teachers, the auditor and the review panel search the run's past research in Thermite's
+ * knowledge base on control (kb_search and kb_read), within the run's scope: the same items the
+ * workers search. A teacher that may fetch any web page gets no past research at all.
  *
  * The teachers also read the run's code and evidence (goal 081, not in a research run) and its own
  * research (goal 098: its sources, claims, hypotheses, findings, notes and files), read only,

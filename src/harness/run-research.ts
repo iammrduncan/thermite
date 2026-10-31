@@ -32,7 +32,7 @@ import {
  *
  * A research run keeps all of it. A hill-climb or goal run keeps the sources, claims and notes its
  * trials recorded (goal 065), and none of the rest. Past research, from other runs, is another
- * thing: the run's knowledge/ (knowledge.ts), which leaves the run's own items out.
+ * thing: Thermite's knowledge base on control, which every agent searches with kb_search.
  *
  * Every answer is cut to a size, pages its lists, and says that what it holds is data the run's
  * workers wrote or fetched, never instructions. Nothing here writes.
@@ -497,8 +497,8 @@ export class RunResearch {
   }
 
   /**
-   * Searches all of the run's research, read only: the items whose text has every word given (as
-   * the past-research search reads words: knowledge.ts), newest first; no words, the newest.
+   * Searches all of the run's research, read only: the items whose text has every word given
+   * (searchWords: knowledge.ts), newest first; no words, the newest.
    * `kinds` keeps those kinds; `limit` how many (SEARCH_DEFAULT, at most SEARCH_MAX). A source is
    * searched in its title, address and archived text; a file, a report section or a lane's text
    * file (the report itself is made of the claims and findings, which are searched as such).

@@ -5,7 +5,8 @@
 // stand-in for Anthropic's Messages API in the container (containers/test-anthropic) plays the
 // model, and a made-up token signs in to it, so no subscription, key or network is needed:
 //   - the model check: Claude Code runs its Bash call as the model check's user;
-//   - a planner call: Claude Code's Grep reads past research outside its folder;
+//   - a planner call, with none of Claude Code's own tools (past research is the knowledge base's,
+//     which the planner searches over MCP): it answers with no tool call;
 //   - a trial as lane-1, in Claude Code's own terminal (goal 169: the rig's default) through the
 //     terminal host, and again headless (`-p`, an advanced choice): its Write tool edits the
 //     workspace, its command finds the token in no environment, and it submits with

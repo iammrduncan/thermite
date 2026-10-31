@@ -7,7 +7,6 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { kbCall } from "../../../../src/agents/tools/index.ts";
 import { KB_WRITE } from "../../../../src/core/api/harness/supervisor.ts";
-import type { KbItemWire } from "../../../../src/core/kb.ts";
 import { createHarnessApi } from "../../../../src/harness/api/index.ts";
 import { AdvisorsConfig, auditOne, reviewOne } from "../../../../src/supervisor/advisors/index.ts";
 import {
@@ -27,41 +26,10 @@ const tokens = { supervisor: "sup-token", proposer: "prop-token" };
 const RUN = "js-1";
 type Env = ReturnType<typeof makeJudgeEnv>;
 
-const item = (seq: number, over: Partial<KbItemWire> = {}): KbItemWire => ({
-  seq,
-  campaign: "kernels",
-  rig: "rig-b",
-  run: "kernels-7",
-  kind: "note",
-  ref: String(seq),
-  title: `note ${seq}`,
-  body: `The body of note ${seq}.`,
-  by: "lane-1",
-  url: null,
-  sub: "lesson",
-  at: "2026-10-16T00:00:00.000Z",
-  updated_at: `2026-10-16T00:00:0${seq}.000Z`,
-  ...over,
-});
-
-const PAST: KbItemWire[] = [
-  item(1, { body: "Vector loads need 16-byte aligned pointers." }),
-  item(2, {
-    kind: "experiment",
-    ref: "x-1",
-    title: "Tile by 32",
-    body: "Tiles of 32 rows.\nResult: attempt a-1 (submitted)",
-    by: "planner",
-    sub: null,
-  }),
-  item(3, { kind: "source", ref: "s-1", title: "The guide", body: "x".repeat(6000) }),
-];
-
-/** A run with past research, its harness API behind the supervisor's token. */
+/** A run, its harness API behind the supervisor's token. */
 async function setup() {
   const env = makeJudgeEnv();
   await env.service.applyCommand(env.assign);
-  env.service.writeKnowledge(RUN, PAST, ["smoke-matmul", "kernels"]);
   return { env };
 }
 

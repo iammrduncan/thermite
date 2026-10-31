@@ -29,7 +29,7 @@ The harness makes a normal export every hour when something new happened (the **
 | `research/<run>/…`, other files: each run's archive of the web pages it fetched | No | Yes |
 | `ledger.sqlite`: a snapshot of the ledger, which holds every event, claim, source, finding, report and note, without the table of held-out results | Written each time; it leaves the rig at most once a day | Always, and it always leaves the rig |
 
-A run's folder in a full export goes beside the place its end exports to, under the export's name, because a results repository never replaces a file it already has: the folder exported when the run finishes still reaches `research/<run>/folder/`. A folder leaves out the working areas and the past research in its `knowledge/`, which are in their own runs' exports. [Set up the results repository](../how-to/operate/results-repository.md#what-gets-pushed) lists every file.
+A run's folder in a full export goes beside the place its end exports to, under the export's name, because a results repository never replaces a file it already has: the folder exported when the run finishes still reaches `research/<run>/folder/`. A folder leaves out the working areas, and a `knowledge/` folder an older build left in it: other runs' records are in their own runs' exports. [Set up the results repository](../how-to/operate/results-repository.md#what-gets-pushed) lists every file.
 
 ## A run's export
 

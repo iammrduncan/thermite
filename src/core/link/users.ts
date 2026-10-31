@@ -84,8 +84,8 @@ const anySource = (subject: string) => subject.replace(/\.[^.]+$/, ".*");
  * events there, from its reports. It may put the knowledge base's files on its own subject of the
  * `KB_FILES` stream, and may not read that stream or remove from it (kb-files.ts). It may ask
  * control to search and read the knowledge base on its own subjects (kb.ts), and ask control what
- * a rig asks of it (asks.ts: its figures, screens, daily report, past research and a command's
- * renewal), and takes the answers at its inbox.
+ * a rig asks of it (asks.ts: its figures, screens, daily report and a command's renewal), and takes
+ * the answers at its inbox.
  */
 export function rigPermissions(rig: string, runs: readonly string[] = []): Permissions {
   const consumer = `${COMMAND_STREAM}.${commandConsumerName(rig)}`;

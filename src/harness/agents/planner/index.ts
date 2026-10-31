@@ -8,7 +8,7 @@ import type { PlannerView } from "./call.ts";
 import { type Ask, type PlannerTries, plannerTries } from "./call.ts";
 import type { PlanTry } from "./causes.ts";
 import { type NewFamily, type QueuePlan, validatePlan } from "./check.ts";
-import { type PlannerInput, type PlannerPast, plannerContext } from "./context.ts";
+import { type PlannerInput, plannerContext } from "./context.ts";
 import { fallbackPlan } from "./fallback.ts";
 import type { PlannerCompaction, PlannerMcp } from "./pi.ts";
 import { PLAN_SPEC } from "./submit.ts";
@@ -30,7 +30,6 @@ export {
   type GoalReport,
   lanesOf,
   type PlannerInput,
-  type PlannerPast,
   plannerContext,
   queueTargetContext,
   toConvert,
@@ -119,7 +118,6 @@ export async function plan(
   model?: ModelConfig,
   signal?: AbortSignal,
   ask?: Ask,
-  past?: PlannerPast,
   mcp?: PlannerMcp,
   compaction?: PlannerCompaction,
   /** Each model call's usage in Pi (goal 075); another harness's goes with `ask`. */
@@ -139,7 +137,6 @@ export async function plan(
       check: (raw) => validatePlan(raw, input),
       signal,
       ask,
-      past,
       mcp,
       compaction,
       usage,

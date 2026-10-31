@@ -269,20 +269,14 @@ describe("Copy a campaign over REST (goal 069)", () => {
     assert.equal(sent.payload.contract_sha, copy.sha);
     assert.deepEqual(sent.payload.imports, before.payload.imports);
     assert.deepEqual(sent.payload.seed, before.payload.seed);
-    // The rig reports the run: control files it in the copy's folder, and syncs it nothing else.
+    // The rig reports the run: control files it in the copy's collection; the source's run stays
+    // in its own.
     await s.ingest("rig-a", [
       ["harness", "run_created", "matmul-speed-b-1", { campaign: "matmul-speed-b" }],
     ]);
-    const sync = s.store.kb().sync("rig-a", "matmul-speed-b-1", 0);
-    assert.deepEqual(
-      [sync?.campaign, sync?.collections, sync?.items],
-      ["matmul-speed-b", ["matmul-speed-b"], []],
-    );
-    // The source's run still reads its own folder and survey-study's.
-    assert.deepEqual(s.store.kb().sync("rig-a", "matmul-speed-1", 0)?.collections, [
-      "matmul-speed",
-      "survey-study",
-    ]);
+    assert.equal(kb.runCampaign("rig-a", "matmul-speed-b-1"), "matmul-speed-b");
+    assert.equal(kb.runCampaign("rig-a", "matmul-speed-1"), "matmul-speed");
+    assert.deepEqual(kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
   });
 
   test("refusals in words; nothing is saved", async () => {

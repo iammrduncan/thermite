@@ -480,7 +480,7 @@ Returns `[{rig, name, run, full, from_event, through_event, files, files_kept, b
 
 **Let a campaign read another's collection.** Owner; the operator proposes it.
 
-> From now on, the campaign's agents may search and read the other campaign's collection, read only: they never write to it. A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Runs started from now may include it in what they search (Start a run's granted collections); a run's scope is fixed when it starts. Until the copies of past research leave the rigs, the campaign's runs at work also receive the collection in their research folder at their supervisor's next sync. A campaign always reads its own collection.
+> From now on, the campaign's agents may search and read the other campaign's collection, read only: they never write to it. A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it. Runs started from now may include it in what they search (Start a run's granted collections); a run's scope is fixed when it starts. A campaign always reads its own collection.
 
 That is the owner's description. The operator's begins `Proposes to the owner that the campaign's agents may search and read the other campaign's collection in Thermite's knowledge base. Control checks it as it would the owner's grant, keeps it, and grants nothing until the owner approves it on the campaign's page (Needs you lists it); …`, and then gives the same words after `Once approved:`.
 
@@ -499,7 +499,7 @@ An outside knowledge base is no longer a grant: a campaign's kit names an [MCP s
 
 > The campaign's agents no longer read the other campaign's collection: their searches leave it out at once, also those of runs started with it.
 
-The same inputs as `kb_grant`. Returns `{revoked: true, reads, read_by, said}`. Error: `<campaign> does not read <reads>.` Control writes it to its audit log as `kb_revoke`. Each running run of the campaign loses the collection from its `knowledge/` at its supervisor's next sync.
+The same inputs as `kb_grant`. Returns `{revoked: true, reads, read_by, said}`. Error: `<campaign> does not read <reads>.` Control writes it to its audit log as `kb_revoke`.
 
 ### rig_setup
 

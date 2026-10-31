@@ -7,7 +7,7 @@ import { BRIEF_FILE, briefFile, briefSection } from "../../../core/brief.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { NOTES_ARE_DATA, notesText } from "../../journal.ts";
 import { baselineState, clipReason, SETUP_FAMILY } from "../../judge/index.ts";
-import { briefingText, pastResearchLine } from "../../knowledge.ts";
+import { briefingText } from "../../knowledge.ts";
 import { messageText } from "../../messages.ts";
 import type { Experiment } from "../../queue.ts";
 import { violationsOf, violationsText } from "../../v0.ts";
@@ -22,21 +22,11 @@ import { goalReport } from "./goal.ts";
 
 /**
  * What a trial is told: the worker's brief, gathered from the ledger, with the campaign's brief,
- * the run's notes and past research, and the owner's messages.
+ * the run's notes and the background picked from past research, and the owner's messages.
  */
 
 /** How much of the judge's reasons a setup trial's brief shows (goal 115). */
 const SETUP_REASON_CHARS = 3000;
-
-/** Where a run's past research is, when its folder has some: one line for a brief. */
-export function pastResearch(
-  sched: SchedulerContext,
-  run: string,
-  reader: "worker" | "research" | "files" | "tool",
-): string | undefined {
-  const s = sched.o.service.knowledge.summary(run);
-  return s ? pastResearchLine(s, reader) : undefined;
-}
 
 /**
  * The campaign's brief for a worker's trial brief (goal 078): BRIEF.md in the run's folder, the
@@ -51,7 +41,7 @@ export function campaignBrief(
 ): string {
   const file = briefFile(contract);
   if (!file) return "";
-  const path = join(sched.o.service.knowledge.folder(run), BRIEF_FILE);
+  const path = join(sched.o.service.researchRoot(run), BRIEF_FILE);
   try {
     if (!preview) writeAtomic(path, file);
   } catch (err) {
@@ -62,34 +52,24 @@ export function campaignBrief(
 
 /**
  * What a worker's brief adds from the run's record and from past research: the background the
- * owner picked, where the run's past research is, and the field notes (its lane's newest 10,
- * and the newest 5 decisions and lessons of other writers). All of it is marked as data. A preview
- * (goal 166) leaves the run's past research folder as it is.
+ * owner picked, where the run's research folder is, and the field notes (its lane's newest 10,
+ * and the newest 5 decisions and lessons of other writers). All of it is marked as data.
  */
 export function notesAndPast(
   sched: SchedulerContext,
   run: string,
   lane: string,
   reader: "worker" | "research",
-  preview = false,
 ): string[] {
   const out: string[] = [];
   const background = briefingText(sched.ledger.runs.briefing(run));
   if (background) out.push(background);
-  const knowledge = sched.o.service.knowledge;
-  try {
-    if (!preview) knowledge.show(run);
-  } catch (err) {
-    log("scheduler", "past research not shown", { run, error: String(err) });
-  }
-  const past = pastResearch(sched, run, reader);
-  if (past) out.push(`# Past research\n${past}`);
   // A code trial's run folder, once its trials recorded sources, claims or notes there (a
   // research trial's instructions describe its folder).
   const recorded = sched.ledger.claims.recorded(run);
   if (reader === "worker" && recorded > 0)
     out.push(
-      `# The run's research folder\n${knowledge.folder(run)} holds the sources, claims and notes this run's workers recorded (sources/, claims/, notes/), kept current by the harness. Search it with shell commands (grep -r, cat) before you fetch a page again. You cannot change it.`,
+      `# The run's research folder\n${sched.o.service.researchRoot(run)} holds the sources, claims and notes this run's workers recorded (sources/, claims/, notes/), kept current by the harness. Search it with shell commands (grep -r, cat) before you fetch a page again. You cannot change it.`,
     );
   const { mine, others } = sched.o.service.journal.forLane(run, lane);
   if (mine.length || others.length)
@@ -215,6 +195,6 @@ export function brief(
       : undefined,
     attempts,
     campaignBrief: campaignBrief(sched, run, contract, preview),
-    notesAndPast: notesAndPast(sched, run, a.lane, "worker", preview),
+    notesAndPast: notesAndPast(sched, run, a.lane, "worker"),
   });
 }

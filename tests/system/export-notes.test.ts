@@ -13,6 +13,7 @@ import { exportOnce } from "../../src/supervisor/git-export.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";
 import { researchFixture } from "../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
+import { itemsBySeq } from "../helpers/kb-items.ts";
 
 const RUN = "smoke-1";
 const BRIEFING = [
@@ -42,7 +43,6 @@ async function setup() {
     scratchRoot: join(scratchDir, "research"),
     stateRoot: join(stateDir, "research-work"),
     runner: new LocalRunner(scratchDir),
-    knowledge: env.service.knowledge,
   });
   const research = new Research(env.service.ledger, stateDir, {
     onChange: (run) => void folder.sync(run),
@@ -105,27 +105,10 @@ describe("a run's export holds its journal, its research notes and its briefing"
     assert.equal(readFileSync(join(three.dir, "journal.jsonl"), "utf8"), "");
   });
 
-  test("a closed hill climb that recorded research exports its folder, without past research, and the supervisor pushes it", async () => {
+  test("a closed hill climb that recorded research exports its folder, and the supervisor pushes it", async () => {
     const { env, s, research } = await setup();
     s.journal.write(RUN, { kind: "observation", text: "The loop is memory bound." }, lane);
     research.addNote(RUN, "lane-1", "Aligned loads matter.", [], "t-1");
-    s.writeKnowledge(RUN, [
-      {
-        seq: 1,
-        campaign: "kernels",
-        rig: "rig-b",
-        run: "kernels-7",
-        kind: "note",
-        ref: "12",
-        title: "aligned loads",
-        body: "Vector loads need 16-byte aligned pointers.",
-        by: "lane-2",
-        url: null,
-        sub: "lesson",
-        at: "2026-10-16T00:00:00.000Z",
-        updated_at: "2026-10-16T00:00:00.000Z",
-      },
-    ]);
     // A prompt a lane's worker was sent (goal 166): kept with the run, and pushed compressed.
     s.ledger.prompts.record("harness", RUN, {
       role: "worker",
@@ -140,7 +123,7 @@ describe("a run's export holds its journal, its research notes and its briefing"
     const files = Object.keys(manifestOf(exp.dir).files);
     assert.ok(files.includes(`research/${RUN}/folder/INDEX.md`), files.join(", "));
     assert.ok(files.includes(`research/${RUN}/folder/notes/note-00001.md`));
-    assert.ok(!files.some((f) => f.includes("/knowledge/")), "past research is other runs'");
+    assert.ok(!files.some((f) => f.includes("/knowledge/")), "no copy of past research");
 
     const root = mkdtempSync(join(tmpdir(), "thermite-results-"));
     const remote = join(root, "remote.git");
@@ -373,10 +356,8 @@ describe("a run's export holds its journal, its research notes and its briefing"
       events,
       summary: {},
     });
-    const filed = store
-      .kb()
-      .changedAfter([String(s.ledger.runs.get(RUN)?.campaign)], 0)
-      .map(({ campaign, rig, run, kind, ref, title, body, by, url, sub, at, updated_at }) => ({
+    const filed = itemsBySeq(store, [String(s.ledger.runs.get(RUN)?.campaign)]).map(
+      ({ campaign, rig, run, kind, ref, title, body, by, url, sub, at, updated_at }) => ({
         campaign,
         rig,
         run,
@@ -389,7 +370,8 @@ describe("a run's export holds its journal, its research notes and its briefing"
         sub,
         at,
         updated_at,
-      }));
+      }),
+    );
     const key = (i: Record<string, unknown>) => `${i.kind} ${i.ref}`;
     assert.deepEqual(
       [...part].sort((a, b) => key(a).localeCompare(key(b))),

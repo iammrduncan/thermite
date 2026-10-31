@@ -275,8 +275,8 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
       }),
   },
   answer: (t) => t.result,
-  // No tools, or the read-only file tools when it has past research to read.
-  plannerTools: (read) => (read ? "Read,Grep,Glob" : ""),
+  // None of its own: the planner answers from its prompt, and has the knowledge base over MCP.
+  plannerTools: "",
   check: {
     tool: "Bash",
     why: (t) =>

@@ -55,7 +55,6 @@ export async function planEpoch(
       role: "planner",
       owner: input.ownerMessages,
     });
-    input.pastResearch = r.pastLine;
     // The planner off on this rig: the fixed fallback plan, said so in the epoch's record.
     if (sched.o.plannerOn && !sched.o.plannerOn()) {
       const f = fallbackPlan(input);
@@ -74,7 +73,6 @@ export async function planEpoch(
         r.m,
         ctrl.signal,
         r.ask,
-        r.past,
         r.mcp,
         plannerCompaction(sched, run),
         r.usage,
@@ -310,8 +308,8 @@ export function plannerInput(
     campaignBrief: briefData(contract),
     ownerMessages: owner.map((m) => ({ id: m.id, text: messageText(m) })),
     goalReport: contract.mode === "goal" ? goalReport(sched.ledger, run, champion.seq) : undefined,
-    // The run's newest field notes, the owner's picks from past research, and where the run's
-    // past research is: all data for the planner to weigh.
+    // The run's newest field notes and the owner's picks from past research: all data for the
+    // planner to weigh.
     notes: notesData(sched.o.service.journal.newest(run, 20)),
     briefing: sched.ledger.runs.briefing(run),
     // The queue's target (goal 081): the planner tops the queue up to it with distinct ideas.

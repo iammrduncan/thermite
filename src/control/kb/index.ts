@@ -101,7 +101,7 @@ export const JOURNAL_KINDS = ["observation", "decision", "surprise", "question",
 
 export interface KbItem {
   id: number;
-  /** Increases on every insert and every update of any item: the rigs' sync cursor. */
+  /** Increases on every insert and every update of any item. */
   seq: number;
   campaign: string;
   rig: string;
@@ -160,9 +160,6 @@ export interface KbCollection {
   /** The collections this campaign reads besides its own. */
   reads: string[];
 }
-
-/** Items a rig's sync answers at most at once (it asks again while `more` is true). */
-export const SYNC_PAGE = 500;
 
 /** The kinds the owner can pick from past research when starting a run, and where each goes. */
 export const PICKABLE: Partial<Record<KbKind, "queue" | "briefing">> = {

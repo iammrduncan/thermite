@@ -153,7 +153,7 @@ describe("a place's summary", () => {
       changed: true,
       reads: ["gemv"],
       read_by: [],
-      said: "attic's agents may now read gemv's collection. Runs started from now can include it in their search; runs at work keep their search as it started, and their research folders get it at the next sync.",
+      said: "attic's agents may now read gemv's collection. Runs started from now can include it in their search; runs at work keep their search as it started.",
     });
     const again = await s.api("POST", "/v1/campaigns/attic/kb-grants", { reads: "gemv" });
     assert.equal(again.status, 200);

@@ -7,8 +7,8 @@ import { LedgerError } from "../../ledger/index.ts";
 import type { PreviewAsk } from "../../prompts.ts";
 import { focusOf, limitsInForce } from "../coordinator.ts";
 import { plannerContext } from "../planner/index.ts";
-import { isCliProgram, programOf } from "../programs.ts";
-import { brief, pastResearch, withOwnerSections } from "./briefs.ts";
+import { programOf } from "../programs.ts";
+import { brief, withOwnerSections } from "./briefs.ts";
 import { modelNow, type SchedulerContext } from "./context.ts";
 import { plannerInput } from "./plan.ts";
 import { plannerHarness } from "./planner-call.ts";
@@ -30,12 +30,9 @@ export function previewPrompt(sched: SchedulerContext, run: string, ask: Preview
     const own = sched.o.plannerModel?.();
     const via = plannerHarness(own ?? m, own !== undefined);
     const input = plannerInput(sched, run, contract, n);
-    const past = pastResearch(sched, run, isCliProgram(via) ? "files" : "tool");
-    input.pastResearch = past;
     return renderPlanner({
       program: via,
       context: plannerContext(input),
-      read: isCliProgram(via) && past ? sched.o.service.knowledge.dir(run) : undefined,
       mcpServers: sched.o.service.mcp.given(run, "planner").map((g) => g.name),
       kbWrites: sched.o.service.kbTools.writes(run, "planner"),
       fit: windowFit((own ?? m)?.contextWindow, (own ?? m)?.compactAt),

@@ -109,8 +109,8 @@ export interface LeftOut {
  * A research reviewer's prompt (goal 166). Every reviewer must answer every item to decide, so the
  * package is never cut to a fixed size: it may take what the reviewer's window allows (200,000
  * characters at least), and what the reviewers must answer comes first (the criteria, which items
- * to decide, the questions, then the hypotheses, those to decide first), with past research last,
- * which the reviewers can read with their tools. A cut is said. `leftOut`: the second ask, for
+ * to decide, the questions, then the hypotheses, those to decide first), with the rest last, such
+ * as the background picked from past research, which the reviewers can search with their tools. A cut is said. `leftOut`: the second ask, for
  * what its first answer left out only.
  */
 export function renderResearchReviewer(

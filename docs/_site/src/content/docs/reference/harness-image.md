@@ -156,8 +156,8 @@ The [isolation check](rig-checks.md#isolation-check) tests these users, and [Iso
 
 | Path | What | Owner and mode |
 | --- | --- | --- |
-| `/var/lib/thermite` | State: the ledger, git mirrors, kits, imports, models, builds and the harness's copy of each run's past research, `knowledge/<run>/` (`THERMITE_STATE_DIR`) | `thermite`, 0711. `ledger`, `git`, `kits` and `imports` are 0700; `models` and `builds` 0711, reachable only by exact path |
-| `/scratch` | Workspaces, lane caches, the judge's runs and each run's research folder, `thermite/research/<run>/` with its [`knowledge/`](knowledge-base.md#a-runs-knowledge-folder) (`THERMITE_SCRATCH_DIR`). Emptied at every start, except each lane's cache folder, `thermite/lanes/<lane>/cache` ([A lane's cache](ports-volumes-secrets.md#a-lanes-cache)); the harness puts a run's `knowledge/` back from its state when the run next needs it | root, 0755 |
+| `/var/lib/thermite` | State: the ledger, git mirrors, kits, imports, models and builds (`THERMITE_STATE_DIR`) | `thermite`, 0711. `ledger`, `git`, `kits` and `imports` are 0700; `models` and `builds` 0711, reachable only by exact path |
+| `/scratch` | Workspaces, lane caches, the judge's runs and each run's research folder, `thermite/research/<run>/` (`THERMITE_SCRATCH_DIR`). Emptied at every start, except each lane's cache folder, `thermite/lanes/<lane>/cache` ([A lane's cache](ports-volumes-secrets.md#a-lanes-cache)) | root, 0755 |
 | `/opt/thermite/checks` | The smoke check's kits and projects, with the other examples (`THERMITE_CHECKS_DIR`) | root, with the controller's group `thermite`: folders 0750, files 0640, and 0750 for the scripts the repository keeps executable. No role may enter it. The image's build fails if anything in it is open to other users |
 | `/controller` | The folder the inbox is mounted in | root, with the controller's group `thermite`, 0750: no role may enter it |
 | `/controller/inbox` | What the supervisor fetched for the harness: project and kit bundles, models (`THERMITE_INBOX_DIR`) | Mounted read-only |

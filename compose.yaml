@@ -285,8 +285,6 @@ services:
       THERMITE_POLL_SECONDS: "${THERMITE_POLL_SECONDS:-60}"
       THERMITE_MODEL_ROUTE_POLL_SECONDS: "${THERMITE_MODEL_ROUTE_POLL_SECONDS:-30}"
       THERMITE_LIVE_INTERVAL_MS: "${THERMITE_LIVE_INTERVAL_MS:-3000}"
-      # How often past research comes from control into each running run's knowledge/ (0: off).
-      THERMITE_KB_SYNC_SECONDS: "${THERMITE_KB_SYNC_SECONDS:-180}"
       # The free space a model download leaves where it lands (GiB; empty: 5).
       THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
       THERMITE_HARNESS_TOKEN_FILE: /run/secrets/harness-supervisor-token
@@ -410,7 +408,6 @@ services:
       THERMITE_POLL_SECONDS: "${THERMITE_POLL_SECONDS:-60}"
       THERMITE_MODEL_ROUTE_POLL_SECONDS: "${THERMITE_MODEL_ROUTE_POLL_SECONDS:-30}"
       THERMITE_LIVE_INTERVAL_MS: "${THERMITE_LIVE_INTERVAL_MS:-3000}"
-      THERMITE_KB_SYNC_SECONDS: "${THERMITE_KB_SYNC_SECONDS:-180}"
       # The free space a model download leaves where it lands (GiB; empty: 5).
       THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
       THERMITE_HARNESS_TOKEN_FILE: /run/secrets/harness2-supervisor-token

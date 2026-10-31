@@ -369,7 +369,6 @@ describe("the later turns inside a call (goal 166)", () => {
         { lane: "lane-2", family: "tiling", focus: "tile by 32", parent: "champion" },
       ],
     };
-    const past = { dir: "/scratch/research/i/knowledge" };
     // The knowledge base's search, as the harness runs it: a long answer, which fills the window.
     const kb = {
       writes: [],
@@ -391,11 +390,10 @@ describe("the later turns inside a call (goal 166)", () => {
     });
     const sent: Prompt[] = [];
     const p = await plan(
-      { ...base, pastResearch: "Past research: 1 experiment, from kernels." },
+      base,
       plannerModel(fake.url),
       undefined,
       undefined,
-      past,
       mcp,
       {
         keep: (n) => ({

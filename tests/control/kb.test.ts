@@ -3,16 +3,10 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { buildInfo } from "../../src/common/build-info.ts";
-import { answerRigAsk } from "../../src/control/bus/index.ts";
 import { readKnowledgeAgain } from "../../src/control/events/index.ts";
-import { Screens } from "../../src/control/live/index.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { rigView } from "../../src/control/views/index.ts";
-import { KbSync } from "../../src/core/kb.ts";
-import { PAST_NOT_ASSIGNED } from "../../src/core/link/asks.ts";
 import { assigned } from "../helpers/assignments.ts";
-import { controlOnly } from "../helpers/control-stack.ts";
 import {
   applied,
   busOf,
@@ -21,6 +15,7 @@ import {
   heldEvents,
   ingestReport,
 } from "../helpers/control-store.ts";
+import { itemsBySeq } from "../helpers/kb-items.ts";
 
 type Ev = [string, string, string, Record<string, unknown>];
 
@@ -202,12 +197,7 @@ test("the knowledge base carries on after a restart of control: its cursor and s
   const first = controlStore(path);
   await twoCampaigns(first);
   const before = first.kb().collections();
-  const top = Math.max(
-    ...first
-      .kb()
-      .changedAfter(["gemv-speed", "survey-study"], 0)
-      .map((x) => x.seq),
-  );
+  const top = Math.max(...itemsBySeq(first, ["gemv-speed", "survey-study"]).map((x) => x.seq));
   // Control restarts: a new store on the same file, on the same bus, goes on from the stream's
   // place it applied, and indexes nothing twice.
   closeBus(first);
@@ -263,152 +253,8 @@ test("a rig's new ledger never mixes its runs' items with the old ledger's", asy
   // no verdict from it.
   const [att] = kb.search("old try", ["old-campaign"], { kinds: ["attempt"] });
   assert.doesNotMatch(String(att?.body), /Verdict/);
-  // The sync knows the rig's runs in its current ledger only.
-  assert.equal(kb.sync("rig-a", "r-1", 0)?.campaign, "new-campaign");
-});
-
-test("a run's sync: its readable collections by seq, never its own items, in pages, updates again", async () => {
-  const store = controlStore();
-  await twoCampaigns(store);
-  // A second run of gemv-speed on another rig, and a third campaign nobody granted.
-  await ingest(store, "rig-c", [
-    ["harness", "run_created", "gs-4", { campaign: "gemv-speed", mode: "goal" }],
-    [
-      "lane-1",
-      "journal_note",
-      "gs-4",
-      { id: 1, by: "lane-1", kind: "decision", text: "kept the old path below n = 4096" },
-    ],
-  ]);
-  await ingest(store, "rig-d", [
-    ["harness", "run_created", "x-9", { campaign: "secret-campaign", mode: "goal" }],
-    ["planner", "experiment_added", "x-9", { id: "x-1", title: "not for pn", by: "planner" }],
-  ]);
-  const kb = store.kb();
-  const all = (rig: string, run: string, after = 0, limit = 500) => {
-    const out: KbSync["items"] = [];
-    let cur = after;
-    for (let i = 0; i < 50; i++) {
-      // As the route reads it.
-      const page = store.kb().sync(rig, run, cur, limit);
-      assert.ok(page);
-      KbSync.parse(page);
-      out.push(...page.items);
-      assert.ok(page.next >= cur, "the cursor never goes back");
-      cur = page.next;
-      if (!page.more) return { items: out, next: cur, collections: page.collections };
-    }
-    throw new Error("the sync never ended");
-  };
-  // Its own collection only, without its own items: the other run's note.
-  const s = all("rig-c", "gs-4");
-  assert.deepEqual(s.collections, ["gemv-speed"]);
-  assert.deepEqual(s.items.map((x) => `${x.run}/${x.kind}`).sort(), [
-    "gs-3/attempt",
-    "gs-3/experiment",
-    "gs-3/note",
-    "gs-3/run",
-  ]);
-  assert.ok(
-    s.items.every((x) => x.campaign === "gemv-speed"),
-    "never a collection not granted",
-  );
-  // Each item says which rig's run it came from (run names are unique per rig only).
-  assert.ok(s.items.every((x) => x.rig === "rig-a" && x.run === "gs-3"));
-  const seqs = s.items.map((x) => x.seq);
-  assert.deepEqual(
-    seqs,
-    [...seqs].sort((a, b) => a - b),
-    "in seq order",
-  );
-  // Pages of one item: the same items, with more until the last.
-  const paged = all("rig-c", "gs-4", 0, 1);
-  assert.deepEqual(
-    paged.items.map((x) => x.seq),
-    seqs,
-  );
-  assert.equal(kb.sync("rig-c", "gs-4", 0, 1)?.more, true);
-  // Nothing new: nothing comes, and the cursor stays.
-  const quiet = kb.sync("rig-c", "gs-4", s.next);
-  assert.deepEqual(quiet?.items, []);
-  assert.equal(quiet?.next, s.next);
-  assert.equal(quiet?.more, false);
-  // An updated item comes again, with a seq after the cursor.
-  await ingest(
-    store,
-    "rig-a",
-    [["planner", "experiment_dropped", "gs-3", { id: "x-1", by: "owner", why: "done elsewhere" }]],
-    6,
-  );
-  const again = all("rig-c", "gs-4", s.next);
-  assert.equal(again.items.length, 1);
-  assert.equal(again.items[0]?.ref, "x-1");
-  assert.match(String(again.items[0]?.body), /Dropped: done elsewhere/);
-  // A grant made while the run is at work: the granted collection's items come at the next sync,
-  // although their seqs are behind the run's cursor.
-  assert.equal(kb.grant("gemv-speed", "survey-study", "owner:ui"), true);
-  const granted = all("rig-c", "gs-4", again.next);
-  assert.deepEqual(granted.collections, ["gemv-speed", "survey-study"]);
-  assert.deepEqual(granted.items.map((x) => x.kind).sort(), ["claim", "finding", "run", "source"]);
-  assert.ok(granted.items.every((x) => x.campaign === "survey-study" && x.rig === "rig-b"));
-  assert.deepEqual(all("rig-c", "gs-4", granted.next).items, [], "and only once");
-  // The secret campaign's collection never comes.
-  assert.ok(
-    ![...s.items, ...again.items, ...granted.items].some((x) => x.campaign === "secret-campaign"),
-  );
-  // After a revoke, the collection leaves the run's collections at once (its supervisor removes its
-  // copy), and its items no longer come, even from the start.
-  kb.revoke("gemv-speed", "survey-study");
-  const after = store.kb().sync("rig-c", "gs-4", granted.next);
-  assert.deepEqual(after?.collections, ["gemv-speed"]);
-  assert.deepEqual(after?.items, []);
-  const fresh = all("rig-c", "gs-4", 0);
-  assert.deepEqual(fresh.collections, ["gemv-speed"]);
-  assert.ok(fresh.items.every((x) => x.campaign === "gemv-speed"));
-  // An unknown run, or another rig's run, has no sync.
-  assert.equal(kb.sync("rig-c", "nope", 0), undefined);
-  assert.equal(kb.sync("rig-c", "gs-3", 0), undefined, "gs-3 is rig-a's");
-});
-
-test("a rig's ask on the bus for past research: its own runs, a KbSync, a page within its bytes", async () => {
-  const { store } = controlOnly({
-    tokens: { rigs: { "rig-a": "rig-a-token-abcd", "rig-b": "rig-b-token-abcd" } },
-  });
-  await twoCampaigns(store);
-  const deps = { store, control: buildInfo(), privateKeyPem: "", screens: new Screens() };
-  const ask = (rig: string, body: unknown) => answerRigAsk(deps, rig, "past", body);
-  // A run control did not assign gets nothing, whatever its own events name.
-  assert.deepEqual(ask("rig-b", { run: "sv-2", after: 0 }), {
-    refused: "control did not assign run sv-2 to rig-b",
-    code: PAST_NOT_ASSIGNED,
-  });
-  assigned(store, "rig-b", "sv-2", "survey-study");
-  const body = KbSync.parse(ask("rig-b", { run: "sv-2", after: 0 }));
-  assert.equal(body.campaign, "survey-study");
-  assert.deepEqual(body.items, [], "a run's own items are left out: it has them");
-  store.kb().grant("survey-study", "gemv-speed", "owner:ui");
-  const withGrant = KbSync.parse(ask("rig-b", { run: "sv-2", after: 0 }));
-  assert.deepEqual(withGrant.collections, ["survey-study", "gemv-speed"]);
-  assert.deepEqual(withGrant.items.map((x) => x.kind).sort(), [
-    "attempt",
-    "experiment",
-    "note",
-    "run",
-  ]);
-  assert.ok(withGrant.items.every((x) => x.rig === "rig-a"));
-  // Another rig's run, an unknown run, a bad cursor.
-  assert.equal(
-    (ask("rig-a", { run: "sv-2", after: 0 }) as { code?: string }).code,
-    PAST_NOT_ASSIGNED,
-  );
-  assert.equal(
-    (ask("rig-b", { run: "nope", after: 0 }) as { code?: string }).code,
-    PAST_NOT_ASSIGNED,
-  );
-  assert.match(
-    (ask("rig-b", { run: "sv-2", after: -1 }) as { refused: string }).refused,
-    /^the past is not one control takes: after/,
-  );
+  // A rig's run is known in its current ledger only.
+  assert.equal(kb.runCampaign("rig-a", "r-1"), "new-campaign");
 });
 
 test("a research note is a note of its own in the collection and in the run's journal", async () => {

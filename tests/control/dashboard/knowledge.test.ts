@@ -605,7 +605,7 @@ test("MCP: the owner and an operator read and search the collections; the owner 
     revoked: true,
     reads: [],
     read_by: [],
-    said: "gemv-speed's agents no longer read survey-study's collection: it left every run's search at once, and leaves runs' research folders at the next sync. Nothing is deleted.",
+    said: "gemv-speed's agents no longer read survey-study's collection: it left every run's search at once. Nothing is deleted.",
   });
   assert.ok(
     s.store.auditLog.list(50).some((a) => a.action === "kb_revoke" && a.actor === "owner:mcp"),
