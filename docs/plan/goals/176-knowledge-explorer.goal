@@ -76,7 +76,7 @@ Each with a recommendation.
 
 1. **Where grants are changed.** *Answered by the owner, 2026-10-30: as recommended (Decisions).* On the collection in the explorer, with the campaign's page showing them and linking there. One place to change them.
 2. **A grant removed while a run includes it.** *Answered by the owner, 2026-10-30: as recommended (Decisions).* The collection leaves that run's search at once: the permission is gone. A grant added reaches only runs started after it, which choose to include it.
-3. **Which files the page shows inside it.** Markdown, plain text and PDF as their extracted text; every file downloads as itself; none renders as a page.
+3. **Which files the page shows inside it.** Markdown, plain text and PDF as their extracted text; every file downloads as itself; none renders as a page. *Taken as recommended on 2026-10-31, from the owner's rule for files (Constraints): Markdown, plain text and PDF show as their extracted text, every file downloads as itself, and none renders as a page; built with goal 175's step 7.*
 4. **Today's Journal tab and a campaign's Knowledge section.** *Answered by the owner, 2026-10-30: as recommended (Decisions).* The run's Journal tab stays, read from the knowledge base, and opens the run's slots in the explorer. The campaign's section becomes a summary of its collection, with its grants, linked to the explorer.
 5. **Rebuilding the meaning index.** Automatic when the model or the engine changes, and a button for the owner that says what it does: search by words answers meanwhile, and nothing is lost.
 
