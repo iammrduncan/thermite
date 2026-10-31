@@ -97,8 +97,8 @@ Control keeps **Thermite's knowledge base** in its own store. Each campaign has 
 - experiments, with their results;
 - attempts, with the judge's verdicts;
 - field notes and research notes;
-- documents: the text files lanes write in their working areas of the run's research folder;
-- sources, with the text that was read, and claims with their quotes;
+- documents: the text files lanes write in their working areas of the run's research folder, each kept whole as its item's file;
+- sources, with the whole text that was read, kept as each one's file, and claims with their quotes;
 - a research run's hypotheses, findings and reports.
 
 Each item keeps where it came from: its campaign, its rig and run, who wrote it, and when. The words are a hierarchy, and each names one thing: the **knowledge base** holds a **collection** for each campaign; a collection holds the campaign's **runs**; a run holds **slots**, one for each writer; a slot holds **items**, and an item its **versions**. An item's address says what owns it, `<campaign>/<run>/<slot>/<kind>:<id>`, as every other thing in Thermite is addressed through its owner.

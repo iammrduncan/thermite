@@ -45,15 +45,24 @@ export interface VersionFields {
   url: string | null;
   sub: string | null;
   meta: string;
-  file?: KbItemFile | undefined;
+  file?: KbItemFile | null | undefined;
   /** A file's text, once control extracted it: the item's row holds it for the words index. */
   fileText?: string | undefined;
 }
 
 /**
+ * A file item's text, as its row holds it for the words index and a read gives it: its own words
+ * (a source's address), then its file's text once control extracted it. A written file has no
+ * words of its own: its text is its file's.
+ */
+export const itemText = (own: string, fileText: string): string =>
+  [own, fileText].filter(Boolean).join("\n\n");
+
+/**
  * A new item at `place`, or a new version of the one there, with its links: the item's row holds
- * the newest version, with a new seq; every version, the newest too, is kept in kb_version. `event`: the kb_item event that wrote it. A file item's row holds
- * its file's text, when control has it, for the words index; its version keeps its writer's words.
+ * the newest version, with a new seq; every version, the newest too, is kept in kb_version.
+ * `event`: the kb_item event that wrote it. A file item's row holds its own words and its file's
+ * text, when control has it, for the words index (itemText); its version keeps its own words.
  * Returns the item's id and its version. In the caller's transaction.
  */
 export function keepVersion(
@@ -64,14 +73,14 @@ export function keepVersion(
   o: { at: string; event?: number | undefined; links?: readonly { rel: string; to: string }[] },
 ): { id: number; version: number } {
   const { campaign, rig, ledger, run, slot, kind, ref } = place;
-  const f = v.file;
+  const f = v.file ?? undefined;
   const had = db
     .prepare(
       "select id, version from kb_item where rig = ? and ledger = ? and run = ? and slot = ? and kind = ? and ref = ?",
     )
     .get(rig, ledger, run, slot, kind, ref) as { id: number; version: number } | undefined;
   const file = [f?.sha256 ?? null, f?.name ?? null, f?.type ?? null, f?.bytes ?? null] as const;
-  const indexed = f ? (v.fileText ?? "") : v.body;
+  const indexed = f ? itemText(v.body, v.fileText ?? "") : v.body;
   // Its outcome and context come from Thermite's own records (words.ts), with each version.
   const outcome = outcomeFor(db, place, v.meta);
   const about = campaignAbout(db, campaign);

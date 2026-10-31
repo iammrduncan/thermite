@@ -67,6 +67,7 @@ describe("the planner in Pi in its Pi view", () => {
       live: env.service.live,
       folder: new ResearchFolder({
         ledger: env.service.ledger,
+        outboxDir: env.service.paths.outboxDir,
         scratchRoot: join(env.paths.scratchDir, "research"),
         stateRoot: join(env.paths.stateDir, "research-work"),
         runner: new LocalRunner(env.paths.scratchDir),

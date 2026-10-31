@@ -6,16 +6,21 @@ import type { ResearchContract } from "../../../core/contract.ts";
 import { type Ledger, LedgerError, type SourceRow } from "../../ledger/index.ts";
 import { foldText } from "../checks.ts";
 import { Refusals } from "../refusals.ts";
+import { RunSearch } from "../search/index.ts";
 
 /**
  * What the research service's parts share, built once by Research (research.ts): the ledger, the
- * research folders' root, each run's fetcher and its lasting refusals, the fetch settings, what
- * to tell after a change, and a run's research contract. Each part is a module of this folder
+ * research folders' root, the outbox, the run's index, each run's fetcher and its lasting
+ * refusals, the fetch settings, what to tell after a change, and a run's research contract. Each part is a module of this folder
  * whose functions take it as `ctx`.
  */
 export interface ResearchContext {
   ledger: Ledger;
   stateDir: string;
+  /** The rig's outbox: a source's archived text waits there for the knowledge base (goal 175). */
+  outboxDir: string;
+  /** The index of each run's own research, which search_corpus reads (research/search/). */
+  search: RunSearch;
   /** Each run's fetcher, made at its first fetch (sources.ts). */
   fetchers: Map<string, Fetcher>;
   refusals: Refusals;
@@ -30,13 +35,20 @@ export interface ResearchContext {
 export function researchContext(
   ledger: Ledger,
   stateDir: string,
-  opts: { allowPrivate?: boolean; maxCorpusBytes?: number },
+  opts: {
+    outboxDir: string;
+    search?: RunSearch | undefined;
+    allowPrivate?: boolean;
+    maxCorpusBytes?: number;
+  },
   changed: (run: string) => void,
 ): ResearchContext {
   return {
     ledger,
     refusals: new Refusals(ledger),
     stateDir,
+    outboxDir: opts.outboxDir,
+    search: opts.search ?? new RunSearch({ ledger, stateDir }),
     fetchers: new Map<string, Fetcher>(),
     allowPrivate: opts.allowPrivate ?? false,
     // No cap on the corpus unless one is configured (the owner's direction, 2026-10-15).

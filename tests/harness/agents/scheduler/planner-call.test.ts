@@ -133,6 +133,7 @@ describe("the planner's own harness", () => {
     await env.start();
     const folder = new ResearchFolder({
       ledger: env.service.ledger,
+      outboxDir: env.service.paths.outboxDir,
       scratchRoot: join(env.paths.scratchDir, "research"),
       stateRoot: join(env.paths.stateDir, "research-work"),
       runner: new LocalRunner(env.paths.scratchDir),

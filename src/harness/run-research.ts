@@ -1,17 +1,19 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { RUN_RESEARCH_TOOLS, registrableDomain } from "../agents/tools/index.ts";
+import type { SearchMode } from "../common/search/index.ts";
 import {
   PAGE_DEFAULT,
   PAGE_MAX,
   RESEARCH_KINDS,
   type ResearchKind,
+  SEARCH_DEFAULT,
+  SEARCH_MAX,
   SOURCE_CHARS_DEFAULT,
   SOURCE_CHARS_MAX,
 } from "../core/api/harness/research.ts";
 import { clip } from "../core/kb-index.ts";
 import { FILE_BYTES_MAX, READ_LINES_DEFAULT, READ_LINES_MAX } from "./evidence.ts";
-import { searchLimit, searchWords } from "./knowledge.ts";
 import { type Ledger, LedgerError } from "./ledger/index.ts";
 import {
   cardFile,
@@ -19,6 +21,7 @@ import {
   cardPath,
   cardsOf,
   questionLabel,
+  type RunSearch,
   readNoFollow,
   sectionPath,
 } from "./research/index.ts";
@@ -104,10 +107,13 @@ function bounded(v: number | undefined, dflt: number, min: number, max: number):
 export class RunResearch {
   private readonly ledger: Ledger;
   private readonly saved: string;
+  /** The index its search reads (research/search/). */
+  private readonly index: RunSearch;
 
-  constructor(o: { ledger: Ledger; savedLanes: string }) {
+  constructor(o: { ledger: Ledger; savedLanes: string; index: RunSearch }) {
     this.ledger = o.ledger;
     this.saved = o.savedLanes;
+    this.index = o.index;
   }
 
   /** The run and its mode; a run that is not on the rig is not found. */
@@ -497,16 +503,23 @@ export class RunResearch {
   }
 
   /**
-   * Searches all of the run's research, read only: the items whose text has every word given
-   * (searchWords: knowledge.ts), newest first; no words, the newest.
-   * `kinds` keeps those kinds; `limit` how many (SEARCH_DEFAULT, at most SEARCH_MAX). A source is
-   * searched in its title, address and archived text; a file, a report section or a lane's text
-   * file (the report itself is made of the claims and findings, which are searched as such).
+   * Searches all of the run's research, read only, on its index (research/search/): a source in its
+   * title, address and archived text whole; a claim with its quotes; a hypothesis, finding or note;
+   * a report section or a lane's text file (the report itself is made of the claims and findings,
+   * which are searched as such). Ranked by its words (BM25), best first, each hit with its excerpt,
+   * why it matched and its passage; mode exact takes FTS5's syntax (phrases, prefixes). `kinds`
+   * keeps those kinds; `limit` how many (SEARCH_DEFAULT, at most SEARCH_MAX), from `offset`. No
+   * words: the newest.
    */
   search(
     run: string,
     q: string,
-    o: { kinds?: string[] | undefined; limit?: number | undefined } = {},
+    o: {
+      kinds?: string[] | undefined;
+      limit?: number | undefined;
+      offset?: number | undefined;
+      mode?: SearchMode | undefined;
+    } = {},
   ) {
     const mode = this.runOf(run);
     const bad = (o.kinds ?? []).filter((k) => !(RESEARCH_KINDS as readonly string[]).includes(k));
@@ -515,108 +528,22 @@ export class RunResearch {
         "invalid",
         `no kind ${bad.map((k) => clip(k, 40)).join(", ")}: the kinds are ${RESEARCH_KINDS.join(", ")}`,
       );
-    const kinds = new Set<string>(o.kinds?.length ? o.kinds : RESEARCH_KINDS);
-    const words = searchWords(q);
-    const limit = searchLimit(o.limit);
-    const hits: {
-      kind: ResearchKind;
-      id: string;
-      at: string;
-      title: string;
-      state?: string;
-      excerpt: string;
-    }[] = [];
-    const consider = (h: Omit<(typeof hits)[number], "excerpt">, text: string) => {
-      const hay = text.toLowerCase();
-      if (!words.every((w) => hay.includes(w))) return;
-      const at = words.length ? hay.indexOf(words[0] as string) : 0;
-      const start = Math.max(0, at - 200);
-      const end = Math.min(text.length, at + 400);
-      hits.push({
-        ...h,
-        excerpt: `${start > 0 ? "…" : ""}${text.slice(start, end).replace(/\s+/g, " ").trim()}${end < text.length ? "…" : ""}`,
-      });
-    };
-    if (kinds.has("source"))
-      for (const s of this.ledger.sources.ofRun(run)) {
-        let text = "";
-        try {
-          text = readFileSync(s.text_path, "utf8");
-        } catch {
-          // the archived text is missing: its title and address are still searched
-        }
-        consider(
-          {
-            kind: "source",
-            id: s.id,
-            at: s.fetched_at,
-            title: clip(s.title ?? s.url, 300),
-          },
-          `${s.title ?? ""}\n${s.url}\n${text}`,
-        );
-      }
-    if (kinds.has("claim"))
-      for (const c of this.ledger.claims.ofRun(run))
-        consider(
-          {
-            kind: "claim",
-            id: c.id,
-            at: c.created_at,
-            title: clip(c.text, 300),
-            state: c.verified ? "verified" : "draft",
-          },
-          [c.text, ...(list(c.quotes) as Quote[]).map((x) => String(x.quote))].join("\n"),
-        );
-    if (kinds.has("hypothesis"))
-      for (const h of this.ledger.hypotheses.ofRun(run))
-        consider(
-          { kind: "hypothesis", id: h.id, at: h.created_at, title: clip(h.text, 300) },
-          h.text,
-        );
-    if (kinds.has("finding"))
-      for (const f of this.ledger.claims.findingsOfRun(run))
-        consider(
-          {
-            kind: "finding",
-            id: f.id,
-            at: f.created_at,
-            title: clip(f.text, 300),
-            state: f.supported ? "supported" : "draft",
-          },
-          `${f.text}\n${f.summary}\n${f.why_it_matters}`,
-        );
-    if (kinds.has("note"))
-      for (const n of this.ledger.claims.notes(run))
-        consider(
-          { kind: "note", id: String(n.id), at: n.created_at, title: clip(n.text, 300) },
-          n.text,
-        );
-    if (kinds.has("file")) {
-      for (const s of this.ledger.reports.sections(run)) {
-        const path = sectionPath(s.name);
-        consider({ kind: "file", id: path, at: s.updated_at, title: path }, s.body);
-      }
-      for (const f of this.ledger.laneFiles.current(run, "newest")) {
-        if (f.bytes > FILE_BYTES_MAX) continue;
-        let data: Buffer;
-        try {
-          data = readNoFollow(join(this.saved, run, f.lane, f.path));
-        } catch {
-          continue; // being saved again right now: searched next time
-        }
-        if (data.subarray(0, 8000).includes(0)) continue;
-        const path = `lanes/${f.lane}/${f.path}`;
-        consider({ kind: "file", id: path, at: f.recorded_at, title: path }, data.toString("utf8"));
-      }
-    }
-    hits.sort((a, b) => b.at.localeCompare(a.at));
-    return fit({
-      run,
-      note: noteFor(mode),
-      words,
-      matched: hits.length,
-      items: hits.slice(0, limit),
+    const kinds = (o.kinds?.length ? o.kinds : RESEARCH_KINDS) as ResearchKind[];
+    const offset = bounded(o.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+    const r = this.index.search(run, q, {
+      kinds,
+      mode: o.mode,
+      offset,
+      limit: bounded(o.limit, SEARCH_DEFAULT, 1, SEARCH_MAX),
     });
+    if (r.refused) return { run, note: noteFor(mode), refused: r.refused };
+    const answer = { run, note: noteFor(mode), ...r };
+    // Kept within ANSWER_CHARS: hits taken off the end go to the next page.
+    while (answer.items.length > 1 && JSON.stringify(answer).length > ANSWER_CHARS) {
+      answer.items.pop();
+      answer.next_offset = offset + answer.items.length;
+    }
+    return answer;
   }
 
   /** Each question's answer card, for a brief (goal 117): null where a question has none yet. */

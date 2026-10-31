@@ -2,7 +2,7 @@ import type { AdvisorRole, Harness, MessageHow } from "../agents.ts";
 import type { Mode } from "../contract.ts";
 import type { GoalCellValues, GoalCheck } from "../goal/index.ts";
 import type { HeldOutCell } from "../held-out.ts";
-import type { KbItemBody } from "../kb.ts";
+import type { KbItemBody, KbItemFile } from "../kb.ts";
 import type { AgentPromptBody } from "../prompts.ts";
 import type { RigSettings } from "../rig-settings.ts";
 import type { TerminalOutcome } from "../terminal-input.ts";
@@ -545,7 +545,10 @@ export interface EventBodies {
     bytes: number;
     url: string;
     title: string | null;
-    text: string;
+    /** Its archived text, whole, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
+    /** Its text's start, cut to an item's length: the events of a rig from before its file. */
+    text?: string | undefined;
   };
   fetch_refused: { url: string; reason: string; asked?: number | undefined };
   claim_added: {
@@ -581,6 +584,9 @@ export interface EventBodies {
     change: string;
     bytes?: number | undefined;
     sha256?: string | undefined;
+    /** The file whole, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
+    /** Its text cut to an item's length: the events of a rig from before its file. */
     text?: string | undefined;
     clipped?: boolean | undefined;
   };

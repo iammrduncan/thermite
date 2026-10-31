@@ -1,9 +1,4 @@
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { writeAtomic } from "../../common/fs.ts";
 import {
-  KB_OUTBOX_FILES,
   type KbLinkRel,
   type KbWrittenKind,
   kbAddress,
@@ -12,6 +7,7 @@ import {
   writtenRef,
 } from "../../core/kb.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
+import { kbFileFacts, keepKbFile } from "./files.ts";
 
 /**
  * A write to the knowledge base (goal 175): one version of one item in its writer's slot of a run,
@@ -62,12 +58,7 @@ export interface KbWritten {
 export function writeKbItem(ledger: Ledger, outboxDir: string, w: KbWrite): KbWritten {
   const run = ledger.runs.get(w.run);
   if (!run) throw new LedgerError("not_found", `no run ${w.run}`);
-  const file = w.file && {
-    sha256: createHash("sha256").update(w.file.bytes).digest("hex"),
-    name: w.file.name,
-    type: w.file.type,
-    bytes: w.file.bytes.length,
-  };
+  const file = w.file && kbFileFacts(w.file.bytes, w.file);
   return ledger.tx(() => {
     // The slot's items so far, from its writer's kb_item events: each item's kind and newest
     // version, as control keeps them.
@@ -104,10 +95,7 @@ export function writeKbItem(ledger: Ledger, outboxDir: string, w: KbWrite): KbWr
     });
     if ("refused" in read) throw new LedgerError("invalid", read.refused);
     const { body } = read;
-    if (w.file && file) {
-      const path = join(outboxDir, KB_OUTBOX_FILES, file.sha256);
-      if (!existsSync(path)) writeAtomic(path, Buffer.from(w.file.bytes), 0o644);
-    }
+    if (w.file && file) keepKbFile(outboxDir, w.file.bytes, file);
     const event = ledger.appendEvent(writerOfSlot(body.slot), "kb_item", w.run, body);
     const address = kbAddress({
       campaign: run.campaign,

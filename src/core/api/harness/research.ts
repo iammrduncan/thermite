@@ -33,6 +33,8 @@ export const SEARCH_DEFAULT = 10;
 export const SEARCH_MAX = 50;
 /** The longest search, in characters. */
 export const SEARCH_QUERY_MAX = 300;
+/** How a search reads its words: any words, ranked (the default), or FTS5's query syntax. */
+export const SEARCH_MODES = ["words", "exact"] as const;
 
 /** A question's decision: answered at a certainty, the best that sources allow, or still open. */
 export const QUESTION_DECISIONS = ["answered", "insufficient", "open"] as const;

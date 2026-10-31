@@ -211,6 +211,7 @@ describe("a research run's rounds", () => {
       env.sign("message_agent", { run: "r-1", to: "all", text: "prefer primary sources" }),
     );
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const briefs: string[] = [];

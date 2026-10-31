@@ -1,21 +1,24 @@
 import type { DatabaseSync } from "node:sqlite";
+import { scratchWords, type WordsTables } from "./passages.ts";
 import { COMMON, phrase } from "./query.ts";
-import { scratchWords } from "./words.ts";
 
 /**
- * The words index's own words (goal 175): how many items of a search's scope hold each of its
- * words, "did you mean" for a word none holds, and the words that find more like one item. The
- * index keeps stems (the porter stemmer's: "regress" for "regression"), read through fts5vocab
- * (kb_words_terms); a text's stems come from a scratch index with the same tokenizer. Every count
- * and every suggestion is of the search's scope alone: a word of a collection the run may not read
- * is never told.
+ * A words index's own words (goal 175): how many items of a search's scope hold each of its words,
+ * "did you mean" for a word none holds, and the words that find more like one item. The index
+ * keeps stems (the porter stemmer's: "regress" for "regression"), read through fts5vocab (the
+ * terms table); a text's stems come from a scratch index with the same tokenizer. Every count and
+ * every suggestion is of the search's scope alone: a word of what the search may not read is
+ * never told.
  */
 
-/** SQL that keeps an item `i` within a search's scope, with its values (search.ts). */
+/** SQL that keeps an item `i` of the items table within a search's scope, with its values. */
 export interface ScopeSql {
   sql: string;
   args: string[];
 }
+
+/** A scope that keeps every item. */
+export const EVERY_ITEM: ScopeSql = { sql: "1 = 1", args: [] };
 
 /**
  * How many items within `scope` an FTS5 query matches; counted up to `max` when it is given, so a
@@ -23,12 +26,13 @@ export interface ScopeSql {
  */
 export function itemsMatching(
   db: DatabaseSync,
+  t: WordsTables,
   match: string,
   scope: ScopeSql,
   max?: number,
 ): number {
-  const items = `select distinct p.item from kb_words join kb_passage p on p.id = kb_words.rowid
-    join kb_item i on i.id = p.item where kb_words match ? and ${scope.sql}`;
+  const items = `select distinct p.item from ${t.words} join ${t.passages} p on p.id = ${t.words}.rowid
+    join ${t.items} i on i.id = p.item where ${t.words} match ? and ${scope.sql}`;
   const r = db
     .prepare(`select count(*) as n from (${items}${max ? ` limit ${Math.floor(max)}` : ""})`)
     .get(match, ...scope.args) as { n: number };
@@ -40,7 +44,16 @@ export const WORD_ITEMS_MAX = 1_000;
 
 /** A text's stems as the words index makes them, in the text's order. */
 export function stemsOf(text: string): string[] {
-  const db = scratchWords();
+  return termsOf(text, true);
+}
+
+/** A text's words as the words index reads them before it stems them, in the text's order. */
+export function tokensOf(text: string): string[] {
+  return termsOf(text, false);
+}
+
+function termsOf(text: string, stems: boolean): string[] {
+  const db = scratchWords(stems);
   try {
     db.prepare("insert into w (rowid, body) values (1, ?)").run(text);
     const rows = db.prepare("select term, offset from w_terms").all() as {
@@ -81,13 +94,18 @@ function distance(a: string, b: string, max: number): number {
 }
 
 /** A word as an item holds it: the first word an FTS5 query marks in one item within `scope`. */
-function asWritten(db: DatabaseSync, match: string, scope: ScopeSql): string | undefined {
+function asWritten(
+  db: DatabaseSync,
+  t: WordsTables,
+  match: string,
+  scope: ScopeSql,
+): string | undefined {
   const r = db
     .prepare(
-      `select highlight(kb_words, 0, char(1), char(2)) as t, highlight(kb_words, 1, char(1), char(2)) as c,
-         highlight(kb_words, 2, char(1), char(2)) as b
-       from kb_words join kb_passage p on p.id = kb_words.rowid join kb_item i on i.id = p.item
-       where kb_words match ? and ${scope.sql} limit 1`,
+      `select highlight(${t.words}, 0, char(1), char(2)) as t, highlight(${t.words}, 1, char(1), char(2)) as c,
+         highlight(${t.words}, 2, char(1), char(2)) as b
+       from ${t.words} join ${t.passages} p on p.id = ${t.words}.rowid join ${t.items} i on i.id = p.item
+       where ${t.words} match ? and ${scope.sql} limit 1`,
     )
     .get(match, ...scope.args) as Record<string, string> | undefined;
   return [r?.t, r?.b, r?.c].flatMap((text) => marked(text ?? ""))[0];
@@ -116,6 +134,7 @@ const CANDIDATES_MAX = 8;
  */
 export function didYouMean(
   db: DatabaseSync,
+  t: WordsTables,
   word: string,
   scope: ScopeSql,
 ): { word: string; items: number }[] {
@@ -125,7 +144,7 @@ export function didYouMean(
   const first = stem.slice(0, 1);
   const near = (
     db
-      .prepare("select term, doc from kb_words_terms where term >= ? and term <= ?")
+      .prepare(`select term, doc from ${t.terms} where term >= ? and term <= ?`)
       .all(first, `${first}￿`) as { term: string; doc: number }[]
   )
     .map((r) => ({ term: r.term, doc: Number(r.doc), d: distance(stem, r.term, max) }))
@@ -137,9 +156,9 @@ export function didYouMean(
   const out: { word: string; items: number }[] = [];
   for (const q of queries) {
     if (out.length >= SUGGESTED_MAX) break;
-    const items = itemsMatching(db, q, scope, WORD_ITEMS_MAX);
+    const items = itemsMatching(db, t, q, scope, WORD_ITEMS_MAX);
     if (!items) continue;
-    const written = asWritten(db, q, scope);
+    const written = asWritten(db, t, q, scope);
     if (written && !out.some((o) => o.word === written)) out.push({ word: written, items });
   }
   return out;
@@ -161,6 +180,7 @@ let commonStems: Set<string> | undefined;
  */
 export function likeQuery(
   db: DatabaseSync,
+  t: WordsTables,
   title: string,
   body: string,
 ): { match: string; words: string[] } | undefined {
@@ -168,8 +188,10 @@ export function likeQuery(
   const tf = new Map<string, number>();
   for (const s of stemsOf(`${title}\n${body}`))
     if (s.length > 1 && !commonStems.has(s)) tf.set(s, (tf.get(s) ?? 0) + 1);
-  const n = Number((db.prepare("select count(*) as n from kb_passage").get() as { n: number }).n);
-  const df = db.prepare("select doc from kb_words_terms where term = ?");
+  const n = Number(
+    (db.prepare(`select count(*) as n from ${t.passages}`).get() as { n: number }).n,
+  );
+  const df = db.prepare(`select doc from ${t.terms} where term = ?`);
   const scored: [string, number][] = [];
   for (const [term, count] of tf) {
     const docs = Number((df.get(term) as { doc: number } | undefined)?.doc ?? 0);

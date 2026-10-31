@@ -1,4 +1,4 @@
-import type { KbKind } from "../core/kb.ts";
+import type { KbItemFile, KbKind } from "../core/kb.ts";
 import {
   indexEvent,
   KB_EVENT_KINDS,
@@ -29,6 +29,8 @@ export interface KbPartItem {
   by: string;
   url: string | null;
   sub: string | null;
+  /** Its file, by its SHA-256 (a source's archived text, a lane's document); null for none. */
+  file: KbItemFile | null;
   at: string;
   updated_at: string;
 }
@@ -125,6 +127,7 @@ export function knowledgePart(
       by: x.stored.by,
       url: x.stored.url,
       sub: x.stored.sub,
+      file: x.stored.file,
       at: x.at,
       updated_at: x.updated_at,
     }));

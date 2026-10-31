@@ -7,7 +7,8 @@ import { describe, test } from "node:test";
  * The ledger hides its schema (goal 125, T6): each table has one owner module under
  * `src/harness/ledger/`, and no other production code queries the database. The schema and its
  * migrations make the tables; the selftest and the snapshot open the ledger's file themselves,
- * read only, from processes of their own.
+ * read only, from processes of their own. The index of a run's own research is a database of its
+ * own (goal 175), made from the ledger through its modules.
  */
 
 const ROOT = join(import.meta.dirname, "..", "..", "..");
@@ -17,6 +18,8 @@ const OWN_FILE = new Set([
   "src/harness/selftest/busy.ts",
   "src/harness/broker/snapshot/take.ts",
 ]);
+/** Production code with a database of its own, never the ledger's: each run's search index. */
+const OWN_DATABASE = "src/harness/research/search/";
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -33,7 +36,7 @@ describe("the ledger's owners (goal 125, T6)", () => {
     const found = files(HARNESS)
       .map((path) => relative(ROOT, path))
       .filter((path) => !path.startsWith("src/harness/ledger/"))
-      .filter((path) => !OWN_FILE.has(path))
+      .filter((path) => !OWN_FILE.has(path) && !path.startsWith(OWN_DATABASE))
       .flatMap((path) =>
         readFileSync(join(ROOT, path), "utf8")
           .split("\n")

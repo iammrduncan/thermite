@@ -10,14 +10,14 @@ import {
   renameSync,
   rmSync,
 } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
 // The folder's files are written whole (readers never see half of one), with the modes of the
 // controller's umask (022): every role reads them, and only the controller's user changes them.
 import { writeAtomic } from "../../common/fs.ts";
 import { BRIEF_FILE, briefFile } from "../../core/brief.ts";
 import { COMPACTIONS_DIR } from "../../core/compaction.ts";
-import { KB_BODY_MAX } from "../../core/kb-index.ts";
+import type { KbItemFile } from "../../core/kb.ts";
 import {
   HYPOTHESES_RULE,
   hypothesisStatusWords,
@@ -26,6 +26,7 @@ import {
   REQUIRED_HYPOTHESES,
 } from "../../core/research-check.ts";
 import type { Role, Runner } from "../broker/index.ts";
+import { kbFileFacts, keepKbFile } from "../kb/index.ts";
 import type { HypothesisRow, LaneFileChange, Ledger } from "../ledger/index.ts";
 import { cardFile, cardHistory } from "./cards.ts";
 import { copyTree, LaneCopyRefused, regularFiles } from "./copy.ts";
@@ -125,6 +126,8 @@ export class ResearchFolder {
   /** Under the harness's state: each lane's saved files, which outlive scratch. */
   private readonly stateRoot: string;
   private readonly runner: Runner;
+  /** The rig's outbox: each lane's document goes to the knowledge base from there (goal 175). */
+  private readonly outboxDir: string;
   /** Files already written for records that never change, per run. */
   private readonly written = new Map<string, Set<string>>();
   /** Contents last written for files that do change. */
@@ -135,11 +138,13 @@ export class ResearchFolder {
     scratchRoot: string;
     stateRoot: string;
     runner: Runner;
+    outboxDir: string;
   }) {
     this.ledger = o.ledger;
     this.scratchRoot = o.scratchRoot;
     this.stateRoot = o.stateRoot;
     this.runner = o.runner;
+    this.outboxDir = o.outboxDir;
   }
 
   root(run: string): string {
@@ -533,8 +538,8 @@ export class ResearchFolder {
    * A lane's trial has ended (its processes are gone): its working area is taken back, its files
    * saved and recorded (what changed since the last save), and shown to the other lanes. Each
    * text file it wrote (UTF-8, up to DOC_MAX_BYTES) is also a document of the run: one
-   * `research_doc` event with its text, cut to an item's length, which the campaign's folder in
-   * the knowledge base keeps; a document taken out of the area is said removed the same way.
+   * `research_doc` event that names the file, kept whole in the outbox for the campaign's
+   * collection in the knowledge base; a document taken out of the area is said removed the same way.
    */
   async captureLane(
     run: string,
@@ -562,20 +567,21 @@ export class ResearchFolder {
         `${lane}'s files are not saved: its working area holds ${err.message}. They stay in its working area for its next trials, until the rig restarts`,
       );
     }
-    // The documents: text files, read from the saved copy (the lane can no longer change it).
-    const docs = new Map<string, { text: string; clipped: boolean }>();
+    // The documents: text files, read from the saved copy (the lane can no longer change it),
+    // each kept whole in the outbox for the knowledge base, by its SHA-256.
+    const docs = new Map<string, KbItemFile>();
     for (const [rel, f] of now) {
       if (before[rel]?.sha256 === f.sha256) {
         if (before[rel]?.doc) f.doc = true;
         continue;
       }
-      const text = f.bytes <= DOC_MAX_BYTES ? textOf(readNoFollow(join(tmp, rel))) : undefined;
-      if (text === undefined) continue;
+      const data = f.bytes <= DOC_MAX_BYTES ? readNoFollow(join(tmp, rel)) : undefined;
+      if (!data || textOf(data) === undefined) continue;
       f.doc = true;
-      docs.set(rel, {
-        text: text.length > KB_BODY_MAX ? `${text.slice(0, KB_BODY_MAX - 1)}…` : text,
-        clipped: text.length > KB_BODY_MAX,
-      });
+      const type = /\.(md|markdown)$/i.test(rel) ? "text/markdown" : "text/plain";
+      const file = kbFileFacts(data, { name: basename(rel), type });
+      keepKbFile(this.outboxDir, data, file);
+      docs.set(rel, file);
     }
     const changes: LaneFileChange[] = [];
     let written = 0;
@@ -585,8 +591,8 @@ export class ResearchFolder {
         if (before[rel]?.sha256 === f.sha256) continue;
         changes.push({ path: rel, change: "written", bytes: f.bytes, sha256: f.sha256 });
         written++;
-        const doc = docs.get(rel);
-        if (doc)
+        const file = docs.get(rel);
+        if (file)
           this.ledger.appendEvent(lane, "research_doc", run, {
             lane,
             trial,
@@ -594,8 +600,7 @@ export class ResearchFolder {
             change: "written",
             bytes: f.bytes,
             sha256: f.sha256,
-            text: doc.text,
-            ...(doc.clipped ? { clipped: true } : {}),
+            file,
           });
       }
       for (const [rel, f] of Object.entries(before)) {

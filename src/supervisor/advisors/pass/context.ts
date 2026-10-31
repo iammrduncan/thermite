@@ -144,8 +144,10 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
       search: (query, o) =>
         get(RESEARCH_SEARCH, {
           q: query.slice(0, SEARCH_QUERY_MAX),
+          mode: o.mode,
           kinds: o.kinds?.length ? o.kinds.join(",") : undefined,
           limit: o.limit,
+          offset: o.offset,
         }),
     };
   };

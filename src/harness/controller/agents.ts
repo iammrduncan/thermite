@@ -76,8 +76,11 @@ export function agentParts(
     scratchRoot: join(paths.scratchDir, "research"),
     stateRoot: join(paths.stateDir, SAVED_LANES_DIR),
     runner,
+    outboxDir: paths.outboxDir,
   });
   const research = new Research(ledger, paths.stateDir, {
+    outboxDir: paths.outboxDir,
+    search: service.runSearch,
     maxCorpusBytes: numbers.researchMaxBytes,
     onChange: (run) => void researchFolder.sync(run),
   });

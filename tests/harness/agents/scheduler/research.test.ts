@@ -167,6 +167,7 @@ export async function researchScene(
     assert.equal(r.added.length, 20, JSON.stringify(r.refused));
   }
   const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     allowPrivate: true,
   });
   const prompts: string[] = [];

@@ -254,12 +254,16 @@ describe("the teachers read the run's own research (goal 098)", () => {
     assert.ok(Number(wide.body.to) < 200 && wide.body.next === Number(wide.body.to) + 1);
   });
 
-  test("a search of all of it by words, in every kind or some", async (t) => {
+  test("a search of all of it by words, ranked, in every kind or some", async (t) => {
     const s = await setup(t);
     type Hits = {
       matched: number;
       note: string;
-      items: { kind: string; id: string; excerpt: string }[];
+      next_offset: number | null;
+      words: { word: string; items: number }[];
+      did_you_mean: { word: string; try: { word: string; items: number }[] }[];
+      items: { kind: string; id: string; excerpt: string; why: string }[];
+      refused?: string;
     };
     const search = async (q: string) =>
       (await s.get(`/v1/research/search?run=r-1&${q}`)).body as unknown as Hits;
@@ -269,23 +273,62 @@ describe("the teachers read the run's own research (goal 098)", () => {
     for (const k of ["source", "claim", "finding", "file"]) assert.ok(kinds.has(k), k);
     assert.ok(all.items.some((x) => x.id === "lanes/lane-1/q0-synthesis.md"));
     assert.ok(
-      all.items.every((x) => /archived 42/i.test(x.excerpt)),
+      all.items.every((x) => /\*\*(archived|42)\*\*/i.test(x.excerpt)),
       JSON.stringify(all.items),
     );
-    // Words match within words, as the past-research search reads them: 42 is in 4200.
+    assert.deepEqual(
+      all.words.map((w) => w.word),
+      ["archived", "42"],
+    );
+    // Ranked by its words: the claim of 42 pages before the draft of 4200, which has one word.
     const claims = await search("q=archived+42&kinds=claim");
     assert.deepEqual(
-      claims.items.map((x) => x.id).sort(),
-      [s.ids.claims.verified, s.ids.claims.draft].sort(),
+      claims.items.map((x) => x.id),
+      [s.ids.claims.verified, s.ids.claims.draft],
     );
+    assert.match(claims.items[0]?.why ?? "", /the text has archived, 42/);
     const stateless = await search("q=stateless+crash&kinds=source,claim,note");
     assert.deepEqual(
       stateless.items.map((x) => [x.kind, x.id]),
       [["source", s.ids.sources[0]]],
     );
+    // Both words first: the claim and the page about the clock; then the page with "workers" alone.
     const clock = await search("q=clock+workers&kinds=source,claim");
-    assert.deepEqual(clock.items.map((x) => x.kind).sort(), ["claim", "source"]);
-    assert.equal((await search("q=nothing+like+this")).matched, 0);
+    assert.deepEqual(
+      clock.items
+        .slice(0, 2)
+        .map((x) => x.kind)
+        .sort(),
+      ["claim", "source"],
+    );
+    assert.deepEqual(
+      clock.items.slice(2).map((x) => x.id),
+      [s.ids.sources[0]],
+    );
+    assert.equal((await search("q=quantum+entanglement")).matched, 0);
+    // A word no item holds: words close to it that some do.
+    const typo = await search("q=archivd");
+    assert.equal(typo.matched, 0);
+    assert.equal(typo.did_you_mean[0]?.try[0]?.word, "archived");
+    // The exact mode: a phrase, and a prefix.
+    const phrase = await search(`mode=exact&kinds=claim&q=${encodeURIComponent('"42 pages"')}`);
+    assert.deepEqual(
+      phrase.items.map((x) => x.id),
+      [s.ids.claims.verified],
+    );
+    const prefix = await search("mode=exact&kinds=claim&q=camp*");
+    assert.deepEqual(
+      prefix.items.map((x) => x.id),
+      [s.ids.claims.clock],
+    );
+    const unread = await search(`mode=exact&q=${encodeURIComponent('"open')}`);
+    assert.match(unread.refused ?? "", /^the exact search is not FTS5's query syntax/);
+    // A page at a time.
+    const first = await search("q=archived&limit=1");
+    assert.equal(first.items.length, 1);
+    assert.equal(first.next_offset, 1);
+    const second = await search("q=archived&limit=1&offset=1");
+    assert.notEqual(second.items[0]?.id, first.items[0]?.id);
     const bad = await s.get("/v1/research/search?run=r-1&q=x&kinds=attempt");
     assert.equal(bad.status, 400);
     assert.match(String(bad.body.error), /no kind attempt: the kinds are source, claim/);
@@ -394,6 +437,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
     const r = await servePages();
     t.after(() => r.close());
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const a = (await research.fetch("js-1", "lane-1", `${r.base}/a.html`)) as { source: string };

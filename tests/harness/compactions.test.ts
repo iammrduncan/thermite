@@ -21,6 +21,7 @@ async function setup() {
   assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
   const folder = new ResearchFolder({
     ledger: env.service.ledger,
+    outboxDir: env.service.paths.outboxDir,
     scratchRoot: join(env.service.paths.scratchDir, "research"),
     stateRoot: join(env.service.paths.stateDir, "research-work"),
     runner: new LocalRunner(env.service.paths.scratchDir),

@@ -256,6 +256,7 @@ describe("a campaign's brief (goal 078)", () => {
     const fake = await startFakeModel(() => ({ text: "done" }));
     t.after(() => fake.close());
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const briefs: string[] = [];

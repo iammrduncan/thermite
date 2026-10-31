@@ -370,6 +370,7 @@ describe("the hypothesis pool (goal 117)", () => {
     const { env, research, claims, author, events } = await poolEnv();
     const folder = new ResearchFolder({
       ledger: env.service.ledger,
+      outboxDir: env.service.paths.outboxDir,
       scratchRoot: join(env.service.paths.scratchDir, "research"),
       stateRoot: join(env.service.paths.stateDir, SAVED_LANES_DIR),
       runner: new LocalRunner(env.service.paths.scratchDir),

@@ -59,7 +59,12 @@ const READ_ANEW: Record<string, string[]> = {
  */
 export class KbReading {
   private readonly db: DatabaseSync;
-  private readonly o: { nextSeq: () => number; makeCollection: (campaign: string) => void };
+  private readonly o: {
+    nextSeq: () => number;
+    makeCollection: (campaign: string) => void;
+    /** A file's text, once control extracted it; "" until then. */
+    fileText: (sha256: string) => string;
+  };
 
   constructor(db: DatabaseSync, o: KbReading["o"]) {
     this.db = db;
@@ -214,11 +219,7 @@ export class KbReading {
           .run(rig, ledger, run, campaign);
       },
       item: (run, kind, ref) => {
-        const r = this.db
-          .prepare(
-            "select body, meta from kb_item where rig = ? and ledger = ? and run = ? and slot = 'records' and kind = ? and ref = ?",
-          )
-          .get(rig, ledger, run, kind, ref) as { body: string; meta: string } | undefined;
+        const r = this.stored({ rig, ledger, run, kind, ref });
         return r && { body: r.body, meta: metaOf(r.meta) };
       },
       attempt: (ref) => {
@@ -244,26 +245,52 @@ export class KbReading {
     const { rig, ledger } = src;
     const campaign = this.campaignOf(rig, ledger, run);
     if (!campaign || !ref) return;
-    const row = this.db
-      .prepare(
-        "select title, body, by, url, sub, meta from kb_item where rig = ? and ledger = ? and run = ? and slot = 'records' and kind = ? and ref = ?",
-      )
-      .get(rig, ledger, run, kind, ref) as Row | undefined;
-    const old: KbStored | undefined = row
-      ? {
-          title: str(row.title),
-          body: str(row.body),
-          by: str(row.by),
-          url: row.url ? str(row.url) : null,
-          sub: row.sub ? str(row.sub) : null,
-          meta: str(row.meta),
-        }
-      : undefined;
+    const old = this.stored({ rig, ledger, run, kind, ref });
     const next = mergeItem(ref, old, f);
     // Nothing changed: the item keeps its seq.
     if (old && sameItem(old, next)) return;
-    // A change is the item's next version: the one before stays.
+    // A change is the item's next version: the one before stays. A file whose text control has
+    // already gives it to the item's row for the words index.
     const place = { campaign, rig, ledger, run, slot: KB_RECORDS, kind, ref };
-    keepVersion(this.db, this.o.nextSeq(), place, next, { at });
+    const fileText = next.file ? this.o.fileText(next.file.sha256) : undefined;
+    keepVersion(this.db, this.o.nextSeq(), place, { ...next, fileText }, { at });
+  }
+
+  /**
+   * A records item's fields as the reading merges a change into them: its own words from its
+   * newest version (a file item's row holds its file's text too), its fields and its file.
+   */
+  private stored(p: {
+    rig: string;
+    ledger: string;
+    run: string;
+    kind: string;
+    ref: string;
+  }): KbStored | undefined {
+    const row = this.db
+      .prepare(
+        `select i.title, v.body as own, i.by, i.url, i.sub, i.meta, i.file_sha256, i.file_name,
+           i.file_type, i.file_bytes
+         from kb_item i join kb_version v on v.item = i.id and v.version = i.version
+         where i.rig = ? and i.ledger = ? and i.run = ? and i.slot = 'records' and i.kind = ? and i.ref = ?`,
+      )
+      .get(p.rig, p.ledger, p.run, p.kind, p.ref) as Row | undefined;
+    if (!row) return undefined;
+    return {
+      title: str(row.title),
+      body: str(row.own),
+      by: str(row.by),
+      url: row.url ? str(row.url) : null,
+      sub: row.sub ? str(row.sub) : null,
+      meta: str(row.meta),
+      file: row.file_sha256
+        ? {
+            sha256: str(row.file_sha256),
+            name: str(row.file_name),
+            type: str(row.file_type),
+            bytes: Number(row.file_bytes ?? 0),
+          }
+        : null,
+    };
   }
 }

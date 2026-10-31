@@ -1,4 +1,11 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import {
+  indexItem as indexWords,
+  passageRows,
+  unindexItem as unindexWords,
+  type WordsTables,
+  wordsSchema,
+} from "../../../common/search/index.ts";
 import {
   KB_RECORDS,
   type KbOutcome,
@@ -9,120 +16,33 @@ import {
 import { metaOf } from "../../../core/kb-index.ts";
 
 /**
- * The words index of control's knowledge base (goal 175): FTS5 over passages of the items' newest
- * versions. A text up to ONE_PASSAGE_MAX characters is one passage; a longer one, such as a source
- * read whole, is cut into passages of about PASSAGE_CHARS, so a search ranks the part that
- * matched and its hit points into the text. Each passage is indexed with its item's title and a
- * context Thermite writes from its own records (the item's kind and outcome, its slot, run and
- * campaign, and the campaign's title and target), never from an agent's words. The index's
- * content is the view kb_passage_text, which reads the passages' text out of their items, so no
- * text is kept twice. items.ts calls unindexItem before an item's row changes and indexItem after.
+ * The words index of control's knowledge base (goal 175): the search engine's FTS5 over passages
+ * of the items' newest versions (common/search/), on the knowledge base's own tables. Each passage
+ * is indexed with its item's title and a context Thermite writes from its own records (the item's
+ * kind and outcome, its slot, run and campaign, and the campaign's title and target), never from
+ * an agent's words. items.ts calls unindexItem before an item's row changes and indexItem after.
  */
 
-/**
- * The tokenizer of the words index, and of the stems a search compares with it (vocab.ts): English
- * stems over unicode61's words, which an underscore splits ("win_confirmed" is "win" and
- * "confirmed"). Keeping such words whole was measured on the needle test and lost: "win" then no
- * longer finds the records' win_confirmed, and the outcome field already tells won from not.
- */
-export const KB_TOKENIZE = "porter unicode61 remove_diacritics 2";
-
-/** About how long a passage of a long text is, in characters. */
-export const PASSAGE_CHARS = 2_000;
-/** A text up to this long is one passage. */
-const ONE_PASSAGE_MAX = 3_000;
-/** How far from PASSAGE_CHARS a passage may end, to end at a paragraph, a sentence or a space. */
-const CUT_SLACK = 400;
+/** The knowledge base's words index: its items, passages, their text, the index and its words. */
+export const KB_WORDS: WordsTables = {
+  items: "kb_item",
+  passages: "kb_passage",
+  view: "kb_passage_text",
+  words: "kb_words",
+  terms: "kb_words_terms",
+};
 
 /** The words index as it is built (store migration 17): the passages, the view, the index and its words. */
-export const WORDS_INDEX = `
-create table kb_passage (
-  id integer primary key,
-  item integer not null,
-  -- Its place in its item's text: the first passage is 0.
-  n integer not null,
-  -- Where it is in the text, in SQLite's characters (code points), for substr().
-  start integer not null,
-  len integer not null
-);
-create index kb_passage_item on kb_passage (item, n);
-create view kb_passage_text as
-  select p.id as id, p.item as item, i.title as title, i.context as context,
-    substr(i.body, p.start + 1, p.len) as body
-  from kb_passage p join kb_item i on i.id = p.item;
-create virtual table kb_words using fts5(
-  title, context, body, content = 'kb_passage_text', content_rowid = 'id',
-  tokenize = '${KB_TOKENIZE}'
-);
--- The index's words, each with how many passages hold it (vocab.ts).
-create virtual table kb_words_terms using fts5vocab('kb_words', 'row');
-`;
-
-/** One passage of a text: where it starts and ends, in JavaScript's characters (UTF-16 units). */
-export interface Passage {
-  start: number;
-  end: number;
-}
-
-/** Where a passage ends: at a blank line, a sentence's end or a space near `at`, else at `at`. */
-function cutAt(text: string, from: number, at: number): number {
-  const lo = Math.max(from + 1, at - CUT_SLACK);
-  const window = text.slice(lo, at + CUT_SLACK);
-  const best = (re: RegExp): number | undefined => {
-    let pick: number | undefined;
-    for (const m of window.matchAll(re)) {
-      const end = lo + m.index + m[0].length;
-      if (pick === undefined || Math.abs(end - at) < Math.abs(pick - at)) pick = end;
-    }
-    return pick;
-  };
-  let end = best(/\n\s*\n/g) ?? best(/[.!?]["')\]]?\s/g) ?? best(/\s/g) ?? at;
-  // Never between the two halves of a character outside the BMP.
-  if (/[\uDC00-\uDFFF]/.test(text[end] ?? "")) end++;
-  return end;
-}
-
-/** A text's passages: one for a short text, else about PASSAGE_CHARS each, in order. */
-export function passagesOf(text: string): Passage[] {
-  const out: Passage[] = [];
-  let start = 0;
-  while (text.length - start > ONE_PASSAGE_MAX) {
-    const end = cutAt(text, start, start + PASSAGE_CHARS);
-    out.push({ start, end });
-    start = end;
-  }
-  out.push({ start, end: text.length });
-  return out;
-}
-
-/** A JavaScript offset in a text as SQLite counts characters: a surrogate pair is one. */
-const sqlChars = (text: string, at: number): number =>
-  at - (text.slice(0, at).match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)?.length ?? 0);
-
-/** A text's passages as kb_passage keeps them: each one's place, start and length, in SQLite's characters. */
-function passageRows(body: string): [number, number, number][] {
-  const plain = !/[\uD800-\uDFFF]/.test(body);
-  const at = (i: number) => (plain ? i : sqlChars(body, i));
-  return passagesOf(body).map((p, n) => [n, at(p.start), at(p.end) - at(p.start)]);
-}
+export const WORDS_INDEX = wordsSchema(KB_WORDS);
 
 /** Takes an item's passages out of the words index as they are: call it before its row changes. */
 export function unindexItem(db: DatabaseSync, id: number): void {
-  db.prepare(
-    `insert into kb_words (kb_words, rowid, title, context, body)
-     select 'delete', id, title, context, body from kb_passage_text where item = ?`,
-  ).run(id);
-  db.prepare("delete from kb_passage where item = ?").run(id);
+  unindexWords(db, KB_WORDS, id);
 }
 
 /** Puts an item's passages into the words index, as its row is now (its text: `body`). */
 export function indexItem(db: DatabaseSync, id: number, body: string): void {
-  const add = db.prepare("insert into kb_passage (item, n, start, len) values (?, ?, ?, ?)");
-  for (const r of passageRows(body)) add.run(id, ...r);
-  db.prepare(
-    `insert into kb_words (rowid, title, context, body)
-     select id, title, context, body from kb_passage_text where item = ?`,
-  ).run(id);
+  indexWords(db, KB_WORDS, id, body);
 }
 
 /** Where an item is, as its outcome and context read it. */
@@ -299,12 +219,4 @@ ${WORDS_INDEX}`);
     for (const r of passageRows(x.body)) add.run(x.id, ...r);
   });
   db.exec("insert into kb_words (kb_words) values ('rebuild')");
-}
-
-/** A scratch index with the words index's tokenizer, for the stems of a text (vocab.ts). */
-export function scratchWords(): DatabaseSync {
-  const db = new DatabaseSync(":memory:");
-  db.exec(`create virtual table w using fts5(body, tokenize = '${KB_TOKENIZE}');
-create virtual table w_terms using fts5vocab('w', 'instance');`);
-  return db;
 }

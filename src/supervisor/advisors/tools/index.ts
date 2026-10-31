@@ -24,4 +24,6 @@ export {
   RESEARCH_TOOL_NAMES,
   RESEARCH_TOOLS,
   runResearchTool,
+  SEARCH_MODE_WORDS,
+  SEARCH_QUERY_WORDS,
 } from "./research.ts";

@@ -5,6 +5,8 @@ export interface LaneFileRow {
   lane: string;
   path: string;
   bytes: number;
+  /** Its bytes' SHA-256, as it was saved. */
+  sha256: string;
   trial: string | null;
   recorded_at: string;
 }
@@ -42,7 +44,7 @@ export class LedgerLaneFiles extends LedgerPart {
    */
   current(run: string, order: "path" | "newest"): LaneFileRow[] {
     return this.rows<Row>(
-      `select f.lane, f.path, f.bytes, f.trial, f.recorded_at from research_file f
+      `select f.lane, f.path, f.bytes, f.sha256, f.trial, f.recorded_at from research_file f
         where f.run = ? and f.change = 'written' and f.id = (
           select max(g.id) from research_file g where g.run = f.run and g.lane = f.lane and g.path = f.path)
         order by ${order === "path" ? "f.lane, f.path" : "f.recorded_at desc, f.id desc"}`,
@@ -51,6 +53,7 @@ export class LedgerLaneFiles extends LedgerPart {
       lane: String(f.lane),
       path: String(f.path),
       bytes: Number(f.bytes),
+      sha256: String(f.sha256 ?? ""),
       trial: f.trial === null ? null : String(f.trial),
       recorded_at: String(f.recorded_at),
     }));

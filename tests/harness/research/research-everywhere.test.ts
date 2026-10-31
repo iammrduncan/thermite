@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { parseContract } from "../../../src/core/contract.ts";
+import { KB_OUTBOX_FILES } from "../../../src/core/kb.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { runTrial } from "../../../src/harness/agents/worker/index.ts";
 import { createHarnessApi } from "../../../src/harness/api/index.ts";
@@ -57,17 +58,27 @@ describe("research in every mode", () => {
     );
     assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const s = (await research.fetch("r-1", "lane-1", w.url)) as { source: string };
-    assert.deepEqual(bodies(env, "source_fetched").at(-1), {
+    const fetched = bodies(env, "source_fetched").at(-1) as {
+      bytes: number;
+      file: { sha256: string; bytes: number };
+    };
+    assert.deepEqual(fetched, {
       source: s.source,
       domain: "127.0.0.1",
       status: 200,
-      bytes: (bodies(env, "source_fetched").at(-1) as { bytes: number }).bytes,
+      bytes: fetched.bytes,
       url: w.url,
       title: "Kernel notes",
-      text: (bodies(env, "source_fetched").at(-1) as { text: string }).text,
+      file: {
+        sha256: fetched.file.sha256,
+        name: `${s.source}.txt`,
+        type: "text/plain",
+        bytes: fetched.file.bytes,
+      },
     });
     // A hypothesis is an event too, with the verified claims it rests on.
     research.proposeHypothesis("r-1", "lane-1", {
@@ -79,9 +90,14 @@ describe("research in every mode", () => {
     assert.equal(h.text, "Reads dominate.");
     assert.deepEqual(h.supporting, [], "only verified claims of the run");
     assert.match(String(h.hypothesis), /^h-[0-9a-f]{12}$/);
-    // The text that was read, as the archive keeps it: the folder holds the source itself.
-    const text = String((bodies(env, "source_fetched").at(-1) as { text: string }).text);
+    // The text that was read, whole, as the archive keeps it: in the outbox for the knowledge
+    // base, by its SHA-256, the archived text byte for byte.
+    const text = readFileSync(
+      join(env.service.paths.outboxDir, KB_OUTBOX_FILES, fetched.file.sha256),
+      "utf8",
+    );
     assert.ok(text.includes(QUOTE), "the page's text, with the words a claim quotes");
+    assert.equal(text, String(research.read("r-1", s.source, 0, 20_000).text));
     const long = `The weights stream from memory, ${"and so on ".repeat(80)}`;
     const c = research.addClaim("r-1", "lane-1", {
       text: long,
@@ -129,11 +145,13 @@ describe("research in every mode", () => {
     const { stateDir, scratchDir } = env.service.paths;
     const folder = new ResearchFolder({
       ledger: env.service.ledger,
+      outboxDir: env.service.paths.outboxDir,
       scratchRoot: join(scratchDir, "research"),
       stateRoot: join(stateDir, "research-work"),
       runner: new LocalRunner(scratchDir),
     });
     const research = new Research(env.service.ledger, stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
       onChange: (run) => void folder.sync(run),
     });

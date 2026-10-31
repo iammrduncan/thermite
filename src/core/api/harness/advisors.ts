@@ -17,6 +17,7 @@ import {
   type ResearchKind,
   ResearchVerdicts,
   SEARCH_MAX,
+  SEARCH_MODES,
   SEARCH_QUERY_MAX,
   SOURCE_CHARS_MAX,
 } from "./research.ts";
@@ -211,11 +212,16 @@ export const RESEARCH_FILE = {
   path: "/v1/research/file",
   answer: z.unknown(),
 } as const satisfies Route;
-/** A search: its words, the kinds it keeps (a list with commas), and how many hits. */
+/**
+ * A search: its words, how they are read (words, the default, or exact: FTS5's syntax), the kinds
+ * it keeps (a list with commas), how many hits, and where its page starts.
+ */
 export const SearchQuery = z.object({
   q: z.string().max(SEARCH_QUERY_MAX).default(""),
+  mode: z.enum(SEARCH_MODES).optional(),
   kinds: z.string().max(200).optional(),
   limit: from(1).max(SEARCH_MAX).optional(),
+  offset: from(0).optional(),
 });
 export const RESEARCH_SEARCH = {
   method: "GET",

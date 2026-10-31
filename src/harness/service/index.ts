@@ -30,7 +30,7 @@ import { type Ledger, LedgerError } from "../ledger/index.ts";
 import { type AdvisorRole, OwnerMessages } from "../messages.ts";
 import type { PreviewAsk } from "../prompts.ts";
 import { ExperimentQueue } from "../queue.ts";
-import { Cards, folderRootOf, Papers, SAVED_LANES_DIR } from "../research/index.ts";
+import { Cards, folderRootOf, Papers, RunSearch, SAVED_LANES_DIR } from "../research/index.ts";
 import type { ReviewKind } from "../reviews.ts";
 import { RigSettingsStore } from "../rig-settings.ts";
 import { RunResearch } from "../run-research.ts";
@@ -132,6 +132,11 @@ export class HarnessService {
    * files.
    */
   readonly runResearch: RunResearch;
+  /**
+   * The index of each run's own research (goal 175), which search_research and search_corpus
+   * read: kept on the rig, current with each search, answered with control away.
+   */
+  readonly runSearch: RunSearch;
   /**
    * The MCP servers the runs' kits name (goal 068): workers and the planner call them through
    * here; their sign-in, from control by way of the supervisor, stays in this process's memory.
@@ -278,9 +283,11 @@ export class HarnessService {
     this.journal = new Journal({ ledger: this.ledger, live: this.live, clock: this.clock });
     this.usage = new ModelUsage(this.ledger);
     // The lanes' files where the research folder saves them (main.ts): stateDir/research-work.
+    this.runSearch = new RunSearch({ ledger: this.ledger, stateDir: this.paths.stateDir });
     this.runResearch = new RunResearch({
       ledger: this.ledger,
       savedLanes: join(this.paths.stateDir, SAVED_LANES_DIR),
+      index: this.runSearch,
     });
     this.kbTools = new KbTools({
       ledger: this.ledger,

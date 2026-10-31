@@ -430,6 +430,7 @@ describe("close_run (goal 087)", () => {
       }),
     );
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const s = new Scheduler({

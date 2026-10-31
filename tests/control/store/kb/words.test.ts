@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { passagesOf } from "../../../../src/common/search/index.ts";
 import { ControlStore } from "../../../../src/control/store/index.ts";
-import { knowledgeSearch, passagesOf } from "../../../../src/control/store/kb/index.ts";
+import { knowledgeSearch } from "../../../../src/control/store/kb/index.ts";
 import type { SignedCommand } from "../../../../src/core/commands.ts";
 import { kbOutcomeOf, verdictOutcome } from "../../../../src/core/kb.ts";
 

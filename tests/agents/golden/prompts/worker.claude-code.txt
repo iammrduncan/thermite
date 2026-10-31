@@ -28,7 +28,7 @@ thermite-trial research read_source SOURCE [--offset N] [--length N]
   Read more of an archived source's text, from an offset: at most 10000 characters a read; next_offset says where the next part starts.
 
 thermite-trial research search_corpus TEXT [--skip N]
-  Search the archived sources for a piece of text (case-insensitive, plain text). A page of matches at a time: next_skip, when there is one, gives the next page.
+  Find an exact phrase in the archived sources, as add_claim checks a quote: each source that holds it, with where (at: its offset, as read_source takes it), how many places, and its own characters there (quote), to quote as they are. A source with the same words in another case, punctuation or form is listed as near, never as a match. A page of matches at a time: next_skip, when there is one, gives the next page.
 
 thermite-trial research add_claim - <<'EOF'
 {"text": "the claim", "quotes": [{"source": "SOURCE", "quote": "exact words from it"}], "question": 0, "confidence": 0.8}

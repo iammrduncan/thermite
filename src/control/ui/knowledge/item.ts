@@ -9,7 +9,8 @@ import { outcomeChip, TYPE_ICON } from "./explorer.ts";
  * An item's reader in the knowledge explorer (goal 176): in the preview pane beside the table, or
  * full width on the item's own page, from the owner's read of it (kb_read). Its title, kind,
  * outcome, the mark of withdrawn evidence, its slot and writer, when it was written, its address
- * to copy, its versions to pick from, its file's facts with Download, its text, its links both ways
+ * to copy, its versions to pick from, a file item's own words (a source's address), its file's
+ * facts with Download, its text, its links both ways
  * and which running runs' agents can read it. Everything an agent wrote is escaped, a file is only
  * ever downloaded, and a link goes only to another item's reader.
  */
@@ -180,7 +181,7 @@ export function readerHtml(x: ReaderItem, links: ReaderLinks, now: number): stri
   const meta = `<div class="kx-meta"><span class="chip">${esc(x.kind)}</span>${x.outcome ? outcomeChip(x.outcome) : ""}${withdrawn}<span class="mono">${esc(x.slot)}</span><span aria-hidden="true">·</span><span>${esc(x.writer.words)}</span><span aria-hidden="true">·</span><span title="${esc(x.at)}">written ${esc(ago(x.at, now))} ago</span></div>`;
   const body = `<h2>${esc(x.title || x.address)}</h2>${meta}${x.result ? `<div class="small"><span class="muted">Result:</span> ${esc(x.result)}</div>` : ""}
 <div class="kx-addrline"><code>${esc(x.address)}</code><button type="button" class="ghost sm" data-copy="${esc(x.address)}" aria-label="Copy the address">${icon.copy}<span>Copy</span></button></div>
-${versionsHtml(x, links, now)}${x.file ? fileCard(x, x.file, links) : textHtml(x, links)}${linksHtml(x, links)}${readersHtml(x)}${links.note ? noteHtml(x, links.note) : ""}`;
+${versionsHtml(x, links, now)}${x.head ? `<div class="kx-text">${esc(x.head)}</div>` : ""}${x.file ? fileCard(x, x.file, links) : textHtml(x, links)}${linksHtml(x, links)}${readersHtml(x)}${links.note ? noteHtml(x, links.note) : ""}`;
   if (links.mode === "page")
     return `<div class="kx-scroll"><article class="kx-item">${body}</article></div>`;
   const id = x.address.split("/").slice(3).join("/");

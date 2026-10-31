@@ -325,6 +325,7 @@ describe("Live's message box", () => {
       },
       owner: "steering-ui-test",
       research: new Research(env.service.ledger, env.service.paths.stateDir, {
+        outboxDir: env.service.paths.outboxDir,
         allowPrivate: true,
       }),
       runTrial: async () => ({

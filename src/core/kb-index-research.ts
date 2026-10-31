@@ -1,3 +1,4 @@
+import { kbFileOf } from "./kb.ts";
 import {
   clip,
   cutSaid,
@@ -30,8 +31,10 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
   const b = e.body;
   const ref = (x: unknown) => clip(str(x), 200);
   switch (e.kind) {
-    // A source: its address, then the text that was read (the archived page as text, cut).
-    case "source_fetched":
+    // A source: its address, then the text that was read. The archived text goes whole, as the
+    // item's file; an event from before that carries its start, cut to an item's length.
+    case "source_fetched": {
+      const file = kbFileOf(b.file);
       t.put(
         run,
         "source",
@@ -41,10 +44,12 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
           body: lines([str(b.url), str(b.domain), str(b.text) ? `\n${str(b.text)}` : ""]),
           by: e.actor,
           url: str(b.url) || null,
+          ...(file ? { file } : {}),
         },
         e.at,
       );
       return;
+    }
     case "claim_added":
       t.put(
         run,

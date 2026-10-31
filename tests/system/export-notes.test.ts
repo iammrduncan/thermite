@@ -40,11 +40,13 @@ async function setup() {
   const { stateDir, scratchDir } = env.service.paths;
   const folder = new ResearchFolder({
     ledger: env.service.ledger,
+    outboxDir: env.service.paths.outboxDir,
     scratchRoot: join(scratchDir, "research"),
     stateRoot: join(stateDir, "research-work"),
     runner: new LocalRunner(scratchDir),
   });
   const research = new Research(env.service.ledger, stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     onChange: (run) => void folder.sync(run),
   });
   env.service.researchFolder = (run) => folder.exportFiles(run);
@@ -357,7 +359,7 @@ describe("a run's export holds its journal, its research notes and its briefing"
       summary: {},
     });
     const filed = itemsBySeq(store, [String(s.ledger.runs.get(RUN)?.campaign)]).map(
-      ({ campaign, rig, run, kind, ref, title, body, by, url, sub, at, updated_at }) => ({
+      ({ campaign, rig, run, kind, ref, title, body, by, url, sub, file, at, updated_at }) => ({
         campaign,
         rig,
         run,
@@ -368,6 +370,7 @@ describe("a run's export holds its journal, its research notes and its briefing"
         by,
         url,
         sub,
+        file,
         at,
         updated_at,
       }),

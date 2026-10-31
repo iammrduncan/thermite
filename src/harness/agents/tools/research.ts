@@ -26,7 +26,7 @@ const PARAMS: Record<string, TSchema> = {
     ),
   }),
   search_corpus: Type.Object({
-    text: Type.String(),
+    text: Type.String({ description: "The exact words to find, as a quote would give them" }),
     skip: Type.Optional(
       Type.Number({ description: "Matches to skip: an answer's next_skip, for its next page" }),
     ),

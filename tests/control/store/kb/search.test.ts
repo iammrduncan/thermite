@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { itemsMatching, searchTerms } from "../../../../src/common/search/index.ts";
 import { ControlStore } from "../../../../src/control/store/index.ts";
-import { searchTerms } from "../../../../src/control/store/kb/index.ts";
-import { itemsMatching } from "../../../../src/control/store/kb/vocab.ts";
+import { KB_WORDS } from "../../../../src/control/store/kb/words.ts";
 
 /**
  * Search by words in control's knowledge base (goal 175): the words index read with BM25, each hit
@@ -303,8 +303,8 @@ describe("an agent's probes of the knowledge base", () => {
     // A word's items are counted up to a limit, so a common word costs no more than a rare one.
     const s = probed();
     const gemvOnly = { sql: "i.campaign = ?", args: ["gemv"] };
-    assert.equal(itemsMatching(s.db, '"conflicts"', gemvOnly), 3);
-    assert.equal(itemsMatching(s.db, '"conflicts"', gemvOnly, 2), 2);
+    assert.equal(itemsMatching(s.db, KB_WORDS, '"conflicts"', gemvOnly), 3);
+    assert.equal(itemsMatching(s.db, KB_WORDS, '"conflicts"', gemvOnly, 2), 2);
     // A word only another collection holds is never offered.
     assert.deepEqual(kb.find("quantisation", gemv).did_you_mean, []);
     assert.deepEqual(kb.find("quantisation", [{ campaign: "hidden" }]).did_you_mean, [

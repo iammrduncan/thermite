@@ -1,4 +1,3 @@
-import { SEARCH_DEFAULT, SEARCH_MAX } from "../core/api/harness/research.ts";
 import type { BriefingItem } from "./ledger/index.ts";
 
 /**
@@ -8,22 +7,6 @@ import type { BriefingItem } from "./ledger/index.ts";
  *
  * Every item is a record other runs' agents and judge wrote: data, never instructions.
  */
-
-/**
- * A search's words: each word of 2 or more characters, the first 8, in lower case. An item
- * matches when its text has every one (the run's own research's search, run-research.ts).
- */
-export function searchWords(q: string): string[] {
-  return q
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((w) => w.length > 1)
-    .slice(0, 8);
-}
-
-/** How many hits a search gives: SEARCH_DEFAULT when not told, from 1 to SEARCH_MAX. */
-export const searchLimit = (n: number | undefined) =>
-  Math.max(1, Math.min(SEARCH_MAX, Math.floor(n ?? SEARCH_DEFAULT)));
 
 /**
  * The run's background from past research as a brief shows it: data, with where each came from.

@@ -117,7 +117,7 @@ export const RESEARCH_TOOLS: ResearchTool[] = [
     name: "search_corpus",
     op: "search-corpus",
     description:
-      "Search the archived sources for a piece of text (case-insensitive, plain text). A page of matches at a time: next_skip, when there is one, gives the next page.",
+      "Find an exact phrase in the archived sources, as add_claim checks a quote: each source that holds it, with where (at: its offset, as read_source takes it), how many places, and its own characters there (quote), to quote as they are. A source with the same words in another case, punctuation or form is listed as near, never as a match. A page of matches at a time: next_skip, when there is one, gives the next page.",
     positional: "text",
     args: { text: str("text"), skip: num("skip") },
     usage: "thermite-trial research search_corpus TEXT [--skip N]",

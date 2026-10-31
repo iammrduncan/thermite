@@ -19,6 +19,7 @@ import type { ControlStore, KbTextState } from "../store/index.ts";
 import { type RigView, runCampaign } from "../views/index.ts";
 import { hitOf, textPage } from "./asks.ts";
 import type { KbItem } from "./index.ts";
+import { overLimitWords } from "./settings.ts";
 import { notSearchedWhy } from "./text/index.ts";
 
 /**
@@ -91,6 +92,14 @@ export function fileTextFacts(
   if (t) return { searched: false, text_state: "kept whole", text_why: t.why };
   if (!kbTextReader(f.type))
     return { searched: false, text_state: "kept whole", text_why: notSearchedWhy(f.type) };
+  // A record's file (a source's text, a lane's document) over the largest file control takes.
+  const limit = store.kb().settings.maxFileBytes();
+  if (!files.has(f.sha256) && limit > 0 && f.bytes > limit)
+    return {
+      searched: false,
+      text_state: "waiting",
+      text_why: `${overLimitWords(f, limit)}: control does not keep it, and the item keeps its own words alone`,
+    };
   const waits = files.has(f.sha256)
     ? "control extracts its text soon: it reads one file at a time"
     : "control extracts its text once it holds the file";
@@ -171,6 +180,8 @@ export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbRe
       version: v.version,
       at: v.at,
       ...textPage(kb.versionText(v), q.offset),
+      // A file item's own words, which its text starts with: a source's address. None for others.
+      head: v.file && v.body ? v.body : null,
       versions: versions.length,
       history: [...versions].reverse().map((o) => ({
         version: o.version,

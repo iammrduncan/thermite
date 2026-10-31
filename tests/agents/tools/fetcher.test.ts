@@ -44,7 +44,10 @@ async function research() {
     }),
   );
   assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-  const r = new Research(env.service.ledger, env.service.paths.stateDir, { allowPrivate: true });
+  const r = new Research(env.service.ledger, env.service.paths.stateDir, {
+    outboxDir: env.service.paths.outboxDir,
+    allowPrivate: true,
+  });
   const sources = () => env.service.ledger.db.prepare("select url from source").all().length;
   return { r, sources };
 }

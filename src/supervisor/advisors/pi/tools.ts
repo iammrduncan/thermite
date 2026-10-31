@@ -14,6 +14,8 @@ import {
   runCodeTool,
   runPaperTool,
   runResearchTool,
+  SEARCH_MODE_WORDS,
+  SEARCH_QUERY_WORDS,
   toolText,
 } from "../tools/index.ts";
 import { toolAnswer } from "./agent.ts";
@@ -120,13 +122,17 @@ export function advisorPiTools(t: AdvisorTools): { tools: AgentTool[]; mcpAt: nu
         limit: Type.Optional(Type.Number({ description: "How many lines, at most 2000" })),
       }),
       search_research: Type.Object({
-        query: Type.String({ description: "Words that must all be in an item; empty: the newest" }),
+        query: Type.String({ description: SEARCH_QUERY_WORDS }),
+        mode: Type.Optional(Type.String({ description: SEARCH_MODE_WORDS })),
         kinds: Type.Optional(
           Type.Array(Type.String(), {
             description: "Only these kinds: source, claim, hypothesis, finding, note, file",
           }),
         ),
         limit: Type.Optional(Type.Number({ description: `How many items, 1 to ${SEARCH_MAX}` })),
+        offset: Type.Optional(
+          Type.Number({ description: "Where the page starts: the last page's next_offset" }),
+        ),
       }),
     };
     for (const name of RESEARCH_TOOL_NAMES)

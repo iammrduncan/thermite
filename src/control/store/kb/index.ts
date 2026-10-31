@@ -6,6 +6,7 @@ import { JOURNAL_KINDS, type KbCollection, type KbFound, type KbItem } from "../
 import { KbFileRows, KbSettingRows, keepFileText, knowledgeFiles } from "./files.ts";
 import {
   itemOf,
+  itemText,
   type KbVersion,
   keepVersion,
   linksTo,
@@ -48,13 +49,13 @@ export type {
   KbListOptions,
   KbTotals,
 } from "./list.ts";
-export { type KbSearchMode, OUTCOME_WORDS, searchTerms } from "./query.ts";
+export type { KbSearchMode } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
 export type { KbCounts, KbFind, KbPassage, KbWhere } from "./search.ts";
 export type { KbStoredCollection, KbStoredFigures, KbStoredFile, KbTextState } from "./stored.ts";
 export { KB_STORED_FILES } from "./stored.ts";
-export { knowledgeSearch, passagesOf } from "./words.ts";
+export { knowledgeSearch } from "./words.ts";
 /** A search's answer: its page of hits, each a found item, and what search.ts says beside them. */
 export type KbFindAnswer = Omit<KbFindResult, "found"> & { hits: KbFound[] };
 
@@ -86,6 +87,7 @@ export class KnowledgeBase {
     this.reader = new KbReading(db, {
       nextSeq: () => this.nextSeq(),
       makeCollection: (campaign) => this.makeCollection(campaign),
+      fileText: (sha256) => this.files.text(sha256),
     });
     // Store migrations 14, 17 and 23 run them; a store that waits at an older version for the move
     // of its events table has its hierarchy, words index and files' text here, before the apply
@@ -208,9 +210,9 @@ export class KnowledgeBase {
     return versionsOf(this.db, id);
   }
 
-  /** A version's text as a read gives it: its writer's words, or its file's text once extracted. */
+  /** A version's text as a read gives it: its own words, then its file's text once extracted. */
   versionText(v: Pick<KbVersion, "body" | "file">): string {
-    return v.file ? this.files.text(v.file.sha256) : v.body;
+    return v.file ? itemText(v.body, this.files.text(v.file.sha256)) : v.body;
   }
 
   /**

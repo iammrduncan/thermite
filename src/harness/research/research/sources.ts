@@ -2,19 +2,19 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Fetcher, htmlToText, moreText, READ_MAX } from "../../../agents/tools/index.ts";
-import { KB_BODY_MAX } from "../../../core/kb-index.ts";
+import { kbFileFacts, keepKbFile } from "../../kb/index.ts";
 import { LedgerError, type SourceRow } from "../../ledger/index.ts";
 import { clip, type ResearchContext, sourceText } from "./context.ts";
 
-/** A run's archived sources: fetched and archived, read, searched, and the links to follow. */
+/**
+ * A run's archived sources: fetched and archived, read, and the links to follow. search_corpus
+ * reads the run's index (../search/).
+ */
 
 /** The start of a fetched page's text that fetch answers with (read_source reads the rest). */
 const VIEW_CHARS = 6000;
 /** The links a fetch answers with, in characters, beside the text, within OUTPUT_MAX. */
 const VIEW_LINKS_CHARS = 5000;
-/** One page of search_corpus: at most this many matches, and this many characters of them. */
-const SEARCH_PAGE = 30;
-const SEARCH_CHARS = 11_000;
 
 /** A URL as the archive stores it (parsed, without its fragment); undefined when it is not one. */
 export function archiveUrl(s: string): string | undefined {
@@ -87,6 +87,11 @@ export async function fetchSource(
   const same = ctx.ledger.sources.withContent(run, f.sha256);
   if (same) return view(same, "the same content is already archived under this id", f.links);
   const id = `s-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  // Its archived text whole, for the campaign's collection in the knowledge base: kept in the
+  // outbox by its SHA-256, which the supervisor puts on the message bus (goal 175).
+  const bytes = new TextEncoder().encode(f.text);
+  const file = bytes.length ? kbFileFacts(bytes, { name: `${id}.txt`, type: "text/plain" }) : null;
+  if (file) keepKbFile(ctx.outboxDir, bytes, file);
   ctx.ledger.tx(() => {
     ctx.ledger.sources.add({
       id,
@@ -103,8 +108,8 @@ export async function fetchSource(
       textPath: f.textPath,
       by: lane ?? "research",
     });
-    // Its address, its title and the text that was read (cut to an item's length), so the
-    // campaign's collection in the knowledge base holds the source itself, from events alone.
+    // Its address, its title and its text's file, so the campaign's collection in the knowledge
+    // base holds the source itself, whole.
     ctx.ledger.appendEvent(lane ?? "research", "source_fetched", run, {
       source: id,
       domain: f.domain,
@@ -112,7 +117,7 @@ export async function fetchSource(
       bytes: f.bytes,
       url: clip(f.url, 2000),
       title: f.title ? clip(f.title, 500) : null,
-      text: clip(f.text, KB_BODY_MAX),
+      ...(file ? { file } : {}),
     });
   });
   const row = ctx.ledger.sources.get(run, id) as SourceRow;
@@ -183,49 +188,6 @@ export function readSource(
     ...(asked > READ_MAX ? { note: `a read gives at most ${READ_MAX} characters` } : {}),
     ...(from >= text.length && text.length > 0
       ? { note: `offset ${from} is at the end: the text has ${text.length} characters` }
-      : {}),
-  };
-}
-
-/**
- * Case-insensitive plain-text search over the archived texts (no regular expressions), a page
- * at a time: up to 30 matches, and fewer when their excerpts would not fit a tool's answer;
- * `next_skip` gives the next page (goal 117: a page that stops says so).
- */
-export function searchCorpus(ctx: ResearchContext, run: string, text: string, skip = 0) {
-  const needle = text.trim().toLowerCase().slice(0, 200);
-  if (needle.length < 2) return { matches: [] };
-  const from = Math.max(0, Math.trunc(Number(skip) || 0));
-  const out: { source: string; url: string; excerpt: string }[] = [];
-  let seen = 0;
-  let size = 0;
-  let more = false;
-  for (const s of ctx.ledger.sources.list(run)) {
-    const body = sourceText(s);
-    const at = body.toLowerCase().indexOf(needle);
-    if (at < 0) continue;
-    if (seen++ < from) continue;
-    const m = {
-      source: s.id,
-      url: s.url,
-      excerpt: body.slice(Math.max(0, at - 200), at + 300),
-    };
-    const len = JSON.stringify(m).length;
-    if (out.length >= SEARCH_PAGE || (out.length > 0 && size + len > SEARCH_CHARS)) {
-      more = true;
-      break;
-    }
-    out.push(m);
-    size += len;
-  }
-  return {
-    matches: out,
-    ...(from ? { skip: from } : {}),
-    ...(more
-      ? {
-          next_skip: from + out.length,
-          more: `more sources match: search_corpus again with skip ${from + out.length} for the next page`,
-        }
       : {}),
   };
 }

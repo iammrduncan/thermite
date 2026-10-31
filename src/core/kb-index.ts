@@ -1,3 +1,4 @@
+import { kbFileOf } from "./kb.ts";
 import { clip, type KbEvent, type KbIndexTarget, lines, n, setLine, str } from "./kb-fields.ts";
 import { indexResearchEvent } from "./kb-index-research.ts";
 import { currentEvent } from "./names.ts";
@@ -319,6 +320,9 @@ export function indexEvent(target: KbIndexTarget, event: KbEvent): void {
         );
         return;
       }
+      // The file goes whole, as the item's file; an event from before that carries its text, cut
+      // to an item's length.
+      const file = kbFileOf(b.file);
       t.put(
         run,
         "doc",
@@ -330,6 +334,7 @@ export function indexEvent(target: KbIndexTarget, event: KbEvent): void {
             b.clipped === true ? `(Cut: the file has ${n(b.bytes)} bytes.)` : "",
           ]),
           by: lane || e.actor,
+          ...(file ? { file } : {}),
         },
         e.at,
       );

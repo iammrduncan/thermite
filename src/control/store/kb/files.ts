@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { KB_TEXT_TYPES } from "../../../core/kb.ts";
+import { itemText } from "./items.ts";
 import { indexItem, unindexItem } from "./words.ts";
 
 /**
@@ -170,8 +171,8 @@ export class KbFileRows {
 
 /**
  * A file's text, once: kept by its SHA-256, and, when searched, given to each item whose newest
- * version names the file, as the text its row holds for the words index (words.ts), which follows
- * in the same transaction. The item's versions keep their writer's words. A file read again keeps
+ * version names the file, after the item's own words, as the text its row holds for the words
+ * index (words.ts), which follows in the same transaction. The item's versions keep their own words. A file read again keeps
  * its first text. In the caller's transaction.
  */
 export function keepFileText(
@@ -188,13 +189,18 @@ export function keepFileText(
     )
     .run(sha256, r.state, text, r.why, text.length, r.pages, at);
   if (Number(added.changes) === 0 || !text) return;
-  const items = db.prepare("select id from kb_item where file_sha256 = ?").all(sha256) as {
-    id: number;
-  }[];
-  for (const { id } of items) {
+  // Each item's own words, from its newest version, before the file's text.
+  const items = db
+    .prepare(
+      `select i.id, v.body from kb_item i join kb_version v on v.item = i.id and v.version = i.version
+       where i.file_sha256 = ?`,
+    )
+    .all(sha256) as { id: number; body: string }[];
+  for (const { id, body } of items) {
+    const whole = itemText(body, text);
     unindexItem(db, id);
-    db.prepare("update kb_item set body = ? where id = ?").run(text, id);
-    indexItem(db, id, text);
+    db.prepare("update kb_item set body = ? where id = ?").run(whole, id);
+    indexItem(db, id, whole);
   }
 }
 

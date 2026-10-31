@@ -2,6 +2,7 @@ import { CODE_RESEARCH_TOOLS, researchTool } from "../../../agents/tools/index.t
 import { log } from "../../../common/env.ts";
 import { type Ledger, LedgerError } from "../../ledger/index.ts";
 import type { TaskYield } from "../../queue.ts";
+import type { RunSearch } from "../search/index.ts";
 import { addClaim } from "./claims.ts";
 import { clockOf } from "./clock.ts";
 import { type ResearchContext, researchContext } from "./context.ts";
@@ -14,7 +15,7 @@ import {
 } from "./hypotheses.ts";
 import { addNote } from "./notes.ts";
 import { report, updateSection } from "./report.ts";
-import { fetchSource, frontier, readSource, searchCorpus } from "./sources.ts";
+import { fetchSource, frontier, readSource } from "./sources.ts";
 import { statsOf } from "./stats.ts";
 import { trialYield } from "./yield.ts";
 
@@ -38,8 +39,8 @@ const CODE_OPS = new Set(CODE_RESEARCH_TOOLS.map((n) => researchTool(n)?.op ?? n
  * - the harness owns the clock (running time only): workers cannot end a campaign.
  *
  * The class holds the service's state and is its interface. The bodies of its operations are in
- * research/, a module for each part: sources.ts (fetch, read and search the archive, and the
- * links to follow), claims.ts, notes.ts, findings.ts, hypotheses.ts (with the brief's list and
+ * research/, a module for each part: sources.ts (fetch and read the archive, and the links to
+ * follow; search_corpus reads the run's index, ../search/), claims.ts, notes.ts, findings.ts, hypotheses.ts (with the brief's list and
  * the free functions the harness's service calls), yield.ts (what a trial added), clock.ts,
  * stats.ts and report.ts. context.ts holds what they share.
  */
@@ -70,10 +71,14 @@ export class Research {
     ledger: Ledger,
     stateDir: string,
     opts: {
+      /** The rig's outbox: each source's archived text goes to the knowledge base from there. */
+      outboxDir: string;
+      /** The index search_corpus reads; one of its own when not given. */
+      search?: RunSearch | undefined;
       allowPrivate?: boolean;
       maxCorpusBytes?: number;
       onChange?: ((run: string) => void) | undefined;
-    } = {},
+    },
   ) {
     this.ctx = researchContext(ledger, stateDir, opts, (run) => this.changed(run));
     this.onChange = opts.onChange;
@@ -113,9 +118,9 @@ export class Research {
     return readSource(this.ctx, run, source, offset, length);
   }
 
-  /** Plain-text search over the archived texts, a page at a time: research/sources.ts. */
+  /** An exact phrase in the archived texts, a page at a time: search/corpus.ts. */
   searchCorpus(run: string, text: string, skip?: number) {
-    return searchCorpus(this.ctx, run, text, skip);
+    return this.ctx.search.corpus(run, text, skip ?? 0);
   }
 
   /** A worker's claim, verified or kept as a draft: research/claims.ts. */

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_LANES, NAME_PATTERN } from "./ids.ts";
-import { KB_BODY_MAX } from "./kb-index.ts";
+import { KB_BODY_MAX } from "./kb-fields.ts";
 import { BROKEN_VERDICTS, SCREENED_VERDICTS, UNCLEAR_VERDICTS, WON_VERDICTS } from "./verdicts.ts";
 
 /**
@@ -362,6 +362,9 @@ export const KbItemFile = z.object({
   bytes: z.number().int().min(0),
 });
 export type KbItemFile = z.infer<typeof KbItemFile>;
+
+/** An event's file, when it names one as an item's file is named; else none. */
+export const kbFileOf = (v: unknown): KbItemFile | undefined => KbItemFile.safeParse(v).data;
 
 /**
  * The files whose text control extracts and searches, by media type, and how it reads each: as

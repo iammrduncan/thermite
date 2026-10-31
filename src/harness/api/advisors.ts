@@ -147,13 +147,17 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
   app.get(RESEARCH_SEARCH.path, supervisor, (c) => {
     const q = SearchQuery.parse({
       q: c.req.query("q") ?? undefined,
+      mode: c.req.query("mode") || undefined,
       kinds: c.req.query("kinds") || undefined,
       limit: numberOf(c.req.query("limit")),
+      offset: numberOf(c.req.query("offset")),
     });
     return c.json(
       service.runResearch.search(runOf(c), q.q, {
         kinds: q.kinds?.split(",").map((k) => k.trim()),
         limit: q.limit,
+        offset: q.offset,
+        mode: q.mode,
       }),
     );
   });

@@ -67,7 +67,10 @@ export async function researchEnv(
     }),
   );
   if (!(out.status === "applied" && out.accepted)) throw new Error(JSON.stringify(out));
-  const research = new Research(env.service.ledger, env.service.paths.stateDir, { allowPrivate });
+  const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+    outboxDir: env.service.paths.outboxDir,
+    allowPrivate,
+  });
   return { env, research, contract: parsed.contract };
 }
 
@@ -100,11 +103,13 @@ export async function makeResearchRun(
   const { stateDir, scratchDir } = env.service.paths;
   const folder = new ResearchFolder({
     ledger: env.service.ledger,
+    outboxDir: env.service.paths.outboxDir,
     scratchRoot: join(scratchDir, "research"),
     stateRoot: join(stateDir, SAVED_LANES_DIR),
     runner: new LocalRunner(scratchDir),
   });
   const research = new Research(env.service.ledger, stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     allowPrivate: true,
     onChange: (r) => void folder.sync(r),
   });

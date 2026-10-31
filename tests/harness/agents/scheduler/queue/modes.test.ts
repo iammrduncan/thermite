@@ -111,6 +111,7 @@ describe("research runs use the queue", () => {
       },
       owner: "research-test",
       research: new Research(env.service.ledger, env.service.paths.stateDir, {
+        outboxDir: env.service.paths.outboxDir,
         allowPrivate: true,
       }),
       maxConcurrent: 2,
@@ -169,6 +170,7 @@ describe("research runs use the queue", () => {
       false,
     );
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const briefs: string[] = [];

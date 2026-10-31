@@ -3,8 +3,8 @@
  * (folder.ts), the checks research text shares (checks.ts), where each question and hypothesis
  * stands (shares.ts, progress.ts, hypothesis-evidence.ts), fetches refused for good
  * (refusals.ts), the time the agents could not work (blocked.ts), and what the tools tell a worker
- * (worker-words.ts); with the research service (research/), the review panel (review/) and the
- * paper (paper/).
+ * (worker-words.ts); with the research service (research/), the index its own searches read
+ * (search/), the review panel (review/) and the paper (paper/).
  */
 
 export {
@@ -55,6 +55,7 @@ export {
   reviewerGaps,
   waitingReview,
 } from "./review/index.ts";
+export { type RunFound, type RunHit, RunSearch } from "./search/index.ts";
 export {
   gapOf,
   nextGap,

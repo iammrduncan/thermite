@@ -1,4 +1,4 @@
-import type { KbKind } from "./kb.ts";
+import type { KbItemFile, KbKind } from "./kb.ts";
 
 /**
  * An item of the knowledge base's records slots as Thermite's reading keeps it (core/kb-index.ts):
@@ -12,7 +12,10 @@ export const str = (v: unknown) =>
   typeof v === "string" ? v : v === undefined || v === null ? "" : String(v);
 export const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-/** The longest item text, in characters (a source's text and a document are cut to it). */
+/**
+ * The longest text an item keeps of its own, in characters. A source's text and a lane's document
+ * go whole, as the item's file (KbItemFile); a report, the paper and an answer card are cut to it.
+ */
 export const KB_BODY_MAX = 20_000;
 
 /**
@@ -33,9 +36,11 @@ export interface KbFields {
   url?: string | null | undefined;
   sub?: string | null | undefined;
   meta?: Record<string, string> | undefined;
+  /** The item's file, kept whole by its SHA-256: its text follows the item's own words. */
+  file?: KbItemFile | undefined;
 }
 
-/** An item's stored fields (meta as JSON). */
+/** An item's stored fields (meta as JSON); `body` is its own words, without its file's text. */
 export interface KbStored {
   title: string;
   body: string;
@@ -43,6 +48,7 @@ export interface KbStored {
   url: string | null;
   sub: string | null;
   meta: string;
+  file: KbItemFile | null;
 }
 
 /** An item's fields after a change: what the change gives, else what the item had. */
@@ -56,6 +62,7 @@ export function mergeItem(ref: string, old: KbStored | undefined, f: KbFields): 
     url: url && url.length <= 2000 ? url : null,
     sub: sub ? clip(sub, 40) : null,
     meta: f.meta ? JSON.stringify(f.meta) : old?.meta || "{}",
+    file: f.file ?? old?.file ?? null,
   };
 }
 
@@ -67,7 +74,8 @@ export function sameItem(a: KbStored, b: KbStored): boolean {
     a.by === b.by &&
     a.url === b.url &&
     a.sub === b.sub &&
-    a.meta === b.meta
+    a.meta === b.meta &&
+    a.file?.sha256 === b.file?.sha256
   );
 }
 
