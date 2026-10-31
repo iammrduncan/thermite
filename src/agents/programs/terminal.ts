@@ -3,7 +3,7 @@ import type { TerminalKey } from "../../core/terminal-input.ts";
 
 /**
  * An agent program in its own terminal (goal 169), as Thermite's terminal host
- * (src/harness/terminal/) drives it: the keys it may be sent by name, the shape of each program's
+ * (src/agents/terminal/) drives it: the keys it may be sent by name, the shape of each program's
  * steps to interrupt the agent's turn and to end the program, the files seeded before it starts
  * and where its session log is. Each program's own are in its folder (`terminal.ts`), and the
  * table of their profiles in index.ts. What each program does with a key is what the spike of

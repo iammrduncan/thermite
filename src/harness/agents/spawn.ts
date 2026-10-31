@@ -7,10 +7,10 @@ import {
   modelEnv,
   STALL_SETTING,
 } from "../../agents/model/index.ts";
+import { startTerminal, type TerminalEnded } from "../../agents/terminal/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { logWarn } from "../../common/log.ts";
 import type { Role, Runner, RunOutcome } from "../broker/index.ts";
-import { startTerminal, type TerminalEnded } from "../terminal/index.ts";
 import { type PiConsole, VIEW_FLAG, VIEW_RESULT } from "./pi-view/index.ts";
 import type { ResearchTrialSpec } from "./research/index.ts";
 import { TrialResult, type TrialSpec } from "./worker/index.ts";

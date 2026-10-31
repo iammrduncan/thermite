@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TERMINAL_KEYS, TERMINAL_PROGRAMS } from "../../agents/programs/index.ts";
+import { TERMINAL_KEYS, TERMINAL_PROGRAMS } from "../programs/index.ts";
 
 /**
  * The terminal host's protocol with the harness (goal 169): the start it reads on its stdin, and

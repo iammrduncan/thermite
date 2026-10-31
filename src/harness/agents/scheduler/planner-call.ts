@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { CliHarness, MessageInbox } from "../../../agents/cli/index.ts";
 import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import { type McpCaller, mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { type ModelConfig, withAgentsContext } from "../../../agents/model/index.ts";
@@ -15,9 +16,8 @@ import type { CompactionOf } from "../../compactions.ts";
 import { messageText } from "../../messages.ts";
 import { keepPrompt } from "../../prompts.ts";
 import { routeOf } from "../../usage.ts";
-import type { CliHarness, TerminalCallLink } from "../cli/index.ts";
+import type { TerminalCallLink } from "../cli/index.ts";
 import { PLANNER } from "../coordinator.ts";
-import type { MessageInbox } from "../live-session.ts";
 import type {
   Ask,
   PlannerCompaction,

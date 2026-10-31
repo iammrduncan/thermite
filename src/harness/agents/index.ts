@@ -6,15 +6,10 @@
  * process of its own.
  */
 
-export {
-  type CliOnceDeps,
-  type ConsoleLater,
-  type ConsoleNow,
-  TrialConsole,
-} from "./cli/index.ts";
+export type { CliOnceDeps } from "./cli/index.ts";
 export { handedOut, lanesAtWork, rulesInForce } from "./coordinator.ts";
 export { DevRuns } from "./devrun.ts";
-export type { MessageInbox, ReplyNow, TurnDelivery } from "./live-session.ts";
+export type { ReplyNow } from "./live-session.ts";
 export {
   type ControlRoute,
   type ModelInfo,

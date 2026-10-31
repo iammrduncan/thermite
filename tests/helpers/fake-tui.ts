@@ -1,5 +1,5 @@
 // Test only: a stand-in for an agent program's terminal UI, which the terminal host's tests run
-// (tests/harness/terminal/) and the harness image's check (tests/stand-ins/terminal/check.mjs). It
+// (tests/agents/terminal/) and the harness image's check (tests/stand-ins/terminal/check.mjs). It
 // imports nothing of Thermite's. It draws a screen and a prompt, reads typed text, pastes and keys
 // in raw mode, writes a session log as Claude Code writes its transcript (0600, in a 0700 folder
 // of its home), and runs the hook its settings name, as Claude Code does. Each thing it saw is one

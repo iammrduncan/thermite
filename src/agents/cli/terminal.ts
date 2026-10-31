@@ -1,20 +1,20 @@
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { errorText, Refusal } from "../../common/errors.ts";
+import { log, logWarn } from "../../common/log.ts";
+import type { LaneLimitValues } from "../../core/contract.ts";
+import { MAX_RUN_MS } from "../../core/kit.ts";
+import { type LiveKind, liveText, summarizeArgs } from "../../core/live.ts";
+import { SCREEN_DATA_MAX } from "../../core/screens.ts";
+import type { TerminalKey } from "../../core/terminal-input.ts";
 import {
   newSessionTally,
   readNew,
   type SessionEvent,
   type SessionLogAdapter,
   tallyEvents,
-} from "../../../agents/programs/index.ts";
-import { errorText, Refusal } from "../../../common/errors.ts";
-import { log, logWarn } from "../../../common/log.ts";
-import type { LaneLimitValues } from "../../../core/contract.ts";
-import { MAX_RUN_MS } from "../../../core/kit.ts";
-import { type LiveKind, liveText, summarizeArgs } from "../../../core/live.ts";
-import { SCREEN_DATA_MAX } from "../../../core/screens.ts";
-import type { TerminalKey } from "../../../core/terminal-input.ts";
-import type { Runner, RunOutcome } from "../../broker/index.ts";
+} from "../programs/index.ts";
+import type { RoleRunner, RoleRunOutcome } from "../runner.ts";
 import {
   DEFAULT_COLS,
   DEFAULT_ROWS,
@@ -22,13 +22,13 @@ import {
   startTerminal,
   type Terminal,
   type TerminalEnded,
-} from "../../terminal/index.ts";
+} from "../terminal/index.ts";
 import type { CliProgram, CliRun, CliTally } from "./program.ts";
 
 /**
  * The one path for a role in its program's own terminal UI (goal 169): a trial's worker, in the
  * trial loop's terminal mode (loop.ts), or a call outside a trial, a planner's (call.ts), each a
- * CliRun. The terminal host (src/harness/terminal/), which the broker runs as the role's user
+ * CliRun. The terminal host (src/agents/terminal/), which the broker runs as the role's user
  * (under the lane's limits, for a trial), holds the program instead of one headless run for each
  * turn. One host holds the program while it runs: its first message is typed into it once it is
  * ready, never put on its command line, which other processes on the rig can read, and each later
@@ -71,8 +71,8 @@ const kept = (s: ScreenSnapshot): ScreenSnapshot =>
 const BACKSTOP_MS = 60_000;
 
 /** How a run of the program ended, as the loop reads it: its turn, its program, or a limit. */
-export type RunEnd = Pick<RunOutcome, "exitCode" | "signal" | "killedFor"> &
-  Partial<Pick<RunOutcome, "peakRssBytes" | "peakDiskBytes" | "peakEntries">>;
+export type RunEnd = Pick<RoleRunOutcome, "exitCode" | "signal" | "killedFor"> &
+  Partial<Pick<RoleRunOutcome, "peakRssBytes" | "peakDiskBytes" | "peakEntries">>;
 
 /** A turn that ended in the log, the program still running. */
 const TURN_ENDED: RunEnd = { exitCode: 0, signal: null, killedFor: null };
@@ -120,7 +120,7 @@ async function ready(host: Terminal, stopping: () => boolean): Promise<void> {
 
 /** What the path takes from the trial loop, or from a call. */
 export interface RoleTerminalDeps<T extends CliTally> {
-  runner: Runner;
+  runner: RoleRunner;
   /** Where the program works, and its environment as a headless run has it. */
   cwd: string;
   env: Record<string, string>;

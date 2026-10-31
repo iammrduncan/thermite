@@ -1,31 +1,26 @@
 import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { CliCompactions, type OnceKeeping } from "../../../agents/compaction/index.ts";
-import type { McpAccess } from "../../../agents/mcp/index.ts";
-import type { ModelConfig } from "../../../agents/model/index.ts";
-import { type PlanWindows, SIGNALS_VAR } from "../../../agents/programs/index.ts";
-import { messageText, type Prompt } from "../../../agents/prompt.ts";
-import type { LiveKind } from "../../../core/live.ts";
-import type { CallUsage } from "../../../core/usage.ts";
-import type { Role } from "../../broker/index.ts";
-import type { MessageInbox, TurnDelivery } from "../live-session.ts";
-import type { PiConsole } from "../pi-view/index.ts";
-import type { ProviderLink } from "../provider-errors.ts";
-import { takeUsage } from "./common.ts";
+import type { LiveKind } from "../../core/live.ts";
+import type { CallUsage } from "../../core/usage.ts";
+import { CliCompactions, type OnceKeeping } from "../compaction/index.ts";
+import type { McpAccess } from "../mcp/index.ts";
+import type { ModelConfig } from "../model/index.ts";
+import { type PlanWindows, SIGNALS_VAR } from "../programs/index.ts";
+import { messageText, type Prompt } from "../prompt.ts";
+import type { RoleRunner } from "../runner.ts";
 import { TrialConsole } from "./console.ts";
-import { TrialSignals, TurnMessages } from "./in-turn.ts";
-import { setUp } from "./loop.ts";
-import type { CliOnceDeps } from "./once.ts";
+import { type MessageInbox, TrialSignals, type TurnDelivery, TurnMessages } from "./in-turn.ts";
 import type { CliProgram, CliRun, CliTally } from "./program.ts";
+import { setUp, takeUsage } from "./shared.ts";
 import { RoleTerminal } from "./terminal.ts";
-import { waitOutWindow } from "./usage-window.ts";
+import { type WindowLink, waitOutWindow } from "./usage-window.ts";
 
 /**
  * A call of a role outside a trial in its program's own terminal (goal 169; the owner's decision
  * of 2026-10-31): a planner's, on the one path every role takes there (terminal.ts; a planner in
- * Pi takes the same link to its Pi view, planner/view.ts). It is a CliRun
- * of the program's own entry, as a trial is, in a folder of its own under the lanes' area, run as
+ * Pi takes the same link to its Pi view, src/harness/agents/planner/view.ts). It is a CliRun of
+ * the program's own entry, as a trial is, in a folder of its own under the lanes' area, run as
  * the role's user: its prompt is typed in, the owner's messages go in inside its turn through its
  * hooks or Thermite's plugin, the owner's console types into it, Live shows its screen, and a full
  * usage window is waited out as a trial's is. It ends when its first turn does, with the tally of
@@ -49,8 +44,8 @@ export type CallTurn =
   | { kind: "owner"; id: number; text: string }
   | { kind: "failed"; words: string };
 
-/** What a call in its own terminal takes from the harness: its id, its credential and its links. */
-export interface TerminalCallLink extends ProviderLink {
+/** What a call in its own terminal takes from its caller: its id, its credential and its links. */
+export interface CallLink extends WindowLink {
   /** Its id for the console and the screens (plannerCallId). */
   id: string;
   /**
@@ -68,11 +63,8 @@ export interface TerminalCallLink extends ProviderLink {
   sent?: ((p: Prompt) => void) | undefined;
   /** Lines for its live source, from its session log. */
   live(entries: { kind: LiveKind; text: string }[]): void;
-  /**
-   * Given its console when its terminal starts, and undefined when it ends; in Pi, its Pi view's
-   * own side too, which its process asks for the owner's inputs (planner/view.ts).
-   */
-  console(c: TrialConsole | undefined, piView?: PiConsole): void;
+  /** Given its console when its terminal starts, and undefined when it ends. */
+  console(c: TrialConsole | undefined): void;
   /** Lets its hooks or plugin take the owner's messages inside its turn; undefined at its end. */
   inTurn(d: TurnDelivery | undefined): void;
   /** Whether the rig drains: a call that waits for its usage window ends. */
@@ -81,10 +73,19 @@ export interface TerminalCallLink extends ProviderLink {
   pollMs?: number | undefined;
 }
 
+/** What a call in its own terminal takes from its caller's runtime. */
+export interface CallDeps {
+  runner: RoleRunner;
+  /** The API as the call's user reaches it, for example http://127.0.0.1:8700. */
+  apiUrl: string;
+  /** Where its folder is made (callFolder). */
+  scratchDir: string;
+}
+
 /** What a call in its terminal is: who runs it, what it may use, and where its usage goes. */
 export interface TerminalCallOptions {
-  role: Role;
-  link: TerminalCallLink;
+  role: string;
+  link: CallLink;
   signal?: AbortSignal | undefined;
   /** The MCP servers it may use, and whether Thermite's own (the knowledge base's) too. */
   mcp?: Pick<McpAccess, "servers" | "kb"> | undefined;
@@ -104,7 +105,7 @@ export async function terminalCall<T extends CliTally>(
   p: CliProgram<T>,
   model: ModelConfig,
   prompt: string,
-  deps: CliOnceDeps,
+  deps: CallDeps,
   o: TerminalCallOptions,
 ): Promise<T> {
   const link = o.link;
@@ -131,7 +132,7 @@ export async function terminalCall<T extends CliTally>(
   };
   const signalsFile = join(dir, `${p.prefix}-signals.jsonl`);
   const tally = p.newTally();
-  // The harness's group enters the folder: the host's socket, the copy of its log, its signals.
+  // Its caller's group enters the folder: the host's socket, the copy of its log, its signals.
   await deps.runner.handOver(dir, o.role, { harnessReads: true });
   try {
     const setupError = await setUp(p.name, p.setup(run), deps.runner, { role: o.role, cwd: dir });

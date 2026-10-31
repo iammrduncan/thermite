@@ -1,4 +1,17 @@
 import { dirname, join } from "node:path";
+import {
+  type CliProgram,
+  type CliRun,
+  type CliTally,
+  RoleTerminal,
+  type RunEnd,
+  setUp,
+  TrialConsole,
+  TrialSignals,
+  TurnMessages,
+  takeUsage,
+  waitOutWindow,
+} from "../../../agents/cli/index.ts";
 import { CliCompactions } from "../../../agents/compaction/index.ts";
 import { readNew, SIGNALS_VAR } from "../../../agents/programs/index.ts";
 import { messageText, type Prompt } from "../../../agents/prompt.ts";
@@ -19,37 +32,10 @@ import {
   breachError,
   CarriedMessages,
   compareSessionLog,
-  takeUsage,
   trialEnd,
   turnsUp,
 } from "./common.ts";
-import { TrialConsole } from "./console.ts";
-import { TrialSignals, TurnMessages } from "./in-turn.ts";
-import type { CliProgram, CliRun, CliSetup, CliTally, CliTrial, CliTrialDeps } from "./program.ts";
-import { RoleTerminal, type RunEnd } from "./terminal.ts";
-import { waitOutWindow } from "./usage-window.ts";
-
-/**
- * Sets a program up in its run's area (or its call's folder), as the run's user: relative to that
- * folder, since the user may not walk the harness's directories by name. Undefined when it is set
- * up; else why not.
- */
-export async function setUp(
-  name: string,
-  s: CliSetup,
-  runner: Runner,
-  at: { role: Role; cwd: string },
-): Promise<string | undefined> {
-  const r = await runner.run({
-    role: at.role,
-    argv: ["sh", "-c", s.script, ...(s.args ?? [])],
-    cwd: at.cwd,
-    timeoutMs: 30_000,
-    ...(s.stdin !== undefined ? { stdin: s.stdin } : {}),
-    captureBytes: 4096,
-  });
-  return r.exitCode === 0 ? undefined : `could not set ${name} up: ${r.stderr.slice(-300)}`;
-}
+import type { CliTrial, CliTrialDeps } from "./program.ts";
 
 /**
  * One run of a program as its run's user, in `cwd`, under the lane's limits. Its output goes to

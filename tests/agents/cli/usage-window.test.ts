@@ -8,11 +8,8 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { CliHarness } from "../../../../src/harness/agents/cli/program.ts";
-import {
-  TERMINAL_WAIT_MAX_MS,
-  waitOutWindow,
-} from "../../../../src/harness/agents/cli/usage-window.ts";
+import type { CliHarness } from "../../../src/agents/cli/program.ts";
+import { TERMINAL_WAIT_MAX_MS, waitOutWindow } from "../../../src/agents/cli/usage-window.ts";
 
 /** A stand-in for the trial's terminal: the limit its log shows, whether it runs, what was done. */
 function fakeTerm(limit: { resetsAt?: string } | undefined) {

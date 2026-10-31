@@ -4,10 +4,10 @@ import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
-import { Terminal } from "../../../src/harness/terminal/client.ts";
-import type { TerminalHost } from "../../../src/harness/terminal/host.ts";
-import { ANSWER_MAX, REQUEST_MAX } from "../../../src/harness/terminal/protocol.ts";
-import { serveTerminal } from "../../../src/harness/terminal/server.ts";
+import { Terminal } from "../../../src/agents/terminal/client.ts";
+import type { TerminalHost } from "../../../src/agents/terminal/host.ts";
+import { ANSWER_MAX, REQUEST_MAX } from "../../../src/agents/terminal/protocol.ts";
+import { serveTerminal } from "../../../src/agents/terminal/server.ts";
 
 const SECRET = "s".repeat(43);
 

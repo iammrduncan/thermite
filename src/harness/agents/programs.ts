@@ -1,3 +1,12 @@
+import {
+  type CliHarness,
+  type CliProgram,
+  type CliTally,
+  claudeProgram,
+  codexProgram,
+  opencodeProgram,
+  TrialConsole,
+} from "../../agents/cli/index.ts";
 import type { CliCompacted } from "../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../agents/model/index.ts";
 import { type TrialProgram, windowFit } from "../../agents/roles/index.ts";
@@ -12,18 +21,11 @@ import {
 import type { Role } from "../broker/index.ts";
 import {
   type CliAskOptions,
-  type CliHarness,
   type CliOnceDeps,
-  type CliProgram,
-  type CliTally,
   type CliTrialDeps,
-  claudeProgram,
   cliAsk,
   cliModelCheck,
-  codexProgram,
-  opencodeProgram,
   runCliTrial,
-  TrialConsole,
 } from "./cli/index.ts";
 import { checkModel, type RigCheckReport } from "./model/index.ts";
 import { PiConsole } from "./pi-view/index.ts";

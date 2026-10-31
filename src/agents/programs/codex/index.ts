@@ -20,8 +20,8 @@ export { tomlString } from "./toml.ts";
 
 /**
  * The Codex CLI as Thermite starts it, for the harness's agents and the supervisor's advisors: its
- * binary, its configuration, its command line and its environment. Its entry for the harness's CLI
- * trial loop is in src/harness/agents/cli/codex.ts.
+ * binary, its configuration, its command line and its environment. Its entry, as every role runs
+ * it, is src/agents/cli/codex.ts.
  */
 
 /** The Codex CLI's binary: THERMITE_CODEX_BIN, else `codex` on the PATH (read when used). */

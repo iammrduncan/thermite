@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { OPENCODE_MEMORY } from "../../../../src/agents/cli/opencode.ts";
 import { claudeEnv } from "../../../../src/agents/programs/claude-code/index.ts";
 import { codexEnv } from "../../../../src/agents/programs/codex/index.ts";
 import {
@@ -23,7 +24,6 @@ import {
   PLANNER_ROLE,
 } from "../../../../src/harness/agents/cli/common.ts";
 import {
-  OPENCODE_MEMORY,
   opencodeModelCheck,
   opencodeOnce,
   runOpencodeResearchTrial,

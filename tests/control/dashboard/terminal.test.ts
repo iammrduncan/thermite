@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { TrialConsole } from "../../../src/agents/cli/index.ts";
 import {
   XTERM_DIR,
   XTERM_SHA256,
@@ -14,7 +15,7 @@ import { prepareCommand } from "../../../src/control/issue/index.ts";
 import { TERMINAL_JS } from "../../../src/control/ui/terminal.ts";
 import { SCREENS_WATCHED_MAX } from "../../../src/core/screens.ts";
 import { plannerCallId, TERMINAL_KEYS } from "../../../src/core/terminal-input.ts";
-import { ModelSource, TrialConsole } from "../../../src/harness/agents/index.ts";
+import { ModelSource } from "../../../src/harness/agents/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { ask } from "../../../src/supervisor/ask.ts";
 import { relayScreensOnce } from "../../../src/supervisor/live/index.ts";

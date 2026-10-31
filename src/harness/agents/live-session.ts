@@ -2,7 +2,6 @@ import type { Agent } from "@earendil-works/pi-agent-core";
 import { type Prompt, userMessage } from "../../agents/prompt.ts";
 import { renderWorkerTurn } from "../../agents/roles/index.ts";
 import { log } from "../../common/env.ts";
-import type { InTurn, MessageHow } from "../../core/agents.ts";
 import { type LiveKind, liveText, summarizeArgs } from "../../core/live.ts";
 
 /**
@@ -48,29 +47,6 @@ export interface ReplyNow {
 
 /** How often an open model call is reported. A shorter call is never reported. */
 export const REPLY_REPORT_MS = 30_000;
-
-/** The owner's messages for a running trial, as an in-process harness adapter reads them. */
-export interface MessageInbox {
-  /** Messages waiting for the trial (fetching them gives nothing to the agent). */
-  waiting(): { id: number; text: string }[];
-  /** These messages were given to the agent, `how` (goal 169): their read receipts. */
-  given(ids: number[], how?: MessageHow): void;
-}
-
-/**
- * How a running trial in Claude Code, Codex or OpenCode takes the owner's messages inside its
- * turn (goal 169), through its hook or Thermite's plugin, which ask the trial's routes
- * (core/api/harness/turn.ts).
- */
-export interface TurnDelivery {
-  /**
-   * The next message waiting, as the agent's role puts it, held for the hook that asked until
-   * its receipt; undefined when none waits or no run is under way. Nothing is read yet.
-   */
-  offer(at: InTurn): { offer: string; text: string } | undefined;
-  /** The hook gave the offer's text to its program: it is read now. The ids read. */
-  taken(offer: string): number[];
-}
 
 export interface TrialProgress {
   turns: number;

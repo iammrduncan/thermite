@@ -8,9 +8,10 @@ import { serveTerminal } from "./server.ts";
 
 /**
  * The terminal host's entry (goal 169): one process for one run of an agent program in its own
- * terminal, started by the broker as the lane's user, in the run's area, under the lane's limits,
- * its GPU fence and its network rules, as the program is. It reads its start, one JSON line, on
- * its stdin; serves the harness on its socket in its working folder (TERMINAL_SOCKET); and exits
+ * terminal, started by its caller's runner as the role's user, in the run's area (by the broker,
+ * under the lane's limits, its GPU fence and its network rules, as the program is). It reads its
+ * start, one JSON line, on its stdin; serves its caller on its socket in its working folder
+ * (TERMINAL_SOCKET); and exits
  * when the program has ended, its last line on stdout `{"msg":"the program ended", ...}` with how.
  * The program's environment is the host's own, with TERM an xterm's.
  */
@@ -42,8 +43,8 @@ async function main(): Promise<number> {
     server.once("listening", resolve);
     server.once("error", reject);
   });
-  // The harness's user is in neither the lane's user nor its group: it may connect only through
-  // "other". The area is the lane's, which only the harness's group may enter besides.
+  // The caller's user is in neither the role's user nor its group: it may connect only through
+  // "other". The area is the role's, which only the caller's group may enter besides.
   chmodSync(socket, 0o666);
   log("terminal", "the host listens", { trial: start.trial, socket });
   await host.run();

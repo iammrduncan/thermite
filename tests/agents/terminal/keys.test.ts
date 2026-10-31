@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { ENTER, keyBytes, typedText } from "../../../src/harness/terminal/keys.ts";
+import { ENTER, keyBytes, typedText } from "../../../src/agents/terminal/keys.ts";
 
 describe("what the terminal host types", () => {
   test("a named key is the bytes an xterm sends, the arrows by the cursor keys' mode", () => {

@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { TurnDelivery } from "../../agents/cli/index.ts";
 import { type McpCaller, McpGateway } from "../../agents/mcp/index.ts";
 import {
   type ModelConfig,
@@ -20,7 +21,7 @@ import { LiveLog } from "../../core/live.ts";
 import { type McpUse, McpUses } from "../../core/mcp.ts";
 import { PROGRAM_MODE_DEFAULT } from "../../core/rig-settings.ts";
 import type { BuildInfo } from "../../core/version.ts";
-import type { ControlRoute, ModelSource, TurnDelivery } from "../agents/index.ts";
+import type { ControlRoute, ModelSource } from "../agents/index.ts";
 import type { Compactions } from "../compactions.ts";
 import type { DiskWatch } from "../disk.ts";
 import { Journal } from "../journal.ts";

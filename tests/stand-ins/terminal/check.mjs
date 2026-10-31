@@ -41,7 +41,7 @@ const SRC = process.env.THERMITE_SRC ?? "/opt/thermite/dist";
 const ext = SRC.endsWith("/dist") ? "js" : "ts";
 const load = (path) => import(`${SRC}/${path}.${ext}`);
 const { BrokerClient } = await load("harness/broker/client");
-const { startTerminal } = await load("harness/terminal/index");
+const { startTerminal } = await load("agents/terminal/index");
 const programs = await load("agents/programs/index");
 const { hookArgv } = await load("agents/programs/hooks/index");
 

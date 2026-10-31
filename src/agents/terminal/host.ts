@@ -2,13 +2,9 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { closeSync, constants, fchmodSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { connect } from "node:net";
 import { dirname, join } from "node:path";
-import {
-  TERMINAL_PROFILES,
-  type TerminalKey,
-  type TerminalStep,
-} from "../../agents/programs/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { log, logWarn } from "../../common/log.ts";
+import { TERMINAL_PROFILES, type TerminalKey, type TerminalStep } from "../programs/index.ts";
 import { ENTER, ENTER_GAP_MS, KEY_GAP_MS, keyBytes, typedText } from "./keys.ts";
 import { Mirror } from "./mirror.ts";
 import type {

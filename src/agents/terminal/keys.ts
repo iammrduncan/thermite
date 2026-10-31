@@ -1,4 +1,4 @@
-import type { TerminalKey } from "../../agents/programs/index.ts";
+import type { TerminalKey } from "../programs/index.ts";
 
 /**
  * What the terminal host writes to a program for a named key and for typed text, as an xterm

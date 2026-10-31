@@ -6,8 +6,8 @@
  * that read each one's own session log into one set of events (session-log.ts); and Thermite's
  * hook program for Claude Code and Codex, with the adapter of its signals (hooks/); and how each
  * runs in its own terminal (terminal.ts and each program's `terminal.ts`, goal 169), which
- * Thermite's terminal host (src/harness/terminal/) drives. The harness's trial loop for them is
- * src/harness/agents/cli/.
+ * Thermite's terminal host (src/agents/terminal/) drives. Each program's entry, as every role runs
+ * it, is src/agents/cli/, and the harness's trial loop for them src/harness/agents/cli/.
  */
 
 import { CLAUDE_TERMINAL } from "./claude-code/index.ts";

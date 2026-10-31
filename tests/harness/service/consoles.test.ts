@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, test } from "node:test";
+import { TrialConsole } from "../../../src/agents/cli/index.ts";
 import { type CommandKind, signEnvelope } from "../../../src/core/commands.ts";
 import { plannerCallId, TERMINAL_INPUTS_PER_MINUTE } from "../../../src/core/terminal-input.ts";
-import { TrialConsole } from "../../../src/harness/agents/index.ts";
 import { PiConsole } from "../../../src/harness/agents/pi-view/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../../src/harness/api/index.ts";

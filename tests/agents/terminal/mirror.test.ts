@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { Mirror } from "../../../src/harness/terminal/mirror.ts";
+import { Mirror } from "../../../src/agents/terminal/mirror.ts";
 
 /** A home with a session log in a private folder, as Claude Code keeps its transcript. */
 function place() {

@@ -1,6 +1,7 @@
 import { chmodSync, lstatSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { z } from "zod";
+import type { RoleRunner } from "../../agents/runner.ts";
 import { MAX_LANES } from "../../core/contract.ts";
 import { MAX_RUN_MS } from "../../core/kit.ts";
 import { type PairOutcome, runPairSupervised } from "./pair.ts";
@@ -155,7 +156,8 @@ export type RunRequest = z.input<typeof RunRequest>;
 
 export type RunOutcome = SupervisedResult;
 
-export interface Runner {
+/** The runner the agent runtimes share (agents/runner.ts), with what only the harness asks of it. */
+export interface Runner extends RoleRunner {
   /** True when roles really run as separate users. */
   readonly separated: boolean;
   run(req: RunRequest): Promise<RunOutcome>;

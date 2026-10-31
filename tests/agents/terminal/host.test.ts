@@ -6,13 +6,13 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { hookArgv } from "../../../src/agents/programs/hooks/index.ts";
 import type { TerminalProgram } from "../../../src/agents/programs/index.ts";
-import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import {
   startTerminal,
   TERMINAL_SOCKET,
   type Terminal,
-} from "../../../src/harness/terminal/index.ts";
-import { programStdio, SETSID } from "../../../src/harness/terminal/pty.ts";
+} from "../../../src/agents/terminal/index.ts";
+import { programStdio, SETSID } from "../../../src/agents/terminal/pty.ts";
+import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 
 /**
  * The terminal host on the fake TUI (tests/helpers/fake-tui.ts), through the local runner: the

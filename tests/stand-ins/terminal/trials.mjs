@@ -1,5 +1,5 @@
 // Test only (check.mjs, in the harness image): one short trial through the trial loop's terminal
-// mode (src/harness/agents/cli/terminal.ts), under the real broker as lane-1, for each program the
+// mode (src/harness/agents/cli/loop.ts, src/agents/cli/terminal.ts), under the real broker as lane-1, for each program the
 // image has: the fake TUI (tests/helpers/fake-tui.ts) in Claude Code's place, writing a transcript
 // as Claude Code does; the real Codex CLI; and the real OpenCode, its server and its terminal.
 // Codex and OpenCode reach the stand-in model (model.mjs), which answers each call with text, so
@@ -134,9 +134,8 @@ function fakeWindowScript(resetsAt) {
 
 /** Runs the loop's trials; `c` is check.mjs's: its loader, runner, checks and lane helpers. */
 export async function loopTrials(c) {
-  const { runCliTrial, claudeProgram, codexProgram, opencodeProgram } = await c.load(
-    "harness/agents/cli/index",
-  );
+  const { runCliTrial } = await c.load("harness/agents/cli/index");
+  const { claudeProgram, codexProgram, opencodeProgram } = await c.load("agents/cli/index");
   const before = {
     claude: process.env.THERMITE_CLAUDE_BIN,
     codex: process.env.THERMITE_CODEX_BIN,
@@ -281,7 +280,7 @@ export async function loopTrials(c) {
     // The owner's input through the trial's console, into the fake mid-turn: text, then a key.
     // The fake shows each thing it takes on its screen; its own record is lane-1's alone. The
     // console's screen restores it in an emulator: read back as plain lines.
-    const { Screen } = await c.load("harness/terminal/screen");
+    const { Screen } = await c.load("agents/terminal/screen");
     const fakeShows = async (con) => {
       const snap = await con.screen();
       if (!snap) return "";

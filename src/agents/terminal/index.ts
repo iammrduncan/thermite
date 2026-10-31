@@ -1,9 +1,10 @@
 /**
  * The terminal host (goal 169): an agent program's own terminal UI, held in a pseudo-terminal by a
- * small program of Thermite's that runs as the lane's user (main.ts, host.ts), with the screen
- * kept by a headless terminal emulator (screen.ts), the program's session log copied where the
- * harness may read it (mirror.ts), and a socket the harness asks it on (server.ts, protocol.ts).
- * The harness starts it and asks it through client.ts. This file is only the folder's interface.
+ * small program of Thermite's that runs as the role's user (main.ts, host.ts), with the screen
+ * kept by a headless terminal emulator (screen.ts), the program's session log copied where its
+ * caller may read it (mirror.ts), and a socket its caller asks it on (server.ts, protocol.ts). Its
+ * caller starts it through a runner (runner.ts: the harness's broker) and asks it through
+ * client.ts. This file is only the folder's interface.
  */
 
 export {

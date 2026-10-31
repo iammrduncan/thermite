@@ -2,11 +2,11 @@ import { connect } from "node:net";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import type { TerminalKey } from "../../agents/programs/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { logDebug, logWarn } from "../../common/log.ts";
 import { newToken } from "../../common/secrets.ts";
-import type { Role, Runner, RunOutcome } from "../broker/index.ts";
+import type { TerminalKey } from "../programs/index.ts";
+import type { RoleRunner, RoleRunOutcome } from "../runner.ts";
 import { END_WAIT_MS, SERVER_READY_MS, TERM_WAIT_MS } from "./host.ts";
 import {
   ANSWER_MAX,
@@ -22,11 +22,12 @@ import {
 } from "./protocol.ts";
 
 /**
- * The harness's side of the terminal host (goal 169): it starts the host through the broker, as
- * the lane's user, and asks it, over its socket, to type, interrupt, show its screen and end. The
- * host runs as the lane's user, as the agent does, so each answer is read no further than
- * ANSWER_MAX and checked against its schema, and none decides anything: the program's session log
- * and its hooks say what happened.
+ * The caller's side of the terminal host (goal 169). It starts the host through its runner
+ * (runner.ts: the harness's broker), as the role's user, and asks
+ * it, over its socket, to type, interrupt, show its screen and end. The host runs as the role's
+ * user, as the agent does, so each answer is read no further than ANSWER_MAX and checked against
+ * its schema, and none decides anything: the program's session log and its hooks say what
+ * happened.
  */
 
 /** The host's entry, as Node runs it: main.js when built, main.ts from the source. */
@@ -42,14 +43,14 @@ export const READY_MS = SERVER_READY_MS + 30_000;
 /** The tail of the host's output the broker keeps: its last line says how the program ended. */
 const CAPTURE_BYTES = 64 * 1024;
 
-/** One run of a program in its terminal, as the harness asks the broker for it. */
+/** One run of a program in its terminal, as its caller asks its runner for it. */
 export interface TerminalRun {
-  role: Role;
+  role: string;
   /** The run's own area: the host's working folder, its socket, the copy of the session log. */
   area: string;
   /** The program's environment, which is the host's too. */
   env: Record<string, string>;
-  /** The host's start, but its secret, which the harness makes. */
+  /** The host's start, but its secret, which the caller makes. */
   start: Omit<TerminalStartInput, "secret">;
   /** The run's limits, as a headless run of the program has them; none unless given. */
   timeoutMs?: number | undefined;
@@ -62,7 +63,7 @@ export interface TerminalRun {
 
 /** A run that has ended: the broker's outcome, and how the program ended, as the host said. */
 export interface TerminalEnded {
-  outcome: RunOutcome;
+  outcome: RoleRunOutcome;
   exit: ProgramExit | undefined;
 }
 
@@ -82,7 +83,7 @@ function exitOf(stdout: string): ProgramExit | undefined {
 }
 
 /** Why the host itself failed, from the last line of its output or its errors. */
-function hostError(o: RunOutcome): string {
+function hostError(o: RoleRunOutcome): string {
   const last = (o.stdout.trim() || o.stderr.trim()).split("\n").at(-1) ?? "";
   try {
     const line = JSON.parse(last) as { error?: unknown };
@@ -130,7 +131,7 @@ function ask(socket: string, body: object, ms: number): Promise<unknown> {
   });
 }
 
-/** A running host, as the harness asks it. */
+/** A running host, as its caller asks it. */
 export class Terminal {
   readonly socket: string;
   /** Resolves when the run has ended: the program has, and the host. */
@@ -205,11 +206,11 @@ const Done = z.object({ ok: z.literal(true) });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Starts a program in its terminal: the host, through the broker, as `r.role`, in `r.area`, with
+ * Starts a program in its terminal: the host, through its runner, as `r.role`, in `r.area`, with
  * its start (and a secret of its own) on its stdin; then waits until the host answers and the
  * program has started, or failed to. If the host never answers, the role's processes are ended.
  */
-export async function startTerminal(runner: Runner, r: TerminalRun): Promise<Terminal> {
+export async function startTerminal(runner: RoleRunner, r: TerminalRun): Promise<Terminal> {
   const socket = join(r.area, TERMINAL_SOCKET);
   if (Buffer.byteLength(socket) > SOCKET_PATH_MAX)
     throw new Error(`the terminal host's socket would be over ${SOCKET_PATH_MAX} bytes: ${socket}`);

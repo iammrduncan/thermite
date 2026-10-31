@@ -19,7 +19,8 @@ import { logStall, modelStallMs, stallGuard } from "./stall.ts";
  * The model client the harness's agents and the supervisor's advisors share: a route and its
  * settings, and the model Pi calls (this file); a silent stream broken off (stall.ts); one call
  * through a key-adding model proxy (forward.ts), kept to what a ChatGPT sign-in takes
- * (chatgpt.ts), with the tokens each answer reports (tokens.ts); and Pi's model usage (meter.ts).
+ * (chatgpt.ts), with the tokens each answer reports (tokens.ts); when a provider said to try again
+ * (retry.ts); and Pi's model usage (meter.ts).
  */
 
 export {
@@ -30,6 +31,7 @@ export {
   type ProviderErrorAnswer,
 } from "./forward.ts";
 export { PiMeter, USAGE_BATCH, UsageSender } from "./meter.ts";
+export { durationMs, type ProviderAnswer, retryAtFrom } from "./retry.ts";
 export { logStall, modelStallMs, STALL_SETTING, stalledFor, stallWords } from "./stall.ts";
 export { type AnswerTokens, TokensSeen } from "./tokens.ts";
 

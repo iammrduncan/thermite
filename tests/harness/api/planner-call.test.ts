@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { TrialConsole } from "../../../src/agents/cli/index.ts";
 import { plannerCallId } from "../../../src/core/terminal-input.ts";
-import { TrialConsole } from "../../../src/harness/agents/index.ts";
 import { PiConsole } from "../../../src/harness/agents/pi-view/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../../src/harness/api/index.ts";

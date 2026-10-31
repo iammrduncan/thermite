@@ -9,6 +9,10 @@ import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { claudeProgram } from "../../../../src/agents/cli/claude-code.ts";
+import { codexProgram } from "../../../../src/agents/cli/codex.ts";
+import { opencodeProgram } from "../../../../src/agents/cli/opencode.ts";
+import type { CliProgram, CliTally } from "../../../../src/agents/cli/program.ts";
 import { mcpLine } from "../../../../src/agents/mcp/tools.ts";
 import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import type { PlanWindows } from "../../../../src/agents/programs/claude-code/windows.ts";
@@ -16,16 +20,9 @@ import { RESEARCH_WORKER_SYSTEM } from "../../../../src/agents/roles/research-wo
 import { throughProxy } from "../../../../src/core/agents.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
 import type { CallUsage } from "../../../../src/core/usage.ts";
-import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts";
-import { codexProgram } from "../../../../src/harness/agents/cli/codex.ts";
 import { runCliTrial } from "../../../../src/harness/agents/cli/loop.ts";
 import { cliAsk, cliModelCheck, cliOnce } from "../../../../src/harness/agents/cli/once.ts";
-import { opencodeProgram } from "../../../../src/harness/agents/cli/opencode.ts";
-import type {
-  CliProgram,
-  CliTally,
-  CliTrialDeps,
-} from "../../../../src/harness/agents/cli/program.ts";
+import type { CliTrialDeps } from "../../../../src/harness/agents/cli/program.ts";
 import type { ResearchTrialSpec } from "../../../../src/harness/agents/research/worker.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import type { RunRequest } from "../../../../src/harness/broker/runner.ts";

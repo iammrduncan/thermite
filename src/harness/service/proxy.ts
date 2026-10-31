@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { MessageInbox } from "../../agents/cli/index.ts";
 import type { McpCaller } from "../../agents/mcp/index.ts";
 import {
   logStall,
@@ -9,7 +10,6 @@ import {
 import type { PlannerAnswer } from "../../core/api/harness/planner.ts";
 import type { LiveKind, LiveLog } from "../../core/live.ts";
 import type { CallUsage } from "../../core/usage.ts";
-import type { MessageInbox } from "../agents/index.ts";
 import type { CompactionOf } from "../compactions.ts";
 
 /**

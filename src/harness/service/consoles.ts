@@ -1,3 +1,5 @@
+import type { TrialConsole } from "../../agents/cli/index.ts";
+import type { ScreenSnapshot } from "../../agents/terminal/index.ts";
 import { errorText } from "../../common/errors.ts";
 import { SCREEN_DATA_MAX, type ScreenFrame } from "../../core/screens.ts";
 import {
@@ -5,9 +7,8 @@ import {
   type TerminalInput,
   type TerminalOutcome,
 } from "../../core/terminal-input.ts";
-import type { PiConsole, TrialConsole } from "../agents/index.ts";
+import type { PiConsole } from "../agents/index.ts";
 import { LedgerError } from "../ledger/index.ts";
-import type { ScreenSnapshot } from "../terminal/index.ts";
 import type { HarnessService } from "./index.ts";
 
 /**

@@ -1,18 +1,12 @@
 import { z } from "zod";
+import type { MessageInbox, TurnDelivery } from "../../agents/cli/index.ts";
 import { stalledFor } from "../../agents/model/index.ts";
 import { log } from "../../common/env.ts";
 import type { InTurn } from "../../core/agents.ts";
 import { ExperimentText } from "../../core/commands.ts";
 import type { LiveKind } from "../../core/live.ts";
 import { measurementIn, measurementRefusal } from "../../core/research-check.ts";
-import {
-  holdUntil,
-  KIND_WORDS,
-  type MessageInbox,
-  type ProviderErrorKind,
-  Registry,
-  type TurnDelivery,
-} from "../agents/index.ts";
+import { holdUntil, KIND_WORDS, type ProviderErrorKind, Registry } from "../agents/index.ts";
 import { Journal } from "../journal.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { messageText, type OwnerMessages } from "../messages.ts";

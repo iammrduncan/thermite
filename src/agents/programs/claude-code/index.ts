@@ -9,8 +9,8 @@ import { CLAUDE_BASE_ENV } from "./shell.ts";
 
 /**
  * Claude Code as Thermite starts it, for the harness's agents and the supervisor's advisors: its
- * exit words, its environment and compaction settings, and its command line. Its entry for the
- * harness's CLI trial loop is in src/harness/agents/cli/claude-code.ts.
+ * exit words, its environment and compaction settings, and its command line. Its entry, as every
+ * role runs it, is src/agents/cli/claude-code.ts.
  *
  * Claude Code's own sandbox stays off, in the harness's trials and in the advisors (whose Claude
  * Code has none of its own tools), so the images carry no bubblewrap.

@@ -1,6 +1,7 @@
-import { log } from "../../../common/log.ts";
-import { retryAtFrom } from "../provider-errors.ts";
-import type { CliProgram, CliTally, CliTerminal, CliTrialDeps, OwnStop } from "./program.ts";
+import { log } from "../../common/log.ts";
+import type { LiveKind } from "../../core/live.ts";
+import { type ProviderAnswer, retryAtFrom } from "../model/index.ts";
+import type { CliProgram, CliTally, CliTerminal, OwnStop } from "./program.ts";
 
 /**
  * A full usage window in a program's own terminal (goal 169; the owner's decisions of 2026-10-27):
@@ -40,6 +41,30 @@ export const TERMINAL_WAIT_MAX_MS = 24 * 3_600_000;
  * 40 s after the reset in goal 169's spike.
  */
 export const GO_ON_GRACE_MS = 3 * 60_000;
+
+/**
+ * What a run in its program's own terminal learns of its provider from whoever runs it (the
+ * harness's model proxy): the newest error answer it saw for the run since `since` (ms), who is
+ * told of each wait, and how long a wait really lasts (tests shorten it).
+ */
+export interface WindowLink {
+  providerAnswer?:
+    | ((since: number) => (ProviderAnswer & { body?: string | undefined }) | undefined)
+    | undefined;
+  waiting?: ((w: { until: string; kind: "rate_limit"; words: string }) => void) | undefined;
+  pauseMs?: ((ms: number) => number) | undefined;
+}
+
+/** What the wait takes from the trial loop, or from a call (call.ts). */
+export interface WindowDeps extends WindowLink {
+  signal?: AbortSignal | undefined;
+  /** Whether the rig drains: a run that waits for its usage window ends. */
+  draining?: (() => boolean) | undefined;
+  /** How often the log is read (tests make it short). */
+  pollMs?: number | undefined;
+  /** Lines for the live view. */
+  live(entries: { kind: LiveKind; text: string }[]): void;
+}
 
 /** What the wait needs of the role's terminal (terminal.ts's RoleTerminal). */
 export interface WindowTerminal {
@@ -82,10 +107,7 @@ export async function waitOutWindow(
   p: Pick<CliProgram<CliTally>, "id" | "name"> & {
     terminal: Pick<CliTerminal<CliTally>, "goesOnAfterLimit">;
   },
-  deps: Pick<
-    CliTrialDeps,
-    "providerAnswer" | "signal" | "draining" | "waiting" | "pauseMs" | "pollMs" | "live"
-  >,
+  deps: WindowDeps,
   r: WindowRun,
 ): Promise<WindowStep> {
   const now = Date.now();

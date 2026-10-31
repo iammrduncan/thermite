@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { Screen } from "../../../src/harness/terminal/screen.ts";
+import { Screen } from "../../../src/agents/terminal/screen.ts";
 
 /** A screen whose replies to the program are kept. */
 function screen(o: { cols?: number; rows?: number; scrollback?: number } = {}) {

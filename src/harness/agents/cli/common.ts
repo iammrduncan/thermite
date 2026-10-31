@@ -1,13 +1,11 @@
+import type { CliProgram, CliRun, CliTally, MessageInbox } from "../../../agents/cli/index.ts";
 import { tallyDifferences } from "../../../agents/programs/index.ts";
 import { errorText } from "../../../common/errors.ts";
 import { log, logDebug, logWarn } from "../../../common/log.ts";
 import type { LaneLimitValues } from "../../../core/contract.ts";
-import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, RunOutcome } from "../../broker/index.ts";
-import type { MessageInbox } from "../live-session.ts";
 import type { ProgramStep } from "../provider-errors.ts";
 import type { TrialResult } from "../worker/index.ts";
-import type { CliProgram, CliRun, CliTally } from "./program.ts";
 
 /**
  * What the trial loops of the agent programs that run as command-line programs (OpenCode,
@@ -97,14 +95,6 @@ export class CarriedMessages {
   drop(): void {
     this.carrying = undefined;
   }
-}
-
-/** Hands the usage the tally gathered to `usage`, once each (goal 075). */
-export function takeUsage(
-  t: { calls: CallUsage[] },
-  usage: ((u: CallUsage) => void) | undefined,
-): void {
-  for (const u of t.calls.splice(0)) usage?.(u);
 }
 
 /**

@@ -1,14 +1,14 @@
-import { Refusal } from "../../../common/errors.ts";
-import type { PiViewCall, PiViewInput } from "../../../core/api/harness/console.ts";
-import { SCREEN_DATA_MAX } from "../../../core/screens.ts";
-import type { TerminalInput } from "../../../core/terminal-input.ts";
+import type { ConsoleTerminal } from "../../../agents/cli/index.ts";
 import {
   DEFAULT_COLS,
   DEFAULT_ROWS,
   type ScreenSnapshot,
   type Terminal,
-} from "../../terminal/index.ts";
-import type { ConsoleTerminal } from "../cli/index.ts";
+} from "../../../agents/terminal/index.ts";
+import { Refusal } from "../../../common/errors.ts";
+import type { PiViewCall, PiViewInput } from "../../../core/api/harness/console.ts";
+import { SCREEN_DATA_MAX } from "../../../core/screens.ts";
+import type { TerminalInput } from "../../../core/terminal-input.ts";
 import { piViewCall } from "./commands.ts";
 
 /**

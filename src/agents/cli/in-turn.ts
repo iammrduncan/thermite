@@ -1,14 +1,9 @@
 import { randomUUID } from "node:crypto";
-import {
-  readNew,
-  type SessionEvent,
-  type SessionLogAdapter,
-} from "../../../agents/programs/index.ts";
-import { messageText, type Prompt } from "../../../agents/prompt.ts";
-import { log, logDebug } from "../../../common/log.ts";
-import type { InTurn } from "../../../core/agents.ts";
-import type { LiveKind } from "../../../core/live.ts";
-import type { MessageInbox, TurnDelivery } from "../live-session.ts";
+import { log, logDebug } from "../../common/log.ts";
+import type { InTurn, MessageHow } from "../../core/agents.ts";
+import type { LiveKind } from "../../core/live.ts";
+import { readNew, type SessionEvent, type SessionLogAdapter } from "../programs/index.ts";
+import { messageText, type Prompt } from "../prompt.ts";
 
 /**
  * What a program's hooks or Thermite's plugin give the CLI trial loop inside the agent's turn
@@ -16,6 +11,29 @@ import type { MessageInbox, TurnDelivery } from "../live-session.ts";
  * file, read into the session-log adapters' events; and the owner's messages the hooks and the
  * plugin take inside the turn (TurnMessages), which the trial's routes offer them.
  */
+
+/** The owner's messages for a running trial (or a call), as the role's runtime reads them. */
+export interface MessageInbox {
+  /** Messages waiting for the trial (fetching them gives nothing to the agent). */
+  waiting(): { id: number; text: string }[];
+  /** These messages were given to the agent, `how` (goal 169): their read receipts. */
+  given(ids: number[], how?: MessageHow): void;
+}
+
+/**
+ * How a running trial in Claude Code, Codex or OpenCode takes the owner's messages inside its
+ * turn (goal 169), through its hook or Thermite's plugin, which ask the trial's routes
+ * (core/api/harness/turn.ts).
+ */
+export interface TurnDelivery {
+  /**
+   * The next message waiting, as the agent's role puts it, held for the hook that asked until
+   * its receipt; undefined when none waits or no run is under way. Nothing is read yet.
+   */
+  offer(at: InTurn): { offer: string; text: string } | undefined;
+  /** The hook gave the offer's text to its program: it is read now. The ids read. */
+  taken(offer: string): number[];
+}
 
 /**
  * A trial's signals, followed while it runs: each read gives the events its hooks or plugin

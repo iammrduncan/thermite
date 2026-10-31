@@ -1,3 +1,4 @@
+import type { CliHarness } from "../../../agents/cli/index.ts";
 import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
@@ -8,7 +9,6 @@ import type { Runner } from "../../broker/index.ts";
 import type { Ledger } from "../../ledger/index.ts";
 import type { Research } from "../../research/index.ts";
 import type { HarnessService } from "../../service/index.ts";
-import type { CliHarness } from "../cli/index.ts";
 import { Coordinator, lanesAtWork, rulesInForce } from "../coordinator.ts";
 import type { PlannerCallSpec, PlannerViewCall } from "../planner/index.ts";
 import { Registry } from "../registry.ts";

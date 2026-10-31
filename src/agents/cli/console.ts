@@ -1,10 +1,10 @@
-import { errorText, Refusal } from "../../../common/errors.ts";
+import { errorText, Refusal } from "../../common/errors.ts";
 import {
   TERMINAL_QUEUE_MAX,
   type TerminalInput,
   type TerminalOutcome,
-} from "../../../core/terminal-input.ts";
-import type { ScreenSnapshot } from "../../terminal/index.ts";
+} from "../../core/terminal-input.ts";
+import type { ScreenSnapshot } from "../terminal/index.ts";
 
 /**
  * The owner's console into one trial's terminal (goal 169): the owner's inputs (terminal_input),

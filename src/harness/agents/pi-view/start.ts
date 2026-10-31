@@ -1,5 +1,5 @@
+import { DEFAULT_COLS, DEFAULT_ROWS } from "../../../agents/terminal/index.ts";
 import { PI_VIEW_DONE, PI_VIEW_END, PI_VIEW_NEXT } from "../../../core/api/harness/console.ts";
-import { DEFAULT_COLS, DEFAULT_ROWS } from "../../terminal/index.ts";
 import type { McpForAgent, ProviderWait, TrialResult, TrialView } from "../worker/index.ts";
 import { ViewInputs } from "./inputs.ts";
 import { PiView } from "./view.ts";

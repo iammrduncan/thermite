@@ -13,16 +13,16 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { serve } from "@hono/node-server";
+import { claudeProgram } from "../../../../src/agents/cli/claude-code.ts";
 import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import { messageText, type Prompt } from "../../../../src/agents/prompt.ts";
 import { renderPlannerTurn } from "../../../../src/agents/roles/index.ts";
+import { SETSID } from "../../../../src/agents/terminal/pty.ts";
 import { signEnvelope } from "../../../../src/core/commands.ts";
 import { plannerCallId } from "../../../../src/core/terminal-input.ts";
-import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts";
 import { cliAsk } from "../../../../src/harness/agents/cli/once.ts";
 import { createHarnessApi } from "../../../../src/harness/api/index.ts";
 import { LocalRunner } from "../../../../src/harness/broker/runner.ts";
-import { SETSID } from "../../../../src/harness/terminal/pty.ts";
 import { makeJudgeEnv } from "../../../helpers/judge-env.ts";
 
 const FAKE = join(import.meta.dirname, "..", "..", "..", "helpers", "fake-tui.ts");

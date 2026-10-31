@@ -1,4 +1,13 @@
 import { join } from "node:path";
+import {
+  type CliCall,
+  type CliProgram,
+  type CliTally,
+  callFolder,
+  setUp,
+  takeUsage,
+  terminalCall,
+} from "../../../agents/cli/index.ts";
 import { CliCompactions, type OnceKeeping, reclaim } from "../../../agents/compaction/index.ts";
 import type { McpAccess } from "../../../agents/mcp/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
@@ -8,10 +17,8 @@ import { renderModelCheck } from "../../../agents/roles/index.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, Runner } from "../../broker/index.ts";
 import type { RigCheckReport } from "../model/index.ts";
-import { callFolder, type TerminalCallLink, terminalCall } from "./call.ts";
-import { CHECK_ROLE, PLANNER_ROLE, takeUsage } from "./common.ts";
-import { setUp } from "./loop.ts";
-import type { CliCall, CliProgram, CliTally } from "./program.ts";
+import { CHECK_ROLE, PLANNER_ROLE } from "./common.ts";
+import type { TerminalCallLink } from "./program.ts";
 
 /**
  * One prompt through a program outside a trial (goal 125, T7): a planner call or a model check,
