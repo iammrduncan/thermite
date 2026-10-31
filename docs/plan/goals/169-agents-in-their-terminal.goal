@@ -1,16 +1,16 @@
 ---
 id: "169"
 title: "Agents in their own terminal: each agent program runs its TUI, the live view shows it, steering types into it, session logs become events"
-status: READY
+status: IN_PROGRESS
 version: "0.1.1"
 depends_on: ["166"]
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-31
 ---
 
 # 169 · Agents in their own terminal: each agent program runs its TUI, the live view shows it, steering types into it, session logs become events
 
-**Status:** `READY` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [166](_completed/166-agent-definitions.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [166](_completed/166-agent-definitions.goal)
 
 ## What
 

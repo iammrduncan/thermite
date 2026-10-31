@@ -1,16 +1,16 @@
 ---
 id: "168"
 title: "One message bus: NATS JetStream between control, rigs and agents, with fast storage and retrieval"
-status: READY
+status: IN_PROGRESS
 version: "0.1.1"
 depends_on: ["167"]
 created: 2026-10-26
-updated: 2026-10-28
+updated: 2026-10-31
 ---
 
 # 168 · One message bus: NATS JetStream between control, rigs and agents, with fast storage and retrieval
 
-**Status:** `READY` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [167](_completed/167-how-the-parts-talk.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [167](_completed/167-how-the-parts-talk.goal)
 
 ## What
 

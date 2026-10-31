@@ -1,16 +1,16 @@
 ---
 id: "174"
 title: "Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows"
-status: READY
+status: IN_PROGRESS
 version: "0.1.1"
 depends_on: ["160"]
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-31
 ---
 
 # 174 · Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows
 
-**Status:** `READY` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [160](_completed/160-v010-audit.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [160](_completed/160-v010-audit.goal)
 
 ## What
 
