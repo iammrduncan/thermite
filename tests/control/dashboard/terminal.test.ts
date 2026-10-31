@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
@@ -11,7 +14,7 @@ import { prepareCommand } from "../../../src/control/issue/index.ts";
 import { TERMINAL_JS } from "../../../src/control/ui/terminal.ts";
 import { SCREENS_WATCHED_MAX } from "../../../src/core/screens.ts";
 import { TERMINAL_KEYS } from "../../../src/core/terminal-input.ts";
-import { TrialConsole } from "../../../src/harness/agents/index.ts";
+import { ModelSource, TrialConsole } from "../../../src/harness/agents/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { ask } from "../../../src/supervisor/ask.ts";
 import { relayScreensOnce } from "../../../src/supervisor/live/index.ts";
@@ -140,6 +143,30 @@ describe("a trial's terminal on Live", () => {
     assert.doesNotThrow(() => new Function(TERMINAL_JS));
     assert.match(TERMINAL_JS, /disableStdin: true/);
     assert.match(TERMINAL_JS, /linkHandler: \{ activate: \(\) => \{\} \}/);
+  });
+
+  test("a rig whose workers run in Pi lists their terminals too, and a trial's page draws its Pi view's", async () => {
+    const s = await setup();
+    // The rig's own model, with no harness named: its workers run in Pi, which the rig reports.
+    s.env.service.models = new ModelSource(
+      join(mkdtempSync(join(tmpdir(), "thermite-pi-")), "route.json"),
+      {
+        baseUrl: "http://127.0.0.1:9/v1",
+        model: "local",
+        apiKey: "k",
+        contextWindow: 32_000,
+        maxTokens: 2_000,
+      },
+    );
+    await s.relay();
+    const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
+    assert.match(
+      run,
+      /<a href="\/ui\/rigs\/rig-a\/live\?source=trial%3At-0123456789abcdef">lane-1's terminal<\/a>/,
+    );
+    const html = await s.owner.page(PAGE);
+    assert.match(html, /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=t-0123456789abcdef"/);
+    assert.match(html, /data-term-console/);
   });
 
   test("no other token sees the view or the console: the dashboard signs in the owner alone", async () => {

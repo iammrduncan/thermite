@@ -127,9 +127,10 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
       chip("advisors", "Advisors"),
       chip("you", "You", "your messages, and who read them"),
     ].join("");
-    // Each lane's trial at work in its program's own terminal (goal 169): its page has the terminal.
+    // Each lane's trial at work in its program's own terminal (goal 169), a worker in Pi in its Pi
+    // view: its page has the terminal.
     const inTerminals =
-      r.status === "running" && u.settings?.program_mode === "terminal" && u.model?.harness !== "pi"
+      r.status === "running" && u.settings?.program_mode === "terminal"
         ? Object.entries(r.at_work).sort(([a], [b]) =>
             a.localeCompare(b, undefined, { numeric: true }),
           )
@@ -426,15 +427,14 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           .join(", ")}.</div>`
       : `<div class="composer off">No run on this rig to message.</div>`;
     // A trial's page has its terminal, and the owner's console into it (goal 169).
-    const term =
-      trial?.run && u.model?.harness !== "pi"
-        ? terminalPanel(dash, c, {
-            rig: u.id,
-            run: trial.run,
-            trial: source.slice(6),
-            ended: Boolean(ended.get(source)),
-          })
-        : "";
+    const term = trial?.run
+      ? terminalPanel(dash, c, {
+          rig: u.id,
+          run: trial.run,
+          trial: source.slice(6),
+          ended: Boolean(ended.get(source)),
+        })
+      : "";
     const title = source ? sourceName(source, sel?.lane) : "Everything";
     return page(
       c,
