@@ -159,6 +159,10 @@ export async function piAdvisor(o: PiAdvisorCall): Promise<PiAdvisorEnd> {
     },
     streamFn: meter.streamFn(models),
     toolExecution: "sequential",
+    // Every later turn that waits goes in before its next model call: the owner's words typed into
+    // its view and the owner's messages alike. Pi's default takes one a call, and an answer on that
+    // call would end it with the rest never sent and never read.
+    steeringMode: "all",
   });
   meter.watch(agent);
   // Near the window the call's conversation is compacted and the advisor goes on (goal 070), as

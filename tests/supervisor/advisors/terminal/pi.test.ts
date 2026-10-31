@@ -239,3 +239,90 @@ test("an advisor in Pi in its Pi view: an owner's message before its next call, 
     [],
   );
 });
+
+test("an owner's message that comes while the owner's typed words wait goes in with them before its next model call, as its numbered turn", async () => {
+  // The steering check's scene: its first reply is held while the owner types into its view and
+  // writes to its role; then it reads its brief, whose owner_messages carry the message too.
+  const TYPED = "Look at the timer code.";
+  const MESSAGE = "Check the timer before you advise.";
+  const HOLD_MS = 2000;
+  let replies = 0;
+  let next: string | undefined;
+  const model = await startFakeModel(({ messages }) => {
+    const said = JSON.stringify(messages);
+    if (said.includes(TYPED) && said.includes(MESSAGE)) {
+      next ??= said;
+      return {
+        toolCalls: [
+          {
+            name: "answer",
+            args: {
+              decision: "needs_owner",
+              reasons: "the owner asked about the timer",
+              citations: [],
+              answers: [{ message: 8, text: "The timer is the judge's own." }],
+            },
+          },
+        ],
+      };
+    }
+    replies++;
+    return { toolCalls: [{ name: "brief", args: {} }], delayMs: replies === 1 ? HOLD_MS : 50 };
+  });
+  const { r } = runner();
+  const consoles = new AdvisorConsoles();
+  let sent: { id: number; text: string }[] = [];
+  let reads = 0;
+  const terminals: AdvisorTerminals = {
+    runner: r,
+    root,
+    consoles,
+    waiting: async () => {
+      reads++;
+      return sent;
+    },
+    live: () => undefined,
+    pollMs: 25,
+  };
+  const { auditor } = AdvisorsConfig.parse({
+    teachers: [],
+    auditor: {
+      name: "auditor",
+      runtime: "openai",
+      base_url: model.url,
+      model: "scripted",
+      api_key_file: keyFile,
+    },
+  });
+  assert.ok(auditor);
+  const running = runAdvisor({
+    runtime: auditor,
+    prompt: (f) => renderAuditor({ pkg: { attempt: "a-1" } }, f),
+    schema: AuditAnswer,
+    answerSchema: ANSWER,
+    tools: { brief: async () => ({ owner_messages: sent.map((m) => ({ ...m, read: false })) }) },
+    terminal: { terminals, run: "js-1", role: "auditor", given: [] },
+  });
+  for (let i = 0; i < 500 && !replies; i++) await new Promise((res) => setTimeout(res, 10));
+  const [call] = consoles.calls();
+  assert.ok(call && replies === 1, "its first reply is held");
+  const typed = await consoles.input(
+    { id: "i-1", call: call.id, text: TYPED, wait: "now" },
+    () => undefined,
+  );
+  assert.deepEqual(typed, { outcome: "typed" });
+  sent = [{ id: 8, text: MESSAGE }];
+  const seen = reads;
+  for (let i = 0; i < 500 && reads <= seen; i++) await new Promise((res) => setTimeout(res, 10));
+  assert.equal(model.requests, 1, "the owner typed and wrote while its first reply was held");
+  const res = await running;
+  await model.close();
+  assert.equal(res.error, undefined, JSON.stringify(res));
+  assert.ok(next, "a model call held both");
+  assert.ok(
+    next.includes("answer it in answers with the others when you call answer") &&
+      next.includes(JSON.stringify(JSON.stringify({ id: 8, text: MESSAGE })).slice(1, -1)),
+    `its next model call holds the message as its numbered turn: ${next.slice(-600)}`,
+  );
+  assert.deepEqual(res.given, [8], "the owner's message went in, for its receipt");
+});

@@ -19,6 +19,16 @@ const OWNER_PI = "answer it in answers with the others when you call answer";
 const TEACHER = "teacher-a";
 
 /**
+ * What a model call was sent around the last place that holds `words`, with the words of the turn
+ * that carries them, kept short for a check's detail. The last place: a turn steered in comes
+ * after the tool results, and the brief's owner_messages quote the owner's message too.
+ */
+function around(said, words) {
+  const at = said.lastIndexOf(words);
+  return at < 0 ? "" : said.slice(Math.max(0, at - 200), at + words.length + 40);
+}
+
+/**
  * The scene's part of the scripted model, and the scene itself. `turn(model, messages, answer)`:
  * the teacher's turn while the scene is on, or undefined, when the script answers as it does.
  */
@@ -81,7 +91,7 @@ export function piAdvisorScene() {
         check(
           "the owner's message went into the teacher's call before its next model call, in the Pi advisor's words",
           s.done.said.includes(MESSAGE) && s.done.said.includes(OWNER_PI),
-          { held_for_ms: s.done.at - s.heldAt },
+          { held_for_ms: s.done.at - s.heldAt, around_message: around(s.done.said, MESSAGE) },
         );
         const events = await rigEvents("local-1");
         check(
