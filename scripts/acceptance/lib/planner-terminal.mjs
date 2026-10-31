@@ -40,12 +40,13 @@ export function piPlannerTurn(messages, tools) {
 export async function piPlannerScene(check) {
   const call = await plannerInTerminal("smoke-1", { ms: 300_000 });
   const since = (await events()).length;
+  // Typed first: the call stays open until the owner's message comes, then it plans and ends.
+  const typed = await typeInto(call.id, { text: "/status" });
   await command("message_agent", {
     run: "smoke-1",
     to: "planner",
     text: "OWNER-PI-PLANNER Spread the lanes wider.",
   });
-  const typed = await typeInto(call.id, { text: "/status" });
   const frame = await screenOnLive(call.id);
   const read = await until(
     "the planner in Pi read the owner's message during its call",
