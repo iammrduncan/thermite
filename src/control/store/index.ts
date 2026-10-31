@@ -79,7 +79,9 @@ export type {
   KbListAt,
   KbListCounts,
   KbListed,
+  KbSettingKey,
   KbStoredFigures,
+  KbTextState,
   KbTotals,
 } from "./kb/index.ts";
 export { KB_STORED_FILES } from "./kb/index.ts";

@@ -14,7 +14,8 @@ import { clip } from "../../core/kb-index.ts";
  * campaign reads its own collection and, when the owner grants it, other campaigns' collections.
  *
  * Its collections, items, versions, runs, grants, scopes, files and cursor are kept by the store's
- * knowledge base (store/kb/); the files themselves in control's state (files.ts).
+ * knowledge base (store/kb/); the files themselves in control's state (files.ts), with their text
+ * extracted once (text/), and its settings on control (settings.ts).
  */
 
 export type { KbKind } from "../../core/kb.ts";
@@ -60,6 +61,7 @@ export {
 } from "./note.ts";
 export { KbSearchQuery, kbSearchFields, ownerKbSearch } from "./owner.ts";
 export {
+  fileTextFacts,
   type KbReadAnswer,
   type KbReader,
   type KbReaderWhy,
@@ -68,8 +70,27 @@ export {
   ownerKbRead,
   readersOf,
 } from "./read.ts";
+export {
+  KB_SETTING_WORDS,
+  type KbSettings,
+  KbSettingsBody,
+  type KbSettingsOutcome,
+  kbSettingsOf,
+  kbSettingsWords,
+  overLimitWords,
+  setKbSettings,
+} from "./settings.ts";
 export { KB_REFUSED_PAGE, type KbStored, type KbWaiting, kbStored } from "./stored.ts";
 export { KB_REFUSALS_SHOWN, type KbSummary } from "./summary.ts";
+export {
+  extractText,
+  KB_TEXT_LIMITS,
+  KB_TEXT_LOOK_MS,
+  KbText,
+  type KbTextLimits,
+  type KbTextResult,
+  notSearchedWhy,
+} from "./text/index.ts";
 
 /** What a grant of another campaign's collection opens, in words: every agent of the campaign. */
 export const GRANT_OPENS =

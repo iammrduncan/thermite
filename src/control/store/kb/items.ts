@@ -46,13 +46,16 @@ export interface VersionFields {
   sub: string | null;
   meta: string;
   file?: KbItemFile | undefined;
+  /** A file's text, once control extracted it: the item's row holds it for the words index. */
+  fileText?: string | undefined;
 }
 
 /**
  * A new item at `place`, or a new version of the one there, with its links: the item's row holds
  * the newest version, with a new seq (the rigs' syncs read after it); every version, the newest
- * too, is kept in kb_version. `event`: the kb_item event that wrote it. Returns the item's id and
- * its version. In the caller's transaction.
+ * too, is kept in kb_version. `event`: the kb_item event that wrote it. A file item's row holds
+ * its file's text, when control has it, for the words index; its version keeps its writer's words.
+ * Returns the item's id and its version. In the caller's transaction.
  */
 export function keepVersion(
   db: DatabaseSync,
@@ -69,6 +72,7 @@ export function keepVersion(
     )
     .get(rig, ledger, run, slot, kind, ref) as { id: number; version: number } | undefined;
   const file = [f?.sha256 ?? null, f?.name ?? null, f?.type ?? null, f?.bytes ?? null] as const;
+  const indexed = f ? (v.fileText ?? "") : v.body;
   // Its outcome and context come from Thermite's own records (words.ts), with each version.
   const outcome = outcomeFor(db, place, v.meta);
   const about = campaignAbout(db, campaign);
@@ -87,7 +91,7 @@ export function keepVersion(
       seq,
       version,
       v.title,
-      v.body,
+      indexed,
       v.by,
       v.url,
       v.sub,
@@ -118,7 +122,7 @@ export function keepVersion(
           kind,
           ref,
           v.title,
-          v.body,
+          indexed,
           v.by,
           v.url,
           v.sub,
@@ -131,7 +135,7 @@ export function keepVersion(
         ).lastInsertRowid,
     );
   }
-  indexItem(db, id, v.body);
+  indexItem(db, id, indexed);
   // A recorded attempt's outcome is its experiment's too.
   if (kind === "attempt" && slot === KB_RECORDS) followAttempt(db, place, ref, outcome);
   db.prepare(

@@ -414,4 +414,68 @@ describe("the owner's search of the knowledge base", () => {
       server.close();
     }
   });
+
+  test("thermite kb settings reads the knowledge base's settings, and sets them as PUT /v1/kb/settings does", async () => {
+    const { api } = control();
+    const server = serve({ fetch: api.fetch, port: 0, hostname: "127.0.0.1" });
+    await new Promise((r) => server.once("listening", r));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const dir = mkdtempSync(join(tmpdir(), "thermite-cli-kb-"));
+    const tokenFile = join(dir, "token");
+    writeFileSync(tokenFile, `${TOKENS.admin}\n`);
+    const at = ["--control", url, "--token-file", tokenFile];
+    try {
+      const read = await cli("kb", "settings", ...at);
+      assert.equal(read.code, 0, read.stderr);
+      assert.deepEqual(Object.entries(JSON.parse(read.stdout)).slice(0, 3), [
+        ["max_file_mib", 0],
+        ["orphan_hours", 0],
+        ["orphan_hours_from", "environment"],
+      ]);
+      const set = await cli(
+        "kb",
+        "settings",
+        "--max-file-mib",
+        "64",
+        "--orphan-hours",
+        "72",
+        ...at,
+      );
+      assert.equal(set.code, 0, set.stderr);
+      const now = JSON.parse(set.stdout) as Record<string, unknown>;
+      assert.deepEqual(
+        [now.max_file_mib, now.orphan_hours, now.orphan_hours_from],
+        [64, 72, "setting"],
+      );
+      assert.equal(
+        now.said,
+        "The knowledge base takes files up to 64 MiB; a file no item names is removed after 72 hours.",
+      );
+      // Empty: no limit; default: back to THERMITE_CONTROL_KB_ORPHAN_HOURS.
+      const back = await cli(
+        "kb",
+        "settings",
+        "--max-file-mib",
+        "",
+        "--orphan-hours",
+        "default",
+        ...at,
+      );
+      assert.equal(back.code, 0, back.stderr);
+      const was = JSON.parse(back.stdout) as Record<string, unknown>;
+      assert.deepEqual([was.max_file_mib, was.orphan_hours_from], [0, "environment"]);
+      const bad = await cli("kb", "settings", "--max-file-mib", "big", ...at);
+      assert.notEqual(bad.code, 0);
+      assert.match(bad.stderr, /--max-file-mib takes a number, 0 or more, not "big"/);
+      const other = await cli("kb", "search", "x", "--orphan-hours", "1", ...at);
+      assert.match(
+        other.stderr,
+        /kb search takes no --max-file-mib or --orphan-hours: kb settings does/,
+      );
+      const mixed = await cli("kb", "settings", "--kind", "note", ...at);
+      assert.match(mixed.stderr, /kb settings takes only --max-file-mib and --orphan-hours/);
+    } finally {
+      server.close();
+    }
+  });
 });

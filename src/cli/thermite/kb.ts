@@ -6,7 +6,9 @@ import {
   KB_LIST,
   KB_NOTE,
   KB_SEARCH,
+  KB_SETTINGS,
   KB_STORED,
+  SET_KB_SETTINGS,
 } from "../../core/api/control/owner.ts";
 import { controlAt, orFail } from "../calls.ts";
 import { fail } from "./shared.ts";
@@ -16,7 +18,8 @@ import { USAGE } from "./usage.ts";
  * thermite kb: the owner's search of Thermite's knowledge base, one item read (goal 175), one
  * place's list, and a grant given or ended (goal 176), through control's `GET /v1/kb/search`, `GET
  * /v1/kb/item`, `GET /v1/kb/list` and `POST` or `DELETE /v1/campaigns/<campaign>/kb-grants`, as
- * MCP's kb_search, kb_read, kb_list, kb_grant and kb_revoke, with the same options. It prints
+ * MCP's kb_search, kb_read, kb_list, kb_grant and kb_revoke, with the same options; and the
+ * knowledge base's settings on control, read or set (`GET` or `PUT /v1/kb/settings`). It prints
  * control's answer as JSON on standard output.
  */
 export async function thermiteKb(rest: string[]): Promise<void> {
@@ -42,12 +45,14 @@ export async function thermiteKb(rest: string[]): Promise<void> {
       order: { type: "string" },
       as: { type: "string" },
       title: { type: "string" },
+      "max-file-mib": { type: "string" },
+      "orphan-hours": { type: "string" },
       control: { type: "string" },
       "token-file": { type: "string" },
     },
   });
   const grants = sub === "grant" || sub === "revoke";
-  const subs = ["search", "read", "list", "stored", "note"];
+  const subs = ["search", "read", "list", "stored", "note", "settings"];
   if (!subs.includes(sub ?? "") && !grants) fail(USAGE);
   if (!values.control || !values["token-file"])
     fail("give --control and --token-file: control keeps the knowledge base");
@@ -67,6 +72,37 @@ export async function thermiteKb(rest: string[]): Promise<void> {
     process.stdout.write(`${JSON.stringify(out)}\n`);
     return;
   }
+  const settings = { max: values["max-file-mib"], hours: values["orphan-hours"] };
+  if (sub === "settings") {
+    const given = Object.entries(values).filter(
+      ([k, v]) =>
+        v !== undefined && !["control", "token-file", "max-file-mib", "orphan-hours"].includes(k),
+    );
+    if (positionals.length || given.length)
+      fail("kb settings takes only --max-file-mib and --orphan-hours");
+    if (settings.max === undefined && settings.hours === undefined) {
+      process.stdout.write(`${JSON.stringify(await orFail(control.call(KB_SETTINGS, {})))}\n`);
+      return;
+    }
+    const body = {
+      // Empty or 0: no limit.
+      ...(settings.max !== undefined
+        ? { max_file_mib: settingNumber(settings.max, "--max-file-mib") }
+        : {}),
+      // default: back to THERMITE_CONTROL_KB_ORPHAN_HOURS.
+      ...(settings.hours !== undefined
+        ? {
+            orphan_hours:
+              settings.hours === "default" ? null : settingNumber(settings.hours, "--orphan-hours"),
+          }
+        : {}),
+    };
+    const out = await orFail(control.call(SET_KB_SETTINGS, { body }));
+    process.stdout.write(`${JSON.stringify(out)}\n`);
+    return;
+  }
+  if (settings.max !== undefined || settings.hours !== undefined)
+    fail(`kb ${sub} takes no --max-file-mib or --orphan-hours: kb settings does`);
   if (sub !== "note" && values.title !== undefined)
     fail(`kb ${sub} takes no --title: kb note does`);
   if (sub === "note") {
@@ -178,4 +214,11 @@ export async function thermiteKb(rest: string[]): Promise<void> {
     }),
   );
   process.stdout.write(`${JSON.stringify(out)}\n`);
+}
+
+/** A setting's number as the command line gives it: empty is 0; anything else must be a number of 0 or more. */
+function settingNumber(raw: string, option: string): number {
+  const n = raw.trim() === "" ? 0 : Number(raw);
+  if (!Number.isFinite(n) || n < 0) fail(`${option} takes a number, 0 or more, not "${raw}"`);
+  return n;
 }

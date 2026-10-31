@@ -44,6 +44,10 @@ COPY --from=build /src/dist ./dist
 # xterm.js, which draws a trial's terminal on Live (goal 169): the copy kept in the repository, with
 # its MIT licence. Control serves it only when its SHA-256 is the pinned one.
 COPY vendor/xterm ./vendor/xterm
+# PDF.js's legacy build, which reads the text of the knowledge base's PDF files (goal 175): the two
+# JavaScript files kept in the repository, with its Apache-2.0 licence. Control loads them only
+# when their SHA-256 values are the pinned ones, in a child process with no native module.
+COPY vendor/pdfjs ./vendor/pdfjs
 COPY containers/thermite /usr/local/bin/thermite
 COPY --from=build /kubectl /usr/local/bin/kubectl
 COPY containers/control/kubectl/LICENSE /usr/local/share/doc/kubectl/LICENSE

@@ -76,19 +76,30 @@ const TYPE_WORDS: Record<string, string> = {
 export const fileHref = (address: string, version: number) =>
   `/ui/kb/file?${new URLSearchParams({ address, version: String(version) })}`;
 
-function fileCard(x: ReaderItem, f: NonNullable<ReaderItem["file"]>): string {
+/** What became of a file's text, in the file's line. */
+const TEXT_STATE_WORDS: Record<NonNullable<ReaderItem["file"]>["text_state"], string> = {
+  searched: "text searched",
+  waiting: "its text not extracted yet",
+  "kept whole": "kept whole, its text not searched",
+};
+
+function fileCard(x: ReaderItem, f: NonNullable<ReaderItem["file"]>, links: ReaderLinks): string {
   const meta = [
     TYPE_WORDS[f.type] ?? f.type,
     sizeWords(f.bytes),
-    f.searched ? "text searched" : "kept whole, its text not searched",
+    TEXT_STATE_WORDS[f.text_state],
   ].join(" · ");
   const download = f.held
     ? `<a class="btn sm" href="${esc(fileHref(x.address, x.version))}" download>${icon.download}<span>Download</span></a>`
     : `<span class="muted small">Control does not hold the file yet: it comes when the rig sends it.</span>`;
+  // Its text as control extracted it, shown as text, never as the file itself.
   const text = x.text
-    ? `<details class="kx-filetext"><summary class="btn sm">${icon.file}<span>Show text</span></summary><div class="kx-text mono">${esc(x.text)}</div></details>`
+    ? `<details class="kx-filetext"><summary class="btn sm">${icon.file}<span>Show text</span></summary>${textHtml(x, links)}</details>`
     : "";
-  return `<div class="kx-file"><div class="kx-fhead"><span class="iconbox">${icon.doc}</span><div class="kx-fname"><b>${esc(f.name)}</b><span class="muted small">${esc(meta)}</span></div></div><dl class="kx-fmeta"><dt>SHA-256</dt><dd><code>${esc(f.sha256)}</code></dd><dt>From</dt><dd>${esc(f.from)}</dd></dl><div class="kx-fbtns">${download}${text}</div></div>`;
+  const why = f.text_why
+    ? `<dt>${f.text_state === "searched" ? "Its text" : "Why"}</dt><dd>${esc(f.text_why)}</dd>`
+    : "";
+  return `<div class="kx-file"><div class="kx-fhead"><span class="iconbox">${icon.doc}</span><div class="kx-fname"><b>${esc(f.name)}</b><span class="muted small">${esc(meta)}</span></div></div><dl class="kx-fmeta"><dt>SHA-256</dt><dd><code>${esc(f.sha256)}</code></dd><dt>From</dt><dd>${esc(f.from)}</dd>${why}</dl><div class="kx-fbtns">${download}${text}</div></div>`;
 }
 
 /** The version picker: Version n of m, the latest first; an older one says so. */
@@ -134,9 +145,12 @@ function readersHtml(x: ReaderItem): string {
   return `<details class="kx-sec"><summary>${icon.chevron}<span>Who can read it</span><span class="n">${x.readers.length ? `${can} of ${x.readers.length} running ${x.readers.length === 1 ? "run" : "runs"}` : "no run running"}</span></summary><div class="kx-pophead">${infoLabel("Running runs", READERS_TIP)}</div>${rows ? `<div class="kx-readers" role="list">${rows}</div>` : `<div class="muted small">No run is running now.</div>`}</details>`;
 }
 
-/** The text a page at a time: on the item's page with its parts; in the pane, its first. */
+/**
+ * The text a page at a time: on the item's page with its parts; in the pane, its first. A file's
+ * extracted text goes in its card, under Show text.
+ */
 function textHtml(x: ReaderItem, links: ReaderLinks): string {
-  if (x.file || !x.text) return "";
+  if (!x.text) return "";
   const here = links.version(x.history[0]?.version === x.version ? undefined : x.version);
   const sep = here.includes("?") ? "&" : "?";
   const parts =
@@ -166,7 +180,7 @@ export function readerHtml(x: ReaderItem, links: ReaderLinks, now: number): stri
   const meta = `<div class="kx-meta"><span class="chip">${esc(x.kind)}</span>${x.outcome ? outcomeChip(x.outcome) : ""}${withdrawn}<span class="mono">${esc(x.slot)}</span><span aria-hidden="true">·</span><span>${esc(x.writer.words)}</span><span aria-hidden="true">·</span><span title="${esc(x.at)}">written ${esc(ago(x.at, now))} ago</span></div>`;
   const body = `<h2>${esc(x.title || x.address)}</h2>${meta}${x.result ? `<div class="small"><span class="muted">Result:</span> ${esc(x.result)}</div>` : ""}
 <div class="kx-addrline"><code>${esc(x.address)}</code><button type="button" class="ghost sm" data-copy="${esc(x.address)}" aria-label="Copy the address">${icon.copy}<span>Copy</span></button></div>
-${versionsHtml(x, links, now)}${x.file ? fileCard(x, x.file) : ""}${textHtml(x, links)}${linksHtml(x, links)}${readersHtml(x)}${links.note ? noteHtml(x, links.note) : ""}`;
+${versionsHtml(x, links, now)}${x.file ? fileCard(x, x.file, links) : textHtml(x, links)}${linksHtml(x, links)}${readersHtml(x)}${links.note ? noteHtml(x, links.note) : ""}`;
   if (links.mode === "page")
     return `<div class="kx-scroll"><article class="kx-item">${body}</article></div>`;
   const id = x.address.split("/").slice(3).join("/");

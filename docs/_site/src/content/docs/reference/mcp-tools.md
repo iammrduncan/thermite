@@ -51,9 +51,9 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `list_rigs`, `get_run`, `get_attempt`, `run_queue`, `recent_events`, `leaderboard`, `model_usage`, `rig_reports`, `list_commands`, `command_status` | Yes | Yes | Yes | Yes |
 | `issue_command` | Yes, the owner's kinds | Yes, the operator's kinds | Yes, the agent's kinds | No |
 | `propagate_champion` | Yes | Yes | Yes | No |
-| `kb_collections`, `kb_list`, `kb_search`, `kb_read`, `kb_stored`, `kb_note`, `exports` | Yes | Yes | No | No |
+| `kb_collections`, `kb_list`, `kb_search`, `kb_read`, `kb_stored`, `kb_note`, `kb_settings`, `exports` | Yes | Yes | No | No |
 | `kb_grant` | Yes | Yes, as a proposal the owner approves | No | No |
-| `kb_revoke` | Yes | No | No | No |
+| `kb_revoke`, `set_kb_settings` | Yes | No | No | No |
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
 | `trial_session`, `control_log`, `providers`, `bus_state`, `rig_models`, `rig_settings`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
 | `runpod_rig_logs`, `agent_roles`, `agent_prompts`, `reachable_addresses` | Yes | Yes | No | No |
@@ -383,6 +383,27 @@ Returns `{ok, address, follows, said}`, as [`POST /v1/kb/notes`](rest-api.md#the
 
 Returns what [`GET /v1/kb/stored`](rest-api.md#the-knowledge-base) returns ([What's stored](knowledge-base.md#whats-stored)).
 
+### kb_settings
+
+**The knowledge base's settings.** Owner and operator.
+
+> The knowledge base's settings on control, as Settings › Knowledge base shows them: …
+
+No input. Returns what [`GET /v1/kb/settings`](rest-api.md#the-knowledge-base) returns: `{max_file_mib, orphan_hours, orphan_hours_from, orphan_hours_default, set_by, set_at}` ([The knowledge base's settings](knowledge-base.md#the-knowledge-bases-settings)).
+
+### set_kb_settings
+
+**Set the knowledge base's settings.** Owner.
+
+> Sets the knowledge base's settings on control, as Settings › Knowledge base does: each one given changes, and null puts it back to its default …
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `max_file_mib` | number, 0 or more, or `null`, optional | unchanged | The largest file the knowledge base takes, in MiB. `0` or `null`: no limit |
+| `orphan_hours` | number, 0 or more, or `null`, optional | unchanged | How many hours a file no item names stays. `0`: every file is kept; `null`: back to `THERMITE_CONTROL_KB_ORPHAN_HOURS` |
+
+Give at least one. Returns what [`PUT /v1/kb/settings`](rest-api.md#the-knowledge-base) returns, with `said`, the settings in words, and is audited as `kb_settings_set`; a value that is not a number of 0 or more is a tool error, in the same words as REST's.
+
 ### kb_list
 
 **List a place of the knowledge base.** Owner and operator.
@@ -440,7 +461,7 @@ Returns `{note, collections, matched, next_offset, counts, words, did_you_mean, 
 | `version` | whole number, optional | its newest | One of its versions |
 | `offset` | whole number, optional | 0 | Where its text starts, in characters: a hit's `passage.from`, or a read's `next_offset` |
 
-Returns `{note, item}`, as [`GET /v1/kb/item`](rest-api.md#the-knowledge-base): `item` is `{id, address, collection, run, slot, rig, kind, type, title, outcome, by, at, version, text, offset, chars, next_offset, versions, history, writer, withdrawn, file, links, linked_from, readers, result}`. `text` is at most 10,000 characters from `offset`; `chars` is the whole text's length, and `next_offset` where the next read starts (`null` at its end). `history` is every version, newest first; `writer` who wrote it, with the program its calls ran in; `withdrawn` why an attempt's evidence was withdrawn; `file` the version's file with `held`, `searched` and `from`; `links` its own links with their targets' titles, and `linked_from` the items that link to it; `readers` each running run, whether its agents can read the item, and why ([An item's read](knowledge-base.md#an-items-read)). The file itself downloads over REST only, `GET /v1/kb/file`. Errors: `the knowledge base has no item <address>`, `<address> has versions 1 to <n>, not <version>`.
+Returns `{note, item}`, as [`GET /v1/kb/item`](rest-api.md#the-knowledge-base): `item` is `{id, address, collection, run, slot, rig, kind, type, title, outcome, by, at, version, text, offset, chars, next_offset, versions, history, writer, withdrawn, file, links, linked_from, readers, result}`. `text` is at most 10,000 characters from `offset`; `chars` is the whole text's length, and `next_offset` where the next read starts (`null` at its end). `history` is every version, newest first; `writer` who wrote it, with the program its calls ran in; `withdrawn` why an attempt's evidence was withdrawn; `file` the version's file with `held`, `searched`, `text_state`, `text_why` and `from`, and `text` for a file its extracted text; `links` its own links with their targets' titles, and `linked_from` the items that link to it; `readers` each running run, whether its agents can read the item, and why ([An item's read](knowledge-base.md#an-items-read)). The file itself downloads over REST only, `GET /v1/kb/file`. Errors: `the knowledge base has no item <address>`, `<address> has versions 1 to <n>, not <version>`.
 
 ### exports
 

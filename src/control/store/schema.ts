@@ -13,7 +13,7 @@ import {
   eventsTableMayGo,
 } from "./events.ts";
 import { gitAccessHost } from "./git-access.ts";
-import { knowledgeHierarchy, knowledgeSearch } from "./kb/index.ts";
+import { knowledgeFiles, knowledgeHierarchy, knowledgeSearch } from "./kb/index.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
@@ -687,6 +687,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   clusterUncheckedColumn,
   // A rig on RunPod keeps its pod's leaf node authority and address for the bus (goal 168).
   tunnelLeafColumns,
+  // The knowledge base's files' text, extracted once, and its settings on control (goal 175).
+  knowledgeFiles,
 ];
 
 /**

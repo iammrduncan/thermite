@@ -10,6 +10,7 @@ import {
   slotOfWriter,
 } from "../../core/kb.ts";
 import { EVENT_STREAM, type EventRead, kindSubjects } from "../../core/link/events.ts";
+import { overLimitWords } from "../kb/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { streamEvent } from "../views/index.ts";
 
@@ -22,9 +23,10 @@ import { streamEvent } from "../views/index.ts";
  * registry; the slot is the event's writer's (slotOfWriter: records from Thermite's code, an
  * agent's own slot from that agent), never one the item names for another writer; and the item is
  * new in its slot or the next version of the writer's own (store/kb/); and an agent's kind is one
- * the campaign lets the agent's role write, as the run's signed assignment says (core/kb.ts). A refused
- * item is recorded in control's audit log (`kb_item_refused`) and its log, and the rest of the
- * page goes on. Its file meets it by its SHA-256 (control/kb/files.ts), whichever comes first.
+ * the campaign lets the agent's role write, as the run's signed assignment says (core/kb.ts); and
+ * a file is no larger than the largest the owner lets the knowledge base take, when one is set. A
+ * refused item is recorded in control's audit log (`kb_item_refused`) and its log, and the rest of
+ * the page goes on. Its file meets it by its SHA-256 (control/kb/files.ts), whichever comes first.
  */
 export function takeKbItem(
   store: ControlStore,
@@ -63,6 +65,9 @@ function storeItem(
   const kinds = kindsForSlot(writes, b.slot);
   if (b.slot !== KB_RECORDS && !kinds.includes(b.kind))
     return `the campaign lets ${b.slot} write ${kinds.length ? kinds.join(", ") : "nothing"} in run ${src.run}: not a ${b.kind}`;
+  // No limit unless the owner set one on control (control/kb/settings.ts).
+  const limit = store.kb().settings.maxFileBytes();
+  if (b.file && limit > 0 && b.file.bytes > limit) return overLimitWords(b.file, limit);
   return store.kb().write({ ...src, event: e.id, at: e.at }, b);
 }
 

@@ -196,6 +196,7 @@ export function createControlApi(
     mcpServers,
     publicUrl: parts.publicUrl,
     kits: parts.kits,
+    kbFiles: opts.kbFiles,
   });
 
   return app;

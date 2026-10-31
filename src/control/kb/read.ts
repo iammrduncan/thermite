@@ -4,19 +4,22 @@ import {
   KB_OWNER,
   KB_RECORDS,
   KbAddress,
+  type KbItemFile,
   type KbWriterRole,
   kbAddress,
   kbItemType,
+  kbTextReader,
   roleOfSlot,
   withdrawnWhy,
 } from "../../core/kb.ts";
 import { KB_IS_DATA, KB_READ_PAGE } from "../../core/link/kb.ts";
 import type { UsageAgent } from "../../core/usage.ts";
 import { HARNESS_NAMES } from "../rigs/index.ts";
-import type { ControlStore } from "../store/index.ts";
+import type { ControlStore, KbTextState } from "../store/index.ts";
 import { type RigView, runCampaign } from "../views/index.ts";
 import { hitOf, textPage } from "./asks.ts";
 import type { KbItem } from "./index.ts";
+import { notSearchedWhy } from "./text/index.ts";
 
 /**
  * The owner's read of one item of the knowledge base (goals 175 and 176), the same on REST (`GET
@@ -71,6 +74,27 @@ export function slotWriter(store: ControlStore, p: { run: string; slot: string; 
   const harness = role ? store.usage.programOf(p.run, USAGE_AGENT[role], p.rig) : undefined;
   const program = harness ? (HARNESS_NAMES[harness as Harness] ?? harness) : null;
   return { role, program, words: [role ?? p.slot, program].filter(Boolean).join(" · ") };
+}
+
+/**
+ * What became of a file's text: searched (its text in the words index), waiting to be extracted,
+ * or kept whole, and why in words: where its text was cut, why it is kept whole, or what it waits
+ * for; null for a text read whole.
+ */
+export function fileTextFacts(
+  store: ControlStore,
+  f: KbItemFile,
+): { searched: boolean; text_state: KbTextState; text_why: string | null } {
+  const files = store.kb().files;
+  const t = files.textState(f.sha256);
+  if (t?.state === "searched") return { searched: true, text_state: "searched", text_why: t.why };
+  if (t) return { searched: false, text_state: "kept whole", text_why: t.why };
+  if (!kbTextReader(f.type))
+    return { searched: false, text_state: "kept whole", text_why: notSearchedWhy(f.type) };
+  const waits = files.has(f.sha256)
+    ? "control extracts its text soon: it reads one file at a time"
+    : "control extracts its text once it holds the file";
+  return { searched: false, text_state: "waiting", text_why: waits };
 }
 
 /** Why a running run's agents can or can't read an item, in a few words. */
@@ -146,7 +170,7 @@ export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbRe
       title: v.title,
       version: v.version,
       at: v.at,
-      ...textPage(v.body, q.offset),
+      ...textPage(kb.versionText(v), q.offset),
       versions: versions.length,
       history: [...versions].reverse().map((o) => ({
         version: o.version,
@@ -160,8 +184,7 @@ export function ownerKbRead(store: ControlStore, vs: readonly RigView[], q: KbRe
       file: v.file && {
         ...v.file,
         held: kb.files.has(v.file.sha256),
-        // Its text is searched once control holds text for it: what the words index reads.
-        searched: x.body !== "",
+        ...fileTextFacts(store, v.file),
         from: `${x.slot} wrote it in ${x.run}, on ${x.rig}`,
       },
       links: v.links.map((l) => ({ ...l, title: titleAt(l.to) })),

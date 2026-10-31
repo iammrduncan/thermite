@@ -111,7 +111,7 @@ export function storedHtml(s: KbStored, now: number, page: (offset: number) => s
   const files = section(
     "files",
     "Largest files",
-    "The largest file items, by their newest version's file. Searched: its text is in the words index. Kept whole: only its bytes are kept.",
+    "The largest file items, by their newest version's file. Searched: its text is in the words index. Waiting: control extracts its text soon, one file at a time. Kept whole: only its bytes are kept, and the reader says why.",
     n(s.largest_files.length),
     `${table(
       ["File", "Type", "#Size", "Item", "Text"],
@@ -120,16 +120,17 @@ export function storedHtml(s: KbStored, now: number, page: (offset: number) => s
         esc(f.type),
         esc(bytes(f.bytes)),
         `<a class="mono" href="${esc(knowledgeHref(f.address))}">${esc(f.address)}</a>`,
-        f.searched ? "searched" : "kept whole",
+        esc(f.text_state),
       ]),
     )}${table(
-      ["File type", "#Files", "#Size", "#Searched", "#Kept whole"],
+      ["File type", "#Files", "#Size", "#Searched", "#Waiting", "#Kept whole"],
       s.file_types.map((x) => [
         esc(x.type),
         n(x.files),
         esc(bytes(x.bytes)),
         n(x.searched),
-        n(x.files - x.searched),
+        n(x.waiting),
+        n(x.files - x.searched - x.waiting),
       ]),
     )}`,
   );

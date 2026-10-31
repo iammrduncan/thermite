@@ -79,7 +79,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
     const v = store.db.prepare("select max(version) as v from schema_migrations").get() as {
       v: number;
     };
-    assert.equal(v.v, 22);
+    assert.equal(v.v, 23);
     const rows = store.db
       .prepare("select id, seq, slot, version, kind, ref from kb_item order by id")
       .all() as Record<string, unknown>[];

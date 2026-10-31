@@ -8,7 +8,7 @@ import {
   readKbAddress,
   writtenRef,
 } from "../../../core/kb.ts";
-import { str } from "../../../core/kb-index.ts";
+import { clip, KB_BODY_MAX, str } from "../../../core/kb-index.ts";
 import {
   JOURNAL_KINDS,
   type KbCollection,
@@ -16,7 +16,7 @@ import {
   type KbItem,
   SYNC_PAGE,
 } from "../../kb/index.ts";
-import { KbFileRows } from "./files.ts";
+import { KbFileRows, KbSettingRows, keepFileText, knowledgeFiles } from "./files.ts";
 import {
   itemOf,
   type KbVersion,
@@ -44,7 +44,14 @@ import { findItems, type KbFind, type KbFindResult, type KbWhere } from "./searc
 import { type KbStoredFigures, storedFigures } from "./stored.ts";
 import { knowledgeSearch } from "./words.ts";
 
-export type { KbFileRow } from "./files.ts";
+export type {
+  KbFileRow,
+  KbFileText,
+  KbSettingKey,
+  KbSettingRow,
+  KbTextDue,
+} from "./files.ts";
+export { knowledgeFiles } from "./files.ts";
 export type { KbVersion } from "./items.ts";
 export type {
   KbFolderRow,
@@ -58,7 +65,7 @@ export { type KbSearchMode, OUTCOME_WORDS, searchTerms } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
 export type { KbCounts, KbFind, KbPassage, KbWhere } from "./search.ts";
-export type { KbStoredCollection, KbStoredFigures, KbStoredFile } from "./stored.ts";
+export type { KbStoredCollection, KbStoredFigures, KbStoredFile, KbTextState } from "./stored.ts";
 export { KB_STORED_FILES } from "./stored.ts";
 export { knowledgeSearch, passagesOf } from "./words.ts";
 /** A search's answer: its page of hits, each a found item, and what search.ts says beside them. */
@@ -79,6 +86,8 @@ export class KnowledgeBase {
   private readonly db: DatabaseSync;
   /** The files it holds, each once by its SHA-256 (files.ts; control/kb/files.ts keeps them). */
   readonly files: KbFileRows;
+  /** Its settings on control: the largest file, and how long an orphan file stays (files.ts). */
+  readonly settings: KbSettingRows;
 
   /** Thermite's reading of the rigs' events into the records slots (reading.ts). */
   private readonly reader: KbReading;
@@ -86,15 +95,18 @@ export class KnowledgeBase {
   constructor(db: DatabaseSync) {
     this.db = db;
     this.files = new KbFileRows(db);
+    this.settings = new KbSettingRows(db);
     this.reader = new KbReading(db, {
       nextSeq: () => this.nextSeq(),
       makeCollection: (campaign) => this.makeCollection(campaign),
     });
-    // Store migrations 14 and 17 run them; a store that waits at an older version for the move of
-    // its events table has its hierarchy and words index here, before the apply writes an item.
+    // Store migrations 14, 17 and 23 run them; a store that waits at an older version for the move
+    // of its events table has its hierarchy, words index and files' text here, before the apply
+    // writes an item.
     transaction(db, () => {
       knowledgeHierarchy(db);
       knowledgeSearch(db);
+      knowledgeFiles(db);
     });
   }
 
@@ -176,11 +188,19 @@ export class KnowledgeBase {
       ref: writtenRef(b.slot, b.item),
     };
     const links = b.links.map((l) => ({ rel: l.rel, to: l.to }));
-    keepVersion(this.db, this.nextSeq(), place, writtenFields(b), {
-      at: src.at,
-      event: src.event,
-      links,
-    });
+    // A file whose text control has already gives it to the item's row for the words index.
+    const fileText = b.file ? this.files.text(b.file.sha256) : undefined;
+    keepVersion(
+      this.db,
+      this.nextSeq(),
+      place,
+      { ...writtenFields(b), fileText },
+      {
+        at: src.at,
+        event: src.event,
+        links,
+      },
+    );
     return undefined;
   }
 
@@ -199,6 +219,22 @@ export class KnowledgeBase {
   /** Every version of an item, oldest first, each with its links. */
   versions(id: number): KbVersion[] {
     return versionsOf(this.db, id);
+  }
+
+  /** A version's text as a read gives it: its writer's words, or its file's text once extracted. */
+  versionText(v: Pick<KbVersion, "body" | "file">): string {
+    return v.file ? this.files.text(v.file.sha256) : v.body;
+  }
+
+  /**
+   * A file's text, extracted once (control/kb/text/): kept by its SHA-256 and, when searched, in
+   * each item whose newest version names the file, which the words index follows (files.ts).
+   */
+  keepFileText(
+    sha256: string,
+    r: { state: "searched" | "whole"; text?: string; why: string | null; pages: number | null },
+  ): void {
+    this.tx(() => keepFileText(this.db, sha256, r));
   }
 
   /** What a run reads: its scope (scope.ts), never past what its campaign may read. */
@@ -270,11 +306,11 @@ export class KnowledgeBase {
     );
   }
 
-  /** The collections a campaign reads besides its own: its grants. */
+  /** The collections a campaign reads besides its own: its grants, by name. */
   reads(campaign: string): string[] {
     return (
       this.db
-        .prepare("select reads from kb_read where campaign = ? order by granted_at, reads")
+        .prepare("select reads from kb_read where campaign = ? order by reads")
         .all(campaign) as Row[]
     ).map((r) => str(r.reads));
   }
@@ -580,7 +616,8 @@ export class KnowledgeBase {
         kind: x.kind,
         ref: x.ref,
         title: x.title,
-        body: x.body,
+        // A file's text may be long: a rig's copy holds as much of it as a blurb's.
+        body: clip(x.body, KB_BODY_MAX),
         by: x.by,
         url: x.url,
         sub: x.sub,

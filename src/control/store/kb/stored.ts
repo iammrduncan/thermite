@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { kbAddress } from "../../../core/kb.ts";
+import { KB_TEXT_TYPES, kbAddress } from "../../../core/kb.ts";
 import { itemOf } from "./items.ts";
 
 type Row = Record<string, unknown>;
@@ -31,11 +31,16 @@ export interface KbStoredFile {
   name: string;
   type: string;
   bytes: number;
-  /** Its text is in the words index: control holds text for it. */
+  /** Its text is in the words index: control extracted it. */
   searched: boolean;
+  /** Its text searched, waiting to be extracted (a type control reads), or kept whole. */
+  text_state: KbTextState;
   /** Control holds the file's bytes. */
   held: boolean;
 }
+
+/** What became of a file's text, in words (control/kb/text/). */
+export type KbTextState = "searched" | "waiting" | "kept whole";
 
 export interface KbStoredFigures {
   collections: KbStoredCollection[];
@@ -44,8 +49,11 @@ export interface KbStoredFigures {
   /** The items the words index holds passages of. */
   words: { items: number };
   largest: KbStoredFile[];
-  /** Each file type: its files, their bytes, and how many are searched; the rest are kept whole. */
-  file_types: { type: string; files: number; bytes: number; searched: number }[];
+  /**
+   * Each file type: its files, their bytes, how many are searched, and how many wait for their text
+   * to be extracted; the rest are kept whole.
+   */
+  file_types: { type: string; files: number; bytes: number; searched: number; waiting: number }[];
   /** The newest version a writer's `kb_item` event stored, and the newest file control kept. */
   last_item: { address: string; version: number; at: string } | null;
   last_file: { sha256: string; bytes: number; at: string } | null;
@@ -53,6 +61,12 @@ export interface KbStoredFigures {
 
 /** How many of the largest files it names. */
 export const KB_STORED_FILES = 10;
+
+/** Whether an item's file is of a type control reads text from, in SQL. */
+const READ_SQL = `lower(i.file_type) in (${KB_TEXT_TYPES.map((t) => `'${t}'`).join(", ")})`;
+/** What became of an item's file's text, in SQL, as KbTextState says it (t: its kb_file_text). */
+const TEXT_STATE_SQL = `(case when t.state = 'searched' then 'searched'
+  when t.state is null and ${READ_SQL} then 'waiting' else 'kept whole' end)`;
 
 /** An item's type in SQL, as kbItemType (core/kb.ts) says it. */
 const TYPE_SQL =
@@ -109,8 +123,9 @@ export function storedFigures(db: DatabaseSync): KbStoredFigures {
   const largest = (
     db
       .prepare(
-        `select i.*, f.sha256 is not null as held from kb_item i
+        `select i.*, f.sha256 is not null as held, ${TEXT_STATE_SQL} as text_state from kb_item i
          left join kb_file f on f.sha256 = i.file_sha256
+         left join kb_file_text t on t.sha256 = i.file_sha256
          where i.file_sha256 is not null order by i.file_bytes desc, i.id limit ?`,
       )
       .all(KB_STORED_FILES) as Row[]
@@ -119,18 +134,22 @@ export function storedFigures(db: DatabaseSync): KbStoredFigures {
     name: String(r.file_name ?? ""),
     type: String(r.file_type ?? ""),
     bytes: Number(r.file_bytes ?? 0),
-    searched: String(r.body ?? "") !== "",
+    searched: r.text_state === "searched",
+    text_state: r.text_state as KbTextState,
     held: Number(r.held) === 1,
   }));
   const file_types = rows(
-    `select file_type as t, count(*) as n, coalesce(sum(file_bytes), 0) as b,
-       sum(case when body != '' then 1 else 0 end) as s
-     from kb_item where file_sha256 is not null group by file_type order by b desc, t`,
+    `select i.file_type as ft, count(*) as n, coalesce(sum(i.file_bytes), 0) as b,
+       sum(case when ${TEXT_STATE_SQL} = 'searched' then 1 else 0 end) as s,
+       sum(case when ${TEXT_STATE_SQL} = 'waiting' then 1 else 0 end) as w
+     from kb_item i left join kb_file_text t on t.sha256 = i.file_sha256
+     where i.file_sha256 is not null group by i.file_type order by b desc, ft`,
   ).map((r) => ({
-    type: String(r.t ?? ""),
+    type: String(r.ft ?? ""),
     files: Number(r.n),
     bytes: Number(r.b),
     searched: Number(r.s ?? 0),
+    waiting: Number(r.w ?? 0),
   }));
   const last = db
     .prepare(

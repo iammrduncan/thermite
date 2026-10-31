@@ -9,6 +9,7 @@ import {
 } from "../../core/commands.ts";
 import type { BuildInfo } from "../../core/version.ts";
 import type { Credential } from "../credential.ts";
+import type { KbFiles } from "../kb/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import type { DeploymentDriver, RunpodDriver } from "../lifecycle.ts";
 import type { McpServers } from "../mcp-servers/index.ts";
@@ -54,6 +55,8 @@ export interface McpOptions {
   requestUrl?: string | undefined;
   /** The kits control keeps (goal 096); without it the kit tools are not offered. */
   kits?: KitRepos | undefined;
+  /** The knowledge base's files: its settings' default for orphans comes with them (none: 0). */
+  kbFiles?: KbFiles | undefined;
 }
 
 const json = (value: unknown) => ({

@@ -46,6 +46,7 @@ import { usageBlock, usageChips } from "../../ui/providers/usage.ts";
 import { checkFollowUrl, modelCheckHtml } from "../../ui/rigs/checks.ts";
 import { modelPricesBlock } from "../../ui/usage.ts";
 import type { Dashboard } from "../context.ts";
+import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
 import { reachBlock } from "./reach.ts";
 import { modelPrefix, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
@@ -139,8 +140,9 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
     const atMcp = c.req.query("at") === "mcp";
     // So is what Save prices did (at=prices), in Model prices.
     const atPrices = c.req.query("at") === "prices";
-    // And what the addresses cluster rigs may reach said (at=reach), in theirs.
-    const elsewhere = atMcp || atPrices || c.req.query("at") === "reach";
+    // And what the addresses cluster rigs may reach said (at=reach), and the knowledge base's
+    // settings (at=kb), in theirs.
+    const elsewhere = atMcp || atPrices || ["reach", "kb"].includes(c.req.query("at") ?? "");
     const ok = elsewhere ? undefined : c.req.query("ok");
     const error = elsewhere ? undefined : said(c);
     // Model prices (goal 075): one table under the providers, for every model not on a plan.
@@ -341,6 +343,7 @@ ${prices}
 <div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>
 ${mcpSettingsBlocks(store, mcpServers, t, now, (k) => (k === "error" ? said(c) : c.req.query(k)))}
 ${reachBlock(store, t, now, (k) => c.req.query(k))}
+${kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) => c.req.query(k))}
 <div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>
 <script src="/ui/assets/providers.js" defer></script>`,
       vs,

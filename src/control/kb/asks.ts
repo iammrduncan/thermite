@@ -152,7 +152,7 @@ export function answerKbAsk(
       title: v.title,
       version: v.version,
       at: v.at,
-      ...textPage(v.body, offset),
+      ...textPage(kb.versionText(v), offset),
       versions: versions.length,
       links: v.links.flatMap((l) => {
         const rel = KbLinkRel.safeParse(l.rel);

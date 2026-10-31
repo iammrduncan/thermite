@@ -9,8 +9,10 @@ import {
   KB_LIST,
   KB_NOTE,
   KB_SEARCH,
+  KB_SETTINGS,
   KB_STORED,
   PROPAGATE,
+  SET_KB_SETTINGS,
 } from "../../core/api/control/owner.ts";
 import { CHAMPION_PATCH } from "../../core/api/control/rigs.ts";
 import { keepChampionPatch } from "../champions.ts";
@@ -25,11 +27,13 @@ import {
   KbSearchQuery,
   kbFileOf,
   kbFileResponse,
+  kbSettingsOf,
   kbStored,
   ownerKbList,
   ownerKbRead,
   ownerKbSearch,
   revokeCollection,
+  setKbSettings,
   writeOwnerNote,
 } from "../kb/index.ts";
 import { resultsLeft } from "../results-left.ts";
@@ -120,6 +124,22 @@ export function resultRoutes(
       return c.json({ error: "bad request: offset: a whole number, 0 or more" }, 400);
     return c.json(await kbStored(store, api.parts.bus, { offset }));
   });
+  // The knowledge base's settings on control (goal 175): as MCP's kb_settings and set_kb_settings,
+  // `thermite kb settings` and Settings › Knowledge base.
+  const orphanHoursDefault = opts.kbFiles?.orphanHoursDefault ?? 0;
+  app.get(KB_SETTINGS.path, admin, (c) => c.json(kbSettingsOf(store, orphanHoursDefault)));
+  app.put(
+    SET_KB_SETTINGS.path,
+    admin,
+    bodyLimit({ maxSize: SET_KB_SETTINGS.maxBytes }),
+    async (c) => {
+      const body = await c.req.json().catch(() => undefined);
+      const o = setKbSettings(store, body, orphanHoursDefault, "owner:api");
+      return o.ok
+        ? c.json({ ...o.settings, said: o.said })
+        : c.json({ error: `bad request: ${o.error}` }, 400);
+    },
+  );
   app.get(KB_LIST.path, admin, (c) => {
     const list = (k: string) =>
       (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);

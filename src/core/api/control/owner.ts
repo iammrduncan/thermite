@@ -417,6 +417,27 @@ export const KB_STORED = {
     collections: z.array(z.looseObject({})),
   }),
 } as const satisfies Route;
+/** The knowledge base's settings on control (goal 175): the largest file, and orphans' hours. */
+const KbSettingsAnswer = z.looseObject({
+  max_file_mib: z.number(),
+  orphan_hours: z.number(),
+  orphan_hours_from: z.string(),
+});
+export const KB_SETTINGS = {
+  method: "GET",
+  path: "/v1/kb/settings",
+  what: "knowledge base settings",
+  answer: KbSettingsAnswer,
+} as const satisfies Route;
+/** A change of them: control checks the body (control/kb/settings.ts); null: back to its default. */
+export const SET_KB_SETTINGS = {
+  method: "PUT",
+  path: "/v1/kb/settings",
+  what: "knowledge base settings",
+  body: SharedFields,
+  answer: KbSettingsAnswer.extend({ said: z.string() }),
+  maxBytes: 4096,
+} as const satisfies Route;
 export const KB_LIST = {
   method: "GET",
   path: "/v1/kb/list",

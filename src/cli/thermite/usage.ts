@@ -204,6 +204,12 @@ export const USAGE = `usage: thermite <command> [options]
                                       the file types, what waits on the bus for control to store,
                                       and the writes control refused, 50 a page from --offset.
                                       It prints JSON
+  kb settings [--max-file-mib N] [--orphan-hours H|default] --control URL --token-file F
+                                      the knowledge base's settings on control (owner's token):
+                                      with no option, read them; --max-file-mib, the largest file
+                                      it takes (empty or 0: no limit); --orphan-hours, how long a
+                                      file no item names stays (0: kept for good; default: back to
+                                      THERMITE_CONTROL_KB_ORPHAN_HOURS). It prints JSON
   kb grant CAMPAIGN READS --control URL --token-file F
   kb revoke CAMPAIGN READS --control URL --token-file F
                                       let CAMPAIGN's agents read READS's collection in the

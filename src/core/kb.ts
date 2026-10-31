@@ -368,6 +368,26 @@ export const KbItemFile = z.object({
 export type KbItemFile = z.infer<typeof KbItemFile>;
 
 /**
+ * The files whose text control extracts and searches, by media type, and how it reads each: as
+ * text, as a web page with no markup, scripts or styles, or with PDF.js. Any other file is kept
+ * whole, and not searched.
+ */
+const KB_TEXT_READERS = {
+  "text/markdown": "text",
+  "text/x-markdown": "text",
+  "text/plain": "text",
+  "text/html": "html",
+  "application/xhtml+xml": "html",
+  "application/pdf": "pdf",
+} as const;
+export type KbTextReader = (typeof KB_TEXT_READERS)[keyof typeof KB_TEXT_READERS];
+/** The media types control extracts text from. */
+export const KB_TEXT_TYPES = Object.keys(KB_TEXT_READERS);
+/** How control reads a file's text, by its media type; undefined: it is kept whole. */
+export const kbTextReader = (type: string): KbTextReader | undefined =>
+  KB_TEXT_READERS[type.toLowerCase() as keyof typeof KB_TEXT_READERS];
+
+/**
  * The body of a `kb_item` event (goal 175): one version of one item, in its writer's slot of the
  * event's run (its subject). `item` is the item's number in its slot; `version` 1 makes the item,
  * and each later version adds to the writer's own item, whose older versions stay. An item holds a

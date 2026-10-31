@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
-import { KbFiles } from "../../../src/control/kb/index.ts";
+import { KbFiles, KbText } from "../../../src/control/kb/index.ts";
 import { controlOnly, signIn } from "../../helpers/control-stack.ts";
+import { KB_RIG } from "../../helpers/kb-places.ts";
 import {
   FINDING,
   fillReader,
@@ -12,6 +14,7 @@ import {
   SVG_IMAGE,
   WITHDRAWN_WHY,
 } from "../../helpers/kb-reader.ts";
+import { tinyPdf } from "../../helpers/pdf.ts";
 
 /**
  * The Knowledge page's reader (goal 176): an item in the preview pane beside the table, with the
@@ -37,7 +40,7 @@ async function withFiles() {
     const r = await s.get(path);
     return { status: r.status, html: await r.text() };
   };
-  return { store, control, page, get: s.get };
+  return { store, control, page, get: s.get, files: files as KbFiles };
 }
 
 const pane = (html: string) => {
@@ -202,14 +205,14 @@ describe("the reader", () => {
 
   test("a file: its facts and Download; a stored HTML or SVG file never renders in the dashboard's origin", async () => {
     const s = await withFiles();
-    for (const [n, name, body] of [
-      [3, "loads.html", HTML_PAGE],
-      [4, "loads.svg", SVG_IMAGE],
+    for (const [n, name, body, state] of [
+      [3, "loads.html", HTML_PAGE, "its text not extracted yet"],
+      [4, "loads.svg", SVG_IMAGE, "kept whole, its text not searched"],
     ] as const) {
       const address = `gemv/gs-1/worker-1/reference:${n}`;
       const p = pane((await s.page(`/ui/knowledge/gemv/gs-1/worker-1?item=${q(address)}`)).html);
       assert.match(p, new RegExp(`<div class="kx-fname"><b>${name.replace(".", "\\.")}</b>`));
-      assert.match(p, /kept whole, its text not searched/);
+      assert.match(p, new RegExp(` · ${state}</span>`));
       assert.match(p, /<dt>From<\/dt><dd>worker-1 wrote it in gs-1, on rig-a<\/dd>/);
       const href = `/ui/kb/file?address=${q(address)}&amp;version=1`;
       assert.ok(p.includes(`<a class="btn sm" href="${href}" download>`), p);
@@ -247,5 +250,44 @@ describe("the reader", () => {
       303,
       "signed in only",
     );
+  });
+
+  test("a PDF's text: once control extracted it, Show text shows it as text, with why where it was cut", async () => {
+    const s = await withFiles();
+    const pdf = tinyPdf(["The <b>osprey</b> dives", "for fish"]);
+    const sha256 = createHash("sha256").update(pdf).digest("hex");
+    const refused = s.store.kb().write(
+      { ...KB_RIG, run: "gs-1", event: 5000, at: "2026-10-30T12:00:00.000Z" },
+      {
+        slot: "worker-1",
+        item: 7,
+        version: 1,
+        kind: "reference",
+        title: "Raptors",
+        links: [],
+        file: { sha256, name: "raptors.pdf", type: "application/pdf", bytes: pdf.length },
+      },
+    );
+    assert.equal(refused, undefined);
+    mkdirSync(dirname(s.files.path(sha256)), { recursive: true });
+    writeFileSync(s.files.path(sha256), pdf);
+    s.store.kb().files.kept(sha256, pdf.length);
+    const address = "gemv/gs-1/worker-1/reference:7";
+    const before = pane((await s.page(`/ui/knowledge/gemv?item=${q(address)}`)).html);
+    assert.match(before, /PDF · [^<]+ · its text not extracted yet<\/span>/);
+    assert.ok(!before.includes("Show text"));
+    await new KbText(s.store, s.files, { pages: 1 }).look();
+    const p = pane((await s.page(`/ui/knowledge/gemv?item=${q(address)}`)).html);
+    assert.match(p, /PDF · [^<]+ · text searched<\/span>/);
+    assert.match(p, /<dt>Its text<\/dt><dd>the first 1 of its 2 pages<\/dd>/);
+    assert.match(
+      p,
+      /<details class="kx-filetext"><summary class="btn sm">.*<span>Show text<\/span><\/summary><div class="kx-text">The &lt;b&gt;osprey&lt;\/b&gt; dives<\/div>/s,
+      "the text, escaped, never markup",
+    );
+    assert.ok(!p.includes("for fish"), "the pages after the limit are not read");
+    // Its own page shows the same.
+    const full = (await s.page(`/ui/knowledge/${address}`)).html;
+    assert.match(full, /<span>Show text<\/span>/);
   });
 });
