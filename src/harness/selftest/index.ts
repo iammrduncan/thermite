@@ -18,6 +18,7 @@ import {
   walk,
 } from "../broker/index.ts";
 import { copyForRun } from "../judge/index.ts";
+import { checksDir } from "../smoke-check.ts";
 import { isolationBusy } from "./busy.ts";
 import {
   containerChecks,
@@ -31,6 +32,7 @@ import {
   firstBuildFile,
   firstInboxFile,
   firstKitFile,
+  imageChecksProbes,
   readsResearch,
   removeOwnTree,
   researchProbeFolder,
@@ -60,16 +62,22 @@ export {
   readSupervisorIsolation,
   SUPERVISOR_ISOLATION_FILE,
 } from "./supervisor.ts";
-export { firstInboxFile, readsResearch, researchProbeFolder } from "./targets.ts";
+export {
+  firstInboxFile,
+  imageChecksProbes,
+  readsResearch,
+  researchProbeFolder,
+} from "./targets.ts";
 
 /**
  * Isolation self-test, run as root inside the harness container (`thermite selftest
  * isolation`). For each role it asks the broker to run a probe as that role's user, which tries
- * to read, list or write what the role must not reach, the inbox and a file in it among them, in
- * every placement. Every probe must be refused, except a `readable` or `reachable` probe, which
- * must succeed; a checker must read a kit and a baseline's file by their paths. On Kubernetes, lane
- * 1 also tries to connect to the cluster's API server, which the rig's network rules must keep it
- * from. In the one-container rig image it also checks the container as a whole (containerChecks):
+ * to read, list or write what the role must not reach, the inbox and the smoke check's own kits
+ * and a file in each among them, in every placement. Every probe must be refused, except a
+ * `readable` or `reachable` probe, which must succeed; a checker must read a kit and a baseline's
+ * file by their paths. On Kubernetes, lane 1 also tries to connect to the cluster's API server,
+ * which the rig's network rules must keep it from. In the one-container rig image it also checks
+ * the container as a whole (containerChecks):
  * the supervisor's user, its GPU access, set-id files, RunPod's variables, the enrollment code, in
  * pull mode control's key, and the state snapshot (THERMITE_STATE_SNAPSHOT_DIR): its folder holds
  * nothing but sealed files, and only root has its key. Each role probes the folder and the key too.
@@ -253,6 +261,10 @@ export async function isolationSelftest(opts: {
   const kitFile = firstKitFile(join(opts.stateDir, "kits"));
   if (kitFile) probes.push({ name: "kit-by-path", op: "read", path: kitFile });
   else skipped.push("kit-by-path (no kit checked out yet)");
+  // The smoke check's own kits and projects, which the image keeps for the controller alone.
+  const imageChecks = imageChecksProbes(checksDir());
+  if (imageChecks.length) probes.push(...imageChecks);
+  else skipped.push("image-checks (no kit where the smoke check looks for its own)");
   for (const f of opts.secretFiles) probes.push({ name: `secret:${f}`, op: "read", path: f });
   const build = firstBuildFile(join(opts.stateDir, "builds"));
   if (build) probes.push({ name: "build-overwrite", op: "write", path: build });

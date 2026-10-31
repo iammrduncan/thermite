@@ -95,6 +95,8 @@ When a run is assigned, control sends the rig a signed command that names the ki
 
 Before any agent starts, the harness checks that the kit fits: that it measures on the rig's kind of hardware, and that every cell, metric and verifier the contract names is in it. A kit that does not fit is refused with the reasons. The kit then stays on the rig, in the harness's private store, so later runs can use it again.
 
+The harness image also carries kits of its own: the smoke check's, and the examples', such as the CPU matrix multiply's. Like every kit, they are the judge's alone. Their folder, `/opt/thermite/checks`, is closed to every user but root and the harness's controller, so no lane, agent or planner can list it or open a file in it, and the [isolation check](../reference/rig-checks.md#isolation-check) makes sure of that. The smoke check makes git repositories of its kit and project and hands them to the harness as bundles, as any kit arrives, so the judge works on its own copy in the harness's private store ([Smoke check](../reference/rig-checks.md#smoke-check)).
+
 ## Pinning and changing a kit
 
 Because the commit is pinned, the kit that judged a result can always be identified, and a kit cannot change under a running campaign.

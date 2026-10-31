@@ -3,8 +3,9 @@
 // four fake GPUs (plain files in place of /dev/nvidia*, and a stand-in nvidia-smi; see
 // containers/test-gpu), two for the judge and two for the agents. The broker's per-card groups,
 // the timing user of the second judge card, the judge executors and the isolation selftest then
-// run for real. A second start with overlapping lists must be refused. The fakes refuse to start
-// where a real NVIDIA device is present.
+// run for real; every role, on every card, is refused the image's own kits and projects
+// (/opt/thermite/checks). A second start with overlapping lists must be refused. The fakes refuse
+// to start where a real NVIDIA device is present.
 //
 //   COMPOSE="podman compose" node scripts/acceptance/multigpu.mjs
 import { execFileSync, spawnSync } from "node:child_process";
@@ -246,6 +247,18 @@ try {
     Object.values(roles["lane-1"] ?? {}).every((v) => !String(v).startsWith("ALLOWED")) &&
       roles["lane-1"]?.["device:nvidia1"]?.startsWith("EACCES"),
     JSON.stringify(roles["lane-1"]),
+  );
+  // The smoke check's own kits and projects (/opt/thermite/checks): the controller's alone. Every
+  // role, a lane's and an agent's users among them, must have probed them and been refused.
+  const imageKits = [...new Set(["lane-1", "agent-1", ...Object.keys(roles)])].flatMap((role) =>
+    ["image-checks-list", "image-kit-read"]
+      .filter((p) => !/^E[A-Z]+$/.test(roles[role]?.[p] ?? ""))
+      .map((p) => `${role} ${p}: ${roles[role]?.[p]}`),
+  );
+  check(
+    "no role lists the image's own kits or reads one, on any card: only the harness does",
+    imageKits.length === 0,
+    imageKits.slice(0, 6).join("; "),
   );
 
   // Overlapping lists: refused, and the rig neither times nor allows dev runs.

@@ -130,6 +130,8 @@ It prints the whole report as JSON and exits with 1 when isolation does not hold
 | `runs-list` | List | The directory of the judge's runs |
 | `tmp-create`, `var-tmp-create`, `shm-create` | Create a file | `/tmp`, `/var/tmp`, `/dev/shm` |
 | `kit-by-path` | Read | A checked-out `kit.json`, reached by its full path. Skipped before any kit is checked out. The checkers must read it instead (below) |
+| `image-checks-list` | List | The [smoke check](#smoke-check)'s own kits and projects, with the other examples: `/opt/thermite/checks` in the harness image, or `THERMITE_CHECKS_DIR`. Skipped, as `image-checks`, where that folder holds no kit |
+| `image-kit-read` | Read | A `kit.json` in that folder, reached by its full path. Skipped with `image-checks-list` |
 | `secret:<file>` | Read | Each secret file: the model routes control set for the agents and for the planner, and the supervisor token, the proposer token and the model key files. Where the harness shares its container with a supervisor in [pull mode](../explanation/trust.md#rigs-in-pull-mode) (`THERMITE_TUNNEL_DIR` set), also the pod's own keys, `keys.json` |
 | `build-overwrite` | Write | A file of a stored build. Skipped before any build exists |
 | `build-work` | List | A build under way, handed to `builder` as the judge hands one over. Every role but `builder` must be refused, the other cards' builders among them |
@@ -247,7 +249,7 @@ The details hold every probe's result for every role, the container's checks, an
 
 The smoke check runs a small campaign with no agents on the rig's own target. The changes it submits, called candidates, each have a known right verdict. It passes when every candidate gets it, with one exception: [noisy timing](#noisy-timing).
 
-1. It picks the smoke kit for the rig's target: `smoke-cpu` for `cpu`, `smoke-cuda` for `cuda-gpu`. It reads the kits and their projects from `/opt/thermite/checks` in the harness image, or from `THERMITE_CHECKS_DIR`.
+1. It picks the smoke kit for the rig's target: `smoke-cpu` for `cpu`, `smoke-cuda` for `cuda-gpu`. It reads the kits and their projects from `/opt/thermite/checks` in the harness image, or from `THERMITE_CHECKS_DIR`. In the image, only the harness's controller may read that folder; the isolation check makes sure every role is refused it (`image-checks-list`, `image-kit-read`).
 2. It makes a git repository of the project and one of the kit (without its candidates), with fixed dates, so the same files always give the same commits.
 3. It assigns a judge-only run named `check-smoke-` and eight hexadecimal digits, of a campaign named `rig-check-<kit>-` and the first eight digits of the kit's commit. The contract is the image's `examples/contracts/smoke-cpu.json`, with the rig's target. Assigning pauses the rig's running runs, with the reason `replaced by check-smoke-…`.
 4. It submits every candidate except `good`, and waits until each is settled: `judged`, `rejected_v0`, `duplicate`, `promoted`, `awaiting_approval` or `errored`.

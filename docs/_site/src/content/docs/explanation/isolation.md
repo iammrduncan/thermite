@@ -72,7 +72,7 @@ A lane is one line of search ([Agents, lanes and the planner](agents-lanes-plann
 
 The controller keeps its state where no role can look around in it:
 
-- the ledger, the harness's copies of projects and kits, and imported files are open to the controller alone;
+- the ledger, the harness's copies of projects and kits, and imported files are open to the controller alone, and so are the kits and projects the image carries for the smoke check, with the other examples, in `/opt/thermite/checks`;
 - stored builds and model files can be reached only by their exact path. Build outputs are hashed and made read-only, and checked again before every timed run;
 - each timed run gets a folder of its own, with a read-only copy of the files the kit's `run.copy` lists. The judge owns that copy; the run can read it but not change it;
 - the kit's check runs as `checker`, in a folder of its own, with the run's outputs and the judge's copy of the parameters. Through the `checkers` group it reads the kits and the files a hill climb's baseline kept, which no other role can open; it can write neither, nor reach the ledger, the git mirrors or the rig's keys;

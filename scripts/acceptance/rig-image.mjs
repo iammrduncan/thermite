@@ -18,7 +18,8 @@
 //   - the isolation selftest passes, both the harness's own check at start and one run as root,
 //     with the container checks (the supervisor's user, its GPU access, set-id files, RunPod's
 //     variables, the enrollment code, control's key, the snapshot folder and its key) and the
-//     supervisor's places, the snapshot folder and its key probed for every role;
+//     supervisor's places, the snapshot folder and its key probed for every role, and the image's
+//     own kits and projects (/opt/thermite/checks) refused to every role;
 //   - a key the supervisor writes after enrollment changes nothing the harness trusts;
 //   - a supervisor that hangs is ended and starts again: frozen (SIGSTOP), its health route no
 //     longer answers, and the broker, which asks it every 30 s, ends it at the third failure in a
@@ -482,6 +483,18 @@ try {
     "no role reaches the supervisor's places, PID 1's environment, the state's snapshot, its key or a RunPod variable",
     Object.keys(roles).length >= 6 && leaks.length === 0,
     leaks.slice(0, 6).join("; "),
+  );
+  // The smoke check's own kits and projects (/opt/thermite/checks): the controller's alone. Every
+  // role, a lane's and an agent's users among them, must have probed them and been refused.
+  const imageKits = [...new Set(["lane-1", "agent-1", ...Object.keys(roles)])].flatMap((role) =>
+    ["image-checks-list", "image-kit-read"]
+      .filter((p) => !/^E[A-Z]+$/.test(roles[role]?.[p] ?? ""))
+      .map((p) => `${role} ${p}: ${roles[role]?.[p]}`),
+  );
+  check(
+    "no role lists the image's own kits or reads one: only the harness does",
+    imageKits.length === 0,
+    imageKits.slice(0, 6).join("; "),
   );
   if (foreign) {
     const fenced = ["builder", "lane-1", "agent-1"].map((r) => [r, roles[r]?.["device:nvidia0"]]);

@@ -177,9 +177,18 @@ COPY --from=claude /out/ /usr/local/bin/
 COPY --from=codex /out/opt/ /opt/
 RUN if [ -x /opt/codex/bin/codex ]; then ln -s /opt/codex/bin/codex /usr/local/bin/codex; fi
 COPY --chmod=0755 containers/thermite-trial /usr/local/bin/thermite-trial
-# The smoke check's kits and projects (the rig_check smoke command builds them into a campaign).
+# The smoke check's kits and projects (the rig_check smoke command builds them into a campaign),
+# with the other examples: like every kit, the judge's alone. They are root's, with the
+# controller's group (thermite), which reads them, and closed to every other user, the lanes' and
+# the agents' among them. Folders and the scripts git keeps executable are 0750, other files 0640:
+# git records only the execute bit, so the smoke kit's commit stays the one
+# examples/contracts/smoke-cpu-goal.json names. The build fails if anything there is left open to
+# other users.
 COPY kits ./checks/kits
 COPY examples ./checks/examples
+RUN chown -R 0:10010 checks \
+ && chmod -R u=rwX,g=rX,o= checks \
+ && test -z "$(find checks -perm /o=rwx -print -quit)"
 # No set-id file anywhere, as in every Thermite image: no process in the container can gain
 # privileges through a setuid or setgid program. Last, after every package; the build fails if one
 # is left, and if pi-tui's native helpers were left (goal 169: no image holds them).

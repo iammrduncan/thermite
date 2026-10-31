@@ -89,7 +89,7 @@ The workflow builds control, the harness images and the supervisor with `THERMIT
 | C and C++ toolchain | From the base image's apt repository; not pinned | `gcc`, `g++`, `libc6-dev`, `make`, `cmake`, `ninja-build`, `ccache` |
 | Python | From the base's apt repository; not pinned | `python3`, `python3-numpy` |
 | Other packages | From the base's apt repository; not pinned | `git`, `tini`, `ca-certificates`. The build fails unless `setpriv`, `prlimit`, `taskset` and `setsid` exist |
-| Smoke kits and projects | This repository's `kits/` and `examples/` | `/opt/thermite/checks/kits`, `/opt/thermite/checks/examples`. The [smoke check](rig-checks.md#smoke-check) uses them |
+| Smoke kits and projects | This repository's `kits/` and `examples/` | `/opt/thermite/checks/kits`, `/opt/thermite/checks/examples`. The [smoke check](rig-checks.md#smoke-check) uses them. Only root and the harness's controller may read them: no role may list the folder or open a file in it ([Paths](#paths)) |
 
 On the default base, the apt packages are Debian 12 ("bookworm") packages. The base must use apt (Debian or Ubuntu), because the image installs its packages with `apt-get`. Before it installs them, each build upgrades the base's own system packages (`apt-get upgrade`), so an image built again takes the distribution's fixes. The supervisor, rig and control images do the same.
 
@@ -158,6 +158,7 @@ The [isolation check](rig-checks.md#isolation-check) tests these users, and [Iso
 | --- | --- | --- |
 | `/var/lib/thermite` | State: the ledger, git mirrors, kits, imports, models, builds and the harness's copy of each run's past research, `knowledge/<run>/` (`THERMITE_STATE_DIR`) | `thermite`, 0711. `ledger`, `git`, `kits` and `imports` are 0700; `models` and `builds` 0711, reachable only by exact path |
 | `/scratch` | Workspaces, lane caches, the judge's runs and each run's research folder, `thermite/research/<run>/` with its [`knowledge/`](knowledge-base.md#a-runs-knowledge-folder) (`THERMITE_SCRATCH_DIR`). Emptied at every start, except each lane's cache folder, `thermite/lanes/<lane>/cache` ([A lane's cache](ports-volumes-secrets.md#a-lanes-cache)); the harness puts a run's `knowledge/` back from its state when the run next needs it | root, 0755 |
+| `/opt/thermite/checks` | The smoke check's kits and projects, with the other examples (`THERMITE_CHECKS_DIR`) | root, with the controller's group `thermite`: folders 0750, files 0640, and 0750 for the scripts the repository keeps executable. No role may enter it. The image's build fails if anything in it is open to other users |
 | `/controller` | The folder the inbox is mounted in | root, with the controller's group `thermite`, 0750: no role may enter it |
 | `/controller/inbox` | What the supervisor fetched for the harness: project and kit bundles, models (`THERMITE_INBOX_DIR`) | Mounted read-only |
 | `/outbox` | Exports the supervisor pushes (`THERMITE_OUTBOX_DIR`) | `thermite` with the supervisor's group (10010:10001), 2750 |
