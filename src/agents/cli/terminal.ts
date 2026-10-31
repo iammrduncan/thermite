@@ -60,6 +60,8 @@ const READY_STILL_MS = 750;
 const READY_MAX_MS = 20_000;
 /** The lines above the screen kept at the end, for the live view after the trial. */
 const SCREEN_SCROLLBACK = 500;
+/** The last text of this many turns is kept, newest last, for a call's answer (turnTexts). */
+const TURN_TEXTS_KEPT = 50;
 
 /** A snapshot's last SCREEN_DATA_MAX characters: a longer one starts in its scrollback. */
 const kept = (s: ScreenSnapshot): ScreenSnapshot =>
@@ -141,6 +143,9 @@ export class RoleTerminal<T extends CliTally> {
   private readonly state: unknown;
   /** The log's events added up, as the headless readers count them. */
   private readonly counts = newSessionTally();
+  /** The last text of each turn that ended, oldest first, and the text of the turn under way. */
+  private readonly texts: string[] = [];
+  private turnText: string | undefined;
   private readonly logFile: string;
   private next = 0;
   private host: Terminal | undefined;
@@ -358,6 +363,7 @@ export class RoleTerminal<T extends CliTally> {
       for (const e of events) {
         this.p.terminal.take?.(e, this.o.tally, live.length);
         this.liveOf(e, live);
+        if (e.type === "assistant.text" && e.text) this.turnText = e.text;
         if (e.type === "limit") this.limit = { resetsAt: e.resetsAt };
         else if (e.type === "turn.ended" && e.reason === "limit") this.limit ??= {};
         if (e.type === "turn.started") {
@@ -368,6 +374,7 @@ export class RoleTerminal<T extends CliTally> {
         } else if (e.type === "turn.ended") {
           this.open = false;
           this.endedAt = Date.now();
+          this.keepTurnText();
         }
       }
       this.fill();
@@ -381,6 +388,23 @@ export class RoleTerminal<T extends CliTally> {
     )
       this.settle(TURN_ENDED);
     return { live, lines: lines.length, more: r.more };
+  }
+
+  /** The turn that ended said this last, when it said anything. */
+  private keepTurnText(): void {
+    if (this.turnText === undefined) return;
+    this.texts.push(this.turnText);
+    if (this.texts.length > TURN_TEXTS_KEPT) this.texts.shift();
+    this.turnText = undefined;
+  }
+
+  /**
+   * The last text of each turn that has ended, oldest first (at most TURN_TEXTS_KEPT): a call's
+   * answer is one of them (call.ts), since the owner may type into it, and the turn that answers
+   * the owner is not always its answer.
+   */
+  turnTexts(): readonly string[] {
+    return this.texts;
   }
 
   /** The loop's tally, from the log's counts: the same fields a headless reader fills. */

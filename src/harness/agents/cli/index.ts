@@ -8,5 +8,11 @@
 
 export { PLANNER_ROLE } from "./common.ts";
 export { runCliTrial } from "./loop.ts";
-export { type CliAskOptions, type CliOnceDeps, cliAsk, cliModelCheck } from "./once.ts";
+export {
+  type CliAskOptions,
+  type CliOnceDeps,
+  cliAsk,
+  cliModelCheck,
+  planJson,
+} from "./once.ts";
 export type { CliTrialDeps, TerminalCallLink } from "./program.ts";

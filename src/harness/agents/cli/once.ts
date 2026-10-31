@@ -140,6 +140,20 @@ export async function cliOnce<T extends CliTally>(
   return tally;
 }
 
+/**
+ * The JSON a planner's answer holds: in a fenced block, else from its first `{` to its last `}`;
+ * undefined when none parses.
+ */
+export function planJson(text: string): unknown {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1];
+  const body = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  try {
+    return JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+}
+
 /** A planner call through a program: what it may read, use and keep, and where its usage goes. */
 export interface CliAskOptions {
   signal?: AbortSignal | undefined;
@@ -162,8 +176,8 @@ export interface CliAskOptions {
  * The planner's call through a program, as the planner's own user: its answer. With past
  * research, the prompt names the run's knowledge/ folder, which every agent user may read and none
  * may change; a program that takes a list of tools gets the read-only file tools for it. On a rig
- * whose agents run in their own terminal, it runs in its program's terminal, and its answer is its
- * last text there.
+ * whose agents run in their own terminal, it runs in its program's terminal, and its answer is the
+ * newest text that ends one of its turns and holds a plan there (else its last text).
  */
 export async function cliAsk<T extends CliTally>(
   p: CliProgram<T>,
@@ -183,6 +197,7 @@ export async function cliAsk<T extends CliTally>(
       tools,
       usage: o.usage,
       windows: o.windows,
+      answer: (text) => planJson(text) !== undefined,
     });
     if (!t.lastText) throw new Error(t.errors.at(-1) ?? `${p.name} gave no answer`);
     return t.lastText;

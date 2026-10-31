@@ -4,6 +4,7 @@ import { windowFit } from "../../../agents/roles/index.ts";
 import { LenientNotes, type NoteInput } from "../../../core/journal.ts";
 import type { OwnerAddition } from "../../../core/role-additions.ts";
 import type { CallUsage } from "../../../core/usage.ts";
+import { planJson } from "../cli/index.ts";
 import { causeOf, causeWords, PlannerCallError, type PlanTry } from "./causes.ts";
 import type { PlannerPast } from "./context.ts";
 import { callPlanner, type PlannerCompaction, type PlannerMcp } from "./pi.ts";
@@ -160,14 +161,11 @@ async function askPlanner(
       ? { ...(read ? { read } : {}), ...(mcp?.length ? { mcp } : {}), ...(kb ? { kb } : {}) }
       : undefined,
   );
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1];
-  const body = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
-  try {
-    return JSON.parse(body);
-  } catch {
+  const plan = planJson(text);
+  if (plan === undefined)
     throw new PlannerCallError(
       "text_only",
       `the planner's answer was not a JSON plan: ${text.slice(0, 200)}`,
     );
-  }
+  return plan;
 }

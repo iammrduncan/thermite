@@ -23,8 +23,11 @@ import { type WindowLink, waitOutWindow } from "./usage-window.ts";
  * the program's own entry, as a trial is, in a folder of its own under the lanes' area, run as
  * the role's user: its prompt is typed in, the owner's messages go in inside its turn through its
  * hooks or Thermite's plugin, the owner's console types into it, Live shows its screen, and a full
- * usage window is waited out as a trial's is. It ends when its first turn does, with the tally of
- * its session log; its answer is its last text.
+ * usage window is waited out as a trial's is. It ends when its first turn does (one an owner's
+ * message sent on at its end goes on), with the tally of its session log; its answer is its last
+ * text, or the newest text that ends one of its turns and that its caller takes as an answer
+ * (`answer`): the owner may type into it, and its turn that answers the owner in other words is
+ * not its answer.
  */
 
 /** A fresh folder for one call, which its user will own, removed when the call ends. */
@@ -96,6 +99,11 @@ export interface TerminalCallOptions {
   /** Each model usage its session log reports (goal 075), and its subscription's windows. */
   usage?: ((u: CallUsage) => void) | undefined;
   windows?: ((w: PlanWindows) => void) | undefined;
+  /**
+   * Whether a turn's last text is an answer (a planner's: it holds a plan). The newest one taken is
+   * the tally's last text; none taken, or no `answer`: its last text, as the log said it.
+   */
+  answer?: ((text: string) => boolean) | undefined;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -291,4 +299,7 @@ async function converse<T extends CliTally>(
   await term.stop();
   ownerConsole.close("the call ended before the program's usage window reset");
   signals?.report({ trial: link.id, program: p.id });
+  const answer = o.answer;
+  const taken = answer ? [...term.turnTexts()].reverse().find((t) => answer(t)) : undefined;
+  if (taken !== undefined) tally.lastText = taken;
 }
