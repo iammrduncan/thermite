@@ -7,7 +7,6 @@ import type { McpCallResult } from "../../common/mcp-client.ts";
 import type { McpToolInfo } from "../../core/mcp.ts";
 import type { CallUsage, UsageRoute } from "../../core/usage.ts";
 import type { AdvisorRuntime } from "./config.ts";
-import type { AdvisorInTerminal } from "./terminal/index.ts";
 import type {
   AdvisorCode,
   AdvisorKb,
@@ -38,12 +37,6 @@ export interface AdvisorCall<S extends z.ZodType> {
   /** Where the conversation is kept before each compaction (goal 070); none: not kept. */
   keeper?: AdvisorKeeper | undefined;
   /**
-   * On a rig whose agents run in their own terminal (goal 169): the call's run and role, and what
-   * the supervisor gives a call there. A call in Claude Code, Codex or OpenCode then runs in its
-   * program's terminal; unset, or in another runtime, headless.
-   */
-  terminal?: AdvisorInTerminal | undefined;
-  /**
    * In Pi, a check of an answer that fits the schema: its problems in words, and the advisor is
    * asked to answer again within the same call; undefined: the answer is taken (goal 112's final
    * writer revises its paper this way). The other runtimes answer once.
@@ -66,11 +59,6 @@ export interface AdvisorResult<T> {
    * first message, then its later turns.
    */
   sent?: Prompt[] | undefined;
-  /**
-   * The owner's messages it took inside its turn, in its program's own terminal (goal 169): given
-   * to it, as those of its prompt are, for its receipts.
-   */
-  given?: number[] | undefined;
 }
 
 /** An advisor call's model usage (goal 075): where it ran, and each record. */

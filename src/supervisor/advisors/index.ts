@@ -29,10 +29,9 @@
  * tools (tools/); the prompt (prompt.ts); each role with its answer: the teachers and their
  * merged by model (teachers/), the auditor, the review panel, the final writer and the
  * synthesizer, with the answers to the owner's messages that they share (owner-answers.ts); the
- * guarded web fetch (fetcher.ts); the pass, which runs each role's part in turn (pass/); which
- * advisors decide, as the harness is told (harness.ts); and the calls of the advisors the owner's
- * messages reach in their programs' own terminals, on a rig set so (terminal/). The rest of the
- * supervisor imports them from this file.
+ * guarded web fetch (fetcher.ts); the pass, which runs each role's part in turn (pass/); and which
+ * advisors decide, as the harness is told (harness.ts). The rest of the supervisor imports them
+ * from this file.
  */
 
 export { AuditAnswer, auditOne } from "./auditor.ts";
@@ -95,4 +94,3 @@ export {
   type TeacherRun,
   teacherRound,
 } from "./teachers/index.ts";
-export { advisorTerminals, relayAdvisorTerminals } from "./terminal/index.ts";

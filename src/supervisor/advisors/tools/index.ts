@@ -12,12 +12,7 @@ export {
   runCodeTool,
   toolText,
 } from "./code.ts";
-export {
-  type AdvisorKb,
-  type AdvisorServers,
-  type PastSearchServer,
-  serveAdvisorTools,
-} from "./mcp.ts";
+export { type AdvisorKb, type AdvisorServers, serveAdvisorTools } from "./mcp.ts";
 export { type AdvisorPaper, PAPER_TOOL_NAMES, PAPER_TOOLS, runPaperTool } from "./paper.ts";
 export {
   type AdvisorResearch,

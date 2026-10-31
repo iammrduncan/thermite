@@ -22,7 +22,6 @@ export {
   type ConsoleLimit,
   type ConsoleNow,
   type ConsoleTerminal,
-  screenFrame,
   TrialConsole,
 } from "./console.ts";
 export {

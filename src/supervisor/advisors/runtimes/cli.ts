@@ -103,24 +103,6 @@ export function lastJsonObject(out: string): unknown {
   return last;
 }
 
-/**
- * An advisor's answer in a text: its last JSON object, or the object that object wraps (agents
- * that wrap their answer, `{"result": ...}`), checked against the call's schema.
- */
-export function parseAnswer<S extends z.ZodType>(
-  text: string,
-  schema: S,
-): { ok: true; value: z.infer<S> } | { ok: false } {
-  let found = lastJsonObject(text);
-  if (found && typeof found === "object" && "result" in found) {
-    const inner = (found as { result: unknown }).result;
-    const nested = typeof inner === "string" ? lastJsonObject(inner) : inner;
-    if (schema.safeParse(nested).success) found = nested;
-  }
-  const parsed = schema.safeParse(found);
-  return parsed.success ? { ok: true, value: parsed.data } : { ok: false };
-}
-
 /** What a command printed, or why it could not run. */
 interface Ran {
   out: string;
@@ -309,7 +291,14 @@ export async function runCli<S extends z.ZodType>(
   if (error) return { output: undefined, error, tokensIn: 0, tokensOut: 0, usd: 0, ...kept };
   // A CLI with JSON events (OpenCode, Codex): its last message is the answer.
   const said = rt.read?.(out);
-  const parsed = parseAnswer(said ? said.text : out, schema);
+  let found = lastJsonObject(said ? said.text : out);
+  // Agents that wrap their answer (for example `{"result": "..."}`): look inside once.
+  if (found && typeof found === "object" && "result" in found) {
+    const inner = (found as { result: unknown }).result;
+    const nested = typeof inner === "string" ? lastJsonObject(inner) : inner;
+    if (schema.safeParse(nested).success) found = nested;
+  }
+  const parsed = schema.safeParse(found);
   const tokensIn = said?.tokensIn ?? 0;
   const tokensOut = said?.tokensOut ?? 0;
   // Its model usage, from what it printed, answer or not.
@@ -318,8 +307,8 @@ export async function runCli<S extends z.ZodType>(
     : undefined;
   // Why there is no answer: the CLI's last message, else its last error, else its output.
   const why = said?.text || said?.error || err || out;
-  return parsed.ok
-    ? { output: parsed.value, tokensIn, tokensOut, usd: 0, usage, ...kept }
+  return parsed.success
+    ? { output: parsed.data, tokensIn, tokensOut, usd: 0, usage, ...kept }
     : {
         output: undefined,
         error: `no valid answer: ${why.slice(-300)}`,

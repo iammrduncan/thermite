@@ -27,7 +27,6 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
     configFor,
     additionsFor,
     keeperFor,
-    terminalFor,
     mcpFor,
     overBudget,
     count,
@@ -71,8 +70,6 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         // With the campaign's own context settings, when it sets any (goal 070).
         const panel = (await configFor(pkg.run)).review_panel;
         const compactions: AdvisorCompaction[] = [];
-        // The owner's messages a reviewer's terminal took inside its turn (goal 169).
-        const takenInTurn = new Set<number>();
         // Each reviewer that gave no answer, and why.
         const unanswered: { reviewer: string; why: string }[] = [];
         // The reviewers review at once, in parallel (goal 117), each blind to the others. Each
@@ -90,12 +87,6 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
               ...(research && pkg.run ? { research: researchFor(pkg.run) } : {}),
               keeper: keeperFor(pkg.run),
               additions,
-              // In its program's own terminal on a rig set so (goal 169).
-              terminal: terminalFor(
-                pkg.run,
-                "review_panel",
-                owner.map((m) => m.id),
-              ),
             }).then(
               (r) => ({ runtime, r }),
               (err: unknown) => ({
@@ -116,7 +107,6 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
           await usageOut(pkg.run, `review ${pkg.id}`, "review_panel", r.usage);
           await promptsOut(pkg.run, `review ${pkg.id}`, r.sent);
           compactions.push(...(r.compactions ?? []));
-          for (const id of r.given ?? []) takenInTurn.add(id);
           if (!r.output) {
             unanswered.push({ reviewer: runtime.name, why: clip(r.error ?? "no answer", 300) });
             continue;
@@ -165,9 +155,9 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         const posted = await harness.call(REVIEW, { params: { id: pkg.id }, body: { results } });
         s.reviews++;
         if (pkg.run) {
-          const ids = [...new Set([...owner.map((m) => m.id), ...takenInTurn])];
+          const ids = owner.map((m) => m.id);
           await receipts(pkg.run, "review_panel", ids, answers);
-          for (const id of ids) told.add(id);
+          for (const m of owner) told.add(m.id);
         }
         say(
           pkg.run,

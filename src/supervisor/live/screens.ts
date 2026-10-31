@@ -1,15 +1,15 @@
 import { harnessClient } from "../../common/api/harness.ts";
 import { log } from "../../common/env.ts";
 import { SCREENS } from "../../core/api/harness/supervisor.ts";
-import { SCREENS_IDLE_MS, SCREENS_WATCHED_MS, type ScreenFrame } from "../../core/screens.ts";
+import { SCREENS_IDLE_MS, SCREENS_WATCHED_MS } from "../../core/screens.ts";
 import { ask, type ControlOnBus } from "../ask.ts";
 
 /**
  * The terminal view's relay (goal 169; core/screens.ts): the supervisor asks control which of the
- * rig's terminals someone watches, asks its harness for their screens, takes its own advisors'
- * from its own consoles, and sends them to control, on the message bus as a request on the rig's
- * own subject (core/link/asks.ts's `screens`), which no stream keeps: a screen is a view, not a
- * record. Nothing here keeps a screen: each goes on as it came, and only while watched.
+ * rig's trials someone watches, asks its harness for their screens, and sends them to control, on
+ * the message bus as a request on the rig's own subject (core/link/asks.ts's `screens`), which no
+ * stream keeps: a screen is a view, not a record. Nothing here keeps a screen: each goes on as it
+ * came, and only while watched.
  */
 export interface ScreensRelayConfig {
   harnessUrl: string;
@@ -17,8 +17,6 @@ export interface ScreensRelayConfig {
   /** Where the supervisor asks control: its rig's subjects on the bus. */
   control: ControlOnBus;
   fetchImpl?: typeof fetch | undefined;
-  /** The supervisor's own terminals, its advisors' (advisors/terminal/consoles.ts). */
-  own?: { has(id: string): boolean; frames(ids: readonly string[]): Promise<ScreenFrame[]> };
 }
 
 /**
@@ -34,12 +32,9 @@ export async function relayScreensOnce(
     token: cfg.harnessToken,
     fetchImpl: cfg.fetchImpl,
   });
-  const mine = watch.filter((id) => cfg.own?.has(id));
-  const theirs = watch.filter((id) => !mine.includes(id));
-  const frames = [
-    ...(theirs.length ? (await harness.call(SCREENS, { body: { trials: theirs } })).screens : []),
-    ...(mine.length && cfg.own ? await cfg.own.frames(mine) : []),
-  ];
+  const frames = watch.length
+    ? (await harness.call(SCREENS, { body: { trials: [...watch] } })).screens
+    : [];
   const answer = await ask(cfg.control, "screens", { frames });
   return answer.watch;
 }

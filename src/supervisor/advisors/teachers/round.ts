@@ -15,7 +15,6 @@ import type {
 } from "../call.ts";
 import { type AdvisorsConfig, packageFit } from "../config.ts";
 import { runAdvisor } from "../run.ts";
-import type { AdvisorInTerminal } from "../terminal/index.ts";
 import type { AdvisorKb } from "../tools/index.ts";
 import {
   checkPortfolio,
@@ -63,8 +62,6 @@ export interface TeacherRun {
   usage: ({ agent: AdvisorAgent } & AdvisorUsage)[];
   /** The prompts the round's calls sent (goal 166), for the harness to keep. */
   sent: Prompt[];
-  /** The owner's messages the teachers' terminals took inside their turns (goal 169). */
-  given: number[];
 }
 
 /** Experiments without repeats: the first of each idea's words. */
@@ -107,11 +104,6 @@ export async function teacherRound(input: {
   research?: boolean | undefined;
   /** The owner's additions to the run's roles (goal 166): each teacher's and the merged by's. */
   additions?: RunAdditions;
-  /**
-   * On a rig whose agents run in their own terminal (goal 169): each teacher's call runs in its
-   * program's; the merged by model, which takes no message, stays headless.
-   */
-  terminal?: AdvisorInTerminal | undefined;
 }): Promise<TeacherRun> {
   const research = input.research === true;
   type Item = Opportunity | ResearchOpportunity;
@@ -137,7 +129,6 @@ export async function teacherRound(input: {
     usd: 0,
     usage: [],
     sent: [],
-    given: [],
   };
   const count = (r: AdvisorResult<unknown>, agent: AdvisorAgent) => {
     run.tokens.in += r.tokensIn;
@@ -165,7 +156,6 @@ export async function teacherRound(input: {
         answerSchema: research ? ResearchTeacherAnswer : TeacherAnswer,
         tools: input.tools,
         keeper: input.keeper,
-        terminal: input.terminal,
       }),
     ),
   );
@@ -177,7 +167,6 @@ export async function teacherRound(input: {
       ...(r.output ? { review: r.output } : { error: r.error ?? "no review" }),
     });
     for (const a of r.output?.answers ?? []) run.answers.push({ ...a, advisor: teacher });
-    for (const id of r.given ?? []) if (!run.given.includes(id)) run.given.push(id);
     if (r.output?.journal.length) run.journal.push({ by: teacher, notes: r.output.journal });
   });
   const good = run.reviews.filter(

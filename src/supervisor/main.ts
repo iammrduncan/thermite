@@ -37,12 +37,10 @@ import {
   adviseOnce,
   advisorsFileReport,
   advisorsOf,
-  advisorTerminals,
   type ControlAdvisors,
   emptyAdviseState,
   harnessAdvisors,
   mergeAdvisors,
-  relayAdvisorTerminals,
   teachersCalled,
 } from "./advisors/index.ts";
 import { ask } from "./ask.ts";
@@ -350,11 +348,6 @@ async function main(): Promise<void> {
 
   // The rig's settings and which advisors decide, from and to the harness.
   const harnessLink = harnessAdvisors(harnessUrl, harnessToken);
-  // The advisors in their programs' own terminals, on a rig set so (goal 169).
-  const { consoles: advisorConsoles, terminals } = advisorTerminals({
-    harness,
-    live: (line) => supervisorLive.append({ source: "supervisor", ...line }),
-  });
   const { tell: tellAdvisors, retell } = harnessLink;
 
   // The supervisor's figures for control, its regular call: git sync, advisors, relay.
@@ -475,7 +468,6 @@ async function main(): Promise<void> {
             // The deployment's STE checker for research papers (goal 112), when it gives one.
             steChecker: env.THERMITE_STE_CHECKER || undefined,
             kb: onBus,
-            ...(on.terminal && terminals ? { terminals } : {}),
           },
           adviseState,
         );
@@ -548,10 +540,7 @@ async function main(): Promise<void> {
   };
   const livingDone = living();
   // The terminal view (goal 169): the screens of the trials someone watches on control.
-  const screensDone = relayScreens(
-    { harnessUrl, harnessToken, control: onBus, own: advisorConsoles },
-    () => stopping,
-  );
+  const screensDone = relayScreens({ harnessUrl, harnessToken, control: onBus }, () => stopping);
 
   // Commands from the bus, each as control issues it: a pause or a message never waits for the
   // next report.
@@ -637,8 +626,6 @@ async function main(): Promise<void> {
   // they come, and asked of control on the bus.
   // Not waited for at a stop: its call held open to the harness ends with the process.
   void relayKbAsks({ harness, control: onBus, stopping: () => stopping });
-  // The owner's inputs to the advisors' terminals, which the harness checked (goal 169).
-  void relayAdvisorTerminals({ harness, consoles: advisorConsoles, stopping: () => stopping });
 
   loops.add("report", intervalMs);
   while (!stopping) {

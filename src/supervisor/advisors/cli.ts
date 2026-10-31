@@ -154,20 +154,14 @@ export function codexAdvisorConfig(
   servers: readonly AdvisorServer[],
   /** Where the supervisor keeps the conversation before each compaction (goal 070). */
   keptAt?: KeptAt | undefined,
-  /**
-   * In its own terminal (goal 169): Thermite's hooks stay on, for its signals and the owner's
-   * messages inside its turn, and its notify names Thermite's hook program too.
-   */
-  terminal?: { notify: readonly string[] } | undefined,
 ): string {
-  const off = terminal ? CODEX_ADVISOR_OFF.filter((f) => f !== "hooks") : CODEX_ADVISOR_OFF;
   return [
     // Top-level keys come before the tables the workers' configuration ends with.
     'sandbox_mode = "read-only"',
     'approval_policy = "never"',
-    codexConfig(m, proxyRoot, undefined, keptAt, terminal?.notify),
+    codexConfig(m, proxyRoot, undefined, keptAt),
     "[features]",
-    ...off.map((f) => `${f} = false`),
+    ...CODEX_ADVISOR_OFF.map((f) => `${f} = false`),
     "",
     "[tools.experimental_request_user_input]",
     "enabled = false",
@@ -208,20 +202,6 @@ export function codexAdvisorArgs(m: ModelConfig, o: { keep?: boolean } = {}): st
     m.model,
     "-",
   ];
-}
-
-/**
- * The Codex CLI's command line for an advisor in its own terminal (goal 169): no daemon, Thermite's
- * hooks run without a trusted hash, in the call's folder `cwd`. Unlike a trial's, it keeps its
- * read-only sandbox and never asks for approval (its configuration says so), as `codex exec` does
- * for an advisor. After a crash, `resume` (the thread's id) continues the same thread.
- */
-export function codexAdvisorTerminalArgs(
-  m: ModelConfig,
-  o: { cwd: string; resume?: string | undefined },
-): string[] {
-  const flags = ["--no-daemon", "--dangerously-bypass-hook-trust", "-C", o.cwd, "--model", m.model];
-  return o.resume ? ["resume", ...flags, o.resume] : flags;
 }
 
 /**

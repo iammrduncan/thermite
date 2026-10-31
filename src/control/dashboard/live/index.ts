@@ -1,7 +1,6 @@
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { errorText } from "../../../common/errors.ts";
-import { terminalSource } from "../../../core/terminal-input.ts";
 import { commandFollowUrl, commandProgress, notSent } from "../../command-progress.ts";
 import { issueCommand, nobodyReads, panelReviews } from "../../issue/index.ts";
 import { HARNESS_NAMES } from "../../rigs/index.ts";
@@ -33,7 +32,6 @@ import {
   runLiveHref,
   runLiveStreamHref,
   runMessageHref,
-  terminalHref,
 } from "../../ui/urls.ts";
 import { clip, earlierWords, signed } from "../../ui/words/index.ts";
 import {
@@ -138,14 +136,13 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
             a.localeCompare(b, undefined, { numeric: true }),
           )
         : [];
-    // The planner's call, while it plans this run in its own terminal, and the advisors' calls in
-    // theirs (goal 169).
-    const calls = (workOf(u.summary)?.terminals ?? []).filter((x) => x.run === r.id);
-    const planning = calls.some((x) => x.role === "planner");
-    const advising = calls.filter((x) => terminalSource(x.id) === "supervisor");
+    // The planner's call, while it plans this run in its own terminal.
+    const planning = workOf(u.summary)?.terminals?.some(
+      (x) => x.role === "planner" && x.run === r.id,
+    );
     const terminals =
-      inTerminals.length || planning || advising.length
-        ? `<details class="lkept"><summary class="lchip" title="Each agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${planning ? `<div><a href="${liveHref(u.id, "planner")}">the planner's terminal</a></div>` : ""}${advising.map((x) => `<div><a href="${terminalHref(u.id, x.id)}">${esc(x.role)}'s terminal</a> <span class="muted small">(advisor)</span></div>`).join("")}${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.family)})</span></div>`).join("")}</div></details>`
+      inTerminals.length || planning
+        ? `<details class="lkept"><summary class="lchip" title="Each agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${planning ? `<div><a href="${liveHref(u.id, "planner")}">the planner's terminal</a></div>` : ""}${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.family)})</span></div>`).join("")}</div></details>`
         : "";
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
@@ -436,17 +433,11 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           .join(", ")}.</div>`
       : `<div class="composer off">No run on this rig to message.</div>`;
     // A trial's page has its terminal, and the owner's console into it (goal 169); the planner's
-    // page, its call's while it plans in its own terminal; the advisors' page, the advisor's call
-    // it names, else the first that runs in its terminal.
-    const open = workOf(u.summary)?.terminals ?? [];
-    const asked = c.req.query("call");
-    const advisors = open.filter((x) => terminalSource(x.id) === "supervisor");
-    const inCall =
+    // page, its call's while it plans in its own terminal.
+    const plannerCall =
       source === "planner"
-        ? open.find((x) => x.role === "planner")
-        : source === "supervisor"
-          ? (advisors.find((x) => x.id === asked) ?? advisors[0])
-          : undefined;
+        ? workOf(u.summary)?.terminals?.find((x) => x.role === "planner")
+        : undefined;
     const term = trial?.run
       ? terminalPanel(dash, c, {
           rig: u.id,
@@ -454,11 +445,11 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           trial: source.slice(6),
           ended: Boolean(ended.get(source)),
         })
-      : inCall
+      : plannerCall
         ? terminalPanel(dash, c, {
             rig: u.id,
-            run: inCall.run,
-            trial: inCall.id,
+            run: plannerCall.run,
+            trial: plannerCall.id,
             ended: false,
           })
         : "";

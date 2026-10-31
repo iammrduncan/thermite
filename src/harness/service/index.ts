@@ -37,7 +37,6 @@ import { RigSettingsStore } from "../rig-settings.ts";
 import { RunResearch } from "../run-research.ts";
 import { HARNESS_NUMBERS } from "../settings.ts";
 import { ModelUsage } from "../usage.ts";
-import { AdvisorInputs } from "./advisor-inputs.ts";
 import * as assignment from "./assignment.ts";
 import * as attempts from "./attempts.ts";
 import * as champion from "./champion.ts";
@@ -632,8 +631,6 @@ export class HarnessService {
 
   /** The owner's consoles into the agents' terminals, and their screens (goal 169). */
   readonly consoles = new TerminalConsoles(this);
-  /** The owner's inputs to the advisors' terminals, on their way to the supervisor (goal 169). */
-  readonly advisorInputs = new AdvisorInputs();
 
   /** A running trial's way to take the owner's messages inside its turn (goal 169). */
   inTurn(id: string, d: TurnDelivery | undefined): void {

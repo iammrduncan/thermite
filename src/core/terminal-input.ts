@@ -5,11 +5,9 @@ import { RunId } from "./ids.ts";
  * The owner's console into an agent's terminal (goal 169; the owner's decision of 2026-10-26):
  * `terminal_input`, a signed command only the owner issues, never an operator, an agent or a
  * reader. It types text into one agent's program in its terminal (a message, a slash command or a
- * skill, then Enter), or sends it keys from a fixed list: a running trial's, a planner's call's
- * (plannerCallId) or an advisor's call's (advisorCallId), which the supervisor runs and the
- * harness hands the input to (core/api/harness/terminals.ts). A worker in Pi takes the same input
- * in its Pi view, where each is one call in its trial's loop (core/api/harness/console.ts). The
- * harness
+ * skill, then Enter), or sends it keys from a fixed list: a running trial's, or a planner's call's
+ * (plannerCallId). A worker in Pi takes the same input in its Pi view, where each is one call in
+ * its trial's loop (core/api/harness/console.ts). The harness
  * records each input word for word with its outcome. While the program waits for its usage
  * window, an input waits for the reset unless the owner says to send it now (the owner's decision
  * of 2026-10-27).
@@ -54,16 +52,12 @@ export const TERMINAL_QUEUE_MAX = 20;
 
 /**
  * The id of an agent's terminal, as terminal_input and the screens name it: a trial's
- * (`t-` and 16 hex digits), or a call's of a role outside a trial, plannerCallId's or
- * advisorCallId's.
+ * (`t-` and 16 hex digits), or a call's of a role outside a trial, such as plannerCallId's.
  */
 export const TERMINAL_ID = /^[A-Za-z0-9_-]{1,100}$/;
 export const TerminalId = z
   .string()
-  .regex(
-    TERMINAL_ID,
-    "a trial's id, a planner's call's (planner-RUN-N) or an advisor's call's (advisor-ADVISOR-RUN-N)",
-  );
+  .regex(TERMINAL_ID, "a trial's id, or a planner's call's (planner-RUN-N)");
 
 /**
  * A planner's call in its own terminal (goal 169), as the console and the screens name it: the
@@ -72,23 +66,8 @@ export const TerminalId = z
  */
 export const plannerCallId = (run: string, round: number): string => `planner-${run}-${round}`;
 
-/** The most characters of an advisor's name in its call's id: the run's name must fit after it. */
-const ADVISOR_IN_ID_MAX = 20;
-
-/**
- * An advisor's call in its own terminal (goal 169), as the console and the screens name it: the
- * advisor (auditor, teacher-1, reviewer-2; another character than TERMINAL_ID's becomes `-`, and a
- * long name is cut), the run it advises, and the supervisor's count of its calls.
- */
-export const advisorCallId = (advisor: string, run: string, n: number): string =>
-  `advisor-${advisor.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, ADVISOR_IN_ID_MAX)}-${run}-${n}`;
-
-/**
- * Where a terminal's lines go on control's Live, by its id: a planner's call's to the planner's
- * page, an advisor's call's to the advisors' (the supervisor's lines), a trial's to its own.
- */
-export const terminalSource = (id: string): string =>
-  id.startsWith("planner-") ? "planner" : id.startsWith("advisor-") ? "supervisor" : `trial:${id}`;
+/** Whether a terminal's id is a planner's call's, not a trial's. */
+export const isPlannerCall = (id: string): boolean => id.startsWith("planner-");
 
 /** What an input does while the program waits for its usage window: wait for the reset, or go now. */
 export const TERMINAL_WAITS = ["queue", "now"] as const;
@@ -132,8 +111,8 @@ export const TerminalInput = z
   .strictObject({
     run: RunId,
     /**
-     * The terminal it goes into: a running trial's, as stop_trial names one, or a planner's or an
-     * advisor's call's (plannerCallId, advisorCallId), as Live shows it.
+     * The terminal it goes into: a running trial's, as stop_trial names one, or a planner's call's
+     * (plannerCallId), as Live shows it.
      */
     trial: TerminalId,
     /** Typed into the program, then Enter. */

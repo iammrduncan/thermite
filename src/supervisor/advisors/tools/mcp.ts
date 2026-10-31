@@ -54,11 +54,6 @@ export interface PastSearchServer {
   /** Claude Code's flags: the server, and permission for its one tool. */
   args: string[];
   /**
-   * Claude Code's MCP configuration, with the token in it: in its own terminal (goal 169), a file
-   * in the call's folder that only the call's user reads, never its command line.
-   */
-  mcpConfig: string;
-  /**
    * Each server as another CLI's configuration names it (goal 073: OpenCode and Codex): its name
    * and its address, no token in it. The past-research search is PAST_MCP_SERVER.
    */
@@ -154,19 +149,18 @@ export async function serveAdvisorTools(o: {
     ...(thermite ? [{ name: PAST_MCP_SERVER, url }] : []),
     ...(mcp?.servers ?? []).map((s) => ({ name: s, url: `${url}/${encodeURIComponent(s)}` })),
   ];
-  const mcpConfig = JSON.stringify({
+  const config = {
     mcpServers: Object.fromEntries(
       servers.map((s) => [s.name, { type: "http", url: s.url, headers }]),
     ),
-  });
+  };
   return {
     url,
     servers,
     token,
-    mcpConfig,
     args: [
       "--mcp-config",
-      mcpConfig,
+      JSON.stringify(config),
       "--allowedTools",
       ...(kb ? kbTools(kb.writes).map((t) => `mcp__${PAST_MCP_SERVER}__${t.name}`) : []),
       ...(code ? CODE_TOOL_NAMES.map((n) => `mcp__${PAST_MCP_SERVER}__${n}`) : []),

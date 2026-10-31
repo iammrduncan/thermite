@@ -260,14 +260,9 @@ export class RoleTerminal<T extends CliTally> {
       host = await this.startHost(this.counts.session, remaining);
       if (this.stopping) return;
     }
-    const h = host;
     try {
-      // On the one typing chain from the start: the owner's input typed while a new program gets
-      // ready goes in after its message, never before.
-      await this.typed(async () => {
-        if (started) await ready(h, () => this.stopping);
-        if (!this.stopping && this.host === h) await typeIn(h, text);
-      });
+      if (started) await ready(host, () => this.stopping);
+      if (!this.stopping && this.host === host) await this.typed(() => typeIn(host, text));
     } catch (err) {
       // The program ended meanwhile: its end settles the run, and the next turn resumes it.
       const gone = await Promise.race([host.done.then(() => true), sleep(2_000).then(() => false)]);

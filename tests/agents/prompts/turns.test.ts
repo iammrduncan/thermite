@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { messageText, type Prompt } from "../../../src/agents/prompt.ts";
 import {
-  renderAdvisorTurn,
   renderCompacted,
   renderPlannerTurn,
   renderResearchPlannerTurn,
@@ -145,25 +144,6 @@ describe("the later turns inside a call (goal 166)", () => {
         renderResearchPlannerTurn({
           ...at,
           program: "codex",
-          kind: "failed",
-          words: "the usage window is full until 13:00 UTC",
-        }),
-      ],
-      [
-        "auditor in a program's own terminal: an owner's message inside its turn",
-        renderAdvisorTurn("auditor", {
-          ...at,
-          program: "claude-code",
-          kind: "owner",
-          id: 9,
-          text: "Check the timing code before you clear it.",
-        }),
-      ],
-      [
-        "reviewer in a program's own terminal: after a full usage window",
-        renderAdvisorTurn("reviewer", {
-          ...at,
-          program: "opencode",
           kind: "failed",
           words: "the usage window is full until 13:00 UTC",
         }),

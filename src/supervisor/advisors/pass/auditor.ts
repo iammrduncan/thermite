@@ -21,7 +21,6 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
     configFor,
     additionsFor,
     keeperFor,
-    terminalFor,
     mcpFor,
     overBudget,
     count,
@@ -114,13 +113,6 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
           pkg: { ...pkg, owner_messages: owner },
           keeper: keeperFor(pkg.run),
           additions: await additionsFor(pkg.run),
-          // In its program's own terminal on a rig set so (goal 169), where the owner's messages
-          // that come meanwhile go in inside its turn.
-          terminal: terminalFor(
-            pkg.run,
-            "auditor",
-            owner.map((m) => m.id),
-          ),
           tools: {
             ...toolsFor(),
             mcp: await mcpFor(pkg.run),
@@ -145,17 +137,15 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
           },
         });
         s.audits++;
-        // Read only with the posted audit: an audit that fails to post gives them again. Those
-        // its terminal took inside its turn (goal 169) were given too.
+        // Read only with the posted audit: an audit that fails to post gives them again.
         if (pkg.run) {
-          const given = [...owner.map((m) => m.id), ...(r.given ?? [])];
           await receipts(
             pkg.run,
             "auditor",
-            given,
+            owner.map((m) => m.id),
             r.output.answers.map((a) => ({ ...a, advisor: auditor.name })),
           );
-          for (const id of given) told.add(id);
+          for (const m of owner) told.add(m.id);
         }
         say(
           pkg.run,

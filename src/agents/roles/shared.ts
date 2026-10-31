@@ -267,42 +267,6 @@ export function advisorPromptOf(
 }
 
 /**
- * Told an advisor in its program's own terminal when an owner's message goes in inside its turn
- * (goal 169): the message follows, as JSON with its id, as owner_messages gives the others. Its
- * answer is the last text of its turn, so it gives the whole answer again.
- */
-export const ADVISOR_OWNER_TURN =
-  "A message from the campaign's owner, who is watching this session, as one more of owner_messages: answer it in answers with the others, and end with your whole answer again, as one JSON object.";
-
-/** A later turn in an advisor's call in its program's own terminal (goal 169). */
-export type AdvisorTurn =
-  /** An owner's message that went in inside its turn, through its hook or Thermite's plugin. */
-  | { kind: "owner"; id: number; text: string }
-  /** It waited for its usage window to reset; `words`: the limit's. */
-  | { kind: "failed"; words: string };
-
-/**
- * A later turn in an advisor's call in its program's own terminal (goal 169), for its role (the
- * role of the call's first prompt): its program and its place in the call, after its first message.
- */
-export function renderAdvisorTurn(
-  role: string,
-  i: AdvisorTurn & { program: string; turn: number },
-): Prompt {
-  const message =
-    i.kind === "owner"
-      ? [
-          section(
-            "owner",
-            "owner",
-            `${ADVISOR_OWNER_TURN}\n\n${JSON.stringify({ id: i.id, text: i.text })}`,
-          ),
-        ]
-      : trialTurnSections(i);
-  return prompt(role, i.program, { turn: i.turn, message });
-}
-
-/**
  * An advisor's package: its brief or package as JSON, cut to `max` characters. The owner's
  * messages go first and are never cut, so a large diff cannot hide one the supervisor then
  * records as read. `fit`: the most characters that fit the advisor's window (packageFit, goal

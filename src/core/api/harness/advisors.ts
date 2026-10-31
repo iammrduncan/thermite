@@ -416,18 +416,6 @@ export const ADVISOR_MESSAGES = {
   maxBytes: 256 * 1024,
 } as const satisfies Route;
 
-/**
- * The owner's messages that wait for an advisor role in a run (`run` and `role`), oldest first, as
- * its package gives them: an advisor's call in its program's own terminal takes them inside its
- * turn (goal 169).
- */
-export const ADVISOR_MESSAGES_WAITING = {
-  method: "GET",
-  path: "/v1/advisor-messages/waiting",
-  what: "the owner's messages waiting for an advisor",
-  answer: z.object({ messages: z.array(z.object({ id: z.number(), text: z.string() })) }),
-} as const satisfies Route;
-
 /** The most experiments one request adds to a run's queue, and the most it moves. */
 export const QUEUE_PART_MAX = 20;
 

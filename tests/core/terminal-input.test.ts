@@ -10,13 +10,12 @@ import {
   RUN_KINDS,
 } from "../../src/core/commands.ts";
 import {
-  advisorCallId,
   confirmFirst,
+  isPlannerCall,
   plannerCallId,
   TERMINAL_KEYS,
   TERMINAL_KEYS_MAX,
   TERMINAL_TEXT_MAX,
-  terminalSource,
   typesIntoTerminals,
 } from "../../src/core/terminal-input.ts";
 
@@ -54,19 +53,13 @@ describe("terminal_input's payload", () => {
     assert.ok(!parse({ text: "a", more: 1 }).success, "nothing but its fields");
   });
 
-  test("it names a trial's terminal, a planner's call's or an advisor's call's, and nothing else", () => {
+  test("it names a trial's terminal, or a planner's call's by its run and round, and nothing else", () => {
     const run = `r${"x".repeat(63)}`;
     assert.equal(plannerCallId(run, 12345), `planner-${run}-12345`);
     assert.ok(parse({ trial: plannerCallId(run, 12345), text: "a" }).success, "the longest run");
-    // An advisor's name with other characters, or a long one, still makes an id that fits.
-    assert.equal(advisorCallId("reviewer-2", "js-1", 3), "advisor-reviewer-2-js-1-3");
-    const long = advisorCallId("my auditor: the one with a long name", run, 123456);
-    assert.equal(long, `advisor-my-auditor--the-one--${run}-123456`);
-    assert.ok(parse({ trial: long, text: "a" }).success, "the longest run and name");
-    assert.equal(terminalSource(plannerCallId("js-1", 2)), "planner");
-    assert.equal(terminalSource(advisorCallId("auditor", "js-1", 2)), "supervisor");
-    assert.equal(terminalSource("t-0123456789abcdef"), "trial:t-0123456789abcdef");
-    assert.match(why({ trial: "planner js-1", text: "a" }), /a trial's id, a planner's call's/);
+    assert.ok(isPlannerCall(plannerCallId("js-1", 2)));
+    assert.ok(!isPlannerCall("t-0123456789abcdef"));
+    assert.match(why({ trial: "planner js-1", text: "a" }), /a trial's id, or a planner's call's/);
     assert.ok(!parse({ trial: "x".repeat(101), text: "a" }).success);
   });
 

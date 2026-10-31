@@ -227,18 +227,6 @@ The supervisor runs `codex exec --json --skip-git-repo-check --ignore-rules --mo
 
 Codex may still offer the model its `apply_patch` tool. Under the read-only sandbox, with approvals never asked for, it refuses every change: `patch rejected: writing is blocked by read-only sandbox`. Codex also keeps its read-only tools to list and read the MCP servers' resources. Its answer is the last agent message in its JSON events, read as for `opencode`, and its tokens come from the same events. The supervisor finds the Codex CLI through `THERMITE_CODEX_BIN`, or else `codex` on its `PATH`; the supervisor image holds it unless it was built with an empty `CODEX_VERSION`. Its spending counts as USD 0.
 
-### In the program's own terminal
-
-On a rig whose agent programs run in their own terminal (`program_mode` `terminal`, the default), a call of the teachers, the auditor or a reviewer of the review panel in `claude-code`, `opencode` or `codex` runs in that program's terminal UI instead, held by Thermite's terminal host, which the advisors' runner starts as the call's advisor user, in the call's folder ([The advisors' terminals](../explanation/agents-lanes-planner.md#the-advisors-terminals)). The merged by model, the synthesizer and the final writer stay as above. What changes from the command lines above:
-
-| Runtime | In its own terminal |
-| --- | --- |
-| `claude-code` | Claude Code's terminal UI with `--permission-mode bypassPermissions`, `--tools ""`, `--setting-sources ""`, `--strict-mcp-config`, `--disallowedTools AskUserQuestion` and a session id of its own, so no screen waits: with none of its own tools, the bypass covers only the call's MCP tools, which `--allowedTools` names headless. Its MCP configuration is a file in the call's home, `mcp.json`, which only the call's user reads, never its command line. Its `--settings` add Thermite's hooks, whose PostToolUse and Stop hooks give it the owner's messages inside its turn, with the warning about bypassed permissions taken as read and `autoContinueAtUsageLimit` on. Its home is seeded with its onboarding done and the call's folder trusted |
-| `opencode` | Its server, then its terminal attached to it, as a worker's, with the configuration above and the model in it, and Thermite's plugin linked, which writes its events (the call's record) and steers the owner's messages in |
-| `codex` | Codex's terminal UI with `--no-daemon` and `--dangerously-bypass-hook-trust`, keeping the read-only sandbox and approvals that are never asked for; the configuration above with its `hooks` feature on, its `notify` naming Thermite's hook program, the call's folder trusted, and its notices and animations off |
-
-The prompt is typed into the program once it is ready, never put on its command line. The answer is the newest text that ends one of the call's turns and holds a valid answer. Thermite's hooks and plugin reach the owner's messages through turn routes the supervisor serves on `127.0.0.1` for the call alone, named in the program's environment (`THERMITE_HARNESS_URL`) with a credential bound to the call (`THERMITE_TRIAL_AUTH`, `call.` and a token); a message they give the advisor is answered in its `answers` with the others, and counts as read with them. A `timeout_s` ends the program its own way.
-
 ## What each role gets
 
 | Role | When it runs | What it reads | Tools (`openai` runtimes only) |

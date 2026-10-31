@@ -2,7 +2,6 @@ import type { z } from "zod";
 import { messageText, type Prompt } from "../../agents/prompt.ts";
 import type { AdvisorCall, AdvisorResult } from "./call.ts";
 import { runClaudeCode, runCli, runCliHarness, runPi } from "./runtimes/index.ts";
-import { runInTerminal, runsInTerminal } from "./terminal/index.ts";
 
 /**
  * Runs one advisor call: a role prompt, the tools, and an output schema. The model answers by
@@ -38,8 +37,6 @@ function dispatch<S extends z.ZodType>(input: AdvisorCall<S>): Promise<AdvisorRe
       ),
       input.schema,
     );
-  // On a rig whose agents run in their own terminal (goal 169).
-  if (input.terminal && runsInTerminal(rt)) return runInTerminal(rt, input, input.terminal);
   if (rt.runtime === "claude-code") return runClaudeCode(rt, input);
   if (rt.runtime === "opencode" || rt.runtime === "codex") return runCliHarness(rt, input);
   return runPi(rt, input);

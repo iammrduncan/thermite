@@ -1,5 +1,4 @@
 import { errorText, Refusal } from "../../common/errors.ts";
-import { SCREEN_DATA_MAX, type ScreenFrame } from "../../core/screens.ts";
 import {
   TERMINAL_QUEUE_MAX,
   type TerminalInput,
@@ -144,43 +143,4 @@ export class TrialConsole {
   lastScreen(): ScreenSnapshot | undefined {
     return this.term.lastScreen();
   }
-}
-
-/** A screen cut to SCREEN_DATA_MAX characters, its newest kept. */
-const fit = (s: ScreenSnapshot) => ({
-  cols: s.cols,
-  rows: s.rows,
-  data: s.data.length > SCREEN_DATA_MAX ? s.data.slice(-SCREEN_DATA_MAX) : s.data,
-});
-
-/**
- * One terminal's frame for control's live view (core/screens.ts), wherever its console is (the
- * harness's or the supervisor's): a running one's screen now, with its usage limit and the inputs
- * that wait for its reset; an ended one's last screen; or `none`, for one with no terminal here.
- * Only ever shown.
- */
-export async function screenFrame(o: {
-  id: string;
-  console?: Pick<TrialConsole, "screen" | "limit" | "queued"> | undefined;
-  last?: ScreenSnapshot | undefined;
-  /** Its screen is a worker's or a planner's Pi view. */
-  piView?: boolean | undefined;
-  at: string;
-}): Promise<ScreenFrame> {
-  const c = o.console;
-  if (c) {
-    const s = await c.screen().catch(() => undefined);
-    const limit = c.limit();
-    return {
-      trial: o.id,
-      state: s ? "running" : "none",
-      ...(s ? fit(s) : {}),
-      ...(limit ? { limit: limit.resetsAt ? { resets_at: limit.resetsAt } : {} } : {}),
-      ...(c.queued ? { queued: c.queued } : {}),
-      ...(o.piView ? { pi_view: true as const } : {}),
-      at: o.at,
-    };
-  }
-  if (o.last) return { trial: o.id, state: "ended", ...fit(o.last), at: o.at };
-  return { trial: o.id, state: "none", at: o.at };
 }

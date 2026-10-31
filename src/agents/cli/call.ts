@@ -18,9 +18,8 @@ import { type WindowLink, waitOutWindow } from "./usage-window.ts";
 
 /**
  * A call of a role outside a trial in its program's own terminal (goal 169; the owner's decision
- * of 2026-10-31): a planner's or an advisor's, on the one path every role takes there (terminal.ts;
- * a planner in Pi takes the same link to its Pi view, src/harness/agents/planner/view.ts; an
- * advisor's call is src/supervisor/advisors/terminal/). It is a CliRun of
+ * of 2026-10-31): a planner's, on the one path every role takes there (terminal.ts; a planner in
+ * Pi takes the same link to its Pi view, src/harness/agents/planner/view.ts). It is a CliRun of
  * the program's own entry, as a trial is, in a folder of its own under the lanes' area, run as
  * the role's user: its prompt is typed in, the owner's messages go in inside its turn through its
  * hooks or Thermite's plugin, the owner's console types into it, Live shows its screen, and a full
@@ -82,13 +81,8 @@ export interface CallDeps {
   runner: RoleRunner;
   /** The API as the call's user reaches it, for example http://127.0.0.1:8700. */
   apiUrl: string;
-  /** Where its folder is made (callFolder), unless `folder` makes it. */
+  /** Where its folder is made (callFolder). */
   scratchDir: string;
-  /**
-   * Makes the call's folder where its runner needs it: the advisors' runner takes only its runs'
-   * root's children (src/supervisor/advisors/terminal/).
-   */
-  folder?: ((prefix: string) => string) | undefined;
 }
 
 /** What a call in its terminal is: who runs it, what it may use, and where its usage goes. */
@@ -123,7 +117,7 @@ export async function terminalCall<T extends CliTally>(
   o: TerminalCallOptions,
 ): Promise<T> {
   const link = o.link;
-  const dir = deps.folder?.(p.prefix) ?? callFolder(deps.scratchDir, p.prefix);
+  const dir = callFolder(deps.scratchDir, p.prefix);
   const run: CliRun = {
     id: link.id,
     role: o.role,
