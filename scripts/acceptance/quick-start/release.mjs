@@ -12,7 +12,7 @@ import {
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { hostName, scriptedModel } from "../lib/scripted-model.mjs";
-import { until } from "../lib/smoke-env.mjs";
+import { imageTarget, until } from "../lib/smoke-env.mjs";
 import { COMPOSE, check, control, engine, plan, repo, section, tag, version } from "./context.mjs";
 import { script } from "./model.mjs";
 import { freePort, portInUse, quiet, rewrites, sh, work } from "./processes.mjs";
@@ -58,7 +58,7 @@ async function buildImages(commit) {
     const args = ["--build-arg", `THERMITE_COMMIT=${commit}`];
     if (key === "harness")
       args.push("--build-arg", `THERMITE_IMAGE_ID=${version}+${commit.slice(0, 12)}`);
-    sh(engine, ["build", "-f", `containers/${key}/Containerfile`, ...args, "-t", ref, "."], {
+    sh(engine, ["build", ...imageTarget(key), ...args, "-t", ref, "."], {
       cwd: repo,
       stdio: "inherit",
     });

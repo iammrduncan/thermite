@@ -13,11 +13,11 @@ import { killScope, runSupervised, type SupervisedResult } from "./process.ts";
  * current user, without separation. Callers never pass uids: they name a role.
  */
 
-/** Fixed ids, created in the harness image (containers/harness/Containerfile). */
+/** Fixed ids, created in the harness image (the harness target of containers/Containerfile). */
 export const IDS = {
   thermite: { uid: 10010, gid: 10010 },
   /**
-   * The rig's supervisor (containers/supervisor/Containerfile). In the one-container rig image
+   * The rig's supervisor (containers/build/supervisor-users.sh). In the one-container rig image
    * (containers/rig/Containerfile) the broker starts it under this user, beside the roles.
    */
   supervisor: { uid: 10001, gid: 10001 },

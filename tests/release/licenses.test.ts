@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { CONTAINERFILE, finalStage, repoFile, stage } from "../helpers/containerfile.ts";
 
 /**
  * The licence label each published image carries (.github/workflows/release.yml), as an SPDX
@@ -51,14 +52,13 @@ test("the published images' licence labels name every licence they carry", () =>
 
 test("control's image carries kubectl's licence file, the Apache License 2.0, while its label stays MIT", () => {
   const root = join(import.meta.dirname, "..", "..");
-  const containerfile = readFileSync(join(root, "containers", "control", "Containerfile"), "utf8");
-  // The final stage, after the last FROM: what the published image holds.
-  const final = containerfile.slice(containerfile.lastIndexOf("\nFROM "));
+  // Control's target: what the published image holds.
+  const final = finalStage("control");
   assert.match(
     final,
     /\nCOPY containers\/control\/kubectl\/LICENSE \/usr\/local\/share\/doc\/kubectl\/LICENSE\n/,
   );
-  assert.match(final, /\nCOPY --from=build \/kubectl \/usr\/local\/bin\/kubectl\n/);
+  assert.match(final, /\nCOPY --from=kubectl \/kubectl \/usr\/local\/bin\/kubectl\n/);
   // The LICENSE of kubernetes/kubernetes at the pinned tag: the Apache License 2.0, whole.
   const license = readFileSync(join(root, "containers", "control", "kubectl", "LICENSE"), "utf8");
   assert.match(license, /^\n +Apache License\n +Version 2\.0, January 2004\n/);
@@ -68,19 +68,15 @@ test("control's image carries kubectl's licence file, the Apache License 2.0, wh
 });
 
 test("the supervisor's image carries OpenCode and the Codex CLI at the harness image's versions, with their licences", () => {
-  const root = join(import.meta.dirname, "..", "..");
-  const read = (name: string) =>
-    readFileSync(join(root, "containers", name, "Containerfile"), "utf8");
-  const supervisor = read("supervisor");
-  const harness = read("harness");
-  // The same pinned releases as the harness image's.
+  // One pinned release of each, built once, in stages both images copy from.
+  const text = repoFile(CONTAINERFILE);
   for (const arg of ["OPENCODE_VERSION", "CODEX_VERSION"]) {
-    const pin = (cf: string) => new RegExp(`\\nARG ${arg}=([^\\n]+)\\n`).exec(cf)?.[1];
-    assert.ok(pin(harness), arg);
-    assert.equal(pin(supervisor), pin(harness), arg);
+    assert.equal([...text.matchAll(new RegExp(`\\nARG ${arg}=`, "g"))].length, 1, arg);
+    const program = arg === "CODEX_VERSION" ? "codex" : "opencode";
+    assert.match(stage(text, program), new RegExp(`\\nARG ${arg}\\n`), arg);
   }
-  // The final stage, after the last FROM: what the published image holds.
-  const final = supervisor.slice(supervisor.lastIndexOf("\nFROM "));
+  // The supervisor's target: what the published image holds.
+  const final = finalStage("supervisor");
   assert.match(
     final,
     /\nCOPY --from=opencode \/usr\/local\/bin\/opencode \/usr\/local\/bin\/opencode\n/,
@@ -94,11 +90,11 @@ test("the supervisor's image carries OpenCode and the Codex CLI at the harness i
   assert.match(final, /ln -s \/opt\/codex\/bin\/codex \/usr\/local\/bin\/codex/);
   // Codex's LICENSE and NOTICE go to /usr/local/share/doc/codex; OpenCode's LICENSE to its own.
   assert.match(
-    supervisor,
+    stage(text, "codex"),
     /install -m 0644 \/tmp\/codex-legal\/LICENSE \/tmp\/codex-legal\/NOTICE \/out\/doc\/codex\//,
   );
   assert.match(
-    supervisor,
+    stage(text, "opencode"),
     /\nCOPY containers\/harness\/opencode\/LICENSE \/usr\/local\/share\/doc\/opencode\/LICENSE\n/,
   );
 });

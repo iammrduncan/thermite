@@ -36,7 +36,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { generateKeyPairSync } from "node:crypto";
 import { acceptanceChecks } from "./lib/checks.mjs";
 import { addressOn, followControlBus, startControlBus } from "./lib/control-bus.mjs";
-import { cleanEngine, engine } from "./lib/smoke-env.mjs";
+import { cleanEngine, engine, imageTarget, RIG_CONTAINERFILE } from "./lib/smoke-env.mjs";
 
 // Control's side, in this process (Node.js strips the types of these files), on its message bus.
 const { buildInfo } = await import("../../src/common/build-info.ts");
@@ -129,11 +129,9 @@ const kill = (script) =>
 
 try {
   console.log("building the CPU harness image and the rig image on it ...");
-  execFileSync(
-    engine,
-    ["build", "-q", "-t", harnessImage, "-f", "containers/harness/Containerfile", "."],
-    { stdio: ["ignore", "ignore", "inherit"] },
-  );
+  execFileSync(engine, ["build", "-q", "-t", harnessImage, ...imageTarget("harness"), "."], {
+    stdio: ["ignore", "ignore", "inherit"],
+  });
   execFileSync(
     engine,
     [
@@ -144,7 +142,7 @@ try {
       "--build-arg",
       `HARNESS_IMAGE=${harnessImage}`,
       "-f",
-      "containers/rig/Containerfile",
+      RIG_CONTAINERFILE,
       ".",
     ],
     { stdio: ["ignore", "ignore", "inherit"] },

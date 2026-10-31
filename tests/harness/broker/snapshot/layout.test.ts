@@ -80,7 +80,7 @@ describe("where the snapshot and the live state are", () => {
     for (const path of [
       "compose.yaml",
       "containers/release/compose.template.yaml",
-      "containers/harness/Containerfile",
+      "containers/Containerfile",
       "src/control/clusters/manifests.ts",
       "src/control/machines/deploy.ts",
     ])

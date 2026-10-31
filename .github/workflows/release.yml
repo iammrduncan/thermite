@@ -1,9 +1,9 @@
-# Releases. On a tag v*, it builds the control, harness (CPU and CUDA) and supervisor images from
-# their Containerfiles, and the one-container rig image for RunPod on the CUDA harness, and pushes
-# them to GitHub's container registry, tagged with the commit. Then it checks each published image
-# (scripts/release/check-images.ts): pulled by digest with no sign-in, it reports the commit, carries no
-# Claude Code, no key and, for the rig image, no set-id file (goal 010). Only images that hold get
-# the version's tag. Then it writes the release bundle, a compose file that pins those images by
+# Releases. On a tag v*, it builds the control, harness (CPU and CUDA) and supervisor images, each a
+# target of containers/Containerfile, and the one-container rig image for RunPod on the CUDA
+# harness, and pushes them to GitHub's container registry, tagged with the commit. Then it checks
+# each published image (scripts/release/check-images.ts): pulled by digest with no sign-in, it
+# reports the commit, carries no Claude Code, no key and, for the rig image, no set-id file (goal
+# 010). Only images that hold get the version's tag. Then it writes the release bundle, a compose file that pins those images by
 # digest and a short readme that gives the compose file's SHA-256 (scripts/release/bundle.ts), and
 # attaches both to a draft GitHub Release, whose notes are the readme.
 #
@@ -22,7 +22,7 @@
 # the run reaches a script as an environment variable, never as its text (as in ci.yml).
 #
 # The images never carry Claude Code: no build here sets CLAUDE_CODE_VERSION. The harness images
-# carry OpenCode and the Codex CLI, both open source, at their Containerfile's pinned versions.
+# carry OpenCode and the Codex CLI, both open source, at the Containerfile's pinned versions.
 name: release
 
 on:
@@ -33,7 +33,7 @@ on:
     paths:
       - .github/workflows/release.yml
       - containers/**
-      - scripts/release/bundle.ts
+      - scripts/release/**
       - src/release/**
       - tests/release/**
   workflow_dispatch:
@@ -136,7 +136,7 @@ jobs:
         include:
           - key: control
             repository: thermite-control
-            containerfile: containers/control/Containerfile
+            target: control
             platforms: linux/amd64,linux/arm64
             suffix: ""
             cuda: false
@@ -146,19 +146,19 @@ jobs:
           # beside Thermite (MIT): their licence label is the SPDX expression of all three.
           - key: harness
             repository: thermite-harness
-            containerfile: containers/harness/Containerfile
+            target: harness
             platforms: linux/amd64,linux/arm64
             suffix: ""
             cuda: false
             description: "Thermite's harness for CPU rigs: the judge, the broker and the agents."
             licenses: "MIT AND Apache-2.0"
-          # The CUDA harnesses: the same Containerfile on a CUDA base (cuda_base names it), in the
+          # The CUDA harnesses: the same target on a CUDA base (cuda_base names it), in the
           # same package as the CPU harness. CUDA 12 under tags that end in -cuda, for Pascal to
           # Hopper; the same job then builds the rig image on it (rig). CUDA 13 under tags that
           # end in -cuda13, for Turing to Blackwell, on arm64 too (goal 132).
           - key: harness-cuda
             repository: thermite-harness
-            containerfile: containers/harness/Containerfile
+            target: harness
             platforms: linux/amd64
             suffix: "-cuda"
             cuda: true
@@ -168,7 +168,7 @@ jobs:
             licenses: "MIT AND Apache-2.0"
           - key: harness-cuda13
             repository: thermite-harness
-            containerfile: containers/harness/Containerfile
+            target: harness
             platforms: linux/amd64,linux/arm64
             suffix: "-cuda13"
             cuda: true
@@ -180,7 +180,7 @@ jobs:
           # for the advisors, as the harness images do.
           - key: supervisor
             repository: thermite-supervisor
-            containerfile: containers/supervisor/Containerfile
+            target: supervisor
             platforms: linux/amd64,linux/arm64
             suffix: ""
             cuda: false
@@ -242,7 +242,8 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: ${{ matrix.containerfile }}
+          file: containers/Containerfile
+          target: ${{ matrix.target }}
           platforms: ${{ matrix.platforms }}
           # Every image reports THERMITE_COMMIT with the version in package.json, and control
           # compares rigs' builds with its own. THERMITE_IMAGE_ID is the image's tag and commit:

@@ -14,7 +14,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { cleanEngine, engine } from "./lib/smoke-env.mjs";
+import { cleanEngine, engine, imageTarget } from "./lib/smoke-env.mjs";
 
 const image = "localhost/thermite-harness:multigpu-check";
 const names = [
@@ -147,13 +147,9 @@ try {
     publicKey.export({ type: "spki", format: "pem" }),
   );
   console.log("building the harness image ...");
-  execFileSync(
-    engine,
-    ["build", "-q", "-t", image, "-f", "containers/harness/Containerfile", "."],
-    {
-      stdio: ["ignore", "ignore", "inherit"],
-    },
-  );
+  execFileSync(engine, ["build", "-q", "-t", image, ...imageTarget("harness"), "."], {
+    stdio: ["ignore", "ignore", "inherit"],
+  });
 
   // Two judge cards and two agents' cards.
   const a = names[0];

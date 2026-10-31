@@ -171,11 +171,14 @@ export function bundleFiles(
 
 // --- Keeping the template in step with compose.yaml -------------------------------------------
 
-/** The `image:` line that stands for each `build:` line of compose.yaml in the template. */
+/** The one Containerfile compose.yaml builds its images from, each image a target of it. */
+const CONTAINERFILE = "containers/Containerfile";
+
+/** The `image:` line that stands for each `build:` line of compose.yaml in the template, by target. */
 const BUILD_TO_IMAGE: Record<string, string> = {
-  "containers/control/Containerfile": "@@CONTROL_IMAGE@@",
-  "containers/harness/Containerfile": "@@HARNESS_IMAGE@@",
-  "containers/supervisor/Containerfile": "@@SUPERVISOR_IMAGE@@",
+  control: "@@CONTROL_IMAGE@@",
+  harness: "@@HARNESS_IMAGE@@",
+  supervisor: "@@SUPERVISOR_IMAGE@@",
 };
 
 /** A compose file's lines without comments and blank lines, and without trailing spaces. */
@@ -194,11 +197,12 @@ function meaningful(text: string): string[] {
 export function templateDrift(composeYaml: string, template: string): string[] {
   const expected = meaningful(composeYaml).map((line) => {
     // A build line, with or without its build arguments (the published images carry theirs).
-    const build = /^(\s*)build: \{ context: \., dockerfile: ([^\s,]+)(?:, args: \{.*\})? \}$/.exec(
-      line,
-    );
-    if (!build) return line;
-    const image = BUILD_TO_IMAGE[build[2] ?? ""];
+    const build =
+      /^(\s*)build: \{ context: \., dockerfile: ([^\s,]+), target: ([\w-]+)(?:, args: \{.*\})? \}$/.exec(
+        line,
+      );
+    if (!build || build[2] !== CONTAINERFILE) return line;
+    const image = BUILD_TO_IMAGE[build[3] ?? ""];
     return image ? `${build[1]}image: ${image}` : line;
   });
   const lines = meaningful(template);

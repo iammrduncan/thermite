@@ -30,7 +30,7 @@ import { prepareSupervisorFolders } from "./folders.ts";
  * THERMITE_ALLOW_UNSEPARATED=1 (development); otherwise it stops.
  */
 
-/** The supervisor's user and group in the image (containers/supervisor/Containerfile). */
+/** The supervisor's user and group in the image (containers/build/supervisor-users.sh). */
 const SUPERVISOR = { uid: 10001, gid: 10001 };
 
 const env = process.env;

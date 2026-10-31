@@ -32,7 +32,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { resolve } from "node:path";
-import { cleanEngine, engine } from "./lib/smoke-env.mjs";
+import { cleanEngine, engine, imageTarget } from "./lib/smoke-env.mjs";
 
 const image = process.env.IMAGE ?? "localhost/thermite-harness:terminal-check";
 const name = "thermite-terminal";
@@ -60,11 +60,9 @@ const started = Date.now();
 try {
   if (!process.env.IMAGE) {
     console.log("building the harness image ...");
-    execFileSync(
-      engine,
-      ["build", "-q", "-t", image, "-f", "containers/harness/Containerfile", "."],
-      { stdio: ["ignore", "ignore", "inherit"] },
-    );
+    execFileSync(engine, ["build", "-q", "-t", image, ...imageTarget("harness"), "."], {
+      stdio: ["ignore", "ignore", "inherit"],
+    });
   }
   spawnSync(engine, ["rm", "-f", name], { stdio: "ignore" });
   const { publicKey } = generateKeyPairSync("ed25519");
@@ -164,7 +162,7 @@ try {
     console.log("building the supervisor image ...");
     execFileSync(
       engine,
-      ["build", "-q", "-t", supervisorImage, "-f", "containers/supervisor/Containerfile", "."],
+      ["build", "-q", "-t", supervisorImage, ...imageTarget("supervisor"), "."],
       { stdio: ["ignore", "ignore", "inherit"] },
     );
   }

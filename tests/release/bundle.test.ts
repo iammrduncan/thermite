@@ -121,6 +121,15 @@ describe("the release bundle", () => {
 
   test("the template matches compose.yaml but for images and the init service", () => {
     assert.deepEqual(templateDrift(COMPOSE, TEMPLATE), []);
+    // Each build line stands for its image by its target of the one Containerfile: a build from
+    // another file, or of another target, is drift.
+    const harness = "dockerfile: containers/Containerfile, target: harness";
+    assert.ok(COMPOSE.includes(harness));
+    for (const other of [
+      "dockerfile: containers/harness/Containerfile, target: harness",
+      "dockerfile: containers/Containerfile, target: harness-dev",
+    ])
+      assert.match(templateDrift(COMPOSE.replace(harness, other), TEMPLATE).join(), /build: \{/);
     const changed = COMPOSE.replace(
       "THERMITE_TARGET: cpu\n      THERMITE_CONTROL_PUBKEY_FILE",
       'THERMITE_TARGET: cpu\n      THERMITE_NEW_SETTING: "1"\n      THERMITE_CONTROL_PUBKEY_FILE',

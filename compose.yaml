@@ -12,7 +12,7 @@ x-logging: &logging
 
 services:
   control:
-    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: control, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_CONTROL_DIR: /var/lib/thermite-control
       THERMITE_CONTROL_LISTEN: 0.0.0.0:8800
@@ -182,7 +182,7 @@ services:
   #   docker compose --profile backup run --rm backup thermite restore --control http://control:8800 /backups/<name>
   backup:
     profiles: [backup]
-    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: control, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     command: ["thermite", "help"]
     environment:
       THERMITE_CONTROL_DIR: /var/lib/thermite-control
@@ -205,7 +205,7 @@ services:
   # before is kept while control has the rig enrolled; a control whose state was removed enrolls
   # the rig again. It runs as root with only the capability to write that file, which is yours.
   enroll:
-    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: control, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     command: ["thermite", "local", "enroll", "local-1", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/control-rig-token"]
     user: "0:0"
     volumes:
@@ -220,7 +220,7 @@ services:
     logging: *logging
 
   harness:
-    build: { context: ., dockerfile: containers/harness/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: harness, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_RIG_ID: local-1
       THERMITE_TARGET: cpu
@@ -277,7 +277,7 @@ services:
       start_period: 5m
 
   supervisor:
-    build: { context: ., dockerfile: containers/supervisor/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: supervisor, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_RIG_ID: local-1
       HARNESS_URL: http://harness:8700
@@ -335,7 +335,7 @@ services:
   # the rig again. It runs as root with only the capability to write that file, which is yours.
   enroll-2:
     profiles: [two-rigs]
-    build: { context: ., dockerfile: containers/control/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: control, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     command: ["thermite", "local", "enroll", "local-2", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/control-rig-token-2"]
     user: "0:0"
     volumes:
@@ -351,7 +351,7 @@ services:
 
   harness-2:
     profiles: [two-rigs]
-    build: { context: ., dockerfile: containers/harness/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: harness, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_RIG_ID: local-2
       THERMITE_TARGET: cpu
@@ -400,7 +400,7 @@ services:
 
   supervisor-2:
     profiles: [two-rigs]
-    build: { context: ., dockerfile: containers/supervisor/Containerfile, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
+    build: { context: ., dockerfile: containers/Containerfile, target: supervisor, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_RIG_ID: local-2
       HARNESS_URL: http://harness-2:8700

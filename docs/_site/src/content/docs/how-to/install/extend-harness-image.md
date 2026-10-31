@@ -90,7 +90,7 @@ Then start the stack with it, and name it in every later `up`, with your other `
 docker compose -f compose.yaml -f compose.harness.yaml up -d   # or: podman compose -f … -f … up -d
 ```
 
-In a checkout of the source code, the stack builds its harness from your clone instead. Add the packages to the first `apt-get install` line in your clone's `containers/harness/Containerfile` (the one that lists `gcc`), then rebuild with `docker compose up -d --build harness`. The change stays in your clone, so a later `git pull` may ask you to merge it.
+In a checkout of the source code, the stack builds its harness from your clone instead. Add the packages to the first `apt-get install` line of the harness target in your clone's `containers/Containerfile` (the one that lists `gcc`), then rebuild with `docker compose up -d --build harness`. The change stays in your clone, so a later `git pull` may ask you to merge it.
 
 ## Check that it worked
 

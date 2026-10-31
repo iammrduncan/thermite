@@ -14,6 +14,12 @@ export const compose = (process.env.COMPOSE ?? "podman compose").split(" ");
  * which may be a launcher, as in `uvx podman-compose`.
  */
 export const engine = compose.some((w) => /^docker(-compose)?$/.test(w)) ? "docker" : "podman";
+/** The Containerfile control, the harness and the supervisor are built from, each its target. */
+export const CONTAINERFILE = "containers/Containerfile";
+/** The one-container rig image's, built on a harness image (its build argument HARNESS_IMAGE). */
+export const RIG_CONTAINERFILE = "containers/rig/Containerfile";
+/** The arguments of an engine's build that build one image: control, harness or supervisor. */
+export const imageTarget = (target) => ["-f", CONTAINERFILE, "--target", target];
 // THERMITE_PROJECT and THERMITE_CONTROL_PORT let a second stack (a long run) run beside the usual
 // one, with THERMITE_NATS_PUBLISH for its message bus's port (such as 127.0.0.1:4223).
 export const control = `http://127.0.0.1:${process.env.THERMITE_CONTROL_PORT ?? "8800"}`;

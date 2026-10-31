@@ -212,51 +212,64 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           BASE: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
-          # The containers and compose files, the APIs and the relay, the advisors' runner, and the
-          # smoke test.
+          # Each path of code names a folder, or a module by its name: the file and the folder it
+          # becomes when it splits (`^src/core/paths(\.ts$|/)`), so a split or a move into a
+          # folder keeps the job running (tests/release/workflows.test.ts holds it).
+          #
+          # The containers and compose files, the APIs, the relay and the message bus it goes over,
+          # the advisors' runner, and the smoke test.
           COMPOSE: |
             ^containers/
             ^compose[^/]*\.yaml$
             ^package(-lock)?\.json$
             ^kits/smoke-cpu/
-            ^src/(control|harness)/api(\.ts|/)
-            ^src/(control|harness|supervisor)/main\.ts$
+            ^src/(control|harness)/api/
+            ^src/(control|harness|supervisor)/main(\.ts$|/)
             ^src/harness/controller/
-            ^src/supervisor/relay(\.ts|/)
+            ^src/supervisor/relay/
+            ^src/(common|control)/bus/
+            ^src/core/link/
             ^src/supervisor/advisor-runs/
             ^src/common/run-as/
-            ^scripts/acceptance/(compose-smoke|stage-smoke)\.mjs$
+            ^scripts/acceptance/(compose-smoke|stage-smoke)(\.mjs$|/)
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
-          # The rig image and the harness image under it, the broker, the isolation selftest, the
-          # advisors' runner and pull mode's enrollment.
+          # The rig image and the harness image under it (their Containerfiles and the scripts they
+          # run), the broker, the isolation selftest, the advisors' runner, pull mode's enrollment,
+          # and the message bus with the pod's leaf node.
           RIG_IMAGE: |
-            ^containers/(rig|harness)/
+            ^containers/(Containerfile$|build/|harness/|rig/)
             ^package(-lock)?\.json$
-            ^src/harness/broker(\.ts|/)
+            ^src/harness/broker/
             ^tests/harness/broker/
-            ^src/harness/selftest(\.ts|/)
+            ^src/harness/selftest/
             ^src/supervisor/advisor-runs/
             ^src/common/run-as/
-            ^src/core/tunnel\.ts$
-            ^src/control/runpod/tunnel\.ts$
-            ^src/core/paths\.ts$
-            ^scripts/acceptance/rig-image\.mjs$
+            ^src/core/(tunnel|paths)(\.ts$|/)
+            ^src/control/runpod/tunnel(\.ts$|/)
+            ^src/(common|control)/bus/
+            ^src/core/link/
+            ^src/supervisor/leaf(\.ts$|/)
+            ^scripts/acceptance/rig-image(\.mjs$|/)
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
-          # Rigs on RunPod, pull mode, results sent to control, and the rig image.
+          # Rigs on RunPod, pull mode, results sent to control, the message bus with the pod's leaf
+          # node, and the rig image with the harness image under it.
           RUNPOD: |
-            ^src/control/runpod
+            ^src/control/runpod/
             ^tests/control/runpod/
-            ^tests/control/dashboard/runpod\.test\.ts$
-            ^src/control/exports\.ts$
-            ^src/control/store/(runpod|tunnels|exports)\.ts$
-            ^src/core/(tunnel|paths)\.ts$
-            ^src/supervisor/export-upload\.ts$
-            ^src/supervisor/relay(\.ts|/)
-            ^tests/helpers/fake-runpod\.ts$
-            ^containers/rig/
-            ^scripts/acceptance/runpod\.mjs$
+            ^tests/control/dashboard/runpod(\.test\.ts$|/)
+            ^src/control/exports(\.ts$|/)
+            ^src/control/store/(runpod|tunnels|exports)(\.ts$|/)
+            ^src/core/(tunnel|paths)(\.ts$|/)
+            ^src/supervisor/export-upload(\.ts$|/)
+            ^src/supervisor/relay/
+            ^src/(common|control)/bus/
+            ^src/core/link/
+            ^src/supervisor/leaf(\.ts$|/)
+            ^tests/helpers/fake-runpod(\.ts$|/)
+            ^containers/(Containerfile$|build/|harness/|rig/)
+            ^scripts/acceptance/runpod(\.mjs$|/)
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
           # The images and compose files, the release bundle, the quick start's pages, the sample
@@ -264,7 +277,7 @@ jobs:
           QUICK_START: |
             ^containers/
             ^compose[^/]*\.yaml$
-            ^scripts/release/bundle\.ts$
+            ^scripts/release/bundle(\.ts$|/)
             ^src/release/
             ^tests/release/
             ^docs/_site/src/content/docs/tutorials/(first-run|agents-with-a-free-model)\.md$
@@ -274,8 +287,8 @@ jobs:
             ^kits/smoke-cpu/
             ^scripts/acceptance/quick-start(\.mjs$|/)
             ^scripts/acceptance/lib/
-            ^tests/helpers/quick-start\.ts$
-            ^tests/docs/quick-start\.test\.ts$
+            ^tests/helpers/quick-start(\.ts$|/)
+            ^tests/docs/quick-start(\.test\.ts$|/)
             ^\.github/workflows/ci\.yml$
         run: |
           all=

@@ -13,6 +13,7 @@ import {
   smokeCheck,
   smokeReport,
 } from "../../src/harness/smoke-check.ts";
+import { finalStage } from "../helpers/containerfile.ts";
 import { makeJudgeEnv } from "../helpers/judge-env.ts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -194,8 +195,7 @@ describe("the smoke check's report", () => {
 });
 
 describe("the smoke check's kits and projects in the harness image", () => {
-  const file = readFileSync(join(repoRoot, "containers", "harness", "Containerfile"), "utf8");
-  const final = file.slice(file.lastIndexOf("\nFROM "));
+  const final = finalStage("harness");
   // The copies of kits/ and examples/, then one step that closes them and checks that it did.
   const step =
     /\nCOPY kits \.\/checks\/kits\nCOPY examples \.\/checks\/examples\nRUN chown -R 0:(\d+) checks \\\n && chmod -R (\S+) checks \\\n && test -z "\$\(find checks -perm \/o=rwx -print -quit\)"\n/.exec(
@@ -208,7 +208,7 @@ describe("the smoke check's kits and projects in the harness image", () => {
     assert.match(final.slice(0, step.index), /\nWORKDIR \/opt\/thermite\n/);
     // The controller runs as `thermite`, with that group (broker/runner.ts); no role has it.
     assert.equal(Number(step[1]), IDS.thermite.gid);
-    assert.match(file, new RegExp(`groupadd -g ${IDS.thermite.gid} thermite `));
+    assert.match(final, new RegExp(`groupadd -g ${IDS.thermite.gid} thermite `));
     assert.equal(step[2], "u=rwX,g=rX,o=");
     // No later step names the folder, so none opens it again.
     const later = final

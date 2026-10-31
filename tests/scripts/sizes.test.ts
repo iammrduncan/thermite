@@ -61,7 +61,7 @@ describe("the size check's scope", () => {
       true,
     );
     assert.equal(
-      inScope("containers/supervisor/Containerfile", () => "FR"),
+      inScope("containers/Containerfile", () => "FR"),
       false,
     );
   });

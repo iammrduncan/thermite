@@ -33,17 +33,19 @@ export function joinPath(...paths: string[]): string {
 
 /**
  * Where the harness reads its inbox, which the supervisor fills: inside a folder of the harness
- * image's own that only root and the controller's group may enter (containers/harness/Containerfile),
- * so that no role reaches what the supervisor fetched, whatever the modes in the mounted folder.
- * Compose, the machine units and the cluster manifests mount the inbox here.
+ * image's own that only root and the controller's group may enter (the harness target of
+ * containers/Containerfile), so that no role reaches what the supervisor fetched, whatever the
+ * modes in the mounted folder. Compose, the machine units and the cluster manifests mount the
+ * inbox here.
  */
 export const HARNESS_INBOX_DIR = "/controller/inbox";
 
 /**
  * Where the supervisor fills the inbox in its own image: inside a folder of the image's own that
- * only root and the supervisor's group may enter (containers/supervisor/Containerfile), so that no
- * advisor's program reaches what the supervisor fetched, whatever the modes in the mounted folder.
- * Compose, the machine units and the cluster manifests mount the inbox here.
+ * only root and the supervisor's group may enter (the supervisor target of
+ * containers/Containerfile), so that no advisor's program reaches what the supervisor fetched,
+ * whatever the modes in the mounted folder. Compose, the machine units and the cluster manifests
+ * mount the inbox here.
  */
 export const SUPERVISOR_INBOX_DIR = "/supervisor/inbox";
 

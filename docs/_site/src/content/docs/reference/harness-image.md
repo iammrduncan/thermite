@@ -8,20 +8,22 @@ sidebar:
 
 Thermite runs as three container images. The **harness** image holds a rig's judge, broker and agents; the **supervisor** image is the rig's link to the outside; the **control** image is the central service. A fourth, the **one-container rig image**, puts a rig's harness and supervisor in one container, for hosts that run one container per machine, such as RunPod. This page lists what each one contains. [Extend the harness image](../how-to/install/extend-harness-image.md) adds your project's tools, and [Push the images to your own registry](../how-to/install/own-registry.md) builds them. The [glossary](glossary.md) explains the terms.
 
-Each image is built from the repository's root, from its own file:
+Each image is built from the repository's root. The harness, supervisor and control images are three targets of one file, `containers/Containerfile`, chosen with `--target`:
 
 | Image | Built from |
 | --- | --- |
-| Harness | `containers/harness/Containerfile` |
-| Supervisor | `containers/supervisor/Containerfile` |
-| Control | `containers/control/Containerfile` |
+| Harness | `containers/Containerfile`, target `harness` |
+| Supervisor | `containers/Containerfile`, target `supervisor` |
+| Control | `containers/Containerfile`, target `control` |
 | One-container rig | `containers/rig/Containerfile`, on a harness image built first |
 
 ```sh
-docker build -t thermite-harness -f containers/harness/Containerfile .
+docker build --target harness -t thermite-harness -f containers/Containerfile .
 ```
 
-`podman build` takes the same arguments. In a checkout of the source code, `docker compose build` builds all three.
+`podman build` takes the same arguments. A build that names no target builds the harness. In a checkout of the source code, `docker compose build` builds all three.
+
+The three targets copy from the file's other stages, each written once: Thermite's code and its packages, built once for all three; one stage each that fetches OpenCode, the Codex CLI, Claude Code and kubectl; and the supervisor's build of node-pty. Each pinned version is a [build argument](#build-arguments) whose default is written once, at the top of the file. Two short scripts in `containers/build/` are mounted only for the steps that run them, so no image keeps them: `no-set-id.sh`, every image's last step, and `supervisor-users.sh`, which makes the supervisor's and the advisors' users in the supervisor image and in the one-container rig image.
 
 ## Published images
 
@@ -203,7 +205,7 @@ Each release publishes it on the CUDA harness, as `ghcr.io/iammrduncan/thermite-
 It is the harness image with the supervisor added. Build the harness image first, on a CUDA 12.x base for a GPU pod, and name it in `HARNESS_IMAGE`. The CPU harness image works the same, for a test:
 
 ```sh
-podman build -t thermite-harness -f containers/harness/Containerfile .
+podman build --target harness -t thermite-harness -f containers/Containerfile .
 podman build -t thermite-rig --build-arg HARNESS_IMAGE=localhost/thermite-harness \
   -f containers/rig/Containerfile .
 ```

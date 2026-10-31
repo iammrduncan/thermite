@@ -103,11 +103,13 @@ Continuous integration (`.github/workflows/ci.yml`) runs on every pull request, 
 | **judge tests (Node 22)**, **judge tests (Node 24)** | The judge's and the broker's tests, one file at a time, on a machine of their own, because they time real processes (`node scripts/test.mjs --part alone`) |
 | **docs site** | `npm run docs:build` and `npm run docs:check` |
 | **secret scan** | gitleaks over the whole history of the commit (see below) |
-| **compose-smoke** | The compose smoke test with Docker, when the change touches the containers, a compose file, the APIs, the relay or the smoke test |
-| **rig image** | Builds the one-container rig image, enrolls it in pull mode from control's code in the script, and runs its isolation self-test with Docker (`scripts/acceptance/rig-image.mjs`), when the change touches the rig or harness image, the broker, the isolation self-test or pull mode |
-| **runpod** | Launches a rig on the fake RunPod API, whose pod is a container of the rig image, then stops, starts and terminates it, with Docker (`scripts/acceptance/runpod.mjs`), when the change touches rigs on RunPod, pull mode, results sent to control or the rig image |
+| **compose-smoke** | The compose smoke test with Docker, when the change touches the containers, a compose file, the APIs, the relay, the message bus or the smoke test |
+| **rig image** | Builds the one-container rig image, enrolls it in pull mode from control's code in the script, and runs its isolation self-test with Docker (`scripts/acceptance/rig-image.mjs`), when the change touches the rig or harness image, the broker, the isolation self-test, pull mode or the message bus |
+| **runpod** | Launches a rig on the fake RunPod API, whose pod is a container of the rig image, then stops, starts and terminates it, with Docker (`scripts/acceptance/runpod.mjs`), when the change touches rigs on RunPod, pull mode, results sent to control, the message bus, or the rig image and the harness image under it |
 | **heavy checks, needed?** | Decides which heavy jobs run, and says why in its log: every one on a version tag or a run by hand; on a pull request or a push, each one whose paths the change touches. Changing the workflow runs them all |
 | **quick-start** | The quick-start test with Docker (`scripts/acceptance/quick-start.mjs`), when the change touches the containers, a compose file, the release bundle, the quick start's pages, `examples/`, the smoke kit or the test itself. It stops after 60 minutes. Its report, with each check and how long each step took, is the run's artifact `quick-start-report` |
+
+Each heavy job's paths name folders, or a module by its name with the folder it becomes when it splits (`^src/core/paths(\.ts$|/)`), never a file alone, so a split or a move into a folder keeps the job running. Each path must name a file of the repository. `tests/release/workflows.test.ts` holds both, and holds the release workflow's paths to folders too.
 
 A new commit on a pull request cancels the run for the commit before it. Every push to `main` or to a version's branch gets a whole run of its own.
 

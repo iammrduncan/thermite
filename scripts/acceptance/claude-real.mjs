@@ -32,7 +32,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { resolve } from "node:path";
-import { cleanEngine, engine } from "./lib/smoke-env.mjs";
+import { cleanEngine, engine, imageTarget } from "./lib/smoke-env.mjs";
 
 const version = process.env.CLAUDE_CODE_VERSION ?? "2.1.308";
 const image = process.env.IMAGE ?? "localhost/thermite-harness:claude-real-check";
@@ -94,8 +94,7 @@ try {
         "-q",
         "-t",
         image,
-        "-f",
-        "containers/harness/Containerfile",
+        ...imageTarget("harness"),
         "--build-arg",
         `CLAUDE_CODE_VERSION=${version}`,
         ".",
