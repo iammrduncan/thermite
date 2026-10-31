@@ -467,7 +467,8 @@ export type HarnessImage =
 
 export function harnessImageFrom(compose: string | undefined): HarnessImage {
   if (compose === undefined) return { kind: "unset" };
-  if (/dockerfile: containers\/harness\/Containerfile/.test(compose)) return { kind: "build" };
+  if (/dockerfile: containers\/Containerfile\b[^}\n]*\btarget: harness\b/.test(compose))
+    return { kind: "build" };
   const m =
     /THERMITE_RIG_HARNESS_CUDA_IMAGE: "\$\{THERMITE_RIG_HARNESS_CUDA_IMAGE:-([^}"\s]+)\}"/.exec(
       compose,
