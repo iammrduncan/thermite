@@ -26,6 +26,7 @@ const PARAMS = {
   seq: 3,
   name: "20261020T120000Z-0123abcd",
   campaign: "sort-speed",
+  reads: "papers",
 };
 
 describe("control's API has one contract (core/api/control/)", () => {
