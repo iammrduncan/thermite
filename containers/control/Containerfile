@@ -8,7 +8,8 @@ COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
 COPY scripts/patch-pi-ai.mjs ./scripts/
 # No package's install script runs: this stage has no compiler for node-pty's native part, and no
 # other package Thermite runs needs its own. node-pty, the one optional dependency, is the
-# harness's terminal host's (goal 169), so it is left out here with what it alone needs.
+# terminal host's (goal 169), which control does not run, so it is left out here with what it
+# alone needs.
 RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
 COPY src ./src
 # pi-tui's prebuilt helpers for its clipboard and modifier keys, which nothing here loads, stay out:

@@ -96,6 +96,30 @@ test("every image's Containerfile clears set-id bits last, and fails its build i
   }
 });
 
+test("the supervisor image builds node-pty in a stage of its own and keeps only the module: no compiler or make is in it (goal 169)", () => {
+  const text = readFileSync(
+    join(import.meta.dirname, "..", "..", "containers", "supervisor", "Containerfile"),
+    "utf8",
+  );
+  const pty = text.slice(
+    text.indexOf("\nFROM ${NODE_IMAGE} AS pty"),
+    text.indexOf("\nFROM ", text.indexOf("AS pty")),
+  );
+  assert.match(pty, /apt-get install -y --no-install-recommends g\+\+ make python3/);
+  assert.match(pty, /node-gyp\.js rebuild/);
+  const final = text.slice(text.lastIndexOf("\nFROM "));
+  const fromPty = [...final.matchAll(/COPY --from=pty (\S+)/g)].map((m) => m[1]);
+  assert.deepEqual(fromPty, ["/src/node_modules/node-pty"]);
+  assert.doesNotMatch(final, /apt-get install[^\n]*(g\+\+|gcc|make|build-essential)/);
+  assert.match(final, /require\('\/opt\/thermite\/node_modules\/node-pty'\)\.native\.open/);
+  assert.match(
+    final,
+    /! command -v cc && ! command -v gcc && ! command -v g\+\+ && ! command -v make/,
+  );
+  // The build stage no longer leaves node-pty out: it hands it to the pty stage.
+  assert.doesNotMatch(text, /--omit=optional/);
+});
+
 test("no image holds pi-tui's native helpers: each deletes them, its build fails on them, and the release check refuses them (goal 169)", () => {
   for (const image of ["control", "harness", "supervisor"]) {
     const text = readFileSync(

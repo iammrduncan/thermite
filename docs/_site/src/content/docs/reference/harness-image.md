@@ -173,7 +173,8 @@ At start the broker also closes `/tmp`, `/var/tmp` and `/dev/shm` to the roles (
 | --- | --- |
 | Base | `NODE_IMAGE` |
 | Packages | `git`, `openssh-client`, `tini`, `ca-certificates`, `python3`, after the base's own are upgraded |
-| Thermite | `/opt/thermite`, with its production dependencies but `node-pty`, which only the harness's terminal host uses, and without pi-tui's prebuilt native helpers, as in the harness image, and the `thermite` command at `/usr/local/bin/thermite` |
+| Thermite | `/opt/thermite`, with its production dependencies, without pi-tui's prebuilt native helpers, as in the harness image, and the `thermite` command at `/usr/local/bin/thermite` |
+| node-pty | The terminal host's pseudo-terminals: its native part, built in a stage of its own with Debian's `g++`, `make` and `python3` (for node-gyp), which stay in that stage. Only the built module is copied in, and the build fails if a compiler or `make` is in the image |
 | Compaction hook and plugin | The same as in the harness image, for advisors in Claude Code and OpenCode: `/opt/thermite/dist/agents/programs/claude-code/compaction-hook.js` and `/opt/thermite/dist/agents/programs/opencode/plugin.js`. Each keeps an advisor's conversation before each of that program's compactions ([Compaction](limits-and-pacing.md#compaction)) |
 | Claude Code | `/usr/local/bin/claude`, only when built with `CLAUDE_CODE_VERSION`. Advisors on a Claude subscription need it |
 | OpenCode | `/usr/local/bin/opencode`, at `OPENCODE_VERSION` (2.1.4 by default), as in the harness image, for [advisors in OpenCode](advisors-file.md#opencode-opencode-v2-in-the-supervisor). Always installed. Its MIT `LICENSE` is in `/usr/local/share/doc/opencode` |
@@ -347,7 +348,7 @@ The [isolation check](rig-checks.md#the-one-container-image) checks the supervis
 | Base | `NODE_IMAGE` |
 | Packages | `tini`, `ca-certificates`, `git` and `openssh-client` (for machines over SSH and Git over SSH), after the base's own are upgraded |
 | kubectl | `KUBECTL_VERSION`, v1.37.1 by default, checked against a pinned sha256, at `/usr/local/bin/kubectl`. The build stops with `no pinned kubectl for <arch>` on any architecture but amd64 and arm64. kubectl is under the Apache License 2.0: the `LICENSE` of the Kubernetes repository at that tag is kept in `/usr/local/share/doc/kubectl`, from `containers/control/kubectl/LICENSE` |
-| Thermite | `/opt/thermite`, with its production dependencies but `node-pty`, which only the harness's terminal host uses, and without pi-tui's prebuilt native helpers, as in the harness image, and the `thermite` command at `/usr/local/bin/thermite` |
+| Thermite | `/opt/thermite`, with its production dependencies but `node-pty`, which only the terminal host uses, and without pi-tui's prebuilt native helpers, as in the harness image, and the `thermite` command at `/usr/local/bin/thermite` |
 | User | `thermite`, uid and gid 10001, home `/var/lib/thermite-control`. It has a passwd entry because OpenSSH refuses a user without one |
 | Paths it owns | `/var/lib/thermite-control` (its state, `THERMITE_CONTROL_DIR`), `/keys` |
 | Entry point | `tini`, then `node /opt/thermite/dist/control/main.js` |

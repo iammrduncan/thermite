@@ -7,15 +7,37 @@ WORKDIR /src
 COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
 # It patches Pi's streaming tool-call parse after the install (goal 140).
 COPY scripts/patch-pi-ai.mjs ./scripts/
-# No package's install script runs: this stage has no compiler for node-pty's native part, and no
-# other package Thermite runs needs its own. node-pty, the one optional dependency, is the
-# harness's terminal host's (goal 169), so it is left out here with what it alone needs.
+# No package's install script runs: this stage has no compiler for node-pty's native part, which
+# the pty stage builds (below), and no other package Thermite runs needs its own.
 RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
 COPY src ./src
-# pi-tui's prebuilt helpers for its clipboard and modifier keys, which nothing here loads, stay out:
-# no image holds a native part of pi-tui (goal 169).
-RUN npm run build && npm prune --omit=dev --omit=optional --no-fund --no-audit \
- && rm -rf node_modules/@earendil-works/pi-tui/native
+# node-pty and node-addon-api's headers, which only its build reads, go to the pty stage, apart
+# from what the final stage copies; node-pty's prebuilt modules, for other systems, and its Windows
+# parts go. So do pi-tui's prebuilt helpers for its clipboard and modifier keys, which nothing here
+# loads: no image holds a native part of pi-tui (goal 169).
+RUN npm run build && npm prune --omit=dev --no-fund --no-audit \
+ && rm -rf node_modules/node-pty/prebuilds node_modules/node-pty/third_party node_modules/node-pty/deps \
+    node_modules/@earendil-works/pi-tui/native \
+ && mkdir /pty && mv node_modules/node-pty node_modules/node-addon-api /pty/
+
+# node-pty's native part, for the terminal host the advisors' programs run in (goal 169; the
+# owner's decision of 2026-10-31): built in this stage alone, with Debian's compiler and make, and
+# the Python node-gyp runs, downloaded for it, npm's node-gyp and the Node image's own headers.
+# Only the built module goes on to the final stage: node-pty's sources, the build's own files and
+# node-addon-api stay here, and no compiler is in the image.
+FROM ${NODE_IMAGE} AS pty
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends g++ make python3 \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /src/node_modules
+COPY --from=build /pty/ ./
+RUN cd node-pty \
+ && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild \
+      --nodedir=/usr/local --devdir=/tmp/node-gyp \
+ && install -D -m 0755 build/Release/pty.node /tmp/pty.node \
+ && rm -rf build node-addon-api scripts src binding.gyp /tmp/node-gyp \
+ && install -D -m 0755 /tmp/pty.node build/Release/pty.node \
+ && rm -f /tmp/pty.node
 
 # OpenCode v2, a harness an advisor may run in (goal 073): the same pinned release as the harness
 # image's, with its MIT LICENSE (containers/harness/opencode/; update both with the version).
@@ -83,6 +105,8 @@ RUN apt-get update \
 WORKDIR /opt/thermite
 COPY --from=build /src/package.json ./
 COPY --from=build /src/node_modules ./node_modules
+# node-pty, built in the pty stage: the terminal host's pseudo-terminals (goal 169).
+COPY --from=pty /src/node_modules/node-pty ./node_modules/node-pty
 COPY --from=build /src/dist ./dist
 COPY containers/thermite /usr/local/bin/thermite
 # Claude Code, when the build asked for it (CLAUDE_CODE_VERSION); otherwise this copies nothing.
@@ -114,10 +138,15 @@ RUN mkdir -p /var/lib/thermite-supervisor/home /results /outbox /supervisor/inbo
  && chown 10010:10001 /outbox && chmod 2750 /outbox
 # No set-id file anywhere, as in every Thermite image: no process in the container can gain
 # privileges through a setuid or setgid program. Last, after every package; the build fails if one
-# is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
+# is left, and if pi-tui's native helpers were left (goal 169: no image holds them). It fails too
+# if node-pty's module does not load, if the terminal host's setsid is missing, or if a compiler
+# or make is in the image (goal 169: node-pty is built in a stage of its own).
 RUN find / -xdev -type f -perm /6000 -exec chmod ug-s {} + \
  && test -z "$(find / -xdev -type f -perm /6000 -print -quit)" \
- && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)" \
+ && node -e "if (typeof require('/opt/thermite/node_modules/node-pty').native.open !== 'function') process.exit(1)" \
+ && command -v setsid \
+ && ! command -v cc && ! command -v gcc && ! command -v g++ && ! command -v make
 ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
 # The source commit the image is built from (empty: not given). The supervisor sends it with
 # Thermite's version from package.json on its calls to control, which compares them with its own.
