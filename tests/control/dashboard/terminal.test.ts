@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { TrialConsole } from "../../../src/agents/cli/index.ts";
+import { harnessClient } from "../../../src/common/api/harness.ts";
 import {
   XTERM_DIR,
   XTERM_SHA256,
@@ -14,9 +15,13 @@ import {
 import { prepareCommand } from "../../../src/control/issue/index.ts";
 import { TERMINAL_JS } from "../../../src/control/ui/terminal.ts";
 import { SCREENS_WATCHED_MAX } from "../../../src/core/screens.ts";
-import { plannerCallId, TERMINAL_KEYS } from "../../../src/core/terminal-input.ts";
+import { advisorCallId, plannerCallId, TERMINAL_KEYS } from "../../../src/core/terminal-input.ts";
 import { ModelSource } from "../../../src/harness/agents/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
+import {
+  AdvisorConsoles,
+  relayAdvisorTerminals,
+} from "../../../src/supervisor/advisors/terminal/index.ts";
 import { ask } from "../../../src/supervisor/ask.ts";
 import { relayScreensOnce } from "../../../src/supervisor/live/index.ts";
 import { ADMIN, controlStack, mcpClient, signIn } from "../../helpers/control-stack.ts";
@@ -331,6 +336,58 @@ describe("a trial's terminal on Live", () => {
     s.env.service.consoles.ended(id);
     await s.relay();
     assert.doesNotMatch(await s.owner.page("/ui/rigs/rig-a/live?source=planner"), /data-term=/);
+  });
+
+  test("an advisor's call in its own terminal: the advisors' page shows it, and the console types into it through the harness and the supervisor", async () => {
+    const s = await setup();
+    const id = advisorCallId("auditor", "js-1", 1);
+    const consoles = new AdvisorConsoles();
+    const auditor = fakeTerminal();
+    let stopping = false;
+    const harness = harnessClient({
+      url: s.cfg.harnessUrl,
+      token: s.cfg.harnessToken,
+      fetchImpl: s.cfg.fetchImpl,
+    });
+    // Not waited for: its call held open to the harness ends with the test's file.
+    void relayAdvisorTerminals({ harness, consoles, stopping: () => stopping });
+    consoles.set({ id, run: "js-1", role: "auditor" }, new TrialConsole(auditor));
+    for (let i = 0; i < 100 && !s.env.service.work().terminals; i++)
+      await new Promise((r) => setTimeout(r, 10));
+    await s.relay();
+    const html = await s.owner.page("/ui/rigs/rig-a/live?source=supervisor");
+    assert.match(html, /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=advisor-auditor-js-1-1"/);
+    const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
+    assert.match(
+      run,
+      /<a href="\/ui\/rigs\/rig-a\/live\?source=supervisor&call=advisor-auditor-js-1-1">auditor's terminal<\/a>/,
+    );
+    // Its screen is the supervisor's own: the harness is not asked for it.
+    s.asked.length = 0;
+    await relayScreensOnce({ ...s.screensCfg, own: consoles }, [id]);
+    assert.deepEqual(s.asked, []);
+    // The console's input: signed by control, checked and recorded by the harness, typed by the
+    // supervisor, which says so.
+    const sent = await s.owner.post("/ui/rigs/rig-a/live/terminal", {
+      csrf: s.owner.csrfOf(html),
+      run: "js-1",
+      trial: id,
+      text: "Check the timer code.",
+    });
+    assert.equal(sent.status, 303);
+    assert.equal(sent.headers.get("location"), `/ui/rigs/rig-a/live?source=supervisor&call=${id}`);
+    await s.relay();
+    await s.relay();
+    assert.deepEqual(auditor.typed, [{ text: "Check the timer code.", keys: undefined }]);
+    const typed = s.env.ledger
+      .eventsAfter(0, 10_000)
+      .events.filter((e) => e.kind === "terminal_input")
+      .map((e) => e.body as Record<string, unknown>);
+    assert.deepEqual(
+      typed.map((x) => [x.trial, x.lane, x.outcome]),
+      [[id, "auditor", "typed"]],
+    );
+    stopping = true;
   });
 
   test("a worker in Pi's view: the console offers its commands and a follow-up, sent as follow_up", async () => {

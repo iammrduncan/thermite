@@ -44,6 +44,7 @@ import { askControl } from "../../kb/index.ts";
 import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage } from "../call.ts";
 import { type RunningAdvisors, withRunContext } from "../config.ts";
 import { advisorFetcher } from "../fetcher.ts";
+import type { AdvisorInTerminal } from "../terminal/index.ts";
 import type { AdvisorCode, AdvisorKb, AdvisorResearch } from "../tools/index.ts";
 import { kbSearchFor } from "./kb.ts";
 import { advisorKeeper } from "./keeper.ts";
@@ -177,6 +178,17 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
   const additionsFor = async (run: string | undefined): Promise<RunAdditions> =>
     run ? ((await runsNow()).find((r) => r.id === run)?.role_additions ?? undefined) : undefined;
   // Each call's conversation before a compaction, kept with the supervisor's records (goal 070).
+  /**
+   * A call of the teachers, the auditor or a reviewer in its program's own terminal (goal 169), on
+   * a rig set so, for a run: the owner's messages its prompt gives (`given`) are never offered again
+   * inside its turn. None: headless.
+   */
+  const terminalFor = (
+    run: string | undefined,
+    role: AdvisorRole,
+    given: readonly number[],
+  ): AdvisorInTerminal | undefined =>
+    cfg.terminals && run ? { terminals: cfg.terminals, run, role, given } : undefined;
   const keeperFor = (run: string | undefined): AdvisorKeeper =>
     advisorKeeper(cfg.home, run, (text) => say(run, "status", text));
   const mcpFor = async (run: string | undefined): Promise<AdvisorMcp | undefined> => {
@@ -409,6 +421,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     configFor,
     additionsFor,
     keeperFor,
+    terminalFor,
     mcpFor,
     limit,
     overBudget,

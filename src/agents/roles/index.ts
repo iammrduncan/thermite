@@ -42,7 +42,14 @@ import {
   renderResearchReviewer,
   renderReviewer,
 } from "./reviewer.ts";
-import { FAILED_GO_ON, KB_GUIDE, OWNER_TURN_HEAD, TRIAL_TURN_TEXTS } from "./shared.ts";
+import {
+  ADVISOR_OWNER_TURN,
+  FAILED_GO_ON,
+  KB_GUIDE,
+  OWNER_TURN_HEAD,
+  renderAdvisorTurn,
+  TRIAL_TURN_TEXTS,
+} from "./shared.ts";
 import { renderSynthesizer, SYNTHESIZER_SYSTEM } from "./synthesizer.ts";
 import { RESEARCH_TEACHER_SYSTEM, renderTeacher, TEACHER_SYSTEM } from "./teacher.ts";
 import {
@@ -110,10 +117,13 @@ export {
   renderReviewer,
 } from "./reviewer.ts";
 export {
+  ADVISOR_OWNER_TURN,
   type AdvisorFrame,
+  type AdvisorTurn,
   advisorPackage,
   limitsNote,
   orderedPackage,
+  renderAdvisorTurn,
   renderOwnerMessages,
   type TrialTurn,
   timeLeftWords,
@@ -206,6 +216,27 @@ const PLANNER_TERMINAL_TEXTS: readonly RoleText[] = [
     text: OWNER_TURN_HEAD,
   },
 ];
+
+/**
+ * The later turns of an advisor's call in its program's own terminal (goal 169), for the roles the
+ * owner's messages reach: an owner's message inside its turn, and what it goes on from after a
+ * usage window.
+ */
+const ADVISOR_TERMINAL_TEXTS: readonly RoleText[] = [
+  {
+    id: "owner-terminal",
+    what: "in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id",
+    text: ADVISOR_OWNER_TURN,
+  },
+  {
+    id: "failed-terminal",
+    what: "in its program's own terminal, after it waited for a full usage window, after the limit's words",
+    text: FAILED_GO_ON,
+  },
+];
+
+/** The later turns of an advisor the owner's messages reach: Pi's, and those in its terminal. */
+const ADVISOR_TURNS = [...PI_TURNS, renderAdvisorTurn] as const;
 
 /**
  * The knowledge base's part of every role's prompt but the model check's and compaction's (goal
@@ -353,8 +384,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderTeacher,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: TEACHER_SYSTEM }, KB_TEXT],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: TEACHER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "research-teacher",
@@ -365,8 +400,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderTeacher,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_TEACHER_SYSTEM }, KB_TEXT],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: RESEARCH_TEACHER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "merged-by",
@@ -401,8 +440,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderAuditor,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: AUDITOR_SYSTEM }, KB_TEXT],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: AUDITOR_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "reviewer",
@@ -413,8 +456,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderReviewer,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: REVIEWER_SYSTEM }, KB_TEXT],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: REVIEWER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "research-reviewer",
@@ -425,8 +472,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderResearchReviewer,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_REVIEWER_SYSTEM }, KB_TEXT],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: RESEARCH_REVIEWER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "synthesizer",

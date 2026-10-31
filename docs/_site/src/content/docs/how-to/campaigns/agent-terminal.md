@@ -1,12 +1,12 @@
 ---
 title: "Watch and steer an agent in its terminal"
-description: "Open a trial's or the planner's terminal on Live, watch its agent program's screen as it works, and type into it: words, a slash command, a skill or a key."
+description: "Open a trial's, the planner's or an advisor's terminal on Live, watch its agent program's screen as it works, and type into it: words, a slash command, a skill or a key."
 type: how-to
 sidebar:
   order: 18
 ---
 
-A worker in Claude Code, Codex or OpenCode works in that program's own terminal, as a person would use it, when its rig runs its agent programs in their own terminal ([Agents in their own terminal](../../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)). A worker in Pi draws Thermite's Pi view there instead ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). The planner plans in that program's terminal too, or, in Pi, in its own Pi view ([The planner's terminal](#the-planners-terminal)). You can watch that terminal from the dashboard and type into it: words for the agent, a slash command such as `/compact`, a skill, or a key for one of the program's menus. Each input is a signed command, [`terminal_input`](../../reference/signed-commands.md#terminal_input), that only you can send, and the rig records it word for word with what became of it.
+A worker in Claude Code, Codex or OpenCode works in that program's own terminal, as a person would use it, when its rig runs its agent programs in their own terminal ([Agents in their own terminal](../../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)). A worker in Pi draws Thermite's Pi view there instead ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). The planner plans in that program's terminal too, or, in Pi, in its own Pi view ([The planner's terminal](#the-planners-terminal)), and so do the teachers, the auditor and the review panel's reviewers in Claude Code, Codex or OpenCode ([An advisor's terminal](#an-advisors-terminal)). You can watch that terminal from the dashboard and type into it: words for the agent, a slash command such as `/compact`, a skill, or a key for one of the program's menus. Each input is a signed command, [`terminal_input`](../../reference/signed-commands.md#terminal_input), that only you can send, and the rig records it word for word with what became of it.
 
 To tell the agents something without typing into a program, send a message instead: every agent reads one ([Send the agents a message](steer-a-run.md#send-the-agents-a-message)).
 
@@ -87,6 +87,20 @@ The planner's page shows its terminal and console at its top, as a trial's page 
 A message to the planner (**To the planner**, under the run's message box) sent while it plans goes in inside its turn, as a worker's does: in Claude Code, Codex or OpenCode after a tool, or at the end of its turn, and the planner goes on with it; in Pi before its next model call. It joins the owner's messages the planner was given, with its number, so a rule it asks for names it. A full usage window is waited out in the planner's terminal as in a trial's, and the run waits with it.
 
 When the round's plan is in, the call ends: its page no longer shows a terminal, and the console takes no more input.
+
+## An advisor's terminal
+
+The advisors the owner's messages reach (the teachers, the auditor and the review panel's reviewers) run in the supervisor, each call in its program's own terminal when it runs in Claude Code, Codex or OpenCode on a rig that runs its agent programs in their own terminal. Each call has a terminal of its own, named `advisor-<advisor>-<run>-<n>`, such as `advisor-auditor-matmul-1-4`. The teachers' merged by model, the synthesizer and the final writer take no message, and an advisor in Pi or a command (`cli`) runs as before, with no terminal.
+
+1. Open **Live**, choose the run, and press **⌨ Terminals**: while an advisor works on this run, the list shows `auditor's terminal`, `teacher-1's terminal` or `reviewer-2's terminal`, each marked `(advisor)`.
+
+   You can also open the rig's page, press **Live**, and choose **Supervisor** under **Sessions**: the page shows the first advisor's terminal that runs.
+
+The page shows the advisor's terminal and console at its top while its call runs. Type into it as into a trial's: your input is checked and recorded by the rig's harness, as every input is, then handed to the supervisor, which types it into the advisor's program; the list under the console shows its outcome. The advisor's session shows in the supervisor's stream as it works, each line with the advisor's name.
+
+A message to the advisor's role (**To the auditor**, **To the teachers** or **To the review panel**, under the run's message box) sent while it works goes in inside its turn, as a worker's does: after a tool, or at the end of its turn, and the advisor goes on with it and answers it with the others. A full usage window is waited out in the advisor's terminal: it is not a failed try, and the supervisor's stream says until when it waits.
+
+When the advisor answers, the call ends: the page no longer shows its terminal. The supervisor keeps the last screens of its 20 most recently ended advisors' calls, in memory only.
 
 ## After the trial ends
 

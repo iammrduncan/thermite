@@ -98,7 +98,7 @@ The page shows `rig-1 takes sonnet-5.5 from "claude-max" under Claude Code withi
 
 To give the planner or an advisor the subscription, and to set an effort, use **Edit rig**: see [Give each agent its own model](model-per-agent.md).
 
-Control gives a rig the token only while one of its agents uses the subscription. On the rig, Claude Code runs as the agent's own user with its own sandbox off: the rig's isolation holds the commands it runs, and the token reaches Claude Code on a file descriptor, never in an environment variable. An advisor's Claude Code runs in the supervisor's container as an advisor user of its own, which can't read the supervisor's files, with none of its own tools, also with its sandbox off and the token on a file descriptor ([Who holds your keys](../../explanation/who-holds-your-keys.md#subscriptions)).
+Control gives a rig the token only while one of its agents uses the subscription. On the rig, Claude Code runs as the agent's own user with its own sandbox off: the rig's isolation holds the commands it runs, and the token reaches Claude Code on a file descriptor, never in an environment variable. An advisor's Claude Code runs in the supervisor's container as an advisor user of its own, which can't read the supervisor's files, with none of its own tools, also with its sandbox off and the token on a file descriptor ([Who holds your keys](../../explanation/who-holds-your-keys.md#subscriptions)); on a rig whose agent programs run in their own terminal, the teachers, the auditor and the reviewers run in Claude Code's own terminal there ([An advisor's terminal](../campaigns/agent-terminal.md#an-advisors-terminal)).
 
 ## Watch the usage windows
 

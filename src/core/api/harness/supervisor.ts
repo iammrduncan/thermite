@@ -3,6 +3,7 @@ import { COMMAND_MAX_BYTES, SignedCommand } from "../../commands.ts";
 import { HealthAnswer } from "../../health.ts";
 import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
+import { PROGRAM_MODES } from "../../rig-settings.ts";
 import { ScreenFrame, WatchedTrials } from "../../screens.ts";
 import { ControlRoute } from "../model-route.ts";
 import type { Route } from "../route.ts";
@@ -25,7 +26,10 @@ export const HEALTH = {
   answer: HealthAnswer,
 } as const satisfies Route;
 
-/** The rig's settings (Edit rig): the supervisor reads which advisors are switched on. */
+/**
+ * The rig's settings (Edit rig): the supervisor reads which advisors are switched on, and whether
+ * the agent programs run in their own terminals (goal 169).
+ */
 export const SETTINGS = {
   method: "GET",
   path: "/v1/settings",
@@ -34,6 +38,7 @@ export const SETTINGS = {
     teachers: z.boolean().optional(),
     auditor: z.boolean().optional(),
     review: z.boolean().optional(),
+    program_mode: z.enum(PROGRAM_MODES).optional(),
   }),
 } as const satisfies Route;
 

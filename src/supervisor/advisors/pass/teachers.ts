@@ -61,6 +61,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
     researchFor,
     configFor,
     keeperFor,
+    terminalFor,
     mcpFor,
     limit,
     overBudget,
@@ -180,6 +181,8 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
           research: inst.mode === "research",
           // The owner's additions to the teacher and the merged by model (goal 166).
           additions: inst.role_additions ?? undefined,
+          // Each teacher in its program's own terminal on a rig set so (goal 169).
+          terminal: terminalFor(inst.id, "teachers", given),
           // The merged by model's own slot, under the same rule.
           ...(openFetch ? {} : { mergedKb: await kbFor(inst.id, "merged-by") }),
           tools: {
@@ -212,9 +215,10 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
               : `teacher ${r.teacher} gave no review: ${clip(r.error ?? "", 300)}`,
           );
         }
-        // The teachers that reviewed had the owner's messages in their brief: they read them.
+        // The teachers that reviewed had the owner's messages in their brief: they read them; and
+        // those their terminals took inside their turns (goal 169).
         if (run.reviews.some((r) => r.review))
-          await receipts(inst.id, "teachers", given, run.answers);
+          await receipts(inst.id, "teachers", [...new Set([...given, ...run.given])], run.answers);
         // Teachers' opportunities the merged by model left out, kept by code (goal 081).
         if (run.kept.length)
           say(inst.id, "status", `the teachers' portfolio: ${run.kept.join("; ")}`);

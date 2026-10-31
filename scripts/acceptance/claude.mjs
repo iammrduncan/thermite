@@ -25,9 +25,13 @@
 //   - the rig set to headless over REST, a later trial runs Claude Code headless (`-p`), with
 //     the same token, flags, hooks and two messages inside its turn, and submits: headless stays
 //     an advanced choice, so both modes keep a trial here;
-//   - the auditor, given the subscription's model on Edit rig, audits a large gain in Claude
-//     Code in the supervisor, with no tools, no settings or MCP, its effort, and the token on
-//     file descriptor 3 (in no environment), without the scrub;
+//   - the rig set back to terminals over REST, the auditor, given the subscription's model on
+//     Edit rig, audits a large gain in Claude Code's own terminal in the supervisor (goal 169), as
+//     an advisor user through the advisors' runner, with no tools, no settings or MCP, its effort,
+//     and the token on file descriptor 3 (in no environment), without the scrub; an input typed
+//     into its terminal from the owner's console (`terminal_input`, handed from the harness to the
+//     supervisor) reaches it, and one owner's message to the auditor goes in inside its turn,
+//     through its Stop hook and the call's own turn routes;
 //   - the subscription's usage windows reach the Providers page;
 //   - the token shows in no page, event or record.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/claude.mjs
@@ -348,36 +352,6 @@ try {
       Number(trial.body.compactions) === 1,
     { said, compacted: compacted?.body, compactions: trial.body.compactions },
   );
-  const good = submit(
-    composeEnv,
-    "smoke-1",
-    candidatePatch(env, "kits/smoke-cpu/candidates/good"),
-    "good kernel",
-  );
-  const audited = await until(
-    "the good kernel's audit, in Claude Code in the supervisor",
-    async () =>
-      (await api("/v1/rigs/local-1/view")).body.runs
-        ?.find((r) => r.id === "smoke-1")
-        ?.audits?.find((a) => a.attempt === good.attempt && a.decision),
-    1_200_000,
-    3000,
-  );
-  const why = String(audited.reasons ?? "");
-  check(
-    "the auditor ran in Claude Code in the supervisor, with no tools, no settings or MCP, its effort, the token on file descriptor 3 (in no environment) and its own sandbox off",
-    audited.decision === "clear" &&
-      /Claude Code stand-in/.test(why) &&
-      /tools=none /.test(why) &&
-      /effort=high /.test(why) &&
-      /token=set /.test(why) &&
-      /token_on=fd3 /.test(why) &&
-      /scrub=unset /.test(why) &&
-      /strict_mcp=true /.test(why) &&
-      /no_settings=true /.test(why) &&
-      /model=claude-opus-5-5\)/.test(why),
-    audited,
-  );
   // The later trial, headless: the owner's two messages go to each trial that starts, until one
   // submits headless.
   const later = await until(
@@ -423,6 +397,80 @@ try {
       laterReads.map((e) => e.body.how).join(",") === "after-tool,turn-end" &&
       Number(laterTrial.body.turns) >= 1,
     { said: saidLater, reads: laterReads.map((e) => e.body), trial: laterTrial.body },
+  );
+  // The rig set back to its agents' own terminals: the auditor's call runs in Claude Code's
+  // terminal in the supervisor (goal 169), as an advisor user, through the advisors' runner.
+  const inTerminals = await api("/v1/rigs/local-1/settings", {
+    method: "POST",
+    body: JSON.stringify({ program_mode: "terminal" }),
+  });
+  check(
+    "the rig is set back to run its agent programs in their own terminals over REST",
+    inTerminals.status === 200 && inTerminals.body.sent?.program_mode === "terminal",
+    inTerminals.body,
+  );
+  const good = submit(
+    composeEnv,
+    "smoke-1",
+    candidatePatch(env, "kits/smoke-cpu/candidates/good"),
+    "good kernel",
+  );
+  // While it audits in its terminal: one input typed into it from the owner's console, then one
+  // owner's message to the auditor, which goes in inside its turn through its Stop hook.
+  const auditing = await until(
+    "the auditor's call in its own terminal",
+    async () =>
+      ((await api("/v1/rigs/local-1/view")).body.summary?.work?.terminals ?? []).find(
+        (x) => x.role === "auditor" && x.run === "smoke-1",
+      ),
+    600_000,
+    1000,
+  );
+  const typedToAuditor = await command("terminal_input", {
+    run: "smoke-1",
+    trial: auditing.id,
+    text: "OWNER-TYPED-AUDITOR Look at the timer code.",
+  });
+  await command("message_agent", {
+    run: "smoke-1",
+    to: "auditor",
+    text: "Check the timer code before you clear it.",
+  });
+  const audited = await until(
+    "the good kernel's audit, in Claude Code in the supervisor",
+    async () =>
+      (await api("/v1/rigs/local-1/view")).body.runs
+        ?.find((r) => r.id === "smoke-1")
+        ?.audits?.find((a) => a.attempt === good.attempt && a.decision),
+    1_200_000,
+    3000,
+  );
+  const why = String(audited.reasons ?? "");
+  check(
+    "the auditor ran in Claude Code's own terminal in the supervisor, as an advisor user, with no tools, no settings or MCP, its effort, the token on file descriptor 3 (in no environment) and its own sandbox off",
+    audited.decision === "clear" &&
+      /Claude Code stand-in/.test(why) &&
+      /mode=terminal /.test(why) &&
+      /uid=1008[1-8] /.test(why) &&
+      /tty=true /.test(why) &&
+      /seeded=yes /.test(why) &&
+      /tools=none /.test(why) &&
+      /effort=high /.test(why) &&
+      /token=set /.test(why) &&
+      /token_on=fd3 /.test(why) &&
+      /scrub=unset /.test(why) &&
+      /strict_mcp=true /.test(why) &&
+      /no_settings=true /.test(why) &&
+      /model=claude-opus-5-5/.test(why),
+    { audited, id: auditing.id },
+  );
+  check(
+    "the owner's message to the auditor went in inside its turn, through its Stop hook, and the input typed into its terminal reached it",
+    /steered=turn-end:owner /.test(why) &&
+      /typed=OWNER-TYPED-AUDITOR /.test(why) &&
+      typedToAuditor.outcome?.result?.outcome === "typed" &&
+      !/the owner's message none /.test(why),
+    { why, typed: typedToAuditor.outcome },
   );
   const providers = await until(
     "the subscription's usage on the Providers page",

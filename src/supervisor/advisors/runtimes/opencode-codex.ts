@@ -40,6 +40,36 @@ import { serveAdvisorTools } from "../tools/index.ts";
 import { callId, collectCompactions, runCli } from "./cli.ts";
 
 /**
+ * The model an advisor in OpenCode or the Codex CLI reaches, with the key the call's proxy adds
+ * (none for OpenCode's own models, which take no proxy); else why it can't run, in words.
+ */
+export function cliHarnessModel(
+  rt: Extract<AdvisorRuntime, { runtime: "opencode" | "codex" }>,
+): { model: ModelConfig; key: string; native: boolean } | string {
+  const native = rt.runtime === "opencode" && rt.api === "opencode";
+  if (!native && !rt.base_url) return `advisor ${rt.name} has no base_url`;
+  const key = native
+    ? ""
+    : (rt.api_key ?? (rt.api_key_file ? readFileSync(rt.api_key_file, "utf8").trim() : ""));
+  if (!native && !key) return `advisor ${rt.name} has no key`;
+  const model: ModelConfig = {
+    api: rt.api === "openai" ? undefined : rt.api,
+    baseUrl: (rt.base_url ?? "").replace(/\/$/, ""),
+    model: rt.model,
+    // The key stays in the supervisor: the proxy adds it.
+    apiKey: "",
+    // The window and the point the CLI compacts with, in its own settings, as the workers' are
+    // (goal 070): OpenCode's limit.context and compaction.buffer, Codex's model_context_window and
+    // model_auto_compact_token_limit.
+    contextWindow: rt.context_window,
+    ...(rt.compact_at !== undefined ? { compactAt: rt.compact_at } : {}),
+    maxTokens: 0,
+    reasoning: rt.runtime === "codex" ? rt.reasoning : undefined,
+  };
+  return { model, key, native };
+}
+
+/**
  * An advisor in OpenCode or the Codex CLI (goal 073): the past research and the kit's MCP servers
  * on localhost for this call, a key-adding proxy for the call (none for OpenCode's own models),
  * the CLI's configuration written in the call's own folder, and the prompt on stdin. Its answer is
@@ -56,31 +86,14 @@ export async function runCliHarness<S extends z.ZodType>(
   },
 ): Promise<AdvisorResult<z.infer<S>>> {
   const fail = (error: string) => ({ output: undefined, error, tokensIn: 0, tokensOut: 0, usd: 0 });
-  const native = rt.runtime === "opencode" && rt.api === "opencode";
   // Where the conversation is kept before each of the program's own compactions (goal 070):
   // OpenCode's through Thermite's plugin, Codex's from its rollout, which the call then keeps.
   const call = callId();
   const keeper = input.keeper;
   const at = keeper?.at?.(rt.name, call);
-  if (!native && !rt.base_url) return fail(`advisor ${rt.name} has no base_url`);
-  const key = native
-    ? ""
-    : (rt.api_key ?? (rt.api_key_file ? readFileSync(rt.api_key_file, "utf8").trim() : ""));
-  if (!native && !key) return fail(`advisor ${rt.name} has no key`);
-  const model: ModelConfig = {
-    api: rt.api === "openai" ? undefined : rt.api,
-    baseUrl: (rt.base_url ?? "").replace(/\/$/, ""),
-    model: rt.model,
-    // The key stays in the supervisor: the proxy adds it.
-    apiKey: "",
-    // The window and the point the CLI compacts with, in its own settings, as the workers' are
-    // (goal 070): OpenCode's limit.context and compaction.buffer, Codex's model_context_window and
-    // model_auto_compact_token_limit.
-    contextWindow: rt.context_window,
-    ...(rt.compact_at !== undefined ? { compactAt: rt.compact_at } : {}),
-    maxTokens: 0,
-    reasoning: rt.runtime === "codex" ? rt.reasoning : undefined,
-  };
+  const route = cliHarnessModel(rt);
+  if (typeof route === "string") return fail(route);
+  const { model, key, native } = route;
   const t = input.tools;
   let tools: Awaited<ReturnType<typeof serveAdvisorTools>> | undefined;
   let proxy: Awaited<ReturnType<typeof serveAdvisorModel>> | undefined;
