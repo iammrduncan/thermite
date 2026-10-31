@@ -1,7 +1,7 @@
 #!/bin/sh
 # The supervisor's user and the advisors' users, in the supervisor image and in the one-container
 # rig image (containers/Containerfile, containers/rig/Containerfile), each run with this folder
-# mounted for that step only. The supervisor's user needs a passwd entry: ssh (git over SSH)
+# mounted for that step only, from the build-scripts stage. The supervisor's user needs a passwd entry: ssh (git over SSH)
 # refuses a uid without one, and finds ~/.ssh from the entry's home, not from $HOME. Each
 # advisor's program runs as one of the advisor users, advisor-1..advisor-8 (uid and gid
 # 10081..10088, src/core/advisor-runs.ts), one for each call while it runs, in none of the

@@ -5,8 +5,8 @@
 #   podman build --target harness -t thermite-harness -f containers/Containerfile .
 #
 # docker build takes the same arguments. The one-container rig image is built on a harness image
-# built first (containers/rig/Containerfile). The scripts in containers/build/ are mounted for the
-# steps that run them, and stay out of every image.
+# built first (containers/rig/Containerfile). The scripts in containers/build/ are mounted from the
+# build-scripts stage for the steps that run them, and stay out of every image.
 #
 # The harness's default base is the Node image (CPU rigs). GPU rigs build it with BASE_IMAGE set
 # to a CUDA devel image: CUDA 12 for Pascal to Hopper, CUDA 13 (which dropped Maxwell, Pascal and
@@ -74,6 +74,12 @@ RUN cd node-pty \
  && rm -rf build node-addon-api scripts src binding.gyp /tmp/node-gyp \
  && install -D -m 0755 /tmp/pty.node build/Release/pty.node \
  && rm -f /tmp/pty.node
+
+# The build scripts (containers/build/), which the steps that run them mount from this stage, so no
+# image keeps them. A stage, not the context: Podman's builder can't open a script bound from the
+# context.
+FROM scratch AS build-scripts
+COPY containers/build/ /
 
 # Node.js itself, and npm's node-gyp with the Node.js headers, for the harness on any base.
 FROM ${NODE_IMAGE} AS node
@@ -182,7 +188,7 @@ RUN mkdir -p /var/lib/thermite-control /keys /nats-config \
  && chown 10001:10001 /var/lib/thermite-control /keys /nats-config
 # No set-id file anywhere (containers/build/no-set-id.sh). Last, after every package; the build
 # fails if one is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
-RUN --mount=type=bind,source=containers/build,target=/mnt sh /mnt/no-set-id.sh \
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh \
  && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
 ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning HOME=/var/lib/thermite-control
 # The source commit the image is built from (empty: not given). Control reports it with
@@ -222,7 +228,7 @@ COPY --from=codex /out/opt/ /opt/
 COPY --from=codex /out/doc/ /usr/local/share/doc/
 RUN if [ -x /opt/codex/bin/codex ]; then ln -s /opt/codex/bin/codex /usr/local/bin/codex; fi
 # The supervisor's user and the advisors' users (containers/build/supervisor-users.sh).
-RUN --mount=type=bind,source=containers/build,target=/mnt sh /mnt/supervisor-users.sh
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/supervisor-users.sh
 # Mount points owned by the supervisor's user, so new named volumes inherit the ownership. The
 # inbox is mounted in /supervisor (src/core/paths.ts), root's folder that only the supervisor's
 # group may enter: no advisor's program reaches what the supervisor fetched (a kit's bundle among
@@ -235,7 +241,7 @@ RUN mkdir -p /var/lib/thermite-supervisor/home /results /outbox /supervisor/inbo
 # fails if one is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
 # It fails too if node-pty's module does not load, if the terminal host's setsid is missing, or if
 # a compiler or make is in the image (goal 169: node-pty is built in a stage of its own).
-RUN --mount=type=bind,source=containers/build,target=/mnt sh /mnt/no-set-id.sh \
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh \
  && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)" \
  && node -e "if (typeof require('/opt/thermite/node_modules/node-pty').native.open !== 'function') process.exit(1)" \
  && command -v setsid \
@@ -369,7 +375,7 @@ RUN chown -R 0:10010 checks \
  && test -z "$(find checks -perm /o=rwx -print -quit)"
 # No set-id file anywhere (containers/build/no-set-id.sh). Last, after every package; the build
 # fails if one is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
-RUN --mount=type=bind,source=containers/build,target=/mnt sh /mnt/no-set-id.sh \
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh \
  && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
 ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
 # The source commit the image is built from (empty: not given). The harness reports it with

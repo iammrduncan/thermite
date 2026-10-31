@@ -55,9 +55,9 @@ export function instructions(text: string): string[] {
   return out;
 }
 
-/** The step that runs one of the build scripts, with their folder mounted for that step only. */
+/** The step that runs one of the build scripts, mounted from their stage for that step only. */
 export const RUN_SCRIPT = (script: string) =>
-  `RUN --mount=type=bind,source=${BUILD_SCRIPTS},target=/mnt sh /mnt/${script}`;
+  `RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/${script}`;
 
 /**
  * The users and groups a step makes: its shell run with groupadd and useradd standing in for

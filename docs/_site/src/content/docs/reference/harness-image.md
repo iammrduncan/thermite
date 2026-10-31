@@ -23,7 +23,7 @@ docker build --target harness -t thermite-harness -f containers/Containerfile .
 
 `podman build` takes the same arguments. A build that names no target builds the harness. In a checkout of the source code, `docker compose build` builds all three.
 
-The three targets copy from the file's other stages, each written once: Thermite's code and its packages, built once for all three; one stage each that fetches OpenCode, the Codex CLI, Claude Code and kubectl; and the supervisor's build of node-pty. Each pinned version is a [build argument](#build-arguments) whose default is written once, at the top of the file. Two short scripts in `containers/build/` are mounted only for the steps that run them, so no image keeps them: `no-set-id.sh`, every image's last step, and `supervisor-users.sh`, which makes the supervisor's and the advisors' users in the supervisor image and in the one-container rig image.
+The three targets copy from the file's other stages, each written once: Thermite's code and its packages, built once for all three; one stage each that fetches OpenCode, the Codex CLI, Claude Code and kubectl; and the supervisor's build of node-pty. Each pinned version is a [build argument](#build-arguments) whose default is written once, at the top of the file. Two short scripts in `containers/build/` are copied into a stage of their own, `build-scripts`, which holds nothing else, and mounted from it only for the steps that run them, so no image keeps them: `no-set-id.sh`, every image's last step, and `supervisor-users.sh`, which makes the supervisor's and the advisors' users in the supervisor image and in the one-container rig image. The rig image's file has the same stage.
 
 ## Published images
 

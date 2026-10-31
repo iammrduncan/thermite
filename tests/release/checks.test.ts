@@ -110,9 +110,43 @@ test("every image clears set-id bits last, with one script, and fails its build 
     for (const later of steps.slice(sweep + 1))
       assert.doesNotMatch(later, /apt-get|npm |COPY --from|useradd|chmod [ug]?\+s/, image);
   }
-  // The scripts are mounted for their steps only: no image copies them.
-  for (const text of [repoFile(CONTAINERFILE), repoFile(RIG_CONTAINERFILE)])
-    assert.doesNotMatch(text, /COPY [^\n]*containers\/build/);
+  // Each image runs the scripts it needs, and only those, mounted from their stage.
+  const runs: Record<(typeof IMAGES)[number], string[]> = {
+    control: ["no-set-id.sh"],
+    harness: ["no-set-id.sh"],
+    supervisor: ["supervisor-users.sh", "no-set-id.sh"],
+    rig: ["supervisor-users.sh", "no-set-id.sh"],
+  };
+  for (const image of IMAGES) {
+    const mounted = [...finalStage(image).matchAll(/--mount=type=bind,[^\n]*build-scripts[^\n]*/g)];
+    assert.deepEqual(
+      mounted.map((m) => m[0].replace(/ \\$/, "")),
+      runs[image].map((script) => RUN_SCRIPT(script).slice("RUN ".length)),
+      image,
+    );
+  }
+  // The scripts reach those steps from a stage of their own, which holds them alone and which no
+  // image copies from: no image keeps them. Every bind mount is from a stage, never the build
+  // context, which Podman's builder under compose can't open.
+  for (const file of [CONTAINERFILE, RIG_CONTAINERFILE]) {
+    const text = repoFile(file);
+    assert.deepEqual(
+      instructions(stage(text, "build-scripts")),
+      ["FROM scratch AS build-scripts", `COPY ${BUILD_SCRIPTS}/ /`],
+      file,
+    );
+    // No other step names the scripts' folder: none copies it into an image or mounts it.
+    assert.deepEqual(
+      instructions(text).filter((step) => step.includes(BUILD_SCRIPTS)),
+      [`COPY ${BUILD_SCRIPTS}/ /`],
+      file,
+    );
+    assert.doesNotMatch(text, /COPY --from=build-scripts/, file);
+    const mounts = [...text.matchAll(/--mount=type=bind,(\S+)/g)];
+    assert.ok(mounts.length > 0, file);
+    for (const mount of mounts)
+      assert.match(mount[1] as string, /(^|,)from=/, `${file}: ${mount[0]}`);
+  }
 });
 
 test("the supervisor image builds node-pty in a stage of its own and keeps only the module: no compiler or make is in it (goal 169)", () => {
@@ -275,8 +309,14 @@ test("each image is a target of the one Containerfile, on its own base, and take
   const codex = stage(text, "codex");
   assert.match(codex, /\/tmp\/codex-legal\/NOTICE \/out\/opt\/codex\//);
   assert.match(codex, /\/tmp\/codex-legal\/NOTICE \/out\/doc\/codex\//);
-  // The rig image is built on a harness image, given as its one build argument.
-  assert.match(repoFile(RIG_CONTAINERFILE), /\nARG HARNESS_IMAGE\nFROM \$\{HARNESS_IMAGE\}\n/);
+  // The rig image is built on a harness image, given as its one build argument; its other stage
+  // only holds the build scripts.
+  const rig = repoFile(RIG_CONTAINERFILE);
+  const froms = [...rig.matchAll(/^FROM .*$/gm)].map((m) => m[0]);
+  assert.equal(froms.length, 2);
+  assert.equal(froms[0], "FROM scratch AS build-scripts");
+  assert.match(froms[1] as string, /^FROM \$\{HARNESS_IMAGE\}$/);
+  assert.ok(rig.indexOf("\nARG HARNESS_IMAGE\n") < rig.indexOf("\nFROM "));
 });
 
 test("the probe's lines are read by name, each value trimmed", () => {
