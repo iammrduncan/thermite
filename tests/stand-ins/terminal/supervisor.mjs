@@ -92,12 +92,13 @@ async function serve() {
 }
 
 /** The uid a process runs as. */
-const uidOf = (pid) =>
-  Number(/^Uid:\s+(\d+)/m.exec(readFileSync(`/proc/${pid}/status`, "utf8"))?.[1] ?? -1);
+function uidOf(pid) {
+  return Number(/^Uid:\s+(\d+)/m.exec(readFileSync(`/proc/${pid}/status`, "utf8"))?.[1] ?? -1);
+}
 
 /** The processes of a user still alive. */
-const processesOf = (uid) =>
-  readdirSync("/proc")
+function processesOf(uid) {
+  return readdirSync("/proc")
     .filter((p) => /^\d+$/.test(p))
     .filter((p) => {
       try {
@@ -106,6 +107,7 @@ const processesOf = (uid) =>
         return false;
       }
     });
+}
 
 /** As the supervisor's user: an advisor's terminal through the runner. */
 async function client() {
