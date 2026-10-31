@@ -686,6 +686,26 @@ try {
     (e) => e.kind === "research_doc" && e.body.path === "synthesis.md",
   );
   const writes = researchSeen.writes ?? {};
+  // The document reaches the knowledge base whole, as its item's file (goal 175): its words are
+  // read there once control has its text.
+  const docText = doc?.body.file
+    ? await until(
+        "the research document whole in the knowledge base",
+        async () => {
+          const q = encodeURIComponent("sources on quotes");
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find((h) =>
+            String(h.address).includes("synthesis"),
+          );
+          if (!hit) return undefined;
+          const item = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`)).body;
+          return /Read next: the sources on quotes\./.test(String(item.text))
+            ? String(item.text)
+            : undefined;
+        },
+        180_000,
+        3000,
+      ).catch(() => "")
+    : "";
   check(
     "a research trial under OpenCode reads and searches its run's research folder, cannot change the harness's part, and its own files are saved when it ends",
     researchSeen.index === true &&
@@ -695,13 +715,16 @@ try {
       Number(saved?.body.written) >= 1 &&
       doc?.body.trial === researchTrial.body.trial &&
       doc?.body.change === "written" &&
-      /Read next: the sources on quotes\./.test(String(doc?.body.text)),
+      Boolean(doc?.body.file) &&
+      /Read next: the sources on quotes\./.test(docText),
     {
       index: researchSeen.index ?? false,
       searched: researchSeen.searched ?? false,
       writes,
       saved: saved?.body,
       doc: doc && { trial: doc.body.trial, path: doc.body.path, bytes: doc.body.bytes },
+      doc_file: Boolean(doc?.body.file),
+      doc_in_kb: Boolean(docText),
     },
   );
   check(
