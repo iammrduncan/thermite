@@ -303,7 +303,7 @@ const model = await scriptedModel(script, {
         if (/"questions":\s*\[/.test(out)) researchSeen.progress = true;
         // The research folder, as the trial's shell saw it.
         if (/# Research through OpenCode/.test(out)) researchSeen.index = true;
-        if (/notes\/note-\d{5}\.md/.test(out)) researchSeen.searched = true;
+        if (/source-notes\/source-note-\d{5}\.md/.test(out)) researchSeen.searched = true;
         // Each match has its groups: they are not optional in the patterns.
         for (const hit of /** @type {Iterable<[string, string, string]>} */ (
           out.matchAll(/FOLDER-WRITE-(ALLOWED|REFUSED) (\S+)/g)
