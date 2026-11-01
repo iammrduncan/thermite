@@ -403,6 +403,27 @@ try {
     (e) => e.kind === "context_compacted" && e.body.harness === "codex" && e.body.trial === trialId,
   );
   const kept = String(compacted?.body.snapshot ?? "");
+  // The conversation reaches the knowledge base whole, as its item's file (goal 175), so the
+  // event holds its size and hash, not its words: they are read there once control has its text.
+  const keptText = compacted?.body.file
+    ? await until(
+        "the kept conversation whole in the knowledge base",
+        async () => {
+          const q = encodeURIComponent("conversation before compaction");
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find((h) =>
+            JSON.stringify(h).includes(trialId),
+          );
+          if (!hit) return undefined;
+          const { item } = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`))
+            .body;
+          return /from the Codex CLI's own rollout of the thread/.test(String(item?.text))
+            ? String(item.text)
+            : undefined;
+        },
+        180_000,
+        3000,
+      ).catch(() => "")
+    : String(compacted?.body.text ?? "");
   check(
     "Codex's compaction kept its own rollout in the run's research folder, with a summary naming the file",
     /compacted=rollout /.test(said) &&
@@ -410,9 +431,14 @@ try {
       compacted?.body.how === "harness" &&
       /^compactions\/[A-Za-z0-9._-]+-1\.md$/.test(kept) &&
       String(compacted?.body.summary ?? "").endsWith(`/${kept}.`) &&
-      /from the Codex CLI's own rollout of the thread/.test(String(compacted?.body.text ?? "")) &&
+      /from the Codex CLI's own rollout of the thread/.test(keptText) &&
       Number(trial.body.compactions) === 1,
-    { said, compacted: compacted?.body, compactions: trial.body.compactions },
+    {
+      said,
+      compacted: { ...compacted?.body, summary: undefined },
+      kept_text: keptText.slice(0, 200),
+      compactions: trial.body.compactions,
+    },
   );
   const good = submit(
     composeEnv,

@@ -341,6 +341,27 @@ try {
       e.body.trial === trialId,
   );
   const kept = String(compacted?.body.snapshot ?? "");
+  // The conversation reaches the knowledge base whole, as its item's file (goal 175), so the
+  // event holds its size and hash, not its words: they are read there once control has its text.
+  const keptText = compacted?.body.file
+    ? await until(
+        "the kept conversation whole in the knowledge base",
+        async () => {
+          const q = encodeURIComponent("conversation before compaction");
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find((h) =>
+            JSON.stringify(h).includes(trialId),
+          );
+          if (!hit) return undefined;
+          const { item } = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`))
+            .body;
+          return /from Claude Code's own transcript of the session/.test(String(item?.text))
+            ? String(item.text)
+            : undefined;
+        },
+        180_000,
+        3000,
+      ).catch(() => "")
+    : String(compacted?.body.text ?? "");
   check(
     "Claude Code's compaction kept its own transcript in the run's research folder, with a summary naming the file",
     /compacted=hook /.test(said) &&
@@ -348,9 +369,14 @@ try {
       compacted?.body.how === "harness" &&
       /^compactions\/[A-Za-z0-9._-]+-1\.md$/.test(kept) &&
       String(compacted?.body.summary ?? "").includes(`/${kept}. Name that file in your summary`) &&
-      /from Claude Code's own transcript of the session/.test(String(compacted?.body.text ?? "")) &&
+      /from Claude Code's own transcript of the session/.test(keptText) &&
       Number(trial.body.compactions) === 1,
-    { said, compacted: compacted?.body, compactions: trial.body.compactions },
+    {
+      said,
+      compacted: { ...compacted?.body, summary: undefined },
+      kept_text: keptText.slice(0, 200),
+      compactions: trial.body.compactions,
+    },
   );
   // The later trial, headless: the owner's two messages go to each trial that starts, until one
   // submits headless.
