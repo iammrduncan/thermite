@@ -18,7 +18,7 @@ A review of every way two of Thermite's parts exchange data: control, a rig's su
 
 1. **A catalogue of every channel:** its two ends, its transport, who starts it, each message type, where the message's schema lives, how it is authenticated, how often it runs and how large its messages are, what each end logs, and what happens when one end is down.
 2. **Performance:** the polling loops in every process, the delay they add end to end (an agent's step to the live view, a command from the dashboard to a rig, an event from the harness to control's pages), and the work each poll does.
-3. **Findings,** with evidence, in the audit's folder. Bugs become goals; the rest feeds goal [168](../168-message-bus.goal), the message bus, and goal [125](../125-code-to-the-conventions.goal)'s contracts.
+3. **Findings,** with evidence, in the audit's folder. Bugs become goals; the rest feeds goal [168](168-message-bus.goal), the message bus, and goal [125](../125-code-to-the-conventions.goal)'s contracts.
 4. **A public page** that explains how the parts talk, as Thermite's design. It names no deployment, host or address.
 
 ## Why
@@ -48,13 +48,13 @@ The audit's lane 10 (`.internal/reviews/v0.1.1-audit/10-communication.md`, with 
 - **A rig's configuration comes in three polls,** with three rules for what changed: the model route, the MCP servers and the advisors' routes.
 - **Failure handling differs on every channel.** One backs off; the others retry at their fixed interval for good. Outside pull mode, no HTTP client on a rig sets a timeout. Six places drop a channel's errors with no log.
 - **Only a command's ID crosses from one process to the next.** Reports, live batches, advisor calls and trials can't be followed from control's log to the rig's.
-- **Five changes without a bus remove most of the delay** (goal [168](../168-message-bus.goal)'s first part).
+- **Five changes without a bus remove most of the delay** (goal [168](168-message-bus.goal)'s first part).
 
 ## Decisions
 
 ## Open questions
 
-Moved to goal [168](../168-message-bus.goal), whose first part builds what they decide.
+Moved to goal [168](168-message-bus.goal), whose first part builds what they decide.
 
 ## Progress
 

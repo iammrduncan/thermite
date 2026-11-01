@@ -1,16 +1,16 @@
 ---
 id: "169"
 title: "Agents in their own terminal: each agent program runs its TUI, the live view shows it, steering types into it, session logs become events"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.1"
 depends_on: ["166"]
 created: 2026-10-26
-updated: 2026-10-31
+updated: 2026-11-01
 ---
 
 # 169 · Agents in their own terminal: each agent program runs its TUI, the live view shows it, steering types into it, session logs become events
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [166](_completed/166-agent-definitions.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [166](166-agent-definitions.goal)
 
 ## What
 
@@ -31,7 +31,7 @@ The owner, 2026-10-26: "I also want all agents that ran to use native TUI of the
 - **Isolation holds.** The TUI runs as the lane's user, with the lane's devices and network rules; agents never reach the judge's state.
 - **No default caps.** A trial ends by its configured limits and its own end, as today; the TUI adds none.
 - **Every input is recorded:** who typed what, when, into which agent.
-- **New dependencies and downloads** (a terminal library, a browser terminal) come with the owner's yes, and each is credited in [CREDITS.md](../../../CREDITS.md).
+- **New dependencies and downloads** (a terminal library, a browser terminal) come with the owner's yes, and each is credited in [CREDITS.md](../../../../CREDITS.md).
 - **Docs follow the code,** in the same commit.
 
 ## Done when
@@ -40,7 +40,7 @@ The owner, 2026-10-26: "I also want all agents that ran to use native TUI of the
 - [x] The dashboard's live view shows the terminal, and steering from the dashboard, REST and MCP types into it.
 - [x] One adapter for each program turns its session log into events, with tests on recorded logs.
 - [x] ~~The token use of Claude Code's TUI and `-p` mode is measured on the same work, and the result is recorded here.~~ Dropped by the owner on 2026-11-01 (Decisions): not needed.
-- [ ] The docs describe the live view, steering and what each program records; the fast checks, the docs checks and the agents, Claude Code, real Claude Code and Codex acceptance checks pass.
+- [x] The docs describe the live view, steering and what each program records; the fast checks, the docs checks and the agents, Claude Code, real Claude Code and Codex acceptance checks pass.
 
 ## What the review found
 
@@ -59,7 +59,7 @@ The audit's lane 12 (`.internal/reviews/v0.1.1-audit/12-native-tui.md`) reviewed
 - **The live view:** the terminal's frames, sent only for trials someone is watching and kept in memory; the transcript stays beside it. A byte stream waits for goal [168](168-message-bus.goal)'s decision.
 - **Steering:** Thermite's own messages go in through the hooks or the program's API; typing is for the owner's console (text, slash commands, skills, MCP reconnects), each input a signed command, recorded with its outcome.
 - **Which roles** (the owner, 2026-10-26): every role the owner's messages can reach runs in its program's TUI: the workers, the planner, the teachers, the auditor and the review panel's reviewers. The advisors run in the supervisor, so their terminals are held there. The roles that take no message (the model check, the teachers' merged-by model, the synthesizer, the final writer and compaction) stay headless, with a view-only live feed. Pi is studied for a minimal TUI (question 1).
-- **The steps:** goal [166](_completed/166-agent-definitions.goal) and the table of agent programs first; a spike of each program's TUI in the harness image, with recorded session logs; the session-log adapters, beside today's stream readers; hook signals and steering inside a turn, in headless mode; the terminal host; the terminal mode in the one trial loop; the steering command; the live view; usage from the TUI; stand-ins, acceptance checks and a version check; the docs and credits. About 55 to 65 files, a third of them tests.
+- **The steps:** goal [166](166-agent-definitions.goal) and the table of agent programs first; a spike of each program's TUI in the harness image, with recorded session logs; the session-log adapters, beside today's stream readers; hook signals and steering inside a turn, in headless mode; the terminal host; the terminal mode in the one trial loop; the steering command; the live view; usage from the TUI; stand-ins, acceptance checks and a version check; the docs and credits. About 55 to 65 files, a third of them tests.
 
 ## Decisions
 
@@ -126,7 +126,8 @@ The audit's lane 12 (`.internal/reviews/v0.1.1-audit/12-native-tui.md`) reviewed
 - 2026-10-31 22:26 UTC: The acceptance checks: on 9450f6b4, agents, control, compose smoke and cluster pass (the supervisor's 4 GiB share, the terminal refusal and the switch to headless on a kind cluster); the terminal check's supervisor-image scene had two faults of its own, its helper socket's mode (6e6e6c9c) and helpers it called before defining them (74e4e64c), and passes on 74e4e64c, with the terminal host run inside the supervisor image as an advisor user. Steering's new scene found that an owner's message that waited with the owner's typed words went in a call later, or was dropped unread when the call closed: Pi's agent takes one waiting message for each model call by default. Advisors in Pi (05af9d22) and the Pi worker, research worker and planner (c2111e1c) now take all that waits; steering passes all 15 checks on 05af9d22. Real Claude Code passes on c2111e1c. Every role that takes the owner's messages, in every program, now works in its own terminal on one path, each proven in real images: workers (terminal, agents), the planner (Claude Code, Codex, agents) and the advisors in the supervisor (Claude Code, steering, terminal). The session-log adapters for Claude Code, Codex and OpenCode have tests on recorded logs; Pi's events are Thermite's own. Left: the token measurement of Claude Code's terminal against `-p` (gate C: the owner's yes and time), and the full checks at goal 172's step 11.
 - 2026-11-01 08:09 UTC: a headless advisor at a full usage window whose reset is under a day away waits for the reset (question 8): the try is not counted, the audits or reviews it holds wait with it, and Live says until when; the reset comes from Pi's failed call, Claude Code's transcript, the program's own error or the provider's answer the advisor's proxy saw (`src/supervisor/advisors/limit.ts`). The model proxy answers the Codex CLI a full ChatGPT plan in Codex's own usage-limit form (429 `usage_limit_reached`), while the harness keeps OpenAI's answer. History says when the owner's words went to an agent as a follow-up. The weekly window under Needs you and the credits mark on Providers are being built from the mockup.
 - 2026-11-01 08:32 UTC: from the owner's mockup: a weekly window, a limit whose reset its program gave more than a day and at most eight days away, holds its run until the reset, marked `weekly` (`scheduler/provider.ts`); Needs you shows it with what happened, what waits until when, and the two choices, Give <rig> another model… (the workers' model as on Edit rig, which the planner follows when it has none of its own, and `end_wait` for each waiting run) or Wait for the reset (the rig's page says so until then), each a step in the rig's history and an audit entry; REST's rig view and `list_rigs` give `weekly_limit`. Advisors wait out a weekly window too, headless and in their terminal (a Pi advisor in its own Pi view still counts it as a failed try: its routes don't carry the limit back). Providers marks a Claude subscription whose usage credits Claude Code reports on (`overageStatus`, carried as `subscription_usage.credits`) with a chip and a note whose Dismiss hides it until the credits come on again after being off. Tests pass; the Claude Code, real Claude Code, terminal, agents and steering checks have not run it yet.
+- 2026-11-01 13:18 UTC: Verified on 70ddbe37: the docs describe the live view, steering and what each program records; the fast checks and docs checks, the agents, Claude Code and Codex acceptance checks (3e2ec85b's tree), real Claude Code (3e2ec85b) and the terminal host (13eb14a8) passed. The token measurement was dropped by the owner. Moved to `_completed/`.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/169-agents-in-their-terminal.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/169-agents-in-their-terminal.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

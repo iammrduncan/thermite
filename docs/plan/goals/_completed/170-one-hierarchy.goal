@@ -1,16 +1,16 @@
 ---
 id: "170"
 title: "One hierarchy: each thing identified and addressed through what owns it, so a run's history stays whole wherever it runs"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.1"
 depends_on: ["160"]
 created: 2026-10-26
-updated: 2026-10-28
+updated: 2026-11-01
 ---
 
 # 170 · One hierarchy: each thing identified and addressed through what owns it, so a run's history stays whole wherever it runs
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [160](_completed/160-v010-audit.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [160](160-v010-audit.goal)
 
 ## What
 
@@ -18,7 +18,7 @@ Thermite's things form one hierarchy: machines host rigs; campaigns, with their 
 
 1. **A review of the hierarchy,** designed and as built: each thing's ID, who mints it, how far it is unique, where it is stored, and how every interface addresses it (dashboard URLs, REST routes, MCP tools, the command line, events, signed commands, knowledge-base references, exports and git refs).
 2. **One rule:** each thing has an ID that is unique where it is used, and is addressed through what owns it. The rig a trial or an attempt ran on is a fact about it, not its parent.
-3. **The changes,** so that a run's history stays whole if the run moves to another rig, or a new run starts from another rig's champion (goal [085](085-move-a-campaign-to-another-rig.goal)): the IDs, the URLs and routes, the stored keys, and the names of the message bus's subjects (goal [168](168-message-bus.goal)).
+3. **The changes,** so that a run's history stays whole if the run moves to another rig, or a new run starts from another rig's champion (goal [085](../085-move-a-campaign-to-another-rig.goal)): the IDs, the URLs and routes, the stored keys, and the names of the message bus's subjects (goal [168](168-message-bus.goal)).
 
 ## Why
 
@@ -32,10 +32,10 @@ The owner, 2026-10-26, about an attempt's page on control: "This is the url seem
 
 ## Done when
 
-- [ ] The review is in `.internal/reviews/v0.1.1-audit/` (lane 13), and the rule and its design are recorded here.
-- [ ] Every thing is identified and addressed by the rule, in the dashboard, REST, MCP, the command line, events, exports and the knowledge base; a test fails when a route addresses a thing through a parent that does not own it.
-- [x] A run's pages, links and records stay whole when its rig is retired or fully reset, shown by a test (`tests/control/dashboard/earlier-runs.test.ts`). A run that continues on another rig is goal [085](085-move-a-campaign-to-another-rig.goal)'s, by the owner's decision of 2026-10-30.
-- [ ] The fast checks, the docs checks and the control, steering and RunPod acceptance checks pass.
+- [x] The review is in `.internal/reviews/v0.1.1-audit/` (lane 13), and the rule and its design are recorded here.
+- [x] Every thing is identified and addressed by the rule, in the dashboard, REST, MCP, the command line, events, exports and the knowledge base; a test fails when a route addresses a thing through a parent that does not own it.
+- [x] A run's pages, links and records stay whole when its rig is retired or fully reset, shown by a test (`tests/control/dashboard/earlier-runs.test.ts`). A run that continues on another rig is goal [085](../085-move-a-campaign-to-another-rig.goal)'s, by the owner's decision of 2026-10-30.
+- [x] The fast checks, the docs checks and the control, steering and RunPod acceptance checks pass.
 
 ## What the review found
 
@@ -56,7 +56,7 @@ The audit's lane 13 (`.internal/reviews/v0.1.1-audit/13-hierarchy.md`) reviewed 
 - **One address for each thing:** on the dashboard under its campaign, `/ui/campaigns/<campaign>/runs/<run>` and `/ui/campaigns/<campaign>/runs/<run>/attempts/<attempt>` (the owner's choice); `/v1/runs/<run>/…` and MCP `{run}` (with a new `get_attempt`), since a run's ID is unique; and the same in commands and the knowledge base. Rig-level things (checks, settings, the judge's queue, builds, exports, resets) keep the rig's address.
 - **A run registry on control,** written when control signs an assignment, and **views built by run,** across old ledgers and retired rigs.
 - **Every run-scoped event names its run.**
-- **A move is a new run that continues the old one** (goal [085](085-move-a-campaign-to-another-rig.goal)), shown on both pages.
+- **A move is a new run that continues the old one** (goal [085](../085-move-a-campaign-to-another-rig.goal)), shown on both pages.
 - **The bus's subjects follow it** (goal [168](168-message-bus.goal)): `thermite.run.<run>.ev.<kind>`, with the rig and the ledger in headers and the attempt's and trial's ids in the event (the owner, 2026-10-29: a subject for each attempt costs NATS memory for good).
 - **The steps,** in goal 125's order: the rule of shape; run IDs unique per control and the right champion patch; a run's export with its verdicts; `core/ids.ts`; the run on every event; the registry; views by run; run-scoped addresses; the knowledge base keyed by run; the subjects; the move (goal 085).
 
@@ -70,6 +70,7 @@ The audit's lane 13 (`.internal/reviews/v0.1.1-audit/13-hierarchy.md`) reviewed 
   - **Runs of a retired rig, or from before a full reset,** are under the campaign's Earlier runs, marked, and open like any run.
   - **No redirects** for old links in v0.1.1.
 - 2026-10-30 18:21 UTC, owner, on the verification: this goal's box on a run that "continues on another rig" is narrowed to a rig retired or fully reset, which is met; a run continued on another rig is goal 085's move, in v0.2.0.
+- 2026-11-01 13:18 UTC, lead: a trial's and the planner's terminal stay a view of their rig's Live page, chosen by its source (`/ui/rigs/<rig>/live?source=trial:<id>`): Live is the rig's own live view of whatever runs on it, and the run's page links each trial's terminal there. The rule's test checks paths, which go through no rig for a run's things.
 
 ## Open questions
 
@@ -85,7 +86,8 @@ The audit's lane 13 (`.internal/reviews/v0.1.1-audit/13-hierarchy.md`) reviewed 
 - 2026-10-27 20:53 UTC: Control's run registry (`src/control/store/runs.ts`, store schema 6): a row for each run and rig, written when control signs an assignment and completed when the rig reports the run, made at the migration from the commands and the events control already holds. A run's name is used while its assignment is pending or delivered, or once a rig created it; the command's status stays the one record of whether it went through. The next run name, the used-name refusal and the campaigns control assigned to a rig read it, where they each read the signed commands' JSON. Next in this goal's order: views by run, with the split of `control/views.ts` (goal 125's step 6).
 - 2026-10-28 19:32 UTC: H6 and H7. Views by run: control reads a run from its registry, wherever it ran (`findRun` and `campaignRuns` in `src/control/views/cache.ts`): the rig's own kept view for its current ledger, else a fold of the run's own ledger, kept as the rigs' are for the 16 earlier ledgers read last. A campaign's page lists its runs from the registry; a retired rig's runs and those from before a full reset are under **Earlier runs**, marked, and open like any run, and a command to one is refused in words. Run-scoped addresses: the dashboard's under `/ui/campaigns/<campaign>/runs/<run>` (tabs, attempts, Live, its message box, the paper, champion patches, a stuck trial's Leave it running), every link made in `src/control/ui/urls.ts`; REST under `/v1/runs/<run>`, with the new attempt read; MCP's run tools take a run alone, with the new `get_attempt`; `issue_command`, `POST /v1/commands` and `thermite command` fill the rig of a command about a run from the registry; `--queue-from RUN`. No redirects. `tests/control/hierarchy.test.ts` holds the rule, `tests/control/dashboard/earlier-runs.test.ts` the pages of a retired rig's run and of an old ledger's. A name two runs shared before v0.1.1 stands for the newest (Known limits). Next in this goal's order: the knowledge base keyed by run (H8).
 - 2026-10-30 18:21 UTC: Verified at b48f15a0 against the code, tests and pages. Items 1 and 2 are met: the review is in `.internal/` (lane 13), and the rule is here and in CONVENTIONS.md; `tests/control/hierarchy.test.ts` fails on a dashboard or REST route, or an MCP tool, that addresses a run's thing through its rig; events name their run (`tests/harness/ledger/runs.test.ts`, `migrations.test.ts`); a run's export takes its verdicts (`tests/harness/outbox.test.ts`); the bus's subjects are by run (`tests/core/link/events.test.ts`); the knowledge base is collection › run › slot › item (`tests/control/kb.test.ts`); the command line names a run alone. Item 3 is met for a retired rig and a full reset (`tests/control/dashboard/earlier-runs.test.ts`), narrowed by the owner's decision; a run continued on another rig is goal 085's. Item 4 waits for the fast, docs, control, steering and RunPod checks on the last commit.
+- 2026-11-01 13:18 UTC: Verified on 70ddbe37: the review is in the maintainers' notes and the rule in CONVENTIONS.md; every surface addresses by the rule (`tests/control/hierarchy.test.ts` and the tests the audit listed), the stale routes and run-name words fixed in 428b0218; the fast checks and docs checks, and the control, steering and RunPod acceptance checks passed on 13eb14a8. Moved to `_completed/`.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/170-one-hierarchy.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/170-one-hierarchy.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

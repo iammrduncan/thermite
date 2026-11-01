@@ -1,22 +1,22 @@
 ---
 id: "173"
 title: "Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.1"
 depends_on: ["160"]
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-11-01
 ---
 
 # 173 · Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [160](_completed/160-v010-audit.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [160](160-v010-audit.goal)
 
 ## What
 
-The operations review of the v0.1.1 audit (goal [160](_completed/160-v010-audit.goal), lane 8, in `.internal/reviews/v0.1.1-audit/08-operations.md`) found that Thermite has no way back after a bad update and no way to see a part that hangs. The owner took its recommendations on 2026-10-26 (the [clean-up guide](../code-clean-up-guide.md)'s questions 13 and 15). This goal builds them.
+The operations review of the v0.1.1 audit (goal [160](160-v010-audit.goal), lane 8, in `.internal/reviews/v0.1.1-audit/08-operations.md`) found that Thermite has no way back after a bad update and no way to see a part that hangs. The owner took its recommendations on 2026-10-26 (the [clean-up guide](../../code-clean-up-guide.md)'s questions 13 and 15). This goal builds them.
 
-1. **A copy before every migration.** The harness copies the ledger before any migration runs (`vacuum into`, beside it, the two newest kept), and control copies `control.db` the same way. A refusal of a newer schema names the copy to restore. Control's store gets ordered migrations and a version table, as the ledger has (with goal [125](125-code-to-the-conventions.goal)'s theme T6).
+1. **A copy before every migration.** The harness copies the ledger before any migration runs (`vacuum into`, beside it, the two newest kept), and control copies `control.db` the same way. A refusal of a newer schema names the copy to restore. Control's store gets ordered migrations and a version table, as the ledger has (with goal [125](../125-code-to-the-conventions.goal)'s theme T6).
 2. **Backup and restore.** `thermite backup <folder>` copies control's state (`control.db`, its keys, its kits and exports) into a dated folder, and `thermite restore` puts it back. A page says what to keep, where, and how to back up a rig's ledger, for compose, machines, clusters and RunPod, and the update pages get a backup step.
 3. **A disk floor.** Before an export, a snapshot, a build and a model download, the rig checks its free space against a floor (a setting, with its default stated). At the floor it records the fact, holds new trials and builds with a reason the owner can read, and never fails in a loop; the judge's job in flight still writes its verdict. Each report carries the rig's free disk.
 4. **Drains that end.** A drain has a deadline (the rig's setting, or the update's). At the deadline it ends with a recorded step and the owner's choice: apply now, or end the drain. A rig's page shows the drain's age.
@@ -36,12 +36,12 @@ The owner took the review's recommendations on backups ("a copy of the ledger an
 ## Done when
 
 - [x] A migration of the ledger or of `control.db` keeps a copy first, shown by a test that migrates a copy of a v0.1.0 database (`tests/control/store/schema.test.ts`, with a store v0.1.0's own code wrote; `tests/harness/ledger.test.ts`; `tests/common/db-copy.test.ts`).
-- [ ] `thermite backup` and `thermite restore` work on a compose stack, shown by a test, and the pages say how to back up each placement.
-- [ ] The disk floor holds new work at its limit and reports free disk, shown by a test with a full-disk stand-in.
-- [ ] A drain ends at its deadline with the owner's choice, shown by a test.
-- [ ] The machine units and compose bound their logs, and the pages say where the logs are.
-- [ ] The health routes answer with each loop's age and 503 past its limit, every deployment checks them, and a test shows a hung loop answered as unhealthy.
-- [ ] The fast checks, the docs checks, and the compose smoke, machines, cluster, rig deploy and RunPod acceptance checks pass.
+- [x] `thermite backup` and `thermite restore` work on a compose stack, shown by a test, and the pages say how to back up each placement.
+- [x] The disk floor holds new work at its limit and reports free disk, shown by a test with a full-disk stand-in.
+- [x] A drain ends at its deadline with the owner's choice, shown by a test.
+- [x] The machine units and compose bound their logs, and the pages say where the logs are.
+- [x] The health routes answer with each loop's age and 503 past its limit, every deployment checks them, and a test shows a hung loop answered as unhealthy.
+- [x] The fast checks, the docs checks, and the compose smoke, machines, cluster, rig deploy and RunPod acceptance checks pass.
 
 ## Decisions
 
@@ -61,7 +61,8 @@ The owner took the review's recommendations on backups ("a copy of the ledger an
 - 2026-10-30 18:21 UTC: Verified at b48f15a0. Items 1 to 5 are met: the copy before a migration (`tests/common/db-copy.test.ts`, `tests/control/store/schema.test.ts`, `tests/harness/ledger/migrations.test.ts`); backup and restore (`tests/system/backup.test.ts`, `tests/common/backup/restore.test.ts`; on a compose stack, `scripts/acceptance/backup.mjs`), and Back up and restore control for each placement and each rig's ledger; the disk floor, with a full-disk stand-in (`tests/harness/disk.test.ts`, `tests/control/disk.test.ts`); the drain's deadline and the owner's choice (`tests/control/dashboard/drain-deadline.test.ts`, `tests/harness/service/drain.test.ts`); bounded logs in compose, the release bundle and the machine units, with Troubleshoot's Where the logs are. New test: `tests/release/logs-and-health.test.ts` holds compose's and the release bundle's log bounds and health checks. Item 6 is met but on RunPod: the one-container rig's broker restarts a part that exits, not one that hangs; its health watch is being built. Item 7 waits for the checks on the last commit.
 - 2026-10-30 18:35 UTC: The RunPod one-container rig checks its parts' health (pushed in b421d0ae): the broker (`src/harness/broker/watch.ts`) asks the harness's and the supervisor's health routes every 30 s (5 s for an answer, `healthProbe`'s rule) and ends a part's process group at the third 503 or missing answer in a row, logging each failure and why; the part's exit handler starts it again with the broker's restart backoff. Until its first 2xx, a part's failures count only after the cluster's startup allowance, 10 minutes for the harness and 5 for the supervisor; during a stop it ends nothing. Tests: `tests/harness/broker/watch.test.ts` (6). The rig image acceptance freezes the supervisor (SIGSTOP) and checks that it is ended after three failures and starts again (about 100 s). Docs: Troubleshoot, Run a rig on RunPod, the harness image's Restarts and stops, ports and settings. Item 6 is met in every placement. Left: the rig image and RunPod acceptance checks on this commit, and item 7's checks on the last commit.
 - 2026-11-01 08:09 UTC: a RunPod pod's own NATS server is watched as the broker watches its parts (`watchPart`, now shared in `common/health.ts`): every 30 s the supervisor signs in to it with the rig's key and makes one round trip within 5 s (`common/bus/probe.ts`), and at the third failure in a row kills a hung server, which its exit handler starts again; no monitoring port is opened. The supervisor's health comment no longer names the old command loop. The rig image and RunPod checks have not run it against the real server yet. The rig image and RunPod checks for the health routes passed on 9a61da9a.
+- 2026-11-01 13:18 UTC: Verified on 70ddbe37: backup and restore (`tests/system/backup.test.ts`, `tests/common/backup/restore.test.ts`, the backup check on f5c63fbe and 13eb14a8), the disk floor (`tests/harness/disk.test.ts`, `tests/control/disk.test.ts`), the drain deadline (`tests/harness/service/drain.test.ts`, `tests/control/dashboard/drain-deadline.test.ts`), bounded logs (`tests/release/logs-and-health.test.ts`), health routes (`tests/common/health.test.ts` and the probes' tests); the fast checks and docs checks, and the compose smoke, machines, cluster, rig deploy, rig image and RunPod acceptance checks passed on 13eb14a8. Left out by choice: the drain deadline stays a setting (`THERMITE_DRAIN_MINUTES`), not a field on Edit rig. Moved to `_completed/`.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/173-recovery-and-health.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/173-recovery-and-health.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

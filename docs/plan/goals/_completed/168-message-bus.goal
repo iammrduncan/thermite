@@ -1,22 +1,22 @@
 ---
 id: "168"
 title: "One message bus: NATS JetStream between control, rigs and agents, with fast storage and retrieval"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.1"
 depends_on: ["167"]
 created: 2026-10-26
-updated: 2026-10-31
+updated: 2026-11-01
 ---
 
 # 168 · One message bus: NATS JetStream between control, rigs and agents, with fast storage and retrieval
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [167](_completed/167-how-the-parts-talk.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [167](167-how-the-parts-talk.goal)
 
 ## What
 
 NATS with JetStream becomes the channel between Thermite's systems, in place of today's many HTTP polling loops: events, commands and their answers, reports, live views, past research and the dashboard's live updates.
 
-1. **A design first,** from the review of goal [167](_completed/167-how-the-parts-talk.goal): subjects and streams for each channel, what stays in SQLite, the accounts and permissions of each part, how rigs reach it (on one machine, over SSH, on a cluster, and on RunPod, where a rig dials out), and the order of the move.
+1. **A design first,** from the review of goal [167](167-how-the-parts-talk.goal): subjects and streams for each channel, what stays in SQLite, the accounts and permissions of each part, how rigs reach it (on one machine, over SSH, on a cluster, and on RunPod, where a rig dials out), and the order of the move.
 2. **NATS in every deployment,** starting with the one-machine compose file: its image, its storage, its health check, and what a user configures.
 3. **The channels move to it,** one at a time, with the system working at every step.
 4. **Storage and retrieval made fast:** control's pages read views kept up to date as events arrive, instead of folding every event of a rig on every request.
@@ -26,24 +26,24 @@ NATS with JetStream becomes the channel between Thermite's systems, in place of 
 
 The owner, 2026-10-26: "I want us to optimize the data storage and retrieval and message bus between systems. We have so many moving parts here its probably time to throw in nats.io jetstream and have that as part of single machine podman compose, and using it as the communication channel between all our systems. With solid API and MCP coverage."
 
-The audit found the cost this removes: control rebuilds each rig's view from every event on every request (about 0.55 s for each rig at 100,000 events), and the parts talk through polling loops with no shared contract ([the clean-up guide](../code-clean-up-guide.md), themes T2 and T12).
+The audit found the cost this removes: control rebuilds each rig's view from every event on every request (about 0.55 s for each rig at 100,000 events), and the parts talk through polling loops with no shared contract ([the clean-up guide](../../code-clean-up-guide.md), themes T2 and T12).
 
 ## Constraints
 
 - **The design invariants hold.** The ledger stays the record ("Nothing is destroyed"); commands stay signed and checked by the harness; agents never reach the judge's state.
-- **The network rules** in [decisions.md](../decisions.md) change only by the owner's decision, recorded there.
-- **New dependencies and downloads** (the NATS server's image, the client libraries) come with the owner's yes, and each is credited in [CREDITS.md](../../../CREDITS.md).
+- **The network rules** in [decisions.md](../../decisions.md) change only by the owner's decision, recorded there.
+- **New dependencies and downloads** (the NATS server's image, the client libraries) come with the owner's yes, and each is credited in [CREDITS.md](../../../../CREDITS.md).
 - **v0.1.1 may break compatibility with v0.1.0** (owner, 2026-10-26).
 - **Docs follow the code,** in the same commit.
 
 ## Done when
 
-- [ ] The design is in this goal, with the owner's decisions.
-- [ ] NATS runs in the compose stack and in every other deployment, with a health check, and the docs say how to run it.
-- [ ] Every channel the design moves runs over NATS, and the polling it replaces is gone.
+- [x] The design is in this goal, with the owner's decisions.
+- [x] NATS runs in the compose stack and in every other deployment, with a health check, and the docs say how to run it.
+- [x] Every channel the design moves runs over NATS, and the polling it replaces is gone.
 - [x] Control's pages read views kept up to date as events arrive, measured before and after at 100,000 events.
-- [ ] REST, MCP, the command line and the dashboard show the bus's state; the reference pages list them.
-- [ ] The fast checks, the docs checks and the acceptance checks for every changed part pass.
+- [x] REST, MCP, the command line and the dashboard show the bus's state; the reference pages list them.
+- [x] The fast checks, the docs checks and the acceptance checks for every changed part pass.
 
 ## What the review found
 
@@ -76,17 +76,19 @@ The owner chose this design on 2026-10-26, from a drawing of it: JetStream as th
 
 | Subject | Stream or bucket | Truth | Kept |
 | --- | --- | --- | --- |
-| `thermite.run.<run>.ev.<kind>`, with the attempt's and trial's ids in the event | `EVENTS`, a record | the rig's ledger | for good; deletes and purges refused |
-| `thermite.rig.<rig>.ev.<kind>`, a rig's events with no run | `EVENTS`, a record | the rig's ledger | for good |
-| `thermite.run.<run>.queue.<op>` | `EVENTS`, and a key-value bucket of each experiment's state | the rig's ledger | for good; the bucket holds the latest, changed by compare-and-set |
-| `thermite.rig.<rig>.cmd` | `COMMANDS`, a work queue | control signs and keeps each; the rig's ledger keeps its outcome | until the rig acks |
-| `thermite.run.<run>.live.<source>` | `LIVE`, a view | none | by count and age |
-| `thermite.rig.<rig>.config` | a key-value bucket | control's store | the latest; secrets sealed to the rig's key |
-| `thermite.campaign.<campaign>.<kind>` | `CAMPAIGNS`, a record | control's store | for good |
-| `KB_FILES` | an object store: each file of the knowledge base by its SHA-256, put before its `kb_item` event (goal [175](175-knowledge-base.goal)) | the rig's ledger; then control's knowledge base | for good |
-| `thermite.kb.search`, `thermite.kb.read` | request and reply, not kept | control's knowledge base | not kept |
+| `thermite.run.<run>.ev.<kind>`, with the attempt's and trial's ids in the event | `EVENTS`, a record | the rig's ledger | until a retention policy purges some, by subject; never deleted (the owner's decision of 2026-11-01) |
+| `thermite.rig.<rig>.ev.<kind>`, a rig's events with no run | `EVENTS`, a record | the rig's ledger | as above |
+| `thermite.run.<run>.queue.<op>` | `EVENTS` | the rig's ledger | as above; the key-value bucket of each experiment's state waits until something reads it (decision of 2026-10-29) |
+| `thermite.rig.<rig>.report` | `REPORTS`, an inbox (a work queue) | the rig | until control takes or refuses each page |
+| `thermite.rig.<rig>.cmd` | `COMMANDS`, a work queue | control signs and keeps each; the rig's ledger keeps its outcome | until the rig acks, or its time limit |
+| `thermite.run.<run>.live.<source>`, `thermite.rig.<rig>.live.<source>` | `LIVE`, a view | none | by count, size and age |
+| `thermite.rig.<rig>.config.<key>` | `CONFIG`, one subject for each key | control's store | the newest of each; secrets sealed to the rig's key |
+| `thermite.rig.<rig>.kbfile` | `KB_FILES`, an inbox of each file's chunks, sent before its `kb_item` event (goal [175](../175-knowledge-base.goal)) | the rig's ledger; then control's knowledge base | until control takes them |
+| `thermite.kb.search.<rig>`, `thermite.kb.read.<rig>` | request and reply, not kept | control's knowledge base | not kept |
+| `thermite.rig.<rig>.ask.<kind>` | request and reply, not kept: a rig's asks of control (figures, screens, daily report, renewal, space, the knowledge base's files it holds) | control | not kept |
+| `thermite.jsapi` | the JetStream API of a RunPod pod's own server, reached through its leaf node | control's server | not kept |
 
-Control's own SQLite copies of the rigs' events and of its commands go: JetStream holds control's one copy, and control's pages read views that consumers keep up to date. JetStream snapshots are its backup.
+Control's own SQLite copies of the rigs' events and of its commands go: JetStream holds control's one copy, and control's pages read views that consumers keep up to date. `thermite backup` keeps the streams with control's state (goal [173](173-recovery-and-health.goal)). The CAMPAIGNS stream of the first drawing is dropped (the owner's decision of 2026-11-01).
 
 **Who may do what.** Only control and the rigs' supervisors hold bus credentials. A supervisor publishes only its own rig's subjects and its runs' (control also checks that the run registry gives each run to that rig), takes its own rig's commands, reads its rig's config, puts its runs' files into `KB_FILES`, and asks control to search and read the collections its runs may read. Control publishes commands, each signed, config and campaigns, answers searches of the knowledge base, and reads everything. The owner and operators act through control, which signs what they may issue. Every record a rig publishes keeps the harness's signature inside it, so a bus credential alone can forge nothing.
 
@@ -108,9 +110,9 @@ Control's own SQLite copies of the rigs' events and of its commands go: JetStrea
 ## Decisions
 
 - 2026-10-26: the audit's lane 11 evaluated NATS JetStream; it recommended a first part over HTTP and a decision on NATS after it.
-- 2026-10-26, owner, after a drawing of the design above: "for jetstream direction, this looks great". JetStream is the event log, the delivery and the queues between control, the rigs' supervisors and the dashboard, with the harness and the agents off the bus at first, bridged by the supervisor ([decisions.md](../decisions.md#the-product)). This answers the review's questions on when to add NATS (now, as designed), on RunPod (a leaf node in the pod, dialed by control, in place of the tunnel), on what JetStream holds (records, the commands queue, the live view and key-value buckets, with control's own copies gone), on a report soon after each command (events now arrive as they happen) and on one configuration document for each rig (the config bucket).
+- 2026-10-26, owner, after a drawing of the design above: "for jetstream direction, this looks great". JetStream is the event log, the delivery and the queues between control, the rigs' supervisors and the dashboard, with the harness and the agents off the bus at first, bridged by the supervisor ([decisions.md](../../decisions.md#the-product)). This answers the review's questions on when to add NATS (now, as designed), on RunPod (a leaf node in the pod, dialed by control, in place of the tunnel), on what JetStream holds (records, the commands queue, the live view and key-value buckets, with control's own copies gone), on a report soon after each command (events now arrive as they happen) and on one configuration document for each rig (the config bucket).
 - 2026-10-26, owner: input typed into an agent's terminal is signed, owner only: text, slash commands, skills and a fixed list of named keys, each a signed command recorded word for word with its outcome. Input travels as a command on the rig's commands stream.
-- 2026-10-27, owner (goal [175](175-knowledge-base.goal)): the knowledge base lives on control, and its writes arrive as durable events on NATS. A write is a `kb_item` event in `EVENTS` with its file in the `KB_FILES` object store; searches go to control by request and reply. The `KB` stream from control to the rigs goes: no rig keeps a copy of the knowledge base.
+- 2026-10-27, owner (goal [175](../175-knowledge-base.goal)): the knowledge base lives on control, and its writes arrive as durable events on NATS. A write is a `kb_item` event in `EVENTS` with its file in the `KB_FILES` object store; searches go to control by request and reply. The `KB` stream from control to the rigs goes: no rig keeps a copy of the knowledge base.
 - 2026-10-27 23:42 UTC, owner, the seven open questions, asked as goal 172's step 5 began:
   1. A rig on a machine or a cluster reaches control's NATS server on NATS's own port, with TLS: a second port to open and a certificate for it. The review had recommended WebSocket through the operator's HTTPS reverse proxy.
   2. Each supervisor makes its own key and registers it over today's HTTPS call; control writes the server's users file and reloads it. The secret never leaves the rig.
@@ -135,7 +137,7 @@ Control's own SQLite copies of the rigs' events and of its commands go: JetStrea
 
 None: the owner answered the seven on 2026-10-27 (see Decisions).
 
-The question of an assignment that expires while its models download is goal [171](_completed/171-bugs-on-the-wire.goal)'s item 5.
+The question of an assignment that expires while its models download is goal [171](171-bugs-on-the-wire.goal)'s item 5.
 
 ## Progress
 
@@ -180,7 +182,8 @@ The question of an assignment that expires while its models download is goal [17
 - 2026-10-30 21:05 UTC: Bus only passes every acceptance check it touches, after four fixes the checks found: control starts after `nats-init`, which leaves an empty bus folder a file (Podman gives an empty volume the owner of each container that mounts it; dae42cc2); under the lifecycle overlay control keeps group 10001, so the bus's server reads its key (ca7af272); a RunPod rig's asks are answered at the reply its leaf node's service import makes (41265199); the RunPod check reads the pod's lifecycle beside the bus's steps (e7d1cff5). Passed: compose smoke under podman compose and podman-compose, quick start, bus, leaf, RunPod (enrollment, reports, exports, stop and start from the sealed snapshot, full reset and terminate, all over the leaf node), rig image, control, agents, terminal, Claude Code, Codex, real Claude Code, steering, judge, multi-GPU, campaign, machines, rig deploy and cluster (on fe35d7d9, ca7af272 and e7d1cff5). Left for the goal: its verification, and the bus's state in REST, MCP, the command line and the dashboard (item 5) checked against the code.
 - 2026-11-01 08:09 UTC: the bus's state on the command line and each rig's connection: `thermite bus [--json]` prints `GET /v1/bus` (its contract now `core/api/control/bus.ts`); `bus` in `GET /v1/rigs`, `GET /v1/rigs/<rig>/view` and MCP's `list_rigs` says whether each rig is on the bus, since its last registration, or off it and broken, with why, since when and what to do, from the source the rig's page uses; `thermite rig list` notes a rig off the bus. Stale text fixed: the REST page's example route, `live.ts`'s comment, the EVENTS description (kept until a retention policy purges by subject; never deleted). The dashboard's Settings › Message bus is being built from the mockup.
 - 2026-11-01 08:32 UTC: Settings › Message bus is built from the owner's mockup, as three blocks after Space: control's connection (since when, the server's version, its store against control's disk floor, the rigs' events written and applied), each rig on or off the bus with its reports waiting (REPORTS' messages by subject, `counts` in `GET /v1/bus`), commands waiting (its consumer's pending and not acked, and those control holds) and messages sent again, and each stream with what it carries, holds and keeps. `GET /v1/bus` and `bus_state` add `connection`; `thermite bus` prints it. A few of the mockup's words changed to say what is true (the tips on Connection, Commands waiting and Sent again, LIVE and CONFIG). Tests on the fake bus pass; the bus and control checks have not run it yet.
+- 2026-11-01 13:19 UTC: Verified on 70ddbe37: the design table matches the built contract (the owner's decisions recorded, the CAMPAIGNS stream dropped, the queue's bucket deferred); NATS runs in compose, the release bundle, machines, clusters and RunPod pods (their own server watched), with health checks and the Run the message bus page; every channel the design moves is on the bus, with the polls it replaced gone; `thermite bus`, `GET /v1/bus`, `bus_state`, each rig's `bus` in REST and MCP, and Settings › Message bus show its state; the fast checks and docs checks, and the bus, leaf, control, smoke (Docker and Podman), backup, rig image and RunPod acceptance checks passed on 13eb14a8 and 3e2ec85b's tree. Moved to `_completed/`.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/168-message-bus.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/168-message-bus.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).
