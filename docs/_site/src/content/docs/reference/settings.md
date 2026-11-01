@@ -97,7 +97,7 @@ A lifecycle driver lets control restart a rig's containers: the button **Restart
 | `THERMITE_K8S_API` | URL | `https://<KUBERNETES_SERVICE_HOST>:<KUBERNETES_SERVICE_PORT>`, else `https://kubernetes.default.svc` | no | `kubernetes`: the cluster's API server |
 | `THERMITE_K8S_TOKEN_FILE` | path | `/var/run/secrets/kubernetes.io/serviceaccount/token` | path to a secret | `kubernetes`: control's service account token. Read again at each restart, so a rotated token is used; an empty file is refused (`secret file for THERMITE_K8S_TOKEN_FILE is empty`), and nothing is sent |
 | `THERMITE_K8S_CA_FILE` | path | `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt` | no | `kubernetes`: the API server's certificate authority |
-| `THERMITE_K8S_NAMESPACE` | template | `thermite-{rig}` | no | `kubernetes`: each rig's namespace. `{rig}` is replaced with the rig's name; so is `{unit}`, the placeholder's older name. Empty counts as not set |
+| `THERMITE_K8S_NAMESPACE` | template | `thermite-{rig}` | no | `kubernetes`: each rig's namespace. `{rig}` is replaced with the rig's name. A template that names `{unit}`, the placeholder's name before v0.1.0, stops control at start. Empty counts as not set |
 | `THERMITE_K8S_SELECTOR_HARNESS` | label selector | `app.kubernetes.io/component=harness` | no | `kubernetes`: how control finds a rig's harness pods |
 | `THERMITE_K8S_SELECTOR_SUPERVISOR` | label selector | `app.kubernetes.io/component=supervisor` | no | `kubernetes`: how control finds a rig's supervisor pods |
 | `KUBERNETES_SERVICE_HOST`, `KUBERNETES_SERVICE_PORT` | address, port | set by Kubernetes in every pod; port `443` | no | Read for the default of `THERMITE_K8S_API` |
@@ -349,12 +349,6 @@ A rig set up from **Add a rig**, on a machine or a cluster, or with a join comma
 An image update of a rig on a cluster writes its two deployments again from control's settings at that moment, so the supervisor's `CONTROL_URL` is taken from `THERMITE_CONTROL_PUBLIC_URL` again, and its bus's address and authority from control's as they are then; an update of a rig on a machine writes its units and the authority's file again the same way. Without `THERMITE_CONTROL_PUBLIC_URL`, the update is refused: `Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL): the rig would no longer know where to report.` When only this address changed, the rig's page offers **Give it control's new address**, and the MCP tool [`update_rig_images`](mcp-tools.md#update_rig_images) does the same: the rig's pods restart with the new address, on the same images. The page compares the address control recorded when it set the rig up or last updated it; a rig set up before control kept that record shows the button only after its next update.
 
 ## Older names
-
-Some settings were renamed. These older names are still read when the new name is not set.
-
-| Older name | Read as | Still works |
-| --- | --- | --- |
-| `THERMITE_UNIT_ID` | `THERMITE_RIG_ID` | Yes, in the harness and the supervisor. It logs `THERMITE_UNIT_ID is deprecated; set THERMITE_RIG_ID` |
 
 The model settings have only the names in [The rig's own model](#the-rigs-own-model). Names they had before are not read.
 

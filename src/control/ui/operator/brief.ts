@@ -16,7 +16,7 @@ const introText = (s: string) => s.replace(/^(research )?trial on [^:]+: /, "");
  * What a run is doing now, one line each: every lane's focus and for how long, the judge, and the
  * planner when it waits. With `heading`, the run's name, progress and champion lead; with
  * `detail`, each lane also shows its last step and the judge its latest line; `lane` adds to a
- * lane's row and below it (a drain's trial: ui/drain.ts).
+ * lane's row and below it (a drain's trial: ui/rigs/drain.ts).
  */
 export function runBrief(
   store: ControlStore,

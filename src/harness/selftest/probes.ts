@@ -58,7 +58,7 @@ export function isFailure(result: string): boolean {
  * tries to list the state snapshot's folder and to write an empty file in it (removed again):
  * refused, as it must be where the volume keeps permissions, or, where it does not, "open,
  * sealed" when the folder holds only what a sealed snapshot holds, as inspectSnapshotFolder
- * (broker/snapshot.ts) looks, and "FOUND" with the first thing that is not. `connect` opens a TCP
+ * (broker/snapshot/) looks, and "FOUND" with the first thing that is not. `connect` opens a TCP
  * connection to `path` on port `expect`, after the other probes: one that is made is "ALLOWED";
  * one refused, unreachable or not answered in 3 s passes.
  */

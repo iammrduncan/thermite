@@ -50,7 +50,7 @@ export async function researchTick(
   const last = research.lastReportAt(run);
   if (!last || Date.now() - Date.parse(last) >= contract.report_cadence.digest_minutes * 60_000) {
     // At a digest, after the minimum: the review panel is asked about the items with no
-    // standing decision, when code finds them ready (research/review.ts); then the progress
+    // standing decision, when code finds them ready (research/review/); then the progress
     // rule is checked. A failure of either is logged; the digest and the research go on, and
     // the next digest tries again.
     try {

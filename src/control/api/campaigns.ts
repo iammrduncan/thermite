@@ -190,7 +190,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     return shelf(
       c,
       `/v1/campaigns/${campaign}/unarchive`,
-      unarchiveCampaign(store, allViews(), campaign, "owner:api"),
+      unarchiveCampaign(store, campaign, "owner:api"),
     );
   });
   app.post("/v1/campaigns/:campaign/folder", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
@@ -198,7 +198,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const path = `/v1/campaigns/${campaign}/folder`;
     const body = await bodyOf(c, MoveBody);
     if (!body.success) return shelf(c, path, refusedBody(body.error));
-    return shelf(c, path, moveCampaign(store, allViews(), campaign, body.data.folder, "owner:api"));
+    return shelf(c, path, moveCampaign(store, campaign, body.data.folder, "owner:api"));
   });
   app.get("/v1/campaign-folders", admin, (c) => c.json(campaignFoldersAnswer(store)));
   app.post("/v1/campaign-folders", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {

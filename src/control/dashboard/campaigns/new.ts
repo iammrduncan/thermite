@@ -63,6 +63,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
   const newCampaignPage = (
     c: Ctx,
     extra: { draft?: Record<string, unknown>; errors?: string[] } = {},
+    vs = views(),
   ) =>
     page(
       c,
@@ -73,7 +74,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       },
       newCampaignBody({
         csrf: csrf(c),
-        rigs: views(),
+        rigs: vs,
         access: store.gitAccess.list(),
         // The MCP servers in Settings, for the kit's MCP servers block (goal 068).
         mcp: mcpServers.list(),
@@ -89,9 +90,10 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
             })),
           })),
         // The Agents' context checks a window against each rig's agents' models (goal 070).
-        agentModels: Object.fromEntries(views().map((u) => [u.id, ownModels(store, u.id)])),
+        agentModels: Object.fromEntries(vs.map((u) => [u.id, ownModels(store, u.id)])),
         ...extra,
       }),
+      vs,
     );
   app.get("/ui/campaigns/new", (c) =>
     opts.kits ? newCampaignPage(c) : c.text("This control keeps no kits.", 404),

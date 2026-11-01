@@ -114,7 +114,7 @@ describe("signed commands", () => {
 });
 
 describe("commands signed before the rename", () => {
-  test("a command naming its unit and instance is verified as signed and read as rig and run", async () => {
+  test("a command naming its unit and instance, as before v0.1.0, is refused as malformed", async () => {
     const { createPrivateKey, sign } = await import("node:crypto");
     const keys = generateSigningKeys();
     const old = {
@@ -132,17 +132,9 @@ describe("commands signed before the rename", () => {
       Buffer.from(canonicalJson(old)),
       createPrivateKey(keys.privateKeyPem),
     ).toString("base64");
-    const r = verifyCommand({ envelope: old, signature }, keys.publicKeyPem, "gpu-1");
-    assert.ok(r.ok, JSON.stringify(r));
-    assert.equal(r.ok && r.envelope.kind, "pause_run");
-    assert.equal(r.ok && r.envelope.rig, "gpu-1");
-    assert.deepEqual(r.ok && r.payload, { run: "smoke-1", reason: "owner check" });
-    // Changed after signing: refused, as any other command.
-    const tampered = {
-      envelope: { ...old, payload: { instance: "other-1", reason: "x" } },
-      signature,
-    };
-    assert.equal(verifyCommand(tampered, keys.publicKeyPem, "gpu-1").ok, false);
-    assert.equal(verifyCommand({ envelope: old, signature }, keys.publicKeyPem, "gpu-2").ok, false);
+    assert.deepEqual(verifyCommand({ envelope: old, signature }, keys.publicKeyPem, "gpu-1"), {
+      ok: false,
+      reason: "malformed command",
+    });
   });
 });

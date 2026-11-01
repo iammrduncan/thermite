@@ -262,7 +262,7 @@ export function createScheduler(
       const m = modelFor(spec.run);
       return programOf(m).runTrial({ mode: "code", spec }, link(spec, m, signal));
     },
-    // The planner through OpenCode, Claude Code or Codex, as the planner's own user (cli/once.ts).
+    // The planner through OpenCode, Claude Code or Codex, as the planner's own user (agents/cli/once.ts).
     ask: (via, m, prompt, signal, o) =>
       CLI_PROGRAMS[via].ask(m, prompt, once, { ...o, signal, windows }),
     // A planner in Pi on a rig whose agents run in their own terminal: in a process of its own,

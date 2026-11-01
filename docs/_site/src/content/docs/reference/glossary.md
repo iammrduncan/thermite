@@ -184,4 +184,4 @@ Thermite's work is organized as **campaign › run › lane › trial › attemp
 
 ## Older names
 
-Before 2026-10-15 a rig was called a **unit**, and a run an **instance**. Older ledgers and command-line flags with those names are still read under the new names.
+Before 2026-10-15 a rig was called a **unit**, and a run an **instance**. The command line refuses the flags with those names (`--unit`, `--instance`), and a rig refuses a command signed with them. Older ledgers with those names are still read under the new names.

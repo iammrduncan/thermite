@@ -28,7 +28,7 @@ const clip = (s: string, n: number) => {
  *
  * Reviews are per champion commit: a new champion needs a new review.
  *
- * A research run's review (goal 112, research/review.ts) is a row here too, with the reserved goal
+ * A research run's review (goal 112, research/review/) is a row here too, with the reserved goal
  * name `research` and a marker of the evidence it saw in place of a commit. It is given only to a
  * supervisor that asks for research reviews, so a supervisor from before it never gets one.
  */
@@ -120,7 +120,7 @@ export class Reviews {
 
   /**
    * Requests a research review of a run (goal 112): once for each marker of the evidence it saw
-   * (research/review.ts decides when). Returns its id.
+   * (research/review/ decides when). Returns its id.
    */
   requestResearch(input: {
     run: string;
@@ -207,9 +207,9 @@ export class Reviews {
   }
 
   /**
-   * A research review's results (goals 112 and 117), as code checked them (research/review.ts),
+   * A research review's results (goals 112 and 117), as code checked them (research/review/),
    * written once. Each reviewer's checked answer to each item it was asked to decide is a
-   * `review_item` row, and each item's decision (research/review.ts decideItems) an
+   * `review_item` row, and each item's decision (research/review/ decideItems) an
    * `item_decision` row. The review passes when, after it, every question has an end (a standing
    * decision of answered or insufficient) and every required hypothesis an end (hypothesis-evidence.ts).
    * Events: `review_items` for each reviewer, `item_decided` for each item, and `review_panel`

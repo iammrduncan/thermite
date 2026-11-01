@@ -73,7 +73,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return shelfAnswer(
       c,
       await c.req.parseBody(),
-      unarchiveCampaign(store, views(), name, "owner:ui"),
+      unarchiveCampaign(store, name, "owner:ui"),
       (a) =>
         a.changed
           ? `Unarchived ${name}. It is back in the navigation, ${a.folder ? `in ${a.folder}` : "in no folder"}.`
@@ -90,7 +90,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return shelfAnswer(
       c,
       f,
-      id && !to ? goneFolder : moveCampaign(store, views(), name, to?.name ?? null, "owner:ui"),
+      id && !to ? goneFolder : moveCampaign(store, name, to?.name ?? null, "owner:ui"),
       (a) =>
         !a.changed
           ? a.folder

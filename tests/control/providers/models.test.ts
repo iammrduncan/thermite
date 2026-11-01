@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import { listedPrice, listModels, providerBase } from "../../../src/control/providers/models.ts";
-import { ControlStore } from "../../../src/control/store/index.ts";
 
 const answer =
   (status: number, body: unknown, seen?: { url: string; headers: Headers }[]) =>
@@ -161,31 +156,5 @@ describe("a provider's model list", () => {
       answer(200, { models: [] }) as typeof fetch,
     );
     assert.ok("error" in odd && !odd.error.includes("sk-secret"));
-  });
-});
-
-describe("the first settings page's routes", () => {
-  test("become providers with their model, and their rigs keep it", () => {
-    const path = join(mkdtempSync(join(tmpdir(), "thermite-migrate-")), "control.db");
-    const old = new DatabaseSync(path);
-    old.exec(`create table model_route (name text primary key, base_url text not null, model text not null,
-      context_window integer not null default 0, max_tokens integer not null default 0, reasoning text,
-      key_sealed text not null, key_hint text not null, version integer not null default 1, updated_at text not null);
-      create table rig_model_route (rig text primary key, route text not null, assigned_at text not null);
-      insert into model_route values ('oc', 'https://p.example/v1', 'm-1', 0, 0, null, 's1:x', '…0001', 3, '2026-10-17');
-      insert into rig_model_route values ('rig-a', 'oc', '2026-10-17');`);
-    old.close();
-    const store = new ControlStore(path);
-    const p = store.modelProviders.get("oc");
-    assert.equal(p?.type, "openai");
-    assert.equal(p?.key_sealed, "s1:x");
-    assert.deepEqual(p?.models, [{ id: "m-1", added: true }]);
-    assert.deepEqual(store.agentModels.byRig(), {
-      "rig-a": { provider: "oc", model: "m-1", harness: "pi" },
-    });
-    assert.equal(
-      store.db.prepare("select 1 from sqlite_master where name = 'model_route'").get(),
-      undefined,
-    );
   });
 });

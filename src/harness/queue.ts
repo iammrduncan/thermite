@@ -23,7 +23,6 @@ import { type ExperimentRow, type Ledger, LedgerError } from "./ledger/index.ts"
  */
 
 export type Experiment = ExperimentRow;
-export type ExperimentState = ExperimentRow["state"];
 
 /** An experiment's text, as every writer gives it (the same limits as the owner's commands). */
 export const ExperimentInput = z.object({

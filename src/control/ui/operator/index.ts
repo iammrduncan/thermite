@@ -26,7 +26,6 @@ export {
   runFigure,
   runProgress,
   runRow,
-  runStateHtml,
   waitEnd,
   waitingOn,
   waitsForLimit,

@@ -24,7 +24,7 @@ import {
 import { startFakeModel } from "../../../helpers/fake-model.ts";
 
 /**
- * An advisor in Pi in its Pi view (goal 169): the real process (pi/main.ts), started by a stand-in
+ * An advisor in Pi in its Pi view (goal 169): the real process (advisors/pi/main.ts), started by a stand-in
  * for the terminal host as the advisors' runner would start it, reaches the supervisor only over
  * its call's routes with its call's credential, and its model only through the call's proxy. An
  * owner's message for its role goes in before its next model call; the owner's words typed into

@@ -36,8 +36,6 @@ export interface JudgeOptions {
   runner: Runner;
   driver: TargetDriver;
   owner: string;
-  /** The rig's promotion policy: confirmed wins promote on their own, or wait for the owner. */
-  promotion: PromotionPolicy;
   leaseMs?: number | undefined;
   /** Readiness retries before a block is abandoned as an infrastructure failure. */
   readyRetries?: number | undefined;

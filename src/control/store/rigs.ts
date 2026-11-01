@@ -111,6 +111,15 @@ export class ReportedRigs extends StorePart {
     return true;
   }
 
+  /** Whether a rig reported and is not retired: one list() names. */
+  listed(rig: string): boolean {
+    return Boolean(
+      this.db
+        .prepare("select 1 from rig where id = ? and id not in (select rig from rig_retired)")
+        .get(rig),
+    );
+  }
+
   /**
    * The rigs that reported, but not the retired ones unless asked for. `last_cursor` is the cursor
    * after the last event control holds of the rig's current ledger: its held cursor.

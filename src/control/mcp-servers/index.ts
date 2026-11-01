@@ -151,7 +151,6 @@ export class McpServers {
     this.oauth = new OAuthSignIns(this.table, store, fetchImpl, this);
     this.connect = o.connect ?? mcpConnect(o.fetch, "thermite-control");
     store.mcpServers.ensureTables();
-    store.mcpServers.migrateOutsideKb(secrets);
   }
 
   // ------------------------------------------------------------------ reading

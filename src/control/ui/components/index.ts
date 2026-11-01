@@ -343,24 +343,6 @@ export function verdictColor(v: string): string {
   if (v === "inconclusive" || v === "crash_infra") return "#d4d4d8";
   return "#a1a1aa";
 }
-export function verdictChip(v: string | null, lifecycle: string): string {
-  const k = v ?? lifecycle;
-  const cls =
-    WON_VERDICTS.includes(k) || k === "promoted" || k === "starting_point"
-      ? "ok"
-      : k === "regress" || k === "crash_candidate"
-        ? "bad"
-        : k === "invalid" ||
-            k === "rejected_v0" ||
-            k === "duplicate" ||
-            k === "awaiting_audit" ||
-            k === "awaiting_approval"
-          ? "warn"
-          : k === "queued" || k === "screening" || k === "confirming"
-            ? "info"
-            : "";
-  return `<span class="chip ${cls}">${esc(k.replace(/_/g, " "))}</span>`;
-}
 
 export function stackBar(counts: Record<string, number>): string {
   const entries = Object.entries(counts)

@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, type TestContext, test } from "node:test";
-import { runCodexTrial } from "../../../../src/harness/agents/cli/codex.ts";
+import { codexProgram } from "../../../../src/agents/cli/index.ts";
+import { runCliTrial } from "../../../../src/harness/agents/cli/index.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import type { RunRequest } from "../../../../src/harness/broker/runner.ts";
 import { fakeProgramRunner } from "../../../helpers/fake-program.ts";
@@ -130,15 +131,19 @@ async function trial(t: TestContext, write?: (req: RunRequest) => void) {
     if (typeof chunk === "string" && chunk.startsWith('{"at":')) return said.push(chunk) > 0;
     return through(chunk as string, ...rest);
   });
-  const result = await runCodexTrial(spec(area), {
-    runner: f.runner,
-    model,
-    apiUrl: "http://127.0.0.1:8700",
-    live: () => undefined,
-    progress: () => undefined,
-    submitted: () => (f.submitted() ? { attempt: "a-1", lifecycle: "queued" } : undefined),
-    pollMs: 5,
-  });
+  const result = await runCliTrial(
+    codexProgram,
+    { mode: "code", spec: spec(area) },
+    {
+      runner: f.runner,
+      model,
+      apiUrl: "http://127.0.0.1:8700",
+      live: () => undefined,
+      progress: () => undefined,
+      submitted: () => (f.submitted() ? { attempt: "a-1", lifecycle: "queued" } : undefined),
+      pollMs: 5,
+    },
+  );
   t.mock.restoreAll();
   const lines = said
     .filter((l) => l.includes("session log"))

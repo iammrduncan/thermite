@@ -114,7 +114,7 @@ export function recordReviewPanel(
 
 /**
  * A research review's results (goals 112 and 117): each reviewer's answers to the items it was
- * asked to decide, checked by code against the package it was given (research/review.ts), and
+ * asked to decide, checked by code against the package it was given (research/review/), and
  * recorded with each failed check's reason; each item's decision is the panel's majority
  * (reviews.ts). The decisions go in the run's journal, and, when items stay open, what each
  * reviewer found open. A pass (every question has an end, every required hypothesis a verdict)

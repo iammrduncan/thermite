@@ -42,7 +42,7 @@ import {
  *   snapshot key, keeps the rig's state over a stop that empties the container's disk: the live
  *   state stays on that disk, and a sealed snapshot of it on the host's volume is restored at a
  *   start on an empty disk, and taken every few minutes, after each export, after enrollment and
- *   at a stop (broker/snapshot.ts, broker/seal.ts).
+ *   at a stop (broker/snapshot/, broker/seal.ts).
  *
  * No process it starts gets RunPod's variables (RUNPOD_*), and only the supervisor gets pull
  * mode's launch values. On SIGTERM or SIGINT it passes the signal on and exits when every part

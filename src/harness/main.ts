@@ -113,7 +113,6 @@ async function main(): Promise<void> {
 
   const executors = createJudges(ctx, {
     service,
-    promotion,
     devRuns: parts.devRuns,
     judging,
     judgeCards: targets.judgeCards,

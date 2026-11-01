@@ -152,12 +152,7 @@ export function readSecrets(broker: Broker): Record<string, string> {
 export function wipeIfMarked(broker: Broker): boolean {
   const marker = join(broker.stateDir, WIPE_MARKER);
   if (!existsSync(marker)) return false;
-  const keep = new Set([
-    "rig-signing.key",
-    "rig-signing.key.pub",
-    "unit-signing.key",
-    "unit-signing.key.pub",
-  ]);
+  const keep = new Set(["rig-signing.key", "rig-signing.key.pub"]);
   const rm = (p: string) =>
     execFileSync("rm", ["-rf", "--one-file-system", "--", p], { stdio: "ignore" });
   for (const name of readdirSync(broker.stateDir)) {

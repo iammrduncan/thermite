@@ -3,8 +3,8 @@ import { type GoalChecks, goalChecks } from "../../../core/goal/index.ts";
 import { KitSchema } from "../../../core/kit.ts";
 import { type KbKind, PICKABLE } from "../../kb/index.ts";
 import type { ChecksSource } from "../../ui/campaigns/goal-checks.ts";
-import { isRigCheck, workCard } from "../../ui/campaigns/list.ts";
-import { bestGainWords, icon, modeName, num, pct } from "../../ui/components/index.ts";
+import { workCard } from "../../ui/campaigns/list.ts";
+import { bestGainWords, icon, num, pct } from "../../ui/components/index.ts";
 import { runBrief } from "../../ui/operator/index.ts";
 import { runLiveHref } from "../../ui/urls.ts";
 import {
@@ -38,12 +38,6 @@ export const headline = (k: CampaignView): { value: string; sub: string; best?: 
 /** Who copied a campaign, as its page says it: the dashboard is the owner's, so "you". */
 export const copiedBy = (by: string) =>
   by === "owner:operator" ? "the operator" : by === "owner" || by.startsWith("owner:") ? "you" : by;
-
-/** A campaign's mode in words, for collections: hill climb, goal, research or rig check. */
-export const modeWords =
-  (modes: Map<string, string | null>) =>
-  (name: string): string =>
-    isRigCheck(name) ? "rig check" : modeName(modes.get(name) ?? null) || "campaign";
 
 /**
  * What the campaigns' pages share: a run at work as a card, how each goal is checked, what a

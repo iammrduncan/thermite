@@ -27,7 +27,13 @@ export {
   runEvents,
   runMessages,
 } from "./cache.ts";
-export { type CampaignView, campaignModes, campaignViews, newestRun } from "./campaigns.ts";
+export {
+  type CampaignView,
+  campaignKnown,
+  campaignModes,
+  campaignViews,
+  newestRun,
+} from "./campaigns.ts";
 export { runDirections } from "./directions.ts";
 export { championsInForce, currentChampion, runCampaign } from "./facts.ts";
 export type { RigCheckView } from "./fold/index.ts";

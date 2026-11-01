@@ -3,7 +3,8 @@ import { appendFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { runOpencodeTrial } from "../../../../../src/harness/agents/cli/opencode.ts";
+import { opencodeProgram } from "../../../../../src/agents/cli/index.ts";
+import { runCliTrial } from "../../../../../src/harness/agents/cli/index.ts";
 import type { TrialSpec } from "../../../../../src/harness/agents/worker/index.ts";
 import type { Runner, RunOutcome, RunRequest } from "../../../../../src/harness/broker/runner.ts";
 
@@ -57,15 +58,19 @@ test("an OpenCode code trial ends at Turns per trial, as the other programs' do 
     wallMs: 60_000,
     maxTurns: 2,
   };
-  const r = await runOpencodeTrial(spec, {
-    runner,
-    model,
-    apiUrl: "http://127.0.0.1:8700",
-    live: () => undefined,
-    progress: () => undefined,
-    submitted: () => undefined,
-    pollMs: 5,
-  });
+  const r = await runCliTrial(
+    opencodeProgram,
+    { mode: "code", spec: spec },
+    {
+      runner,
+      model,
+      apiUrl: "http://127.0.0.1:8700",
+      live: () => undefined,
+      progress: () => undefined,
+      submitted: () => undefined,
+      pollMs: 5,
+    },
+  );
   assert.equal(r.stopped, "turns");
   assert.ok(killed >= 1, "OpenCode stopped at the cap");
 });

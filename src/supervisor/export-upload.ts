@@ -39,8 +39,6 @@ export interface UploadConfig {
   controlUrl: string;
   controlToken: string;
   fetchImpl?: typeof fetch | undefined;
-  /** The ledger snapshot goes at most this often, except with a full export (default a day). */
-  ledgerEveryMs?: number | undefined;
   /** Bytes per request (PIECE_BYTES by default). */
   chunkBytes?: number | undefined;
   now?: (() => Date) | undefined;
@@ -87,7 +85,7 @@ async function answer<T>(
 }
 
 /** Sends one export; resolves when control holds all of it, saying whether the ledger went. */
-async function uploadOne(cfg: UploadConfig, name: string, ledgerDue: boolean): Promise<boolean> {
+async function uploadOne(cfg: UploadConfig, name: string): Promise<boolean> {
   const control = controlClient({
     url: cfg.controlUrl,
     token: cfg.controlToken,
@@ -100,8 +98,8 @@ async function uploadOne(cfg: UploadConfig, name: string, ledgerDue: boolean): P
   if (!manifest) throw new UploadError(`export ${name} refused: ${problems.join("; ")}`, true);
   // The manifest as the harness wrote it (verified above), with its rig and time.
   const raw = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as Manifest;
-  const withLedger = ledgerDue || manifest.full === true;
-  const rels = Object.keys(manifest.files).filter((rel) => rel !== "ledger.sqlite" || withLedger);
+  // Every file, the ledger's copy too when the harness put one in (outbox.ts says when).
+  const rels = Object.keys(manifest.files);
   const files = Object.fromEntries(rels.map((rel) => [rel, statSync(join(dir, rel)).size]));
   const begin = () =>
     answer(
@@ -179,12 +177,9 @@ export async function uploadExportsOnce(
       next.lastError = `export ${name.slice(0, 80)} not sent: not an export's name`;
       continue;
     }
-    const due =
-      !next.lastLedgerAt ||
-      now().getTime() - Date.parse(next.lastLedgerAt) >= (cfg.ledgerEveryMs ?? 24 * 3_600_000);
     let ledger: boolean;
     try {
-      ledger = await uploadOne(cfg, name, due);
+      ledger = await uploadOne(cfg, name);
     } catch (err) {
       const why = err instanceof Error ? err.message.slice(0, 600) : String(err);
       if (err instanceof UploadError && err.final) {

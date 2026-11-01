@@ -74,20 +74,10 @@ export function liveRoutes(app: Hono, { service, supervisor }: ApiContext): void
   });
 }
 
-/** The exports: those the supervisor pushed leave the outbox, and one made now. */
+/** The exports: those the supervisor pushed leave the outbox. */
 export function exportRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   app.post(EXPORTS_DONE.path, supervisor, limitOf(EXPORTS_DONE), async (c) => {
     const body = EXPORTS_DONE.body.parse(await c.req.json());
     return c.json({ removed: service.removeExports(body.names) });
-  });
-
-  app.post("/v1/export", supervisor, async (c) => {
-    const r = await service.export("supervisor");
-    return c.json({
-      export: r.id,
-      dir: r.dir.split("/").pop(),
-      attempts: r.attempts,
-      events: r.events,
-    });
   });
 }

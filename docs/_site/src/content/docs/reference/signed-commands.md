@@ -779,4 +779,4 @@ The harness refuses an import with: `path escapes inbox: <path>`, `not found in 
 
 ## Older names
 
-Commands signed before runs and rigs were renamed still verify. Their envelope names `unit` instead of `rig`; their payloads may name `instance`, `source_instance` and `source_unit`, read as `run`, `source_run` and `source_rig`; and the kinds `pause_instance` and `resume_instance` are read as `pause_run` and `resume_run`.
+A command signed before runs and rigs were renamed, on 2026-10-15, is refused as `malformed command`: its envelope names `unit` instead of `rig`, and its payload and kind may name an `instance`. Control signs every command with today's names.

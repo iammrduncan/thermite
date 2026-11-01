@@ -9,7 +9,7 @@
  */
 
 /** What a value or a credential is replaced by. */
-export const BLANKED = "***";
+const BLANKED = "***";
 
 // ---------------------------------------------------------------- values given to agents
 

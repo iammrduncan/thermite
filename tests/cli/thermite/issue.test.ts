@@ -244,7 +244,6 @@ describe("thermite assign --note (goal 066)", () => {
     "--bundle",
     "repos/smoke.bundle",
   ];
-  const OLD_NAME = "--direction is now --note: a direction is now a named line of experiments";
 
   test("--note keeps a text with the run, in the signed field direction; without it there is none", async () => {
     for (const cmd of [assign, assignPayload]) {
@@ -258,18 +257,21 @@ describe("thermite assign --note (goal 066)", () => {
     }
   });
 
-  test("--direction, the old name, still works and says on standard error that it is now --note", async () => {
+  test("--instance and --unit, the names of --run and --rig before v0.1.0, are refused", async () => {
+    const instance = await cli(...assignPayload.map((a) => (a === "--run" ? "--instance" : a)));
+    assert.notEqual(instance.code, 0);
+    assert.match(instance.stderr, /Unknown option '--instance'/);
+    const unit = await cli("command", "--unit", "rig-1", "--kind", "pause_run");
+    assert.notEqual(unit.code, 0);
+    assert.match(unit.stderr, /Unknown option '--unit'/);
+  });
+
+  test("--direction, the name before v0.1.0, is refused as an unknown option", async () => {
     for (const cmd of [assign, assignPayload]) {
       const r = await cli(...cmd, "--direction", "memory first");
-      assert.equal(r.code, 0, r.stderr);
-      assert.equal(r.stderr.trim(), OLD_NAME, cmd[0]);
-      assert.equal(JSON.parse(r.stdout).direction, "memory first", cmd[0]);
-      const both = await cli(...cmd, "--note", "a", "--direction", "b");
-      assert.deepEqual(
-        [both.code, both.stderr.trim()],
-        [2, "--direction is the old name of --note: give only --note"],
-        cmd[0],
-      );
+      assert.notEqual(r.code, 0, cmd[0]);
+      assert.match(r.stderr, /Unknown option '--direction'/, cmd[0]);
+      assert.equal(r.stdout, "", cmd[0]);
     }
   });
 });

@@ -274,7 +274,7 @@ export function registerCampaignSettings(tools: ToolContext): void {
         inputSchema: campaignInput,
       },
       audited("unarchive_campaign", (a: { campaign: string }) =>
-        shelved(unarchiveCampaign(store, allViews(), a.campaign, actor)),
+        shelved(unarchiveCampaign(store, a.campaign, actor)),
       ),
     );
     const folderName = z.string().max(200).describe(`At most ${FOLDER_NAME_MAX} characters`);
@@ -328,7 +328,7 @@ export function registerCampaignSettings(tools: ToolContext): void {
         },
       },
       audited("move_campaign", (a: { campaign: string; folder: string | null }) =>
-        shelved(moveCampaign(store, allViews(), a.campaign, a.folder, actor)),
+        shelved(moveCampaign(store, a.campaign, a.folder, actor)),
       ),
     );
   }

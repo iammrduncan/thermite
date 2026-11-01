@@ -27,7 +27,7 @@ The harness makes a normal export every hour when something new happened (the **
 | `research/<run>/folder/…`: the [research folder](../explanation/campaign-modes.md#research) of each run that finished in this export (a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation) | Yes | Yes |
 | `research/<run>/folder-<export>/…`: the research folder of every other research run, and of every other hill-climb or goal run that recorded sources, claims or notes, or compacted a conversation, as it stands now: running, paused, closed or broken | No | Yes |
 | `research/<run>/…`, other files: each run's archive of the web pages it fetched | No | Yes |
-| `ledger.sqlite`: a snapshot of the ledger, which holds every event, claim, source, finding, report and note, without the table of held-out results | Written each time; it leaves the rig at most once a day | Always, and it always leaves the rig |
+| `ledger.sqlite`: a snapshot of the ledger, which holds every event, claim, source, finding, report and note, without the table of held-out results | In the first export, then in one export a day, and in every full export | Always, and it always leaves the rig |
 
 A run's folder in a full export goes beside the place its end exports to, under the export's name, because a results repository never replaces a file it already has: the folder exported when the run finishes still reaches `research/<run>/folder/`. A folder leaves out the working areas, and a `knowledge/` folder an older build left in it: other runs' records are in their own runs' exports. [Set up the results repository](../how-to/operate/results-repository.md#what-gets-pushed) lists every file.
 
@@ -43,7 +43,7 @@ A run's folder in a full export goes beside the place its end exports to, under 
 | `ledger.sqlite` | No: the ledger holds every run |
 | Champion patches | No: a champion is published with the rig's own exports |
 
-A run's export stays outside the rig's chain of exports: the next export, by the hour or asked for, starts where the last export of the chain ended, so it still holds everything the run's export also held. A full reset never takes a run's export as its full export. A supervisor pushes it to the results repository with its research folder and pages, or sends it to control, as it does the rig's exports.
+A run's export stays outside the rig's chain of exports: the next export, by the hour or asked for, starts where the last export of the chain ended, so it still holds everything the run's export also held. A full reset never takes a run's export as its full export. A supervisor pushes it to the results repository with its research folder and pages, or sends it to control, as it does the rig's exports. Once it is pushed or sent, it leaves the outbox, as they do.
 
 ## Where exports go
 
@@ -59,14 +59,14 @@ An export leaves the harness's outbox only once it is safe: pushed to the result
 
 ## What goes to control
 
-Every file the export's manifest lists, each with the SHA-256 the manifest gives it. The copy of the ledger (`ledger.sqlite`) goes with the first export, then at most once a day, and with every full export: the same rule as the results repository's ledger branch. A ledger copy never holds the table of held-out results. Its events, like `events.jsonl`, hold the judge's `held_out_checked` events: each held-out case's name, kind and value, never its inputs or output ([Held-out failures](verdicts.md#held-out-failures)).
+Every file the export's manifest lists, each with the SHA-256 the manifest gives it. The copy of the ledger (`ledger.sqlite`) goes with each export that holds one: the first, then one a day, and every full export, as the results repository's ledger branch gets it. A ledger copy never holds the table of held-out results. Its events, like `events.jsonl`, hold the judge's `held_out_checked` events: each held-out case's name, kind and value, never its inputs or output ([Held-out failures](verdicts.md#held-out-failures)).
 
 ## How an export is sent
 
 1. The supervisor starts the export on control with its manifest and the size of each file it sends. Control refuses a list that leaves out a file of the manifest (the ledger copy aside), or names one the manifest does not list.
 2. It sends each file in pieces of up to 8 MiB, each at the place control says it has. When a send breaks, the next round goes on from there.
 3. When a file's last byte arrives, control checks its SHA-256 against the manifest. It keeps the file only if they match; otherwise it deletes it, and the supervisor sends it again.
-4. The export is complete when every file it promised is kept. Then the supervisor tells the harness, and the export leaves the outbox.
+4. The export is complete when every file it promised is kept. Then the supervisor tells the harness, and the export leaves the outbox. An export the harness was writing when it stopped (a folder named `.tmp-` and the export's name) is removed at the harness's next start; so is a build the judge was storing.
 
 The routes are in the [REST API reference](rest-api.md#routes-used-by-rigs). A rig whose control reaches it through a proxy (a RunPod pod) sends the same requests through its tunnel.
 

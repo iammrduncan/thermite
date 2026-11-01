@@ -180,20 +180,6 @@ describe("Settings › MCP servers", () => {
     assert.match(row, /Sign in again with another account/);
   });
 
-  test("an outside knowledge base kept at the update is told once, until Got it", async (t) => {
-    const s = await stack(t);
-    s.store.db
-      .prepare(
-        "insert into mcp_server (name, url, auth, header, status, migrated_from, created_at, created_by, updated_at) values ('gbrain', 'https://brain.example.com/mcp', 'key', 'Authorization', 'unchecked', 'outside_kb', 'x', 'control', 'x')",
-      )
-      .run();
-    const html = await s.page("/ui/settings");
-    assert.match(html, /The outside knowledge base is now an MCP server/);
-    assert.match(html, /Moved here from the outside knowledge base at the update to 0\.1\.0/);
-    await s.post("/ui/settings/mcp-moved", {});
-    assert.ok(!(await s.page("/ui/settings")).includes("is now an MCP server"));
-  });
-
   test("the add form's script shows each kind's fields and says what is wrong before sending", () => {
     for (const piece of [
       "data-auth",

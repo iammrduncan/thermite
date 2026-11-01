@@ -36,8 +36,7 @@ export const USAGE = `usage: thermite <command> [options]
                                       too).
                                       --mcp-servers gives the MCP servers the kit's kit.json
                                       names, as in kit.json; the rig refuses a run whose list
-                                      differs. --note keeps a text with the run (--direction,
-                                      its old name, still works and says so). --context-window
+                                      differs. --note keeps a text with the run. --context-window
                                       and --compact-at set the campaign's own context settings
                                       in the contract sent (its agents_context, over the file's):
                                       every agent's window is the lower of it and its own, and

@@ -1,17 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { log, redact } from "./log.ts";
 
-/** Settings renamed on 2026-10-15 (unit -> rig): the old names still work, for a transition. */
-const RENAMED: Record<string, string> = {
-  THERMITE_RIG_ID: "THERMITE_UNIT_ID",
-};
-
 /** Reads a required environment variable. */
 export function requireEnv(name: string, env: NodeJS.ProcessEnv = process.env): string {
-  const old = RENAMED[name];
-  const v = env[name] || (old ? env[old] : undefined);
+  const v = env[name];
   if (!v) throw new Error(`missing environment variable ${name}`);
-  if (!env[name] && old) log("env", `${old} is deprecated; set ${name}`);
   return v;
 }
 

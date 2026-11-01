@@ -65,6 +65,7 @@ jobs:
       - run: npm run check:public
       - run: npm run check:sizes
       - run: npm run check:imports
+      - run: npm run check:loose-ends
 
   # The judge's and the broker's tests time real processes, so they run one file at a time, on a
   # machine with nothing else on it.
@@ -231,7 +232,7 @@ jobs:
             ^src/core/link/
             ^src/supervisor/advisor-runs/
             ^src/common/run-as/
-            ^scripts/acceptance/(compose-smoke|stage-smoke)(\.mjs$|/)
+            ^scripts/acceptance/compose-smoke(\.mjs$|/)
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
           # The rig image and the harness image under it (their Containerfiles and the scripts they

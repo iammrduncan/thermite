@@ -1,13 +1,6 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sweepTemp } from "../../common/fs.ts";
 import { log } from "../../common/log.ts";
 import { fingerprint, generateSigningKeys } from "../../core/commands.ts";
 import { PROGRAM_MODE_DEFAULT } from "../../core/rig-settings.ts";
@@ -43,14 +36,7 @@ export function openState(ctx: ControllerContext): {
     chmodSync(join(paths.stateDir, dir), mode);
   }
   // A full reset's wipe, requested by the last controller run: done before anything opens.
-  if (
-    wipeIfRequested(paths, [
-      "rig-signing.key",
-      "rig-signing.key.pub",
-      "unit-signing.key",
-      "unit-signing.key.pub",
-    ])
-  ) {
+  if (wipeIfRequested(paths, ["rig-signing.key", "rig-signing.key.pub"])) {
     log("harness", "state wiped (full reset); starting with a fresh ledger");
     for (const [dir, mode] of [
       ["ledger", 0o700],
@@ -63,6 +49,10 @@ export function openState(ctx: ControllerContext): {
       chmodSync(join(paths.stateDir, dir), mode);
     }
   }
+  // An export a crash stopped half written, swept before the next is written.
+  const left = sweepTemp(paths.outboxDir);
+  if (left.length)
+    log("harness", "removed the exports a crash left half written", { left: left.length });
   const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"));
   // After a wipe: commands issued before it belonged to the old ledger.
   const notBefore = join(paths.stateDir, "ledger", NOT_BEFORE_FILE);
@@ -72,12 +62,6 @@ export function openState(ctx: ControllerContext): {
   }
   // The rig's report-signing key: created once, kept with the ledger (0700).
   const rigKeyPath = join(paths.stateDir, "ledger", "rig-signing.key");
-  // Before the 2026-10-15 rename the key was the "unit" key: kept, so control's pin still holds.
-  const oldKeyPath = join(paths.stateDir, "ledger", "unit-signing.key");
-  if (!existsSync(rigKeyPath) && existsSync(oldKeyPath) && existsSync(`${oldKeyPath}.pub`)) {
-    renameSync(`${oldKeyPath}.pub`, `${rigKeyPath}.pub`);
-    renameSync(oldKeyPath, rigKeyPath);
-  }
   if (!existsSync(rigKeyPath)) {
     const k = generateSigningKeys();
     writeFileSync(rigKeyPath, k.privateKeyPem, { mode: 0o600 });

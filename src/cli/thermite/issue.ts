@@ -14,20 +14,6 @@ import { USAGE } from "./usage.ts";
  * assign-payload (assign_campaign's payload, printed) and command (any kind, through control).
  */
 
-/**
- * The run's note, from --note TEXT (sent as the signed field `direction`, which the ledger keeps
- * with the run). --direction is its old name: a direction is now a named line of experiments
- * (goal 066). It still works in v0.1.0, and says so on standard error.
- */
-function runNote(values: { note?: string | undefined; direction?: string | undefined }) {
-  if (values.direction === undefined) return values.note;
-  if (values.note !== undefined) fail("--direction is the old name of --note: give only --note");
-  process.stderr.write(
-    "--direction is now --note: a direction is now a named line of experiments\n",
-  );
-  return values.direction;
-}
-
 function readJsonArg(value: string): unknown {
   return JSON.parse(value.startsWith("@") ? readFileSync(value.slice(1), "utf8") : value);
 }
@@ -59,13 +45,12 @@ export function thermiteAssignPayload(rest: string[]): void {
       "kit-bundle-sha256": { type: "string" },
       model: { type: "string", multiple: true },
       note: { type: "string" },
-      direction: { type: "string" },
       agents: { type: "string" },
     },
   });
   if (values.agents !== undefined && values.agents !== "on" && values.agents !== "off")
     fail("--agents is on or off");
-  const note = runNote(values);
+  const note = values.note;
   if (
     !values.contract ||
     !values.run ||
@@ -128,7 +113,6 @@ export async function thermiteAssign(rest: string[]): Promise<void> {
       kit: { type: "string" },
       model: { type: "string", multiple: true },
       note: { type: "string" },
-      direction: { type: "string" },
       agents: { type: "string" },
       promotion: { type: "string" },
       ask: { type: "string", multiple: true },
@@ -151,7 +135,7 @@ export async function thermiteAssign(rest: string[]): Promise<void> {
   const ownContext = contextFromFlags(values);
   if (values.agents !== undefined && values.agents !== "on" && values.agents !== "off")
     fail("--agents is on or off");
-  const note = runNote(values);
+  const note = values.note;
   if (values.promotion !== undefined && !["auto", "owner"].includes(values.promotion))
     fail("--promotion is auto or owner");
   const { askOwnerOption } = await import("../run.ts");

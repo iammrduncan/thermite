@@ -8,21 +8,19 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { claudeProgram, codexProgram, opencodeProgram } from "../../../../src/agents/cli/index.ts";
 import { CHATGPT_LIMIT_CODE, type ModelConfig } from "../../../../src/agents/model/index.ts";
 import { NO_CLAUDE_CODE } from "../../../../src/agents/programs/claude-code/index.ts";
 import { NO_CODEX } from "../../../../src/agents/programs/codex/index.ts";
 import { NO_OPENCODE, opencodeExitWords } from "../../../../src/agents/programs/opencode/index.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
-import { claudeOnce, runClaudeTrial } from "../../../../src/harness/agents/cli/claude-code.ts";
-import { codexOnce, runCodexTrial } from "../../../../src/harness/agents/cli/codex.ts";
 import { PLANNER_ROLE } from "../../../../src/harness/agents/cli/common.ts";
 import {
-  type OpencodeTrialDeps,
-  opencodeModelCheck,
-  opencodeOnce,
-  runOpencodeResearchTrial,
-  runOpencodeTrial,
-} from "../../../../src/harness/agents/cli/opencode.ts";
+  type CliTrialDeps,
+  cliModelCheck,
+  runCliTrial,
+} from "../../../../src/harness/agents/cli/index.ts";
+import { cliOnce } from "../../../../src/harness/agents/cli/once.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import { fakeProgramRunner, type Program } from "../../../helpers/fake-program.ts";
 
@@ -130,9 +128,9 @@ function trial(
   program: Program,
   s: TrialSpec,
   f: Fake,
-  over: Partial<Omit<OpencodeTrialDeps, "model">> & { model?: ModelConfig } = {},
+  over: Partial<Omit<CliTrialDeps, "model">> & { model?: ModelConfig } = {},
 ) {
-  const deps: Omit<OpencodeTrialDeps, "model"> = {
+  const deps: Omit<CliTrialDeps, "model"> = {
     runner: f.runner,
     apiUrl: "http://127.0.0.1:8700",
     live: () => undefined,
@@ -142,10 +140,22 @@ function trial(
     ...over,
   };
   if (program === "opencode")
-    return runOpencodeTrial(s, { ...deps, model: over.model ?? MODELS.opencode });
+    return runCliTrial(
+      opencodeProgram,
+      { mode: "code", spec: s },
+      { ...deps, model: over.model ?? MODELS.opencode },
+    );
   if (program === "claude-code")
-    return runClaudeTrial(s, { ...deps, model: over.model ?? MODELS["claude-code"] });
-  return runCodexTrial(s, { ...deps, model: over.model ?? MODELS.codex });
+    return runCliTrial(
+      claudeProgram,
+      { mode: "code", spec: s },
+      { ...deps, model: over.model ?? MODELS["claude-code"] },
+    );
+  return runCliTrial(
+    codexProgram,
+    { mode: "code", spec: s },
+    { ...deps, model: over.model ?? MODELS.codex },
+  );
 }
 
 /** The prompts a trial's runs were given, in order (Claude Code's, in its prompt's file). */
@@ -181,22 +191,26 @@ describe("the agent programs' trial loops, where they had drifted apart", () => 
     }
     const a = area();
     const f = fakeProgramRunner("opencode", turns("opencode", 3), { hang: true });
-    const r = await runOpencodeResearchTrial(
+    const r = await runCliTrial(
+      opencodeProgram,
       {
-        trialId: "t-r",
-        token: "tok",
-        run: "r-1",
-        lane: "lane-1",
-        brief: "b",
-        wallMs: 60_000,
-        maxTurns: 2,
+        mode: "research",
+        spec: {
+          trialId: "t-r",
+          token: "tok",
+          run: "r-1",
+          lane: "lane-1",
+          brief: "b",
+          wallMs: 60_000,
+          maxTurns: 2,
+        },
+        area: a,
+        folder: { root: a, work: a },
       },
       {
         runner: f.runner,
         model: MODELS.opencode,
         apiUrl: "http://127.0.0.1:8700",
-        area: a,
-        folder: { root: a, work: a },
         live: () => undefined,
         progress: () => undefined,
         pollMs: 5,
@@ -260,10 +274,13 @@ describe("the agent programs' trial loops, where they had drifted apart", () => 
         const o = { role: PLANNER_ROLE, signal: ctrl.signal };
         const t =
           p === "opencode"
-            ? await opencodeOnce(MODELS.opencode, "plan", deps, o)
+            ? await cliOnce(opencodeProgram, MODELS.opencode, "plan", deps, o)
             : p === "claude-code"
-              ? await claudeOnce(MODELS["claude-code"], "plan", deps, { ...o, tools: "" })
-              : await codexOnce(MODELS.codex, "plan", deps, o);
+              ? await cliOnce(claudeProgram, MODELS["claude-code"], "plan", deps, {
+                  ...o,
+                  tools: "",
+                })
+              : await cliOnce(codexProgram, MODELS.codex, "plan", deps, o);
         assert.equal(f.programRuns().length, 0, `${p}, stopped ${when}: no run`);
         assert.equal(t.lastText, "", `${p}, stopped ${when}`);
         assert.deepEqual(t.errors, [], `${p}, stopped ${when}`);
@@ -291,7 +308,8 @@ describe("the agent programs' trial loops, where they had drifted apart", () => 
         await trial("opencode", spec(area()), f);
         assert.ok(f.programRuns()[0]?.argv.includes(at), `a trial runs ${at}`);
         const once = fakeProgramRunner("opencode", turns("opencode", 1));
-        await opencodeOnce(
+        await cliOnce(
+          opencodeProgram,
           MODELS.opencode,
           "plan",
           {
@@ -383,16 +401,20 @@ describe("the agent programs' trial loops, where they had drifted apart", () => 
     }
     assert.match(NO_OPENCODE, /^this rig's harness image has no OpenCode binary: /);
     const a = area();
-    const research = await runOpencodeResearchTrial(
-      { trialId: "t-r", token: "tok", run: "r-1", lane: "lane-1", brief: "b" },
+    const research = await runCliTrial(
+      opencodeProgram,
+      {
+        mode: "research",
+        spec: { trialId: "t-r", token: "tok", run: "r-1", lane: "lane-1", brief: "b" },
+        area: a,
+        folder: { root: a, work: a },
+      },
       {
         runner: fakeProgramRunner("opencode", ["sh: 1: exec: opencode: not found"], {
           outcome: { exitCode: 127 },
         }).runner,
         model: MODELS.opencode,
         apiUrl: "http://127.0.0.1:8700",
-        area: a,
-        folder: { root: a, work: a },
         live: () => undefined,
         progress: () => undefined,
         pollMs: 5,
@@ -400,7 +422,7 @@ describe("the agent programs' trial loops, where they had drifted apart", () => 
     );
     assert.equal(research.error, NO_OPENCODE);
     // The model check runs OpenCode behind the GPU fence, which can't find it either.
-    const check = await opencodeModelCheck(MODELS.opencode, {
+    const check = await cliModelCheck(opencodeProgram, MODELS.opencode, {
       runner: fakeProgramRunner("opencode", [], {
         outcome: {
           exitCode: 126,

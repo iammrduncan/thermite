@@ -47,8 +47,8 @@ import { keepGoing, PI_TRIAL, watchedStream, withoutPastThinking } from "../work
 
 /**
  * A research trial in Pi: a fresh agent session with the research tools and file tools over its
- * research folder, and no shell. (In OpenCode, cli/opencode.ts, the agent keeps its shell and files
- * and runs the same research tools as commands.) Every research action goes through the
+ * research folder, and no shell. (In OpenCode, the CLI trial loop's research mode, the agent keeps
+ * its shell and files and runs the same research tools as commands.) Every research action goes through the
  * harness's research service: the harness fetches and archives, and code decides whether a claim
  * or a finding holds. The agent cannot end the campaign; a trial just ends.
  */

@@ -6,7 +6,7 @@ import {
   type RunView,
   runCampaign,
 } from "../../views/index.ts";
-import { ago, esc, gainChip, icon, reportingTag, sparkline } from "../components/index.ts";
+import { ago, esc, gainChip, reportingTag, sparkline } from "../components/index.ts";
 import { attemptHref, runHref } from "../urls.ts";
 import { attemptState, clip, jobText, runOfAttempt, signed } from "../words/index.ts";
 import { cap } from "./change.ts";
@@ -41,13 +41,6 @@ export function leftByClose(r: RunView, u?: RigView): AttemptView[] {
   return r.status === "closed"
     ? r.attempts.filter((a) => outcome(r, a, u).word === "Run closed")
     : [];
-}
-
-/** A run's status for tables: running, paused or closed (with why), and what waits for you. */
-export function runStateHtml(r: RunView): string {
-  const n = waitingOn(r);
-  const tone = r.status === "running" ? "info" : "muted";
-  return `<span class="label ${tone}">${r.status === "running" ? icon.live : r.status === "paused" ? icon.pause : icon.check}${esc(r.status)}</span>${n ? ` <span class="label warn">${icon.warn}${n} need${n === 1 ? "s" : ""} you</span>` : ""}${r.status !== "running" && r.pause_reason ? `<div class="muted xs clip" title="${esc(r.pause_reason)}">${esc(r.pause_reason)}</div>` : ""}`;
 }
 
 /**

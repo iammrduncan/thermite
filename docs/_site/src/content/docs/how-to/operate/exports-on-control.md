@@ -42,7 +42,7 @@ cd rig-1-20261020T120000-0123abcd
 jq -r '.files | to_entries[] | "\(.value)  \(.key)"' manifest.json | sha256sum -c --ignore-missing
 ```
 
-Each file says `OK`. On a Mac, use `shasum -a 256 -c --ignore-missing` in place of `sha256sum -c --ignore-missing`. An export that is not full may list `ledger.sqlite` in its manifest without holding it: a rig sends its ledger copy to control at most once a day ([What goes to control](../../reference/exports.md#what-goes-to-control)).
+Each file says `OK`. On a Mac, use `shasum -a 256 -c --ignore-missing` in place of `sha256sum -c --ignore-missing`. Only some exports hold `ledger.sqlite`: the rig's harness puts a copy of its ledger in the first export, then once a day, and in every full export ([What goes to control](../../reference/exports.md#what-goes-to-control)).
 
 A run's champion is also a patch you can [download from the run's page](../campaigns/take-the-result.md).
 

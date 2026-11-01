@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -32,4 +32,15 @@ test("the harness logs its report key's fingerprint at every start: the one cont
     assert.equal(l.fingerprint, fingerprint(again.rigKeys.publicKeyPem));
     assert.equal(l.fingerprint, byHand);
   }
+});
+
+test("an export a crash left half written in the outbox is swept at the start", () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "thermite-state-"));
+  const outboxDir = mkdtempSync(join(tmpdir(), "thermite-outbox-"));
+  mkdirSync(join(outboxDir, ".tmp-20261031T000000Z-0123abcd", "attempts"), { recursive: true });
+  mkdirSync(join(outboxDir, "20261031T000000Z-89abcdef"));
+  const ctx = { rig: "rig-1", paths: { stateDir, outboxDir } } as unknown as ControllerContext;
+  openState(ctx).ledger.close();
+  assert.ok(!existsSync(join(outboxDir, ".tmp-20261031T000000Z-0123abcd")));
+  assert.ok(existsSync(join(outboxDir, "20261031T000000Z-89abcdef")), "a written export stays");
 });

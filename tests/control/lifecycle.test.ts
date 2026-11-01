@@ -93,6 +93,11 @@ describe("deployment drivers", () => {
     assert.deepEqual(await own.restart("rig-1", ["harness"]), ["ar-rig-1/harness-abc"]);
     assert.ok(seen.includes("DELETE /api/v1/namespaces/thermite-rig-1/pods/harness-abc"));
     assert.ok(seen.includes("DELETE /api/v1/namespaces/ar-rig-1/pods/harness-abc"));
+    // {unit}, the placeholder's name before v0.1.0, is refused in words, before any call.
+    assert.throws(
+      () => KubernetesDriver.inCluster({ ...env, THERMITE_K8S_NAMESPACE: "ar-{unit}" }),
+      /^Error: THERMITE_K8S_NAMESPACE names \{unit\}, the placeholder's name before v0\.1\.0: write \{rig\}$/,
+    );
     // The token is a secret file, read as every secret file is: an empty one is refused in words
     // that name the setting, and nothing is sent without it.
     writeFileSync(join(dir, "token"), "\n");

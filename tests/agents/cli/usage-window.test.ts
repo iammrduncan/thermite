@@ -1,5 +1,5 @@
 /**
- * A full usage window in a program's own terminal (goal 169; src/harness/agents/cli/usage-window.ts),
+ * A full usage window in a program's own terminal (goal 169; src/agents/cli/usage-window.ts),
  * on a stand-in for the trial's terminal: the wait recorded as the run's, the program that goes on
  * by itself followed with nothing typed, the harness's continuation after the reset for one that
  * does not, the reset from the model proxy where the log gives none, and each way the trial ends

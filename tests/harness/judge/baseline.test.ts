@@ -98,7 +98,6 @@ describe("a hill climb's baseline (goal 115)", () => {
       runner: new LocalRunner(env.paths.scratchDir),
       driver: new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
       owner: "judge-test",
-      promotion: "auto",
       readyRetries: 0,
       calibrationBlocks: 2,
     });

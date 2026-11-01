@@ -306,7 +306,7 @@ export const PROPAGATE = {
   maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
-/** Start a run of a campaign control keeps (control/start-run.ts checks the request). */
+/** Start a run of a campaign control keeps (control/campaigns/start-run.ts checks the request). */
 export const START_RUN = {
   method: "POST",
   path: "/v1/campaigns/:campaign/runs",
@@ -319,7 +319,7 @@ export const START_RUN = {
   }),
 } as const satisfies Route;
 
-/** A campaign's own context settings (control/campaign-context.ts checks them). */
+/** A campaign's own context settings (control/campaigns/context.ts checks them). */
 export const CAMPAIGN_CONTEXT = {
   method: "POST",
   path: "/v1/campaigns/:campaign/context",
@@ -449,7 +449,7 @@ export const KB_LIST = {
   }),
 } as const satisfies Route;
 
-/** A copy of a campaign control keeps (control/copy-campaign.ts checks the request). */
+/** A copy of a campaign control keeps (control/campaigns/copy.ts checks the request). */
 export const CAMPAIGN_COPY = {
   method: "POST",
   path: "/v1/campaigns/:campaign/copy",
@@ -508,7 +508,7 @@ export const MCP_SERVERS = {
   answer: z.looseObject({ servers: z.array(McpServerLine) }),
 } as const satisfies Route;
 
-/** An MCP server's settings (control/mcp-server-routes.ts checks them); secrets from files. */
+/** An MCP server's settings (control/mcp-servers/routes.ts checks them); secrets from files. */
 export const MCP_SERVER_ADD = {
   method: "POST",
   path: "/v1/mcp-servers",

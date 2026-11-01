@@ -4,6 +4,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
+import { claudeProgram, codexProgram, opencodeProgram } from "../../../src/agents/cli/index.ts";
 import {
   type CliCompacted,
   CliCompactions,
@@ -26,9 +27,8 @@ import type {
   OpencodeCompaction,
   OpencodePluginContext,
 } from "../../../src/agents/programs/opencode/plugin.ts";
-import { claudeOnce, runClaudeTrial } from "../../../src/harness/agents/cli/claude-code.ts";
-import { codexOnce, runCodexTrial } from "../../../src/harness/agents/cli/codex.ts";
-import { opencodeOnce, runOpencodeTrial } from "../../../src/harness/agents/cli/opencode.ts";
+import { runCliTrial } from "../../../src/harness/agents/cli/index.ts";
+import { cliOnce } from "../../../src/harness/agents/cli/once.ts";
 import type { TrialSpec } from "../../../src/harness/agents/worker/index.ts";
 import type { Runner, RunOutcome, RunRequest } from "../../../src/harness/broker/runner.ts";
 
@@ -334,20 +334,24 @@ describe("each harness's own conversation, kept before its compaction and named 
       killRole: async () => 0,
     } as unknown as Runner;
     const got: CliCompacted[] = [];
-    const r = await runClaudeTrial(trialSpec(a), {
-      ...trialDeps(runner, () => submitted),
-      model: {
-        api: "claude",
-        harness: "claude-code",
-        baseUrl: "",
-        model: "claude-opus-5-5",
-        apiKey: "k",
-        contextWindow: 200_000,
-        maxTokens: 0,
+    const r = await runCliTrial(
+      claudeProgram,
+      { mode: "code", spec: trialSpec(a) },
+      {
+        ...trialDeps(runner, () => submitted),
+        model: {
+          api: "claude",
+          harness: "claude-code",
+          baseUrl: "",
+          model: "claude-opus-5-5",
+          apiKey: "k",
+          contextWindow: 200_000,
+          maxTokens: 0,
+        },
+        keptAt: at,
+        compacted: (c) => got.push(c),
       },
-      keptAt: at,
-      compacted: (c) => got.push(c),
-    });
+    );
     assert.equal(r.compactions, 1);
     // Its setup makes the hook's folder, readable by the harness.
     assert.match(
@@ -426,18 +430,22 @@ describe("each harness's own conversation, kept before its compaction and named 
       killRole: async () => 0,
     } as unknown as Runner;
     const got: CliCompacted[] = [];
-    const r = await runCodexTrial(trialSpec(a), {
-      ...trialDeps(runner, () => submitted),
-      model: {
-        baseUrl: "https://p.example/v1",
-        model: "gpt-x",
-        apiKey: "k",
-        contextWindow: 200_000,
-        maxTokens: 0,
+    const r = await runCliTrial(
+      codexProgram,
+      { mode: "code", spec: trialSpec(a) },
+      {
+        ...trialDeps(runner, () => submitted),
+        model: {
+          baseUrl: "https://p.example/v1",
+          model: "gpt-x",
+          apiKey: "k",
+          contextWindow: 200_000,
+          maxTokens: 0,
+        },
+        keptAt: at,
+        compacted: (c) => got.push(c),
       },
-      keptAt: at,
-      compacted: (c) => got.push(c),
-    });
+    );
     assert.equal(r.compactions, 1);
     // Codex's own compaction prompt: Thermite's summary prompt, with where the conversation is kept.
     const prompt = /^compact_prompt = (".*")$/m.exec(config)?.[1] ?? '""';
@@ -517,18 +525,22 @@ describe("each harness's own conversation, kept before its compaction and named 
       killRole: async () => 0,
     } as unknown as Runner;
     const got: CliCompacted[] = [];
-    const r = await runOpencodeTrial(trialSpec(a), {
-      ...trialDeps(runner, () => submitted),
-      model: {
-        baseUrl: "https://p.example/v1",
-        model: "m-1",
-        apiKey: "k",
-        contextWindow: 131_072,
-        maxTokens: 0,
+    const r = await runCliTrial(
+      opencodeProgram,
+      { mode: "code", spec: trialSpec(a) },
+      {
+        ...trialDeps(runner, () => submitted),
+        model: {
+          baseUrl: "https://p.example/v1",
+          model: "m-1",
+          apiKey: "k",
+          contextWindow: 131_072,
+          maxTokens: 0,
+        },
+        keptAt: at,
+        compacted: (c) => got.push(c),
       },
-      keptAt: at,
-      compacted: (c) => got.push(c),
-    });
+    );
     assert.equal(r.compactions, 1);
     // Its setup links the plugin into OpenCode's own settings; its run has the plugin's folder
     // and the line naming the kept file.
@@ -621,7 +633,8 @@ describe("a planner call's own compactions, kept once the call is over", () => {
       ]);
     });
     const got: CliCompacted[] = [];
-    const t = await claudeOnce(
+    const t = await cliOnce(
+      claudeProgram,
       {
         api: "claude",
         harness: "claude-code",
@@ -690,7 +703,8 @@ describe("a planner call's own compactions, kept once the call is over", () => {
       ]);
     });
     const got: CliCompacted[] = [];
-    const t = await codexOnce(
+    const t = await cliOnce(
+      codexProgram,
       {
         baseUrl: "https://p.example/v1",
         model: "gpt-x",
@@ -731,7 +745,8 @@ describe("a planner call's own compactions, kept once the call is over", () => {
       return jsonl([{ type: "text", sessionID: "ses_1", part: { text: "{}" } }]);
     });
     const got: CliCompacted[] = [];
-    const t = await opencodeOnce(
+    const t = await cliOnce(
+      opencodeProgram,
       {
         baseUrl: "https://p.example/v1",
         model: "m-1",

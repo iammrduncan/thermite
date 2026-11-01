@@ -51,7 +51,7 @@ import {
   treeList,
 } from "../ui/knowledge/index.ts";
 import { KNOWLEDGE_ROOT, knowledgeHref, knowledgeParts } from "../ui/urls.ts";
-import { campaignModes } from "../views/index.ts";
+import { campaignKnown, campaignModes } from "../views/index.ts";
 import { campaignHelpers } from "./campaigns/shared.ts";
 import type { Ctx, Dashboard } from "./context.ts";
 
@@ -421,8 +421,7 @@ export function knowledgeRoutes(app: Hono, dash: Dashboard): void {
   app.get("/ui/kb/search.json", (c) => {
     c.header("cache-control", "no-store");
     const campaign = c.req.query("campaign") ?? "";
-    if (!campaignModes(store, views()).has(campaign))
-      return c.json({ error: "no such campaign" }, 404);
+    if (!campaignKnown(store, campaign)) return c.json({ error: "no such campaign" }, 404);
     const kb = store.kb();
     const collections = kb.readable(campaign);
     const items = pastResults(campaign, (c.req.query("q") ?? "").slice(0, 300));

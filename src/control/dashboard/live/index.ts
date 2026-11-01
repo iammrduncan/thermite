@@ -501,7 +501,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
   // it; a result also as the part it adds to its call's row.
   app.get("/ui/rigs/:rig/live/stream", (c) => {
     const rig = c.req.param("rig");
-    if (!views().some((u) => u.id === rig)) return c.json({ error: "no such rig" }, 404);
+    if (!store.reportedRigs.listed(rig)) return c.json({ error: "no such rig" }, 404);
     const source = c.req.query("source") || undefined;
     const draw = (lines: ReturnType<typeof store.liveLines.after>): PushedLine[] => {
       const now = Date.now();

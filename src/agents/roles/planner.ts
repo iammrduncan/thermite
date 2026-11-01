@@ -8,7 +8,7 @@ import { advisorPackage, kbSections, ownerAdditionSection, trialTurnSections } f
 /**
  * The planner (goal 166): it coordinates a hill-climb or goal run's lanes, round by round. Each
  * round it gives each lane its next experiment and changes the queue, the rules and the
- * directions; code checks the answer before any of it is applied (harness/agents/planner.ts).
+ * directions; code checks the answer before any of it is applied (harness/agents/planner/check.ts).
  * It runs in the harness, on the planner's model, in Pi or another agent program.
  */
 

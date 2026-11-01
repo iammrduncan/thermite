@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { opencodeProgram } from "../../../../src/agents/cli/index.ts";
 import { OPENCODE_MEMORY } from "../../../../src/agents/cli/opencode.ts";
 import { claudeEnv } from "../../../../src/agents/programs/claude-code/index.ts";
 import { codexEnv } from "../../../../src/agents/programs/codex/index.ts";
@@ -23,14 +24,12 @@ import {
   CHECK_ROLE,
   PLANNER_ROLE,
 } from "../../../../src/harness/agents/cli/common.ts";
-import {
-  opencodeModelCheck,
-  opencodeOnce,
-  runOpencodeResearchTrial,
-  runOpencodeTrial,
-} from "../../../../src/harness/agents/cli/opencode.ts";
+import { cliModelCheck, cliOnce } from "../../../../src/harness/agents/cli/once.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import type { Runner, RunOutcome, RunRequest } from "../../../../src/harness/broker/runner.ts";
+import { trialsIn } from "../../../helpers/cli-trials.ts";
+
+const opencode = trialsIn(opencodeProgram);
 
 // OpenCode v2's JSON output, as the spike recorded it (trimmed).
 /** An inbox of the owner's messages as the harness keeps it: a message waits until it is given. */
@@ -249,7 +248,7 @@ describe("the OpenCode harness", () => {
       scratchDir: mkdtempSync(join(tmpdir(), "thermite-oc-ask-")),
       mintProxyToken: () => "proxy",
     };
-    const check = await opencodeModelCheck(model, deps);
+    const check = await cliModelCheck(opencodeProgram, model, deps);
     assert.equal(check.ok, true, check.summary);
     assert.ok(runs.length >= 2 && runs.every((r) => r.role === "model-check"));
     assert.deepEqual(handed, ["model-check"]);
@@ -259,7 +258,7 @@ describe("the OpenCode harness", () => {
     // A planner call cancelled while OpenCode runs kills the planner's processes only.
     const ctrl = new AbortController();
     during = () => ctrl.abort();
-    await opencodeOnce(model, "plan", deps, {
+    await cliOnce(opencodeProgram, model, "plan", deps, {
       role: PLANNER_ROLE,
       timeoutMs: 1000,
       signal: ctrl.signal,
@@ -303,7 +302,7 @@ describe("the OpenCode harness", () => {
       brief: "Make it faster.",
       wallMs: 60_000,
     };
-    const r = await runOpencodeTrial(spec, {
+    const r = await opencode.code(spec, {
       runner,
       model,
       apiUrl: "http://127.0.0.1:8700",
@@ -379,7 +378,7 @@ describe("the OpenCode harness", () => {
         return 1;
       },
     } as unknown as Runner;
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-1",
         token: "tok",
@@ -438,7 +437,7 @@ describe("the OpenCode harness", () => {
     } as unknown as Runner;
     const runs: string[] = [];
     const nprocs: (number | undefined)[] = [];
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-3",
         run: "r-1",
@@ -501,7 +500,7 @@ describe("the OpenCode harness", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     const calls: CallUsage[] = [];
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-2",
         run: "r-1",
@@ -563,7 +562,7 @@ describe("the OpenCode harness", () => {
       },
       killRole: async () => 0,
     } as unknown as Runner;
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-3",
         run: "r-1",
@@ -608,7 +607,7 @@ describe("the OpenCode harness", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     const progress: number[] = [];
-    const r = await runOpencodeResearchTrial(
+    const r = await opencode.research(
       {
         trialId: "t-r1",
         token: "tok",
@@ -618,11 +617,11 @@ describe("the OpenCode harness", () => {
         wallMs: 60_000,
       },
       {
+        area,
+        folder: { root: join(area, "folder"), work: workdir },
         runner,
         model: { ...model, api: "opencode", model: "glm-5.3-flash-free" },
         apiUrl: "http://127.0.0.1:8700",
-        area,
-        folder: { root: join(area, "folder"), work: workdir },
         live: () => undefined,
         progress: (p) => progress.push(p.turns),
         pollMs: 5,
@@ -708,7 +707,7 @@ describe("the OpenCode harness", () => {
           return 1;
         },
       } as unknown as Runner;
-      const r = await runOpencodeResearchTrial(
+      const r = await opencode.research(
         {
           trialId: "t",
           run: "r",
@@ -718,11 +717,11 @@ describe("the OpenCode harness", () => {
           maxTurns: o.maxTurns,
         },
         {
+          area,
+          folder: { root: area, work: area },
           runner,
           model,
           apiUrl: "http://h",
-          area,
-          folder: { root: area, work: area },
           live: () => undefined,
           progress: () => undefined,
           messages: owner.inbox,

@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { shellQuote } from "../common/exec.ts";
+import { fileSha256 } from "../common/fs.ts";
 import { gitText } from "../common/git.ts";
 
 /**
@@ -13,7 +13,7 @@ import { gitText } from "../common/git.ts";
  *
  *   thermite/<rig>/attempts  attempts/<id>.patch, attempts/<id>.json, events/<export>.jsonl,
  *                            champions/<run>/<seq>.patch and .json
- *   thermite/<rig>/ledger    ledger.sqlite and its manifest (at most once per ledgerEveryMs)
+ *   thermite/<rig>/ledger    ledger.sqlite and its manifest (each export that holds a copy)
  *
  * and pushes them with the rig's deploy key. Git work is deterministic code only; no model
  * ever runs git here.
@@ -29,7 +29,6 @@ export interface ExportConfig {
   sshKeyFile?: string | undefined;
   /** The results host's key (known_hosts); without it the first key seen is trusted. */
   knownHostsFile?: string | undefined;
-  ledgerEveryMs?: number | undefined;
 }
 
 export interface ExportState {
@@ -42,6 +41,7 @@ export interface ExportState {
   pushed?: string[] | undefined;
   /** The attempts branch commit the last push left on the remote. */
   pushedCommit?: string | undefined;
+  /** When the last copy of the ledger was committed. */
   lastLedgerAt?: string | undefined;
   lastPushAt?: string | undefined;
   lastError?: string | undefined;
@@ -61,10 +61,6 @@ async function git(
   opts: { env?: Record<string, string> } = {},
 ): Promise<string> {
   return (await gitText(["-C", repo, ...args], { env: { ...IDENTITY, ...opts.env } })).trim();
-}
-
-function sha256(path: string): string {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
 /** A single-quoted shell word (GIT_SSH_COMMAND is run by a shell). */
@@ -119,7 +115,7 @@ export function verifyExport(dir: string): { problems: string[]; manifest?: Mani
   for (const [rel, sum] of Object.entries(manifest.files)) {
     if (rel.split("/").includes("..")) bad.push(`unsafe path ${rel}`);
     else if (!regularFile(join(dir, rel))) bad.push(`missing or not a regular file: ${rel}`);
-    else if (sha256(join(dir, rel)) !== sum) bad.push(`hash mismatch ${rel}`);
+    else if (fileSha256(join(dir, rel)) !== sum) bad.push(`hash mismatch ${rel}`);
   }
   return bad.length ? { problems: bad } : { problems: [], manifest };
 }
@@ -232,12 +228,9 @@ export async function exportOnce(cfg: ExportConfig, state: ExportState): Promise
       files,
       `${cfg.rig}: export ${name}, ${attempts} attempts, events ${manifest.from_event + 1}-${manifest.through_event}`,
     );
-    // A full export's ledger snapshot is always kept: a full reset wipes the ledger after it.
-    const due =
-      manifest.full === true ||
-      !next.lastLedgerAt ||
-      Date.now() - Date.parse(next.lastLedgerAt) >= (cfg.ledgerEveryMs ?? 24 * 3_600_000);
-    if (due && manifest.files["ledger.sqlite"]) {
+    // The harness puts a copy of the ledger in an export when one is due (outbox.ts), and always
+    // in a full export: a full reset wipes the ledger after it.
+    if (manifest.files["ledger.sqlite"]) {
       await commitFiles(
         repo,
         ledgerBranch,

@@ -149,7 +149,7 @@ export function terminalPanel(
 }
 
 export function terminalRoutes(app: Hono, dash: Dashboard): void {
-  const { opts, parts, noted, store, views } = dash;
+  const { opts, parts, noted, store } = dash;
 
   // xterm.js, from the repository's copy, and the terminal's own script (ui/terminal.ts).
   app.get("/ui/assets/xterm.js", (c) => {
@@ -172,7 +172,7 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
   app.get("/ui/rigs/:rig/live/screen", (c) => {
     const rig = c.req.param("rig");
     const trial = c.req.query("trial") ?? "";
-    if (!views().some((u) => u.id === rig)) return c.json({ error: "no such rig" }, 404);
+    if (!store.reportedRigs.listed(rig)) return c.json({ error: "no such rig" }, 404);
     if (!TERMINAL_ID.test(trial)) return c.json({ error: "no such trial" }, 404);
     return streamSSE(c, async (stream) => {
       const stop = parts.screens.watch(rig, trial);

@@ -109,6 +109,21 @@ In a **slot**, a namespace the cluster's operators made for Thermite, the operat
 | Supervisor | `/var/lib/thermite-advisors` | On the container's own disk: one folder for each advisor call while it runs, made by the supervisor and given to the call's advisor user for the call, then removed. The supervisor's, mode 0711, emptied at every start |
 | Supervisor | `/keys` | Read-only: `bus-ca.pem`, control's authority's certificate, which it trusts the bus's server through (`THERMITE_NATS_CA_FILE`). Under compose, control's `control-pub` volume; on a machine, the rig's `bus/` folder. On a cluster the certificate is in the supervisor's environment instead (`THERMITE_NATS_CA`) |
 
+### The space control's state takes
+
+**Settings › Space** lists the space each kind of what control keeps takes on its disk, each label with what the kind is under its ⓘ, and their sum; `/metrics` has the same as `thermite_control_space_bytes`, by `kind` ([Metrics series](rest-api.md#metrics-series)). Control reads them at most once a minute, and keeps every kind for good.
+
+| Kind | Label | What it is |
+| --- | --- | --- |
+| `events` | Rigs' events | Control's copy of every event its rigs reported, in the message bus's `EVENTS` stream |
+| `exports` | Rigs' exports | The exports that rigs without a results repository send control, in `exports/` |
+| `store` | Control's store | `control.db`, with its write-ahead log |
+| `copies` | Copies of the store | `control.db` as it was before each update that changed its tables |
+| `kb_files` | Knowledge base files | The knowledge base's files, in `kb-files/` |
+| `kits` | Kits | The kits written or uploaded on the **New campaign** page, in `kits/` |
+
+A kind control can't read shows `not read:` and why on the page, and has no series.
+
 ### A lane's cache
 
 Each lane keeps a cache folder for its builds, `/scratch/thermite/lanes/<lane>/cache` (`$THERMITE_LANE_CACHE` and `CCACHE_DIR` in its commands, at most 8 GB). Its trials share it, so a fresh workspace does not rebuild everything; the judge builds without it. Each trial's checkout is a new folder, `/scratch/thermite/lanes/<lane>/<id>/repo`, so ccache gets `CCACHE_BASEDIR`, the lane's folder, and `CCACHE_NOHASHDIR=1`: it keys each compile on paths relative to the build folder. A build in the same folder of the checkout in each trial, such as `build/`, then hits what earlier trials compiled. The worker's brief says so. It outlives a restart of the harness, an image update and a restart of the rig wherever `/scratch` is on a volume that outlives the container:

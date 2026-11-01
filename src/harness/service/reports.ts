@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { type KeyPairPem, reportBody, signJson } from "../../core/commands.ts";
 import { liveGroups } from "../../core/link/live.ts";
@@ -100,17 +100,30 @@ export function snapshot(
     : report;
 }
 
+/** Whether an export folder holds a run's export (outside the chain, so the ledger records none). */
+function runExport(dir: string): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as {
+      run?: unknown;
+    };
+    return typeof manifest.run === "string";
+  } catch {
+    // A manifest that can't be read names no run: the folder stays, for the owner to look at.
+    return false;
+  }
+}
+
 /**
  * Exports the supervisor has pushed (or committed, without a remote) leave the outbox, so it
- * does not grow forever. Only recorded export names are removed.
+ * does not grow forever: those the ledger records, and runs' exports, which it does not.
  */
 export function removeExports(svc: HarnessService, names: string[]): number {
   let removed = 0;
   for (const name of names) {
     if (!/^[0-9TZ]+-[0-9a-f]{8}$/.test(name)) continue;
-    const known = svc.ledger.exports.at(name);
     const dir = join(svc.paths.outboxDir, name);
-    if (!known || !existsSync(dir)) continue;
+    if (!existsSync(dir)) continue;
+    if (!svc.ledger.exports.at(name) && !runExport(dir)) continue;
     rmSync(dir, { recursive: true, force: true });
     removed++;
   }

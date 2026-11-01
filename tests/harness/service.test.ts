@@ -392,11 +392,9 @@ describe("harness service and API", () => {
     assert.equal(new Set(ids).size, ids.length);
     assert.equal(ids.length, env.service.ledger.latestEventId());
 
-    const exp = (await (
-      await api.request("/v1/export", { method: "POST", headers: auth(tokens.supervisor) })
-    ).json()) as { dir: string; attempts: number };
+    const exp = await env.service.export("supervisor");
     assert.equal(exp.attempts, 1);
-    const dir = join(env.service.paths.outboxDir, exp.dir);
+    const dir = exp.dir;
     const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as {
       files: Record<string, string>;
     };
@@ -410,10 +408,21 @@ describe("harness service and API", () => {
       );
     }
     assert.ok(readdirSync(join(dir, "attempts")).some((f) => f.endsWith(".patch")));
-    const second = (await (
-      await api.request("/v1/export", { method: "POST", headers: auth(tokens.supervisor) })
-    ).json()) as { attempts: number };
+    const second = await env.service.export("supervisor");
     assert.equal(second.attempts, 0);
+  });
+
+  test("pushed exports leave the outbox: the chain's, and a run's, which the ledger records none of", async () => {
+    const env = makeHarnessEnv("rig-a");
+    const chain = await env.service.export("supervisor");
+    const run = await env.service.export("supervisor", { run: "r-1" });
+    assert.equal(run.id, 0, "a run's export is outside the chain");
+    const stray = join(env.service.paths.outboxDir, "20261031T000000Z-0123abcd");
+    mkdirSync(stray);
+    const names = [chain.dir, run.dir, stray].map((d) => d.split("/").pop() ?? "");
+    assert.equal(env.service.removeExports([...names, "../ledger"]), 2);
+    assert.ok(!existsSync(chain.dir) && !existsSync(run.dir));
+    assert.ok(existsSync(stray), "a folder that is no export of this ledger stays");
   });
 
   test("an applied command re-sent after it expired is still reported as replayed", async () => {

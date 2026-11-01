@@ -157,8 +157,12 @@ export class Ledger {
   copyTo(path: string, without: readonly string[] = []): void {
     this.db.exec(`vacuum into '${path.replace(/'/g, "''")}'`);
     if (!without.length) return;
+    // With secure_delete, the dropped tables' pages are written over with zeros as they are
+    // freed, so nothing of them stays in the file, and the copy needs no second vacuum.
     const copy = new DatabaseSync(path);
-    copy.exec(`${without.map((t) => `drop table if exists ${t};`).join(" ")} vacuum;`);
+    copy.exec(
+      `pragma secure_delete = on; ${without.map((t) => `drop table if exists ${t};`).join(" ")}`,
+    );
     copy.close();
   }
 
@@ -217,13 +221,21 @@ export class Ledger {
     return this.events.newest(kind as EventKind, { subject })?.body as Record<string, unknown>;
   }
 
-  /** Events strictly after the cursor, in order. The next cursor is the last id returned. */
-  eventsAfter(cursor: number, limit = 500): { events: LedgerEvent[]; next: number } {
-    const rows = this.all<Row>(
-      "select id, at, actor, kind, subject, body, run from event where id > ? order by id limit ?",
-      cursor,
-      limit,
-    );
+  /**
+   * Events strictly after the cursor, in order: with `run`, that run's alone, through its index.
+   * The next cursor is the last id returned.
+   */
+  eventsAfter(cursor: number, limit = 500, run?: string): { events: LedgerEvent[]; next: number } {
+    const columns = "select id, at, actor, kind, subject, body, run from event";
+    const rows =
+      run === undefined
+        ? this.all<Row>(`${columns} where id > ? order by id limit ?`, cursor, limit)
+        : this.all<Row>(
+            `${columns} where run = ? and id > ? order by id limit ?`,
+            run,
+            cursor,
+            limit,
+          );
     // Events recorded before the 2026-10-15 rename are read under the new names.
     const events = rows.map((r) =>
       currentEvent({

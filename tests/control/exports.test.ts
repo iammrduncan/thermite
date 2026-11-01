@@ -133,9 +133,11 @@ describe("exports sent to control", () => {
     assert.equal(kept.rig, "rig-a");
     assert.ok(kept.created_at);
 
-    // The next export within the day leaves its ledger snapshot out; control takes it so.
+    // The next export within the day holds no copy of the ledger (the harness puts one in once a
+    // day, outbox.ts); control takes it so.
     const next = "20261020T130000Z-89abcdef";
-    writeExport(s.outbox, next, files());
+    const { "ledger.sqlite": _ledger, ...withoutLedger } = files();
+    writeExport(s.outbox, next, withoutLedger);
     const again = await uploadExportsOnce(s.cfg, { ...after, queue: [next] });
     assert.deepEqual(again.uploaded, [NAME, next]);
     assert.equal(again.lastLedgerAt, after.lastLedgerAt);

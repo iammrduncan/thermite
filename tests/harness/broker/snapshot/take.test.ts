@@ -35,7 +35,7 @@ import {
 } from "./setup.ts";
 
 /**
- * Taking a sealed snapshot of the rig's live state (broker/snapshot.ts): what it seals and what it
+ * Taking a sealed snapshot of the rig's live state (broker/snapshot/): what it seals and what it
  * leaves out, a consistent copy of the ledger while it is written, a new manifest swapped in by
  * rename, and incremental takes.
  */
@@ -65,7 +65,7 @@ const restoreAside = (f: ReturnType<typeof fixture>) =>
     areas: f.areas.map((a) => ({ ...a, live: join(f.root, `aside-${++asides}`, a.name) })),
   });
 
-describe("the rig's sealed state snapshot (broker/snapshot.ts)", () => {
+describe("the rig's sealed state snapshot (broker/snapshot/)", () => {
   test("a snapshot seals the live state, and a restore onto an empty disk puts it back with owners and modes", async () => {
     const f = fixture();
     typicalState(f);

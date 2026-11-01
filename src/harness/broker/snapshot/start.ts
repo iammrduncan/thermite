@@ -31,7 +31,7 @@ import type { TakeJob } from "./take.ts";
 const rigId = (broker: Broker): string | null => broker.env.THERMITE_RIG_ID || null;
 
 /**
- * THERMITE_STATE_SNAPSHOT_DIR (the one-container rig image sets it; broker/snapshot.ts): the live
+ * THERMITE_STATE_SNAPSHOT_DIR (the one-container rig image sets it; broker/snapshot/): the live
  * state stays on the container's disk, and a sealed snapshot of it on the host's volume outlives
  * a stop that empties that disk. At a start, before anything else: root makes the snapshot
  * folder, its own with mode 0700, and records whether the controller's user, the supervisor's and

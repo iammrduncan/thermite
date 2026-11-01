@@ -32,10 +32,7 @@ import { USAGE } from "./usage.ts";
 export { formatMcpServers } from "./mcp.ts";
 
 async function main(argv: string[]): Promise<void> {
-  // --instance and --unit are the flags' names before the 2026-10-15 rename: still read.
-  const [cmd, ...rest] = argv.map((a) =>
-    a.replace(/^--instance(?==|$)/, "--run").replace(/^--unit(?==|$)/, "--rig"),
-  );
+  const [cmd, ...rest] = argv;
   switch (cmd) {
     case "doctor":
       return thermiteDoctor(rest);

@@ -5,7 +5,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { createUser } from "@nats-io/nkeys";
-import { redact, waitForFile } from "../../src/common/env.ts";
+import { redact, requireEnv, waitForFile } from "../../src/common/env.ts";
+
+describe("a required setting", () => {
+  test("it is read by its own name only: THERMITE_UNIT_ID, the rig's name before v0.1.0, is not", () => {
+    assert.equal(requireEnv("THERMITE_RIG_ID", { THERMITE_RIG_ID: "rig-1" }), "rig-1");
+    assert.throws(
+      () => requireEnv("THERMITE_RIG_ID", { THERMITE_UNIT_ID: "rig-1" }),
+      /^Error: missing environment variable THERMITE_RIG_ID$/,
+    );
+  });
+});
 
 describe("waiting for a file", () => {
   test("it gives up after its timeout", async () => {

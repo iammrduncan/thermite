@@ -44,6 +44,71 @@ describe("control's store migrations", () => {
     assert.equal(copiesOf(path).length, 1, "a store at this code's version is not copied again");
   });
 
+  test("a store that v0.1.0 wrote, once migrated, has every table, column and index a new store has", () => {
+    const shape = (db: DatabaseSync) => {
+      const tables = db
+        .prepare(
+          "select name from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name",
+        )
+        .all() as { name: string }[];
+      const columns = tables.map(({ name }) => [
+        name,
+        (db.prepare(`pragma table_info(${name})`).all() as Record<string, unknown>[]).map(
+          (c) => `${c.name} ${c.type} ${c.notnull} ${c.dflt_value} ${c.pk}`,
+        ),
+      ]);
+      const indexes = db
+        .prepare(
+          "select tbl_name || '.' || name as i from sqlite_master where type = 'index' and name not like 'sqlite_%' order by i",
+        )
+        .all() as { i: string }[];
+      return { columns, indexes: indexes.map((x) => x.i) };
+    };
+    const made = new ControlStore(fresh());
+    const path = fresh();
+    const old = new DatabaseSync(path);
+    old.exec(V010);
+    old.close();
+    const upgraded = new ControlStore(path);
+    assert.deepEqual(shape(upgraded.db), shape(made.db));
+    made.db.close();
+    upgraded.db.close();
+  });
+
+  test("a store from before v0.1.0 is refused in words, and kept as it is, with no copy", () => {
+    const cases: [string, string][] = [
+      ["create table unit (id text primary key)", "it has the table unit"],
+      [
+        "create table model_route (name text primary key, model text not null)",
+        "it has the table model_route",
+      ],
+      [
+        "create table rig (id text primary key, first_seen text not null, last_seen text not null, last_cursor integer not null default 0, ledger_id text, summary text not null default '{}')",
+        "its table rig has no column pubkey",
+      ],
+    ];
+    for (const [sql, why] of cases) {
+      const path = fresh();
+      const old = new DatabaseSync(path);
+      old.exec(sql);
+      old.close();
+      assert.throws(
+        () => new ControlStore(path),
+        (e: Error) =>
+          e.message ===
+          `this control store is from before v0.1.0 (${why}): start Thermite v0.1.0 on it once, which brings it to v0.1.0's tables, then this version. The store is kept as it is: ${path}`,
+      );
+      const kept = new DatabaseSync(path, { readOnly: true });
+      assert.deepEqual(
+        kept.prepare("select name from sqlite_master where type = 'table'").all().length,
+        1,
+        why,
+      );
+      kept.close();
+      assert.deepEqual(copiesOf(path), [], why);
+    }
+  });
+
   test("a new store is not copied", () => {
     const path = fresh();
     const store = new ControlStore(path);

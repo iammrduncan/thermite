@@ -236,7 +236,7 @@ export function drainCommand(
 
 /**
  * stop_trial (goal 136): the trial must still run, in that run. The ledger records the ask
- * (`trial_stop_asked`), and the scheduler stops the trial within a second (`scheduler/stops.ts`),
+ * (`trial_stop_asked`), and the scheduler stops the trial within a second (`agents/scheduler/stops.ts`),
  * as a restart would: it ends as interrupted, and its experiment goes back to the top of the
  * run's queue. A trial that ends meanwhile is left as it ended.
  */

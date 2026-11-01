@@ -2,6 +2,7 @@ import type { Loops } from "../common/health.ts";
 import { LoopAges } from "../core/health.ts";
 import { type BusView, busState } from "./bus/index.ts";
 import { controlDiskOf } from "./disk.ts";
+import { spaceOf } from "./space.ts";
 import type { ControlStore } from "./store/index.ts";
 import { currentChampion, diskOf, type RigView, rigView, workOf } from "./views/index.ts";
 
@@ -262,5 +263,24 @@ export async function busMetricsText(
     lines.push(`thermite_config_updates_taken_total{${l}} ${r.supervisor.taken}`);
     lines.push(`thermite_config_updates_refused_total{${l}} ${r.supervisor.refused}`);
   }
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * The space each kind of what control keeps takes (space.ts), from its last look: one series for
+ * each kind, and none for a kind whose space could not be read. Bounded: by kind.
+ */
+export async function spaceMetricsText(
+  store: ControlStore,
+  bus: BusView | undefined,
+): Promise<string> {
+  const uses = await spaceOf(store, bus);
+  const lines = [
+    "# HELP thermite_control_space_bytes The bytes one kind of what control keeps takes",
+    "# TYPE thermite_control_space_bytes gauge",
+  ];
+  for (const u of uses)
+    if (u.bytes !== null)
+      lines.push(`thermite_control_space_bytes{kind="${label(u.kind)}"} ${u.bytes}`);
   return `${lines.join("\n")}\n`;
 }

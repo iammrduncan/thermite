@@ -34,6 +34,7 @@ import {
   runpodLine,
   type TestView,
 } from "../../runpod/index.ts";
+import { spaceOf } from "../../space.ts";
 import {
   HARNESSES,
   type Machine,
@@ -50,6 +51,7 @@ import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
 import { reachBlock } from "./reach.ts";
 import { modelPrefix, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
+import { spaceBlock } from "./space.ts";
 
 /**
  * Settings › Providers: what can be added, the providers with their rows, the harness and model
@@ -344,6 +346,7 @@ ${prices}
 ${mcpSettingsBlocks(store, mcpServers, t, now, (k) => (k === "error" ? said(c) : c.req.query(k)))}
 ${reachBlock(store, t, now, (k) => c.req.query(k))}
 ${kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) => c.req.query(k))}
+${spaceBlock(await spaceOf(store, opts.parts.bus))}
 <div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>
 <script src="/ui/assets/providers.js" defer></script>`,
       vs,

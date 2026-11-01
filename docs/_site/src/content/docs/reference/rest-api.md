@@ -1108,6 +1108,7 @@ Health's series follow, the ones an operator alerts on with **Needs you** (goal 
 | `thermite_control_disk_free_bytes` | gauge | `place` | Free space on each place control writes to: `state`, its state folder, and `bus store`, the room the bus's store has left under its limit |
 | `thermite_control_disk_floor_bytes` | gauge | none | The free space control keeps on each place (`THERMITE_DISK_FLOOR_GIB`) |
 | `thermite_control_disk_low` | gauge | none | 1 while control holds new runs for its disk floor |
+| `thermite_control_space_bytes` | gauge | `kind` | The bytes one kind of what control keeps takes: `events`, `exports`, `store`, `copies`, `kb_files` and `kits` ([The space control's state takes](ports-volumes-secrets.md#the-space-controls-state-takes)), read at most once a minute; none for a kind control can't read |
 | `thermite_rig_disk_free_bytes` | gauge | `rig`, `place` | Free space on each place the rig writes to (`state`, `scratch`, `outbox`), from its last report |
 | `thermite_rig_disk_floor_bytes` | gauge | `rig` | The free space the rig keeps on each place (`THERMITE_DISK_FLOOR_GIB`) |
 | `thermite_rig_disk_low` | gauge | `rig` | 1 while the rig holds new work for its disk floor |

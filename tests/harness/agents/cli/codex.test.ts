@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { codexProgram } from "../../../../src/agents/cli/index.ts";
 import { modelConfigFromEnv } from "../../../../src/agents/model/index.ts";
 import {
   codexArgs,
@@ -16,7 +17,7 @@ import {
 import { limitsNote } from "../../../../src/agents/roles/index.ts";
 import { WORKER_CODEX_SYSTEM } from "../../../../src/agents/roles/worker.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
-import { codexModelCheck, runCodexTrial } from "../../../../src/harness/agents/cli/codex.ts";
+import { cliModelCheck, runCliTrial } from "../../../../src/harness/agents/cli/index.ts";
 import { ControlRoute } from "../../../../src/harness/agents/model/source.ts";
 import { Scheduler } from "../../../../src/harness/agents/scheduler/index.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
@@ -264,7 +265,11 @@ describe("the Codex CLI", () => {
   test("a trial runs as the lane's user with only the trial's token, and ends with the submission", async () => {
     const a = area();
     const f = fakeRunner(events(), { submit: true });
-    const r = await runCodexTrial(spec(a, join(a, "repo")), deps(f));
+    const r = await runCliTrial(
+      codexProgram,
+      { mode: "code", spec: spec(a, join(a, "repo")) },
+      deps(f),
+    );
     assert.equal(r.stopped, "submitted");
     assert.equal(r.turns, 3);
     assert.equal(r.tokensIn, 2400);
@@ -305,10 +310,14 @@ describe("the Codex CLI", () => {
       const f = fakeRunner(events(), { submit: o.submit });
       const owner = inbox(["look at the inner loop"]);
       // The worker keeps working each run: the campaign's nudges of 2 (goal 079: none by default).
-      const r = await runCodexTrial(
-        spec(a, join(a, "repo"), {
-          limits: { ...laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }), nudges: 2 },
-        }),
+      const r = await runCliTrial(
+        codexProgram,
+        {
+          mode: "code",
+          spec: spec(a, join(a, "repo"), {
+            limits: { ...laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }), nudges: 2 },
+          }),
+        },
         {
           ...deps(f),
           messages: { waiting: owner.waiting, given: owner.given_ },
@@ -332,7 +341,11 @@ describe("the Codex CLI", () => {
   test("a turn cap stops a trial; a failed run waits and resumes its thread; no credits the proxy saw ends it", async () => {
     const b = area();
     const capped = fakeRunner(events());
-    const c = await runCodexTrial(spec(b, join(b, "repo"), { maxTurns: 1 }), deps(capped));
+    const c = await runCliTrial(
+      codexProgram,
+      { mode: "code", spec: spec(b, join(b, "repo"), { maxTurns: 1 }) },
+      deps(capped),
+    );
     assert.equal(c.stopped, "turns");
     assert.ok(capped.killed.includes("lane-1"));
     const d = area();
@@ -342,10 +355,17 @@ describe("the Codex CLI", () => {
     ]);
     // A dropped stream is a passing fault (goal 079): the trial waits and resumes the same
     // thread; only the campaign's failures_in_a_row ends it.
-    const e = await runCodexTrial(
-      spec(d, join(d, "repo"), {
-        limits: { ...laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }), failuresInARow: 2 },
-      }),
+    const e = await runCliTrial(
+      codexProgram,
+      {
+        mode: "code",
+        spec: spec(d, join(d, "repo"), {
+          limits: {
+            ...laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }),
+            failuresInARow: 2,
+          },
+        }),
+      },
       { ...deps(broken), pauseMs: () => 5 },
     );
     assert.equal(e.stopped, "error");
@@ -362,11 +382,15 @@ describe("the Codex CLI", () => {
       JSON.stringify({ type: "thread.started", thread_id: THREAD }),
       JSON.stringify({ type: "turn.failed", error: { message: "402 insufficient credits" } }),
     ]);
-    const h = await runCodexTrial(spec(g, join(g, "repo")), {
-      ...deps(broke),
-      pauseMs: () => 5,
-      providerAnswer: () => ({ status: 402, body: '{"error":"insufficient credits"}' }),
-    });
+    const h = await runCliTrial(
+      codexProgram,
+      { mode: "code", spec: spec(g, join(g, "repo")) },
+      {
+        ...deps(broke),
+        pauseMs: () => 5,
+        providerAnswer: () => ({ status: 402, body: '{"error":"insufficient credits"}' }),
+      },
+    );
     assert.deepEqual([h.stopped, h.errorKind], ["error", "credits"]);
     assert.equal(broke.programRuns().length, 1);
   });
@@ -398,14 +422,18 @@ describe("the Codex CLI", () => {
         remove: async () => undefined,
       }) as unknown as Runner;
     const a = area();
-    const trial = await runCodexTrial(spec(a, join(a, "repo")), {
-      ...deps(fakeRunner([])),
-      runner: missing({ file: "sh: 1: exec: codex: not found\n" }),
-    });
+    const trial = await runCliTrial(
+      codexProgram,
+      { mode: "code", spec: spec(a, join(a, "repo")) },
+      {
+        ...deps(fakeRunner([])),
+        runner: missing({ file: "sh: 1: exec: codex: not found\n" }),
+      },
+    );
     assert.equal(trial.stopped, "error");
     assert.equal(trial.error, NO_CODEX);
     assert.match(NO_CODEX, /^this rig's harness image has no Codex CLI: /);
-    const check = await codexModelCheck(model, {
+    const check = await cliModelCheck(codexProgram, model, {
       runner: missing({
         stderr: "thermite-devfence: /opt/codex/bin/codex: No such file or directory\n",
       }),
@@ -443,7 +471,7 @@ describe("the Codex CLI", () => {
       handOver: async () => undefined,
       remove: async () => undefined,
     } as unknown as Runner;
-    const r = await codexModelCheck(model, {
+    const r = await cliModelCheck(codexProgram, model, {
       runner,
       apiUrl: "http://127.0.0.1:8700",
       scratchDir: mkdtempSync(join(tmpdir(), "thermite-codex-check-")),

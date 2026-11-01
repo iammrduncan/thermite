@@ -69,7 +69,7 @@ The documentation's screenshots come from the demo, whose data is made up. With 
 
 ## Journals and the knowledge base
 
-Goal 065's parts are covered by unit tests, which `npm test` runs like any other: field notes (`tests/harness/journal.test.ts`, `tests/harness/agents/scheduler/notes.test.ts`), research in every mode (`tests/harness/research/research-everywhere.test.ts`), the export (`tests/system/export-notes.test.ts`), the supervisor's past-research sync (`tests/supervisor/kb-sync.test.ts`), the advisors' notes (`tests/supervisor/advisors/pass/notes.test.ts`), control's knowledge base and its pages (`tests/control/kb.test.ts`, `tests/control/dashboard/knowledge.test.ts`).
+Goal 065's parts are covered by unit tests, which `npm test` runs like any other: field notes (`tests/harness/journal.test.ts`, `tests/harness/agents/scheduler/notes.test.ts`), research in every mode (`tests/harness/research/research-everywhere.test.ts`), the export (`tests/system/export-notes.test.ts`), the advisors' notes (`tests/supervisor/advisors/pass/notes.test.ts`), control's knowledge base and its pages (`tests/control/kb.test.ts`, `tests/control/dashboard/knowledge.test.ts`).
 
 - **Control's assignments** (`tests/helpers/assignments.ts`): control serves a rig's past research and MCP servers only for runs it assigned, so a test that seeds a rig's events records control's own assignment of the run with `assigned(store, rig, run, campaign)`, and any other field of the assignment, such as its `mcp_servers`, as a fifth argument.
 

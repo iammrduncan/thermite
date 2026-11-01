@@ -66,8 +66,7 @@ usage: thermite <command> [options]
                                       too).
                                       --mcp-servers gives the MCP servers the kit's kit.json
                                       names, as in kit.json; the rig refuses a run whose list
-                                      differs. --note keeps a text with the run (--direction,
-                                      its old name, still works and says so). --context-window
+                                      differs. --note keeps a text with the run. --context-window
                                       and --compact-at set the campaign's own context settings
                                       in the contract sent (its agents_context, over the file's):
                                       every agent's window is the lower of it and its own, and
@@ -342,7 +341,7 @@ usage: thermite <command> [options]
 ## Rules for every command
 
 - **Options.** Each option takes its value as the next word or after `=`. In `doctor`, `local init`, `backup`, `restore`, `token new`, `assign`, `assign-payload`, `rig`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `command`, `invalidate`, `submit` and `status`, an option the command does not know, or a word it does not expect, ends the command with Node's own message and exit code 2. In `runpod` and `mcp`, an option it does not know does the same; a word after the name it takes is ignored.
-- **Older option names.** `--instance` is read as `--run`, and `--unit` as `--rig`. These are the names from before runs and rigs were renamed.
+- **Older option names.** `--instance`, `--unit` and `--direction`, the names from before runs, rigs and a run's note were renamed, are refused as unknown options: give `--run`, `--rig` and `--note`.
 - **Control's token.** The commands that talk to control (`assign`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `mcp`, `command`, `invalidate`, `rig add`, `rig token`, `rig retire`, `rig list`, and every `runpod` command) send the contents of `--token-file`, trimmed, as `Authorization: Bearer <token>`. Only the owner's token works on these routes; any other token gets `401 {"error":"unauthorized"}`. See [Tokens and roles](tokens.md).
 - **Control's address.** `--control` is control's base address, such as `https://control.example.com`. A trailing `/` is removed.
 - **Refusals.** When control or the harness refuses a request, the command prints `<url> -> <status> <body>` on standard error and exits 2. `status` is the exception: see [below](#status). A request body that does not match the route gives `400 {"error":"invalid request"}` from control. The harness says which field and why, such as `400 {"error":"invalid request: run is missing: it must be a string"}`. A command that control refuses before signing it gives `400` with the reason (for example a payload that does not fit its kind, or a message that nothing would read), or `404` for an unknown rig; another refusal from inside control gives `500` with the reason. The [REST API reference](rest-api.md) lists the routes.
@@ -453,7 +452,6 @@ The hash is what control's settings take; the token itself stays with you. See [
 | `--kit control:NAME` | No | | The kit `NAME` that control keeps: one given to it with [`thermite kit add`](#kit-add), or one the **New campaign** page wrote. The rig's supervisor fetches the contract's `project.kit.commit` from control. `NAME` is lowercase letters, digits, dots, dashes and underscores, at most 64, starting with a letter or digit |
 | `--model NAME=URL` | No, repeatable | | A [model file](glossary.md) the contract lists under `models` (a data file the project loads, such as a model's weights), and an `http` or `https` address to fetch it from |
 | `--note TEXT` | No | | The run's note: a text kept with the run, and shown as `Note: …` on the run's page in the [knowledge base](knowledge-base.md). Thermite does not act on it. It is sent as the command's `direction` field, a name from before a direction meant a named line of experiments |
-| `--direction D` | No | | The old name of `--note`. It still works in v0.1.0, and prints `--direction is now --note: a direction is now a named line of experiments` on standard error. With `--note` as well, the command stops: `--direction is the old name of --note: give only --note` (exit 2) |
 | `--agents on\|off` | No | `on` | `off` starts a judge-only run: no worker agents, the judge still works |
 | `--promotion auto\|owner` | No | The rig's own setting | The run's promotion rule. `owner` is sent as `owner_approval`: every confirmed win waits for the owner |
 | `--ask WHAT` | No, repeatable | Nothing: the run is hands-off | What else the run asks the owner about, sent as the command's `ask_owner`: `gain:PERCENT`, a confirmed gain above it (`gain:15` is 15%); `flaws`, a win whose worker declared flaws; `reviews`, a review panel's pass of a goal or of a research run's answers; `not-possible`, a "not possible" ending of a goal campaign. See [Decide what waits for you](../how-to/campaigns/decide-what-waits.md) |
@@ -532,7 +530,6 @@ Sent, it prints control's answer on one line, such as `{"id":"<command id>","sta
 | `--kit-bundle-sha256 H` | No | The kit bundle's SHA-256 |
 | `--model NAME=SHA256:PATH` | No, repeatable | A model file in the inbox, with its SHA-256: `bad --model <arg>; expected NAME=SHA256:PATH` otherwise |
 | `--note TEXT` | No | As for `assign` |
-| `--direction D` | No | As for `assign`: the old name of `--note` |
 | `--agents on\|off` | No | As for `assign` |
 
 It has no `--promotion`; the run takes the rig's own promotion rule.

@@ -1,15 +1,19 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { gzipSync } from "node:zlib";
+import { fileSha256 } from "../common/fs.ts";
 import { canonicalJson } from "../core/canonical.ts";
 import { patchBytes } from "./git.ts";
 import { knowledgePart } from "./kb-part.ts";
@@ -80,11 +84,6 @@ export const LEDGER_COPY = {
   ],
 } as const;
 
-/** Whether an event is a run's (goal 170): the run the ledger recorded with it. */
-export function runEvents(run: string): (e: { run: string | null }) => boolean {
-  return (e) => e.run === run;
-}
-
 /**
  * Outbox export. The harness has no git credentials and no remote access: it writes exports
  * into the shared outbox, and the supervisor pushes them to the results repository as packed
@@ -101,6 +100,84 @@ export function runEvents(run: string): (e: { run: string | null }) => boolean {
  * every run's) and publishes no champion, and it stays outside the rig's chain of exports: the
  * next export still starts where the last one of the chain ended, and a full reset never takes it.
  */
+
+/**
+ * How often an export of the chain holds a copy of the ledger: once a day. A full export always
+ * holds one, and a run's export never does. The supervisor sends on each copy it finds.
+ */
+export const LEDGER_COPY_EVERY_MS = 24 * 3_600_000;
+
+/** Events an export reads and writes at a time. */
+const EXPORT_PAGE = 1_000;
+/** The kinds whose events name the rows an export holds beside them, and the field that names each. */
+const NAMING = [
+  ["journal_note", "id"],
+  ["research_note", "note"],
+  ["agent_prompt", "id"],
+] as const;
+
+/** What an export keeps of its events once they are written: what its other files need. */
+interface WrittenEvents {
+  count: number;
+  /** The attempts the events recorded, in their order. */
+  attempts: string[];
+  /** The ids NAMING's kinds name, by kind. */
+  named: Map<string, number[]>;
+  /** The runs created, those whose research ended, and those closed. */
+  created: string[];
+  finals: string[];
+  closed: string[];
+}
+
+/**
+ * The events an export holds, after `since` and through `through` (a run's export: the run's,
+ * through its index), written to `file` a page at a time, so the export never holds them all.
+ */
+function writeEvents(
+  ledger: Ledger,
+  o: { since: number; through: number; run?: string | undefined },
+  file: string,
+): WrittenEvents {
+  const attempts = new Set<string>();
+  const named = new Map<string, number[]>(NAMING.map(([kind]) => [kind, []]));
+  const created = new Set<string>();
+  const finals = new Set<string>();
+  const closed = new Set<string>();
+  let count = 0;
+  const fd = openSync(file, "w");
+  try {
+    for (let cursor = o.since; ; ) {
+      const page = ledger.eventsAfter(cursor, EXPORT_PAGE, o.run);
+      const events = page.events.filter((e) => e.id <= o.through);
+      if (events.length) writeSync(fd, `${events.map((e) => canonicalJson(e)).join("\n")}\n`);
+      count += events.length;
+      for (const e of events) {
+        const subject = String(e.subject);
+        const body = e.body as Record<string, unknown>;
+        if (e.kind === "attempt_recorded") attempts.add(subject);
+        else if (e.kind === "run_created") created.add(subject);
+        else if (e.kind === "research_final") finals.add(subject);
+        else if (e.kind === "run_status" && body.status === "closed") closed.add(subject);
+        for (const [kind, field] of NAMING) {
+          const id = Number(body?.[field]);
+          if (e.kind === kind && Number.isInteger(id)) named.get(kind)?.push(id);
+        }
+      }
+      if (events.length < EXPORT_PAGE) break;
+      cursor = page.next;
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return {
+    count,
+    attempts: [...attempts],
+    named,
+    created: [...created],
+    finals: [...finals],
+    closed: [...closed],
+  };
+}
 
 export interface ExportResult {
   id: number;
@@ -138,18 +215,8 @@ export async function writeExport(input: {
   const final = join(input.outboxDir, name);
   mkdirSync(join(tmp, "attempts"), { recursive: true });
   try {
-    const ofRun = only ? runEvents(only) : () => true;
-    const events = ledger
-      .eventsAfter(since, Number.MAX_SAFE_INTEGER)
-      .events.filter((e) => e.id <= through && ofRun(e));
-    writeFileSync(
-      join(tmp, "events.jsonl"),
-      events.map((e) => canonicalJson(e)).join("\n") + (events.length ? "\n" : ""),
-    );
-
-    const attemptIds = [
-      ...new Set(events.filter((e) => e.kind === "attempt_recorded").map((e) => String(e.subject))),
-    ];
+    const written = writeEvents(ledger, { since, through, run: only }, join(tmp, "events.jsonl"));
+    const attemptIds = written.attempts;
     for (const id of attemptIds) {
       const a = ledger.attempts.get(id);
       if (!a || (only && String(a.run) !== only)) continue;
@@ -194,14 +261,10 @@ export async function writeExport(input: {
     // (research-notes.jsonl, with every source they cite) and the background the owner picked
     // for runs created since then (briefing.jsonl), oldest first. The ledger snapshot holds all of
     // them too; these are for readers without SQLite.
-    const ids = (kind: string, field: string) =>
-      events
-        .filter((e) => e.kind === kind)
-        .map((e) => Number((e.body as Record<string, unknown>)[field]))
-        .filter((n) => Number.isInteger(n));
+    const ids = (kind: (typeof NAMING)[number][0]) => written.named.get(kind) ?? [];
     const jsonl = (rows: unknown[]) =>
       rows.map((r) => canonicalJson(r)).join("\n") + (rows.length ? "\n" : "");
-    const journal = ledger.journal.byIds(ids("journal_note", "id")).map((r) => ({
+    const journal = ledger.journal.byIds(ids("journal_note")).map((r) => ({
       id: Number(r.id),
       run: String(r.run),
       by: String(r.by),
@@ -214,7 +277,7 @@ export async function writeExport(input: {
     }));
     writeFileSync(join(tmp, "journal.jsonl"), jsonl(journal));
     const notesRel: string[] = [];
-    const researchNotes = ledger.claims.notesById(ids("research_note", "note")).map((r) => ({
+    const researchNotes = ledger.claims.notesById(ids("research_note")).map((r) => ({
       id: r.id,
       run: r.run,
       lane: r.lane,
@@ -226,10 +289,7 @@ export async function writeExport(input: {
       writeFileSync(join(tmp, "research-notes.jsonl"), jsonl(researchNotes));
       notesRel.push("research-notes.jsonl");
     }
-    const created = [
-      ...new Set(events.filter((e) => e.kind === "run_created").map((e) => String(e.subject))),
-    ];
-    const briefing = created.flatMap((run) =>
+    const briefing = written.created.flatMap((run) =>
       ledger.runs.briefing(run).map((b, i) => ({ run, seq: i + 1, ...b })),
     );
     if (briefing.length) {
@@ -238,7 +298,7 @@ export async function writeExport(input: {
     }
     // The whole text of each prompt the runs' agents were sent since then (goal 166), its
     // sections and their sources, one JSON line each, compressed (prompts.jsonl.gz).
-    const prompts = ids("agent_prompt", "id").flatMap((id) => {
+    const prompts = ids("agent_prompt").flatMap((id) => {
       const p = ledger.prompts.get(id);
       return p ? [p] : [];
     });
@@ -264,16 +324,10 @@ export async function writeExport(input: {
     if (input.researchFolder) {
       const recorded = (run: string) => ledger.claims.recorded(run, { compactions: true }) > 0;
       const finished = new Set([
-        ...events.filter((e) => e.kind === "research_final").map((e) => String(e.subject)),
-        ...events
-          .filter(
-            (e) =>
-              e.kind === "run_status" &&
-              (e.body as { status?: string }).status === "closed" &&
-              ledger.runs.get(String(e.subject))?.mode !== "research" &&
-              recorded(String(e.subject)),
-          )
-          .map((e) => String(e.subject)),
+        ...written.finals,
+        ...written.closed.filter(
+          (run) => ledger.runs.get(run)?.mode !== "research" && recorded(run),
+        ),
       ]);
       // Where each run's folder goes in the export: a run that finished, at research/<run>/folder/;
       // a run's export, its run's folder as it stands, beside it under the export's name.
@@ -305,18 +359,20 @@ export async function writeExport(input: {
       }
     }
 
-    // A copy of the ledger (ledger.sqlite). The held_out table, the judge's whole record of each
+    // A copy of the ledger (ledger.sqlite), when one is due. The held_out table, the judge's whole record of each
     // held-out check, never goes into an export. The owner's record of one does (goal 082): the
     // held_out_checked event, with each held-out cell's name, kind of failure and value against
     // its threshold (at most 50 cells), is in the events table and events.jsonl, as it reaches
     // control. No agent reads events.
-    if (!only) ledger.copyTo(join(tmp, "ledger.sqlite"), LEDGER_COPY.dropped);
+    const withLedger =
+      !only && (input.full === true || ledger.exports.ledgerCopyDue(LEDGER_COPY_EVERY_MS));
+    if (withLedger) ledger.copyTo(join(tmp, "ledger.sqlite"), LEDGER_COPY.dropped);
 
     const files = [
       "events.jsonl",
       "journal.jsonl",
       ...notesRel,
-      ...(only ? [] : ["ledger.sqlite"]),
+      ...(withLedger ? ["ledger.sqlite"] : []),
       ...attemptIds.flatMap((id) => [`attempts/${id}.patch`, `attempts/${id}.json`]),
       ...championRel,
       ...researchRel,
@@ -328,14 +384,7 @@ export async function writeExport(input: {
       from_event: since,
       through_event: through,
       created_at: new Date().toISOString(),
-      files: Object.fromEntries(
-        files.map((f) => [
-          f,
-          createHash("sha256")
-            .update(readFileSync(join(tmp, f)))
-            .digest("hex"),
-        ]),
-      ),
+      files: Object.fromEntries(files.map((f) => [f, fileSha256(join(tmp, f))])),
     };
     writeFileSync(join(tmp, "manifest.json"), `${canonicalJson(manifest)}\n`);
     renameSync(tmp, final);
@@ -356,7 +405,7 @@ export async function writeExport(input: {
         export: name,
       });
     }
-    return { id, dir: final, attempts: attemptIds.length, events: events.length };
+    return { id, dir: final, attempts: attemptIds.length, events: written.count };
   } catch (err) {
     rmSync(tmp, { recursive: true, force: true });
     throw err;

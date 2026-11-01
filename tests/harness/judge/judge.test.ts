@@ -68,7 +68,6 @@ describe("judge pipeline (local runner, Node test kit)", () => {
         runner: new LocalRunner(env.paths.scratchDir),
         driver: new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
         owner: `executor-${index}`,
-        promotion: "auto",
         readyRetries: 0,
         calibrationBlocks: 2,
         card: { index, uuid: `GPU-${"ab"[index]}`, count: 2 },
@@ -310,7 +309,6 @@ export function work() {
       runner: new LocalRunner(env.paths.scratchDir),
       driver: new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY }),
       owner: "judge-test",
-      promotion: "auto",
       readyRetries: 0,
       calibrationBlocks: 0,
     });

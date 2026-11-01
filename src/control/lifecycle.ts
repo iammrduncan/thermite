@@ -110,9 +110,16 @@ export class KubernetesDriver implements DeploymentDriver {
     this.o = o;
   }
 
-  /** In-cluster configuration from the pod's service account. */
+  /**
+   * In-cluster configuration from the pod's service account. A namespace template that names
+   * `{unit}`, the placeholder's name before v0.1.0, is refused: it would name no namespace.
+   */
   static inCluster(env: NodeJS.ProcessEnv = process.env): KubernetesDriver {
     const sa = "/var/run/secrets/kubernetes.io/serviceaccount";
+    if (env.THERMITE_K8S_NAMESPACE?.includes("{unit}"))
+      throw new Error(
+        "THERMITE_K8S_NAMESPACE names {unit}, the placeholder's name before v0.1.0: write {rig}",
+      );
     return new KubernetesDriver({
       apiUrl: env.THERMITE_K8S_API ?? inClusterApi(env),
       token: () =>
@@ -129,8 +136,7 @@ export class KubernetesDriver implements DeploymentDriver {
 
   async restart(rig: string, components: Component[]): Promise<string[]> {
     if (!RIG_ID.test(rig)) throw new Error(`not a rig name: ${rig}`);
-    // {unit} is the placeholder's name before the 2026-10-15 rename.
-    const ns = this.o.namespaceTemplate.replace("{rig}", rig).replace("{unit}", rig);
+    const ns = this.o.namespaceTemplate.replace("{rig}", rig);
     const token = typeof this.o.token === "function" ? this.o.token() : this.o.token;
     const headers = { authorization: `Bearer ${token}` };
     const deleted: string[] = [];

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { opencodeProgram } from "../../../src/agents/cli/index.ts";
 import { messageText, type Prompt } from "../../../src/agents/prompt.ts";
 import {
   renderAdvisorTurn,
@@ -14,7 +15,7 @@ import {
 } from "../../../src/agents/roles/index.ts";
 import { kbAgentTools } from "../../../src/agents/tools/index.ts";
 import { partText } from "../../../src/core/prompts.ts";
-import { runOpencodeTrial } from "../../../src/harness/agents/cli/opencode.ts";
+import { runCliTrial } from "../../../src/harness/agents/cli/index.ts";
 import { plan } from "../../../src/harness/agents/planner/index.ts";
 import { type CompactionLink, runTrial } from "../../../src/harness/agents/worker/index.ts";
 import { prepareWorkspace } from "../../../src/harness/agents/workspace.ts";
@@ -317,16 +318,20 @@ describe("the later turns inside a call (goal 166)", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     let waiting = [{ id: 1, text: "Prefer a change a reader can follow." }];
-    await runOpencodeTrial(
+    await runCliTrial(
+      opencodeProgram,
       {
-        trialId: "t-oc",
-        run,
-        lane: "lane-1",
-        workspace: area,
-        workspaceRoot: area,
-        parentCommit: "c".repeat(40),
-        editablePaths: ["src/**"],
-        brief: "Make it faster.",
+        mode: "code",
+        spec: {
+          trialId: "t-oc",
+          run,
+          lane: "lane-1",
+          workspace: area,
+          workspaceRoot: area,
+          parentCommit: "c".repeat(40),
+          editablePaths: ["src/**"],
+          brief: "Make it faster.",
+        },
       },
       {
         runner,

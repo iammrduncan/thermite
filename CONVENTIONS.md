@@ -98,6 +98,7 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 ### Dead code and loose ends
 
 - Remove what nothing uses: functions, exports, files, scripts, settings and dependencies. Git keeps the history.
+- `npm run check` finds two loose ends: an export of `src/` that no other file names, and a path in a comment or a page that names no file. Today's are listed in `scripts/loose-ends.json`, and the list only shrinks.
 - Don't commit code that is commented out, or a placeholder that looks finished. An unfinished part says so, and its goal records it.
 - Each suppression, such as `biome-ignore`, `@ts-expect-error` or a skipped test, states its reason next to it. A test that is switched off also names the goal that brings it back.
 - A new module follows the patterns of the modules around it, unless the change replaces that pattern everywhere.

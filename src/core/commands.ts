@@ -617,13 +617,9 @@ export function verifyCommand(
   rig: string,
   now: Date = new Date(),
 ): VerifyResult {
-  // A command signed before the 2026-10-15 rename names its "unit" and "instance": its
-  // signature is checked over the envelope as it was signed, then it is read under the new names.
-  const legacy = legacyEnvelope(input);
-  const parsed = SignedCommand.safeParse(legacy ? legacy.normalized : input);
+  const parsed = SignedCommand.safeParse(input);
   if (!parsed.success) return { ok: false, reason: "malformed command" };
   const { envelope, signature } = parsed.data;
-  const signedForm = legacy ? legacy.signed : envelope;
   let key: KeyObject;
   try {
     key = createPublicKey(publicKeyPem);
@@ -634,7 +630,7 @@ export function verifyCommand(
   try {
     valid = edVerify(
       null,
-      Buffer.from(canonicalJson(signedForm)),
+      Buffer.from(canonicalJson(envelope)),
       key,
       Buffer.from(signature, "base64"),
     );
@@ -659,38 +655,6 @@ export function verifyCommand(
     };
   }
   return { ok: true, envelope, payload: payload.data };
-}
-
-const LEGACY_KINDS: Record<string, string> = {
-  pause_instance: "pause_run",
-  resume_instance: "resume_run",
-};
-const LEGACY_KEYS: Record<string, string> = {
-  instance: "run",
-  source_instance: "source_run",
-  source_unit: "source_rig",
-};
-
-/** An envelope from before the rename: as signed, and read under the new names. */
-function legacyEnvelope(input: unknown): { signed: unknown; normalized: unknown } | undefined {
-  const cmd = input as { envelope?: Record<string, unknown>; signature?: unknown } | undefined;
-  const env = cmd?.envelope;
-  if (!env || typeof env !== "object" || "rig" in env || !("unit" in env)) return undefined;
-  const { unit, kind, payload, ...rest } = env;
-  const p =
-    payload && typeof payload === "object" && !Array.isArray(payload)
-      ? Object.fromEntries(
-          Object.entries(payload as Record<string, unknown>).map(([k, v]) => [
-            LEGACY_KEYS[k] ?? k,
-            v,
-          ]),
-        )
-      : payload;
-  const k = typeof kind === "string" ? (LEGACY_KINDS[kind] ?? kind) : kind;
-  return {
-    signed: env,
-    normalized: { ...cmd, envelope: { ...rest, rig: unit, kind: k, payload: p } },
-  };
 }
 
 /** Signs any JSON value (canonical form) with an Ed25519 key. Returns base64. */

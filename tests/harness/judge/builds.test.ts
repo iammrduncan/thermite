@@ -4,6 +4,7 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   symlinkSync,
   writeFileSync,
@@ -66,6 +67,19 @@ function setup(buildScript: string, outputs: string[], timeoutS = 30) {
 }
 
 describe("build store", () => {
+  test("a build a crash left half stored is swept when the store opens; stored builds stay", () => {
+    const root = mkdtempSync(join(tmpdir(), "thermite-builds-"));
+    const store = join(root, "state", "builds");
+    mkdirSync(join(store, ".tmp-1f2e3d4c", "out"), { recursive: true });
+    mkdirSync(join(store, "a".repeat(64)));
+    const scratch = join(root, "scratch");
+    mkdirSync(scratch);
+    const ledger = Ledger.open(join(root, "ledger.db"));
+    new BuildStore(join(root, "state"), scratch, new LocalRunner(scratch), ledger);
+    ledger.close();
+    assert.deepEqual(readdirSync(store), ["a".repeat(64)]);
+  });
+
   test("a build's toolchain is the image's packages and compilers, not its name (goal 135)", () => {
     const a = toolchainOf({ THERMITE_IMAGE_ID: "0.1.0-cuda+1a2b3c4d5e6f" });
     // A new image with the same packages and compilers keeps its builds.

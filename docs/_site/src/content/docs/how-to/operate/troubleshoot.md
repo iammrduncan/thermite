@@ -336,6 +336,12 @@ To have control apply the images again and wait once more, press **Try the updat
 - **Why:** a newer control opened `control.db` and migrated it. An older control never opens a newer store.
 - **Do:** run the newer control image again. Or, to go back, stop control, rename `control.db` (with its `-wal` and `-shm` files) to keep it, and copy the named `.copy` file to `control.db`. What control recorded after the upgrade is in the store you kept.
 
+### Control stops at start: its store is from before v0.1.0
+
+- **You see:** control does not start, and its log has `this control store is from before v0.1.0 (it has the table unit): start Thermite v0.1.0 on it once, which brings it to v0.1.0's tables, then this version. The store is kept as it is: /var/lib/thermite-control/control.db` (the reason in brackets varies: a table such as `model_route`, or `its table rig has no column pubkey`).
+- **Why:** v0.1.0 brought every older store to its tables as it opened it. Later versions upgrade a store that v0.1.0 wrote, and no older one. Control changed nothing in the store, and made no copy.
+- **Do:** run control's v0.1.0 image once on the store, until it answers, then stop it and start this version again.
+
 ### A join command stops at a check and then doesn't work
 
 - **You see:** the join command stops with a line such as `thermite: Podman is missing: install Podman 4.4 or later, then make a new join command`. Run again, it fails with curl's `The requested URL returned error: 401`.

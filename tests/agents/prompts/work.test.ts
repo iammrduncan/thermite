@@ -3,13 +3,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { claudeProgram, codexProgram, opencodeProgram } from "../../../src/agents/cli/index.ts";
 import type { Prompt } from "../../../src/agents/prompt.ts";
-import { runClaudeTrial } from "../../../src/harness/agents/cli/claude-code.ts";
-import { runCodexTrial } from "../../../src/harness/agents/cli/codex.ts";
-import {
-  runOpencodeResearchTrial,
-  runOpencodeTrial,
-} from "../../../src/harness/agents/cli/opencode.ts";
+import { runCliTrial } from "../../../src/harness/agents/cli/index.ts";
 import { runPiTrial } from "../../../src/harness/agents/programs.ts";
 import {
   type ResearchTrialSpec,
@@ -247,52 +243,64 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
       [
         "worker.opencode",
         (runner: Runner, s: TrialSpec) =>
-          runOpencodeTrial(s, {
-            ...common,
-            runner,
-            model: {
-              baseUrl: "http://127.0.0.1:9",
-              model: "m",
-              apiKey: "k",
-              contextWindow: 32000,
-              maxTokens: 2000,
+          runCliTrial(
+            opencodeProgram,
+            { mode: "code", spec: s },
+            {
+              ...common,
+              runner,
+              model: {
+                baseUrl: "http://127.0.0.1:9",
+                model: "m",
+                apiKey: "k",
+                contextWindow: 32000,
+                maxTokens: 2000,
+              },
             },
-          }),
+          ),
       ],
       [
         "worker.claude-code",
         (runner: Runner, s: TrialSpec) =>
-          runClaudeTrial(s, {
-            ...common,
-            runner,
-            model: {
-              api: "claude" as const,
-              harness: "claude-code" as const,
-              baseUrl: "https://api.anthropic.com",
-              model: "claude-test",
-              apiKey: "token",
-              contextWindow: 1_000_000,
-              maxTokens: 0,
+          runCliTrial(
+            claudeProgram,
+            { mode: "code", spec: s },
+            {
+              ...common,
+              runner,
+              model: {
+                api: "claude" as const,
+                harness: "claude-code" as const,
+                baseUrl: "https://api.anthropic.com",
+                model: "claude-test",
+                apiKey: "token",
+                contextWindow: 1_000_000,
+                maxTokens: 0,
+              },
             },
-          }),
+          ),
       ],
       [
         "worker.codex",
         (runner: Runner, s: TrialSpec) =>
-          runCodexTrial(s, {
-            ...common,
-            runner,
-            model: {
-              api: "chatgpt" as const,
-              harness: "codex" as const,
-              baseUrl: "https://api.openai.com/v1",
-              model: "gpt-test",
-              apiKey: "access",
-              contextWindow: 0,
-              maxTokens: 0,
-              reasoning: "off" as const,
+          runCliTrial(
+            codexProgram,
+            { mode: "code", spec: s },
+            {
+              ...common,
+              runner,
+              model: {
+                api: "chatgpt" as const,
+                harness: "codex" as const,
+                baseUrl: "https://api.openai.com/v1",
+                model: "gpt-test",
+                apiKey: "access",
+                contextWindow: 0,
+                maxTokens: 0,
+                reasoning: "off" as const,
+              },
             },
-          }),
+          ),
       ],
     ] as const;
     const paths = [env.paths.scratchDir, env.paths.stateDir, env.root, tmpdir()];
@@ -420,22 +428,29 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     const area = mkdtempSync(join(tmpdir(), "thermite-prompts-area-"));
-    await runOpencodeResearchTrial(spec, {
-      runner,
-      model: {
-        baseUrl: "http://127.0.0.1:9",
-        model: "m",
-        apiKey: "k",
-        contextWindow: 32000,
-        maxTokens: 2000,
+    await runCliTrial(
+      opencodeProgram,
+      {
+        mode: "research",
+        spec: spec,
+        area,
+        folder: await r.folder.prepareLane("r-1", spec.lane, spec.lane),
       },
-      apiUrl: "http://127.0.0.1:8700",
-      area,
-      folder: await r.folder.prepareLane("r-1", spec.lane, spec.lane),
-      live: () => undefined,
-      progress: () => undefined,
-      pollMs: 5,
-    });
+      {
+        runner,
+        model: {
+          baseUrl: "http://127.0.0.1:9",
+          model: "m",
+          apiKey: "k",
+          contextWindow: 32000,
+          maxTokens: 2000,
+        },
+        apiUrl: "http://127.0.0.1:8700",
+        live: () => undefined,
+        progress: () => undefined,
+        pollMs: 5,
+      },
+    );
     await r.close();
     const given = runs.find((x) => String(x.stdin ?? "").includes("# Research assignment"));
     assert.ok(given, "no run was given the brief");
