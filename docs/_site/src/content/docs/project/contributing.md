@@ -6,7 +6,7 @@ sidebar:
   order: 3
 ---
 
-Thermite is open source under the [MIT license](https://github.com/iammrduncan/thermite/blob/main/LICENSE), and changes are welcome. This page shows how to send a change, how to set up a working copy, which checks a change must pass, and the rules every change keeps.
+Thermite is open source under the [Apache License 2.0](https://github.com/iammrduncan/thermite/blob/main/LICENSE), and changes are welcome. This page shows how to send a change, how to set up a working copy, which checks a change must pass, and the rules every change keeps.
 
 The repository holds the rules, and this page sums them up:
 
@@ -19,7 +19,7 @@ The repository holds the rules, and this page sums them up:
 | [CODE_OF_CONDUCT.md](https://github.com/iammrduncan/thermite/blob/main/CODE_OF_CONDUCT.md) | The code of conduct: the Contributor Covenant 2.1 |
 | [SECURITY.md](https://github.com/iammrduncan/thermite/blob/main/SECURITY.md) | How to report a security problem privately |
 
-There is no contributor agreement to sign and no sign-off line to add to your commits. What you contribute is published under the project's MIT license.
+There is no contributor agreement to sign and no sign-off line to add to your commits. What you contribute is published under the project's Apache License 2.0: its section 5 says a contribution you submit is under its terms.
 
 Before you start on a large change, say what you plan in a [GitHub issue](https://github.com/iammrduncan/thermite/issues) or on [Discord](https://discord.gg/3Qs2uejUf9), so that it fits the [roadmap](roadmap.md).
 

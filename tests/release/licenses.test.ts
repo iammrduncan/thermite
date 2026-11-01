@@ -6,7 +6,7 @@ import { CONTAINERFILE, finalStage, repoFile, stage } from "../helpers/container
 
 /**
  * The licence label each published image carries (.github/workflows/release.yml), as an SPDX
- * expression: Thermite is MIT, and the harness images, the rig image built on the CUDA one and
+ * expression: Thermite is Apache-2.0, and the harness images, the rig image built on the CUDA one and
  * the supervisor image (for its advisors, goal 073) also carry the Codex CLI (Apache-2.0, with
  * its NOTICE) beside OpenCode (MIT).
  */
@@ -20,7 +20,7 @@ const entry = (key: string) =>
   new RegExp(`- key: ${key}\\n((?: {12}[^\\n]*\\n)+)`).exec(workflow)?.[1] ?? "";
 
 test("the published images' licence labels name every licence they carry", () => {
-  assert.match(entry("control"), / {12}licenses: MIT\n/);
+  assert.match(entry("control"), / {12}licenses: Apache-2\.0\n/);
   assert.match(entry("supervisor"), / {12}licenses: "MIT AND Apache-2\.0"\n/);
   assert.match(entry("harness"), / {12}licenses: "MIT AND Apache-2\.0"\n/);
   assert.match(entry("harness-cuda"), / {12}licenses: "MIT AND Apache-2\.0"\n/);
@@ -50,7 +50,7 @@ test("the published images' licence labels name every licence they carry", () =>
   );
 });
 
-test("control's image carries kubectl's licence file, the Apache License 2.0, while its label stays MIT", () => {
+test("control's image carries kubectl's licence file, the Apache License 2.0, as Thermite's own licence is", () => {
   const root = join(import.meta.dirname, "..", "..");
   // Control's target: what the published image holds.
   const final = finalStage("control");
@@ -64,7 +64,25 @@ test("control's image carries kubectl's licence file, the Apache License 2.0, wh
   assert.match(license, /^\n +Apache License\n +Version 2\.0, January 2004\n/);
   assert.match(license, /END OF TERMS AND CONDITIONS/);
   assert.equal(license.length, 11358);
-  assert.match(entry("control"), / {12}licenses: MIT\n/);
+  assert.match(entry("control"), / {12}licenses: Apache-2\.0\n/);
+});
+
+test("Thermite is under the Apache License 2.0, and each image carries its license and notice", () => {
+  const root = join(import.meta.dirname, "..", "..");
+  // The same text as kubectl's: the Apache License 2.0, whole, appendix included.
+  assert.equal(
+    readFileSync(join(root, "LICENSE"), "utf8"),
+    readFileSync(join(root, "containers", "control", "kubectl", "LICENSE"), "utf8"),
+  );
+  assert.match(readFileSync(join(root, "NOTICE"), "utf8"), /^Thermite\nCopyright 2026 /);
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { license: string };
+  assert.equal(pkg.license, "Apache-2.0");
+  for (const target of ["control", "supervisor", "harness"] as const)
+    assert.match(
+      finalStage(target),
+      /\nCOPY LICENSE NOTICE \/usr\/local\/share\/doc\/thermite\/\n/,
+      target,
+    );
 });
 
 test("the supervisor's image carries OpenCode and the Codex CLI at the harness image's versions, with their licences", () => {

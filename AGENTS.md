@@ -20,7 +20,7 @@ Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The publi
 The full list, with dates, is in [docs/plan/decisions.md](docs/plan/decisions.md).
 
 - **Language:** TypeScript wherever possible, on Node.js LTS. Use another language only where a target project's own tooling requires it, for example measurement scripts in a project kit.
-- **License:** MIT.
+- **License:** Apache License 2.0 (MIT up to v0.1.0).
 - **Campaign modes:** hill climb, goal and research.
 - **State and agents:** the harness owns all research state. Every agent invocation starts fresh from context the harness builds. Parallel workers are isolated, and a central stateless planner assigns their experiments.
 - **Agents never judge.** Measurement, verdicts, completion and promotion live in code the agents cannot write.

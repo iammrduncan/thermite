@@ -5,7 +5,7 @@
 Thermite is open-source **autoresearch**: AI agents that run experiments in a loop, for hours or days, on your own machines. You set the goal: a faster program, a list of checks to pass, or a question to answer. A judge that the agents can't see or change measures every attempt, and keeps only what it confirms. One dashboard, with a REST API and MCP, shows and steers every campaign on every machine.
 
 [![ci](https://github.com/iammrduncan/thermite/actions/workflows/ci.yml/badge.svg)](https://github.com/iammrduncan/thermite/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Node.js 22.19+](https://img.shields.io/badge/node-%E2%89%A522.19-339933)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/3Qs2uejUf9)
 
@@ -144,4 +144,4 @@ Thermite builds on other people's research and software. [Credits](https://useth
 
 ## License
 
-[MIT](LICENSE)
+[Apache License 2.0](LICENSE). Version 0.1.0 was released under the MIT License.

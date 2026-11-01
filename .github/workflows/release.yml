@@ -141,9 +141,9 @@ jobs:
             suffix: ""
             cuda: false
             description: "Thermite's control service: the dashboard, the REST API and MCP."
-            licenses: MIT
+            licenses: Apache-2.0
           # The harness images carry the Codex CLI (Apache-2.0, with its NOTICE) and OpenCode (MIT)
-          # beside Thermite (MIT): their licence label is the SPDX expression of all three.
+          # beside Thermite (Apache-2.0): their licence label is the SPDX expression of all three.
           - key: harness
             repository: thermite-harness
             target: harness

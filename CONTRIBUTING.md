@@ -4,7 +4,7 @@ Thank you for helping. Fixes, documentation, kits, bug reports and ideas are all
 
 ## The terms
 
-- Thermite is under the [MIT license](LICENSE). What you contribute is published under it.
+- Thermite is under the [Apache License 2.0](LICENSE). What you contribute is published under it: section 5 of the license says a contribution you submit is under its terms.
 - There is no contributor agreement to sign, and no sign-off line to add to your commits.
 - Everyone in the project follows the [code of conduct](CODE_OF_CONDUCT.md), the Contributor Covenant 2.1.
 

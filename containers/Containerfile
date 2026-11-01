@@ -167,6 +167,8 @@ WORKDIR /opt/thermite
 COPY --from=build /src/package.json ./
 COPY --from=control-modules /src/node_modules ./node_modules
 COPY --from=build /src/dist ./dist
+# Thermite's license and notice, which every copy of it carries (Apache License 2.0, section 4).
+COPY LICENSE NOTICE /usr/local/share/doc/thermite/
 # xterm.js, which draws a trial's terminal on Live (goal 169): the copy kept in the repository, with
 # its MIT licence. Control serves it only when its SHA-256 is the pinned one.
 COPY vendor/xterm ./vendor/xterm
@@ -217,6 +219,8 @@ COPY --from=supervisor-modules /src/node_modules ./node_modules
 # node-pty, built in the pty stage: the terminal host's pseudo-terminals (goal 169).
 COPY --from=pty /src/node_modules/node-pty ./node_modules/node-pty
 COPY --from=build /src/dist ./dist
+# Thermite's license and notice, which every copy of it carries (Apache License 2.0, section 4).
+COPY LICENSE NOTICE /usr/local/share/doc/thermite/
 COPY containers/thermite /usr/local/bin/thermite
 # Claude Code, when the build asked for it (CLAUDE_CODE_VERSION); otherwise this copies nothing.
 COPY --from=claude /out/ /usr/local/bin/
@@ -350,6 +354,8 @@ RUN --mount=type=bind,from=node,source=/usr/local,target=/mnt/node \
  && rm -rf ../node-addon-api \
  && node -e "if (typeof require('/opt/thermite/node_modules/node-pty').native.open !== 'function') process.exit(1)"
 COPY --from=build /src/dist ./dist
+# Thermite's license and notice, which every copy of it carries (Apache License 2.0, section 4).
+COPY LICENSE NOTICE /usr/local/share/doc/thermite/
 COPY --chmod=0755 containers/thermite /usr/local/bin/thermite
 # The OpenCode harness: its binary, and Thermite's tools for an agent's own shell.
 COPY --from=opencode /usr/local/bin/opencode /usr/local/bin/opencode

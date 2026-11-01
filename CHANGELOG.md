@@ -4,6 +4,10 @@ Each release of Thermite, newest first. Versions 0.x make no upgrade promise: re
 
 ## [Unreleased]: v0.1.1
 
+### License
+
+- Thermite is now under the Apache License 2.0, with a `NOTICE` file; it was under MIT up to v0.1.0, which stays under MIT. Every published image carries Thermite's `LICENSE` and `NOTICE` in `/usr/local/share/doc/thermite/`, and control's image label is now `Apache-2.0`.
+
 ### Operate
 
 - The tests are in `tests/`, in folders that mirror `src/`, with their helpers, fakes and stand-ins in `tests/helpers/` (goal 160). `npm test` stops if it finds a test file in `src/`.

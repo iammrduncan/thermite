@@ -7,7 +7,8 @@ Decisions that shape the whole product, newest last in each section. A decision 
 | Date | Decision |
 | --- | --- |
 | 2026-10-14 | TypeScript wherever possible, on Node.js LTS. Another language only where a target project's own tooling needs it, such as a measurement script in a kit. |
-| 2026-10-14 | MIT license. |
+| 2026-10-14 | MIT license. Replaced on 2026-11-01 (below). |
+| 2026-11-01 | The Apache License 2.0, from v0.1.1 on, with a NOTICE file; every published image carries both. v0.1.0 was released under MIT and stays so. The owner's words: "update the LICENSE of this repo from MIT to Apache 2.0". |
 | 2026-10-14 | Three campaign modes: hill climb, goal and research. |
 | 2026-10-14 | SQLite stores, one for each harness and one for control, and a single control replica. |
 | 2026-10-15 | The names: a **rig** is one judge, its agents and a supervisor on a set of devices, and a machine can host several rigs. A **run** is one campaign on one rig from one starting point. The hierarchy is Campaign ▸ Run ▸ Lane ▸ Trial ▸ Attempt. |
