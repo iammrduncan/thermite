@@ -4,6 +4,7 @@ import { RIG_ID, RIG_ID_WORDS } from "../../ids.ts";
 import { ReachBody } from "../../reach.ts";
 import { POD_CONFIG_ENV } from "../../tunnel.ts";
 import type { Route } from "../route.ts";
+import { EXPORT_NAME } from "./rigs.ts";
 
 /**
  * Control's API as the command line calls it, with the owner's token (src/control/api/ and the
@@ -537,6 +538,35 @@ export const MCP_SERVER_DELETE = {
   method: "DELETE",
   path: "/v1/mcp-servers/:name",
   answer: z.unknown(),
+} as const satisfies Route;
+
+/** The most exports one delete names: the Exports page lists the newest 1,000. */
+export const EXPORTS_DELETE_MAX = 1000;
+
+/** An export control keeps, by its rig and its name. */
+const ExportOnControl = z.strictObject({
+  rig: z.string().min(1).max(80),
+  name: z.string().regex(EXPORT_NAME, "an export's name is a time and 8 hexadecimal characters"),
+});
+
+/**
+ * Exports control keeps, deleted by hand (control/exports.ts): every one named, or none when one
+ * is still arriving (409, in words). One control does not have is in `gone`. `said` says what
+ * went, as the Exports page does.
+ */
+export const EXPORTS_DELETE = {
+  method: "POST",
+  path: "/v1/exports/delete",
+  what: "the delete of exports",
+  body: z.strictObject({ exports: z.array(ExportOnControl).min(1).max(EXPORTS_DELETE_MAX) }),
+  answer: z.looseObject({
+    deleted: z.array(
+      z.looseObject({ rig: z.string(), name: z.string(), bytes: z.number(), files: z.number() }),
+    ),
+    gone: z.array(z.looseObject({ rig: z.string(), name: z.string() })),
+    said: z.string(),
+  }),
+  maxBytes: 256 * 1024,
 } as const satisfies Route;
 
 /** An entry of the list of addresses cluster rigs may reach, as control keeps it. */

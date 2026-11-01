@@ -43,7 +43,7 @@ A rig and control talk on the message bus, below, but for three things that go o
 | The agents' searches and reads of the knowledge base | the bus, an ask | rig → control, and back | as an agent asks | — |
 | The knowledge base's files | the bus's `KB_FILES` stream | rig → control | every 60 seconds, before the events | `THERMITE_POLL_SECONDS` |
 | The daily report | the bus, an ask | rig → control | once a day | — |
-| Exports, when the rig has no results repository, in parts of 8 MiB | HTTPS | rig → control | after each export, at most once an hour | `THERMITE_EXPORT_MINUTES` |
+| Exports, when the rig has no results repository, in parts of 8 MiB | HTTPS | rig → control | after each export: one when each run ends, and one each time someone asks | **Edit rig** › **Exports** |
 | Each new champion's patch | HTTPS | rig → control | after each export that holds one | — |
 | A kit or a project kept on control, as git | HTTPS | control → rig | when an assignment needs it | — |
 

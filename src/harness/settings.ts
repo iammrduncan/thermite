@@ -15,11 +15,6 @@ export const HARNESS_NUMBERS = {
   calibrationBlocks: { name: "THERMITE_CALIBRATION_BLOCKS", rule: { integer: true }, fallback: 6 },
   usdPerMTokIn: { name: "THERMITE_LLM_USD_PER_MTOK_IN", rule: { unit: "US dollars" } },
   usdPerMTokOut: { name: "THERMITE_LLM_USD_PER_MTOK_OUT", rule: { unit: "US dollars" } },
-  exportMinutes: {
-    name: "THERMITE_EXPORT_MINUTES",
-    rule: { unit: "minutes", aboveMin: true },
-    fallback: 60,
-  },
   trialMinutes: {
     name: "THERMITE_TRIAL_MINUTES",
     rule: { unit: "minutes", integer: true, min: 1, max: 1440 },
@@ -55,7 +50,6 @@ export function harnessNumbers(env: Record<string, string | undefined>) {
     calibrationBlocks: readNumber(env, n.calibrationBlocks),
     usdPerMTokIn: readNumber(env, n.usdPerMTokIn),
     usdPerMTokOut: readNumber(env, n.usdPerMTokOut),
-    exportEveryMs: readNumber(env, n.exportMinutes) * 60_000,
     /** The disk floor, in GiB; 0: none. */
     diskFloorGib: readNumber(env, n.diskFloorGib),
     /** A drain's deadline when its command gives none, in minutes. */

@@ -187,13 +187,15 @@ export function settlePropagations(ledger: Ledger, by: string): number {
 }
 
 /**
- * The champion files an export publishes: for each run's current champion (beyond the
- * seed), the binary patch from the seed and a manifest with the tree and the patch's sha256.
- * Returns the files written (relative paths) and the publications to announce.
+ * The champion files an export publishes: for each run's current champion (beyond the seed) not
+ * published yet, or `run`'s alone, the binary patch from the seed and a manifest with the tree and
+ * the patch's sha256. Returns the files written (relative paths) and the publications to announce.
  */
 export async function championFiles(input: {
   ledger: Ledger;
   mirrorFor: (repo: string) => string;
+  /** One run's champion only (a run's export at its end). */
+  run?: string | undefined;
   write: (rel: string, data: string | Buffer) => void;
 }): Promise<
   {
@@ -214,7 +216,7 @@ export async function championFiles(input: {
     path: string;
   }[] = [];
   for (const inst of input.ledger.runs.list()) {
-    if (inst.mode === "research") continue;
+    if (inst.mode === "research" || (input.run !== undefined && inst.id !== input.run)) continue;
     const champ = input.ledger.champions.current(inst.id);
     if (champ.seq <= 1 || !champ.attempt) continue;
     const published = input.ledger.events.newest("champion_published", {

@@ -227,7 +227,7 @@ If **History** says that the planner planned a round `(by the fixed rules: the m
 
 ## 11. Take the result home
 
-The rig exports its results every hour. To have them now:
+The champion reaches control with the run's export at its end, or, while the run still runs, with an export of what changed. To ask the rig for one now:
 
 1. Open **Rigs**, then **local-1**, and press **Export**. Leave **What changed** chosen and press **Export** under it. A line at the top of the page says `Sent to local-1 at`, the time, and `Waiting for the rig to take it.`, then, within a minute, `Done.`
 2. About a minute later, open **Campaigns** in the sidebar. Under **At work now**, on the card of your run, press `primes-speed › primes-speed-1`. On the run's **Overview**, under **The run**, beside **Champion**, a link says `download champion #2 as a patch`, then `applies to` and the commit your campaign started from. If the link isn't there yet, press **refresh** after another minute.

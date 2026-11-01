@@ -80,8 +80,10 @@ async function main(): Promise<void> {
   const executorIds = reclaimJobs(ledger, judging);
   const parts = agentParts(ctx, ledger, service, targets);
 
-  // A check a previous controller left running is over.
+  // A check a previous controller left running is over, and a run's export at its end that it
+  // wrote and did not record is recorded, before the API lets the supervisor take it.
   service.reconcileRigChecks();
+  service.recordRunEndsInOutbox();
   addIsolationCheck(ctx, service);
   // The isolation check at every start, before the API, the judge or any agent runs: nothing of
   // theirs can be running yet, and control sees the result beside the rig's hardware.
@@ -128,7 +130,7 @@ async function main(): Promise<void> {
     parts,
     split: { gpuSet, judgeNow },
   });
-  startLoops(ctx, { ledger, service, settings, scheduler, executors, executorIds, server });
+  startLoops({ ledger, service, settings, scheduler, executors, executorIds, server });
 }
 
 main().catch((err) => {

@@ -106,7 +106,7 @@ describe("exports sent to control", () => {
     assert.deepEqual(after.queue, []);
     assert.deepEqual(after.uploaded, [NAME]);
     assert.equal(after.lastError, undefined);
-    assert.ok(after.lastLedgerAt, "the first export takes the ledger snapshot along");
+    assert.ok(after.lastLedgerAt, "the copy of the ledger in the export goes along");
     assert.ok(s.sent().pieces > 10, "in many pieces");
 
     const list = (await (
@@ -133,8 +133,8 @@ describe("exports sent to control", () => {
     assert.equal(kept.rig, "rig-a");
     assert.ok(kept.created_at);
 
-    // The next export within the day holds no copy of the ledger (the harness puts one in once a
-    // day, outbox.ts); control takes it so.
+    // An export of what changed holds no copy of the ledger (only a full export does,
+    // outbox.ts); control takes it so.
     const next = "20261020T130000Z-89abcdef";
     const { "ledger.sqlite": _ledger, ...withoutLedger } = files();
     writeExport(s.outbox, next, withoutLedger);

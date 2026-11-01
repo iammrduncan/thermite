@@ -197,6 +197,7 @@ export function createControlApi(
     publicUrl: parts.publicUrl,
     kits: parts.kits,
     kbFiles: opts.kbFiles,
+    exportFiles,
   });
 
   return app;

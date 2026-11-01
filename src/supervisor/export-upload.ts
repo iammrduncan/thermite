@@ -18,8 +18,8 @@ import { verifyExport } from "./git-export.ts";
  * they stopped. Control checks every file against the export's manifest and keeps the export only
  * once every file arrived with its SHA-256. Until then the export stays in the outbox.
  *
- * What goes is what a results repository would get: every file of the manifest, and the ledger
- * snapshot at most once a day (and always with a full export).
+ * What goes is what a results repository would get: every file of the manifest, with the copy of
+ * the ledger a full export holds.
  */
 
 export interface UploadState {

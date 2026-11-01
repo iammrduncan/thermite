@@ -7,13 +7,13 @@ import { gitText } from "../common/git.ts";
 
 /**
  * The supervisor's git exporter. The harness writes exports into the outbox (read-only here):
- * patches and manifests of new attempts, the events since the last export, and a ledger
- * snapshot. This turns each verified export into packed commits on a few branches of the
- * results repository, without a checkout:
+ * patches and manifests of new attempts, the events since the last export, and, in a full
+ * export, a copy of the ledger. This turns each verified export into packed commits on a few
+ * branches of the results repository, without a checkout:
  *
  *   thermite/<rig>/attempts  attempts/<id>.patch, attempts/<id>.json, events/<export>.jsonl,
  *                            champions/<run>/<seq>.patch and .json
- *   thermite/<rig>/ledger    ledger.sqlite and its manifest (each export that holds a copy)
+ *   thermite/<rig>/ledger    ledger.sqlite and its manifest (each full export)
  *
  * and pushes them with the rig's deploy key. Git work is deterministic code only; no model
  * ever runs git here.
@@ -228,8 +228,8 @@ export async function exportOnce(cfg: ExportConfig, state: ExportState): Promise
       files,
       `${cfg.rig}: export ${name}, ${attempts} attempts, events ${manifest.from_event + 1}-${manifest.through_event}`,
     );
-    // The harness puts a copy of the ledger in an export when one is due (outbox.ts), and always
-    // in a full export: a full reset wipes the ledger after it.
+    // The harness puts a copy of the ledger in a full export (outbox.ts): a full reset wipes the
+    // ledger after it.
     if (manifest.files["ledger.sqlite"]) {
       await commitFiles(
         repo,

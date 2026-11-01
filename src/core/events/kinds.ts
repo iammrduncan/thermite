@@ -122,6 +122,7 @@ export const EVENT_KINDS = [
   "rig_drain",
   "rig_settings_changed",
   "run_created",
+  "run_end_exported",
   "run_status",
   "source_fetched",
   "submission_refused",

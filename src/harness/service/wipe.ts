@@ -71,6 +71,7 @@ const HOUSEKEEPING = new Set([
   "command_rejected",
   "run_status",
   "export_written",
+  "run_end_exported",
   "champion_published",
   "wipe_requested",
 ]);

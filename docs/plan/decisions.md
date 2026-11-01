@@ -77,6 +77,7 @@ Decisions that shape the whole product, newest last in each section. A decision 
 | 2026-10-16 | Campaigns are operated only through control: the dashboard, REST, MCP or the CLI. |
 | 2026-10-16 | The owner mints the admin token, and control keeps only its hash. An operator token lets agents assign, pause, resume, redirect, reset, export and message agents. Approvals, audits and reviews stay the owner's. |
 | 2026-10-18 | Cards, call-outs and reports are written in Simplified Technical English. |
+| 2026-11-01 | Everything is kept everywhere by default. Users design their own retention policies, with full control over what each removes, where and when. Exports are made only when a run ends or when someone asks for one, never on a timer, and are removed only by hand from the Exports menu. ([125](goals/125-code-to-the-conventions.goal)) |
 
 ## Releases and planning
 

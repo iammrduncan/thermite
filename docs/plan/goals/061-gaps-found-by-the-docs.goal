@@ -26,8 +26,8 @@ The writers and verifiers of the documentation site (goal [060](_completed/060-d
 - [ ] Rigs on other computers: control under compose answers only on the same computer, and Thermite ships no example, such as a reverse proxy, that serves it to rigs elsewhere.
 - [ ] Start after a reboot: nothing brings the compose stack back after the computer restarts where the engine does not do it itself (Podman needs its own restart service).
 - [ ] Advisors on a model server on the host: compose gives `host.docker.internal` to control and the harness, not to the supervisor, so under native Linux Docker an advisor may not find that server (inferred from `compose.yaml`, not run).
-- [ ] The harness image's apt packages are not pinned, so two builds of one commit can have different toolchains (`containers/harness/Containerfile`).
-- [ ] The supervisor image installs `python3` "for an operator's staging scripts", but Thermite ships no such script (`containers/supervisor/Containerfile`).
+- [ ] The harness image's apt packages are not pinned, so two builds of one commit can have different toolchains (`containers/Containerfile`, its `harness` target).
+- [ ] The supervisor image installs `python3` "for an operator's staging scripts", but Thermite ships no such script (`containers/Containerfile`, its `supervisor` target).
 - [ ] `package.json` asks for Node.js 22.19 or later, but CI tests only the newest 22.x and 24 (`.github/workflows/ci.yml`).
 
 ### Settings
@@ -175,7 +175,7 @@ The writers and verifiers of the documentation site (goal [060](_completed/060-d
 - [ ] With two teachers and no combiner, only the first answer is used, so the second call is spent for nothing; a teacher pair from Edit rig always has two (`src/supervisor/advisors/teachers/round.ts`, `src/supervisor/advisors/routes.ts`).
 - [ ] The combiner's prompt always says "Two independent reviewers", also when there is one teacher (`src/agents/roles/merged-by.ts`).
 - [ ] The advisors file is read only when the supervisor starts, while Edit rig's roles are read every round (`src/supervisor/main.ts`).
-- [ ] The supervisor image has no agent command line for the `cli` advisor runtime, and nothing says how to add one (`containers/supervisor/Containerfile`).
+- [ ] The supervisor image has no agent command line for the `cli` advisor runtime, and nothing says how to add one (`containers/Containerfile`, its `supervisor` target).
 
 ### Results and propagation
 

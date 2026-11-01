@@ -140,7 +140,6 @@ const composeEnv = {
   THERMITE_POLL_SECONDS: "2",
   THERMITE_PROMOTION: "auto",
   THERMITE_CALIBRATION_BLOCKS: "0",
-  THERMITE_EXPORT_MINUTES: "0.1",
   THERMITE_MODEL_BASE_URL: `http://${hostName}:${port}/v1`,
   THERMITE_MODEL: "scripted",
   // Agents plan epochs but run no trials: this acceptance is about steering, not workers.
@@ -299,7 +298,13 @@ try {
     promoted.audits,
   );
 
-  // 3. Propagation and cross-verification.
+  // 3. Propagation and cross-verification. A rig publishes its champion with an export of what
+  // changed, asked for here: nothing is exported on a timer.
+  const asked = await api("/v1/commands", {
+    method: "POST",
+    body: JSON.stringify({ rig: "local-1", kind: "export_now", payload: {} }),
+  });
+  check("an export of what changed is asked for", asked.status === 201, asked.body);
   await until(
     "the champion published",
     async () => (await runOf("local-1"))?.published?.seq === 2,

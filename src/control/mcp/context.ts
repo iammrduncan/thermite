@@ -9,6 +9,7 @@ import {
 } from "../../core/commands.ts";
 import type { BuildInfo } from "../../core/version.ts";
 import type { Credential } from "../credential.ts";
+import type { ExportFiles } from "../exports.ts";
 import type { KbFiles } from "../kb/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import type { DeploymentDriver, RunpodDriver } from "../lifecycle.ts";
@@ -57,6 +58,8 @@ export interface McpOptions {
   kits?: KitRepos | undefined;
   /** The knowledge base's files: its settings' default for orphans comes with them (none: 0). */
   kbFiles?: KbFiles | undefined;
+  /** Where control keeps rigs' exports (none: it keeps none), which delete_exports deletes from. */
+  exportFiles?: ExportFiles | undefined;
 }
 
 const json = (value: unknown) => ({

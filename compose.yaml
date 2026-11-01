@@ -245,7 +245,6 @@ services:
       THERMITE_RESEARCH_MAX_MB: "${THERMITE_RESEARCH_MAX_MB:-}"
       THERMITE_LLM_USD_PER_MTOK_IN: "${THERMITE_LLM_USD_PER_MTOK_IN:-}"
       THERMITE_LLM_USD_PER_MTOK_OUT: "${THERMITE_LLM_USD_PER_MTOK_OUT:-}"
-      THERMITE_EXPORT_MINUTES: "${THERMITE_EXPORT_MINUTES:-60}"
       # The free space the rig keeps (GiB; empty: 5), and how long a drain waits before it asks
       # the owner (minutes; empty: 60).
       THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"
@@ -370,7 +369,6 @@ services:
       THERMITE_MAX_TRIALS: "${THERMITE_MAX_TRIALS:-1}"
       THERMITE_TRIAL_MINUTES: "${THERMITE_TRIAL_MINUTES:-}"
       THERMITE_MAX_TURNS: "${THERMITE_MAX_TURNS:-}"
-      THERMITE_EXPORT_MINUTES: "${THERMITE_EXPORT_MINUTES:-60}"
       # The free space the rig keeps (GiB; empty: 5), and how long a drain waits before it asks
       # the owner (minutes; empty: 60).
       THERMITE_DISK_FLOOR_GIB: "${THERMITE_DISK_FLOOR_GIB:-}"

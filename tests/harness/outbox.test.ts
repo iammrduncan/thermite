@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { sha256Hex } from "../../src/core/canonical.ts";
 import { parseContract } from "../../src/core/contract.ts";
 import { Ledger } from "../../src/harness/ledger/index.ts";
-import { LEDGER_COPY_EVERY_MS, writeExport } from "../../src/harness/outbox.ts";
+import { writeExport } from "../../src/harness/outbox.ts";
 import { hillClimbFixture } from "../helpers/fixtures.ts";
 
 test("a run's export takes its attempts' verdicts and its judge's jobs, and no other run's (goal 170)", () => {
@@ -108,8 +108,8 @@ test("each of the ledger's tables is placed on purpose in an export's copy: copi
   copy.close();
 });
 
-test("an export of the chain holds a copy of the ledger once a day; a full export always; a run's never", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "thermite-ledger-due-"));
+test("only a full export holds a copy of the ledger: an export of what changed never, a run's never", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "thermite-ledger-copy-"));
   let now = Date.parse("2026-10-31T00:00:00Z");
   const ledger = Ledger.open(join(dir, "l.db"), () => new Date(now));
   const exportOf = (o: { full?: boolean; run?: string } = {}) =>
@@ -117,14 +117,11 @@ test("an export of the chain holds a copy of the ledger once a day; a full expor
   const holds = (r: { dir: string }) =>
     "ledger.sqlite" in
     (JSON.parse(readFileSync(join(r.dir, "manifest.json"), "utf8")) as { files: object }).files;
-  assert.equal(holds(await exportOf()), true, "the first export holds one");
-  now += 3_600_000;
-  assert.equal(holds(await exportOf()), false, "an hour later: none");
+  assert.equal(holds(await exportOf()), false, "the first export of what changed: none");
+  now += 2 * 24 * 3_600_000;
+  assert.equal(holds(await exportOf()), false, "two days later: still none");
   assert.equal(holds(await exportOf({ full: true })), true, "a full export: always");
-  now += LEDGER_COPY_EVERY_MS - 1;
-  assert.equal(holds(await exportOf()), false, "within a day of the full export's copy: none");
-  now += 1;
-  assert.equal(holds(await exportOf()), true, "a day after it: one");
+  assert.equal(holds(await exportOf({ full: true })), true, "the next full export too");
   assert.equal(holds(await exportOf({ run: "r-1" })), false, "a run's export: never");
 });
 

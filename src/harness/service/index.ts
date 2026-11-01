@@ -703,7 +703,17 @@ export class HarnessService {
     return reports.removeExports(this, names);
   }
 
-  export(actor: string, o: { full?: boolean; run?: string | undefined } = {}) {
+  export(actor: string, o: { full?: boolean; run?: string | undefined; end?: boolean } = {}) {
     return reports.exportForSupervisor(this, actor, o);
+  }
+
+  /** Each run's export at its end, once its closing work is done: service/reports.ts. */
+  exportRunEnds(actor: string, closingFailed: (run: string) => boolean = () => false) {
+    return reports.exportRunEnds(this, actor, closingFailed);
+  }
+
+  /** At the start: a run's end export a crash left unrecorded is recorded (service/reports.ts). */
+  recordRunEndsInOutbox(): number {
+    return reports.recordRunEndsInOutbox(this);
   }
 }

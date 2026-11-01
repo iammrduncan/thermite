@@ -721,19 +721,4 @@ describe("ledger", () => {
     assert.deepEqual(seen, all);
     assert.equal(new Set(seen).size, seen.length);
   });
-
-  test("an export's own event is not something new to export", () => {
-    const { ledger } = setup();
-    ledger.exports.record({
-      throughEvent: ledger.latestEventId(),
-      path: "x",
-      manifest: {},
-      actor: "t",
-    });
-    const through = ledger.exports.last()?.through_event ?? 0;
-    assert.equal(ledger.recordedAfter(through), true);
-    assert.equal(ledger.recordedAfter(through, ["export_written"]), false);
-    appendOther(ledger, "t", "tick", null, {});
-    assert.equal(ledger.recordedAfter(through, ["export_written"]), true);
-  });
 });

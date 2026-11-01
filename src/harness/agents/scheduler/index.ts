@@ -97,6 +97,14 @@ export class Scheduler {
     return this.sched.running.size;
   }
 
+  /**
+   * Whether a closed run's closing work failed in this process, so its export at its end goes
+   * without it: a research run's final report (research/end.ts tries it once a process).
+   */
+  closingFailed(run: string): boolean {
+    return this.sched.finalFailed.has(run);
+  }
+
   /** The run whose planner's call is out now, for the health route (goal 173). */
   get planningFor(): string | undefined {
     return this.sched.planning?.run;

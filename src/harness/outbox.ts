@@ -24,9 +24,9 @@ import { championFiles } from "./propagation.ts";
 export const PROMPTS_FILE = "prompts.jsonl.gz";
 
 /**
- * Where each of the ledger's tables goes in an export's copy of the ledger (ledger.sqlite). Every
- * table is on one of the two lists, on purpose: a test fails on a table that is on neither, so a
- * new table is placed when it is made. The held_out table, the judge's whole record of each
+ * Where each of the ledger's tables goes in a full export's copy of the ledger (ledger.sqlite).
+ * Every table is on one of the two lists, on purpose: a test fails on a table that is on neither,
+ * so a new table is placed when it is made. The held_out table, the judge's whole record of each
  * held-out check, never goes into an export. The copy goes to the results repository and to
  * control: a table that holds a secret goes on `dropped`.
  */
@@ -89,23 +89,20 @@ export const LEDGER_COPY = {
  * into the shared outbox, and the supervisor pushes them to the results repository as packed
  * commits. An export holds patches and manifests for attempts recorded since the last export,
  * the events since then, the runs' field notes, research notes, briefings and prompts sent since
- * then, the runs' part of their campaigns' collections in the knowledge base that changed since then, a
- * consistent ledger snapshot, each new run champion as a patch against its seed (what other rigs
- * need to judge it themselves), and the research folder of each run that finished. A full export
- * also holds the research archive and the research folder of every run, finished or not.
+ * then, the runs' part of their campaigns' collections in the knowledge base that changed since then,
+ * each new run champion as a patch against its seed (what other rigs need to judge it
+ * themselves), and the research folder of each run that finished. A full export also holds a
+ * consistent copy of the ledger, the research archive and the research folder of every run,
+ * finished or not.
  *
- * A run's export (goal 103: Export on a run's page) holds that run alone, from its start: its
- * events, attempts, field notes, research notes, briefing, prompts sent and part of its campaign's
- * folder, its research folder as it stands and the pages it fetched. It holds no ledger snapshot (the ledger is
- * every run's) and publishes no champion, and it stays outside the rig's chain of exports: the
- * next export still starts where the last one of the chain ended, and a full reset never takes it.
+ * A run's export (goal 103: Export on a run's page, and each run's export at its end:
+ * service/reports.ts) holds that run alone, from its start: its events, attempts, field notes,
+ * research notes, briefing, prompts sent and part of its campaign's folder, its research folder as
+ * it stands and the pages it fetched. It holds no copy of the ledger (the ledger is every run's),
+ * and it stays outside the rig's chain of exports: the next export still starts where the last one
+ * of the chain ended, and a full reset never takes it. A run's export at its end also publishes the
+ * run's champion when it is not published yet, as the chain's exports do; one asked for does not.
  */
-
-/**
- * How often an export of the chain holds a copy of the ledger: once a day. A full export always
- * holds one, and a run's export never does. The supervisor sends on each copy it finds.
- */
-export const LEDGER_COPY_EVERY_MS = 24 * 3_600_000;
 
 /** Events an export reads and writes at a time. */
 const EXPORT_PAGE = 1_000;
@@ -181,7 +178,11 @@ function writeEvents(
 
 export interface ExportResult {
   id: number;
+  /** The export's name in the outbox, and its folder there. */
+  name: string;
   dir: string;
+  /** The last event it holds. */
+  through_event: number;
   attempts: number;
   events: number;
 }
@@ -205,6 +206,8 @@ export async function writeExport(input: {
   researchFolder?: ((run: string) => { root: string; files: string[] }) | undefined;
   /** A run's export: that run alone, outside the chain (its result's id is 0). */
   run?: string | undefined;
+  /** A run's export at its end (with `run`): its manifest says `"end": true`. */
+  end?: boolean | undefined;
 }): Promise<ExportResult> {
   const { ledger, run: only } = input;
   const since = only ? 0 : (ledger.exports.last()?.through_event ?? 0);
@@ -231,18 +234,22 @@ export async function writeExport(input: {
     }
 
     const championRel: string[] = [];
-    // A run's export publishes no champion: champion_published belongs to the chain's exports.
-    const published = only
-      ? []
-      : await championFiles({
-          ledger,
-          mirrorFor: input.mirrorFor,
-          write: (rel, data) => {
-            mkdirSync(dirname(join(tmp, rel)), { recursive: true });
-            writeFileSync(join(tmp, rel), data);
-            championRel.push(rel);
-          },
-        });
+    // Each run's champion not published yet, as a patch from its seed: in the chain's exports,
+    // and in a run's export at its end, for that run alone (its results leave the rig with no one
+    // asking). A run's export someone asks for publishes none.
+    const published =
+      only && !input.end
+        ? []
+        : await championFiles({
+            ledger,
+            mirrorFor: input.mirrorFor,
+            run: only,
+            write: (rel, data) => {
+              mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+              writeFileSync(join(tmp, rel), data);
+              championRel.push(rel);
+            },
+          });
 
     // A full export keeps what a wipe would otherwise destroy: the archived research sources.
     const researchRel: string[] = [];
@@ -359,13 +366,12 @@ export async function writeExport(input: {
       }
     }
 
-    // A copy of the ledger (ledger.sqlite), when one is due. The held_out table, the judge's whole record of each
-    // held-out check, never goes into an export. The owner's record of one does (goal 082): the
-    // held_out_checked event, with each held-out cell's name, kind of failure and value against
-    // its threshold (at most 50 cells), is in the events table and events.jsonl, as it reaches
-    // control. No agent reads events.
-    const withLedger =
-      !only && (input.full === true || ledger.exports.ledgerCopyDue(LEDGER_COPY_EVERY_MS));
+    // A copy of the ledger (ledger.sqlite), in a full export only. The held_out table, the judge's
+    // whole record of each held-out check, never goes into an export. The owner's record of one
+    // does (goal 082): the held_out_checked event, with each held-out cell's name, kind of failure
+    // and value against its threshold (at most 50 cells), is in the events table and
+    // events.jsonl, as it reaches control. No agent reads events.
+    const withLedger = !only && input.full === true;
     if (withLedger) ledger.copyTo(join(tmp, "ledger.sqlite"), LEDGER_COPY.dropped);
 
     const files = [
@@ -381,6 +387,7 @@ export async function writeExport(input: {
       rig: input.rig,
       ...(input.full && !only ? { full: true } : {}),
       ...(only ? { run: only } : {}),
+      ...(only && input.end ? { end: true } : {}),
       from_event: since,
       through_event: through,
       created_at: new Date().toISOString(),
@@ -405,7 +412,14 @@ export async function writeExport(input: {
         export: name,
       });
     }
-    return { id, dir: final, attempts: attemptIds.length, events: written.count };
+    return {
+      id,
+      name,
+      dir: final,
+      through_event: through,
+      attempts: attemptIds.length,
+      events: written.count,
+    };
   } catch (err) {
     rmSync(tmp, { recursive: true, force: true });
     throw err;

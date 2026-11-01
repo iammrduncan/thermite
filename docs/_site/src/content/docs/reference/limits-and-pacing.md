@@ -173,7 +173,7 @@ The dashboard calls an epoch a **round**.
 
 | What | Default | Setting |
 | --- | --- | --- |
-| Exports | Every 60 minutes, when anything new was recorded | `THERMITE_EXPORT_MINUTES`; **Edit rig** › **Exports** |
+| Exports | None on a timer: each run's export once it ends (looked for every 5 s), and each export someone asks for ([When a rig exports](exports.md#when-a-rig-exports)) | **Edit rig** › **Exports** |
 | Reports on the message bus, the supervisor's figures, exports pushed, champion uploads | Every 60 s | `THERMITE_POLL_SECONDS` |
 | The registration of the rig's keys on the message bus, over HTTPS | At each start of the supervisor, and every 30 s until control has them | Fixed |
 | Commands from control | On the message bus, as they are issued; a command that waits, as for its content, is handed again every 5 s | Fixed |

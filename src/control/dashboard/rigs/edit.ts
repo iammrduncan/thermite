@@ -181,8 +181,8 @@ export function editRigRoutes(app: Hono, dash: Dashboard): void {
     {
       id: "exports",
       name: "Exports",
-      does: "Every hour, the rig writes its results for the supervisor to send to the results repository, or to control when the rig has none.",
-      off: "Results stay on the rig only. If the rig is lost, its results are lost.",
+      does: "Export each run when it ends: the rig writes the run's results for the supervisor to send to the results repository, or to control when the rig has none. Nothing is exported on a timer.",
+      off: "A run that ends stays on the rig only, and if the rig is lost, it is lost. It is exported once you turn this on again.",
     },
   ];
   app.get("/ui/assets/edit-rig.js", (c) =>

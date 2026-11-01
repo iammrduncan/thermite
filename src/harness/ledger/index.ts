@@ -255,12 +255,6 @@ export class Ledger {
     return Number(this.get<Row>("select coalesce(max(id), 0) as id from event")?.id ?? 0);
   }
 
-  /** Whether an event of any kind but `except` was recorded after event `id`. */
-  recordedAfter(id: number, except: readonly string[] = []): boolean {
-    const notIn = except.length ? ` and kind not in (${except.map(() => "?").join(", ")})` : "";
-    return !!this.get<Row>(`select 1 from event where id > ?${notIn} limit 1`, id, ...except);
-  }
-
   // ---------------------------------------------------------------- contracts and runs
 
   // ---------------------------------------------------------------- champions

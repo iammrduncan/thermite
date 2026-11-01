@@ -307,7 +307,7 @@ export const rigSettingsFields = {
     "The review panel (used only if the rig has one). Off: goals that need judgement stay open",
   ),
   exports: part(
-    "Hourly exports of the rig's results. Off: results stay on the rig only; if the rig is lost, they are lost",
+    "Export each run when it ends: the rig writes the run's results for its supervisor to send off the rig. Off: a run that ends stays on the rig only, and if the rig is lost, it is lost; it is exported once this is on again",
   ),
   trial_minutes: z
     .number()

@@ -6,7 +6,6 @@ import type { Ledger } from "../ledger/index.ts";
 import { settlePropagations } from "../propagation.ts";
 import type { RigSettingsStore } from "../rig-settings.ts";
 import type { HarnessService } from "../service/index.ts";
-import type { ControllerContext } from "./context.ts";
 
 /** How often each loop comes around when it has nothing to do (goal 173: its limit follows). */
 const JUDGE_IDLE_MS = 1000;
@@ -17,30 +16,26 @@ const EXPORTS_MS = 5000;
  * The controller's loops: the judging loops, the scheduler's and the exports', and the stop on
  * SIGTERM or SIGINT. Each ticks the service's `loops` once a round, for the health route (goal
  * 173): a judge in a job and the scheduler in the planner's call are busy, never late. The exports
- * loop also reads the disk against its floor and ends a drain at its deadline.
+ * loop exports each run at its end, and also reads the disk against its floor and ends a drain at
+ * its deadline.
  */
-export function startLoops(
-  ctx: ControllerContext,
-  {
-    ledger,
-    service,
-    settings,
-    scheduler,
-    executors,
-    executorIds,
-    server,
-  }: {
-    ledger: Ledger;
-    service: HarnessService;
-    settings: RigSettingsStore;
-    scheduler: Scheduler;
-    executors: Judge[];
-    executorIds: string[];
-    server: ServerType;
-  },
-): void {
-  const { numbers } = ctx;
-  const exportEveryMs = numbers.exportEveryMs;
+export function startLoops({
+  ledger,
+  service,
+  settings,
+  scheduler,
+  executors,
+  executorIds,
+  server,
+}: {
+  ledger: Ledger;
+  service: HarnessService;
+  settings: RigSettingsStore;
+  scheduler: Scheduler;
+  executors: Judge[];
+  executorIds: string[];
+  server: ServerType;
+}): void {
   const { loops } = service;
   let stopping = false;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -98,22 +93,13 @@ export function startLoops(
       } catch (err) {
         log("harness", "disk or drain check error", { error: String(err) }, "error");
       }
-      // Hourly export for the supervisor to push (and an export command can force one). An
-      // export's own event is not news, or an idle rig would export every hour forever. At the
-      // disk floor it waits: the rig says why, once, and an export command is refused in words.
-      const last = ledger.exports.last();
-      const lastAt = last ? Date.parse(last.created_at) : 0;
-      if (
-        settings.get().exports &&
-        !service.disk?.held &&
-        ledger.recordedAfter(last?.through_event ?? 0, ["export_written"]) &&
-        Date.now() - lastAt >= exportEveryMs
-      ) {
-        try {
-          await service.export("scheduler");
-        } catch (err) {
-          log("harness", "export error", { error: String(err) }, "error");
-        }
+      // Each run's export at its end, for the supervisor to push (service/reports.ts), while the
+      // rig's Exports setting is on. No export comes on a timer: the others are asked for (the
+      // export_now command). At the disk floor it waits: the rig says why, once.
+      try {
+        await service.exportRunEnds("harness", (run) => scheduler.closingFailed(run));
+      } catch (err) {
+        log("harness", "export error", { error: String(err) }, "error");
       }
       loops.tick("exports");
       await sleep(EXPORTS_MS);

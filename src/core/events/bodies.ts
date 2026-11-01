@@ -39,6 +39,8 @@ export interface EventBodies {
   run_status: { status: "closed" | "paused" | "running"; reason: string | null };
   import_verified: { name: string | null; sha256: string | null; commit: string | null };
   export_written: { through_event: number; path: string };
+  /** A run's export at its end (service/reports.ts): the export's name and its last event. */
+  run_end_exported: { export: string; through_event: number };
   wipe_requested: { export: string };
 
   // ---------------------------------------------------------------- commands

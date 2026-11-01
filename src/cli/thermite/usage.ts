@@ -250,6 +250,12 @@ export const USAGE = `usage: thermite <command> [options]
   mcp delete NAME --control URL --token-file F
                                       forget a server and its secrets; refused while a kit
                                       names it
+  exports delete RIG NAME... --control URL --token-file F
+                                      delete exports control keeps from RIG (owner's token), as
+                                      Delete on the Exports page does: their files and records,
+                                      with export_deleted in the audit log. It can't be undone.
+                                      All or none: one still arriving is refused, and then
+                                      nothing is deleted. It prints what went
   command --control URL --token-file F [--rig U] --kind K --payload JSON|@file [--ttl MIN]
                                       issue a signed command through control (admin token). A
                                       kind about one run (its payload's run) goes to the rig the

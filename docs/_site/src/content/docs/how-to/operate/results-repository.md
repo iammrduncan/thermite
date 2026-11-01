@@ -6,7 +6,7 @@ sidebar:
   order: 3
 ---
 
-Every hour in which something new happened, a rig's harness (its container that holds the judge and the agents) writes an **export**: the new attempts, champions, events and agents' notes since the last one. The rig's supervisor (its other container, the link to the outside) commits each export to git and pushes it to the **results repository**. That repository is the lasting copy of a rig's work, and [sending a champion to another rig](../campaigns/several-rigs.md) needs it. A rig without one sends its exports to control instead: see [Get a rig's results from control](exports-on-control.md).
+When a run ends, a rig's harness (its container that holds the judge and the agents) writes an **export** of it: the run's attempts, events, agents' notes and research folder. **Export** on a rig's or a run's page writes one when you ask: of a run alone, of what changed since the last one (the new attempts, champions, events and agents' notes), or a full one. Nothing is exported on a timer. The rig's supervisor (its other container, the link to the outside) commits each export to git and pushes it to the **results repository**. That repository is the lasting copy of a rig's work, and [sending a champion to another rig](../campaigns/several-rigs.md) needs it. A rig without one sends its exports to control instead: see [Get a rig's results from control](exports-on-control.md).
 
 This page sets up a results repository on your own git host, reached over SSH.
 
@@ -86,10 +86,10 @@ The deploy key is for the results repository alone: the supervisor fetches a cam
 
 ## 4. See that pushes work
 
-Open the rig's page (**Rigs** in the sidebar, then the rig) and press **Export**, then **Export** under the choice, to export at once rather than wait for the hour. **Full export** also sends the ledger, the research archive and every run's research folder. Then, after a minute or two, press **refresh** in the status bar, the line along the bottom of the page:
+Open the rig's page (**Rigs** in the sidebar, then the rig) and press **Export**, then **Export** under the choice, to export at once rather than wait for a run to end. **Full export** also sends the ledger, the research archive and every run's research folder. Then, after a minute or two, press **refresh** in the status bar, the line along the bottom of the page:
 
 - The **Results** row of the **The rig** block says `N exports · pushed … ago`.
-- On your git host, the repository has two branches for the rig. If you can reach the repository from your computer, list them:
+- On your git host, the repository has the rig's branches: its attempts branch, and, once it has taken a full export, its ledger branch. If you can reach the repository from your computer, list them:
 
   ```sh
   git ls-remote ssh://git@git.example.com/lab/thermite-results.git
@@ -121,10 +121,10 @@ Each rig has two branches. Commits are made by `thermite <thermite@localhost>`.
 | | `knowledge/<export>.jsonl` | The runs' part of their campaigns' collections in the [knowledge base](../../reference/knowledge-base.md#the-export): each item added or changed since the last export, with its run, its writer and its time. Only when there are some |
 | | `exports/<export>.json` | The export's manifest: each file with its SHA-256 |
 | | `research/<run>/folder/…` | The [research folder](../../explanation/campaign-modes.md#research) of each run that finished in that export: a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation. A `knowledge/` folder an older build left in it is left out: other runs' records are in their own runs' exports |
-| | `research/<run>/folder-<export>/…` | Only from a full export: the research folder of every other run that has one, finished or not, as it stood then ([Normal and full exports](../../reference/exports.md#normal-and-full-exports)) |
-| | `research/<run>/…`, other files | Only from a full export (a full reset takes one): each run's archive of the web pages it fetched |
-| `thermite/<rig>/ledger` | `ledger.sqlite`, `manifest.json` | A copy of the rig's ledger: with the first export, then once a day, and with every full export. Its table of held-out results is left out. Its events, like `events/<export>.jsonl`, hold the judge's `held_out_checked` events: each held-out case's name, kind and value, never its inputs or output |
+| | `research/<run>/folder-<export>/…` | From a full export: the research folder of every other run that has one, finished or not, as it stood then ([Normal and full exports](../../reference/exports.md#normal-and-full-exports)). From a run's export, each run's at its end among them: that run's folder as it stood then ([A run's export](../../reference/exports.md#a-runs-export)) |
+| | `research/<run>/…`, other files | From a full export (a full reset takes one): each run's archive of the web pages it fetched. From a run's export: that run's |
+| `thermite/<rig>/ledger` | `ledger.sqlite`, `manifest.json` | A copy of the rig's ledger, with every full export (a full reset takes one). Its table of held-out results is left out. Its events, like `events/<export>.jsonl`, hold the judge's `held_out_checked` events: each held-out case's name, kind and value, never its inputs or output |
 
 The attempts branch only grows: a file already published there is never replaced. The supervisor commits only files that the export's manifest lists, with the SHA-256 it lists. An export that fails that check is never pushed, and the **Results** row says `export … refused: …`.
 
-How often the harness exports is its setting `THERMITE_EXPORT_MINUTES` (60 by default), and the **Exports** switch on **Edit rig** turns hourly exports off. **Export** on a rig's page works either way.
+Nothing is exported on a timer. The **Exports** switch on **Edit rig** turns each run's export at its end off: a run that ends then stays on the rig only, until the switch is on again. **Export** on a rig's or a run's page works either way ([When a rig exports](../../reference/exports.md#when-a-rig-exports)).

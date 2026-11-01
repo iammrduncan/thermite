@@ -33,15 +33,6 @@ export class LedgerExports extends LedgerPart {
       : undefined;
   }
 
-  /** Whether no export holds a copy of the ledger yet, or the newest that does is `everyMs` old. */
-  ledgerCopyDue(everyMs: number): boolean {
-    const r = this.row<Row>(
-      `select created_at from export where json_extract(manifest, '$.files."ledger.sqlite"') is not null
-       order by id desc limit 1`,
-    );
-    return !r || Date.parse(this.now()) - Date.parse(String(r.created_at)) >= everyMs;
-  }
-
   /** The export written at `path`, with its manifest, if there is one. */
   at(path: string): { id: number; through_event: number; manifest: unknown } | undefined {
     const r = this.row<Row>("select id, through_event, manifest from export where path = ?", path);

@@ -4,6 +4,7 @@ import { thermiteAgents } from "./agents.ts";
 import { thermiteBackup, thermiteRestore } from "./backup.ts";
 import { thermiteCampaign, thermiteRun } from "./campaigns.ts";
 import { thermiteInvalidate } from "./evidence.ts";
+import { thermiteExports } from "./exports.ts";
 import { thermiteAssign, thermiteAssignPayload, thermiteCommand } from "./issue.ts";
 import { thermiteKb } from "./kb.ts";
 import { thermiteKit } from "./kits.ts";
@@ -62,6 +63,8 @@ async function main(argv: string[]): Promise<void> {
       return thermiteAgents(rest);
     case "mcp":
       return thermiteMcp(rest);
+    case "exports":
+      return thermiteExports(rest);
     case "command":
       return thermiteCommand(rest);
     case "invalidate":

@@ -500,6 +500,12 @@ export const CLIENT_JS = `
   document.addEventListener("input", (ev) => { if (ev.target.matches && ev.target.matches("input[data-confirm]")) confirms(); });
   confirms();
 
+  // ------------------------------------------------ the Exports page: one box ticks every export shown
+  const xall = $("#xall");
+  if (xall) xall.addEventListener("change", () => {
+    document.querySelectorAll("#xrows input[name=pick]").forEach((b) => { b.checked = xall.checked; });
+  });
+
   // ------------------------------------------------ a rig's history: everything, the pod, the runs or the judge
   const hf = $("#hf");
   if (hf) hf.querySelectorAll("[data-h]").forEach((b) => b.addEventListener("click", () => {

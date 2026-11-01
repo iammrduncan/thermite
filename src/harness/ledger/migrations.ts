@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { MIGRATIONS } from "../schema/index.ts";
 import { PROMPT_TABLE, PROMPT_TURN_COLUMN } from "./prompts.ts";
-import { eventRunColumn } from "./runs.ts";
+import { eventRunColumn, RUN_END_EXPORTS_FROM } from "./runs.ts";
 import { TRIAL_PROXY_TOKENS } from "./trials.ts";
 
 /**
@@ -26,4 +26,6 @@ export const LEDGER_MIGRATIONS: readonly (string | ((db: DatabaseSync) => void))
   PROMPT_TURN_COLUMN,
   // 26: the tokens the model proxy saw of each trial through it, which a run's budget counts.
   TRIAL_PROXY_TOKENS,
+  // 27: the runs that export at their end: those closed from now on.
+  RUN_END_EXPORTS_FROM,
 ];

@@ -22,7 +22,7 @@ export interface RigSettings {
   auditor: boolean;
   teachers: boolean;
   review: boolean;
-  /** Hourly exports for the supervisor to push. */
+  /** Each run's export when it ends, for the supervisor to push or send; off: none. */
   exports: boolean;
   /** A trial's length when its contract sets none, in minutes; null: none (goal 079). */
   trial_minutes: number | null;

@@ -1,8 +1,8 @@
 /**
  * Numeric settings from the environment (goal 164): one reading for every part, so a typo stops
  * the part at start with the setting's name and what it takes, never passing as a value. Before
- * this, `THERMITE_EXPORT_MINUTES=6O` gave NaN and the rig never exported again, and an empty value
- * gave 0 and an export every few seconds.
+ * this, a period of minutes given as `6O` gave NaN and what it timed never ran again, and an empty
+ * value gave 0 and ran it every few seconds.
  */
 
 type Env = Record<string, string | undefined>;

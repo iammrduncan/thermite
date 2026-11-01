@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { EXPORTS_DELETE, EXPORTS_DELETE_MAX } from "../../core/api/control/owner.ts";
 import { proposeSetting } from "../campaigns/index.ts";
-import { exportSummary } from "../exports.ts";
+import { deleteExports, EXPORT_RECEIVING_MS, exportSummary } from "../exports.ts";
 import {
   GRANT_OPENS,
   grantCollection,
@@ -187,15 +188,15 @@ export function registerKnowledgeBase(tools: ToolContext): void {
         return r;
       }),
     );
-  // The exports control keeps (goal 103): a list only; the owner downloads them over REST or on
-  // the dashboard's Exports page.
+  // The exports control keeps (goal 103): a list; the owner downloads them over REST or on the
+  // dashboard's Exports page, and deletes them by hand (delete_exports, the owner's only).
   if (role === "owner" || role === "operator")
     server.registerTool(
       "exports",
       {
         title: "Exports on control",
         description:
-          "The exports rigs without a results repository sent to control, newest first: each one's rig, name, whether it is full, the run of a run's export (run; null for the rig's), its event range, files and size, and when it was made and completed (complete_at null: still arriving). The owner downloads a complete one as one .tar.gz on the dashboard's Exports page, or over REST at GET /v1/rigs/{rig}/exports/{name}/archive; there is no download over MCP.",
+          "The exports rigs without a results repository sent to control, newest first: each one's rig, name, whether it is full, the run of a run's export (run; null for the rig's) and whether the rig made it at the run's end (end), its event range, files and size, and when it was made and completed (complete_at null: still arriving). The owner downloads a complete one as one .tar.gz on the dashboard's Exports page, or over REST at GET /v1/rigs/{rig}/exports/{name}/archive; there is no download over MCP. Control never deletes an export by itself: the owner deletes them with delete_exports.",
         inputSchema: {
           rig: z.string().min(1).optional(),
           limit: z.number().int().min(1).max(500).default(50),
@@ -207,6 +208,28 @@ export function registerKnowledgeBase(tools: ToolContext): void {
           ...exportSummary(undefined, e),
         })),
       ),
+    );
+  if (role === "owner")
+    server.registerTool(
+      "delete_exports",
+      {
+        title: "Delete exports on control",
+        description: `Deletes exports control keeps, as Delete on the dashboard's Exports page does: each one named by its rig and name (as exports lists them), at most ${EXPORTS_DELETE_MAX}. Control deletes each one's files and its record, and writes export_deleted in its audit log. It can't be undone: a rig lets an export go once control holds it, so control's copy is the only one off the rig. All or none: when one is still arriving (control received a piece of it in the last ${EXPORT_RECEIVING_MS / 60_000} minutes), it is refused in words and nothing is deleted. One control does not have is in gone. Returns {deleted: [{rig, name, bytes, files}], gone: [{rig, name}], said}. The owner's token only.`,
+        inputSchema: EXPORTS_DELETE.body.shape,
+      },
+      audited("delete_exports", (a: { exports: { rig: string; name: string }[] }) => {
+        const r = deleteExports({ store, files: opts.exportFiles }, a.exports, actor);
+        return {
+          deleted: r.deleted.map((e) => ({
+            rig: e.rig,
+            name: e.name,
+            bytes: e.bytes,
+            files: Object.keys(e.files).length,
+          })),
+          gone: r.gone,
+          said: r.said,
+        };
+      }),
     );
   // Which collections a campaign's agents may read: the owner's choice. An operator proposes a
   // grant, which waits for the owner's approval on the campaign's page; it never revokes one.

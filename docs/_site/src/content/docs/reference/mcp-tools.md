@@ -53,7 +53,7 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `propagate_champion` | Yes | Yes | Yes | No |
 | `kb_collections`, `kb_list`, `kb_search`, `kb_read`, `kb_stored`, `kb_note`, `kb_settings`, `exports` | Yes | Yes | No | No |
 | `kb_grant` | Yes | Yes, as a proposal the owner approves | No | No |
-| `kb_revoke`, `set_kb_settings` | Yes | No | No | No |
+| `kb_revoke`, `set_kb_settings`, `delete_exports` | Yes | No | No | No |
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
 | `trial_session`, `control_log`, `providers`, `bus_state`, `rig_models`, `rig_settings`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
 | `runpod_rig_logs`, `agent_roles`, `agent_prompts`, `reachable_addresses` | Yes | Yes | No | No |
@@ -467,14 +467,26 @@ Returns `{note, item}`, as [`GET /v1/kb/item`](rest-api.md#the-knowledge-base): 
 
 **Exports on control.** Owner and operator.
 
-> The exports rigs without a results repository sent to control, newest first: each one's rig, name, whether it is full, the run of a run's export (run; null for the rig's), its event range, files and size, and when it was made and completed (complete_at null: still arriving). The owner downloads a complete one as one .tar.gz on the dashboard's Exports page, or over REST at GET /v1/rigs/{rig}/exports/{name}/archive; there is no download over MCP.
+> The exports rigs without a results repository sent to control, newest first: each one's rig, name, whether it is full, the run of a run's export (run; null for the rig's) and whether the rig made it at the run's end (end), its event range, files and size, and when it was made and completed (complete_at null: still arriving). The owner downloads a complete one as one .tar.gz on the dashboard's Exports page, or over REST at GET /v1/rigs/{rig}/exports/{name}/archive; there is no download over MCP. Control never deletes an export by itself: the owner deletes them with delete_exports.
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `rig` | string, optional | every rig | One rig's exports only |
 | `limit` | whole number, 1 to 500 | 50 | How many exports |
 
-Returns `[{rig, name, run, full, from_event, through_event, files, files_kept, bytes, bytes_received, created_at, complete_at}]`, newest first (`run`: the run a run's export holds, or `null` for the rig's own), with `bytes_received` always `null`. [Exports](exports.md#download-an-export) says what each holds and how to download one.
+Returns `[{rig, name, run, end, full, from_event, through_event, files, files_kept, bytes, bytes_received, created_at, complete_at}]`, newest first (`run`: the run a run's export holds, or `null` for the rig's own; `end`: true for [a run's export the rig made at the run's end](exports.md#a-runs-export-at-its-end)), with `bytes_received` always `null`. [Exports](exports.md#download-an-export) says what each holds and how to download one.
+
+### delete_exports
+
+**Delete exports on control.** Owner only.
+
+> Deletes exports control keeps, as Delete on the dashboard's Exports page does: each one named by its rig and name (as exports lists them), at most 1000. Control deletes each one's files and its record, and writes export_deleted in its audit log. It can't be undone: a rig lets an export go once control holds it, so control's copy is the only one off the rig. All or none: when one is still arriving (control received a piece of it in the last 15 minutes), it is refused in words and nothing is deleted. One control does not have is in gone. …
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `exports` | list of `{rig, name}`, 1 to 1,000 | | The exports to delete, each by its rig and its name |
+
+Returns `{deleted: [{rig, name, bytes, files}], gone: [{rig, name}], said}`, as [`POST /v1/exports/delete`](rest-api.md#rigs-and-their-history): `said` is what went, in the words the dashboard shows, such as `Deleted 1 export from control: rig-1 · 20261101T010000Z-0123abcd (4.2 KiB).` Refused, with nothing deleted: `rig-1 · <name> (1 of 3 files) is still arriving: control is receiving its files. Delete it once complete. Nothing was deleted.` See [Delete exports](exports.md#delete-exports).
 
 ### kb_grant
 

@@ -1,16 +1,23 @@
 import type { Hono } from "hono";
-import { archiveResponse } from "../exports.ts";
+import { errorText, Refusal } from "../../common/errors.ts";
+import {
+  archiveResponse,
+  deleteExports,
+  type ExportRef,
+  exportsToDelete,
+  stillReceiving,
+} from "../exports.ts";
 import { cursorOf } from "../store/index.ts";
 import { commandRow } from "../ui/commands/index.ts";
 import { ago, avatar, esc, icon, meter, pct, valuesPairWords } from "../ui/components/index.ts";
-import { exportsBody } from "../ui/exports.ts";
+import { exportsBody, exportsHref, pickedExport } from "../ui/exports.ts";
 import { runHref } from "../ui/urls.ts";
 import { leaderboard } from "../views/index.ts";
-import type { Dashboard } from "./context.ts";
+import { backTo, type Dashboard } from "./context.ts";
 
 /** The Commands, Audit, Leaderboard, Exports (goal 103) and Reports pages. */
 export function recordRoutes(app: Hono, dash: Dashboard): void {
-  const { csrf, opts, page, store, views } = dash;
+  const { csrf, opts, page, said, store, views } = dash;
 
   // ---------------------------------------------------------------- commands, audit, leaderboard, reports
   app.get("/ui/commands", (c) => {
@@ -87,13 +94,27 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
 
   // ---------------------------------------------------------------- exports (goal 103)
   // Every export control keeps, for every rig, newest first; a complete one downloads as one
-  // .tar.gz. Owner only, as the whole dashboard is (its session is the owner's).
+  // .tar.gz. Owner only, as the whole dashboard is (its session is the owner's). Delete, with the
+  // exports ticked (`pick`), shows their confirmation at the top; its form deletes them.
+  const files = opts.exportFiles;
   app.get("/ui/exports", (c) => {
     const vs = views();
+    const now = Date.now();
     const all = store.exports.all(1000);
     const rig = c.req.query("rig") || undefined;
     const rigs = [...new Set([...all.map((e) => e.rig), ...vs.map((u) => u.id)])].sort();
     if (rig && !rigs.includes(rig)) rigs.push(rig);
+    let confirm: Parameters<typeof exportsBody>[0]["confirm"];
+    if (c.req.query("delete")) {
+      const refs = (c.req.queries("pick") ?? []).flatMap((v) => pickedExport(v) ?? []);
+      try {
+        confirm = { ...exportsToDelete({ store, files }, refs, now), refused: undefined };
+      } catch (err) {
+        if (!(err instanceof Refusal)) throw err;
+        confirm = { found: [], gone: [], refused: errorText(err) };
+      }
+    }
+    const error = said(c);
     return page(
       c,
       {
@@ -103,15 +124,37 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
           : "the exports rigs sent to control, newest first",
         active: "exports",
       },
-      exportsBody({
-        exports: all,
-        rigs,
-        rig,
-        kept: opts.exportFiles !== undefined,
-        now: Date.now(),
-      }),
+      `${error ? `<div class="card warn" style="margin-bottom:12px"><b class="bad">Not deleted.</b> ${esc(error)}</div>` : ""}${exportsBody(
+        {
+          exports: all,
+          rigs,
+          rig,
+          kept: files !== undefined,
+          now,
+          csrf: csrf(c),
+          receiving: (e) => stillReceiving(files, e, now),
+          confirm,
+        },
+      )}`,
       vs,
     );
+  });
+  app.post("/ui/exports/delete", async (c) => {
+    const f = await c.req.parseBody({ all: true });
+    const back = backTo(f, exportsHref());
+    const refs: ExportRef[] = [f.export ?? []].flat().flatMap((v) => pickedExport(v) ?? []);
+    const to = (key: "sent" | "error", words: string) => {
+      const u = new URL(back, "http://control");
+      u.searchParams.set(key, words);
+      return c.redirect(`${u.pathname}${u.search}`, 303);
+    };
+    if (!refs.length) return to("error", "Tick one or more exports, then press Delete.");
+    try {
+      return to("sent", deleteExports({ store, files }, refs, "owner:ui").said);
+    } catch (err) {
+      if (!(err instanceof Refusal)) throw err;
+      return to("error", errorText(err));
+    }
   });
   app.get("/ui/exports/:rig/:name/archive", (c) =>
     archiveResponse(

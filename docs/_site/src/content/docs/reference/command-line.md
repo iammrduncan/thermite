@@ -280,6 +280,12 @@ usage: thermite <command> [options]
   mcp delete NAME --control URL --token-file F
                                       forget a server and its secrets; refused while a kit
                                       names it
+  exports delete RIG NAME... --control URL --token-file F
+                                      delete exports control keeps from RIG (owner's token), as
+                                      Delete on the Exports page does: their files and records,
+                                      with export_deleted in the audit log. It can't be undone.
+                                      All or none: one still arriving is refused, and then
+                                      nothing is deleted. It prints what went
   command --control URL --token-file F [--rig U] --kind K --payload JSON|@file [--ttl MIN]
                                       issue a signed command through control (admin token). A
                                       kind about one run (its payload's run) goes to the rig the
@@ -896,6 +902,21 @@ The options of `add` and `change`:
 | `--scope S` | The scopes to ask for, separated by spaces |
 
 A refused request ends the command with the route's answer, such as `… -> 409 {"error":"q4-gemv-kit names it. Take it out of that kit first.","named_by":["q4-gemv-kit"]}` (exit 2).
+
+### `exports`
+
+Deletes exports that control keeps, with the owner's token, as **Delete** on the **Exports** page does ([Delete exports](exports.md#delete-exports)). It takes the rig and one or more export names, as the **Exports** page, MCP's `exports` and `GET /v1/rigs/<rig>/exports` list them. It can't be undone.
+
+```sh
+thermite exports delete rig-1 20261101T010000Z-0123abcd 20261101T020000Z-89abcdef \
+  --control https://control.example.com --token-file ~/.thermite/owner-token
+```
+
+| Command | Route | What it prints |
+| --- | --- | --- |
+| `thermite exports delete RIG NAME...` | `POST /v1/exports/delete` | What went, in control's words: `Deleted 2 exports from control: rig-1 · 20261101T010000Z-0123abcd (4.2 KiB) and rig-1 · 20261101T020000Z-89abcdef (1.0 KiB).`, and `Control did not have rig-1 · …` for a name control does not have |
+
+All or none: when one of them is still arriving, nothing is deleted, and the command ends with control's refusal, `… -> 409 {"error":"rig-1 · 20261101T030000Z-feedface (1 of 3 files) is still arriving: control is receiving its files. Delete it once complete. Nothing was deleted."}` (exit 2).
 
 ### `command`
 
