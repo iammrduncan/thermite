@@ -402,6 +402,9 @@ export interface EventBodies {
     how: "summary" | "trimmed" | "harness";
     snapshot: string | null;
     bytes?: number | undefined;
+    /** The conversation whole, scrubbed, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
+    /** Its start, cut to an item's length: the events of a rig from before its file. */
     text?: string | undefined;
     clipped?: boolean | undefined;
     summary: string | null;

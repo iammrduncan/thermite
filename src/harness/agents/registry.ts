@@ -1,3 +1,4 @@
+import { gaveSecret } from "../../common/scrub.ts";
 import { heldOutWords } from "../judge/index.ts";
 import { type EpochSource, type FamilyStatus, type Ledger, LedgerError } from "../ledger/index.ts";
 import { shownViolations, violationsOf } from "../v0.ts";
@@ -240,6 +241,8 @@ export class Registry {
     /** The lane's focus for this trial, as the planner gave it. */
     focus?: string | undefined;
   }): void {
+    // The agent is given its token: a conversation it keeps is scrubbed of it (common/scrub.ts).
+    if (t.token) gaveSecret(t.token);
     this.ledger.tx(() => {
       this.ledger.trials.startTrial(t);
       // Control learns that a lane is at work, and on what, from the record, not the live view.

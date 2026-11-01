@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { gaveSecret } from "../../common/scrub.ts";
 import { claudeOwn } from "../compaction/index.ts";
 import { claudeMcpConfig } from "../mcp/index.ts";
 import {
@@ -31,6 +32,12 @@ import {
 } from "../programs/index.ts";
 import type { RoleRunner } from "../runner.ts";
 import type { CliProgram, CliRun } from "./program.ts";
+
+/** The owner's sign-in token as Claude Code is given it: a conversation it keeps is scrubbed of it. */
+function givenToken(token: string): string {
+  gaveSecret(token);
+  return token;
+}
 
 /**
  * Trials, model checks and planner calls in Claude Code, for a Claude subscription. Anthropic
@@ -169,7 +176,7 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
   ],
   // The token comes on stdin, which the shell moves to file descriptor 3 for Claude Code.
   shell: claudeShell,
-  stdin: (_prompt, run) => run.model.apiKey,
+  stdin: (_prompt, run) => givenToken(run.model.apiKey),
   newTally: newClaudeTally,
   read: readClaudeEvents,
   found: (t) => t.compactions.splice(0),
@@ -210,7 +217,7 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
       }),
       env: { ...CLAUDE_TERMINAL_ENV },
       seeds: claudeTerminalSeeds(run.home, at.cwd, versions.get(claudeExe() ?? claudeBin()) ?? ""),
-      token: run.model.apiKey,
+      token: givenToken(run.model.apiKey),
       log: claudeTerminalLog(run.home, at.session),
     }),
     log: { adapter: () => claudeTranscript, from: "copy" },

@@ -484,6 +484,13 @@ export class ResearchFolder {
     return shown;
   }
 
+  /** A file of the run's records kept in the outbox for the knowledge base, by its SHA-256. */
+  kbFile(bytes: Uint8Array, name: string, type: string): KbItemFile {
+    const file = kbFileFacts(bytes, { name, type });
+    keepKbFile(this.outboxDir, bytes, file);
+    return file;
+  }
+
   /** The folder the kept conversations are shown in, as the agents see it (made when one is kept). */
   compactionsDir(run: string): string {
     return join(this.root(run), COMPACTIONS_DIR);

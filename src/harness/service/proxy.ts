@@ -7,6 +7,7 @@ import {
   type ProviderErrorAnswer,
   stallWords,
 } from "../../agents/model/index.ts";
+import { gaveSecret } from "../../common/scrub.ts";
 import type { PlannerAnswer } from "../../core/api/harness/planner.ts";
 import type { LiveKind, LiveLog } from "../../core/live.ts";
 import type { CallUsage } from "../../core/usage.ts";
@@ -14,7 +15,8 @@ import type { CompactionOf } from "../compactions.ts";
 
 /**
  * What the model proxy and the MCP gateway take from the service besides trials' tokens: the
- * credentials the harness mints for a check, a plan or a planner's MCP calls, and what the model
+ * credentials the harness mints for a check, a plan or a planner's MCP calls (each remembered as
+ * given to an agent, so a kept conversation is scrubbed of it: common/scrub.ts), and what the model
  * proxy saw of a provider: its error answers, and calls broken off because their stream went
  * silent.
  */
@@ -35,6 +37,7 @@ export class ProxyCredentials {
     const now = Date.now();
     for (const [t, v] of this.proxyTokens) if (v.until < now) this.proxyTokens.delete(t);
     const token = `proxy.${randomBytes(24).toString("hex")}`;
+    gaveSecret(token);
     this.proxyTokens.set(token, { until: now + ms, ...(model ? { model } : {}) });
     return token;
   }
@@ -58,6 +61,7 @@ export class ProxyCredentials {
     const now = Date.now();
     for (const [t, v] of this.mcpTokens) if (v.until < now) this.mcpTokens.delete(t);
     const token = `mcp.${randomBytes(24).toString("hex")}`;
+    gaveSecret(token);
     this.mcpTokens.set(token, { caller, until: now + ms });
     return token;
   }
@@ -78,6 +82,7 @@ export class ProxyCredentials {
    */
   mintCallToken(c: CallCredential): string {
     const token = `call.${randomBytes(24).toString("hex")}`;
+    gaveSecret(token);
     this.callTokens.set(token, c);
     return token;
   }

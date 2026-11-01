@@ -340,25 +340,33 @@ export function indexEvent(target: KbIndexTarget, event: KbEvent): void {
       );
       return;
     }
-    // An agent's conversation as the harness kept it before a compaction (goal 070): a document
-    // of the run, as a lane's own files are. The run's research folder keeps it whole.
+    // An agent's conversation as the harness kept it before a compaction (goal 070), scrubbed: a
+    // document of the run, as a lane's own files are, whole as its file after a line of its own;
+    // an event from before that carries its start, cut to an item's length.
     case "context_compacted": {
-      if (!str(b.snapshot) || !str(b.text)) return;
+      const file = kbFileOf(b.file);
+      if (!str(b.snapshot) || (!file && !str(b.text))) return;
       const who = str(b.trial) ? `trial ${str(b.trial)}` : str(b.lane) || "an agent";
+      const tokens =
+        typeof b.tokens_before === "number" ? `, at about ${n(b.tokens_before)} tokens` : "";
       t.put(
         run,
         "doc",
         ref(str(b.snapshot)),
         {
           title: `${who}: the conversation before compaction ${str(b.number)}`,
-          // A long conversation's cut is said first: the item keeps only its beginning.
-          body: lines([
-            b.clipped === true
-              ? `(Cut: the file has ${n(b.bytes)} bytes; the run's research folder keeps it whole, ${str(b.snapshot)}.)`
-              : "",
-            str(b.text),
-          ]),
+          // From before its file: a long conversation's cut is said first, and the item keeps
+          // only its beginning.
+          body: file
+            ? `Kept before compaction ${str(b.number)}${tokens}.`
+            : lines([
+                b.clipped === true
+                  ? `(Cut: the file has ${n(b.bytes)} bytes; the run's research folder keeps it whole, ${str(b.snapshot)}.)`
+                  : "",
+                str(b.text),
+              ]),
           by: str(b.lane) || e.actor,
+          ...(file ? { file } : {}),
         },
         e.at,
       );

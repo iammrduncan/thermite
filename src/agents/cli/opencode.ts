@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { gaveSecret } from "../../common/scrub.ts";
 import { newToken } from "../../common/secrets.ts";
 import { opencodeOwn } from "../compaction/index.ts";
 import {
@@ -22,6 +23,16 @@ import {
   runEnv,
 } from "../programs/index.ts";
 import type { CliProgram, CliRun } from "./program.ts";
+
+/**
+ * A password of the run's own for OpenCode's server, which the agent's commands inherit: a
+ * conversation it keeps is scrubbed of it (common/scrub.ts).
+ */
+function serverPassword(): string {
+  const { token } = newToken();
+  gaveSecret(token);
+  return token;
+}
 
 /**
  * Trials (hill-climb, goal and research), model checks and planner calls in OpenCode v2 instead
@@ -111,7 +122,7 @@ export const opencodeProgram: CliProgram<OpencodeTally> = {
       if (port === undefined) throw new Error("OpenCode's terminal needs a port for its server");
       return {
         args: opencodeTerminalArgs(port, at.cwd, undefined, at.resume ? at.session : undefined),
-        env: { OPENCODE_SERVER_PASSWORD: newToken().token, OPENCODE_DISABLE_AUTOUPDATE: "1" },
+        env: { OPENCODE_SERVER_PASSWORD: serverPassword(), OPENCODE_DISABLE_AUTOUPDATE: "1" },
         seeds: [
           {
             path: join(run.home, ".config", "opencode", "opencode.jsonc"),
