@@ -692,13 +692,15 @@ try {
     ? await until(
         "the research document whole in the knowledge base",
         async () => {
-          const q = encodeURIComponent("sources on quotes");
+          const q = encodeURIComponent("synthesis");
           const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find((h) =>
             String(h.address).includes("synthesis"),
           );
           if (!hit) return undefined;
-          const item = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`)).body;
-          return /Read next: the sources on quotes\./.test(String(item.text))
+          // A read's answer holds the item, its text among its fields.
+          const { item } = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`))
+            .body;
+          return /Read next: the sources on quotes\./.test(String(item?.text))
             ? String(item.text)
             : undefined;
         },
