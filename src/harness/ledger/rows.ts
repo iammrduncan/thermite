@@ -25,7 +25,7 @@ export interface RunRow {
   mode: string;
   seed_repo: string;
   seed_commit: string;
-  direction: string | null;
+  note: string | null;
   status: "running" | "paused" | "closed";
   pause_reason: string | null;
   /** False: no worker agents run for this run (the judge still works). */
@@ -77,7 +77,7 @@ export interface ExperimentRow {
   run: string;
   title: string;
   details: string;
-  family: string;
+  direction: string;
   why: string;
   added_by: string;
   state: "proposed" | "queued" | "assigned" | "done" | "dropped";
@@ -124,7 +124,7 @@ export function toRun(r: Row): RunRow {
     mode: String(r.mode),
     seed_repo: String(r.seed_repo),
     seed_commit: String(r.seed_commit),
-    direction: r.direction === null ? null : String(r.direction),
+    note: r.note === null || r.note === undefined ? null : String(r.note),
     status: String(r.status) as RunRow["status"],
     pause_reason: r.pause_reason === null ? null : String(r.pause_reason),
     agents: r.agents === undefined || Number(r.agents) !== 0,

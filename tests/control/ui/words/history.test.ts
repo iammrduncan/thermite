@@ -16,7 +16,7 @@ test("a research run's rounds with the planner off read as set by the gap-driven
       at: "2026-10-20T00:00:00Z",
       body,
     }) as never;
-  const assignments = [{ lane: "lane-1", family: "contradict" }];
+  const assignments = [{ lane: "lane-1", direction: "contradict" }];
   const u = { judge: { jobs: [] }, runs: [] } as never;
   const research = sentence(
     u,
@@ -225,20 +225,20 @@ test("History tells the queue's changes, the hand-outs and the rules in words", 
   assert.equal(
     say("directive", "control:owner:ui", {
       id: 4,
-      body: { kind: "mandate", family: "shared-memory-tiling" },
+      body: { kind: "mandate", direction: "shared-memory-tiling" },
     }),
     "You set a rule for the plan: mandate :shared-memory-tiling:.",
   );
   assert.equal(
-    say("family_added", "planner:planner", {
-      family: "shared-memory-tiling",
+    say("direction_added", "planner:planner", {
+      direction: "shared-memory-tiling",
       description: "tiles staged in shared memory",
       for_rules: [4],
     }),
     "The planner designed the new direction :shared-memory-tiling: for rule 4: tiles staged in shared memory.",
   );
   assert.equal(
-    say("family_added", "planner:planner", { family: "split-k", description: "split k" }),
+    say("direction_added", "planner:planner", { direction: "split-k", description: "split k" }),
     "The run has a new direction, :split-k: (split k).",
   );
   // The planner converts an old rule in words: one line, from its directive_converted event; the
@@ -248,7 +248,7 @@ test("History tells the queue's changes, the hand-outs and the rules in words", 
       id: 3,
       to: 9,
       kind: "avoid",
-      family: "shared-memory",
+      direction: "shared-memory",
       words: "shared memory",
     }),
     "The planner converted rule 3, an old rule in words (“shared memory”), to rule 9: avoid :shared-memory:.",
@@ -263,7 +263,7 @@ test("History tells the queue's changes, the hand-outs and the rules in words", 
         id: 9,
         body: {
           kind: "avoid",
-          family: "shared-memory",
+          direction: "shared-memory",
           converted_from: { rule: 3, words: "shared memory" },
         },
       },
@@ -272,7 +272,7 @@ test("History tells the queue's changes, the hand-outs and the rules in words", 
   );
   assert.equal(
     say("directives_left_out", "supervisor", {
-      rules: [{ kind: "avoid", family: "blogs" }],
+      rules: [{ kind: "avoid", direction: "blogs" }],
       why: "A research run's directions are its task kinds.",
       reason: "unknown_direction",
     }),
@@ -281,19 +281,19 @@ test("History tells the queue's changes, the hand-outs and the rules in words", 
   // Goal 081: a rule that would freeze the queue's size, and a queue below its target.
   assert.equal(
     say("directives_left_out", "supervisor", {
-      rules: [{ kind: "note", value: "Do not add queue entries" }],
+      rules: [{ kind: "planner_note", value: "Do not add queue entries" }],
       why: "a rule may not freeze the queue's size",
       reason: "freezes_queue",
     }),
-    "The teachers gave a rule that would freeze the queue's size (note): left out. a rule may not freeze the queue's size",
+    "The teachers gave a rule that would freeze the queue's size (planner_note): left out. a rule may not freeze the queue's size",
   );
   assert.equal(
     say("directives_left_out", "supervisor", {
-      rules: [{ kind: "priority" }, { kind: "note" }],
+      rules: [{ kind: "priority" }, { kind: "planner_note" }],
       why: "a rule may not pin an experiment",
       reason: "pins_experiment",
     }),
-    "The teachers gave 2 rules that would pin an experiment (priority; note): left out. a rule may not pin an experiment",
+    "The teachers gave 2 rules that would pin an experiment (priority; planner_note): left out. a rule may not pin an experiment",
   );
   assert.equal(
     say("queue_low", "planner", { round: 7, ready: 1, target: 4, lanes: 2 }),

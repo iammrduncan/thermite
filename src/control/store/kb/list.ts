@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { KB_OUTCOMES, type KbItemType, type KbListSort } from "../../../core/kb.ts";
+import { KB_OUTCOMES, type KbItemType, type KbListSort } from "../../../core/kb/index.ts";
 import type { KbItem } from "../../kb/index.ts";
 import { itemOf } from "./items.ts";
 
@@ -62,7 +62,7 @@ export interface KbListed {
 type Sql = { sql: string; args: string[] };
 type Row = Record<string, unknown>;
 
-/** An item's type in SQL, as kbItemType (core/kb.ts) says it. */
+/** An item's type in SQL, as kbItemType (core/kb/items.ts) says it. */
 const TYPE_SQL =
   "(case when file_sha256 is not null then 'file' when slot = 'records' then 'record' else 'blurb' end)";
 /** Each filter's column, by its name in the counts. */

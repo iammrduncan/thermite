@@ -183,7 +183,7 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
             ? await toQueue(
                 pkg.run,
                 "auditor",
-                [{ ...check, family: "check", position: "top" }],
+                [{ ...check, direction: "check", position: "top" }],
                 [],
               )
             : undefined;

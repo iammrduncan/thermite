@@ -1,7 +1,7 @@
 import type { Bus, BusRequest } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
-import { KbLinkRel, kbAddress } from "../../core/kb.ts";
+import { KbLinkRel, kbAddress } from "../../core/kb/index.ts";
 import {
   KB_IS_DATA,
   KB_READ_PAGE,

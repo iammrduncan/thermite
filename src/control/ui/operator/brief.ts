@@ -54,8 +54,8 @@ export function runBrief(
         work?.focus ||
         plan?.focus ||
         introText(t?.intro ?? "") ||
-        work?.family ||
-        plan?.family ||
+        work?.direction ||
+        plan?.direction ||
         "";
       const last =
         opts.detail && t?.last_tool
@@ -78,7 +78,7 @@ export function runBrief(
         r.status !== "running"
           ? "stopped"
           : plan
-            ? `next: ${esc(clip(plan.focus || plan.family, 160))}`
+            ? `next: ${esc(clip(plan.focus || plan.direction, 160))}`
             : `between trials${done ? ` <span class="muted">· the last ${done.attempt ? "submitted a change" : `ended: ${esc(done.stopped.replace(/_/g, " "))}`} ${esc(ago(done.at, now))} ago</span>` : ""}`,
         "",
         "muted",

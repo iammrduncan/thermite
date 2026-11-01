@@ -3,7 +3,7 @@ import { RIG_ID } from "../ids.ts";
 
 /**
  * The knowledge base's files on their way to control (goal 175, step 2): the `KB_FILES` stream. An
- * item's file is kept whole by its SHA-256 (core/kb.ts): the harness keeps it in the rig's outbox,
+ * item's file is kept whole by its SHA-256 (core/kb/items.ts): the harness keeps it in the rig's outbox,
  * the rig's supervisor puts it here once, in chunks in order on the rig's own subject, each chunk
  * naming the file's SHA-256 in a header, and control takes each chunk, puts the file together in
  * its state, checks its SHA-256 and keeps it once. The stream is an inbox: a chunk stays until

@@ -18,7 +18,7 @@ import { apiCall } from "./api-call.ts";
  *   thermite-trial submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
  *   thermite-trial dev-run [--timeout SECONDS] -- COMMAND...
  *   thermite-trial status ATTEMPT
- *   thermite-trial idea TITLE [--why TEXT] [--family TEXT] [--details TEXT] [--question N]
+ *   thermite-trial idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]
  *   thermite-trial note --kind KIND [--about TYPE:ID] TEXT
  *   thermite-trial research TOOL [WORDS...] [--FLAG VALUE]... [-]   (the research tools)
  */
@@ -27,9 +27,9 @@ const USAGE = `usage:
   thermite-trial submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
   thermite-trial dev-run [--timeout SECONDS] -- COMMAND...
   thermite-trial status ATTEMPT
-  thermite-trial idea TITLE [--why TEXT] [--family TEXT] [--details TEXT] [--question N]
+  thermite-trial idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]
   ${NOTE_USAGE}
-    KIND: observation, decision, surprise, question, lesson or note
+    KIND: observation, decision, surprise, question, lesson or other
     TYPE: run, experiment, attempt, source, claim, finding, round, trial or message
       (no --about: the note is about the run)
   thermite-trial research TOOL ... (thermite-trial research help lists them)`;
@@ -193,7 +193,7 @@ export async function trialCli(
     if (rest.length === 1 && COMMAND_WORDS.has(title.toLowerCase()))
       return `error: "${title}" is a command word, not an idea. idea proposes an experiment: give what to try, in a few words. thermite-trial does not list the run's ideas or queue.\n${USAGE}`;
     const unknown = Object.keys(flags).filter(
-      (f) => !["why", "family", "details", "question"].includes(f),
+      (f) => !["why", "direction", "details", "question"].includes(f),
     );
     if (unknown.length) return `error: idea has no --${unknown[0]}\n${USAGE}`;
     const opt = (f: string, n: number) => {
@@ -207,7 +207,7 @@ export async function trialCli(
     const out = (await call("POST", "/v1/trial/idea", {
       title: title.slice(0, 200),
       ...opt("why", 2000),
-      ...opt("family", 80),
+      ...opt("direction", 80),
       ...opt("details", 4000),
       ...(q !== undefined ? { question: Number(q) } : {}),
     })) as { experiment: string };
@@ -219,7 +219,7 @@ export async function trialCli(
     if (unknown.length) return `error: note has no --${unknown[0]}\n${USAGE}`;
     const kind = flags.kind?.at(-1)?.trim().toLowerCase();
     if (!kind)
-      return `error: note needs --kind: observation, decision, surprise, question, lesson or note\n${USAGE}`;
+      return `error: note needs --kind: observation, decision, surprise, question, lesson or other\n${USAGE}`;
     if (!text) return `error: note needs its text: what you observed, decided or learned\n${USAGE}`;
     const a = flags.about?.at(-1)?.trim();
     const about = a ? /^([a-z]+):(.+)$/.exec(a) : undefined;

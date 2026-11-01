@@ -30,7 +30,7 @@ export function editRigRoutes(app: Hono, api: ApiContext): void {
   const { store, parts, admin } = api;
 
   // Give one of a rig's agents a model, or clear it (goals 029 and 070): the twin of MCP's
-  // set_rig_model, through Edit rig's own code (rigs/agent-models.ts), with its refusals in words.
+  // set_rig_model, through Edit rig's own code (rigs/model/agents.ts), with its refusals in words.
   // Each call sets the agent's context window cap and compaction point anew: none given, none kept.
   app.post("/v1/rigs/:rig/model", admin, bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
     const rig = c.req.param("rig");

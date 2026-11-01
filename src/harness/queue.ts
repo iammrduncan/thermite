@@ -28,16 +28,18 @@ export type Experiment = ExperimentRow;
 export const ExperimentInput = z.object({
   title: ExperimentText.title,
   details: ExperimentText.details.optional(),
-  family: ExperimentText.family.optional(),
+  direction: ExperimentText.direction.optional(),
   why: ExperimentText.why.optional(),
 });
 export type ExperimentInput = z.infer<typeof ExperimentInput>;
 
 export { directionOf };
 
-/** Whether an experiment's direction is the family a rule names (exactly, or as its id). */
-export function inFamily(x: Pick<Experiment, "family">, family: string): boolean {
-  return x.family !== "" && (x.family === family || directionOf(x.family) === family);
+/** Whether an experiment's direction is the direction a rule names (exactly, or as its id). */
+export function inDirection(x: Pick<Experiment, "direction">, direction: string): boolean {
+  return (
+    x.direction !== "" && (x.direction === direction || directionOf(x.direction) === direction)
+  );
 }
 
 /** Where a position puts an experiment among `others` queued ones: an index, as control does. */
@@ -68,7 +70,7 @@ export interface BriefExperiment {
   id: string;
   title: string;
   details?: string;
-  family?: string;
+  direction?: string;
   why?: string;
   /** A research task's question, as an index from 0 (goal 117). */
   question?: number;
@@ -144,13 +146,15 @@ export class ExperimentQueue {
    */
   ready(
     run: string,
-    rules: readonly { body: { kind: string; family?: string | undefined } }[],
+    rules: readonly { body: { kind: string; direction?: string | undefined } }[],
     given: ReadonlySet<string> = new Set(),
   ): Experiment[] {
     const avoid = rules.flatMap((r) =>
-      r.body.kind === "avoid" && r.body.family ? [r.body.family] : [],
+      r.body.kind === "avoid" && r.body.direction ? [r.body.direction] : [],
     );
-    return this.queued(run).filter((x) => !given.has(x.id) && !avoid.some((f) => inFamily(x, f)));
+    return this.queued(run).filter(
+      (x) => !given.has(x.id) && !avoid.some((f) => inDirection(x, f)),
+    );
   }
 
   /** The lanes' ideas waiting for the planner or the owner, oldest first. */
@@ -173,17 +177,17 @@ export class ExperimentQueue {
 
   /**
    * The run's directions (goal 066), by name: the direction of each of its experiments, in any
-   * state; each family in its direction registry; each family an attempt was tagged with; and, in
+   * state; each direction in its direction registry; each direction an attempt was tagged with; and, in
    * a research run, the task kinds. A rule may name only these. Sorted by name.
    */
   directions(run: string): string[] {
     const names = new Set<string>();
     for (const x of this.all(run)) {
-      const d = x.family ? directionOf(x.family) : undefined;
+      const d = x.direction ? directionOf(x.direction) : undefined;
       if (d) names.add(d);
     }
-    const families = this.ledger.trials.families(run).map((f) => f.id);
-    for (const name of [...families, ...this.ledger.attempts.families(run)])
+    const directions = this.ledger.trials.directions(run).map((f) => f.id);
+    for (const name of [...directions, ...this.ledger.attempts.directions(run)])
       if (DIRECTION_NAME.test(name)) names.add(name);
     if (this.ledger.runs.get(run)?.mode === "research")
       for (const k of RESEARCH_TASK_KINDS) names.add(k);
@@ -207,7 +211,7 @@ export class ExperimentQueue {
       id: x.id,
       title: x.title,
       ...(x.details ? { details: clip(x.details, 600) } : {}),
-      ...(x.family ? { family: x.family } : {}),
+      ...(x.direction ? { direction: x.direction } : {}),
       ...(x.why ? { why: clip(x.why, 400) } : {}),
       ...(typeof x.question === "number" ? { question: x.question } : {}),
       by: x.added_by,
@@ -346,7 +350,7 @@ export class ExperimentQueue {
       run,
       title: text.title,
       details: text.details ?? "",
-      family: text.family ?? "",
+      direction: text.direction ?? "",
       why: text.why ?? "",
       added_by: input.by,
       state,
@@ -371,7 +375,7 @@ export class ExperimentQueue {
         id: x.id,
         title: x.title,
         ...(x.details ? { details: x.details } : {}),
-        ...(x.family ? { family: x.family } : {}),
+        ...(x.direction ? { direction: x.direction } : {}),
         ...(x.why ? { why: x.why } : {}),
         ...(question !== null ? { question } : {}),
         by: input.by,
@@ -451,7 +455,7 @@ export class ExperimentQueue {
       ...strip(x),
       ...(c.title !== undefined ? { title: c.title } : {}),
       ...(c.details !== undefined ? { details: c.details } : {}),
-      ...(c.family !== undefined ? { family: c.family } : {}),
+      ...(c.direction !== undefined ? { direction: c.direction } : {}),
       ...(c.why !== undefined ? { why: c.why } : {}),
     };
     this.ledger.experiments.write([row], {
@@ -463,7 +467,7 @@ export class ExperimentQueue {
         by: o.by,
         ...(c.title !== undefined ? { title: c.title } : {}),
         ...(c.details !== undefined ? { details: c.details } : {}),
-        ...(c.family !== undefined ? { family: c.family } : {}),
+        ...(c.direction !== undefined ? { direction: c.direction } : {}),
         ...(c.why !== undefined ? { why: c.why } : {}),
       },
     });

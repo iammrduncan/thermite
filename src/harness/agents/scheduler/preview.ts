@@ -1,7 +1,7 @@
 import { withAgentsContext } from "../../../agents/model/index.ts";
 import type { Prompt } from "../../../agents/prompt.ts";
 import { renderPlanner, renderWorker, windowFit } from "../../../agents/roles/index.ts";
-import { workerSlot } from "../../../core/kb.ts";
+import { workerSlot } from "../../../core/kb/index.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import { LedgerError } from "../../ledger/index.ts";
 import type { PreviewAsk } from "../../prompts.ts";
@@ -60,7 +60,7 @@ export function previewPrompt(sched: SchedulerContext, run: string, ask: Preview
       n,
       {
         lane,
-        family: sched.coordinator.direction(run, x),
+        direction: sched.coordinator.direction(run, x),
         focus: focusOf(x),
         experiment: x.id,
         parent: "champion",

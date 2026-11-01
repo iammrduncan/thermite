@@ -31,7 +31,7 @@ import { join } from "node:path";
  * planner's call's in its own terminal):
  * - each event OpenCode gives the plugin (`ctx.event.subscribe()`) goes as one JSON line into the
  *   trial's signals file, which the harness follows and reads with its OpenCode adapter
- *   (session-events.ts): the event without its `location`, each string cut to STRING_MAX. The
+ *   (session.ts): the event without its `location`, each string cut to STRING_MAX. The
  *   text and the tool input as they stream (the `.delta` events) are left out: their ends carry
  *   them whole;
  * - when a tool of the session starts (`session.tool.called`; not a subagent's), it asks the

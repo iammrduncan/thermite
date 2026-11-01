@@ -37,6 +37,42 @@ describe("signed commands", () => {
     );
     assert.ok(r.ok);
   });
+  test("a command signed before v0.1.1 is read under the public names (core/names.ts)", () => {
+    const old = verifyCommand(
+      signEnvelope(
+        envelope({
+          kind: "queue_add",
+          payload: { run: "smoke-1", title: "tile it", family: "tiling" },
+        }),
+        keys.privateKeyPem,
+      ),
+      keys.publicKeyPem,
+      "rig-a",
+      now,
+    );
+    assert.ok(old.ok, old.ok ? "" : old.reason);
+    assert.equal((old.payload as { direction?: string }).direction, "tiling");
+    const rules = verifyCommand(
+      signEnvelope(
+        envelope({
+          kind: "redirect",
+          payload: {
+            run: "smoke-1",
+            directives: [{ kind: "note", value: "memory first", rationale: "r" }],
+          },
+        }),
+        keys.privateKeyPem,
+      ),
+      keys.publicKeyPem,
+      "rig-a",
+      now,
+    );
+    assert.ok(rules.ok, rules.ok ? "" : rules.reason);
+    assert.equal(
+      (rules.payload as { directives: { kind: string }[] }).directives[0]?.kind,
+      "planner_note",
+    );
+  });
   test("rejects unsigned, tampered and wrongly signed commands", () => {
     const signed = signEnvelope(envelope(), keys.privateKeyPem);
     assert.equal(

@@ -121,7 +121,7 @@ export function researchRunEvents(): Ev[] {
   ) => [
     ev(
       "experiment_added",
-      { id, title, family: "explore", question: q, by: "planner", state: "queued" },
+      { id, title, direction: "explore", question: q, by: "planner", state: "queued" },
       h,
     ),
     ...(yld === undefined
@@ -277,7 +277,7 @@ export function researchRunEvents(): Ev[] {
       {
         id: "x-4",
         title: "read the driver notes",
-        family: "primary",
+        direction: "primary",
         question: 2,
         by: "owner",
         state: "queued",

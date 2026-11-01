@@ -1,4 +1,4 @@
-import { KB_RECORDS, KB_WRITES_DEFAULT, kindsForSlot } from "../../core/kb.ts";
+import { KB_RECORDS, KB_WRITES_DEFAULT, kindsForSlot } from "../../core/kb/index.ts";
 import type { ControlStore, KbListAt } from "../store/index.ts";
 import { campaignModes, type RigView } from "../views/index.ts";
 import type { KbFolder } from "./list.ts";

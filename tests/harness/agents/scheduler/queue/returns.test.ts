@@ -137,7 +137,7 @@ describe("the planner as the queue's coordinator", () => {
       run: RUN,
       lane: "lane-1",
       epoch: 1,
-      family: "general",
+      direction: "general",
       parent: "p",
     });
     s.q.assign(RUN, x, { lane: "lane-1", trial: "t-dead00000000000", by: "planner" }, "planner");

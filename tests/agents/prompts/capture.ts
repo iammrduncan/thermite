@@ -119,7 +119,7 @@ export const teachersScript: Script = ({ messages }) => {
         {
           name: "answer",
           args: {
-            directives: [{ kind: "try", family: "loops", rationale: "both", citations: ["a"] }],
+            directives: [{ kind: "try", direction: "loops", rationale: "both", citations: ["a"] }],
             experiments: [],
           },
         },
@@ -132,7 +132,7 @@ export const teachersScript: Script = ({ messages }) => {
         name: "answer",
         args: {
           summary: "the loop does wasted work",
-          recommendations: [{ kind: "try", family: "loops", rationale: "r", citations: ["a"] }],
+          recommendations: [{ kind: "try", direction: "loops", rationale: "r", citations: ["a"] }],
         },
       },
     ],
@@ -145,9 +145,9 @@ export const PLAN = {
     {
       name: "submit_plan",
       args: {
-        new_families: [{ id: "loops", description: "simplify the inner loop" }],
+        new_directions: [{ id: "loops", description: "simplify the inner loop" }],
         assignments: [
-          { lane: "lane-1", family: "loops", focus: "remove wasted work", parent: "champion" },
+          { lane: "lane-1", direction: "loops", focus: "remove wasted work", parent: "champion" },
         ],
       },
     },

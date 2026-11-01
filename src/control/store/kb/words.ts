@@ -11,9 +11,9 @@ import {
   type KbOutcome,
   KbOutcome as KbOutcomeSchema,
   kbOutcomeOf,
+  metaOf,
   resultAttempt,
-} from "../../../core/kb.ts";
-import { metaOf } from "../../../core/kb-index.ts";
+} from "../../../core/kb/index.ts";
 
 /**
  * The words index of control's knowledge base (goal 175): the search engine's FTS5 over passages
@@ -70,7 +70,7 @@ function attemptOutcome(
   return KbOutcomeSchema.safeParse(r.outcome).data ?? null;
 }
 
-/** A records item's outcome from its fields (core/kb.ts); none for an agent's item. */
+/** A records item's outcome from its fields (core/kb/items.ts); none for an agent's item. */
 export function outcomeFor(db: DatabaseSync, p: WordsPlace, meta: string): KbOutcome | null {
   if (p.slot !== KB_RECORDS) return null;
   return kbOutcomeOf(p.kind, metaOf(meta), (ref) => attemptOutcome(db, p, ref));

@@ -10,7 +10,7 @@ import { serveRigAsks } from "../../src/control/bus/index.ts";
 import { answerKbAsk, followKbFiles, KbFiles } from "../../src/control/kb/index.ts";
 import { Screens } from "../../src/control/live/index.ts";
 import type { SignedCommand } from "../../src/core/commands.ts";
-import { KB_OUTBOX_FILES, type KbItemBody } from "../../src/core/kb.ts";
+import { KB_OUTBOX_FILES, type KbItemBody } from "../../src/core/kb/index.ts";
 import type { KbSearchAnswer } from "../../src/core/link/kb.ts";
 import { KB_FILES_STREAM, KB_FILES_STREAM_CONFIG } from "../../src/core/link/kb-files.ts";
 import { rigInboxPrefix } from "../../src/core/link/users.ts";

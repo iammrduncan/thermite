@@ -1,15 +1,16 @@
 import type { DatabaseSync } from "node:sqlite";
-import { KB_RECORDS, type KbKind } from "../../../core/kb.ts";
 import {
   indexEvent,
+  KB_RECORDS,
   type KbFields,
   type KbIndexTarget,
+  type KbKind,
   type KbStored,
   mergeItem,
   metaOf,
   sameItem,
   str,
-} from "../../../core/kb-index.ts";
+} from "../../../core/kb/index.ts";
 import { eventKinds } from "../../../core/names.ts";
 import { keepVersion } from "./items.ts";
 import { ORIGIN_KINDS, originTarget } from "./journal.ts";
@@ -54,7 +55,7 @@ const READ_ANEW: Record<string, string[]> = {
 };
 
 /**
- * Thermite's reading of a rig's events into the records slot of each run (core/kb-index.ts reads
+ * Thermite's reading of a rig's events into the records slot of each run (core/kb/records.ts reads
  * each event), in the collection control files the run in, and the reading's upgrades: the
  * knowledge base's part that the apply of the events stream feeds (store/kb/index.ts holds it).
  */
@@ -74,7 +75,7 @@ export class KbReading {
 
   /**
    * One event of a rig's ledger into the records slot of its run, in its campaign's collection
-   * (core/kb-index.ts reads it). The apply of the events stream hands each event here, in the
+   * (core/kb/records.ts reads it). The apply of the events stream hands each event here, in the
    * stream's order, so each ledger's events come while it is the rig's: a rig's report from a
    * ledger it has left is refused. `again`: an event read again after an upgrade
    * (kindsToReadAgain), whose run, filed already, stays in its collection.

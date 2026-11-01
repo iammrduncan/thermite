@@ -15,7 +15,7 @@ import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { writeAtomic } from "../../common/fs.ts";
 import { KB_FILES_HELD } from "../../core/api/harness/supervisor.ts";
-import { KB_FILES_HELD_MAX, KB_OUTBOX_FILES } from "../../core/kb.ts";
+import { KB_FILES_HELD_MAX, KB_OUTBOX_FILES } from "../../core/kb/index.ts";
 import {
   KB_FILE_CHUNK_BYTES,
   KB_FILE_HEADERS,

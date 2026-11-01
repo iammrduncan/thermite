@@ -212,7 +212,7 @@ describe("an owner's message inside the agent's turn, the whole way in (goal 169
       run: "js-1",
       lane,
       epoch: n,
-      family: "f",
+      direction: "f",
       parent: "p",
       token,
     });

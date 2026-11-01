@@ -190,7 +190,7 @@ Starts a run of a campaign on the rig. On a [rig launched on RunPod](rest-api.md
 | `contract` | object | required | The whole [contract](contract.md) |
 | `contract_sha` | 64 hexadecimal characters | required | The contract's SHA-256, as `thermite contract validate` prints it |
 | `seed` | `{repo, commit}` | none | The repository (a lowercase id) and the commit the run starts from. Required for hill climb and goal campaigns; research campaigns have none. When the contract names a `project.folder`, `commit` is the whole repository's commit, and the run starts from that folder of it |
-| `direction` | text | none | The run's note, recorded with the run (`thermite assign --note`). The field keeps its old name; it is not one of the run's directions |
+| `note` | text | none | The run's note, recorded with the run (`thermite assign --note`) and shown as **Note:** on the run's item; no agent sees it. Before v0.1.1 this field was `direction`: a command signed then is read with it as `note`, and control refuses `direction` in a new one |
 | `imports` | list of [imports](#imports) | `[]` | What the rig must take in first: the project, the kit, models |
 | `agents` | boolean | worker agents run | `false`: a judge-only run |
 | `promotion` | `auto` or `owner_approval` | the rig's own setting | The run's promotion rule |
@@ -205,13 +205,13 @@ Each experiment in `queue` has these fields:
 | --- | --- | --- |
 | `title` | text, 1 to 200 characters | What to try |
 | `details` | text up to 4000 characters | Optional. More about it |
-| `family` | text, 1 to 80 characters | Optional. Its direction, in words or as a direction family's name |
+| `direction` | text, 1 to 80 characters | Optional. Its direction, in words or as a direction's name |
 | `why` | text up to 2000 characters | Optional. Why it is worth trying |
 | `by` | text, 1 to 80 characters | Who added it in the first place, such as `owner`, `planner`, `teacher` or `lane-2`. The new run keeps it as the experiment's author. Over MCP, control replaces it, as below |
 | `state` | `queued` or `proposed` | `queued`: up next. `proposed`: a lane's idea, which stays an idea in the new run |
 | `from` | `{run, id}` | The run and the experiment it was copied from |
 
-Over MCP, control does not keep the caller's words for a copied experiment that it can take from its own record. It takes `title`, `details`, `family`, `why` and `by` from its record of the experiment that `from` names: the rigs' signed events, with every edit applied. A field that the record does not have is left out. It does this only when the run that `from` names is [filed](knowledge-base.md#which-collection-a-run-goes-in) in the collection of the new run's campaign (`contract.campaign`), or of a campaign whose collection that campaign may read ([Grants](knowledge-base.md#grants)). Any other experiment keeps the caller's words, and its `by` is `copied`: one that control has no record of (no rig reported it, or more than one did), and one from a run in any other collection, or in none. To an experiment taken from its record, control adds the line `In <run> (<campaign>) it was <result>.` after the details when the experiment's item in the [knowledge base](knowledge-base.md#items) has a result, as **Start a run** does, and cuts `details` to 4,000 characters.
+Over MCP, control does not keep the caller's words for a copied experiment that it can take from its own record. It takes `title`, `details`, `direction`, `why` and `by` from its record of the experiment that `from` names: the rigs' signed events, with every edit applied. A field that the record does not have is left out. It does this only when the run that `from` names is [filed](knowledge-base.md#which-collection-a-run-goes-in) in the collection of the new run's campaign (`contract.campaign`), or of a campaign whose collection that campaign may read ([Grants](knowledge-base.md#grants)). Any other experiment keeps the caller's words, and its `by` is `copied`: one that control has no record of (no rig reported it, or more than one did), and one from a run in any other collection, or in none. To an experiment taken from its record, control adds the line `In <run> (<campaign>) it was <result>.` after the details when the experiment's item in the [knowledge base](knowledge-base.md#items) has a result, as **Start a run** does, and cuts `details` to 4,000 characters.
 
 Each item in `briefing` has these fields:
 
@@ -232,7 +232,7 @@ The harness creates the run only after every check passes. In order, it refuses:
 | `contract hash does not match contract_sha` | The hash differs |
 | `run <run> already exists` | The run id is taken on this rig |
 | `a run without agents has no queue: leave out the experiments to copy` | `"agents": false` with experiments in `queue` |
-| `queue experiment <n>: <the first problem>` | An experiment in `queue` whose `title` or `family` is only spaces. `<n>` counts from 1 |
+| `queue experiment <n>: <the first problem>` | An experiment in `queue` whose `title` or `direction` is only spaces. `<n>` counts from 1 |
 | `a run without agents has no briefs: leave out the background from past research` | `"agents": false` with items in `briefing` |
 | `contract <campaign> v<version> exists with other content` | The rig has this contract version with different content |
 | `model <name> is not listed in the contract` | A `model` import the contract does not list |
@@ -312,9 +312,9 @@ Each directive has only these fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `kind` | `avoid`, `try`, `mandate`, `priority`, `lane_count`, `trial_minutes`, `keep_working` or `note` | `avoid`, `try` and `mandate` (**Always** on the dashboard) name a direction; `priority` ranks one; `lane_count` sets how many lanes work, up to the contract's count; `trial_minutes` sets how long one trial lasts, in minutes (`value`, a whole number from 1 to 1440), over the contract's and the rig's; `keep_working`, `on` or `off` (`value`), whether the run's lanes keep working while the judge works, over the contract's; `note` is text for the planner only |
-| `family` | letters, digits, spaces and dashes, plain or as `:name:`, that make a name of 2 to 41 characters | The direction it is about, when the kind needs one. Control signs it as the direction's name: its words in lowercase, joined by dashes, so `:Shared memory tiling:` becomes `shared-memory-tiling` |
-| `value` | text up to 1000 characters, or a number | The value, when the kind needs one. A research run's `try` or `mandate` may give a question's number here instead of a `family` |
+| `kind` | `avoid`, `try`, `mandate`, `priority`, `lane_count`, `trial_minutes`, `keep_working` or `planner_note` | `avoid`, `try` and `mandate` (**Always** on the dashboard) name a direction; `priority` ranks one; `lane_count` sets how many lanes work, up to the contract's count; `trial_minutes` sets how long one trial lasts, in minutes (`value`, a whole number from 1 to 1440), over the contract's and the rig's; `keep_working`, `on` or `off` (`value`), whether the run's lanes keep working while the judge works, over the contract's; `planner_note` is text for the planner only |
+| `direction` | letters, digits, spaces and dashes, plain or as `:name:`, that make a name of 2 to 41 characters | The direction it is about, when the kind needs one. Control signs it as the direction's name: its words in lowercase, joined by dashes, so `:Shared memory tiling:` becomes `shared-memory-tiling` |
+| `value` | text up to 1000 characters, or a number | The value, when the kind needs one. A research run's `try` or `mandate` may give a question's number here instead of a `direction` |
 | `rationale` | text, 1 to 2000 characters | Why. The planner sees it; workers never do |
 | `citations` | up to 20 texts of 1 to 500 characters | Sources. Default `[]` |
 
@@ -322,16 +322,16 @@ Control refuses a directive that breaks these rules before signing, with `bad re
 
 | Field and message | When |
 | --- | --- |
-| `a rule no longer takes match: name its direction in family, in plain words or as :name:` | The directive has `match`, a rule in words |
-| `family: "<text>" is not a direction's name: write it in letters, digits, spaces and dashes, such as shared memory tiling or :shared memory tiling:` | Other characters in `family` |
-| `family: "<text>" is too long for a direction's name: use at most 41 letters, digits, spaces and dashes` | A name over 41 characters |
-| `family: an avoid, try or mandate rule names a direction (family)` | An `avoid`, `try` or `mandate` with no `family` (and, for `try` and `mandate`, no `value`) |
+| `a rule no longer takes match: give its direction in direction, in plain words or as :name:` | The directive has `match`, a rule in words |
+| `direction: "<text>" is not a direction's name: write it in letters, digits, spaces and dashes, such as shared memory tiling or :shared memory tiling:` | Other characters in `direction` |
+| `direction: "<text>" is too long for a direction's name: use at most 41 letters, digits, spaces and dashes` | A name over 41 characters |
+| `direction: an avoid, try or mandate rule names a direction` | An `avoid`, `try` or `mandate` with no `direction` (and, for `try` and `mandate`, no `value`) |
 
-A `family` may name a direction the run doesn't have yet. The rig takes it, and the planner's model designs the direction at its next round: it says what the direction means, in its own words, and the run then has it ([Directions](../how-to/campaigns/choose-what-runs-next.md#directions)). A research run's planner designs no direction: control and the rig refuse there any direction but a task kind, `A research run's directions are its task kinds: :explore:, :primary:, :contradict:, :consolidate:. Its planner designs no new direction, so a rule for :<name>: would do nothing. Name a task kind.`
+A `direction` may name a direction the run doesn't have yet. The rig takes it, and the planner's model designs the direction at its next round: it says what the direction means, in its own words, and the run then has it ([Directions](../how-to/campaigns/choose-what-runs-next.md#directions)). A research run's planner designs no direction: control and the rig refuse there any direction but a task kind, `A research run's directions are its task kinds: :explore:, :primary:, :contradict:, :consolidate:. Its planner designs no new direction, so a rule for :<name>: would do nothing. Name a task kind.`
 
 A set that both avoids a direction and tries or mandates it is refused: `the set both avoids and asks for <directions>`. A closed run is refused: `run <run> is closed: its queue and rules no longer change`. Result: `{"run", "directives": [<ids>]}`, with `"new_directions": [<names>]` when the set names directions the run doesn't have yet.
 
-A rule in words (`match`) set before rules named directions stays in force, marked legacy, until the planner's next round with its model converts it. No command converts it: the rig does, at the planner's round, with new records, and no signed command or earlier record changes. The new directive has the old one's author, `kind`, `rationale`, `citations` and `from_message`, the `family` the planner named, and `"converted_from": {"rule": <id>, "words": "<the old words>"}`; its `directive` event is its author's. The old directive leaves force as converted, with the event `directive_converted` by the planner: `{"id": <old id>, "to": <new id>, "kind", "family", "words"}`. Until then, only the planner's model reads it. The fixed rules that give out work without the model (no model, a model answer that code refused, the planner switched off, and a research run's gap-driven plan) keep only the directives that name a `family`; a research run's planner converts no rule in words, so one there is never converted ([Old rules in words](../how-to/campaigns/choose-what-runs-next.md#old-rules-in-words)).
+A rule in words (`match`) set before rules named directions stays in force, marked legacy, until the planner's next round with its model converts it. No command converts it: the rig does, at the planner's round, with new records, and no signed command or earlier record changes. The new directive has the old one's author, `kind`, `rationale`, `citations` and `from_message`, the `direction` the planner named, and `"converted_from": {"rule": <id>, "words": "<the old words>"}`; its `directive` event is its author's. The old directive leaves force as converted, with the event `directive_converted` by the planner: `{"id": <old id>, "to": <new id>, "kind", "direction", "words"}`. Until then, only the planner's model reads it. The fixed rules that give out work without the model (no model, a model answer that code refused, the planner switched off, and a research run's gap-driven plan) keep only the directives that name a `direction`; a research run's planner converts no rule in words, so one there is never converted ([Old rules in words](../how-to/campaigns/choose-what-runs-next.md#old-rules-in-words)).
 
 `redirect` is not the only source of rules. The teachers' set (a teacher's recommendations, or the merged by model's directives: see [What each role must answer](advisors-file.md#what-each-role-must-answer)) and a rule that the planner adds because an owner's message asked for it name a direction the same way.
 
@@ -447,11 +447,11 @@ Adds an experiment to the run's **experiment queue**. Each run has its own queue
 | `run` | lowercase id | required | The run |
 | `title` | text, 1 to 200 characters, trimmed | required | What to try |
 | `details` | text up to 4000 characters | none | More about it |
-| `family` | text, 1 to 80 characters, trimmed | none | Its direction: in your own words, or a direction's name. Written as `:name:`, it is kept without the colons |
+| `direction` | text, 1 to 80 characters, trimmed | none | Its direction: in your own words, or a direction's name. Written as `:name:`, it is kept without the colons |
 | `why` | text up to 2000 characters | none | Why it is worth trying. The planner reads it, and so does the worker whose lane gets the experiment |
 | `position` | `"top"`, `"end"`, or a whole number from 0 to 100000 | `"end"` | Where it goes among the queued experiments |
 
-The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `family`, `why` and `details` when they are not empty. It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
+The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `direction`, `why` and `details` when they are not empty. It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
 
 These rules hold for the five queue kinds:
 
@@ -460,7 +460,7 @@ These rules hold for the five queue kinds:
 - The harness refuses a run it doesn't have (`no run <run>`), a closed run (`run <run> is closed: its queue and rules no longer change`), and an experiment the run doesn't have (`no experiment <id> in run <run>`).
 - The harness writes the experiment and one event in one step. The event's actor is `control:<issued_by>`, such as `control:owner:ui`, and its `by` is `owner`, whoever issued the command.
 
-The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now. Event: `experiment_added`, `{id, title, details?, family?, why?, question?, by, state, position}`. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
+The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now. Event: `experiment_added`, `{id, title, details?, direction?, why?, question?, by, state, position}`. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
 
 ### `queue_move`
 
@@ -482,13 +482,13 @@ Changes the words of an experiment that still waits: one up next, or a lane's id
 | --- | --- | --- |
 | `run` | lowercase id | The run |
 | `id` | experiment id | The experiment |
-| `title`, `details`, `family`, `why` | as for `queue_add` | The new words. Give at least one; the others stay as they are |
+| `title`, `details`, `direction`, `why` | as for `queue_add` | The new words. Give at least one; the others stay as they are |
 
-An empty `details` or `why` clears it; `title` and `family` cannot be empty.
+An empty `details` or `why` clears it; `title` and `direction` cannot be empty.
 
-**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`family`) and **Why**. **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `family` only when they are not empty, so an emptied one keeps its old words. A lane's idea has no **Edit** on the dashboard.
+**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`direction`) and **Why**. **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `direction` only when they are not empty, so an emptied one keeps its old words. A lane's idea has no **Edit** on the dashboard.
 
-Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, family and why`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
+Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, direction and why`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
 
 ### `queue_drop`
 
@@ -525,7 +525,7 @@ Removes one [directive](#redirect), a rule for the plan, whoever set it: the own
 
 The harness refuses: `no run <run>`, a closed run (`run <run> is closed: its queue and rules no longer change`), and `no rule <id> in force in run <run>`. The directive stays in the record with the status `dropped`, and the ledger records `directive_dropped`, `{id}`. Result: `{"run", "dropped": <id>}`.
 
-**A removed rule does not come back from the advisors, the planner or an agent's token.** The teachers' next set of directives replaces their earlier set, the planner adds rules when an owner's message asks for one, and an agent token may send a `redirect`. Before the harness records such a set, it leaves out each rule that matches a rule removed from the run with `drop_directive`: the same kind, and the same `family` or `match` words, ignoring case and spaces at the ends. A rule that names neither matches every removed rule of its kind that names neither. The harness records the left-out rules in one event, `directives_left_out`, `{rules, why: "the owner removed these rules"}`, whose actor is `supervisor`, `planner` or `control:agent:mcp`, and records the rest of the set. Only a `redirect` issued by the owner, or by an operator for the owner, sets a removed rule again: its author is `control:owner:…`, such as `control:owner:api` for the owner's REST API or `control:owner:operator`.
+**A removed rule does not come back from the advisors, the planner or an agent's token.** The teachers' next set of directives replaces their earlier set, the planner adds rules when an owner's message asks for one, and an agent token may send a `redirect`. Before the harness records such a set, it leaves out each rule that matches a rule removed from the run with `drop_directive`: the same kind, and the same `direction` or `match` words, ignoring case and spaces at the ends. A rule that names neither matches every removed rule of its kind that names neither. The harness records the left-out rules in one event, `directives_left_out`, `{rules, why: "the owner removed these rules"}`, whose actor is `supervisor`, `planner` or `control:agent:mcp`, and records the rest of the set. Only a `redirect` issued by the owner, or by an operator for the owner, sets a removed rule again: its author is `control:owner:…`, such as `control:owner:api` for the owner's REST API or `control:owner:operator`.
 
 ### `hypothesis_status`
 

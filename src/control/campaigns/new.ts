@@ -1,5 +1,6 @@
 import type { AskOwner, BriefingSeed } from "../../core/commands.ts";
 import { parseContract } from "../../core/contract.ts";
+import { currentCommand } from "../../core/names.ts";
 import { issueWaking, type PodWaker } from "../issue/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import { nextRunName } from "../run-names.ts";
@@ -183,7 +184,7 @@ export interface RunInput {
 export interface QueueSeed {
   title: string;
   details?: string | undefined;
-  family?: string | undefined;
+  direction?: string | undefined;
   why?: string | undefined;
   by: string;
   state: "queued" | "proposed";
@@ -269,7 +270,8 @@ export async function startRun(deps: Deps, input: RunInput): Promise<RunStarted>
       rig: input.rig,
       kind: "assign_campaign",
       payload: {
-        ...kept,
+        // Kept from an assignment signed before v0.1.1: under the public names (core/names.ts).
+        ...currentCommand("assign_campaign", kept),
         run,
         contract: v.contract,
         contract_sha: v.sha,

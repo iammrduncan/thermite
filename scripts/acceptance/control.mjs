@@ -260,7 +260,7 @@ try {
     kind: "redirect",
     payload: {
       run: "smoke-2",
-      directives: [{ kind: "try", family: "tiling", rationale: "acceptance", citations: [] }],
+      directives: [{ kind: "try", direction: "tiling", rationale: "acceptance", citations: [] }],
     },
   });
   await agent.call("issue_command", {

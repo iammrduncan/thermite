@@ -201,9 +201,9 @@ export async function teacherRound(input: {
     xs.flatMap((x) => {
       const d = StructuredDirective.safeParse(x);
       if (d.success) return [d.data];
-      const r = (x ?? {}) as { kind?: unknown; family?: unknown; match?: unknown };
+      const r = (x ?? {}) as { kind?: unknown; direction?: unknown; match?: unknown };
       run.dropped.push(
-        `${String(r.kind ?? "?")} ${String(r.family ?? r.match ?? "")}: ${d.error.issues[0]?.message ?? "invalid"}`,
+        `${String(r.kind ?? "?")} ${String(r.direction ?? r.match ?? "")}: ${d.error.issues[0]?.message ?? "invalid"}`,
       );
       return [];
     });
@@ -274,22 +274,22 @@ export async function teacherRound(input: {
   run.experiments = distinct([...run.portfolio.map(toExperiment), ...plain]);
   run.directives = directives.filter((d) => {
     if (!d.citations.length) {
-      run.dropped.push(`${d.kind} ${d.family ?? ""}: no citation`);
+      run.dropped.push(`${d.kind} ${d.direction ?? ""}: no citation`);
       return false;
     }
     // A rule that freezes the queue's size or pins an experiment (goal 081).
     const refused = ruleRefusal(d);
     if (refused) {
-      run.dropped.push(`${d.kind}${d.family ? ` ${d.family}` : ""}: ${refused.why}`);
+      run.dropped.push(`${d.kind}${d.direction ? ` ${d.direction}` : ""}: ${refused.why}`);
       return false;
     }
     return true;
   });
-  const notes = run.directives.filter((d) => d.kind === "note");
+  const notes = run.directives.filter((d) => d.kind === "planner_note");
   if (notes.length > 3) {
-    run.dropped.push(`${notes.length - 3} extra notes`);
+    run.dropped.push(`${notes.length - 3} extra planner_note rules`);
     const keep = new Set(notes.slice(0, 3));
-    run.directives = run.directives.filter((d) => d.kind !== "note" || keep.has(d));
+    run.directives = run.directives.filter((d) => d.kind !== "planner_note" || keep.has(d));
   }
   return run;
 }

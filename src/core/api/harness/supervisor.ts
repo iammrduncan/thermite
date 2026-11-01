@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { COMMAND_MAX_BYTES, SignedCommand } from "../../commands.ts";
 import { HealthAnswer } from "../../health.ts";
-import { type KB_AGENT_SLOTS, KB_FILES_HELD_MAX, KbFileSha256 } from "../../kb.ts";
+import { type KB_AGENT_SLOTS, KB_FILES_HELD_MAX, KbFileSha256 } from "../../kb/index.ts";
 import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
 import { RetentionRemoved, SpaceInventory } from "../../retention/index.ts";

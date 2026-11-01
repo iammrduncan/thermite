@@ -4,8 +4,8 @@ import { LedgerError, LedgerPart, type Row } from "./part.ts";
 
 /** A rule's kind and what it names, to tell the same rule set again. */
 function ruleKey(body: unknown): string {
-  const b = (body ?? {}) as { kind?: unknown; family?: unknown; match?: unknown };
-  return `${String(b.kind ?? "")}|${String(b.family ?? b.match ?? "")
+  const b = (body ?? {}) as { kind?: unknown; direction?: unknown; match?: unknown };
+  return `${String(b.kind ?? "")}|${String(b.direction ?? b.match ?? "")
     .trim()
     .toLowerCase()}`;
 }
@@ -96,7 +96,7 @@ export class LedgerDirectives extends LedgerPart {
    * The old rule ends as converted (`directive_converted`, by `actor`): never dropped silently.
    * One transaction. Returns the new rule's id.
    */
-  convertRule(run: string, id: number, family: string, actor: string): number {
+  convertRule(run: string, id: number, direction: string, actor: string): number {
     return this.tx(() => {
       const old = this.row<Row>(
         "select author, body from directive where id = ? and run = ? and status = 'active'",
@@ -107,7 +107,7 @@ export class LedgerDirectives extends LedgerPart {
       const body = JSON.parse(String(old.body)) as Record<string, unknown>;
       if (!isLegacyRule(body))
         throw new LedgerError("invalid", `rule ${id} names a direction already`);
-      const to = this.add(run, String(old.author), convertedRule(id, body, family));
+      const to = this.add(run, String(old.author), convertedRule(id, body, direction));
       this.execute(
         "update directive set status = 'converted', superseded_at = ? where id = ?",
         this.now(),
@@ -117,7 +117,7 @@ export class LedgerDirectives extends LedgerPart {
         id,
         to,
         kind: body.kind,
-        family,
+        direction,
         words: body.match,
       });
       return to;

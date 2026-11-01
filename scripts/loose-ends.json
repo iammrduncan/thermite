@@ -39,7 +39,7 @@
     "src/agents/programs/hooks/index.ts": ["HookSource"],
     "src/agents/programs/hooks/main.ts": ["hookOutput"],
     "src/agents/programs/hooks/signals.ts": ["HookSignalsState"],
-    "src/agents/programs/opencode/session-events.ts": ["OpencodeLogState"],
+    "src/agents/programs/opencode/session.ts": ["OpencodeLogState"],
     "src/agents/programs/opencode/terminal.ts": ["opencodeServerUrl"],
     "src/agents/programs/session-log.ts": ["TurnEnd", "TallyCounts"],
     "src/agents/roles/compaction.ts": ["keptFile"],
@@ -74,8 +74,8 @@
       "CLOCK_FAIL_S",
       "CLOCK_WARN_S"
     ],
-    "src/cli/local-enroll.ts": ["ENROLL_WAIT_MS", "EnrollOutcome"],
-    "src/cli/local-init.ts": ["LOCAL_FOLDERS", "LocalInitResult"],
+    "src/cli/local/enroll.ts": ["ENROLL_WAIT_MS", "EnrollOutcome"],
+    "src/cli/local/init.ts": ["LOCAL_FOLDERS", "LocalInitResult"],
     "src/cli/machine.ts": [
       "SMI_ARGS",
       "EngineFacts",
@@ -109,8 +109,8 @@
       "BusSignIn"
     ],
     "src/common/db-copy.ts": ["DbCopy"],
-    "src/common/git-auth.ts": ["GitEnv"],
-    "src/common/git.ts": ["GIT_TIMEOUT_MS", "GIT_MAX_BYTES", "GitOptions"],
+    "src/common/git/auth.ts": ["GitEnv"],
+    "src/common/git/run.ts": ["GIT_TIMEOUT_MS", "GIT_MAX_BYTES", "GitOptions"],
     "src/common/run-as/client.ts": ["RunAsRequest"],
     "src/common/run-as/server.ts": ["RunAsServerOptions"],
     "src/common/search/find.ts": ["WordsFind"],
@@ -214,8 +214,8 @@
     "src/control/providers/chatgpt.ts": ["ChatGPTLogin"],
     "src/control/providers/models.ts": ["OPENCODE_BASE", "CONTEXT_CAP_MIN", "CONTEXT_CAP_MAX"],
     "src/control/results-left.ts": ["ResultsDestination", "RemoveCheck"],
-    "src/control/rigs/model-routes.ts": ["RouteParts", "ModelRoutes"],
-    "src/control/rigs/model.ts": [
+    "src/control/rigs/model/routes.ts": ["RouteParts", "ModelRoutes"],
+    "src/control/rigs/model/request.ts": [
       "MODEL_AGENTS",
       "ModelAgent",
       "ModelChoice",
@@ -317,7 +317,7 @@
       "MetricsInput"
     ],
     "src/control/ui/words/rig.ts": ["commandText", "checkName"],
-    "src/control/usage.ts": ["UsageQuery", "PriceRequest", "PriceView"],
+    "src/control/usage-report.ts": ["UsageQuery", "PriceRequest", "PriceView"],
     "src/control/versions.ts": ["VersionState", "refusalFor"],
     "src/control/views/agent.ts": ["AgentHeldOut", "agentHeldOut", "agentGoalChecks"],
     "src/control/views/research.ts": ["ReviewerView", "TASK_WINDOW"],
@@ -348,7 +348,7 @@
     "src/core/health.ts": ["LoopAge", "LATE_AFTER_PERIODS"],
     "src/core/ids.ts": ["ATTEMPT_ID"],
     "src/core/journal.ts": ["AboutType"],
-    "src/core/kb.ts": ["isAgentSlot", "KbPlace"],
+    "src/core/kb/items.ts": ["isAgentSlot", "KbPlace"],
     "src/core/link/config.ts": [
       "CONFIG_SUBJECTS",
       "GIT_ACCESS_MAX",
@@ -457,11 +457,11 @@
     ],
     "src/harness/judge/measure.ts": ["CheckResult", "CrashFailure", "InvalidFailure"],
     "src/harness/judge/ports.ts": ["PORT_WHY"],
-    "src/harness/kb-part.ts": ["KbPartItem"],
+    "src/harness/kb/part.ts": ["KbPartItem"],
     "src/harness/kb/asks.ts": ["KbAskOut", "ASK_UNTAKEN_MS", "ASK_UNANSWERED_MS"],
     "src/harness/kb/write.ts": ["KbWrite", "KbWritten"],
     "src/harness/ledger/champions.ts": ["PromoteResult"],
-    "src/harness/ledger/claims.ts": ["NoteRow"],
+    "src/harness/ledger/claims.ts": ["SourceNoteRow"],
     "src/harness/ledger/events.ts": ["ReadEvent", "EventQuery"],
     "src/harness/ledger/lane-files.ts": ["LaneFileRow"],
     "src/harness/ledger/prompts.ts": ["PromptRow"],

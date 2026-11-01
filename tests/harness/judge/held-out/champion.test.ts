@@ -186,7 +186,7 @@ describe("the champion's held-out check (goal 086)", () => {
         "js-1",
         env.service.contractFor("js-1"),
         2,
-        { lane: "lane-1", family: "f" },
+        { lane: "lane-1", direction: "f" },
         { title: "fix it", added_by: "planner" },
         1,
         1,

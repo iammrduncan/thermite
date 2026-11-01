@@ -142,7 +142,7 @@ describe("the prompts a run's agents were sent (goal 166)", () => {
       run: RUN,
       lane: "lane-2",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seedCommit,
       token: "tok-later",
     });

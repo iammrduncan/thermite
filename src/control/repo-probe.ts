@@ -2,8 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errorText } from "../common/errors.ts";
-import { gitText } from "../common/git.ts";
-import { type GitAuth, withGitAuth } from "../common/git-auth.ts";
+import { type GitAuth, gitText, withGitAuth } from "../common/git/index.ts";
 
 /**
  * What the new-campaign page shows about a project before it starts: the commit a branch or tag

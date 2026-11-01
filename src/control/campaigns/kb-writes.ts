@@ -6,7 +6,7 @@ import {
   type KbWrites,
   KbWrites as KbWritesSchema,
   kbWritesOf,
-} from "../../core/kb.ts";
+} from "../../core/kb/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { campaignContract } from "./context.ts";
 import { saveWithField } from "./saved-version.ts";
@@ -15,7 +15,7 @@ import { saveWithField } from "./saved-version.ts";
  * Which kinds of item each role may write in its own slot of the campaign's collection in
  * Thermite's knowledge base (goal 175). It lives in the contract, as `kb_writes`, so it is signed
  * into every assignment, versioned and copied with the contract: a change is a new version, and a
- * run keeps what it started with. Left out, core/kb.ts's KB_WRITES_DEFAULT holds. A role that may
+ * run keeps what it started with. Left out, core/kb/items.ts's KB_WRITES_DEFAULT holds. A role that may
  * write gets the `kb_write` tool; every role gets `kb_search` and `kb_read`. The rig's harness
  * refuses another kind, and control refuses it again as it stores the item.
  *

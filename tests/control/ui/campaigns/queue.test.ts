@@ -21,7 +21,7 @@ test("a judge-only run's queue says no worker takes it, and how to carry it to a
         state,
         position: 0,
         by: "teacher",
-        family: "",
+        direction: "",
         why: "",
         at: "2026-10-21T00:00:00Z",
         updated_at: "2026-10-21T00:00:00Z",
@@ -43,7 +43,7 @@ test("a judge-only run's queue says no worker takes it, and how to carry it to a
       csrf: "c",
       back: "/ui/campaigns/quality/runs/q-1/experiments",
       cmd: () => "",
-      families: [],
+      directions: [],
     });
   assert.match(tab(run(false, waiting("queued"))), LINE);
   assert.match(judgeOnlyQueueLine(run(false, waiting("proposed"))), LINE);

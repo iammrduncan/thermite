@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KB_OWNER, KbAddress, KbItemBody, kbAddress } from "../../core/kb.ts";
+import { KB_OWNER, KbAddress, KbItemBody, kbAddress } from "../../core/kb/index.ts";
 import type { ControlStore } from "../store/index.ts";
 
 /**

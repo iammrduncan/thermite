@@ -1,4 +1,4 @@
-import { cutSaid } from "../../../core/kb-index.ts";
+import { cutSaid } from "../../../core/kb/index.ts";
 import { hypothesisStatusWords, questionLabel } from "../../../core/research-check.ts";
 import { kbFileFacts, keepKbFile } from "../../kb/index.ts";
 import { type ClaimRow, type FindingRow, LedgerError } from "../../ledger/index.ts";

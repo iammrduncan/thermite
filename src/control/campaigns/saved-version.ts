@@ -1,5 +1,6 @@
 import { parseContract } from "../../core/contract.ts";
 import { isRigCheck } from "../../core/ids.ts";
+import { currentContract } from "../../core/names.ts";
 import type { CampaignSources, ControlStore } from "../store/index.ts";
 import { RUN_FIELDS } from "./copy.ts";
 
@@ -53,9 +54,10 @@ export function saveWithField(
     return refuse(`${campaign} is a rig check's campaign. Its agents keep ${o.what}.`, 400);
   const saved = store.campaigns.versions(campaign)[0];
   const assigned = store.commands.latestAssignments().get(campaign);
-  const source = (saved?.contract ?? assigned?.payload.contract) as
-    | Record<string, unknown>
-    | undefined;
+  // A new version: the source's keys under the new names (core/names.ts).
+  const source = currentContract(
+    (saved?.contract ?? assigned?.payload.contract) as Record<string, unknown> | undefined,
+  );
   if (!source)
     return refuse(
       `Control has no saved version or earlier assignment of ${campaign}. Save it on the New campaign page first.`,

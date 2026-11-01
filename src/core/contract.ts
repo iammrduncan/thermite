@@ -3,8 +3,9 @@ import { canonicalSha } from "./canonical.ts";
 import { AgentsContext } from "./compaction.ts";
 import { DURATION_PATTERN, parseDuration } from "./duration.ts";
 import { CampaignId, MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
-import { KbWritesInContract } from "./kb.ts";
+import { KbWritesInContract } from "./kb/index.ts";
 import { McpUses } from "./mcp.ts";
+import { CONTRACT_KEYS } from "./names.ts";
 import { additionRefusals, RoleAdditions } from "./role-additions.ts";
 
 export { MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
@@ -154,6 +155,12 @@ const Common = {
    * was tried, limits and what good looks like, in Markdown, with no length limit. The planner,
    * the workers and the advisors get it as data to weigh, never as a rule (brief.ts).
    */
+  additional_information: z.string().optional(),
+  /**
+   * The additional information's key in a contract written before v0.1.1 (core/names.ts). Such a
+   * contract keeps its keys as it was signed, so its hash holds (parseStoredContract), and is read
+   * with this as `additional_information` (currentContract). A new contract may not use it.
+   */
   notes: z.string().optional(),
   /**
    * What the campaign's author thinks is true, one entry each (goal 078): a starting point for the
@@ -177,7 +184,7 @@ const Common = {
   /**
    * Which kinds of item each role may write in its own slot of Thermite's knowledge base (goal
    * 175): planner, worker, teachers, merged_by, auditor, review_panel, synthesizer and
-   * final_writer, each with its kinds. Left out: core/kb.ts's KB_WRITES_DEFAULT. Optional and
+   * final_writer, each with its kinds. Left out: core/kb/items.ts's KB_WRITES_DEFAULT. Optional and
    * without a default, so contracts written before it keep their hash; a contract that names a
    * role as the slots were spelled before keeps it as signed, and kbWritesOf reads it.
    */
@@ -318,7 +325,7 @@ export const GoalContract = z
       .default({ allowed: false }),
     /** Epochs during which lanes get no cross-lane evidence. */
     independence_epochs: z.number().int().min(0).default(2),
-    /** Approach families that must stay alive at once. */
+    /** Directions that must stay alive at once. */
     min_live_families: z.number().int().min(1).default(2),
     /** Runs per cell when a metric threshold is checked; its interval needs several. */
     threshold_reps: z.number().int().min(2).max(20).default(5),
@@ -463,8 +470,25 @@ export type ContractParse =
   | { ok: true; contract: Contract; sha: string }
   | { ok: false; errors: string[] };
 
-/** Validates a contract and returns it with defaults applied and its content hash. */
+/**
+ * Validates a new contract and returns it with defaults applied and its content hash. A key a
+ * contract had before v0.1.1 is refused, with its new name (core/names.ts).
+ */
 export function parseContract(input: unknown): ContractParse {
+  const old =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? [...CONTRACT_KEYS].filter(([k]) => k in input)
+      : [];
+  if (old.length)
+    return { ok: false, errors: old.map(([k, now]) => `${k}: \`${k}\` is now \`${now}\``) };
+  return parseStoredContract(input);
+}
+
+/**
+ * Validates a contract as it was signed, a stored one included: a contract written before v0.1.1
+ * keeps its old keys, so its hash holds. Read it under the new names with currentContract.
+ */
+export function parseStoredContract(input: unknown): ContractParse {
   const r = ContractSchema.safeParse(input);
   if (!r.success) {
     return {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { z } from "zod";
 import { Refusal } from "../../common/errors.ts";
 import type { CommandPayloads } from "../../core/commands.ts";
-import { KB_OUTBOX_FILES } from "../../core/kb.ts";
+import { KB_OUTBOX_FILES } from "../../core/kb/index.ts";
 import type { HarnessPaths, HarnessService } from "./index.ts";
 
 /** A full reset's wipe: the command that asks for it, and the wipe at the next start. */

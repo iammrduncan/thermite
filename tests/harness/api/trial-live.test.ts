@@ -32,7 +32,7 @@ describe("a trial's counters and waits on its route", () => {
       run: "r-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: "p",
       token: "tok-1",
     });

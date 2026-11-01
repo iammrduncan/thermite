@@ -58,8 +58,8 @@ describe("close_run (goal 087)", () => {
         {
           name: "submit_plan",
           args: {
-            assignments: [{ lane: "lane-1", family: "loops", focus: "f", parent: "champion" }],
-            new_families: [{ id: "loops", description: "d" }],
+            assignments: [{ lane: "lane-1", direction: "loops", focus: "f", parent: "champion" }],
+            new_directions: [{ id: "loops", description: "d" }],
           },
         },
       ],

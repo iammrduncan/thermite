@@ -57,7 +57,7 @@ export { LedgerError } from "./part.ts";
 export type { PromptRow } from "./prompts.ts";
 export type { AttemptInput, BriefingItem, ExperimentRow, JobRow, RunRow } from "./rows.ts";
 export type { SourceRow } from "./sources.ts";
-export type { EpochSource, FamilyStatus } from "./trials.ts";
+export type { DirectionStatus, EpochSource } from "./trials.ts";
 export type { InvalidationResult } from "./verdicts.ts";
 
 export class Ledger {

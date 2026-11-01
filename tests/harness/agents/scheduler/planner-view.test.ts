@@ -34,8 +34,10 @@ const workers: ModelConfig = {
 };
 
 const PLAN = {
-  new_families: [{ id: "tidy", description: "Small tidy-ups." }],
-  assignments: [{ lane: "lane-1", family: "tidy", focus: "tidy the kernel", parent: "champion" }],
+  new_directions: [{ id: "tidy", description: "Small tidy-ups." }],
+  assignments: [
+    { lane: "lane-1", direction: "tidy", focus: "tidy the kernel", parent: "champion" },
+  ],
   notes: "planned in its Pi view",
 };
 

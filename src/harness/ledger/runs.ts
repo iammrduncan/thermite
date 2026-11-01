@@ -97,7 +97,8 @@ export class LedgerRuns extends LedgerPart {
     seedCommit: string;
     /** A project in one folder of its repository: the folder, and the repository's commit. */
     seedFolder?: { folder: string; commit: string } | undefined;
-    direction?: string | undefined;
+    /** The owner's label for the run (`--note`). */
+    note?: string | undefined;
     /** False: a judge-only run (no worker agents). */
     agents?: boolean | undefined;
     /** The run's own promotion policy (unset: the rig's default). */
@@ -123,7 +124,7 @@ export class LedgerRuns extends LedgerPart {
       const at = this.now();
       this.execute(
         `insert into run (id, campaign, version, contract_sha, mode, seed_repo, seed_commit,
-           direction, status, agents, promotion, ask_owner, created_at, updated_at)
+           note, status, agents, promotion, ask_owner, created_at, updated_at)
            values (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)`,
         input.id,
         input.contract.campaign,
@@ -132,7 +133,7 @@ export class LedgerRuns extends LedgerPart {
         input.contract.mode,
         input.seedRepo,
         input.seedCommit,
-        input.direction ?? null,
+        input.note ?? null,
         input.agents === false ? 0 : 1,
         input.promotion ?? null,
         input.askOwner && Object.keys(input.askOwner).length ? canonicalJson(input.askOwner) : null,
@@ -171,7 +172,7 @@ export class LedgerRuns extends LedgerPart {
             ? { folder: input.seedFolder.folder, source_commit: input.seedFolder.commit }
             : {}),
         },
-        direction: input.direction ?? null,
+        note: input.note ?? null,
         agents: input.agents !== false,
         promotion: input.promotion ?? null,
         ...(input.askOwner && Object.keys(input.askOwner).length

@@ -113,7 +113,7 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
         {
           run: "smoke-1",
           role: "auditor",
-          add: [{ title: "Re-measure a-1", why: "a doubt", family: "check", position: "top" }],
+          add: [{ title: "Re-measure a-1", why: "a doubt", direction: "check", position: "top" }],
           move: [],
         },
       ],

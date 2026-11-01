@@ -13,7 +13,7 @@ import {
   KbKind,
   KbLinkRel,
   KbWrittenKind,
-} from "../../core/kb.ts";
+} from "../../core/kb/index.ts";
 import {
   KB_OFFSET_MAX,
   KB_QUERIES_MAX,

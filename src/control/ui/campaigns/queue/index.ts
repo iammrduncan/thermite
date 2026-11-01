@@ -134,7 +134,7 @@ export function experimentsTab(o: {
   back: string;
   cmd: CmdForm;
   /** Directions the run has used, to suggest when adding. */
-  families: string[];
+  directions: string[];
 }): string {
   const { u, r } = o;
   // A research run's queue holds research tasks, each a question, a gap and a kind of task: "task"
@@ -156,13 +156,13 @@ export function experimentsTab(o: {
     ...extra,
   });
   const item = (x: ExperimentView, i: number) =>
-    `<div class="qi" draggable="true" data-id="${esc(x.id)}" data-rig="${esc(u.id)}" data-run="${esc(r.id)}"><span class="qh" title="Drag to reorder">⋮⋮</span><span class="qn">${i + 1}</span><div class="qmain"><div class="qt">${esc(x.title)}</div>${x.why ? `<div class="qwhy">${esc(x.why)}</div>` : ""}${x.returns ? `<div class="muted xs">Came back ${x.returns === 1 ? "once" : `${x.returns} times`}: its trial never really tried it${x.cause ? ` (${esc(clip(x.cause, 200))})` : ""}.</div>` : ""}<div class="qmeta">${src(x.by)}${questionChip(r, x.question)}${x.family ? `<span class="qdir">${esc(x.family)}</span>` : ""}${x.from_run ? `<span class="muted xs">from ${esc(x.from_run)}</span>` : ""}</div></div><div class="qacts">${i > 0 ? o.cmd({ rig: u.id, kind: "queue_move", fields: fields(x, { position: "top" }), label: "↑ Top", cls: "sm ghost", back: o.back }) : ""}<details class="menu"><summary class="btn sm ghost">Edit</summary><div class="menu-pop qedit">${o.cmd({ rig: u.id, kind: "queue_edit", fields: fields(x), label: "Save", cls: "sm", back: o.back, extra: editFields(x) })}</div></details><details class="menu"><summary class="btn sm ghost">Drop</summary><div class="menu-pop">${o.cmd({ rig: u.id, kind: "queue_drop", fields: fields(x), label: "Drop it", cls: "sm danger", back: o.back, extra: `<input name="why" required placeholder="why" aria-label="Why" style="width:100%;margin-bottom:6px">` })}</div></details></div></div>`;
+    `<div class="qi" draggable="true" data-id="${esc(x.id)}" data-rig="${esc(u.id)}" data-run="${esc(r.id)}"><span class="qh" title="Drag to reorder">⋮⋮</span><span class="qn">${i + 1}</span><div class="qmain"><div class="qt">${esc(x.title)}</div>${x.why ? `<div class="qwhy">${esc(x.why)}</div>` : ""}${x.returns ? `<div class="muted xs">Came back ${x.returns === 1 ? "once" : `${x.returns} times`}: its trial never really tried it${x.cause ? ` (${esc(clip(x.cause, 200))})` : ""}.</div>` : ""}<div class="qmeta">${src(x.by)}${questionChip(r, x.question)}${x.direction ? `<span class="qdir">${esc(x.direction)}</span>` : ""}${x.from_run ? `<span class="muted xs">from ${esc(x.from_run)}</span>` : ""}</div></div><div class="qacts">${i > 0 ? o.cmd({ rig: u.id, kind: "queue_move", fields: fields(x, { position: "top" }), label: "↑ Top", cls: "sm ghost", back: o.back }) : ""}<details class="menu"><summary class="btn sm ghost">Edit</summary><div class="menu-pop qedit">${o.cmd({ rig: u.id, kind: "queue_edit", fields: fields(x), label: "Save", cls: "sm", back: o.back, extra: editFields(x) })}</div></details><details class="menu"><summary class="btn sm ghost">Drop</summary><div class="menu-pop">${o.cmd({ rig: u.id, kind: "queue_drop", fields: fields(x), label: "Drop it", cls: "sm danger", back: o.back, extra: `<input name="why" required placeholder="why" aria-label="Why" style="width:100%;margin-bottom:6px">` })}</div></details></div></div>`;
   // An experiment's words, to change before a lane takes it.
   const editFields = (x: ExperimentView) =>
-    `<label class="sfd">${infoLabel(research ? "Task" : "What to try", `The ${thing}'s title: what a lane works on.`)}<input name="title" required maxlength="200" value="${esc(x.title)}"></label><label class="sfd">${infoLabel("Details", "More on how to try it, for the lane that takes it. Empty: none.")}<textarea name="details" rows="3" maxlength="4000">${esc(x.details ?? "")}</textarea></label><label class="sfd">${infoLabel(kindWord, research ? "Explore, primary, contradict or consolidate. Rules apply by kind of task." : "The approach it belongs to. Rules apply by direction.")}<input name="family" maxlength="80" value="${esc(x.family)}"></label><label class="sfd">${infoLabel("Why", "Why it is worth trying. Empty: none.")}<input name="why" maxlength="2000" value="${esc(x.why ?? "")}"></label>`;
+    `<label class="sfd">${infoLabel(research ? "Task" : "What to try", `The ${thing}'s title: what a lane works on.`)}<input name="title" required maxlength="200" value="${esc(x.title)}"></label><label class="sfd">${infoLabel("Details", "More on how to try it, for the lane that takes it. Empty: none.")}<textarea name="details" rows="3" maxlength="4000">${esc(x.details ?? "")}</textarea></label><label class="sfd">${infoLabel(kindWord, research ? "Explore, primary, contradict or consolidate. Rules apply by kind of task." : "The approach it belongs to. Rules apply by direction.")}<input name="direction" maxlength="80" value="${esc(x.direction)}"></label><label class="sfd">${infoLabel("Why", "Why it is worth trying. Empty: none.")}<input name="why" maxlength="2000" value="${esc(x.why ?? "")}"></label>`;
   const add = `<form class="qadd" method="post" action="/ui/commands"><input type="hidden" name="csrf" value="${esc(o.csrf)}"><input type="hidden" name="rig" value="${esc(u.id)}"><input type="hidden" name="run" value="${esc(r.id)}"><input type="hidden" name="kind" value="queue_add"><input type="hidden" name="back" value="${esc(o.back)}">
 <label class="sfd">${infoLabel(research ? "Add a task" : "Add an experiment", `Something for a lane to ${research ? "research" : "try"}. It joins the queue where you put it; the planner gives it to a free lane when it reaches the top, and keeps two lanes off the same thing.`)}<input name="title" required maxlength="200" placeholder="${research ? "for example: Question 2 (index 1): find the vendor's documentation of the warp scheduler" : "for example: unroll the dequantize loop by 4"}"></label>
-<label class="sfd">${infoLabel(kindWord, research ? "Explore, primary, contradict or consolidate. Rules apply by kind of task." : "The approach it belongs to, in your words or one this run has used. The planner keeps similar work on the same lane, and rules apply by direction.")}<input name="family" maxlength="80" list="qfams" placeholder="optional"><datalist id="qfams">${o.families.map((f) => `<option value="${esc(f)}">`).join("")}</datalist></label>
+<label class="sfd">${infoLabel(kindWord, research ? "Explore, primary, contradict or consolidate. Rules apply by kind of task." : "The approach it belongs to, in your words or one this run has used. The planner keeps similar work on the same lane, and rules apply by direction.")}<input name="direction" maxlength="80" list="qfams" placeholder="optional"><datalist id="qfams">${o.directions.map((f) => `<option value="${esc(f)}">`).join("")}</datalist></label>
 <label class="sfd">${infoLabel("Where", "Its place in the queue. You can drag it later.")}<select name="position"><option value="top">at the top</option><option value="end">at the end</option></select></label>
 <button class="primary">Add</button>
 <label class="sfd qwhy-f">${infoLabel("Why", `Shown with the ${thing} to the planner and to the lane that gets it.`)}<input name="why" maxlength="2000" placeholder="optional"></label>
@@ -171,7 +171,7 @@ export function experimentsTab(o: {
     .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
     .map(([lane, w]) => {
       const x = doing.find((d) => d.trial === w.trial || d.lane === lane);
-      return `<div class="qlane"><div class="qlt"><span class="dot ok"></span><b>${esc(lane)}</b> · since ${esc(ago(w.since, o.now))} ago</div><div>${esc(x?.title ?? w.focus ?? w.family ?? "working")}</div>${x ? `<div class="muted xs">${src(x.by)}${questionChip(r, x.question)}</div>` : ""}</div>`;
+      return `<div class="qlane"><div class="qlt"><span class="dot ok"></span><b>${esc(lane)}</b> · since ${esc(ago(w.since, o.now))} ago</div><div>${esc(x?.title ?? w.focus ?? w.direction ?? "working")}</div>${x ? `<div class="muted xs">${src(x.by)}${questionChip(r, x.question)}</div>` : ""}</div>`;
     })
     .join("");
   const ideaRows = ideas
@@ -185,7 +185,7 @@ export function experimentsTab(o: {
     .map((x) => {
       const res = triedResult(r, x);
       counts[res.cls]++;
-      return `<tr data-r="${res.cls}" data-d="${esc(x.family)}" data-b="${esc(byLabel(x.by).text)}"><td><b>${esc(x.title)}</b>${namesQuestion(x) ? "" : ` ${questionChip(r, x.question)}`}${x.why ? `<div class="muted xs">${esc(clip(x.why, 160))}</div>` : ""}${x.cause && x.state === "done" ? `<div class="muted xs">How its trial ended: ${esc(clip(x.cause, 200))}</div>` : ""}</td><td class="qdir">${esc(x.family)}</td><td>${src(x.by)}</td><td class="muted small">${esc([x.lane, x.trial ? `trial ${x.trial.slice(0, 10)}` : ""].filter(Boolean).join(" · ") || "·")}</td><td><span class="qres ${res.cls}${res.quiet ? " flat" : ""}">${esc(res.text)}</span></td><td class="muted small nowrap">${esc(ago(x.updated_at, o.now))} ago</td></tr>`;
+      return `<tr data-r="${res.cls}" data-d="${esc(x.direction)}" data-b="${esc(byLabel(x.by).text)}"><td><b>${esc(x.title)}</b>${namesQuestion(x) ? "" : ` ${questionChip(r, x.question)}`}${x.why ? `<div class="muted xs">${esc(clip(x.why, 160))}</div>` : ""}${x.cause && x.state === "done" ? `<div class="muted xs">How its trial ended: ${esc(clip(x.cause, 200))}</div>` : ""}</td><td class="qdir">${esc(x.direction)}</td><td>${src(x.by)}</td><td class="muted small">${esc([x.lane, x.trial ? `trial ${x.trial.slice(0, 10)}` : ""].filter(Boolean).join(" · ") || "·")}</td><td><span class="qres ${res.cls}${res.quiet ? " flat" : ""}">${esc(res.text)}</span></td><td class="muted small nowrap">${esc(ago(x.updated_at, o.now))} ago</td></tr>`;
     })
     .join("");
   const chip = (key: string, label: string, n: number) =>
@@ -202,7 +202,7 @@ export function experimentsTab(o: {
     "data-qd",
     kindWord,
     research ? "Every kind of task" : "Every direction",
-    tried.map((x) => x.family),
+    tried.map((x) => x.direction),
   )}${pick(
     "data-qb",
     "Added by",
@@ -252,6 +252,7 @@ function kindOf(kind: string): { chip: string; verb: string } {
   if (kind === "lane_count") return { chip: "lanes", verb: "Lanes" };
   if (kind === "trial_minutes") return { chip: "trial", verb: "Trials last" };
   if (kind === "keep_working") return { chip: "lanes", verb: "Keep working while judged" };
+  if (kind === "planner_note") return { chip: "note", verb: "Note for the planner" };
   return { chip: kind, verb: kind };
 }
 
@@ -336,10 +337,10 @@ export function plannerTab(o: {
     const kind = String(x.body.kind ?? "");
     const k = kindOf(kind);
     // A direction shows as :name: (goal 066); an old rule in words, in quotes.
-    const family = typeof x.body.family === "string" ? x.body.family : "";
-    const d = family ? dirOf(family) : undefined;
-    const what = family
-      ? tok(family, d?.to_design ?? false)
+    const direction = typeof x.body.direction === "string" ? x.body.direction : "";
+    const d = direction ? dirOf(direction) : undefined;
+    const what = direction
+      ? tok(direction, d?.to_design ?? false)
       : x.legacy
         ? esc(`“${String(x.body.match ?? "")}”`)
         : esc(String(x.body.value ?? ""));
@@ -350,7 +351,7 @@ export function plannerTab(o: {
           ? `Trials last ${what} minutes`
           : kind === "keep_working"
             ? `Lanes keep working while the judge works: ${what}`
-            : kind === "note"
+            : kind === "planner_note"
               ? what
               : `${esc(k.verb)} ${what}`;
     const fromMsg =
@@ -359,7 +360,7 @@ export function plannerTab(o: {
         : undefined;
     // A rule the planner converted from an old rule in words: the words it replaced.
     const was = (x.body.converted_from ?? undefined) as { words?: unknown } | undefined;
-    const effect = family && !d?.to_design ? ruleEffect(kind, d) : "";
+    const effect = direction && !d?.to_design ? ruleEffect(kind, d) : "";
     const note = x.legacy
       ? `<div class="xs warn" style="margin-top:3px">${icon.warn} An old rule in words, from before rules named directions. ${esc(converts)}</div>`
       : d?.to_design
@@ -389,7 +390,8 @@ export function plannerTab(o: {
   const changed = (r.timeline ?? [])
     .filter(
       (e) =>
-        (e.actor === "planner" || (e.kind === "family_added" && e.actor.startsWith("planner:"))) &&
+        (e.actor === "planner" ||
+          (e.kind === "direction_added" && e.actor.startsWith("planner:"))) &&
         !e.body.requeued_from &&
         e.unreadable === undefined,
     )
@@ -412,16 +414,16 @@ export function plannerTab(o: {
               : e.kind === "experiment_dropped"
                 ? `Dropped ${t}${why(b.why)}`
                 : e.kind === "directive"
-                  ? `Set the rule ${esc(String(d.kind ?? ""))} ${typeof d.family === "string" ? tok(d.family) : typeof d.match === "string" ? esc(`“${d.match}”`) : esc(String(d.value ?? ""))}${why(d.rationale)}${
+                  ? `Set the rule ${esc(String(d.kind ?? ""))} ${typeof d.direction === "string" ? tok(d.direction) : typeof d.match === "string" ? esc(`“${d.match}”`) : esc(String(d.value ?? ""))}${why(d.rationale)}${
                       typeof d.from_message === "number"
                         ? ` <span class="muted">(from your message: “${esc(clip(r.messages.find((m) => m.id === d.from_message)?.text ?? `#${d.from_message}`, 120))}”)</span>`
                         : ""
                     }`
                   : // A direction the planner designed for rules that named it (goal 066).
-                    e.kind === "family_added" && Array.isArray(b.for_rules) && b.for_rules.length
-                    ? `Designed the direction ${tok(String(b.family ?? ""))} for rule ${esc(b.for_rules.join(", "))}${why(b.description)}`
+                    e.kind === "direction_added" && Array.isArray(b.for_rules) && b.for_rules.length
+                    ? `Designed the direction ${tok(String(b.direction ?? ""))} for rule ${esc(b.for_rules.join(", "))}${why(b.description)}`
                     : e.kind === "directive_converted"
-                      ? `Converted the old rule in words “${esc(clip(String(b.words ?? ""), 160))}” (rule ${esc(String(b.id))}) to ${esc(kindOf(String(b.kind ?? "")).verb)} ${tok(String(b.family ?? ""))} (rule ${esc(String(b.to))})`
+                      ? `Converted the old rule in words “${esc(clip(String(b.words ?? ""), 160))}” (rule ${esc(String(b.id))}) to ${esc(kindOf(String(b.kind ?? "")).verb)} ${tok(String(b.direction ?? ""))} (rule ${esc(String(b.to))})`
                       : "";
       return { at: e.at, html: said };
     })
@@ -453,22 +455,22 @@ export function plannerTab(o: {
     const round = seen.round ?? r.handouts.find((h) => h.at >= seen.at)?.round ?? null;
     const hand = r.handouts.find((h) => h.round === round && h.at >= seen.at);
     const items = m.rules.map((x) => {
-      const d = x.family ? dirOf(x.family) : undefined;
+      const d = x.direction ? dirOf(x.direction) : undefined;
       // A direction the model designed in that round: new for this rule.
-      const made = x.family
-        ? r.families.find(
-            (f) => f.name === x.family && f.by === "planner:planner" && f.at >= seen.at,
+      const made = x.direction
+        ? r.registry.find(
+            (f) => f.name === x.direction && f.by === "planner:planner" && f.at >= seen.at,
           )
         : undefined;
       const inForce = r.rules.some((y) => y.id === x.id);
       const effect = inForce && d && !d.to_design ? ruleEffect(x.kind, d) : "";
       // The rule and why, the direction the planner designed for it, then what it does now.
-      return `<li><b>${esc(kindOf(x.kind).verb)} ${x.family ? tok(x.family, d?.to_design ?? false) : ""}</b>${made ? ` <span class="chip info">new direction</span>` : ""}${x.rationale ? ` <span class="muted">· ${esc(clip(x.rationale, 300))}</span>` : ""}${made ? `<div class="small">The run had none for it, so the planner designed it: ${esc(clip(made.description, 300))}.</div>` : ""}${inForce ? (effect ? `<div class="xs ok">${icon.check} ${esc(effect)}</div>` : "") : `<div class="xs muted">It is no longer in force.</div>`}</li>`;
+      return `<li><b>${esc(kindOf(x.kind).verb)} ${x.direction ? tok(x.direction, d?.to_design ?? false) : ""}</b>${made ? ` <span class="chip info">new direction</span>` : ""}${x.rationale ? ` <span class="muted">· ${esc(clip(x.rationale, 300))}</span>` : ""}${made ? `<div class="small">The run had none for it, so the planner designed it: ${esc(clip(made.description, 300))}.</div>` : ""}${inForce ? (effect ? `<div class="xs ok">${icon.check} ${esc(effect)}</div>` : "") : `<div class="xs muted">It is no longer in force.</div>`}</li>`;
     });
     // Rules it made that you had removed: the harness left them out, so say so, never "none".
     const left = m.left_out.map(
       (x) =>
-        `<li><b>${esc(kindOf(x.kind).verb)} ${x.family ? tok(x.family) : ""}</b><div class="xs warn">${icon.warn} You removed this rule. Only your own <code>redirect</code> sets it again.</div></li>`,
+        `<li><b>${esc(kindOf(x.kind).verb)} ${x.direction ? tok(x.direction) : ""}</b><div class="xs warn">${icon.warn} You removed this rule. Only your own <code>redirect</code> sets it again.</div></li>`,
     );
     const notes = hand && hand.notes !== "the planner's plan" ? hand.notes : "";
     return `<div class="qturn" data-msg="${m.id}">${said}<div class="qmsg planner"><div class="qmh"><span class="qsrc planner">planner</span> <span class="muted xs">${round !== null ? `round ${round} · ` : ""}${esc(seen.at.slice(11, 16))}</span></div>${

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { agentModelsOf } from "../../../../src/control/rigs/model.ts";
+import { agentModelsOf } from "../../../../src/control/rigs/model/index.ts";
 import { stack } from "./stack.ts";
 
 /** The teachers over REST: one or two models and a merged by model, all checked before any is set. */

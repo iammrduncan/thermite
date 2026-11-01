@@ -16,7 +16,7 @@ import {
 } from "../../src/control/lifecycle.ts";
 import { leaderboard } from "../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
-import { KB_OUTBOX_FILES } from "../../src/core/kb.ts";
+import { KB_OUTBOX_FILES } from "../../src/core/kb/index.ts";
 import { WIPE_MARKER, wipeIfRequested } from "../../src/harness/service/index.ts";
 import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";

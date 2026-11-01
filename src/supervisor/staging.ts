@@ -13,8 +13,7 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { log } from "../common/env.ts";
-import { git as gitRun } from "../common/git.ts";
-import { type GitAuth, gitHost, withGitAuth } from "../common/git-auth.ts";
+import { type GitAuth, gitHost, git as gitRun, withGitAuth } from "../common/git/index.ts";
 import { gitRepoPath } from "../core/api/control/rigs.ts";
 import type { SignedCommand } from "../core/commands.ts";
 import { sshCommand } from "./git-export.ts";

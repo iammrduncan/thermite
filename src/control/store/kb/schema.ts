@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { currentAddress, KB_SLOTS_BEFORE, KbOutcome } from "../../../core/kb.ts";
+import { currentAddress, KB_SLOTS_BEFORE, KbOutcome } from "../../../core/kb/index.ts";
 import { campaignAbout, contextOf, indexItem, unindexItem } from "./words.ts";
 
 /**
@@ -141,7 +141,7 @@ begin select raise(abort, 'a version of an item is never removed'); end;
 insert into kb_version (item, version, title, body, by, url, sub, meta, at)
 select id, 1, title, body, by, url, sub, meta, updated_at from kb_item;
 
--- A version's links to other items, by their addresses (core/kb.ts): supports, contradicts,
+-- A version's links to other items, by their addresses (core/kb/items.ts): supports, contradicts,
 -- follows. A link names an address as its writer gave it, found or not.
 create table kb_link (
   item integer not null,

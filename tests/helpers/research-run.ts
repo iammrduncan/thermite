@@ -12,7 +12,7 @@ import { makeHarnessEnv } from "./harness-env.ts";
 /**
  * A research run with some of everything its workers record (goal 098's tests): two sources from a
  * tiny local "web", claims verified and draft for two questions, the author's hypothesis, a supported and a
- * draft finding, a research note, a report section, a digest, and a lane's files saved as the
+ * draft finding, a source note, a report section, a digest, and a lane's files saved as the
  * research folder saves them when a trial ends.
  */
 
@@ -159,7 +159,7 @@ export async function fillResearch(r: Awaited<ReturnType<typeof makeResearchRun>
     why_it_matters: "Size matters for the archive.",
     supporting: [draft.claim],
   });
-  const note = research.addNote(run, "lane-1", "Look for a second site that says the same.", [
+  const note = research.addSourceNote(run, "lane-1", "Look for a second site that says the same.", [
     a.source,
   ]);
   research.updateSection(run, "lane-1", "synthesis", "Two sites so far.\nBoth agree.");

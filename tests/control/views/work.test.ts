@@ -51,8 +51,8 @@ describe("what each lane's trial is doing, in at_work (goal 143)", () => {
     const c = await researchControl();
     const events = [
       ...researchRunEvents(),
-      ev("trial_started", { trial: "t-1", lane: "lane-1", family: "contradict", focus: "f1" }),
-      ev("trial_started", { trial: "t-2", lane: "lane-2", family: "contradict", focus: "f2" }),
+      ev("trial_started", { trial: "t-1", lane: "lane-1", direction: "contradict", focus: "f1" }),
+      ev("trial_started", { trial: "t-2", lane: "lane-2", direction: "contradict", focus: "f2" }),
     ];
     await c.ingest(events);
     await ingestReport(c.store, {
@@ -75,7 +75,7 @@ describe("what each lane's trial is doing, in at_work (goal 143)", () => {
     };
     assert.deepEqual(run.at_work["lane-2"], {
       trial: "t-2",
-      family: "contradict",
+      direction: "contradict",
       focus: "f2",
       since: run.at_work["lane-2"]?.since,
       ...QUIET,

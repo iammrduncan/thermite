@@ -36,7 +36,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.start();
@@ -53,7 +54,7 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     await command("queue_add", {
       run,
       title: "Unroll the loop by four",
-      family: "loops",
+      direction: "loops",
       why: "the loop does one add per step",
     });
     const { sent, script } = recorder(({ tools }) =>
@@ -116,7 +117,9 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
 
   test("a research run's planner and worker, in Pi", async () => {
     const r = await makeResearchRun("r-1", {
-      contract: { notes: "Weigh the sources that measured more than one campaign." },
+      contract: {
+        additional_information: "Weigh the sources that measured more than one campaign.",
+      },
     });
     await r.env.service.applyCommand(
       r.env.sign("message_agent", {
@@ -175,7 +178,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.start();
@@ -368,7 +372,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.start();
@@ -378,7 +383,9 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
       [["standard input", await asked(env.service)]],
     );
     const r = await makeResearchRun("r-1", {
-      contract: { notes: "Weigh the sources that measured more than one campaign." },
+      contract: {
+        additional_information: "Weigh the sources that measured more than one campaign.",
+      },
     });
     const { stateDir, scratchDir } = r.env.service.paths;
     sections(
@@ -391,7 +398,9 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
 
   test("a research run's worker in OpenCode: what the program is given", async () => {
     const r = await makeResearchRun("r-1", {
-      contract: { notes: "Weigh the sources that measured more than one campaign." },
+      contract: {
+        additional_information: "Weigh the sources that measured more than one campaign.",
+      },
     });
     // The trial the scheduler starts for the sample run.
     let spec: ResearchTrialSpec | undefined;

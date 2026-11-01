@@ -187,7 +187,7 @@ describe("a trial's lines, through the harness, reach the report and the teacher
       run: "r-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: "p",
       token: "tok-1",
     });

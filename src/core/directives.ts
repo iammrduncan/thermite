@@ -9,7 +9,7 @@ import { DirectionRef } from "./directions.ts";
  * direction; LANE_COUNT sets the lanes (up to the contract's count); TRIAL_MINUTES sets how long
  * one trial lasts, in minutes (value, 1 to 1,440), over the contract's; KEEP_WORKING turns the
  * run's lanes keeping working while the judge works on or off (value, on or off), over the
- * contract's; NOTE is free text for the
+ * contract's; PLANNER_NOTE is free text for the
  * planner only. The planner sees rationales and notes; workers never do. A rule in words that
  * names no direction (`match`) is no longer made: one already in a ledger stays in force as
  * legacy (isLegacyRule) until the planner's next round converts it to a named direction.
@@ -23,7 +23,7 @@ export const DIRECTIVE_KINDS = [
   "lane_count",
   "trial_minutes",
   "keep_working",
-  "note",
+  "planner_note",
 ] as const;
 
 export const StructuredDirective = z
@@ -31,7 +31,7 @@ export const StructuredDirective = z
     {
       kind: z.enum(DIRECTIVE_KINDS),
       /** The direction the directive is about: plain words or `:name:`, kept as its name. */
-      family: DirectionRef.optional(),
+      direction: DirectionRef.optional(),
       value: z.union([z.string().max(1000), z.number()]).optional(),
       /** Why, with citations; shown to the planner, never to workers. */
       rationale: z.string().min(1).max(2000),
@@ -40,7 +40,7 @@ export const StructuredDirective = z
     {
       error: (iss) =>
         iss.code === "unrecognized_keys" && iss.keys.includes("match")
-          ? "a rule no longer takes match: name its direction in family, in plain words or as :name:"
+          ? "a rule no longer takes match: give its direction in direction, in plain words or as :name:"
           : undefined,
     },
   )
@@ -48,11 +48,11 @@ export const StructuredDirective = z
   .refine(
     (d) =>
       !["avoid", "try", "mandate"].includes(d.kind) ||
-      d.family !== undefined ||
+      d.direction !== undefined ||
       (d.kind !== "avoid" && d.value !== undefined),
     {
-      message: "an avoid, try or mandate rule names a direction (family)",
-      path: ["family"],
+      message: "an avoid, try or mandate rule names a direction",
+      path: ["direction"],
     },
   )
   .refine(

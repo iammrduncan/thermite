@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { z } from "zod";
 import { BadInput, Refusal } from "../../common/errors.ts";
 import type { CommandPayloads, ImportSpec } from "../../core/commands.ts";
-import { contractSha, parseContract } from "../../core/contract.ts";
+import { contractSha, parseContract, parseStoredContract } from "../../core/contract.ts";
 import { goalChecks } from "../../core/goal/index.ts";
 import { type Kit, KitSchema, kitProblems } from "../../core/kit.ts";
 import { canonicalUses, type McpUse, sameUses, usesWords } from "../../core/mcp.ts";
@@ -118,7 +118,8 @@ export async function assignCampaign(
   by: string,
   inboxDir = svc.paths.inboxDir,
 ): Promise<unknown> {
-  const parsed = parseContract(p.contract);
+  // A contract signed before v0.1.1 keeps its keys, so its hash holds (core/names.ts).
+  const parsed = parseStoredContract(p.contract);
   if (!parsed.ok) throw new BadInput(`invalid contract: ${parsed.errors.join("; ")}`);
   if (parsed.sha !== p.contract_sha)
     throw new BadInput("contract hash does not match contract_sha");
@@ -218,7 +219,7 @@ export async function assignCampaign(
       seedRepo: seed.repo,
       seedCommit: start,
       ...(folder ? { seedFolder: { folder, commit: seed.commit } } : {}),
-      direction: p.direction,
+      note: p.note,
       agents: p.agents,
       promotion: p.promotion,
       askOwner: p.ask_owner,
@@ -250,7 +251,7 @@ export async function assignCampaign(
         {
           title: s.title,
           details: s.details,
-          family: s.family,
+          direction: s.direction,
           why: s.why,
           by: s.by,
           state: s.state,

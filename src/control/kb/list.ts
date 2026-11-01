@@ -10,7 +10,7 @@ import {
   kbAddress,
   kbItemType,
   withdrawnWhy,
-} from "../../core/kb.ts";
+} from "../../core/kb/index.ts";
 import { KB_FILTER_MAX, KB_IS_DATA } from "../../core/link/kb.ts";
 import type { ControlStore, KbFolderRow, KbListAt, KbListCounts } from "../store/index.ts";
 import type { RigView } from "../views/index.ts";

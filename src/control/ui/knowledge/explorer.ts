@@ -7,7 +7,7 @@ import {
   type KbListSort,
   type KbOutcome,
   kbItemType,
-} from "../../../core/kb.ts";
+} from "../../../core/kb/index.ts";
 import type { KbFolder, KbListAnswer } from "../../kb/index.ts";
 import type { KbCounts } from "../../store/index.ts";
 import { ago, esc, fmtInt, icon, infoLabel } from "../components/index.ts";

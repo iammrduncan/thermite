@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { promisify } from "node:util";
-import { LOCAL_RIGS, LOCAL_TOKEN_FILES } from "../../src/cli/local-init.ts";
+import { LOCAL_RIGS, LOCAL_TOKEN_FILES } from "../../src/cli/local/index.ts";
 import { BUS_TLS_FILES, BUS_USERS_FILE } from "../../src/control/bus/index.ts";
 import { BUS_SIGN_IN_SECONDS, BUS_TLS_SECONDS } from "../../src/core/link/leaf.ts";
 import {

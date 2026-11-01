@@ -41,7 +41,7 @@ export const BASELINE_DIR_FILES = 1000;
  */
 export const BASELINE_RETRY_MS = 10 * 60_000;
 /** The direction of a setup round's experiments. */
-export const SETUP_FAMILY = "setup";
+export const SETUP_DIRECTION = "setup";
 /** The end of `promoted_by` on a champion a setup change became: a new starting point. */
 export const SETUP_MARK = ":setup";
 

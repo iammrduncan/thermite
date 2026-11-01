@@ -29,7 +29,7 @@ describe("each event's run", () => {
       run,
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: "champion",
       token: "tok",
     });

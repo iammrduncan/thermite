@@ -121,7 +121,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         return chip(
           l,
           l,
-          work ? `${work.family}: ${work.focus}` : "between trials",
+          work ? `${work.direction}: ${work.focus}` : "between trials",
           Boolean(work) && r.status === "running",
         );
       }),
@@ -145,7 +145,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const advising = calls.filter((x) => terminalSource(x.id) === "supervisor");
     const terminals =
       inTerminals.length || planning || advising.length
-        ? `<details class="lkept"><summary class="lchip" title="Each agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${planning ? `<div><a href="${liveHref(u.id, "planner")}">the planner's terminal</a></div>` : ""}${advising.map((x) => `<div><a href="${terminalHref(u.id, x.id)}">${esc(x.role)}'s terminal</a> <span class="muted small">(advisor)</span></div>`).join("")}${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.family)})</span></div>`).join("")}</div></details>`
+        ? `<details class="lkept"><summary class="lchip" title="Each agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${planning ? `<div><a href="${liveHref(u.id, "planner")}">the planner's terminal</a></div>` : ""}${advising.map((x) => `<div><a href="${terminalHref(u.id, x.id)}">${esc(x.role)}'s terminal</a> <span class="muted small">(advisor)</span></div>`).join("")}${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.direction)})</span></div>`).join("")}</div></details>`
         : "";
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
@@ -172,7 +172,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
       to === "all"
         ? `Each agent reads it ${harness === undefined ? "when it can" : pi ? "at its next step" : "when its current run ends"}; the planner at its next plan`
         : to.startsWith("lane-")
-          ? `${to}${r.at_work[to] ? ` (on ${r.at_work[to]?.family})` : ""} reads it ${when}`
+          ? `${to}${r.at_work[to] ? ` (on ${r.at_work[to]?.direction})` : ""} reads it ${when}`
           : to === "planner"
             ? "The planner reads it when it plans the next round"
             : to === "teachers"

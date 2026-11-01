@@ -3,7 +3,7 @@ import { LOG_LEVELS } from "../../core/log-levels.ts";
 import { busState } from "../bus/index.ts";
 import { CONTROL_LOG_LEVEL_WORDS, controlLogLevelOf, setControlLogLevel } from "../log-level.ts";
 import { providersWithUsage } from "../providers/index.ts";
-import { modelPrices, setModelPrice } from "../usage.ts";
+import { modelPrices, setModelPrice } from "../usage-report.ts";
 import type { ToolContext } from "./context.ts";
 
 /**

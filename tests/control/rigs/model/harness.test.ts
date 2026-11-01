@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { agentModelsOf } from "../../../../src/control/rigs/model.ts";
+import { agentModelsOf } from "../../../../src/control/rigs/model/index.ts";
 import { stack } from "./stack.ts";
 
 /** Each agent runs in the harness it is given, and is refused in words where its model can't run. */

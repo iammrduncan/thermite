@@ -61,7 +61,7 @@ async function twoCampaigns(store: ControlStore) {
         title: "Load int4 weights with vector loads",
         details: "128-bit loads of the packed weights",
         why: "the guide says twice the bandwidth",
-        family: "memory-layout",
+        direction: "memory-layout",
         by: "teacher",
       },
     ],
@@ -143,7 +143,7 @@ test("each campaign's collection is built from its runs' events; collections are
   assert.deepEqual(exp?.meta, {
     details: "128-bit loads of the packed weights",
     why: "the guide says twice the bandwidth",
-    family: "memory-layout",
+    direction: "memory-layout",
     result: "Result: attempt a-1 (submitted)",
     lane: "lane-1",
     trial: "t-1",
@@ -257,7 +257,7 @@ test("a rig's new ledger never mixes its runs' items with the old ledger's", asy
   assert.equal(kb.runCampaign("rig-a", "r-1"), "new-campaign");
 });
 
-test("a research note is a note of its own in the collection and in the run's journal", async () => {
+test("a source note is a note of its own in the collection and in the run's journal", async () => {
   const store = controlStore();
   await ingest(store, "rig-c", [
     ["harness", "run_created", "g-1", { campaign: "gemv-speed", mode: "goal" }],
@@ -269,7 +269,7 @@ test("a research note is a note of its own in the collection and in the run's jo
     ],
     [
       "lane-1",
-      "research_note",
+      "source_note",
       "g-1",
       {
         note: 1,
@@ -279,12 +279,27 @@ test("a research note is a note of its own in the collection and in the run's jo
         url: "https://example.com/guide",
       },
     ],
+    // A rig on v0.1.0 recorded a source note as research_note, and a field note of no other
+    // kind as note: both are read under the public names (core/names.ts).
+    [
+      "lane-2",
+      "research_note",
+      "g-1",
+      { note: 2, by: "lane-2", text: "An older note on prefetch distance", sources: ["s-2"] },
+    ],
+    ["lane-2", "journal_note", "g-1", { id: 2, by: "lane-2", kind: "note", text: "a plain aside" }],
   ]);
   const kb = store.kb();
   const notes = kb.search("bandwidth", ["gemv-speed"], { kinds: ["note"] });
   assert.equal(notes.length, 1);
   assert.equal(notes[0]?.ref, "rn-1", "never the field note's id");
-  assert.equal(notes[0]?.sub, "note");
+  assert.equal(notes[0]?.sub, "source_note");
+  const older = kb.search("prefetch distance", ["gemv-speed"], { kinds: ["note"] });
+  assert.deepEqual(
+    older.map((x) => [x.ref, x.sub]),
+    [["rn-2", "source_note"]],
+  );
+  assert.equal(kb.search("plain aside", ["gemv-speed"])[0]?.sub, "other");
   assert.equal(notes[0]?.url, "https://example.com/guide");
   assert.match(String(notes[0]?.body), /Sources: s-1/);
   assert.equal(kb.search("memory bound", ["gemv-speed"])[0]?.sub, "observation");
@@ -293,10 +308,12 @@ test("a research note is a note of its own in the collection and in the run's jo
     run?.journal.map((n) => [n.id, n.kind, n.about?.type ?? null]),
     [
       [1, "observation", "run"],
-      [-1, "note", "source"],
+      [-1, "source_note", "source"],
+      [-2, "source_note", "source"],
+      [2, "other", "run"],
     ],
   );
-  assert.ok(!run?.timeline.some((e) => e.kind === "research_note"));
+  assert.ok(!run?.timeline.some((e) => e.kind === "source_note"));
 });
 
 test("a collection holds everything a run produces: the run, its trials, its documents, the sources' text", async () => {
@@ -321,7 +338,7 @@ test("a collection holds everything a run produces: the run, its trials, its doc
       "scheduler",
       "trial_started",
       "rs-1",
-      { trial: "t-1", lane: "lane-1", epoch: 3, family: "survey", focus: "read the guide" },
+      { trial: "t-1", lane: "lane-1", epoch: 3, direction: "survey", focus: "read the guide" },
     ],
     [
       "lane-1",
@@ -467,7 +484,7 @@ test("after an upgrade, the runs indexed before get their run and trial items, o
       "scheduler",
       "trial_started",
       "gs-3",
-      { trial: "t-1", lane: "lane-1", epoch: 1, family: "loads" },
+      { trial: "t-1", lane: "lane-1", epoch: 1, direction: "loads" },
     ],
     ["lane-1", "journal_note", "gs-3", { id: 1, by: "lane-1", kind: "lesson", text: "kept" }],
     ["control:owner", "run_status", "gs-3", { status: "paused", reason: "a pause" }],

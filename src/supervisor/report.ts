@@ -44,7 +44,7 @@ export async function dailyReport(input: {
       }.`,
       // A research run's rounds: by its planner, or by its research plan in code (goal 117).
       `- Epochs: ${b.epochs.length ? `${b.epochs[0]?.n} so far; ${inst.mode === "research" ? `${b.epochs.filter((e) => e.planner_valid).length} of the last ${b.epochs.length} planned by the planner, the rest set by the research plan` : `planner valid in ${b.epochs.filter((e) => e.planner_valid).length} of the last ${b.epochs.length}`}` : "none yet"}.`,
-      `- Directions: ${b.families.map((x) => `${x.id} (${x.status}, ${x.attempts} attempts)`).join("; ") || "none"}.`,
+      `- Directions: ${b.registry.map((x) => `${x.id} (${x.status}, ${x.attempts} attempts)`).join("; ") || "none"}.`,
       `- Directives in force: ${b.directives.length}.`,
       ...(b.goals ? [`- Goals: ${b.goals.map((g) => `${g.id} ${g.status}`).join(", ")}.`] : []),
       `- Device hours used: ${b.budget.device_hours_used.toFixed(2)}; agent tokens: ${b.budget.tokens.in} in, ${b.budget.tokens.out} out.`,

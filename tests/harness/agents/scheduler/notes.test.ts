@@ -71,10 +71,10 @@ describe("field notes in planning and briefs", () => {
     const x = await setup(t, (_prompt, call) =>
       call === 1
         ? {
-            add: [{ ref: "new-1", title: "vector loads", family: "simd", why: "a paper" }],
+            add: [{ ref: "new-1", title: "vector loads", direction: "simd", why: "a paper" }],
             assignments: [
               { lane: "lane-1", experiment: "new-1", why: "it builds on its work" },
-              { lane: "lane-2", title: "unroll the tail", family: "unroll" },
+              { lane: "lane-2", title: "unroll the tail", direction: "unroll" },
             ],
             journal: [
               {
@@ -135,8 +135,8 @@ describe("field notes in planning and briefs", () => {
       t,
       () => ({
         assignments: [
-          { lane: "lane-1", title: "vector loads", family: "simd" },
-          { lane: "lane-2", title: "unroll the tail", family: "unroll" },
+          { lane: "lane-1", title: "vector loads", direction: "simd" },
+          { lane: "lane-2", title: "unroll the tail", direction: "unroll" },
         ],
       }),
       { briefing: BRIEFING },

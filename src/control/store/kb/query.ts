@@ -11,7 +11,7 @@ export type KbSearchMode = SearchMode;
 
 /**
  * Thermite's outcome words: a forgiving search for a word on the left also finds the words on the
- * right, the words the runs' records and the items' outcomes (core/kb.ts) say it with. Plain words
+ * right, the words the runs' records and the items' outcomes (core/kb/items.ts) say it with. Plain words
  * only: an agent that writes "failed" finds the experiments the planner dropped and the attempts
  * the judge found worse, no better or broken. The exact mode leaves them out.
  */

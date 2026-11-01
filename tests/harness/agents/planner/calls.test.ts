@@ -20,14 +20,16 @@ describe("planner", () => {
     let call = 0;
     const good = {
       assignments: [
-        { lane: "lane-1", family: "unroll", focus: "unroll by 4", parent: "champion" },
-        { lane: "lane-2", family: "simd", focus: "use vectors", parent: "champion" },
+        { lane: "lane-1", direction: "unroll", focus: "unroll by 4", parent: "champion" },
+        { lane: "lane-2", direction: "simd", focus: "use vectors", parent: "champion" },
       ],
-      new_families: [{ id: "simd", description: "vector instructions" }],
+      new_directions: [{ id: "simd", description: "vector instructions" }],
     };
     const wrong = {
       // Within the tool's schema (goal 079), refused by the checks.
-      assignments: [{ lane: "lane-1", family: "nonexistent", focus: "guess", parent: "lane_best" }],
+      assignments: [
+        { lane: "lane-1", direction: "nonexistent", focus: "guess", parent: "lane_best" },
+      ],
     };
     const fake = await startFakeModel(() => {
       call++;
@@ -38,7 +40,7 @@ describe("planner", () => {
     assert.equal(p.tries, 2);
     assert.ok(p.rawViolations.length > 0);
     assert.deepEqual(
-      p.newFamilies.map((f) => f.id),
+      p.newDirections.map((f) => f.id),
       ["simd"],
     );
     await fake.close();
@@ -84,7 +86,7 @@ describe("planner", () => {
           {
             name: "submit_plan",
             args: {
-              assignments: [{ lane: "lane-1", family: "f", focus: "y".repeat(5000) }],
+              assignments: [{ lane: "lane-1", direction: "f", focus: "y".repeat(5000) }],
             },
           },
         ],
@@ -152,8 +154,8 @@ describe("planner", () => {
     const ok = validatePlan(
       {
         assignments: [
-          { lane: "lane-1", focus: long, family: "unroll" },
-          { lane: "lane-2", focus: "tile by 32", family: "tiling" },
+          { lane: "lane-1", focus: long, direction: "unroll" },
+          { lane: "lane-2", focus: "tile by 32", direction: "tiling" },
         ],
       },
       base,
@@ -165,10 +167,10 @@ describe("planner", () => {
     const prompts: string[] = [];
     const good = {
       assignments: [
-        { lane: "lane-1", family: "unroll", focus: "unroll by 4", parent: "champion" },
-        { lane: "lane-2", family: "tiling", focus: "tile by 32", parent: "champion" },
+        { lane: "lane-1", direction: "unroll", focus: "unroll by 4", parent: "champion" },
+        { lane: "lane-2", direction: "tiling", focus: "tile by 32", parent: "champion" },
       ],
-      new_families: [],
+      new_directions: [],
     };
     const p = await plan(base, model("http://unused"), undefined, async (prompt) => {
       prompts.push(prompt);

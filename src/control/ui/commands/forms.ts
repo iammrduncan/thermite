@@ -36,7 +36,7 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
       run,
       title: String(f.title ?? "").trim(),
       ...(String(f.details ?? "").trim() ? { details: String(f.details).trim() } : {}),
-      ...(String(f.family ?? "").trim() ? { family: String(f.family).trim() } : {}),
+      ...(String(f.direction ?? "").trim() ? { direction: String(f.direction).trim() } : {}),
       ...(String(f.why ?? "").trim() ? { why: String(f.why).trim() } : {}),
       position: f.position === "end" ? "end" : "top",
     },
@@ -47,7 +47,7 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
       id: String(f.id ?? ""),
       ...(String(f.title ?? "").trim() ? { title: String(f.title).trim() } : {}),
       details: String(f.details ?? "").trim(),
-      ...(String(f.family ?? "").trim() ? { family: String(f.family).trim() } : {}),
+      ...(String(f.direction ?? "").trim() ? { direction: String(f.direction).trim() } : {}),
       why: String(f.why ?? "").trim(),
     },
     queue_move: {

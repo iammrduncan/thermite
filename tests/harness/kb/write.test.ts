@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { KB_OUTBOX_FILES, KB_TEXT_MAX } from "../../../src/core/kb.ts";
+import { KB_OUTBOX_FILES, KB_TEXT_MAX } from "../../../src/core/kb/index.ts";
 import { writeKbItem } from "../../../src/harness/kb/index.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
 

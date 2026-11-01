@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { parseContract } from "../../../src/core/contract.ts";
-import { KB_OUTBOX_FILES } from "../../../src/core/kb.ts";
+import { KB_OUTBOX_FILES } from "../../../src/core/kb/index.ts";
 import { runResearchTrial } from "../../../src/harness/agents/research/worker.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { ResearchFolder } from "../../../src/harness/research/folder.ts";
@@ -98,7 +98,7 @@ describe("the research folder", () => {
       ],
     });
     assert.equal(draft.verified, false);
-    research.addNote("r-1", "lane-1", "Look for a third site.", [a.source]);
+    research.addSourceNote("r-1", "lane-1", "Look for a third site.", [a.source]);
     research.proposeHypothesis("r-1", "lane-1", {
       text: "Archiving early helps.",
       supporting: [good.claim],
@@ -151,7 +151,7 @@ describe("the research folder", () => {
       /supported[\s\S]*## Why it matters\n\nIt shows/,
     );
     assert.match(read(root, "findings", `${weak.finding}.md`), /draft[\s\S]*the number 7/);
-    assert.match(read(root, "notes", "note-00001.md"), /Look for a third site\./);
+    assert.match(read(root, "source-notes", "source-note-00001.md"), /Look for a third site\./);
     assert.match(read(root, "report", "background.md"), /Second version\./);
     const index = read(root, "INDEX.md");
     assert.match(

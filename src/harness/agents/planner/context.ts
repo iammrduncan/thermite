@@ -12,7 +12,7 @@ import { NOTES_ARE_DATA, type notesData } from "../../journal.ts";
 import { briefingData } from "../../knowledge.ts";
 import type { BriefingItem } from "../../ledger/index.ts";
 import type { QueueBrief } from "../../queue.ts";
-import type { Evidence, FamilyView } from "../registry.ts";
+import type { Evidence, RegisteredDirection } from "../registry.ts";
 
 /**
  * What the planner reads each round: its input from the ledger and the judge's goal report, and
@@ -26,7 +26,8 @@ export interface PlannerInput {
   objective: string;
   editablePaths: string[];
   champion: { seq: number; gain: number };
-  families: FamilyView[];
+  /** The direction registry: each direction the run has, with its standing. */
+  registry: RegisteredDirection[];
   evidence: Evidence[];
   /** The rules in force, each with who set it (`by`: owner, or its author, coordinator.ts). */
   directives: { id: number; body: StoredRule; by?: string | undefined }[];
@@ -97,8 +98,8 @@ export function directiveSets(input: PlannerInput) {
   const of = (k: string) =>
     new Set(
       input.directives
-        .filter((d) => d.body.kind === k && d.body.family)
-        .map((d) => String(d.body.family)),
+        .filter((d) => d.body.kind === k && d.body.direction)
+        .map((d) => String(d.body.direction)),
     );
   return { avoid: of("avoid"), mandate: of("mandate"), tryFam: of("try") };
 }
@@ -131,7 +132,7 @@ export function plannerContext(input: PlannerInput): string {
     objective: input.objective,
     editable_paths: input.editablePaths,
     champion: input.champion,
-    families: input.families,
+    registry: input.registry,
     evidence: input.evidence,
     queue: input.queue ?? { up_next: [], proposed: [], in_progress: [], tried: [] },
     // The target the queue is kept at (goal 081): a target that drives ideas, not a cap.

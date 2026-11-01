@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { KB_TEXT_TYPES } from "../../../core/kb.ts";
+import { KB_TEXT_TYPES } from "../../../core/kb/index.ts";
 import { itemText } from "./items.ts";
 import { indexItem, unindexItem } from "./words.ts";
 

@@ -7,7 +7,7 @@ import type { CampaignDraft } from "../../../src/control/campaigns/builder.ts";
 import { startCampaign } from "../../../src/control/campaigns/new.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { parseContract } from "../../../src/core/contract.ts";
-import { KB_WRITES_DEFAULT, kbWritesOf } from "../../../src/core/kb.ts";
+import { KB_WRITES_DEFAULT, kbWritesOf } from "../../../src/core/kb/index.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 
 /**

@@ -48,7 +48,7 @@ async function setup() {
     run: "js-1",
     lane: "lane-1",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: "p",
     token: `tok-${n}`,
   });
@@ -363,7 +363,7 @@ describe("terminal_input, as the harness applies it", () => {
       run: "js-1",
       lane: "lane-2",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: "p",
       token: "tok-other",
     });

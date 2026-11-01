@@ -11,7 +11,7 @@ import {
   runDetail,
   runQueue,
 } from "../run-lists.ts";
-import { modelUsage } from "../usage.ts";
+import { modelUsage } from "../usage-report.ts";
 import {
   agentEvent,
   agentRun,

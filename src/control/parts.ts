@@ -18,7 +18,7 @@ import { keepFolds, type RigView, type RunOnRig } from "./views/index.ts";
 
 /**
  * What control is made of, built once in createControlApi (goal 125, T5): the dashboard, REST
- * and MCP each call the same operations on it (rigs/agent-models.ts, campaigns/start-run.ts and the like), so
+ * and MCP each call the same operations on it (rigs/model/agents.ts, campaigns/start-run.ts and the like), so
  * each has one set of checks and one set of refusals in words.
  */
 export interface ControlParts {

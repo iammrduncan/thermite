@@ -49,11 +49,13 @@ export function script(messages, tools) {
         {
           name: "submit_plan",
           args: {
-            new_families: [{ id: "loop-order", description: "change the loop order for locality" }],
+            new_directions: [
+              { id: "loop-order", description: "change the loop order for locality" },
+            ],
             assignments: [
               {
                 lane: "lane-1",
-                family: "loop-order",
+                direction: "loop-order",
                 focus: "make the inner loop contiguous",
                 parent: "champion",
               },

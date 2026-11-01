@@ -107,10 +107,10 @@ export function opencodePlanner(messages, asked) {
   const lanes = [...new Set([...asked.matchAll(/lane-\d+/g)].map((m) => m[0]))].sort();
   return {
     text: JSON.stringify({
-      new_families: [{ id: "oc-plan", description: "planned by the model in OpenCode" }],
+      new_directions: [{ id: "oc-plan", description: "planned by the model in OpenCode" }],
       assignments: lanes.slice(0, 2).map((lane) => ({
         lane,
-        family: "oc-plan",
+        direction: "oc-plan",
         focus: "tidy the kernel",
         parent: "champion",
       })),

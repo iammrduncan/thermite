@@ -9,7 +9,14 @@ import { z } from "zod";
  */
 
 /** The kinds of the run's research, as the tools and the search name them. */
-export const RESEARCH_KINDS = ["source", "claim", "hypothesis", "finding", "note", "file"] as const;
+export const RESEARCH_KINDS = [
+  "source",
+  "claim",
+  "hypothesis",
+  "finding",
+  "source_note",
+  "file",
+] as const;
 export type ResearchKind = (typeof RESEARCH_KINDS)[number];
 
 /** Each kind's list: GET /v1/research/<path>. */
@@ -18,7 +25,7 @@ export const KIND_PATHS: Record<ResearchKind, string> = {
   claim: "claims",
   hypothesis: "hypotheses",
   finding: "findings",
-  note: "notes",
+  source_note: "source-notes",
   file: "files",
 };
 

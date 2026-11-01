@@ -2,12 +2,12 @@ import { canonicalJson, sha256Hex } from "../../core/canonical.ts";
 import { LedgerPart, type Row } from "./part.ts";
 
 /**
- * A family's standing in the direction registry: `live`, or `exhausted` once a "not possible"
+ * A direction's standing in the direction registry: `live`, or `exhausted` once a "not possible"
  * proposal counts it as refuted, and `live` again when that proposal is rejected (conclusions.ts).
- * The family table's check also names `blocked`, which nothing sets: the check is an old
+ * The direction table's check also names `blocked`, which nothing sets: the check is an old
  * migration's, kept as written (schema/before-rename.ts).
  */
-export type FamilyStatus = "live" | "exhausted";
+export type DirectionStatus = "live" | "exhausted";
 
 /** Who planned an epoch: the planner, or the rules in code. */
 export type EpochSource = "planner" | "fallback";
@@ -18,7 +18,7 @@ export interface TrialRow {
   run: string;
   lane: string;
   epoch: number;
-  family: string | null;
+  direction: string | null;
   parent_commit: string;
   attempt: string | null;
   stopped: string | null;
@@ -54,7 +54,7 @@ function toTrial(r: Row): TrialRow {
     run: String(r.run),
     lane: String(r.lane),
     epoch: Number(r.epoch),
-    family: textOrNull(r.family),
+    direction: textOrNull(r.direction),
     parent_commit: String(r.parent_commit),
     attempt: textOrNull(r.attempt),
     stopped: textOrNull(r.stopped),
@@ -68,7 +68,7 @@ function toTrial(r: Row): TrialRow {
   };
 }
 
-const TRIAL_COLS = `id, run, lane, epoch, family, parent_commit, attempt, stopped, turns, tool_calls,
+const TRIAL_COLS = `id, run, lane, epoch, direction, parent_commit, attempt, stopped, turns, tool_calls,
   tokens_in, tokens_out, error, started_at, ended_at`;
 
 /**
@@ -93,8 +93,8 @@ export const RESETS_APPLIED_FROM = `insert or ignore into meta (key, value)
   select '${RESETS_APPLIED}', coalesce(max(id), 0) from event where kind = 'workers_reset';`;
 
 /**
- * The `trial`, `lane`, `epoch` and `family` tables: the workers' trials, each lane's retained
- * best, the planner's epochs and the direction registry's families.
+ * The `trial`, `lane`, `epoch` and `direction` tables: the workers' trials, each lane's retained
+ * best, the planner's epochs and the direction registry.
  */
 export class LedgerTrials extends LedgerPart {
   /** A new trial. Only its token's hash is stored. */
@@ -103,17 +103,17 @@ export class LedgerTrials extends LedgerPart {
     run: string;
     lane: string;
     epoch: number;
-    family: string;
+    direction: string;
     parent: string;
     token?: string | undefined;
   }): void {
     this.execute(
-      "insert into trial (id, run, lane, epoch, family, parent_commit, token_sha, started_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+      "insert into trial (id, run, lane, epoch, direction, parent_commit, token_sha, started_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
       t.id,
       t.run,
       t.lane,
       t.epoch,
-      t.family,
+      t.direction,
       t.parent,
       t.token ? sha256Hex(t.token) : null,
       this.now(),
@@ -399,13 +399,13 @@ export class LedgerTrials extends LedgerPart {
     );
   }
 
-  // The direction registry's families.
+  // The direction registry.
 
-  /** Adds a family to a run's registry, unless the run has it: whether it did. */
-  addFamily(run: string, id: string, description: string, by: string): boolean {
+  /** Adds a direction to a run's registry, unless the run has it: whether it did. */
+  addDirection(run: string, id: string, description: string, by: string): boolean {
     return (
       this.execute(
-        "insert or ignore into family (run, id, description, created_by, created_at) values (?, ?, ?, ?, ?)",
+        "insert or ignore into direction (run, id, description, created_by, created_at) values (?, ?, ?, ?, ?)",
         run,
         id,
         description.slice(0, 500),
@@ -415,10 +415,15 @@ export class LedgerTrials extends LedgerPart {
     );
   }
 
-  /** Sets a family's status, only while it has `from`: whether it changed. */
-  setFamilyStatus(run: string, id: string, status: FamilyStatus, from: FamilyStatus): boolean {
+  /** Sets a direction's status, only while it has `from`: whether it changed. */
+  setDirectionStatus(
+    run: string,
+    id: string,
+    status: DirectionStatus,
+    from: DirectionStatus,
+  ): boolean {
     const r = this.execute(
-      "update family set status = ? where run = ? and id = ? and status = ?",
+      "update direction set status = ? where run = ? and id = ? and status = ?",
       status,
       run,
       id,
@@ -427,21 +432,21 @@ export class LedgerTrials extends LedgerPart {
     return r.changes > 0;
   }
 
-  /** A run's families with their status, oldest first. */
-  families(run: string): { id: string; description: string; status: FamilyStatus }[] {
+  /** A run's directions with their status, oldest first. */
+  directions(run: string): { id: string; description: string; status: DirectionStatus }[] {
     return this.rows<Row>(
-      "select id, description, status from family where run = ? order by created_at",
+      "select id, description, status from direction where run = ? order by created_at",
       run,
     ).map((f) => ({
       id: String(f.id),
       description: String(f.description),
-      status: String(f.status) as FamilyStatus,
+      status: String(f.status) as DirectionStatus,
     }));
   }
 
-  /** A run's families and what each tries, in no set order. */
-  familyDescriptions(run: string): { id: string; description: string }[] {
-    return this.rows<Row>("select id, description from family where run = ?", run).map((f) => ({
+  /** A run's directions and what each tries, in no set order. */
+  directionDescriptions(run: string): { id: string; description: string }[] {
+    return this.rows<Row>("select id, description from direction where run = ?", run).map((f) => ({
       id: String(f.id),
       description: String(f.description),
     }));

@@ -8,5 +8,6 @@
  */
 export { ASK_UNANSWERED_MS, ASK_UNTAKEN_MS, type KbAskOut, KbAsks, TAKE_MAX } from "./asks.ts";
 export { forgetHeldKbFiles, kbFileFacts, keepKbFile } from "./files.ts";
+export { knowledgePart } from "./part.ts";
 export { type KbCaller, KbTools } from "./tools.ts";
 export { type KbWrite, type KbWritten, writeKbItem } from "./write.ts";

@@ -4,7 +4,7 @@ import type { CallUsage } from "../../core/usage.ts";
 /**
  * The session logs the agent programs keep of their own (goal 169), read into one set of events:
  * Claude Code's transcript (claude-code/transcript.ts), the Codex CLI's rollout (codex/rollout.ts),
- * and OpenCode's events and messages (opencode/session-events.ts). Each adapter is pure: it takes
+ * and OpenCode's events and messages (opencode/session.ts). Each adapter is pure: it takes
  * batches of new whole lines and keeps its own state, so a log can be followed as it grows or read
  * whole. The formats are the programs' own and can change with any release, so each adapter counts
  * the kinds of record it neither reads nor leaves out on purpose, and the tests on recorded logs

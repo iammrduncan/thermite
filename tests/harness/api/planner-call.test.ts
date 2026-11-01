@@ -26,7 +26,7 @@ async function setup() {
     run: RUN,
     lane: "lane-1",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: env.seedCommit,
     token: "tok-1",
   });

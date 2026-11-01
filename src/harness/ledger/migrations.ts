@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { MIGRATIONS } from "../schema/index.ts";
 import { PROMPT_TABLE, PROMPT_TURN_COLUMN } from "./prompts.ts";
+import { publicNames } from "./public-names.ts";
 import { eventRunColumn, RUN_END_EXPORTS_FROM } from "./runs.ts";
 import { RESETS_APPLIED_FROM, TRIAL_PROXY_TOKENS } from "./trials.ts";
 
@@ -30,4 +31,7 @@ export const LEDGER_MIGRATIONS: readonly (string | ((db: DatabaseSync) => void))
   RUN_END_EXPORTS_FROM,
   // 28: the resets of a run's workers the scheduler applied: those recorded from now on.
   RESETS_APPLIED_FROM,
+  // 29: the public names in the rows a ledger may change: a run's note, directions, the rules'
+  // and the field notes' kinds, source notes (public-names.ts).
+  publicNames,
 ];

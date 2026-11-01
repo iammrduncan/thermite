@@ -90,10 +90,10 @@ describe("directions, written as plain words or :name: (goal 066)", () => {
   test("a rule's direction is kept as its name; words (match) are no longer a rule", () => {
     const ok = StructuredDirective.parse({
       kind: "avoid",
-      family: ":Shared memory tiling:",
+      direction: ":Shared memory tiling:",
       rationale: "slow",
     });
-    assert.equal(ok.family, "shared-memory-tiling");
+    assert.equal(ok.direction, "shared-memory-tiling");
     const words = StructuredDirective.safeParse({
       kind: "avoid",
       match: "anything with shared memory",
@@ -102,7 +102,7 @@ describe("directions, written as plain words or :name: (goal 066)", () => {
     assert.ok(!words.success);
     assert.match(
       words.error.issues.map((i) => i.message).join("; "),
-      /a rule no longer takes match: name its direction in family, in plain words or as :name:/,
+      /a rule no longer takes match: give its direction in direction, in plain words or as :name:/,
     );
     // A trial_minutes rule gives its minutes, a whole number from 1 to 1440.
     assert.equal(
@@ -128,24 +128,25 @@ describe("directions, written as plain words or :name: (goal 066)", () => {
       );
     }
     // An experiment's direction written :name: is kept without its colons.
-    const add = CommandPayloads.queue_add.parse({ run: "r-1", title: "t", family: ":split k:" });
-    assert.equal(add.family, "split k");
+    const add = CommandPayloads.queue_add.parse({ run: "r-1", title: "t", direction: ":split k:" });
+    assert.equal(add.direction, "split k");
     assert.equal(
-      CommandPayloads.queue_add.parse({ run: "r-1", title: "t", family: "Loop: order" }).family,
+      CommandPayloads.queue_add.parse({ run: "r-1", title: "t", direction: "Loop: order" })
+        .direction,
       "Loop: order",
     );
   });
 
   test("an old rule in words is legacy; the directions rules name that the run lacks wait for the planner", () => {
     assert.ok(isLegacyRule({ kind: "avoid", match: "anything slow" }));
-    assert.ok(!isLegacyRule({ kind: "avoid", family: "tiling" }));
-    assert.ok(!isLegacyRule({ kind: "note", value: "x" }));
+    assert.ok(!isLegacyRule({ kind: "avoid", direction: "tiling" }));
+    assert.ok(!isLegacyRule({ kind: "planner_note", value: "x" }));
     assert.deepEqual(
       directionsToDesign(
         [
-          { id: 1, body: { kind: "avoid", family: "tiling", rationale: "a" } },
-          { id: 2, body: { kind: "try", family: "split-k", rationale: "b" } },
-          { id: 3, body: { kind: "mandate", family: "split-k", rationale: "c" } },
+          { id: 1, body: { kind: "avoid", direction: "tiling", rationale: "a" } },
+          { id: 2, body: { kind: "try", direction: "split-k", rationale: "b" } },
+          { id: 3, body: { kind: "mandate", direction: "split-k", rationale: "c" } },
           { id: 4, body: { kind: "avoid", match: "anything slow", rationale: "d" } },
         ],
         ["tiling"],
@@ -168,9 +169,9 @@ describe("directions, written as plain words or :name: (goal 066)", () => {
 
   test("an old rule in words converts to a rule on a direction: the same kind, why and source, and its words", () => {
     const rules = [
-      { id: 1, body: { kind: "avoid", family: "tiling", rationale: "a" } },
+      { id: 1, body: { kind: "avoid", direction: "tiling", rationale: "a" } },
       { id: 4, body: { kind: "mandate", match: "anything with vector loads", rationale: "b" } },
-      { id: 6, body: { kind: "note", value: "x", rationale: "c" } },
+      { id: 6, body: { kind: "planner_note", value: "x", rationale: "c" } },
     ];
     assert.deepEqual(rulesToConvert(rules), [
       { rule: 4, kind: "mandate", words: "anything with vector loads", rationale: "b" },
@@ -194,7 +195,7 @@ describe("directions, written as plain words or :name: (goal 066)", () => {
     const next = convertedRule(7, old, "shared-memory");
     assert.deepEqual(next, {
       kind: "avoid",
-      family: "shared-memory",
+      direction: "shared-memory",
       rationale: "slow on this GPU",
       citations: ["run 3"],
       from_message: 2,

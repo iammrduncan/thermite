@@ -5,7 +5,7 @@ import { ago, esc } from "../ui/components/index.ts";
 import { runBrief, timeline } from "../ui/operator/index.ts";
 import { campaignHref } from "../ui/urls.ts";
 import { metricsBody } from "../ui/usage.ts";
-import { usageData } from "../usage.ts";
+import { usageData } from "../usage-report.ts";
 import {
   type CampaignView,
   campaignModes,

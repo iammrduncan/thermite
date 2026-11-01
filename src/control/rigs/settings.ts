@@ -23,7 +23,7 @@ import { rigSettingsOf } from "../views/index.ts";
  * its twins build the change here (rigSettingsChange): only what differs from what the rig
  * reports, checked against the rig's GPU split and the rig_settings payload, refused in the same
  * words. The change goes to the rig as one signed owner command, rig_settings, which the rig's
- * harness takes only from an `owner:` issuer. The agents' models are rigs/model.ts's. On a rig
+ * harness takes only from an `owner:` issuer. The agents' models are rigs/model/request.ts's. On a rig
  * control set up on a cluster, a new program_mode moves its supervisor's share of its memory, so
  * it changes the rig's size too, as set_cluster_rig_resources does (clusters/resize.ts).
  */

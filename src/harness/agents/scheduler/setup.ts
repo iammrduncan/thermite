@@ -1,6 +1,6 @@
 import { EXPERIMENT_DETAILS } from "../../../core/commands.ts";
 import type { Contract } from "../../../core/contract.ts";
-import { type BaselineState, clipReason, SETUP_FAMILY } from "../../judge/index.ts";
+import { type BaselineState, clipReason, SETUP_DIRECTION } from "../../judge/index.ts";
 import { focusOf, type Handout, PLANNER } from "../coordinator.ts";
 import { lanesOf } from "../planner/index.ts";
 import type { Assignment, EpochRecord } from "../registry.ts";
@@ -58,9 +58,9 @@ export function planSetupEpoch(
   n: number,
   setup: Extract<BaselineState, { state: "setup" }>,
 ): void {
-  sched.registry.addFamily(
+  sched.registry.addDirection(
     run,
-    SETUP_FAMILY,
+    SETUP_DIRECTION,
     "Make the starting point build and run its cells, so the judge can measure it",
     PLANNER,
   );
@@ -77,7 +77,7 @@ export function planSetupEpoch(
           `The judge could not measure the starting point (champion #${setup.start.seq}, commit ${setup.start.commit.slice(0, 12)}). Its reasons: ${setup.failure.reasons}`,
           EXPERIMENT_DETAILS,
         ),
-        family: SETUP_FAMILY,
+        direction: SETUP_DIRECTION,
         why,
         by: PLANNER,
         position: "top",
@@ -87,7 +87,7 @@ export function planSetupEpoch(
     handout.push({ lane, experiment: x.id, why: "setup" });
     assignments.push({
       lane,
-      family: SETUP_FAMILY,
+      direction: SETUP_DIRECTION,
       focus: focusOf(x),
       parent: "champion",
       experiment: x.id,
@@ -124,7 +124,7 @@ export function planSetupEpoch(
 /** Setup experiments left in the queue once the starting point is measured are dropped. */
 export function dropSetupExperiments(sched: SchedulerContext, run: string): void {
   for (const x of sched.o.service.queue.queued(run)) {
-    if (x.family !== SETUP_FAMILY) continue;
+    if (x.direction !== SETUP_DIRECTION) continue;
     sched.o.service.queue.drop(
       run,
       x.id,
@@ -141,6 +141,6 @@ export function dropSetupExperiments(sched: SchedulerContext, run: string): void
 export function isSetupRound(e: EpochRecord): boolean {
   return (
     e.assignments.length > 0 &&
-    e.assignments.every((a) => a.family === SETUP_FAMILY && a.why === "setup")
+    e.assignments.every((a) => a.direction === SETUP_DIRECTION && a.why === "setup")
   );
 }

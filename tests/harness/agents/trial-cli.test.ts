@@ -109,7 +109,7 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
         "loop",
         "--why",
         "the profile shows it",
-        "--family",
+        "--direction",
         "unroll",
       ],
       env,
@@ -123,7 +123,7 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
       {
         method: "POST",
         path: "/v1/trial/idea",
-        body: { title: "unroll the tail loop", why: "the profile shows it", family: "unroll" },
+        body: { title: "unroll the tail loop", why: "the profile shows it", direction: "unroll" },
       },
     ]);
     assert.match(await trialCli(["idea", "--why", "w"], env, call), /^error: idea needs a title/);
@@ -194,15 +194,15 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
     assert.deepEqual(calls[1]?.body, { kind: "lesson", text: "keep it short" });
     assert.match(await trialCli(["note", "no kind"], env, call), /^error: note needs --kind/);
     assert.match(
-      await trialCli(["note", "--kind", "note"], env, call),
+      await trialCli(["note", "--kind", "other"], env, call),
       /^error: note needs its text/,
     );
     assert.match(
-      await trialCli(["note", "--kind", "note", "--about", "a-1", "t"], env, call),
+      await trialCli(["note", "--kind", "other", "--about", "a-1", "t"], env, call),
       /^error: --about takes TYPE:ID/,
     );
     assert.match(
-      await trialCli(["note", "--kind", "note", "--lane", "lane-2", "t"], env, call),
+      await trialCli(["note", "--kind", "other", "--lane", "lane-2", "t"], env, call),
       /^error: note has no --lane/,
     );
     assert.equal(calls.length, 2, "nothing sent for a mistake");
@@ -223,7 +223,7 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
         "read_source",
         "search_corpus",
         "add_claim",
-        "add_note",
+        "add_source_note",
         "propose_hypothesis",
         "revise_hypothesis",
         "add_finding",
@@ -241,7 +241,7 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
     await trialCli(["research", "search_corpus", "dequantize"], env, call);
     await trialCli(["research", "search_corpus", "dequantize", "--skip", "18"], env, call);
     await trialCli(
-      ["research", "add_note", "kernels", "differ", "--source", "s-1", "--source", "s-2"],
+      ["research", "add_source_note", "kernels", "differ", "--source", "s-1", "--source", "s-2"],
       env,
       call,
     );
@@ -267,7 +267,7 @@ describe("thermite-trial, Thermite's tools in an agent's own shell", () => {
       },
       {
         method: "POST",
-        path: "/v1/research/note",
+        path: "/v1/research/source_note",
         body: { text: "kernels differ", sources: ["s-1", "s-2"] },
       },
       {

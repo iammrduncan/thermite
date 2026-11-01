@@ -63,10 +63,10 @@ async function setup(
         {
           name: "submit_plan",
           args: {
-            new_families: [{ id: "speed", description: "make the sum faster" }],
+            new_directions: [{ id: "speed", description: "make the sum faster" }],
             assignments: o.refuse?.()
               ? []
-              : [{ lane: "lane-1", family: "speed", focus: "go faster", parent: "champion" }],
+              : [{ lane: "lane-1", direction: "speed", focus: "go faster", parent: "champion" }],
           },
         },
       ],

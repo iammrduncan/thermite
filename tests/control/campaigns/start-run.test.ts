@@ -92,7 +92,7 @@ async function stack() {
         id: "x-1",
         title: "Load int4 weights with vector loads",
         details: "128-bit loads of the packed weights",
-        family: "memory-layout",
+        direction: "memory-layout",
         by: "teacher",
       },
     ],

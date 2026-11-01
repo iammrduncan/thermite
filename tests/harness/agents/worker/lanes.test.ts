@@ -30,7 +30,7 @@ describe("worker trial", () => {
       run: "js-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seed,
       token: "lane-token",
     });
@@ -95,7 +95,7 @@ describe("worker trial", () => {
       run: "js-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seed,
       token: "lim-token",
     });
@@ -200,7 +200,7 @@ describe("worker trial", () => {
       run: "js-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seed,
       token: "busy-token",
     });

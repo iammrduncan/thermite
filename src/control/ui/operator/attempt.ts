@@ -173,7 +173,7 @@ export function attemptDetail(
   const facts = [
     ["Run", `<a href="${runHref(r)}">${esc(runCampaign(r))} › ${esc(r.id)}</a> on ${esc(u.id)}`],
     ["Lane", esc(a.lane ?? "none: submitted by hand")],
-    ...(a.family ? [["Direction", esc(a.family)]] : []),
+    ...(a.direction ? [["Direction", esc(a.direction)]] : []),
     [
       "Made on",
       `${base ? `champion #${base.seq} ` : ""}<code class="muted" title="${esc(a.parent ?? "")}">${esc(short(a.parent))}</code>`,

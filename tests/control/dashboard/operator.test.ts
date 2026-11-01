@@ -267,7 +267,7 @@ describe("control dashboard for an operator", () => {
     assert.match(attempts, /blocked by the auditor/);
     assert.match(attempts, /waiting for your approval/);
     assert.match(attempts, /href="\/ui\/campaigns\/sum-speed\/runs\/sum-1\/attempts\/a-5b5b0001"/);
-    // The Journal: the agents' field notes, newest first; the research note beside them.
+    // The Journal: the agents' field notes, newest first; the source note beside them.
     const journal = await get("/ui/campaigns/sum-speed/runs/sum-1/journal");
     assert.match(journal, /Journal <span class="muted">4 notes<\/span>/);
     assert.ok(journal.indexOf("A gain far above") < journal.indexOf("Unrolling past 8"));

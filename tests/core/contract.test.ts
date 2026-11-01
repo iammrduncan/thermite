@@ -2,13 +2,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { briefOf } from "../../src/core/brief.ts";
 import { canonicalSha } from "../../src/core/canonical.ts";
 import {
   agentsContextRefusal,
   agentsContextWords,
   contextApplied,
 } from "../../src/core/compaction.ts";
-import { CHECK_CONSTRAINT_REFUSED, parseContract } from "../../src/core/contract.ts";
+import {
+  CHECK_CONSTRAINT_REFUSED,
+  parseContract,
+  parseStoredContract,
+} from "../../src/core/contract.ts";
+import { currentContract } from "../../src/core/names.ts";
 import { goalFixture, hillClimbFixture, researchFixture } from "../helpers/fixtures.ts";
 
 const readJson = (path: string): unknown => JSON.parse(readFileSync(path, "utf8"));
@@ -157,10 +163,39 @@ describe("contracts", () => {
     }
   });
 
-  test("a campaign's brief (goal 078): notes, ideas and hypotheses are optional, in the hash only when set; old contracts keep their hashes", () => {
+  test("a contract written before v0.1.1 keeps its key `notes` as signed, so its hash holds; a new one is refused it, with its new name", () => {
+    const examples = join(import.meta.dirname, "..", "..", "examples", "contracts");
+    const now = readJson(join(examples, "smoke-cpu.json")) as Record<string, unknown>;
+    const { additional_information: information, ...rest } = now;
+    const before = { ...rest, notes: information };
+    // The smoke contract as it was signed before v0.1.1: the same hash as then.
+    const stored = parseStoredContract(before);
+    assert.ok(stored.ok, stored.ok ? "" : stored.errors.join("; "));
+    assert.equal(
+      stored.ok && stored.sha,
+      "27b211d2e3514fe2c2eec61c246dde7d7cc9a84b0629e456bd8c43230f091402",
+    );
+    assert.ok(
+      stored.ok && "notes" in stored.contract && !("additional_information" in stored.contract),
+    );
+    // Read under the new name: its brief is the same text.
+    assert.equal(briefOf(stored.ok ? stored.contract : {})?.additional_information, information);
+    assert.equal(
+      (currentContract(before) as Record<string, unknown>).additional_information,
+      information,
+    );
+    // A new contract takes only the new key.
+    assert.deepEqual(parseContract(before), {
+      ok: false,
+      errors: ["notes: `notes` is now `additional_information`"],
+    });
+  });
+
+  test("a campaign's brief (goal 078): additional information, ideas and hypotheses are optional, in the hash only when set; old contracts keep their hashes", () => {
     // The hashes of the example contracts and the fixtures before goal 078: unchanged. The smoke
     // contract's and the hill-climb fixture's changed once since, when goal 163 removed their
-    // `check` hard constraint, which is refused now.
+    // `check` hard constraint, which is refused now; the smoke contract's again in v0.1.1, when
+    // its additional information took its new key (the test below keeps its hash before).
     const examples = join(import.meta.dirname, "..", "..", "examples", "contracts");
     const before: [unknown, string][] = [
       [
@@ -173,7 +208,7 @@ describe("contracts", () => {
       ],
       [
         readJson(join(examples, "smoke-cpu.json")),
-        "27b211d2e3514fe2c2eec61c246dde7d7cc9a84b0629e456bd8c43230f091402",
+        "bfde932cafba1bccf593d5464e366983046196424878d290609101f9d3a2ea33",
       ],
       [
         readJson(join(examples, "smoke-cpu-goal.json")),
@@ -198,13 +233,13 @@ describe("contracts", () => {
     const notes = `## Background\n${"A long line about the project. ".repeat(4000)}`;
     const hc = parseContract({
       ...hillClimbFixture,
-      notes,
+      additional_information: notes,
       ideas: ["Fuse the dequantize step.", "Load 128-bit vectors."],
       hypotheses: ["It is memory bound.\nAt batch size 1 only."],
     });
     assert.ok(hc.ok, hc.ok ? "" : hc.errors.join("; "));
     assert.ok(hc.ok && hc.contract.mode === "hill_climb" && hc.contract.ideas?.length === 2);
-    assert.equal(hc.ok && hc.contract.notes, notes);
+    assert.equal(hc.ok && hc.contract.additional_information, notes);
     const base = parseContract(hillClimbFixture);
     assert.ok(hc.ok && base.ok && hc.sha !== base.sha);
     const research = parseContract({

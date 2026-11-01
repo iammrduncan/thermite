@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { KbFiles } from "../../src/control/kb/index.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
-import type { KbItemBody } from "../../src/core/kb.ts";
+import type { KbItemBody } from "../../src/core/kb/index.ts";
 import { ingestReport } from "./control-store.ts";
 import { fillKnowledge, KB_RIG } from "./kb-places.ts";
 

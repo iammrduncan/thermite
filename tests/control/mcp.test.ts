@@ -229,7 +229,7 @@ describe("control over MCP", () => {
     assert.ok(
       await issue(agent, "redirect", {
         run: "js-1",
-        directives: [{ kind: "avoid", family: "loop-tiling", rationale: "slower twice" }],
+        directives: [{ kind: "avoid", direction: "loop-tiling", rationale: "slower twice" }],
         replace: false,
       }),
       "an agent may add a rule",

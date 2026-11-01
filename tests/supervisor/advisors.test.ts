@@ -63,15 +63,15 @@ describe("advisors", () => {
                 directives: [
                   {
                     kind: "mandate",
-                    family: "tiling",
+                    direction: "tiling",
                     rationale: "both reviews",
                     citations: ["arxiv:1"],
                   },
-                  { kind: "try", family: "guesswork", rationale: "no source", citations: [] },
+                  { kind: "try", direction: "guesswork", rationale: "no source", citations: [] },
                   // A direction written :name: with spaces (goal 066); words are no rule.
                   {
                     kind: "try",
-                    family: ":shared memory tiling:",
+                    direction: ":shared memory tiling:",
                     rationale: "the paper's kernel",
                     citations: ["arxiv:2"],
                   },
@@ -80,7 +80,7 @@ describe("advisors", () => {
                 experiments: [
                   {
                     title: "stage the tiles in shared memory",
-                    family: "shared memory tiling",
+                    direction: "shared memory tiling",
                     why: "arxiv:2 does it",
                   },
                 ],
@@ -98,7 +98,7 @@ describe("advisors", () => {
             args: {
               summary: "tiling looks promising",
               recommendations: [
-                { kind: "try", family: "tiling", rationale: "paper", citations: ["arxiv:1"] },
+                { kind: "try", direction: "tiling", rationale: "paper", citations: ["arxiv:1"] },
               ],
             },
           },
@@ -154,12 +154,12 @@ describe("advisors", () => {
     assert.ok(usage.every((u) => u.provider === null && u.tokens_in === 100));
     const active = env.ledger.directives
       .active("js-1")
-      .map((d) => d.body as { kind: string; family: string });
+      .map((d) => d.body as { kind: string; direction: string });
     assert.deepEqual(active, [
-      { kind: "mandate", family: "tiling", rationale: "both reviews", citations: ["arxiv:1"] },
+      { kind: "mandate", direction: "tiling", rationale: "both reviews", citations: ["arxiv:1"] },
       {
         kind: "try",
-        family: "shared-memory-tiling",
+        direction: "shared-memory-tiling",
         rationale: "the paper's kernel",
         citations: ["arxiv:2"],
       },
@@ -191,7 +191,7 @@ describe("advisors", () => {
   });
 
   test("one teacher works with no merge; two are merged only by a merged by model, else the first review is the set", async () => {
-    // Each model on its own fake: each teacher recommends its own family, the merged by model a
+    // Each model on its own fake: each teacher recommends its own direction, the merged by model a
     // third, and each counts its calls.
     const called: Record<string, number> = { first: 0, second: 0, merger: 0 };
     const teacher = (name: string) =>
@@ -204,7 +204,7 @@ describe("advisors", () => {
               args: {
                 summary: `${name} reviewed`,
                 recommendations: [
-                  { kind: "try", family: name, rationale: "r", citations: ["arxiv:1"] },
+                  { kind: "try", direction: name, rationale: "r", citations: ["arxiv:1"] },
                 ],
               },
             },
@@ -223,7 +223,7 @@ describe("advisors", () => {
               name: "answer",
               args: {
                 directives: [
-                  { kind: "try", family: "merged", rationale: "both", citations: ["arxiv:3"] },
+                  { kind: "try", direction: "merged", rationale: "both", citations: ["arxiv:3"] },
                 ],
               },
             },
@@ -246,16 +246,16 @@ describe("advisors", () => {
         brief: { campaign: "c" },
         tools: {},
       });
-      return { families: r.directives?.map((d) => d.family), called: { ...called } };
+      return { directions: r.directives?.map((d) => d.direction), called: { ...called } };
     };
     // One teacher and a merged by model: the teacher's set; the merged by model is not called.
     assert.deepEqual(await round({ teachers: [runtime("first")], merged_by: runtime("merger") }), {
-      families: ["first"],
+      directions: ["first"],
       called: { first: 1, second: 0, merger: 0 },
     });
     // Two teachers without one: the first review's set, as before goal 074.
     assert.deepEqual(await round({ teachers: [runtime("first"), runtime("second")] }), {
-      families: ["first"],
+      directions: ["first"],
       called: { first: 1, second: 1, merger: 0 },
     });
     // Two teachers and a merged by model: the merged set.
@@ -264,7 +264,7 @@ describe("advisors", () => {
         teachers: [runtime("first"), runtime("second")],
         merged_by: runtime("merger"),
       }),
-      { families: ["merged"], called: { first: 1, second: 1, merger: 1 } },
+      { directions: ["merged"], called: { first: 1, second: 1, merger: 1 } },
     );
     for (const f of Object.values(fakes)) await f.close();
   });

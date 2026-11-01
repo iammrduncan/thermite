@@ -11,7 +11,7 @@ import {
   type KbStored,
   mergeItem,
   metaOf,
-} from "../../src/core/kb-index.ts";
+} from "../../src/core/kb/index.ts";
 import { fillResearch, makeResearchRun, writeCards } from "./research-run.ts";
 
 /**
@@ -28,11 +28,12 @@ function inOrder(_key: string, value: unknown): unknown {
 /**
  * A research run with some of every record, and what each of the four renderers of its research
  * makes of it (goal 125, T11): the research folder's files (harness/research/folder.ts), the
- * teachers' reads (harness/run-research.ts), the knowledge base's items (core/kb-index.ts and
- * kb-index-research.ts) and control's view of the run's hypotheses and decisions
+ * teachers' reads (harness/run-research.ts), the knowledge base's items (core/kb/records.ts and
+ * core/kb/research.ts) and control's view of the run's hypotheses and decisions
  * (control/views/research.ts). Every id, time, address and hash is replaced by a stable name, so
  * two runs of it give the same JSON: tests/fixtures/research-renders.json holds it as the code
- * made it before the four took their reading from core/corpus.ts.
+ * made it before the four took their reading from core/corpus.ts, under the public names of
+ * v0.1.1 (source notes).
  */
 export async function researchRenders(): Promise<unknown> {
   const r = await makeResearchRun();

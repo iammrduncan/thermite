@@ -142,7 +142,7 @@ These rules give the code one shape, so a reader knows where a thing lives befor
 
 - **A wire contract has one home.** Each body that crosses a process boundary has one schema in `core`: a route's request and answer, a signed command, an event, a file that one container hands to another, an environment variable. Route paths and limits are named constants beside it.
 - **Event kinds are constants with schemas.** A new kind goes into `core/events/` with the schema of its body, and `appendEvent` takes it typed.
-- **One name map.** Where a public name differs from a stored or wire name, the mapping lives in `core/names.ts` or in the module that owns the word, never in a caller. v0.1.1 keeps no old names: it breaks compatibility with v0.1.0, and older ledgers and databases are kept, never deleted.
+- **One name map.** Where a public name differs from a stored or wire name, the mapping lives in `core/names.ts` or in the module that owns the word, never in a caller. v0.1.1 upgrades v0.1.0's data in place: rows that may change are migrated, and events, signed commands and contracts keep the words they were written with and are read under the public names through `core/names.ts`. The APIs take only the public names. Data from before v0.1.0 is not read, and a ledger or database that can't be read is kept, never deleted.
 - **A thing is addressed through what owns it.** Each thing has an ID that is unique where it is used, and every interface addresses it through its owner: an attempt through its run, a run through its campaign. Where a thing ran, such as its rig, is a fact about it, not its parent.
 
 ### Shared tools, errors, settings and timeouts

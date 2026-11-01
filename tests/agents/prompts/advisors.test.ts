@@ -19,7 +19,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
   test("a hill-climb run's two teachers and their merged by model, in Pi", async () => {
     const env = makeJudgeEnv({
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.service.applyCommand(env.assign);
@@ -42,7 +43,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
   test("a hill-climb run's auditor, in Pi, on a win that asks for an audit", async () => {
     const env = makeJudgeEnv({
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
         acceptance: {
           looks: [3, 6],
           confirm_blocks: 4,
@@ -75,7 +77,9 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
 
   test("a research run's two teachers and their merged by model, in Pi", async () => {
     const r = await makeResearchRun("r-1", {
-      contract: { notes: "Weigh the sources that measured more than one campaign." },
+      contract: {
+        additional_information: "Weigh the sources that measured more than one campaign.",
+      },
     });
     await r.env.service.applyCommand(
       r.env.sign("message_agent", { run: r.run, to: "teachers", text: "Find primary sources." }),
@@ -120,7 +124,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     const env = makeJudgeEnv({
       goal: { opsPerSecond: 1e12 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.start();
@@ -186,7 +191,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
   test("a hill-climb run's teacher as a command: what every advisor run as a program is given", async () => {
     const env = makeJudgeEnv({
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.service.applyCommand(env.assign);

@@ -160,7 +160,7 @@ describe("the owner's messages", () => {
     await env.service.applyCommand(env.assign);
     const registry = new Registry(env.ledger);
     const t1 = trial("a", "lane-1");
-    registry.startTrial({ ...t1, epoch: 1, family: "f", parent: "p" });
+    registry.startTrial({ ...t1, epoch: 1, direction: "f", parent: "p" });
     const sent = await send(env, { to: `trial:${t1.id}`, text: "check the bounds" });
     assert.deepEqual(sent.result.readers, ["lane-1"]);
     assert.equal(sent.result.note, undefined);
@@ -404,7 +404,7 @@ describe("the owner's messages", () => {
     await env.service.applyCommand(env.assign);
     const registry = new Registry(env.ledger);
     const t = trial("a", "lane-1");
-    registry.startTrial({ ...t, epoch: 1, family: "f", parent: "p", token: "tok-1" });
+    registry.startTrial({ ...t, epoch: 1, direction: "f", parent: "p", token: "tok-1" });
     await send(env, { to: "lane-1", text: "for you" });
     await send(env, { to: "lane-2", text: "not for you" });
     const api = createHarnessApi(env.service, { supervisor: "sup" });

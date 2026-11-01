@@ -23,7 +23,7 @@ import {
 import { PDFJS_DIR } from "../../../src/control/kb/text/pdf.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
-import type { KbItemBody } from "../../../src/core/kb.ts";
+import type { KbItemBody } from "../../../src/core/kb/index.ts";
 import type { KbReadAnswer, KbSearchAnswer } from "../../../src/core/link/kb.ts";
 import { tinyPdf } from "../../helpers/pdf.ts";
 

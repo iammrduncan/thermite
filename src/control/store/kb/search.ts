@@ -43,7 +43,7 @@ export interface KbFindOptions {
   runs?: readonly string[] | undefined;
   slots?: readonly string[] | undefined;
   collections?: readonly string[] | undefined;
-  /** Only items of these types: record, blurb or file (core/kb.ts, kbItemType). */
+  /** Only items of these types: record, blurb or file (core/kb/items.ts, kbItemType). */
   types?: readonly string[] | undefined;
   /** Items left out, by id: those the caller has seen already. */
   seen?: readonly number[] | undefined;
@@ -81,7 +81,7 @@ const CONTEXT_WORDS = "its context (kind, outcome, slot, run, campaign)";
 /** How many runs and slots the counts name at most: the rest are summed under "other". */
 const COUNTED_MAX = 20;
 
-/** An item's type in SQL on `i`, as kbItemType (core/kb.ts) says it. */
+/** An item's type in SQL on `i`, as kbItemType (core/kb/items.ts) says it. */
 const ITEM_TYPE =
   "(case when i.file_sha256 is not null then 'file' when i.slot = 'records' then 'record' else 'blurb' end)";
 

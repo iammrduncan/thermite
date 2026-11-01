@@ -1,20 +1,25 @@
 import { gaveSecret } from "../../common/scrub.ts";
 import { heldOutWords } from "../judge/index.ts";
-import { type EpochSource, type FamilyStatus, type Ledger, LedgerError } from "../ledger/index.ts";
+import {
+  type DirectionStatus,
+  type EpochSource,
+  type Ledger,
+  LedgerError,
+} from "../ledger/index.ts";
 import { shownViolations, violationsOf } from "../v0.ts";
 
 /**
- * Agent state in the ledger: the direction registry (approach families and how they fared),
+ * Agent state in the ledger: the direction registry (directions and how they fared),
  * planner epochs, worker trials and each lane's retained best. The judge never reads any of it;
  * verdicts stay the judge's alone.
  */
 
 type Row = Record<string, unknown>;
 
-export interface FamilyView {
+export interface RegisteredDirection {
   id: string;
   description: string;
-  status: FamilyStatus;
+  status: DirectionStatus;
   attempts: number;
   verdicts: Record<string, number>;
   best_delta: number | null;
@@ -22,7 +27,7 @@ export interface FamilyView {
 
 export interface Assignment {
   lane: string;
-  family: string;
+  direction: string;
   focus: string;
   parent: "champion" | "lane_best";
   /** The MANDATE or TRY directive this assignment follows, when it follows one. */
@@ -45,7 +50,7 @@ export interface EpochRecord {
 export interface Evidence {
   attempt: string;
   lane: string | null;
-  family: string | null;
+  direction: string | null;
   hypothesis: string | null;
   lifecycle: string;
   verdict: string | null;
@@ -66,7 +71,7 @@ export interface Evidence {
 const EVIDENCE_VIOLATIONS = 5;
 
 /**
- * One attempt's evidence, from its row (id, lane, family, hypothesis, lifecycle and v0): the one
+ * One attempt's evidence, from its row (id, lane, direction, hypothesis, lifecycle and v0): the one
  * shape the planner's evidence, the teachers' brief and their read_evidence tool share (goals 081
  * and 082).
  */
@@ -78,7 +83,7 @@ export function evidenceOf(ledger: Ledger, r: Row): Evidence {
   return {
     attempt: String(r.id),
     lane: r.lane === null || r.lane === undefined ? null : String(r.lane),
-    family: r.family === null || r.family === undefined ? null : String(r.family),
+    direction: r.direction === null || r.direction === undefined ? null : String(r.direction),
     hypothesis:
       r.hypothesis === null || r.hypothesis === undefined
         ? null
@@ -102,20 +107,26 @@ export class Registry {
    * A new direction for the run. `forRules`: the rules in force that named it before the run had
    * it, when the planner designed it for them (goal 066); its event says so.
    */
-  addFamily(run: string, id: string, description: string, by: string, forRules?: number[]): void {
+  addDirection(
+    run: string,
+    id: string,
+    description: string,
+    by: string,
+    forRules?: number[],
+  ): void {
     this.ledger.tx(() => {
-      if (this.ledger.trials.addFamily(run, id, description, by))
-        this.ledger.appendEvent(by, "family_added", run, {
-          family: id,
+      if (this.ledger.trials.addDirection(run, id, description, by))
+        this.ledger.appendEvent(by, "direction_added", run, {
+          direction: id,
           description,
           ...(forRules?.length ? { for_rules: forRules } : {}),
         });
     });
   }
 
-  families(run: string): FamilyView[] {
-    return this.ledger.trials.families(run).map((f) => {
-      const attempts = this.ledger.attempts.ofFamily(run, f.id);
+  directions(run: string): RegisteredDirection[] {
+    return this.ledger.trials.directions(run).map((f) => {
+      const attempts = this.ledger.attempts.ofDirection(run, f.id);
       const verdicts: Record<string, number> = {};
       let best: number | null = null;
       for (const a of attempts) {
@@ -136,8 +147,8 @@ export class Registry {
     });
   }
 
-  tagAttempt(attempt: string, family: string): void {
-    this.ledger.attempts.setFamily(attempt, family);
+  tagAttempt(attempt: string, direction: string): void {
+    this.ledger.attempts.setDirection(attempt, direction);
   }
 
   /** The newest judged evidence, for the planner and for briefs. */
@@ -207,7 +218,7 @@ export class Registry {
         directives: input.directives ?? [],
         assignments: input.assignments.map((a) => ({
           lane: a.lane,
-          family: a.family,
+          direction: a.direction,
           // What the lane is asked to do, for control's "at work now" (the brief has it all).
           focus: a.focus.slice(0, 300),
           parent: a.parent,
@@ -235,7 +246,7 @@ export class Registry {
     run: string;
     lane: string;
     epoch: number;
-    family: string;
+    direction: string;
     parent: string;
     token?: string | undefined;
     /** The lane's focus for this trial, as the planner gave it. */
@@ -250,7 +261,7 @@ export class Registry {
         trial: t.id,
         lane: t.lane,
         epoch: t.epoch,
-        family: t.family,
+        direction: t.direction,
         ...(t.focus ? { focus: t.focus.slice(0, 300) } : {}),
       });
     });
@@ -261,7 +272,7 @@ export class Registry {
     id: string;
     run: string;
     lane: string;
-    family: string | null;
+    direction: string | null;
     parent: string;
     attempt: string | null;
   } {
@@ -272,7 +283,7 @@ export class Registry {
       id: r.id,
       run: r.run,
       lane: r.lane,
-      family: r.family,
+      direction: r.direction,
       parent: r.parent_commit,
       attempt: r.attempt,
     };
@@ -284,7 +295,7 @@ export class Registry {
       if (!this.ledger.trials.linkAttempt(trial, attempt))
         throw new LedgerError("conflict", `trial ${trial} already has an attempt`);
       const t = this.ledger.trials.get(trial);
-      if (t?.family) this.tagAttempt(attempt, t.family);
+      if (t?.direction) this.tagAttempt(attempt, t.direction);
     });
   }
 
@@ -331,7 +342,7 @@ export class Registry {
         trial: id,
         lane: t?.lane ?? null,
         epoch: t?.epoch ?? null,
-        family: t?.family ?? null,
+        direction: t?.direction ?? null,
         attempt: t?.attempt ?? null,
         stopped: r.stopped,
         turns: r.turns,

@@ -1,4 +1,4 @@
-import { clip } from "../../../core/kb-index.ts";
+import { clip } from "../../../core/kb/index.ts";
 import { currentChampion } from "../facts.ts";
 import { frozen } from "../sharing.ts";
 import type { BaselineView } from "../types.ts";

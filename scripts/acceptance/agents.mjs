@@ -97,12 +97,12 @@ function researchSteps() {
   });
   return [
     shell(`thermite-trial research fetch http://${hostName}:${port}/paper`),
-    shell("thermite-trial research add_note 'opencode research note: the fetch was refused'"),
+    shell("thermite-trial research add_source_note 'opencode source note: the fetch was refused'"),
     shell(
       `thermite-trial research update_section - <<'EOF'\n{"name": "opencode", "body": "Written with thermite-trial in OpenCode."}\nEOF`,
     ),
     // The folder's index, and the note just recorded, found by searching all of the folder.
-    shell("head -n 1 ../../INDEX.md; grep -rl 'opencode research note' ../.. 2>/dev/null"),
+    shell("head -n 1 ../../INDEX.md; grep -rl 'opencode source note' ../.. 2>/dev/null"),
     // Two of the harness's files and two new ones in its folders: each must be refused. The
     // words of each answer are put together in the shell, so the command itself holds neither.
     shell(
@@ -210,17 +210,17 @@ function script(messages, tools) {
         {
           name: "submit_plan",
           args: {
-            new_families: [{ id: "loop-order", description: "change the loop order for locality" }],
+            new_directions: [{ id: "loop-order", description: "loop order for locality" }],
             assignments: [
               {
                 lane: "lane-1",
-                family: "loop-order",
+                direction: "loop-order",
                 focus: "make the inner loop contiguous",
                 parent: "champion",
               },
               {
                 lane: "lane-2",
-                family: "loop-order",
+                direction: "loop-order",
                 focus: "tidy the kernel",
                 parent: "champion",
               },
@@ -650,7 +650,7 @@ try {
   await command("pause_run", { run: "research-oc", reason: "acceptance: drain" });
   const researchEvents = (await events()).filter((e) => e.subject === "research-oc");
   const refusal = researchEvents.find((e) => e.kind === "fetch_refused");
-  const note = researchEvents.find((e) => e.kind === "research_note");
+  const note = researchEvents.find((e) => e.kind === "source_note");
   const researchInTerminal = terminalStarts().some((l) =>
     l.includes(`"trial":"${String(researchTrial.body.trial)}"`),
   );
@@ -666,7 +666,7 @@ try {
       /private or local address/.test(String(refusal?.body.reason)) &&
       // The note is the trial's, in the run's record; the section and progress answered.
       note?.body.trial === researchTrial.body.trial &&
-      /opencode research note/.test(String(note?.body.text)) &&
+      /opencode source note/.test(String(note?.body.text)) &&
       researchSeen.note === true &&
       researchSeen.section === true &&
       researchSeen.progress === true &&

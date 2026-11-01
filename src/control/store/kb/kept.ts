@@ -1,8 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { withoutCredentials } from "../../../common/scrub.ts";
 import { COMPACTIONS_DIR } from "../../../core/compaction.ts";
-import { KB_RECORDS, writerOfSlot } from "../../../core/kb.ts";
-import { type KbStored, metaOf, str } from "../../../core/kb-index.ts";
+import { KB_RECORDS, type KbStored, metaOf, str, writerOfSlot } from "../../../core/kb/index.ts";
 import { type ItemPlace, keepVersion } from "./items.ts";
 
 /**

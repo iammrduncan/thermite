@@ -6,7 +6,7 @@ import { mcpLine } from "../mcp/index.ts";
 import { linesSection, type Prompt, prompt, type Section, section } from "../prompt.ts";
 import {
   CODE_RESEARCH_TOOLS,
-  codeResearchNote,
+  codeResearchHint,
   NOTE_USAGE,
   researchCommands,
 } from "../tools/index.ts";
@@ -39,10 +39,10 @@ a smaller result. If you cannot make a useful change, explain why in your final 
 submitting. If you see another experiment worth trying that is not your assignment, propose it
 with the idea tool: the planner or the campaign's owner decides whether it is queued, and your trial goes on.`;
 
-/** Field notes, and sources, claims and notes from the web, for a code trial (goal 065). */
+/** Field notes, and sources, claims and source notes from the web, for a code trial (goal 065). */
 export const WORKER_PI_NOTES = `${notesInstruction("with the note tool")}
 
-${codeResearchNote("with the fetch tool")}`;
+${codeResearchHint("with the fetch tool")}`;
 
 /** The worker's instructions in OpenCode, which calls Thermite's tools as thermite-trial commands. */
 export const WORKER_OPENCODE_SYSTEM = `You are a research worker in an automated research harness, working in a git repository
@@ -58,12 +58,12 @@ Keep your change inside the editable paths. If you find a flaw in your own chang
 Other commands: "thermite-trial dev-run [--timeout SECONDS] -- COMMAND" runs a command on the
 measurement device (for example a GPU) when the judge is not using it; "thermite-trial status
 ATTEMPT" shows how the judge decided an attempt; "thermite-trial idea TITLE [--why TEXT]
-[--family TEXT]" proposes another experiment worth trying for the run's queue (the planner
+[--direction TEXT]" proposes another experiment worth trying for the run's queue (the planner
 decides whether it is queued; your trial goes on).
 
-${notesInstruction(`with "${NOTE_USAGE}" (KIND: observation, decision, surprise, question, lesson or note; TYPE: run, experiment, attempt, source, claim, finding, round, trial or message; no --about: the run)`)}
+${notesInstruction(`with "${NOTE_USAGE}" (KIND: observation, decision, surprise, question, lesson or other; TYPE: run, experiment, attempt, source, claim, finding, round, trial or message; no --about: the run)`)}
 
-${codeResearchNote('with "thermite-trial research fetch URL"')} The research commands:
+${codeResearchHint('with "thermite-trial research fetch URL"')} The research commands:
 
 ${researchCommands(CODE_RESEARCH_TOOLS)}
 

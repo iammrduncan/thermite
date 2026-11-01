@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { gitHost } from "../../common/git-auth.ts";
+import { gitHost } from "../../common/git/index.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**

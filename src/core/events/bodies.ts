@@ -2,7 +2,7 @@ import type { AdvisorRole, Harness, MessageHow } from "../agents.ts";
 import type { Mode } from "../contract.ts";
 import type { GoalCellValues, GoalCheck } from "../goal/index.ts";
 import type { HeldOutCell } from "../held-out.ts";
-import type { KbItemBody, KbItemFile } from "../kb.ts";
+import type { KbItemBody, KbItemFile } from "../kb/index.ts";
 import type { AgentPromptBody } from "../prompts.ts";
 import type { RetentionRemoved } from "../retention/index.ts";
 import type { RigSettings } from "../rig-settings.ts";
@@ -23,7 +23,7 @@ export interface EventBodies {
     version: number;
     mode: Mode;
     seed: { repo: string; commit: string; folder?: string | undefined; source_commit?: string };
-    direction: string | null;
+    note: string | null;
     agents: boolean;
     promotion: "auto" | "owner_approval" | null;
     ask_owner?:
@@ -228,14 +228,14 @@ export interface EventBodies {
     advisor?: string | undefined;
   };
   directive: { id: number; body: unknown };
-  directive_converted: { id: number; to: number; kind: unknown; family: string; words: unknown };
+  directive_converted: { id: number; to: number; kind: unknown; direction: string; words: unknown };
   directive_dropped: { id: number };
   directives_superseded: { ids: number[] };
   directives_left_out: { rules: unknown[]; why: string; reason?: string | undefined };
   conclusion_proposed: {
     proposal: number;
     kind: string;
-    approaches: { family: string; attempts: number }[];
+    approaches: { direction: string; attempts: number }[];
   };
   conclusion_accepted: ConclusionDecided;
   conclusion_rejected: ConclusionDecided;
@@ -285,7 +285,7 @@ export interface EventBodies {
     directives: number[];
     assignments: {
       lane: string;
-      family: string;
+      direction: string;
       focus: string;
       parent: "champion" | "lane_best";
       directive?: number | undefined;
@@ -306,13 +306,13 @@ export interface EventBodies {
     lanes: number;
     source: "fallback" | "planner";
   };
-  family_added: { family: string; description: string; for_rules?: number[] | undefined };
-  family_status: { family: string; status: string; reason: string };
+  direction_added: { direction: string; description: string; for_rules?: number[] | undefined };
+  direction_status: { direction: string; status: string; reason: string };
   experiment_added: {
     id: string;
     title: string;
     details?: string | undefined;
-    family?: string | undefined;
+    direction?: string | undefined;
     why?: string | undefined;
     question?: number | undefined;
     by: string;
@@ -337,7 +337,7 @@ export interface EventBodies {
     by: string;
     title?: string | undefined;
     details?: string | undefined;
-    family?: string | undefined;
+    direction?: string | undefined;
     why?: string | undefined;
   };
   experiment_dropped: { id: string; by: string; why: string };
@@ -364,14 +364,14 @@ export interface EventBodies {
     trial: string;
     lane: string;
     epoch: number;
-    family: string;
+    direction: string;
     focus?: string | undefined;
   };
   trial_finished: {
     trial: string;
     lane: unknown;
     epoch: unknown;
-    family: unknown;
+    direction: unknown;
     attempt: unknown;
     stopped: string;
     turns: number;
@@ -582,7 +582,7 @@ export interface EventBodies {
     summary: string;
     why: string;
   };
-  research_note: {
+  source_note: {
     note: number;
     by: string;
     text: string;
@@ -670,7 +670,7 @@ export interface EventBodies {
     open: { questions: number[]; hypotheses: string[] };
   };
   research_paper_requested: { review: number; figures: unknown; end: string };
-  /** One version of one item in its writer's slot of the knowledge base (core/kb.ts). */
+  /** One version of one item in its writer's slot of the knowledge base (core/kb/items.ts). */
   kb_item: KbItemBody;
   research_paper_refused: {
     review: number;

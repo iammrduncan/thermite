@@ -114,7 +114,7 @@ What each rule does:
 | **Try** | Its experiments go first when a lane is free | `Its experiments go first when a lane is free.`, then how many are up next |
 | **Always** | One lane works on it at every hand-out | `One lane works on it at every hand-out.`, then the lanes on it now |
 
-Rules come from elsewhere too: the teachers' advice, and `redirect` from the [command line](steer-a-run.md#steer-from-the-command-line), the REST API or MCP. They show in the same list, with who set them. The planner makes only **Avoid**, **Try** and **Always** rules. The other kinds, `priority`, `lane_count` and `note`, come from the teachers or from `redirect`.
+Rules come from elsewhere too: the teachers' advice, and `redirect` from the [command line](steer-a-run.md#steer-from-the-command-line), the REST API or MCP. They show in the same list, with who set them. The planner makes only **Avoid**, **Try** and **Always** rules. The other kinds, `priority`, `lane_count` and `planner_note`, come from the teachers or from `redirect`.
 
 ### Directions
 
@@ -228,29 +228,29 @@ The same panel can also start the queue from **past research**: the experiments 
 ```sh
 npx thermite command --control http://127.0.0.1:8800 --token-file .dev/secrets/control-admin-token \
   --rig local-1 --kind queue_add \
-  --payload '{"run":"sort-speed-1","title":"unroll the inner loop by 4","family":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}'
+  --payload '{"run":"sort-speed-1","title":"unroll the inner loop by 4","direction":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}'
 ```
 
 It prints the command's id and `"status":"pending"`. The kinds, with an example payload each:
 
 | Kind | Example payload |
 | --- | --- |
-| `queue_add` | `{"run":"sort-speed-1","title":"unroll the inner loop by 4","details":"Keep the remainder loop.","family":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}` |
+| `queue_add` | `{"run":"sort-speed-1","title":"unroll the inner loop by 4","details":"Keep the remainder loop.","direction":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}` |
 | `queue_move` | `{"run":"sort-speed-1","id":"x-0123456789ab","position":2}` |
 | `queue_edit` | `{"run":"sort-speed-1","id":"x-0123456789ab","details":"Unroll by 8 on the large cases."}` |
 | `queue_drop` | `{"run":"sort-speed-1","id":"x-0123456789ab","why":"measured slower twice"}` |
 | `queue_accept` | `{"run":"sort-speed-1","id":"x-0123456789ab","position":"top"}` |
 | `drop_directive` | `{"run":"sort-speed-1","id":7}` |
-| `redirect` | `{"run":"sort-speed-1","directives":[{"kind":"avoid","family":":shared memory tiling:","rationale":"slower on this GPU"}],"replace":false}` |
+| `redirect` | `{"run":"sort-speed-1","directives":[{"kind":"avoid","direction":":shared memory tiling:","rationale":"slower on this GPU"}],"replace":false}` |
 
 - An experiment's id is `x-` and 12 hexadecimal characters; a rule's id is a number. **Commands** shows a new experiment's id in its row's **Outcome**, such as `"experiment":"x-0123456789ab"`. To read every id, use the MCP tool `run_queue`, or the REST API with the owner's token: `curl -s -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" http://127.0.0.1:8800/v1/rigs/local-1/view`. In its answer, find the run in `runs`: its `queue` lists each experiment with its `id`, `title` and `state`, and its `rules` each rule with its `id`.
 - A `position` is `"top"`, `"end"`, or a number: the place among the experiments up next, 0 first. Unlike the dashboard, `queue_add` and `queue_accept` put an experiment at the end unless you give one.
-- `queue_edit` changes the title, details, direction (`family`) or why of an experiment that waits, as **Edit** on the dashboard does. A field you leave out stays as it was; an empty `details` or `why` clears it.
-- In `redirect`, each rule names its direction in `family`, in plain words or as `:name:`; control sends the name, such as `shared-memory-tiling`. `"replace": false` adds to the rules in force. A direction the run doesn't have yet is taken, and the rig's answer lists it: `"new_directions":["shared-memory-tiling"]`. The planner designs it at its next round. `match`, a rule in words, is refused: `bad redirect payload: directives.0: a rule no longer takes match: name its direction in family, in plain words or as :name:`.
-- `queue_add` and `queue_edit` take an experiment's direction (`family`) as `:name:` too, and keep it without the colons.
+- `queue_edit` changes the title, details, direction or why of an experiment that waits, as **Edit** on the dashboard does. A field you leave out stays as it was; an empty `details` or `why` clears it.
+- In `redirect`, each rule names its direction in `direction`, in plain words or as `:name:`; control sends the name, such as `shared-memory-tiling`. `"replace": false` adds to the rules in force. A direction the run doesn't have yet is taken, and the rig's answer lists it: `"new_directions":["shared-memory-tiling"]`. The planner designs it at its next round. `match`, a rule in words, is refused: `bad redirect payload: directives.0: a rule no longer takes match: give its direction in direction, in plain words or as :name:`.
+- `queue_add` and `queue_edit` take an experiment's direction as `:name:` too, and keep it without the colons.
 - To read the run's directions, use `run_queue` over MCP, or `GET /v1/runs/sort-speed-1/directions` over REST. Each direction has its `name`, its `description` when the planner or the registry gave one, its experiments `tried`, its `wins` among them, those `queued`, the `lanes` on it now, the `rules` that name it, and `to_design`: true while only a rule names it and the planner has not designed it yet. A rule in `rules` has `legacy: true` when it is an [old rule in words](#old-rules-in-words).
 
-[Signed commands](../../reference/signed-commands.md) has every field, limit and refusal. Control refuses a payload that doesn't fit at once, such as `bad queue_edit payload: payload: change at least one of title, details, family and why`. The rig's own refusals show on **Commands**, where the row is **failed** with the reason under **Outcome**, such as:
+[Signed commands](../../reference/signed-commands.md) has every field, limit and refusal. Control refuses a payload that doesn't fit at once, such as `bad queue_edit payload: payload: change at least one of title, details, direction and why`. The rig's own refusals show on **Commands**, where the row is **failed** with the reason under **Outcome**, such as:
 
 - `no experiment x-0123456789ab in run sort-speed-1`;
 - `experiment x-0123456789ab is done: only proposed or queued experiments can be dropped`;

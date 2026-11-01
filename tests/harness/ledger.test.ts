@@ -228,14 +228,14 @@ describe("ledger", () => {
       () =>
         ledger.db
           .prepare(
-            "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'note', 't', null, null, ?)",
+            "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'other', 't', null, null, ?)",
           )
           .run(at),
       /NOT NULL/,
     );
     const next = ledger.db
       .prepare(
-        "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'note', 't', 'run', 'old-1', ?)",
+        "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'other', 't', 'run', 'old-1', ?)",
       )
       .run(at);
     assert.equal(Number(next.lastInsertRowid), 3);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { advisorRoutesOf } from "../../../../src/control/rigs/model-routes.ts";
+import { advisorRoutesOf } from "../../../../src/control/rigs/model/index.ts";
 import { AdvisorRoutesValue, CONFIG_VALUES } from "../../../../src/core/link/config.ts";
 import { mcpClient } from "../../../helpers/control-stack.ts";
 import { stack, TOKENS, text } from "./stack.ts";

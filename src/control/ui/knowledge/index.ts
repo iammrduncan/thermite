@@ -121,7 +121,7 @@ function noteHtml(r: RunView, n: JournalNoteView): string {
 export const JOURNAL_SHOWN = 500;
 
 /**
- * A field note as the knowledge base keeps it (core/kb-index.ts): its words, then what it is about
+ * A field note as the knowledge base keeps it (core/kb/records.ts): its words, then what it is about
  * on a line of its own, which its fields keep too, with its lane and trial. A note about nothing
  * named is about its run, as on the run's events.
  */
@@ -134,7 +134,7 @@ export function fieldNote(x: KbItem): JournalNoteView {
   return {
     id: Number(x.ref) || x.id,
     by: x.by,
-    kind: x.sub || "note",
+    kind: x.sub || "other",
     text: cut >= 0 ? x.body.slice(0, cut) : x.body,
     about: type ? { type, id } : { type: "run", id: x.run },
     lane: x.meta.lane || null,
@@ -160,7 +160,7 @@ export function journalTab(o: {
   const { r } = o;
   const field = o.field.items.map(fieldNote);
   const total = Math.max(o.field.total, field.length);
-  // Research notes have negative ids on the run's events (views.ts), whatever the kind.
+  // Source notes have negative ids on the run's events (views.ts), whatever the kind.
   const notes = r.journal.filter((n) => n.id < 0).reverse();
   const writers = [...new Map(field.map((n) => [writer(n.by).key, writer(n.by)])).values()].sort(
     (a, b) => {
@@ -245,9 +245,11 @@ export function pastWords(x: KbItem, result: string | null): { label: string; li
   const label =
     x.kind === "experiment"
       ? "Past experiment"
-      : x.kind === "note" && x.sub && x.sub !== "note"
-        ? `${x.sub[0]?.toUpperCase() ?? ""}${x.sub.slice(1)}`
-        : KIND_WORD[x.kind][0];
+      : x.kind === "note" && x.sub === "source_note"
+        ? "Source note"
+        : x.kind === "note" && x.sub && x.sub !== "other"
+          ? `${x.sub[0]?.toUpperCase() ?? ""}${x.sub.slice(1)}`
+          : KIND_WORD[x.kind][0];
   const line = [
     x.run,
     result ?? (x.kind === "claim" && x.sub ? x.sub : ""),

@@ -107,7 +107,9 @@ export function runResearchTool(
 /** The tools' inputs as an MCP server gives them. */
 const SHAPES = {
   list_research: {
-    kind: z.enum(RESEARCH_KINDS).describe("source, claim, hypothesis, finding, note or file"),
+    kind: z
+      .enum(RESEARCH_KINDS)
+      .describe("source, claim, hypothesis, finding, source_note or file"),
     offset: z
       .number()
       .int()

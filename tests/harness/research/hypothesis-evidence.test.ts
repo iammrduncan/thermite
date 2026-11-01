@@ -145,7 +145,7 @@ test("an undecided with no claim for or against a hypothesis is no end: the plan
   const x = hypothesisTask(ledger, queue, RUN, QUESTIONS, "planner");
   assert.ok(x);
   assert.equal(x.question, null);
-  assert.equal(x.family, "primary");
+  assert.equal(x.direction, "primary");
   assert.match(gapOf(x.details) ?? "", new RegExp(`^Hypothesis ${table} needs a verdict`));
   assert.match(x.details, /Each table of a database is kept in a file of its own/);
   assert.equal(

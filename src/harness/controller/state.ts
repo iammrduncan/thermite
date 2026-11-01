@@ -6,7 +6,7 @@ import { fingerprint, generateSigningKeys } from "../../core/commands.ts";
 import { PROGRAM_MODE_DEFAULT } from "../../core/rig-settings.ts";
 import type { PromotionPolicy } from "../judge/index.ts";
 import { Ledger } from "../ledger/index.ts";
-import { lanesFromEnv, RigSettingsStore, trialMinutesFromEnv } from "../rig-settings.ts";
+import { lanesFromEnv, RigSettingsStore, trialMinutesFromEnv } from "../rig-settings-store.ts";
 import { NOT_BEFORE_FILE, wipeIfRequested } from "../service/index.ts";
 import type { ControllerContext } from "./context.ts";
 

@@ -24,7 +24,7 @@ import type { ReplyNow } from "./watch.ts";
 export const IdeaRequest = z.strictObject({
   title: ExperimentText.title,
   details: ExperimentText.details.optional(),
-  family: ExperimentText.family.optional(),
+  direction: ExperimentText.direction.optional(),
   why: ExperimentText.why.optional(),
   /** In a research run, the question the task is about, an index from 0 (goal 117). */
   question: z.number().int().min(0).optional(),
@@ -45,7 +45,7 @@ export function proposeIdea(
   const idea = IdeaRequest.parse(input);
   if (svc.ledger.runs.get(t.run)?.mode === "research") {
     const measures = measurementIn(
-      [idea.title, idea.details ?? "", idea.why ?? "", idea.family ?? ""].join("\n"),
+      [idea.title, idea.details ?? "", idea.why ?? "", idea.direction ?? ""].join("\n"),
     );
     if (measures) throw new LedgerError("invalid", measurementRefusal(measures));
   }

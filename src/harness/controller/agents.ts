@@ -22,12 +22,12 @@ import {
 import { effectiveGpuLists } from "../broker/index.ts";
 import { Compactions, compactionOf } from "../compactions.ts";
 import type { Ledger } from "../ledger/index.ts";
+import { routeOf } from "../model-usage.ts";
 import { keepPrompt } from "../prompts.ts";
 import { Research, ResearchFolder, SAVED_LANES_DIR } from "../research/index.ts";
-import type { RigSettingsStore } from "../rig-settings.ts";
+import type { RigSettingsStore } from "../rig-settings-store.ts";
 import type { HarnessService } from "../service/index.ts";
 import { keepSession } from "../sessions.ts";
-import { routeOf } from "../usage.ts";
 import type { ControllerContext } from "./context.ts";
 import type { Targets } from "./targets.ts";
 

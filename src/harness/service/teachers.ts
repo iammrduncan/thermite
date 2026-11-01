@@ -78,7 +78,7 @@ function codeMirror(svc: HarnessService, run: string): string {
   if (inst.mode === "research")
     throw new LedgerError(
       "invalid",
-      `run ${run} is a research run: it has no code to read. Its work is the sources, claims and notes in its research folder`,
+      `run ${run} is a research run: it has no code to read. Its work is the sources, claims and source notes in its research folder`,
     );
   return svc.mirrorFor(inst.seed_repo);
 }
@@ -157,8 +157,8 @@ export function brief(svc: HarnessService, run: string): unknown {
     violations: (JSON.parse(String(e.raw_violations)) as unknown[]).length,
     directives: JSON.parse(String(e.directives ?? "[]")) as number[],
     assignments: (
-      JSON.parse(String(e.assignments)) as { lane: string; family: string; directive?: number }[]
-    ).map((a) => ({ lane: a.lane, family: a.family, directive: a.directive ?? null })),
+      JSON.parse(String(e.assignments)) as { lane: string; direction: string; directive?: number }[]
+    ).map((a) => ({ lane: a.lane, direction: a.direction, directive: a.directive ?? null })),
   }));
   const goals =
     contract.mode === "goal"
@@ -202,7 +202,7 @@ export function brief(svc: HarnessService, run: string): unknown {
     editable_paths: "editable_paths" in contract ? contract.editable_paths : [],
     // Its commit: the tree the teachers read with their code tools (goal 081).
     champion: { seq: champion.seq, attempt: champion.attempt, commit: champion.commit_sha },
-    families: registry.families(run),
+    registry: registry.directions(run),
     // The run's directions (goal 066). A rule may also name a new one: the planner designs it.
     directions: svc.queue.directions(run),
     // The target the teachers keep the queue at, and how far below it the queue is now

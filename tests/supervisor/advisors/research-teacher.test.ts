@@ -135,7 +135,7 @@ describe("a research run's teachers (goal 117)", () => {
     // Queued with its question, its title labelled, its gap first in its details.
     const queued = env.service.queue.queued("r-1");
     assert.deepEqual(
-      queued.map((x) => [x.title, x.question, x.family, x.added_by]),
+      queued.map((x) => [x.title, x.question, x.direction, x.added_by]),
       [
         ["Question 2 (index 1): Bank layout in the guide", 1, "primary", "teacher"],
         ["Question 1 (index 0): the vendor's memory overview", 0, "", "teacher"],
@@ -215,7 +215,7 @@ describe("a research run's teachers (goal 117)", () => {
     assert.ok(x.title.length <= 200);
     assert.ok((x.details ?? "").length <= 4000);
     assert.match(x.title, /^Question 4 \(index 3\): t+/);
-    assert.equal(x.family, undefined);
+    assert.equal(x.direction, undefined);
     assert.equal(x.question, 3);
   });
 });

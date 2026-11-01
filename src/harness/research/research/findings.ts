@@ -36,7 +36,7 @@ export function addFinding(ctx: ResearchContext, run: string, lane: string | nul
   if (draft && !supported)
     throw new LedgerError(
       "invalid",
-      `this finding repeats draft finding ${draft.id} and is not recorded again. It is still a draft: ${problems.join("; ")}. Cite only verified claims and use only numbers they contain, then send it again; or record what you learned as a note (add_note)`,
+      `this finding repeats draft finding ${draft.id} and is not recorded again. It is still a draft: ${problems.join("; ")}. Cite only verified claims and use only numbers they contain, then send it again; or record what you learned as a note (add_source_note)`,
     );
   const id = `f-${randomUUID().replace(/-/g, "").slice(0, 12)}`;
   ctx.ledger.tx(() => {

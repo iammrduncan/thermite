@@ -8,7 +8,7 @@ import {
   type KbOutcome,
   KbSlot,
   readKbAddress,
-} from "../../core/kb.ts";
+} from "../../core/kb/index.ts";
 import { KB_OFFSET_MAX, KB_QUERY_MAX, KB_SEARCH_MAX } from "../../core/link/kb.ts";
 import {
   type GrantOutcome,

@@ -311,7 +311,7 @@ export class LiveLines extends StorePart {
 
   /**
    * Each worker trial's session in a rig's live log: when it started and what it was asked to do
-   * (its first status line: "trial on lane-1: family, focus"), what it did last (its newest tool
+   * (its first status line: "trial on lane-1: direction, focus"), what it did last (its newest tool
    * call), and how it ended. Newest first.
    */
   trials(rig: string): {

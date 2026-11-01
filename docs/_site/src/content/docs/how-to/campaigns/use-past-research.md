@@ -12,7 +12,7 @@ The words this page uses:
 
 - A **field note** is a short note an agent writes while it works: an observation, a decision and why, a surprise, an open question or a lesson. The workers, the planner and the [advisors](../../reference/glossary.md) write them. What was tried, and its result, is not a field note: the [experiment queue](choose-what-runs-next.md) keeps that.
 - A run's **journal** is its field notes.
-- **Thermite's knowledge base** is kept by control, with one **collection** for each campaign. A collection holds everything the campaign's runs produce: the runs and their trials, field notes and research notes, the documents lanes write, experiments with their results, attempts with their verdicts, sources with the text that was read, claims, hypotheses, findings and reports. Each item keeps its campaign, rig, run, who wrote it and when.
+- **Thermite's knowledge base** is kept by control, with one **collection** for each campaign. A collection holds everything the campaign's runs produce: the runs and their trials, field notes and source notes, the documents lanes write, experiments with their results, attempts with their verdicts, sources with the text that was read, claims, hypotheses, findings and reports. Each item keeps its campaign, rig, run, who wrote it and when.
 - A **grant** lets one campaign's agents read another campaign's collection. A campaign always reads its own.
 - **Past research** is what a run's agents get from the collections their campaign may read.
 - A **briefing** is the background you pick from past research when you start a run. Every agent's brief shows it.
@@ -45,7 +45,7 @@ At the side:
 
 - **This run's corpus** counts what the run recorded: **Field notes**, **Notes**, **Sources read**, **Experiments tried**, **Claims** (when it has some) and **Findings**.
 - **The campaign's collection** says that all of it goes into the campaign's collection in Thermite's knowledge base. Below, it names the other collections the campaign's agents read, such as `Its agents also read: merge-speed.`, or says `Its agents read only this campaign's collection.` **Open the run's folders** opens the run in **Knowledge**, with its slots; **What it can read** opens the campaign's **Knowledge** section: see [Let a campaign read another's collection](#let-a-campaign-read-anothers-collection).
-- **Notes** lists the run's research notes: facts an agent recorded, with the sources it found them in. It shows the newest 5, then **All 12 notes** for the rest.
+- **Notes** lists the run's source notes: facts an agent recorded, with the sources it found them in. It shows the newest 5, then **All 12 notes** for the rest.
 
 **Live** also shows each field note as it is written, such as `noted (observation): …`, or `teachers:teacher-a noted (lesson): …` for an advisor. Field notes stay out of **History**.
 

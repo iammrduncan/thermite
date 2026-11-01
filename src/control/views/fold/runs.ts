@@ -72,7 +72,7 @@ export function emptyRun(id: string): RunView {
     has_agents: true,
     rules: [],
     directions: [],
-    families: [],
+    registry: [],
     queue: [],
     handouts: [],
     messages: [],
@@ -131,16 +131,16 @@ export const RUNS: Handlers = {
     v.calibration = { at: e.at, sigma: Number(b.sigma), summary: String(b.summary ?? "") };
   },
   conclusion_proposed(f, e, b) {
-    const families = (Array.isArray(b.approaches) ? b.approaches : []).map((x) => {
+    const directions = (Array.isArray(b.approaches) ? b.approaches : []).map((x) => {
       const y = (x ?? {}) as Record<string, unknown>;
-      return { family: String(y.family ?? ""), attempts: Number(y.attempts ?? 0) };
+      return { direction: String(y.direction ?? ""), attempts: Number(y.attempts ?? 0) };
     });
     f.run(String(e.subject)).conclusions.push({
       proposal: Number(b.proposal),
       decision: null,
-      approaches: families.length,
+      approaches: directions.length,
       at: e.at,
-      families,
+      directions,
     });
   },
   conclusion_accepted: concluded,

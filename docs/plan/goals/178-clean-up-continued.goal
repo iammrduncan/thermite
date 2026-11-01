@@ -25,6 +25,7 @@ Goal [125](125-code-to-the-conventions.goal) brought Thermite's code to its conv
 7. **The docs' screenshots** taken again from the one demo seed (`node scripts/docs/screenshots.mjs`, with the demo running).
 8. **The images on Node.js 24** (the guide's question 17, answered for v0.1.2).
 9. **Pull mode's allow-list held to the routes by a test** (the guide's section 5).
+10. **The goal contract's `min_live_families`**, which nothing reads: it goes, or takes the public name `min_live_directions`, with old contracts read as signed so their hash holds.
 
 ## Why
 
@@ -32,7 +33,7 @@ CONVENTIONS.md asks for each of these. None changes what Thermite does, so they 
 
 ## Done when
 
-- [ ] Items 1 to 9 are done, each with its check or test, or each left with a recorded reason.
+- [ ] Items 1 to 10 are done, each with its check or test, or each left with a recorded reason.
 - [ ] The fast checks, the docs checks and the acceptance checks the changes need pass.
 
 ## Decisions

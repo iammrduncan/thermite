@@ -1,13 +1,13 @@
 import type { BriefingSeed, QueueSeed } from "../../core/commands.ts";
 import { RunId } from "../../core/ids.ts";
-import type { KbItemFile, KbKind, KbOutcome } from "../../core/kb.ts";
-import { clip } from "../../core/kb-index.ts";
+import type { KbItemFile, KbKind, KbOutcome } from "../../core/kb/index.ts";
+import { clip } from "../../core/kb/index.ts";
 
 /**
  * Thermite's own knowledge base (goals 065 and 175), on control: one collection for each
  * campaign, a collection's runs, a run's slots (one for each writer), a slot's items and their
  * versions. Thermite's code writes each run's records slot from the rigs' signed events as they
- * arrive (core/kb-index.ts reads each): the runs, the trials, the agents' field notes and research
+ * arrive (core/kb/records.ts reads each): the runs, the trials, the agents' field notes and research
  * notes, the documents lanes wrote, the experiments with their results, attempts with their
  * verdicts, sources with their text, claims, findings and reports, each with its run, who wrote it
  * and when. An agent writes only its own slot, with a `kb_item` event its harness signs. A
@@ -18,7 +18,7 @@ import { clip } from "../../core/kb-index.ts";
  * extracted once (text/), and its settings on control (settings.ts).
  */
 
-export type { KbKind } from "../../core/kb.ts";
+export type { KbKind } from "../../core/kb/index.ts";
 export {
   answerKbAsk,
   hitOf,
@@ -93,12 +93,17 @@ export {
   notSearchedWhy,
 } from "./text/index.ts";
 
+import { NOTE_KINDS } from "../../core/journal.ts";
+
 /** What a grant of another campaign's collection opens, in words: every agent of the campaign. */
 export const GRANT_OPENS =
   "A grant opens the collection to every agent of the campaign: its workers, its planner and its advisors search and read it, read only, and never write to it.";
 
-/** The field notes' kinds (journal_note); a research note is a note of kind "note". */
-export const JOURNAL_KINDS = ["observation", "decision", "surprise", "question", "lesson"] as const;
+/**
+ * The field notes' kinds (journal_note), every one of them counted as a field note; a source note
+ * is a note of the sub-kind `source_note`.
+ */
+export const JOURNAL_KINDS = NOTE_KINDS;
 
 export interface KbItem {
   id: number;
@@ -121,14 +126,14 @@ export interface KbItem {
   /** Who wrote it: a lane, the planner, an advisor, the judge, the owner. */
   by: string;
   url: string | null;
-  /** For a note: observation, decision, surprise, question, lesson or note. */
+  /** For a field note: observation, decision, surprise, question, lesson or other; source_note for a source note. */
   sub: string | null;
   /**
    * Fields kept apart: an experiment's details, why and direction; in the records slot, the lane
    * and the trial its events name (goal 176).
    */
   meta: Record<string, string>;
-  /** How an experiment or an attempt ended, from its records (core/kb.ts); null for other kinds. */
+  /** How an experiment or an attempt ended, from its records (core/kb/items.ts); null for other kinds. */
   outcome: KbOutcome | null;
   /** A file item's file, by its SHA-256; null for a blurb. */
   file: KbItemFile | null;
@@ -151,7 +156,7 @@ export type KbFound = KbItem & {
 export interface KbCollection {
   campaign: string;
   counts: Partial<Record<KbKind, number>>;
-  /** Of the notes, how many are field notes (observations, decisions, …), not research notes. */
+  /** Of the notes, how many are field notes (observations, decisions, …), not source notes. */
   journal: number;
   items: number;
   runs: number;
@@ -186,7 +191,7 @@ export function queueSeedOf(x: KbItem, result: string | null): QueueSeed | undef
   return {
     title: clip(x.title, 200),
     ...(details ? { details: clip(details, 4000) } : {}),
-    ...(x.meta.family ? { family: clip(x.meta.family, 80) } : {}),
+    ...(x.meta.direction ? { direction: clip(x.meta.direction, 80) } : {}),
     ...(x.meta.why ? { why: clip(x.meta.why, 2000) } : {}),
     by: clip(x.by || "copied", 80),
     state: "queued",

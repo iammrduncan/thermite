@@ -116,8 +116,8 @@ function hillClimb(
         source: rnd() > 0.92 ? "fallback" : "planner",
         raw_violations: rnd() > 0.85 ? 1 : 0,
         assignments: [
-          { lane: "lane-1", family: "smem-activations", parent: "champion" },
-          { lane: "lane-2", family: "split-k", parent: "champion" },
+          { lane: "lane-1", direction: "smem-activations", parent: "champion" },
+          { lane: "lane-2", direction: "split-k", parent: "champion" },
         ],
       });
     u.ev(t - 0.02, "trial_finished", run, {
@@ -222,13 +222,13 @@ export function hillClimbRigs(): { g1: Rig; g2: Rig } {
   g1.ev(9 / 60, "trial_started", "decode-a", {
     lane: "lane-1",
     trial: "t-4f1c9a2e7b3d5c01",
-    family: "smem-activations",
+    direction: "smem-activations",
     focus: "keep the activation vector in shared memory",
   });
   g1.ev(3 / 60, "trial_started", "decode-a", {
     lane: "lane-2",
     trial: "t-9b2e6d4a1c8f3e77",
-    family: "split-k",
+    direction: "split-k",
     focus: "split K across two warps to hide load latency",
   });
   // decode-a's experiment queue: tried, in progress, up next and a lane's idea.
@@ -236,7 +236,7 @@ export function hillClimbRigs(): { g1: Rig; g2: Rig } {
     hoursAgo: number,
     id: string,
     by: string,
-    family: string,
+    direction: string,
     title: string,
     why: string,
     state: "queued" | "proposed" = "queued",
@@ -245,7 +245,7 @@ export function hillClimbRigs(): { g1: Rig; g2: Rig } {
       hoursAgo,
       "experiment_added",
       "decode-a",
-      { id, by, family, title, why, state, position: "end" },
+      { id, by, direction, title, why, state, position: "end" },
       by,
     );
   experiment(

@@ -1,13 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { KbKind } from "../../../core/kb.ts";
-import { type KbIndexTarget, metaOf, str } from "../../../core/kb-index.ts";
+import type { KbKind } from "../../../core/kb/index.ts";
+import { type KbIndexTarget, metaOf, str } from "../../../core/kb/index.ts";
 import { JOURNAL_KINDS, type KbItem } from "../../kb/index.ts";
 import { itemOf } from "./items.ts";
 
 type Row = Record<string, unknown>;
 
 /**
- * The kinds of event that name a lane or a trial, under their names now (core/kb-index.ts gives
+ * The kinds of event that name a lane or a trial, under their names now (core/kb/records.ts gives
  * each item it puts from one the lane and the trial, as fields). Reading 4 reads them once more
  * for that alone (goal 176): originTarget.
  */
@@ -15,7 +15,7 @@ export const ORIGIN_KINDS = [
   "trial_started",
   "trial_finished",
   "journal_note",
-  "research_note",
+  "source_note",
   "research_doc",
   "context_compacted",
   "experiment_added",
@@ -98,7 +98,7 @@ export function runCountsOf(
 
 /**
  * A run's field notes in its records slot, newest first (the Journal tab, goal 176): at most
- * `limit`, with how many it has. A research note (`rn-` ref) is not one, whatever its kind.
+ * `limit`, with how many it has. A source note (`rn-` ref) is not one, whatever its kind.
  */
 export function fieldNotesOf(
   db: DatabaseSync,

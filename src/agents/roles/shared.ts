@@ -21,7 +21,7 @@ import type { RoleText } from "./index.ts";
  */
 
 /** How every advisor is told about field notes and the data its brief carries from past work. */
-export const ADVISOR_NOTES = `${NOTES_GUIDE} Put yours in journal; they are not NOTE directives for the planner.`;
+export const ADVISOR_NOTES = `${NOTES_GUIDE} Put yours in journal; they are not planner_note rules.`;
 
 /** How the advisors are told about the campaign's brief (goal 078). */
 export const BRIEF_GUIDE = `campaign_brief, when there is one, comes from the campaign's author: background, links, what was tried, limits and what good looks like (additional_information), starting_links, ideas_to_try and hypotheses. Take it into account as the author's view: starting points, not rules.`;

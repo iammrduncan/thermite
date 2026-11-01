@@ -9,7 +9,7 @@ import {
 
 /**
  * The research tools as Pi offers them: a research trial has all of them, a hill-climb or goal
- * trial the ones for sources, claims and notes (CODE_RESEARCH_TOOLS). The name, description and
+ * trial the ones for sources, claims and source notes (CODE_RESEARCH_TOOLS). The name, description and
  * operation come from the list OpenCode's commands share (src/agents/tools/research.ts); the
  * parameters are Pi's.
  */
@@ -50,7 +50,7 @@ const PARAMS: Record<string, TSchema> = {
     ),
     confidence: Type.Optional(Type.Number()),
   }),
-  add_note: Type.Object({
+  add_source_note: Type.Object({
     text: Type.String(),
     sources: Type.Optional(Type.Array(Type.String())),
   }),

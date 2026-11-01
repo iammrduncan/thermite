@@ -253,7 +253,7 @@ export async function researchScene(
         by: x?.added_by ?? "",
         title: x?.title ?? "",
         details: x?.details ?? "",
-        family: x?.family ?? "",
+        direction: x?.direction ?? "",
       };
     });
   return { env, contract, research, scheduler, round, given, prompts, briefs, q, db };
@@ -549,7 +549,7 @@ describe("the model plans a research run's rounds from its answer cards (goals 0
     );
     const g = s.given();
     assert.deepEqual(
-      g.map((x) => [x.by, x.question, x.family, x.title]),
+      g.map((x) => [x.by, x.question, x.direction, x.title]),
       [
         ["planner", 2, "explore", "Question 3 (index 2): Occupancy limits"],
         ["planner", 5, "primary", "Question 6 (index 5): Stall reasons in the profiler guide"],

@@ -55,9 +55,9 @@ async function stuckRun(settings: Record<string, unknown> = { quiet_minutes: 30 
   const c = await researchControl();
   const events = [
     ...researchRunEvents(),
-    ev("trial_started", { trial: "t-1", lane: "lane-1", family: "contradict", focus: "f1" }),
-    ev("trial_started", { trial: "t-2", lane: "lane-2", family: "contradict", focus: "f2" }),
-    ev("trial_started", { trial: "t-3", lane: "lane-3", family: "primary", focus: "f3" }),
+    ev("trial_started", { trial: "t-1", lane: "lane-1", direction: "contradict", focus: "f1" }),
+    ev("trial_started", { trial: "t-2", lane: "lane-2", direction: "contradict", focus: "f2" }),
+    ev("trial_started", { trial: "t-3", lane: "lane-3", direction: "primary", focus: "f3" }),
   ];
   await c.ingest(events);
   const report = async (lane2: Record<string, unknown>) =>
@@ -209,7 +209,7 @@ describe("a stuck trial asks under Needs you (goal 143)", () => {
     const run = (w: Record<string, unknown>, status = "running") =>
       ({
         status,
-        at_work: { "lane-1": { trial: "t-1", family: null, focus: null, since: started, ...w } },
+        at_work: { "lane-1": { trial: "t-1", direction: null, focus: null, since: started, ...w } },
       }) as never;
     const q = { settings: { quiet_minutes: 30 } } as never;
     const now = Date.now();

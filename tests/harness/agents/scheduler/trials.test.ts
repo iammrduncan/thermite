@@ -52,7 +52,10 @@ describe("agent scheduler", () => {
     const t = env.ledger.db.prepare("select lane, attempt from trial").get();
     const a = env.ledger.attempts.get(String(t?.attempt));
     assert.equal(a?.lane, "lane-1");
-    assert.equal(a?.family, env.ledger.db.prepare("select family from trial").get()?.family);
+    assert.equal(
+      a?.direction,
+      env.ledger.db.prepare("select direction from trial").get()?.direction,
+    );
     // The trial has ended: its token no longer works.
     await assert.rejects(
       env.service.submitForTrial(String(tokens[0]), {
@@ -108,12 +111,12 @@ describe("agent scheduler", () => {
     await scheduler.tick();
     await scheduler.idle();
     const trials = env.ledger.db
-      .prepare("select id, family, attempt from trial order by started_at, id")
-      .all() as { id: string; family: string | null; attempt: string | null }[];
+      .prepare("select id, direction, attempt from trial order by started_at, id")
+      .all() as { id: string; direction: string | null; attempt: string | null }[];
     assert.equal(trials.length, 2);
     assert.equal(trials[0]?.attempt, first);
     assert.equal(trials[1]?.attempt, null, "the worker's word links nothing");
-    assert.equal(env.ledger.attempts.get(String(first))?.family, trials[0]?.family);
+    assert.equal(env.ledger.attempts.get(String(first))?.direction, trials[0]?.direction);
     const finished = env.ledger
       .eventsAfter(0, 10_000)
       .events.filter((e) => e.kind === "trial_finished")

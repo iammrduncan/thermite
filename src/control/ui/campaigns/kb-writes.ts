@@ -3,7 +3,7 @@ import {
   KB_WRITTEN_KINDS,
   type KbWriterRole,
   type KbWrites,
-} from "../../../core/kb.ts";
+} from "../../../core/kb/index.ts";
 import { esc, infoLabel } from "../components/index.ts";
 
 /**

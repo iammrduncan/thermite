@@ -45,7 +45,7 @@ function queueEvent(v: RunView, e: StoredEvent): void {
       id,
       title: str("title") ?? id,
       details: str("details") ?? "",
-      family: str("family") ?? "",
+      direction: str("direction") ?? "",
       why: str("why") ?? "",
       by: str("by") ?? e.actor,
       state: b.state === "proposed" ? "proposed" : "queued",
@@ -83,7 +83,7 @@ function queueEvent(v: RunView, e: StoredEvent): void {
     case "experiment_edited":
       x.title = str("title") ?? x.title;
       x.details = str("details") ?? x.details;
-      x.family = str("family") ?? x.family;
+      x.direction = str("direction") ?? x.direction;
       x.why = str("why") ?? x.why;
       break;
     case "experiment_dropped":

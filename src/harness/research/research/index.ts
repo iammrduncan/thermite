@@ -13,7 +13,7 @@ import {
   reviseHypothesis,
   setHypothesisStatus,
 } from "./hypotheses.ts";
-import { addNote } from "./notes.ts";
+import { addSourceNote } from "./notes.ts";
 import { report, updateSection } from "./report.ts";
 import { fetchSource, frontier, readSource } from "./sources.ts";
 import { statsOf } from "./stats.ts";
@@ -95,7 +95,7 @@ export class Research {
 
   /**
    * Workers may act only on a running run. A research run takes every operation; a hill-climb or
-   * goal run records sources, claims and notes (goal 065), and the rest belongs to research runs.
+   * goal run records sources, claims and source notes (goal 065), and the rest belongs to research runs.
    */
   requireRunning(run: string, op?: string | undefined): void {
     const inst = this.ctx.ledger.runs.get(run);
@@ -104,7 +104,7 @@ export class Research {
     if (inst.mode !== "research" && (op === undefined || !CODE_OPS.has(op)))
       throw new LedgerError(
         "invalid",
-        `a ${inst.mode.replace(/_/g, "-")} run records sources, claims and notes only (${CODE_RESEARCH_TOOLS.join(", ")}); the rest belongs to research runs`,
+        `a ${inst.mode.replace(/_/g, "-")} run records sources, claims and source notes only (${CODE_RESEARCH_TOOLS.join(", ")}); the rest belongs to research runs`,
       );
   }
 
@@ -128,15 +128,15 @@ export class Research {
     return addClaim(this.ctx, run, lane, input);
   }
 
-  /** A research note, with the sources it relies on: research/notes.ts. */
-  addNote(
+  /** A source note, with the sources it relies on: research/notes.ts. */
+  addSourceNote(
     run: string,
     lane: string | null,
     text: string,
     sources?: string[],
     trial?: string | undefined,
   ) {
-    return addNote(this.ctx, run, lane, text, sources, trial);
+    return addSourceNote(this.ctx, run, lane, text, sources, trial);
   }
 
   /** A worker's hypothesis for the run's pool: research/hypotheses.ts. */

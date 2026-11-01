@@ -68,9 +68,9 @@ describe("a campaign's own context settings in a run (goal 070)", () => {
       ask: async (_via, m) => {
         asked.push(m);
         return JSON.stringify({
-          new_families: [{ id: "cx-tidy", description: "Small tidy-ups." }],
+          new_directions: [{ id: "cx-tidy", description: "Small tidy-ups." }],
           assignments: [
-            { lane: "lane-1", family: "cx-tidy", focus: "tidy the kernel", parent: "champion" },
+            { lane: "lane-1", direction: "cx-tidy", focus: "tidy the kernel", parent: "champion" },
           ],
           notes: "planned",
         });

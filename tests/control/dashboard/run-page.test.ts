@@ -33,7 +33,7 @@ describe("control dashboard", () => {
     await send({
       kind: "queue_add",
       title: "vector loads",
-      family: "memory-layout",
+      direction: "memory-layout",
       position: "top",
     });
     let html = await (await s.get(tab)).text();
@@ -84,7 +84,7 @@ describe("control dashboard", () => {
           directives: [
             {
               kind: "try",
-              family: "vector loads",
+              direction: "vector loads",
               rationale: "the guide says twice the bandwidth",
             },
           ],

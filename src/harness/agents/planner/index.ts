@@ -7,7 +7,7 @@ import type { Assignment } from "../registry.ts";
 import type { PlannerView } from "./call.ts";
 import { type Ask, type PlannerTries, plannerTries } from "./call.ts";
 import type { PlanTry } from "./causes.ts";
-import { type NewFamily, type QueuePlan, validatePlan } from "./check.ts";
+import { type NewDirection, type QueuePlan, validatePlan } from "./check.ts";
 import { type PlannerInput, plannerContext } from "./context.ts";
 import { fallbackPlan } from "./fallback.ts";
 import type { PlannerCompaction, PlannerMcp } from "./pi.ts";
@@ -25,7 +25,7 @@ export {
   PlannerCallError,
   type PlanTry,
 } from "./causes.ts";
-export { type NewFamily, type PlannerRule, type QueuePlan, validatePlan } from "./check.ts";
+export { type NewDirection, type PlannerRule, type QueuePlan, validatePlan } from "./check.ts";
 export {
   type GoalReport,
   lanesOf,
@@ -59,9 +59,9 @@ export {
  * Its answer, through one tool call (or JSON through another harness): which experiment each
  * lane works on next and why, changes to the queue (add, move, drop, accept, each with why), and
  * the rules the owner's messages ask for. Code checks it: no two lanes share an experiment, a
- * dropped or finished experiment is never given out, AVOID families are never given out and
- * every MANDATE family is. A rule names a direction (goal 066): one the run has, or a new one the
- * planner designs (new_families, its name and what it means, in its words); a rule in force for a
+ * dropped or finished experiment is never given out, AVOID directions are never given out and
+ * every MANDATE direction is. A rule names a direction (goal 066): one the run has, or a new one the
+ * planner designs (new_directions, its name and what it means, in its words); a rule in force for a
  * direction the run doesn't have yet must be designed in the answer. Each old rule in words
  * (legacy) in force must be converted in the answer: the model names the direction its words mean
  * (convert), one the run has or one it designs, and code replaces the rule with one on that
@@ -86,7 +86,7 @@ export interface PlanResult {
   rawViolations: string[];
   /** The fixed plan (fallback): a direction for each lane, used when the queue has nothing. */
   assignments: Assignment[];
-  newFamilies: NewFamily[];
+  newDirections: NewDirection[];
   notes?: string | undefined;
   /** The model's valid answer. */
   queue?: QueuePlan | undefined;
@@ -98,17 +98,17 @@ export interface PlanResult {
 }
 
 /**
- * Attribution: each assignment whose family a MANDATE (first) or TRY directive names records that
+ * Attribution: each assignment whose direction a MANDATE (first) or TRY directive names records that
  * directive, so a directive's effect on an epoch can be traced to the lanes it steered.
  */
 export function attribute(
   assignments: Assignment[],
   directives: { id: number; body: StoredRule }[],
 ): Assignment[] {
-  const find = (kind: string, family: string) =>
-    directives.filter((d) => d.body.kind === kind && d.body.family === family).at(-1)?.id;
+  const find = (kind: string, direction: string) =>
+    directives.filter((d) => d.body.kind === kind && d.body.direction === direction).at(-1)?.id;
   return assignments.map((a) => {
-    const directive = find("mandate", a.family) ?? find("try", a.family);
+    const directive = find("mandate", a.direction) ?? find("try", a.direction);
     return directive === undefined ? a : { ...a, directive };
   });
 }
@@ -145,7 +145,7 @@ export async function plan(
     });
     const p = r.plan;
     if (p) {
-      const { newFamilies, notes, ...queue } = p;
+      const { newDirections, notes, ...queue } = p;
       return {
         source: "planner",
         tries: r.tries,
@@ -154,17 +154,17 @@ export async function plan(
         ...(r.causes.length ? { causes: r.causes } : {}),
         ...(r.journal.length ? { journal: r.journal } : {}),
         assignments: queue.handout.map((h) => {
-          const x = familyAndTitle(h.experiment, input, queue);
+          const x = directionAndTitle(h.experiment, input, queue);
           return {
             lane: h.lane,
-            family: x.family,
+            direction: x.direction,
             focus: x.title,
             parent: h.parent,
             experiment: h.experiment,
             why: h.why,
           };
         }),
-        newFamilies,
+        newDirections,
         notes,
         queue,
       };
@@ -178,21 +178,21 @@ export async function plan(
     rawViolations: r?.rawViolations ?? [],
     ...(r?.causes.length ? { causes: r.causes } : {}),
     assignments: f.assignments,
-    newFamilies: f.newFamilies,
+    newDirections: f.newDirections,
     ...(r?.journal.length ? { journal: r.journal } : {}),
   };
 }
 
 /** An experiment's direction and title, wherever the plan names it from. */
-function familyAndTitle(
+function directionAndTitle(
   id: string,
   input: PlannerInput,
   queue: QueuePlan,
-): { family: string; title: string } {
+): { direction: string; title: string } {
   const q = input.queue;
   const x =
     q?.up_next.find((e) => e.id === id) ??
     q?.proposed.find((e) => e.id === id) ??
     queue.add.find((e) => e.ref === id);
-  return { family: x?.family ?? "", title: x?.title ?? id };
+  return { direction: x?.direction ?? "", title: x?.title ?? id };
 }

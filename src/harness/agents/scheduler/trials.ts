@@ -3,7 +3,7 @@ import { errorText } from "../../../common/errors.ts";
 import { log } from "../../../common/log.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { newTrialId } from "../../../core/ids.ts";
-import { workerSlot } from "../../../core/kb.ts";
+import { workerSlot } from "../../../core/kb/index.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import type { Role } from "../../broker/index.ts";
@@ -59,7 +59,7 @@ export function experimentFor(
     x = sched.coordinator.fill(
       run,
       a,
-      `the queue had nothing for ${a.lane}: it goes on in its round's direction (${a.family})`,
+      `the queue had nothing for ${a.lane}: it goes on in its round's direction (${a.direction})`,
     );
     why = "the queue had nothing for this lane, so it goes on in its round's direction";
   }
@@ -88,7 +88,7 @@ export function startTrial(
   // The trial works on its experiment: its direction and its text are the trial's.
   const a: Assignment = {
     ...round,
-    family: sched.coordinator.direction(run, got.x),
+    direction: sched.coordinator.direction(run, got.x),
     focus: focusOf(got.x),
     experiment: got.x.id,
     why: got.why,
@@ -114,7 +114,7 @@ export function startTrial(
       run,
       lane: a.lane,
       epoch,
-      family: a.family,
+      direction: a.direction,
       parent,
       token,
       focus: a.focus,
@@ -132,7 +132,7 @@ export function startTrial(
       run,
       a.lane,
       "status",
-      `trial on ${a.lane}: ${a.family}, ${got.x.title} (from ${parent === champion.commit_sha ? `the champion, seq ${champion.seq}` : `the lane's best, ${best}`})`,
+      `trial on ${a.lane}: ${a.direction}, ${got.x.title} (from ${parent === champion.commit_sha ? `the champion, seq ${champion.seq}` : `the lane's best, ${best}`})`,
     );
     const limits = limitsInForce(sched.ledger, run, contract);
     let ws: { dir: string; repo: string } | undefined;
@@ -201,7 +201,7 @@ export function startTrial(
       // before it could say so (goal 079): an interrupted Pi trial that submitted has its attempt
       // with the judge, and its experiment is done, not back in the queue.
       const attempt = sched.registry.attemptOf(id);
-      if (attempt) sched.registry.tagAttempt(attempt, a.family);
+      if (attempt) sched.registry.tagAttempt(attempt, a.direction);
       // The trial ends first (its token stops working), then its processes and dev runs.
       sched.o.service.trialWorkspaces.delete(id);
       sched.registry.finishTrial(id, r, sched.o.owner);

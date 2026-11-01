@@ -9,7 +9,7 @@ import {
 } from "../../../src/control/bus/index.ts";
 import type { McpServers } from "../../../src/control/mcp-servers/index.ts";
 import { ChatGPTLogins } from "../../../src/control/providers/index.ts";
-import { STEP_WORDS } from "../../../src/control/rigs/setup.ts";
+import { STEP_WORDS } from "../../../src/control/rigs/setup/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import {

@@ -140,7 +140,7 @@ describe("a hill climb's baseline on control (goal 115)", () => {
           planner_tries: 0,
           planner_valid: false,
           raw_violations: 0,
-          assignments: [{ lane: "lane-1", family: "setup", parent: "champion" }],
+          assignments: [{ lane: "lane-1", direction: "setup", parent: "champion" }],
         },
       },
     ]);

@@ -23,7 +23,7 @@ import {
   type ProviderType,
 } from "../../store/index.ts";
 import { PRICE_NUMBER, PRICE_WORDS } from "../../ui/usage.ts";
-import { setModelPrice } from "../../usage.ts";
+import { setModelPrice } from "../../usage-report.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { mountMcpUi } from "./mcp-servers.ts";
 import {

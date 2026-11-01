@@ -82,7 +82,7 @@ describe("thermite assign --queue-from (goal 067)", () => {
         "run_created",
         { campaign: "smoke-cpu", mode: "hill_climb", version: 1, agents: true },
       ],
-      add("x-000000000001", "planner", { family: "tiling", why: "the profile says so" }),
+      add("x-000000000001", "planner", { direction: "tiling", why: "the profile says so" }),
       add("x-000000000002", "owner", { position: 0 }),
       add("x-000000000003", "lane-2", { state: "proposed" }),
       add("x-000000000004", "teacher", { details: "first words" }),
@@ -157,7 +157,7 @@ describe("thermite assign --queue-from (goal 067)", () => {
         { title: "try x-000000000002", by: "owner", state: "queued", from: from("x-000000000002") },
         {
           title: "try x-000000000001",
-          family: "tiling",
+          direction: "tiling",
           why: "the profile says so",
           by: "planner",
           state: "queued",
@@ -245,15 +245,17 @@ describe("thermite assign --note (goal 066)", () => {
     "repos/smoke.bundle",
   ];
 
-  test("--note keeps a text with the run, in the signed field direction; without it there is none", async () => {
+  test("--note keeps a text with the run, in the signed field note; without it there is none", async () => {
     for (const cmd of [assign, assignPayload]) {
       const r = await cli(...cmd, "--note", "memory first");
       assert.equal(r.code, 0, r.stderr);
       assert.equal(r.stderr, "", `${cmd[0]} says nothing more`);
-      assert.equal(JSON.parse(r.stdout).direction, "memory first", cmd[0]);
+      const sent = JSON.parse(r.stdout);
+      assert.equal(sent.note, "memory first", cmd[0]);
+      assert.equal(sent.direction, undefined, `${cmd[0]}: the name before v0.1.1 is not sent`);
       const none = await cli(...cmd);
       assert.equal(none.code, 0, none.stderr);
-      assert.equal(JSON.parse(none.stdout).direction, undefined, cmd[0]);
+      assert.equal(JSON.parse(none.stdout).note, undefined, cmd[0]);
     }
   });
 

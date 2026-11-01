@@ -14,7 +14,7 @@ export const NOTE_KINDS = [
   "surprise",
   "question",
   "lesson",
-  "note",
+  "other",
 ] as const;
 export const NoteKind = z.enum(NOTE_KINDS);
 export type NoteKind = z.infer<typeof NoteKind>;

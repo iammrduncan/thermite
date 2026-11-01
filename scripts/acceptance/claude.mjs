@@ -225,7 +225,7 @@ try {
     "the planner planned in Claude Code's own terminal, with no tools",
     epoch.body.source === "planner" &&
       epoch.body.planner_valid === true &&
-      epoch.body.assignments?.[0]?.family === "cc-tidy" &&
+      epoch.body.assignments?.[0]?.direction === "cc-tidy" &&
       /in its terminal/.test(planned) &&
       /tools=none /.test(planned),
     {
@@ -518,10 +518,28 @@ try {
     600_000,
     1000,
   );
-  const typedToAuditor = await command("terminal_input", {
-    run: "smoke-1",
-    trial: auditing.id,
-    text: "OWNER-TYPED-AUDITOR Look at the timer code.",
+  // The terminal takes typed input only while its program runs: one seen between its turns (the
+  // rig's report lags it by a few seconds) refuses it in words, so it is typed again until it takes.
+  /** @type {unknown} */
+  let typedRefused;
+  const typedToAuditor = await until(
+    "the input typed into the auditor's terminal",
+    async () => {
+      try {
+        return await command("terminal_input", {
+          run: "smoke-1",
+          trial: auditing.id,
+          text: "OWNER-TYPED-AUDITOR Look at the timer code.",
+        });
+      } catch (err) {
+        typedRefused = err;
+        return undefined;
+      }
+    },
+    120_000,
+    2000,
+  ).catch((err) => {
+    throw new Error(`${String(err)}; last refusal: ${String(typedRefused)}`);
   });
   await command("message_agent", {
     run: "smoke-1",

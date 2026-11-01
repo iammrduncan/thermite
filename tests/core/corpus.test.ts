@@ -5,7 +5,7 @@ import {
   readClaim,
   readFinding,
   readHypothesis,
-  readNote,
+  readSourceNote,
   storedList,
 } from "../../src/core/corpus.ts";
 
@@ -38,7 +38,7 @@ describe("the research corpus, read in one place (goal 125, T11)", () => {
       problems: [],
     });
     assert.deepEqual(readHypothesis({ id: "h-1", supporting: "[3]" }).supporting, ["3"]);
-    assert.deepEqual(readNote({ id: 1, sources: '["s-1"]' }).sources, ["s-1"]);
+    assert.deepEqual(readSourceNote({ id: 1, sources: '["s-1"]' }).sources, ["s-1"]);
   });
 
   test("a hypothesis's events: what each change says, and what it leaves unsaid", () => {

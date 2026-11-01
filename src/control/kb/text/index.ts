@@ -3,7 +3,7 @@ import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { log } from "../../../common/env.ts";
 import { errorText } from "../../../common/errors.ts";
-import { type KbTextReader, kbTextReader } from "../../../core/kb.ts";
+import { type KbTextReader, kbTextReader } from "../../../core/kb/index.ts";
 import type { ControlStore } from "../../store/index.ts";
 import { type KbTextJob, type KbTextLimits, type KbTextResult, MEMORY_EXIT, mib } from "./job.ts";
 

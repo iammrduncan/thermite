@@ -108,7 +108,7 @@ test("a check or a lane named constructor or __proto__ is a check or a lane, and
   for (const name of names) {
     f.apply(event("rig_check_started", null, { check: name, id: `c-${name}` }));
     f.apply(event("rig_check_finished", null, { check: name, ok: true, summary: "fine" }));
-    f.apply(event("trial_started", "p-1", { lane: name, trial: `t-${name}`, family: "f" }));
+    f.apply(event("trial_started", "p-1", { lane: name, trial: `t-${name}`, direction: "f" }));
   }
   const state = f.state();
   assert.deepEqual(Object.keys(state.checks).sort(), [...names].sort());

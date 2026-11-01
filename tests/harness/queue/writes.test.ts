@@ -30,7 +30,7 @@ describe("the advisors' and workers' writes", () => {
       add: [
         {
           title: "vector loads",
-          family: "memory",
+          direction: "memory",
           why: "the profile says reads dominate",
           position: "top",
         },
@@ -68,7 +68,7 @@ describe("the advisors' and workers' writes", () => {
         await post({
           run: RUN,
           role: "auditor",
-          add: [{ title: "re-measure a-1", family: "check", why: "a doubt" }],
+          add: [{ title: "re-measure a-1", direction: "check", why: "a doubt" }],
         })
       ).status,
       200,
@@ -93,7 +93,7 @@ describe("the advisors' and workers' writes", () => {
       run: RUN,
       lane: "lane-2",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: s.env.seedCommit,
       token,
     });
@@ -106,7 +106,7 @@ describe("the advisors' and workers' writes", () => {
     const r = await idea({
       title: "unroll the tail loop",
       why: "the profile shows it",
-      family: "unroll",
+      direction: "unroll",
       run: "other",
     });
     assert.equal(
@@ -117,7 +117,7 @@ describe("the advisors' and workers' writes", () => {
     const ok = await idea({
       title: "unroll the tail loop",
       why: "the profile shows it",
-      family: "unroll",
+      direction: "unroll",
     });
     assert.equal(ok.status, 201, await ok.clone().text());
     const { experiment } = (await ok.json()) as { experiment: string };
@@ -130,7 +130,7 @@ describe("the advisors' and workers' writes", () => {
     assert.deepEqual(e?.body, {
       id: experiment,
       title: "unroll the tail loop",
-      family: "unroll",
+      direction: "unroll",
       why: "the profile shows it",
       by: "lane-2",
       state: "proposed",

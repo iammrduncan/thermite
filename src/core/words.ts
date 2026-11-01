@@ -11,3 +11,10 @@ export function sizeWords(b: number): string {
   if (b < 1024 ** 3) return `${(b / 1024 ** 2).toFixed(1)} MiB`;
   return `${(b / 1024 ** 3).toFixed(2)} GiB`;
 }
+
+/** A value as text: a string as it is, nothing as "", anything else as String gives it. */
+export const str = (v: unknown) =>
+  typeof v === "string" ? v : v === undefined || v === null ? "" : String(v);
+
+/** A text cut to `n` characters, the last one an ellipsis when it is cut. */
+export const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);

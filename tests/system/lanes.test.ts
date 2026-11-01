@@ -14,7 +14,7 @@ import {
 import { CHECK_ROLE, PLANNER_ROLE } from "../../src/harness/agents/cli/common.ts";
 import { IDS, RoleSchema, RunRequest, roleIds } from "../../src/harness/broker/runner.ts";
 import { ALL_ROLES, nprocFor } from "../../src/harness/broker/server.ts";
-import { lanesFromEnv } from "../../src/harness/rig-settings.ts";
+import { lanesFromEnv } from "../../src/harness/rig-settings-store.ts";
 import { probedRoles } from "../../src/harness/selftest/index.ts";
 import {
   BUILD_SCRIPTS,

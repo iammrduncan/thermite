@@ -263,7 +263,7 @@ try {
     "the planner planned in Codex's own terminal, as the planner's user, through the proxy with its call's credential",
     epoch.body.source === "planner" &&
       epoch.body.planner_valid === true &&
-      epoch.body.assignments?.[0]?.family === "cx-tidy" &&
+      epoch.body.assignments?.[0]?.direction === "cx-tidy" &&
       /in its terminal/.test(planned) &&
       /uid=10040 /.test(planned) &&
       /auth=call /.test(planned) &&

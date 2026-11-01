@@ -360,8 +360,8 @@ function runHeadless() {
   } else if (/The campaign, as JSON:/.test(prompt)) {
     const ctx = JSON.parse(prompt.slice(prompt.indexOf("The campaign, as JSON:") + "The campaign, as JSON:".length));
     answer = JSON.stringify({
-      new_families: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
-      assignments: ctx.lanes.map((lane) => ({ lane, family: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
+      new_directions: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
+      assignments: ctx.lanes.map((lane) => ({ lane, direction: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
       notes: `planned by the Claude Code stand-in (${facts})`,
     });
     turn([{ type: "text", text: answer }]);
@@ -409,8 +409,8 @@ const planInTerminal = async (text) => {
   const ctx = JSON.parse(text.slice(text.indexOf(CAMPAIGN) + CAMPAIGN.length));
   const plan = (note) =>
     JSON.stringify({
-      new_families: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
-      assignments: ctx.lanes.map((lane) => ({ lane, family: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
+      new_directions: [{ id: "cc-tidy", description: "Small tidy-ups proposed by the Claude Code stand-in." }],
+      assignments: ctx.lanes.map((lane) => ({ lane, direction: "cc-tidy", focus: "tidy the kernel", parent: "champion" })),
       notes: `planned by the Claude Code stand-in in its terminal (${note})`,
     });
   const draft = plan("a first plan");

@@ -1,5 +1,5 @@
 import { HELD_OUT_EVENT_CELLS } from "../../../core/held-out.ts";
-import { clip } from "../../../core/kb-index.ts";
+import { clip } from "../../../core/kb/index.ts";
 import { metricValuesOf } from "../metric-values.ts";
 import { frozen } from "../sharing.ts";
 import type { AttemptView, HeldOutView } from "../types.ts";
@@ -56,7 +56,7 @@ export const ATTEMPTS: Handlers = {
       commit: typeof b.commit === "string" ? b.commit : null,
       parent: typeof b.parent === "string" ? b.parent : null,
       known_flaws: frozen(Array.isArray(b.known_flaws) ? b.known_flaws.map((x) => String(x)) : []),
-      family: null,
+      direction: null,
       trial: null,
       gained: null,
       lost: [],

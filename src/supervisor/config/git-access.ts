@@ -1,4 +1,4 @@
-import type { GitAuth } from "../../common/git-auth.ts";
+import type { GitAuth } from "../../common/git/index.ts";
 import type { RigConfig } from "./bus.ts";
 
 /**

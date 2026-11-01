@@ -86,7 +86,7 @@ export const RUNS = {
  */
 export const RunBrief = z.looseObject({
   champion: z.looseObject({ seq: z.number() }),
-  families: z.array(
+  registry: z.array(
     z.looseObject({
       id: z.string(),
       status: z.string(),
@@ -444,7 +444,7 @@ export const AdvisorQueueRequest = z.strictObject({
       z.strictObject({
         title: ExperimentText.title,
         details: ExperimentText.details.optional(),
-        family: ExperimentText.family.optional(),
+        direction: ExperimentText.direction.optional(),
         why: z.string().trim().min(1).max(2000),
         position: QueuePosition.optional(),
         /** A research run's task: the question it is about, an index from 0 (goal 117). */

@@ -273,7 +273,7 @@ describe("the model proxy", () => {
       run: "smoke-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seedCommit,
       token: "silent-trial-token",
     });
@@ -346,7 +346,7 @@ describe("the model proxy", () => {
         run: "smoke-1",
         lane: "lane-1",
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: env.seedCommit,
         token: `${id}-token`,
       });

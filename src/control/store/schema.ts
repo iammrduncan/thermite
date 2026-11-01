@@ -21,6 +21,7 @@ import { gitAccessHost } from "./git-access.ts";
 import {
   knowledgeFiles,
   knowledgeHierarchy,
+  knowledgePublicNames,
   knowledgeSearch,
   knowledgeSlotNames,
 } from "./kb/index.ts";
@@ -649,6 +650,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   knowledgeSlotNames,
   // Control's own settings the owner sets on control: its log level (the guide's question 16).
   ownSettingsTable,
+  // The public names in the knowledge base: field notes' kind other, source notes, directions.
+  knowledgePublicNames,
 ];
 
 /**

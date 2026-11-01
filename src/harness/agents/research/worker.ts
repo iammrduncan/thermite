@@ -327,7 +327,7 @@ export async function runResearchTrial(
   const failures: FailureCount = { failures: 0, rateWaits: 0 };
   try {
     // With the note tool, the brief says how to keep field notes, and how they differ from
-    // research notes.
+    // source notes.
     await agent.prompt(messageText(sent));
     // What it is told comes from its role's definition, kept as it is sent (goal 166).
     const say = (t: TrialTurn | { kind: "go-on" }) => {

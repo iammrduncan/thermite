@@ -33,17 +33,17 @@ describe("agent scheduler", () => {
             {
               name: "submit_plan",
               args: {
-                new_families: [{ id: "loops", description: "simplify the inner loop" }],
+                new_directions: [{ id: "loops", description: "simplify the inner loop" }],
                 assignments: [
                   {
                     lane: "lane-1",
-                    family: "loops",
+                    direction: "loops",
                     focus: "remove wasted work",
                     parent: "champion",
                   },
                   {
                     lane: "lane-2",
-                    family: "loops",
+                    direction: "loops",
                     focus: "try a closed form",
                     parent: "champion",
                   },
@@ -120,7 +120,7 @@ describe("agent scheduler", () => {
     assert.equal(env.ledger.champions.current("js-1").attempt, winner);
     assert.equal(scheduler.registry.laneBest("js-1", "lane-1"), null);
     assert.equal(scheduler.registry.laneBest("js-1", "lane-2"), null);
-    assert.equal(String(env.ledger.attempts.get(winner)?.family), "loops");
+    assert.equal(String(env.ledger.attempts.get(winner)?.direction), "loops");
     await scheduler.idle();
     await fake.close();
   });
@@ -135,9 +135,9 @@ describe("agent scheduler", () => {
             {
               name: "submit_plan",
               args: {
-                new_families: [{ id: "loops", description: "simplify the inner loop" }],
+                new_directions: [{ id: "loops", description: "simplify the inner loop" }],
                 assignments: [
-                  { lane: "lane-1", family: "loops", focus: "remove waste", parent: "champion" },
+                  { lane: "lane-1", direction: "loops", focus: "remove waste", parent: "champion" },
                 ],
               },
             },
@@ -231,10 +231,10 @@ describe("agent scheduler", () => {
             {
               name: "submit_plan",
               args: {
-                new_families: [{ id: "loops", description: "simplify the inner loop" }],
+                new_directions: [{ id: "loops", description: "simplify the inner loop" }],
                 assignments: ["lane-1", "lane-2"].map((lane) => ({
                   lane,
-                  family: "loops",
+                  direction: "loops",
                   focus: "remove waste",
                   parent: "champion",
                 })),

@@ -1,4 +1,4 @@
-import type { KbTextReader } from "../../../core/kb.ts";
+import type { KbTextReader } from "../../../core/kb/index.ts";
 
 /**
  * What control's text extractor (index.ts) hands its child process (main.ts) for one file, and

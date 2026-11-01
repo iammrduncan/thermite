@@ -10,7 +10,7 @@ import {
 } from "../../agents/tools/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
-import { KB_TEXT_MAX, type KbWrittenKind, kbWritesOf, kindsForSlot } from "../../core/kb.ts";
+import { KB_TEXT_MAX, type KbWrittenKind, kbWritesOf, kindsForSlot } from "../../core/kb/index.ts";
 import type { Ledger } from "../ledger/index.ts";
 import type { KbAsks } from "./asks.ts";
 import { writeKbItem } from "./write.ts";
@@ -20,7 +20,7 @@ import { writeKbItem } from "./write.ts";
  * kb_read go to control by way of the supervisor (asks.ts), and kb_write records the item in the
  * ledger, in the caller's own slot (write.ts). The caller is the trial or the call the harness
  * runs, or the advisor's call the supervisor runs: its slot comes from there, never from the
- * agent. Which kinds a slot may write is its run's contract's (core/kb.ts).
+ * agent. Which kinds a slot may write is its run's contract's (core/kb/items.ts).
  */
 
 /** Who calls: the run, and the caller's slot in it (worker-<lane>, planner, an advisor's role). */

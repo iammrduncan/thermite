@@ -19,7 +19,7 @@ import { campaignHref } from "./urls.ts";
  * at the top of a run's page (one line and two cards) with the details on its Stats tab, in a
  * campaign page's sidebar, on the Metrics page, and one table of model prices in Settings ›
  * Providers. Every number comes from control's sums of the records that code made at each call
- * (control/usage.ts); a figure no record reports says "not reported", a cost with no price known
+ * (control/usage-report.ts); a figure no record reports says "not reported", a cost with no price known
  * says "no price", and a subscription's calls "on a plan": never 0.
  */
 

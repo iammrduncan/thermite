@@ -17,8 +17,8 @@ import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
 import { writeAtomic } from "../../common/fs.ts";
 import { BRIEF_FILE, briefFile } from "../../core/brief.ts";
 import { COMPACTIONS_DIR } from "../../core/compaction.ts";
-import { readClaim, readFinding, readHypothesis, readNote } from "../../core/corpus.ts";
-import type { KbItemFile } from "../../core/kb.ts";
+import { readClaim, readFinding, readHypothesis, readSourceNote } from "../../core/corpus.ts";
+import type { KbItemFile } from "../../core/kb/index.ts";
 import {
   HYPOTHESES_RULE,
   hypothesisStatusWords,
@@ -46,6 +46,8 @@ const clipWords = (s: string, n: number) => {
 export const PAPER_FILE = "paper.md";
 /** The paper's next experiments with their kinds (goal 119), beside paper.md. */
 export const NEXT_EXPERIMENTS_FILE = "next-experiments.json";
+/** The folder of the run's source notes: what sources say, each with the sources it cites. */
+const SOURCE_NOTES = "source-notes";
 
 /**
  * A research run's folder: everything the run has learned, as files a worker can search with
@@ -55,7 +57,7 @@ export const NEXT_EXPERIMENTS_FILE = "next-experiments.json";
  *   paper.md                            the research paper, once code accepted it (goal 112)
  *   cards/q<index>.md                   each question's answer card, with its versions (goal 117)
  *   sources/ claims/ findings/          from the harness's records, kept current as they change
- *   hypotheses/ notes/ report/
+ *   hypotheses/ source-notes/ report/
  *   lanes/LANE/                         each lane's files, as they were when its last trial ended
  *   work/LANE/                          the lane's working area: its own while its trial runs
  *   compactions/                        each agent conversation, as kept before a compaction
@@ -183,8 +185,18 @@ export class ResearchFolder {
       quality?: { min_independent_sources?: number };
     };
     for (const d of research
-      ? ["sources", "claims", "findings", "hypotheses", "notes", "report", "cards", "lanes", "work"]
-      : ["sources", "claims", "notes"])
+      ? [
+          "sources",
+          "claims",
+          "findings",
+          "hypotheses",
+          SOURCE_NOTES,
+          "report",
+          "cards",
+          "lanes",
+          "work",
+        ]
+      : ["sources", "claims", SOURCE_NOTES])
       mkdirSync(join(root, d), { recursive: true });
     this.showCompactions(run);
     // The campaign's brief from its author, whole (goal 078).
@@ -305,18 +317,21 @@ export class ResearchFolder {
         ].join("\n"),
       );
 
-    const notes = this.ledger.claims.notes(run).map(readNote);
+    const notes = this.ledger.claims.sourceNotes(run).map(readSourceNote);
     for (const n of notes)
-      this.once(run, join(root, "notes", `note-${String(n.id).padStart(5, "0")}.md`), () =>
-        [
-          `# Note ${n.id}`,
-          "",
-          n.text,
-          "",
-          `Sources: ${n.sources.join(", ") || "none"}`,
-          `Recorded: ${n.created_at} by ${n.lane ?? "research"}`,
-          "",
-        ].join("\n"),
+      this.once(
+        run,
+        join(root, SOURCE_NOTES, `source-note-${String(n.id).padStart(5, "0")}.md`),
+        () =>
+          [
+            `# Source note ${n.id}`,
+            "",
+            n.text,
+            "",
+            `Sources: ${n.sources.join(", ") || "none"}`,
+            `Recorded: ${n.created_at} by ${n.lane ?? "research"}`,
+            "",
+          ].join("\n"),
       );
 
     const verified = claims.filter((c) => c.verified).length;
@@ -327,13 +342,13 @@ export class ResearchFolder {
         [
           `# ${contract.title ?? run}`,
           "",
-          "This folder holds the sources, claims and notes this run's workers recorded. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
+          "This folder holds the sources, claims and source notes this run's workers recorded. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
           "",
           "## What is here",
           "",
           `- sources/: ${sources.length} archived pages as text, one file each (claims quote these words)`,
           `- claims/: ${claims.length} claims, ${verified} verified and ${claims.length - verified} drafts (the first line says which)`,
-          `- notes/: ${notes.length}`,
+          `- ${SOURCE_NOTES}/: ${notes.length}`,
           ...briefLine,
           "",
         ].join("\n"),
@@ -416,7 +431,7 @@ export class ResearchFolder {
         `- claims/: ${claims.length} claims, ${verified} verified and ${claims.length - verified} drafts (the first line says which)`,
         `- findings/: ${findings.length} findings (${findings.filter((f) => f.supported).length} supported)`,
         `- hypotheses/: ${hypotheses.length} (${hypotheses.filter((h) => REQUIRED_HYPOTHESES.some((s) => s === h.status)).length} that need a verdict, ${hypotheses.filter((h) => h.status === "pool").length} in the pool)`,
-        `- notes/: ${notes.length}`,
+        `- ${SOURCE_NOTES}/: ${notes.length}`,
         `- report/: ${sections.length} report sections`,
         `- cards/: one answer card for each question, whole with its earlier versions (cards/q0.md for question 1 (index 0), and so on); workers never edit them`,
         `- lanes/: the files each lane wrote, as they were when its last trial ended (${files.length} files)`,

@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
 import { busMetricsText, healthMetricsText, metricsText, spaceMetricsText } from "../metrics.ts";
-import { modelPrices, modelUsage, setModelPrice, usageQueryRefusal } from "../usage.ts";
+import { modelPrices, modelUsage, setModelPrice, usageQueryRefusal } from "../usage-report.ts";
 import type { ApiContext } from "./context.ts";
 
 /**

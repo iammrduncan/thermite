@@ -6,7 +6,7 @@ import {
   slotSpellings,
   writerOfSlot,
   writtenRef,
-} from "../../core/kb.ts";
+} from "../../core/kb/index.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
 import { kbFileFacts, keepKbFile } from "./files.ts";
 
@@ -23,7 +23,7 @@ export interface KbWrite {
   run: string;
   /**
    * Who writes, and so the slot it writes in: `records` for Thermite's code, or an agent's slot,
-   * its role with its lane for a worker (core/kb.ts). The harness gives it from what it knows of
+   * its role with its lane for a worker (core/kb/items.ts). The harness gives it from what it knows of
    * the caller, never from the caller's words.
    */
   writer: string;

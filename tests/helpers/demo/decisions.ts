@@ -112,8 +112,8 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
           raw_violations: 0,
           directives: [],
           assignments: [
-            { lane: "lane-1", family: "simd-dispatch", parent: "champion" },
-            { lane: "lane-2", family: "bit-reader", parent: "champion" },
+            { lane: "lane-1", direction: "simd-dispatch", parent: "champion" },
+            { lane: "lane-2", direction: "bit-reader", parent: "champion" },
           ],
         },
       ],
@@ -149,7 +149,7 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
           trial: "t-1111",
           lane: "lane-1",
           epoch: 1,
-          family: "simd-dispatch",
+          direction: "simd-dispatch",
           attempt: "a-7e1a0001",
           stopped: "submitted",
           turns: 212,
@@ -397,8 +397,8 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
           raw_violations: 0,
           directives: [],
           assignments: [
-            { lane: "lane-1", family: "filter-bank", parent: "champion" },
-            { lane: "lane-2", family: "range-decoder", parent: "champion" },
+            { lane: "lane-1", direction: "filter-bank", parent: "champion" },
+            { lane: "lane-2", direction: "range-decoder", parent: "champion" },
           ],
         },
       ],
@@ -410,7 +410,7 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
           trial: "t-3331",
           lane: "lane-1",
           epoch: 1,
-          family: "filter-bank",
+          direction: "filter-bank",
           focus: "vectorize the filter bank so a frame fits its time budget",
         },
       ],
@@ -538,7 +538,7 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
         },
       ],
       [2990, "calibration", "sum-1", { sigma: 0.012, summary: "6 A/A blocks" }],
-      // The agents' field notes and a research note (goal 065).
+      // The agents' field notes and a source note (goal 065).
       [
         690,
         "journal_note",
@@ -590,7 +590,7 @@ export async function decisionRigs(store: ControlStore, now: number): Promise<vo
       ],
       [
         210,
-        "research_note",
+        "source_note",
         "sum-1",
         {
           note: 1,

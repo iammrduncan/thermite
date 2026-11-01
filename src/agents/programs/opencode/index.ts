@@ -13,7 +13,7 @@ import { agentPath } from "../path.ts";
 
 export { newTally, type OpencodeTally, readNew, readOpencodeEvents } from "./events.ts";
 export { NO_OPENCODE, opencodeBin, opencodeExe, opencodeExitWords } from "./run.ts";
-export { type OpencodeLogState, opencodeSession } from "./session-events.ts";
+export { type OpencodeLogState, opencodeSession } from "./session.ts";
 export {
   OPENCODE_TERMINAL,
   opencodeServerArgs,

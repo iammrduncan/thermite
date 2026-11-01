@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { ControlStore } from "../../../../src/control/store/index.ts";
-import type { KbItemBody } from "../../../../src/core/kb.ts";
+import type { KbItemBody } from "../../../../src/core/kb/index.ts";
 
 /**
  * The hierarchy's items in control's store (goal 175): a collection made with its campaign; a

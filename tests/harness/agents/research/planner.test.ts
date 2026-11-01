@@ -76,7 +76,7 @@ function scene(
         id: `x-t${String(i).padStart(10, "0")}`,
         title: `Teacher's lead ${i}`,
         question: 0,
-        family: "explore",
+        direction: "explore",
         by: "teacher",
       })),
     ],
@@ -180,7 +180,7 @@ describe("the research planner's answer, checked in code (goals 047 and 117)", (
     assert.ok(plan);
     const add = plan.queue.add;
     assert.deepEqual(
-      add.map((a) => [a.ref, a.question, a.family, a.title]),
+      add.map((a) => [a.ref, a.question, a.direction, a.title]),
       [
         ["new-1", 2, "explore", "Question 3 (index 2): Occupancy in the guide"],
         ["@lane-2", 5, "primary", "Question 6 (index 5): Read the manual's chapter"],
@@ -213,8 +213,8 @@ describe("the research planner's answer, checked in code (goals 047 and 117)", (
     const input = scene({
       promoted: PLANNER_PROMOTIONS_MAX - 1,
       rules: [
-        { kind: "avoid", family: "consolidate", rationale: "r", citations: [] },
-        { kind: "mandate", family: "contradict", rationale: "r", citations: [] },
+        { kind: "avoid", direction: "consolidate", rationale: "r", citations: [] },
+        { kind: "mandate", direction: "contradict", rationale: "r", citations: [] },
       ],
     });
     const { errors } = validateResearchPlan(
@@ -308,7 +308,7 @@ describe("the research planner's answer, checked in code (goals 047 and 117)", (
     const input = scene({
       promoted: 3,
       rules: [
-        { kind: "try", family: "primary", rationale: "r", citations: [] },
+        { kind: "try", direction: "primary", rationale: "r", citations: [] },
         { kind: "mandate", value: 2, rationale: "r", citations: [] },
       ],
     });

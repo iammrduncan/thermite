@@ -56,7 +56,7 @@ export function registerKnowledgeBase(tools: ToolContext): void {
       {
         title: "Knowledge base collections",
         description:
-          "Thermite's own knowledge base: one collection for each campaign, made with the campaign, holding everything its runs produced (the runs, their trials, field notes, experiments with their results, attempts with their verdicts, research notes, the documents lanes wrote, sources with the text that was read, claims, hypotheses, findings, reports), each item under its run, in its writer's slot (records: Thermite's own records of the run), with its time. For each collection: its mode, its counts by kind, how many of its notes are field notes, its runs, its newest change, the campaigns granted to read it (read_by) and the collections it reads besides its own (reads).",
+          "Thermite's own knowledge base: one collection for each campaign, made with the campaign, holding everything its runs produced (the runs, their trials, field notes, experiments with their results, attempts with their verdicts, source notes, the documents lanes wrote, sources with the text that was read, claims, hypotheses, findings, reports), each item under its run, in its writer's slot (records: Thermite's own records of the run), with its time. For each collection: its mode, its counts by kind, how many of its notes are field notes, its runs, its newest change, the campaigns granted to read it (read_by) and the collections it reads besides its own (reads).",
         inputSchema: {},
       },
       audited("kb_collections", () => {

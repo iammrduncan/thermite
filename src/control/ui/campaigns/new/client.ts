@@ -474,7 +474,7 @@ ${BRIEF_PAGE_JS}
     const bf = briefFieldsNow(), bd = briefDraft(mode, bf);
     const qs = mode === "research" ? briefList(blItems("questions")).length : 0, nl = briefLinks(bf.links).links.length;
     const count = (n, one, many) => n.toLocaleString("en-US") + " " + (n === 1 ? one : many);
-    const bparts = [qs ? count(qs, "question", "questions") : "", bd.notes ? count(bd.notes.length, "character", "characters") + " of additional information" : "", nl ? count(nl, "starting link", "starting links") : "", bd.ideas ? count(bd.ideas.length, "idea", "ideas") + " to try" : "", bd.hypotheses ? count(bd.hypotheses.length, "hypothesis", "hypotheses") : ""].filter(Boolean);
+    const bparts = [qs ? count(qs, "question", "questions") : "", bd.additional_information ? count(bd.additional_information.length, "character", "characters") + " of additional information" : "", nl ? count(nl, "starting link", "starting links") : "", bd.ideas ? count(bd.ideas.length, "idea", "ideas") + " to try" : "", bd.hypotheses ? count(bd.hypotheses.length, "hypothesis", "hypotheses") : ""].filter(Boolean);
     // Only a brief with something in it is said: an empty one adds nothing to the sentence.
     const brief = bparts.length ? " Its brief: " + bparts.join(", ") + "." : "";
     const s = (val("campaign") || "The campaign") + " will " + aim + proj + ". " + lanes + (Number(lanes) === 1 ? " agent works" : " agents work") + " on " + (rig || "(no rig chosen)") + "." + ctx + brief;
@@ -495,7 +495,7 @@ ${BRIEF_PAGE_JS}
   const back = form.dataset.draft ? JSON.parse(form.dataset.draft) : null;
   if (back) {
     const set = (n, v) => { if (form.elements[n] && v !== undefined && v !== null) form.elements[n].value = Array.isArray(v) ? v.join(n === "editable_paths" || n === "forbidden_patterns" || n === "links" ? "\\n" : " ") : v; };
-    set("campaign", back.campaign); set("title", back.title); set("notes", back.notes); set("lanes", back.lanes); set("queue_target", back.queue_target);
+    set("campaign", back.campaign); set("title", back.title); set("additional_information", back.additional_information); set("lanes", back.lanes); set("queue_target", back.queue_target);
     // The brief's lists, one box for each entry (goal 078).
     blFill("ideas", back.ideas); blFill("hypotheses", back.hypotheses);
     set("links", back.mode === "research" ? back.research && back.research.seeds : back.links);

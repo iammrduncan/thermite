@@ -266,7 +266,7 @@ export class Commands {
           {
             title: p.title,
             details: p.details,
-            family: p.family,
+            direction: p.direction,
             why: p.why,
             by: "owner",
             position: p.position,

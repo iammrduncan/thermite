@@ -152,7 +152,7 @@ export function conclusionNeeds(c: NeedsContext, u: RigView, r: RunView): Need[]
         kind: "Not possible?",
         question: "End this campaign as not possible?",
         headline: `The harness proposes that the goals cannot be reached`,
-        why: `${k.approaches} approach families were tried and refuted; only you can end a campaign`,
+        why: `${k.approaches} directions were tried and refuted; only you can end a campaign`,
         key: `conclusion-${u.id}-${r.id}-${k.proposal}`,
         decided: decidedState(
           ds,
@@ -165,8 +165,8 @@ export function conclusionNeeds(c: NeedsContext, u: RigView, r: RunView): Need[]
         r,
         since: k.at,
         now,
-        facts: `<dt>What</dt><dd>The harness (not an agent) proposes that the goals cannot be reached: ${k.approaches} approach families were tried and refuted, each with several judged attempts and no progress.</dd>
-<dt>Refuted</dt><dd>${k.families.length ? k.families.map((x) => `<span class="chip">${esc(x.family)} · ${x.attempts} attempts</span>`).join(" ") : `<span class="muted">${k.approaches} families</span>`}</dd>`,
+        facts: `<dt>What</dt><dd>The harness (not an agent) proposes that the goals cannot be reached: ${k.approaches} directions were tried and refuted, each with several judged attempts and no progress.</dd>
+<dt>Refuted</dt><dd>${k.directions.length ? k.directions.map((x) => `<span class="chip">${esc(x.direction)} · ${x.attempts} attempts</span>`).join(" ") : `<span class="muted">${k.approaches} directions</span>`}</dd>`,
         choices: [
           {
             button: f.cmd({

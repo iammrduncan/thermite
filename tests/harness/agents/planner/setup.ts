@@ -10,7 +10,7 @@ export const base: PlannerInput = {
   objective: "increase x",
   editablePaths: ["src/**"],
   champion: { seq: 1, gain: 0 },
-  families: [
+  registry: [
     {
       id: "tiling",
       description: "tile loops",

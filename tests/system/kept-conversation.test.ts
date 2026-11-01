@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { KbFiles, KbText, ownerKbRead } from "../../src/control/kb/index.ts";
-import { KB_OUTBOX_FILES, type KbItemFile } from "../../src/core/kb.ts";
+import { KB_OUTBOX_FILES, type KbItemFile } from "../../src/core/kb/index.ts";
 import { Registry } from "../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { LocalRunner } from "../../src/harness/broker/runner.ts";
@@ -46,7 +46,7 @@ test("a kept conversation reaches control scrubbed of its credentials, and whole
     run: RUN,
     lane: "lane-1",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: env.seedCommit,
     token,
   });

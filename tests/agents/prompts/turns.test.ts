@@ -370,8 +370,8 @@ describe("the later turns inside a call (goal 166)", () => {
   test("a planner in Pi: the message it goes on from after a compaction is its role's, kept", async () => {
     const good = {
       assignments: [
-        { lane: "lane-1", family: "unroll", focus: "unroll by 4", parent: "champion" },
-        { lane: "lane-2", family: "tiling", focus: "tile by 32", parent: "champion" },
+        { lane: "lane-1", direction: "unroll", focus: "unroll by 4", parent: "champion" },
+        { lane: "lane-2", direction: "tiling", focus: "tile by 32", parent: "champion" },
       ],
     };
     // The knowledge base's search, as the harness runs it: a long answer, which fills the window.

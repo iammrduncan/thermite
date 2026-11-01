@@ -62,19 +62,19 @@ describe("the planner as the queue's coordinator", () => {
     assert.equal(new Set(ids).size, ids.length);
   });
 
-  test("the fixed rules skip AVOID families and put MANDATE families first", async (t) => {
+  test("the fixed rules skip AVOID directions and put MANDATE directions first", async (t) => {
     const s = await setup(t);
-    await s.add("unroll it", { family: "Loop unroll" });
-    await s.add("tile it", { family: "Tiling" });
-    await s.add("vectorize it", { family: "simd" });
+    await s.add("unroll it", { direction: "Loop unroll" });
+    await s.add("tile it", { direction: "Tiling" });
+    await s.add("vectorize it", { direction: "simd" });
     // A direction with spaces, as :name:, is the same direction as the experiment's words.
     await command(s.env, "redirect", {
       run: RUN,
       directives: [
-        { kind: "avoid", family: ":loop unroll:", rationale: "flat twice", citations: [] },
+        { kind: "avoid", direction: ":loop unroll:", rationale: "flat twice", citations: [] },
         {
           kind: "mandate",
-          family: "simd",
+          direction: "simd",
           rationale: "the target has wide vectors",
           citations: [],
         },
@@ -85,24 +85,24 @@ describe("the planner as the queue's coordinator", () => {
     assert.equal(s.q.queued(RUN)[0]?.title, "unroll it", "avoided, never given out");
     const why = body(events(s.env, "experiment_assigned")[0]).why;
     assert.match(String(why), /MANDATE rule \(\d+\) names its direction, simd/);
-    // A family's words map to the registry's direction: "Tiling" is tiling.
-    const trials = s.env.ledger.db.prepare("select lane, family from trial order by lane").all();
+    // A direction's words map to the registry's direction: "Tiling" is tiling.
+    const trials = s.env.ledger.db.prepare("select lane, direction from trial order by lane").all();
     assert.deepEqual(
-      trials.map((r) => r.family),
+      trials.map((r) => r.direction),
       ["simd", "tiling"],
     );
   });
 
-  test("the fixed rules put TRY families first when there is a choice, after MANDATE ones", async (t) => {
+  test("the fixed rules put TRY directions first when there is a choice, after MANDATE ones", async (t) => {
     const s = await setup(t);
-    await s.add("plain one", { family: "loops" });
-    await s.add("try one", { family: "simd" });
-    await s.add("always one", { family: "cache" });
+    await s.add("plain one", { direction: "loops" });
+    await s.add("try one", { direction: "simd" });
+    await s.add("always one", { direction: "cache" });
     await command(s.env, "redirect", {
       run: RUN,
       directives: [
-        { kind: "try", family: "simd", rationale: "wide vectors", citations: [] },
-        { kind: "mandate", family: "cache", rationale: "the misses dominate", citations: [] },
+        { kind: "try", direction: "simd", rationale: "wide vectors", citations: [] },
+        { kind: "mandate", direction: "cache", rationale: "the misses dominate", citations: [] },
       ],
     });
     await s.round();
@@ -119,11 +119,11 @@ describe("the planner as the queue's coordinator", () => {
 
   test("a lane prefers the next experiment in its last direction, so it builds on what it learned", async (t) => {
     const s = await setup(t);
-    await s.add("loops one", { family: "loops" });
-    await s.add("simd one", { family: "simd" });
+    await s.add("loops one", { direction: "loops" });
+    await s.add("simd one", { direction: "simd" });
     await s.round();
-    await s.add("simd two", { family: "simd" });
-    await s.add("loops two", { family: "loops" });
+    await s.add("simd two", { direction: "simd" });
+    await s.add("loops two", { direction: "loops" });
     await s.round();
     assert.deepEqual(s.given(), [
       "lane-1:loops one",

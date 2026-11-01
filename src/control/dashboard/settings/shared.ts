@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errorText } from "../../../common/errors.ts";
-import { gitHost } from "../../../common/git-auth.ts";
+import { gitHost } from "../../../common/git/index.ts";
 import { readRunpod } from "../../runpod/index.ts";
 import type { ProviderType } from "../../store/index.ts";
 import type { Dashboard } from "../context.ts";

@@ -3,7 +3,7 @@ import { errorText } from "../../../../common/errors.ts";
 import { log } from "../../../../common/log.ts";
 import type { ResearchContract } from "../../../../core/contract.ts";
 import { newTrialId } from "../../../../core/ids.ts";
-import { workerSlot } from "../../../../core/kb.ts";
+import { workerSlot } from "../../../../core/kb/index.ts";
 import { questionLabel } from "../../../../core/research-check.ts";
 import { additionOf } from "../../../../core/role-additions.ts";
 import type { Experiment, TaskYield } from "../../../queue.ts";
@@ -28,10 +28,10 @@ export function startResearchTrial(
   clock: { elapsed_ms: number; min_ms: number; max_ms: number | null },
   got: { x: Experiment; why: string },
 ): void {
-  // A research task from the queue: its task kind is the trial's family, its text the focus.
+  // A research task from the queue: its task kind is the trial's direction, its text the focus.
   const a: Assignment = {
     ...round,
-    family: got.x.family || "explore",
+    direction: got.x.direction || "explore",
     focus: [focusOf(got.x), got.x.why ? `Why: ${got.x.why}` : ""].filter(Boolean).join("\n"),
     experiment: got.x.id,
     why: got.why,
@@ -78,7 +78,7 @@ export function startResearchTrial(
     run,
     lane: a.lane,
     epoch,
-    family: a.family,
+    direction: a.direction,
     parent: "research",
     token,
     focus: a.focus,
@@ -95,7 +95,7 @@ export function startResearchTrial(
     run,
     a.lane,
     "status",
-    `research trial on ${a.lane}: ${a.family}, ${got.x.title}`,
+    `research trial on ${a.lane}: ${a.direction}, ${got.x.title}`,
   );
   const fullBrief = withOwnerSections(sched, id, run, a.lane, brief);
   const limits = limitsInForce(sched.ledger, run, contract);

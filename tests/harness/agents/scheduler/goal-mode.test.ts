@@ -34,11 +34,11 @@ describe("agent scheduler", () => {
           {
             name: "submit_plan",
             args: {
-              new_families: [{ id: "speed", description: "make the sum faster" }],
+              new_directions: [{ id: "speed", description: "make the sum faster" }],
               assignments: [
                 {
                   lane: "lane-1",
-                  family: "speed",
+                  direction: "speed",
                   focus: "reach the fast goal",
                   parent: "champion",
                 },

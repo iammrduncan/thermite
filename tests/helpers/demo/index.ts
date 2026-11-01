@@ -62,7 +62,7 @@ export async function seedDemo(
         directives: [
           {
             kind: "try",
-            family: "simd-prefilter",
+            direction: "simd-prefilter",
             rationale: "the prefilter probe skips most of the input",
             citations: [],
           },

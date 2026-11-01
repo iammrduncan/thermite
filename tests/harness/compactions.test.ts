@@ -3,12 +3,12 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { KB_OUTBOX_FILES } from "../../src/core/kb.ts";
+import { KB_OUTBOX_FILES } from "../../src/core/kb/index.ts";
 import { Registry } from "../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { LocalRunner } from "../../src/harness/broker/runner.ts";
 import { Compactions, compactionOf } from "../../src/harness/compactions.ts";
-import { knowledgePart } from "../../src/harness/kb-part.ts";
+import { knowledgePart } from "../../src/harness/kb/index.ts";
 import { ResearchFolder } from "../../src/harness/research/folder.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 
@@ -38,7 +38,7 @@ async function setup() {
     run: RUN,
     lane: "lane-2",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: env.seedCommit,
     token,
   });

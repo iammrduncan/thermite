@@ -3,7 +3,7 @@ import { errorText } from "../common/errors.ts";
 import { scrubSecrets } from "../common/scrub.ts";
 import type { Harness } from "../core/agents.ts";
 import { COMPACTIONS_DIR, compactionFile } from "../core/compaction.ts";
-import type { KbItemFile } from "../core/kb.ts";
+import type { KbItemFile } from "../core/kb/index.ts";
 import type { LiveLog } from "../core/live.ts";
 import type { Ledger } from "./ledger/index.ts";
 

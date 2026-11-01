@@ -6,7 +6,7 @@ import { log } from "../../../common/log.ts";
 import { BRIEF_FILE, briefFile, briefSection } from "../../../core/brief.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { NOTES_ARE_DATA, notesText } from "../../journal.ts";
-import { baselineState, clipReason, SETUP_FAMILY } from "../../judge/index.ts";
+import { baselineState, clipReason, SETUP_DIRECTION } from "../../judge/index.ts";
 import { briefingText } from "../../knowledge.ts";
 import { messageText } from "../../messages.ts";
 import type { Experiment } from "../../queue.ts";
@@ -69,7 +69,7 @@ export function notesAndPast(
   const recorded = sched.ledger.claims.recorded(run);
   if (reader === "worker" && recorded > 0)
     out.push(
-      `# The run's research folder\n${sched.o.service.researchRoot(run)} holds the sources, claims and notes this run's workers recorded (sources/, claims/, notes/), kept current by the harness. Search it with shell commands (grep -r, cat) before you fetch a page again. You cannot change it.`,
+      `# The run's research folder\n${sched.o.service.researchRoot(run)} holds the sources, claims and source notes this run's workers recorded (sources/, claims/, source-notes/), kept current by the harness. Search it with shell commands (grep -r, cat) before you fetch a page again. You cannot change it.`,
     );
   const { mine, others } = sched.o.service.journal.forLane(run, lane);
   if (mine.length || others.length)
@@ -129,7 +129,7 @@ export function brief(
   start: string,
   preview = false,
 ): Section[] {
-  const fam = sched.registry.families(run).find((f) => f.id === a.family);
+  const fam = sched.registry.directions(run).find((f) => f.id === a.direction);
   const attempts = sched.registry.evidence(run, 3, a.lane).map((e) => {
     const v = e.verdict ? sched.ledger.verdicts.current(e.attempt) : undefined;
     // Its start and its end, where a crash's error usually is.
@@ -151,7 +151,7 @@ export function brief(
       ? goalReport(sched.ledger, run, sched.ledger.champions.current(run).seq)
       : undefined;
   // A setup trial (goal 115): why the judge could not measure the starting point.
-  const base = a.family === SETUP_FAMILY ? baselineState(sched.ledger, run) : undefined;
+  const base = a.direction === SETUP_DIRECTION ? baselineState(sched.ledger, run) : undefined;
   const setup = base?.state === "setup" ? base : undefined;
   return renderWorkerBrief({
     epoch,
@@ -168,7 +168,7 @@ export function brief(
       name: m.name,
       path: join(sched.o.service.paths.stateDir, "models", m.sha256),
     })),
-    direction: { id: a.family, description: fam?.description },
+    direction: { id: a.direction, description: fam?.description },
     experiment: {
       title: x.title,
       ...(x.details ? { details: x.details } : {}),

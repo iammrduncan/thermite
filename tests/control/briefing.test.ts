@@ -27,7 +27,7 @@ async function ran(store: ControlStore, rig: string, run: string, words: string)
         id: 2,
         at: at(1),
         actor: "lane-1",
-        kind: "research_note",
+        kind: "source_note",
         subject: run,
         body: { id: 7, by: "lane-1", text: words },
       },

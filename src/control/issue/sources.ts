@@ -1,4 +1,4 @@
-import { gitHost } from "../../common/git-auth.ts";
+import { gitHost } from "../../common/git/index.ts";
 import type { ControlStore } from "../store/index.ts";
 
 /**

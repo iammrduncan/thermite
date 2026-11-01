@@ -22,8 +22,8 @@ export const PLAN_LIMITS = {
   /** An experiment's details, and an inline one's focus (the text past its title goes there). */
   details: 4000,
   focus: 4000,
-  /** A direction's name in a family field. */
-  family: 80,
+  /** A direction's name in a direction field. */
+  direction: 80,
   /** Every why and rationale. */
   why: 2000,
   /** A ref an added experiment is named by. */
@@ -40,11 +40,11 @@ export const PLAN_LIMITS = {
   changes: 40,
   rules: 5,
   convert: CONVERT_PER_ROUND,
-  newFamilies: 8 + CONVERT_PER_ROUND,
+  newDirections: 8 + CONVERT_PER_ROUND,
 } as const;
 
 /** The limits in words, for the prompt (goal 079). */
-export const PLAN_LIMITS_TEXT = `Limits (an answer over one is refused): title ${PLAN_LIMITS.title} characters; details and focus ${PLAN_LIMITS.details}; family ${PLAN_LIMITS.family}; each why and rationale ${PLAN_LIMITS.why}; a ref ${PLAN_LIMITS.ref}; a new direction's description 3 to ${PLAN_LIMITS.description}; notes ${PLAN_LIMITS.notes}; at most ${PLAN_LIMITS.changes} moves, ${PLAN_LIMITS.changes} drops, ${PLAN_LIMITS.rules} rules, ${PLAN_LIMITS.convert} conversions and ${PLAN_LIMITS.newFamilies} new directions. Added experiments and accepted ideas have no count.`;
+export const PLAN_LIMITS_TEXT = `Limits (an answer over one is refused): title ${PLAN_LIMITS.title} characters; details and focus ${PLAN_LIMITS.details}; direction ${PLAN_LIMITS.direction}; each why and rationale ${PLAN_LIMITS.why}; a ref ${PLAN_LIMITS.ref}; a new direction's description 3 to ${PLAN_LIMITS.description}; notes ${PLAN_LIMITS.notes}; at most ${PLAN_LIMITS.changes} moves, ${PLAN_LIMITS.changes} drops, ${PLAN_LIMITS.rules} rules, ${PLAN_LIMITS.convert} conversions and ${PLAN_LIMITS.newDirections} new directions. Added experiments and accepted ideas have no count.`;
 
 /** The planner's task, the same through every harness; only how it answers differs. */
 export const PLANNER_TASK = `You coordinate the lanes of an automated research campaign. Each lane runs one
@@ -63,22 +63,22 @@ up next, in progress and tried, and add new experiments, each distinct and with 
 target is reached. The target drives ideas; it is not a cap: add more when you have more distinct,
 evidenced ideas. Drop a proposed idea that repeats one queued or tried, saying which. No rule
 stops you from keeping the queue at its target. Obey the
-directives (the rules for the plan): never give out an experiment whose family an AVOID
-directive names, give at least one lane an experiment of every MANDATE family (add one if the
-queue has none), and prefer TRY families. A directive marked legacy is an old rule in the
+directives (the rules for the plan): never give out an experiment whose direction an AVOID
+directive names, give at least one lane an experiment of every MANDATE direction (add one if the
+queue has none), and prefer TRY directions. A directive marked legacy is an old rule in the
 owner's own words (match), from before rules named directions; to_convert lists them. Convert
-each one: add it to convert, with its id in rule and, in family, the direction its words mean:
-one in directions, or a new one you design in new_families. Code then replaces it with a rule
+each one: add it to convert, with its id in rule and, in direction, the direction its words mean:
+one in directions, or a new one you design in new_directions. Code then replaces it with a rule
 of the same kind on that direction, and keeps that rule. Until then code does not keep it, so
 weigh it yourself (do not give out what it avoids; prefer what it asks for). directions lists the
 run's directions by name. to_design lists the directions that rules name but the run doesn't
-have yet: design each one, by adding it to new_families with its name and what it means, in your
+have yet: design each one, by adding it to new_directions with its name and what it means, in your
 words, and add experiments in it when its rule asks for it (try, mandate). Messages in
 owner_messages come from the campaign's owner: take them into account. When a message asks for a
 rule (to avoid, try or always work on something), add it to rules, with from_message set to that
-message's id and family set to the rule's direction. A message names a direction exactly as
+message's id and direction set to the rule's direction. A message names a direction exactly as
 :name: (its directions lists them): use that one. For plain words, use the run's direction that
-fits, or design a new one in new_families. In a goal campaign, goal_report is the judge's check of the champion: aim lanes at
+fits, or design a new one in new_directions. In a goal campaign, goal_report is the judge's check of the champion: aim lanes at
 goals it does not meet yet (a goal "not run" waits on a goal it requires), never at work the
 champion already does. Each goal's reasons give the values the judge measured on each case, met
 or not: how far a goal is from its line, or how much room a change has before it loses one. When
@@ -98,7 +98,7 @@ ${NOTES_GUIDE} Put yours in journal, for example a key decision of this round an
 export const PLANNER_PI_SYSTEM = `${PLANNER_TASK} ${PLAN_LIMITS_TEXT} Answer only by calling submit_plan once.`;
 
 /** Through another harness (OpenCode), it answers with the plan as JSON text. */
-const PLANNER_ASK = `${PLANNER_TASK} Answer with only the plan, as one JSON object: {"assignments": [{"lane": "lane-1", "experiment": "an id from queue.up_next or queue.proposed, or the ref of one you add", "parent": "champion" or "lane_best", "why": "..."}], "add": [{"ref": "new-1", "title": "...", "details": "...", "family": "...", "why": "...", "position": "top", "end" or an index}], "move": [{"id": "...", "position": "top", "end" or an index, "why": "..."}], "drop": [{"id": "...", "why": "..."}], "accept": [{"id": "...", "why": "..."}], "rules": [{"kind": "avoid", "try" or "mandate", "family": "a direction's name", "rationale": "...", "from_message": 1}], "convert": [{"rule": 4, "family": "the direction the old rule's words mean"}], "new_families": [{"id": "a new direction's name", "description": "what it means, in your words"}], "journal": [{"kind": "observation", "decision", "surprise", "question", "lesson" or "note", "text": "...", "about": {"type": "experiment", "id": "..."}}], "notes": "..."}. Leave out the lists you do not need. ${PLAN_LIMITS_TEXT}`;
+const PLANNER_ASK = `${PLANNER_TASK} Answer with only the plan, as one JSON object: {"assignments": [{"lane": "lane-1", "experiment": "an id from queue.up_next or queue.proposed, or the ref of one you add", "parent": "champion" or "lane_best", "why": "..."}], "add": [{"ref": "new-1", "title": "...", "details": "...", "direction": "...", "why": "...", "position": "top", "end" or an index}], "move": [{"id": "...", "position": "top", "end" or an index, "why": "..."}], "drop": [{"id": "...", "why": "..."}], "accept": [{"id": "...", "why": "..."}], "rules": [{"kind": "avoid", "try" or "mandate", "direction": "a direction's name", "rationale": "...", "from_message": 1}], "convert": [{"rule": 4, "direction": "the direction the old rule's words mean"}], "new_directions": [{"id": "a new direction's name", "description": "what it means, in your words"}], "journal": [{"kind": "observation", "decision", "surprise", "question", "lesson" or "other", "text": "...", "about": {"type": "experiment", "id": "..."}}], "notes": "..."}. Leave out the lists you do not need. ${PLAN_LIMITS_TEXT}`;
 
 /** The same, with no tools: what a call with no MCP servers and no knowledge base is told. */
 export const PLANNER_ASK_SYSTEM = `${PLANNER_ASK} Use no tools.`;

@@ -1,8 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { canonicalJson } from "../../core/canonical.ts";
 import type { SignedCommand } from "../../core/commands.ts";
-import { type KbWrites, kbWritesOf } from "../../core/kb.ts";
+import { type KbWrites, kbWritesOf } from "../../core/kb/index.ts";
 import { type McpUse, McpUses } from "../../core/mcp.ts";
+import { currentCommand } from "../../core/names.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
@@ -285,8 +286,11 @@ export class IssuedCommands extends StorePart {
     for (const r of rows) {
       if (out.has(r.campaign)) continue;
       const { signed: json } = signed.get(r.id) as { signed: string };
-      const payload = (JSON.parse(json) as { envelope: { payload: Record<string, unknown> } })
-        .envelope.payload;
+      // Signed before v0.1.1, it is read under the public names (core/names.ts).
+      const payload = currentCommand(
+        "assign_campaign",
+        (JSON.parse(json) as { envelope: { payload: Record<string, unknown> } }).envelope.payload,
+      );
       out.set(r.campaign, {
         id: r.id,
         rig: r.rig,

@@ -3,7 +3,7 @@ import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../../common/env.ts";
 import { writeAtomic } from "../../common/fs.ts";
-import { KB_OUTBOX_FILES, KbFileSha256, type KbItemFile } from "../../core/kb.ts";
+import { KB_OUTBOX_FILES, KbFileSha256, type KbItemFile } from "../../core/kb/index.ts";
 
 /**
  * An item's file for the knowledge base (goal 175), kept in the rig's outbox by its SHA-256

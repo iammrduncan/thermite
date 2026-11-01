@@ -11,7 +11,7 @@ import {
   kbTextReader,
   roleOfSlot,
   withdrawnWhy,
-} from "../../core/kb.ts";
+} from "../../core/kb/index.ts";
 import { KB_IS_DATA, KB_READ_PAGE } from "../../core/link/kb.ts";
 import type { UsageAgent } from "../../core/usage.ts";
 import { HARNESS_NAMES } from "../rigs/index.ts";

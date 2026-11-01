@@ -47,5 +47,5 @@
       "absolute": 1000
     }
   },
-  "notes": "CPU timing in a container on a shared development machine varies by 1-3% per block (A/A) and has occasional single-run outliers, far more than a dedicated GPU, so the smoke campaign uses a 5% equivalence band, a 10% minimum effect and the median of 3 runs per cell, instead of the 0.5% default with one run. Audits are effectively off (thresholds of 1000x): the smoke campaign's candidates are known, and audit acceptance sets its own thresholds."
+  "additional_information": "CPU timing in a container on a shared development machine varies by 1-3% per block (A/A) and has occasional single-run outliers, far more than a dedicated GPU, so the smoke campaign uses a 5% equivalence band, a 10% minimum effect and the median of 3 runs per cell, instead of the 0.5% default with one run. Audits are effectively off (thresholds of 1000x): the smoke campaign's candidates are known, and audit acceptance sets its own thresholds."
 }

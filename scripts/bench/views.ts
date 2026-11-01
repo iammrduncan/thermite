@@ -86,7 +86,12 @@ function trial(run: string, n: number): Ev[] {
     },
   });
   return [
-    { kind: "trial_started", subject: run, run, body: { trial: t, lane, family: "f", focus: "x" } },
+    {
+      kind: "trial_started",
+      subject: run,
+      run,
+      body: { trial: t, lane, direction: "f", focus: "x" },
+    },
     call(1),
     call(2),
     call(3),

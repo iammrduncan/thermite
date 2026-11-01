@@ -64,7 +64,7 @@ async function stack() {
         title: "Load int4 weights with vector loads",
         details: "128-bit loads of the packed weights",
         why: "the guide says twice the bandwidth",
-        family: "memory-layout",
+        direction: "memory-layout",
         by: "teacher",
       },
     ],
@@ -122,7 +122,7 @@ async function stack() {
     ],
     [
       "lane-1",
-      "research_note",
+      "source_note",
       "gs-3",
       { note: 4, by: "lane-1", text: "The GPU has 4 MB of L2.", sources: ["s-1"] },
     ],
@@ -189,7 +189,7 @@ test("a run's Journal tab: field notes newest first, by writer and kind, linked 
   for (const k of ["observation", "decision", "surprise", "question", "lesson"])
     assert.match(page, new RegExp(`data-jk="${k}"`));
   assert.match(page, /data-who="teachers" data-kind="lesson"/);
-  // A research note is in the Notes card, not among the field notes.
+  // A source note is in the Notes card, not among the field notes.
   assert.ok(!list.slice(0, list.indexOf('class="jside"')).includes("The GPU has 4 MB of L2"));
   assert.match(page, /<h3>Notes<\/h3><div class="jsnote"><span>The GPU has 4 MB of L2\./);
   assert.match(
@@ -431,7 +431,7 @@ test("Start a run from past research: the search reads only granted collections;
       title: "Load int4 weights with vector loads",
       details:
         "128-bit loads of the packed weights\nIn gs-3 (gemv-speed) it was tried: attempt a-1 (submitted), win confirmed (+6.10%).",
-      family: "memory-layout",
+      direction: "memory-layout",
       why: "the guide says twice the bandwidth",
       by: "teacher",
       state: "queued",
@@ -739,7 +739,7 @@ test("MCP: a copied experiment takes control's record only from a folder the run
     title: "Load int4 weights with vector loads",
     details:
       "128-bit loads of the packed weights\nIn gs-3 (gemv-speed) it was tried: attempt a-1 (submitted), win confirmed (+6.10%).",
-    family: "memory-layout",
+    direction: "memory-layout",
     why: "the guide says twice the bandwidth",
     by: "teacher",
     state: "queued",

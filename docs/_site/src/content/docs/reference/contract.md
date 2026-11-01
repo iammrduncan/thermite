@@ -75,7 +75,7 @@ Every field this example leaves out takes its default. The repository has one ex
 | `budget` | object | `{"max_open_attempts": 4}` | Optional budgets and back-pressure. See [Budget](#budget) |
 | `min_duration` | duration | none | Research: required. The time the run has to collect sources and claims: a floor, never a stop. After it, at each digest, the review panel is asked about the questions and hypotheses with no decision that stands, and a review that gives every question an end ends the run, as the progress rule does ([Research](#research)). Other modes: accepted, not used yet |
 | `max_duration` | duration | none | Research: when the run ends at the latest, its questions answered or not. It may not be shorter than `min_duration`. Without it, a research run whose questions the review panel never finds answered runs until someone closes it. Other modes: accepted, not used yet |
-| `notes` | text | none | The campaign's additional information, from its author, in Markdown, with no length limit. See [The campaign's brief](#the-campaigns-brief) |
+| `additional_information` | text | none | The campaign's additional information, from its author, in Markdown, with no length limit. See [The campaign's brief](#the-campaigns-brief). A contract written before v0.1.1 has it as `notes`: such a contract keeps its key as it was signed, so its hash holds, and is read with it as `additional_information`. A new contract that uses `notes` is refused: `notes: \`notes\` is now \`additional_information\`` |
 | `hypotheses` | list of text, each not empty | none | What the campaign's author thinks is true, one entry each. See [The campaign's brief](#the-campaigns-brief) |
 | `agents_context` | object | none: each agent keeps the rig's settings | The campaign's own context window and compaction point for all its runs' agents. See [Agents' context](#agents-context) |
 | `role_additions` | object: a role's id and its text | none: each role has its own text only | Your own words added to a role's instructions for this campaign's runs. See [Your additions to the agents' roles](#your-additions-to-the-agents-roles) |
@@ -121,7 +121,7 @@ The brief is what the campaign's author tells the agents beyond the objective: s
 
 ```json title="contract.json (part)"
 {
-  "notes": "## Background\nThe kernel is `src/kernel/work.c`. It runs at batch size 1.\n\n## What was tried\n- Shared-memory tiling: no gain.",
+  "additional_information": "## Background\nThe kernel is `src/kernel/work.c`. It runs at batch size 1.\n\n## What was tried\n- Shared-memory tiling: no gain.",
   "links": ["https://git.example.com/team/project/issues/12"],
   "ideas": ["Fuse the dequantize step into the inner loop.", "Load 128-bit vectors."],
   "hypotheses": ["The kernel is memory bound at batch size 1."]
@@ -130,7 +130,7 @@ The brief is what the campaign's author tells the agents beyond the objective: s
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `notes` | text | none | The additional information, in Markdown: the project and its links, what was tried, limits, and what good looks like. No length limit of its own |
+| `additional_information` | text | none | The additional information, in Markdown: the project and its links, what was tried, limits, and what good looks like. No length limit of its own |
 | `links` | list of URLs | none | Hill climb and goal only: starting links, pages the agents get with the brief. Nothing fetches them up front; a worker fetches one when it needs it. A research campaign's starting links are its [`seeds`](#research) |
 | `ideas` | list of text, each not empty | none | Hill climb and goal only: ideas to try, one entry each. The planner turns those that fit into experiments. A research contract with it is refused: `Unrecognized key: "ideas"` |
 | `hypotheses` | list of text, each not empty | none | What the author thinks is true, one entry each, for the agents to test. A research run starts with them as its own hypotheses |
@@ -289,7 +289,7 @@ A change still waiting when another setup change became the starting point is sc
 | `insufficient` | list of text | `[]` | Outcomes that must never count as success. The auditor and the review panel get the list; code does not check it |
 | `adversarial_checklist` | list of text | `[]` | Failure modes to audit for. When the list is not empty, every promotion waits for an audit, and the auditor gets the list |
 | `infeasibility.allowed` | boolean | `false` | Whether the harness may propose that the goals are not possible. The proposal closes the run, unless the run asks the owner (`ask_owner.not_possible`), who then accepts or rejects it |
-| `infeasibility.min_refuted_approaches` | integer ≥ 1 | none | Required when `allowed` is `true`. The proposal comes only after this many approach families each had 3 or more judged attempts and no progress |
+| `infeasibility.min_refuted_approaches` | integer ≥ 1 | none | Required when `allowed` is `true`. The proposal comes only after this many directions each had 3 or more judged attempts and no progress |
 | `independence_epochs` | integer ≥ 0 | 2 | Accepted, not used yet |
 | `min_live_families` | integer ≥ 1 | 2 | Accepted, not used yet |
 | `threshold_reps` | integer, 2–20 | 5 | Runs on each cell when a `metric_threshold` goal is checked |

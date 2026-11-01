@@ -5,9 +5,9 @@ import {
   type KbItemFile,
   type KbKind,
   KbOutcome,
+  str,
   writtenRef,
-} from "../../../core/kb.ts";
-import { str } from "../../../core/kb-index.ts";
+} from "../../../core/kb/index.ts";
 import type { KbItem } from "../../kb/index.ts";
 import {
   campaignAbout,

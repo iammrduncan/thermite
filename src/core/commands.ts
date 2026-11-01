@@ -15,6 +15,7 @@ import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
 import { InvalidateEvidence } from "./invalidation.ts";
 import { LOG_LEVELS, LOG_PARTS } from "./log-levels.ts";
 import { McpUses } from "./mcp.ts";
+import { currentCommand } from "./names.ts";
 import { RETENTION_NAME_MAX, RetentionRule } from "./retention/index.ts";
 import { PROGRAM_MODES } from "./rig-settings.ts";
 import { TerminalInput } from "./terminal-input.ts";
@@ -117,10 +118,10 @@ export const ExperimentText = {
   title: z.string().trim().min(1).max(200),
   details: z.string().max(EXPERIMENT_DETAILS),
   /**
-   * The direction (approach family): a direction's name, or words, whose direction is the name
+   * The direction: a direction's name, or words, whose direction is the name
    * they make (directionOf). Written `:name:`, it is kept without the colons.
    */
-  family: z
+  direction: z
     .string()
     .trim()
     .min(1)
@@ -139,7 +140,7 @@ export const ExperimentText = {
 export const QueueSeed = z.strictObject({
   title: z.string().min(1).max(200),
   details: z.string().max(4000).optional(),
-  family: z.string().min(1).max(80).optional(),
+  direction: z.string().min(1).max(80).optional(),
   why: z.string().max(2000).optional(),
   by: z.string().min(1).max(80),
   state: z.enum(["queued", "proposed"]),
@@ -201,7 +202,8 @@ export const CommandPayloads = {
     contract_sha: Sha256Schema,
     /** The starting commit; research campaigns have none. */
     seed: z.object({ repo: IdSchema, commit: CommitSchema }).optional(),
-    direction: z.string().min(1).optional(),
+    /** The owner's label for the run (`--note`), shown as its note; no agent sees it. */
+    note: z.string().min(1).optional(),
     imports: z.array(ImportSpec).default([]),
     /** False: a judge-only run. No worker agents run; the judge still works. */
     agents: z.boolean().optional(),
@@ -278,7 +280,7 @@ export const CommandPayloads = {
     run: RunId,
     title: ExperimentText.title,
     details: ExperimentText.details.optional(),
-    family: ExperimentText.family.optional(),
+    direction: ExperimentText.direction.optional(),
     why: ExperimentText.why.optional(),
     position: QueuePosition.default("end"),
   }),
@@ -289,16 +291,16 @@ export const CommandPayloads = {
       id: ExperimentId,
       title: ExperimentText.title.optional(),
       details: ExperimentText.details.optional(),
-      family: ExperimentText.family.optional(),
+      direction: ExperimentText.direction.optional(),
       why: ExperimentText.why.optional(),
     })
     .refine(
       (p) =>
         p.title !== undefined ||
         p.details !== undefined ||
-        p.family !== undefined ||
+        p.direction !== undefined ||
         p.why !== undefined,
-      { message: "change at least one of title, details, family and why" },
+      { message: "change at least one of title, details, direction and why" },
     ),
   queue_drop: z.strictObject({
     run: RunId,
@@ -674,7 +676,10 @@ export function verifyCommand(
     return { ok: false, reason: "issued in the future", authenticId };
   }
   if (expires < now.getTime()) return { ok: false, reason: "expired", authenticId };
-  const payload = CommandPayloads[envelope.kind].safeParse(envelope.payload);
+  // A command signed before v0.1.1 is read under the public names (core/names.ts).
+  const payload = CommandPayloads[envelope.kind].safeParse(
+    currentCommand(envelope.kind, envelope.payload),
+  );
   if (!payload.success) {
     return {
       ok: false,

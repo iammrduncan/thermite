@@ -8,7 +8,7 @@ import {
   KbLinkRel,
   KbOutcome,
   KbSlot,
-} from "../kb.ts";
+} from "../kb/index.ts";
 
 /**
  * A search or a read of Thermite's knowledge base, asked of control for an agent's run (goal 175).

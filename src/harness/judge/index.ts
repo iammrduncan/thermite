@@ -11,7 +11,7 @@ export {
   BASELINE_PRIORITY,
   type BaselineState,
   baselineState,
-  SETUP_FAMILY,
+  SETUP_DIRECTION,
   startingPoint,
 } from "./baseline.ts";
 export { BUILD_KEY, removeBuild } from "./builds.ts";

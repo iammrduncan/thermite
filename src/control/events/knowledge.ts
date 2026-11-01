@@ -8,7 +8,7 @@ import {
   kindsForSlot,
   readKbItem,
   slotOfWriter,
-} from "../../core/kb.ts";
+} from "../../core/kb/index.ts";
 import { EVENT_STREAM, type EventRead, kindSubjects } from "../../core/link/events.ts";
 import { overLimitWords } from "../kb/index.ts";
 import type { ControlStore } from "../store/index.ts";
@@ -23,7 +23,7 @@ import { streamEvent } from "../views/index.ts";
  * registry; the slot is the event's writer's (slotOfWriter: records from Thermite's code, an
  * agent's own slot from that agent), never one the item names for another writer; and the item is
  * new in its slot or the next version of the writer's own (store/kb/); and an agent's kind is one
- * the campaign lets the agent's role write, as the run's signed assignment says (core/kb.ts); and
+ * the campaign lets the agent's role write, as the run's signed assignment says (core/kb/items.ts); and
  * a file is no larger than the largest the owner lets the knowledge base take, when one is set. A
  * refused item is recorded in control's audit log (`kb_item_refused`) and its log, and the rest of
  * the page goes on. Its file meets it by its SHA-256 (control/kb/files.ts), whichever comes first.

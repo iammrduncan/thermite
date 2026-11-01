@@ -17,12 +17,12 @@ export class LedgerExperiments extends LedgerPart {
     return this.tx(() => {
       const now = this.now();
       const upsert = this.db.prepare(
-        `insert into experiment (id, run, title, details, family, why, added_by, state, place, lane,
+        `insert into experiment (id, run, title, details, direction, why, added_by, state, place, lane,
            trial, attempt, result, dropped_by, dropped_why, from_run, from_id, cause, returns,
            question, yield, created_at, updated_at)
          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict (id) do update set title = excluded.title, details = excluded.details,
-           family = excluded.family, why = excluded.why, state = excluded.state,
+           direction = excluded.direction, why = excluded.why, state = excluded.state,
            place = excluded.place, lane = excluded.lane, trial = excluded.trial,
            attempt = excluded.attempt, result = excluded.result, dropped_by = excluded.dropped_by,
            dropped_why = excluded.dropped_why, cause = excluded.cause, returns = excluded.returns,
@@ -37,7 +37,7 @@ export class LedgerExperiments extends LedgerPart {
           r.run,
           r.title,
           r.details,
-          r.family,
+          r.direction,
           r.why,
           r.added_by,
           r.state,

@@ -36,7 +36,7 @@ async function setup(contract?: Record<string, unknown>) {
     run: RUN,
     lane: "lane-1",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: env.seed,
     token,
   });

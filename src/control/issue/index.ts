@@ -17,6 +17,7 @@ import {
   COMMAND_STAGING_HOLD_HOURS,
 } from "../../core/link/commands.ts";
 import { McpUses, sameUses, usesWords } from "../../core/mcp.ts";
+import { oldCommandKeys } from "../../core/names.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
 import { campaignContextRefusal, savedSettingsRefusal } from "../campaigns/index.ts";
 import { controlDiskOf } from "../disk.ts";
@@ -172,7 +173,7 @@ export function archivedRefusal(
  * planner, so there only its task kinds may be named. The rig's harness checks the same.
  */
 export function redirectRefusal(store: ControlStore, rig: string, payload: unknown): string {
-  const p = payload as { run?: unknown; directives?: { family?: unknown }[] } | null;
+  const p = payload as { run?: unknown; directives?: { direction?: unknown }[] } | null;
   if (typeof p?.run !== "string") return "";
   const r = rigView(store, rig)?.runs.find((x) => x.id === p.run);
   if (r?.mode !== "research") return "";
@@ -180,7 +181,7 @@ export function redirectRefusal(store: ControlStore, rig: string, payload: unkno
   const unknown = [
     ...new Set(
       (p.directives ?? [])
-        .map((d) => d.family)
+        .map((d) => d.direction)
         .filter((f): f is string => typeof f === "string" && !kinds.includes(f)),
     ),
   ];
@@ -444,6 +445,9 @@ export function prepareCommand(
       ? campaignContextRefusal(store, rig, assigned?.contract)
       : "";
   if (tooWide) throw new Error(tooWide);
+  // The old names a command took before v0.1.1 are refused in words (core/names.ts).
+  const old = oldCommandKeys(input.kind, input.payload);
+  if (old.length) throw new Error(`bad ${input.kind} payload: ${old.join("; ")}`);
   const parsed = CommandPayloads[input.kind].safeParse(
     input.kind === "message_agent"
       ? checkedMessage(store, rig, input.payload)

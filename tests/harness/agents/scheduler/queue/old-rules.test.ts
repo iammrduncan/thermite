@@ -17,19 +17,19 @@ describe("the planner as the queue's coordinator", () => {
       planner: (_p, call) => ({
         ...(call > 1
           ? {
-              new_families: [
+              new_directions: [
                 { id: "vector loads", description: "wider loads, such as half2 or float4" },
               ],
-              convert: [{ rule: old, family: ":vector loads:" }],
+              convert: [{ rule: old, direction: ":vector loads:" }],
             }
           : {}),
         assignments: [
           { lane: "lane-1", experiment: x, why: "w" },
-          { lane: "lane-2", title: "load float4", family: "vector-loads", why: "the rule" },
+          { lane: "lane-2", title: "load float4", direction: "vector-loads", why: "the rule" },
         ],
       }),
     });
-    x = await s.add("tile it", { family: "tiling" });
+    x = await s.add("tile it", { direction: "tiling" });
     // A rule in words from before rules named directions: a new one can't be made, so the
     // ledger gets it as an older harness wrote it.
     old = Number(
@@ -89,7 +89,7 @@ describe("the planner as the queue's coordinator", () => {
       author: "control:owner:ui",
       body: {
         kind: "try",
-        family: "vector-loads",
+        direction: "vector-loads",
         rationale: "old",
         citations: ["a-1"],
         converted_from: { rule: old, words: "anything with vector loads" },
@@ -104,16 +104,16 @@ describe("the planner as the queue's coordinator", () => {
             id: old,
             to,
             kind: "try",
-            family: "vector-loads",
+            direction: "vector-loads",
             words: "anything with vector loads",
           },
         ],
       ],
     );
     // The direction it designed for the old rule, in its words: the run's now.
-    const made = events(s.env, "family_added").find((e) => body(e).family === "vector-loads");
+    const made = events(s.env, "direction_added").find((e) => body(e).direction === "vector-loads");
     assert.deepEqual(body(made), {
-      family: "vector-loads",
+      direction: "vector-loads",
       description: "wider loads, such as half2 or float4",
       for_rules: [old],
     });
@@ -153,7 +153,7 @@ describe("the planner as the queue's coordinator", () => {
             (n.b.converted_from as { rule?: number } | undefined)?.rule === id,
         );
       return rows
-        .filter((r) => typeof r.b.match === "string" && !r.b.family && r.status !== "active")
+        .filter((r) => typeof r.b.match === "string" && !r.b.direction && r.status !== "active")
         .filter((r) => !byOwner.has(r.id) && !replaced(r.id))
         .map((r) => r.id);
     };
@@ -163,18 +163,18 @@ describe("the planner as the queue's coordinator", () => {
     // replaces only its own rules.
     const s = await setup(t, {
       planner: () => ({
-        new_families: [{ id: "timer code", description: "any change to the timing code" }],
+        new_directions: [{ id: "timer code", description: "any change to the timing code" }],
         convert: [
-          { rule: ids[0], family: "timer code" },
-          { rule: ids[1], family: "tiling" },
+          { rule: ids[0], direction: "timer code" },
+          { rule: ids[1], direction: "tiling" },
         ],
         assignments: [
           { lane: "lane-1", experiment: x, why: "w" },
-          { lane: "lane-2", title: "tile more", family: "tiling", why: "w" },
+          { lane: "lane-2", title: "tile more", direction: "tiling", why: "w" },
         ],
       }),
     });
-    x = await s.add("tile it", { family: "tiling" });
+    x = await s.add("tile it", { direction: "tiling" });
     ids = s.env.service.ledger.directives.addSet(
       RUN,
       "control:owner:ui",
@@ -186,7 +186,7 @@ describe("the planner as the queue's coordinator", () => {
     );
     s.env.service.addDirectives(
       RUN,
-      [{ kind: "note", value: "a note", rationale: "r", citations: ["a-1"] }],
+      [{ kind: "planner_note", value: "a note", rationale: "r", citations: ["a-1"] }],
       "supervisor",
     );
     // A third, removed by the owner: it may leave force with nothing in its place.
@@ -202,7 +202,7 @@ describe("the planner as the queue's coordinator", () => {
     assert.deepEqual(
       s.env.service.ledger.directives
         .active(RUN)
-        .map((d) => (d.body as { family?: string }).family),
+        .map((d) => (d.body as { direction?: string }).direction),
       [undefined, "timer-code", "tiling"],
     );
     assert.deepEqual(unreplaced(s.env), []);
@@ -241,8 +241,8 @@ describe("the planner as the queue's coordinator", () => {
     const stubborn = await setup(t, {
       planner: () => ({
         assignments: [
-          { lane: "lane-1", title: "a", family: "misc", why: "w" },
-          { lane: "lane-2", title: "b", family: "misc", why: "w" },
+          { lane: "lane-1", title: "a", direction: "misc", why: "w" },
+          { lane: "lane-2", title: "b", direction: "misc", why: "w" },
         ],
       }),
     });

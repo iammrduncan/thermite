@@ -35,7 +35,7 @@ flowchart LR
 
 Every agent in Thermite starts fresh. Each trial, each plan and each advisor round is a new model session, which the harness briefs from its ledger ([Agents, lanes and the planner](agents-lanes-planner.md#why-every-agent-starts-fresh) explains why). That keeps the research state safe in the harness, but on its own it would cost the agents' insight. Only a submitted attempt, an idea for the queue, a research claim and the final report would outlive the session, and whatever else an agent noticed would end with it.
 
-The owner set the aim in one sentence: "All agents should be writing journals, research notes, etc and building a corpus that then we can extract into the knowledge base... so that we can build up a corpus of past research to inform future campaigns and runs."
+The owner set the aim in one sentence: "All agents should be writing journals, source notes, etc and building a corpus that then we can extract into the knowledge base... so that we can build up a corpus of past research to inform future campaigns and runs."
 
 So the agents keep **field notes**: short notes, written as they work. Each note has one kind:
 
@@ -46,9 +46,9 @@ So the agents keep **field notes**: short notes, written as they work. Each note
 | `surprise` | A result or a behaviour it did not expect |
 | `question` | An open question |
 | `lesson` | Something learned that later work should know |
-| `note` | Anything else worth keeping |
+| `other` | Anything else worth keeping (`note` before v0.1.1) |
 
-A run's field notes are its **journal**. A note is not a record of what was tried: the run's [experiment queue](agents-lanes-planner.md#the-experiment-queue) already logs every experiment with its result, so a note says what the agent learned, not what it did. A field note is not a **research note** either: a research note records what sources say, with the sources, for the run's research ([below](#research-in-every-mode)).
+A run's field notes are its **journal**. A note is not a record of what was tried: the run's [experiment queue](agents-lanes-planner.md#the-experiment-queue) already logs every experiment with its result, so a note says what the agent learned, not what it did. A field note is not a **source note** either: a source note records what sources say, with the sources, for the run's research ([below](#research-in-every-mode)).
 
 Notes are short and typed for their readers. A note with a kind, and a record that it is about, can be filtered, linked to that record and searched later. It also fits in the brief of the next agent, who has only a few lines to spare for it.
 
@@ -83,11 +83,11 @@ The owner reads them on the run's **Journal** tab, between **Experiments** and *
 
 ## Research in every mode
 
-In a research campaign, reading is the work: workers fetch pages through the rig's archiving fetcher, and record claims with exact quotes that code checks word for word ([Campaign modes](campaign-modes.md#research)). Workers in hill-climb and goal runs can do part of the same. They can fetch a page, read and search what the run archived, and record a claim with its quotes or a research note with the sources it rests on. Their instructions name the reasons to read: "a paper, upstream code, an issue, a specification". Findings, hypotheses and the report stay with research runs.
+In a research campaign, reading is the work: workers fetch pages through the rig's archiving fetcher, and record claims with exact quotes that code checks word for word ([Campaign modes](campaign-modes.md#research)). Workers in hill-climb and goal runs can do part of the same. They can fetch a page, read and search what the run archived, and record a claim with its quotes or a source note with the sources it rests on. Their instructions name the reasons to read: "a paper, upstream code, an issue, a specification". Findings, hypotheses and the report stay with research runs.
 
 A change to code often rests on something read. Without a record, that reading would stay inside one trial's session. Through the archiving fetcher, the page is kept in the run's research folder, every lane can search it, a claim is checked against the archived text as in a research run, and the records go into the campaign's collection for later runs. [Campaign modes](campaign-modes.md#research-in-every-mode) says what a code run's folder holds.
 
-A research note is its own record and event (`research_note`), kept apart from the field notes. A research note says what sources say. A field note says what the agent learned while it worked.
+A source note is its own record and event (`source_note`), kept apart from the field notes. A source note says what sources say. A field note says what the agent learned while it worked.
 
 ## The knowledge base: a collection for each campaign
 
@@ -96,7 +96,7 @@ Control keeps **Thermite's knowledge base** in its own store. Each campaign has 
 - the runs, and their trials: each agent session of a lane, and how it ended;
 - experiments, with their results;
 - attempts, with the judge's verdicts;
-- field notes and research notes;
+- field notes and source notes;
 - documents: the text files lanes write in their working areas of the run's research folder, each kept whole as its item's file;
 - sources, with the whole text that was read, kept as each one's file, and claims with their quotes;
 - a research run's hypotheses, findings and reports.
@@ -159,7 +159,7 @@ Before 0.1.0, an "outside knowledge base" had two fixed roles instead: control c
 A rig's exports carry its runs' records to its results repository, and the journal is part of that record:
 
 - **The field notes** recorded since the last export, in `journal.jsonl`, which every export writes, even an empty one;
-- **the research notes** since then, in `research-notes.jsonl`;
+- **the source notes** since then, in `source-notes.jsonl`;
 - **the briefing** of each run created since then, in `briefing.jsonl`;
 - **the runs' part of their campaigns' collections:** each item added or changed since then, in `knowledge.jsonl`, read from the rig's own events the way control reads them, so an export holds what its runs put in the knowledge base;
 - **a finished run's research folder:** a research run's, with its final report, and a finished hill-climb or goal run's, when it recorded sources, claims or notes, or compacted a conversation (its `compactions/`).

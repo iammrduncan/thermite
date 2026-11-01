@@ -111,7 +111,7 @@ export interface AttemptView {
   /** Flaws its author declared when submitting it (they trigger an audit). */
   known_flaws: string[];
   /** The planner's direction for the trial that made it. */
-  family: string | null;
+  direction: string | null;
   trial: string | null;
   /** Goal campaigns: what the judge's latest finished job found against the champion. */
   gained: string[] | null;
@@ -471,8 +471,8 @@ export interface RunView {
     decision: string | null;
     approaches: number;
     at: string;
-    /** The refuted approach families, each with its judged attempts. */
-    families: { family: string; attempts: number }[];
+    /** The refuted directions, each with its judged attempts. */
+    directions: { direction: string; attempts: number }[];
   }[];
   /** The newest champion published for propagation (what another rig can import). */
   published: {
@@ -513,7 +513,7 @@ export interface RunView {
     n: number;
     at: string;
     source: string;
-    assignments: { lane: string; family: string; parent: string; focus: string | null }[];
+    assignments: { lane: string; direction: string; parent: string; focus: string | null }[];
   } | null;
   /** When each of its rounds started, oldest first: a run page's model calls in each round. */
   round_starts: string[];
@@ -521,7 +521,7 @@ export interface RunView {
   trials: {
     trial: string;
     lane: string | null;
-    family: string | null;
+    direction: string | null;
     attempt: string | null;
     stopped: string;
     error: string | null;
@@ -536,7 +536,7 @@ export interface RunView {
     string,
     {
       trial: string;
-      family: string | null;
+      direction: string | null;
       focus: string | null;
       since: string;
     } & Partial<TrialDoing>
@@ -560,8 +560,8 @@ export interface RunView {
   }[];
   /** The run's directions (goal 066), by name, with what each holds and the rules naming it. */
   directions: DirectionView[];
-  /** The directions the run's registry has, from family_added events: what each means, and who added it. */
-  families: { name: string; description: string; by: string; at: string; for_rules: number[] }[];
+  /** The run's direction registry, from direction_added events: what each direction means, and who added it. */
+  registry: { name: string; description: string; by: string; at: string; for_rules: number[] }[];
   /** The experiment queue (goal 064): every experiment, with its state; up next in order. */
   queue: ExperimentView[];
   /** The planner's hand-outs, newest last (at most 50): what went to which lane, and why. */
@@ -574,13 +574,13 @@ export interface RunView {
   }[];
   /** The owner's messages to the run's agents (goal 063), newest last, with who read them. */
   messages: MessageView[];
-  /** The agents' field notes and research notes (goal 065), oldest first; all of them. */
+  /** The agents' field notes and source notes (goal 065), oldest first; all of them. */
   journal: JournalNoteView[];
 }
 
 /**
  * One note an agent wrote as it worked (goal 065): an observation, a decision and why, a surprise,
- * an open question or a lesson (field notes), or a research note ("note"). Agents' words: data.
+ * an open question or a lesson (field notes), or a source note ("note"). Agents' words: data.
  */
 export interface JournalNoteView {
   id: number;
@@ -595,7 +595,7 @@ export interface JournalNoteView {
 }
 
 /**
- * One of a run's directions (goal 066): an approach family its experiments belong to. A rule names
+ * One of a run's directions (goal 066): an approach its experiments take. A rule names
  * one; a picker lists them.
  */
 export interface DirectionView {
@@ -621,7 +621,7 @@ export interface ExperimentView {
   id: string;
   title: string;
   details: string;
-  family: string;
+  direction: string;
   why: string;
   by: string;
   state: "proposed" | "queued" | "assigned" | "done" | "dropped";
@@ -668,7 +668,7 @@ export interface MessageView {
   rules: {
     id: number;
     kind: string;
-    family: string | null;
+    direction: string | null;
     rationale: string;
     by: string;
     at: string;
@@ -677,5 +677,5 @@ export interface MessageView {
    * Rules the planner made from it that the harness left out: rules the owner removed, which
    * only the owner's own `redirect` sets again (`directives_left_out`).
    */
-  left_out: { kind: string; family: string | null; at: string }[];
+  left_out: { kind: string; direction: string | null; at: string }[];
 }

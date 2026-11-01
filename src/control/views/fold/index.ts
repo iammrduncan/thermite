@@ -109,7 +109,7 @@ export class RigFold {
         : frozen({ ...e, actor: e.actor.slice(0, EVENT_ACTOR_MAX), body: {}, unreadable: why });
     const run = this.runOf(e);
     // The agents' notes are kept in the journal: the timeline tells what happened.
-    if (run && this.runs.has(run) && e.kind !== "journal_note" && e.kind !== "research_note") {
+    if (run && this.runs.has(run) && e.kind !== "journal_note" && e.kind !== "source_note") {
       const t = (this.runs.get(run) as RunView).timeline;
       t.push(kept);
       if (t.length > KEPT_TIMELINE) t.shift();

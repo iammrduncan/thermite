@@ -537,7 +537,7 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
         run: "js-1",
         lane: "lane-1",
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: "p",
         token: "tok-in-turn",
       });
@@ -602,7 +602,7 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
         run: "js-1",
         lane: "lane-1",
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: "p",
         token: "tok-limit",
       });

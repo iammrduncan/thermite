@@ -116,7 +116,7 @@ Each rig has two branches. Commits are made by `thermite <thermite@localhost>`.
 | | `champions/<run>/<seq>.patch` and `.json` | Each published champion, as a patch from the run's starting commit |
 | | `events/<export>.jsonl` | The export's events, one per line. They include the text of your messages to the run's agents and advisors, and the advisors' answers |
 | | `journal/<export>.jsonl` | The [field notes](../../explanation/journals-and-knowledge.md) the agents recorded since the last export, one per line: the short notes the workers, the planner and the advisors keep as they work. Every export has this file, empty when there are none |
-| | `research-notes/<export>.jsonl` | The research notes recorded since the last export, each with the sources it cites. Only when there are some |
+| | `source-notes/<export>.jsonl` | The source notes recorded since the last export, each with the sources it cites. Only when there are some. Exports before v0.1.1 put them in `research-notes/` |
 | | `briefing/<export>.jsonl` | For each run created since the last export, its briefing: the background from past research that you picked when you started it ([Use past research in a new run](../campaigns/use-past-research.md)). Only when there is one |
 | | `knowledge/<export>.jsonl` | The runs' part of their campaigns' collections in the [knowledge base](../../reference/knowledge-base.md#the-export): each item added or changed since the last export, with its run, its writer and its time. Only when there are some |
 | | `exports/<export>.json` | The export's manifest: each file with its SHA-256 |

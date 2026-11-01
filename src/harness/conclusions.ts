@@ -5,7 +5,7 @@ import { type Ledger, LedgerError } from "./ledger/index.ts";
 /**
  * "Not possible" endings for goal campaigns. The harness proposes one only where the contract
  * allows it, and only from evidence in the ledger: at least `min_refuted_approaches` approach
- * families, each with several judged attempts and no progress at all. Hands-off by default
+ * directions, each with several judged attempts and no progress at all. Hands-off by default
  * (goal 079): the proposal is taken and the campaign ends, unless its run asks the owner
  * (`ask_owner.not_possible`); then the owner accepts or rejects it, and until then the campaign
  * goes on. No agent can end a campaign.
@@ -13,7 +13,7 @@ import { type Ledger, LedgerError } from "./ledger/index.ts";
 
 type Row = Record<string, unknown>;
 
-/** Judged attempts a family needs, with no progress, before it counts as refuted. */
+/** Judged attempts a direction needs, with no progress, before it counts as refuted. */
 export const REFUTE_ATTEMPTS = 3;
 
 /** Verdicts that show an approach is getting somewhere (so it is not refuted). */
@@ -34,7 +34,7 @@ const REFUTING = new Set([
 ]);
 
 export interface RefutedApproach {
-  family: string;
+  direction: string;
   description: string;
   attempts: { attempt: string; verdict: string; verdict_id: number; reasons: string }[];
 }
@@ -46,13 +46,13 @@ export class Conclusions {
     this.ledger = ledger;
   }
 
-  /** Approach families with enough judged attempts and no progress, with their receipts. */
+  /** Directions with enough judged attempts and no progress, with their receipts. */
   refuted(run: string): RefutedApproach[] {
     const out: RefutedApproach[] = [];
-    for (const f of this.ledger.trials.familyDescriptions(run)) {
+    for (const f of this.ledger.trials.directionDescriptions(run)) {
       const attempts: RefutedApproach["attempts"] = [];
       let promising = false;
-      for (const id of this.ledger.attempts.ofFamily(run, f.id)) {
+      for (const id of this.ledger.attempts.ofDirection(run, f.id)) {
         const v = this.ledger.verdicts.current(id);
         if (!v) continue;
         if (PROMISING.has(v.verdict)) promising = true;
@@ -66,7 +66,7 @@ export class Conclusions {
         });
       }
       if (!promising && attempts.length >= REFUTE_ATTEMPTS) {
-        out.push({ family: f.id, description: f.description, attempts });
+        out.push({ direction: f.id, description: f.description, attempts });
       }
     }
     return out;
@@ -95,14 +95,14 @@ export class Conclusions {
     const evidence = {
       approaches: refuted,
       goals: [...goals].map(([goal, status]) => ({ goal, status })),
-      rule: `at least ${need} approach families, each with ${REFUTE_ATTEMPTS} or more judged attempts and no progress`,
+      rule: `at least ${need} directions, each with ${REFUTE_ATTEMPTS} or more judged attempts and no progress`,
     };
     return this.ledger.tx(() => {
       const id = this.ledger.conclusions.add(run, evidence, new Date().toISOString());
       for (const a of refuted) {
-        if (this.ledger.trials.setFamilyStatus(run, a.family, "exhausted", "live")) {
-          this.ledger.appendEvent(by, "family_status", run, {
-            family: a.family,
+        if (this.ledger.trials.setDirectionStatus(run, a.direction, "exhausted", "live")) {
+          this.ledger.appendEvent(by, "direction_status", run, {
+            direction: a.direction,
             status: "exhausted",
             reason: `refuted: evidence for "not possible" proposal ${id}`,
           });
@@ -111,7 +111,7 @@ export class Conclusions {
       this.ledger.appendEvent(by, "conclusion_proposed", run, {
         proposal: id,
         kind: "not_possible",
-        approaches: refuted.map((a) => ({ family: a.family, attempts: a.attempts.length })),
+        approaches: refuted.map((a) => ({ direction: a.direction, attempts: a.attempts.length })),
       });
       return id;
     });
@@ -148,13 +148,14 @@ export class Conclusions {
       if (accept) {
         this.ledger.runs.setStatus(run, "closed", closeReason, by);
       } else {
-        // The owner wants the campaign to go on: the families this proposal exhausted reopen.
-        const families = (JSON.parse(String(row.evidence)) as { approaches: { family: string }[] })
-          .approaches;
-        for (const f of families) {
-          if (this.ledger.trials.setFamilyStatus(run, f.family, "live", "exhausted")) {
-            this.ledger.appendEvent(by, "family_status", run, {
-              family: f.family,
+        // The owner wants the campaign to go on: the directions this proposal exhausted reopen.
+        const directions = (
+          JSON.parse(String(row.evidence)) as { approaches: { direction: string }[] }
+        ).approaches;
+        for (const f of directions) {
+          if (this.ledger.trials.setDirectionStatus(run, f.direction, "live", "exhausted")) {
+            this.ledger.appendEvent(by, "direction_status", run, {
+              direction: f.direction,
               status: "live",
               reason: `the owner rejected "not possible" proposal ${proposal}`,
             });

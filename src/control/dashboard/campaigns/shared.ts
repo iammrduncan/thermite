@@ -1,4 +1,4 @@
-import { parseContract } from "../../../core/contract.ts";
+import { parseStoredContract } from "../../../core/contract.ts";
 import { type GoalChecks, goalChecks } from "../../../core/goal/index.ts";
 import { KitSchema } from "../../../core/kit.ts";
 import { type KbKind, PICKABLE } from "../../kb/index.ts";
@@ -86,7 +86,7 @@ export function campaignHelpers(dash: Dashboard) {
     if (rig && run?.goal_checks) return { checks: run.goal_checks, source: { from: "rig", rig } };
     const v = store.campaigns.versions(name)[0];
     const raw = v?.contract ?? store.commands.latestAssignments().get(name)?.payload.contract;
-    const parsed = raw ? parseContract(raw) : undefined;
+    const parsed = raw ? parseStoredContract(raw) : undefined;
     const contract = parsed?.ok && parsed.contract.mode === "goal" ? parsed.contract : undefined;
     const ref = contract?.project.kit;
     const kept = v?.sources.kit !== undefined && "control" in v.sources.kit;

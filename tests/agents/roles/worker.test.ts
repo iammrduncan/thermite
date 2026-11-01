@@ -52,7 +52,8 @@ async function briefOfOneTrial(t: TestContext): Promise<string> {
   const env = makeJudgeEnv({
     lanes: { count: 1, trials_per_epoch: 1 },
     contract: {
-      notes: "The kernel sums a list. Earlier work found the loop bound by memory reads.",
+      additional_information:
+        "The kernel sums a list. Earlier work found the loop bound by memory reads.",
       ideas: ["unroll the loop"],
       links: ["https://example.com/sum"],
     },
@@ -86,12 +87,12 @@ async function briefOfOneTrial(t: TestContext): Promise<string> {
         {
           name: "submit_plan",
           args: {
-            new_families: [{ id: "speed", description: "make the sum faster" }],
+            new_directions: [{ id: "speed", description: "make the sum faster" }],
             assignments: [
               {
                 lane: "lane-1",
                 experiment,
-                family: "speed",
+                direction: "speed",
                 parent: "champion",
                 why: "the teacher's idea fits the loop's cost",
               },

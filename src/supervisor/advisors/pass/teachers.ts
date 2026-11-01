@@ -208,7 +208,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             inst.id,
             r.review ? "text" : "status",
             r.review
-              ? `teacher ${r.teacher}: ${clip(r.review.summary, 400)}${recs.length ? ` Suggests: ${recs.map((x) => `${x.kind}${x.family ? ` ${x.family}` : ""}`).join(", ")}.` : ""}`
+              ? `teacher ${r.teacher}: ${clip(r.review.summary, 400)}${recs.length ? ` Suggests: ${recs.map((x) => `${x.kind}${x.direction ? ` ${x.direction}` : ""}`).join(", ")}.` : ""}`
               : `teacher ${r.teacher} gave no review: ${clip(r.error ?? "", 300)}`,
           );
         }
@@ -236,7 +236,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             `directives for the planner: ${run.directives
               .map(
                 (d) =>
-                  `${d.kind}${d.family ? ` ${d.family}` : ""}${d.value !== undefined ? ` ${String(d.value)}` : ""} (why: ${clip(d.rationale, 200)})`,
+                  `${d.kind}${d.direction ? ` ${d.direction}` : ""}${d.value !== undefined ? ` ${String(d.value)}` : ""} (why: ${clip(d.rationale, 200)})`,
               )
               .join(
                 "; ",

@@ -36,7 +36,7 @@ export {
   CLAIM_LIMITS,
   CLAIM_LIMITS_WORDS,
   CODE_RESEARCH_TOOLS,
-  codeResearchNote,
+  codeResearchHint,
   moreText,
   READ_MAX,
   RESEARCH_TOOLS,

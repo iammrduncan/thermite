@@ -61,7 +61,8 @@ describe("the owner's additions in the prompts sent (goal 166)", () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
         role_additions: { worker: ADDITIONS.worker, planner: ADDITIONS.planner },
       },
     });
@@ -130,7 +131,8 @@ describe("the owner's additions in the prompts sent (goal 166)", () => {
   test("a hill-climb run's teachers and their merged by model, each with its own addition", async () => {
     const env = makeJudgeEnv({
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
         role_additions: { teacher: ADDITIONS.teacher, "merged-by": ADDITIONS["merged-by"] },
       },
     });

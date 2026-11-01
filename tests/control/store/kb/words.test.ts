@@ -4,7 +4,7 @@ import { passagesOf } from "../../../../src/common/search/index.ts";
 import { ControlStore } from "../../../../src/control/store/index.ts";
 import { knowledgeSearch } from "../../../../src/control/store/kb/index.ts";
 import type { SignedCommand } from "../../../../src/core/commands.ts";
-import { kbOutcomeOf, verdictOutcome } from "../../../../src/core/kb.ts";
+import { kbOutcomeOf, verdictOutcome } from "../../../../src/core/kb/index.ts";
 
 /**
  * The words index of control's knowledge base (goal 175): long texts cut into passages, each

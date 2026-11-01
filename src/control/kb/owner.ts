@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KB_OUTCOMES, KbKind } from "../../core/kb.ts";
+import { KB_OUTCOMES, KbKind } from "../../core/kb/index.ts";
 import {
   KB_IS_DATA,
   KB_OFFSET_MAX,

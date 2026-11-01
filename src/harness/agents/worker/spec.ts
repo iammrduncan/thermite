@@ -93,7 +93,7 @@ export interface TrialDeps {
   idea?(req: IdeaInput): Promise<{ experiment: string }>;
   /** A field note: written by this lane, in the run's journal. */
   note?(req: NoteRequest): Promise<{ note: number }>;
-  /** The research service (sources, claims and notes in the run's folder): one operation. */
+  /** The research service (sources, claims and source notes in the run's folder): one operation. */
   research?(op: string, args: Record<string, unknown>): Promise<unknown>;
   /** The knowledge base's tools (goal 175), run by the harness for the trial's own slot. */
   kb?: KbCall | undefined;

@@ -1,4 +1,4 @@
-import { str } from "./kb-fields.ts";
+import { str } from "./words.ts";
 
 /**
  * A run's research corpus, read (goal 125, T11): the one reading of the items its research
@@ -6,7 +6,7 @@ import { str } from "./kb-fields.ts";
  * they are kept. On the rig, the ledger's rows keep their lists as JSON; on control, the research
  * events carry them. The four renderers of the corpus take their items from here: the research
  * folder's files (harness/research/folder.ts), the teachers' reads (harness/run-research.ts), the
- * knowledge base's items (core/kb-index-research.ts) and control's view of a research run
+ * knowledge base's items (core/kb/research.ts) and control's view of a research run
  * (control/views/research.ts). It does no I/O: each renderer reads its own store, and this module
  * reads what the store gave it.
  */
@@ -69,8 +69,8 @@ export function readHypothesis<T extends { supporting: string }>(
   return { ...row, supporting: storedTexts(row.supporting) };
 }
 
-/** A research note, from its row: the sources it names read. */
-export function readNote<T extends { sources: string }>(
+/** A source note, from its row: the sources it names read. */
+export function readSourceNote<T extends { sources: string }>(
   row: T,
 ): Omit<T, "sources"> & { sources: string[] } {
   return { ...row, sources: storedTexts(row.sources) };

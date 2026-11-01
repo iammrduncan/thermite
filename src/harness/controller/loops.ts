@@ -4,7 +4,7 @@ import type { Scheduler } from "../agents/index.ts";
 import type { Judge } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
 import { settlePropagations } from "../propagation.ts";
-import type { RigSettingsStore } from "../rig-settings.ts";
+import type { RigSettingsStore } from "../rig-settings-store.ts";
 import type { HarnessService } from "../service/index.ts";
 
 /** How often each loop comes around when it has nothing to do (goal 173: its limit follows). */

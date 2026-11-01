@@ -5,7 +5,7 @@ import { queueTarget } from "../../../core/queue-target.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import { notesData } from "../../journal.ts";
 import { messageText } from "../../messages.ts";
-import { type Experiment, inFamily } from "../../queue.ts";
+import { type Experiment, inDirection } from "../../queue.ts";
 import { type Handout, PLANNER } from "../coordinator.ts";
 import {
   attribute,
@@ -65,7 +65,7 @@ export async function planEpoch(
         rawViolations: [],
         notes: "the planner is off on this rig (Edit rig)",
         assignments: f.assignments,
-        newFamilies: f.newFamilies,
+        newDirections: f.newDirections,
       };
     } else
       p = await plan(
@@ -101,10 +101,10 @@ export async function planEpoch(
   // New directions, with the rules that named them before the run had them, and the old rules
   // in words converted to them (goal 066).
   const waiting = toDesign(input);
-  for (const f of p.newFamilies)
-    sched.registry.addFamily(run, f.id, f.description, `planner:${p.source}`, [
+  for (const f of p.newDirections)
+    sched.registry.addDirection(run, f.id, f.description, `planner:${p.source}`, [
       ...(waiting.find((d) => d.name === f.id)?.rules.map((r) => r.id) ?? []),
-      ...(p.queue?.convert.filter((c) => c.family === f.id).map((c) => c.rule) ?? []),
+      ...(p.queue?.convert.filter((c) => c.direction === f.id).map((c) => c.rule) ?? []),
     ]);
   // The hand-out: the model's answer applied to the queue, or the fixed rules. Every lane gets
   // an experiment for its next trial; none goes to two lanes.
@@ -131,7 +131,9 @@ export async function planEpoch(
   // hand-out, the lanes' distinct ideas go up next first, oldest first, as the planner's.
   const target = input.queueTarget ?? 0;
   const avoided = (x: Experiment) =>
-    directives.some((d) => d.body.kind === "avoid" && d.body.family && inFamily(x, d.body.family));
+    directives.some(
+      (d) => d.body.kind === "avoid" && d.body.direction && inDirection(x, d.body.direction),
+    );
   // The one count of ready ideas, which the teachers' brief and queue_low read too.
   const ready = () => sched.o.service.queue.ready(run, directives, given).length;
   const waitingLanes = lanes.filter((l) => !handout.some((h) => h.lane === l)).length;
@@ -154,7 +156,7 @@ export async function planEpoch(
       x = sched.coordinator.fill(
         run,
         fixed,
-        `the queue was empty: the fixed plan's direction for ${lane} (${fixed.family})`,
+        `the queue was empty: the fixed plan's direction for ${lane} (${fixed.direction})`,
       );
       why = "the queue was empty, so the fixed plan added it";
     }
@@ -173,7 +175,7 @@ export async function planEpoch(
     return [
       {
         lane: h.lane,
-        family: sched.coordinator.direction(run, x, p.newFamilies),
+        direction: sched.coordinator.direction(run, x, p.newDirections),
         focus: x.title,
         parent: h.parent,
         experiment: x.id,
@@ -188,16 +190,16 @@ export async function planEpoch(
       `round ${n}: ${p.source === "planner" ? `planned by the model${p.tries > 1 ? ` (try ${p.tries})` : ""}` : `taken from the queue by the fixed rules${p.notes ? ` (${p.notes})` : p.rawViolations.length ? " (the model gave no usable plan)" : p.tries === 0 ? " (no model)" : ""}`}`,
       ...assignments.map(
         (a) =>
-          `${a.lane}: ${a.family}, ${a.focus}${a.parent === "lane_best" ? " (from the lane's best)" : ""}`,
+          `${a.lane}: ${a.direction}, ${a.focus}${a.parent === "lane_best" ? " (from the lane's best)" : ""}`,
       ),
-      ...(p.newFamilies.length
+      ...(p.newDirections.length
         ? [
-            `new directions: ${p.newFamilies.map((f) => `${asToken(f.id)} (${f.description})`).join("; ")}`,
+            `new directions: ${p.newDirections.map((f) => `${asToken(f.id)} (${f.description})`).join("; ")}`,
           ]
         : []),
       ...(p.queue?.convert.length
         ? [
-            `old rules in words converted: ${p.queue.convert.map((c) => `rule ${c.rule} to ${asToken(c.family)}`).join("; ")}`,
+            `old rules in words converted: ${p.queue.convert.map((c) => `rule ${c.rule} to ${asToken(c.direction)}`).join("; ")}`,
           ]
         : []),
       // Why the model's tries gave no usable plan, each by its real cause (goal 079).
@@ -297,7 +299,7 @@ export function plannerInput(
     objective: objectiveOf(contract),
     editablePaths: "editable_paths" in contract ? contract.editable_paths : [],
     champion: { seq: champion.seq, gain: championGain(sched.ledger, run) },
-    families: sched.registry.families(run),
+    registry: sched.registry.directions(run),
     evidence: sched.registry.evidence(run, 30),
     queue: sched.o.service.queue.brief(run),
     laneState: sched.coordinator.laneState(run, lanes),

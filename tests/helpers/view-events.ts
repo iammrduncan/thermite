@@ -145,9 +145,14 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
       plan: "setup",
       planner_valid: false,
       raw_violations: 0,
-      assignments: [{ lane: "lane-1", family: "setup", parent: "champion" }],
+      assignments: [{ lane: "lane-1", direction: "setup", parent: "champion" }],
     }),
-    ev("trial_started", run, { lane: "lane-1", trial: "t-1", family: "setup", focus: "the build" }),
+    ev("trial_started", run, {
+      lane: "lane-1",
+      trial: "t-1",
+      direction: "setup",
+      focus: "the build",
+    }),
     ev("attempt_recorded", "a-fix", {
       run,
       lane: "lane-1",
@@ -164,7 +169,7 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ev("trial_finished", run, {
       lane: "lane-1",
       trial: "t-1",
-      family: "setup",
+      direction: "setup",
       attempt: "a-fix",
       stopped: "submitted",
       tokens_in: 1000,
@@ -200,13 +205,20 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ev("agent_message_read", run, { message: 1, by: "lane-1", trial: "t-2" }),
     ev("advisor_answer", run, { message: 1, role: "teacher", text: "Tiling.", advisor: "t-1" }),
     ev("advisor_answer", run, { message: 9, role: "teacher", text: "No such message." }),
-    ev("family_added", run, { family: "tiling", description: "Tile the loops.", for_rules: [1] }),
-    ev("family_added", run, { family: "tiling", description: "Added twice." }),
-    ev("family_added", run, { family: "" }),
+    ev("direction_added", run, {
+      direction: "tiling",
+      description: "Tile the loops.",
+      for_rules: [1],
+    }),
+    ev("direction_added", run, { direction: "tiling", description: "Added twice." }),
+    ev("direction_added", run, { direction: "" }),
     ev(
       "directive",
       run,
-      { id: 1, body: { kind: "prefer", family: "tiling", rationale: "it won", from_message: 1 } },
+      {
+        id: 1,
+        body: { kind: "prefer", direction: "tiling", rationale: "it won", from_message: 1 },
+      },
       "planner",
     ),
     ev("directive", run, { id: 2, body: { match: "unroll", from_message: 1 } }, "planner"),
@@ -215,15 +227,20 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
       run,
       {
         id: 3,
-        body: { kind: "avoid", family: "unrolling", from_message: 1, converted_from: { rule: 2 } },
+        body: {
+          kind: "avoid",
+          direction: "unrolling",
+          from_message: 1,
+          converted_from: { rule: 2 },
+        },
       },
       "planner",
     ),
     ev("directive_converted", run, { id: 2 }),
     ev("directive", run, { id: 4, body: { match: "old words" } }, "teacher"),
-    ev("directive", run, { id: 5, body: { kind: "avoid", family: "vectorize" } }, "owner"),
+    ev("directive", run, { id: 5, body: { kind: "avoid", direction: "vectorize" } }, "owner"),
     ev("directives_left_out", run, {
-      rules: [{ kind: "avoid", family: "unrolling", from_message: 1 }, { kind: "x" }, null],
+      rules: [{ kind: "avoid", direction: "unrolling", from_message: 1 }, { kind: "x" }, null],
     }),
     ev("directives_superseded", run, { ids: [5, "x"] }),
     ev("directive_dropped", run, { id: 99 }),
@@ -233,8 +250,8 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
       planner_valid: true,
       raw_violations: 1,
       assignments: [
-        { lane: "lane-1", family: "tiling", parent: "champion", focus: "tile 64" },
-        { lane: "lane-2", family: "vectorize", parent: "champion" },
+        { lane: "lane-1", direction: "tiling", parent: "champion", focus: "tile 64" },
+        { lane: "lane-2", direction: "vectorize", parent: "champion" },
       ],
     }),
     ev("epoch_started", run, { source: "fallback", plan: "research", assignments: null }),
@@ -246,7 +263,7 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ev("experiment_added", run, {
       id: "x-1",
       title: "tile 64",
-      family: "tiling",
+      direction: "tiling",
       why: "it won",
       by: "planner",
     }),
@@ -255,13 +272,22 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ev("experiment_added", run, { id: "x-1", title: "added twice" }),
     ev("experiment_added", run, { title: "no id" }),
     ev("experiment_moved", run, { id: "x-1", position: "top" }),
-    ev("experiment_edited", run, { id: "x-2", title: "vector loads, wide", family: "vectorize" }),
+    ev("experiment_edited", run, {
+      id: "x-2",
+      title: "vector loads, wide",
+      direction: "vectorize",
+    }),
     ev("experiment_accepted", run, { id: "x-3", position: 1 }),
     ev("experiment_assigned", run, { id: "x-1", lane: "lane-1", trial: "t-2" }),
     ev("experiment_dropped", run, { id: "x-3", why: "a rule avoids it", by: "planner" }),
     ev("experiment_moved", run, { id: "x-9", position: 0 }),
-    ev("trial_started", run, { lane: "lane-1", trial: "t-2", family: "tiling", focus: "tile 64" }),
-    ev("trial_started", run, { lane: "lane-2", trial: "t-3", family: "vectorize" }),
+    ev("trial_started", run, {
+      lane: "lane-1",
+      trial: "t-2",
+      direction: "tiling",
+      focus: "tile 64",
+    }),
+    ev("trial_started", run, { lane: "lane-2", trial: "t-3", direction: "vectorize" }),
     ev("attempt_recorded", "a-1", {
       run,
       lane: "lane-1",
@@ -275,7 +301,7 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ev("trial_finished", run, {
       lane: "lane-1",
       trial: "t-2",
-      family: "tiling",
+      direction: "tiling",
       attempt: "a-1",
       stopped: "submitted",
       tokens_in: 5000,
@@ -367,7 +393,7 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ev("trial_finished", run, {
       lane: "lane-2",
       trial: "t-other",
-      family: "vectorize",
+      direction: "vectorize",
       attempt: "a-2",
       stopped: "submitted",
     }),
@@ -390,7 +416,7 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ev("agents_stopped", run, { kind: "model_check", words: "the model check fails", by: "check" }),
     ev("conclusion_proposed", run, {
       proposal: 1,
-      approaches: [{ family: "tiling", attempts: 3 }, { family: "vectorize" }],
+      approaches: [{ direction: "tiling", attempts: 3 }, { direction: "vectorize" }],
     }),
     ev("conclusion_rejected", run, { proposal: 1 }),
     ev("conclusion_proposed", run, { proposal: 2, approaches: [] }),
@@ -411,14 +437,14 @@ export function hillClimbEvents(run = "h-1"): SetEvent[] {
     ),
     ev("journal_note", run, { id: 2, text: "An old note." }, "lane-2"),
     ev("journal_note", run, { id: 3, text: "" }),
-    ev("research_note", run, {
+    ev("source_note", run, {
       note: 4,
       text: "The survey names three tilings.",
       sources: ["src-1"],
       by: "lane-1",
       trial: "t-2",
     }),
-    ev("research_note", run, { note: 5, text: "A note from the planner.", by: "planner" }),
+    ev("source_note", run, { note: 5, text: "A note from the planner.", by: "planner" }),
     ev("rig_settings_changed", null, { change: { lanes: 2 }, settings: { lanes: 2 } }, "owner"),
     ev("agent_message_unkept", run, { message: 1 }),
     ev("job_queued", "6", { attempt: "a-4", kind: "evaluate" }),
@@ -578,7 +604,7 @@ export function longEvents(): SetEvent[] {
     if (i % 2) out.push(ev("agent_message_read", run, { message: i, by: "lane-1" }));
   }
   for (let i = 1; i <= 120; i++) {
-    out.push(ev("trial_started", run, { lane: `lane-${i % 3}`, trial: `t-${i}`, family: "f" }));
+    out.push(ev("trial_started", run, { lane: `lane-${i % 3}`, trial: `t-${i}`, direction: "f" }));
     out.push(ev("trial_finished", run, { lane: `lane-${i % 3}`, trial: `t-${i}`, stopped: "x" }));
   }
   for (let i = 1; i <= 60; i++) out.push(ev("planner_handout", run, { round: i, assignments: [] }));

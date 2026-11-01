@@ -547,9 +547,9 @@ describe("the Codex CLI", () => {
         if (via !== "codex") throw new Error(`not ${via}`);
         asked.push({ model: m.model, prompt });
         return JSON.stringify({
-          new_families: [{ id: "cx-tidy", description: "Small tidy-ups." }],
+          new_directions: [{ id: "cx-tidy", description: "Small tidy-ups." }],
           assignments: [
-            { lane: "lane-1", family: "cx-tidy", focus: "tidy the kernel", parent: "champion" },
+            { lane: "lane-1", direction: "cx-tidy", focus: "tidy the kernel", parent: "champion" },
           ],
           notes: "planned in Codex",
         });

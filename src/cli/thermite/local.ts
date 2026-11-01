@@ -13,14 +13,14 @@ import {
   formatReport,
   machineProbes,
 } from "../doctor/index.ts";
-import { localEnroll } from "../local-enroll.ts";
 import {
   chooseOwner,
+  localEnroll,
   localInit,
   parentOwner,
   readStackCompose,
   writeGpuOverride,
-} from "../local-init.ts";
+} from "../local/index.ts";
 import {
   containerEngine,
   detectInContainer,

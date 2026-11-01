@@ -16,7 +16,7 @@ import { gzipSync } from "node:zlib";
 import { fileSha256 } from "../common/fs.ts";
 import { canonicalJson } from "../core/canonical.ts";
 import { patchBytes } from "./git.ts";
-import { knowledgePart } from "./kb-part.ts";
+import { knowledgePart } from "./kb/index.ts";
 import type { Ledger } from "./ledger/index.ts";
 import { championFiles } from "./propagation.ts";
 
@@ -44,12 +44,12 @@ export const LEDGER_COPY = {
     "command",
     "conclusion",
     "contract",
+    "direction",
     "directive",
     "epoch",
     "event",
     "experiment",
     "export",
-    "family",
     "finding",
     "goal",
     "goal_check",
@@ -63,7 +63,6 @@ export const LEDGER_COPY = {
     "lane",
     "measurement",
     "meta",
-    "note",
     "prompt",
     "propagation",
     "question_card",
@@ -78,6 +77,7 @@ export const LEDGER_COPY = {
     "run_briefing",
     "schema_migrations",
     "source",
+    "source_note",
     // A trial keeps only its token's SHA-256, and the token stops working when its trial ends.
     "trial",
     "verdict",
@@ -88,7 +88,7 @@ export const LEDGER_COPY = {
  * Outbox export. The harness has no git credentials and no remote access: it writes exports
  * into the shared outbox, and the supervisor pushes them to the results repository as packed
  * commits. An export holds patches and manifests for attempts recorded since the last export,
- * the events since then, the runs' field notes, research notes, briefings and prompts sent since
+ * the events since then, the runs' field notes, source notes, briefings and prompts sent since
  * then, the runs' part of their campaigns' collections in the knowledge base that changed since then,
  * each new run champion as a patch against its seed (what other rigs need to judge it
  * themselves), and the research folder of each run that finished. A full export also holds a
@@ -97,7 +97,7 @@ export const LEDGER_COPY = {
  *
  * A run's export (goal 103: Export on a run's page, and each run's export at its end:
  * service/reports.ts) holds that run alone, from its start: its events, attempts, field notes,
- * research notes, briefing, prompts sent and part of its campaign's folder, its research folder as
+ * source notes, briefing, prompts sent and part of its campaign's folder, its research folder as
  * it stands and the pages it fetched. It holds no copy of the ledger (the ledger is every run's),
  * and it stays outside the rig's chain of exports: the next export still starts where the last one
  * of the chain ended, and a full reset never takes it. A run's export at its end also publishes the
@@ -109,7 +109,7 @@ const EXPORT_PAGE = 1_000;
 /** The kinds whose events name the rows an export holds beside them, and the field that names each. */
 const NAMING = [
   ["journal_note", "id"],
-  ["research_note", "note"],
+  ["source_note", "note"],
   ["agent_prompt", "id"],
 ] as const;
 
@@ -264,8 +264,8 @@ export async function writeExport(input: {
       }
     }
 
-    // A run's field notes recorded since the last export (journal.jsonl), the research notes
-    // (research-notes.jsonl, with every source they cite) and the background the owner picked
+    // A run's field notes recorded since the last export (journal.jsonl), the source notes
+    // (source-notes.jsonl, with every source they cite) and the background the owner picked
     // for runs created since then (briefing.jsonl), oldest first. The ledger snapshot holds all of
     // them too; these are for readers without SQLite.
     const ids = (kind: (typeof NAMING)[number][0]) => written.named.get(kind) ?? [];
@@ -284,7 +284,7 @@ export async function writeExport(input: {
     }));
     writeFileSync(join(tmp, "journal.jsonl"), jsonl(journal));
     const notesRel: string[] = [];
-    const researchNotes = ledger.claims.notesById(ids("research_note")).map((r) => ({
+    const sourceNotes = ledger.claims.sourceNotesById(ids("source_note")).map((r) => ({
       id: r.id,
       run: r.run,
       lane: r.lane,
@@ -292,9 +292,9 @@ export async function writeExport(input: {
       sources: JSON.parse(r.sources) as string[],
       at: r.created_at,
     }));
-    if (researchNotes.length) {
-      writeFileSync(join(tmp, "research-notes.jsonl"), jsonl(researchNotes));
-      notesRel.push("research-notes.jsonl");
+    if (sourceNotes.length) {
+      writeFileSync(join(tmp, "source-notes.jsonl"), jsonl(sourceNotes));
+      notesRel.push("source-notes.jsonl");
     }
     const briefing = written.created.flatMap((run) =>
       ledger.runs.briefing(run).map((b, i) => ({ run, seq: i + 1, ...b })),

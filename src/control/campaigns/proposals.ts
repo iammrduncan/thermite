@@ -1,4 +1,4 @@
-import type { KbWrites } from "../../core/kb.ts";
+import type { KbWrites } from "../../core/kb/index.ts";
 import { GRANT_OPENS } from "../kb/index.ts";
 import type { CampaignProposal, ControlStore, ProposedField } from "../store/index.ts";
 import { contractAdditions, sameAdditions, setCampaignAdditions } from "./additions.ts";

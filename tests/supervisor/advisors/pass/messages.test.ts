@@ -193,7 +193,7 @@ describe("the owner's messages to the advisors", () => {
                 directives: [
                   {
                     kind: "mandate",
-                    family: "tiling",
+                    direction: "tiling",
                     rationale: "both reviews cite the paper",
                     citations: ["arxiv:1"],
                   },
@@ -211,7 +211,7 @@ describe("the owner's messages to the advisors", () => {
             args: {
               summary: "tiling looks promising",
               recommendations: [
-                { kind: "try", family: "tiling", rationale: "paper", citations: ["arxiv:1"] },
+                { kind: "try", direction: "tiling", rationale: "paper", citations: ["arxiv:1"] },
               ],
               ...(asked ? { answers: [{ message: 1, text: "We will weigh the paper." }] } : {}),
             },

@@ -18,7 +18,7 @@ import { ModelSource } from "../../src/harness/agents/model/source.ts";
 import { Registry } from "../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { resolveInbox } from "../../src/harness/imports.ts";
-import { knowledgePart } from "../../src/harness/kb-part.ts";
+import { knowledgePart } from "../../src/harness/kb/index.ts";
 import { NOISY_TIMING_NOTE, smokeReport } from "../../src/harness/smoke-check.ts";
 import { shownViolations, violationsText } from "../../src/harness/v0.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
@@ -268,7 +268,7 @@ describe("harness service and API", () => {
         run,
         lane,
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: env.seedCommit,
         token: `tok-${id}`,
       });
@@ -445,7 +445,9 @@ describe("harness service and API", () => {
     await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));
     const redirect = env.sign("redirect", {
       run: "smoke-1",
-      directives: [{ kind: "avoid", family: "loop-unrolling", rationale: "tried", citations: [] }],
+      directives: [
+        { kind: "avoid", direction: "loop-unrolling", rationale: "tried", citations: [] },
+      ],
     });
     const outcomes = await Promise.all([
       env.service.applyCommand(redirect),

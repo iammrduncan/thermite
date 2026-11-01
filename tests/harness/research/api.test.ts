@@ -15,7 +15,7 @@ describe("research API", () => {
       run: "r-1",
       lane: "lane-1",
       epoch: 1,
-      family: "explore",
+      direction: "explore",
       parent: "research",
       token: "secret-token",
     });

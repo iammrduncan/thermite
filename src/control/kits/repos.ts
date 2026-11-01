@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { gitSync, gitText } from "../../common/git.ts";
+import { gitSync, gitText } from "../../common/git/index.ts";
 import { KIT_BUNDLE_MAX } from "../../core/api/control/owner.ts";
 import { ID_PATTERN } from "../../core/contract.ts";
 import { KitSchema } from "../../core/kit.ts";

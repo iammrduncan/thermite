@@ -238,7 +238,7 @@ describe("starting a campaign from the page", () => {
     const seed = [
       {
         title: "vector loads",
-        family: "memory-layout",
+        direction: "memory-layout",
         why: "the guide",
         by: "teacher",
         state: "queued" as const,

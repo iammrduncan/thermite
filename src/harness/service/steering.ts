@@ -37,8 +37,8 @@ export function setAdvisorRules(
   if (uncited.length) {
     throw new LedgerError("invalid", `${uncited.length} directive(s) without a citation`);
   }
-  if (parsed.filter((d) => d.kind === "note").length > 3) {
-    throw new LedgerError("invalid", "at most 3 notes per directive set");
+  if (parsed.filter((d) => d.kind === "planner_note").length > 3) {
+    throw new LedgerError("invalid", "at most 3 planner_note rules per directive set");
   }
   conflictCheck(parsed);
   type Rule = (typeof parsed)[number];
@@ -53,10 +53,10 @@ export function setAdvisorRules(
   const known = svc.queue.directions(run);
   const unknown = research ? unknownIn(parsed, known) : [];
   const unknownWhy = unknown.length ? researchDirectionRefusal(unknown) : "";
-  const isUnknown = (d: Rule) => !!d.family && unknown.includes(d.family);
+  const isUnknown = (d: Rule) => !!d.direction && unknown.includes(d.direction);
   const keep = parsed.filter((d) => !isUnknown(d) && !refused.has(d));
   const named = (d: Rule) =>
-    `${d.kind}${d.family ? ` ${d.family}` : ""}${typeof d.value === "string" ? ` "${d.value.slice(0, 80)}"` : ""}`;
+    `${d.kind}${d.direction ? ` ${d.direction}` : ""}${typeof d.value === "string" ? ` "${d.value.slice(0, 80)}"` : ""}`;
   return svc.ledger.tx(() => {
     if (unknown.length)
       svc.ledger.appendEvent(author, "directives_left_out", run, {

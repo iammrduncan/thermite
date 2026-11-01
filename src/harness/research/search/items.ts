@@ -105,10 +105,16 @@ export function entriesOf(ledger: Ledger, savedLanes: string, run: string): Inde
         `${f.text}\n${f.summary}\n${f.why_it_matters}`,
       ),
     );
-  for (const n of ledger.claims.notes(run))
+  for (const n of ledger.claims.sourceNotes(run))
     out.push(
       known(
-        { kind: "note", ref: String(n.id), at: n.created_at, title: title(n.text), state: null },
+        {
+          kind: "source_note",
+          ref: String(n.id),
+          at: n.created_at,
+          title: title(n.text),
+          state: null,
+        },
         n.text,
       ),
     );

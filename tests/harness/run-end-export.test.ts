@@ -166,7 +166,7 @@ describe("each run's export at its end", () => {
       run: RUN,
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seedCommit,
     });
     // A judge's job under way for it: the first of its jobs the judge leases.

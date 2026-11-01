@@ -20,13 +20,13 @@ async function draining(work?: Record<string, unknown>) {
     ev("trial_started", {
       trial: "t-1",
       lane: "lane-1",
-      family: "survey",
+      direction: "survey",
       focus: "Trace the vendor's benchmark guide to its source",
     }),
     ev("trial_started", {
       trial: "t-2",
       lane: "lane-2",
-      family: "survey",
+      direction: "survey",
       focus: "Find published repetition counts",
     }),
   ];

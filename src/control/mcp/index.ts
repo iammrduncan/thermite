@@ -18,9 +18,12 @@ import { registerKnowledgeBase } from "./kb.ts";
 import { registerKits } from "./kits.ts";
 import { registerReads } from "./reads.ts";
 import { registerRetention } from "./retention.ts";
-import { registerRigModels } from "./rig-models.ts";
-import { registerRigReads } from "./rig-reads.ts";
-import { registerRetire, registerRigSettings } from "./rigs.ts";
+import {
+  registerRetire,
+  registerRigModels,
+  registerRigReads,
+  registerRigSettings,
+} from "./rigs/index.ts";
 import { registerRunpod } from "./runpod.ts";
 import { registerMcpServers } from "./servers.ts";
 

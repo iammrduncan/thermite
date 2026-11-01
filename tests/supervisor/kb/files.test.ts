@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { KB_FILES_HELD } from "../../../src/core/api/harness/supervisor.ts";
-import { KB_FILES_HELD_MAX, KB_OUTBOX_FILES } from "../../../src/core/kb.ts";
+import { KB_FILES_HELD_MAX, KB_OUTBOX_FILES } from "../../../src/core/kb/index.ts";
 import { KB_FILE_HEADERS, KB_FILES_STREAM_CONFIG } from "../../../src/core/link/kb-files.ts";
 import {
   KB_FILES_PER_ROUND,

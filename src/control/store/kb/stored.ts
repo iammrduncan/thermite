@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { KB_TEXT_TYPES, kbAddress } from "../../../core/kb.ts";
+import { KB_TEXT_TYPES, kbAddress } from "../../../core/kb/index.ts";
 import { itemOf } from "./items.ts";
 
 type Row = Record<string, unknown>;
@@ -68,7 +68,7 @@ const READ_SQL = `lower(i.file_type) in (${KB_TEXT_TYPES.map((t) => `'${t}'`).jo
 const TEXT_STATE_SQL = `(case when t.state = 'searched' then 'searched'
   when t.state is null and ${READ_SQL} then 'waiting' else 'kept whole' end)`;
 
-/** An item's type in SQL, as kbItemType (core/kb.ts) says it. */
+/** An item's type in SQL, as kbItemType (core/kb/items.ts) says it. */
 const TYPE_SQL =
   "(case when i.file_sha256 is not null then 'file' when i.slot = 'records' then 'record' else 'blurb' end)";
 

@@ -117,14 +117,14 @@ export function researchRig(): Rig {
     [1, "consolidate", "consolidate the claims on significance tests", 3, 0],
     [2, "explore", "search for measurements of driver-induced jitter", 0, 0],
   ];
-  TASKS.forEach(([q, family, title, verified, fresh], n) => {
+  TASKS.forEach(([q, direction, title, verified, fresh], n) => {
     const id = `x-${String(n + 1).padStart(3, "0")}`;
     const at = 10.5 - n * 0.8;
     const full = `Question ${q + 1} (index ${q}): ${title}`;
     c1.ev(at, "experiment_added", RS, {
       id,
       title: full,
-      family,
+      direction,
       why: "the research plan: the question's open gaps",
       question: q,
       by: "planner",
@@ -161,7 +161,7 @@ export function researchRig(): Rig {
     c1.ev(0.3, "experiment_added", RS, {
       id: `x-${String(n).padStart(3, "0")}`,
       title: `Question ${q + 1} (index ${q}): ${title}`,
-      family: n === 13 ? "contradict" : "primary",
+      direction: n === 13 ? "contradict" : "primary",
       why: "the research plan: the question's open gaps",
       question: q,
       by: "planner",

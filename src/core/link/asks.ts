@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { SupervisorFigures } from "../api/control/rigs.ts";
 import { RIG_ID } from "../ids.ts";
-import { KB_FILES_HELD_MAX, KbFileSha256 } from "../kb.ts";
+import { KB_FILES_HELD_MAX, KbFileSha256 } from "../kb/index.ts";
 import { RigSpace } from "../retention/index.ts";
 import { SCREENS_WATCHED_MAX, ScreenFrame, WatchedTrials } from "../screens.ts";
 import { ReportPlace } from "./report.ts";

@@ -80,7 +80,7 @@ describe("the knowledge base's hierarchy (store migration 14)", () => {
     const v = store.db.prepare("select max(version) as v from schema_migrations").get() as {
       v: number;
     };
-    assert.equal(v.v, 27);
+    assert.equal(v.v, 28);
     const rows = store.db
       .prepare("select id, seq, slot, version, kind, ref from kb_item order by id")
       .all() as Record<string, unknown>[];
@@ -284,5 +284,70 @@ delete from schema_migrations where version >= 26;`);
       ["gemv"],
     );
     again.db.close();
+  });
+
+  test("store migration 28: the public names in the knowledge base, its versions and its words index", () => {
+    const path = fresh();
+    const old = new ControlStore(path);
+    const RIG = { rig: "rig-a", ledger: "ledger-a" };
+    const at = "2026-11-01T10:00:00.000Z";
+    const index = (kind: string, body: Record<string, unknown>) =>
+      old.kb().index(RIG, { at, actor: "lane-1", kind, subject: "gs-1", body });
+    index("run_created", { campaign: "gemv", mode: "goal" });
+    index("journal_note", { id: 1, by: "lane-1", kind: "other", text: "an aside on the loop" });
+    index("source_note", { note: 1, by: "lane-1", text: "the guide on vector loads", sources: [] });
+    index("experiment_added", {
+      id: "x-000000000001",
+      title: "tile it",
+      direction: "tiling",
+      by: "planner",
+      state: "queued",
+    });
+    // The rows as v0.1.0 kept them: a field note of no other kind and a source note had the
+    // sub-kind `note`, and an experiment's direction was `family`.
+    old.db.exec(`
+drop trigger kb_version_never_changed;
+update kb_item set sub = 'note' where kind = 'note';
+update kb_version set sub = 'note' where item in (select id from kb_item where kind = 'note');
+update kb_item set meta = replace(meta, '"direction"', '"family"') where kind = 'experiment';
+update kb_version set meta = replace(meta, '"direction"', '"family"')
+  where item in (select id from kb_item where kind = 'experiment');
+create trigger kb_version_never_changed before update on kb_version
+begin select raise(abort, 'a version of an item is never changed'); end;
+delete from schema_migrations where version >= 28;`);
+    old.db.close();
+
+    const store = new ControlStore(path);
+    const rows = (sql: string) =>
+      (store.db.prepare(sql).all() as Record<string, unknown>[]).map((r) => ({ ...r }));
+    assert.deepEqual(rows("select ref, sub from kb_item where kind = 'note' order by ref"), [
+      { ref: "1", sub: "other" },
+      { ref: "rn-1", sub: "source_note" },
+    ]);
+    assert.deepEqual(
+      rows(
+        "select v.sub from kb_version v join kb_item i on i.id = v.item where i.kind = 'note' order by i.ref",
+      ),
+      [{ sub: "other" }, { sub: "source_note" }],
+    );
+    const metas = [
+      "select meta from kb_item where kind = 'experiment'",
+      "select v.meta from kb_version v join kb_item i on i.id = v.item where i.kind = 'experiment'",
+    ];
+    for (const sql of metas) {
+      const meta = rows(sql).map((r) => JSON.parse(String(r.meta)) as Record<string, unknown>);
+      assert.deepEqual(
+        meta.map((m) => [m.direction, "family" in m]),
+        [["tiling", false]],
+        sql,
+      );
+    }
+    // The words index follows: a search finds each under its new sub-kind.
+    const kb = store.kb();
+    assert.equal(kb.search("aside", ["gemv"])[0]?.sub, "other");
+    assert.equal(kb.search("vector loads", ["gemv"], { kinds: ["note"] })[0]?.sub, "source_note");
+    // Versions stay unchanged from now on.
+    assert.throws(() => store.db.prepare("update kb_version set sub = 'x'").run(), /never changed/);
+    store.db.close();
   });
 });

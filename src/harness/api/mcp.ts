@@ -4,7 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import type { McpCaller } from "../../agents/mcp/index.ts";
 import { KB_SERVER, kbServer } from "../../agents/tools/index.ts";
-import { workerSlot } from "../../core/kb.ts";
+import { workerSlot } from "../../core/kb/index.ts";
 import type { KbCaller } from "../kb/index.ts";
 import { type ApiContext, Unauthorized } from "./context.ts";
 

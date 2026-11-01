@@ -14,7 +14,7 @@ describe("the owner's queue commands", () => {
     const added = await s.command("queue_add", {
       run: RUN,
       title: "vector loads",
-      family: "memory",
+      direction: "memory",
       why: "reads dominate",
       position: "top",
     });
@@ -82,7 +82,7 @@ describe("the owner's queue commands", () => {
     assert.match(String(d.result.error), /run smoke-1 is closed/);
     const redirect = await s.command("redirect", {
       run: RUN,
-      directives: [{ kind: "try", family: "unroll", rationale: "late", citations: [] }],
+      directives: [{ kind: "try", direction: "unroll", rationale: "late", citations: [] }],
     });
     assert.match(String(redirect.result.error), /run smoke-1 is closed: its queue and rules/);
   });
@@ -91,7 +91,7 @@ describe("the owner's queue commands", () => {
     const seeds = [
       {
         title: "fuse",
-        family: "fusion",
+        direction: "fusion",
         why: "won on long",
         by: "planner",
         state: "queued",
@@ -127,7 +127,7 @@ describe("the owner's queue commands", () => {
     assert.deepEqual(added[0]?.body, {
       id: s.q.queued(RUN)[0]?.id,
       title: "fuse",
-      family: "fusion",
+      direction: "fusion",
       why: "won on long",
       by: "planner",
       state: "queued",

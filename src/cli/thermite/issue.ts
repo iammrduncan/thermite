@@ -74,7 +74,7 @@ export function thermiteAssignPayload(rest: string[]): void {
     contract: r.contract,
     contract_sha: r.sha,
     seed: { repo: values["seed-repo"], commit: values["seed-commit"] },
-    ...(note ? { direction: note } : {}),
+    ...(note ? { note } : {}),
     ...(values.agents === "off" ? { agents: false } : {}),
     imports: [
       {
@@ -262,7 +262,7 @@ export async function thermiteAssign(rest: string[]): Promise<void> {
     contract,
     contract_sha: r.sha,
     ...(seed ? { seed } : {}),
-    ...(note ? { direction: note } : {}),
+    ...(note ? { note } : {}),
     ...(values.agents === "off" ? { agents: false } : {}),
     // The run's own promotion policy; unset, the rig's default applies.
     ...(values.promotion

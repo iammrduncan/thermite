@@ -126,7 +126,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
       [s.ids.findings.draft],
     );
 
-    const notes = await page("/v1/research/notes?run=r-1");
+    const notes = await page("/v1/research/source-notes?run=r-1");
     assert.deepEqual(
       notes.items.map((x) => [x.text, x.sources]),
       [["Look for a second site that says the same.", [s.ids.sources[0]]]],
@@ -145,13 +145,13 @@ describe("the teachers read the run's own research (goal 098)", () => {
     );
 
     // A filter a kind does not take is refused in words.
-    const bad = await s.get("/v1/research/notes?run=r-1&state=verified");
+    const bad = await s.get("/v1/research/source-notes?run=r-1&state=verified");
     assert.equal(bad.status, 400);
     assert.match(String(bad.body.error), /state narrows claims \(verified, draft\) and findings/);
     const badState = await s.get("/v1/research/claims?run=r-1&state=supported");
     assert.equal(badState.status, 400);
     assert.match(String(badState.body.error), /a claim's state is verified or draft/);
-    assert.equal((await s.get("/v1/research/notes?run=r-1&question=0")).status, 400);
+    assert.equal((await s.get("/v1/research/source-notes?run=r-1&question=0")).status, 400);
     assert.equal((await s.get("/v1/research/claims?run=nope")).status, 404);
   });
 
@@ -170,12 +170,12 @@ describe("the teachers read the run's own research (goal 098)", () => {
 
     // Fifty notes of 4,000 characters each: the page stops at the cap and says where to go on.
     for (let i = 0; i < 50; i++)
-      s.research.addNote(
+      s.research.addSourceNote(
         "r-1",
         "lane-2",
         `${String(i).padStart(2, "0")} ${"long note ".repeat(399)}`,
       );
-    const big = await s.get("/v1/research/notes?run=r-1&limit=50");
+    const big = await s.get("/v1/research/source-notes?run=r-1&limit=50");
     const p = big.body as unknown as Page;
     assert.ok(
       JSON.stringify(big.body).length <= ANSWER_CHARS,
@@ -184,7 +184,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
     assert.ok(p.items.length > 1 && p.items.length < 50, String(p.items.length));
     assert.equal(p.total, 51);
     assert.equal(p.next, p.items.length);
-    const rest = (await s.get(`/v1/research/notes?run=r-1&offset=${p.next}&limit=50`))
+    const rest = (await s.get(`/v1/research/source-notes?run=r-1&offset=${p.next}&limit=50`))
       .body as unknown as Page;
     assert.notEqual(rest.items[0]?.id, p.items.at(-1)?.id);
   });
@@ -287,7 +287,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
       [s.ids.claims.verified, s.ids.claims.draft],
     );
     assert.match(claims.items[0]?.why ?? "", /the text has archived, 42/);
-    const stateless = await search("q=stateless+crash&kinds=source,claim,note");
+    const stateless = await search("q=stateless+crash&kinds=source,claim,source_note");
     assert.deepEqual(
       stateless.items.map((x) => [x.kind, x.id]),
       [["source", s.ids.sources[0]]],
@@ -343,7 +343,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
       run: "r-1",
       lane: "lane-1",
       epoch: 1,
-      family: "explore",
+      direction: "explore",
       parent: "0".repeat(40),
       token: trial,
     });
@@ -354,7 +354,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
       "/v1/research/claims?run=r-1",
       "/v1/research/hypotheses?run=r-1",
       "/v1/research/findings?run=r-1",
-      "/v1/research/notes?run=r-1",
+      "/v1/research/source-notes?run=r-1",
       "/v1/research/files?run=r-1",
       `/v1/research/source?run=r-1&source=${s.ids.sources[0]}`,
       "/v1/research/file?run=r-1&path=REPORT.md",
@@ -383,7 +383,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
         claims: r.claims,
         hypotheses: r.hypotheses,
         findings: r.findings,
-        notes: r.notes,
+        source_notes: r.source_notes,
         files: r.files,
       },
       {
@@ -392,7 +392,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
         claims: { verified: 2, draft: 1 },
         hypotheses: 1,
         findings: { supported: 1, draft: 1 },
-        notes: 1,
+        source_notes: 1,
         files: 4,
       },
     );
@@ -420,7 +420,7 @@ describe("the teachers read the run's own research (goal 098)", () => {
     assert.equal(cut.text.length, DIGEST_CHARS);
   });
 
-  test("a hill-climb run answers with what its trials recorded: sources, claims and notes, and nothing else", async (t) => {
+  test("a hill-climb run answers with what its trials recorded: sources, claims and source notes, and nothing else", async (t) => {
     const env = makeJudgeEnv();
     await env.service.applyCommand(env.assign);
     const api = createHarnessApi(env.service, tokens);
@@ -432,7 +432,10 @@ describe("the teachers read the run's own research (goal 098)", () => {
     assert.equal((env.service.brief("js-1") as { research?: unknown }).research, undefined);
     const empty = (await get("/v1/research/claims?run=js-1")).body as unknown as Page;
     assert.equal(empty.total, 0);
-    assert.match(empty.note, /A hill-climb or goal run records sources, claims and notes only/);
+    assert.match(
+      empty.note,
+      /A hill-climb or goal run records sources, claims and source notes only/,
+    );
     // A trial recorded a source, a claim and a note (goal 065).
     const r = await servePages();
     t.after(() => r.close());
@@ -445,16 +448,19 @@ describe("the teachers read the run's own research (goal 098)", () => {
       text: "The first run archived 42 pages.",
       quotes: [{ source: a.source, quote: "The harness archived 42 pages in its first run." }],
     });
-    research.addNote("js-1", "lane-1", "A page worth reading again.", [a.source]);
+    research.addSourceNote("js-1", "lane-1", "A page worth reading again.", [a.source]);
     const brief = (env.service.brief("js-1") as { research?: Record<string, unknown> }).research;
     assert.ok(brief, "the brief says what the run's trials recorded");
     assert.deepEqual(
-      [brief.sources, brief.claims, brief.notes, brief.questions, brief.newest_report],
+      [brief.sources, brief.claims, brief.source_notes, brief.questions, brief.newest_report],
       [1, { verified: 1, draft: 0 }, 1, undefined, undefined],
     );
     assert.equal(((await get("/v1/research/claims?run=js-1")).body as unknown as Page).total, 1);
     assert.equal(((await get("/v1/research/sources?run=js-1")).body as unknown as Page).total, 1);
-    assert.equal(((await get("/v1/research/notes?run=js-1")).body as unknown as Page).total, 1);
+    assert.equal(
+      ((await get("/v1/research/source-notes?run=js-1")).body as unknown as Page).total,
+      1,
+    );
     for (const kind of ["hypotheses", "findings", "files"])
       assert.equal(
         ((await get(`/v1/research/${kind}?run=js-1`)).body as unknown as Page).total,

@@ -34,7 +34,7 @@ A normal export is made when you choose **What changed** under **Export**, or se
 
 | Part | A normal export | A full export |
 | --- | --- | --- |
-| Events, attempts, champion patches, field notes, research notes, briefings, knowledge items and the prompts the agents were sent (`prompts.jsonl.gz`) since the last export | Yes | Yes |
+| Events, attempts, champion patches, field notes, source notes, briefings, knowledge items and the prompts the agents were sent (`prompts.jsonl.gz`) since the last export | Yes | Yes |
 | `research/<run>/folder/…`: the [research folder](../explanation/campaign-modes.md#research) of each run that finished in this export (a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation) | Yes | Yes |
 | `research/<run>/folder-<export>/…`: the research folder of every other research run, and of every other hill-climb or goal run that recorded sources, claims or notes, or compacted a conversation, as it stands now: running, paused, closed or broken | No | Yes |
 | `research/<run>/…`, other files: each run's archive of the web pages it fetched | No | Yes |
@@ -48,7 +48,7 @@ A run's folder in a full export goes beside the place a normal export puts a fin
 
 | Part | A run's export |
 | --- | --- |
-| Events, attempts, field notes, research notes, briefing and knowledge items | The run's alone, from its start: the events whose `run` is the run, which include those about its attempts (each `verdict`, its lifecycle, audits) and about the judge's jobs for it |
+| Events, attempts, field notes, source notes, briefing and knowledge items | The run's alone, from its start: the events whose `run` is the run, which include those about its attempts (each `verdict`, its lifecycle, audits) and about the judge's jobs for it |
 | `research/<run>/folder-<export>/…` | The run's research folder as it stands, with its paper as `paper.md` when it has one |
 | `research/<run>/…`, other files | The run's archive of the web pages it fetched |
 | `ledger.sqlite` | No: the ledger holds every run |

@@ -1,7 +1,12 @@
 import type { DatabaseSync } from "node:sqlite";
 import { transaction } from "../../../common/sqlite.ts";
-import { type KbItemBody, type KbKind, readKbAddress, writtenRef } from "../../../core/kb.ts";
-import { str } from "../../../core/kb-index.ts";
+import {
+  type KbItemBody,
+  type KbKind,
+  readKbAddress,
+  str,
+  writtenRef,
+} from "../../../core/kb/index.ts";
 import { JOURNAL_KINDS, type KbCollection, type KbFound, type KbItem } from "../../kb/index.ts";
 import { KbFileRows, KbSettingRows, keepFileText, knowledgeFiles } from "./files.ts";
 import {
@@ -52,6 +57,7 @@ export type {
   KbTotals,
 } from "./list.ts";
 export type { OlderVersion } from "./older.ts";
+export { knowledgePublicNames } from "./public-names.ts";
 export type { KbSearchMode } from "./query.ts";
 export { knowledgeHierarchy, knowledgeSlotNames } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
@@ -444,7 +450,7 @@ export class KnowledgeBase {
   }
 
   /**
-   * The item at an address (core/kb.ts), the newest of that address if two rigs' runs share its
+   * The item at an address (core/kb/items.ts), the newest of that address if two rigs' runs share its
    * run's name; within `where` when given. Undefined when there is none there.
    */
   at(address: string, where?: readonly KbWhere[]): KbItem | undefined {

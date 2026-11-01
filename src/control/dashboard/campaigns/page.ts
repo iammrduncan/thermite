@@ -47,7 +47,7 @@ import { goalState } from "../../ui/operator/index.ts";
 import { campaignHref, runHref } from "../../ui/urls.ts";
 import { campaignUsageBlock, runStateWord } from "../../ui/usage.ts";
 import { listText } from "../../ui/words/index.ts";
-import { usageData } from "../../usage.ts";
+import { usageData } from "../../usage-report.ts";
 import {
   type CampaignView,
   campaignViews,

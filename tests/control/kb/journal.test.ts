@@ -34,13 +34,13 @@ async function ingest(store: ControlStore, rig: string, events: Ev[]) {
   });
 }
 
-/** A goal run with a trial, two field notes (one in a trial), a research note and a hypothesis. */
+/** A goal run with a trial, two field notes (one in a trial), a source note and a hypothesis. */
 async function aRun() {
   const store = controlStore();
   assigned(store, "rig-a", "gs-3", "gemv-speed");
   await ingest(store, "rig-a", [
     ["harness", "run_created", "gs-3", { campaign: "gemv-speed", mode: "goal" }],
-    ["scheduler", "trial_started", "gs-3", { trial: "t-1", lane: "lane-1", family: "loads" }],
+    ["scheduler", "trial_started", "gs-3", { trial: "t-1", lane: "lane-1", direction: "loads" }],
     [
       "lane-1",
       "journal_note",
@@ -58,7 +58,7 @@ async function aRun() {
     ["planner", "journal_note", "gs-3", { id: 2, by: "planner", kind: "lesson", text: "Plain." }],
     [
       "lane-1",
-      "research_note",
+      "source_note",
       "gs-3",
       { note: 3, by: "lane-1", text: "The GPU has 4 MB of L2.", sources: ["s-1"], trial: "t-1" },
     ],
@@ -112,7 +112,7 @@ test("a store from an earlier reading gives the items it kept their lane and tri
     Number((store.db.prepare("select count(*) as n from kb_version").get() as { n: number }).n);
   const kept = versions();
   const kinds = kb.kindsToReadAgain();
-  for (const k of ["journal_note", "research_note", "trial_started", "hypothesis_added"])
+  for (const k of ["journal_note", "source_note", "trial_started", "hypothesis_added"])
     assert.ok(kinds.includes(k), k);
   assert.ok(!kinds.includes("run_created") && !kinds.includes("hypothesis_status"));
   await readKnowledgeAgain(store, busOf(store).bus);
@@ -137,7 +137,7 @@ test("a store from an earlier reading gives the items it kept their lane and tri
 test("the Journal tab reads its field notes from the knowledge base, with each note's trial", async () => {
   const store = await aRun();
   const field = store.kb().fieldNotes("rig-a", "ledger-rig-a", "gs-3", 500);
-  // Field notes only, newest first: the research note is not one.
+  // Field notes only, newest first: the source note is not one.
   assert.equal(field.total, 2);
   assert.deepEqual(
     field.items.map((x) => x.ref),

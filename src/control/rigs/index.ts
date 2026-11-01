@@ -7,40 +7,36 @@
  * subscription's weekly limit (weekly.ts).
  */
 
-export {
-  type AgentModelPlan,
-  agentsModelMissing,
-  applyAgentModel,
-  checkAgentModel,
-  clearRigModel,
-  giveRigModel,
-  harnessKept,
-  opencodeOnlyModel,
-  researchNeedsOpencode,
-  rigModels,
-  setRigModel,
-} from "./agent-models.ts";
 export { takeFigures } from "./figures.ts";
 export { sendSplit, splitFor } from "./gpu-split.ts";
 export {
   type AdvisorSetupView,
   type AdvisorsFileView,
+  type AgentModelPlan,
+  advisorRoutesOf,
   advisorsFileOf,
+  agentsModelMissing,
+  applyAgentModel,
+  checkAgentModel,
+  clearRigModel,
+  giveRigModel,
   HARNESS_NAMES,
+  harnessKept,
+  type ModelRoutes,
+  modelRoutesOf,
   neededHarness,
   opencodeOnly,
+  opencodeOnlyModel,
   RigModelBody,
+  type RouteParts,
+  researchNeedsOpencode,
   rigModelAnswer,
   rigModelFields,
   rigModelRequest,
+  rigModels,
   rigModelsAnswer,
-} from "./model.ts";
-export {
-  advisorRoutesOf,
-  type ModelRoutes,
-  modelRoutesOf,
-  type RouteParts,
-} from "./model-routes.ts";
+  setRigModel,
+} from "./model/index.ts";
 export { checkRigPlace } from "./place.ts";
 export { bringBackRig } from "./retire.ts";
 export {
@@ -66,12 +62,13 @@ export {
   NO_RIG_BUS,
   type RigImages,
   rigBusOf,
+  rigSetupView,
   rigTaken,
+  SETUP_STEPS,
   STEP_WORDS,
   sleep,
   UPDATE_STEP_WORDS,
-} from "./setup.ts";
-export { rigSetupView, SETUP_STEPS } from "./setup-view.ts";
+} from "./setup/index.ts";
 export { RigUpdates, rigVersionWords } from "./update.ts";
 export { checkQuietRigs } from "./watch.ts";
 export { WEEKLY_MODEL_STEP, WEEKLY_WAIT_STEP, weeklyLimit } from "./weekly.ts";

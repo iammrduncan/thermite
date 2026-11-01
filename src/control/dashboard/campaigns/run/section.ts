@@ -40,7 +40,7 @@ import { promptsTab } from "../../../ui/prompts.ts";
 import { attemptHref, championPatchHref, type RunTab, runHref } from "../../../ui/urls.ts";
 import { type RunUsage, runStatsTab, runUsageTop } from "../../../ui/usage.ts";
 import { auditReason, clip, jobText, runStatusText, signed } from "../../../ui/words/index.ts";
-import { pricingOf, usageData } from "../../../usage.ts";
+import { pricingOf, usageData } from "../../../usage-report.ts";
 import {
   championsInForce,
   currentChampion,
@@ -455,11 +455,11 @@ export function runHelpers(dash: Dashboard) {
                       csrf: t,
                       back,
                       cmd: (f) => cmdForm(c, f),
-                      families: [
+                      directions: [
                         ...new Set([
-                          ...i.queue.map((x) => x.family),
-                          ...i.trials.map((x) => x.family ?? ""),
-                          ...(i.epoch?.assignments.map((a) => a.family) ?? []),
+                          ...i.queue.map((x) => x.direction),
+                          ...i.trials.map((x) => x.direction ?? ""),
+                          ...(i.epoch?.assignments.map((a) => a.direction) ?? []),
                         ]),
                       ].filter(Boolean),
                     })

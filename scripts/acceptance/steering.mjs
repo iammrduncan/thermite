@@ -148,7 +148,7 @@ function script(messages, tools, model) {
       directives: [
         {
           kind: "mandate",
-          family: "tiling",
+          direction: "tiling",
           rationale: "both reviewers point at cache blocking",
           citations: ["acceptance:teacher-a", "acceptance:teacher-b"],
         },
@@ -160,7 +160,7 @@ function script(messages, tools, model) {
     const advice = answer({
       summary: "try cache blocking",
       recommendations: [
-        { kind: "try", family: "tiling", rationale: "blocking", citations: ["acceptance"] },
+        { kind: "try", direction: "tiling", rationale: "blocking", citations: ["acceptance"] },
       ],
     });
     return kbTurn(messages, tools, prompt) ?? piView.turn(model, messages, advice) ?? advice;
@@ -361,7 +361,7 @@ try {
   check(
     "the next epoch records the directive and the lane it steered",
     epoch.body.assignments.some(
-      (/** @type {Assignment} */ a) => a.family === "tiling" && a.directive,
+      (/** @type {Assignment} */ a) => a.direction === "tiling" && a.directive,
     ),
     epoch.body,
   );

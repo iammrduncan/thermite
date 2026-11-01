@@ -1,5 +1,5 @@
 import type { ControlStore } from "../../src/control/store/index.ts";
-import type { KbItemBody } from "../../src/core/kb.ts";
+import type { KbItemBody } from "../../src/core/kb/index.ts";
 
 /**
  * A knowledge base with places to list (goal 176), in one store, as rig-a's events and its

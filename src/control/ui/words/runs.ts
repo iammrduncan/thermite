@@ -40,7 +40,7 @@ export function runSentence(w: SentenceContext, e: StoredEvent): Sentence | null
       );
     case "epoch_started": {
       const as = Array.isArray(b.assignments)
-        ? (b.assignments as { lane?: string; family?: string }[])
+        ? (b.assignments as { lane?: string; direction?: string }[])
         : [];
       const round = Number.isFinite(Number(b.n)) ? `round ${String(b.n)}` : "a round";
       // Why each try gave no plan: its real cause (goal 079), else ("try 2: …") its refusal.
@@ -67,7 +67,7 @@ export function runSentence(w: SentenceContext, e: StoredEvent): Sentence | null
       // A research run's code plan, with the planner off on purpose (goal 117): not a refused plan.
       if (b.plan === "research" || String(b.notes ?? "").startsWith("research plan"))
         return s(
-          `The gap-driven plan set ${round} (the planner is off): ${as.map((a) => `${a.lane} on ${a.family}`).join("; ")}.`,
+          `The gap-driven plan set ${round} (the planner is off): ${as.map((a) => `${a.lane} on ${a.direction}`).join("; ")}.`,
           "",
           { run: String(e.subject) },
         );
@@ -82,7 +82,7 @@ export function runSentence(w: SentenceContext, e: StoredEvent): Sentence | null
                 : Number(b.planner_tries) === 0
                   ? " (by the fixed rules: no model)"
                   : " (by the fixed rules)"
-        }: ${as.map((a) => `${a.lane} on ${a.family}`).join("; ")}.`,
+        }: ${as.map((a) => `${a.lane} on ${a.direction}`).join("; ")}.`,
         "",
         { run: String(e.subject) },
       );
@@ -94,7 +94,7 @@ export function runSentence(w: SentenceContext, e: StoredEvent): Sentence | null
           : `without a submission (${String(b.stopped).replace(/_/g, " ")}${b.error ? `: ${clip(String(b.error), 140)}` : ""})`;
       const compactions = Number(b.compactions) || 0;
       return s(
-        `${b.lane ? String(b.lane) : "A lane"}'s trial${b.family ? ` on ${String(b.family)}` : ""} ended ${why}.${compactions ? ` Its conversation was compacted ${compactions === 1 ? "once" : `${compactions} times`}.` : ""}`,
+        `${b.lane ? String(b.lane) : "A lane"}'s trial${b.direction ? ` on ${String(b.direction)}` : ""} ended ${why}.${compactions ? ` Its conversation was compacted ${compactions === 1 ? "once" : `${compactions} times`}.` : ""}`,
         b.attempt ? "" : b.stopped === "error" ? "bad" : "",
         { attempt: b.attempt ? String(b.attempt) : undefined, run: String(e.subject) },
       );
