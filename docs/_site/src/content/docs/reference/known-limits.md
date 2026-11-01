@@ -15,7 +15,7 @@ Thermite is at version 0.x. This page lists what to know before you run it: the 
 | [There are no default caps](#there-are-no-default-caps) | No goal: it is a decision |
 | [Timing on RunPod is noisier](#timing-on-runpod-is-noisier) | No goal: it comes with shared machines |
 | [Research mode searches the web only through an MCP server](#research-mode-searches-the-web-only-through-an-mcp-server) | No goal: give the campaign a search server |
-| [The knowledge base takes text from agents, and reads each file once](#the-knowledge-base-takes-text-from-agents-and-reads-each-file-once) | No goal yet: [goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/175-knowledge-base.goal) records them |
+| [The knowledge base takes text from agents, and reads each file once](#the-knowledge-base-takes-text-from-agents-and-reads-each-file-once) | No goal yet: [goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/_completed/175-knowledge-base.goal) records them |
 | [Runs of several days are not yet proven](#runs-of-several-days-are-not-yet-proven) | [Goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), v0.5.0 |
 | [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.1.2 |
 | [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), v0.1.3 |
@@ -73,7 +73,7 @@ Research workers have no web search of their own. They search the web with the t
 - **A scanned PDF gives no text.** Control reads no text from images, so a PDF of scanned pages is kept whole and not searched. A PDF whose fonts need character maps, as some with Chinese, Japanese or Korean text do, may give little or wrong text.
 - **A file is read once.** Control reads each file's text once, by its SHA-256. When a later version changes the limits, or reads more kinds of file, control does not read again a file it read before.
 
-**Removed by:** no goal yet. [Goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/175-knowledge-base.goal) records each of them.
+**Removed by:** no goal yet. [Goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/_completed/175-knowledge-base.goal) records each of them.
 
 ## Runs of several days are not yet proven
 

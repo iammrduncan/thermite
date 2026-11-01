@@ -77,27 +77,210 @@ Then: "not only file sizes and restructure stuff, but also looking for DRY, etc 
 
 ## Audit
 
-Filled in as the work goes, one heading for each area. It starts from goal [127](_completed/127-clean-up-pre-audit.goal)'s guide, `docs/plan/code-clean-up-guide.md`.
+Each area was audited against the rules of CONVENTIONS.md, starting from the themes (T1 to T15) and the owner's answers to the questions (Q1 to Q26) of goal [127](_completed/127-clean-up-pre-audit.goal)'s guide, `docs/plan/code-clean-up-guide.md`. Each finding names its theme or question and what fixed it: a commit, or the date of its line under Progress. The bugs the audit found are in goals [161](_completed/161-control-bugs-from-the-audit.goal) to [165](_completed/165-results-kept-through-remove-and-reset.goal) and [171](_completed/171-bugs-on-the-wire.goal), each with its regression test. Security findings are handled as [SECURITY.md](../../../SECURITY.md) says (goal [172](172-build-v011.goal), step 10) and are not written here. "Now" means commit 63ea241b.
 
-Known at the start, 2026-10-24:
+### At the start and now
 
-- **File sizes.** Of the 262 production files in `src/` (tests not counted), 33 are over 800 lines, and 29 more are between 500 and 800. The largest:
+| | At the start | Now |
+| --- | --- | --- |
+| Production files over 800 lines | 33 (2026-10-26; `control/dashboard.ts` 8,875) | 0 |
+| Files in scope over 800 / over 500 lines | 49 / 124 (the first baseline, 2026-10-27, 597 files) | 0 / 121 (1,727 files; `npm run check:sizes -- --list`) |
+| Groups of files named in place of a folder | 32, with 96 files | the groups under [Still open](#still-open) |
+| Exceptions to the import rule | 62 in 32 files (2026-10-27) | 2, in one file, with a reason |
+| Loose ends (`scripts/loose-ends.json`) | 692 when the check started (2026-11-01) | 679 unused exports and 2 paths |
+| Tests | all 206 test files beside the code | in `tests/`, mirroring `src/` (goal [160](_completed/160-v010-audit.goal), then 2181f7be) |
+| CI's heavy jobs | picked by file paths, some missed | picked by folders (2026-10-31 23:17) |
+| Log levels | fixed when a part starts | changed while it runs (T4, Q16) |
 
-  | File | Lines |
-  | --- | --- |
-  | `src/control/dashboard.ts` | 8,894 |
-  | `src/control/store.ts` | 4,303 |
-  | `src/harness/agents/scheduler.ts` | 3,086 |
-  | `src/supervisor/advisors.ts` | 3,070 |
-  | `src/harness/service.ts` | 2,994 |
-  | `src/control/views.ts` | 2,175 |
-  | `src/harness/judge/judge.ts` | 2,134 |
+### Control (`src/control/`)
 
-  In `scripts/`, 2 files are over 800 lines.
-- **Names in place of folders.** 32 groups of files, 96 files in all, share a word at the start or the end of their names, such as the 16 `scripts/*-acceptance.mjs`, the 9 `src/control/ui/*-client.ts` and the 6 `src/control/runpod-*.ts`.
-- **Tests beside the code.** All 206 test files sit in `src/`, beside the code they test. `scripts/test.mjs` lists them from `src/` (`readdirSync("src")`), and runs those that match `^src/harness/(judge|broker)/` alone, one at a time: both change when the tests move. New test helpers go in `src/testing/` until then. Goal [160](_completed/160-v010-audit.goal) moved them all on 2026-10-26: the tests to `tests/`, the helpers to `tests/helpers/`.
-- **CI picks its heavy jobs by path.** The compose-smoke, rig-image, RunPod and quick-start jobs in `.github/workflows/ci.yml` run on a push or a pull request only when the change touches their paths, which name files in `src/`, such as `^src/(control|harness)/api\.ts$` and `^src/harness/broker(\.ts|/)`. Each move, split and rename updates these lists in the same commit, or a heavy check stops running when it should.
-- **Logging.** No log level can be changed while a program runs.
+Audited against file size and folders (T8, T9), repeated knowledge (T1), module design (T5, T6), contracts and errors (T2, T4), growth (T12), dead code (T13), logging (Q16) and the browser scripts (Q10).
+
+- **The rig operations lived in the dashboard,** behind `ControlActions`' 12 optional slots. T5 and Q8: one domain module for each operation, which REST, MCP and the pages call; `ControlActions` is gone (7419f712, 38cac095). Control's `main.ts` builds the parts once (acf3f386).
+- **Facts worked out inline:** the current champion 13 times, a run's campaign 16 times, the judge's GPU share in 10 places, 4 rig-name rules. T1: `control/views/facts.ts`, `core/ids.ts` and `core/hardware.ts` (ccc48e0a, 326a5d50, 288b7292, 1b3b9d06).
+- **The table of who may issue each command** was kept in `control/mcp.ts` and in the harness. T1: one table in `core/commands.ts` (eefff17d).
+- **Event kinds read by bare string** in about 30 files. T1: `core/events/` lists each kind with its body, checked when the code compiles (31c65370, 29aee825). Checks at control's intake come later, by the owner's answer to Q5.
+- **Each side of a route kept its own limits,** and a body over its limit was answered 500. T2: one contract for each API in `core/api/`, which both sides import; an oversized body is now 413 (e2c26448). REST refusals in their own words: goal 161 (273ff621).
+- **The store was one class of about 180 methods,** three modules made tables, and migrations checked columns at each start. T6 and Q9: 32 sub-stores in `control/store/`, ordered migrations with a version table (goal 173, b24a041d), one transaction helper in `common/sqlite.ts`, and a test that no production code outside the store runs SQL (2749651c, 94294866).
+- **Large files:** `dashboard.ts`, `api.ts`, `mcp.ts`, `mcp-servers.ts`, `views.ts`, `store.ts` and the pages' style, words and operator cards. T8: each is a folder of its parts, with every route, string and output the same before and after (462e9715, be4c3f6d, 2ac944ec, 1b58285d, 94294866). `views.ts`'s switch of 78 cases is the `RigFold` class, held by a test that folds the same events in different splits.
+- **Names in place of folders:** `runpod-*`, `campaign-*`, `rig-*`, `kit-*`, `mcp-servers*`, `*-view.ts` and the pages' `*-client.ts`. T9: folders, each with an `index.ts` that code outside imports (921fed83, 4b765429, d023f95f, 991faa19).
+- **Domain modules imported page code.** Q3: control's `main.ts` hands the API its pages (`MountPages`), and `listText` is in `core/words.ts` (7419f712, e614efd1, 4234c561).
+- **Views were built again from every event on each request:** about 0.55 s for each rig at 100,000 events. T12 and goal 168: each rig's fold is kept and takes only new events (acdf381d); existence checks build no view (84ae73ec). At 100,000 events: start-up pass 0.26 s, every rig's view with nothing new 23.5 ms (2026-11-01 01:36).
+- **Control removed nothing it copies or derives.** Q12, as the owner answered it on 2026-11-01: Settings › Space and `thermite_control_space_bytes`; retention policies for seven kinds, each off until set (84ae73ec, cdf7c813, 546b09f3, f5c63fbe); exports only when a run ends or by hand, deleted only by hand (9a61da9a).
+- **The browser scripts had no check.** Q10: `tests/control/dashboard/browser-scripts.test.ts` parses each served script, refuses inline scripts and holds constants to `JSON.stringify`; it found 7 places, fixed with the same output (63ea241b).
+- **Control's log level was fixed at start.** Q16: a setting kept in the store, over REST, MCP and `thermite log-level control`, applied at once and audited (63ea241b).
+- **Backups, the remove guard and health:** Q13 and Q15 are goal [173](_completed/173-recovery-and-health.goal), Q14 is goal [165](_completed/165-results-kept-through-remove-and-reset.goal), all verified. T15, a thing addressed through what owns it, is goal [170](_completed/170-one-hierarchy.goal), verified.
+
+Left as it is: the two checks of every signed command, `prepareCommand`, and the REST and MCP twins, as the guide's section 5 says.
+
+### Harness (`src/harness/`)
+
+Audited against T1, T3, T4, T6, T7, T8, T9, T12 and T13, and Q1, Q2, Q25 and Q26.
+
+- **`Ledger.db` was public:** 234 raw SQL sites in 35 files, and hand-written queries of the event table in 18 files, two of which missed the kinds renamed on 2026-10-15. T6: `ledger/events.ts` reads events typed by kind (36a2f9c2, 104f8ada); each table has one module under `harness/ledger/` (a761a88f, 3fc2625e, dfe0d421, 96ec38de, 632e706d). `tests/harness/ledger/owners.test.ts` holds that no production code outside them queries the database (20bd60d6). The schema, the selftest and the snapshot open the file themselves, and tests may read it (2026-10-28 03:47 and 06:11).
+- **Promotion was written three times.** One function in one transaction: goal 163 (425f4903).
+- **No test migrated a ledger that v0.1.0 wrote.** T6: `tests/harness/ledger/migrations.test.ts`, from `tests/helpers/data/ledger-v0.1.0.sql` (937d12e0).
+- **153 plain `Error`s became HTTP 500.** T4: `Refusal` is 409, `BadInput` 400, and a `LedgerError` answers by its code (93b93446, d7117cc9). Faults of the harness's own, such as a path it built, stay `Error`, where 500 is right. A refused command is answered 200 with `accepted: false`, since it is recorded (2026-10-27 17:35).
+- **Settings read with raw `process.env`.** T4: `HARNESS_NUMBERS` and `BROKER_NUMBERS`, read through `readNumber` (1f792d26); a bad value stops the part at start: goal 164.
+- **Attempt, trial and experiment IDs made in four places.** T1: `core/ids.ts` (e9b10e03).
+- **Four trial loops, 60 to 83% the same,** and the program chosen in 34 places. T7: one CLI trial loop and one table of programs, `harness/agents/programs.ts` (e2353106, dab6e7d8, 5779573a, 03d736a9). Claude Code's limits note gives its measured memory (d6b436a5).
+- **Large files:** the service, the scheduler with the planner and the worker, the API, research's run, review and paper, the schema and `main.ts`. T8: folders of their parts, `main.ts` as `harness/controller/` (39e20b74, cda4482f, 137dec6a, 5831f087, 9f657165).
+- **The shared agent runtimes and the contract words lived in the harness.** Q1 and Q2: `src/agents/` and `core` (1e33fa82, fa96518e).
+- **Stops and resets reached the scheduler by an event it polled every second.** Q26: the service also tells the scheduler at once through `AgentSignals`, and still writes the events; ledger migration 28 acts on a reset once (63ea241b).
+- **Growth:** an hourly export copied the whole ledger, and the build store only grew. T12: a run is exported once when it ends (9a61da9a); builds and trials' session logs are kinds a policy may remove, never a champion's build (cdf7c813, 546b09f3); crash leftovers are swept at start (84ae73ec).
+- **Dead code:** `JudgeOptions.promotion`, `POST /v1/export` (84ae73ec) and `gapPlan` (c05f0a0b) are gone. `usageLimitRetry` and `setFamilyStatus`, which the guide found kept alive only by tests, now have production callers (the advisors' usage limits; the conclusions), so they stay.
+- **`Ledger.invalidate()` had no caller.** Q25: goal [174](_completed/174-invalidate-evidence.goal), verified.
+
+Left as it is: the ledger's interface, its append-only triggers, the readers of v0.1.0 ledgers' older events (`core/names.ts`, kept by the owner's decision of 2026-10-31 23:15), and the brief windows, as the guide's section 5 says.
+
+### The judge (`src/harness/judge/`)
+
+Audited on its own against T3, T8 and T10, with the judge acceptance check.
+
+- **`judge.ts` was 2,131 lines.** T8: `Judge` keeps its job loop; its shared steps are `JudgeContext`, with a module for each kind of job in `judge/jobs/` (a254fb55).
+- **The held-out words were the judge's,** and control and the supervisor imported them. T1: `core/held-out.ts`, three import exceptions gone (3a664e06).
+- **Git and subprocess calls had their own wrappers.** T3: `common/git.ts`, with a named time limit (4a183cb3).
+- **Failures that passed for something else,** and a held-out mask that fell back to empty: goal 163 (8a53a444).
+- **No property tests of verdicts or promotion.** T10: seeded property tests of the statistics, the screen's verdicts and promotion's compare-and-swap; the last fails when the swap takes a stale seq (ccff6687, 106d3dfd).
+
+The judge acceptance passed 24 checks after T6 (2026-10-27 21:53). Its adversarial set runs in CI on each version tag (Q20, c05f0a0b), not yet run there.
+
+### The broker (`src/harness/broker/`)
+
+- **`broker.ts` sat beside `broker/`.** T8 and T9: a folder with its context, folders, devices, controller, supervisor and snapshots, entered by `broker/main.ts` (a254fb55, 921fed83).
+- **The user IDs were in the Containerfile and in `runner.ts`.** T14: each ID is in the image's script and in TypeScript, held equal by a test (c238483c).
+
+Left as it is: the broker's own process runner apart from `common/exec`, and its restarts of the controller and the supervisor with a backoff, as the guide's section 5 says. `thermite selftest isolation` imports the broker's device lists and the selftest: the one import exception (below, the command line).
+
+### Supervisor (`src/supervisor/`)
+
+Audited against the import rule (Q1, Q2, Q3), T2, T3, T4, T8, T9 and Q24.
+
+- **It imported 20 harness files,** 32 import exceptions. Q1 and Q2: it imports `src/agents/` and `core`; none is left (1e33fa82, fa96518e).
+- **20 calls built by hand in 11 files,** errors matched by their English words, the same auth header in 12 files, and one time limit in 13 files that call HTTP. T2: one typed client for each API in `common/api/`, with time limits; no caller matches an error's words (e2c26448).
+- **Git push and fetch had no time limit.** T3: one git runner with a 30-minute limit (4a183cb3).
+- **The figures' limits differed between the sides** (50 and 1,000 against `slice(-50)` and `slice(0, 900)`). T2: one value for each.
+- **`advisors.ts` and `advise.ts`** (a function of 1,052 lines). T8 and T9: one folder, `advisors/`, with the pass in `pass/` and the tools in `tools/` (d959c88f, 1e33fa82).
+- **Four names for the review panel and two for the merging teacher.** T1 and Q11: `review_panel` and `merged_by` everywhere, with `ADVISOR_ROLES` in `core/agents.ts` (dfbf991a).
+- **The advisors file's `kb` and the teachers' `search_outside_kb` did one job two ways.** Q24: both are gone; a file that still has `kb` is read without it, with a warning, since a refusal would stop the rig at the upgrade's restart (63ea241b).
+- **Past research was copied to the rig twice for each run.** Goal [175](_completed/175-knowledge-base.goal): nothing of the knowledge base is kept on a rig (3e78db26).
+- **The advisors' records only grew.** T12: a kind a policy may remove, kept under `advisors/runs/<run>/` (cdf7c813).
+- **Settings and log levels:** `SUPERVISOR_NUMBERS` (1f792d26); the level changes by the signed `log_level` command (Q16, 63ea241b).
+
+Left as it is: `git-export.ts`, which commits without a checkout, as the guide's section 5 says.
+
+### Agents (`src/agents/`)
+
+A part made by Q1 (2026-10-28 17:19): the model client, compaction, the MCP tools, the programs' adapters and the tools, then the roles (goal [166](_completed/166-agent-definitions.goal)) and the terminal and Pi view (goal [169](_completed/169-agents-in-their-terminal.goal)). Audited against folders and the import rule, T3, T4 and T7.
+
+- **The shared runtimes lived in `harness/agents/`,** and the supervisor imported them there. Q1: they are `src/agents/` (1e33fa82).
+- **The runtimes' number settings** are one table, `AGENTS_NUMBERS` in `agents/settings.ts`, which the harness and the supervisor both read, so a bad value stops either at start (T4, 1e33fa82).
+- **A role's terminal path lived in the harness.** It moved to `src/agents/`, so every role's runner can use it, the advisors' too (12192729).
+- **Each role's prompt and tools** have one definition, in `agents/roles/` and `agents/tools/` (goal 166).
+
+Left as it is: the OpenCode plugin and the compaction hook keep their own copies of `common`'s helpers (2026-10-27 16:19), and `node:http` in place of `fetch` in the model's forward, as the guide's section 5 says.
+
+### The command line (`src/cli/`) and `src/release/`
+
+Audited against T2, T4, T8, T9, T13 and Q6.
+
+- **`cli/thermite.ts` was 1,330 lines,** a `switch` of 965. T8: a module for each command in `cli/thermite/`, with the usage text in its own module, which the docs check reads (5831f087); the entry is `cli/thermite/main.ts` (921fed83).
+- **It imported 3 control and 2 harness files.** It takes its words from `core` and `common` (219410d3). One exception stays: `cli/thermite/local.ts` runs the harness's isolation check, with the broker's device lists, in the harness's own image; the check has one home (2026-10-28 17:26, `scripts/import-exceptions.json`).
+- **Names from before v0.1.0:** `--instance`, `--unit` and `--direction` are gone, with the three wrapper files only tests kept alive (Q6, 84ae73ec).
+- **`scripts/dev-init.mjs` copied `cli/local-init.ts`.** `npm run dev:init` runs it from the source (T13, 63ea241b).
+- **Calls and settings:** the typed clients (T2, e2c26448) and `CLI_NUMBERS` (T4, 1f792d26). New commands follow REST and MCP: `thermite exports delete` (9a61da9a), `thermite retention` (cdf7c813) and `thermite log-level` (63ea241b).
+- **`src/release/`** has thin scripts over tested modules, as the guide's section 5 says; the pinned versions it checks come from the one Containerfile (c238483c).
+
+### Core (`src/core/`)
+
+Audited against T1, T2, T11, Q2, Q4 and Q5, and the TypeScript rules.
+
+- **Shared words kept in each part.** T1: event kinds and bodies (`core/events/`), verdicts and lifecycles (`verdicts.ts`), held-out words (`held-out.ts`), the agents' words and roles (`agents.ts`), IDs (`ids.ts`), the old-name map (`names.ts`) and the GPU share (`hardware.ts`) (31c65370, 29aee825, 3a664e06, 26b5f11d, e9b10e03, 1b3b9d06).
+- **Contract words lived in the harness.** Q2: the kit's schema, the goals' checks and values, the research's checks, the rig's settings and ChatGPT's address (fa96518e).
+- **`core/version.ts` read `package.json`.** Q4: the read is `common/build-info.ts`; path work is `core/paths.ts`, held to Node's `path.posix` (fa96518e).
+- **Each route's schema and limits had copies.** T2: `core/api/` (e2c26448); the message bus's contracts are `core/link/` (goal [168](_completed/168-message-bus.goal)).
+- **The research corpus was read four ways.** T11: `core/corpus.ts` reads it for the research folder, the teachers, the knowledge base's index and control's research view, held to their earlier outputs by `tests/system/research-corpus.test.ts` (63ea241b).
+- **`RIG_MS`,** left by a blind rename: gone (T13, 84ae73ec).
+- **Retention's rule** is one function for the preview and the run, `core/retention/` (cdf7c813).
+
+Left as it is: the review panel's decisions are still read two ways, since the readings differ on malformed dissent entries (2026-11-01 14:15). Fields whose words only the harness defines, such as a baseline's cells or a review's items, stay `unknown` in `core/events/bodies.ts` (30 now), as its header says, until their words move to `core`.
+
+### Common (`src/common/`)
+
+Audited against T3 and T4. It held 3 files at the start.
+
+- **143 copies of the error-to-text idiom,** 5 named copies of `writeAtomic`, 7 git wrappers, 7 constant-time compares, 5 shell quotes. T3: `errorText`, `writeAtomic`, `sameSecret`, `shellQuote` and one git runner (eefff17d, 1d312458, 83a28173, 4a183cb3).
+- **One log function with no level.** T4: `common/log.ts`, with levels, `THERMITE_LOG_LEVEL`, SIGUSR2 and `setLogLevel` (a734d786, 63ea241b).
+- **Three transaction helpers and two sets of pragmas.** T6: `openDatabase` and `transaction` in `common/sqlite.ts` (2749651c).
+- **Settings tables** read through `readNumber` (T4, 1f792d26); typed API clients in `common/api/` (T2, e2c26448).
+
+### Tests (`tests/`)
+
+Audited against T10, Q18 and Q19, and the testing rules.
+
+- **The control stack was written 21 times,** with a sign-in in 42 files and an MCP client in 10. T10: `tests/helpers/control-stack.ts` alone makes control; 113 files moved onto it, 2,696 lines out and 964 in (de636140, 8aa65e60, 10d719e1, 4745cc32).
+- **15 test files over 800 lines,** and `core.test.ts` tested six modules. T10: 63 files in folders named for the code they test, and a file for each module (b328a53d, ff6e9759).
+- **No property tests,** and the research clock tested with real sleeps. T10: seeded property tests with no library (`tests/helpers/property.ts`; ccff6687, 106d3dfd); a clock moved by hand (696fbbe3).
+- **Two demo seeds did one job.** T10: `tests/helpers/demo/`, which the dashboard demo serves and the dashboard's tests read (63ea241b).
+- **Tests of moved code no longer mirrored `src/`.** T9 and Q18: 134 test files and 4 setup files moved; tests that wire two or more parts are in `tests/system/`, feature tests of control's pages in `tests/control/dashboard/` (2181f7be).
+- **The stand-ins were in `containers/test-*`.** Q19: `tests/stand-ins/<name>/`; no published image takes anything from `tests/` (63ea241b).
+- **Tests that hold a rule:** golden tests of every role's whole prompt (goal 166), and tests that no production code outside the ledger's and the store's modules runs SQL (T6).
+- **Checked now:** no test is skipped; each of the 12 `biome-ignore` and `@ts-expect-error` comments in `src/`, `tests/` and `scripts/` states its reason; `src/` has no `any`.
+
+### Scripts (`scripts/`)
+
+Audited against T3, T8, T9, T13 and Q19.
+
+- **Nothing held file sizes.** The size check, `npm run check:sizes` (40c162e7), in `npm run check` and CI. It counts test files, and a file's reason to stay goes in the baseline's `reason` field: the answers to this goal's two open questions.
+- **Nothing held the import rule** (Q3): `npm run check:imports` (40982322). **Nothing found loose ends** (T13): `npm run check:loose-ends` (84ae73ec).
+- **`check()` was written 16 times.** T3: `scripts/acceptance/lib/checks.mjs` (07fbf00f). `claude-real.mjs` keeps its own, which prints a failed check's log lines (2026-10-27 17:45).
+- **Names in place of folders** (16 `*-acceptance.mjs`, the docs, release and dev tools) and two scripts over 800 lines. T9 and T8: `scripts/acceptance/`, `checks/`, `docs/`, `release/` and `dev/`, and the two scripts as folders of their steps (1f21bba6, 5831f087).
+- **`stage-smoke.mjs` was called by nothing,** and still started CI's heavy jobs: gone (T13, 84ae73ec).
+- **No typecheck and no npm script for most acceptance checks.** Q19: every acceptance script and its `lib/` starts with `// @ts-check` and is type-checked; each check has `npm run acceptance:<name>`, held by `tests/scripts/acceptance.test.ts` (63ea241b).
+- **T12's measurement:** `npm run bench:views` (`scripts/bench/views.ts`, 84ae73ec), run at 100,000 events.
+
+Left as it is: `scripts/patch-pi-ai.mjs`, as the guide's section 5 says.
+
+### Containers and CI (`containers/`, `.github/`)
+
+Audited against T14 and Q17, Q20 and Q21.
+
+- **The build stage was copied 3 times,** the program stages twice, the versions in two files and the set-id sweep 4 times. Q21: one `containers/Containerfile` with a target for each image; the shared stages and each pinned version once; the sweep and the supervisor's users as scripts in `containers/build/` (c238483c, 70bcf66c). Tests hold each version to one default and each target to what it held.
+- **The images took no fixes from their base between releases.** Each image upgrades its base's system packages when built (2f94621a).
+- **CI's path lists named files,** and missed parts of the API and the relay. They name folders now, and cover the message bus (2026-10-28 11:43, 2026-10-31 23:17).
+- **13 of the 17 acceptance checks never ran in CI.** Q20: `tag-acceptance` runs every check a runner can run, on a version tag or by hand (c05f0a0b). The cluster and rig deploy checks need Podman itself, and the paid RunPod check costs money: they stay by hand (2026-11-01 03:25). CI and release runs wait for a maintainer's approval (54209168).
+
+Left as it is: the rig image keeps a Containerfile of its own, built on a published harness image (the owner, 2026-10-31 23:15). The move to Node 24 is for v0.1.2 (Q17).
+
+### Kits and examples (`kits/`, `examples/`)
+
+Audited against file size and T3's copies. No file is over 500 lines. The check of each smoke kit and of the sample kit (`examples/matmul-cpu/kit/`) share most of their code. Each kit is a repository of its own, so each keeps its own copy, as the guide's section 5 says for the smoke kits.
+
+### Docs
+
+The docs followed each change in its commit. What the goal itself changed:
+
+- CONVENTIONS.md: the rules of shape (b83b0562), the loose-ends rule (84ae73ec) and the folder and namespace rule (991faa19). CONTRIBUTING.md and the site's Contributing page name the size check.
+- AGENTS.md's checks, `docs/local-development.md` and the Contributing page name the scripts' new paths (1f21bba6) and `npm run acceptance:<name>` (63ea241b).
+- `npm run docs:check` holds the settings page's Type and Default cells to each part's table, and found three that disagreed (1f792d26), and reads the command line's usage text (5831f087).
+- The signed-commands page and the changelog said 409 for a refused command; corrected to 200 with `accepted: false` (d7117cc9).
+- The guide's section 5 names `tests/stand-ins/` (63ea241b).
+
+### Still open
+
+- **Q11 and Q23, the renames on the wire and in storage:** `family` to `direction` (the ledger's columns, the directives, MCP's `queue_add`, `queue_edit` and `redirect`); the field-note kind `note` to `other` (`core/journal.ts`); the directive kind `note` to `planner_note` (`core/directives.ts`); "research note" to "source note" (`research_note`, `add_note`); and the contract's `notes` and the signed `direction`, which take their new names as Q23 says. This goal.
+- **Q22:** 2,568 mentions of a goal number in `src/`, 2,548 of them on comment lines. This goal.
+- **T13:** 679 unused exports in `scripts/loose-ends.json` (control 260, the harness 179, `agents` 71, `core` 60, the supervisor 54, `common` 26, the command line 24, `release` 5). This goal; the check fails until each removed one is dropped from the list.
+- **Folders in place of names.** Move `src/core/kb.ts`, `kb-fields.ts`, `kb-index.ts` and `kb-index-research.ts` into `core/kb/`, and `harness/kb-part.ts` into `harness/kb/`. Rule on the two-file groups: `control/run-lists` and `run-names`, `harness/run-research` and `run-status`, `harness/agents/trial-cli` and `trial-clock`, `supervisor/model-download` and `model-route`, `cli/local-enroll` and `local-init`, `control/mcp/rig-models` and `rig-reads`; and those that share a word with a one-word file: `common/git` and `git-auth`, `control/rigs/model` and `model-routes`, `control/rigs/setup` and `setup-view`, `control/campaigns/copy` and `queue-copy`, `control/mcp/reads` and `rig-reads`, `harness/rig-settings` and `settings`, `agents/programs/opencode/events` and `session-events`. Also the guide's rule 12 on same-named files: `usage.ts` in `core`, control and the harness, and `rig-settings.ts` in `core` and the harness (`research-tools.ts` is resolved). This goal.
+- **T4, silent catches:** 21 empty `catch {}` in `src/`, about half in the pages' browser scripts. The guide counted about 40; no sweep of them is recorded. This goal.
+- **Cohesion reviews:** 121 files in scope over 500 lines (50 in `src/`) have none recorded. This goal.
+- **T12:** the measurement at 1,000,000 events (`npm run bench:views -- --events 1000000`; about 2 GB of heap). This goal.
+- **T14:** a dry run of the release workflow since the one Containerfile, and the first CI run of `tag-acceptance`. Both need a maintainer's approval. This goal and goal 172.
+- **Q16:** the dashboard's place for log levels (Settings › Logs; Edit rig › Parts of the rig) waits for a mockup. This goal.
+- **The docs' screenshots** (`docs/_site/src/assets/screenshots/`) are taken again from the one demo seed (`scripts/docs/screenshots.mjs`); none is taken from it yet. This goal.
+- **Words to correct:** CONVENTIONS.md's "One name map" ("v0.1.1 keeps no old names"), the 2026-10-26 row of [decisions.md](../decisions.md) and the guide's Q7 and rule 3 predate the owner's decision of 2026-10-31 23:15, which keeps the in-place upgrade of a v0.1.0 control's data and the readers of v0.1.0 ledgers' older events. This goal.
+- **Q17:** no goal or roadmap line holds the move to Node 24 in v0.1.2 yet.
+- **The end's checks:** `npm run check`, the docs checks and the acceptance checks the changes need, with which ran (this goal's last open box, and goal 172's step 11).
 
 ## Decisions
 
@@ -145,6 +328,7 @@ Known at the start, 2026-10-24:
 - 2026-11-01 02:30 UTC, owner, on the retention mockup (a list of policies on Settings beside the Space table; each removes one kind, where the owner says, by a rule of age, of the newest few kept or of a size, by day, by week or only by hand; each starts off and shows what it would remove first; Run now asks first; what policies removed is listed and written to the audit log; Delete on the Exports page): build it as drawn. A policy may remove seven kinds: control's copy of the rigs' events, the judge's builds, the trials' session logs, the advisors' records, older versions of knowledge-base items, copies of control's store and the audit log; the first and the last carry a warning of what is lost. No policy removes exports, which go only by hand, nor the rigs' ledgers or the results repositories.
 - 2026-11-01 04:50 UTC, owner, on the three kinds left after the first five were built: control's copy of the rigs' events becomes a kind a policy may remove, so control makes the bus's EVENTS stream again once, at the upgrade, without the setting that refused every delete and purge, and keeps for each rig a floor below which events were removed on purpose; rigs keep each trial's full session log after the trial ends, until a policy removes it; control keeps the two newest copies of its store by default, and a policy for that kind takes the place of that rule ("keep the two newest as default, policy can change it").
 - 2026-11-01 06:44 UTC, owner, after a correction: v0.1.0 had no message bus, so no released control has an EVENTS stream that refuses purges, and a control that moves up from v0.1.0 makes the stream with the new settings. The one-time rebuild built for the answer above serves only a deployment that ran an unreleased build, which none did: it goes, with its part of the bus check. The events kind, its purge and the floors stay.
+- 2026-11-01 18:19 UTC, owner, on the two names question 23 left open: the contract's `notes`, which the New campaign page calls "Additional information", becomes `additional_information`; the signed `direction` field of `assign_campaign`, the owner's own label for one run that no agent sees (`--note`, shown as "Note:" on the run's item), becomes `note`. Contracts and commands from before read under the new names, a contract keeping its keys as signed so its hash holds.
 
 ## Open questions
 

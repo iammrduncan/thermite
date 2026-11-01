@@ -28,7 +28,7 @@ The goals it completes:
 | [170](_completed/170-one-hierarchy.goal) | One hierarchy: run IDs unique across rigs, a run registry, run-scoped addresses |
 | [173](_completed/173-recovery-and-health.goal) | Recovery and health: a copy before every migration, backup and restore, a disk floor, drains that end, bounded logs, health that checks |
 | [174](_completed/174-invalidate-evidence.goal) | Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows |
-| [175](175-knowledge-base.goal) | The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot, writes as durable events on NATS |
+| [175](_completed/175-knowledge-base.goal) | The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot, writes as durable events on NATS |
 | [176](_completed/176-knowledge-explorer.goal) | The knowledge explorer: the owner reads, searches and sees what the knowledge base stores |
 
 The [code clean-up guide](../code-clean-up-guide.md) holds the map of the code, the themes, the rules of shape, what to leave and the review guide; its section 8 places goals 166 to 171 in its order.
@@ -89,7 +89,7 @@ The owner, 2026-10-27: "write a single .goal that outlines how to complete the a
 ## Decisions
 
 - 2026-10-27, owner: one goal to launch and finish all the v0.1.1 work the audit planned.
-- 2026-10-30 03:51 UTC, owner, in step 10: control keeps a list of addresses and ports that cluster rigs' harnesses may reach beside the internet ("Allow control to define a list of addresses/ports that rigs can access"); control writes it into each rig's network rules and accepts a pre-made slot whose rules open exactly listed ones. The other answers of step 10 are recorded privately, apart from those that shape the product: bus only (goal [168](_completed/168-message-bus.goal)) and the knowledge base's orphan files (goal [175](175-knowledge-base.goal)).
+- 2026-10-30 03:51 UTC, owner, in step 10: control keeps a list of addresses and ports that cluster rigs' harnesses may reach beside the internet ("Allow control to define a list of addresses/ports that rigs can access"); control writes it into each rig's network rules and accepts a pre-made slot whose rules open exactly listed ones. The other answers of step 10 are recorded privately, apart from those that shape the product: bus only (goal [168](_completed/168-message-bus.goal)) and the knowledge base's orphan files (goal [175](_completed/175-knowledge-base.goal)).
 
 ## Open questions
 
