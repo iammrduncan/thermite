@@ -16,7 +16,7 @@ The roadmap says what comes next. A goal says what one piece of work is and when
 
 A goal is one deliverable that can be checked.
 
-- **File name:** `goals/NNN-name.goal`, such as `goals/_completed/125-code-to-the-conventions.goal`; once verified, `goals/_completed/NNN-name.goal`, such as `goals/_completed/005-sample-project.goal`. The number is the goal's ID. It is never reused, and it does not change when the goal moves to another version.
+- **File name:** `goals/NNN-name.goal`, such as `goals/178-clean-up-continued.goal`; once verified, `goals/_completed/NNN-name.goal`, such as `goals/_completed/005-sample-project.goal`. The number is the goal's ID. It is never reused, and it does not change when the goal moves to another version.
 - **Format:** Markdown with a front-matter block. A goal can be run as an agent task with `/goal Complete docs/plan/goals/NNN-name.goal`.
 - **Sections:** What, Why, Done when, Decisions, Open questions, Progress.
 
