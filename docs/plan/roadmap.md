@@ -151,6 +151,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 **GPUs on demand, and work within a budget.** GPUs rented only while they work, a secondary judge, one budget in dollars that holds on every rig, measurements that cost less, and what Thermite spent on RunPod. Proposed.
 
+- [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
 - [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
 - [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
 - [123](goals/123-budgets-made-simple.goal) Budgets made simple: one amount in dollars, easy to set, that holds on every rig · `PROPOSED`
