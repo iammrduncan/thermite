@@ -42,7 +42,8 @@ const { check } = acceptanceChecks({ max: 300, into: report.checks });
 const dcp = (...args) => dc(composeEnv, ...profile, ...args);
 const view = async (rig) => (await api(`/v1/rigs/${rig}/view`)).body;
 const runStatus = async (rig, id) => (await view(rig)).runs?.find((i) => i.id === id)?.status;
-const harnessEvents = (service, kind) =>
+/** Rows of one query of a harness's ledger, read only, inside its container. */
+const harnessRows = (service, sql, ...params) =>
   JSON.parse(
     dc(
       composeEnv,
@@ -52,9 +53,22 @@ const harnessEvents = (service, kind) =>
       service,
       "node",
       "-e",
-      `const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync("/var/lib/thermite/ledger/ledger.db",{readOnly:true});process.stdout.write(JSON.stringify(db.prepare("select id, kind, subject from event where kind = ?").all(${JSON.stringify(kind)})))`,
+      `const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync("/var/lib/thermite/ledger/ledger.db",{readOnly:true});process.stdout.write(JSON.stringify(db.prepare(${JSON.stringify(sql)}).all(...${JSON.stringify(params)})))`,
     ),
   );
+const harnessEvents = (service, kind) =>
+  harnessRows(service, "select id, kind, subject from event where kind = ?", kind);
+/** What a harness's judge had to do, and what held it: its jobs, and the events that say why. */
+const judgeState = (service) => ({
+  jobs: harnessRows(
+    service,
+    "select id, kind, state, attempt, priority, expiries, json_extract(result, '$.error') as error, updated_at from job order by id",
+  ),
+  events: harnessRows(
+    service,
+    "select id, kind, subject, at from event where kind in ('baseline', 'baseline_failed', 'crash_infra', 'rig_disk', 'rig_drain', 'run_status') order by id",
+  ),
+});
 
 /** A dashboard session: log in with the admin token, keep the cookie, post forms with CSRF. */
 async function dashboard() {
@@ -251,7 +265,9 @@ try {
     async () => harnessEvents("harness", "verdict").some((e) => e.subject === attempt),
     600_000,
     3000,
-  );
+  ).catch((err) => {
+    throw new Error(`${err.message}: ${JSON.stringify({ attempt, ...judgeState("harness") })}`);
+  });
   check("with control stopped, the rig kept researching", true);
   dcp("start", "control");
   await until("control back", async () => (await fetch(`${control}/v1/health`)).ok);

@@ -268,10 +268,14 @@ const compact = () => {
   }
   return r.status === 0 && /^Thermite keeps the whole conversation/.test(said) ? "hook" : `hook-failed-${r.status}`;
 };
-// Thermite's own MCP server, from the --mcp-config the harness gave it (goal 175).
+// Thermite's own MCP server, from the --mcp-config the harness gave it (goal 175). Claude Code
+// takes JSON there, or a file of it, which is what the harness gives (claude-home/mcp.json).
 const thermiteMcp = (() => {
+  const given = val("--mcp-config");
+  if (!given) return undefined;
   try {
-    return JSON.parse(val("--mcp-config") ?? "{}").mcpServers?.thermite;
+    const json = given.trimStart().startsWith("{") ? given : fs.readFileSync(given, "utf8");
+    return JSON.parse(json).mcpServers?.thermite;
   } catch {
     return undefined;
   }

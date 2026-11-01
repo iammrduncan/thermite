@@ -34,7 +34,14 @@ export const servedNames = (a: Pick<McpAccess, "servers" | "kb"> | undefined): s
 export const gatewayUrl = (apiUrl: string, server: string) =>
   `${apiUrl}/v1/mcp/${encodeURIComponent(server)}`;
 
-/** OpenCode's `mcp` configuration: each server a remote one at the gateway, OAuth off. */
+/**
+ * OpenCode's `mcp` configuration: each server a remote one at the gateway, OAuth off. OpenCode v2
+ * puts a server's tools in its Code Mode unless the server says `codemode: false`: the model then
+ * sees only OpenCode's `execute` tool, calls them from the JavaScript it gives it, and reads each
+ * tool's description cut to its first line. Thermite's own server says so, so its tools are on the
+ * model's own list, `thermite_kb_search` and so on, with their whole descriptions, as in every
+ * other program (goal 175); the kit's servers stay in Code Mode, as OpenCode keeps them.
+ */
 export function opencodeMcp(a: McpAccess | undefined): Record<string, unknown> | undefined {
   if (!a || !servedNames(a).length) return undefined;
   return {
@@ -46,6 +53,7 @@ export function opencodeMcp(a: McpAccess | undefined): Record<string, unknown> |
           url: gatewayUrl(a.apiUrl, s),
           headers: { Authorization: `Bearer ${a.auth}` },
           oauth: false,
+          ...(s === KB_SERVER ? { codemode: false } : {}),
         },
       ]),
     ),

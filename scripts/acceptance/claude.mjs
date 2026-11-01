@@ -40,6 +40,7 @@
 // Usage: COMPOSE="podman compose" node scripts/acceptance/claude.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { deniedItems } from "./lib/kb-agents.mjs";
 import {
   api,
   assign,
@@ -448,7 +449,8 @@ try {
     180_000,
     3000,
   ).catch(() => undefined);
-  const kbDenied = (await api("/v1/kb/search?q=kbprobedenied")).body.hits ?? [];
+  // A kept conversation quotes the refused call: only an item the write made counts.
+  const kbDenied = await deniedItems();
   check(
     "Claude Code's trials, in its terminal and headless, each write a finding into their own slot with Thermite's MCP server's kb_write, which control holds there; a write naming another slot is refused and never reaches control",
     ownWords(kbTerminal.address) &&
@@ -457,8 +459,14 @@ try {
       kbTerminal.refused &&
       kbHeadless.refused &&
       Boolean(kbStored) &&
-      kbDenied.length === 0,
-    { terminal: kbTerminal, headless: kbHeadless, stored: kbStored, denied: kbDenied.length },
+      kbDenied.held.length === 0,
+    {
+      terminal: kbTerminal,
+      headless: kbHeadless,
+      denied: kbDenied.held,
+      quoted: kbDenied.quoted,
+      stored: kbStored,
+    },
   );
   // The rig set back to its agents' own terminals: the auditor's call runs in Claude Code's
   // terminal in the supervisor (goal 169), as an advisor user, through the advisors' runner.

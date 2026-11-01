@@ -51,9 +51,13 @@ const api = await startAnthropicStandIn({ token: TOKEN });
 
 async function harness() {
   const { BrokerClient } = await import("/opt/thermite/dist/harness/broker/client.js");
-  const { claudeModelCheck, claudeOnce, runClaudeTrial } = await import(
-    "/opt/thermite/dist/harness/agents/cli/claude-code.js"
-  );
+  // The harness's trial loop and one-prompt call, with Claude Code's entry, as the rig runs them.
+  const { claudeProgram } = await import("/opt/thermite/dist/agents/cli/index.js");
+  const { runCliTrial } = await import("/opt/thermite/dist/harness/agents/cli/loop.js");
+  const { cliModelCheck, cliOnce } = await import("/opt/thermite/dist/harness/agents/cli/once.js");
+  const runClaudeTrial = (spec, d) => runCliTrial(claudeProgram, { mode: "code", spec }, d);
+  const claudeOnce = (m, prompt, d, o) => cliOnce(claudeProgram, m, prompt, d, o);
+  const claudeModelCheck = (m, d, timeoutMs) => cliModelCheck(claudeProgram, m, d, timeoutMs);
   const runner = new BrokerClient("/run/thermite/broker.sock");
   const scratchDir = "/scratch/thermite";
   const deps = { runner, apiUrl: "http://127.0.0.1:8700", scratchDir };

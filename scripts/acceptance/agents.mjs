@@ -144,7 +144,7 @@ function script(messages, tools) {
   if (names.includes("shell") && names.includes("execute")) {
     const asked = JSON.stringify(messages);
     // The second run's planner (goal 175) searches the knowledge base once, then plans.
-    const searched = kbScene.plannerTurn(messages, names, asked);
+    const searched = kbScene.plannerTurn(messages, names, "opencode");
     if (searched) return searched;
     // The planner in OpenCode's own terminal (lib/planner-terminal.mjs).
     const planned = opencodePlanner(messages, asked);
@@ -193,7 +193,8 @@ function script(messages, tools) {
     return { toolCalls: [{ name: "echo", args: { word } }] };
   }
   if (tools.some((t) => t.function.name === "submit_plan")) {
-    const held = piPlannerTurn(messages, tools);
+    // The second run's planner, in Pi (goal 175), searches the knowledge base once, then plans.
+    const held = kbScene.plannerTurn(messages, names, "pi") ?? piPlannerTurn(messages, tools);
     if (held) return held;
     return {
       toolCalls: [

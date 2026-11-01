@@ -2,14 +2,33 @@
 // worker in Pi and a hill-climb trial in OpenCode each write an item with kb_write into their own
 // slot (worker-<lane>), and a write naming another slot, which kb_write never takes, is refused;
 // the owner's search finds each item in its slot, and none of the refused ones; then a second run
-// of the campaign, smoke-2, whose planner runs in OpenCode, searches with kb_search and finds both
-// items: an agent of another run. Each item's word is one token, so a search finds exactly it.
+// of the campaign, smoke-2, whose planner searches with kb_search and finds both items: an agent
+// of another run. Its planner follows the workers, so it plans in Pi (the workers run in OpenCode
+// on a provider's route, which a planner that follows them reaches through Pi); in OpenCode its
+// search would be Thermite's MCP server's. Each item's word is one token, so a search finds
+// exactly it.
 import { api, assign, command, until } from "./smoke-env.mjs";
 
 const PI = "kbprobepi";
 const OC = "kbprobeoc";
 const DENIED = "kbprobedenied";
 const CAMPAIGN_JSON = "The campaign, as JSON:";
+
+/**
+ * What the owner's search for a write naming another slot finds, which every check's agents title
+ * `kbprobedenied …`. `held`: the items such a write made, whose title is the write's; there must be
+ * none, as the harness refuses each such write. `quoted`: the other items holding the word, each
+ * as its address, kind and slot; a kept conversation is one, a `doc` of the run's records whose
+ * text quotes the refused call (the conversation before a compaction).
+ */
+export async function deniedItems() {
+  const hits = (await api(`/v1/kb/search?q=${DENIED}`)).body.hits ?? [];
+  const held = hits.filter((h) => String(h.title ?? "").includes(DENIED));
+  const quoted = hits
+    .filter((h) => !held.includes(h))
+    .map((h) => `${h.address} (${h.kind} in ${h.slot})`);
+  return { held, quoted };
+}
 
 /** A tool result's text: OpenCode sends it as a string or as text parts. */
 const textOf = (c) =>
@@ -51,7 +70,14 @@ const together = (had, kb) => ({
 
 /** The scene's part of the scripted model, and its checks. */
 export function kbAgentsScene() {
-  const seen = { pi: undefined, oc: undefined, found: undefined, second: false, ocTools: [] };
+  const seen = {
+    pi: undefined,
+    oc: undefined,
+    found: undefined,
+    second: false,
+    ocTools: [],
+    planner: undefined,
+  };
   return {
     /** lane-1's worker's two calls in Pi, before it submits; `messages` its conversation so far. */
     piSteps(messages) {
@@ -74,7 +100,7 @@ export function kbAgentsScene() {
      */
     ocSteps(messages, names) {
       const write = names.find((n) => /kb_write$/.test(n));
-      seen.ocTools = names.filter((n) => /kb_/.test(n));
+      seen.ocTools = [...new Set([...seen.ocTools, ...names.filter((n) => /kb_/.test(n))])];
       if (!write) return [];
       seen.oc = together(seen.oc, answered(messages));
       const item = {
@@ -84,12 +110,25 @@ export function kbAgentsScene() {
       };
       return [{ name: write, args: item }, denied(write)];
     },
-    /** The second run's planner in OpenCode: one search before it plans, or undefined. */
-    plannerTurn(messages, names, asked) {
-      if (!seen.second || !asked.includes(CAMPAIGN_JSON)) return undefined;
+    /**
+     * The second run's planner, in the program it runs in (`program`): one search before it plans,
+     * or undefined. In Pi the caller knows a planner's request by its submit_plan; in OpenCode it
+     * is the request whose prompt gives the campaign as JSON.
+     */
+    plannerTurn(messages, names, program) {
+      const planner = program === "pi" || JSON.stringify(messages).includes(CAMPAIGN_JSON);
+      if (!seen.second || !planner) return undefined;
       const kb = answered(messages);
       if (kb.hits.length) seen.found = kb.hits;
       const search = names.find((n) => /kb_search$/.test(n));
+      // What it was given and told, for the check's detail.
+      const told = messages.find((m) => m.role === "tool");
+      seen.planner = {
+        program,
+        asks: (seen.planner?.asks ?? 0) + 1,
+        kb_tools: names.filter((n) => /kb_/.test(n)),
+        answer: told ? textOf(told.content).slice(0, 400) : seen.planner?.answer,
+      };
       if (!search || messages.some((m) => m.role === "tool")) return undefined;
       return { toolCalls: [{ name: search, args: { query: `${PI} ${OC}`, limit: 50 } }] };
     },
@@ -130,15 +169,15 @@ export function kbAgentsScene() {
           seen.oc?.refused === true,
         { seen: seen.oc, kb_tools: seen.ocTools, stored: ocStored },
       );
-      const refused = await ownerFinds(DENIED);
+      const refused = await deniedItems();
       check(
         "a write naming another writer's slot never reaches control",
-        refused.length === 0,
+        refused.held.length === 0,
         refused,
       );
-      // An agent of another run: a second run of the campaign, whose planner (in OpenCode, as the
-      // rig is set now) searches for both items before it plans. Assigning it pauses research-oc's
-      // run, already paused; smoke-2 is paused once it found them.
+      // An agent of another run: a second run of the campaign, whose planner searches for both
+      // items before it plans. Assigning it pauses research-oc's run, already paused; smoke-2 is
+      // paused once it found them.
       const kept = [piKept, ocKept].filter(Boolean);
       const name =
         "an agent of another run (smoke-2's planner) finds the items Pi's and OpenCode's agents wrote in smoke-1, with kb_search";
@@ -158,6 +197,7 @@ export function kbAgentsScene() {
         found,
         pi: piKept,
         oc: ocKept,
+        planner: seen.planner,
       });
     },
   };

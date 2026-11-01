@@ -93,8 +93,14 @@ describe("the knowledge base's tools in the harness", () => {
     assert.deepEqual(Object.keys(claude.mcpServers), ["gbrain", "thermite"]);
     assert.equal(claude.mcpServers.thermite?.url, "http://127.0.0.1:8700/v1/mcp/thermite");
     assert.equal(claude.mcpServers.thermite?.headers.Authorization, "Bearer trial.abc");
-    const opencode = opencodeMcp(access) as { servers: Record<string, { url: string }> };
+    const opencode = opencodeMcp(access) as {
+      servers: Record<string, { url: string; codemode?: boolean }>;
+    };
     assert.equal(opencode.servers.thermite?.url, "http://127.0.0.1:8700/v1/mcp/thermite");
+    // OpenCode lists Thermite's own tools to the model (thermite_kb_write), out of its Code Mode;
+    // the kit's servers keep OpenCode's default.
+    assert.equal(opencode.servers.thermite?.codemode, false);
+    assert.equal("codemode" in (opencode.servers.gbrain ?? {}), false);
     const codex = codexConfig(
       { api: "openai", model: "m", reasoning: "off" } as never,
       "http://127.0.0.1:8700/v1/model-proxy",

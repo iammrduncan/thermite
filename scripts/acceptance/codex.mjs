@@ -50,6 +50,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { deniedItems } from "./lib/kb-agents.mjs";
 import { hostName as containersHost } from "./lib/scripted-model.mjs";
 import {
   api,
@@ -546,7 +547,8 @@ try {
     180_000,
     3000,
   ).catch(() => undefined);
-  const kbDenied = (await api("/v1/kb/search?q=kbprobedenied")).body.hits ?? [];
+  // A kept conversation quotes the refused call: only an item the write made counts.
+  const kbDenied = await deniedItems();
   check(
     "Codex's trials, in its terminal and headless, each write a finding into their own slot with Thermite's MCP server's kb_write, which control holds there; a write naming another slot is refused and never reaches control",
     ownSlot(kbTerminal.address) &&
@@ -555,8 +557,14 @@ try {
       kbTerminal.refused &&
       kbHeadless.refused &&
       Boolean(kbStored) &&
-      kbDenied.length === 0,
-    { terminal: kbTerminal, headless: kbHeadless, stored: kbStored, denied: kbDenied.length },
+      kbDenied.held.length === 0,
+    {
+      terminal: kbTerminal,
+      headless: kbHeadless,
+      denied: kbDenied.held,
+      quoted: kbDenied.quoted,
+      stored: kbStored,
+    },
   );
   check(
     "every Responses call reached the provider with its own key, added by the proxy, never a run's credential",

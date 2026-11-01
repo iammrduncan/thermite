@@ -21,6 +21,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { deniedItems } from "./lib/kb-agents.mjs";
 import { piAdvisorScene } from "./lib/pi-advisor-view.mjs";
 import {
   api,
@@ -473,15 +474,16 @@ try {
   const kbHit = ((await api(`/v1/kb/search?q=${KB_TEACH}`)).body.hits ?? []).find(
     (h) => h.address === kbSteer.kept,
   );
-  const kbDenied = (await api("/v1/kb/search?q=kbprobedenied")).body.hits ?? [];
+  // A kept conversation quotes the refused call: only an item the write made counts.
+  const kbDenied = await deniedItems();
   check(
     "an advisor (a teacher of smoke-1, in Pi) writes a note into its own slot with kb_write, which control holds there; its write naming another slot is refused and never reaches control; a teacher of another run (smoke-2) finds the note with kb_search",
     /^smoke-cpu\/smoke-1\/teachers\/note:\d+$/.test(String(kbSteer.kept)) &&
       kbHit?.slot === "teachers" &&
       kbSteer.refused &&
       kbFound === kbSteer.kept &&
-      kbDenied.length === 0,
-    { kb: kbSteer, stored: kbHit, denied: kbDenied.length },
+      kbDenied.held.length === 0,
+    { kb: kbSteer, denied: kbDenied.held, quoted: kbDenied.quoted, stored: kbHit },
   );
 
   // 6. An advisor in Pi in its Pi view in the supervisor (goal 169): one teacher's call, with one
