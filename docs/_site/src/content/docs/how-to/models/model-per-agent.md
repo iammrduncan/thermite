@@ -23,7 +23,7 @@ The planner coordinates each run's experiment queue, the run's ordered list of t
    | Group | Agent | Its job | With no model chosen |
    | --- | --- | --- | --- |
    | The work | **Workers** | "Change the code, one trial each." | The model of the rig's own `THERMITE_MODEL_*` settings, such as `rig's settings: my-model`. Without those, the agents have no model and wait: `none: can't run` |
-   | The work | **Planner** | "Picks what each worker tries next." | **same as the workers**: their model, harness and context |
+   | The work | **Planner** | "Picks what each worker tries next." | **same as the workers**: their model and context, and their harness, but the planner of workers in OpenCode plans in Pi |
    | The advisors | **Teachers** | "Read recent trials and suggest next steps." One model, or two: see [Two teachers](#two-teachers) | The teachers of the rig's advisors file, such as `rig's file: opus-5.5`, or `none: off` |
    | The advisors | **Auditor** | "Checks a win before it is kept." | The auditor of the rig's advisors file, or `none: off` |
    | The advisors | **Review panel** | "Scores goals that code can't measure." Three reviewers, all on this model; the advisors file can set two to five | The review panel of the rig's advisors file, or `none: off` |
