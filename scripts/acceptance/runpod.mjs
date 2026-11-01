@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // Rigs on RunPod from end to end, with no RunPod and nothing paid. Control runs in this process,
 // with its REST API, pull mode and the RunPod rigs' loop, against the fake RunPod API
 // (tests/helpers/fake-runpod.ts), and on its message bus: the bus's server in a container of its
@@ -57,13 +58,35 @@ const prefix = `thermite-runpod-check-${process.pid}`;
 const OWNER = "an-owner-token-for-the-runpod-check";
 /** The bus's server's host port: RUNPOD_CHECK_BUS_PORT, 14510 unless given (never 4222). */
 const busPort = Number(process.env.RUNPOD_CHECK_BUS_PORT ?? "14510");
-/** Control's bus, once started: the pods join its network. */
+/** @typedef {Awaited<ReturnType<typeof startControlBus>>} ControlBus */
+/** @typedef {import("../../tests/helpers/fake-runpod.ts").FakePod} FakePod */
+/**
+ * A pod as this check keeps it: the fake's, with its container's exit code and output at its
+ * stop, which the fake's stop hook writes.
+ * @typedef {FakePod & { stopCode: string, stopLog: string }} CheckPod
+ */
+/** The body of a call to RunPod's API, where it is a stop or a start. */
+/** @typedef {{ action?: string }} ActionBody */
+/**
+ * Control's bus, once started: the pods join its network.
+ * @type {ControlBus | undefined}
+ */
 let onBus;
 // Inside the fake's hooks: control's loops go on while the engine works, as they do on RunPod.
+/** @param {string[]} args */
 const run = async (args) => (await promisify(execFile)(engine, args, { encoding: "utf8" })).stdout;
+/** @param {number} ms */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const { check, failed } = acceptanceChecks();
-/** Waits until `fn` gives something, checking every `every` ms; throws, in words, at the end. */
+/**
+ * Waits until `fn` gives something, checking every `every` ms; throws, in words, at the end.
+ * @template T
+ * @param {string} what
+ * @param {() => T | Promise<T>} fn
+ * @param {number} [ms]
+ * @param {number} [every]
+ * @returns {Promise<NonNullable<T>>}
+ */
 async function until(what, fn, ms = 300_000, every = 1000) {
   const deadline = Date.now() + ms;
   for (;;) {
@@ -74,11 +97,18 @@ async function until(what, fn, ms = 300_000, every = 1000) {
   }
 }
 
+/** @param {FakePod} pod */
 const container = (pod) => `${prefix}-${pod.id}`;
+/** @param {FakePod} pod */
 const volume = (pod) => `${prefix}-${pod.id}-volume`;
-/** Whether the engine has this container or volume (`kind`), with Docker as with Podman. */
+/**
+ * Whether the engine has this container or volume (`kind`), with Docker as with Podman.
+ * @param {string} kind
+ * @param {string} name
+ */
 const has = (kind, name) =>
   spawnSync(engine, [kind, "inspect", name], { stdio: "ignore" }).status === 0;
+/** @param {string} name */
 const logsOf = (name) => {
   const r = spawnSync(engine, ["logs", name], { encoding: "utf8" });
   return `${r.stdout}${r.stderr}`;
@@ -87,6 +117,7 @@ const logsOf = (name) => {
 /**
  * Starts a pod's container on its volume; its pull mode port is the proxy's way in, and its leaf
  * node's port, on the bus's network, is the address the fake RunPod gives control's server.
+ * @param {FakePod} pod
  */
 async function startContainer(pod) {
   await run([
@@ -95,7 +126,7 @@ async function startContainer(pod) {
     "--name",
     container(pod),
     "--network",
-    onBus.net,
+    /** @type {ControlBus} */ (onBus).net,
     "-v",
     `${volume(pod)}:/workspace`,
     "-p",
@@ -115,9 +146,16 @@ async function startContainer(pod) {
     ...Object.entries(pod.env).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
     rigImage,
   ]);
-  const port = (await run(["port", container(pod), "8790/tcp"])).trim().split("\n")[0];
+  const port = /** @type {string} */ (
+    (await run(["port", container(pod), "8790/tcp"])).trim().split("\n")[0]
+  );
   pod.upstream = `http://127.0.0.1:${port.split(":").at(-1)}`;
-  pod.tcp = { [LEAF_PORT]: { ip: addressOn(onBus.net, container(pod)), public: LEAF_PORT } };
+  pod.tcp = {
+    [LEAF_PORT]: {
+      ip: addressOn(/** @type {ControlBus} */ (onBus).net, container(pod)),
+      public: LEAF_PORT,
+    },
+  };
 }
 
 const cloud = fakeRunpod({
@@ -125,10 +163,10 @@ const cloud = fakeRunpod({
   // RunPod stops the container and empties its disk; the volume stays.
   onStop: async (pod) => {
     await run(["stop", "-t", "60", container(pod)]);
-    pod.stopCode = (
+    /** @type {CheckPod} */ (pod).stopCode = (
       await run(["inspect", container(pod), "--format", "{{.State.ExitCode}}"])
     ).trim();
-    pod.stopLog = logsOf(container(pod));
+    /** @type {CheckPod} */ (pod).stopLog = logsOf(container(pod));
     await run(["rm", container(pod)]);
     pod.upstream = undefined;
   },
@@ -140,7 +178,9 @@ const cloud = fakeRunpod({
 });
 
 const exportsDir = mkdtempSync(join(tmpdir(), "thermite-runpod-check-"));
+/** @type {ReturnType<typeof setInterval>[]} */
 const timers = [];
+/** @type {ReturnType<typeof followControlBus> | undefined} */
 let followed;
 const cleanup = async () => {
   for (const t of timers) clearInterval(t);
@@ -214,17 +254,31 @@ try {
     { staleAfterMs: 180_000, control: buildInfo() },
   );
   followed = followControlBus(onBus, parts);
-  const app = createControlApi(store, { admin: OWNER, rigs: {} }, keys.privateKeyPem, {
-    staleAfterMs: 180_000,
-    secrets,
-    tunnels,
-    runpodRigs: rigs,
-    cloudFetch: cloud.fetch,
-    exportsDir,
-    parts,
-    busUsers: onBus.busUsers,
-    busConfig: followed.busConfig,
-  });
+  const app = createControlApi(
+    store,
+    /** @type {import("../../src/control/api/context.ts").ControlTokens} */ ({
+      admin: OWNER,
+      rigs: {},
+    }),
+    keys.privateKeyPem,
+    {
+      staleAfterMs: 180_000,
+      secrets,
+      tunnels,
+      runpodRigs: rigs,
+      cloudFetch: cloud.fetch,
+      exportsDir,
+      parts,
+      busUsers: onBus.busUsers,
+      busConfig: followed.busConfig,
+    },
+  );
+  /**
+   * A call to control's REST API as the owner: a POST when it has a body, else a GET.
+   * @param {string} path
+   * @param {unknown} [body]
+   * @returns {Promise<import("./lib/smoke-env.mjs").ApiAnswer>}
+   */
   const api = async (path, body) => {
     const r = await app.request(path, {
       method: body === undefined ? "GET" : "POST",
@@ -243,9 +297,13 @@ try {
     }, 2000),
     setInterval(() => {
       const privateKeyPem = keys.privateKeyPem;
-      advanceResets({ store, privateKeyPem, staleAfterMs: 180_000 }).catch((err) =>
-        console.error(`resets: ${String(err)}`),
-      );
+      advanceResets(
+        /** @type {Parameters<typeof advanceResets>[0]} */ ({
+          store,
+          privateKeyPem,
+          staleAfterMs: 180_000,
+        }),
+      ).catch((err) => console.error(`resets: ${String(err)}`));
     }, 2000),
   );
 
@@ -260,8 +318,10 @@ try {
     launched.status === 201,
     JSON.stringify(launched.body).slice(0, 300),
   );
+  /** @type {string} */
   const rig = launched.body.rig;
-  const pod = cloud.pods.get(launched.body.pod);
+  // The pod the launch made; the check below says whether it is there.
+  const pod = /** @type {CheckPod} */ (cloud.pods.get(launched.body.pod));
   check(
     "its pod runs: a container of the rig image",
     Boolean(pod) && has("container", container(pod)),
@@ -299,7 +359,9 @@ try {
   );
   await until(
     "the supervisor's export figures",
-    () => store.reportedRigs.supervisor(rig)?.export?.to === "control",
+    () =>
+      /** @type {{ to?: string } | undefined} */ (store.reportedRigs.supervisor(rig)?.export)
+        ?.to === "control",
   );
   check("the supervisor sends its exports to control", true);
 
@@ -317,7 +379,8 @@ try {
   const stopExport = stopped.last_export;
   check(
     "its export left the pod for control before the pod stopped",
-    stopped.last_export_left === true && Boolean(store.exports.get(rig, stopExport)?.complete_at),
+    stopped.last_export_left === true &&
+      Boolean(store.exports.get(rig, /** @type {string} */ (stopExport))?.complete_at),
     `${stopExport}: ${JSON.stringify(store.rigHistory.list(rig).at(-1)?.detail)}`,
   );
   check(
@@ -379,14 +442,18 @@ try {
   check(
     "the snapshot on the volume is sealed: the manifest and sealed files only, nothing in plain text",
     sealedLook.names.includes("manifest") &&
-      sealedLook.names.every((n) => n === "manifest" || /^[0-9a-f]{64}$/.test(n)) &&
+      sealedLook.names.every(
+        (/** @type {string} */ n) => n === "manifest" || /^[0-9a-f]{64}$/.test(n),
+      ) &&
       sealedLook.plain.length === 0 &&
-      !JSON.stringify(sealedLook).includes(pod.env.THERMITE_STATE_SNAPSHOT_KEY),
+      !JSON.stringify(sealedLook).includes(
+        /** @type {string} */ (pod.env.THERMITE_STATE_SNAPSHOT_KEY),
+      ),
     `${sealedLook.names.length} names; not sealed: ${sealedLook.plain.join(", ")}`,
   );
   check(
     "the snapshot key appears nowhere in the pod's output",
-    !pod.stopLog.includes(pod.env.THERMITE_STATE_SNAPSHOT_KEY),
+    !pod.stopLog.includes(/** @type {string} */ (pod.env.THERMITE_STATE_SNAPSHOT_KEY)),
   );
   check("the rig shows who stopped it", stopped.stopped_by === "owner", stopped.stopped_by);
 
@@ -437,6 +504,7 @@ try {
   );
   const resetOf = () =>
     store.fullResets.list(50).find((r) => Number(r.id) === resetAsked.body.reset);
+  /** @param {...string} states */
   const resetIn = (...states) => (states.includes(String(resetOf()?.state)) ? true : undefined);
   await until("the reset's export", () => resetIn("awaiting_owner", "failed", "cancelled"));
   check(
@@ -453,7 +521,11 @@ try {
     store.reportedRigs.list().find((u) => u.id === rig && u.ledger_id !== ledgerBefore),
   );
   await until("a report from the supervisor after the wipe", () =>
-    Date.parse(store.reportedRigs.supervisor(rig)?.received_at ?? "") > wipedAt ? true : undefined,
+    Date.parse(
+      /** @type {string | undefined} */ (store.reportedRigs.supervisor(rig)?.received_at) ?? "",
+    ) > wipedAt
+      ? true
+      : undefined,
   );
   check("the harness reports a new ledger, and the supervisor reports again", true);
 
@@ -498,6 +570,7 @@ try {
   // The pod's lifecycle in order; beside it, the bus's steps: its leaf's address and the
   // supervisor's key registration after each launch and start, and the keys it made.
   const lifecycle = history.filter((h) => want.includes(h));
+  /** @param {string} step */
   const count = (step) => history.filter((h) => h === step).length;
   check(
     "each change is in the rig's history",
@@ -511,7 +584,10 @@ try {
   );
   const calls = cloud.calls
     .filter((c) => c.host === "api.runpod.io" && c.method !== "GET")
-    .map((c) => `${c.method} ${c.path}${c.body?.action ? ` ${c.body.action}` : ""}`);
+    .map(
+      (c) =>
+        `${c.method} ${c.path}${/** @type {ActionBody | undefined} */ (c.body)?.action ? ` ${/** @type {ActionBody} */ (c.body).action}` : ""}`,
+    );
   check(
     "RunPod's API got a create, a stop, a start and a delete, nothing more",
     JSON.stringify(calls) ===

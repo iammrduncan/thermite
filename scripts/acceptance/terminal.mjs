@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // The terminal host in the harness image (goal 169): the image as a rig runs it (the broker as
 // root, which closes /tmp to the roles and puts each role's work under the GPU fence; only the
 // broker's capabilities; no new privileges; no network at all), with the host run by the broker as
@@ -6,7 +7,7 @@
 // controller's user: the fake TUI (tests/helpers/fake-tui.ts) through every request of the host;
 // the real Codex CLI and OpenCode (its server first, then its terminal) in their own terminals,
 // against a stand-in model; and the real Claude Code when the image has it, against
-// containers/test-anthropic's stand-in, with a made-up sign-in; then one short trial through the
+// tests/stand-ins/anthropic's stand-in, with a made-up sign-in; then one short trial through the
 // trial loop's terminal mode for the fake TUI, the real Codex and the real OpenCode, with each
 // trial's last screen kept in memory, and the owner's input (terminal_input's) typed through a
 // trial's console into the fake TUI and the real Codex; then a full usage window (goal 169): the
@@ -40,10 +41,18 @@ const supervisorImage =
   process.env.SUPERVISOR_IMAGE ?? "localhost/thermite-supervisor:terminal-check";
 const supervisorName = "thermite-terminal-supervisor";
 const source = process.env.SOURCE === "1";
+/**
+ * Runs the engine and returns what it printed.
+ * @param {string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ * @returns {string}
+ */
 const sh = (args, opts = {}) =>
   execFileSync(engine, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+/** @type {(ms: number) => Promise<void>} */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
+/** @param {import("./lib/checks.mjs").CheckRecord} c */
 const report = (c) => {
   console.log(
     `${c.ok ? "PASS" : "FAIL"} ${c.name}${c.detail === undefined || c.detail === "" ? "" : `: ${JSON.stringify(c.detail).slice(0, 800)}`}`,
@@ -102,7 +111,7 @@ try {
     "-e",
     `TEST_CONTROL_PUBKEY=${publicKey.export({ type: "spki", format: "pem" })}`,
     "-v",
-    `${resolve("containers/test-anthropic")}:/opt/test-anthropic:ro`,
+    `${resolve("tests/stand-ins/anthropic")}:/opt/test-anthropic:ro`,
     "-v",
     `${resolve("tests/stand-ins/terminal")}:/opt/test-terminal:ro`,
     "-v",

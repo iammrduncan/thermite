@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test } from "node:test";
-// @ts-expect-error: a script's module, plain JavaScript with no types.
-import { acceptanceChecks } from "../../scripts/acceptance/lib/checks.mjs";
+import { acceptanceChecks, type CheckRecord } from "../../scripts/acceptance/lib/checks.mjs";
 
 /** The acceptance scripts' one way to check (goal 125, T3): what each prints and keeps. */
 describe("acceptance checks", () => {
@@ -16,7 +15,7 @@ describe("acceptance checks", () => {
   });
 
   test("PASS and FAIL with the detail, kept for the report and counted", () => {
-    const report = { checks: [] as unknown[] };
+    const report = { checks: [] as CheckRecord[] };
     const { check, failed } = acceptanceChecks({ max: 13, into: report.checks });
     assert.equal(check("one", true), true);
     assert.equal(check("two", 0, { long: "a detail longer than twelve" }), false);

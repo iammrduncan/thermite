@@ -30,6 +30,7 @@ import { LiveLines } from "./live.ts";
 import { Machines } from "./machines.ts";
 import { McpServerRows } from "./mcp-servers.ts";
 import { ModelAssignments } from "./models.ts";
+import { OwnSettings } from "./own-settings.ts";
 import { BusPositions } from "./positions.ts";
 import { CampaignProposals } from "./proposals.ts";
 import { ModelProviders } from "./providers.ts";
@@ -145,6 +146,8 @@ export class ControlStore {
   readonly busPositions: BusPositions;
   /** The addresses cluster rigs' harnesses may reach beside the internet, set by the owner. */
   readonly reachable: ReachableAddresses;
+  /** Control's own settings the owner sets on control (store migration 27). */
+  readonly ownSettings: OwnSettings;
   /** The owner's retention policies, what they removed, and what each rig keeps (goal 125). */
   readonly retention: RetentionPolicies;
   private knowledge: KnowledgeBase | undefined;
@@ -192,6 +195,7 @@ export class ControlStore {
     this.proposals = new CampaignProposals(this, this.db);
     this.busPositions = new BusPositions(this, this.db);
     this.reachable = new ReachableAddresses(this, this.db);
+    this.ownSettings = new OwnSettings(this, this.db);
     this.retention = new RetentionPolicies(this, this.db);
   }
 

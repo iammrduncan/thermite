@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { windowFit } from "../../agents/roles/index.ts";
-import { LOCAL_HTTP_HOSTS, mcpUrlProblem } from "../../common/mcp-client.ts";
+import { logWarn } from "../../common/log.ts";
 import { EFFORTS } from "../../core/agents.ts";
 import {
   type AgentsContext,
@@ -217,9 +218,6 @@ export function advisorsFileReport(file: AdvisorsConfig | undefined): AdvisorsFi
   };
 }
 
-/** Why the file's `kb` address is refused, in words. */
-const KB_URL_REFUSED = `Use https, or http to this machine only (${LOCAL_HTTP_HOSTS.join(", ")}), with no user, password, fragment or secret in the address: the token goes in token_file.`;
-
 /**
  * The advisors file's fields, with goal 074's names: one or two teachers, the model that merges
  * the advice of two (`merged_by`), the auditor and the review panel. AdvisorsConfig is what the
@@ -234,8 +232,8 @@ export const AdvisorsConfig = z.strictObject({
   teacher_minutes: z.number().positive().default(60),
   /**
    * Domains advisors may fetch from (papers, upstream code). Empty: no web fetch. "*": any public
-   * domain, and then no knowledge-base search in the same call, so private notes and an open
-   * fetch never meet in one injected agent. The auditor fetches only from listed domains.
+   * domain, and then no knowledge base and no MCP server in the same call, so private notes and an
+   * open fetch never meet in one injected agent. The auditor fetches only from listed domains.
    */
   fetch_domains: z.array(z.string().min(1)).default([]),
   /**
@@ -243,17 +241,6 @@ export const AdvisorsConfig = z.strictObject({
    * unless the owner sets one: Thermite sets no limits of its own.
    */
   max_usd_per_day: z.number().nonnegative().optional(),
-  /**
-   * An optional knowledge-base MCP server the advisors may search (read only): https, or http to
-   * this machine only (mcpUrlProblem's rule), with its token in a file, never in the address.
-   */
-  kb: z
-    .strictObject({
-      mcp_url: z.url().refine((url) => mcpUrlProblem(url) === null, KB_URL_REFUSED),
-      token_file: z.string().min(1),
-      tool: z.string().min(1).default("search"),
-    })
-    .optional(),
 });
 export type AdvisorsConfig = z.output<typeof AdvisorsConfig>;
 
@@ -286,16 +273,49 @@ function runtimesIn(raw: unknown): [(string | number)[], Record<string, unknown>
 }
 
 /**
+ * The fields the advisors file no longer has (goal 125), each with what replaces it. A file that
+ * still has one is read without it, with a warning at each start (readAdvisorsFile): refused, it
+ * would stop the supervisor, and so the rig, at the restart that brings the new version, for a
+ * search its advisors go on without.
+ */
+const RETIRED_FIELDS = {
+  kb: "The advisors file's kb is retired, and with it the advisors' search_outside_kb tool: the supervisor reads the file without it. Give the advisors an outside search as an MCP server that the campaign's kit names (mcp_servers, with advisors among its agents), from the servers control keeps on Settings › MCP servers, and take kb out of the file.",
+} as const;
+
+/** The warnings for the retired fields a file still has, in its order. */
+function retiredFieldsIn(raw: unknown): string[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(RETIRED_FIELDS).flatMap(([field, words]) =>
+    Object.hasOwn(raw, field) ? [words] : [],
+  );
+}
+
+/**
  * The advisors file as the supervisor reads it from disk: AdvisorsConfig, with no key or token
- * written into it. A `claude-code` runtime needs a token, so the file can't give one.
+ * written into it, and without a retired field. A `claude-code` runtime needs a token, so the
+ * file can't give one.
  */
 export const AdvisorsFile = z.preprocess((raw, ctx) => {
   for (const [path, rt] of runtimesIn(raw))
     for (const field of ["api_key", "token"] as const)
       if (Object.hasOwn(rt, field) || (field === "token" && rt.runtime === "claude-code"))
         ctx.addIssue({ code: "custom", path: [...path, field], message: NOT_IN_FILE[field] });
-  return raw;
+  if (!retiredFieldsIn(raw).length) return raw;
+  const kept: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+  for (const field of Object.keys(RETIRED_FIELDS)) delete kept[field];
+  return kept;
 }, AdvisorsConfig);
+
+/**
+ * The advisors file at `path`, read once at the supervisor's start: a file that is not JSON or
+ * that AdvisorsFile refuses throws, in words, and stops the supervisor; a retired field is left
+ * out, with a warning line that says what replaces it.
+ */
+export function readAdvisorsFile(path: string): AdvisorsConfig {
+  const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+  for (const words of retiredFieldsIn(raw)) logWarn("supervisor", words, { file: path });
+  return AdvisorsFile.parse(raw);
+}
 
 /**
  * What the supervisor runs: the advisors file, with the synthesizer's and the final writer's own

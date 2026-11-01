@@ -1,3 +1,4 @@
+// @ts-check
 // The acceptance scene "an advisor in Pi in its Pi view" (goal 169), for the steering check: on a
 // rig whose agents run in their own terminal (the default), a teacher in Pi works in its Pi view,
 // in a process of its own that the supervisor image's terminal host runs as an advisor user. The
@@ -22,6 +23,8 @@ const TEACHER = "teacher-a";
  * What a model call was sent around the last place that holds `words`, with the words of the turn
  * that carries them, kept short for a check's detail. The last place: a turn steered in comes
  * after the tool results, and the brief's owner_messages quote the owner's message too.
+ * @param {string} said
+ * @param {string} words
  */
 function around(said, words) {
   const at = said.lastIndexOf(words);
@@ -33,8 +36,19 @@ function around(said, words) {
  * the teacher's turn while the scene is on, or undefined, when the script answers as it does.
  */
 export function piAdvisorScene() {
+  /**
+   * The scene's state: on or not, when it held the teacher's reply, and what the teacher's next
+   * model call was sent (`done`).
+   * @type {{ active: boolean, heldAt: number, release: undefined, released: boolean, done: { said: string, at: number } | undefined }}
+   */
   const s = { active: false, heldAt: 0, release: undefined, released: false, done: undefined };
   return {
+    /**
+     * @param {string} model
+     * @param {any[]} messages
+     * @param {import("./scripted-model.mjs").ScriptedTurn} answer
+     * @returns {import("./scripted-model.mjs").ScriptedTurn | Promise<import("./scripted-model.mjs").ScriptedTurn> | undefined}
+     */
     turn(model, messages, answer) {
       if (!s.active || model !== TEACHER || s.done) return undefined;
       const said = JSON.stringify(messages);
@@ -51,7 +65,11 @@ export function piAdvisorScene() {
         return { toolCalls: [{ name: "brief", args: {} }] };
       })();
     },
-    /** Runs the scene on rig 1's run smoke-1; `check` records each result, `rigEvents` reads its events. */
+    /**
+     * Runs the scene on rig 1's run smoke-1; `check` records each result, `rigEvents` reads its events.
+     * @param {import("./checks.mjs").Check} check
+     * @param {(rig: string) => Promise<import("./smoke-env.mjs").ControlEvent[]>} rigEvents
+     */
     async run(check, rigEvents) {
       s.active = true;
       try {
@@ -60,7 +78,8 @@ export function piAdvisorScene() {
           "the teacher's call listed among the rig's terminals",
           async () =>
             ((await api("/v1/rigs/local-1/view")).body.summary?.work?.terminals ?? []).find(
-              (x) => x.role === TEACHER && x.run === "smoke-1",
+              (/** @type {{ id: string, role: string, run: string }} */ x) =>
+                x.role === TEACHER && x.run === "smoke-1",
             ),
           120_000,
           1000,
@@ -82,16 +101,22 @@ export function piAdvisorScene() {
         // The supervisor reads the owner's messages for its calls every 5 seconds.
         await sleep(8000);
         s.released = true;
-        await until("the teacher's answer after both", async () => s.done, 180_000, 500);
+        // What the teacher's next call was sent: s.done, which is set once.
+        const done = await until(
+          "the teacher's answer after both",
+          async () => s.done,
+          180_000,
+          500,
+        );
         check(
           "the input typed into the teacher's Pi view was typed, and steered its next model call",
-          typed.outcome?.result?.outcome === "typed" && s.done.said.includes(TYPED),
+          typed.outcome?.result?.outcome === "typed" && done.said.includes(TYPED),
           typed.outcome,
         );
         check(
           "the owner's message went into the teacher's call before its next model call, in the Pi advisor's words",
-          s.done.said.includes(MESSAGE) && s.done.said.includes(OWNER_PI),
-          { held_for_ms: s.done.at - s.heldAt, around_message: around(s.done.said, MESSAGE) },
+          done.said.includes(MESSAGE) && done.said.includes(OWNER_PI),
+          { held_for_ms: done.at - s.heldAt, around_message: around(done.said, MESSAGE) },
         );
         const events = await rigEvents("local-1");
         check(
@@ -109,7 +134,7 @@ export function piAdvisorScene() {
           "the teacher's call ended",
           async () =>
             !((await api("/v1/rigs/local-1/view")).body.summary?.work?.terminals ?? []).some(
-              (x) => x.id === call.id,
+              (/** @type {{ id: string }} */ x) => x.id === call.id,
             ),
           120_000,
           1000,

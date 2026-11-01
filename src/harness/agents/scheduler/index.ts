@@ -1,7 +1,9 @@
 import type { Prompt } from "../../../agents/prompt.ts";
+import { log, logError } from "../../../common/log.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { baselineState } from "../../judge/index.ts";
 import type { PreviewAsk } from "../../prompts.ts";
+import type { AgentSignals, StopAsked } from "../../service/index.ts";
 import { type Coordinator, keepsWorking } from "../coordinator.ts";
 import type { Registry } from "../registry.ts";
 import {
@@ -21,8 +23,9 @@ import { type AgentsStopped, agentsStopped, stopAgents, waitingForLimit } from "
 import { finishClosedResearch, finishEndedResearch, researchTick } from "./research/index.ts";
 import { lanesInRound, roundOver, waitsForJudge } from "./rounds.ts";
 import { dropSetupExperiments, isSetupRound, noteBaseline, planSetupEpoch } from "./setup.ts";
+import { stopAsked } from "./stops.ts";
 import { experimentFor, startTrial } from "./trials.ts";
-import { applyResets, applyStops, shutdown } from "./watch.ts";
+import { applyResets, applyStops, resetAsked, shutdown } from "./watch.ts";
 
 export { questionDetails } from "../../research/index.ts";
 export {
@@ -56,7 +59,7 @@ export type { AgentsStopped };
  * the planner's calls (planner-call.ts) and the rounds it plans (plan.ts), the trials (trials.ts)
  * and their briefs (briefs.ts), and research mode (research/).
  */
-export class Scheduler {
+export class Scheduler implements AgentSignals {
   readonly registry: Registry;
   /** How lanes get work from the run's experiment queue. */
   readonly coordinator: Coordinator;
@@ -67,6 +70,39 @@ export class Scheduler {
     this.sched = schedulerContext(opts);
     this.registry = this.sched.registry;
     this.coordinator = this.sched.coordinator;
+    // The service tells this scheduler at once of each stop and reset it records.
+    opts.service.agents = this;
+  }
+
+  /**
+   * The owner's stop of one trial, just recorded (stop_trial): it stops now (scheduler/stops.ts).
+   * A failure is logged: the ask is recorded, and the command that made it stands.
+   */
+  onStopAsked(ask: StopAsked): void {
+    const { ledger, aborts, laneRun, o } = this.sched;
+    try {
+      const stopped = stopAsked(ledger, { aborts, laneRun, owner: o.owner }, ask);
+      log(
+        "scheduler",
+        stopped ? "a trial stops, as asked" : "a trial asked to stop runs here no more",
+        { ...ask },
+      );
+    } catch (err) {
+      logError("scheduler", "a trial's stop failed", { ...ask, error: String(err) });
+    }
+  }
+
+  /**
+   * The owner's reset of a run's workers, just recorded (reset_workers): its trials stop now, and
+   * its lane bests and epoch at the next step (scheduler/watch.ts).
+   */
+  onReset(reset: { event: number; run: string }): void {
+    try {
+      resetAsked(this.sched, reset);
+      log("scheduler", "a run's workers reset: its trials stop now", { ...reset });
+    } catch (err) {
+      logError("scheduler", "a reset failed", { ...reset, error: String(err) });
+    }
   }
 
   /** The run's agents stop (goal 079), until a model check passes: scheduler/provider.ts. */

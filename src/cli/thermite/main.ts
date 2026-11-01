@@ -17,6 +17,7 @@ import {
   thermiteSelftest,
   thermiteToken,
 } from "./local.ts";
+import { thermiteLogLevel } from "./log-level.ts";
 import { thermiteMcp } from "./mcp.ts";
 import { thermiteStatus, thermiteSubmit } from "./proposer.ts";
 import { thermiteRetention } from "./retention.ts";
@@ -71,6 +72,8 @@ async function main(argv: string[]): Promise<void> {
       return thermiteRetention(rest);
     case "bus":
       return thermiteBus(rest);
+    case "log-level":
+      return thermiteLogLevel(rest);
     case "command":
       return thermiteCommand(rest);
     case "invalidate":

@@ -81,6 +81,17 @@ alter table trial add column proxy_tokens_in integer;
 alter table trial add column proxy_tokens_out integer;
 `;
 
+/** Where the meta table keeps the newest `workers_reset` the scheduler applied. */
+const RESETS_APPLIED = "workers_resets_applied";
+
+/**
+ * Ledger migration 28: the scheduler records each reset of a run's workers it applied, so one that
+ * a restart cut off is applied when the harness starts again. The resets a ledger recorded before
+ * this version were applied as they came: in a new ledger, every reset counts.
+ */
+export const RESETS_APPLIED_FROM = `insert or ignore into meta (key, value)
+  select '${RESETS_APPLIED}', coalesce(max(id), 0) from event where kind = 'workers_reset';`;
+
 /**
  * The `trial`, `lane`, `epoch` and `family` tables: the workers' trials, each lane's retained
  * best, the planner's epochs and the direction registry's families.
@@ -320,6 +331,22 @@ export class LedgerTrials extends LedgerPart {
         "update lane set lane_best_attempt = null where id = ? and lane_best_attempt is not null",
         `${run}:${lane}`,
       ).changes > 0
+    );
+  }
+
+  /** The newest reset of a run's workers the scheduler applied: its `workers_reset` event's id. */
+  resetsApplied(): number {
+    return Number(
+      this.row<Row>("select value from meta where key = ?", RESETS_APPLIED)?.value ?? 0,
+    );
+  }
+
+  /** A reset of a run's workers applied: its `workers_reset` event's id. */
+  resetApplied(event: number): void {
+    this.execute(
+      "insert or replace into meta (key, value) values (?, ?)",
+      RESETS_APPLIED,
+      String(event),
     );
   }
 

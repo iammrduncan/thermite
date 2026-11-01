@@ -14,7 +14,7 @@
 //     attached, against the same stand-in: its first message and a typed one taken in, its server
 //     refusing lane-2's requests without the password, `/exit`, and its server ended with it;
 //   - the real Claude Code, when the image has it (built with CLAUDE_CODE_VERSION), against
-//     containers/test-anthropic's stand-in, with a made-up sign-in on file descriptor 3: its
+//     tests/stand-ins/anthropic's stand-in, with a made-up sign-in on file descriptor 3: its
 //     transcript, which only lane-1 may read, copied; its hooks' signals; `/exit`;
 //   - one short trial through the trial loop's terminal mode for the fake TUI in Claude Code's
 //     place, the real Codex and the real OpenCode, and the owner's input (terminal_input's) through

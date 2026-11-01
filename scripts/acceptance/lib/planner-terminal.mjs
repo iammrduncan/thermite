@@ -1,3 +1,4 @@
+// @ts-check
 // The agents acceptance's planner in its own terminal (goal 169): in Pi, the first epoch's plan in
 // its Pi view, in a process of its own, which takes one owner's message and one input typed into
 // its console while it plans; in OpenCode's own terminal, the scripted model's answers to the
@@ -16,6 +17,9 @@ const PI_PLANNER_WAITS = 90;
  * them), or undefined when it should plan now. Its first plan searches the knowledge base, a call
  * every 2 s, so that its process can take the owner's message in before its next model call,
  * until the message comes (at most PI_PLANNER_WAITS); then it plans, as every later plan does.
+ * @param {any[]} messages
+ * @param {any[]} tools
+ * @returns {Promise<import("./scripted-model.mjs").ScriptedTurn> | undefined}
  */
 export function piPlannerTurn(messages, tools) {
   if (!tools.some((t) => t.function.name === "submit_plan")) return undefined;
@@ -36,6 +40,7 @@ export function piPlannerTurn(messages, tools) {
  * The first epoch's planner, in Pi on a rig nobody set: its call runs in its Pi view as
  * planner-<run>-<round>, in a process of its own. One owner's message goes in before its next
  * model call, `/status` typed into its console is typed, and Live shows its Pi view.
+ * @param {import("./checks.mjs").Check} check
  */
 export async function piPlannerScene(check) {
   const call = await plannerInTerminal("smoke-1", { ms: 300_000 });
@@ -87,6 +92,9 @@ const PLANNER_WAITS = 60;
  * or undefined for another request. Its first plan runs a short command at a time, so that
  * Thermite's plugin can steer the owner's message in as each starts, until it comes (at most
  * PLANNER_WAITS); then it answers the plan as JSON, as every later plan does at once.
+ * @param {any[]} messages
+ * @param {string} asked
+ * @returns {import("./scripted-model.mjs").ScriptedTurn | undefined}
  */
 export function opencodePlanner(messages, asked) {
   if (!asked.includes("The campaign, as JSON:")) return undefined;
@@ -115,6 +123,7 @@ export function opencodePlanner(messages, asked) {
  * The planner on the scripted model in OpenCode, over REST, so its next plan runs in OpenCode's
  * own terminal as planner-<run>-<round>; one owner's message to it goes in inside its turn,
  * steered in by Thermite's plugin as a command starts. Then the planner follows the workers again.
+ * @param {import("./checks.mjs").Check} check
  */
 export async function opencodePlannerScene(check) {
   const given = await api("/v1/rigs/local-1/model", {

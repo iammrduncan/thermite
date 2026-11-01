@@ -107,7 +107,11 @@ async function harness() {
   await runner.handOver(area2, lane, { harnessReads: true });
   const compacted = [];
   const said2 = [];
-  const kept = { dir: join(scratchDir, "research", "claude-real-1", "compactions"), stem: "t-compact", readable: true };
+  const kept = {
+    dir: join(scratchDir, "research", "claude-real-1", "compactions"),
+    stem: "t-compact",
+    readable: true,
+  };
   // In its terminal: the compaction comes from its transcript, as the host copies it.
   const ct = await runClaudeTrial(
     {
@@ -175,11 +179,11 @@ async function codeTrial({ runner, runClaudeTrial, lane, scratchDir, terminal })
   mkdirSync(join(repo, "src"), { recursive: true });
   writeFileSync(join(repo, "src", "value.txt"), "1\n");
   const git = (...a) =>
-    execFileSync(
-      "git",
-      ["-c", "user.name=thermite", "-c", "user.email=thermite@localhost", ...a],
-      { cwd: repo, env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: area }, stdio: "ignore" },
-    );
+    execFileSync("git", ["-c", "user.name=thermite", "-c", "user.email=thermite@localhost", ...a], {
+      cwd: repo,
+      env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: area },
+      stdio: "ignore",
+    });
   git("init", "--quiet", "-b", "work");
   git("add", "-A");
   git("commit", "--quiet", "-m", "parent");
@@ -326,17 +330,23 @@ async function compactionDiagnostics(runner, area, live) {
   }
   if (!files(join(home, "debug")).length) out.push(`no debug log under ${join(home, "debug")}`);
   const drops = files(join(area, "claude-compactions"));
-  out.push(`the hooks' folder: ${drops.map((f) => f.split("/").pop()).join(", ") || "empty or missing"}`);
+  out.push(
+    `the hooks' folder: ${drops.map((f) => f.split("/").pop()).join(", ") || "empty or missing"}`,
+  );
   for (const f of drops.filter((f) => f.endsWith(".meta.json")))
     out.push(`  ${f.split("/").pop()}: ${readFileSync(f, "utf8").trim().slice(0, 600)}`);
   for (const f of drops.filter((f) => f.endsWith(".jsonl")))
-    out.push(`  ${f.split("/").pop()}: ${readFileSync(f, "utf8").split("\n").filter(Boolean).length} lines`);
+    out.push(
+      `  ${f.split("/").pop()}: ${readFileSync(f, "utf8").split("\n").filter(Boolean).length} lines`,
+    );
   for (const project of files(join(home, "projects")))
     for (const t of files(project).filter((f) => f.endsWith(".jsonl"))) {
       const lines = readFileSync(t, "utf8").split("\n").filter(Boolean);
       const boundaries = lines.filter((l) => /"subtype":"compact_boundary"/.test(l)).length;
       const summaries = lines.filter((l) => /"isCompactSummary":true/.test(l)).length;
-      out.push(`transcript ${t}: ${lines.length} lines, ${boundaries} compaction boundaries, ${summaries} summaries`);
+      out.push(
+        `transcript ${t}: ${lines.length} lines, ${boundaries} compaction boundaries, ${summaries} summaries`,
+      );
     }
   out.push("the trial's last live lines:");
   out.push(...live.slice(-12).map((e) => `  ${e.kind}: ${String(e.text).slice(0, 300)}`));
@@ -370,7 +380,10 @@ function watchAdvisor() {
       let ppid = was?.ppid ?? "";
       let argv0 = was?.argv0 ?? "";
       try {
-        ppid = readFileSync(`/proc/${pid}/stat`, "latin1").replace(/^.*\) /s, "").split(" ")[1] ?? "";
+        ppid =
+          readFileSync(`/proc/${pid}/stat`, "latin1")
+            .replace(/^.*\) /s, "")
+            .split(" ")[1] ?? "";
         argv0 = readFileSync(`/proc/${pid}/cmdline`, "latin1").split("\0")[0] ?? "";
       } catch {
         // gone
@@ -403,7 +416,13 @@ async function advisor() {
   const { renderAuditor } = await import("/opt/thermite/dist/agents/roles/index.js");
   const watch = watchAdvisor();
   const r = await runAdvisor({
-    runtime: { name: "check", runtime: "claude-code", model: model.model, token: TOKEN, timeout_s: 120 },
+    runtime: {
+      name: "check",
+      runtime: "claude-code",
+      model: model.model,
+      token: TOKEN,
+      timeout_s: 120,
+    },
     prompt: (f) => renderAuditor({ pkg: { question: "ADVISOR-CHECK Is this change clear?" } }, f),
     schema: {
       safeParse: (v) =>

@@ -1,20 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { seedDemo } from "../../helpers/control-demo.ts";
 import { controlOnly, signIn } from "../../helpers/control-stack.ts";
-import { applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
+import { controlStore, ingestReport } from "../../helpers/control-store.ts";
+import { seedDemo } from "../../helpers/demo/index.ts";
 
 /**
  * The dashboard for an operator, over the demo seed: each decision and what it decides, the
  * overview in words, an attempt's page, a campaign's views, and agent-written text escaped.
  */
 
-/** Control over the demo seed (no harness): three rigs with decisions waiting and runs at work. */
+/**
+ * Control over the demo seed (no harness): its eight rigs, four decisions waiting for the owner
+ * (three of them on rig-a, rig-b and rig-c, one on gpu-2), and runs at work.
+ */
 async function demo() {
   const store = controlStore();
   await seedDemo(store);
-  // The knowledge base's folders and the model usage, as control applies them from the bus.
-  await applied(store);
   const { control } = controlOnly({
     store,
     tokens: { rigs: { "rig-a": "t-a-abcdef", "rig-b": "t-b-abcdef", "rig-c": "t-c-abcdef" } },
@@ -130,16 +131,16 @@ describe("control dashboard for an operator", () => {
     );
     assert.match(home, /The change becomes <b>champion #5<\/b>/);
     // Every decision button is a signed-command form with the session's token: approve (or
-    // overrule) and decline, for each of the three decisions.
+    // overrule) and decline, for each of the four decisions.
     const forms = home.match(/<form class="inline" method="post" action="\/ui\/commands">/g) ?? [];
-    assert.equal(forms.length, 6);
+    assert.equal(forms.length, 8);
   });
 
   test("the overview says what each run is doing now, and what happened, in words", async () => {
     const { get } = await demo();
     const home = await get("/ui");
     // The few numbers first, then one line per lane and for the judge, with how long.
-    assert.match(home, /<b>3<\/b><span>need you<\/span>/);
+    assert.match(home, /<b>4<\/b><span>need you<\/span>/);
     assert.match(home, /<h2>At work<\/h2>/);
     assert.match(
       home,
@@ -152,7 +153,7 @@ describe("control dashboard for an operator", () => {
     assert.match(home, /4\/8 goals/);
     // Campaigns: what is at work now first, then what waits, then one row per campaign.
     const campaigns = await get("/ui/campaigns");
-    assert.match(campaigns, /<h2>At work now<\/h2><span class="n">2<\/span>/);
+    assert.match(campaigns, /<h2>At work now<\/h2><span class="n">6<\/span>/);
     assert.match(campaigns, /opus-simd › dec-2/);
     assert.match(campaigns, /<h2>Waiting for you<\/h2>/);
     assert.match(
@@ -169,7 +170,7 @@ describe("control dashboard for an operator", () => {
     // The Rigs list: a row for each rig, with its run at work. What its judge does and its
     // checks are on the rig's page.
     const rigsList = await get("/ui/rigs");
-    assert.match(rigsList, /<span class="summary">3 rigs · /);
+    assert.match(rigsList, /<span class="summary">8 rigs · /);
     assert.match(
       rigsList,
       /<a class="nowrap" href="\/ui\/campaigns\/opus-simd\/runs\/dec-2">dec-2<\/a><span class="rsub">opus-simd · /,
@@ -185,11 +186,14 @@ describe("control dashboard for an operator", () => {
     // The run's page adds each lane's last step.
     const run = await get("/ui/campaigns/opus-simd/runs/dec-2");
     assert.match(run, /last: <code>run timeout 270 make -C build bench-decode/);
-    // What happened is sentences, not event kinds and IDs.
-    assert.match(home, /Run dec-1 paused: moved to rig-b as dec-2\./);
-    assert.match(home, /The judge checked champion #1: 4 of 8 goals met\./);
+    // What happened is sentences, not event kinds and IDs: on the overview, which lists the newest
+    // of every rig's, a rig's page and a run's history.
+    const rigA = await get("/ui/rigs/rig-a");
+    const history = await get("/ui/campaigns/opus-simd/runs/dec-2/history");
+    assert.match(rigA, /Run dec-1 paused: moved to rig-b as dec-2\./);
+    assert.match(history, /The judge checked champion #1: 4 of 8 goals met\./);
     for (const raw of ["job leased", "attempt lifecycle", "job queued", "promotion blocked"])
-      assert.doesNotMatch(home, new RegExp(raw));
+      for (const html of [home, rigA, history]) assert.doesNotMatch(html, new RegExp(raw));
   });
 
   test("an attempt has a page with the change, the judge's findings and its history", async () => {

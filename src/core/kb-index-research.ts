@@ -1,3 +1,4 @@
+import { hypothesisEvent } from "./corpus.ts";
 import { kbFileOf } from "./kb.ts";
 import {
   clip,
@@ -76,24 +77,25 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
     case "hypothesis_added":
     case "hypothesis_revised":
     case "hypothesis_merged": {
-      const supporting = Array.isArray(b.supporting) ? b.supporting.map(String) : [];
-      const status = e.kind === "hypothesis_merged" ? "merged" : str(b.status);
+      const h = hypothesisEvent(e.kind, b);
+      if (!h) return;
+      const supporting = h.supporting ?? [];
       t.put(
         run,
         "hypothesis",
-        ref(b.hypothesis),
+        ref(h.id),
         {
-          title: clip(str(b.text), 300) || `hypothesis ${str(b.hypothesis)}`,
+          title: clip(h.text, 300) || `hypothesis ${h.id}`,
           body: lines([
-            str(b.text),
-            typeof b.question === "number" ? questionLabel(b.question) : "",
-            status ? `Status: ${hypothesisStatusWords(status, str(b.into) || null)}` : "",
+            h.text,
+            typeof h.question === "number" ? questionLabel(h.question) : "",
+            h.status ? `Status: ${hypothesisStatusWords(h.status, h.into || null)}` : "",
             supporting.length
               ? `Supporting claims: ${supporting.join(", ")}`
               : "No verified claim supports it yet.",
-            e.kind === "hypothesis_added" ? "" : `Changed by ${str(b.lane) || e.actor}.`,
+            h.change === "added" ? "" : `Changed by ${h.lane || e.actor}.`,
           ]),
-          ...(e.kind === "hypothesis_added" ? { by: str(b.lane) || e.actor } : {}),
+          ...(h.change === "added" ? { by: h.lane || e.actor } : {}),
         },
         e.at,
       );
@@ -102,9 +104,11 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
     // A hypothesis promoted, returned to the pool or retired (goal 117), by the owner or the
     // planner, with why: its item's status changes; one not in the reading yet is added.
     case "hypothesis_status": {
-      const id = ref(b.hypothesis);
-      const status = `Status: ${hypothesisStatusWords(str(b.status))}`;
-      const why = `Status set by ${str(b.by) || e.actor}: ${str(b.reason)}`;
+      const h = hypothesisEvent(e.kind, b);
+      if (!h) return;
+      const id = ref(h.id);
+      const status = `Status: ${hypothesisStatusWords(h.status)}`;
+      const why = `Status set by ${h.by || e.actor}: ${h.reason}`;
       const old = t.item(run, "hypothesis", id)?.body;
       t.put(
         run,
@@ -112,10 +116,10 @@ export function indexResearchEvent(t: KbIndexTarget, event: KbEvent, run: string
         id,
         old === undefined
           ? {
-              title: clip(str(b.text), 300) || `hypothesis ${str(b.hypothesis)}`,
+              title: clip(h.text, 300) || `hypothesis ${h.id}`,
               body: lines([
-                str(b.text),
-                typeof b.question === "number" ? questionLabel(b.question) : "",
+                h.text,
+                typeof h.question === "number" ? questionLabel(h.question) : "",
                 status,
                 why,
               ]),

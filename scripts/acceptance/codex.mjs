@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+// @ts-check
 // Codex CLI acceptance under compose, with a stand-in for the Codex CLI mounted in the harness
-// (containers/test-codex; no ChatGPT plan and no download needed) and a scripted provider on this
+// (tests/stand-ins/codex; no ChatGPT plan and no download needed) and a scripted provider on this
 // machine that answers OpenAI's Responses API. Through the dashboard: an OpenAI-compatible
 // provider added in Providers, its model given to the rig in Codex, then:
 //   - the rig takes the route; its model check runs one shell call through Codex, as the model
@@ -68,7 +69,7 @@ import {
 } from "./lib/smoke-env.mjs";
 
 const KEY = "provider-key-codex-acceptance"; // public-check: allow (a made-up key for the stand-in)
-const files = ["-f", "compose.yaml", "-f", "containers/test-codex/compose.yaml"];
+const files = ["-f", "compose.yaml", "-f", "tests/stand-ins/codex/compose.yaml"];
 const composeEnv = {
   THERMITE_POLL_SECONDS: "2",
   THERMITE_PROMOTION: "auto",
@@ -77,6 +78,8 @@ const composeEnv = {
   THERMITE_MODEL_ROUTE_POLL_SECONDS: "2",
 };
 const { check, results } = acceptanceChecks({ max: 400 });
+/** @typedef {import("../../src/core/link/kb.ts").KbHit} KbHit */
+/** @typedef {import("../../src/control/views/index.ts").RunView} RunView */
 
 /** Seconds from the usage window the provider answers to its reset. */
 const WINDOW_S = 30;
@@ -85,6 +88,7 @@ const WINDOW_S = 30;
  * the stand-in's first `usage-window` call, which meets a full usage window: a 429 with the reset in
  * its Retry-After, as Codex's own usage-limit error.
  */
+/** @type {{ keys: Set<string>, paths: string[], window: string | undefined }} */
 const seen = { keys: new Set(), paths: [], window: undefined };
 const provider = createServer((req, res) => {
   // What each Responses call carried (control's own model list carries the key too).
@@ -136,8 +140,8 @@ const provider = createServer((req, res) => {
     res.end(JSON.stringify({ error: { message: "only the model list and Responses here" } }));
   });
 });
-await new Promise((r) => provider.listen(0, "0.0.0.0", r));
-const base = `http://${containersHost()}:${provider.address().port}/v1`;
+await /** @type {Promise<void>} */ (new Promise((r) => provider.listen(0, "0.0.0.0", r)));
+const base = `http://${containersHost()}:${/** @type {import("node:net").AddressInfo} */ (provider.address()).port}/v1`;
 
 const env = prepare();
 const contract = JSON.parse(readFileSync(env.contractFile, "utf8"));
@@ -162,9 +166,14 @@ try {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const page = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
+  const page = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
   const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page("/ui/settings"))?.[1] ?? "";
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) =>
     decodeURIComponent(
       String(
@@ -414,8 +423,8 @@ try {
         "the kept conversation whole in the knowledge base",
         async () => {
           const q = encodeURIComponent("conversation before compaction");
-          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find((h) =>
-            JSON.stringify(h).includes(trialId),
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find(
+            (/** @type {KbHit} */ h) => JSON.stringify(h).includes(trialId),
           );
           if (!hit) return undefined;
           const { item } = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`))
@@ -454,8 +463,10 @@ try {
     "the good kernel's audit, in Codex in the supervisor",
     async () =>
       (await api("/v1/rigs/local-1/view")).body.runs
-        ?.find((r) => r.id === "smoke-1")
-        ?.audits?.find((a) => a.attempt === good.attempt && a.decision),
+        ?.find((/** @type {RunView} */ r) => r.id === "smoke-1")
+        ?.audits?.find(
+          (/** @type {RunView["audits"][number]} */ a) => a.attempt === good.attempt && a.decision,
+        ),
     1_200_000,
     3000,
   );
@@ -528,19 +539,20 @@ try {
   );
   // The knowledge base (goal 175): each trial's finding, written through Thermite's MCP server,
   // in its own slot, where control holds it; each write naming another slot refused.
-  const kbOfSaid = (s) => ({
+  const kbOfSaid = (/** @type {string} */ s) => ({
     address: /kb=(\S+)/.exec(s)?.[1],
     refused: /kb_refused=yes/.test(s),
   });
   const kbTerminal = kbOfSaid(said);
   const kbHeadless = kbOfSaid(saidLater);
-  const ownSlot = (a) => /^smoke-cpu\/smoke-1\/worker-1\/finding:\d+$/.test(String(a));
+  const ownSlot = (/** @type {string | undefined} */ a) =>
+    /^smoke-cpu\/smoke-1\/worker-1\/finding:\d+$/.test(String(a));
   const kbStored = await until(
     "control holds Codex's two items",
     async () => {
       const hits = (await api("/v1/kb/search?q=kbprobecx")).body.hits ?? [];
       const both = [kbTerminal.address, kbHeadless.address].map((a) =>
-        hits.find((h) => h.address === a),
+        hits.find((/** @type {KbHit} */ h) => h.address === a),
       );
       return both.every((h) => h?.slot === "worker-1") ? both : undefined;
     },
@@ -581,7 +593,11 @@ try {
   ]);
   check("the key shows in no page, event or rig record", !everything.includes(KEY));
 } catch (err) {
-  check("acceptance run", false, String(err?.stack ?? err));
+  check(
+    "acceptance run",
+    false,
+    String(/** @type {{ stack?: unknown } | null | undefined} */ (err)?.stack ?? err),
+  );
 } finally {
   provider.close();
   if (process.env.KEEP !== "1") dc(composeEnv, ...files, "down", "-v");

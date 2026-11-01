@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+// @ts-check
 // Machines acceptance: control reaches a machine over SSH from its own image. A local container
-// stands in for the machine (containers/test-machine; never a real host), on control's compose
+// stands in for the machine (tests/stand-ins/machine; never a real host), on control's compose
 // network. Control makes the machine's key, the test adds its public half to the machine, the
 // owner's host-key check is compared with the machine's real host key, the read-only check
 // reads the machine, Podman is installed only after the owner's yes, and a changed host key is
@@ -8,19 +9,24 @@
 // Usage: COMPOSE="podman compose" node scripts/acceptance/machine.mjs (or "docker compose").
 import { execFileSync } from "node:child_process";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { control, dc, engine, formAnswer, secret, sh, until } from "./lib/smoke-env.mjs";
+import { control, dc, devInit, engine, formAnswer, secret, sh, until } from "./lib/smoke-env.mjs";
 
 const { check, results } = acceptanceChecks();
 const box = "thermite-test-machine";
+/** @param {...string} a */
 const run = (...a) => sh(engine, a);
+/**
+ * @param {string} cmd
+ * @param {string} [input]
+ */
 const onBox = (cmd, input) =>
   execFileSync(engine, ["exec", "-i", box, "sh", "-c", cmd], { encoding: "utf8", input });
 
-sh("node", ["scripts/dev/init.mjs"]);
+devInit();
 const env = { THERMITE_CONTROL_PUBLIC_URL: "http://control:8800" };
 console.log("compose: build and start control; build the stand-in machine");
 dc(env, "up", "-d", "--build", "control", "nats");
-run("build", "-q", "-t", "thermite-test-machine", "containers/test-machine");
+run("build", "-q", "-t", "thermite-test-machine", "tests/stand-ins/machine");
 try {
   run("rm", "-f", box);
 } catch {}
@@ -50,9 +56,13 @@ try {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
   const page = async () => (await fetch(`${control}/ui/settings`, { headers: { cookie } })).text();
   const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page())?.[1] ?? "";
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) => {
     const r = await fetch(`${control}${path}`, {
       method: "POST",
@@ -115,7 +125,10 @@ try {
     "control asks before installing Podman, showing the exact commands",
     Boolean(sha) && /sudo -n apt-get install -y podman/.test(html),
   );
-  const started = await post("/ui/settings/machines/test-box/install", { recipe: "podman", sha });
+  const started = await post("/ui/settings/machines/test-box/install", {
+    recipe: "podman",
+    sha: /** @type {string} */ (sha),
+  });
   check(
     "the owner's yes starts the install",
     /Installing Podman on "test-box", as you allowed/.test(started),
@@ -158,7 +171,7 @@ try {
     /The machine now presents a different host key/.test(await page()),
   );
 } catch (err) {
-  check("acceptance run", false, String(err?.stack ?? err));
+  check("acceptance run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
   try {
     run("rm", "-f", box);

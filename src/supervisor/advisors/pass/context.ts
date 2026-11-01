@@ -48,7 +48,6 @@ import { advisorFetcher } from "../fetcher.ts";
 import type { AdvisorLimit } from "../limit.ts";
 import type { AdvisorInTerminal } from "../terminal/index.ts";
 import type { AdvisorCode, AdvisorKb, AdvisorResearch } from "../tools/index.ts";
-import { kbSearchFor } from "./kb.ts";
 import { advisorKeeper } from "./keeper.ts";
 import { clip, harnessOf } from "./shared.ts";
 import { type AdviseConfig, type AdviseState, MAX_TRIES } from "./state.ts";
@@ -117,15 +116,12 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
       `${what}: ${advisor} waits for its provider's usage limit to reset, until ${limits[advisor]}, and goes on then; it is not counted as a failed try. ${clip(redact(l.words), 400)}`,
     );
   };
-  // Web fetch only for listed domains; with an open fetch ("*"), no knowledge-base search in the
-  // same agent, so private notes and the open web never meet in one injectable context. An
-  // outside knowledge base's search goes only to the advisors of the campaigns granted it.
+  // Web fetch only for listed domains; with an open fetch ("*"), no knowledge base and no MCP
+  // server in the same agent, so private notes and the open web never meet in one injectable
+  // context.
   const domains = cfg.advisors.fetch_domains;
   const fetchUrl = domains.length ? advisorFetcher(cfg.home, domains) : undefined;
-  const toolsFor = (): AdvisorTools => ({
-    ...(fetchUrl ? { fetchUrl } : {}),
-    ...(domains.includes("*") ? {} : { kbSearch: kbSearchFor(cfg.advisors) }),
-  });
+  const toolsFor = (): AdvisorTools => (fetchUrl ? { fetchUrl } : {});
   // Thermite's knowledge base for an advisor's call (goal 175): kb_search and kb_read asked of
   // control for the run, from the run's scope, and kb_write recorded by the harness in the
   // advisor's own slot, when the run's campaign lets that slot write. None without a control.

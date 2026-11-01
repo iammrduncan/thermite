@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { MIGRATIONS } from "../schema/index.ts";
 import { PROMPT_TABLE, PROMPT_TURN_COLUMN } from "./prompts.ts";
 import { eventRunColumn, RUN_END_EXPORTS_FROM } from "./runs.ts";
-import { TRIAL_PROXY_TOKENS } from "./trials.ts";
+import { RESETS_APPLIED_FROM, TRIAL_PROXY_TOKENS } from "./trials.ts";
 
 /**
  * Every ledger migration, in order: schema.ts's, then the ones since, here, so schema.ts no longer
@@ -28,4 +28,6 @@ export const LEDGER_MIGRATIONS: readonly (string | ((db: DatabaseSync) => void))
   TRIAL_PROXY_TOKENS,
   // 27: the runs that export at their end: those closed from now on.
   RUN_END_EXPORTS_FROM,
+  // 28: the resets of a run's workers the scheduler applied: those recorded from now on.
+  RESETS_APPLIED_FROM,
 ];

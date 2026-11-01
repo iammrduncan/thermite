@@ -283,6 +283,14 @@ export const USAGE = `usage: thermite <command> [options]
                                       run is on, so --rig may be left out; every other kind
                                       needs it. assign_campaign and resume_run on a RunPod rig
                                       whose pod is stopped start the pod first, and say so
+  log-level [control|harness|supervisor] [debug|info|warn|error|default] [--rig R] [--ttl MIN]
+            --control URL --token-file F
+                                      a log level (owner's token). control: control's own, read
+                                      with no level, or set at once and kept across control's
+                                      restarts; harness or supervisor: that part of rig R, by a
+                                      signed log_level command, until another changes it or the
+                                      part restarts. default: the part's THERMITE_LOG_LEVEL. It
+                                      prints JSON
   invalidate --run RUN (--attempt ID | --job N) --reason TEXT [--yes] --control URL --token-file F
                                       withdraw bad evidence (owner's token): an attempt, for
                                       good, with every attempt built on it, or a judge job's

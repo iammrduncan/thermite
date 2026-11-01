@@ -308,8 +308,23 @@ export function issueCommand(
 ): { id: string } {
   const signed = prepareCommand(store, privateKeyPem, input);
   store.commands.enqueue(signed);
+  auditChange(store, signed);
   publishCommand(store, signed);
   return { id: signed.envelope.id };
+}
+
+/**
+ * A command that changes a rig part's setting says in the audit log what it changes, beside the
+ * `command_issued` that every command gets: a `log_level` its part and level.
+ */
+function auditChange(store: ControlStore, signed: SignedCommand): void {
+  const e = signed.envelope;
+  if (e.kind !== "log_level") return;
+  store.auditLog.add(e.issued_by, "log_level_sent", {
+    command: e.id,
+    rig: e.rig,
+    ...(e.payload as Record<string, unknown>),
+  });
 }
 
 /**
@@ -385,6 +400,7 @@ export async function issueWaking(
     }
   }
   store.commands.enqueue(signed);
+  auditChange(store, signed);
   publishCommand(store, signed);
   return { id: signed.envelope.id, woke };
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // New-campaign acceptance: a campaign from nothing through control's dashboard form, end to end.
 // A tiny C project is served from this machine by git daemon. The form's draft describes the kit
 // on the page; control writes the kit, keeps it, stores the contract and signs the assignment.
@@ -30,6 +31,8 @@ import {
 } from "./lib/smoke-env.mjs";
 
 const { check, results } = acceptanceChecks();
+/** The fields of control's answer to a kit's upload that this script reads. */
+/** @typedef {{ id?: string, name?: string, cells?: string[] }} KitUploadAnswer */
 
 // The project: one C file whose benchmark prints the n it was given.
 const root = mkdtempSync(join(tmpdir(), "thermite-newcamp-"));
@@ -39,6 +42,7 @@ writeFileSync(
   join(work, "bench.c"),
   `#include <stdio.h>\n#include <stdlib.h>\nint main(int c, char **v) { long n = atol(v[1]); volatile double s = 0; for (long i = 0; i < n * 200000; i++) s += i; printf("%ld\\n", n); return 0; }\n`,
 );
+/** @param {...string} a */
 const git = (...a) =>
   execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], {
     cwd: work,
@@ -57,6 +61,7 @@ cpSync(join("examples", "matmul-cpu"), join(sampleWork, "examples", "matmul-cpu"
   recursive: true,
 });
 writeFileSync(join(sampleWork, "README.md"), "A repository whose project is in a folder.\n");
+/** @param {...string} a */
 const sampleGit = (...a) =>
   execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], {
     cwd: sampleWork,
@@ -111,7 +116,7 @@ try {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
   const pageHtml = await (
     await fetch(`${control}/ui/campaigns/new`, { headers: { cookie } })
   ).text();
@@ -224,7 +229,9 @@ try {
     3000,
   );
   check("a faster run wins when the score is time", verdict === "win_confirmed", { verdict });
-  const cmd = (await api("/v1/commands")).body.commands.find((c) => c.kind === "assign_campaign");
+  const cmd = (await api("/v1/commands")).body.commands.find(
+    (/** @type {{ kind: string }} */ c) => c.kind === "assign_campaign",
+  );
   check(
     "the assignment was signed by control for the owner and delivered",
     cmd?.status === "delivered" && cmd?.issued_by === "owner:ui",
@@ -251,7 +258,7 @@ try {
     body: form,
     headers: { cookie },
   });
-  const kit = await up.json();
+  const kit = /** @type {KitUploadAnswer} */ (await up.json());
   check(
     "control unpacked and checked an uploaded kit",
     up.status === 200 && kit.cells?.join(" ") === "small large",
@@ -303,7 +310,7 @@ try {
     body: sampleForm,
     headers: { cookie },
   });
-  const sampleKit = await sampleUp.json();
+  const sampleKit = /** @type {KitUploadAnswer} */ (await sampleUp.json());
   check(
     "control checked the sample's kit, packed as the quick start packs it",
     sampleUp.status === 200 &&
@@ -384,7 +391,7 @@ try {
 
   // The private path. A stand-in Git host on control's network accepts only keys in its
   // authorized_keys; control makes the deploy key in Providers and keeps its private half.
-  execFileSync(engine, ["build", "-q", "-t", "thermite-test-machine", "containers/test-machine"], {
+  execFileSync(engine, ["build", "-q", "-t", "thermite-test-machine", "tests/stand-ins/machine"], {
     stdio: ["ignore", "ignore", "inherit"],
   });
   execFileSync(
@@ -402,6 +409,10 @@ try {
     "/home/thermite/tiny.git",
   ]);
   const privateUrl = `ssh://thermite@${gitBox}/home/thermite/tiny.git`;
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const settingsPost = (path, form) =>
     fetch(`${control}${path}`, {
       method: "POST",
@@ -480,7 +491,7 @@ try {
     privateImport?.body,
   );
 } catch (err) {
-  check("acceptance run", false, String(err?.stack ?? err));
+  check("acceptance run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
   daemon.kill();
   try {

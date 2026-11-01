@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { LOG_LEVELS } from "../../core/log-levels.ts";
 import { busState } from "../bus/index.ts";
+import { CONTROL_LOG_LEVEL_WORDS, controlLogLevelOf, setControlLogLevel } from "../log-level.ts";
 import { providersWithUsage } from "../providers/index.ts";
 import { modelPrices, setModelPrice } from "../usage.ts";
 import type { ToolContext } from "./context.ts";
@@ -9,7 +11,35 @@ import type { ToolContext } from "./context.ts";
  * the message bus's state.
  */
 export function registerControl(tools: ToolContext): void {
-  const { server, store, opts, audited } = tools;
+  const { server, store, opts, actor, role, audited } = tools;
+
+  // Control's own log level (the guide's question 16): read by every role but the agent's, set
+  // by the owner's token. A rig part's goes by issue_command's log_level.
+  const levelAnswer =
+    "{level, from, environment, now, set_by, set_at}: level, what control writes at; from, setting (the owner set it on control) or environment (THERMITE_LOG_LEVEL); environment, THERMITE_LOG_LEVEL's level; now, the level now (debug while SIGUSR2's switch is on)";
+  server.registerTool(
+    "control_log_level",
+    {
+      title: "Control's log level",
+      description: `Control's own log level, as set_control_log_level sets it: ${levelAnswer}. A rig's harness and supervisor each have their own: issue_command's log_level {part: harness|supervisor, level} changes one.`,
+      inputSchema: {},
+    },
+    audited("control_log_level", () => controlLogLevelOf(store)),
+  );
+  if (role === "owner")
+    server.registerTool(
+      "set_control_log_level",
+      {
+        title: "Set control's log level",
+        description: `Sets control's own log level. ${CONTROL_LOG_LEVEL_WORDS} Audited as control_log_level_set. Returns ${levelAnswer}, and said, the level in words. The owner's token only.`,
+        inputSchema: { level: z.enum(LOG_LEVELS).nullable().describe(CONTROL_LOG_LEVEL_WORDS) },
+      },
+      audited("set_control_log_level", (a: { level: string | null }) => {
+        const o = setControlLogLevel(store, a, actor);
+        if (!o.ok) throw new Error(o.error);
+        return { ...o.level, said: o.said };
+      }),
+    );
 
   server.registerTool(
     "control_log",

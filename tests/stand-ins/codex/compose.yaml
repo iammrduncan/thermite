@@ -10,7 +10,7 @@ services:
     environment:
       THERMITE_CODEX_BIN: /opt/fake-codex/codex
     volumes:
-      - ./containers/test-codex:/opt/fake-codex:ro
+      - ./tests/stand-ins/codex:/opt/fake-codex:ro
   supervisor:
     build:
       args:
@@ -18,4 +18,4 @@ services:
     environment:
       THERMITE_CODEX_BIN: /opt/fake-codex/codex
     volumes:
-      - ./containers/test-codex:/opt/fake-codex:ro
+      - ./tests/stand-ins/codex:/opt/fake-codex:ro

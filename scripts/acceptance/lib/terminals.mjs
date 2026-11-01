@@ -1,3 +1,4 @@
+// @ts-check
 // An agent's terminal as the acceptance checks reach it (goal 169): the owner's console over
 // REST (terminal_input) and the screen Live gets, as the owner's page watches it.
 import { api, control, secret, until } from "./smoke-env.mjs";
@@ -5,6 +6,9 @@ import { api, control, secret, until } from "./smoke-env.mjs";
 /**
  * One of the owner's inputs to a trial's or a call's terminal, as REST sends it: its command,
  * once settled.
+ * @param {string} trial
+ * @param {Record<string, unknown>} input
+ * @param {string} [run]
  */
 export async function typeInto(trial, input, run = "smoke-1") {
   const issued = await api("/v1/commands", {
@@ -22,14 +26,18 @@ export async function typeInto(trial, input, run = "smoke-1") {
   );
 }
 
-/** The first frame of a trial's or a call's terminal that Live gets, as the owner's page watches it. */
+/**
+ * The first frame of a trial's or a call's terminal that Live gets, as the owner's page watches it.
+ * @param {string} trial
+ * @param {string} [rig]
+ */
 export async function screenOnLive(trial, rig = "local-1") {
   const login = await fetch(`${control}/ui/login`, {
     method: "POST",
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
   const stop = new AbortController();
   const timer = setTimeout(() => stop.abort(), 60_000);
   try {
@@ -37,7 +45,7 @@ export async function screenOnLive(trial, rig = "local-1") {
       headers: { cookie },
       signal: stop.signal,
     });
-    const reader = res.body.getReader();
+    const reader = /** @type {ReadableStream<Uint8Array>} */ (res.body).getReader();
     let text = "";
     for (;;) {
       const { value, done } = await reader.read();

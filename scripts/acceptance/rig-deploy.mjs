@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+// @ts-check
 // Rig deploy acceptance: control sets a rig up on a machine over SSH, and the rig reports.
 // A privileged local container with systemd, sshd and rootless Podman stands in for the machine
-// (containers/test-host; never a real host), on control's compose network. Control makes the
+// (tests/stand-ins/host; never a real host), on control's compose network. Control makes the
 // machine's key, the owner trusts the host key, lingering is turned on after the owner's yes,
 // then Rigs › Add a rig enrolls a CPU rig, writes its files and Quadlet units, starts it, and the
 // rig's first report must reach control. Then its services are stopped, started and removed.
@@ -11,7 +12,7 @@
 // Usage: COMPOSE="podman compose" node scripts/acceptance/rig-deploy.mjs (Podman only).
 import { execSync } from "node:child_process";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { control, dc, engine, formAnswer, secret, sh, until } from "./lib/smoke-env.mjs";
+import { control, dc, devInit, engine, formAnswer, secret, sh, until } from "./lib/smoke-env.mjs";
 
 const { check, results } = acceptanceChecks();
 if (engine !== "podman") {
@@ -19,7 +20,7 @@ if (engine !== "podman") {
   process.exit(1);
 }
 const host = "thermite-test-host";
-const onHost = (cmd) => sh("podman", ["exec", host, "sh", "-c", cmd]);
+const onHost = (/** @type {string} */ cmd) => sh("podman", ["exec", host, "sh", "-c", cmd]);
 const harnessImage = "docker.io/library/thermite-harness:latest";
 const supervisorImage = "docker.io/library/thermite-supervisor:latest";
 const env = {
@@ -30,11 +31,11 @@ const env = {
   THERMITE_RIG_SUPERVISOR_IMAGE: supervisorImage,
 };
 
-sh("node", ["scripts/dev/init.mjs"]);
+devInit();
 console.log("compose: build the images and start control; build the stand-in machine");
 dc(env, "build", "control", "harness", "supervisor");
 dc(env, "up", "-d", "control", "nats");
-sh("podman", ["build", "-q", "-t", "thermite-test-host", "containers/test-host"]);
+sh("podman", ["build", "-q", "-t", "thermite-test-host", "tests/stand-ins/host"]);
 const cleanup = () => {
   try {
     sh("podman", ["rm", "-f", "-t", "5", host]);
@@ -75,9 +76,14 @@ try {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const get = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
+  const get = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
   const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await get("/ui/settings"))?.[1] ?? "";
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) => {
     const r = await fetch(`${control}${path}`, {
       method: "POST",
@@ -117,7 +123,10 @@ try {
       html,
     )?.[1];
   check("control asks before turning lingering on", Boolean(sha));
-  await post("/ui/settings/machines/test-host/install", { recipe: "linger", sha });
+  await post("/ui/settings/machines/test-host/install", {
+    recipe: "linger",
+    sha: /** @type {string} */ (sha),
+  });
   await until(
     "lingering is on",
     async () =>
@@ -206,7 +215,7 @@ try {
     removed,
   );
 } catch (err) {
-  check("acceptance run", false, String(err?.stack ?? err));
+  check("acceptance run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
   cleanup();
   dc(env, "down", "-v");

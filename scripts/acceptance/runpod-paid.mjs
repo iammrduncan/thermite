@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // The paid acceptance of rigs on RunPod: one real pod, launched and ended through a real control,
 // run by hand by the owner. It SPENDS MONEY, so it runs only with --i-accept-the-cost and a spend
 // limit the owner gives. It talks to control's REST API only, with the owner's token; control
@@ -59,8 +60,16 @@ if (!(spendLimit > 0)) {
 }
 const control = o.control.replace(/\/$/, "");
 const token = readFileSync(o["token-file"], "utf8").trim();
+/** @param {number} ms */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const { check, failed } = acceptanceChecks();
+/**
+ * A call to control's REST API with the owner's token: a POST when it has a body, else a GET. The
+ * answer's body is its JSON, or its text, read loosely as the lib's answers are.
+ * @param {string} path
+ * @param {unknown} [body]
+ * @returns {Promise<import("./lib/smoke-env.mjs").ApiAnswer>}
+ */
 async function api(path, body) {
   const r = await fetch(`${control}${path}`, {
     method: body === undefined ? "GET" : "POST",
@@ -76,7 +85,14 @@ async function api(path, body) {
   }
   return { status: r.status, body: json };
 }
-/** Waits until `fn` gives something; throws, in words, after `minutes`. */
+/**
+ * Waits until `fn` gives something; throws, in words, after `minutes`.
+ * @template T
+ * @param {string} what
+ * @param {() => Promise<T>} fn
+ * @param {number} minutes
+ * @returns {Promise<NonNullable<T>>}
+ */
 async function until(what, fn, minutes) {
   const deadline = Date.now() + minutes * 60_000;
   for (;;) {
@@ -86,8 +102,15 @@ async function until(what, fn, minutes) {
     await sleep(10_000);
   }
 }
+/** A rig as control's list of rigs gives it. */
+/** @typedef {import("../../src/core/api/control/owner.ts").RigList["rigs"][number]} ListedRig */
+/** @param {string} rig */
 const view = async (rig) => (await api(`/v1/rigs/${encodeURIComponent(rig)}/runpod`)).body;
 
+/**
+ * The rig's name, once control launched it.
+ * @type {string | undefined}
+ */
 let rig;
 const t0 = Date.now();
 try {
@@ -106,7 +129,7 @@ try {
     )
   )
     throw new Error("not launched: nothing was started");
-  rig = launched.body.rig;
+  rig = /** @type {string} */ (launched.body.rig);
   const pod = launched.body.pod;
   console.log(
     `rig ${rig}, pod ${pod}, ${launched.body.gpu_name}, $${launched.body.price_per_hr}/h`,
@@ -114,7 +137,7 @@ try {
   check("on Secure cloud", launched.body.cloud_type === "SECURE");
 
   // Enroll and report.
-  await until("enrollment", async () => (await view(rig)).enrolled_at, 20);
+  await until("enrollment", async () => (await view(/** @type {string} */ (rig))).enrolled_at, 20);
   check(
     "control enrolled the pod through RunPod's proxy",
     true,
@@ -124,7 +147,7 @@ try {
     "report",
     async () =>
       ((await api("/v1/rigs")).body.rigs ?? []).find(
-        (u) => u.id === rig && Date.parse(u.last_seen) > 0,
+        (/** @type {ListedRig} */ u) => u.id === rig && Date.parse(u.last_seen) > 0,
       ),
     10,
   );
@@ -136,7 +159,8 @@ try {
   const iso = await until(
     "isolation check",
     async () => {
-      const c = (await api(`/v1/rigs/${encodeURIComponent(rig)}/view`)).body.checks?.isolation;
+      const c = (await api(`/v1/rigs/${encodeURIComponent(/** @type {string} */ (rig))}/view`)).body
+        .checks?.isolation;
       return c && c.ok !== null ? c : undefined;
     },
     15,
@@ -163,7 +187,8 @@ try {
       const smoke = await until(
         "smoke check",
         async () => {
-          const c = (await api(`/v1/rigs/${encodeURIComponent(rig)}/view`)).body.checks?.smoke;
+          const c = (await api(`/v1/rigs/${encodeURIComponent(/** @type {string} */ (rig))}/view`))
+            .body.checks?.smoke;
           return c && c.ok !== null ? c : undefined;
         },
         90,
@@ -221,7 +246,7 @@ try {
   const stopped = await until(
     "stop",
     async () => {
-      const v = await view(rig);
+      const v = await view(/** @type {string} */ (rig));
       return v.status === "EXITED" && !v.op ? v : undefined;
     },
     20,
@@ -248,7 +273,7 @@ try {
       "report after the start",
       async () =>
         ((await api("/v1/rigs")).body.rigs ?? []).find(
-          (u) => u.id === rig && Date.parse(u.last_seen) > startedAt,
+          (/** @type {ListedRig} */ u) => u.id === rig && Date.parse(u.last_seen) > startedAt,
         ),
       15,
     );
@@ -271,7 +296,7 @@ try {
   const gone = await until(
     "terminate",
     async () => {
-      const v = await view(rig);
+      const v = await view(/** @type {string} */ (rig));
       if (v.error?.startsWith("Not terminated")) throw new Error(v.error);
       return v.active === false ? v : undefined;
     },
@@ -279,7 +304,7 @@ try {
   );
   check("every result left the pod, then RunPod removed it", gone.status === "TERMINATED");
   console.log(
-    `history: ${(gone.history ?? []).map((h) => `${h.step}${h.ok ? "" : " (not ok)"}`).join(", ")}`,
+    `history: ${(gone.history ?? []).map((/** @type {{ step: string, ok: boolean }} */ h) => `${h.step}${h.ok ? "" : " (not ok)"}`).join(", ")}`,
   );
   console.log(
     `it cost $${gone.spend_usd} by control's count, in ${Math.round((Date.now() - t0) / 60_000)} minutes`,

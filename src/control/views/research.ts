@@ -1,3 +1,4 @@
+import { hypothesisEvent } from "../../core/corpus.ts";
 import type { ExperimentView, RunView, StoredEvent } from "./index.ts";
 
 /**
@@ -224,49 +225,48 @@ function decisionOf(at: string, b: Record<string, unknown>): ItemDecisionView | 
  */
 export function researchEvent(v: RunView, e: StoredEvent): boolean {
   const b = e.body ?? {};
-  switch (e.kind) {
-    case "hypothesis_added": {
-      const id = str(b.hypothesis);
-      if (!id || v.hypotheses.some((h) => h.id === id)) return true;
-      const lane = typeof b.lane === "string" && b.lane ? b.lane : null;
-      // From before the pool (goal 117): a hypothesis with no lane is the author's.
-      const status = str(b.status) || (lane ? "pool" : "author");
-      v.hypotheses.push({
-        id,
-        text: str(b.text),
-        question: int(b.question),
-        status,
-        merged_into: null,
-        by: lane ?? (b.from === "brief" || status === "author" ? "brief" : e.actor),
-        supporting: strs(b.supporting, 200, 64),
+  const change = hypothesisEvent(e.kind, b);
+  // Its supporting claims as the view keeps them: at most 200, each id cut to 64 characters.
+  const supporting = (ids: string[]) => ids.slice(0, 200).map((id) => id.slice(0, 64));
+  if (change?.change === "added") {
+    const { id } = change;
+    if (!id || v.hypotheses.some((h) => h.id === id)) return true;
+    const lane = change.lane || null;
+    // From before the pool (goal 117): a hypothesis with no lane is the author's.
+    const status = change.status || (lane ? "pool" : "author");
+    v.hypotheses.push({
+      id,
+      text: change.text,
+      question: int(change.question ?? null),
+      status,
+      merged_into: null,
+      by: lane ?? (change.from === "brief" || status === "author" ? "brief" : e.actor),
+      supporting: supporting(change.supporting ?? []),
+      at: e.at,
+      updated_at: e.at,
+      status_change: null,
+    });
+    return true;
+  }
+  if (change) {
+    const h = v.hypotheses.find((x) => x.id === change.id);
+    if (!h) return true;
+    h.updated_at = e.at;
+    if (change.text) h.text = change.text;
+    if (change.question !== undefined) h.question = int(change.question);
+    if (change.supporting) h.supporting = supporting(change.supporting);
+    if (change.change === "merged") h.merged_into = change.into || null;
+    if (change.status) h.status = change.status;
+    if (change.change === "status")
+      h.status_change = {
+        status: h.status,
+        by: change.by || e.actor,
+        reason: change.reason.slice(0, 2000),
         at: e.at,
-        updated_at: e.at,
-        status_change: null,
-      });
-      return true;
-    }
-    case "hypothesis_revised":
-    case "hypothesis_merged":
-    case "hypothesis_status": {
-      const h = v.hypotheses.find((x) => x.id === str(b.hypothesis));
-      if (!h) return true;
-      h.updated_at = e.at;
-      if (typeof b.text === "string" && b.text) h.text = b.text;
-      if ("question" in b) h.question = int(b.question);
-      if (Array.isArray(b.supporting)) h.supporting = strs(b.supporting, 200, 64);
-      if (e.kind === "hypothesis_merged") {
-        h.status = "merged";
-        h.merged_into = str(b.into) || null;
-      } else if (typeof b.status === "string" && b.status) h.status = b.status;
-      if (e.kind === "hypothesis_status")
-        h.status_change = {
-          status: h.status,
-          by: str(b.by) || e.actor,
-          reason: str(b.reason).slice(0, 2000),
-          at: e.at,
-        };
-      return true;
-    }
+      };
+    return true;
+  }
+  switch (e.kind) {
     case "review_items": {
       const r = v.reviews.find((x) => x.review === int(b.review));
       const reviewer = str(b.reviewer);

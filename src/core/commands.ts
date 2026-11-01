@@ -13,6 +13,7 @@ import { directionName } from "./directions.ts";
 import { StructuredDirective } from "./directives.ts";
 import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
 import { InvalidateEvidence } from "./invalidation.ts";
+import { LOG_LEVELS, LOG_PARTS } from "./log-levels.ts";
 import { McpUses } from "./mcp.ts";
 import { RETENTION_NAME_MAX, RetentionRule } from "./retention/index.ts";
 import { PROGRAM_MODES } from "./rig-settings.ts";
@@ -442,6 +443,16 @@ export const CommandPayloads = {
   invalidate_evidence: InvalidateEvidence,
   /** The owner types into a running trial's terminal (goal 169; owner only): core/terminal-input.ts. */
   terminal_input: TerminalInput,
+  /**
+   * The level a rig part writes its log at, from now on (the guide's question 16): the harness's
+   * or the supervisor's, each on its own; null: back to its THERMITE_LOG_LEVEL. It lasts until
+   * another changes it or the part restarts (core/log-levels.ts). The harness takes it; the
+   * supervisor's is its supervisor's, which sets it once the harness took the command.
+   */
+  log_level: z.strictObject({
+    part: z.enum(LOG_PARTS),
+    level: z.enum(LOG_LEVELS).nullable(),
+  }),
 } as const;
 
 export type CommandKind = keyof typeof CommandPayloads;
@@ -465,8 +476,8 @@ export const MCP_AGENT_KINDS = [
 ] as const satisfies readonly CommandKind[];
 /**
  * An operator (a token the owner gives an operating agent) may also message the run's agents,
- * stop a trial (goal 136) and end a run's wait for its provider, on the owner's behalf; it never
- * approves, accepts or wipes.
+ * stop a trial (goal 136), end a run's wait for its provider and change a rig part's log level,
+ * on the owner's behalf; it never approves, accepts or wipes.
  */
 export const MCP_OPERATOR_KINDS = [
   ...MCP_AGENT_KINDS,
@@ -481,6 +492,8 @@ export const MCP_OPERATOR_KINDS = [
   "queue_drop",
   "queue_accept",
   "drop_directive",
+  // A rig part's log level, to look into a fault (the guide's question 16).
+  "log_level",
 ] as const satisfies readonly CommandKind[];
 /**
  * The owner (admin token) may also approve or decline promotions over MCP, and close a run for
@@ -523,6 +536,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "invalidate_evidence",
   "terminal_input",
   "retention_run",
+  "log_level",
 ]);
 
 /**

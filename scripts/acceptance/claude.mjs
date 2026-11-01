@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+// @ts-check
 // Claude Code acceptance under compose, with a stand-in for Claude Code mounted in the harness
-// (containers/test-claude; no subscription and no download needed). Through the dashboard: a
+// (tests/stand-ins/claude; no subscription and no download needed). Through the dashboard: a
 // Claude subscription added in Providers, its model given to the rig (in Claude Code), then:
 //   - the rig takes the route; its model check runs one Bash call through Claude Code;
 //   - the planner plans in Claude Code's own terminal (goal 169: the default), with no tools, as
@@ -57,7 +58,7 @@ import {
 } from "./lib/smoke-env.mjs";
 
 const TOKEN = "sk-ant-oat01-acceptance-stand-in-token-0000"; // public-check: allow (a made-up token for the stand-in)
-const files = ["-f", "compose.yaml", "-f", "containers/test-claude/compose.yaml"];
+const files = ["-f", "compose.yaml", "-f", "tests/stand-ins/claude/compose.yaml"];
 const composeEnv = {
   THERMITE_POLL_SECONDS: "2",
   THERMITE_PROMOTION: "auto",
@@ -66,27 +67,42 @@ const composeEnv = {
   THERMITE_MODEL_ROUTE_POLL_SECONDS: "2",
 };
 const { check, results } = acceptanceChecks({ max: 400 });
+/** @typedef {import("../../src/core/link/kb.ts").KbHit} KbHit */
+/** @typedef {import("../../src/control/views/index.ts").RunView} RunView */
+/** A call outside a trial that runs in its own terminal, as the rig's report lists it. */
+/** @typedef {NonNullable<import("../../src/control/views/work.ts").Work["terminals"]>[number]} CallTerminal */
 
-/** A form's current values from its page (inputs, checked boxes and radios, selected options). */
+/**
+ * A form's current values from its page (inputs, checked boxes and radios, selected options).
+ * @param {string} html
+ * @param {string} id
+ * @returns {Record<string, string>}
+ */
 const formOf = (html, id) => {
   const start = html.indexOf(`<form id="${id}"`);
   const form = html.slice(start, html.indexOf("</form>", start));
-  const unesc = (v) =>
+  const unesc = (/** @type {string} */ v) =>
     v
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&amp;/g, "&");
+  /** @type {Record<string, string>} */
   const f = {};
-  for (const [, a] of form.matchAll(/<input ([^>]*)>/g)) {
+  // Each match has its groups: they are not optional in the patterns.
+  for (const [, a] of /** @type {Iterable<[string, string]>} */ (
+    form.matchAll(/<input ([^>]*)>/g)
+  )) {
     const name = /name="([^"]+)"/.exec(a)?.[1];
     const type = /type="([^"]+)"/.exec(a)?.[1] ?? "text";
     if (!name || /\sdisabled/.test(a)) continue;
     if ((type === "checkbox" || type === "radio") && !/\schecked/.test(a)) continue;
     f[name] = unesc(/value="([^"]*)"/.exec(a)?.[1] ?? "");
   }
-  for (const [, name, body] of form.matchAll(/<select name="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g)) {
+  for (const [, name, body] of /** @type {Iterable<[string, string, string]>} */ (
+    form.matchAll(/<select name="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g)
+  )) {
     const picked =
       /<option value="([^"]*)"[^>]*\sselected/.exec(body) ?? /<option value="([^"]*)"/.exec(body);
     f[name] = unesc(picked?.[1] ?? "");
@@ -117,9 +133,14 @@ try {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const page = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
+  const page = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
   const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page("/ui/settings"))?.[1] ?? "";
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) =>
     decodeURIComponent(
       String(
@@ -352,8 +373,8 @@ try {
         "the kept conversation whole in the knowledge base",
         async () => {
           const q = encodeURIComponent("conversation before compaction");
-          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find((h) =>
-            JSON.stringify(h).includes(trialId),
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find(
+            (/** @type {KbHit} */ h) => JSON.stringify(h).includes(trialId),
           );
           if (!hit) return undefined;
           const { item } = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`))
@@ -430,19 +451,20 @@ try {
   );
   // The knowledge base (goal 175): each trial's finding, written through Thermite's MCP server,
   // in its own slot, where control holds it; each write naming another slot refused.
-  const kbOfSaid = (s) => ({
+  const kbOfSaid = (/** @type {string} */ s) => ({
     address: /kb=(\S+)/.exec(s)?.[1],
     refused: /kb_refused=yes/.test(s),
   });
   const kbTerminal = kbOfSaid(said);
   const kbHeadless = kbOfSaid(saidLater);
-  const ownWords = (a) => /^smoke-cpu\/smoke-1\/worker-1\/finding:\d+$/.test(String(a));
+  const ownWords = (/** @type {string | undefined} */ a) =>
+    /^smoke-cpu\/smoke-1\/worker-1\/finding:\d+$/.test(String(a));
   const kbStored = await until(
     "control holds Claude Code's two items",
     async () => {
       const hits = (await api("/v1/kb/search?q=kbprobecc")).body.hits ?? [];
       const both = [kbTerminal.address, kbHeadless.address].map((a) =>
-        hits.find((h) => h.address === a),
+        hits.find((/** @type {KbHit} */ h) => h.address === a),
       );
       return both.every((h) => h?.slot === "worker-1") ? both : undefined;
     },
@@ -491,7 +513,7 @@ try {
     "the auditor's call in its own terminal",
     async () =>
       ((await api("/v1/rigs/local-1/view")).body.summary?.work?.terminals ?? []).find(
-        (x) => x.role === "auditor" && x.run === "smoke-1",
+        (/** @type {CallTerminal} */ x) => x.role === "auditor" && x.run === "smoke-1",
       ),
     600_000,
     1000,
@@ -510,8 +532,10 @@ try {
     "the good kernel's audit, in Claude Code in the supervisor",
     async () =>
       (await api("/v1/rigs/local-1/view")).body.runs
-        ?.find((r) => r.id === "smoke-1")
-        ?.audits?.find((a) => a.attempt === good.attempt && a.decision),
+        ?.find((/** @type {RunView} */ r) => r.id === "smoke-1")
+        ?.audits?.find(
+          (/** @type {RunView["audits"][number]} */ a) => a.attempt === good.attempt && a.decision,
+        ),
     1_200_000,
     3000,
   );
@@ -564,7 +588,11 @@ try {
   ]);
   check("the token shows in no page, event or rig record", !everything.includes(TOKEN));
 } catch (err) {
-  check("acceptance run", false, String(err?.stack ?? err));
+  check(
+    "acceptance run",
+    false,
+    String(/** @type {{ stack?: unknown } | null | undefined} */ (err)?.stack ?? err),
+  );
 } finally {
   if (process.env.KEEP !== "1") dc(composeEnv, ...files, "down", "-v");
 }

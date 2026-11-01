@@ -1,15 +1,15 @@
-import type { ControlStore } from "../../src/control/store/index.ts";
-import type { LiveEntry } from "../../src/core/live.ts";
-import { ingestReport } from "./control-store.ts";
+import type { ControlStore } from "../../../src/control/store/index.ts";
+import type { LiveEntry } from "../../../src/core/live.ts";
+import { ingestReport } from "../control-store.ts";
 
 /**
- * A realistic control store for dashboard tests and demos: three rigs, a goal campaign with two
- * runs (one with an attempt held for an audit and another that did not hold on fresh runs, one
- * with lanes at work and the judge validating), and
- * a hill climb whose rig waits for the owner's approval of a confirmed win, with an earlier one the
- * auditor blocked. Every event has the shape the harness writes; names are generic.
+ * The demo's decisions for the owner, on three rigs: a goal campaign, opus-simd, with two runs
+ * (dec-1 on rig-a, with an attempt held for an audit and another that did not hold on fresh runs,
+ * then moved to rig-b as dec-2, with lanes at work and the judge validating), and a hill climb,
+ * sum-speed, whose rig-c waits for the owner's approval of a confirmed win, with an earlier one
+ * the auditor blocked. Every event has the shape the harness writes; `now` is the demo's clock.
  */
-export async function seedDemo(store: ControlStore, now = Date.now()): Promise<void> {
+export async function decisionRigs(store: ControlStore, now: number): Promise<void> {
   const at = (minutesAgo: number) => new Date(now - minutesAgo * 60_000).toISOString();
   const rig = async (
     id: string,

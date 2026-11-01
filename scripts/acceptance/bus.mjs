@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // The message bus's permissions and limits, against a real NATS server (goal 168): the server's
 // pinned image, started as compose.yaml starts it, with a users file and a certificate that
 // control's own code writes, on a host port of its own. Control's side and the rigs' sign in with
@@ -70,10 +71,13 @@ const key = () => {
   const k = createUser();
   return { seed: k.getSeed(), publicKey: k.getPublicKey() };
 };
+/** @typedef {ReturnType<typeof key>} Key */
+/** @typedef {import("@nats-io/transport-node").NatsConnection} NatsConnection */
 const keys = { control: key(), system: key(), a: key(), b: key() };
 const tls = new BusTls({ stateDir: work, configDir: files, names: ["127.0.0.1"] });
 tls.write();
 const trust = { ca: tls.caCert };
+/** @param {[rig: string, key: Key, runs: string[]][]} rigs */
 const users = (rigs) =>
   usersFile({
     control: keys.control.publicKey,
@@ -103,7 +107,11 @@ const cleanup = () => {
   } catch {}
 };
 
-/** Signs in as a user over TLS; a rig takes its replies at its own inbox. */
+/**
+ * Signs in as a user over TLS; a rig takes its replies at its own inbox.
+ * @param {Key} k
+ * @param {string} [rig]
+ */
 const signIn = (k, rig) =>
   connect({
     servers: url,
@@ -115,16 +123,26 @@ const signIn = (k, rig) =>
     ...(rig ? { inboxPrefix: rigInboxPrefix(rig) } : {}),
   });
 
-/** Whether an error is the server refusing the user, at any depth of its causes. */
+/**
+ * Whether an error is the server refusing the user, at any depth of its causes.
+ * @param {unknown} err
+ */
 function deniedBy(err) {
-  for (let e = err, depth = 0; e && depth < 6; e = e.cause, depth++) {
+  for (
+    let e = /** @type {Error | undefined} */ (err), depth = 0;
+    e && depth < 6;
+    e = /** @type {Error | undefined} */ (e.cause), depth++
+  ) {
     if (e instanceof errors.PermissionViolationError) return true;
     if (/permissions violation|authorization violation/i.test(String(e?.message ?? e))) return true;
   }
   return false;
 }
 
-/** What a call met: "allowed", "denied" (the user's permissions), or the error in words. */
+/**
+ * What a call met: "allowed", "denied" (the user's permissions), or the error in words.
+ * @param {() => unknown} fn
+ */
 async function tried(fn) {
   try {
     await fn();
@@ -132,14 +150,16 @@ async function tried(fn) {
   } catch (err) {
     if (deniedBy(err)) return "denied";
     if (err instanceof JetStreamApiError) return `refused ${err.code}: ${err.message}`;
-    return `error: ${String(err?.message ?? err)}`;
+    return `error: ${String(/** @type {Error} */ (err)?.message ?? err)}`;
   }
 }
 
+/** @param {number} ms */
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const data = (n = 16) => new Uint8Array(n).fill(65);
 
 let control;
+/** @type {NatsConnection | undefined} */
 let rigA;
 let rigB;
 try {
@@ -233,6 +253,7 @@ try {
   store.busKeys.setRigKey("rig-a", keys.a.publicKey);
   store.busKeys.setRigKey("rig-b", keys.b.publicKey);
   await new RigConsumers({ store, bus }).make();
+  /** @type {string[]} */
   const made = [];
   for await (const c of jsm.consumers.list(commands.COMMAND_STREAM)) made.push(c.name);
   for await (const c of jsm.consumers.list(config.CONFIG_STREAM)) made.push(c.name);
@@ -296,10 +317,15 @@ try {
   rigA = await signIn(keys.a, "rig-a");
   const aJs = jetstream(rigA);
   const aJsm = await jetstreamManager(rigA, { checkAPI: false });
+  /**
+   * @param {string} name
+   * @param {() => unknown} fn
+   */
   const denied = async (name, fn) => {
     const r = await tried(fn);
     check(name, r === "denied", r);
   };
+  /** @type {Partial<import("@nats-io/jetstream").ConsumerConfig>} */
   const own = {
     durable_name: commands.commandConsumerName("rig-a"),
     filter_subject: commands.commandSubject("rig-a"),
@@ -315,7 +341,7 @@ try {
     }),
   );
   await denied("rig-a may not make a consumer the old way", () =>
-    rigA.request(
+    /** @type {NatsConnection} */ (rigA).request(
       `$JS.API.CONSUMER.DURABLE.CREATE.${commands.COMMAND_STREAM}.${own.durable_name}`,
       JSON.stringify({ stream_name: commands.COMMAND_STREAM, config: own }),
       { timeout: 5_000 },
@@ -337,7 +363,7 @@ try {
     aJsm.consumers.info(commands.COMMAND_STREAM, commands.commandConsumerName("rig-b")),
   );
   await denied("rig-a may not take from rig-b's consumer", () =>
-    rigA.request(
+    /** @type {NatsConnection} */ (rigA).request(
       `$JS.API.CONSUMER.MSG.NEXT.${commands.COMMAND_STREAM}.${commands.commandConsumerName("rig-b")}`,
       JSON.stringify({ batch: 1, no_wait: true }),
       { timeout: 5_000 },
@@ -450,7 +476,7 @@ try {
   console.log(`the server's memory at the end: ${stats}`);
   await bus.close();
 } catch (err) {
-  check("the check ran to its end", false, String(err?.stack ?? err));
+  check("the check ran to its end", false, String(/** @type {Error} */ (err)?.stack ?? err));
   try {
     console.log(sh(engine, ["logs", "--tail", "40", box]));
   } catch {}

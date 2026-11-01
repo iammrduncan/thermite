@@ -13,7 +13,7 @@ import { judgeGpusByDefault } from "../../../../core/hardware.ts";
 export const JUDGE_SHARE_JS = `(n, typed) => {
   if (n < 2) return undefined;
   const raw = String(typed ?? "").trim();
-  if (!raw) return (${judgeGpusByDefault})(n);
+  if (!raw) return (${judgeGpusByDefault.toString()})(n);
   const j = Number(raw);
   if (!Number.isInteger(j) || j < 1 || j > n - 1 || j > 8 || n - j > 8)
     return "With " + n + " GPUs the judge takes 1 to " + Math.min(8, n - 1) + " of them, and the agents at most 8.";

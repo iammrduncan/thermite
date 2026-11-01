@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // Local compose smoke test: build and start control and one rig, assign the smoke campaign
 // through control, submit one candidate as a proposer, and wait until its verdict reaches
 // control. Usage: COMPOSE="podman compose" node scripts/acceptance/compose-smoke.mjs (or "docker compose").
@@ -25,7 +26,24 @@ const composeEnv = {
   THERMITE_POLL_SECONDS: "3",
   THERMITE_CALIBRATION_BLOCKS: "0",
 };
+/** @param {...string} args */
 const stack = (...args) => dc(composeEnv, ...args);
+
+/** One event from control's raw events route, with the fields read here. */
+/** @typedef {{ kind: string, at: string, received_at: string }} RawEvent */
+/**
+ * One stream in the NATS server's monitoring answer, with its consumers, as far as read here.
+ * @typedef {{
+ *   name: string,
+ *   state?: { messages?: number, last_seq?: number },
+ *   consumer_detail?: {
+ *     name: string,
+ *     ack_floor?: { stream_seq?: number },
+ *     num_pending?: number,
+ *     num_ack_pending?: number,
+ *   }[],
+ * }} StreamDetail
+ */
 
 /**
  * Seconds from each event's time at the rig to control holding it (when the events stream stored
@@ -33,7 +51,9 @@ const stack = (...args) => dc(composeEnv, ...args);
  * waits for its first report). Both times are from the same machine's clock.
  */
 async function eventDelays() {
-  const rows = (await api("/v1/rigs/local-1/events?limit=5000")).body.events;
+  const rows = /** @type {RawEvent[]} */ (
+    (await api("/v1/rigs/local-1/events?limit=5000")).body.events
+  );
   const start = rows.findIndex((r) => r.kind === "run_created");
   return rows
     .slice(Math.max(0, start))
@@ -41,10 +61,15 @@ async function eventDelays() {
     .sort((a, b) => a - b);
 }
 
-/** A stream's state, from the NATS server's own monitoring; undefined before it is made. */
+/**
+ * A stream's state, from the NATS server's own monitoring; undefined before it is made.
+ * @param {string} name
+ */
 function streamState(name) {
   const url = "http://127.0.0.1:8222/jsz?streams=true&consumers=true";
-  const jsz = JSON.parse(stack("exec", "-T", "nats", "wget", "-q", "-O", "-", url));
+  const jsz = /** @type {{ account_details?: { stream_detail?: StreamDetail[] }[] }} */ (
+    JSON.parse(stack("exec", "-T", "nats", "wget", "-q", "-O", "-", url))
+  );
   return (jsz.account_details ?? [])
     .flatMap((a) => a.stream_detail ?? [])
     .find((s) => s.name === name);
@@ -71,7 +96,9 @@ try {
   const health = await until(
     "control's health says the bus is connected",
     async () => {
-      const h = await (await fetch(`${control}/v1/health`)).json();
+      const h = /** @type {{ bus?: string }} */ (
+        await (await fetch(`${control}/v1/health`)).json()
+      );
       return h.bus === "connected" ? h : undefined;
     },
     60_000,
@@ -127,8 +154,8 @@ try {
     "live lines over the bus",
     async () => {
       const { body } = await api("/v1/bus");
-      const rig = body.live?.rigs?.find((r) => r.rig === "local-1");
-      const stream = body.streams?.find((x) => x.name === "LIVE");
+      const rig = body.live?.rigs?.find((/** @type {{ rig: string }} */ r) => r.rig === "local-1");
+      const stream = body.streams?.find((/** @type {{ name: string }} */ x) => x.name === "LIVE");
       return stream?.messages > 0 && rig?.taken > 0 && rig?.supervisor?.published > 0
         ? { messages: stream.messages, taken: body.live.taken, rig }
         : undefined;
@@ -168,7 +195,8 @@ try {
   );
   console.log("events on the bus:", JSON.stringify(onBus));
   const delays = await eventDelays();
-  const at = (q) => delays[Math.min(delays.length - 1, Math.floor(q * delays.length))] ?? 0;
+  const at = (/** @type {number} */ q) =>
+    delays[Math.min(delays.length - 1, Math.floor(q * delays.length))] ?? 0;
   console.log(
     `seconds from an event to control holding it, over the bus (${delays.length} events): median ${at(0.5).toFixed(2)}, 90th percentile ${at(0.9).toFixed(2)}, max ${(delays.at(-1) ?? 0).toFixed(2)}`,
   );

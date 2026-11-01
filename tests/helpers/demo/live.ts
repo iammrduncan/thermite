@@ -1,5 +1,5 @@
 import type { ControlStore } from "../../../src/control/store/index.ts";
-import { iso, now } from "./shared.ts";
+import { demoNow, iso } from "./shared.ts";
 
 // Live sessions: the planner, the judge, two workers and the supervisor on gpu-1.
 type Line = {
@@ -19,7 +19,7 @@ export function liveSessions(store: ControlStore): void {
       "demo-log",
       items.map((l, n) => ({
         seq: ++seq,
-        at: new Date(now - (minutesAgo - n * 0.4) * 60_000).toISOString(),
+        at: new Date(demoNow() - (minutesAgo - n * 0.4) * 60_000).toISOString(),
         ...l,
       })),
       true,

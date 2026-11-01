@@ -1,3 +1,4 @@
+// @ts-check
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pageText } from "../../../tests/helpers/quick-start.ts";
@@ -15,7 +16,9 @@ export async function firstRun() {
   section("Your first run, 1: get Thermite");
   await typed(plan.firstRun.get, "step 1");
   thermiteDir = cwd;
-  const firstLine = readFileSync(join(thermiteDir, "compose.yaml"), "utf8").split("\n")[0];
+  const firstLine = /** @type {string} */ (
+    readFileSync(join(thermiteDir, "compose.yaml"), "utf8").split("\n")[0]
+  );
   // The page's example names its own release; this bundle's is this checkout's version.
   const names = plan.firstRun.firstLine.replace(/\d+\.\d+\.\d+\S*$/, version);
   check(
@@ -126,9 +129,15 @@ export async function firstRun() {
   const candidates = Object.values(
     JSON.parse(readFileSync("kits/smoke-cpu/candidates/candidates.json", "utf8")),
   );
+  /** @type {Record<string, number>} */
   const counted = {};
-  for (const e of evs.filter(
-    (x) => x.kind === "attempt_recorded" && x.body.run === smokeRun.subject,
+  // The check of the campaign above stops the test when the check's run is missing.
+  for (const e of /** @type {import("./dashboard.mjs").AttemptEvent[]} */ (
+    evs.filter(
+      (x) =>
+        x.kind === "attempt_recorded" &&
+        x.body.run === /** @type {import("./dashboard.mjs").ControlEvent} */ (smokeRun).subject,
+    )
   )) {
     const verdict = verdicts[e.subject];
     const accepts = candidates.find((c) => c.hypothesis === e.body.hypothesis)?.accept ?? [];
@@ -141,7 +150,7 @@ export async function firstRun() {
           );
     counted[word] = (counted[word] ?? 0) + 1;
   }
-  const same = (x, y) =>
+  const same = (/** @type {object} */ x, /** @type {object} */ y) =>
     JSON.stringify(Object.entries(x).sort()) === JSON.stringify(Object.entries(y).sort());
   check(
     "How the judge decided counts what the page counts",

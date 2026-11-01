@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // M2a judge acceptance under compose on the cpu driver. It assigns the smoke campaign, then
 // checks the plan's M2 verify list:
 //   - every smoke candidate gets its expected verdict (broken -> invalid, no-op -> neutral,
@@ -35,13 +36,32 @@ const composeEnv = {
   THERMITE_PROMOTION: "auto",
   THERMITE_CALIBRATION_BLOCKS: "6",
 };
+/**
+ * The report this script writes. The verdicts are the ledger's rows as JSON, kept as they come.
+ * @typedef {{
+ *   started_at: string,
+ *   compose: string,
+ *   checks: import("./lib/checks.mjs").CheckRecord[],
+ *   resources?: { process_peak_rss_bytes: Record<string, number>, judged_jobs: number },
+ *   verdicts?: unknown,
+ *   finished_at?: string,
+ *   ok?: boolean,
+ * }} JudgeReport
+ */
+/** @type {JudgeReport} */
 const report = {
   started_at: new Date().toISOString(),
   compose: process.env.COMPOSE ?? "podman compose",
   checks: [],
 };
 const { check } = acceptanceChecks({ into: report.checks });
+/** @param {...string} args */
 const harnessExec = (...args) => dc(composeEnv, "exec", "-T", "harness", ...args);
+/**
+ * The processes of one user in the harness container.
+ * @param {number} uid
+ * @returns {number[]}
+ */
 const procsOf = (uid) =>
   JSON.parse(
     harnessExec(
@@ -99,6 +119,8 @@ try {
   });
 
   // Everything except the known-good change first, so each is judged against the seed.
+  /** Each candidate's attempt, by the candidate's name. */
+  /** @type {Record<string, string>} */
   const ids = {};
   for (const [name, c] of Object.entries(candidates)) {
     if (name === "good") continue;
@@ -110,16 +132,21 @@ try {
     );
     ids[name] = a.attempt;
   }
+  /**
+   * True when the attempt has come to rest; an attempt with no lifecycle yet has not.
+   * @param {import("./lib/smoke-env.mjs").ControlEvent[]} evs
+   * @param {string} id
+   */
   const settled = (evs, id) => {
     const life = lifecycles(evs)[id];
-    return [
+    return /** @type {(string | undefined)[]} */ ([
       "judged",
       "rejected_v0",
       "duplicate",
       "promoted",
       "awaiting_approval",
       "errored",
-    ].includes(life);
+    ]).includes(life);
   };
   await until(
     "all candidates judged",
@@ -138,7 +165,7 @@ try {
   ).attempt;
   await until(
     "good candidate settled",
-    async () => settled(await events(), ids.good),
+    async () => settled(await events(), /** @type {string} */ (ids.good)),
     900_000,
     3000,
   );
@@ -147,7 +174,11 @@ try {
   const verdicts = latestVerdicts(evs);
   const lifes = lifecycles(evs);
   for (const [name, c] of Object.entries(candidates)) {
-    const got = c.expect === "rejected_v0" ? lifes[ids[name]] : verdicts[ids[name]];
+    // Every candidate has its attempt by now.
+    const got =
+      c.expect === "rejected_v0"
+        ? lifes[/** @type {string} */ (ids[name])]
+        : verdicts[/** @type {string} */ (ids[name])];
     const ok = c.accept ? c.accept.includes(got) : got === c.expect;
     check(`candidate ${name} -> ${c.accept ? c.accept.join("|") : c.expect}`, ok, got);
   }
@@ -237,7 +268,7 @@ try {
   check("resource peaks recorded", Object.keys(peaks).length > 0, peaks);
 } catch (err) {
   failed = true;
-  check("acceptance run", false, String(err?.stack ?? err));
+  check("acceptance run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
   // Every verdict with its reasons, for diagnosing a miss after the stack is gone.
   try {

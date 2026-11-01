@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // The one-container rig image (containers/rig/Containerfile), as a RunPod pod runs it, on this
 // machine: built on the CPU harness image, started as root with the engine's default capabilities
 // and without no-new-privileges, and given RunPod's variables (made up) and the launch values
@@ -57,8 +58,15 @@ const NODES = ["nvidia0", "nvidiactl", "nvidia-uvm"];
 /** The rig's live state, on the container's disk, and its snapshot (on RunPod, the volume). */
 const STATE = "/var/lib/thermite-rig";
 const SNAPSHOT = "/workspace/thermite";
+/**
+ * Runs the engine and returns what it printed.
+ * @param {readonly string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ * @returns {string}
+ */
 const sh = (args, opts = {}) =>
   execFileSync(engine, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+/** @param {number} ms */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const { check, failed } = acceptanceChecks();
 
@@ -73,10 +81,17 @@ function foreignNodesPossible() {
 }
 const foreign = foreignNodesPossible();
 
-/** Control's pulls from the pod, once it is launched. */
+/**
+ * Control's pulls from the pod, once it is launched.
+ * @type {ReturnType<typeof setInterval> | undefined}
+ */
 let pump;
-/** Control's bus (lib/control-bus.mjs), and its loops. */
+/**
+ * Control's bus (lib/control-bus.mjs), and its loops.
+ * @type {Awaited<ReturnType<typeof startControlBus>> | undefined}
+ */
 let onBus;
+/** @type {ReturnType<typeof followControlBus> | undefined} */
 let followed;
 /** The bus's server's host port: RIG_IMAGE_CHECK_BUS_PORT, 14520 unless given (never 4222). */
 const busPort = Number(process.env.RIG_IMAGE_CHECK_BUS_PORT ?? "14520");
@@ -94,6 +109,10 @@ const logs = () => {
   const r = spawnSync(engine, ["logs", name], { encoding: "utf8" });
   return `${r.stdout}${r.stderr}`;
 };
+/**
+ * The rig's log lines with this message, each its JSON read loosely.
+ * @param {string} msg
+ */
 const logLines = (msg) =>
   logs()
     .split("\n")
@@ -105,7 +124,12 @@ const logLines = (msg) =>
       }
     })
     .filter((l) => l?.msg === msg);
-/** The `nth` log line (from 1) with this message, once it is there. */
+/**
+ * The `nth` log line (from 1) with this message, once it is there.
+ * @param {string} msg
+ * @param {number} [ms]
+ * @param {number} [nth]
+ */
 async function waitFor(msg, ms = 180_000, nth = 1) {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
@@ -115,13 +139,19 @@ async function waitFor(msg, ms = 180_000, nth = 1) {
   }
   throw new Error(`no "${msg}" (${nth}) in ${ms / 1000} s\n${logs().slice(-4000)}`);
 }
-/** Runs a Node.js snippet in the container as root (or as `user`) and returns its output. */
+/**
+ * Runs a Node.js snippet in the container as root (or as `user`) and returns its output.
+ * @param {string} code
+ * @param {string} [user]
+ */
 const inside = (code, user) =>
   sh(["exec", ...(user ? ["--user", user] : []), name, "node", "-e", code]).trim();
+/** @param {string} script */
 const pidsOf = (script) =>
   inside(
     `const fs=require("fs");const out=[];for(const p of fs.readdirSync("/proc")){if(!/^\\d+$/.test(p))continue;try{const a=fs.readFileSync("/proc/"+p+"/cmdline","utf8").split("\\0");if((a[1]||"").endsWith(${JSON.stringify(script)}))out.push(Number(p))}catch{}}console.log(JSON.stringify(out))`,
   );
+/** @param {string} script */
 const kill = (script) =>
   inside(
     `const fs=require("fs");for(const p of fs.readdirSync("/proc")){if(!/^\\d+$/.test(p))continue;try{const a=fs.readFileSync("/proc/"+p+"/cmdline","utf8").split("\\0");if((a[1]||"").endsWith(${JSON.stringify(script)}))process.kill(Number(p),"SIGKILL")}catch{}}`,
@@ -189,7 +219,10 @@ try {
   followed = followControlBus(onBus, parts);
   createControlApi(
     store,
-    { admin: "an-admin-token-for-the-test", rigs: {} },
+    /** @type {import("../../src/control/api/context.ts").ControlTokens} */ ({
+      admin: "an-admin-token-for-the-test",
+      rigs: {},
+    }),
     controlKeys.privateKeyPem,
     {
       staleAfterMs: 180_000,
@@ -259,7 +292,9 @@ try {
   );
 
   // Control connects to the pod and enrolls it, then exchanges with it as its loop does.
-  const port = sh(["port", name, "8790/tcp"]).trim().split("\n")[0].split(":").at(-1);
+  const port = /** @type {string} */ (sh(["port", name, "8790/tcp"]).trim().split("\n")[0])
+    .split(":")
+    .at(-1);
   tunnels.attach(rig, "pod-test", `http://127.0.0.1:${port}`);
   store.tunnels.setLeafAddress(rig, `${addressOn(onBus.net, name)}:${LEAF_PORT}`);
   pump = setInterval(() => {
@@ -296,7 +331,9 @@ try {
     "the snapshot is sealed: the manifest and sealed files only, nothing in plain text",
     onVolume.names.includes("manifest") &&
       onVolume.names.length > 2 &&
-      onVolume.names.every((n) => /^(manifest(\.new)?|[0-9a-f]{64}|\.new-[0-9a-f]{32})$/.test(n)) &&
+      onVolume.names.every((/** @type {string} */ n) =>
+        /^(manifest(\.new)?|[0-9a-f]{64}|\.new-[0-9a-f]{32})$/.test(n),
+      ) &&
       onVolume.plain.length === 0,
     `${onVolume.names.length} names; not sealed: ${onVolume.plain.join(", ")}`,
   );
@@ -367,7 +404,10 @@ try {
       `const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync(${JSON.stringify(`${STATE}/harness/ledger/ledger.db`)},{readOnly:true});console.log(JSON.stringify(db.prepare("select body from event where kind='rig_check_finished' order by id").all().map(r=>JSON.parse(r.body))))`,
     ),
   );
-  const atStart = started.find((b) => b.check === "isolation");
+  const atStart = started.find(
+    (/** @type {import("../../src/core/events/bodies.ts").EventBody<"rig_check_finished">} */ b) =>
+      b.check === "isolation",
+  );
   check("the harness's isolation check at start passes", atStart?.ok === true, atStart?.summary);
   const startContainer = atStart?.detail?.container ?? {};
   check(
@@ -425,7 +465,10 @@ try {
   // Root without CAP_SYS_PTRACE reads only root's processes: PID 1 (tini) and the broker, from
   // whose environment the supervisor's and the controller's are made.
   const rp = /^none \(read (\d+) of (\d+) processes\)$/.exec(c["runpod-variables"] ?? "");
-  const rpOk = Boolean(rp) && Number(rp[1]) >= 2 && Number(rp[2]) >= 4;
+  const rpOk =
+    Boolean(rp) &&
+    Number(/** @type {RegExpExecArray} */ (rp)[1]) >= 2 &&
+    Number(/** @type {RegExpExecArray} */ (rp)[2]) >= 4;
   check(
     "no process of the rig holds a RunPod variable, PID 1 included",
     rpOk,
@@ -588,7 +631,7 @@ try {
   const partsStopping = lines.findIndex(
     (l) => l.includes('"component":"supervisor"') && l.includes('"msg":"stopping"'),
   );
-  const stopSnap = atStop >= 0 ? JSON.parse(lines[atStop]) : {};
+  const stopSnap = atStop >= 0 ? JSON.parse(/** @type {string} */ (lines[atStop])) : {};
   check(
     "the stop took a snapshot of the state, with the ledger, before the parts stopped",
     stopSnap.msg === "took a snapshot of the rig's state" &&

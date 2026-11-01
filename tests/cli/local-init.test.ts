@@ -27,7 +27,8 @@ import { GPU_OVERRIDE } from "../../src/cli/machine.ts";
 
 const run = promisify(execFile);
 const CLI = join(import.meta.dirname, "../../src/cli/thermite/main.ts");
-const DEV_INIT = join(import.meta.dirname, "..", "..", "scripts", "dev", "init.mjs");
+/** The command line's entry, as package.json's `dev:init` names it from the checkout's root. */
+const DEV_INIT_CLI = "src/cli/thermite/main.ts";
 
 /** Every path under `root`, relative, with its type and permission bits. */
 function tree(root: string, rel = ""): string[] {
@@ -96,9 +97,16 @@ describe("thermite local init", () => {
     assert.equal(secret(root, "model-api-key"), "local-placeholder");
   });
 
-  test("makes the same layout as npm run dev:init", async () => {
+  test("npm run dev:init is this command, run from the source in the checkout's root", async () => {
+    const pkg = JSON.parse(readFileSync(join(import.meta.dirname, "../../package.json"), "utf8"));
+    const [node, ...args] = String(pkg.scripts["dev:init"]).split(" ");
+    assert.equal(node, "node");
+    assert.deepEqual(args.slice(-4), [DEV_INIT_CLI, "local", "init", ".dev"]);
+    // As npm runs it, in a checkout's root: here a new folder, with the source's command line.
     const checkout = mkdtempSync(join(tmpdir(), "thermite-devinit-"));
-    await run(process.execPath, [DEV_INIT], { cwd: checkout });
+    await run(process.execPath, [...args.slice(0, -4), CLI, "local", "init", ".dev"], {
+      cwd: checkout,
+    });
     const root = fresh();
     localInit(root);
     assert.deepEqual(tree(root), tree(join(checkout, ".dev")));

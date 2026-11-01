@@ -56,6 +56,7 @@ export {
   advisorWindow,
   packageFit,
   type RunningAdvisors,
+  readAdvisorsFile,
   withRunContext,
 } from "./config.ts";
 export { advisorFetcher } from "./fetcher.ts";

@@ -25,6 +25,7 @@ import {
   knowledgeSlotNames,
 } from "./kb/index.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
+import { ownSettingsTable } from "./own-settings.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { reachableAddressTable } from "./reachable.ts";
@@ -646,6 +647,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   eventFloorTable,
   // The knowledge base's slots take the agents' names, and a grant's unused copies go (goal 175).
   knowledgeSlotNames,
+  // Control's own settings the owner sets on control: its log level (the guide's question 16).
+  ownSettingsTable,
 ];
 
 /**

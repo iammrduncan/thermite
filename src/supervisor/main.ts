@@ -33,7 +33,6 @@ import { SUPERVISOR_INBOX_DIR } from "../core/paths.ts";
 import { advisorIsolation } from "./advisor-runs/index.ts";
 import {
   type AdviseState,
-  AdvisorsFile,
   adviseOnce,
   advisorsFileReport,
   advisorsOf,
@@ -42,6 +41,7 @@ import {
   emptyAdviseState,
   harnessAdvisors,
   mergeAdvisors,
+  readAdvisorsFile,
   relayAdvisorTerminals,
   teachersCalled,
 } from "./advisors/index.ts";
@@ -67,6 +67,7 @@ import {
   relayScreens,
   supervisorLive,
 } from "./live/index.ts";
+import { onLogLevelTaken } from "./log-level.ts";
 import { ModelDownloads } from "./model-download.ts";
 import { registerKeys } from "./register.ts";
 import {
@@ -241,6 +242,7 @@ async function main(): Promise<void> {
     },
     onDelivered: (kind: string, accepted: boolean, cmd: Parameters<typeof onRetentionTaken>[1]) => {
       if (kind === "wipe_state" && accepted) wipeRequested = true;
+      if (kind === "log_level" && accepted) onLogLevelTaken(cmd);
       // What the policy removed changes what the rig keeps: told to control at the next round.
       if (kind === "retention_run" && accepted)
         void onRetentionTaken(retention, cmd).finally(() => {
@@ -289,9 +291,7 @@ async function main(): Promise<void> {
     }),
   };
   const advisorsFile = env.THERMITE_ADVISORS_FILE;
-  const fileAdvisors = advisorsFile
-    ? AdvisorsFile.parse(JSON.parse(readFileSync(advisorsFile, "utf8")))
-    : undefined;
+  const fileAdvisors = advisorsFile ? readAdvisorsFile(advisorsFile) : undefined;
   // The roles control gives models (the owner's choice per rig) over the file's; read each round,
   // from the rig's config on the bus.
   let controlAdvisors: ControlAdvisors = {};

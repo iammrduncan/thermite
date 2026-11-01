@@ -17,6 +17,7 @@ import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
 import { writeAtomic } from "../../common/fs.ts";
 import { BRIEF_FILE, briefFile } from "../../core/brief.ts";
 import { COMPACTIONS_DIR } from "../../core/compaction.ts";
+import { readClaim, readFinding, readHypothesis, readNote } from "../../core/corpus.ts";
 import type { KbItemFile } from "../../core/kb.ts";
 import {
   HYPOTHESES_RULE,
@@ -27,7 +28,7 @@ import {
 } from "../../core/research-check.ts";
 import type { Role, Runner } from "../broker/index.ts";
 import { kbFileFacts, keepKbFile } from "../kb/index.ts";
-import type { HypothesisRow, LaneFileChange, Ledger } from "../ledger/index.ts";
+import type { LaneFileChange, Ledger } from "../ledger/index.ts";
 import { cardFile, cardHistory } from "./cards.ts";
 import { copyTree, LaneCopyRefused, regularFiles } from "./copy.ts";
 import { scrubKeptFiles } from "./kept.ts";
@@ -117,8 +118,6 @@ export const cardPath = (index: number) => `cards/q${index}.md`;
 
 /** A report section's file in the folder, from its top: report/<name>.md. */
 export const sectionPath = (name: string) => `report/${fileName(name)}.md`;
-
-const list = (json: unknown) => JSON.parse(String(json ?? "[]")) as string[];
 
 export class ResearchFolder {
   private readonly ledger: Ledger;
@@ -216,15 +215,10 @@ export class ResearchFolder {
       });
 
     const questions = contract.questions ?? [];
-    const claims = this.ledger.claims.list(run);
+    const claims = this.ledger.claims.list(run).map(readClaim);
     for (const c of claims)
       this.once(run, join(root, "claims", `${c.id}.md`), () => {
-        const quotes = JSON.parse(c.quotes) as {
-          source: string;
-          quote: string;
-          resolved_from?: string;
-        }[];
-        const problems = list(c.problems);
+        const { quotes, problems } = c;
         const q = c.question === null ? undefined : c.question;
         return [
           `# Claim ${c.id}: ${c.verified ? "verified" : "draft"}`,
@@ -251,7 +245,7 @@ export class ResearchFolder {
         ].join("\n");
       });
 
-    const findings = this.ledger.claims.findings(run);
+    const findings = this.ledger.claims.findings(run).map(readFinding);
     for (const f of findings)
       this.once(run, join(root, "findings", `${f.id}.md`), () =>
         [
@@ -269,9 +263,9 @@ export class ResearchFolder {
           "",
           "## Supporting claims",
           "",
-          ...list(f.supporting).map((id) => `- ${id} (claims/${id}.md)`),
-          ...(list(f.problems).length
-            ? ["", "## Why it is a draft", "", ...list(f.problems).map((p) => `- ${p}`)]
+          ...f.supporting.map((id) => `- ${id} (claims/${id}.md)`),
+          ...(f.problems.length
+            ? ["", "## Why it is a draft", "", ...f.problems.map((p) => `- ${p}`)]
             : []),
           "",
           `Recorded: ${f.created_at} by ${f.lane ?? "research"}`,
@@ -287,8 +281,9 @@ export class ResearchFolder {
     };
     const hypotheses = this.ledger.hypotheses
       .list(run)
+      .map(readHypothesis)
       .sort((a, b) => rank(a.status) - rank(b.status));
-    const questionOf = (h: HypothesisRow) =>
+    const questionOf = (h: { question: number | null }) =>
       h.question === null
         ? "the whole run"
         : `${questionLabel(h.question)}: ${clipWords(questions[h.question] ?? "(no such question)", 300)}`;
@@ -301,7 +296,7 @@ export class ResearchFolder {
           h.text,
           "",
           `About: ${questionOf(h)}`,
-          `Supporting verified claims: ${list(h.supporting).join(", ") || "none"}`,
+          `Supporting verified claims: ${h.supporting.join(", ") || "none"}`,
           `Recorded: ${h.created_at} by ${h.lane ?? "the campaign's author"}`,
           ...(h.updated_at && h.updated_at !== h.created_at ? [`Changed: ${h.updated_at}`] : []),
           "",
@@ -310,7 +305,7 @@ export class ResearchFolder {
         ].join("\n"),
       );
 
-    const notes = this.ledger.claims.notes(run);
+    const notes = this.ledger.claims.notes(run).map(readNote);
     for (const n of notes)
       this.once(run, join(root, "notes", `note-${String(n.id).padStart(5, "0")}.md`), () =>
         [
@@ -318,7 +313,7 @@ export class ResearchFolder {
           "",
           n.text,
           "",
-          `Sources: ${list(n.sources).join(", ") || "none"}`,
+          `Sources: ${n.sources.join(", ") || "none"}`,
           `Recorded: ${n.created_at} by ${n.lane ?? "research"}`,
           "",
         ].join("\n"),

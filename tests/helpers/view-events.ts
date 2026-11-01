@@ -1,12 +1,12 @@
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { PAPER_ACCEPTED, PAPER_REFUSED, PAPER_REQUESTED } from "../../src/core/research-check.ts";
-import { seedDemo } from "./control-demo.ts";
 import { ingestReport } from "./control-store.ts";
+import { seedDemo } from "./demo/index.ts";
 import { researchRunEvents } from "./research-reviews.ts";
 
 /**
  * Rigs' events as control's tests build them, for the tests of control's views (goal 125, T8):
- * the demo's three rigs, a hill climb with promotions, a goal campaign, a research campaign, a
+ * the dashboard's demo seed, a hill climb with promotions, a goal campaign, a research campaign, a
  * reset to a new ledger, judge jobs without an attempt, kinds the views do not fold, and a run
  * longer than every list a view keeps. Each set fills a store as the rigs' reports do.
  */
@@ -593,7 +593,7 @@ export function longEvents(): SetEvent[] {
 /** Every set: what the tests of control's views fold. */
 export const VIEW_SETS: ViewSet[] = [
   {
-    name: "the demo: a goal campaign of two runs, a hill climb waiting for approval, judge jobs",
+    name: "the demo seed: hill climbs, goal and research campaigns, decisions waiting, judge jobs",
     fill: (s) => seedDemo(s, VIEW_NOW),
   },
   {

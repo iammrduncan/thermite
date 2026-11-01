@@ -8,9 +8,9 @@ import { type GoalContract, parseContract } from "../../../src/core/contract.ts"
 import { goalChecks } from "../../../src/core/goal/index.ts";
 import { KitSchema } from "../../../src/core/kit.ts";
 import { assigned } from "../../helpers/assignments.ts";
-import { seedDemo } from "../../helpers/control-demo.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 import { applied, ingestReport } from "../../helpers/control-store.ts";
+import { seedDemo } from "../../helpers/demo/index.ts";
 
 /**
  * Goal 082 on control's side: what the judge found about an attempt, from the rig's events, on

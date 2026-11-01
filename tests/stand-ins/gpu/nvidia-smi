@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Test only: a stand-in for nvidia-smi over the fake device files that containers/test-gpu/enter
+// Test only: a stand-in for nvidia-smi over the fake device files that tests/stand-ins/gpu/enter
 // makes. Like the real one, it lists only the cards whose device files the caller may open, and
 // answers the queries the harness makes (cards, minors, -L, the CUDA version).
 const fs = require("node:fs");

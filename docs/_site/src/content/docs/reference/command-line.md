@@ -313,6 +313,14 @@ usage: thermite <command> [options]
                                       run is on, so --rig may be left out; every other kind
                                       needs it. assign_campaign and resume_run on a RunPod rig
                                       whose pod is stopped start the pod first, and say so
+  log-level [control|harness|supervisor] [debug|info|warn|error|default] [--rig R] [--ttl MIN]
+            --control URL --token-file F
+                                      a log level (owner's token). control: control's own, read
+                                      with no level, or set at once and kept across control's
+                                      restarts; harness or supervisor: that part of rig R, by a
+                                      signed log_level command, until another changes it or the
+                                      part restarts. default: the part's THERMITE_LOG_LEVEL. It
+                                      prints JSON
   invalidate --run RUN (--attempt ID | --job N) --reason TEXT [--yes] --control URL --token-file F
                                       withdraw bad evidence (owner's token): an attempt, for
                                       good, with every attempt built on it, or a judge job's
@@ -1058,6 +1066,20 @@ npx thermite command --control https://control.example.com --token-file ~/thermi
 ```
 
 Control refuses `wipe_state` with `400 {"error":"wipe_state is issued only by a full reset"}`, and a payload that does not fit its kind with `400 {"error":"bad <kind> payload: …"}` (an unknown rig: `404`). `GET /v1/commands/<id>` and the dashboard's **Commands** page show the command's status. A command the rig refuses, such as a `queue_move` for an experiment that is no longer queued, shows there as `failed`, with the reason.
+
+### `log-level`
+
+`thermite log-level` reads or changes a log level, with the owner's token, and prints control's answer on one line. The first word says whose: `control` (the default), or a rig's `harness` or `supervisor`.
+
+- **Control's own.** `thermite log-level` or `thermite log-level control` reads it, as `GET /v1/control/log-level` and MCP's `control_log_level` do; with a level, `debug`, `info`, `warn` or `error`, it sets it, as `PUT /v1/control/log-level` and `set_control_log_level` do: at once, and kept across control's restarts. `default` takes the setting out, and control writes at its `THERMITE_LOG_LEVEL` again ([Control's log level](rest-api.md#controls-log-level)).
+- **A rig part's.** `thermite log-level harness debug --rig rig-1` (or `supervisor`) sends the signed command [`log_level`](signed-commands.md#log_level) through `POST /v1/commands`, as `thermite command --kind log_level` would, and prints `{"id","status":"pending"}`; `--ttl MIN` is its time to live, 60 minutes by default. The part writes at the level until another `log_level` changes it or the part restarts; `default` puts it back to the part's `THERMITE_LOG_LEVEL`. `thermite command`'s `GET /v1/commands/<id>` gives its outcome.
+
+```sh
+npx thermite log-level supervisor debug --rig rig-1 \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+```
+
+It refuses, with exit code 2, a part that is not one of the three (`log-level takes control, harness, supervisor, not "broker"`), a word that is not a level (`log-level takes a level, debug, info, warn, error, default, not "loud"`), a rig part with no level or no `--rig` (`log-level harness takes --rig: the rig whose harness it changes`), and `--rig` or `--ttl` for control's own (`log-level control takes no --rig or --ttl: they are a rig part's`).
 
 ### `invalidate`
 

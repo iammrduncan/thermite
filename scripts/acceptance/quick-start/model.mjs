@@ -1,3 +1,4 @@
+// @ts-check
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repo } from "./context.mjs";
@@ -10,6 +11,9 @@ export const HYPOTHESIS = "i-k-j loop order makes the inner loop contiguous";
  * The agents acceptance's script, cut to the quick start: OpenCode's model check, the planner's
  * one-lane plan, and one OpenCode trial that writes the smoke kit's known-good kernel and submits
  * it with thermite-trial.
+ * @param {any[]} messages the request's, read loosely, as the scripted model gives them
+ * @param {any[]} tools the request's, read loosely, as the scripted model gives them
+ * @returns {import("../lib/scripted-model.mjs").ScriptedTurn}
  */
 export function script(messages, tools) {
   const names = tools.map((t) => t.function.name);

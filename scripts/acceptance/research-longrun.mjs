@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // A long research run under compose with a scripted worker model (no real model needed): the
 // harness's fetcher archives real public pages (robots.txt and rate limits respected), the
 // scripted workers record claims quoting them, and the harness verifies the quotes, keeps the
@@ -17,10 +18,34 @@ const SEEDS = (
   process.env.SEEDS ??
   "https://en.wikipedia.org/wiki/Benchmark_(computing),https://en.wikipedia.org/wiki/Statistical_hypothesis_test"
 ).split(",");
-const DOMAIN = new URL(SEEDS[0]).hostname;
+const DOMAIN = new URL(/** @type {string} */ (SEEDS[0])).hostname;
+
+/** @typedef {import("./lib/scripted-model.mjs").ScriptedTurn} ScriptedTurn */
+/**
+ * The fields of a chat-completions request the scripted model reads. Its messages are parsed JSON
+ * of many shapes, read loosely, so they stay `any`.
+ * @typedef {{ model?: string, tools?: { function: { name: string } }[], messages?: any[] }} ChatRequest
+ */
+/**
+ * The report this script writes.
+ * @typedef {{
+ *   started_at: string,
+ *   minutes: number,
+ *   seeds: string[],
+ *   checks: import("./lib/checks.mjs").CheckRecord[],
+ *   final_report?: string,
+ *   finished_at?: string,
+ *   model_requests?: number,
+ *   ok?: boolean,
+ * }} LongRunReport
+ */
 
 let requests = 0;
-/** One sentence of at least 40 characters, from the text a fetch returned. */
+/**
+ * One sentence of at least 40 characters, from the text a fetch returned.
+ * @param {unknown} text
+ * @param {number} skip
+ */
 function sentenceFrom(text, skip) {
   const sentences = String(text)
     .replace(/\s+/g, " ")
@@ -29,12 +54,18 @@ function sentenceFrom(text, skip) {
   return sentences[skip % Math.max(1, sentences.length)];
 }
 
-/** The scripted research worker: fetch one new page, quote two sentences, update a section. */
+/**
+ * The scripted research worker: fetch one new page, quote two sentences, update a section.
+ * @param {any[]} messages
+ * @returns {ScriptedTurn}
+ */
 function script(messages) {
   const tools = messages.filter((m) => m.role === "tool");
   const brief = JSON.stringify(messages.find((m) => m.role === "user")?.content ?? "");
   const lane = /lane-(\d+)/.exec(brief)?.[1] ?? "1";
-  const call = (name, args) => ({ toolCalls: [{ name, args }] });
+  const call = (/** @type {string} */ name, /** @type {unknown} */ args) => ({
+    toolCalls: [{ name, args }],
+  });
   if (tools.length === 0) {
     // A link not fetched yet from the brief, on the campaign's domain; else a seed.
     const links = [...brief.matchAll(/https:\/\/[^\s"\\]+/g)]
@@ -87,12 +118,16 @@ const model = createServer((req, res) => {
   });
   req.on("end", async () => {
     requests++;
-    const p = JSON.parse(body);
+    const p = /** @type {ChatRequest} */ (JSON.parse(body));
     const planner = (p.tools ?? []).some((t) => t.function.name === "submit_plan");
     if (!planner && !(p.messages ?? []).some((m) => m.role === "tool")) await sleep(PACE_MS);
+    /** @type {ScriptedTurn} */
     const turn = planner ? { text: "no plan" } : script(p.messages ?? []);
     const id = `c${requests}`;
-    const chunk = (delta, finish) =>
+    const chunk = (
+      /** @type {Record<string, unknown>} */ delta,
+      /** @type {string | null} */ finish,
+    ) =>
       `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created: 0, model: p.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
     res.writeHead(200, { "content-type": "text/event-stream" });
     res.write(chunk({ role: "assistant", content: turn.text ?? "" }, null));
@@ -117,8 +152,8 @@ const model = createServer((req, res) => {
     res.end("data: [DONE]\n\n");
   });
 });
-await new Promise((r) => model.listen(0, "0.0.0.0", r));
-const port = model.address().port;
+await /** @type {Promise<void>} */ (new Promise((r) => model.listen(0, "0.0.0.0", r)));
+const port = /** @type {import("node:net").AddressInfo} */ (model.address()).port;
 const hostName = (process.env.COMPOSE ?? "podman compose").startsWith("docker")
   ? "host.docker.internal"
   : "host.containers.internal";
@@ -130,11 +165,12 @@ const composeEnv = {
   THERMITE_TRIAL_MINUTES: "5",
 };
 
+/** @type {LongRunReport} */
 const report = { started_at: new Date().toISOString(), minutes, seeds: SEEDS, checks: [] };
 const { check } = acceptanceChecks({ max: 400, into: report.checks });
 
 prepare();
-const { parseContract } = await import("../../dist/core/contract.js");
+const { parseContract } = await import("../../src/core/contract.ts");
 const parsed = parseContract({
   schema_version: 1,
   campaign: "benchmark-statistics",
@@ -182,7 +218,7 @@ try {
   for (;;) {
     await sleep(60_000);
     const v = (await api("/v1/rigs/local-1/view")).body;
-    const inst = v.runs?.find((i) => i.id === "research-1");
+    const inst = v.runs?.find((/** @type {{ id: string }} */ i) => i.id === "research-1");
     const r = inst?.research ?? {};
     console.log(
       `${Math.round((Date.now() - started) / 60000)} min: ${inst?.status} sources ${r.sources ?? 0} verified ${r.verified ?? 0} trials ${inst?.agents?.trials ?? 0} model requests ${requests}`,
@@ -242,7 +278,7 @@ try {
   report.final_report = final?.report;
 } catch (err) {
   failed = true;
-  check("long run", false, String(err?.stack ?? err));
+  check("long run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
   report.finished_at = new Date().toISOString();
   report.model_requests = requests;

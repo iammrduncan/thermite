@@ -48,6 +48,7 @@ import {
 import { KitRepos } from "./kits/index.ts";
 import { advanceResets, driverFromEnv } from "./lifecycle.ts";
 import { followLive, LiveTaken } from "./live/index.ts";
+import { applyControlLogLevel } from "./log-level.ts";
 import { controlParts } from "./parts.ts";
 import { RETENTION_LOOK_MS, retentionTick } from "./retention/index.ts";
 import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
@@ -113,6 +114,8 @@ async function main(): Promise<void> {
   const notRead = notReadWords(env);
   if (notRead) logWarn("control", notRead);
   const store = new ControlStore(join(dir, CONTROL_STATE.db));
+  // The log level the owner set on control, over THERMITE_LOG_LEVEL's (control/log-level.ts).
+  applyControlLogLevel(store);
   const { host, port } = parseListen(env.THERMITE_CONTROL_LISTEN ?? "0.0.0.0:8800");
   // A rig is stale after 3 missed reports (the supervisor reports every 60 s by default).
   const staleAfterMs = readNumber(env, CONTROL_NUMBERS.staleSeconds) * 1000;

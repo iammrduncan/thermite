@@ -383,7 +383,6 @@ describe("the supervisor's report of its advisors file", () => {
           api_key_file: "/run/secrets/llm-key",
         },
       ],
-      kb: { mcp_url: "https://kb.example.com/mcp", token_file: "/run/secrets/kb-token" },
     });
     const report = advisorsFileReport(file);
     assert.deepEqual(report, {

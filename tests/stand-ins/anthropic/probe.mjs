@@ -20,4 +20,6 @@ for (let i = 0; i < 8 && pid > 1; i++) {
     break;
   }
 }
-console.log(`uid=${process.getuid()} signin=${found.length ? `FOUND in ${found.join(", ")}` : "absent"}`);
+console.log(
+  `uid=${process.getuid()} signin=${found.length ? `FOUND in ${found.join(", ")}` : "absent"}`,
+);

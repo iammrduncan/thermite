@@ -287,6 +287,8 @@ function checkCommandLine(page, text) {
 const codeFiles = walk(join(root, "src"), /\.ts$/);
 const otherFiles = [
   ...walk(join(root, "containers"), /.*/),
+  // The stand-ins the acceptance scripts start inside images read settings of their own.
+  ...walk(join(root, "tests/stand-ins"), /.*/),
   ...walk(join(root, "scripts"), /\.(mjs|ts|sh)$/),
   ...["compose.yaml", "compose.lifecycle.yaml"].map((f) => join(root, f)),
 ].filter((f) => existsSync(f) && !f.endsWith("docs-check.mjs"));

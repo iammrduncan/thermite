@@ -1,3 +1,4 @@
+// @ts-check
 // Control's message bus for an acceptance check that runs control in its own process (the RunPod
 // and the one-container rig image checks): the bus's server in a container of its pinned image,
 // on a network of the check's own, started as compose.yaml starts it, with the users file and the
@@ -29,6 +30,7 @@ const LOOK_MS = 2_000;
 /**
  * Starts the bus's server for a check named `name`, its host port at `port` (never 4222), and
  * control's store on it. `secrets` seals control's own keys on the bus.
+ * @param {{ name: string, port: number, secrets: import("../../../src/control/secrets.ts").SecretBox }} options
  */
 export async function startControlBus({ name, port, secrets }) {
   if (port === 4222) throw new Error("the check's bus port is never the stack's 4222");
@@ -39,7 +41,7 @@ export async function startControlBus({ name, port, secrets }) {
   const box = `${name}-nats`;
   const storeVolume = `${name}-nats-store`;
   const url = `nats://127.0.0.1:${port}`;
-  const quiet = (args) => {
+  const quiet = (/** @type {string[]} */ args) => {
     try {
       sh(engine, args);
     } catch {}
@@ -101,7 +103,9 @@ export async function startControlBus({ name, port, secrets }) {
   const bus = natsBus(url, "control", { seed: busUsers.controlSeed, trust });
   // Control's store on the real bus: the events stream, its writer, its move and its apply, as
   // control's main puts them there.
-  storeOnBus(store, bus);
+  // storeOnBus is typed for the tests' fake bus, a Bus with more for the tests to look at; it uses
+  // only the Bus's own methods, so the real bus serves it (`any` for that reason).
+  storeOnBus(store, /** @type {any} */ (bus));
   return {
     url,
     net,
@@ -132,10 +136,15 @@ export async function startControlBus({ name, port, secrets }) {
  * Control's loops on the bus, as control's main runs them, for `started` (startControlBus) and
  * control's `parts` (controlParts, with the same store). Returns the config writer, which control's
  * API takes, and a stop.
+ * @param {Awaited<ReturnType<typeof startControlBus>>} started
+ * @param {import("../../../src/control/parts.ts").ControlParts} parts
+ * @param {{ requireKeyAcceptance?: boolean }} [o]
  */
 export function followControlBus(started, parts, o = {}) {
   const { store, bus, busUsers } = started;
+  /** @type {ReturnType<typeof setInterval>[]} */
   const timers = [];
+  /** @type {(what: string) => (err: unknown) => void} */
   const said = (what) => (err) => console.error(`control's bus, ${what}: ${String(err)}`);
   const control = buildInfo();
   const rigConsumers = new RigConsumers({ store, bus });
@@ -169,7 +178,11 @@ export function followControlBus(started, parts, o = {}) {
   };
 }
 
-/** A container's address on the check's network: where control's server dials its leaf node. */
+/**
+ * A container's address on the check's network: where control's server dials its leaf node.
+ * @param {string} net
+ * @param {string} container
+ */
 export function addressOn(net, container) {
   const out = sh(engine, [
     "inspect",

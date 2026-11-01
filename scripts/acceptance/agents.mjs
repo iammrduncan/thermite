@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // M4 agents acceptance under compose, with a scripted OpenAI-compatible model on the host (a
 // real model route is not needed to check the machinery). One epoch on the smoke campaign:
 //   - the planner plans through the model and the plan is valid;
@@ -33,6 +34,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
 import { kbAgentsScene } from "./lib/kb-agents.mjs";
+import { PI_INPUTS, piConsoleScene, piScene, piSteps } from "./lib/pi-worker-view.mjs";
 import {
   opencodePlanner,
   opencodePlannerScene,
@@ -56,30 +58,23 @@ import {
   sleep,
   until,
 } from "./lib/smoke-env.mjs";
-import { screenOnLive, typeInto } from "./lib/terminals.mjs";
 
 const GOOD = readFileSync("kits/smoke-cpu/candidates/good/src/kernel/matmul.c", "utf8");
-/** lane-2's trial in its Pi view (goal 169): when it held, and what its model was sent. */
-const piScene = {};
-/** The owner's inputs to lane-2's Pi view, in order, and what each must become. */
-const PI_INPUTS = [
-  { input: { text: "PI-STEER keep the kernel as it is" }, want: "typed" },
-  { input: { text: "/status" }, want: "typed" },
-  { input: { text: "/mcp" }, want: "typed" },
-  { input: { text: "/mcp reconnect" }, want: /gives its workers no MCP servers/ },
-  { input: { text: "/skill:profile" }, want: /this run's kit carries no skills/ },
-  { input: { text: "/model another" }, want: /is not a command of the Pi view/ },
-  { input: { text: "/compact" }, want: "typed" },
-  { input: { text: "PI-FOLLOW then restate it", follow_up: true }, want: "typed" },
-  { input: { keys: ["esc"] }, want: "typed" },
-];
-const NOOP = readFileSync("kits/smoke-cpu/candidates/noop/src/kernel/matmul.c", "utf8");
-const setid = {};
-const background = {};
-/** What the OpenCode research trial's commands answered, as its tool results show. */
+/** @typedef {import("./lib/scripted-model.mjs").ScriptedTurn} ScriptedTurn */
+/** @typedef {import("./lib/pi-worker-view.mjs").PiInput} PiInput */
+const setid = /** @type {Record<string, string>} */ ({});
+const background = /** @type {Record<string, string>} */ ({});
+/**
+ * What the OpenCode research trial's commands answered, as its tool results show.
+ * @type {{
+ *   prompt?: boolean, reachedPrivate?: string, refused?: boolean, note?: boolean,
+ *   section?: boolean, progress?: boolean, index?: boolean, searched?: boolean,
+ *   writes?: Record<string, string>,
+ * }}
+ */
 const researchSeen = {};
 /** A tool result's text: OpenCode sends it as a string or as text parts. */
-const textOf = (c) =>
+const textOf = (/** @type {unknown} */ c) =>
   typeof c === "string"
     ? c
     : Array.isArray(c)
@@ -96,7 +91,10 @@ const kbScene = kbAgentsScene();
  * folder, tries to change the harness's part of it, and writes a file of its own.
  */
 function researchSteps() {
-  const shell = (command) => ({ name: "shell", args: { command, timeout: 0 } });
+  const shell = (/** @type {string} */ command) => ({
+    name: "shell",
+    args: { command, timeout: 0 },
+  });
   return [
     shell(`thermite-trial research fetch http://${hostName}:${port}/paper`),
     shell("thermite-trial research add_note 'opencode research note: the fetch was refused'"),
@@ -122,8 +120,13 @@ async function dashboard() {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const page = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
+  const page = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) =>
     (
       await fetch(`${control}${path}`, {
@@ -136,7 +139,13 @@ async function dashboard() {
   return { page, post };
 }
 
-/** The scripted model: plans with submit_plan; lane-1 improves the kernel, lane-2 restates it. */
+/**
+ * The scripted model: plans with submit_plan; lane-1 improves the kernel, lane-2 restates it.
+ * The messages and tools are the model calls' JSON, as scriptedModel() hands them.
+ * @param {any[]} messages
+ * @param {any[]} tools
+ * @returns {ScriptedTurn | Promise<ScriptedTurn>}
+ */
 function script(messages, tools) {
   const names = tools.map((t) => t.function.name);
   // OpenCode (its own tools, shell among them): its model check, then a trial that edits the
@@ -272,46 +281,8 @@ function script(messages, tools) {
   return steps[done] ? { toolCalls: [steps[done]] } : { text: "done" };
 }
 
-/**
- * lane-2's trial, in its Pi view (goal 169): it holds in a command while the owner's inputs
- * arrive; then, once the follow-up has reached it (a reply without a tool call gives it its
- * chance), it restates the kernel and submits.
- */
-function piSteps(messages, done) {
-  const sent = JSON.stringify(messages);
-  if (done === 0) {
-    piScene.holdAt ??= Date.now();
-    return { toolCalls: [{ name: "run", args: { command: "sleep 90; echo PI-HOLD-DONE" } }] };
-  }
-  if (sent.includes("PI-STEER")) piScene.steered = true;
-  if (!sent.includes("PI-FOLLOW")) return { text: "I stop here for now." };
-  piScene.followed = true;
-  const steps = [
-    { name: "write_file", args: { path: "src/kernel/matmul.c", content: NOOP } },
-    { name: "submit", args: { hypothesis: "restate the kernel" } },
-  ];
-  return steps[done - 1] ? { toolCalls: [steps[done - 1]] } : { text: "done" };
-}
-
-/**
- * The owner's console into lane-2's Pi view (goal 169), while its trial holds in a command: each
- * input in turn, then the screen as Live shows it.
- */
-async function piConsoleScene() {
-  await until("lane-2's trial holds in its Pi view", async () => piScene.holdAt, 900_000, 1000);
-  const started = await until("lane-2's trial", async () =>
-    (await events()).find(
-      (e) => e.kind === "trial_started" && e.subject === "smoke-1" && e.body.lane === "lane-2",
-    ),
-  );
-  const trial = String(started.body.trial);
-  const sent = [];
-  for (const { input, want } of PI_INPUTS)
-    sent.push({ input, want, command: await typeInto(trial, input) });
-  return { trial, sent, frame: await screenOnLive(trial) };
-}
-
 /** Whether the OpenCode trial's memory hog came back killed (the lane's memory limit). */
+/** @type {{ killed?: boolean }} */
 const hogSeen = {};
 const model = await scriptedModel(script, {
   // Anything else but a model call: the research fetch reached this machine, which the
@@ -333,14 +304,21 @@ const model = await scriptedModel(script, {
         // The research folder, as the trial's shell saw it.
         if (/# Research through OpenCode/.test(out)) researchSeen.index = true;
         if (/notes\/note-\d{5}\.md/.test(out)) researchSeen.searched = true;
-        for (const hit of out.matchAll(/FOLDER-WRITE-(ALLOWED|REFUSED) (\S+)/g)) {
+        // Each match has its groups: they are not optional in the patterns.
+        for (const hit of /** @type {Iterable<[string, string, string]>} */ (
+          out.matchAll(/FOLDER-WRITE-(ALLOWED|REFUSED) (\S+)/g)
+        )) {
           researchSeen.writes ??= {};
           researchSeen.writes[hit[2]] = hit[1];
         }
       }
-      for (const hit of JSON.stringify(m.content ?? "").matchAll(/SETID-(BEFORE|AFTER) (\S+)/g))
+      for (const hit of /** @type {Iterable<[string, string, string]>} */ (
+        JSON.stringify(m.content ?? "").matchAll(/SETID-(BEFORE|AFTER) (\S+)/g)
+      ))
         setid[hit[1]] = hit[2];
-      for (const hit of JSON.stringify(m.content ?? "").matchAll(/BG-(STARTED|ALIVE) (yes|no)/g))
+      for (const hit of /** @type {Iterable<[string, string, string]>} */ (
+        JSON.stringify(m.content ?? "").matchAll(/BG-(STARTED|ALIVE) (yes|no)/g)
+      ))
         background[hit[1]] = hit[2];
     }
   },
@@ -359,6 +337,15 @@ const composeEnv = {
   THERMITE_MAX_TRIALS: "2",
   THERMITE_MODEL_ROUTE_POLL_SECONDS: "2",
 };
+/**
+ * @type {{
+ *   started_at: string,
+ *   compose: string,
+ *   checks: import("./lib/checks.mjs").CheckRecord[],
+ *   finished_at?: string,
+ *   ok?: boolean,
+ * }}
+ */
 const report = {
   started_at: new Date().toISOString(),
   compose: process.env.COMPOSE ?? "podman compose",
@@ -377,6 +364,7 @@ try {
   await until("control health", async () => (await fetch("http://127.0.0.1:8800/v1/health")).ok);
   await assign(env, "smoke-1");
   // lane-2's Pi view, while the epoch runs (goal 169).
+  /** @type {Promise<Partial<Awaited<ReturnType<typeof piConsoleScene>>> & { error?: string }>} */
   const piRun = piConsoleScene().catch((err) => ({ error: String(err?.stack ?? err) }));
   // The first epoch's planner in its Pi view (lib/planner-terminal.mjs).
   await piPlannerScene(check);
@@ -389,6 +377,7 @@ try {
       );
       // Settled: judged to the end (a screened win also has to finish its confirmation).
       const life = lifecycles(all);
+      /** @type {(string | undefined)[]} */
       const settled = [
         "judged",
         "promoted",
@@ -432,6 +421,10 @@ try {
   // The Pi view (goal 169): each input's outcome, its record, what the model was sent, the
   // compaction, and the screen on Live.
   const pi = await piRun;
+  /**
+   * A typed input's outcome, from its command.
+   * @param {{ status?: string, outcome?: { accepted?: boolean, result?: { outcome?: unknown } } }} c
+   */
   const outcomeOf = (c) =>
     c?.status !== "delivered" || c?.outcome?.accepted === false
       ? `refused: ${JSON.stringify(c?.outcome ?? c)}`
@@ -445,9 +438,11 @@ try {
     "the owner's console reaches lane-2's Pi view: each call typed, or refused in words",
     outcomes.length === PI_INPUTS.length &&
       (pi.sent ?? []).every((x, i) =>
-        typeof PI_INPUTS[i].want === "string"
-          ? outcomeOf(x.command) === PI_INPUTS[i].want
-          : PI_INPUTS[i].want.test(outcomeOf(x.command)),
+        typeof (/** @type {PiInput} */ (PI_INPUTS[i]).want) === "string"
+          ? outcomeOf(x.command) === /** @type {PiInput} */ (PI_INPUTS[i]).want
+          : /** @type {RegExp} */ (/** @type {PiInput} */ (PI_INPUTS[i]).want).test(
+              outcomeOf(x.command),
+            ),
       ),
     { error: pi.error, outcomes },
   );
@@ -609,7 +604,7 @@ try {
   // OpenCode's own tools and runs the research tools as `thermite-trial research` commands,
   // which reach the harness's research service with the trial's token. Assigning it pauses
   // smoke-1 (one running run per rig).
-  const { parseContract } = await import("../../dist/core/contract.js");
+  const { parseContract } = await import("../../src/core/contract.ts");
   const researchContract = parseContract({
     schema_version: 1,
     campaign: "opencode-research",
@@ -701,8 +696,9 @@ try {
         "the research document whole in the knowledge base",
         async () => {
           const q = encodeURIComponent("synthesis");
-          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find((h) =>
-            String(h.address).includes("synthesis"),
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find(
+            (/** @type {import("../../src/core/link/kb.ts").KbHit} */ h) =>
+              String(h.address).includes("synthesis"),
           );
           if (!hit) return undefined;
           // A read's answer holds the item, its text among its fields.
@@ -783,7 +779,11 @@ try {
   check("the model was asked (planner and workers)", model.requests >= 11, model.requests);
 } catch (err) {
   failed = true;
-  check("acceptance run", false, String(err?.stack ?? err));
+  check(
+    "acceptance run",
+    false,
+    String(/** @type {{ stack?: unknown } | null | undefined} */ (err)?.stack ?? err),
+  );
 } finally {
   report.finished_at = new Date().toISOString();
   report.ok = !failed && report.checks.every((c) => c.ok);

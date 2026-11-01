@@ -32,9 +32,9 @@ const nameCheck = (value, taken, folderOnly) => {
   if (!v) return { ok: false, cls: "", say: "Write a name for the copy.", fix: "" };
   if (!NAME_RX.test(v)) {
     const f = fixName(v);
-    return { ok: false, cls: "bad", say: "A campaign's name is ${NAME_WORDS}.", fix: f && !taken.includes(f) && !f.startsWith(${JSON.stringify(RIG_CHECK_PREFIX)}) ? f : "" };
+    return { ok: false, cls: "bad", say: "A campaign's name is " + ${JSON.stringify(NAME_WORDS)} + ".", fix: f && !taken.includes(f) && !f.startsWith(${JSON.stringify(RIG_CHECK_PREFIX)}) ? f : "" };
   }
-  if (v.startsWith(${JSON.stringify(RIG_CHECK_PREFIX)})) return { ok: false, cls: "bad", say: "A name that starts with ${RIG_CHECK_PREFIX} is for rig checks. Choose another name.", fix: "" };
+  if (v.startsWith(${JSON.stringify(RIG_CHECK_PREFIX)})) return { ok: false, cls: "bad", say: "A name that starts with " + ${JSON.stringify(RIG_CHECK_PREFIX)} + " is for rig checks. Choose another name.", fix: "" };
   if (taken.includes(v)) return { ok: false, cls: "bad", say: "There is a campaign named " + v + " already." + (folderOnly.includes(v) ? " It has no runs now, but its collection is in the knowledge base." : "") + " Choose another name.", fix: "" };
   return { ok: true, cls: "ok", say: "✓ Free. Its runs are named " + v + "-1, " + v + "-2, and so on.", fix: "" };
 };

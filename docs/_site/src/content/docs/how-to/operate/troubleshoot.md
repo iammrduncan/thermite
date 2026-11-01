@@ -32,7 +32,12 @@ The last line says `No check failed.` when the machine is ready. A check that sa
 
 ## Where the logs are
 
-Every part of Thermite writes one JSON object per line, such as `{"at":"…","level":"error","component":"supervisor","msg":"relay error","error":"…"}`. Lines at `warn` and `error` are the ones to read first; for more detail, set [`THERMITE_LOG_LEVEL`](../../reference/settings.md#every-service) to `debug`, or send the part `SIGUSR2`. Before a part writes a line, it takes what looks like a credential out of every text in it, as [a pod's log](../../reference/rest-api.md#a-pods-log) says: an error that echoes a URL, a header or a key shows `***` in its place.
+Every part of Thermite writes one JSON object per line, such as `{"at":"…","level":"error","component":"supervisor","msg":"relay error","error":"…"}`. Lines at `warn` and `error` are the ones to read first. For more detail, turn a part's level to `debug` while it runs, and back once you have what you need:
+
+- **A rig's harness or supervisor:** `thermite log-level harness debug --rig rig-1 --control https://control.example.com --token-file owner-token` (or `supervisor`), which sends the signed command [`log_level`](../../reference/signed-commands.md#log_level). It lasts until you change it again, `thermite log-level harness default --rig rig-1 …`, or the part restarts.
+- **Control:** `thermite log-level control debug --control … --token-file …`, kept across control's restarts until you set `default` ([Control's log level](../../reference/rest-api.md#controls-log-level)).
+
+[`THERMITE_LOG_LEVEL`](../../reference/settings.md#every-service) sets each part's level from its start, and `SIGUSR2` switches a part between its level and `debug`. Before a part writes a line, it takes what looks like a credential out of every text in it, as [a pod's log](../../reference/rest-api.md#a-pods-log) says: an error that echoes a URL, a header or a key shows `***` in its place.
 
 | What | Where |
 | --- | --- |

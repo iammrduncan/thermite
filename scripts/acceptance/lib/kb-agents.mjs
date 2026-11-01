@@ -1,3 +1,4 @@
+// @ts-check
 // The knowledge base's scene of the agents acceptance (goal 175), on its scripted model: lane-1's
 // worker in Pi and a hill-climb trial in OpenCode each write an item with kb_write into their own
 // slot (worker-<lane>), and a write naming another slot, which kb_write never takes, is refused;
@@ -14,6 +15,12 @@ const OC = "kbprobeoc";
 const DENIED = "kbprobedenied";
 const CAMPAIGN_JSON = "The campaign, as JSON:";
 
+/** One hit of the owner's search, as control answers it. */
+/** @typedef {import("../../../src/core/link/kb.ts").KbHit} KbHit */
+/** What the knowledge base's tools answered in one conversation, or in all of a program's. */
+/** @typedef {{ kept: string[], refused: boolean, hits: string[] }} KbAnswered */
+/** @typedef {import("./scripted-model.mjs").ToolCall} ToolCall */
+
 /**
  * What the owner's search for a write naming another slot finds, which every check's agents title
  * `kbprobedenied …`. `held`: the items such a write made, whose title is the write's; there must be
@@ -22,6 +29,7 @@ const CAMPAIGN_JSON = "The campaign, as JSON:";
  * text quotes the refused call (the conversation before a compaction).
  */
 export async function deniedItems() {
+  /** @type {KbHit[]} */
   const hits = (await api(`/v1/kb/search?q=${DENIED}`)).body.hits ?? [];
   const held = hits.filter((h) => String(h.title ?? "").includes(DENIED));
   const quoted = hits
@@ -30,15 +38,23 @@ export async function deniedItems() {
   return { held, quoted };
 }
 
-/** A tool result's text: OpenCode sends it as a string or as text parts. */
+/**
+ * A tool result's text: OpenCode sends it as a string or as text parts.
+ * @param {unknown} c
+ * @returns {string}
+ */
 const textOf = (c) =>
   typeof c === "string"
     ? c
     : Array.isArray(c)
-      ? c.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
+      ? c.map((/** @type {any} */ p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
       : String(c ?? "");
 
-/** A write into another writer's slot: the agent names a slot, which kb_write never takes. */
+/**
+ * A write into another writer's slot: the agent names a slot, which kb_write never takes.
+ * @param {string} name
+ * @returns {ToolCall}
+ */
 const denied = (name) => ({
   name,
   args: { kind: "note", title: `${DENIED} not my slot`, text: "x", slot: "planner" },
@@ -47,13 +63,16 @@ const denied = (name) => ({
 /**
  * What the knowledge base's tools answered in one conversation: the addresses kept, whether a
  * write naming a slot was refused, and smoke-1's agents' items any result names.
+ * @param {any[]} messages
  */
 function answered(messages) {
+  /** @type {KbAnswered} */
   const out = { kept: [], refused: false, hits: [] };
   for (const m of messages) {
     if (m.role !== "tool") continue;
     const t = textOf(m.content);
-    for (const k of t.matchAll(/kept: (\S+?), item \d+, version \d+/g)) out.kept.push(k[1]);
+    for (const k of t.matchAll(/kept: (\S+?), item \d+, version \d+/g))
+      out.kept.push(/** @type {string} */ (k[1]));
     if (/kb_write takes no slot: you write only in your own slot/.test(t)) out.refused = true;
     for (const a of t.matchAll(/smoke-cpu\/smoke-1\/worker-\d+\/[a-z]+:\d+/g))
       if (!out.hits.includes(a[0])) out.hits.push(a[0]);
@@ -61,7 +80,12 @@ function answered(messages) {
   return out;
 }
 
-/** What every conversation of one program's agent was told, together: a later trial adds to it. */
+/**
+ * What every conversation of one program's agent was told, together: a later trial adds to it.
+ * @param {KbAnswered | undefined} had
+ * @param {KbAnswered} kb
+ * @returns {KbAnswered}
+ */
 const together = (had, kb) => ({
   kept: [...new Set([...(had?.kept ?? []), ...kb.kept])],
   refused: Boolean(had?.refused || kb.refused),
@@ -70,6 +94,18 @@ const together = (had, kb) => ({
 
 /** The scene's part of the scripted model, and its checks. */
 export function kbAgentsScene() {
+  /**
+   * What the scene saw: each program's conversations, the items smoke-2's planner found, whether
+   * smoke-2 started, OpenCode's knowledge-base tools, and what smoke-2's planner was given.
+   * @type {{
+   *   pi: KbAnswered | undefined,
+   *   oc: KbAnswered | undefined,
+   *   found: string[] | undefined,
+   *   second: boolean,
+   *   ocTools: string[],
+   *   planner: { program: string, asks: number, kb_tools: string[], answer: string | undefined } | undefined,
+   * }}
+   */
   const seen = {
     pi: undefined,
     oc: undefined,
@@ -79,7 +115,11 @@ export function kbAgentsScene() {
     planner: undefined,
   };
   return {
-    /** lane-1's worker's two calls in Pi, before it submits; `messages` its conversation so far. */
+    /**
+     * lane-1's worker's two calls in Pi, before it submits; `messages` its conversation so far.
+     * @param {any[]} messages
+     * @returns {ToolCall[]}
+     */
     piSteps(messages) {
       seen.pi = together(seen.pi, answered(messages));
       return [
@@ -97,6 +137,9 @@ export function kbAgentsScene() {
     /**
      * An OpenCode trial's two calls of Thermite's MCP server's kb_write (`names`: its tools), or
      * none when OpenCode lists no such tool.
+     * @param {any[]} messages
+     * @param {string[]} names
+     * @returns {ToolCall[]}
      */
     ocSteps(messages, names) {
       const write = names.find((n) => /kb_write$/.test(n));
@@ -114,6 +157,10 @@ export function kbAgentsScene() {
      * The second run's planner, in the program it runs in (`program`): one search before it plans,
      * or undefined. In Pi the caller knows a planner's request by its submit_plan; in OpenCode it
      * is the request whose prompt gives the campaign as JSON.
+     * @param {any[]} messages
+     * @param {string[]} names
+     * @param {string} program
+     * @returns {import("./scripted-model.mjs").ScriptedTurn | undefined}
      */
     plannerTurn(messages, names, program) {
       const planner = program === "pi" || JSON.stringify(messages).includes(CAMPAIGN_JSON);
@@ -135,10 +182,14 @@ export function kbAgentsScene() {
     /**
      * The checks, once smoke-1's trials in Pi and in OpenCode have ended: each item where control
      * holds it, none of the refused ones, then smoke-2's planner's search. `env` is prepare()'s.
+     * @param {import("./checks.mjs").Check} check
+     * @param {import("./smoke-env.mjs").SmokeEnv} env
      */
     async run(check, env) {
+      /** @type {(word: string) => Promise<KbHit[]>} */
       const ownerFinds = async (word) =>
         (await api(`/v1/kb/search?q=${encodeURIComponent(word)}`)).body.hits ?? [];
+      /** @type {(word: string, address: string | undefined) => Promise<KbHit | undefined>} */
       const stored = async (word, address) =>
         address
           ? await until(
@@ -164,7 +215,7 @@ export function kbAgentsScene() {
       check(
         "OpenCode: its trial writes into its own slot with Thermite's MCP server's kb_write, control holds it there, and its write naming another slot is refused",
         Boolean(ocKept) &&
-          ocStored?.slot === ocKept.split("/")[2] &&
+          ocStored?.slot === /** @type {string} */ (ocKept).split("/")[2] &&
           /^worker-\d+$/.test(String(ocStored?.slot)) &&
           seen.oc?.refused === true,
         { seen: seen.oc, kb_tools: seen.ocTools, stored: ocStored },
@@ -178,7 +229,7 @@ export function kbAgentsScene() {
       // An agent of another run: a second run of the campaign, whose planner searches for both
       // items before it plans. Assigning it pauses research-oc's run, already paused; smoke-2 is
       // paused once it found them.
-      const kept = [piKept, ocKept].filter(Boolean);
+      const kept = /** @type {string[]} */ ([piKept, ocKept].filter(Boolean));
       const name =
         "an agent of another run (smoke-2's planner) finds the items Pi's and OpenCode's agents wrote in smoke-1, with kb_search";
       if (!kept.length) return check(name, false, "neither agent kept an item to find");

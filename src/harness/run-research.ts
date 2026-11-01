@@ -12,6 +12,7 @@ import {
   SOURCE_CHARS_DEFAULT,
   SOURCE_CHARS_MAX,
 } from "../core/api/harness/research.ts";
+import { readClaim, readFinding, readHypothesis, readNote } from "../core/corpus.ts";
 import { clip } from "../core/kb-index.ts";
 import { FILE_BYTES_MAX, READ_LINES_DEFAULT, READ_LINES_MAX } from "./evidence.ts";
 import { type Ledger, LedgerError } from "./ledger/index.ts";
@@ -62,22 +63,6 @@ export const DIGEST_CHARS = 4000;
 export const SUMMARY_ANSWER_CHARS = 2000;
 
 type Mode = "research" | "hill_climb" | "goal";
-
-const list = (json: unknown) => {
-  try {
-    const v = JSON.parse(String(json ?? "[]")) as unknown;
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-};
-const ids = (json: unknown) => list(json).map(String);
-
-interface Quote {
-  source: string;
-  quote: string;
-  resolved_from?: string;
-}
 
 /** The note an answer carries, for the run's mode. */
 const noteFor = (mode: Mode) =>
@@ -183,8 +168,8 @@ export class RunResearch {
         const total = this.ledger.sources.count(run);
         // How many claims quote each source, verified and draft.
         const quoted = new Map<string, { verified: number; draft: number }>();
-        for (const c of this.ledger.claims.ofRun(run))
-          for (const s of new Set((list(c.quotes) as Quote[]).map((q) => String(q.source)))) {
+        for (const c of this.ledger.claims.ofRun(run).map(readClaim))
+          for (const s of new Set(c.quotes.map((q) => q.source))) {
             const n = quoted.get(s) ?? { verified: 0, draft: 0 };
             if (c.verified) n.verified++;
             else n.draft++;
@@ -218,15 +203,14 @@ export class RunResearch {
         const questions = this.questions(run);
         return page(
           total,
-          rows.map((c) => {
-            const quotes = list(c.quotes) as Quote[];
-            const problems = ids(c.problems);
+          rows.map(readClaim).map((c) => {
+            const { quotes, problems } = c;
             const verified = c.verified;
             const q = c.question;
             // Registrable domains (goal 117): docs.example.com and blog.example.com are one.
             const domains = new Set(
               quotes.flatMap((x) => {
-                const d = sources.get(String(x.source))?.domain;
+                const d = sources.get(x.source)?.domain;
                 return d ? [registrableDomain(d)] : [];
               }),
             );
@@ -239,10 +223,10 @@ export class RunResearch {
                 : {}),
               text: clip(c.text, 2000),
               quotes: quotes.map((x) => ({
-                source: String(x.source),
-                url: sources.get(String(x.source))?.url ?? null,
-                quote: clip(String(x.quote), 1000),
-                ...(x.resolved_from ? { cited_as: clip(String(x.resolved_from), 200) } : {}),
+                source: x.source,
+                url: sources.get(x.source)?.url ?? null,
+                quote: clip(x.quote, 1000),
+                ...(x.resolved_from ? { cited_as: clip(x.resolved_from, 200) } : {}),
               })),
               domains: domains.size,
               ...(verified
@@ -263,10 +247,10 @@ export class RunResearch {
         const rows = this.ledger.hypotheses.page(run, limit, offset);
         return page(
           total,
-          rows.map((h) => ({
+          rows.map(readHypothesis).map((h) => ({
             id: h.id,
             text: clip(h.text, 2000),
-            supporting: ids(h.supporting),
+            supporting: h.supporting,
             // Its status and question (goal 117): only the author's and promoted ones need a
             // verdict; the question is an index, from 0.
             status: h.status,
@@ -283,16 +267,16 @@ export class RunResearch {
         const rows = this.ledger.claims.findingsPage(run, which, limit, offset);
         return page(
           total,
-          rows.map((f) => {
+          rows.map(readFinding).map((f) => {
             const supported = f.supported;
-            const problems = ids(f.problems);
+            const problems = f.problems;
             return {
               id: f.id,
               state: supported ? "supported" : "draft",
               text: clip(f.text, 2000),
               summary: clip(f.summary, 3000),
               why_it_matters: clip(f.why_it_matters, 1500),
-              supporting: ids(f.supporting),
+              supporting: f.supporting,
               ...(supported
                 ? {}
                 : {
@@ -310,10 +294,10 @@ export class RunResearch {
         const rows = this.ledger.claims.notesPage(run, limit, offset);
         return page(
           total,
-          rows.map((n) => ({
+          rows.map(readNote).map((n) => ({
             id: n.id,
             text: clip(n.text, 4000),
-            sources: ids(n.sources),
+            sources: n.sources,
             lane: n.lane,
             at: n.created_at,
           })),

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+// @ts-check
 // Claude Code itself, not a stand-in: the harness image built with CLAUDE_CODE_VERSION runs as a
 // rig runs it (the broker as root, which closes /tmp to the roles and puts each role's work under
 // the GPU fence; only the broker's capabilities; no new privileges), with no network at all. A
-// stand-in for Anthropic's Messages API in the container (containers/test-anthropic) plays the
+// stand-in for Anthropic's Messages API in the container (tests/stand-ins/anthropic) plays the
 // model, and a made-up token signs in to it, so no subscription, key or network is needed:
 //   - the model check: Claude Code runs its Bash call as the model check's user;
 //   - a planner call, with none of Claude Code's own tools (past research is the knowledge base's,
@@ -37,10 +38,22 @@ import { cleanEngine, engine, imageTarget } from "./lib/smoke-env.mjs";
 const version = process.env.CLAUDE_CODE_VERSION ?? "2.1.308";
 const image = process.env.IMAGE ?? "localhost/thermite-harness:claude-real-check";
 const name = "thermite-claude-real";
+/** A check as check.mjs prints it: a failed one may carry its own account of why, line by line. */
+/** @typedef {{ name: string, ok: boolean, detail?: unknown, log?: unknown }} InsideCheck */
+/** What one run of check.mjs prints: its checks, and the peak memory the broker recorded. */
+/** @typedef {{ checks: InsideCheck[], peakRssBytes?: number, peakTerminalRssBytes?: number }} InsideResult */
+/**
+ * Runs the engine and returns what it printed.
+ * @param {string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ * @returns {string}
+ */
 const sh = (args, opts = {}) =>
   execFileSync(engine, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+/** @type {(ms: number) => Promise<void>} */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
+/** @param {InsideCheck} c */
 const report = (c) => {
   console.log(
     `${c.ok ? "PASS" : "FAIL"} ${c.name}${c.detail === undefined ? "" : `: ${JSON.stringify(c.detail).slice(0, 600)}`}`,
@@ -53,7 +66,8 @@ const logs = () => {
   const r = spawnSync(engine, ["logs", name], { encoding: "utf8" });
   return `${r.stdout}${r.stderr}`;
 };
-const logLine = (msg) =>
+/** The harness's first log line with this message, parsed. */
+const logLine = (/** @type {string} */ msg) =>
   logs()
     .split("\n")
     .map((l) => {
@@ -64,7 +78,13 @@ const logLine = (msg) =>
       }
     })
     .find((l) => l?.msg === msg);
-/** One run of check.mjs in the container; its checks. */
+/**
+ * One run of check.mjs in the container; its checks.
+ * @param {string} user
+ * @param {string} mode
+ * @param {string[]} [env]
+ * @returns {InsideResult}
+ */
 const inside = (user, mode, env = []) => {
   const r = spawnSync(
     engine,
@@ -142,7 +162,7 @@ try {
     "-e",
     `TEST_CONTROL_PUBKEY=${publicKey.export({ type: "spki", format: "pem" })}`,
     "-v",
-    `${resolve("containers/test-anthropic")}:/opt/test-anthropic:ro`,
+    `${resolve("tests/stand-ins/anthropic")}:/opt/test-anthropic:ro`,
     "--entrypoint",
     "/opt/test-anthropic/enter",
     image,
@@ -200,7 +220,7 @@ try {
   ]);
   results.push(inside("10001:10001", "advisor", ["-e", "TMPDIR=/var/lib/claude-real-sup"]));
   for (const r of results) for (const c of r.checks) report(c);
-  const mib = (b) =>
+  const mib = (/** @type {number | undefined} */ b) =>
     typeof b === "number"
       ? `${Math.round(b / 2 ** 20)} MiB`
       : "not recorded (the trial did not run)";

@@ -14,7 +14,7 @@ import type { PlannerCallSpec, PlannerViewCall } from "../planner/index.ts";
 import { Registry } from "../registry.ts";
 import type { ResearchTrialSpec } from "../research/index.ts";
 import type { TrialResult, TrialSpec } from "../worker/index.ts";
-import { lastStopAsked } from "./stops.ts";
+import { stopsAskedBefore } from "./stops.ts";
 
 /** How much of the judge's reasons a brief shows: for each of a lane's attempts, for each goal. */
 export const BRIEF_REASON_CHARS = 1200;
@@ -154,9 +154,11 @@ export interface SchedulerContext {
   /** The planner call in flight, if any. */
   planning: { run: string; ctrl: AbortController } | undefined;
   watcher: ReturnType<typeof setInterval> | undefined;
-  /** The newest workers_reset and trial_stop_asked events acted on. */
-  resetSeen: number;
-  stopSeen: number;
+  /**
+   * The resets of a run's workers to finish at the next step, oldest first (watch.ts), each with
+   * its `workers_reset` event: told by the service, or left by an earlier process.
+   */
+  resets: { event: number; run: string }[];
   reportNoted: string;
   /** Shutting down: no new plan or trial (goal 079). */
   stopping: boolean;
@@ -193,8 +195,9 @@ export function schedulerContext(opts: SchedulerOptions): SchedulerContext {
     queue: opts.service.queue,
     registry,
   });
-  // Resume after a restart: nothing of an earlier process is running any more, and the
-  // experiments those trials had go back to the queue.
+  // Resume after a restart: the owner's stops asked meanwhile are recorded, nothing of an earlier
+  // process is running any more, and the experiments those trials had go back to the queue.
+  stopsAskedBefore(ledger);
   registry.interruptUnfinished(opts.owner);
   coordinator.finishOrphans(opts.owner);
   return {
@@ -209,8 +212,10 @@ export function schedulerContext(opts: SchedulerOptions): SchedulerContext {
     laneRun: new Map(),
     planning: undefined,
     watcher: undefined,
-    resetSeen: ledger.events.lastId("workers_reset"),
-    stopSeen: lastStopAsked(ledger),
+    // The resets an earlier process recorded and did not finish.
+    resets: ledger.events
+      .list("workers_reset", { after: ledger.trials.resetsApplied() })
+      .flatMap((e) => (e.subject === null ? [] : [{ event: e.id, run: e.subject }])),
     reportNoted: "",
     stopping: false,
     failingSince: new Map(),

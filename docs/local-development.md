@@ -35,12 +35,12 @@ npm run build            # the command line on your computer: npx thermite
 docker compose up -d --build     # or: podman compose up -d --build
 ```
 
-- `npm run dev:init` needs only Node.js, not `npm ci`. It writes the same `.dev/` folder as a release's `init` service (`thermite local init`), and keeps every file that exists. A unit test (`tests/cli/local-init.test.ts`) checks that both make the same files and modes.
+- `npm run dev:init` is `thermite local init .dev`, the command a release's `init` service runs, run from the source with no build (after `npm ci`). It keeps every file that exists, and says what the local rig gets.
 - Each rig's token for control (`.dev/secrets/control-rig-token`, `control-rig-token-2`) starts empty. At each `up`, the `enroll` service (`enroll-2` with the `two-rigs` profile) enrolls the rig with control once control answers, and writes the token control made there before the supervisor starts (`thermite local enroll`). A token written before is kept while control has the rig enrolled; after `docker compose down -v`, the next `up` enrolls the rigs again. Control reads no file of rig tokens.
 - If `up` stops with `'name' does not match any of the regexes: '^x-'`, the compose program is the old Compose v1: [replace it](_site/src/content/docs/how-to/operate/troubleshoot.md#compose-wont-start-name-does-not-match-any-of-the-regexes).
 - The first build takes 20 minutes or more; later starts take seconds. After `git pull`, run `npm run dev:init` and `docker compose up -d --build` again.
 - `THERMITE_COMMIT=$(git rev-parse HEAD) docker compose build` gives the images their commit, which each service reports.
-- On a Linux machine with NVIDIA GPUs and NVIDIA's container toolkit, `npx thermite local init .dev` (after `npm run build`) also writes `compose.gpu.yaml`, which builds the harness on the CUDA base as `thermite-harness:local-cuda` and gives it every GPU. Name it in every `up --build`: `docker compose -f compose.yaml -f compose.gpu.yaml up -d --build`. The CUDA base is a large download. `npm run dev:init` doesn't write it ([What the rig gets](_site/src/content/docs/how-to/install/one-machine.md#what-the-rig-gets)).
+- On a Linux machine with NVIDIA GPUs and NVIDIA's container toolkit, `npm run dev:init` also writes `compose.gpu.yaml` (git-ignored), which builds the harness on the CUDA base as `thermite-harness:local-cuda` and gives it every GPU. Name it in every `up --build`: `docker compose -f compose.yaml -f compose.gpu.yaml up -d --build`. The CUDA base is a large download. Without that file, the stack builds the CPU harness ([What the rig gets](_site/src/content/docs/how-to/install/one-machine.md#what-the-rig-gets)).
 - With Claude Code in the images (`compose.claude.yaml`, from [Use a Claude subscription](_site/src/content/docs/how-to/models/claude-subscription.md)), name that file in every `up --build`.
 
 The stack, its settings and how to operate it are described on the site:
@@ -63,7 +63,7 @@ To work on the dashboard without a stack, run a demo with synthetic campaigns an
 node --experimental-strip-types scripts/dev/dashboard-demo/main.ts   # http://127.0.0.1:8810/ui
 ```
 
-It prints the token to sign in with. One of its runs has a made-up experiment queue: experiments tried, in progress and up next, a lane's idea and a hand-out. The same run has five made-up field notes on its **Journal** tab, from lane-1, lane-2, the planner, the auditor and a teacher, and the **Knowledge** page shows a folder for each of the demo's campaigns, built from their events. The demo has no campaign saved on control or assigned through it and no owner's messages, so it shows no **Start a run** and no kept messages; the dashboard's tests cover those. One of them (`tests/control/dashboard/run-page.test.ts`) also drives the **Experiments** and **Planner** tabs through a real harness: it adds, moves and drops experiments, and adds and removes a rule in free words. The dashboard's tests use a smaller fixture with the shapes the harness writes (`tests/helpers/control-demo.ts`): a goal campaign with attempts held for audits, a run at work, and a hill climb with an approval and an auditor's block, field notes and a research note.
+It prints the token to sign in with. One of its runs has a made-up experiment queue: experiments tried, in progress and up next, a lane's idea and a hand-out. The same run has five made-up field notes on its **Journal** tab, from lane-1, lane-2, the planner, the auditor and a teacher, and the **Knowledge** page shows a folder for each of the demo's campaigns, built from their events. The demo has no campaign saved on control or assigned through it and no owner's messages, so it shows no **Start a run** and no kept messages; the dashboard's tests cover those. One of them (`tests/control/dashboard/run-page.test.ts`) also drives the **Experiments** and **Planner** tabs through a real harness: it adds, moves and drops experiments, and adds and removes a rule in free words. The demo's data is one seed, which the dashboard's tests read too (`tests/helpers/demo/`): with the hill climb, the goal and research campaigns and the stale rig, it has three rigs whose events have the shapes the harness writes, with decisions waiting for the owner: a goal campaign's attempt held for an audit and its run moved to another rig, and a hill climb with an approval and an auditor's block, field notes and a research note.
 
 The documentation's screenshots come from the demo, whose data is made up. With the demo running, `node scripts/docs/screenshots.mjs` takes them again: the Overview, the Campaigns list, a run's page, the run's **Experiments** and **Journal** tabs, Live for a run at work, the **Knowledge** page and a rig's page, at 1440×900 in the light theme, as WebP files in `docs/_site/src/assets/screenshots/`. It needs a local Chrome or Chromium (`--chrome PATH`); `--out DIR` writes the files elsewhere, to look at them first.
 
@@ -132,11 +132,11 @@ COMPOSE="podman compose" npm run acceptance:judge
 
 ## Agents without a model
 
-`node scripts/acceptance/agents.mjs` checks the agent machinery without a real model: a scripted model on your machine plans one round and plays two workers, which edit, build, use the device and submit through the real harness image. Then the rig's agents move to OpenCode: a hill-climb trial runs in OpenCode's own terminal, the default, and submits with `thermite-trial`; then, with the rig set to headless, a research run's trial runs the research tools as `thermite-trial research` commands. Its fetch names your machine, so the harness's fetcher must refuse it as a private address; its note, report section and progress must come back from the harness. From its working area, its shell must read and search the run's research folder, be refused when it tries to change the harness's files there or add to them, and the file it writes must be saved and recorded when the trial ends.
+`npm run acceptance:agents` checks the agent machinery without a real model: a scripted model on your machine plans one round and plays two workers, which edit, build, use the device and submit through the real harness image. Then the rig's agents move to OpenCode: a hill-climb trial runs in OpenCode's own terminal, the default, and submits with `thermite-trial`; then, with the rig set to headless, a research run's trial runs the research tools as `thermite-trial research` commands. Its fetch names your machine, so the harness's fetcher must refuse it as a private address; its note, report section and progress must come back from the harness. From its working area, its shell must read and search the run's research folder, be refused when it tries to change the harness's files there or add to them, and the file it writes must be saved and recorded when the trial ends.
 
 ## A long research run
 
-`node scripts/acceptance/research-longrun.mjs` runs a research campaign for a set time (`MINUTES`, 125 by default) with a scripted worker.
+`npm run acceptance:research-longrun` runs a research campaign for a set time (`MINUTES`, 125 by default) with a scripted worker.
 
 - It reads real public pages, at about one page every two minutes, with robots.txt respected.
 - It records quote-verified claims, and kills the harness controller once halfway.
@@ -145,7 +145,7 @@ COMPOSE="podman compose" npm run acceptance:judge
 
 ## The steering acceptance test
 
-`node scripts/acceptance/steering.mjs` runs two rigs with a scripted model on your machine. It checks:
+`npm run acceptance:steering` runs two rigs with a scripted model on your machine. It checks:
 
 - directives from the teachers (two, and their merged by model) and their attribution in the next round;
 - an audit block holding a confirmed win, and a cleared audit letting the next one promote;
@@ -157,7 +157,7 @@ COMPOSE="podman compose" npm run acceptance:judge
 
 ## The quick-start test
 
-`node scripts/acceptance/quick-start.mjs` follows the quick start as a tester does: [Your first run](_site/src/content/docs/tutorials/first-run.md), then [Hand the work to agents](_site/src/content/docs/tutorials/agents-with-a-free-model.md) to the judge's first verdict on the sample in `examples/matmul-cpu`.
+`npm run acceptance:quick-start` follows the quick start as a tester does: [Your first run](_site/src/content/docs/tutorials/first-run.md), then [Hand the work to agents](_site/src/content/docs/tutorials/agents-with-a-free-model.md) to the judge's first verdict on the sample in `examples/matmul-cpu`.
 
 1. **The release, from your copy.** It builds the control, harness and supervisor images, and writes the release bundle for them with `scripts/release/bundle.ts`, pinned by digest. With Podman the images stay in local storage. With Docker they go to a registry container on `127.0.0.1`, so that each one has a digest. The CUDA harnesses and the RunPod rig image are not built: the bundle names the CPU harness in their place, and no step uses them.
 2. **The pages' own steps.** `tests/helpers/quick-start.ts` reads the tutorials, the command line section of [Install Thermite on one machine](_site/src/content/docs/how-to/install/one-machine.md#the-command-line) and [Check the machine](_site/src/content/docs/how-to/operate/troubleshoot.md#check-the-machine). The test runs each shell block as written, in a new folder, with the line for your container tool. It types the values the pages give, presses the buttons they name, and checks the words they quote: the init's last line, Overview's first line, the smoke check's result and its verdict counts, the model check, the kit's summary, the campaign's start and its pause.
@@ -166,14 +166,14 @@ COMPOSE="podman compose" npm run acceptance:judge
 It needs port 8800 free and no volumes of a compose project named `thermite`: it stops before it builds anything otherwise. It removes its stack, its volumes, its images, dangling images and its folder at the end, and writes a report to `.dev/acceptance/`. `KEEP=1` leaves the stack and the folder.
 
 ```sh
-COMPOSE="podman compose" node scripts/acceptance/quick-start.mjs
+COMPOSE="podman compose" npm run acceptance:quick-start
 ```
 
 A change to the steps of those pages runs this test in CI. Run `node scripts/test.mjs tests/docs/quick-start.test.ts` first: it reads the pages as the test does, and fails at once when a step, a value or a quoted line it needs has gone.
 
 ## Other acceptance tests
 
-[AGENTS.md](../AGENTS.md#checks) lists the rest, each with when it is needed: control (two rigs), new campaign, machines over SSH, clusters on kind, rig deploy, multi-GPU, Claude Code (a stand-in for it), real Claude Code (a stand-in for Anthropic's API), Codex, the one-container rig image, RunPod (against a fake RunPod API) and the paid RunPod run (by hand, with the owner's OK to spend). Each uses local stand-ins, never a real host or cluster, except the paid RunPod run. Two of them check more than their names say:
+[AGENTS.md](../AGENTS.md#checks) lists the rest, each with when it is needed and its npm script, `npm run acceptance:<name>`: control (two rigs), new campaign, machines over SSH, clusters on kind, rig deploy, multi-GPU, Claude Code (a stand-in for it), real Claude Code (a stand-in for Anthropic's API), Codex, the one-container rig image, RunPod (against a fake RunPod API) and the paid RunPod run (by hand, with the owner's OK to spend). Each uses local stand-ins, never a real host or cluster, except the paid RunPod run. Two of them check more than their names say:
 
 - **New campaign** (`scripts/acceptance/campaign.mjs`) creates a campaign through the New campaign form, which starts a try of its kit, then starts the campaign's own run from the campaign's page (**Start a run**) with the agents on. The rig gets a model route that nothing answers (`THERMITE_MODEL_BASE_URL=http://127.0.0.1:9/v1`), so control lets the agents start and they fail at once; the script submits the changes itself.
 - **Clusters on kind** (`scripts/acceptance/cluster.mjs`) keeps control's records on a Podman volume. After the slot's rig reports, it tags both rig images `:accept-update`, loads them into kind and restarts control with them. Then it checks that the rig's page offers **Update to these images**, that the rig's new pods run those images and report again, and that its volume claim and secret are unchanged. Next it gives the slot a quota (3 CPUs, 8 GiB) and moves the rig from the namespace's defaults onto 2 CPUs and 6 GiB with `POST /v1/rigs/<rig>/cluster/resources`: a size above the quota must be refused in words, and the rig's new pods must run with the new limits and report again, with its volume claim and secret unchanged. The update and the change of size are tried on the slot's CPU rig only: kind has no GPUs, so a new number of GPUs is the unit tests'.

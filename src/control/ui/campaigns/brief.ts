@@ -100,7 +100,7 @@ ${listField("hypotheses", "Hypotheses", d.hypotheses ?? [])}
  */
 export const BRIEF_CORE_JS = `
 ${MD_CORE_JS}
-const BRIEF_WHOLE = ${BRIEF_WHOLE_CHARS};
+const BRIEF_WHOLE = ${JSON.stringify(BRIEF_WHOLE_CHARS)};
 const BRIEF_SEND_MAX = 3000000;
 const briefList = (xs) => (xs || []).map((x) => String(x).trim()).filter(Boolean);
 const briefLinks = (text) => {

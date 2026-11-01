@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // A rig on RunPod on the message bus (goal 168, step 5): its pod's own server, which control's
 // server dials as a leaf node, against the real server. Two containers of the bus's pinned image,
 // on a network of their own: control's server, started as compose.yaml starts it, with the users
@@ -82,6 +83,9 @@ const url = `nats://127.0.0.1:${ports.control}`;
 const work = mkdtempSync(join(tmpdir(), "thermite-leaf-check-"));
 const files = join(work, "nats");
 mkdirSync(files);
+/** @typedef {import("../../src/common/bus/index.ts").Bus} Bus */
+/** @typedef {import("../../src/supervisor/leaf.ts").LeafValues} LeafValues */
+/** @param {number} ms */
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const containers = new Set();
 
@@ -115,7 +119,13 @@ const cleanup = () => {
   } catch {}
 };
 
-/** Waits until `fn` gives something truthy, checking every half second; undefined at the end. */
+/**
+ * Waits until `fn` gives something truthy, checking every half second; undefined at the end.
+ * @template T
+ * @param {() => T | Promise<T>} fn
+ * @param {number} [ms]
+ * @returns {Promise<NonNullable<T> | undefined>}
+ */
 async function until(fn, ms = 30_000) {
   const deadline = Date.now() + ms;
   for (;;) {
@@ -128,13 +138,18 @@ async function until(fn, ms = 30_000) {
   }
 }
 
-/** What a request met: its answer's text, or the error in words. */
+/**
+ * What a request met: its answer's text, or the error in words.
+ * @param {import("@nats-io/transport-node").NatsConnection} nc
+ * @param {string} subject
+ * @param {string} [data]
+ */
 async function asked(nc, subject, data = "") {
   try {
     const r = await nc.request(subject, data, { timeout: 2_000 });
     return `answered: ${new TextDecoder().decode(r.data).slice(0, 80)}`;
   } catch (err) {
-    return `no answer (${String(err?.message ?? err).slice(0, 40)})`;
+    return `no answer (${String(/** @type {Error} */ (err)?.message ?? err).slice(0, 40)})`;
   }
 }
 
@@ -143,6 +158,12 @@ async function asked(nc, subject, data = "") {
  * check's network, its supervisor's port published on the host at `port` (the pod's own listens
  * on its loopback only: here on every address, so that this process can stand in for the
  * supervisor), and its leaf port at `leafPort` when given.
+ * @param {string} name
+ * @param {string} ip
+ * @param {number} port
+ * @param {LeafValues} values
+ * @param {string} supervisorKey
+ * @param {number} [leafPort]
  */
 function podServer(name, ip, port, values, supervisorKey, leafPort) {
   const dir = join(work, name);
@@ -181,7 +202,12 @@ function podServer(name, ip, port, values, supervisorKey, leafPort) {
   return `${ip}:${leafLink.LEAF_PORT}`;
 }
 
-/** The supervisor's bus client on a pod's server, as main.ts makes it there. */
+/**
+ * The supervisor's bus client on a pod's server, as main.ts makes it there.
+ * @param {number} port
+ * @param {Uint8Array} seed
+ * @param {LeafValues} values
+ */
 const supervisorOn = (port, seed, values) =>
   natsBus(`nats://127.0.0.1:${port}`, `supervisor ${RIG}`, {
     seed,
@@ -194,6 +220,8 @@ const supervisorOn = (port, seed, values) =>
  * Whether the supervisor's report is acked within `ms`: the leaf is up. Across a leaf with no
  * interest yet, a publish meets no "no responders" and waits for its ack's full time, so each try
  * here waits 3 s at most (a try left waiting is acked later, or not, harmlessly).
+ * @param {Bus} sup
+ * @param {number} ms
  */
 const reportAcked = (sup, ms) =>
   until(
@@ -210,12 +238,17 @@ const reportAcked = (sup, ms) =>
 /**
  * What a TLS client meets on the pod's leaf port with this certificate (none: no certificate). A
  * NATS server sends its first line in plain text, then TLS begins on the same connection.
+ * @param {string} trust
+ * @param {{ cert?: string, key?: string }} cert
+ * @returns {Promise<string>}
  */
 function leafPortMeets(trust, cert) {
   return new Promise((resolve) => {
     let out = "";
     const plain = netConnect(ports.leaf, "127.0.0.1");
-    plain.on("error", (e) => resolve(`error ${e.code ?? e.message}`));
+    plain.on("error", (/** @type {NodeJS.ErrnoException} */ e) =>
+      resolve(`error ${e.code ?? e.message}`),
+    );
     plain.once("data", () => {
       const s = tlsConnect({
         socket: plain,
@@ -267,7 +300,10 @@ try {
     "a launch gives the pod its leaf node's values",
     Object.values(leafLink.LEAF_ENV).every((k) => minted.env[k]),
   );
-  const values = leafValues(minted.env);
+  // The launch gave the leaf's values, as the check above says.
+  const values = /** @type {LeafValues} */ (
+    leafValues(/** @type {Record<string, string | undefined>} */ (minted.env))
+  );
   await busUsers.sync();
 
   // Control's server, as compose.yaml runs it: its store given to its user first, as compose's
@@ -363,6 +399,7 @@ try {
     return ci.num_ack_pending === 0 && ci.num_pending === 0;
   }, 10_000);
   check("and its ack reached the consumer", Boolean(acked));
+  /** @type {string[]} */
   const conf = [];
   await control.publish(config.configSubject(RIG, "model-route"), "a route", {
     id: `m-${Date.now()}`,
@@ -414,6 +451,7 @@ try {
     tls: tlsOf({ ca: values.cert }, `nats://127.0.0.1:${ports.pod}`),
     inboxPrefix: rigInboxPrefix(RIG),
   });
+  /** @type {string[]} */
   const seen = [];
   const all = raw.subscribe(">");
   (async () => {
@@ -430,6 +468,7 @@ try {
     seen.length === 0,
     seen.join(", "),
   );
+  /** @type {Record<string, string>} */
   const refused = {};
   for (const subject of [
     "$JS.API.STREAM.DELETE.REPORTS",
@@ -493,10 +532,19 @@ try {
   );
 
   // An impostor: a pod's server whose certificate another authority signed, at the rig's address.
-  const other = leafValues(
-    new ControlTunnels(new ControlStore(":memory:"), secrets, generateSigningKeys().privateKeyPem, {
-      busCa: tls.caCert,
-    }).mint({ by: "owner:check", rig: RIG }).env,
+  const other = /** @type {LeafValues} */ (
+    leafValues(
+      /** @type {Record<string, string | undefined>} */ (
+        new ControlTunnels(
+          new ControlStore(":memory:"),
+          secrets,
+          generateSigningKeys().privateKeyPem,
+          {
+            busCa: tls.caCert,
+          },
+        ).mint({ by: "owner:check", rig: RIG }).env
+      ),
+    )
   );
   const impKey = createUser();
   const impAddress = podServer(
@@ -548,7 +596,7 @@ try {
   );
   await ctl.close();
 } catch (err) {
-  check("the check ran to its end", false, String(err?.stack ?? err));
+  check("the check ran to its end", false, String(/** @type {Error} */ (err)?.stack ?? err));
   for (const c of containers) {
     try {
       console.log(

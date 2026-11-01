@@ -6,7 +6,6 @@ import type { AdviseConfig, AdviseState } from "./state.ts";
 import { writeCards } from "./synthesizer.ts";
 import { teachRuns } from "./teachers.ts";
 
-export { kbSearchFor } from "./kb.ts";
 export { advisorKeeper } from "./keeper.ts";
 export { type AdviseConfig, type AdviseState, emptyAdviseState } from "./state.ts";
 export { overSpendLimit, teachersCalled } from "./teachers.ts";

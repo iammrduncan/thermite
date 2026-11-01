@@ -1,4 +1,5 @@
 import { errorText, Refusal } from "../../common/errors.ts";
+import { setLogLevel } from "../../common/log.ts";
 import {
   CommandPayloads,
   type Envelope,
@@ -6,6 +7,7 @@ import {
   verifyCommand,
 } from "../../core/commands.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
+import { RIG_LOG_LEVEL_LASTS } from "../../core/log-levels.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
 import { endWait } from "../agents/index.ts";
 import { Conclusions } from "../conclusions.ts";
@@ -174,7 +176,7 @@ export class Commands {
       case "drain_rig":
         return drainCommand(svc, CommandPayloads.drain_rig.parse(payload), by, svc.clock());
       case "stop_trial":
-        return askStop(svc.ledger, CommandPayloads.stop_trial.parse(payload), by);
+        return askStop(svc, CommandPayloads.stop_trial.parse(payload), by);
       // The owner ends a run's wait for its provider's limit: new trials and plans start at once.
       case "end_wait": {
         const p = CommandPayloads.end_wait.parse(payload);
@@ -322,13 +324,14 @@ export class Commands {
         return { run: p.run, ...r };
       }
       case "reset_workers": {
-        // The scheduler acts on the event: it kills the run's running trials, clears the
-        // lane bests and ends the epoch, so lanes start again from the champion.
+        // The scheduler, told at once, kills the run's running trials, then clears the lane
+        // bests and ends the epoch, so lanes start again from the champion.
         const p = CommandPayloads.reset_workers.parse(payload);
         requireRun(svc.ledger, p.run);
         if (p.reseed_commit)
           throw new Refusal("re-seeding lanes is not available in this version; reset without it");
-        svc.ledger.appendEvent(by, "workers_reset", p.run, {});
+        const event = svc.ledger.appendEvent(by, "workers_reset", p.run, {});
+        svc.agents?.onReset({ event, run: p.run });
         return { run: p.run, reset: true };
       }
       case "propagate":
@@ -409,6 +412,15 @@ export class Commands {
           envelope.issued_by,
           by,
         );
+      // A rig part's log level (the guide's question 16): the harness's from now on; the
+      // supervisor's is its supervisor's, which sets it once the harness took the command.
+      case "log_level": {
+        const p = CommandPayloads.log_level.parse(payload);
+        if (p.part === "supervisor")
+          return { part: p.part, level: p.level, left_to: "the supervisor" };
+        const { was, now } = setLogLevel("harness", p.level, { by, command: envelope.id });
+        return { part: p.part, level: now, was, lasts: RIG_LOG_LEVEL_LASTS };
+      }
     }
   }
 }

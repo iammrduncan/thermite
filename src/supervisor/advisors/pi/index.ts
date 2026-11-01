@@ -15,4 +15,4 @@ export {
 } from "./agent.ts";
 export { callStamp, type PiRuntime, piKey, piModel, runPi } from "./headless.ts";
 export { PI_ADVISOR_MAIN, PI_ADVISOR_SPEC_FILE, type PiAdvisorSpec } from "./spec.ts";
-export { advisorPiTools, OUTSIDE_KB_SEARCH } from "./tools.ts";
+export { advisorPiTools } from "./tools.ts";

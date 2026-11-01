@@ -1,5 +1,5 @@
 import type { ControlStore } from "../../../src/control/store/index.ts";
-import { ingestReport } from "../../../tests/helpers/control-store.ts";
+import { ingestReport } from "../control-store.ts";
 import { iso, Rig } from "./shared.ts";
 
 // Synthetic hardware, shaped like what a harness reports (no real host data).

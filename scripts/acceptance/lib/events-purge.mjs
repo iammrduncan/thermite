@@ -1,3 +1,4 @@
+// @ts-check
 // A retention policy's purge of control's copy of the rigs' events (control/events/days.ts),
 // against the bus check's real server (bus.mjs): what the tests' fake bus stands in for, on the
 // pinned NATS server.
@@ -27,10 +28,23 @@ const { RetentionSpec } = await import("../../../src/core/retention/index.ts");
 
 const DAY_MS = 86_400_000;
 
-/** The event a message holds: its data, as JSON. */
-const eventIn = (data) => JSON.parse(data);
+/** @typedef {import("../../../src/common/bus/index.ts").Bus} Bus */
+/** @typedef {import("../../../src/common/bus/index.ts").BusMessage} BusMessage */
+/** @typedef {import("../../../src/core/link/report.ts").ReportEvent} ReportEvent */
+/** One page of a rig's events as control took it; `moved`: its first row's place in a store from before the stream. */
+/** @typedef {{ rig: string, ledger: string, events: ReportEvent[], moved: number | undefined }} Page */
 
-/** What a reader of the stream sees of a message: its place, subject, id, headers and data. */
+/**
+ * The event a message holds: its data, as JSON, read loosely (`any`): the checks read its `at`
+ * and `id`, which every event has.
+ * @type {(data: string | Uint8Array) => any}
+ */
+const eventIn = (data) => JSON.parse(/** @type {string} */ (data));
+
+/**
+ * What a reader of the stream sees of a message: its place, subject, id, headers and data.
+ * @param {BusMessage} m
+ */
 const seen = (m) => ({
   seq: m.seq,
   subject: m.subject,
@@ -43,8 +57,14 @@ const seen = (m) => ({
   data: new TextDecoder().decode(m.data),
 });
 
-/** The stream's messages in order, as `seen` gives them. */
+/** @typedef {ReturnType<typeof seen>} Seen */
+
+/**
+ * The stream's messages in order, as `seen` gives them.
+ * @param {Bus} bus
+ */
 async function contents(bus) {
+  /** @type {Seen[]} */
   const out = [];
   for (let from = 1; ; ) {
     const r = await bus.read(EVENT_STREAM, { from, limit: BUS_READ_MAX });
@@ -54,7 +74,11 @@ async function contents(bus) {
   }
 }
 
-/** The first place two lists of messages differ at, in words; "" when they are the same. */
+/**
+ * The first place two lists of messages differ at, in words; "" when they are the same.
+ * @param {unknown[]} a
+ * @param {unknown[]} b
+ */
 function differs(a, b) {
   for (let i = 0; i < Math.max(a.length, b.length); i++)
     if (JSON.stringify(a[i]) !== JSON.stringify(b[i]))
@@ -67,6 +91,8 @@ function differs(a, b) {
  * its id, rig, ledger and report), a page of a store from before the stream as its move did (each
  * row with its place in control's table, and no id); in atomic batches, each naming the last
  * place it expects (batch.ts). Gives the stream's last place.
+ * @param {Bus} bus
+ * @param {Page[]} pages
  */
 async function publishPages(bus, pages) {
   let place = await bus.lastSeq(EVENT_STREAM);
@@ -97,6 +123,7 @@ async function publishPages(bus, pages) {
  * that their pages of the run both use, r-s, lie between each other's. rig-a has r-a1 (closed on
  * the third day), r-a2 (open) and r-s (closed on the third day), and its own events; rig-b has
  * r-b1 (open), r-s, and its own. Rig-a's first page came from a store from before the stream.
+ * @param {number} now
  */
 function pagesOf(now) {
   const rigs = {
@@ -106,6 +133,7 @@ function pagesOf(now) {
   const today = Math.floor(now / DAY_MS) * DAY_MS;
   const daysAgo = [45, 44, 43, 1];
   const perPage = 12;
+  /** @type {Page[]} */
   const pages = [];
   for (const [day, ago] of daysAgo.entries())
     for (let round = 0; round < 3; round++)
@@ -113,6 +141,7 @@ function pagesOf(now) {
         const live =
           day === daysAgo.length - 1 ? r.runs.filter((x) => !r.closes.includes(x)) : r.runs;
         const targets = [...live, null];
+        /** @type {ReportEvent[]} */
         const events = [];
         for (let j = 0; j < perPage; j++) {
           const at = new Date(today - ago * DAY_MS + (6 + 4 * round) * 3_600_000 + j * 60_000);
@@ -120,11 +149,11 @@ function pagesOf(now) {
           const base = { id, at: at.toISOString(), actor: "harness" };
           const closing = day === 2 && round === 2 ? perPage - r.closes.length : perPage;
           if (day === 0 && round === 0 && j < r.runs.length) {
-            const run = r.runs[j];
+            const run = /** @type {string} */ (r.runs[j]);
             const body = { campaign: "speed", mode: "hill_climb" };
             events.push({ ...base, kind: "run_created", subject: run, run, body });
           } else if (j >= closing) {
-            const run = r.closes[j - closing];
+            const run = /** @type {string} */ (r.closes[j - closing]);
             const body = { status: "closed", reason: "done" };
             events.push({ ...base, kind: "run_status", subject: run, run, body });
           } else {
@@ -147,6 +176,14 @@ function pagesOf(now) {
  * The checks. `ctx` is the bus check's: `check` and `tried` (bus.mjs), control's connection
  * (`control`) and its bus (`bus`), rig-a's connection (`rigA`), and control's store with both
  * rigs enrolled. The events stream is there, with today's settings, and holds nothing yet.
+ * @param {{
+ *   check: import("./checks.mjs").Check,
+ *   tried: (fn: () => Promise<unknown>) => Promise<string>,
+ *   control: import("@nats-io/transport-node").NatsConnection,
+ *   bus: Bus,
+ *   rigA: import("@nats-io/transport-node").NatsConnection,
+ *   store: import("../../../src/control/store/index.ts").ControlStore,
+ * }} ctx
  */
 export async function eventsPurgeChecks(ctx) {
   const { check, tried, control, bus, rigA, store } = ctx;
@@ -167,6 +204,7 @@ export async function eventsPurgeChecks(ctx) {
   // The days' record a retention policy reads, as control's apply fills it (apply.ts), with each
   // message stored on its event's day (above), and purges on control's real bus.
   const days = new EventDays();
+  /** @type {BusMessage[]} */
   const stamped = [];
   for (let from = 1; ; ) {
     const r = await bus.read(EVENT_STREAM, { from, limit: BUS_READ_MAX });
@@ -191,8 +229,8 @@ export async function eventsPurgeChecks(ctx) {
   // What it must remove: rig-a's events of more than 30 days ago on r-a1's subjects and its own;
   // not r-a2's (open), and not r-s's, where rig-b's events, which it keeps, lie between rig-a's.
   const cut = now - 30 * DAY_MS;
-  const old = (m) => Date.parse(eventIn(m.data).at) < cut;
-  const mine = (m) =>
+  const old = (/** @type {Seen} */ m) => Date.parse(eventIn(m.data).at) < cut;
+  const mine = (/** @type {Seen} */ m) =>
     m.rig === "rig-a" &&
     old(m) &&
     (m.subject.startsWith("thermite.run.r-a1.") || m.subject.startsWith("thermite.rig.rig-a."));
@@ -244,7 +282,8 @@ export async function eventsPurgeChecks(ctx) {
   const added = (await contents(bus)).slice(left.length);
   check(
     "an event below the floor sent again is not stored again; the new one goes after the last place",
-    written.added === 1 &&
+    // A publish gives the number added, or why the report waits.
+    /** @type {{ added?: number }} */ (written).added === 1 &&
       added.length === 1 &&
       added[0]?.seq === last + 1 &&
       added[0]?.id === `rig-a:ledger-a:${fresh.id}`,

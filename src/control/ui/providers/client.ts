@@ -7,7 +7,7 @@ import { PRICE_NUMBER, PRICE_WORDS } from "../usage.ts";
  * (PRICE_WORDS). The page's script runs it as it is, and so do its tests.
  */
 export const PRICE_CORE_JS = `
-const prNum = ${String(PRICE_NUMBER)};
+const prNum = new RegExp(${JSON.stringify(PRICE_NUMBER.source)});
 const prWords = ${JSON.stringify(PRICE_WORDS)};
 function prJudge(v) {
   const t = {};

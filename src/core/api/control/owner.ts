@@ -442,6 +442,33 @@ export const SET_KB_SETTINGS = {
   answer: KbSettingsAnswer.extend({ said: z.string() }),
   maxBytes: 4096,
 } as const satisfies Route;
+/**
+ * Control's own log level, a setting control keeps (the guide's question 16): the level, where it
+ * comes from (the setting, or THERMITE_LOG_LEVEL), the environment's, the level now and who set it.
+ */
+const ControlLogLevelAnswer = z.looseObject({
+  level: z.string(),
+  from: z.string(),
+  environment: z.string(),
+  now: z.string(),
+  set_by: z.string().nullable(),
+  set_at: z.string().nullable(),
+});
+export const CONTROL_LOG_LEVEL = {
+  method: "GET",
+  path: "/v1/control/log-level",
+  what: "control's log level",
+  answer: ControlLogLevelAnswer,
+} as const satisfies Route;
+/** A change of it, applied at once (control/log-level.ts checks the body); null: THERMITE_LOG_LEVEL's. */
+export const SET_CONTROL_LOG_LEVEL = {
+  method: "PUT",
+  path: "/v1/control/log-level",
+  what: "control's log level",
+  body: SharedFields,
+  answer: ControlLogLevelAnswer.extend({ said: z.string() }),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
+} as const satisfies Route;
 export const KB_LIST = {
   method: "GET",
   path: "/v1/kb/list",

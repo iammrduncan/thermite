@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // M5 acceptance under compose with two rigs and a scripted model on the host (planner and
 // advisors; frontier keys are not needed to check the machinery):
 //   - the two teachers and their merged by model post a cited directive set; after a reset, the next epoch
@@ -36,6 +37,18 @@ import {
   until,
 } from "./lib/smoke-env.mjs";
 
+/** @typedef {import("./lib/scripted-model.mjs").ScriptedTurn} ScriptedTurn */
+/** @typedef {import("../../src/control/views/types.ts").RunView} RunView */
+/** @typedef {import("../../src/control/views/types.ts").ChampionStep} ChampionStep */
+/** @typedef {import("../../src/control/views/types.ts").AttemptView} AttemptView */
+/** @typedef {RunView["audits"][number]} Audit */
+/** @typedef {RunView["propagations"][number]} Propagation */
+/** @typedef {import("../../src/core/events/bodies.ts").EventBody<"epoch_started">["assignments"][number]} Assignment */
+/** A full reset as control lists it. */
+/** @typedef {{ id: number, rig: string, state: string }} Reset */
+/** A line of control's audit log. */
+/** @typedef {import("../../src/control/store/audit.ts").AuditEntry} AuditEntry */
+
 let requests = 0;
 const seen = { teacher: 0, merged_by: 0, auditor: 0, planner: 0 };
 const piView = piAdvisorScene();
@@ -44,6 +57,7 @@ const piView = piAdvisorScene();
  * The knowledge base's scene (goal 175): the note a teacher of smoke-1 kept, whether its write
  * naming another slot was refused, and the note found by a teacher of smoke-2. The note's word is
  * one token, so a search finds exactly it.
+ * @type {{ kept: string | undefined, refused: boolean, found: string | undefined }}
  */
 const kbSteer = { kept: undefined, refused: false, found: undefined };
 const KB_TEACH = "kbprobeteach";
@@ -51,10 +65,18 @@ const KB_TEACH = "kbprobeteach";
  * A teacher's turn for the knowledge base, before it answers, or undefined: in smoke-1, a note in
  * its own slot and then a write naming another slot; in smoke-2, once smoke-1's note is kept, a
  * search for it. Each teachers' round is a conversation of its own.
+ *
+ * The messages and tools are the request's, read loosely (`any`) as the scripted model reads them:
+ * each turn looks only at what it needs.
+ * @param {any[]} messages
+ * @param {any[]} tools
+ * @param {string} prompt
+ * @returns {ScriptedTurn | undefined}
  */
 function kbTurn(messages, tools, prompt) {
   const names = tools.map((t) => t.function.name);
   const run = /Brief of run ([a-z0-9-]+)/.exec(prompt)?.[1];
+  /** @param {string} name */
   const called = (name) =>
     messages
       .filter((m) => m.role === "assistant")
@@ -103,10 +125,18 @@ function kbTurn(messages, tools, prompt) {
   return undefined;
 }
 
-/** The scripted model: planner (falls back), teachers, their merged by model, auditor. */
+/**
+ * The scripted model: planner (falls back), teachers, their merged by model, auditor. The messages
+ * and tools are read loosely, as in kbTurn.
+ * @param {any[]} messages
+ * @param {any[]} tools
+ * @param {string} model
+ * @returns {ScriptedTurn | Promise<ScriptedTurn>}
+ */
 function script(messages, tools, model) {
   const system = JSON.stringify(messages.find((m) => m.role === "system")?.content ?? "");
   const prompt = JSON.stringify(messages.filter((m) => m.role === "user"));
+  /** @param {unknown} args */
   const answer = (args) => ({ toolCalls: [{ name: "answer", args }] });
   if (tools.some((t) => t.function.name === "submit_plan")) {
     seen.planner++;
@@ -157,6 +187,10 @@ const model = createServer((req, res) => {
     // A turn may take its time: the Pi view scene holds one teacher's first reply.
     const turn = await script(p.messages ?? [], p.tools ?? [], p.model);
     const id = `c${requests}`;
+    /**
+     * @param {Record<string, unknown>} delta
+     * @param {string | null} finish
+     */
     const chunk = (delta, finish) =>
       `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created: 0, model: p.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
     res.writeHead(200, { "content-type": "text/event-stream" });
@@ -185,8 +219,8 @@ const model = createServer((req, res) => {
     res.end("data: [DONE]\n\n");
   });
 });
-await new Promise((r) => model.listen(0, "0.0.0.0", r));
-const port = model.address().port;
+await /** @type {Promise<void>} */ (new Promise((r) => model.listen(0, "0.0.0.0", r)));
+const port = /** @type {import("node:net").AddressInfo} */ (model.address()).port;
 const docker = (process.env.COMPOSE ?? "podman compose").startsWith("docker");
 const hostName = docker ? "host.docker.internal" : "host.containers.internal";
 
@@ -215,11 +249,29 @@ const composeEnv = {
   THERMITE_ADVISORS_FILE: "/etc/thermite/advisors/advisors.json",
   ...(socket ? { THERMITE_ENGINE_SOCKET_HOST: socket } : {}),
 };
+/** @param {...string} args */
 const dc = (...args) =>
-  sh(compose[0], [...compose.slice(1), ...files, "--profile", "two-rigs", ...args], {
-    env: { ...process.env, ...composeEnv },
-  });
+  sh(
+    /** @type {string} */ (compose[0]),
+    [...compose.slice(1), ...files, "--profile", "two-rigs", ...args],
+    {
+      env: { ...process.env, ...composeEnv },
+    },
+  );
 
+/**
+ * The report this script writes: its checks, and at the end how many model requests it answered
+ * and whether it passed.
+ * @type {{
+ *   started_at: string,
+ *   compose: string,
+ *   lifecycle_driver: boolean,
+ *   checks: import("./lib/checks.mjs").CheckRecord[],
+ *   finished_at?: string,
+ *   model_requests?: number,
+ *   ok?: boolean,
+ * }}
+ */
 const report = {
   started_at: new Date().toISOString(),
   compose: process.env.COMPOSE ?? "podman compose",
@@ -227,6 +279,7 @@ const report = {
   checks: [],
 };
 const { check } = acceptanceChecks({ max: 300, into: report.checks });
+/** @param {string} rig */
 const rigEvents = async (rig) => {
   const all = [];
   let after = 0;
@@ -237,10 +290,13 @@ const rigEvents = async (rig) => {
     after = page.body.events.at(-1).seq;
   }
 };
+/** @param {string} rig */
 const view = async (rig) => (await api(`/v1/rigs/${rig}/view`)).body;
 // Each rig its own run: a run's name is used once on control (goal 170).
 const RUNS = { "local-1": "smoke-1", "local-2": "smoke-2" };
-const runOf = async (rig) => (await view(rig)).runs?.find((i) => i.id === RUNS[rig]);
+/** @param {keyof typeof RUNS} rig */
+const runOf = async (rig) =>
+  (await view(rig)).runs?.find((/** @type {RunView} */ i) => i.id === RUNS[rig]);
 
 const env = prepare();
 // Audits for any win above 1% (the smoke kernel's win is far larger).
@@ -249,6 +305,7 @@ contract.acceptance.audit = { ratio_to_median: 3, absolute: 0.01 };
 writeFileSync(env.contractFile, JSON.stringify(contract));
 mkdirSync(join(".dev", "advisors"), { recursive: true });
 writeFileSync(join(".dev", "advisors", "key"), "scripted\n");
+/** @param {string} name */
 const runtime = (name) => ({
   name,
   runtime: "openai",
@@ -293,13 +350,19 @@ try {
     async () =>
       (await rigEvents("local-1"))
         .filter((e) => e.kind === "epoch_started")
-        .find((e) => e.body.directives?.length && e.body.assignments.some((a) => a.directive)),
+        .find(
+          (e) =>
+            e.body.directives?.length &&
+            e.body.assignments.some((/** @type {Assignment} */ a) => a.directive),
+        ),
     120_000,
     2000,
   );
   check(
     "the next epoch records the directive and the lane it steered",
-    epoch.body.assignments.some((a) => a.family === "tiling" && a.directive),
+    epoch.body.assignments.some(
+      (/** @type {Assignment} */ a) => a.family === "tiling" && a.directive,
+    ),
     epoch.body,
   );
 
@@ -309,20 +372,27 @@ try {
   const marked = join(".dev", "marked-candidate");
   mkdirSync(join(marked, "src", "kernel"), { recursive: true });
   writeFileSync(join(marked, "src", "kernel", "matmul.c"), `${goodSrc}\n// SUSPICIOUS\n`);
+  /**
+   * @param {string} service
+   * @param {string} patch
+   * @param {string} hypothesis
+   */
   const submitTo = (service, patch, hypothesis) => {
     const b64 = Buffer.from(patch).toString("base64");
     return JSON.parse(
-      dc(
-        "exec",
-        "-T",
-        service,
-        "sh",
-        "-c",
-        `echo ${b64} | base64 -d > /tmp/p.patch && thermite submit --harness http://127.0.0.1:8700 --token-file /run/secrets/${service === "harness" ? "harness" : "harness2"}-proposer-token --run smoke-1 --patch-file /tmp/p.patch --hypothesis "${hypothesis}"`,
-      )
-        .trim()
-        .split("\n")
-        .pop(),
+      /** @type {string} */ (
+        dc(
+          "exec",
+          "-T",
+          service,
+          "sh",
+          "-c",
+          `echo ${b64} | base64 -d > /tmp/p.patch && thermite submit --harness http://127.0.0.1:8700 --token-file /run/secrets/${service === "harness" ? "harness" : "harness2"}-proposer-token --run smoke-1 --patch-file /tmp/p.patch --hypothesis "${hypothesis}"`,
+        )
+          .trim()
+          .split("\n")
+          .pop()
+      ),
     );
   };
   const blocked = submitTo("harness", candidatePatch(env, marked), "marked good kernel");
@@ -330,7 +400,7 @@ try {
     "the audit block",
     async () =>
       (await runOf("local-1"))?.audits?.some(
-        (a) => a.attempt === blocked.attempt && a.decision === "block",
+        (/** @type {Audit} */ a) => a.attempt === blocked.attempt && a.decision === "block",
       ),
     900_000,
     3000,
@@ -338,19 +408,25 @@ try {
   const afterBlock = await runOf("local-1");
   check(
     "an audit block holds a confirmed win",
-    afterBlock.champion.filter((c) => !c.reopened).at(-1).seq === 1 &&
-      afterBlock.attempts.find((a) => a.id === blocked.attempt)?.lifecycle === "audit_blocked",
+    afterBlock.champion.filter((/** @type {ChampionStep} */ c) => !c.reopened).at(-1).seq === 1 &&
+      afterBlock.attempts.find((/** @type {AttemptView} */ a) => a.id === blocked.attempt)
+        ?.lifecycle === "audit_blocked",
     afterBlock.audits,
   );
   // A win far above the absolute trigger: the auditor's clear is the last step, and it is
   // promoted with no owner step (goal 079: hands-off by default).
+  /**
+   * @param {keyof typeof RUNS} rig
+   * @param {string} attempt
+   */
   const promotedWhenCleared = async (rig, attempt) =>
     until(
       `${attempt} cleared and promoted`,
       async () => {
         const i = await runOf(rig);
-        return i?.audits?.some((a) => a.attempt === attempt && a.decision === "clear") &&
-          i.champion.some((c) => c.attempt === attempt)
+        return i?.audits?.some(
+          (/** @type {Audit} */ a) => a.attempt === attempt && a.decision === "clear",
+        ) && i.champion.some((/** @type {ChampionStep} */ c) => c.attempt === attempt)
           ? i
           : undefined;
       },
@@ -361,8 +437,9 @@ try {
   const promoted = await promotedWhenCleared("local-1", clean.attempt);
   check(
     "a cleared audit of a large gain promotes it, with no owner step",
-    promoted.audits.some((a) => a.attempt === clean.attempt && a.decision === "clear") &&
-      !promoted.pending_promotions.includes(clean.attempt),
+    promoted.audits.some(
+      (/** @type {Audit} */ a) => a.attempt === clean.attempt && a.decision === "clear",
+    ) && !promoted.pending_promotions.includes(clean.attempt),
     promoted.audits,
   );
 
@@ -394,7 +471,9 @@ try {
   const received = await until(
     "local-2 received the champion",
     async () =>
-      (await runOf("local-2"))?.propagations?.find((p) => p.source_seq === 2 && p.attempt),
+      (await runOf("local-2"))?.propagations?.find(
+        (/** @type {Propagation} */ p) => p.source_seq === 2 && p.attempt,
+      ),
     600_000,
     3000,
   );
@@ -403,7 +482,7 @@ try {
     "local-2 judged the propagated champion",
     async () =>
       (await runOf("local-2"))?.propagations?.find(
-        (p) => p.result !== "judging" && p.source_seq === 2,
+        (/** @type {Propagation} */ p) => p.result !== "judging" && p.source_seq === 2,
       ),
     1_200_000,
     3000,
@@ -413,7 +492,10 @@ try {
     accepted,
   });
   const board = (await api("/v1/leaderboard")).body.campaigns["smoke-cpu"] ?? [];
-  const leader = board.find((r) => r.rig === "local-1");
+  const leader = board.find(
+    (/** @type {import("../../src/control/views/leaderboard.ts").LeaderEntry} */ r) =>
+      r.rig === "local-1",
+  );
   check(
     "the leaderboard shows rig 1's champion cross-verified by rig 2",
     leader?.verified_by?.includes("local-2"),
@@ -449,7 +531,7 @@ try {
     "daily reports",
     async () => {
       const r = (await api("/v1/reports?limit=10")).body.reports;
-      return new Set(r.map((x) => x.rig)).size >= 2 ? r : undefined;
+      return new Set(r.map((/** @type {{ rig: string }} */ x) => x.rig)).size >= 2 ? r : undefined;
     },
     120_000,
     2000,
@@ -460,7 +542,7 @@ try {
     reports.length >= 2 &&
       sup?.export?.remote === true &&
       (sup?.advisors?.directive_sets ?? 0) >= 1,
-    { rigs: reports.map((r) => r.rig), sup },
+    { rigs: reports.map((/** @type {{ rig: string }} */ r) => r.rig), sup },
   );
 
   // 5b. The knowledge base (goal 175): a teacher of smoke-1 wrote a note in its own slot, and its
@@ -472,7 +554,7 @@ try {
     3000,
   ).catch(() => undefined);
   const kbHit = ((await api(`/v1/kb/search?q=${KB_TEACH}`)).body.hits ?? []).find(
-    (h) => h.address === kbSteer.kept,
+    (/** @type {{ address: string }} */ h) => h.address === kbSteer.kept,
   );
   // A kept conversation quotes the refused call: only an item the write made counts.
   const kbDenied = await deniedItems();
@@ -525,7 +607,9 @@ try {
   const waiting = await until(
     "the reset waits for the owner",
     async () => {
-      const r = (await api("/v1/resets")).body.resets.find((x) => x.id === reset.body.reset);
+      const r = (await api("/v1/resets")).body.resets.find(
+        (/** @type {Reset} */ x) => x.id === reset.body.reset,
+      );
       return ["awaiting_owner", "failed"].includes(r?.state) ? r : undefined;
     },
     600_000,
@@ -540,7 +624,9 @@ try {
   const done = await until(
     "the reset finished",
     async () => {
-      const r = (await api("/v1/resets")).body.resets.find((x) => x.id === reset.body.reset);
+      const r = (await api("/v1/resets")).body.resets.find(
+        (/** @type {Reset} */ x) => x.id === reset.body.reset,
+      );
       return ["done", "failed"].includes(r?.state) ? r : undefined;
     },
     600_000,
@@ -567,13 +653,13 @@ try {
   const audit = (await api("/v1/audit?limit=500")).body.audit;
   check(
     "the reset's steps are in the audit log",
-    audit.some((a) => a.action === "reset_requested") &&
-      audit.some((a) => a.action === "reset_step"),
-    audit.filter((a) => a.action.startsWith("reset")).length,
+    audit.some((/** @type {AuditEntry} */ a) => a.action === "reset_requested") &&
+      audit.some((/** @type {AuditEntry} */ a) => a.action === "reset_step"),
+    audit.filter((/** @type {AuditEntry} */ a) => a.action.startsWith("reset")).length,
   );
 } catch (err) {
   failed = true;
-  check("acceptance run", false, String(err?.stack ?? err));
+  check("acceptance run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
   report.finished_at = new Date().toISOString();
   report.model_requests = requests;

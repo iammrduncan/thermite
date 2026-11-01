@@ -15,8 +15,8 @@ import { GPU_OVERRIDE } from "./machine.ts";
 /**
  * The local compose stack's folder, `.dev/`: random tokens in `secrets/`, the inbox, the outbox,
  * the advisors' folder and the backups' folder. The release bundle's `init` service makes it with
- * `thermite local init`; a checkout makes the same layout with `npm run dev:init`
- * (scripts/dev/init.mjs, which needs no build). Files that exist are kept, so the tokens stay
+ * `thermite local init`; in a checkout, `npm run dev:init` runs the same command from the source,
+ * with no build. Files that exist are kept, so the tokens stay
  * the same from one start to the next. Each rig's token for control starts empty: the stack's
  * enroll step enrolls the rig with control and writes its token there (local-enroll.ts). Where the
  * machine has NVIDIA GPUs the rig can have, the command also writes compose.gpu.yaml next to

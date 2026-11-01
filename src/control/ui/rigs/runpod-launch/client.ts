@@ -29,7 +29,7 @@ export const RUNPOD_LAUNCH_JS = `
     const jRaw = $("judge").value.trim();
     const jNum = Number(jRaw);
     const jOk = n < 2 || !jRaw || (Number.isInteger(jNum) && jNum >= 1 && jNum < n);
-    const j = n < 2 ? 1 : jRaw && jOk ? jNum : (${judgeGpusByDefault})(n);
+    const j = n < 2 ? 1 : jRaw && jOk ? jNum : (${judgeGpusByDefault.toString()})(n);
     $("split").innerHTML = n < 2
       ? "<b>One GPU.</b> The judge and the agents share it. While the judge measures, the agents' own test runs wait, so its timings stay clean."
       : (jOk ? "" : '<b class="bad">The judge needs 1 to ' + (n - 1) + " GPUs.</b> ") + "<b>GPU" + (j > 1 ? "s 0–" + (j - 1) : " 0") + "</b> for the judge, <b>GPU" + (n - j > 1 ? "s " + j + "–" + (n - 1) : " " + j) + "</b> for the agents.";
@@ -51,7 +51,7 @@ export const RUNPOD_LAUNCH_JS = `
     if (!(Number.isInteger(gb) && gb >= 10 && gb <= 10000)) bad.push("The volume is 10 to 10000 GB.");
     if (lim && !(limN > 0)) bad.push("The spend limit is an amount in US dollars, such as 40.");
     if (idle && !(Number.isInteger(idleN) && idleN >= minIdle)) bad.push("The idle stop is a whole number of minutes, " + minIdle + " or more.");
-    if (nm && !/${RIG_ID.source}/.test(nm)) bad.push("${RIG_ID_SENTENCE}");
+    if (nm && !new RegExp(${JSON.stringify(RIG_ID.source)}).test(nm)) bad.push(${JSON.stringify(RIG_ID_SENTENCE)});
     if (own && !$("own").value.trim()) bad.push("Give your image's name and tag.");
     const hour = row ? price : 0;
     $("sum").innerHTML = row

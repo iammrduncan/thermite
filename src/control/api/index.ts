@@ -23,6 +23,7 @@ import { editRigRoutes } from "./edit-rig.ts";
 import { gpuCloudRoutes } from "./gpu-clouds.ts";
 import { kitRoutes } from "./kits.ts";
 import { lifecycleRoutes } from "./lifecycle.ts";
+import { logLevelRoutes } from "./log-level.ts";
 import { reachRoutes } from "./reach.ts";
 import { recordRoutes, rigRecordRoutes } from "./records.ts";
 import { relayRoutes } from "./relay.ts";
@@ -142,6 +143,7 @@ export function createControlApi(
   rigRoutes(app, api);
   usageRoutes(app, api);
   busRoutes(app, api);
+  logLevelRoutes(app, api);
   kitRoutes(app, api);
   rigRecordRoutes(app, api);
   commandRoutes(app, api);

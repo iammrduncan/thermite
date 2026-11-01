@@ -6,9 +6,9 @@ services:
     environment:
       THERMITE_CLAUDE_BIN: /opt/fake-claude/claude
     volumes:
-      - ./containers/test-claude:/opt/fake-claude:ro
+      - ./tests/stand-ins/claude:/opt/fake-claude:ro
   supervisor:
     environment:
       THERMITE_CLAUDE_BIN: /opt/fake-claude/claude
     volumes:
-      - ./containers/test-claude:/opt/fake-claude:ro
+      - ./tests/stand-ins/claude:/opt/fake-claude:ro

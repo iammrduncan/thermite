@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // Backup and restore acceptance (goal 173): the compose stack's own backup service, as the page
 // "Back up and restore control" runs it. It starts control and one rig, gives the rig work so that
 // the bus's EVENTS stream holds its events, backs control up while it runs, and gives the rig more
@@ -31,18 +32,28 @@ import {
 } from "./lib/smoke-env.mjs";
 
 const composeEnv = { THERMITE_POLL_SECONDS: "3", THERMITE_CALIBRATION_BLOCKS: "0" };
+/** @param {...string} args */
 const stack = (...args) => dc(composeEnv, ...args);
-/** The backup service, as the page runs it. */
+/**
+ * The backup service, as the page runs it.
+ * @param {...string} args
+ */
 const backup = (...args) => stack("--profile", "backup", "run", "--rm", "backup", ...args);
+
+/** What execFileSync throws when the program fails: its exit code and what it wrote. */
+/** @typedef {Error & { status: number | null, stdout?: string, stderr?: string }} ExecFailure */
+/** One stream in the bus server's monitoring answer, with the fields read here. */
+/** @typedef {{ name: string, state?: { messages?: number, last_seq?: number } }} StreamDetail */
 
 /**
  * The backup service's run that must fail: its exit code and what it wrote, both streams together
  * (podman-compose passes a container's standard error on its own standard output).
+ * @param {...string} args
  */
 function backupFails(...args) {
   try {
     execFileSync(
-      compose[0],
+      /** @type {string} */ (compose[0]),
       [...compose.slice(1), "--profile", "backup", "run", "--rm", "backup", ...args],
       {
         encoding: "utf8",
@@ -51,7 +62,10 @@ function backupFails(...args) {
       },
     );
   } catch (err) {
-    return { status: err.status, output: `${err.stdout ?? ""}${err.stderr ?? ""}` };
+    return {
+      status: /** @type {ExecFailure} */ (err).status,
+      output: `${/** @type {ExecFailure} */ (err).stdout ?? ""}${/** @type {ExecFailure} */ (err).stderr ?? ""}`,
+    };
   }
   throw new Error(`thermite ${args.slice(1).join(" ")} did not fail`);
 }
@@ -59,7 +73,9 @@ function backupFails(...args) {
 /** The EVENTS stream's messages and last place, from the server's monitoring. */
 function eventsStream() {
   const url = "http://127.0.0.1:8222/jsz?streams=true";
-  const jsz = JSON.parse(stack("exec", "-T", "nats", "wget", "-q", "-O", "-", url));
+  const jsz = /** @type {{ account_details?: { stream_detail?: StreamDetail[] }[] }} */ (
+    JSON.parse(stack("exec", "-T", "nats", "wget", "-q", "-O", "-", url))
+  );
   const s = (jsz.account_details ?? [])
     .flatMap((a) => a.stream_detail ?? [])
     .find((x) => x.name === "EVENTS");
@@ -71,13 +87,20 @@ const healthy = () =>
   until(
     "control serves, on its bus",
     async () => {
-      const h = await (await fetch(`${control}/v1/health`)).json();
+      const h = /** @type {{ ok?: boolean, bus?: string }} */ (
+        await (await fetch(`${control}/v1/health`)).json()
+      );
       return h.ok && h.bus === "connected" ? h : undefined;
     },
     300_000,
   );
 
-/** A candidate submitted, and its verdict at control. */
+/**
+ * A candidate submitted, and its verdict at control.
+ * @param {import("./lib/smoke-env.mjs").SmokeEnv} env
+ * @param {string} dir
+ * @param {string} why
+ */
 async function judged(env, dir, why) {
   const a = submit(composeEnv, "smoke-1", candidatePatch(env, dir), why);
   return await until(
@@ -108,7 +131,7 @@ try {
   if (!name) throw new Error("the backup named no folder");
   made.push(name);
   const manifest = JSON.parse(readFileSync(join(".dev", "backups", name, "manifest.json"), "utf8"));
-  const stream = manifest.streams.find((s) => s.name === "EVENTS");
+  const stream = manifest.streams.find((/** @type {{ name: string }} */ s) => s.name === "EVENTS");
   if (!stream?.messages) throw new Error("the backup holds no EVENTS stream");
   const place = manifest.store.positions.EVENTS ?? 0;
   if (place > stream.last_seq) throw new Error(`control's place ${place} is past the stream's end`);
@@ -133,11 +156,13 @@ try {
     `/backups/${name}`,
   );
   console.log(onBus.trim());
-  const newer =
+  // Both groups take part in every match.
+  const newer = /** @type {[string, string, string] | null} */ (
     /EVENTS on the bus holds the backup's events and ([\d,]+) newer ones after them, to ([\d,]+)/.exec(
       onBus,
-    );
-  const count = (words) => Number(words.replaceAll(",", ""));
+    )
+  );
+  const count = (/** @type {string} */ words) => Number(words.replaceAll(",", ""));
   if (
     !newer ||
     count(newer[2]) < ranOn.last ||

@@ -1,3 +1,4 @@
+// @ts-check
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -17,6 +18,7 @@ import {
 /**
  * Stops what the test started and, unless KEEP=1, removes its stack, volumes, images and folder;
  * then writes the report. The exit status says whether every check passed.
+ * @param {boolean} failed
  */
 export function cleanUp(failed) {
   section("clean up");
@@ -45,7 +47,7 @@ export function cleanUp(failed) {
     try {
       rmSync(work, { recursive: true, force: true });
     } catch (err) {
-      console.log(`could not remove all of ${work}: ${err?.message ?? err}`);
+      console.log(`could not remove all of ${work}: ${/** @type {Error} */ (err)?.message ?? err}`);
     }
   }
   mkdirSync(join(repo, ".dev", "acceptance"), { recursive: true });

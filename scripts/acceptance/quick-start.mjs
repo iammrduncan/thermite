@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // The quick start, followed on this machine as a tester follows it: from the release bundle to
 // the sample campaign's first verdict. The steps come from the pages themselves
 // (tests/helpers/quick-start.ts reads them): each shell block runs as the page writes it, in a new
@@ -51,8 +52,8 @@ try {
   await stopThermite();
 } catch (err) {
   failed = true;
-  console.log(`FAIL ${String(err?.stack ?? err)}`);
-  report.error = String(err?.message ?? err);
+  console.log(`FAIL ${String(/** @type {Error} */ (err)?.stack ?? err)}`);
+  report.error = String(/** @type {Error} */ (err)?.message ?? err);
 } finally {
   cleanUp(failed);
 }

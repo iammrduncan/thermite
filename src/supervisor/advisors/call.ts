@@ -137,7 +137,6 @@ export interface AdvisorKeeper {
 export interface AdvisorTools {
   brief?: () => Promise<unknown>;
   fetchUrl?: (url: string) => Promise<unknown>;
-  kbSearch?: (query: string) => Promise<unknown>;
   /**
    * Thermite's knowledge base (goal 175): kb_search and kb_read, asked of control, and kb_write
    * when the run's campaign lets the advisor's role write. Pi gets them as tools; Claude Code,

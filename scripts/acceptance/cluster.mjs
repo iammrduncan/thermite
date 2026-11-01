@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 import { execFileSync } from "node:child_process";
 // Cluster acceptance: control sets rigs up on a Kubernetes cluster, and they report. A local kind
 // cluster on Podman stands in for the cluster (never a real cluster). Control runs from its image
@@ -23,6 +24,7 @@ import { acceptanceChecks } from "./lib/checks.mjs";
 import {
   cleanEngine,
   dc,
+  devInit,
   engine,
   formAnswer,
   natsInitRun,
@@ -40,13 +42,15 @@ if (engine !== "podman") {
 const cluster = "thermite-accept";
 const ctl = "thermite-kind-control";
 const kindEnv = { ...process.env, KIND_EXPERIMENTAL_PROVIDER: "podman" };
+/** @param {...string} a */
 const kind = (...a) =>
   execFileSync("kind", a, { env: kindEnv, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
+/** @param {...string} a */
 const kc = (...a) => sh("kubectl", ["--context", `kind-${cluster}`, ...a]);
 const harnessImage = "docker.io/library/thermite-harness:latest";
 const supervisorImage = "docker.io/library/thermite-supervisor:latest";
 // The same images under another tag, as a later control would deploy them.
-const updated = (image) => image.replace(/:latest$/, ":accept-update");
+const updated = (/** @type {string} */ image) => image.replace(/:latest$/, ":accept-update");
 const controlData = "thermite-kind-control-data";
 // The message bus's server, and the folder control writes its users and certificate to.
 const bus = "thermite-kind-nats";
@@ -76,7 +80,7 @@ const cleanup = () => {
   cleanEngine();
 };
 
-sh("node", ["scripts/dev/init.mjs"]);
+devInit();
 console.log("build the images; create the kind cluster; load the rig images into it");
 dc({}, "build", "control", "harness", "supervisor");
 try {
@@ -84,7 +88,7 @@ try {
 } catch {}
 try {
   kind("create", "cluster", "--name", cluster, "--wait", "180s");
-  const load = (image) => {
+  const load = (/** @type {string} */ image) => {
     const tar = join(work, "image.tar");
     sh("podman", ["save", "-o", tar, image]);
     kind("load", "image-archive", tar, "--name", cluster);
@@ -110,8 +114,13 @@ try {
   const control = "http://127.0.0.1:8802";
   let cookie = "";
   let csrf = "";
-  const get = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
-  /** Control from its image, deploying these rig images; its records on a volume of their own. */
+  const get = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  /**
+   * Control from its image, deploying these rig images; its records on a volume of their own.
+   * @param {string} harness
+   * @param {string} supervisor
+   */
   const startControl = async (harness, supervisor) => {
     sh("podman", [
       "run",
@@ -165,7 +174,7 @@ try {
       "control serves, with its bus connected",
       async () => {
         const r = await fetch(`${control}/v1/health`);
-        return r.ok && (await r.json()).bus === "connected";
+        return r.ok && /** @type {{ bus?: string }} */ (await r.json()).bus === "connected";
       },
       120_000,
     );
@@ -174,7 +183,7 @@ try {
       body: new URLSearchParams({ token: admin }),
       redirect: "manual",
     });
-    cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+    cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
     csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await get("/ui/settings"))?.[1] ?? "";
   };
   await startControl(harnessImage, supervisorImage);
@@ -208,6 +217,10 @@ try {
     ...nats.command,
   ]);
   await signIn();
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) => {
     const r = await fetch(`${control}${path}`, {
       method: "POST",
@@ -220,6 +233,8 @@ try {
   /**
    * Waits until a rig's page shows this step done (or a step failed). Done is the step with its
    * tick: the page names a step that failed in the same words.
+   * @param {string} rig
+   * @param {string} done
    */
   const rigStep = (rig, done) =>
     until(
@@ -237,7 +252,11 @@ try {
       900_000,
       5000,
     ).catch((e) => String(e?.message ?? e));
-  /** Adds a rig and waits until its page says its first report arrived (or a step failed). */
+  /**
+   * Adds a rig and waits until its page says its first report arrived (or a step failed).
+   * @param {Record<string, string>} form
+   * @param {string} rig
+   */
   const rigUp = async (form, rig) => {
     const made = await post("/ui/rigs/add", { ...form, rig });
     if (made !== `/ui/rigs/${rig}`) return `not taken: ${made}`;
@@ -522,6 +541,10 @@ try {
     "thermite-slot-1",
     "--hard=limits.cpu=3,limits.memory=8Gi",
   );
+  /**
+   * @param {{ cpus: number, memory_gib: number }} body
+   * @returns {Promise<import("./lib/smoke-env.mjs").ApiAnswer>}
+   */
   const resize = async (body) => {
     const r = await fetch(`${control}/v1/rigs/slot-rig-1/cluster/resources`, {
       method: "POST",
@@ -548,6 +571,10 @@ try {
       ),
     terminalTooSmall,
   );
+  /**
+   * @param {{ program_mode: string }} [body]
+   * @returns {Promise<import("./lib/smoke-env.mjs").ApiAnswer>}
+   */
   const settings = async (body) => {
     const r = await fetch(`${control}/v1/rigs/slot-rig-1/settings`, {
       method: body ? "POST" : "GET",
@@ -571,7 +598,7 @@ try {
     sized.body.said === "slot-rig-1's pods restart with 2 CPUs and 6 GiB of memory."
       ? await rigStep("slot-rig-1", "A report reached control after the change")
       : `not taken: ${JSON.stringify(sized)}`;
-  const limits = (name) =>
+  const limits = (/** @type {string} */ name) =>
     kc(
       "get",
       "deploy",
@@ -617,7 +644,7 @@ try {
     ) && /thermite-slot-1/.test(kc("get", "namespace", "thermite-slot-1", "-o", "name")),
   );
 } catch (err) {
-  check("acceptance run", false, String(err?.stack ?? err));
+  check("acceptance run", false, String(/** @type {Error} */ (err)?.stack ?? err));
 } finally {
   cleanup();
 }

@@ -69,6 +69,30 @@ export interface HarnessPaths {
   outboxDir: string;
 }
 
+/** The owner's ask to stop one trial, as the ledger recorded it (`trial_stop_asked`). */
+export interface StopAsked {
+  /** The `trial_stop_asked` event's id. */
+  event: number;
+  run: string;
+  trial: string;
+  lane: string;
+  reason?: string | undefined;
+  /** Who asked: the command's actor, `control:<issued_by>`. */
+  by: string;
+}
+
+/**
+ * What the service tells the agents' scheduler as soon as the ledger records it: a stop of one
+ * trial and a reset of a run's workers. The events stay the record: a scheduler that starts later
+ * finds the ones it never acted on in the ledger. The scheduler sets itself as the service's
+ * `agents` when it is made, so the service does not depend on it.
+ */
+export interface AgentSignals {
+  onStopAsked(ask: StopAsked): void;
+  /** The `workers_reset` event's id, and its run. */
+  onReset(reset: { event: number; run: string }): void;
+}
+
 /**
  * The harness's application service. It is the only code that changes harness state; the API
  * layer authenticates callers and delegates here.
@@ -191,6 +215,8 @@ export class HarnessService {
    * controller sets it, from its scheduler).
    */
   promptPreview?: ((run: string, ask: PreviewAsk) => Prompt) | undefined;
+  /** The agents' scheduler, told at once of each stop and reset (it sets itself here). */
+  agents?: AgentSignals | undefined;
   /**
    * Each compaction of an agent's conversation (goal 070): the conversation kept in the run's
    * research folder, and the record of it (main.ts sets it, with the research folder).

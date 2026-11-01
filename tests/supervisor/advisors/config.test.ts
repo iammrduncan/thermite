@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, test } from "node:test";
-import { AdvisorsConfig, AdvisorsFile } from "../../../src/supervisor/advisors/index.ts";
+import {
+  AdvisorsConfig,
+  AdvisorsFile,
+  readAdvisorsFile,
+} from "../../../src/supervisor/advisors/index.ts";
+import { advisorPiTools } from "../../../src/supervisor/advisors/pi/index.ts";
 
 const api = {
   name: "teacher-a",
@@ -19,40 +27,48 @@ function refused(file: unknown): string[] {
 }
 
 describe("the advisors file", () => {
-  test("takes keys from key files, and a kb over https or on this machine", () => {
-    for (const url of [
-      "https://kb.example.com/mcp",
-      "http://localhost:8080/mcp",
-      "http://127.0.0.1:8080/mcp",
-      "http://[::1]:8080/mcp",
-    ]) {
-      const file = AdvisorsFile.parse({ teachers: [api], auditor: api, kb: kb(url) });
-      assert.equal(file.kb?.mcp_url, url);
-      assert.equal(file.kb?.tool, "search");
-      assert.equal(
-        file.teachers[0]?.runtime === "openai" && file.teachers[0].api_key_file,
-        api.api_key_file,
-      );
-    }
+  test("takes keys from key files", () => {
+    const file = AdvisorsFile.parse({ teachers: [api], auditor: api });
+    assert.equal(
+      file.teachers[0]?.runtime === "openai" && file.teachers[0].api_key_file,
+      api.api_key_file,
+    );
   });
 
-  test("refuses a kb address that is plain http to another machine, or carries a secret", () => {
-    for (const url of [
-      "http://kb.example.com/mcp",
-      "http://kb.example.org:8080/mcp",
-      "ftp://kb.example.com/mcp",
-      "https://user:pass@kb.example.com/mcp",
-      "https://kb.example.com/mcp?token=abc",
-      "https://kb.example.com/mcp#part",
-    ]) {
-      const problems = refused({ kb: kb(url) });
-      assert.equal(problems.length, 1, url);
-      assert.match(
-        problems[0] ?? "",
-        /^kb\.mcp_url: Use https, or http to this machine only \(localhost, 127\.0\.0\.1, \[::1\]\)/,
-        url,
-      );
-    }
+  test("a file that still has the retired kb is read without it, with a warning that says what replaces it", (t) => {
+    const path = join(mkdtempSync(join(tmpdir(), "thermite-advisors-")), "advisors.json");
+    writeFileSync(path, JSON.stringify({ teachers: [api], kb: kb("https://kb.example.com/mcp") }));
+    const lines: Record<string, unknown>[] = [];
+    t.mock.method(process.stdout, "write", (chunk: string) => {
+      lines.push(JSON.parse(chunk) as Record<string, unknown>);
+      return true;
+    });
+    const file = readAdvisorsFile(path);
+    t.mock.restoreAll();
+    assert.equal("kb" in file, false);
+    assert.equal(file.teachers[0]?.name, "teacher-a", "the rest of the file is read");
+    assert.deepEqual(
+      lines.map((l) => [l.level, l.component, l.file]),
+      [["warn", "supervisor", path]],
+    );
+    assert.match(
+      String(lines[0]?.msg),
+      /^The advisors file's kb is retired, and with it the advisors' search_outside_kb tool: the supervisor reads the file without it\. Give the advisors an outside search as an MCP server that the campaign's kit names/,
+    );
+    // Its advisors have no outside search: Thermite's knowledge base and the kit's MCP servers.
+    const { tools } = advisorPiTools({ fetchUrl: async () => "" });
+    assert.deepEqual(
+      tools.map((x) => x.name),
+      ["fetch_url"],
+    );
+    // A file without it reads with no warning; a field the file never had is still refused.
+    const quiet: unknown[] = [];
+    t.mock.method(process.stdout, "write", (chunk: string) => quiet.push(chunk) > 0);
+    writeFileSync(path, JSON.stringify({ teachers: [api] }));
+    readAdvisorsFile(path);
+    t.mock.restoreAll();
+    assert.deepEqual(quiet, []);
+    assert.deepEqual(refused({ teachers: [api], search: {} }), [': Unrecognized key: "search"']);
   });
 
   test("refuses a key written into it, in every role, and says where keys come from", () => {
