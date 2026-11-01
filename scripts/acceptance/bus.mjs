@@ -16,7 +16,10 @@
 //   - REPORTS holds at most REPORTS_WAITING_PER_RIG of one rig's reports, and KB_FILES at most
 //     KB_FILE_CHUNKS_WAITING_PER_RIG of one rig's chunks, each at most KB_FILE_MAX_MESSAGE_BYTES:
 //     the next is refused, and rig-b's still go;
-//   - rig-b retired (its user taken out of the users file, and the server reloaded) is cut off.
+//   - rig-b retired (its user taken out of the users file, and the server reloaded) is cut off;
+//   - an EVENTS stream made before v0.1.1, which refuses purges, is made again once, as control's
+//     main does, also with stops part way, and a retention policy purges it by subject after
+//     (lib/events-rebuild.mjs).
 // It needs Podman or Docker and the server's image pulled already (it pulls nothing). It runs the
 // server's container, thermite-bus-check, with 512 MiB of memory, as compose's user, on a store
 // volume, thermite-bus-check-store, that a short run of compose's nats-init gives to that user
@@ -33,6 +36,7 @@ import { JetStreamApiError, jetstream, jetstreamManager } from "@nats-io/jetstre
 import { createUser } from "@nats-io/nkeys";
 import { connect, errors, nkeyAuthenticator } from "@nats-io/transport-node";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { eventsRebuildChecks } from "./lib/events-rebuild.mjs";
 import { engine, natsInitRun, natsService, sh } from "./lib/smoke-env.mjs";
 
 // Control's own code, as control runs it (Node.js strips the types of these files).
@@ -425,8 +429,10 @@ try {
   check("KB_FILES refuses a chunk over its largest", large.startsWith("refused"), large);
 
   // Rig-b retired: its user goes from the users file, and the server, reloaded, cuts it off.
-  writeFileSync(join(files, "users.conf"), users([["rig-a", keys.a, ["run-a"]]]));
-  sh(engine, ["cp", join(files, "users.conf"), `${box}:/etc/nats/thermite/users.conf`]);
+  const usersPath = join(files, "users.conf");
+  const copyUsers = () => sh(engine, ["cp", usersPath, `${box}:/etc/nats/thermite/users.conf`]);
+  writeFileSync(usersPath, users([["rig-a", keys.a, ["run-a"]]]));
+  copyUsers();
   await reloadBus(url, keys.system.seed, trust);
   await pause(1000);
   const after = await tried(() =>
@@ -438,6 +444,22 @@ try {
     after !== "allowed" && again !== "allowed",
     { publish: after, sign_in: again },
   );
+
+  // The events stream made again once, and a retention policy's purge of it.
+  await eventsRebuildChecks({
+    check,
+    tried,
+    deniedBy,
+    control,
+    bus,
+    rigA,
+    keys,
+    store,
+    usersFile: usersPath,
+    copyUsers,
+    url,
+    trust,
+  });
   const stats = execFileSync(engine, ["stats", "--no-stream", "--format", "{{.MemUsage}}", box], {
     encoding: "utf8",
   }).trim();

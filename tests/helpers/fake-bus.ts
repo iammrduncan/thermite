@@ -66,14 +66,23 @@ const TOO_LARGE = {
   err_code: 10054,
   description: "message size exceeds maximum allowed",
 };
-/** The server's words for an update that would let a stream's messages be deleted or purged again. */
-const NO_DENY_CHANGE = {
+/**
+ * The server's words for an update that would let a stream's messages be deleted again, and for
+ * one that would let them be purged again: it looks at the deletes first. The bus check
+ * (scripts/acceptance/bus.mjs) compares them with the pinned server's.
+ */
+export const NO_DENY_DELETE_CHANGE = {
+  code: 500,
+  err_code: 10052,
+  description: "stream configuration update can not cancel deny message deletes",
+};
+export const NO_DENY_PURGE_CHANGE = {
   code: 500,
   err_code: 10052,
   description: "stream configuration update can not cancel deny purge",
 };
-/** The server's words for a purge of a stream that refuses them. */
-const NO_PURGE = { code: 500, err_code: 10051, description: "stream purge is not permitted" };
+/** The server's words for a purge of a stream that refuses them; the bus check compares them too. */
+export const NO_PURGE = { code: 500, err_code: 10110, description: "stream purge not permitted" };
 /** The server's words for an update that would make a stream a work queue, or one no longer. */
 const NO_RETENTION_CHANGE = {
   code: 500,
@@ -160,19 +169,22 @@ export class FakeBus
   }
 
   /**
-   * As the server: a stream's retention never changes to or from a work queue in place, and a
-   * stream that refuses deletes or purges never stops refusing them. A new stream with a first
-   * place (`first_seq`) starts there.
+   * As the server, through the library's update: settings put on a stream that exists go over
+   * its own, and those they do not name stay as they were (so a stream that refuses deletes or
+   * purges goes on refusing them, unless the settings say otherwise). A stream's retention never
+   * changes to or from a work queue in place, and a stream that refuses deletes or purges never
+   * stops refusing them. A new stream with a first place (`first_seq`) starts there.
    */
   async makeStream(stream: StreamSettings): Promise<void> {
     const had = this.made.get(stream.name);
-    if (had && (had.retention === "workqueue") !== (stream.retention === "workqueue"))
+    const next = had ? { ...had, ...stream } : stream;
+    if (had && (had.retention === "workqueue") !== (next.retention === "workqueue"))
       throw new JetStreamApiError(NO_RETENTION_CHANGE);
-    if (had && ((had.deny_delete && !stream.deny_delete) || (had.deny_purge && !stream.deny_purge)))
-      throw new JetStreamApiError(NO_DENY_CHANGE);
+    if (had?.deny_delete && !next.deny_delete) throw new JetStreamApiError(NO_DENY_DELETE_CHANGE);
+    if (had?.deny_purge && !next.deny_purge) throw new JetStreamApiError(NO_DENY_PURGE_CHANGE);
     if (!had && stream.first_seq && stream.first_seq > 1 && !this.seqs.has(stream.name))
       this.seqs.set(stream.name, stream.first_seq - 1);
-    this.made.set(stream.name, stream);
+    this.made.set(stream.name, next);
   }
 
   /** A stream's settings and places, as the server's info gives them; undefined for one not made. */

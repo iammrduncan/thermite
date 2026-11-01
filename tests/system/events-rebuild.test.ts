@@ -70,8 +70,22 @@ describe("the events stream made again once", () => {
   test("every event keeps its place, subject, id, headers and first time; purges work after", async () => {
     const bus = await oldBus(23);
     const before = await contents(bus);
-    // The server refuses to let the old stream take purges again: today's settings can't be put.
-    await assert.rejects(bus.makeStream(EVENT_STREAM_CONFIG), /can not cancel deny purge/);
+    // The server refuses to let the old stream take purges again; today's settings put on it, as
+    // the library puts them over its own, leave it refusing them.
+    await assert.rejects(
+      bus.makeStream({ ...EVENT_STREAM_CONFIG, deny_delete: false, deny_purge: false }),
+      /can not cancel deny message deletes/,
+    );
+    await assert.rejects(
+      bus.makeStream({ ...EVENT_STREAM_CONFIG, deny_delete: true, deny_purge: false }),
+      /can not cancel deny purge/,
+    );
+    await bus.makeStream(EVENT_STREAM_CONFIG);
+    assert.ok(bus.made.get(EVENT_STREAM)?.deny_purge, "it refuses purges still");
+    await assert.rejects(
+      bus.purge(EVENT_STREAM, { filter: "thermite.rig.rig-a.ev.*" }),
+      /stream purge not permitted/,
+    );
     let deletes = 0;
     const rebuild = new EventsRebuild({
       bus,

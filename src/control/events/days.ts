@@ -111,7 +111,10 @@ export class EventDays {
 
   /**
    * What a purge removes of the days a policy chose (by their items' ids): for each subject, its
-   * days from its oldest up to the first it keeps, any rig's, and the place before which they go.
+   * days from its oldest, any rig's, and the place before which they go. A purge removes every
+   * message of the subject before that place, so it stops at the first day kept, and before the
+   * first place of any day kept: a run's subject holds the events of every rig that used its
+   * name, and one rig's day may reach past the start of another's, which the policy keeps.
    */
   plan(ids: ReadonlySet<string>): { filter: string; before: number; days: EventDay[] }[] {
     const bySubject = new Map<string, EventDay[]>();
@@ -122,13 +125,22 @@ export class EventDays {
     }
     const out: { filter: string; before: number; days: EventDay[] }[] = [];
     for (const [filter, days] of bySubject) {
-      const gone: EventDay[] = [];
-      for (const d of days.sort((a, b) => a.first - b.first)) {
+      const sorted = days.sort((a, b) => a.first - b.first);
+      // The most days from the oldest that go whole: each chosen, and the last place among them
+      // before the first place of the next day, which every later day starts after.
+      let gone = 0;
+      let through = 0;
+      let reach = 0;
+      for (const [i, d] of sorted.entries()) {
         if (!ids.has(`${d.filter}\n${d.rig}\n${d.day}`)) break;
-        gone.push(d);
+        reach = Math.max(reach, d.last);
+        const next = sorted[i + 1];
+        if (!next || reach < next.first) {
+          gone = i + 1;
+          through = reach;
+        }
       }
-      const last = gone.at(-1);
-      if (last) out.push({ filter, before: last.last + 1, days: gone });
+      if (gone) out.push({ filter, before: through + 1, days: sorted.slice(0, gone) });
     }
     return out;
   }
