@@ -492,7 +492,7 @@ export class KnowledgeBase {
 
   /**
    * The item a briefing names by where it came from (campaign, run, kind, ref). Undefined when
-   * control has none, or more than one (run names are unique per rig only).
+   * control has none, or more than one.
    */
   byOrigin(o: {
     campaign: string;
