@@ -11,18 +11,22 @@ import { startFakeModel } from "../../../helpers/fake-model.ts";
  * One Pi advisor's call (goal 169), as both the supervisor and an advisor's own process run it: in
  * its Pi view, a model call refused for a usage limit whose reset its provider's words give is
  * waited out and the call goes on in the same conversation, from its role's words; without a view,
- * the call ends at it, as before.
+ * the call ends at it, with the limit and its reset, which the headless advisor then waits out
+ * (supervisor/advisors/limit.ts).
  */
 
 const Answer = z.strictObject({ decision: z.string() });
 const ANSWER = Type.Object({ decision: Type.String() });
 
-async function callWith(waitOut?: (w: ViewWait) => void) {
+async function callWith(
+  waitOut?: (w: ViewWait) => void,
+  failMessage = "usage limit reached: try again in 1s",
+) {
   let n = 0;
   const said: string[] = [];
   const model = await startFakeModel(({ messages }) => {
     said.push(JSON.stringify(messages));
-    if (++n === 1) return { fail: 429, failMessage: "usage limit reached: try again in 1s" };
+    if (++n === 1) return { fail: 429, failMessage };
     return { toolCalls: [{ name: "answer", args: { decision: "clear" } }] };
   });
   const later: unknown[] = [];
@@ -55,9 +59,27 @@ test("in its Pi view, a usage limit with a reset is waited out, and the call goe
   assert.match(said.at(-1) ?? "", /usage limit reached/);
 });
 
-test("without a view, the call ends at a usage limit, as a headless advisor's does", async () => {
+test("without a view, the call ends at a usage limit, and says it, with its reset, for the advisor to wait out headless", async () => {
+  const started = Date.now();
   const { end, said } = await callWith();
   assert.equal(end.answered, false);
   assert.equal(end.error, "no answer");
   assert.equal(said.length, 1, "no second model call");
+  assert.match(end.limit?.words ?? "", /usage limit reached: try again in 1s/);
+  const until = Date.parse(end.limit?.until ?? "");
+  assert.ok(until >= started + 900 && until <= Date.now() + 1100, `resets at ${end.limit?.until}`);
+});
+
+test("in its Pi view, a weekly window, more than a day away, is not waited out in the call: it ends, with the limit for the advisor to wait for", async () => {
+  const waits: ViewWait[] = [];
+  const started = Date.now();
+  const { end, said } = await callWith(
+    (w) => waits.push(w),
+    "usage limit reached: try again in 72h",
+  );
+  assert.equal(end.answered, false);
+  assert.equal(waits.length, 0, "not waited out inside the call");
+  assert.equal(said.length, 1);
+  const until = Date.parse(end.limit?.until ?? "");
+  assert.ok(Math.abs(until - (started + 72 * 3_600_000)) < 60_000, `resets at ${end.limit?.until}`);
 });

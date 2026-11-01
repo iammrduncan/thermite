@@ -262,7 +262,8 @@ const DUPLICATE_WINDOW_NS = 2 * 60 * 1e9;
 export const EVENT_STREAM_CONFIG = {
   name: EVENT_STREAM,
   subjects: EVENT_SUBJECTS,
-  description: "Every rig's events, by run and kind, kept for good",
+  description:
+    "Every rig's events, by run and kind, kept until a retention policy purges them by subject; never deleted",
   retention: "limits",
   storage: "file",
   max_msgs: -1,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SupervisorFigures } from "../api/control/rigs.ts";
 import { RIG_ID } from "../ids.ts";
+import { KB_FILES_HELD_MAX, KbFileSha256 } from "../kb.ts";
 import { RigSpace } from "../retention/index.ts";
 import { SCREENS_WATCHED_MAX, ScreenFrame, WatchedTrials } from "../screens.ts";
 import { ReportPlace } from "./report.ts";
@@ -8,15 +9,16 @@ import { ReportPlace } from "./report.ts";
 /**
  * A rig's asks of control on the message bus (goal 168, step 5c): the supervisor's regular call
  * with its figures, the screens of the trials someone watches, its daily report, a command
- * signed again while its sources stage, and what the rig keeps of the kinds a retention policy
- * may remove. Each is a request on the rig's own subject with its one
+ * signed again while its sources stage, what the rig keeps of the kinds a retention policy
+ * may remove, and which of the knowledge base's files it put control holds. Each is a request on
+ * the rig's own subject with its one
  * answer, NATS's request and reply: no stream keeps either, and the answer goes to the rig's inbox
  * alone. A rig's user may publish only on its own subjects
  * (users.ts), so control knows the rig from the subject. A refusal comes back in words.
  */
 
 /** What a rig asks control, each the last token of its subject. */
-export const RIG_ASK_KINDS = ["figures", "screens", "daily", "renew", "space"] as const;
+export const RIG_ASK_KINDS = ["figures", "screens", "daily", "renew", "space", "kb-files"] as const;
 export type RigAskKind = (typeof RIG_ASK_KINDS)[number];
 
 /** Every rig's asks, as control serves them: `thermite.rig.<rig>.ask.<kind>`. No stream takes them. */
@@ -70,6 +72,11 @@ export const REPORT_MAX_CHARS = 200_000;
  *   builds, from its harness; the advisors' records, its supervisor's own), each item with its
  *   run, time and bytes (core/retention/), every RIG_SPACE_ASK_MS and after each removal;
  *   control keeps the newest for the Space table and each policy's preview, and answers ok.
+ * - `kb-files`: the knowledge base's files the supervisor put on the bus and its outbox still
+ *   holds, by their SHA-256 (at most KB_FILES_HELD_MAX, goal 175); control answers with those it
+ *   holds, each kept whole in its state after it checked the file's SHA-256 and named by an item
+ *   it stored, and the harness removes them from the outbox. A rig learns only whether control
+ *   holds bytes it has itself.
  */
 export const RIG_ASKS = {
   figures: {
@@ -85,6 +92,10 @@ export const RIG_ASKS = {
     answer: z.looseObject({ id: z.number() }),
   },
   space: { body: RigSpace, answer: z.looseObject({ ok: z.literal(true) }) },
+  "kb-files": {
+    body: z.object({ files: z.array(KbFileSha256).min(1).max(KB_FILES_HELD_MAX) }),
+    answer: z.looseObject({ held: z.array(KbFileSha256).max(KB_FILES_HELD_MAX) }),
+  },
   renew: {
     body: z.object({ id: z.uuid() }),
     answer: z.looseObject({

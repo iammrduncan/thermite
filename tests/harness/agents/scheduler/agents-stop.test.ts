@@ -237,6 +237,46 @@ describe("agent scheduler: the agents stop", () => {
     assert.equal(three.started.n, 1, "another run's hold does not hold this run");
   });
 
+  test("a weekly window holds the run until its reset, a day away or more, marked weekly for Needs you (goal 169)", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 10 } });
+    await env.start();
+    // Its program gave the reset: three days away, as a full weekly window's.
+    const reset = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    const { started, round, events } = provider(env, () => ({
+      stopped: "error" as const,
+      turns: 0,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      error: `Claude Code's usage window is full until ${reset}, more than a day away`,
+      errorKind: "rate_limit" as const,
+      retryAfter: reset,
+    }));
+    await round();
+    const wait = events("agents_wait_for_limit")[0];
+    assert.equal(wait?.until, reset, "until the reset itself, not one trial's length");
+    assert.equal(wait?.weekly, true);
+    assert.equal(typeof wait?.trial, "string");
+    await round();
+    assert.equal(started.n, 1, "the run waits");
+    // A reset within the day is no weekly window: one trial's length at most, as before.
+    const env2 = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 10 } });
+    await env2.start();
+    const soon = new Date(Date.now() + 5 * 3_600_000).toISOString();
+    const two = provider(env2, () => ({
+      stopped: "error" as const,
+      turns: 0,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      error: "the usage window is full",
+      errorKind: "rate_limit" as const,
+      retryAfter: soon,
+    }));
+    await two.round();
+    assert.equal(two.events("agents_wait_for_limit")[0]?.weekly, undefined);
+  });
+
   test("the owner ends a run's wait now: its trials start again at once, and the end is recorded", async () => {
     const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 10 } });
     await env.start();

@@ -1,8 +1,9 @@
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { errorText } from "../../common/errors.ts";
-import { chatgptRequest, chatgptRouteAllowed } from "./chatgpt.ts";
-import type { ModelConfig } from "./index.ts";
+import type { Harness } from "../../core/agents.ts";
+import { chatgptRequest, chatgptRouteAllowed, codexUsageLimit } from "./chatgpt.ts";
+import { CHATGPT_LIMIT_CODE, type ModelConfig } from "./index.ts";
 import { DataSeen, ModelStreamSilent, modelStallMs, stallWords } from "./stall.ts";
 import { type AnswerTokens, TokensSeen } from "./tokens.ts";
 
@@ -31,6 +32,11 @@ export interface ForwardCall {
   header(name: string): string | undefined;
   /** The request's body (none for GET and HEAD). */
   body: Buffer | undefined;
+  /**
+   * The agent program that sent it, where the proxy knows (the route's): the Codex CLI gets a
+   * full ChatGPT plan's refusal as its own usage-limit error (codexUsageLimit).
+   */
+  program?: Harness | undefined;
 }
 
 /** A provider's error answer, as the proxy saw it (goal 079). */
@@ -54,7 +60,8 @@ export interface ForwardStall {
  * Forwards one call to the provider. `onError`: any error answer, with its status, headers and
  * body, for the harness to tell a rate limit's time, no credits or a refused key from the rest
  * (goal 079), and a full ChatGPT plan by OpenAI's code, which a program that keeps only an
- * error's message (the Codex CLI) would lose.
+ * error's message (the Codex CLI) would lose. The Codex CLI is answered that full plan in its own
+ * usage limit's form (codexUsageLimit); every other answer goes on as it came.
  *
  * A call whose stream sends no data for THERMITE_MODEL_STALL_SECONDS (stall.ts; `stall`
  * gives another time) is broken off: with no answer yet, the proxy answers 504 with the words, as
@@ -149,6 +156,11 @@ export async function forwardToProvider(
           for (const [k, v] of Object.entries(res.headers))
             if (typeof v === "string") headers[k.toLowerCase()] = v;
           onError?.({ status, headers, body: text.slice(0, 4000) });
+          // A full ChatGPT plan, to the Codex CLI: in the form it reads as its usage limit.
+          if (call.program === "codex" && text.includes(CHATGPT_LIMIT_CODE)) {
+            resolve(codexUsageLimit());
+            return;
+          }
           // Its rate-limit headers go on too, for a program that reads them itself.
           for (const k of ["retry-after", "retry-after-ms"]) {
             const v = headers[k];

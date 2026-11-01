@@ -3,7 +3,7 @@ import { canonicalSha } from "./canonical.ts";
 import { AgentsContext } from "./compaction.ts";
 import { DURATION_PATTERN, parseDuration } from "./duration.ts";
 import { CampaignId, MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
-import { KbWrites } from "./kb.ts";
+import { KbWritesInContract } from "./kb.ts";
 import { McpUses } from "./mcp.ts";
 import { additionRefusals, RoleAdditions } from "./role-additions.ts";
 
@@ -176,11 +176,12 @@ const Common = {
   role_additions: RoleAdditions.optional(),
   /**
    * Which kinds of item each role may write in its own slot of Thermite's knowledge base (goal
-   * 175): planner, worker, teacher, merged-by, auditor, review-panel, synthesizer and
-   * final-writer, each with its kinds. Left out: core/kb.ts's KB_WRITES_DEFAULT. Optional and
-   * without a default, so contracts written before it keep their hash.
+   * 175): planner, worker, teachers, merged_by, auditor, review_panel, synthesizer and
+   * final_writer, each with its kinds. Left out: core/kb.ts's KB_WRITES_DEFAULT. Optional and
+   * without a default, so contracts written before it keep their hash; a contract that names a
+   * role as the slots were spelled before keeps it as signed, and kbWritesOf reads it.
    */
-  kb_writes: KbWrites.optional(),
+  kb_writes: KbWritesInContract.optional(),
 };
 
 const EditPolicy = {

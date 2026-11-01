@@ -47,7 +47,7 @@ export {
 } from "./terminal.ts";
 export { claudeTranscript, type TranscriptState } from "./transcript.ts";
 export type { PlanWindows, UsageWindow } from "./windows.ts";
-export { mergeUsage } from "./windows.ts";
+export { creditsOn, mergeUsage } from "./windows.ts";
 
 /** What to say when the image has no Claude Code: it is in an image only when built with it. */
 export const NO_CLAUDE_CODE =

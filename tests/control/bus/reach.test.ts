@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createUser } from "@nats-io/nkeys";
+import { formatRigList } from "../../../src/cli/rig.ts";
 import {
   BUS_REACH_GRACE_MS,
   BUS_REGISTERED_STEP,
@@ -8,8 +9,9 @@ import {
   offBus,
   offBusFix,
 } from "../../../src/control/bus/index.ts";
+import { RigList } from "../../../src/core/api/control/owner.ts";
 import { newSealKey } from "../../../src/core/link/config.ts";
-import { controlOnly, RIG_TOKEN, signIn } from "../../helpers/control-stack.ts";
+import { controlOnly, mcpClient, RIG_TOKEN, signIn } from "../../helpers/control-stack.ts";
 import { ingestReport } from "../../helpers/control-store.ts";
 
 /**
@@ -82,6 +84,68 @@ describe("a rig off the message bus", () => {
     await report(s.store);
     const seen = s.store.reportedRigs.list()[0]?.last_seen ?? "";
     assert.equal(offBus(s.store, "rig-a", { lastSeen: seen, now: later }), undefined);
+  });
+
+  test("REST's rig list and rig view, MCP's list_rigs and thermite rig list give its connection: on since its registration, or off, broken, why and what to do", async () => {
+    const s = controlOnly();
+    // A rig that reported, and never registered keys over HTTPS: nothing says it is off the bus.
+    await report(s.store);
+    type Listed = { rigs: { id: string; bus: unknown }[] };
+    const listed = async () =>
+      ((await (await s.api("GET", "/v1/rigs")).json()) as Listed).rigs.find((r) => r.id === "rig-a")
+        ?.bus;
+    const viewed = async () =>
+      ((await (await s.api("GET", "/v1/rigs/rig-a/view")).json()) as { bus: unknown }).bus;
+    const mcp = await mcpClient(s.control);
+    const tool = async () => {
+      const said = (await mcp.callTool({ name: "list_rigs", arguments: {} })) as {
+        content: { text: string }[];
+      };
+      return (JSON.parse(said.content[0]?.text ?? "[]") as { rig: string; bus: unknown }[]).find(
+        (r) => r.rig === "rig-a",
+      )?.bus;
+    };
+    assert.deepEqual(await listed(), { state: "on", since: null });
+    assert.deepEqual(await viewed(), { state: "on", since: null });
+    assert.deepEqual(await tool(), { state: "on", since: null });
+    // It registers its keys over HTTPS: on the bus since then.
+    const registered = await s.api(
+      "POST",
+      "/v1/rigs/rig-a/supervisor",
+      {
+        at: new Date().toISOString(),
+        bus_key: createUser().getPublicKey(),
+        bus_seal_key: newSealKey().publicKey,
+      },
+      RIG_TOKEN,
+    );
+    assert.equal(registered.status, 200);
+    const step = s.store.rigHistory.list("rig-a").find((h) => h.step === BUS_REGISTERED_STEP);
+    assert.ok(step);
+    assert.deepEqual(await listed(), { state: "on", since: step.at });
+    // It calls over HTTP with no keys on the bus: off it, broken, the same words as its page.
+    noteOffBusCall(s.store, "rig-a");
+    const off = offBus(s.store, "rig-a", { lastSeen: "", now: Date.now() });
+    assert.ok(off);
+    const expected = {
+      state: "off",
+      why: "http",
+      words: off.words,
+      since: off.since,
+      fix: offBusFix(s.store, "rig-a", off),
+    };
+    assert.deepEqual(await listed(), expected);
+    assert.deepEqual(await viewed(), expected);
+    assert.deepEqual(await tool(), expected);
+    // The command line's rig list says so under the rig, and the contract reads it.
+    const list = RigList.parse(await (await s.api("GET", "/v1/rigs")).json());
+    assert.match(
+      formatRigList(list),
+      new RegExp(
+        `\\n {2}Off the message bus since ${off.since.replace(/[.]/g, "\\.")}, so it does not work: It calls control over HTTP, with no keys on the message bus`,
+      ),
+    );
+    await mcp.close();
   });
 
   test("its page, the rigs list and Needs you say it is broken, with what to do", async () => {

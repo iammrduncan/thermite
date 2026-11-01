@@ -31,6 +31,7 @@ import {
 } from "./streams.ts";
 import { type BusTrust, tlsOf, where } from "./tls.ts";
 
+export { probeBus } from "./probe.ts";
 export {
   BUS_CA_FILE_SETTING,
   BUS_CA_SETTING,
@@ -48,7 +49,8 @@ export {
  * durable consumer whose messages are handed over one at a time, one made for another part, a
  * key-value bucket watched from the latest of each key, a read of a stream in order, a message by its place, a subject's last
  * message, a stream's last place, a stream made, a message removed, the streams' state, and a
- * request with its one answer (where the server and its authority come from: tls.ts). Every
+ * request with its one answer (where the server and its authority come from: tls.ts), and a check
+ * that a server answers a new connection (probe.ts). Every
  * connection is over TLS, and trusts the server through the authority it is given (control's own,
  * which control hands every rig it sets up), or else the system's. The harness and the agents
  * never reach the bus.
@@ -64,6 +66,8 @@ export const BUS_RETRY_MS = 5_000;
 export const BUS_REMOVE_LOOK_MAX = 1000;
 /** How many consumers of a stream its state lists, at most: then it says how many it left out. */
 export const BUS_STATE_CONSUMERS_MAX = 200;
+/** How many subjects' counts a stream's state gives, at most, where they are asked for. */
+export const BUS_STATE_SUBJECTS_MAX = 1000;
 /** How many messages a batch holds, at most: the server's own limit, which refuses a larger one. */
 export const BUS_BATCH_MAX = 1000;
 /** How long a look (a message, a last place, a read's start) waits for the server. It then fails. */
@@ -173,6 +177,11 @@ export interface StreamState {
   }[];
   /** Consumers past BUS_STATE_CONSUMERS_MAX, left out of the list. */
   consumers_left_out: number;
+  /**
+   * The messages it holds on each subject, where its state was asked for them (`counts`): at most
+   * BUS_STATE_SUBJECTS_MAX subjects. REPORTS has one for each rig.
+   */
+  counts?: Record<string, number> | undefined;
 }
 
 export type StreamSettings = Partial<StreamConfig> & { name: string };
@@ -265,8 +274,14 @@ export interface Bus {
    * False when it is not there, as when a work queue's consumer took it already.
    */
   remove(stream: string, subject: string, id: string): Promise<boolean>;
-  /** The state of each of these streams the server has; a stream not made yet is left out. */
-  streams(names: readonly string[]): Promise<StreamState[]>;
+  /**
+   * The state of each of these streams the server has; a stream not made yet is left out. Those
+   * `counts` names give their messages on each subject too.
+   */
+  streams(
+    names: readonly string[],
+    o?: { counts?: readonly string[] | undefined },
+  ): Promise<StreamState[]>;
   /**
    * The server's purge of a stream's messages on `filter` (a subject, `*` and `>` too): those
    * before the place `seq`, or all but the newest `keep`, or all of them. How many it removed.
@@ -290,6 +305,11 @@ export interface Bus {
   ): Promise<void>;
   /** Whether the part holds a connection to the server now. */
   connected(): boolean;
+  /**
+   * Since when it holds its connection, and the server's version as the server said it, while
+   * connected; nulls otherwise. A bus that does not know them (a test's) has none.
+   */
+  link?(): { since: string | null; version: string | null };
   close(): Promise<void>;
 }
 
@@ -431,6 +451,9 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
   let conn: Promise<NatsConnection> | undefined;
   let closed = false;
   let up = false;
+  // Since when it holds its connection, and the server's version (link()).
+  let upSince: string | null = null;
+  let version: string | null = null;
   /** The consumers being read now, each by its own loop: a close stops them all. */
   const readings = new Set<ConsumerMessages>();
   /** The subjects it serves now: a close ends them all. */
@@ -440,7 +463,9 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
     const made = connectTo(url, name, signIn, -1).then(
       (nc) => {
         void watch(nc, server, (on) => {
+          if (on && !up) upSince = new Date().toISOString();
           up = on;
+          version = nc.info?.version ?? version;
         });
         // Given up (its user refused twice running): the next call connects again.
         void nc.closed().then(() => {
@@ -677,8 +702,8 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       }
       return false;
     },
-    async streams(names) {
-      return streamStates(await connection(), names);
+    async streams(names, o) {
+      return streamStates(await connection(), names, o?.counts ?? []);
     },
     async request(subject, data, timeoutMs) {
       const nc = await connection();
@@ -718,6 +743,7 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       }
     },
     connected: () => up,
+    link: () => ({ since: up ? upSince : null, version: up ? version : null }),
     async close() {
       closed = true;
       for (const r of readings) r.stop();

@@ -40,13 +40,17 @@ Each thing in the knowledge base has one name, the same on the dashboard, in RES
 | **Knowledge base** | The whole store, on control: its collections, items, versions, files, grants and words index, in control's store and its state folder |
 | **Collection** | One for each campaign, made with the campaign. It holds every item the campaign's runs write |
 | **Run** | A run of the campaign. Its items sit under it, whichever rig ran it |
-| **Slot** | Where one writer writes in a run: `records`, which Thermite's code writes; `owner`, where the owner's notes go ([The owner's notes](#the-owners-notes)); or an agent's own, named for its role, with its lane for a worker: `planner`, `worker-<lane>` (`worker-1` to `worker-16`), `teacher`, `merged-by`, `auditor`, `review-panel`, `synthesizer` or `final-writer` |
+| **Slot** | Where one writer writes in a run: `records`, which Thermite's code writes; `owner`, where the owner's notes go ([The owner's notes](#the-owners-notes)); or an agent's own, named as the agent is named in model usage and on **Edit rig**, with its lane for a worker: `planner`, `worker-<lane>` (`worker-1` to `worker-16`), `teachers`, `merged_by`, `auditor`, `review_panel`, `synthesizer` or `final_writer` |
 | **Item** | One thing written, with its kind, its title and its links to other items: a **blurb** (a short text) or a **file** (a document kept whole) |
 | **Version** | A writer may add a new version of its own item. The older versions stay, until a [retention policy](../how-to/operate/retention-policies.md) the owner made removes them; the newest always stays |
 | **Grant** | Permission for a campaign to read another campaign's collection, read only. The owner gives it on a collection's pane in **Knowledge**; nothing is copied |
 | **Scope** | What a run reads: its campaign's whole collection, or only its own run when it starts fresh, and the granted collections it includes |
 
 An item's address names what owns it: `<campaign>/<run>/<slot>/<kind>:<id>`, such as `sum-speed/sum-1/worker-1/finding:2` or `sum-speed/sum-1/records/experiment:x-1a2b3c4d`. An agent's items are numbered in its slot; the records slot's items keep their ids in the run, and an item Thermite's code writes there with a `kb_item` event takes `w` before its number, `w1`.
+
+On the [Knowledge page](#the-knowledge-page) and in the owner's [list of a place](#a-places-list), a **folder** is a place in this tree that holds others: the knowledge base's folders are its collections, a collection's are its runs, and a run's are its slots. A slot holds items, and no folder.
+
+Four agents' slots were spelled differently before this version: `teacher`, `merged-by`, `review-panel` and `final-writer`. Control's store renames the items it kept, with their versions' writers and the links that name them, as it updates ([Compatibility](compatibility.md#the-knowledge-base)); an event a rig recorded before, an address given before and a contract's `kb_writes` saved before read under today's names.
 
 Nothing in the knowledge base is deleted or edited. A change to an item is its next version, and the versions before it stay; evidence the owner withdrew is marked in a new version of its attempt's item ([Withdrawn evidence](verdicts.md#withdrawn-evidence)). Control's store refuses to change or remove a version.
 
@@ -188,9 +192,10 @@ A refused item is left out, with `an item for the knowledge base refused` in con
 
 An item's file is kept whole, once, by its SHA-256:
 
-1. **In the rig's outbox.** The harness keeps it at `.kb-files/<sha256>` in the outbox, unless it is there already. A full reset's wipe leaves the folder, for the supervisor to put.
+1. **In the rig's outbox.** The harness keeps it at `.kb-files/<sha256>` in the outbox, unless it is there already, until control holds it (step 4). A full reset's wipe leaves the folder, for the supervisor to put.
 2. **On the message bus.** Each round, before it sends its report, the rig's supervisor puts each file it has not put yet on the `KB_FILES` stream, at most 50 a round, in chunks of 1 MiB in order on the rig's own subject, `thermite.rig.<rig>.kbfile`, each with the file's SHA-256 in its `Thermite-Sha256` header, and notes it in `kb-files-put/` in its home, so it puts a file once. It never puts a file whose bytes are not its name; it logs `files for the knowledge base wait` with it each round. With the bus away, or the stream not made yet, the files wait in the outbox. The stream holds at most 256 chunks of one rig waiting for control: while it holds as many, the rig's next chunk is refused, the round ends with `files for the knowledge base wait`, and the file is put again from its start at the next round.
 3. **In control's state.** Control takes each chunk, puts the file together in `kb-files/.partial/`, and at its last chunk checks its size and its SHA-256. It keeps it at `kb-files/<first two hex digits>/<sha256>` in its state folder, which a backup holds, and logs `a file for the knowledge base kept`. A file it holds already, from any rig, takes nothing more. A chunk after a gap, one of the wrong size, or bytes that are not their name are refused, with `a chunk of a file for the knowledge base refused` in its log and `kb_file_refused` in its audit log; a file is put together again from its first chunk. A rig's first chunk of a file drops any file of that rig that was cut short in `.partial/` (`a file for the knowledge base cut short dropped` in its log), so control holds at most one for each rig. While control's disk is at its [floor](settings.md#address-and-state), control writes nothing: each chunk waits on the stream, its log says `files for the knowledge base wait for room` once, and it tries again every minute.
+4. **Out of the outbox.** Each round, after its puts, the supervisor asks control which of the files it put, and the outbox still holds, control keeps: at most 500 a round, oldest first, on its own subject `thermite.rig.<rig>.ask.kb-files` ([A rig's asks](../explanation/how-the-parts-talk.md#a-rigs-asks-on-the-message-bus)). Control names those it keeps whole, after it checked their SHA-256, that an item it stored names. The supervisor, which only reads the outbox, names them to its harness (`POST /v1/kb/files-held`, with the supervisor's token), and the harness removes each from the outbox, with `files for the knowledge base left the outbox: control holds them` in both their logs. A file whose item has not reached control, or whose chunks control has not taken yet, stays, and the next round asks again; so does every file while control or the bus is away, or control refuses the rig, with `files for the knowledge base stay` in the supervisor's log. Nothing else removes a file from the outbox. The supervisor's note of a put stays: a file the harness writes again is not put again, and leaves the outbox at a later round.
 
 The item and its file meet by the SHA-256, whichever comes first: an item whose file has not come yet has it as soon as control keeps the file, and a file that comes before its item waits for it. Neither is lost while the other is on its way.
 
@@ -203,7 +208,7 @@ Each source a run archives, each document a lane writes, the run's research pape
 - **The largest file** the owner sets applies to them too ([The largest file](#the-largest-file)): a larger one is not kept, and its item keeps its own words alone.
 - **Items stored before.** A source or a document a rig sent before this version came with its text in its event, cut to its first 20,000 characters, and ends with `…`; a paper or a report was cut the same way, and says so. Control keeps each as it came: it has no more of its text, and can't make it whole. The run's research folder on its rig, and the rig's exports, keep the whole text.
 - **A kept conversation** stored before this version keeps the first 20,000 characters its event carried, and gets a scrubbed new version ([Kept conversations](#kept-conversations)).
-- **What is kept, and where.** On the rig, the outbox keeps each file once by its SHA-256, after the supervisor has put it on the bus: each source's archived text, each version of a lane's document, the paper, the final report and every digest. On control, each file is kept once in `kb-files/`, its extracted text once in the store, and the item's text, its own words and its file's text, in the item's row, which the words index reads. Each digest is a new version with a file of its own, and no version is ever removed, so a long run's digests add up on both sides.
+- **What is kept, and where.** On the rig, the outbox keeps each file once by its SHA-256, until control holds it with an item that names it ([Files](#files)): each source's archived text, each version of a lane's document, the paper, the final report and every digest. The run's research folder and its exports keep their own copies. On control, each file is kept once in `kb-files/`, its extracted text once in the store, and the item's text, its own words and its file's text, in the item's row, which the words index reads. Each digest is a new version with a file of its own, and no version is ever removed, so a long run's digests add up on both sides.
 
 ### Kept conversations
 
@@ -531,12 +536,12 @@ Which kinds each role may write in its own slot is set on the campaign: its cont
 | --- | --- |
 | `planner` (the planner and the research planner) | `decision`, `surprise`, `note` |
 | `worker` (`worker-<lane>`) | `journal`, `surprise`, `note`, `finding`, `doc` (a document it wrote), `reference` (one it downloaded) |
-| `teacher` | `note`, `finding`, `doc` |
-| `merged-by` | nothing |
+| `teachers` | `note`, `finding`, `doc` |
+| `merged_by` | nothing |
 | `auditor` | `review`, `decision` |
-| `review-panel` | `review`, `decision` |
+| `review_panel` | `review`, `decision` |
 | `synthesizer` | `report` |
-| `final-writer` | `paper`, `report` |
+| `final_writer` | `paper`, `report` |
 
 The owner changes it on the campaign's page, under **Who writes in its collection** (a box for each role and kind, then **Save**), over REST [`POST /v1/campaigns/<campaign>/kb-writes`](rest-api.md#which-roles-write-in-the-collection) and over MCP [`set_campaign_kb_writes`](mcp-tools.md#set_campaign_kb_writes). Each saves a new version of the campaign's contract, signed into each assignment: runs started from then take it, and a run keeps what it started with. An assignment from the operator's or an agent's token carries the setting of the campaign's saved version, and no other ([`issue_command`](mcp-tools.md#command-kinds-for-each-role)). The rig's harness refuses another kind, and control refuses it again as it stores the item ([Control's checks](#controls-checks)).
 

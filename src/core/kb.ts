@@ -8,9 +8,9 @@ import { BROKEN_VERDICTS, SCREENED_VERDICTS, UNCLEAR_VERDICTS, WON_VERDICTS } fr
  * control. It holds one collection for each campaign; a collection holds the campaign's runs; a run
  * holds slots, one for each writer; a slot holds items, and each item its versions. Thermite's code
  * writes each run's `records` slot from the run's signed events; an agent writes only its own slot,
- * with a `kb_item` event that its harness records signed. Control also sends a rig's supervisor the
- * items of the collections a run's campaign may read. Items are the agents' and the judge's
- * records: data, never instructions.
+ * with a `kb_item` event that its harness records signed. Control answers a run's searches and
+ * reads, through the rig's supervisor, within the collections the run's campaign may read; nothing
+ * of it is kept on a rig. Items are the agents' and the judge's records: data, never instructions.
  */
 export const KbKind = z.enum([
   "run",
@@ -136,18 +136,40 @@ export function kbOutcomeOf(
 export const KB_RECORDS = "records";
 
 /**
- * The agents' slots, one for each writer, as goal 166's roles name them; a worker's has its lane,
- * `worker-<lane>` (workerSlot). A writer writes only its own slot.
+ * The agents' slots, one for each writer, each named as the agent is named everywhere else: in
+ * model usage, the advisors' roles and their models (core/usage.ts, core/agents.ts). A worker's
+ * has its lane, `worker-<lane>` (workerSlot). A writer writes only its own slot.
  */
 export const KB_AGENT_SLOTS = [
   "planner",
-  "teacher",
-  "merged-by",
+  "teachers",
+  "merged_by",
   "auditor",
-  "review-panel",
+  "review_panel",
   "synthesizer",
-  "final-writer",
+  "final_writer",
 ] as const;
+
+/**
+ * The slots as they were spelled before they took the agents' names (2026-11-01), and the name
+ * each has now. Control's store migration renamed the items it kept; a rig's ledger keeps the
+ * events it recorded, and a contract its `kb_writes` as signed, so their readers map these.
+ */
+export const KB_SLOTS_BEFORE: ReadonlyMap<string, string> = new Map([
+  ["teacher", "teachers"],
+  ["merged-by", "merged_by"],
+  ["review-panel", "review_panel"],
+  ["final-writer", "final_writer"],
+]);
+
+/** A slot under today's name: one spelled as before (KB_SLOTS_BEFORE) gets its name now. */
+const currentSlot = (slot: string): string => KB_SLOTS_BEFORE.get(slot) ?? slot;
+
+/** Every spelling a slot's events may carry: its name, and its spelling before, if it had one. */
+export const slotSpellings = (slot: string): string[] => [
+  slot,
+  ...[...KB_SLOTS_BEFORE].filter(([, now]) => now === slot).map(([before]) => before),
+];
 
 const WORKER_SLOT = /^worker-([1-9][0-9]?)$/;
 
@@ -185,7 +207,8 @@ export const KbSlot = z
  */
 export function slotOfWriter(actor: string): string | undefined {
   if (actor === CODE_WRITER) return KB_RECORDS;
-  return isAgentSlot(actor) ? actor : undefined;
+  const slot = currentSlot(actor);
+  return isAgentSlot(slot) ? slot : undefined;
 }
 
 /** The event's writer for a slot: slotOfWriter's other way. */
@@ -219,16 +242,27 @@ export interface KbPlace {
 export const kbAddress = (p: KbPlace): string =>
   `${p.campaign}/${p.run}/${p.slot}/${p.kind}:${p.ref}`;
 
-const ADDRESS = /^([^/\s]+)\/([^/\s]+)\/([a-z0-9-]+)\/([a-z]+):([^\n]+)$/;
+const ADDRESS = /^([^/\s]+)\/([^/\s]+)\/([a-z0-9_-]+)\/([a-z]+):([^\n]+)$/;
 
-/** An address read back into its parts; undefined for text that is not an item's address. */
+/**
+ * An address read back into its parts; undefined for text that is not an item's address. A slot
+ * spelled as before (KB_SLOTS_BEFORE) reads as its name now, so an address given before still
+ * finds its item.
+ */
 export function readKbAddress(text: string): KbPlace | undefined {
   const m = ADDRESS.exec(text);
   if (!m) return undefined;
-  const [, campaign = "", run = "", slot = "", kind = "", ref = ""] = m;
+  const [, campaign = "", run = "", spelled = "", kind = "", ref = ""] = m;
+  const slot = currentSlot(spelled);
   if (!NAME_PATTERN.test(campaign) || !NAME_PATTERN.test(run)) return undefined;
   if (!KbSlot.safeParse(slot).success || !KbKind.safeParse(kind).success) return undefined;
   return { campaign, run, slot, kind, ref };
+}
+
+/** An address with its slot under today's name; text that is not an address, as it is. */
+export function currentAddress(text: string): string {
+  const p = readKbAddress(text);
+  return p ? kbAddress(p) : text;
 }
 
 export const KbAddress = z
@@ -262,17 +296,17 @@ export type KbListSort = (typeof KB_LIST_SORTS)[number];
 /**
  * The roles the agents' slots are named for, as a campaign says which kinds each may write: a
  * worker's slots (`worker-<lane>`) are the worker's. The research roles write in the same slots
- * (the research planner in `planner`, a research teacher in `teacher`).
+ * (the research planner in `planner`, a research teacher in `teachers`).
  */
 export const KB_WRITER_ROLES = [
   "planner",
   "worker",
-  "teacher",
-  "merged-by",
+  "teachers",
+  "merged_by",
   "auditor",
-  "review-panel",
+  "review_panel",
   "synthesizer",
-  "final-writer",
+  "final_writer",
 ] as const;
 export const KbWriterRole = z.enum(KB_WRITER_ROLES);
 export type KbWriterRole = z.infer<typeof KbWriterRole>;
@@ -297,27 +331,47 @@ export const KbWrites = z.partialRecord(KbWriterRole, KindList);
 export type KbWrites = z.infer<typeof KbWrites>;
 
 /**
+ * A contract's `kb_writes` as it is kept: its roles by today's names, or by the slots' names
+ * before (KB_SLOTS_BEFORE), as it was signed, so that a contract saved before keeps its hash.
+ * kbWritesOf reads either under today's names; the owner sets only today's (KbWrites).
+ */
+export const KbWritesInContract = z.partialRecord(
+  z.enum([...KB_WRITER_ROLES, ...KB_SLOTS_BEFORE.keys()]),
+  KindList,
+);
+
+/**
  * What a campaign that sets nothing lets each role write: the planner its decisions, surprises and
  * notes; a worker its journal entries, surprises, notes and findings, and the files it writes
  * (doc) or downloads (reference); a teacher notes, findings and docs; the auditor and the review
  * panel reviews and decisions; the synthesizer reports; the final writer the paper and reports.
- * The merged-by model, the model check and compaction write nothing.
+ * The merged by model, the model check and compaction write nothing.
  */
 export const KB_WRITES_DEFAULT: KbWrites = {
   planner: ["decision", "surprise", "note"],
   worker: ["journal", "surprise", "note", "finding", "doc", "reference"],
-  teacher: ["note", "finding", "doc"],
+  teachers: ["note", "finding", "doc"],
   auditor: ["review", "decision"],
-  "review-panel": ["review", "decision"],
+  review_panel: ["review", "decision"],
   synthesizer: ["report"],
-  "final-writer": ["paper", "report"],
+  final_writer: ["paper", "report"],
 };
 
-/** What a contract lets each role write: its `kb_writes`, or KB_WRITES_DEFAULT when it sets none. */
+/**
+ * What a contract lets each role write: its `kb_writes` under today's names (a role named as
+ * before takes its name now; where both are given, today's wins), or KB_WRITES_DEFAULT when it
+ * sets none.
+ */
 export function kbWritesOf(contract: unknown): KbWrites {
   const set = (contract as { kb_writes?: unknown } | null | undefined)?.kb_writes;
-  const r = KbWrites.safeParse(set);
-  return set !== undefined && r.success ? r.data : KB_WRITES_DEFAULT;
+  const r = KbWritesInContract.safeParse(set);
+  if (set === undefined || !r.success) return KB_WRITES_DEFAULT;
+  const out: KbWrites = {};
+  for (const [named, kinds] of Object.entries(r.data)) {
+    const role = KbWriterRole.safeParse(currentSlot(named)).data;
+    if (role && kinds && (named === role || out[role] === undefined)) out[role] = [...kinds];
+  }
+  return out;
 }
 
 /** The kinds a slot's writer may write under `writes`: none for the records slot. */
@@ -342,16 +396,28 @@ export const KB_TEXT_MAX = KB_BODY_MAX;
 /**
  * Where a rig's items' files wait in its outbox, each named by its SHA-256: the harness writes them,
  * and the supervisor, which reads the outbox, puts each on the message bus once
- * (core/link/kb-files.ts). The dot keeps them apart from the exports there.
+ * (core/link/kb-files.ts). Once control says it holds a file (the rig's `kb-files` ask,
+ * core/link/asks.ts), the harness removes it from there. The dot keeps them apart from the exports
+ * there.
  */
 export const KB_OUTBOX_FILES = ".kb-files";
 
 /**
- * An item's file, kept whole by its SHA-256: once in the rig's outbox, until the supervisor puts
- * it on the message bus (core/link/kb-files.ts), then once in control's state. No size limit.
+ * The most files one `kb-files` ask names, and so the most the harness removes at once: the rest,
+ * at the supervisor's next round.
+ */
+export const KB_FILES_HELD_MAX = 500;
+
+/** A file's SHA-256 as its name in the outbox and on control: 64 hex digits. */
+export const KbFileSha256 = z.string().regex(/^[0-9a-f]{64}$/, "a file's SHA-256 is 64 hex digits");
+
+/**
+ * An item's file, kept whole by its SHA-256: in the rig's outbox until control holds it (the
+ * supervisor puts it on the message bus, core/link/kb-files.ts), and once in control's state. No
+ * size limit.
  */
 export const KbItemFile = z.object({
-  sha256: z.string().regex(/^[0-9a-f]{64}$/, "a file's SHA-256 is 64 hex digits"),
+  sha256: KbFileSha256,
   /** Its name, as its writer gave it. */
   name: z.string().trim().min(1).max(200),
   /** Its media type: text/markdown, application/pdf, … */
@@ -409,9 +475,30 @@ export const KbItemBody = z
   });
 export type KbItemBody = z.infer<typeof KbItemBody>;
 
-/** A `kb_item` event's body, read and checked; or why it is not one, in words. */
+/**
+ * A `kb_item` event's body under today's names: its slot, and each link's address, spelled as
+ * before (KB_SLOTS_BEFORE) take their names now. Anything else, as it is.
+ */
+function inTodaysNames(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const b = raw as { slot?: unknown; links?: unknown };
+  const link = (l: unknown) => {
+    const to = (l as { to?: unknown } | null)?.to;
+    return typeof to === "string" ? { ...(l as object), to: currentAddress(to) } : l;
+  };
+  return {
+    ...b,
+    ...(typeof b.slot === "string" ? { slot: currentSlot(b.slot) } : {}),
+    ...(Array.isArray(b.links) ? { links: b.links.map(link) } : {}),
+  };
+}
+
+/**
+ * A `kb_item` event's body, read and checked, under today's names (an event recorded before the
+ * slots took the agents' names reads as one recorded now); or why it is not one, in words.
+ */
 export function readKbItem(raw: unknown): { body: KbItemBody } | { refused: string } {
-  const r = KbItemBody.safeParse(raw);
+  const r = KbItemBody.safeParse(inTodaysNames(raw));
   if (r.success) return { body: r.data };
   const words = r.error.issues.map((i) => `${i.path.join(".") || "the item"}: ${i.message}`);
   return { refused: words.join("; ") };

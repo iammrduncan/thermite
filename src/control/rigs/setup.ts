@@ -68,6 +68,10 @@ export const STEP_WORDS: Record<string, string> = {
   bus_registered: "It registered its keys on the message bus with control",
   bus_off:
     "It calls control over HTTP with no keys on the message bus: it is broken until it is set up again",
+  credits_note_dismissed:
+    "You dismissed the note that its subscription's usage credits are on: the mark on Providers stays",
+  weekly_limit_wait: "You chose to wait for its subscription's weekly limit to reset",
+  weekly_limit_model: "You gave it another model while its subscription's weekly limit is full",
   ...UPDATE_STEP_WORDS,
 };
 

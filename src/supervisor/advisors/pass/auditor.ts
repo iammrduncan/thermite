@@ -5,7 +5,10 @@ import type { AdviseContext } from "./context.ts";
 import { clip } from "./shared.ts";
 import { MAX_TRIES } from "./state.ts";
 
-/** The auditor's part of a pass: each open audit, tried again until its tries are spent. */
+/**
+ * The auditor's part of a pass: each open audit, tried again until its tries are spent. A try that
+ * met a full usage window is not counted: the auditor waits for the reset (limit.ts).
+ */
 export async function answerAudits(ctx: AdviseContext): Promise<void> {
   const {
     cfg,
@@ -16,6 +19,9 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
     retryMs,
     due,
     mark,
+    uncount,
+    waitsFor,
+    waitOut,
     toolsFor,
     kbFor,
     configFor,
@@ -104,6 +110,8 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
         if (!t || now - Date.parse(t) >= retryMs) await toOwner(pkg, key);
         continue;
       }
+      // The auditor waits for its provider's full usage window: its audits wait with it.
+      if (waitsFor(auditor.name)) continue;
       if (!due(key)) continue;
       mark(key);
       const owner = (pkg.owner_messages ?? []).filter((m) => !told.has(m.id));
@@ -132,6 +140,12 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
         await usageOut(pkg.run, `audit ${pkg.attempt}`, "auditor", r.usage);
         await promptsOut(pkg.run, `audit ${pkg.attempt}`, r.sent);
         if (!r.output) {
+          // A full usage window, headless: not a failed try; tried again at the reset.
+          if (r.limit) {
+            uncount(key);
+            waitOut(auditor.name, `audit of ${pkg.attempt}`, r.limit, pkg.run);
+            continue;
+          }
           await failed(pkg, key, r.error);
           continue;
         }

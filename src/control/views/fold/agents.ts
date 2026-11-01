@@ -29,6 +29,8 @@ export const AGENTS: Handlers = {
       until: String(b.until ?? ""),
       reason: String(b.reason ?? ""),
       since: e.at,
+      trial: typeof b.trial === "string" ? b.trial : null,
+      weekly: b.weekly === true,
     };
   },
   agents_wait_ended(f, e) {

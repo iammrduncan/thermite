@@ -1,4 +1,9 @@
-import { CHATGPT_USAGE_PAGE, type PlanUsage, type PlanWindow } from "../../providers/index.ts";
+import {
+  CHATGPT_USAGE_PAGE,
+  creditsNoteShows,
+  type PlanUsage,
+  type PlanWindow,
+} from "../../providers/index.ts";
 import { ago, esc } from "../components/index.ts";
 
 /**
@@ -46,4 +51,36 @@ export function usageBlock(
   if (u.error || !u.windows.length)
     return `<div class="muted small">No usage from OpenAI: ${esc(u.error ?? "its answer had no windows")}. See ${page}. ${full}</div>`;
   return `<div class="use">${bars}</div><div class="muted small" style="margin-top:4px">As OpenAI answered control ${esc(ago(u.at, now))} ago${u.plan ? ` (plan: ${esc(u.plan)})` : ""}; asked again after 5 minutes. ${full}</div>`;
+}
+
+/** A time as the Providers page says it: 2026-11-01 14:02 UTC. */
+const utc = (at: string) => `${at.slice(0, 16).replace("T", " ")} UTC`;
+
+/**
+ * A Claude subscription's usage credits on its row (goal 169): the chip "usage credits on" while
+ * Claude Code reports them on, with what a dismissal of its note means in its title. None when
+ * they are off, or never reported.
+ */
+export function creditsChip(u: PlanUsage | undefined, dismissedAt: string | undefined): string {
+  if (!u?.credits?.on) return "";
+  const title = creditsNoteShows(u.credits, dismissedAt)
+    ? "Usage credits are on for this account, as Claude Code reports them."
+    : `Usage credits are on for this account. You dismissed the note on ${utc(dismissedAt ?? "")}; it comes back if credits are reported on again after being off.`;
+  return `<span class="chip warn" data-credits="on" title="${esc(title)}">usage credits on</span>`;
+}
+
+/**
+ * The note under a Claude subscription whose usage credits are on, unless the owner dismissed it
+ * since they last came on: why it matters, what to do, and Dismiss.
+ */
+export function creditsNote(
+  provider: string,
+  u: PlanUsage | undefined,
+  dismissedAt: string | undefined,
+  csrf: string,
+): string {
+  const c = u?.credits;
+  if (!c || !creditsNoteShows(c, dismissedAt)) return "";
+  const dismiss = `<form class="inline" method="post" action="/ui/settings/providers/${encodeURIComponent(provider)}/credits-note/dismiss"><input type="hidden" name="csrf" value="${esc(csrf)}"><button class="sm" style="margin-left:8px" title="Hide this note. The chip stays; the note comes back if Claude Code reports credits on again after reporting them off.">Dismiss</button></form>`;
+  return `<div class="callout warn small" data-credits-note="${esc(provider)}">Claude Code reports usage credits on for this account (in its last session on ${esc(c.rig)}, ${esc(utc(c.at))}). With credits on, a full window can spend paid usage instead of waiting, so Thermite's rule that a full window waits for its reset holds only with them off. Turn them off in the Claude account's settings; this mark goes once Claude Code reports them off.${dismiss}</div>`;
 }

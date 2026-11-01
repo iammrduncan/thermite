@@ -55,7 +55,7 @@ A worker in Pi has no program of its own to type into: its screen is the Pi view
 | You send | What the worker does |
 | --- | --- |
 | Words | Steers the agent: your words go into its conversation before its next model call, as a message from you |
-| Words, with **Follow-up: give my words when the agent would stop…** ticked | Your words wait until the agent ends a reply that calls no tool, and go in then, instead of its stopping |
+| Words, with **Follow-up: give my words when the agent would stop…** ticked | Your words wait until the agent ends a reply that calls no tool, and go in then, instead of its stopping. The run's **History** says `… as a follow-up: the agent gets it when it would stop, at the end of a reply that calls no tool.` |
 | **Esc** | Stops the agent's reply. A tool call under way finishes first. The trial goes on at once with your words that wait, or with its nudge to keep working: your stop is not the agent's, and counts as none of its nudges |
 | `/compact` | Compacts the conversation before the agent's next model call, as the harness does near the model's window, kept and recorded the same way |
 | `/mcp` | Shows the trial's MCP tools, server by server, and the servers that failed |

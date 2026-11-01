@@ -56,12 +56,12 @@ export type KbReadQuery = z.infer<typeof KbReadQuery>;
 const USAGE_AGENT: Record<KbWriterRole, UsageAgent> = {
   planner: "planner",
   worker: "workers",
-  teacher: "teachers",
-  "merged-by": "merged_by",
+  teachers: "teachers",
+  merged_by: "merged_by",
   auditor: "auditor",
-  "review-panel": "review_panel",
+  review_panel: "review_panel",
   synthesizer: "synthesizer",
-  "final-writer": "final_writer",
+  final_writer: "final_writer",
 };
 
 /**

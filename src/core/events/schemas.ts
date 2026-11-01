@@ -371,7 +371,7 @@ const BODIES = {
   }),
   agents_stopped: z.object({ kind: str, words: str, by: str, said: str }),
   agents_resumed: z.object({ why: str }),
-  agents_wait_for_limit: z.object({ until: str, reason: str }),
+  agents_wait_for_limit: z.object({ until: str, reason: str, trial: str, weekly: bool }),
   agents_wait_ended: z.object({ until: str }),
   journal_note: z.object({
     id: num,

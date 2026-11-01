@@ -16,12 +16,12 @@ import { esc, infoLabel } from "../components/index.ts";
 const ROLE_NAMES: Record<KbWriterRole, string> = {
   planner: "Planner",
   worker: "Workers",
-  teacher: "Teachers",
-  "merged-by": "Merged by",
+  teachers: "Teachers",
+  merged_by: "Merged by",
   auditor: "Auditor",
-  "review-panel": "Review panel",
+  review_panel: "Review panel",
   synthesizer: "Synthesizer",
-  "final-writer": "Final writer",
+  final_writer: "Final writer",
 };
 
 const TIP =

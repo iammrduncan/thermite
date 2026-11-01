@@ -1,3 +1,4 @@
+import { TERMINAL_WAIT_MAX_MS } from "../../../agents/cli/index.ts";
 import type { Contract } from "../../../core/contract.ts";
 import type { Ledger } from "../../ledger/index.ts";
 import { statusEvents } from "../../run-status.ts";
@@ -29,6 +30,7 @@ const LONGEST_TRIAL_MS = HARNESS_NUMBERS.trialMinutes.rule.max * 60_000;
  * trial length (a trial_minutes rule, else its contract's), else the rig's (`rigMs`), else the
  * longest a trial may be set to, 24 hours. A trial's words never hold its run longer than one
  * trial could last; a limit still in force then shows again in the next trial, which asks again.
+ * Only a weekly window's reset, which its program gave, holds the run longer (afterTrial).
  */
 export function holdUntil(
   ledger: Ledger,
@@ -42,6 +44,16 @@ export function holdUntil(
   const longest = minutes ? minutes * 60_000 : (rigMs ?? LONGEST_TRIAL_MS);
   return new Date(Math.min(Date.parse(until), now + longest)).toISOString();
 }
+
+/**
+ * A usage limit whose reset its program gave (`retryAfter`) more than a day away, and at most a
+ * week and a day, is a weekly window (the owner's decision of 2026-10-27, as a program's own
+ * terminal tells one: usage-window.ts): the trial ended, its experiment back at the top, and the
+ * run waits for the reset itself, not one trial's length, marked `weekly` for control's Needs you.
+ * A reset further off is not believed, and holds the run one trial's length, as any other.
+ */
+const WEEKLY_AFTER_MS = TERMINAL_WAIT_MAX_MS;
+const WEEKLY_MAX_MS = 8 * 24 * 3_600_000;
 
 /** The first pause before the model is checked again after the run's agents stopped (goal 079). */
 const RECHECK_FIRST_MS = 60_000;
@@ -243,18 +255,26 @@ export function afterTrial(sched: SchedulerContext, id: string, run: string, r: 
   }
   const until =
     r.retryAfter ?? (kind === "rate_limit" ? classifyProviderError(r.error).retryAt : undefined);
-  if (until)
-    sched.ledger.appendEvent(sched.o.owner, "agents_wait_for_limit", run, {
-      until: holdUntil(
-        sched.ledger,
-        run,
-        sched.o.service.contractFor(run),
-        sched.o.trialWallMs,
-        until,
-      ),
-      trial: id,
-      reason: r.error,
-    });
+  if (!until) return;
+  // A weekly window: the reset its program gave, a day away or more (WEEKLY_AFTER_MS).
+  const now = Date.now();
+  const reset = kind === "rate_limit" && r.retryAfter ? Date.parse(r.retryAfter) : Number.NaN;
+  const weekly = reset - now > WEEKLY_AFTER_MS && reset - now <= WEEKLY_MAX_MS;
+  sched.ledger.appendEvent(sched.o.owner, "agents_wait_for_limit", run, {
+    until: weekly
+      ? new Date(reset).toISOString()
+      : holdUntil(
+          sched.ledger,
+          run,
+          sched.o.service.contractFor(run),
+          sched.o.trialWallMs,
+          until,
+          now,
+        ),
+    trial: id,
+    reason: r.error,
+    ...(weekly ? { weekly: true as const } : {}),
+  });
 }
 
 /**

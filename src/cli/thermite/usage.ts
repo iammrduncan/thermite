@@ -266,6 +266,11 @@ export const USAGE = `usage: thermite <command> [options]
                                       --on turns it on too). K: events, builds, trial_logs,
                                       advisor_records, kb_versions, store_copies or audit. KEEP:
                                       open, champions or newest, each on unless --no-keep. UTC
+  bus --control URL --token-file F [--json]
+                                      the message bus as control sees it now (owner's or
+                                      reader's token): its server, each stream with its
+                                      messages, bytes and consumers, the events stream's writer
+                                      and apply, and the live and config figures
   exports delete RIG NAME... --control URL --token-file F
                                       delete exports control keeps from RIG (owner's token), as
                                       Delete on the Exports page does: their files and records,

@@ -210,8 +210,13 @@ test("control reads every rig's view through the folds it keeps for its store", 
     [["rig-a", "ledger-a", 30]],
   );
   await reported(store, "rig-a", "ledger-a", hillClimbEvents("r-1").slice(30), {}, 30);
-  const again = await (await api("GET", "/v1/rigs/rig-a/view")).json();
+  // The route adds the rig's connection to the bus and its weekly limit to the folded view.
+  const { bus, weekly_limit, ...again } = (await (
+    await api("GET", "/v1/rigs/rig-a/view")
+  ).json()) as Record<string, unknown>;
   assert.deepStrictEqual(again, JSON.parse(JSON.stringify(await fresh(store, "rig-a"))));
+  assert.deepEqual(bus, { state: "on", since: null });
+  assert.equal(weekly_limit, null);
 });
 
 test("a read of a view folds nothing more and asks the store for no event", async () => {

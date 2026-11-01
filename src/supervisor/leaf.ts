@@ -1,9 +1,10 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { BusTrust } from "../common/bus/index.ts";
+import { type BusTrust, probeBus } from "../common/bus/index.ts";
 import { log } from "../common/env.ts";
 import { writeAtomic } from "../common/fs.ts";
+import { HEALTH_WATCH, watchPart } from "../common/health.ts";
 import {
   fromEnvLine,
   LEAF_ENV,
@@ -23,12 +24,24 @@ import { busKey } from "./relay/index.ts";
  * server as its own child, and again after it exits; and signs in to it on the pod's loopback with
  * the rig's key, as a supervisor elsewhere signs in to control's server. The pod's key is taken out
  * of the supervisor's environment, so nothing it starts has it.
+ *
+ * Nothing outside the pod checks the server, so the supervisor does, as the broker checks the
+ * supervisor (common/health.ts's HEALTH_WATCH): every 30 s it signs in to the server on its own
+ * connection, makes one round trip and closes it, within 5 s. A server that hangs, its process
+ * still there, fails it; at the third failure in a row it is killed, and started again as after an
+ * exit. It opens no port of its own for the check: a monitoring port would tell anything in the
+ * pod the server's connections and subjects.
  */
 
 /** The pod's server's program: the rig image copies it from the bus's pinned server image. */
 export const POD_BUS_PROGRAM = "/usr/local/bin/nats-server";
 /** After the pod's server exits, it starts again after this long. */
 export const POD_BUS_RESTART_MS = 5_000;
+/**
+ * How long the pod's server may take to start: until it first answers its check, its failed checks
+ * count only after this. It starts in about a second.
+ */
+const POD_BUS_START_MS = 60_000;
 /** At a stop, the pod's server has this long to end, and is then killed. */
 const POD_BUS_STOP_MS = 5_000;
 /** The longest line of the pod's server's log the supervisor's log keeps. */
@@ -100,23 +113,42 @@ export interface PodBus {
 
 /**
  * The pod's server, when the launch gave the leaf's values: its files written in the tunnel's
- * folder, and the server started. Undefined without them. A test gives its own program and wait.
+ * folder, and the server started and watched. Undefined without them. A test gives its own
+ * program, its waits and its check.
  */
 export function startPodBus(
   env: NodeJS.ProcessEnv,
   home: string,
-  o: { program?: string; restartMs?: number } = {},
+  o: {
+    program?: string;
+    restartMs?: number;
+    probe?: () => Promise<string | undefined>;
+    watchEveryMs?: number;
+    startMs?: number;
+  } = {},
 ): PodBus | undefined {
   const program = o.program ?? POD_BUS_PROGRAM;
   const restartMs = o.restartMs ?? POD_BUS_RESTART_MS;
   const values = leafValues(env);
   if (!values) return undefined;
   delete env[LEAF_ENV.key];
+  const key = busKey(home);
   const { config, cert } = writePodBus(
     join(podTunnelDirs(env, home).dir, "bus"),
     values,
-    busKey(home).publicKey,
+    key.publicKey,
   );
+  // The server's check: signed in with the rig's key, trusting the pod's certificate, as the
+  // supervisor's own connection is.
+  const probe =
+    o.probe ??
+    (() =>
+      probeBus(
+        POD_BUS_URL,
+        "supervisor: the pod's bus server's check",
+        { seed: key.seed, trust: { caFile: cert } },
+        HEALTH_WATCH.answerMs,
+      ));
   let child: ChildProcess | undefined;
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -146,6 +178,18 @@ export function startPodBus(
     };
     proc.on("exit", (code, signal) => ended(code, signal));
     proc.on("error", (err) => ended(null, null, err.message));
+    // A server that hangs is killed, and its exit starts it again.
+    watchPart(proc, {
+      component: "supervisor",
+      part: "pod's bus server",
+      check: "sign-in check",
+      where: { bus: new URL(POD_BUS_URL).host },
+      probe,
+      startMs: o.startMs ?? POD_BUS_START_MS,
+      stopping: () => stopped,
+      end: () => proc.kill("SIGKILL"),
+      everyMs: o.watchEveryMs,
+    });
   };
   start();
   log("supervisor", "the pod's bus server started: control's server dials it as a leaf node", {

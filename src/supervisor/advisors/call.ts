@@ -8,6 +8,7 @@ import type { McpToolInfo } from "../../core/mcp.ts";
 import type { PromptSection } from "../../core/prompts.ts";
 import type { CallUsage, UsageRoute } from "../../core/usage.ts";
 import type { AdvisorRuntime } from "./config.ts";
+import type { AdvisorLimit } from "./limit.ts";
 import type { AdvisorInTerminal } from "./terminal/index.ts";
 import type {
   AdvisorCode,
@@ -73,6 +74,11 @@ export interface AdvisorResult<T> {
    * to it, as those of its prompt are, for its receipts.
    */
   given?: number[] | undefined;
+  /**
+   * A headless call with no answer that met a full usage window, with its reset (limit.ts): not a
+   * failed try; the advisor waits for the reset.
+   */
+  limit?: AdvisorLimit | undefined;
 }
 
 /**

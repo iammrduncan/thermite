@@ -13,6 +13,7 @@ import type { CallUsage, UsageRoute } from "../../../core/usage.ts";
 import { type AdvisorRunner, advisorRunner } from "../../advisor-runs/index.ts";
 import type { AdvisorCompaction, AdvisorKeeper, AdvisorResult, AdvisorUsage } from "../call.ts";
 import type { CliAnswer } from "../cli.ts";
+import { type AdvisorLimit, limitIn } from "../limit.ts";
 
 /** A call's id, for the names of its kept conversations: when it started. */
 export const callId = () => new Date().toISOString().replace(/[:.]/g, "-");
@@ -266,6 +267,11 @@ export async function runCli<S extends z.ZodType>(
      * read once it has ended, before the folder is removed.
      */
     collect?: ((home: string) => AdvisorCompaction[]) | undefined;
+    /**
+     * A full usage window the call met, from the program's own records in its folder (Claude
+     * Code's transcript), read as `collect` is; else from its error words (limit.ts).
+     */
+    limitFrom?: ((home: string) => AdvisorLimit | undefined) | undefined;
   },
   /** Its whole prompt: the role's text, the package and the answer's shape (advisorPromptOf). */
   stdin: string,
@@ -305,6 +311,13 @@ export async function runCli<S extends z.ZodType>(
     compactions = [];
   }
   const kept = compactions.length ? { compactions } : {};
+  // A full usage window, from the program's own records, while its folder is there.
+  let recorded: AdvisorLimit | undefined;
+  try {
+    recorded = rt.limitFrom?.(home);
+  } catch {
+    recorded = undefined;
+  }
   await removeHome(runner, home);
   if (error) return { output: undefined, error, tokensIn: 0, tokensOut: 0, usd: 0, ...kept };
   // A CLI with JSON events (OpenCode, Codex): its last message is the answer.
@@ -318,15 +331,27 @@ export async function runCli<S extends z.ZodType>(
     : undefined;
   // Why there is no answer: the CLI's last message, else its last error, else its output.
   const why = said?.text || said?.error || err || out;
-  return parsed.ok
-    ? { output: parsed.value, tokensIn, tokensOut, usd: 0, usage, ...kept }
-    : {
-        output: undefined,
-        error: `no valid answer: ${why.slice(-300)}`,
-        tokensIn,
-        tokensOut,
-        usd: 0,
-        usage,
-        ...kept,
-      };
+  if (parsed.ok) return { output: parsed.value, tokensIn, tokensOut, usd: 0, usage, ...kept };
+  // A full usage window is not a failed try: from the program's records, else its own error, else
+  // the end of what it wrote to stderr when it gave no error of its own (a command-line agent).
+  const own = said?.error || errorResult(out);
+  const limit = recorded ?? (own ? limitIn(own) : limitIn(err.slice(-2000)));
+  return {
+    output: undefined,
+    error: `no valid answer: ${why.slice(-300)}`,
+    tokensIn,
+    tokensOut,
+    usd: 0,
+    usage,
+    ...kept,
+    ...(limit ? { limit } : {}),
+  };
+}
+
+/** The words of a JSON result that says it is an error (Claude Code's `is_error`); else none. */
+function errorResult(out: string): string {
+  const r = lastJsonObject(out);
+  if (!r || typeof r !== "object") return "";
+  const o = r as { is_error?: unknown; result?: unknown };
+  return o.is_error === true && typeof o.result === "string" ? o.result : "";
 }

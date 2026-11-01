@@ -23,6 +23,11 @@
 // turn whose Stop hook does not block ends there, and the next turn (the continuation, or the
 // nudge typed into its terminal) submits.
 //
+// Before a trial submits, it writes two items for Thermite's knowledge base (goal 175) through the
+// `thermite` MCP server its --mcp-config names, as Claude Code calls an MCP tool
+// (mcp__thermite__kb_write): one in its own slot, and one naming another slot, which the harness
+// refuses; what each answered goes in the submission's facts (kb=<address> kb_refused=yes|no).
+//
 // In its terminal, a trial's first turn meets a full 5-hour usage window that resets WINDOW_S
 // later, as Claude Code records one: its own message with the reset, StopFailure, and the turn's
 // end. With autoContinueAtUsageLimit on, as Thermite's settings turn it, it waits for the reset and
@@ -263,10 +268,63 @@ const compact = () => {
   }
   return r.status === 0 && /^Thermite keeps the whole conversation/.test(said) ? "hook" : `hook-failed-${r.status}`;
 };
-/** The trial's change and its submission, after a compaction, with what it was given. */
-const submitChange = () => {
+// Thermite's own MCP server, from the --mcp-config the harness gave it (goal 175).
+const thermiteMcp = (() => {
+  try {
+    return JSON.parse(val("--mcp-config") ?? "{}").mcpServers?.thermite;
+  } catch {
+    return undefined;
+  }
+})();
+let mcpCalls = 0;
+/**
+ * One call of a tool of Thermite's MCP server, as Claude Code makes one: its tool_use and its
+ * result in its output (and transcript), the call a JSON-RPC request over MCP's HTTP transport
+ * with the headers the configuration names. Its hooks are not run for it.
+ */
+const mcpTool = async (tool, args) => {
+  const id = `tu_${session.slice(0, 8)}_mcp${++mcpCalls}`;
+  turn([{ type: "tool_use", id, name: `mcp__thermite__${tool}`, input: args }]);
+  let text;
+  let isError = false;
+  try {
+    const r = await fetch(thermiteMcp.url, {
+      method: "POST",
+      headers: { ...thermiteMcp.headers, "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: mcpCalls, method: "tools/call", params: { name: tool, arguments: args } }),
+    });
+    const body = await r.json();
+    text = body.result ? body.result.content.map((c) => c.text ?? "").join("\n") : JSON.stringify(body.error ?? body);
+    isError = !body.result || body.result.isError === true;
+  } catch (e) {
+    text = String(e);
+    isError = true;
+  }
+  const result = { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: text, is_error: isError }] };
+  if (terminal) record({ type: "user", message: result });
+  out({ type: "user", message: result });
+  return { text, isError };
+};
+/**
+ * Its items for the knowledge base: a finding in its own slot, and a note naming the planner's
+ * slot, which kb_write never takes. What each answered, as the submission's facts.
+ */
+const kbWrites = async () => {
+  if (!thermiteMcp?.url) return "kb=no-server kb_refused=no";
+  const kept = await mcpTool("kb_write", {
+    kind: "finding",
+    title: `kbprobecc: written by the Claude Code stand-in (${terminal ? "terminal" : "headless"})`,
+    text: "kbprobecc: the Claude Code stand-in wrote this in its own slot through Thermite's MCP server.",
+  });
+  const denied = await mcpTool("kb_write", { kind: "note", title: "kbprobedenied not my slot", text: "x", slot: "planner" });
+  const address = /kept: (\S+?), item \d+/.exec(kept.text)?.[1] ?? (kept.isError ? "refused" : "none");
+  return `kb=${address} kb_refused=${denied.isError && /you write only in your own slot/.test(denied.text) ? "yes" : "no"}`;
+};
+/** The trial's change and its submission, after its items and a compaction, with what it was given. */
+const submitChange = async () => {
+  const kb = await kbWrites();
   const kept = compact();
-  bash(`printf '\\n/* tidied by claude code */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'claude code harness: a tidied kernel (compacted=${kept} ${hookFacts()} ${windowFacts()} ${facts})'`);
+  bash(`printf '\\n/* tidied by claude code */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'claude code harness: a tidied kernel (compacted=${kept} ${kb} ${hookFacts()} ${windowFacts()} ${facts})'`);
   turn([{ type: "text", text: "Submitted." }]);
   stop("Submitted.");
 };
@@ -330,7 +388,7 @@ function runHeadless() {
       hook("SessionStart", { source: "resume", model: val("--model") });
       hook("UserPromptSubmit", { prompt: prompt.slice(0, 2000) });
     }
-    if (working) submitChange();
+    if (working) await submitChange();
     if (Object.keys(hooks).length) hook("SessionEnd", { reason: "other" });
     out({ type: "result", subtype: "success", is_error: false, result: answer, num_turns: n, usage: { input_tokens: 100 * n, output_tokens: 20 * n } });
   })();
@@ -459,8 +517,8 @@ function runTerminal() {
         await waitMessages(2);
         bash("true");
         turn([{ type: "text", text: "Read the kernel." }]);
-        if (stop("Read the kernel.")) submitChange();
-      } else if (trial && at === 1) submitChange();
+        if (stop("Read the kernel.")) await submitChange();
+      } else if (trial && at === 1) await submitChange();
       else {
         turn([{ type: "text", text: "done" }]);
         stop("done");

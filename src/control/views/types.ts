@@ -341,9 +341,16 @@ export interface RunView {
   /**
    * The run's newest wait for its provider's limit (`agents_wait_for_limit`): no new trial or plan
    * starts before `until`, unless the owner ends it (`end_wait`). Null when none was asked since
-   * the last one ended; one whose time has passed stays until the next.
+   * the last one ended; one whose time has passed stays until the next. `trial`: the trial that
+   * met it; `weekly`: a weekly window (goal 169), whose reset is `until`, which Needs you shows.
    */
-  agents_wait: { until: string; reason: string; since: string } | null;
+  agents_wait: {
+    until: string;
+    reason: string;
+    since: string;
+    trial: string | null;
+    weekly: boolean;
+  } | null;
   /** Research mode: the newest digest's figures and report. */
   research: Record<string, unknown> | null;
   /**

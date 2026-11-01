@@ -25,6 +25,7 @@ import {
   claudeTranscript,
   claudeTrialSettings,
   closeClaudeRun,
+  creditsOn,
   hookSignals,
   newClaudeTally,
   PROMPT_VAR,
@@ -224,10 +225,13 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
     // A full usage window: it waits for the reset and goes on by itself (its settings turn
     // autoContinueAtUsageLimit on), and the trial waits with it (usage-window.ts).
     goesOnAfterLimit: true,
-    // Its compactions (goal 070).
+    // Its compactions (goal 070), and its account's usage credits, which its record of a usage
+    // limit gives (goal 169: Providers marks a subscription that has them on).
     take: (e, t, at) => {
       if (e.type === "compaction")
         t.compactions.push({ at, tokensBefore: e.tokensBefore ?? null, tokensAfter: null });
+      const on = e.type === "limit" ? creditsOn(e.overage) : undefined;
+      if (on !== undefined) t.usage = { ...t.usage, credits: { on, since: null } };
     },
   },
   // Headless, a full usage window: the trial ends, and the lane waits for the reset (never paid

@@ -58,7 +58,7 @@ import {
 import { type UploadState, uploadExportsOnce } from "./export-upload.ts";
 import { type ExportState, exportOnce } from "./git-export.ts";
 import { serveHealth } from "./health.ts";
-import { putKbFiles, relayKbAsks } from "./kb/index.ts";
+import { putKbFiles, relayKbAsks, removeHeldKbFiles } from "./kb/index.ts";
 import { startPodBus } from "./leaf.ts";
 import {
   LiveCounts,
@@ -618,6 +618,14 @@ async function main(): Promise<void> {
       const files = await putKbFiles({ rig, outboxDir: exportCfg.outboxDir, home, bus });
       if (files.error || files.spoilt.length)
         log("supervisor", "files for the knowledge base wait", { ...files }, "warn");
+      // Those control holds, with an item that names each, leave the outbox.
+      const held = await removeHeldKbFiles({
+        outboxDir: exportCfg.outboxDir,
+        home,
+        control: onBus,
+        harness,
+      });
+      if (held.error) log("supervisor", "files for the knowledge base stay", { ...held }, "warn");
     } catch (err) {
       log("supervisor", "files for the knowledge base wait", { error: String(err) }, "error");
     }
@@ -731,7 +739,7 @@ async function main(): Promise<void> {
     }
     loops.tick("report");
     const until = Date.now() + intervalMs;
-    // A wipe the command loop delivered is acted on at once, not at the next report.
+    // A wipe the bus's commands consumer delivered is acted on at once, not at the next report.
     while (!stopping && !wipeRequested && Date.now() < until)
       await new Promise((r) => setTimeout(r, 250));
   }

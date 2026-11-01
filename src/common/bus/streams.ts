@@ -3,6 +3,7 @@ import type { NatsConnection } from "@nats-io/transport-node";
 import { log } from "../env.ts";
 import {
   BUS_STATE_CONSUMERS_MAX,
+  BUS_STATE_SUBJECTS_MAX,
   type ConsumerSettings,
   type StreamSettings,
   type StreamState,
@@ -79,13 +80,15 @@ export async function purgeOn(
 export async function streamStates(
   nc: NatsConnection,
   names: readonly string[],
+  counts: readonly string[] = [],
 ): Promise<StreamState[]> {
   const jsm = await jetstreamManager(nc);
   const out: StreamState[] = [];
   for (const name of names) {
     let info: Awaited<ReturnType<typeof jsm.streams.info>>;
+    const each = counts.includes(name);
     try {
-      info = await jsm.streams.info(name);
+      info = await jsm.streams.info(name, each ? { subjects_filter: ">" } : undefined);
     } catch (err) {
       if (noSuchStream(err)) continue;
       throw err;
@@ -115,7 +118,16 @@ export async function streamStates(
       last_at: at(st.last_ts),
       consumers,
       consumers_left_out: leftOut,
+      ...(each ? { counts: subjectCounts(st.subjects) } : {}),
     });
   }
+  return out;
+}
+
+/** A stream's messages by subject, as the server gave them, the first BUS_STATE_SUBJECTS_MAX. */
+function subjectCounts(given: Record<string, number> | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [subject, n] of Object.entries(given ?? {}).slice(0, BUS_STATE_SUBJECTS_MAX))
+    out[subject] = n;
   return out;
 }

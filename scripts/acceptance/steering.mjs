@@ -7,6 +7,10 @@
 //   - rig 1's champion is propagated to rig 2, judged there, and shown cross-verified;
 //   - the supervisor's token cannot submit attempts, and a forged command is refused;
 //   - daily reports and supervisor figures reach control;
+//   - the knowledge base (goal 175): a teacher of smoke-1, an advisor in Pi in the supervisor,
+//     writes a note into its own slot (teachers) with kb_write, where control holds it, and its
+//     write naming another slot is refused; a teacher of smoke-2, on the other rig, finds the
+//     note with kb_search: an agent of another run;
 //   - an advisor in Pi in its Pi view in the supervisor (lib/pi-advisor-view.mjs): one input typed
 //     into a teacher's view and one owner's message, both in its next model call;
 //   - with the engine socket (compose.lifecycle.yaml): control restarts a rig's supervisor;
@@ -34,6 +38,69 @@ import {
 let requests = 0;
 const seen = { teacher: 0, merged_by: 0, auditor: 0, planner: 0 };
 const piView = piAdvisorScene();
+
+/**
+ * The knowledge base's scene (goal 175): the note a teacher of smoke-1 kept, whether its write
+ * naming another slot was refused, and the note found by a teacher of smoke-2. The note's word is
+ * one token, so a search finds exactly it.
+ */
+const kbSteer = { kept: undefined, refused: false, found: undefined };
+const KB_TEACH = "kbprobeteach";
+/**
+ * A teacher's turn for the knowledge base, before it answers, or undefined: in smoke-1, a note in
+ * its own slot and then a write naming another slot; in smoke-2, once smoke-1's note is kept, a
+ * search for it. Each teachers' round is a conversation of its own.
+ */
+function kbTurn(messages, tools, prompt) {
+  const names = tools.map((t) => t.function.name);
+  const run = /Brief of run ([a-z0-9-]+)/.exec(prompt)?.[1];
+  const called = (name) =>
+    messages
+      .filter((m) => m.role === "assistant")
+      .flatMap((m) => m.tool_calls ?? [])
+      .filter((c) => c.function?.name === name).length;
+  for (const m of messages.filter((x) => x.role === "tool")) {
+    const t = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+    const kept = /kept: (smoke-cpu\/smoke-1\/teachers\/note:\d+), item/.exec(t)?.[1];
+    if (kept) kbSteer.kept ??= kept;
+    if (/kb_write takes no slot: you write only in your own slot/.test(t)) kbSteer.refused = true;
+    if (run === "smoke-2" && kbSteer.kept && t.includes(kbSteer.kept)) kbSteer.found = kbSteer.kept;
+  }
+  if (run === "smoke-1" && names.includes("kb_write")) {
+    const writes = called("kb_write");
+    if (writes === 0 && !kbSteer.kept)
+      return {
+        toolCalls: [
+          {
+            name: "kb_write",
+            args: {
+              kind: "note",
+              title: `${KB_TEACH}: cache blocking is the next step`,
+              text: `${KB_TEACH}: a teacher of smoke-1 wrote this in its own slot.`,
+            },
+          },
+        ],
+      };
+    if (writes === 1 && !kbSteer.refused)
+      return {
+        toolCalls: [
+          {
+            name: "kb_write",
+            args: { kind: "note", title: "kbprobedenied not my slot", text: "x", slot: "planner" },
+          },
+        ],
+      };
+  }
+  if (
+    run === "smoke-2" &&
+    kbSteer.kept &&
+    !kbSteer.found &&
+    names.includes("kb_search") &&
+    called("kb_search") === 0
+  )
+    return { toolCalls: [{ name: "kb_search", args: { query: KB_TEACH } }] };
+  return undefined;
+}
 
 /** The scripted model: planner (falls back), teachers, their merged by model, auditor. */
 function script(messages, tools, model) {
@@ -65,7 +132,7 @@ function script(messages, tools, model) {
         { kind: "try", family: "tiling", rationale: "blocking", citations: ["acceptance"] },
       ],
     });
-    return piView.turn(model, messages, advice) ?? advice;
+    return kbTurn(messages, tools, prompt) ?? piView.turn(model, messages, advice) ?? advice;
   }
   if (system.includes("You audit a candidate change")) {
     seen.auditor++;
@@ -393,6 +460,28 @@ try {
       sup?.export?.remote === true &&
       (sup?.advisors?.directive_sets ?? 0) >= 1,
     { rigs: reports.map((r) => r.rig), sup },
+  );
+
+  // 5b. The knowledge base (goal 175): a teacher of smoke-1 wrote a note in its own slot, and its
+  // write naming another slot was refused; a teacher of smoke-2, on rig 2, finds the note.
+  const kbFound = await until(
+    "a teacher of smoke-2 finds the note a teacher of smoke-1 kept",
+    async () => kbSteer.found,
+    600_000,
+    3000,
+  ).catch(() => undefined);
+  const kbHit = ((await api(`/v1/kb/search?q=${KB_TEACH}`)).body.hits ?? []).find(
+    (h) => h.address === kbSteer.kept,
+  );
+  const kbDenied = (await api("/v1/kb/search?q=kbprobedenied")).body.hits ?? [];
+  check(
+    "an advisor (a teacher of smoke-1, in Pi) writes a note into its own slot with kb_write, which control holds there; its write naming another slot is refused and never reaches control; a teacher of another run (smoke-2) finds the note with kb_search",
+    /^smoke-cpu\/smoke-1\/teachers\/note:\d+$/.test(String(kbSteer.kept)) &&
+      kbHit?.slot === "teachers" &&
+      kbSteer.refused &&
+      kbFound === kbSteer.kept &&
+      kbDenied.length === 0,
+    { kb: kbSteer, stored: kbHit, denied: kbDenied.length },
   );
 
   // 6. An advisor in Pi in its Pi view in the supervisor (goal 169): one teacher's call, with one

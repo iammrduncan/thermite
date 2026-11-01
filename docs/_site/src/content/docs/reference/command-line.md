@@ -296,6 +296,11 @@ usage: thermite <command> [options]
                                       --on turns it on too). K: events, builds, trial_logs,
                                       advisor_records, kb_versions, store_copies or audit. KEEP:
                                       open, champions or newest, each on unless --no-keep. UTC
+  bus --control URL --token-file F [--json]
+                                      the message bus as control sees it now (owner's or
+                                      reader's token): its server, each stream with its
+                                      messages, bytes and consumers, the events stream's writer
+                                      and apply, and the live and config figures
   exports delete RIG NAME... --control URL --token-file F
                                       delete exports control keeps from RIG (owner's token), as
                                       Delete on the Exports page does: their files and records,
@@ -610,6 +615,7 @@ rig-3: enrolled, no report yet
 - **The first line** is control's build: its version, the first 12 characters of its commit when its image has one, and its protocol. `(works with 1 to 2)` follows when control works with older protocols too.
 - **`STATE`** is `reporting`, `stale` or `offline`. **`LAST REPORT`** is `never` for a rig that never sent one.
 - **`VERSION`** is `current`, `behind`, `ahead`, `unknown` or `refused`. Under a rig that is not `current`, an indented line says what to know and do.
+- **Off the message bus.** Under a rig that is off the bus, so broken, an indented line says since when, why and what to do, in the words of its page: `Off the message bus since <time>, so it does not work: …` ([A rig off the bus](../how-to/operate/message-bus.md#a-rig-off-the-bus)).
 - **`HARNESS`** and **`SUPERVISOR`** are the version each part reports, with its commit, or `no version` for a part from before version checks.
 - **Enrolled rigs** that never reported come last.
 
@@ -973,6 +979,39 @@ A design's options:
 | `--on` | off | `create` and `update`: turned on, from now |
 
 A refused design ends the command with control's words, such as `… -> 400 {"error":"not a retention policy: older_n: …"}` (exit 2), with what is wrong with each field.
+
+### `bus`
+
+`thermite bus` prints the [message bus](../how-to/operate/message-bus.md) as control sees it now (`GET /v1/bus`, as MCP's `bus_state` gives it), with the owner's or the reader's token. `--json` prints the route's answer as it came; [The message bus](rest-api.md#the-message-bus) says what each field means.
+
+```sh
+npx thermite bus --control https://control.example.com --token-file ~/thermite-reader-token
+```
+
+```text
+bus nats:4222: reached
+STREAM    MESSAGES  BYTES    SUBJECTS  NEWEST
+REPORTS   0         0 B      0         none
+EVENTS    120,431   9.8 MiB  212       2026-11-01T10:00:02.118Z
+COMMANDS  0         0 B      0         none
+  consumer rig-rig-1-commands: 0 not handed yet, 0 not acked, 0 handed again
+LIVE      2,310     1.2 MiB  37        2026-11-01T10:00:03.540Z
+  consumer control-live: 0 not handed yet, 0 not acked, 0 handed again
+CONFIG    4         3.1 KiB  4         2026-11-01T09:12:40.006Z
+  consumer rig-rig-1-config: 0 not handed yet, 0 not acked, 0 handed again
+KB_FILES  0         0 B      0         none
+events: 1,204 published since control started, 0 moved from an older store, 0 reports refused for now
+apply: through place 120,431 of 120,431, 0 behind; 1,204 applied, 0 passed over since control started
+live: 2,310 messages and 2,894 lines taken since control started; rig-1 2,894
+config: rig-1 4 values written
+```
+
+- **The first line** is the bus's server, `reached`, or `not reached:` and why, such as `no answer within 5 seconds`; the streams are then left out.
+- **Each stream** control makes and the server has: its messages, bytes and subjects, and when its newest message came (`none` while it holds none). Under it, each consumer: the messages it has not been handed yet, those it was handed and has not acked, and those handed more than once.
+- **`events`** is the writer of the `EVENTS` stream since control started, with why it refused the last report for now when it did; **`apply`** is control's place in the stream against its last place, then `it waits:` or `it stopped:` with why, when it does.
+- **`live`** is what control took from the `LIVE` stream, in all and by rig; **`config`** is what it wrote to each rig's config, or `no seal key, nothing written` for a rig that registered none.
+
+A wrong token ends it with control's `401` (exit 2). Each rig's own connection to the bus is in [`rig list`](#rig-list).
 
 ### `command`
 

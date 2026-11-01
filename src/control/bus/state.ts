@@ -53,7 +53,7 @@ export const BUS_STATE_TIMEOUT_MS = 5_000;
 export interface BusView {
   /** The server's host and port. */
   server: string;
-  bus: Pick<Bus, "streams" | "connected" | "lastSeq">;
+  bus: Pick<Bus, "streams" | "connected" | "lastSeq" | "link">;
   events: EventsWriter;
   move: Pick<EventsMove, "published">;
   apply: EventsApply;
@@ -129,16 +129,27 @@ export async function busState(store: ControlStore, view: BusView | undefined) {
     );
   });
   try {
-    const read = Promise.all([view.bus.streams(BUS_STREAMS), view.bus.lastSeq(EVENT_STREAM)]);
+    // The reports stream by subject too: one for each rig, so each rig's reports that wait.
+    const read = Promise.all([
+      view.bus.streams(BUS_STREAMS, { counts: [REPORT_STREAM] }),
+      view.bus.lastSeq(EVENT_STREAM),
+    ]);
     [streams, eventsPlace] = await Promise.race([read, late]);
   } catch (err) {
     error = errorText(err);
   } finally {
     clearTimeout(timer);
   }
+  const link = view.bus.link?.();
   return {
     on: true as const,
     server: view.server,
+    // Control's connection now: connected since when, with the server's version, or away.
+    connection: {
+      state: busHealth(view),
+      since: link?.since ?? null,
+      version: link?.version ?? null,
+    },
     reachable: error === null,
     error,
     streams,

@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { USAGE_PERIODS } from "../../core/usage.ts";
+import { busReach } from "../bus/index.ts";
+import { weeklyLimit } from "../rigs/index.ts";
 import {
   attemptRead,
   RESEARCH_DETAIL,
@@ -15,6 +17,7 @@ import {
   agentRun,
   currentChampion,
   leaderboard,
+  podStopped,
   readerRun,
   withoutPromptText,
 } from "../views/index.ts";
@@ -32,11 +35,12 @@ export function registerReads(tools: ToolContext): void {
     {
       title: "List rigs",
       description:
-        "Every rig: reporting, stale or offline, last report, its Thermite versions against control's (behind, refused and why, or unknown), and for each campaign run its mode, status, champion and relative gain over the baseline.",
+        "Every rig: reporting, stale or offline, last report, its Thermite versions against control's (behind, refused and why, or unknown), its connection to the message bus (on it, since its supervisor last registered its keys; or off it, so broken, since when, why in words and what to do), its subscription's weekly limit while one holds its runs (until its reset, since when, each run that waits with the trial and lane that met it, the provider and model, and the owner's choice: wait, model or null), and for each campaign run its mode, status, champion and relative gain over the baseline.",
       inputSchema: {},
     },
-    audited("list_rigs", () =>
-      store.reportedRigs.list().map((u) => {
+    audited("list_rigs", () => {
+      const now = Date.now();
+      return store.reportedRigs.list().map((u) => {
         const v = view(u.id);
         return {
           rig: v.id,
@@ -44,6 +48,10 @@ export function registerReads(tools: ToolContext): void {
           stale: v.stale,
           last_seen: v.last_seen,
           version: v.version,
+          // On the message bus or off it, as the rig's page shows it (goal 168).
+          bus: busReach(store, v.id, { lastSeen: v.last_seen, now, podStopped: podStopped(v) }),
+          // Its subscription's weekly limit, while one holds its runs (goal 169).
+          weekly_limit: weeklyLimit(store, v, now) ?? null,
           jobs: v.jobs,
           // A rig launched on a GPU cloud: its pod's status, price and spend so far.
           runpod: v.runpod
@@ -70,8 +78,8 @@ export function registerReads(tools: ToolContext): void {
             };
           }),
         };
-      }),
-    ),
+      });
+    }),
   );
 
   server.registerTool(

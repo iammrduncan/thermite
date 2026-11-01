@@ -157,4 +157,61 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify({ tools: val
       else process.env.THERMITE_CLAUDE_BIN = before;
     }
   });
+
+  test("an advisor in Claude Code at a full usage window: its transcript gives the reset, which its words do not, and the call says it waits", async () => {
+    await runner();
+    const dir = mkdtempSync(join(tmpdir(), "thermite-fake-claude-"));
+    after(() => rmSync(dir, { recursive: true, force: true }));
+    const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600;
+    const words = "You've hit your session limit · resets 5:49am (UTC)";
+    // As Claude Code 2.1.308 records a full five-hour window in its transcript.
+    const record = {
+      type: "assistant",
+      timestamp: new Date().toISOString(),
+      message: {
+        id: "limit-1",
+        model: "<synthetic>",
+        role: "assistant",
+        type: "message",
+        usage: { input_tokens: 0, output_tokens: 0 },
+        content: [{ type: "text", text: words }],
+      },
+      apiError: "usage_limit_reached",
+      apiErrorParams: {
+        rate_limit_info: { status: "rejected", resetsAt, rateLimitType: "five_hour" },
+      },
+      error: "rate_limit",
+      isApiErrorMessage: true,
+      sessionId: "s-1",
+    };
+    const bin = join(dir, "claude");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.readFileSync(0, "utf8");
+const at = require("node:path").join(process.env.HOME, ".claude", "projects", "p");
+fs.mkdirSync(at, { recursive: true });
+fs.writeFileSync(require("node:path").join(at, "s-1.jsonl"), ${JSON.stringify(`${JSON.stringify(record)}\n`)});
+console.log(JSON.stringify({ type: "result", is_error: true, result: ${JSON.stringify(words)} }));
+process.exit(1);
+`,
+    );
+    chmodSync(bin, 0o755);
+    const before = process.env.THERMITE_CLAUDE_BIN;
+    process.env.THERMITE_CLAUDE_BIN = bin;
+    try {
+      const r = await runAdvisor({
+        runtime: { name: "a", runtime: "claude-code", model: "m", token: "sk-ant-oat01-test" },
+        prompt: testPrompt("You audit.", "Audit this."),
+        schema: z.object({ decision: z.string() }),
+        answerSchema: Type.Object({}),
+      });
+      assert.equal(r.output, undefined);
+      assert.deepEqual(r.limit, { until: new Date(resetsAt * 1000).toISOString(), words });
+    } finally {
+      if (before === undefined) delete process.env.THERMITE_CLAUDE_BIN;
+      else process.env.THERMITE_CLAUDE_BIN = before;
+    }
+  });
 });

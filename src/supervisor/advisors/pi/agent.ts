@@ -18,6 +18,7 @@ import { renderAdvisorTurn, renderCompacted } from "../../../agents/roles/index.
 import { errorText } from "../../../common/errors.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { AdvisorCompaction } from "../call.ts";
+import { ADVISOR_WAIT_MAX_MS } from "../limit.ts";
 
 /**
  * One advisor's call in Pi (goal 166's roles, goal 169's views): one agent with its read-only
@@ -125,6 +126,11 @@ export interface PiAdvisorEnd {
   tokensIn: number;
   tokensOut: number;
   compactions: AdvisorCompaction[];
+  /**
+   * Headless, with no answer: the usage limit its last model call met, with its reset less than a
+   * day away (limitOf), which the advisor waits for (limit.ts).
+   */
+  limit?: { until: string; words: string } | undefined;
 }
 
 export async function piAdvisor(o: PiAdvisorCall): Promise<PiAdvisorEnd> {
@@ -283,6 +289,12 @@ export async function piAdvisor(o: PiAdvisorCall): Promise<PiAdvisorEnd> {
     if (deadline) clearTimeout(deadline);
   }
   if (tooBig && !end.answered) end.error ??= tooBig;
+  // A full usage window ended the call: headless, any; in its view, one it did not wait out, more
+  // than a day away (a weekly window). The advisor waits for its reset (limit.ts).
+  if (!end.answered && !stopped) {
+    const l = limitOf(agent, ADVISOR_WAIT_MAX_MS);
+    if (l) end.limit = { until: l.until, words: l.words };
+  }
   if (!end.answered && !end.error && o.view?.interrupted())
     end.error = "the owner stopped its reply from its Pi view";
   if (!end.answered && !end.error) end.error = problems || "no answer";
@@ -291,14 +303,15 @@ export async function piAdvisor(o: PiAdvisorCall): Promise<PiAdvisorEnd> {
 
 /**
  * The usage limit its last model call met, when its provider said when it resets (or a ChatGPT
- * plan's, which says none: CHATGPT_LIMIT_WAIT_MS), less than a day away; else none.
+ * plan's, which says none: CHATGPT_LIMIT_WAIT_MS), at most `withinMs` away (in its view: a day,
+ * the longest it waits inside the call); else none.
  */
-function limitOf(agent: Agent): ViewWait | undefined {
+function limitOf(agent: Agent, withinMs = TERMINAL_WAIT_MAX_MS): ViewWait | undefined {
   const last = lastAssistant(agent);
   if (last?.stopReason !== "error") return undefined;
   const words = last.errorMessage ?? "";
   const until = usageLimitRetry(words) ?? retryAtFrom(words);
-  if (!until || Date.parse(until) - Date.now() > TERMINAL_WAIT_MAX_MS) return undefined;
+  if (!until || Date.parse(until) - Date.now() > withinMs) return undefined;
   return { until, kind: "rate_limit", words: words.slice(0, 1000) };
 }
 

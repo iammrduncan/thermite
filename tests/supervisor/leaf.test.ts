@@ -127,6 +127,84 @@ describe("the pod's own bus server, as its supervisor runs it", () => {
     assert.equal(fake.starts().length, n, "stopped: never started again");
   });
 
+  test("a server that hangs, its process still there, is killed at its third failed check in a row and started again; one that answers is left alone", async () => {
+    const home = mkdtempSync(join(tmpdir(), "thermite-podbus-"));
+    const fake = standIn(home);
+    const env: NodeJS.ProcessEnv = { ...launch(), THERMITE_TUNNEL_DIR: join(home, "tunnel") };
+    // Its check answers until the server has started, then fails for good: the server hangs.
+    let hung = false;
+    let failed = 0;
+    const probe = async () => {
+      if (!hung) return undefined;
+      failed++;
+      return "no answer within 5 s";
+    };
+    const bus = startPodBus(env, home, {
+      program: fake.program,
+      restartMs: 50,
+      probe,
+      watchEveryMs: 20,
+      startMs: 60_000,
+    });
+    assert.ok(bus);
+    try {
+      for (let i = 0; i < 100 && !fake.starts().length; i++) await sleep(20);
+      assert.equal(fake.starts().length, 1);
+      // It answered: its failures count at once from now, and it is killed at the third.
+      await sleep(60);
+      hung = true;
+      for (let i = 0; i < 200 && fake.starts().length < 2; i++) await sleep(20);
+      assert.equal(fake.starts().length, 2, "killed, and started again");
+      assert.ok(failed >= 3, `${failed} failed checks`);
+    } finally {
+      await bus.stop();
+    }
+    // One whose check always answers keeps running.
+    const home2 = mkdtempSync(join(tmpdir(), "thermite-podbus-"));
+    const fake2 = standIn(home2);
+    let asked = 0;
+    const well = startPodBus({ ...launch(), THERMITE_TUNNEL_DIR: join(home2, "tunnel") }, home2, {
+      program: fake2.program,
+      restartMs: 50,
+      probe: async () => {
+        asked++;
+        return undefined;
+      },
+      watchEveryMs: 20,
+    });
+    assert.ok(well);
+    try {
+      for (let i = 0; i < 100 && !fake2.starts().length; i++) await sleep(20);
+      const from = asked;
+      for (let i = 0; i < 100 && asked < from + 10; i++) await sleep(20);
+      assert.ok(asked >= from + 10, `${asked - from} checks`);
+      assert.equal(fake2.starts().length, 1, "never killed");
+    } finally {
+      await well.stop();
+    }
+  });
+
+  test("a server still starting: its failed checks count only once its time to start is over", async () => {
+    const home = mkdtempSync(join(tmpdir(), "thermite-podbus-"));
+    const fake = standIn(home);
+    const t0 = Date.now();
+    const bus = startPodBus({ ...launch(), THERMITE_TUNNEL_DIR: join(home, "tunnel") }, home, {
+      program: fake.program,
+      restartMs: 50,
+      probe: async () => "no connection: connection refused",
+      watchEveryMs: 20,
+      startMs: 1_000,
+    });
+    assert.ok(bus);
+    try {
+      for (let i = 0; i < 200 && fake.starts().length < 2; i++) await sleep(20);
+      assert.equal(fake.starts().length, 2, "killed, and started again");
+      assert.ok(Date.now() - t0 >= 1_000, `killed after ${Date.now() - t0} ms`);
+    } finally {
+      await bus.stop();
+    }
+  });
+
   test("without the leaf's values there is no pod server, and nothing is written", () => {
     const home = mkdtempSync(join(tmpdir(), "thermite-podbus-"));
     assert.equal(startPodBus({ THERMITE_TUNNEL_DIR: join(home, "tunnel") }, home), undefined);

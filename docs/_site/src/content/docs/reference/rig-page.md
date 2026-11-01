@@ -48,7 +48,7 @@ The buttons at the right:
 
 A button that needs typed words stays off until the words are typed exactly. Control checks them again when the form arrives.
 
-The first lines under the title say, in a few sentences: for a RunPod rig, its pod and what it has cost; whether it reports; that it drains, and what for, such as `rig-1 drains: it starts nothing new, and waits for 2 trials to end.`; what runs on it; what its judge does; a check that failed; a key that waits for you; for a RunPod rig, a connection to its pod that failed.
+The first lines under the title say, in a few sentences: for a RunPod rig, its pod and what it has cost; whether it reports; that it drains, and what for, such as `rig-1 drains: it starts nothing new, and waits for 2 trials to end.`; that its subscription's weekly limit holds its runs, such as `rig-1 waits for its subscription's weekly limit to reset, 2026-11-03 18:00 UTC: new trials, its planner and its advisors start again after it.`, with `Needs you asks what to do meanwhile.` until you choose ([A weekly window](../how-to/models/claude-subscription.md#a-weekly-window)); what runs on it; what its judge does; a check that failed; a key that waits for you; for a RunPod rig, a connection to its pod that failed.
 
 When control can't read the rig's events now, the first lines say `Control can't read its events now.`, and a card under them says why in words, such as the event its view failed on. Until control can, the page shows no runs, checks or judge's jobs for the rig; the rest of it is from the rig's last report. This lasts until the rig's next full reset gives it a new ledger. Every other rig, and every other page, shows as before.
 

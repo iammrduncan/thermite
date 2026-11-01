@@ -12,7 +12,11 @@ import type { AdviseContext } from "./context.ts";
 import { clip } from "./shared.ts";
 import { MAX_TRIES } from "./state.ts";
 
-/** The review panel's part of a pass: each open review, by every reviewer of the panel. */
+/**
+ * The review panel's part of a pass: each open review, by every reviewer of the panel. A try in
+ * which a reviewer met a full usage window is not counted: the review waits for the reset
+ * (limit.ts).
+ */
 export async function answerReviews(ctx: AdviseContext): Promise<void> {
   const {
     cfg,
@@ -22,6 +26,9 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
     now,
     retryMs,
     mark,
+    uncount,
+    waitsFor,
+    waitOut,
     kbFor,
     researchFor,
     configFor,
@@ -52,6 +59,8 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
       // never left waiting on a review that no one posts.
       const t = next.tried[key];
       if (t && now - Date.parse(t) < retryMs) continue;
+      // A reviewer waits for its provider's full usage window: the review waits with it.
+      if (cfg.advisors.review_panel.some((r) => waitsFor(r.name))) continue;
       mark(key);
       const last = (next.tries[key] ?? 0) >= MAX_TRIES;
       const owner = (pkg.owner_messages ?? []).filter((m) => !told.has(m.id));
@@ -79,7 +88,7 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         // one's call is then recorded in the panel's order: its usage, its line in Live and its
         // answer. A reviewer whose call throws gave no answer, with the error as why.
         // Thermite's knowledge base for the reviewers (goal 175), in the review panel's slot.
-        const kb = pkg.run ? await kbFor(pkg.run, "review-panel") : undefined;
+        const kb = pkg.run ? await kbFor(pkg.run, "review_panel") : undefined;
         const calls = await Promise.all(
           panel.map((runtime) =>
             reviewOne({
@@ -138,6 +147,17 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
             "text",
             `review ${pkg.id}${research ? " of the research questions" : pkg.goal ? ` of goal ${pkg.goal}` : ""}, ${runtime.name}: ${r.output.pass ? "pass" : "fail"}.${answered} ${clip(r.output.reasons, 300)}`,
           );
+        }
+        // A reviewer that met a full usage window, headless: not a failed try. The review is not
+        // posted, its try not counted, and it is tried again once each such reviewer's window
+        // resets.
+        const full = calls.flatMap(({ runtime, r }) =>
+          !r.output && r.limit ? [{ name: runtime.name, limit: r.limit }] : [],
+        );
+        if (full.length) {
+          uncount(key);
+          for (const f of full) waitOut(f.name, `review ${pkg.id}`, f.limit, pkg.run);
+          continue;
         }
         // Every reviewer must answer: a crashed dissenter must not lose its veto. The owner's
         // messages count as read only with the posted review, so a retry gives them again. From

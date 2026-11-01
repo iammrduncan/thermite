@@ -405,11 +405,16 @@ export class FakeBus
     return m ? asMessage(m) : undefined;
   }
 
-  /** Each stream made, with the messages it keeps; no consumers. */
-  async streams(names: readonly string[]): Promise<StreamState[]> {
+  /** Each stream made, with the messages it keeps, by subject for those `counts` names; no consumers. */
+  async streams(
+    names: readonly string[],
+    o?: { counts?: readonly string[] | undefined },
+  ): Promise<StreamState[]> {
     return names.flatMap((name) => {
       if (!this.made.has(name)) return [];
       const kept = this.kept.filter((m) => m.stream === name);
+      const counts: Record<string, number> = {};
+      for (const m of kept) counts[m.subject] = (counts[m.subject] ?? 0) + 1;
       return [
         {
           name,
@@ -420,6 +425,7 @@ export class FakeBus
           last_at: null,
           consumers: [],
           consumers_left_out: 0,
+          ...(o?.counts?.includes(name) ? { counts } : {}),
         },
       ];
     });

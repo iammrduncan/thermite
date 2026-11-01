@@ -18,7 +18,12 @@ import {
   eventsTableMayGo,
 } from "./events.ts";
 import { gitAccessHost } from "./git-access.ts";
-import { knowledgeFiles, knowledgeHierarchy, knowledgeSearch } from "./kb/index.ts";
+import {
+  knowledgeFiles,
+  knowledgeHierarchy,
+  knowledgeSearch,
+  knowledgeSlotNames,
+} from "./kb/index.ts";
 import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
@@ -639,6 +644,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   retentionTables,
   // Each rig ledger's floor in control's copy of its events, which a policy purged (goal 125).
   eventFloorTable,
+  // The knowledge base's slots take the agents' names, and a grant's unused copies go (goal 175).
+  knowledgeSlotNames,
 ];
 
 /**

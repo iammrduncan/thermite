@@ -40,6 +40,11 @@ export interface CliTally {
   notes: string[];
   /** The model usage it reported since it was last taken (goal 075). */
   calls: CallUsage[];
+  /**
+   * In its own terminal, a call's: the reset of a full usage window it did not wait out, such as a
+   * weekly window more than a day away (usage-window.ts), for whoever runs the call to wait for.
+   */
+  limitedUntil?: string | undefined;
 }
 
 /**

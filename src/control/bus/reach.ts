@@ -1,4 +1,5 @@
 import { log } from "../../common/env.ts";
+import type { BusReach } from "../../core/api/control/bus.ts";
 import type { ControlStore } from "../store/index.ts";
 
 /**
@@ -123,6 +124,22 @@ export function offBus(
         "It registered its keys with control over HTTPS, but nothing came from it on the message bus since: it can't reach the bus's address, or the bus refuses it.",
     };
   return undefined;
+}
+
+/**
+ * A rig's connection to the bus, as REST's rig list and rig view and MCP's `list_rigs` give it
+ * (core/api/control/bus.ts has its shape), from the same knowledge as its page; `o` as offBus
+ * takes it.
+ */
+export function busReach(
+  store: ControlStore,
+  rig: string,
+  o: { lastSeen: string; now: number; podStopped?: boolean | undefined },
+): BusReach {
+  const off = offBus(store, rig, o);
+  if (off) return { state: "off", ...off, fix: offBusFix(store, rig, off) };
+  const registered = store.rigHistory.latest(rig, [BUS_REGISTERED_STEP], 1)[0];
+  return { state: "on", since: registered?.at ?? null };
 }
 
 /**

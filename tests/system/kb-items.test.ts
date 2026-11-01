@@ -4,13 +4,19 @@ import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { harnessClient } from "../../src/common/api/harness.ts";
+import { buildInfo } from "../../src/common/build-info.ts";
+import { serveRigAsks } from "../../src/control/bus/index.ts";
 import { answerKbAsk, followKbFiles, KbFiles } from "../../src/control/kb/index.ts";
+import { Screens } from "../../src/control/live/index.ts";
 import type { SignedCommand } from "../../src/core/commands.ts";
 import { KB_OUTBOX_FILES, type KbItemBody } from "../../src/core/kb.ts";
 import type { KbSearchAnswer } from "../../src/core/link/kb.ts";
 import { KB_FILES_STREAM, KB_FILES_STREAM_CONFIG } from "../../src/core/link/kb-files.ts";
+import { rigInboxPrefix } from "../../src/core/link/users.ts";
+import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { writeKbItem } from "../../src/harness/kb/index.ts";
-import { putKbFiles } from "../../src/supervisor/kb/index.ts";
+import { putKbFiles, removeHeldKbFiles } from "../../src/supervisor/kb/index.ts";
 import { controlOnly } from "../helpers/control-stack.ts";
 import { busOf, foldOnBus } from "../helpers/control-store.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
@@ -62,6 +68,31 @@ async function setup() {
     },
     /** The supervisor's round of puts. */
     put: () => putKbFiles({ rig: "rig-a", outboxDir: outbox, home, bus }),
+    /**
+     * The supervisor's round that removes the files control holds: control answers on the bus,
+     * as its main serves rigs' asks, and the harness removes them over its API.
+     */
+    removeHeld: () => {
+      bus.inbox = rigInboxPrefix("rig-a");
+      void serveRigAsks(bus, {
+        store,
+        control: buildInfo(),
+        privateKeyPem: env.keys.privateKeyPem,
+        screens: new Screens(),
+      });
+      const api = createHarnessApi(env.service, { supervisor: "sup", proposer: "prop" });
+      const harness = harnessClient({
+        url: "http://harness",
+        token: "sup",
+        fetchImpl: async (u, init) => await api.request(String(u), init),
+      });
+      return removeHeldKbFiles({
+        outboxDir: outbox,
+        home,
+        control: { rig: "rig-a", bus },
+        harness,
+      });
+    },
     /** Control's follow of the files' stream, one pass. */
     take: () => followKbFiles(bus, files),
     items: () =>
@@ -153,14 +184,14 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.ok(existsSync(s.files.path(sha)));
     // The other way round: the file first, then its item.
     s.write({
-      writer: "teacher",
+      writer: "teachers",
       kind: "doc",
       title: "The same paper",
       file: { bytes: paper, name: "p.pdf", type: "application/pdf" },
     });
     const again = Buffer.from("A second reference\n");
     s.write({
-      writer: "teacher",
+      writer: "teachers",
       kind: "doc",
       title: "Notes",
       file: { bytes: again, name: "notes.md", type: "text/markdown" },
@@ -173,7 +204,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.deepEqual(
       s
         .items()
-        .filter((i) => i.slot === "teacher")
+        .filter((i) => i.slot === "teachers")
         .map((i) => i.file_sha256),
       [sha, againSha],
     );
@@ -204,7 +235,7 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.deepEqual(s.refusals().reverse(), [
       "worker-2 writes only in its own slot, worker-2: not in worker-1, another writer's",
       "worker-1 writes only in its own slot, worker-1: not in records, another writer's",
-      "not an item: slot: a slot is records, owner, worker-<lane> or one of planner, teacher, merged-by, auditor, review-panel, synthesizer, final-writer",
+      "not an item: slot: a slot is records, owner, worker-<lane> or one of planner, teachers, merged_by, auditor, review_panel, synthesizer, final_writer",
       "run someone-elses-run is not this rig's: control's run registry has no such run of this ledger",
       "not an item: title: Too small: expected string to have >=1 characters",
       "item 1 of slot worker-1 exists already: a new version of it is version 2",
@@ -219,6 +250,39 @@ describe("a write to the knowledge base, from the harness to control", () => {
       s.store.reportedRigs.heldCursor("rig-a", ledger.ledgerId()),
       ledger.latestEventId(),
     );
+  });
+
+  test("an item recorded before the slots took the agents' names goes into its slot under today's name, and the writer's next item counts on from it", async () => {
+    const s = await setup();
+    const ledger = s.env.service.ledger;
+    // As an earlier build recorded it: the review panel's slot spelled review-panel, in the actor,
+    // the slot and an address it links to.
+    ledger.appendEvent("review-panel", "kb_item", RUN, {
+      slot: "review-panel",
+      item: 1,
+      version: 1,
+      kind: "review",
+      title: "The win holds",
+      text: "The panel read the diff.",
+      links: [{ rel: "follows", to: `${COLLECTION}/${RUN}/review-panel/review:9` }],
+    });
+    const next = s.write({ writer: "review_panel", kind: "decision", title: "Keep it", text: "y" });
+    assert.equal(next.item, 2);
+    assert.equal(next.address, `${COLLECTION}/${RUN}/review_panel/decision:2`);
+    assert.equal(await s.report(), 200);
+    assert.deepEqual(s.refusals(), []);
+    assert.deepEqual(
+      s.items().map((i) => [i.slot, i.kind, i.ref]),
+      [
+        ["review_panel", "review", "1"],
+        ["review_panel", "decision", "2"],
+      ],
+    );
+    const first = s.store.kb().at(`${COLLECTION}/${RUN}/review-panel/review:1`);
+    assert.equal(first?.by, "review_panel");
+    assert.deepEqual(s.store.kb().versions(first?.id ?? 0)[0]?.links, [
+      { rel: "follows", to: `${COLLECTION}/${RUN}/review_panel/review:9` },
+    ]);
   });
 
   test("a write while control is away arrives once when it is back: the event waits in the ledger, the file in the outbox and then on the bus", async () => {
@@ -258,6 +322,44 @@ describe("a write to the knowledge base, from the harness to control", () => {
     assert.equal(await s.report(0), 200);
     assert.equal((await s.put()).put, 0, "the supervisor put it once");
     assert.deepEqual(once(), { items: 1, versions: 1, files: 1 });
+  });
+
+  test("a file leaves the outbox only once control holds it with an item that names it; one control lacks stays", async () => {
+    const s = await setup();
+    const outbox = join(s.env.service.paths.outboxDir, KB_OUTBOX_FILES);
+    s.write({
+      writer: "worker-1",
+      kind: "reference",
+      title: "The paper",
+      file: { bytes: paper, name: "paper.pdf", type: "application/pdf" },
+    });
+    // Put and kept by control, but its item not reported yet: it stays.
+    await s.put();
+    await s.take();
+    assert.equal(s.store.kb().files.has(sha), true);
+    assert.deepEqual(await s.removeHeld(), { asked: 1, held: 0, removed: 0 });
+    assert.deepEqual(readdirSync(outbox), [sha]);
+    // Its item reported: control holds both, and the file goes.
+    assert.equal(await s.report(), 200);
+    // A second file, put but not taken by control yet: it stays.
+    const notes = Buffer.from("# Notes on the paper\n");
+    s.write({
+      writer: "worker-1",
+      kind: "doc",
+      title: "Notes",
+      file: { bytes: notes, name: "notes.md", type: "text/markdown" },
+    });
+    await s.put();
+    assert.equal(await s.report(), 200);
+    const notesSha = createHash("sha256").update(notes).digest("hex");
+    assert.deepEqual(await s.removeHeld(), { asked: 2, held: 1, removed: 1 });
+    assert.deepEqual(readdirSync(outbox), [notesSha]);
+    // Taken by control: it goes at the next round, and the store keeps both, as before.
+    await s.take();
+    assert.deepEqual(await s.removeHeld(), { asked: 1, held: 1, removed: 1 });
+    assert.deepEqual(readdirSync(outbox), []);
+    assert.equal(s.store.kb().files.has(notesSha), true);
+    assert.ok(existsSync(s.files.path(sha)));
   });
 });
 

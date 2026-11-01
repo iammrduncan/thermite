@@ -172,10 +172,11 @@ describe("the model proxy", () => {
     }
   });
 
-  test("a ChatGPT plan's refusal goes on as it came, and the proxy keeps OpenAI's answer, its code in it, for the agents that lose the code", async () => {
+  test("a full ChatGPT plan reaches the Codex CLI as its own usage limit and OpenCode as it came, and the proxy keeps OpenAI's answer, its code in it, for the agents that lose the code", async () => {
     const answers = [
       { status: 429, code: "subscription_sharing_usage_limit_exceeded" },
       { status: 500, code: "server_error" },
+      { status: 429, code: "subscription_sharing_usage_limit_exceeded" },
     ];
     const server = createServer((req, res) => {
       req.resume();
@@ -216,8 +217,16 @@ describe("the model proxy", () => {
         });
       const before = Date.now();
       const full = await ask();
+      // Codex 0.162.1 reads this form as its usage limit, with the seconds to the reset; OpenAI
+      // gives none, so the 15 minutes the agents wait for a full plan.
       assert.equal(full.status, 429);
-      assert.match(await full.text(), /subscription_sharing_usage_limit_exceeded/);
+      assert.equal(full.headers.get("retry-after"), "900");
+      const said = (await full.json()) as {
+        error: { type: string; message: string; resets_in_seconds: number };
+      };
+      assert.equal(said.error.type, "usage_limit_reached");
+      assert.equal(said.error.resets_in_seconds, 900);
+      assert.match(said.error.message, /^The ChatGPT plan's usage is full/);
       // The answer, with OpenAI's code, for a trial to read once its program stops (goal 079).
       const kept = env.service.providerAnswerSince("proxy", before);
       assert.equal(kept?.status, 429);
@@ -228,6 +237,27 @@ describe("the model proxy", () => {
       assert.equal(other.status, 500);
       assert.match(await other.text(), /server_error/);
       assert.match(String(env.service.providerAnswerSince("proxy", before)?.body), /server_error/);
+      // OpenCode reads OpenAI's own refusal: it goes on as it came.
+      env.service.models.set({
+        name: "chatgpt-pro",
+        type: "chatgpt",
+        harness: "opencode",
+        version: 1,
+        base_url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`,
+        model: "gpt-test",
+        context_window: 0,
+        max_tokens: 0,
+        reasoning: null,
+        key_hint: "…0001",
+        revision: "bbbbbbbb",
+        api_key: "access-token-one",
+      });
+      const asIs = await ask();
+      assert.equal(asIs.status, 429);
+      assert.equal(asIs.headers.get("retry-after"), null);
+      assert.deepEqual(await asIs.json(), {
+        error: { message: "Refused for now.", code: "subscription_sharing_usage_limit_exceeded" },
+      });
     } finally {
       server.close();
     }

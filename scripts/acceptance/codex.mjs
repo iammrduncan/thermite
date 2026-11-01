@@ -32,6 +32,9 @@
 //   - the rig set to headless over REST, a later trial runs `codex exec` headless, with the same
 //     home, flags, hooks and two messages inside its turn, and submits: headless stays an
 //     advanced choice, so both modes keep a trial here;
+//   - before each of the two trials submits, Codex calls the harness's `thermite` MCP server's
+//     kb_write (goal 175): its finding lands in its own slot (worker-1), where control holds it,
+//     and a write naming another slot is refused and never reaches control;
 //   - the auditor, given the same model in Codex over REST (goal 073), audits a large gain in
 //     the Codex CLI in the supervisor: in its own folder, with the read-only sandbox, no
 //     approvals asked, no shell, through the supervisor's proxy for the call with a credential
@@ -521,6 +524,39 @@ try {
       laterReads.map((e) => e.body.how).join(",") === "after-tool,turn-end" &&
       Number(laterTrial.body.turns) >= 1,
     { said: saidLater, reads: laterReads.map((e) => e.body), trial: laterTrial.body },
+  );
+  // The knowledge base (goal 175): each trial's finding, written through Thermite's MCP server,
+  // in its own slot, where control holds it; each write naming another slot refused.
+  const kbOfSaid = (s) => ({
+    address: /kb=(\S+)/.exec(s)?.[1],
+    refused: /kb_refused=yes/.test(s),
+  });
+  const kbTerminal = kbOfSaid(said);
+  const kbHeadless = kbOfSaid(saidLater);
+  const ownSlot = (a) => /^smoke-cpu\/smoke-1\/worker-1\/finding:\d+$/.test(String(a));
+  const kbStored = await until(
+    "control holds Codex's two items",
+    async () => {
+      const hits = (await api("/v1/kb/search?q=kbprobecx")).body.hits ?? [];
+      const both = [kbTerminal.address, kbHeadless.address].map((a) =>
+        hits.find((h) => h.address === a),
+      );
+      return both.every((h) => h?.slot === "worker-1") ? both : undefined;
+    },
+    180_000,
+    3000,
+  ).catch(() => undefined);
+  const kbDenied = (await api("/v1/kb/search?q=kbprobedenied")).body.hits ?? [];
+  check(
+    "Codex's trials, in its terminal and headless, each write a finding into their own slot with Thermite's MCP server's kb_write, which control holds there; a write naming another slot is refused and never reaches control",
+    ownSlot(kbTerminal.address) &&
+      ownSlot(kbHeadless.address) &&
+      kbTerminal.address !== kbHeadless.address &&
+      kbTerminal.refused &&
+      kbHeadless.refused &&
+      Boolean(kbStored) &&
+      kbDenied.length === 0,
+    { terminal: kbTerminal, headless: kbHeadless, stored: kbStored, denied: kbDenied.length },
   );
   check(
     "every Responses call reached the provider with its own key, added by the proxy, never a run's credential",

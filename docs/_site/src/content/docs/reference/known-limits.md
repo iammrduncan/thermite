@@ -15,6 +15,7 @@ Thermite is at version 0.x. This page lists what to know before you run it: the 
 | [There are no default caps](#there-are-no-default-caps) | No goal: it is a decision |
 | [Timing on RunPod is noisier](#timing-on-runpod-is-noisier) | No goal: it comes with shared machines |
 | [Research mode searches the web only through an MCP server](#research-mode-searches-the-web-only-through-an-mcp-server) | No goal: give the campaign a search server |
+| [The knowledge base takes text from agents, and reads each file once](#the-knowledge-base-takes-text-from-agents-and-reads-each-file-once) | No goal yet: [goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/175-knowledge-base.goal) records them |
 | [Runs of several days are not yet proven](#runs-of-several-days-are-not-yet-proven) | [Goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), v0.5.0 |
 | [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.1.2 |
 | [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), v0.1.3 |
@@ -59,9 +60,20 @@ A RunPod GPU is in a machine that other customers' pods share. Their work can sl
 
 ## Research mode searches the web only through an MCP server
 
-Research workers have no search of their own: their `search` tool answers that the rig has no web search. They search the web with the tools of an MCP server that the campaign gives them, such as a search or browsing server you add in **Settings** ([Give agents MCP tools](../how-to/campaigns/give-agents-mcp-tools.md)). Without one, they start from the contract's starting pages (`seeds`) and follow the links of the pages already archived ([the research contract](contract.md#research)), so a research campaign finds only what its starting pages lead to.
+Research workers have no web search of their own. They search the web with the tools of an MCP server that the campaign gives them, such as a search or browsing server you add in **Settings** ([Give agents MCP tools](../how-to/campaigns/give-agents-mcp-tools.md)). Without one, they start from the contract's starting pages (`seeds`) and follow the links of the pages already archived ([the research contract](contract.md#research)), so a research campaign finds only what its starting pages lead to.
 
 **Removed by:** no goal. Give the campaign a search or browsing MCP server.
+
+## The knowledge base takes text from agents, and reads each file once
+
+[Thermite's knowledge base](knowledge-base.md) keeps files whole, but what an agent can give it, and what control reads from a file, have limits:
+
+- **`kb_write` takes text only.** An agent writes a short text, or a text that is kept whole as a file when it gives `file_name` (a name that ends in `.md`, `.txt`, `.html`, `.json` or `.csv`). It can't send a binary file, such as a PDF or an image, that it downloaded. The sources that the research tools archive, the lanes' documents, the research paper and the reports reach the knowledge base whole, as files, by their own path ([Sources and documents](knowledge-base.md#sources-and-documents)).
+- **Control reads a file's text within fixed limits.** It reads at most 2,000 pages, 5,000,000 characters and 256 MiB of a file, in at most 120 seconds and 1,024 MiB of memory ([Its text](knowledge-base.md#its-text)). These limits are constants in Thermite's code, not settings: a file past one of them is searched by the text read up to it, or kept whole.
+- **A scanned PDF gives no text.** Control reads no text from images, so a PDF of scanned pages is kept whole and not searched. A PDF whose fonts need character maps, as some with Chinese, Japanese or Korean text do, may give little or wrong text.
+- **A file is read once.** Control reads each file's text once, by its SHA-256. When a later version changes the limits, or reads more kinds of file, control does not read again a file it read before.
+
+**Removed by:** no goal yet. [Goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/175-knowledge-base.goal) records each of them.
 
 ## Runs of several days are not yet proven
 

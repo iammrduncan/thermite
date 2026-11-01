@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { COMMAND_MAX_BYTES, SignedCommand } from "../../commands.ts";
 import { HealthAnswer } from "../../health.ts";
+import { type KB_AGENT_SLOTS, KB_FILES_HELD_MAX, KbFileSha256 } from "../../kb.ts";
 import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
 import { RetentionRemoved, SpaceInventory } from "../../retention/index.ts";
@@ -288,20 +289,34 @@ export const KB_ANSWERS = {
   maxBytes: 8 * 1024 * 1024,
 } as const satisfies Route;
 
+/**
+ * The knowledge base's files control holds (goal 175): the supervisor asked control which of the
+ * files it put control keeps (the rig's `kb-files` ask, core/link/asks.ts), and names them here;
+ * the harness removes each from its outbox, and answers how many it removed. Only files control
+ * said it holds come here; one gone already counts as none.
+ */
+export const KB_FILES_HELD = {
+  method: "POST",
+  path: "/v1/kb/files-held",
+  body: z.strictObject({ files: z.array(KbFileSha256).max(KB_FILES_HELD_MAX) }),
+  answer: z.object({ removed: z.number() }),
+  maxBytes: 64 * 1024,
+} as const satisfies Route;
+
 /** The advisors' slots in a run of the knowledge base: the roles the supervisor runs. */
 export const KB_ADVISOR_SLOTS = [
-  "teacher",
-  "merged-by",
+  "teachers",
+  "merged_by",
   "auditor",
-  "review-panel",
+  "review_panel",
   "synthesizer",
-  "final-writer",
-] as const;
+  "final_writer",
+] as const satisfies readonly (typeof KB_AGENT_SLOTS)[number][];
 export type KbAdvisorSlot = (typeof KB_ADVISOR_SLOTS)[number];
 
 /**
  * An advisor's kb_write (goal 175): the supervisor runs the advisor's call, so it names the
- * advisor's slot (teacher, merged-by, auditor, review-panel, synthesizer, final-writer); the
+ * advisor's slot (teachers, merged_by, auditor, review_panel, synthesizer, final_writer); the
  * harness records the item there, signed, if the run's contract lets that role write its kind.
  * The rest is the agent's arguments, which name no slot.
  */

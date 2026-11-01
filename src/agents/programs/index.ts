@@ -40,6 +40,7 @@ export {
   claudeTranscript,
   claudeTrialSettings,
   closeClaudeRun,
+  creditsOn,
   mergeUsage,
   NO_CLAUDE_CODE,
   newClaudeTally,

@@ -86,6 +86,7 @@ describe("who may do what on the message bus", () => {
           "thermite.rig.rig-a.ask.daily",
           "thermite.rig.rig-a.ask.renew",
           "thermite.rig.rig-a.ask.space",
+          "thermite.rig.rig-a.ask.kb-files",
         ],
       },
       subscribe: { allow: ["_INBOX.rig.rig-a.>"] },

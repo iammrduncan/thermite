@@ -17,8 +17,8 @@ import type { CliProgram, CliTally, CliTerminal, OwnStop } from "./program.ts";
  *   only in words, so the reset comes from the error answer the model proxy saw (its Retry-After,
  *   or 15 minutes for a full ChatGPT plan, which gives none). OpenCode stops its turn too, its
  *   events give the reset. For both, the harness types its continuation after the reset. (Codex
- *   0.162.1 does not know a full ChatGPT plan's code as a usage limit: its turn ends with an error,
- *   and the loop's wait for a provider's error does the same, the owner's input held meanwhile.)
+ *   0.162.1 does not know a full ChatGPT plan's code as a usage limit, so the model proxy answers
+ *   it that refusal in its own usage limit's form: model/chatgpt.ts's codexUsageLimit.)
  *
  * The wait is the run's (`agents_wait_for_limit`, through `waiting`): no new trial or plan of the
  * run starts before the reset, and a research run's clock stops. The trial ends instead, as at a

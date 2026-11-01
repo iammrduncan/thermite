@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { type ChildProcess, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { afterEach, describe, test } from "node:test";
-import { HEALTH_WATCH, watchHealth } from "../../../src/harness/broker/watch.ts";
+import { HEALTH_WATCH } from "../../../src/common/health.ts";
+import { watchHealth } from "../../../src/harness/broker/watch.ts";
 
 /**
  * The one-container rig image's watch of its parts (goal 173). A stand-in part runs in its own

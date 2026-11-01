@@ -3,6 +3,7 @@ import {
   type KbWrittenKind,
   kbAddress,
   readKbItem,
+  slotSpellings,
   writerOfSlot,
   writtenRef,
 } from "../../core/kb.ts";
@@ -61,11 +62,17 @@ export function writeKbItem(ledger: Ledger, outboxDir: string, w: KbWrite): KbWr
   const file = w.file && kbFileFacts(w.file.bytes, w.file);
   return ledger.tx(() => {
     // The slot's items so far, from its writer's kb_item events: each item's kind and newest
-    // version, as control keeps them.
+    // version, as control keeps them. Events recorded before the slots took the agents' names
+    // carry the slot's spelling then, and count as the slot's.
     const held = new Map<number, { kind: string; version: number }>();
-    const own = { subject: w.run, actor: writerOfSlot(w.writer), body: { slot: w.writer } };
-    for (const e of ledger.events.list("kb_item", own))
-      held.set(e.body.item, { kind: e.body.kind, version: e.body.version });
+    for (const slot of slotSpellings(w.writer)) {
+      const own = { subject: w.run, actor: writerOfSlot(slot), body: { slot } };
+      for (const e of ledger.events.list("kb_item", own)) {
+        const had = held.get(e.body.item);
+        if (!had || e.body.version > had.version)
+          held.set(e.body.item, { kind: e.body.kind, version: e.body.version });
+      }
+    }
     let item: number;
     let version: number;
     if (w.of === undefined) {

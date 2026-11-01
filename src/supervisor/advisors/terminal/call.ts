@@ -15,6 +15,7 @@ import { advisorCallId } from "../../../core/terminal-input.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorCompaction, AdvisorResult } from "../call.ts";
 import { type AdvisorRuntime, advisorRoute } from "../config.ts";
+import { limitUntil } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
 import { callId, cliHarnessModel, parseAnswer } from "../runtimes/index.ts";
 import { serveAdvisorTools } from "../tools/index.ts";
@@ -193,9 +194,13 @@ export async function runInTerminal<S extends z.ZodType>(
         paper: tools.paper,
       });
     if (key !== undefined)
-      proxy = await serveAdvisorModel({ api: model.api, baseUrl: model.baseUrl, key }, (a) => {
-        answered = { ...a, at: Date.now() };
-      });
+      proxy = await serveAdvisorModel(
+        { api: model.api, baseUrl: model.baseUrl, key },
+        (a) => {
+          answered = { ...a, at: Date.now() };
+        },
+        rt.runtime,
+      );
     turns = await serveAdvisorTurns();
     const first = input.prompt({
       program: rt.runtime,
@@ -308,7 +313,16 @@ export async function runInTerminal<S extends z.ZodType>(
     if (answer.ok) return { output: answer.value, ...result };
     // Why there is no answer: its last text, else its last error or words on its screen.
     const why = tally.lastText || tally.errors.at(-1) || tally.notes.at(-1) || "no output";
-    return { output: undefined, error: `no valid answer: ${why.slice(-300)}`, ...result };
+    // A full window it did not wait out (a weekly one): not a failed try (limit.ts).
+    const limit = tally.limitedUntil
+      ? limitUntil(tally.limitedUntil, tally.errors.at(-1) ?? "its usage window is full")
+      : undefined;
+    return {
+      output: undefined,
+      error: `no valid answer: ${why.slice(-300)}`,
+      ...result,
+      ...(limit ? { limit } : {}),
+    };
   } catch (err) {
     return fail(`${rt.name} could not run in its terminal: ${errorText(err)}`);
   } finally {

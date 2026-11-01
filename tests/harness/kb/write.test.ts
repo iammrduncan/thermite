@@ -134,7 +134,7 @@ describe("a write to the knowledge base, recorded in the run's ledger", () => {
     assert.deepEqual(readFileSync(path), bytes);
     const at = statSync(path).mtimeMs;
     write({
-      writer: "teacher",
+      writer: "teachers",
       kind: "reference",
       title: "The same paper",
       file: { bytes, name: "same.pdf", type: "application/pdf" },

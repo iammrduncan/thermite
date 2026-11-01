@@ -25,11 +25,14 @@
 //     /skill:NAME (refused: the kit carries no skills), a command the view has not (refused),
 //     /compact, words as a follow-up, and Esc. Each is recorded word for word with its outcome;
 //     the model gets the steered words and the follow-up, the conversation is compacted once, the
-//     interrupt does not end the trial, which submits; and Live shows the view's screen.
+//     interrupt does not end the trial, which submits; and Live shows the view's screen;
+//   - the knowledge base (goal 175, lib/kb-agents.mjs): Pi's and OpenCode's agents write in their
+//     own slots, a write naming another slot is refused, and smoke-2's planner finds the items.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/agents.mjs
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { kbAgentsScene } from "./lib/kb-agents.mjs";
 import {
   opencodePlanner,
   opencodePlannerScene,
@@ -82,6 +85,9 @@ const textOf = (c) =>
     : Array.isArray(c)
       ? c.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
       : String(c ?? "");
+
+/** The knowledge base's scene (goal 175: lib/kb-agents.mjs). */
+const kbScene = kbAgentsScene();
 
 /**
  * The OpenCode research trial: each research tool as a shell command, in turn. Its fetch names
@@ -137,6 +143,9 @@ function script(messages, tools) {
   // kernel and submits with thermite-trial. A request without tools names the session.
   if (names.includes("shell") && names.includes("execute")) {
     const asked = JSON.stringify(messages);
+    // The second run's planner (goal 175) searches the knowledge base once, then plans.
+    const searched = kbScene.plannerTurn(messages, names, asked);
+    if (searched) return searched;
     // The planner in OpenCode's own terminal (lib/planner-terminal.mjs).
     const planned = opencodePlanner(messages, asked);
     if (planned) return planned;
@@ -153,33 +162,28 @@ function script(messages, tools) {
       return step ? { toolCalls: [step] } : { text: "done for this trial" };
     }
     // A trial: first a command that takes the lane over its memory limit (the broker kills it
-    // and spares OpenCode), then the change and its submission, then done.
-    if (tools === 0)
-      return {
-        toolCalls: [
-          {
-            name: "shell",
-            args: {
-              command:
-                "python3 -c 'import time; b = bytearray(int(2.5 * 1024**3)); time.sleep(20)'",
-              timeout: 0,
-            },
-          },
-        ],
-      };
-    if (tools > 1) return { text: "done" };
-    return {
-      toolCalls: [
-        {
-          name: "shell",
-          args: {
-            command:
-              "printf '\\n/* tidied */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'opencode harness: a tidied kernel'",
-            timeout: 0,
-          },
+    // and spares OpenCode), then an item for the knowledge base in its own slot and one naming
+    // another slot (goal 175: Thermite's MCP server's kb_write), then the change and its
+    // submission, then done.
+    const steps = [
+      {
+        name: "shell",
+        args: {
+          command: "python3 -c 'import time; b = bytearray(int(2.5 * 1024**3)); time.sleep(20)'",
+          timeout: 0,
         },
-      ],
-    };
+      },
+      ...kbScene.ocSteps(messages, names),
+      {
+        name: "shell",
+        args: {
+          command:
+            "printf '\\n/* tidied */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'opencode harness: a tidied kernel'",
+          timeout: 0,
+        },
+      },
+    ];
+    return steps[tools] ? { toolCalls: [steps[tools]] } : { text: "done" };
   }
   if (!tools.length) return { text: "A Thermite trial" };
   // The rig's model check: echo back the word it was given.
@@ -254,6 +258,9 @@ function script(messages, tools) {
               'if kill -0 "$(cat bg.pid)" 2>/dev/null; then echo "BG-ALIVE yes"; else echo "BG-ALIVE no"; fi',
           },
         },
+        // The knowledge base (goal 175): an item in the worker's own slot, then a write naming
+        // another slot, which is refused.
+        ...kbScene.piSteps(messages),
         {
           name: "submit",
           args: { hypothesis: "i-k-j loop order makes the inner loop contiguous" },
@@ -734,6 +741,9 @@ try {
     agents.epochs >= 1 && agents.planner_valid >= 1 && agents.trials >= 2 && agents.tokens_in > 0,
     agents,
   );
+  // The knowledge base (goal 175): each program's agent's items in its own slot, the refused
+  // writes nowhere, and an agent of another run finds the items (lib/kb-agents.mjs).
+  await kbScene.run(check, env);
   // Later epochs keep starting trials: pause, then every lane and agent process must end with
   // its trial.
   await command("pause_run", { run: "smoke-1", reason: "acceptance: drain" });

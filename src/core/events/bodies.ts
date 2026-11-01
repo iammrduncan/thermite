@@ -423,6 +423,11 @@ export interface EventBodies {
     trial: string;
     reason: string;
     in_trial?: boolean | undefined;
+    /**
+     * A weekly window (goal 169): the trial ended at a usage limit whose reset is more than a day
+     * away, and the run waits for the reset itself; control's Needs you shows it.
+     */
+    weekly?: true | undefined;
   };
   /** The owner ended the run's wait for its provider before its time (`end_wait`). */
   agents_wait_ended: { until: string };

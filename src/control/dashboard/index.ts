@@ -21,6 +21,7 @@ import { rigListRoutes } from "./rigs/list.ts";
 import { rigPageRoutes } from "./rigs/page.ts";
 import { runpodRigRoutes } from "./rigs/runpod.ts";
 import { rigStateRoutes } from "./rigs/state.ts";
+import { rigWeeklyRoutes } from "./rigs/weekly.ts";
 import { sessionRoutes } from "./session.ts";
 import { cloudRoutes } from "./settings/clouds.ts";
 import { clusterRoutes } from "./settings/clusters.ts";
@@ -74,6 +75,7 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   addRigRoutes(app, dash);
   joinedRigRoutes(app, dash);
   rigStateRoutes(app, dash);
+  rigWeeklyRoutes(app, dash);
   runpodRigRoutes(app, dash);
   machineRoutes(app, dash);
   providerRoutes(app, dash);

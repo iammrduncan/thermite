@@ -47,6 +47,8 @@ export function proxyRoutes(app: Hono, { service, registry }: ApiContext): void 
           c.req.method === "GET" || c.req.method === "HEAD"
             ? undefined
             : Buffer.from(await c.req.arrayBuffer()),
+        // The route's program: the Codex CLI hears a full ChatGPT plan as its own usage limit.
+        program: m.harness,
       },
       { api: m.api, baseUrl: m.baseUrl, key: m.keyNow?.() ?? m.apiKey },
       // Each error answer, for the trial (or the check or plan) to tell its kind (goal 079).

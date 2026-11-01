@@ -2,6 +2,7 @@
 import { errorText } from "../../common/errors.ts";
 import { thermiteAgents } from "./agents.ts";
 import { thermiteBackup, thermiteRestore } from "./backup.ts";
+import { thermiteBus } from "./bus.ts";
 import { thermiteCampaign, thermiteRun } from "./campaigns.ts";
 import { thermiteInvalidate } from "./evidence.ts";
 import { thermiteExports } from "./exports.ts";
@@ -68,6 +69,8 @@ async function main(argv: string[]): Promise<void> {
       return thermiteExports(rest);
     case "retention":
       return thermiteRetention(rest);
+    case "bus":
+      return thermiteBus(rest);
     case "command":
       return thermiteCommand(rest);
     case "invalidate":

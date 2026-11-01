@@ -7,6 +7,7 @@ import { auditNeeds, promotionNeeds } from "./promotion.ts";
 import { proposalNeeds } from "./proposal.ts";
 import { conclusionNeeds, reviewNeeds } from "./review.ts";
 import { agentsNeeds, keyNeeds, resetNeeds, staleNeeds } from "./rig.ts";
+import { weeklyLimitNeeds } from "./weekly.ts";
 
 export { attemptDetail } from "./attempt.ts";
 export { baselineBlock } from "./baseline.ts";
@@ -73,7 +74,8 @@ export interface Need {
     | "bus_key"
     | "bus_users"
     | "off_bus"
-    | "held_commands";
+    | "held_commands"
+    | "weekly_limit";
   rig: string;
   run?: string | undefined;
   attempt?: string | undefined;
@@ -135,6 +137,8 @@ export function needs(
     out.push(...off);
     if (!off.length) out.push(...staleNeeds(c, u, key));
     out.push(...heldCommandNeeds(c, store, u));
+    // Its subscription's weekly limit full, until the owner chooses (goal 169).
+    out.push(...weeklyLimitNeeds(c, store, u));
     // Its disk at its floor, or a drain past its deadline (goal 173).
     out.push(...diskNeeds(c, u));
     out.push(...drainNeeds(c, store, u));
@@ -156,6 +160,7 @@ export function needs(
     "disk",
     "drain",
     "agents",
+    "weekly_limit",
     "promotion",
     "audit",
     "blocked",

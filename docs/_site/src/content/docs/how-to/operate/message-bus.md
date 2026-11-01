@@ -34,7 +34,19 @@ curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"bus":"connected","degr
    ```
 
    `"bus":"connected"` says control holds a connection to the server now; `"away"` says it holds none and tries again every 5 seconds. Once control serves, the answer is 200 in both: control's own pages and routes serve whatever the bus does, though what control writes from the rigs' new events waits for the bus. While control starts, it builds its views from the bus's events first: its health then answers 503 with `"starting":true`, and every other route 503, until its log says `control's views built from the events stream`.
-3. For the bus's streams and what each consumer still has to take, ask `GET /v1/bus` with the owner's token, or call the MCP tool `bus_state`: [The message bus](../../reference/rest-api.md#the-message-bus).
+3. For the bus's streams and what each consumer still has to take, ask `GET /v1/bus` with the owner's token, call the MCP tool `bus_state`, or run [`thermite bus`](../../reference/command-line.md#bus): [The message bus](../../reference/rest-api.md#the-message-bus).
+
+   ```sh
+   npx thermite bus --control http://127.0.0.1:8800 --token-file .dev/secrets/control-admin-token
+   ```
+
+   Its first line says `bus nats:4222: reached`, then each stream with its messages and its consumers.
+4. Or open **Settings** and scroll to **Message bus**, on the dashboard. It shows the same figures in three blocks:
+   - **Message bus**, control's connection: its **State** (`Connected, since` the time, or **Away**), the **Server** (its version, address and TLS), **Its store** (what the bus's store uses of its room, and the disk floor below which control holds new runs) and the **Rigs' events** (the stream's place written and applied through, and how many messages are behind);
+   - **Rigs on the bus**: each rig's **Connection** (`On the bus, since` its last registration, or **Off the bus** since a time, broken until it comes back), its **Reports waiting** on the bus, its **Commands waiting** (on the bus and not acknowledged, or held by control), the messages **Sent again** to it (its commands and its config), and its **Last report**;
+   - **Bus streams**: each stream, what it carries, its messages and space, and how long it keeps them.
+
+   Each column's ⓘ says what it counts.
 
 Each time a rig's supervisor starts, its history, on its page, gets the step "It registered its keys on the message bus with control": its one call to control over HTTPS. The first time, it also gets "Its key on the message bus registered". A rig that registered its keys and then sends nothing on the bus shows **Broken**: [A rig off the bus](#a-rig-off-the-bus).
 
@@ -157,6 +169,7 @@ What you see when it does not work:
 - `Error trying to connect as leafnode to remote server "203.0.113.5:40123"` with `connection refused` or `i/o timeout`: nothing answers at the pod's address. The pod may still be starting, or a firewall in front of control keeps the `nats` service from that port. The server tries again about every second, and logs its tries.
 - `Error trying to connect as leafnode to remote server "<rig>.leaf.thermite.invalid:7422"`: harmless. The server's connection names that address for the pod's certificate's name alone, and it never resolves.
 - `TLS leafnode handshake error: … certificate signed by unknown authority`: the server at that address is not the rig's pod. Control's server takes only the certificate control made for that pod at its launch.
+- In the pod's log ([A pod's log](../../reference/rest-api.md#a-pods-log)), `the pod's bus server's sign-in check failed`, then `the pod's bus server is unhealthy: ending it to start it again`: the pod's own server hung, and its supervisor killed it and starts it again. Control's server dials it again once it is back ([Restarts and stops](../../reference/harness-image.md#restarts-and-stops)).
 
 A pod that RunPod gives no public address for its port 7422 can't join the bus: after 5 minutes with no address and nothing from the pod on the bus, its page shows it **Broken**. Terminate it and launch a new one; RunPod may give the new pod an address. A rig on RunPod launched before this version has no leaf node, so it can't report at all: its page shows it **Broken** and its **Pull mode** block says `Not on it: launched before the pod's leaf node, so it can't report. Terminate it and launch a new one.`
 
@@ -207,7 +220,8 @@ A rig and control talk only on the bus. A rig that can't reach it gets no comman
 - on its page, a banner `Broken: <rig> is off the message bus.`, with what control knows, since when, and `To fix it:` for where the rig runs;
 - in its page's top line, `broken · off the message bus`;
 - on the **Rigs** list, the chip **Broken: off the bus**, under the filter **Stale, offline or broken**, and in the summary, `N broken, off the bus`;
-- under **Needs you**, a **Broken** card, `<rig> is broken: it is off the message bus`.
+- under **Needs you**, a **Broken** card, `<rig> is broken: it is off the message bus`;
+- in `GET /v1/rigs`, `GET /v1/rigs/<rig>/view` and the MCP tool `list_rigs`, the rig's `bus`, `{"state":"off", why, words, since, fix}`, with the same words ([A rig's connection to the bus](../../reference/rest-api.md#a-rigs-connection-to-the-bus)), and in [`thermite rig list`](../../reference/command-line.md#rig-list), a line under the rig.
 
 Control sees a rig off the bus three ways. The banner's words say which:
 

@@ -282,6 +282,7 @@ async function converse<T extends CliTally>(
       );
       if ("end" in w) {
         tally.errors.push(w.end.error ?? `${p.name} stopped while it waited for its usage window`);
+        if (w.end.retryAfter) tally.limitedUntil = w.end.retryAfter;
         break;
       }
       following = "followed" in w;

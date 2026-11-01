@@ -67,7 +67,8 @@ const short = (b: ListedBuild | null | undefined) =>
 /**
  * The rig list as `thermite rig list` prints it: control's build, then each rig with whether it
  * reports, its last report, its version against control's and each part's build, and under it
- * what the owner should know. Enrolled rigs that never reported come last.
+ * what the owner should know: of its version, and that it is off the message bus. Enrolled rigs
+ * that never reported come last.
  */
 export function formatRigList(list: RigList): string {
   const c = list.control;
@@ -83,7 +84,13 @@ export function formatRigList(list: RigList): string {
   const rows = [["RIG", "STATE", "LAST REPORT", "VERSION", "HARNESS", "SUPERVISOR"]];
   const notes = new Map<number, string>();
   for (const u of list.rigs) {
-    if (u.version?.notice) notes.set(rows.length, u.version.notice);
+    // What to know of its version, and of its connection to the message bus when it is off it.
+    const bus = u.bus?.state === "off" ? u.bus : undefined;
+    const said = [
+      u.version?.notice,
+      bus && `Off the message bus since ${bus.since}, so it does not work: ${bus.words} ${bus.fix}`,
+    ].filter((n): n is string => Boolean(n));
+    if (said.length) notes.set(rows.length, said.join("\n  "));
     rows.push([
       u.id,
       u.state ?? "unknown",

@@ -152,12 +152,14 @@ export class HarnessService {
   gpuSplit?: { set: number; judge: number } | undefined;
   /**
    * A subscription's usage windows as its runtime last reported them (Claude Code's 5-hour and
-   * weekly windows), for the rig's report: no tokens, only percent used and reset times.
+   * weekly windows), for the rig's report: no tokens, only percent used and reset times; and its
+   * account's usage credits, on or off and since when on this rig (goal 169).
    */
   subscriptionUsage?:
     | {
         five_hour?: { utilization: number; resets_at: string } | undefined;
         seven_day?: { utilization: number; resets_at: string } | undefined;
+        credits?: { on: boolean; since: string | null } | undefined;
         at: string;
       }
     | undefined;

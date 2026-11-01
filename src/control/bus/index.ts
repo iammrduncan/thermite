@@ -27,6 +27,7 @@ export {
   BUS_OFF_STEP,
   BUS_REACH_GRACE_MS,
   BUS_REGISTERED_STEP,
+  busReach,
   noteOffBusCall,
   noteRegistered,
   type OffBus,

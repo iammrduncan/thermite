@@ -9,11 +9,13 @@ import {
   statSync,
 } from "node:fs";
 import { join } from "node:path";
+import type { HarnessClient } from "../../common/api/harness.ts";
 import type { Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { writeAtomic } from "../../common/fs.ts";
-import { KB_OUTBOX_FILES } from "../../core/kb.ts";
+import { KB_FILES_HELD } from "../../core/api/harness/supervisor.ts";
+import { KB_FILES_HELD_MAX, KB_OUTBOX_FILES } from "../../core/kb.ts";
 import {
   KB_FILE_CHUNK_BYTES,
   KB_FILE_HEADERS,
@@ -21,6 +23,7 @@ import {
   kbFileChunks,
   kbFileSubject,
 } from "../../core/link/kb-files.ts";
+import { ask, type ControlOnBus } from "../ask.ts";
 
 /**
  * The knowledge base's files, from the rig's outbox to control (goal 175, step 2). The harness
@@ -31,8 +34,15 @@ import {
  * as their SHA-256 is never put. A put cut short is not noted, and starts again at the next round:
  * the stream keeps once a chunk it had within its duplicate window, and control starts a file
  * again at its first chunk. A put is cut short, too, while the stream holds as many of the rig's
- * chunks as it takes (KB_FILE_CHUNKS_WAITING_PER_RIG), until control has taken some. With the bus away, or control's stream not made yet, the files wait in
- * the outbox, and the item's event in the ledger and the report, until both can go.
+ * chunks as it takes (KB_FILE_CHUNKS_WAITING_PER_RIG), until control has taken some. With the bus
+ * away, or control's stream not made yet, the files wait in the outbox, and the item's event in the
+ * ledger and the report, until both can go.
+ *
+ * A file leaves the outbox only once control says it holds it: each round, the supervisor asks
+ * control which of the files it put the outbox still holds control keeps, each with an item that
+ * names it (the rig's `kb-files` ask, core/link/asks.ts), and names those to its harness, which
+ * removes them (removeHeldKbFiles). The outbox is the harness's, and the supervisor only reads it.
+ * With control away, or a refusal, nothing is removed, and the next round asks again.
  */
 
 /** The files one round puts at most: the rest wait for the next round. */
@@ -150,5 +160,67 @@ export async function putKbFiles(o: {
     out.waiting--;
     log("supervisor", "a file for the knowledge base put on the bus", { rig: o.rig, sha256 });
   }
+  return out;
+}
+
+/** What one round's ask of control did: files asked about, those control holds, those removed. */
+interface KbFilesHeld {
+  asked: number;
+  held: number;
+  removed: number;
+  error?: string | undefined;
+}
+
+/** The files the supervisor put that the outbox still holds, oldest first, KB_FILES_HELD_MAX at most. */
+function putFiles(outboxDir: string, home: string): string[] {
+  const dir = join(outboxDir, KB_OUTBOX_FILES);
+  if (!existsSync(dir)) return [];
+  const put = join(home, KB_FILES_PUT);
+  return readdirSync(dir)
+    .filter((n) => SHA256.test(n) && existsSync(join(put, n)))
+    .map((n) => ({ n, at: statSync(join(dir, n)).mtimeMs }))
+    .sort((a, b) => a.at - b.at || a.n.localeCompare(b.n))
+    .slice(0, KB_FILES_HELD_MAX)
+    .map((f) => f.n);
+}
+
+/**
+ * One round: asks control which of the files the supervisor put, and the outbox still holds,
+ * control keeps, and names those to the harness, which removes them from the outbox. A file
+ * control did not name stays. Its put stays noted, so a file the harness writes again is not put
+ * again, and goes at a later round. Control away, a refusal or a failure of the harness: nothing
+ * is removed, said in the answer, and the next round asks again.
+ */
+export async function removeHeldKbFiles(o: {
+  outboxDir: string;
+  home: string;
+  control: ControlOnBus;
+  harness: Pick<HarnessClient, "call">;
+}): Promise<KbFilesHeld> {
+  const files = putFiles(o.outboxDir, o.home);
+  const out: KbFilesHeld = { asked: files.length, held: 0, removed: 0 };
+  if (!files.length) return out;
+  let held: string[];
+  try {
+    // Only files it asked about: control's answer removes nothing else.
+    held = (await ask(o.control, "kb-files", { files })).held.filter((f) => files.includes(f));
+  } catch (err) {
+    return { ...out, error: `control was not asked which files it holds: ${errorText(err)}` };
+  }
+  out.held = held.length;
+  if (!held.length) return out;
+  try {
+    out.removed = (await o.harness.call(KB_FILES_HELD, { body: { files: held } })).removed;
+  } catch (err) {
+    return {
+      ...out,
+      error: `the harness removed none of the files control holds: ${errorText(err)}`,
+    };
+  }
+  log("supervisor", "files for the knowledge base left the outbox: control holds them", {
+    rig: o.control.rig,
+    held: out.held,
+    removed: out.removed,
+  });
   return out;
 }

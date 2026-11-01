@@ -53,7 +53,7 @@ export type {
 } from "./list.ts";
 export type { OlderVersion } from "./older.ts";
 export type { KbSearchMode } from "./query.ts";
-export { knowledgeHierarchy } from "./schema.ts";
+export { knowledgeHierarchy, knowledgeSlotNames } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
 export type { KbCounts, KbFind, KbPassage, KbWhere } from "./search.ts";
 export type { KbStoredCollection, KbStoredFigures, KbStoredFile, KbTextState } from "./stored.ts";

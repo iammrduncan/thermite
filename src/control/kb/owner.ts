@@ -54,7 +54,7 @@ export const kbSearchFields = {
     "Only items of these types: record (Thermite's own records of a run), blurb (a text an agent or the owner wrote) or file",
   ),
   slots: kbSearchShape.slots.describe(
-    "Only these slots' items: records (Thermite's own records of a run), planner, worker-<lane>, teacher, merged-by, auditor, review-panel, synthesizer, final-writer",
+    "Only these slots' items: records (Thermite's own records of a run), planner, worker-<lane>, teachers, merged_by, auditor, review_panel, synthesizer, final_writer",
   ),
   offset: kbSearchShape.offset.describe(
     `Where the page starts: next_offset of the page before (at most ${KB_OFFSET_MAX})`,

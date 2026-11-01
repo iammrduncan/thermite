@@ -161,7 +161,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.equal(move.stopped, null);
     // The table and the rig's last cursor went, in store migration 12.
     assert.equal(hasTable(store.db), false);
-    assert.equal(version(store.db), 25);
+    assert.equal(version(store.db), 26);
     const rigCols = store.db.prepare("pragma table_info(rig)").all() as { name: string }[];
     assert.ok(!rigCols.some((c) => c.name === "last_cursor"));
     // The copy before it is kept outside the rotation, and holds the table.
@@ -255,7 +255,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.equal(keptCopies(path).length, 1);
     assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v11\..*\.kept$/);
     assert.equal(hasTable(store.db), false);
-    assert.equal(version(store.db), 25);
+    assert.equal(version(store.db), 26);
     const kept = onStream(busOf(store).bus);
     assert.deepEqual(
       kept.map((k) => [k.headers[EVENT_HEADERS.seq], k.subject]),

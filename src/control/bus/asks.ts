@@ -21,8 +21,9 @@ import { leafRigsOf } from "./leaf.ts";
 /**
  * Control's answers to what a rig asks of it on the message bus (core/link/asks.ts): its
  * supervisor's figures, the screens of the trials watched, its daily report, a command's newest
- * form, and what it keeps of the kinds a retention policy may remove there. Each ask comes on the rig's own subject, which only its user may publish to, and is
- * answered at the rig's own inbox alone. A refusal is an answer in words.
+ * form, what it keeps of the kinds a retention policy may remove there, and which of the knowledge
+ * base's files it put control holds. Each ask comes on the rig's own subject, which only its user
+ * may publish to, and is answered at the rig's own inbox alone. A refusal is an answer in words.
  */
 
 /** What answering needs of control: its store, its build, its signing key, the screens watched. */
@@ -77,6 +78,15 @@ export function answerRigAsk(
     case "space": {
       store.retention.takeSpace(rig, RIG_ASKS.space.body.parse(raw));
       return { ok: true };
+    }
+    case "kb-files": {
+      // The files of those asked that control keeps, each checked against its SHA-256 as it was
+      // kept (control/kb/files.ts), and named by an item it stored: the harness removes them from
+      // the rig's outbox. A file whose item has not come yet stays there, as an orphan control may
+      // remove (the knowledge base's settings) would otherwise be lost to the item that names it.
+      const { files } = RIG_ASKS["kb-files"].body.parse(raw);
+      const kb = store.kb();
+      return { held: files.filter((f) => kb.files.has(f) && kb.files.named(f)) };
     }
   }
 }

@@ -163,7 +163,7 @@ export function kbTools(writes: readonly string[]): KbToolInfo[] {
         runs: Type.Optional(Type.Array(Type.String(), { description: "Only these runs' items" })),
         slots: Type.Optional(
           Type.Array(Type.String(), {
-            description: "Only these slots' items: records, planner, worker-<lane>, teacher, …",
+            description: "Only these slots' items: records, planner, worker-<lane>, teachers, …",
           }),
         ),
         collections: Type.Optional(

@@ -4,6 +4,7 @@ import { RIG_ID, RIG_ID_WORDS } from "../../ids.ts";
 import { ReachBody } from "../../reach.ts";
 import { POD_CONFIG_ENV } from "../../tunnel.ts";
 import type { Route } from "../route.ts";
+import { BusReach } from "./bus.ts";
 import { EXPORT_NAME } from "./rigs.ts";
 
 /**
@@ -50,6 +51,8 @@ export const RigList = z.looseObject({
           supervisor: ListedBuild.nullable(),
         })
         .optional(),
+      /** Its connection to the message bus: on it, or off it and broken (bus.ts). */
+      bus: BusReach.optional(),
     }),
   ),
   enrolled: z

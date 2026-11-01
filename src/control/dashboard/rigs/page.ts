@@ -11,7 +11,7 @@ import {
 } from "../../command-progress.ts";
 import { heldCommands } from "../../issue/index.ts";
 import { exportLeft, removeWords, resultsLeft } from "../../results-left.ts";
-import { controlAddress, controlImages } from "../../rigs/index.ts";
+import { controlAddress, controlImages, weeklyLimit } from "../../rigs/index.ts";
 import { MIN_IDLE_STOP_MINUTES } from "../../runpod/index.ts";
 import {
   type ClusterRig,
@@ -28,6 +28,7 @@ import {
   runRow,
   type TimelineRow,
   timeline,
+  waitEnd,
   waitingOn,
 } from "../../ui/operator/index.ts";
 import { checkRowHtml } from "../../ui/rigs/checks.ts";
@@ -216,6 +217,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
       form: (f) => cmdForm(c, { rig: u.id, back, ...f }),
     });
     const live = u.runs.filter((i) => i.status === "running");
+    const weekly = weeklyLimit(store, u, now);
     const runsNow = live
       .map((i) =>
         runBrief(store, u, i, now, {
@@ -257,6 +259,10 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
             ? `<b class="bad">${esc(u.id)} has ${neverReported(u) ? "not reported yet" : `not reported for ${esc(span(u.last_seen, now))}`}.</b>`
             : `${esc(u.id)} is live; it reported ${esc(ago(u.last_seen, now))} ago.`,
       drain?.said ?? "",
+      // Its subscription's weekly limit (goal 169): the quiet note once the owner chose to wait.
+      weekly
+        ? `<span class="warn" data-part="weekly-limit">${esc(u.id)} waits for its subscription's weekly limit to reset, ${esc(waitEnd(weekly.until))}: new trials, its planner and its advisors start again after it.${weekly.chose ? "" : " Needs you asks what to do meanwhile."}</span>`
+        : "",
       u.unreadable
         ? `<b class="bad">Control can't read its events now.</b>`
         : live.length

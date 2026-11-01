@@ -137,8 +137,15 @@ export function runSentence(w: SentenceContext, e: StoredEvent): Sentence | null
         ? `the keys ${b.keys.map(String).join(", ")}`
         : `“${clip(String(b.text ?? ""), 200)}”`;
       const where = `${b.lane ? `${String(b.lane)}'s` : "a"} terminal (trial ${String(b.trial)})`;
+      // Words for an agent in its Pi view that wait until it would stop (follow_up), not steer it.
+      const followUp = b.follow_up === true;
       const words: Record<string, [string, Sentence["tone"]]> = {
-        typed: [`You typed ${what} into ${where}.`, ""],
+        typed: followUp
+          ? [
+              `You typed ${what} into ${where} as a follow-up: the agent gets it when it would stop, at the end of a reply that calls no tool.`,
+              "",
+            ]
+          : [`You typed ${what} into ${where}.`, ""],
         queued: [
           `You typed ${what} into ${where}: it waits for the usage window's reset${b.until ? ` (${String(b.until)})` : ""}.`,
           "warn",
@@ -148,7 +155,10 @@ export function runSentence(w: SentenceContext, e: StoredEvent): Sentence | null
           "",
         ],
         dropped: [`Your input ${what} for ${where} was dropped: ${String(b.why ?? "")}`, "warn"],
-        refused: [`Not typed into ${where}: ${what}. ${String(b.why ?? "")}`, "bad"],
+        refused: [
+          `Not typed into ${where}: ${what}${followUp ? ", as a follow-up" : ""}. ${String(b.why ?? "")}`,
+          "bad",
+        ],
       };
       const [text, tone] = words[String(b.outcome)] ?? [`You typed ${what} into ${where}.`, ""];
       return s(text, tone, { run: String(e.subject) });

@@ -11,6 +11,7 @@ import {
   type ProviderErrorAnswer,
 } from "../../agents/model/index.ts";
 import { sameSecret } from "../../common/secrets.ts";
+import type { Harness } from "../../core/agents.ts";
 
 /**
  * The model proxy for one call of an advisor in OpenCode or the Codex CLI (goal 073), as the
@@ -35,11 +36,13 @@ export const ADVISOR_PROXY_PATH = "/v1/model-proxy";
 /**
  * Starts the proxy on a free local port. Close it when the call ends. `onError` hears each error
  * answer of the provider's: an advisor in its own terminal waits for a full usage window by it
- * (goal 169).
+ * (goal 169). `program`: the advisor's program, the Codex CLI hearing a full ChatGPT plan as its
+ * own usage limit.
  */
 export async function serveAdvisorModel(
   target: ForwardTarget,
   onError?: ((a: ProviderErrorAnswer) => void) | undefined,
+  program?: Harness | undefined,
 ): Promise<AdvisorModelProxy> {
   const token = `proxy.${randomBytes(24).toString("hex")}`;
   const app = new Hono();
@@ -59,6 +62,7 @@ export async function serveAdvisorModel(
           c.req.method === "GET" || c.req.method === "HEAD"
             ? undefined
             : Buffer.from(await c.req.arrayBuffer()),
+        program,
       },
       target,
       onError,

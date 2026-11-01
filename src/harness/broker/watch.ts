@@ -1,17 +1,16 @@
 import type { ChildProcess } from "node:child_process";
 import { errorText } from "../../common/errors.ts";
-import { log, logWarn } from "../../common/log.ts";
+import { HEALTH_WATCH, watchPart } from "../../common/health.ts";
 import { HEALTH_URLS } from "../../core/health.ts";
 
 /**
  * The one-container rig image's health check (goal 173). Compose, a machine's units and a cluster's
  * kubelet check each part's health route; nothing does on a RunPod pod, so the broker asks each
- * part's route itself, as those checks do: every 30 s, with 5 s for the answer (healthProbe's
- * rule). A part that answers other than 2xx (503: one of its loops is late) or not at all three
- * times in a row is ended, its whole process group, as a machine rig's unit ends it; its exit
- * handler then starts it again, with the broker's restart backoff.
+ * part's route itself, as those checks do (common/health.ts's HEALTH_WATCH: every 30 s, with 5 s
+ * for the answer). A part that answers other than 2xx (503: one of its loops is late) or not at
+ * all three times in a row is ended, its whole process group, as a machine rig's unit ends it; its
+ * exit handler then starts it again, with the broker's restart backoff.
  */
-export const HEALTH_WATCH = { everyMs: 30_000, answerMs: 5_000, failures: 3 } as const;
 
 /**
  * Each part the broker watches: its route, and how long it may take to start, as a cluster's
@@ -38,64 +37,30 @@ export interface WatchOptions {
 
 /**
  * Watches a part the broker has just started, from now until it exits, and ends its process
- * group (SIGKILL) after HEALTH_WATCH.failures failures in a row. Each failure that counts is
- * logged with why, and so is the end.
+ * group (SIGKILL) after HEALTH_WATCH.failures failures in a row (watchPart). Each failure that
+ * counts is logged with why, and so is the end.
  */
 export function watchHealth(proc: ChildProcess, o: WatchOptions): void {
   const pid = proc.pid;
   // It never started: its own error handler says so, and starts it again.
   if (pid === undefined) return;
-  const everyMs = o.everyMs ?? HEALTH_WATCH.everyMs;
-  const startedAt = Date.now();
-  let answered = false;
-  let over = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const failures: string[] = [];
-  const end = () => {
-    over = true;
-    clearTimeout(timer);
-  };
-  proc.once("exit", end);
-  const next = () => {
-    timer = setTimeout(() => void round(), everyMs);
-    timer.unref();
-  };
-  const round = async () => {
-    const failure = await ask(o.url);
-    if (over) return;
-    if (o.stopping()) {
-      end();
-      return;
-    }
-    if (failure === undefined) {
-      if (!answered) log("broker", `watching the ${o.part}'s health route`, { url: o.url });
-      answered = true;
-      failures.length = 0;
-    } else if (answered || Date.now() - startedAt >= o.startMs) {
-      failures.push(failure);
-      logWarn("broker", `the ${o.part}'s health route failed`, {
-        url: o.url,
-        why: failure,
-        in_a_row: failures.length,
-        ends_it_at: HEALTH_WATCH.failures,
-      });
-      if (failures.length >= HEALTH_WATCH.failures) {
-        end();
-        logWarn("broker", `the ${o.part} is unhealthy: ending it to start it again`, {
-          url: o.url,
-          failures,
-        });
-        try {
-          process.kill(-pid, "SIGKILL");
-        } catch {
-          // the group is already gone
-        }
-        return;
+  watchPart(proc, {
+    component: "broker",
+    part: o.part,
+    check: "health route",
+    where: { url: o.url },
+    probe: () => ask(o.url),
+    startMs: o.startMs,
+    stopping: o.stopping,
+    everyMs: o.everyMs,
+    end: () => {
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        // the group is already gone
       }
-    }
-    next();
-  };
-  next();
+    },
+  });
 }
 
 /** Asks a health route once: undefined for a 2xx answer in time, otherwise why it failed. */

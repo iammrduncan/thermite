@@ -10,7 +10,7 @@ import {
   opencodeOwn,
   readUnder,
 } from "../../../agents/compaction/index.ts";
-import type { ModelConfig } from "../../../agents/model/index.ts";
+import type { ModelConfig, ProviderErrorAnswer } from "../../../agents/model/index.ts";
 import {
   codexBin,
   codexExe,
@@ -35,6 +35,7 @@ import {
   readOpencodeAnswer,
 } from "../cli.ts";
 import { type AdvisorRuntime, advisorRoute } from "../config.ts";
+import { limitInAnswer } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
 import { serveAdvisorTools } from "../tools/index.ts";
 import { callId, collectCompactions, runCli } from "./cli.ts";
@@ -97,6 +98,8 @@ export async function runCliHarness<S extends z.ZodType>(
   const t = input.tools;
   let tools: Awaited<ReturnType<typeof serveAdvisorTools>> | undefined;
   let proxy: Awaited<ReturnType<typeof serveAdvisorModel>> | undefined;
+  // The newest error answer of the provider's the call's proxy saw: a full usage window's reset.
+  let answered: ProviderErrorAnswer | undefined;
   try {
     if (t?.kb || t?.mcp?.servers.length || t?.code || t?.research || t?.paper)
       tools = await serveAdvisorTools({
@@ -106,7 +109,14 @@ export async function runCliHarness<S extends z.ZodType>(
         research: t.research,
         paper: t.paper,
       });
-    if (!native) proxy = await serveAdvisorModel({ api: model.api, baseUrl: model.baseUrl, key });
+    if (!native)
+      proxy = await serveAdvisorModel(
+        { api: model.api, baseUrl: model.baseUrl, key },
+        (a) => {
+          answered = a;
+        },
+        rt.runtime,
+      );
     const servers = tools?.servers ?? [];
     const opencode = rt.runtime === "opencode";
     const env = {
@@ -118,7 +128,7 @@ export async function runCliHarness<S extends z.ZodType>(
     const root = proxy?.root ?? "";
     const exe = opencode ? (opencodeExe() ?? opencodeBin()) : (codexExe() ?? codexBin());
     const title = `Advisor ${rt.name}`;
-    return await runCli(
+    const r = await runCli(
       {
         argv: [
           exe,
@@ -190,6 +200,9 @@ export async function runCliHarness<S extends z.ZodType>(
       ),
       input.schema,
     );
+    // A full usage window the provider's answer showed, where the program's words gave no reset.
+    const limit = !r.output && !r.limit && answered ? limitInAnswer(answered) : undefined;
+    return limit ? { ...r, limit } : r;
   } finally {
     await proxy?.close();
     await tools?.close();

@@ -181,7 +181,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
           // Each teacher in its program's own terminal on a rig set so (goal 169).
           terminal: terminalFor(inst.id, "teachers", given),
           // The merged by model's own slot, under the same rule.
-          ...(openFetch ? {} : { mergedKb: await kbFor(inst.id, "merged-by") }),
+          ...(openFetch ? {} : { mergedKb: await kbFor(inst.id, "merged_by") }),
           tools: {
             ...toolsFor(),
             // A research run has no code: its seed is a placeholder, with no repository on the
@@ -194,7 +194,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             mcp: await mcpFor(inst.id),
             // Thermite's knowledge base (goal 175), from the run's scope; not for teachers with
             // an open fetch, so private records and the open web never meet in one agent.
-            ...(openFetch ? {} : { kb: await kbFor(inst.id, "teacher") }),
+            ...(openFetch ? {} : { kb: await kbFor(inst.id, "teachers") }),
             brief: async () => closed(await briefOf()),
           },
         });

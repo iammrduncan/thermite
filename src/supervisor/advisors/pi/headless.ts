@@ -94,5 +94,6 @@ export async function runPi<S extends z.ZodType>(
   result.usd =
     (result.tokensIn * rt.usd_per_mtok_in + result.tokensOut * rt.usd_per_mtok_out) / 1e6;
   if (!end.answered) result.error = end.error;
+  if (!end.answered && end.limit) result.limit = end.limit;
   return result;
 }

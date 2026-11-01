@@ -3,16 +3,18 @@ import {
   KB_ANSWERS,
   KB_ASKS,
   KB_ASKS_WAIT_MAX_S,
+  KB_FILES_HELD,
   KB_WRITE,
   KB_WRITES,
 } from "../../core/api/harness/supervisor.ts";
+import { forgetHeldKbFiles } from "../kb/index.ts";
 import { type ApiContext, limitOf } from "./context.ts";
 
 /**
  * The knowledge base's channel between the harness and its supervisor (goal 175): the supervisor
  * takes the agents' searches and reads that wait (held open until one comes), hands back control's
- * answers, and records an advisor's kb_write in the advisor's slot. The agents' own calls come
- * through the MCP gateway (api/mcp.ts).
+ * answers, records an advisor's kb_write in the advisor's slot, and names the files control holds,
+ * which leave the outbox. The agents' own calls come through the MCP gateway (api/mcp.ts).
  */
 export function kbRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   app.get(KB_ASKS.path, supervisor, async (c) => {
@@ -34,5 +36,9 @@ export function kbRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   app.post(KB_WRITE.path, supervisor, limitOf(KB_WRITE), async (c) => {
     const b = KB_WRITE.body.parse(await c.req.json());
     return c.json(await service.kbTools.call({ run: b.run, slot: b.slot }, "kb_write", b.args));
+  });
+  app.post(KB_FILES_HELD.path, supervisor, limitOf(KB_FILES_HELD), async (c) => {
+    const b = KB_FILES_HELD.body.parse(await c.req.json());
+    return c.json({ removed: forgetHeldKbFiles(service.paths.outboxDir, b.files) });
   });
 }

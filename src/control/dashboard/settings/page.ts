@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import { KEY_PROVIDER_TYPES } from "../../../core/agents.ts";
 import { compactAtWords } from "../../../core/compaction.ts";
 import { isFree } from "../../../core/usage.ts";
+import { busState } from "../../bus/index.ts";
 import { type ClusterFacts, clusterLine } from "../../clusters/index.ts";
 import {
   checkRow,
@@ -24,6 +25,7 @@ import {
   ANTHROPIC_BASE,
   CHATGPT_REDIRECT,
   capWords,
+  creditsNoteDismissedAt,
   isOpencodeOwn,
 } from "../../providers/index.ts";
 import { HARNESS_NAMES } from "../../rigs/index.ts";
@@ -43,10 +45,11 @@ import {
 } from "../../store/index.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { ago, esc } from "../../ui/components/index.ts";
-import { usageBlock, usageChips } from "../../ui/providers/usage.ts";
+import { creditsChip, creditsNote, usageBlock, usageChips } from "../../ui/providers/usage.ts";
 import { checkFollowUrl, modelCheckHtml } from "../../ui/rigs/checks.ts";
 import { modelPricesBlock } from "../../ui/usage.ts";
 import type { Dashboard } from "../context.ts";
+import { busSettingsBlock } from "./bus.ts";
 import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
 import { reachBlock } from "./reach.ts";
@@ -175,9 +178,12 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
     const claudeRow = (p: (typeof providers)[number], rigs: string[]) => {
       const pName = encodeURIComponent(p.name);
       const windows = usageBlock("claude", usage.get(p.name), now);
+      // Its usage credits, while Claude Code reports them on (goal 169): a chip, and a note the
+      // owner may dismiss.
+      const dismissed = creditsNoteDismissedAt(store, p.name);
       return `<details class="dq" data-k="provider-${esc(p.name)}"><summary>
 <span class="dq-kind"><span class="kind m">Subscription</span></span>
-<span class="dq-main"><span class="dq-head">${esc(p.name)} <span class="muted" style="font-weight:400">· Claude subscription</span></span><span class="dq-why">${p.models.length} models · runs only in Claude Code, Anthropic's own program</span><span class="dq-sub"><span class="chip">token ${esc(p.key_hint)}</span>${usageChips(usage.get(p.name))}<span class="dq-where">${rigs.length ? `used by ${rigs.map((x) => esc(x)).join(", ")}` : "no rig uses it"}</span></span></span>
+<span class="dq-main"><span class="dq-head">${esc(p.name)} <span class="muted" style="font-weight:400">· Claude subscription</span></span><span class="dq-why">${p.models.length} models · runs only in Claude Code, Anthropic's own program</span><span class="dq-sub"><span class="chip">token ${esc(p.key_hint)}</span>${usageChips(usage.get(p.name))}${creditsChip(usage.get(p.name), dismissed)}<span class="dq-where">${rigs.length ? `used by ${rigs.map((x) => esc(x)).join(", ")}` : "no rig uses it"}</span></span></span>
 </summary><div class="dq-body">${windows}${PLAN_LINE}
 <div class="chips" style="margin:12px 0">${p.models.map((m) => `<span class="chip">claude-code:${esc(m.id)}</span>`).join("")}</div>
 <form method="post" action="/ui/settings/providers" class="form-grid" autocomplete="off"><input type="hidden" name="csrf" value="${t}"><input type="hidden" name="name" value="${esc(p.name)}"><input type="hidden" name="type" value="claude">
@@ -187,7 +193,7 @@ ${
   rigs.length
     ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this subscription</button></form>`
-}</div></details>`;
+}</div></details>${creditsNote(p.name, usage.get(p.name), dismissed, t)}`;
     };
     /** A ChatGPT subscription: its sign-in, its models, and how to sign in again. */
     const chatgptRow = (p: (typeof providers)[number], rigs: string[]) => {
@@ -348,6 +354,7 @@ ${mcpSettingsBlocks(store, mcpServers, t, now, (k) => (k === "error" ? said(c) :
 ${reachBlock(store, t, now, (k) => c.req.query(k))}
 ${kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) => c.req.query(k))}
 ${spaceBlock(await spaceOf(store, opts.parts.bus), store.retention.list())}
+${busSettingsBlock({ state: await busState(store, opts.parts.bus), store, views: vs, now })}
 ${retentionBlocks(store, t, (k) => c.req.query(k), draftOf(dash, c.req.query("draft")))}
 <div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>
 <script src="/ui/assets/providers.js" defer></script>`,

@@ -209,14 +209,14 @@ describe("the advisors' tools for Thermite's knowledge base", () => {
     const ok = (await (
       await write({
         run: RUN,
-        slot: "teacher",
+        slot: "teachers",
         args: { kind: "finding", title: "Aligned loads", text: "They matter." },
       })
     ).json()) as { text: string; isError?: boolean };
     assert.equal(ok.isError, undefined, ok.text);
-    assert.match(ok.text, /^kept: js-sum\/js-1\/teacher\/finding:1, item 1, version 1\./);
+    assert.match(ok.text, /^kept: js-sum\/js-1\/teachers\/finding:1, item 1, version 1\./);
     const e = env.service.ledger.events.list("kb_item", { subject: RUN });
-    assert.equal(e.at(-1)?.actor, "teacher");
+    assert.equal(e.at(-1)?.actor, "teachers");
     // The auditor writes reviews and decisions, not findings; the slot is the call's, never the
     // agent's word.
     const no = (await (

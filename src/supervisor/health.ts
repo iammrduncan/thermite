@@ -9,11 +9,12 @@ import { SUPERVISOR_HEALTH_LISTEN } from "../core/health.ts";
 export const HEALTH_LISTEN_SETTING = "THERMITE_SUPERVISOR_HEALTH_LISTEN";
 
 /**
- * The supervisor's health route (goal 173): `GET /v1/health` answers `{ok}`, and 503 when one of
- * its report, command and live loops is past its limit; with the supervisor's token for its
- * harness (`token`), also `rig` and `loops`, each loop with the time since it last came around.
- * It is all the server answers: anything else is a 404. It listens on the container's loopback by
- * default, so only a check inside the container reaches it.
+ * The supervisor's health route (goal 173): `GET /v1/health` answers `{ok}`, and 503 when its
+ * report loop or its live loop is past its limit (its commands come from a consumer on the
+ * message bus, which has no loop of its own); with the supervisor's token for its harness
+ * (`token`), also `rig` and `loops`, each loop with the time since it last came around. It is all
+ * the server answers: anything else is a 404. It listens on the container's loopback by default,
+ * so only a check inside the container reaches it.
  */
 export function serveHealth(
   env: Record<string, string | undefined>,

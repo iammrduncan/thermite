@@ -53,3 +53,36 @@ describe("the dashboard's words for research reviews and closed runs' attempts",
     );
   });
 });
+
+describe("the History's words for the owner's input into an agent's terminal", () => {
+  const input = (body: Record<string, unknown>) =>
+    said(
+      event("terminal_input", "harness", {
+        command: "c-1",
+        trial: "t-1",
+        lane: "lane-2",
+        wait: "queue",
+        ...body,
+      }),
+    );
+
+  test("words given as a follow-up say so, and when the agent gets them; words that steer do not", () => {
+    assert.equal(
+      input({ text: "also try the tiled loop", follow_up: true, outcome: "typed" }),
+      "You typed “also try the tiled loop” into lane-2's terminal (trial t-1) as a follow-up: the agent gets it when it would stop, at the end of a reply that calls no tool.",
+    );
+    assert.equal(
+      input({ text: "also try the tiled loop", outcome: "typed" }),
+      "You typed “also try the tiled loop” into lane-2's terminal (trial t-1).",
+    );
+    assert.equal(
+      input({
+        text: "/model x",
+        follow_up: true,
+        outcome: "refused",
+        why: "a follow-up is words for the agent.",
+      }),
+      "Not typed into lane-2's terminal (trial t-1): “/model x”, as a follow-up. a follow-up is words for the agent.",
+    );
+  });
+});

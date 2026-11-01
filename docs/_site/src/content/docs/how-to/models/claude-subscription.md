@@ -104,14 +104,39 @@ Control gives a rig the token only while one of its agents uses the subscription
 
 A Claude plan has a 5-hour window and a weekly window. The subscription's row on **Providers** shows them on its closed line, such as `5-hour 42%` and `Weekly 81%`; a window at 80% or more is marked. Open the row to see "5-hour window" and "Weekly window", each with how much is used and when it resets, as Claude Code on a rig last reported it: Claude Code reports a window with each answer that changes it, and the rig keeps the other window from earlier answers. Control makes no call to Anthropic with the token, so before any agent uses the subscription, the row says "No usage reported yet". The MCP tool [`providers`](../../reference/mcp-tools.md#providers) gives the same windows.
 
-When a window is full, its run's agents wait until the window resets: no new trial (one worker's session) or plan of that run starts until then. A wait lasts at most one trial's length (24 hours when neither the campaign nor the rig sets one); if the window is still full then, the next trial meets it, and the run waits again. Each run on the rig waits once one of its own trials meets the full window. **Live** in the sidebar, the dashboard's view of the agents at work ([glossary](../../reference/glossary.md)), shows "agents wait for the subscription's usage window to reset at" and the time. To end a wait early, press **Resume now** on the run's page ([End a wait for the provider](../campaigns/steer-a-run.md#end-a-wait-for-the-provider)).
+When a window is full, its run's agents wait until the window resets: no new trial (one worker's session) or plan of that run starts until then. A wait lasts at most one trial's length (24 hours when neither the campaign nor the rig sets one), but for a weekly window ([below](#a-weekly-window)); if the window is still full then, the next trial meets it, and the run waits again. Each run on the rig waits once one of its own trials meets the full window. **Live** in the sidebar, the dashboard's view of the agents at work ([glossary](../../reference/glossary.md)), shows "agents wait for the subscription's usage window to reset at" and the time. To end a wait early, press **Resume now** on the run's page ([End a wait for the provider](../campaigns/steer-a-run.md#end-a-wait-for-the-provider)).
 
 What becomes of the trial that hit the window depends on how the rig runs Claude Code:
 
 - **In its own terminal**, the default, the trial waits with it. Claude Code waits for the reset and goes on by itself in the same session, as Thermite's settings for it ask (`autoContinueAtUsageLimit`); the trial's **Live** says `waiting until 15:45:00 UTC: the provider's rate limit (…). The trial goes on in the same conversation.` Thermite reads the wait and its reset from Claude Code's transcript, never from its screen, and types nothing into Claude Code meanwhile. Your own input to its terminal waits for the reset too, unless you send it at once ([Watch and steer an agent in its terminal](../campaigns/agent-terminal.md#while-the-program-waits-for-its-usage-window)). If Claude Code has not gone on 3 minutes after the reset, the rig stops it, with nothing typed into it, and goes on in its session in a new terminal. The trial ends instead when the reset is more than a day away (a weekly window, where Claude Code would show a menu that waits for a key, which nothing answers), when it comes after the trial's own end, when Claude Code gives no time it resets, or when the rig drains.
 - **Headless**, the trial that hit the window ends.
 
+### A weekly window
+
+When a trial ends because the weekly window is full, its reset more than a day away, its experiment goes back to the top of the queue, and its run waits for the reset itself, at most a week and a day, rather than one trial's length. **Needs you** shows a card, `<rig> waits for its subscription's weekly limit`, with `waits until` the reset:
+
+- **What happened**: the trial on its lane of its run ended, and its experiment went back to the top of the queue. Thermite never answers the program's own menu at the limit.
+- **What waits**: new trials on the rig, its planner and its advisors, until the limit resets, with the time and how far off it is. The run stays running; nothing is lost.
+- **Your choice**: wait for the reset, or give the rig another model meanwhile, for new trials only. Thermite never switches a model by itself.
+
+Its two buttons:
+
+| Button | What it does |
+| --- | --- |
+| **Give `<rig>` another model…** | Opens a list of the models of your other providers, **Model for new trials**. **Give `<rig>` this model** gives the rig's workers that model, as their row on **Edit rig** does (the planner follows it when it has no model of its own), and ends the waits of the rig's runs (`end_wait`), so their new trials take it. A trial under way keeps its model. The rig's page says `<rig> takes <provider> · <model> for new trials within a minute; Edit rig shows it. Written to the audit log. The subscription's weekly limit still resets <time>.` When the subscription resets, the rig stays on this model until you change it back. With no other provider, the card offers **Add a provider first** |
+| **Wait for the reset** | The card leaves **Needs you**. The rig's page says `<rig> waits for its subscription's weekly limit to reset, <time>: new trials, its planner and its advisors start again after it.` until the reset, and new trials start by themselves after it |
+
+Each choice is a step in the rig's history and an entry in the audit log, `weekly_limit_wait` or `weekly_limit_model` (and `rig_model_given` for the model). If a trial meets the weekly window again later, the card comes back. `GET /v1/rigs/<rig>/view` and the MCP tool [`list_rigs`](../../reference/mcp-tools.md#list_rigs) give the same state as `weekly_limit` ([REST](../../reference/rest-api.md#a-rigs-weekly-limit)).
+
+### Usage credits
+
 Nothing pays for more: the agents go on after the reset, and the rig never answers Claude Code's menus about its usage. That holds while usage credits are off on the Claude account (on claude.ai, under **Settings › Usage**): keep them off on the subscription Thermite uses.
+
+When Claude Code reports usage credits on (in its terminal, in its transcript's record of a full window; headless, in each usage event it gives), the rig's report says so, and the subscription's row on **Providers** shows the chip **usage credits on**, with a note under it: `Claude Code reports usage credits on for this account (in its last session on <rig>, <time>). With credits on, a full window can spend paid usage instead of waiting, so Thermite's rule that a full window waits for its reset holds only with them off. Turn them off in the Claude account's settings; this mark goes once Claude Code reports them off.`
+
+- **Dismiss** hides the note. The chip stays, and its tooltip says when you dismissed it. The note comes back if Claude Code reports the credits on again after reporting them off. The dismissal is a step in the reporting rig's history and `credits_note_dismissed` in the audit log.
+- The chip and the note go once Claude Code reports the credits off.
+- The MCP tool [`providers`](../../reference/mcp-tools.md#providers) gives them in the subscription's `usage` as `credits`: `{on, since, rig, at}`.
 
 Many agents can share one plan, and so can several rigs. On **Edit rig**, a note says how many of the rig's agent sessions at a time can use the subscription. More workers at a time fill a window faster.
 
@@ -131,5 +156,5 @@ Many agents can share one plan, and so can several rigs. On **Edit rig**, a note
 | The model check fails with: *Claude Code needs bubblewrap to keep the agent's commands away from its sign-in* | The same: the harness image is from an older Thermite. Rebuild the images from this version. |
 | An advisor on the subscription fails with *EACCES: permission denied, mkdir '/tmp/claude-10001'* | The rig runs the one-container rig image from an older Thermite, which gave Claude Code no temporary folder of its own. Rebuild the image from this version. |
 | The model check fails with "the subscription's usage window is full until" a time | Wait for the reset, or use another model meanwhile. |
-| A trial ends with "Claude Code's usage window is full until" a time, "more than a day away" | A weekly window: the run waits for its reset. Wait, or give the rig another model meanwhile on **Edit rig**. |
+| A trial ends with "Claude Code's usage window is full until" a time, "more than a day away" | A weekly window: the run waits for its reset, and **Needs you** asks: wait, or give the rig another model meanwhile ([A weekly window](#a-weekly-window)). |
 | A research campaign's trials end with "research workers run in Pi or OpenCode, and a Claude subscription runs only in Claude Code: give this rig another model for research" | Research workers run in Pi or OpenCode v2, never in Claude Code. Give the rig another model for research. |

@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { currentAddress, KB_SLOTS_BEFORE, KbOutcome } from "../../../core/kb.ts";
+import { campaignAbout, contextOf, indexItem, unindexItem } from "./words.ts";
 
 /**
  * The tables of control's knowledge base (store/kb/index.ts), and its hierarchy (goal 175): the
@@ -8,7 +10,16 @@ import type { DatabaseSync } from "node:sqlite";
  * with collections has it.
  */
 
-/** The tables as goals 065 and 162 left them: made empty in a store that never had them. */
+/** The trigger that keeps every version of an item as it was written. */
+const NEVER_CHANGED = `
+create trigger kb_version_never_changed before update on kb_version
+begin select raise(abort, 'a version of an item is never changed'); end;`;
+
+/**
+ * The tables as goals 065 and 162 left them: made empty in a store that never had them. The table
+ * of a grant's copies, `kb_grant_item`, which v0.1.0 made, is no longer made: knowledgeSlotNames
+ * removes it from a store that has it.
+ */
 const BEFORE = `
 create table if not exists kb_item (
   id integer primary key autoincrement,
@@ -53,16 +64,6 @@ create table if not exists kb_read (
   granted_at text not null,
   primary key (campaign, reads)
 );
--- Each grant's copies of the granted collection's items, for the rigs' copies of past research,
--- which are gone (goal 175): no longer written, and kept for the stores that have it.
-create table if not exists kb_grant_item (
-  campaign text not null,
-  reads text not null,
-  item integer not null,
-  seq integer not null,
-  primary key (campaign, reads, item)
-);
-create index if not exists kb_grant_item_seq on kb_grant_item (campaign, seq);
 -- What the items were read with: the reading's version (see READING).
 create table if not exists kb_meta (key text primary key, value text not null);
 `;
@@ -134,8 +135,7 @@ create table kb_version (
   at text not null,
   primary key (item, version)
 );
-create trigger kb_version_never_changed before update on kb_version
-begin select raise(abort, 'a version of an item is never changed'); end;
+${NEVER_CHANGED}
 create trigger kb_version_never_removed before delete on kb_version
 begin select raise(abort, 'a version of an item is never removed'); end;
 insert into kb_version (item, version, title, body, by, url, sub, meta, at)
@@ -242,4 +242,64 @@ export function knowledgeHierarchy(db: DatabaseSync): void {
     ...campaigns("select campaign, null as at from kb_run group by campaign"),
   ];
   for (const c of known) if (c.campaign) made.run(c.campaign, c.at ?? now);
+}
+
+/**
+ * Store migration 26 (goal 175): the agents' slots take the agents' names (KB_SLOTS_BEFORE:
+ * `teacher` is `teachers`, `merged-by` `merged_by`, `review-panel` `review_panel` and
+ * `final-writer` `final_writer`), in every place the store keeps a slot: each item's slot, its
+ * writer (`by`) and its context in the words index, the writer of each of its versions, and the
+ * links that name its address. The trigger that keeps versions unchanged steps aside for that
+ * one rename of their writer's spelling: no text, file or link of a version changes. And the table of a grant's copies
+ * of another collection's items, which nothing has written since the rigs' copies of past research
+ * went, goes. Runs in the migration's transaction.
+ */
+export function knowledgeSlotNames(db: DatabaseSync): void {
+  db.exec("drop index if exists kb_grant_item_seq; drop table if exists kb_grant_item;");
+  type Row = {
+    id: number;
+    campaign: string;
+    run: string;
+    kind: string;
+    sub: string | null;
+    outcome: string | null;
+    body: string;
+  };
+  const items = db.prepare(
+    "select id, campaign, run, kind, sub, outcome, body from kb_item where slot = ?",
+  );
+  const renamed = db.prepare(
+    `update kb_item set slot = ?, by = case when by = ? then ? else by end, context = ?
+     where id = ?`,
+  );
+  const about = new Map<string, string>();
+  db.exec("drop trigger if exists kb_version_never_changed");
+  for (const [before, now] of KB_SLOTS_BEFORE) {
+    for (const x of items.all(before) as unknown as Row[]) {
+      if (!about.has(x.campaign)) about.set(x.campaign, campaignAbout(db, x.campaign));
+      const outcome = KbOutcome.safeParse(x.outcome).data ?? null;
+      const context = contextOf(
+        { campaign: x.campaign, run: x.run, slot: now, kind: x.kind },
+        { outcome, sub: x.sub, about: about.get(x.campaign) ?? "" },
+      );
+      unindexItem(db, x.id);
+      renamed.run(now, before, now, context, x.id);
+      indexItem(db, x.id, x.body);
+    }
+    db.prepare(
+      "update kb_version set by = ? where by = ? and item in (select id from kb_item where slot = ?)",
+    ).run(now, before, now);
+  }
+  db.exec(NEVER_CHANGED);
+  // A link names an address as its writer gave it: one through a renamed slot names it anew.
+  const links = db
+    .prepare("select item, version, rel, target from kb_link where target like '%/%/%/%'")
+    .all() as { item: number; version: number; rel: string; target: string }[];
+  const relinked = db.prepare(
+    "update or replace kb_link set target = ? where item = ? and version = ? and rel = ? and target = ?",
+  );
+  for (const l of links) {
+    const target = currentAddress(l.target);
+    if (target !== l.target) relinked.run(target, l.item, l.version, l.rel, l.target);
+  }
 }

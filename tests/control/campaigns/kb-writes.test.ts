@@ -6,6 +6,7 @@ import { describe, test } from "node:test";
 import type { CampaignDraft } from "../../../src/control/campaigns/builder.ts";
 import { startCampaign } from "../../../src/control/campaigns/new.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
+import { parseContract } from "../../../src/core/contract.ts";
 import { KB_WRITES_DEFAULT, kbWritesOf } from "../../../src/core/kb.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
 
@@ -86,9 +87,45 @@ describe("who writes what in a campaign's collection", () => {
     });
     assert.equal(bad.status, 400);
     assert.match(String(bad.body.error), /^bad request: kb_writes/);
+    // The owner sets roles by today's names only: the slots' spellings before are refused.
+    const before = await s.set({ kb_writes: { "review-panel": ["review"] } });
+    assert.equal(before.status, 400);
+    assert.match(String(before.body.error), /^bad request: kb_writes/);
     const back = await s.set({});
     assert.equal(back.status, 201);
     assert.equal(s.newest().kb_writes, undefined);
+  });
+
+  test("a contract signed with a role named as the slots were spelled before keeps its hash, and reads under today's name", async () => {
+    const saved = (await stack()).newest();
+    const s = (kb_writes: unknown) => {
+      const p = parseContract({ ...saved, kb_writes });
+      assert.ok(p.ok, JSON.stringify(p));
+      return p;
+    };
+    const before = s({ teacher: ["note"], "review-panel": ["review"], worker: ["finding"] });
+    // Kept as it was signed: its keys, and so its hash, are the ones it was saved with.
+    assert.deepEqual(Object.keys(before.contract.kb_writes ?? {}).sort(), [
+      "review-panel",
+      "teacher",
+      "worker",
+    ]);
+    assert.equal(
+      before.sha,
+      s({ teacher: ["note"], "review-panel": ["review"], worker: ["finding"] }).sha,
+    );
+    assert.deepEqual(kbWritesOf(before.contract), {
+      teachers: ["note"],
+      review_panel: ["review"],
+      worker: ["finding"],
+    });
+    // Both spellings given: today's wins, whichever comes first.
+    assert.deepEqual(kbWritesOf({ kb_writes: { teachers: ["doc"], teacher: ["note"] } }), {
+      teachers: ["doc"],
+    });
+    assert.deepEqual(kbWritesOf({ kb_writes: { final_writer: ["paper"], "final-writer": [] } }), {
+      final_writer: ["paper"],
+    });
   });
 
   test("MCP's set_campaign_kb_writes and the campaign's page set it too", async () => {

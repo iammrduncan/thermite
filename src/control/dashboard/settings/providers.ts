@@ -5,7 +5,12 @@ import { checkClusterNow, inspectKubeconfig, KUBE_NAME, NS } from "../../cluster
 import { modelFollowUrl, modelProgress, notSent } from "../../command-progress.ts";
 import { makeDeployKey } from "../../git-keys.ts";
 import { ADDRESS, USER } from "../../machines/index.ts";
-import { CLAUDE_MODELS, listModels, providerBase } from "../../providers/index.ts";
+import {
+  CLAUDE_MODELS,
+  dismissCreditsNote,
+  listModels,
+  providerBase,
+} from "../../providers/index.ts";
 import { probeRepository } from "../../repo-probe.ts";
 import { clearRigModel, giveRigModel } from "../../rigs/index.ts";
 import { readRunpod } from "../../runpod/index.ts";
@@ -511,6 +516,27 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       listError
         ? settingsUrl("error", `"${p.name}" ${listError}.`)
         : settingsUrl("ok", `"${p.name}" lists ${n} model${n === 1 ? "" : "s"}.`),
+      303,
+    );
+  });
+
+  // The note that a Claude subscription's usage credits are on, dismissed (goal 169): the chip
+  // stays, and the note comes back once Claude Code reports them on again after being off.
+  app.post("/ui/settings/providers/:name/credits-note/dismiss", async (c) => {
+    const p = store.modelProviders.get(c.req.param("name"));
+    if (!p) return c.redirect(settingsUrl("error", "No such provider."), 303);
+    const credits = p.type === "claude" ? (await parts.planUsage.of(p))?.credits : undefined;
+    if (!credits?.on)
+      return c.redirect(
+        settingsUrl("error", `Claude Code does not report usage credits on for "${p.name}".`),
+        303,
+      );
+    dismissCreditsNote(store, p.name, credits, "owner:ui");
+    return c.redirect(
+      settingsUrl(
+        "ok",
+        `The note for "${p.name}" is dismissed. The chip stays while its usage credits are on.`,
+      ),
       303,
     );
   });

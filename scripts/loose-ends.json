@@ -350,7 +350,7 @@
     "src/core/health.ts": ["LoopAge", "LATE_AFTER_PERIODS"],
     "src/core/ids.ts": ["ATTEMPT_ID"],
     "src/core/journal.ts": ["AboutType"],
-    "src/core/kb.ts": ["KB_AGENT_SLOTS", "isAgentSlot", "KbPlace"],
+    "src/core/kb.ts": ["isAgentSlot", "KbPlace"],
     "src/core/link/config.ts": [
       "CONFIG_SUBJECTS",
       "GIT_ACCESS_MAX",

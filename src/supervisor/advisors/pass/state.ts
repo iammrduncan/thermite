@@ -62,6 +62,12 @@ export interface AdviseState {
    * owner gives once its tries are spent.
    */
   auditErrors?: Record<string, string> | undefined;
+  /**
+   * Each advisor that waits for its provider's full usage window to reset, by its name: when it
+   * resets (ISO). A headless call that met it is not a failed try (the owner's decision of
+   * 2026-10-27); the advisor's open audits and reviews wait until then (limit.ts).
+   */
+  limits?: Record<string, string> | undefined;
   stats: {
     teacher_runs: number;
     directive_sets: number;
@@ -82,7 +88,8 @@ export interface AdviseState {
 
 /**
  * An audit is tried at most this often before it is left to the owner; a review's try from this
- * one on posts it, each reviewer that gave no answer failing it.
+ * one on posts it, each reviewer that gave no answer failing it. A try that met a full usage
+ * window is not counted.
  */
 export const MAX_TRIES = 5;
 

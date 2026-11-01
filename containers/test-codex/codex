@@ -27,6 +27,12 @@
 // (the continuation, or the nudge typed into its terminal) submits. It refuses to run without
 // THERMITE_FAKE_CODEX=1 or its mounted folder, so it can't stand in by mistake.
 //
+// Before a trial submits, it writes two items for Thermite's knowledge base (goal 175) through the
+// `thermite` MCP server its configuration names (with the token in THERMITE_MCP_AUTH, as
+// bearer_token_env_var says), as Codex calls an MCP tool: one in its own slot, and one naming
+// another slot, which the harness refuses; what each answered goes in the submission's facts
+// (kb=<address> kb_refused=yes|no).
+//
 // In its terminal, a trial's first turn first calls the provider through the proxy (`usage-window`
 // as its input): when the provider answers 429, its usage window is full, and, as Codex 0.162.1
 // does, it says so ("You've hit your usage limit. Try again at …"), ends the turn with that error in
@@ -348,11 +354,68 @@ function compact() {
   return "rollout";
 }
 
-/** The trial's change and its submission, after a compaction, with what it was given. */
-function submitChange(facts) {
+// Thermite's own MCP server, from its configuration (goal 175): its address, and the token in
+// the variable bearer_token_env_var names.
+const thermiteMcp = (() => {
+  const m = /^\[mcp_servers\.(?:"thermite"|thermite)\]\nurl = "([^"]+)"\nbearer_token_env_var = "([^"]+)"/m.exec(config);
+  return m ? { url: m[1], token: process.env[m[2]] ?? "" } : undefined;
+})();
+let mcpCalls = 0;
+/**
+ * One call of a tool of Thermite's MCP server, as Codex makes one: an mcp_tool_call item headless,
+ * a function call and its output in its rollout in its terminal; the call a JSON-RPC request over
+ * MCP's HTTP transport. Its hooks are not run for it.
+ */
+async function mcpTool(tool, args) {
+  const callId = `call_${thread.slice(-6)}_mcp${++mcpCalls}`;
+  if (terminal) {
+    used();
+    record("response_item", { type: "function_call", call_id: callId, name: `mcp__thermite__${tool}`, arguments: JSON.stringify(args) });
+  }
+  let text;
+  let isError = false;
+  try {
+    const r = await fetch(thermiteMcp.url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${thermiteMcp.token}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: mcpCalls, method: "tools/call", params: { name: tool, arguments: args } }),
+    });
+    const body = await r.json();
+    text = body.result ? body.result.content.map((c) => c.text ?? "").join("\n") : JSON.stringify(body.error ?? body);
+    isError = !body.result || body.result.isError === true;
+  } catch (e) {
+    text = String(e);
+    isError = true;
+  }
+  out({
+    type: "item.completed",
+    item: item("mcp_tool_call", { server: "thermite", tool, arguments: args, result: { content: [{ type: "text", text }] }, error: null, status: isError ? "failed" : "completed" }),
+  });
+  if (terminal) record("response_item", { type: "function_call_output", call_id: callId, output: text });
+  return { text, isError };
+}
+/**
+ * Its items for the knowledge base: a finding in its own slot, and a note naming the planner's
+ * slot, which kb_write never takes. What each answered, as the submission's facts.
+ */
+async function kbWrites() {
+  if (!thermiteMcp?.url) return "kb=no-server kb_refused=no";
+  const kept = await mcpTool("kb_write", {
+    kind: "finding",
+    title: `kbprobecx: written by the Codex stand-in (${terminal ? "terminal" : "headless"})`,
+    text: "kbprobecx: the Codex stand-in wrote this in its own slot through Thermite's MCP server.",
+  });
+  const denied = await mcpTool("kb_write", { kind: "note", title: "kbprobedenied not my slot", text: "x", slot: "planner" });
+  const address = /kept: (\S+?), item \d+/.exec(kept.text)?.[1] ?? (kept.isError ? "refused" : "none");
+  return `kb=${address} kb_refused=${denied.isError && /you write only in your own slot/.test(denied.text) ? "yes" : "no"}`;
+}
+
+/** The trial's change and its submission, after its items and a compaction, with what it was given. */
+async function submitChange(facts) {
+  const kb = await kbWrites();
   const compacted = compact();
   shell(
-    `printf '\\n/* tidied by codex */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'codex harness: a tidied kernel (compacted=${compacted} ${hookFacts()} ${windowFacts()} ${facts})'`,
+    `printf '\\n/* tidied by codex */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'codex harness: a tidied kernel (compacted=${compacted} ${kb} ${hookFacts()} ${windowFacts()} ${facts})'`,
   );
   say("Submitted.");
   stop("Submitted.");
@@ -417,7 +480,7 @@ async function runHeadless() {
     hook("UserPromptSubmit", { prompt: prompt.slice(0, 2000) });
     // The first run reads the kernel; a run whose Stop hook did not send it on ends there, and
     // the continuation submits.
-    if (resumed || (await readTurn())) submitChange(facts);
+    if (resumed || (await readTurn())) await submitChange(facts);
   } else {
     say("done");
   }
@@ -506,11 +569,11 @@ async function runTerminal() {
         // The owner's messages, when the acceptance sends two: the first goes in after its
         // command, the second at the end of its turn, which goes on with it to the submission.
         // With none, the turn ends there, and the nudge typed next submits.
-        if (await readTurn()) submitChange(facts);
+        if (await readTurn()) await submitChange(facts);
         work = "submit";
         lastSaid = "Read the kernel.";
       } else if (trial && work === "submit") {
-        submitChange(facts);
+        await submitChange(facts);
         lastSaid = "Submitted.";
       } else {
         say("done");

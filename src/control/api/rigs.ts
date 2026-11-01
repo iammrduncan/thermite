@@ -3,35 +3,44 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
 import { ENROLL, RETIRE, RIG_TOKEN, RIGS } from "../../core/api/control/owner.ts";
+import { busReach } from "../bus/index.ts";
 import { newToken } from "../credential.ts";
 import { bringBackRig } from "../rigs/index.ts";
 import { fingerprint } from "../store/index.ts";
 import { rigVersions } from "../versions.ts";
-import { reportingState } from "../views/index.ts";
+import { podStopped, reportingState } from "../views/index.ts";
 import type { ApiContext } from "./context.ts";
 
 /**
- * The rigs, for the owner: every rig control knows with its state and versions; enrollment, where
- * control makes a rig's token; a new token; retiring a rig and bringing it back.
+ * The rigs, for the owner: every rig control knows with its state, versions and connection to the
+ * message bus; enrollment, where control makes a rig's token; a new token; retiring a rig and
+ * bringing it back.
  */
 export function rigRoutes(app: Hono, api: ApiContext): void {
   const { store, privateKeyPem, control, viewOpts, parts, admin } = api;
   const { runpodRigs } = parts;
 
-  app.get(RIGS.path, admin, (c) =>
-    c.json({
+  app.get(RIGS.path, admin, (c) => {
+    const now = Date.now();
+    return c.json({
       control,
       rigs: store.reportedRigs.list().map((u) => ({
         ...u,
         state: reportingState(u.last_seen, viewOpts),
         version: rigVersions(store, u.id, control),
+        // On the message bus or off it, as the rig's page shows it (goal 168).
+        bus: busReach(store, u.id, {
+          lastSeen: u.last_seen,
+          now,
+          podStopped: podStopped({ runpod: runpodRigs.view(u.id) }),
+        }),
       })),
       enrolled: store.enrollments.rigs(),
       retired: store.retired.list().map((r) => r.rig),
       pull: store.tunnels.list(),
       runpod: runpodRigs.list(),
-    }),
-  );
+    });
+  });
 
   // Enrollment: control makes a rig's token, shows it once and keeps only its SHA-256, so a new
   // rig needs no change to control's deployment and no restart.

@@ -45,6 +45,7 @@ import { advisorRecordsDir } from "../../retention.ts";
 import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage, SentPrompt } from "../call.ts";
 import { type RunningAdvisors, withRunContext } from "../config.ts";
 import { advisorFetcher } from "../fetcher.ts";
+import type { AdvisorLimit } from "../limit.ts";
 import type { AdvisorInTerminal } from "../terminal/index.ts";
 import type { AdvisorCode, AdvisorKb, AdvisorResearch } from "../tools/index.ts";
 import { kbSearchFor } from "./kb.ts";
@@ -77,6 +78,44 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
   const mark = (key: string) => {
     next.tried[key] = new Date().toISOString();
     next.tries[key] = (next.tries[key] ?? 0) + 1;
+  };
+  /**
+   * A try that met a full usage window (limit.ts) is not a failed try: it is not counted, and the
+   * key is tried again as soon as its advisors stop waiting, not retryMs later.
+   */
+  const uncount = (key: string) => {
+    next.tries[key] = Math.max(0, (next.tries[key] ?? 1) - 1);
+    delete next.tried[key];
+  };
+  /** When the advisor's full usage window resets, while it waits for it; its mark goes after. */
+  const waitsFor = (advisor: string): string | undefined => {
+    const limits = next.limits;
+    const until = limits?.[advisor];
+    if (!limits || !until) return undefined;
+    if (Date.parse(until) > Date.now()) return until;
+    delete limits[advisor];
+    return undefined;
+  };
+  /**
+   * The advisor met a full usage window in `what` (an audit, a review): it waits for the reset,
+   * the latest it was told, and the run's Live says so.
+   */
+  const waitOut = (advisor: string, what: string, l: AdvisorLimit, run?: string) => {
+    next.limits ??= {};
+    const limits = next.limits;
+    const was = limits[advisor];
+    if (!was || Date.parse(l.until) > Date.parse(was)) limits[advisor] = l.until;
+    log("supervisor", "an advisor waits for its provider's usage limit to reset", {
+      advisor,
+      until: limits[advisor],
+      what,
+      ...(run ? { run } : {}),
+    });
+    say(
+      run,
+      "status",
+      `${what}: ${advisor} waits for its provider's usage limit to reset, until ${limits[advisor]}, and goes on then; it is not counted as a failed try. ${clip(redact(l.words), 400)}`,
+    );
   };
   // Web fetch only for listed domains; with an open fetch ("*"), no knowledge-base search in the
   // same agent, so private notes and the open web never meet in one injectable context. An
@@ -424,6 +463,9 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     retryMs,
     due,
     mark,
+    uncount,
+    waitsFor,
+    waitOut,
     domains,
     toolsFor,
     kbFor,
