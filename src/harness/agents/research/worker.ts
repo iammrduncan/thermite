@@ -13,6 +13,7 @@ import {
   type TrialTurn,
   windowFit,
 } from "../../../agents/roles/index.ts";
+import { writeSessionLog } from "../../../agents/session-log.ts";
 import {
   type KbCall,
   kbAgentTools,
@@ -102,6 +103,8 @@ export interface ResearchDeps {
   sent?: ((p: Prompt) => void) | undefined;
   /** The trial's Pi view, when its worker draws one in its terminal (goal 169; see TrialDeps). */
   view?: RoleView | undefined;
+  /** Where its session log goes, each message as it ends (agents/session-log.ts); none: no log. */
+  sessionLog?: string | undefined;
 }
 
 const out = (value: unknown) => ({
@@ -239,6 +242,7 @@ export async function runResearchTrial(
     // ends after that call would leave the rest never sent and never read.
     steeringMode: "all",
   });
+  if (deps.sessionLog) writeSessionLog(agent, deps.sessionLog);
   meter?.watch(agent);
   // The later turns of this trial (goal 166), numbered after its first message.
   let said = 0;

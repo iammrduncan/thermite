@@ -219,6 +219,8 @@ export class BusUsers {
   private trouble: { since: number; error: string; step: "write" | "reload" } | undefined;
   private readonly clock: () => number;
   private last: Promise<void> = Promise.resolve();
+  /** While control makes the events stream again, its user may delete it (rebuild.ts). */
+  private rebuilding = false;
 
   constructor(o: BusUsersOptions) {
     this.o = o;
@@ -276,7 +278,23 @@ export class BusUsers {
     }));
     const own = { control: this.control.publicKey, system: this.system.publicKey };
     const leaf = leafRigsFor(store, leafRigsOf(store), (rig) => this.leafTaken.has(rig));
-    return usersFile({ ...own, backup: this.backup, rigs, leaf });
+    return usersFile({ ...own, backup: this.backup, rigs, leaf, rebuilding: this.rebuilding });
+  }
+
+  /**
+   * Runs `work` while control's user may delete the events stream, as making it again needs
+   * (control/events/rebuild.ts): the users file says so and the server took it first, and says so
+   * no longer once `work` ends, whatever became of it.
+   */
+  async whileRebuilding<T>(work: () => Promise<T>): Promise<T> {
+    this.rebuilding = true;
+    try {
+      await this.sync();
+      return await work();
+    } finally {
+      this.rebuilding = false;
+      await this.sync();
+    }
   }
 
   /**

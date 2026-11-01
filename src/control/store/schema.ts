@@ -1,5 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
-import { copyBeforeMigration, keepCopyBefore, newerSchemaWords } from "../../common/db-copy.ts";
+import {
+  COPIES_KEPT,
+  copyBeforeMigration,
+  keepCopyBefore,
+  newerSchemaWords,
+} from "../../common/db-copy.ts";
 import { transaction } from "../../common/sqlite.ts";
 import { auditRepeats } from "./audit.ts";
 import { busKeyTables, busSealKeyColumn } from "./bus.ts";
@@ -18,7 +23,7 @@ import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { reachableAddressTable } from "./reachable.ts";
-import { retentionTables } from "./retention.ts";
+import { copiesPolicyOn, eventFloorTable, retentionTables } from "./retention.ts";
 import { runRegistryTable } from "./runs.ts";
 import { tunnelLeafColumns } from "./tunnels.ts";
 
@@ -632,6 +637,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   knowledgeFiles,
   // The owner's retention policies, what they removed, and each rig's space (goal 125, T12).
   retentionTables,
+  // Each rig ledger's floor in control's copy of its events, which a policy purged (goal 125).
+  eventFloorTable,
 ];
 
 /**
@@ -719,7 +726,15 @@ export function migrateStore(
   if (path !== ":memory:" && tables.n > 0) {
     if (to >= EVENTS_TABLE_GOES && eventsTableHoldsRows(db))
       kept = keepCopyBefore(db, path, current, to, "the last copy of control's events table");
-    else copyBeforeMigration(db, path, current, to);
+    else
+      copyBeforeMigration(
+        db,
+        path,
+        current,
+        to,
+        new Date(),
+        copiesPolicyOn(db) ? null : COPIES_KEPT,
+      );
   }
   db.exec("create table if not exists schema_migrations (version integer primary key)");
   // Each migration in a transaction of its own, as the ledger's: all of it, or none.

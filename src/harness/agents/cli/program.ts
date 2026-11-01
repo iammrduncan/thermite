@@ -14,6 +14,7 @@ import type { ResearchFolderPaths } from "../../../agents/tools/index.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Runner } from "../../broker/index.ts";
+import type { SessionFile } from "../../sessions.ts";
 import type { ProviderLink } from "../provider-errors.ts";
 import type { ResearchTrialSpec } from "../research/index.ts";
 import type { SubmitOutcome, TrialSpec } from "../worker/index.ts";
@@ -74,6 +75,11 @@ export interface CliTrialDeps extends ProviderLink {
    */
   keptAt?: KeptAt | undefined;
   compacted?: OnCompacted | undefined;
+  /**
+   * Keeps the trial's session log when it ends, before its area goes (harness/sessions.ts): the
+   * files of the program's own log that exist.
+   */
+  keepSession?: ((files: SessionFile[]) => void) | undefined;
   /** Keeps the prompt that starts the trial, as it is sent (goal 166). */
   sent?: ((p: Prompt) => void) | undefined;
   /**

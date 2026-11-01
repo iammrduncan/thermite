@@ -44,7 +44,7 @@ export class ReportedRigs extends StorePart {
       | Row
       | undefined;
     const current = u?.ledger_id !== undefined && String(u.ledger_id) === r.ledgerId;
-    const held = this.heldCursor(rig, r.ledgerId);
+    const held = this.takenThrough(rig, r.ledgerId);
     if (r.cursor > held) {
       const reason =
         held === 0 && !current ? "a new ledger's events start at 0" : "a gap in the event stream";
@@ -205,6 +205,16 @@ export class ReportedRigs extends StorePart {
   }
 
   /**
+   * Where a rig's report of a ledger goes on from: its held cursor, or its floor when higher, the
+   * last event a retention policy removed of control's copy on purpose (store/retention.ts), so
+   * control never asks the rig for those again, nor takes them back. The apply reads the held
+   * cursor alone: it applies every event the stream still holds.
+   */
+  takenThrough(rig: string, ledgerId: string): number {
+    return Math.max(this.heldCursor(rig, ledgerId), this.store.retention.floor(rig, ledgerId));
+  }
+
+  /**
    * The apply alone moves a ledger's held cursor, to the last event of it that it applied, never
    * back. A ledger the store has no row for yet, as in a store older than the stream, gets one.
    */
@@ -239,7 +249,7 @@ export class ReportedRigs extends StorePart {
     const ledger = r.ledger_id === null ? null : String(r.ledger_id);
     return {
       ledger_id: ledger,
-      cursor: ledger === null ? 0 : this.heldCursor(rig, ledger),
+      cursor: ledger === null ? 0 : this.takenThrough(rig, ledger),
       report_at: r.report_at === null ? null : String(r.report_at),
     };
   }

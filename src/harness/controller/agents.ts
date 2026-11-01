@@ -26,6 +26,7 @@ import { keepPrompt } from "../prompts.ts";
 import { Research, ResearchFolder, SAVED_LANES_DIR } from "../research/index.ts";
 import type { RigSettingsStore } from "../rig-settings.ts";
 import type { HarnessService } from "../service/index.ts";
+import { keepSession } from "../sessions.ts";
 import { routeOf } from "../usage.ts";
 import type { ControllerContext } from "./context.ts";
 import type { Targets } from "./targets.ts";
@@ -186,6 +187,14 @@ export function agentLinks(
       // A compaction the program reported (goal 070): kept and recorded as a Pi worker's are,
       // with the program's own conversation where Thermite could read it.
       compacted: (harness, c) => service.compactions?.fromHarness(compactionOf(trial), harness, c),
+      // Its session log, kept by run and trial when it ends (sessions.ts; goal 125, T12).
+      keepSession: (files) =>
+        void keepSession(
+          { stateDir: paths.stateDir, disk: service.disk },
+          spec.run,
+          spec.trialId,
+          files,
+        ),
       // Where its conversation is kept before each compaction, for the program's own summary to
       // name it: the run's research folder, which the worker may read (goal 070).
       keptAt: service.compactions?.keptAt(compactionOf(trial), true),

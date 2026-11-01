@@ -35,12 +35,21 @@ export function rigRecordRoutes(app: Hono, api: ApiContext): void {
       : c.json({ error: "no pending key" }, 404),
   );
 
-  // Read from the message bus's events stream: each event's seq is its place there.
+  // Read from the message bus's events stream: each event's seq is its place there. `removed`:
+  // each of the rig's ledgers a retention policy purged, its last event removed on purpose and the
+  // place before which it purged (the stream holds none of those events of it any more).
   app.get("/v1/rigs/:rig/events", admin, async (c) => {
     const after = Math.max(0, Math.trunc(Number(c.req.query("after") ?? "0")) || 0);
     const limit = clampLimit(c.req.query("limit"), 500);
+    const rig = c.req.param("rig");
     return c.json({
-      events: await rigEventsPage(store, { rig: c.req.param("rig"), after, limit }),
+      events: await rigEventsPage(store, { rig, after, limit }),
+      removed: store.retention.floors(rig).map((f) => ({
+        ledger: f.ledger,
+        through_event: f.through_event,
+        before_place: f.before_place,
+        at: f.at,
+      })),
     });
   });
 }

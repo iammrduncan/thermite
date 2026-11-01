@@ -39,6 +39,12 @@ describe("Settings › Retention policies", () => {
     assert.match(row("builds"), /0 rigs said/);
     assert.match(row("audit"), /Kept for good/);
     assert.match(row("exports"), /By hand, on <a href="\/ui\/exports">Exports<\/a>/);
+    assert.match(
+      row("copies"),
+      /Control keeps the two newest, until a policy for this kind is on\./,
+    );
+    assert.match(row("trial_logs"), /<td>Rigs<\/td>/);
+    assert.match(row("events"), /Kept for good/);
     assert.match(html, /<b>No policy\. Thermite keeps everything, everywhere\.<\/b>/);
     assert.match(
       html,
@@ -67,6 +73,10 @@ describe("Settings › Retention policies", () => {
     );
     assert.match(form, /id="rt-preview"><b data-big>It would remove nothing now\.<\/b>/);
     assert.match(form, /id="rt-first">Turned on, it first runs (today|tomorrow) at 03:00 UTC\.</);
+    // Control's copy of the rigs' events is kept on control, and says where by rig; its warning.
+    assert.match(form, /<option value="events">Rigs' events \(control's copy\) — /);
+    assert.match(form, /removed events leave it then, and can(&#39;|')t be shown again/);
+    assert.match(form, /<option value="trial_logs">Trials' session logs — /);
     // The audit log's kind carries its warning.
     assert.ok(
       form.includes("Entries removed can&#39;t be shown again") ||

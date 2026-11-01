@@ -1,4 +1,4 @@
-import { kindOf, RETENTION_KIND_KEYS } from "../../core/retention/index.ts";
+import { kindOf, perRig, RETENTION_KIND_KEYS } from "../../core/retention/index.ts";
 
 /**
  * Settings › Retention policies' script, served from control (/ui/assets/retention.js; no inline
@@ -11,7 +11,7 @@ import { kindOf, RETENTION_KIND_KEYS } from "../../core/retention/index.ts";
 
 /** Each kind's place (control, rigs or supervisors) and what a policy may keep of it. */
 const KINDS = Object.fromEntries(
-  RETENTION_KIND_KEYS.map((k) => [k, { on: kindOf(k).on, keeps: Object.keys(kindOf(k).keeps) }]),
+  RETENTION_KIND_KEYS.map((k) => [k, { perRig: perRig(k), keeps: Object.keys(kindOf(k).keeps) }]),
 );
 
 export const RETENTION_JS = `
@@ -31,8 +31,8 @@ export const RETENTION_JS = `
   const show = (sel, on) => { for (const el of form.querySelectorAll(sel)) el.hidden = !on; };
   const shape = () => {
     const kind = val("kind");
-    const k = kinds[kind] || { on: "control", keeps: [] };
-    const rigs = k.on !== "control";
+    const k = kinds[kind] || { perRig: false, keeps: [] };
+    const rigs = k.perRig;
     for (const el of form.querySelectorAll("[data-kind-info]")) el.hidden = el.dataset.kindInfo !== kind;
     show("[data-for-rigs]", rigs);
     show("[data-for-control]", !rigs);

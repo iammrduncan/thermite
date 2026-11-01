@@ -155,7 +155,11 @@ export async function sendSpace(o: SupervisorRetention): Promise<void> {
   }
   const body: RigSpace = {
     read_at: now.toISOString(),
-    kinds: { builds: fromHarness.builds, advisor_records: records },
+    kinds: {
+      builds: fromHarness.builds,
+      ...(fromHarness.trial_logs ? { trial_logs: fromHarness.trial_logs } : {}),
+      advisor_records: records,
+    },
   };
   await ask(o.control, "space", body);
 }

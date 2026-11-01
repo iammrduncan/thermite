@@ -263,9 +263,9 @@ export const USAGE = `usage: thermite <command> [options]
                   [--time HH:MM] [--day DAY] [--on] --control URL --token-file F [--json]
                                       a new policy (off unless --on), what a design would remove
                                       now, or a change to policy ID (only the options given;
-                                      --on turns it on too). K: builds, advisor_records,
-                                      kb_versions, store_copies or audit. KEEP: open, champions
-                                      or newest, each on unless --no-keep. Times are UTC
+                                      --on turns it on too). K: events, builds, trial_logs,
+                                      advisor_records, kb_versions, store_copies or audit. KEEP:
+                                      open, champions or newest, each on unless --no-keep. UTC
   exports delete RIG NAME... --control URL --token-file F
                                       delete exports control keeps from RIG (owner's token), as
                                       Delete on the Exports page does: their files and records,

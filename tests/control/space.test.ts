@@ -55,6 +55,7 @@ describe("the space control's kinds take", () => {
         kb_files: 30,
         kits: 200,
         builds: 0,
+        trial_logs: 0,
         advisor_records: 0,
       },
     );

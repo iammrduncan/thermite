@@ -335,15 +335,21 @@ export const EXPORTS_DONE = {
 } as const satisfies Route;
 
 /**
- * What the rig keeps of the judge's builds, each with its run, time, bytes and whether its run is
- * open or it is a champion's (core/retention/), and the runs still open: the supervisor sends
- * control the builds with its own advisors' records, and marks those of runs still open.
+ * What the rig keeps of the judge's builds and of the trials' session logs, each with its run,
+ * time, bytes and whether its run is open or it is a champion's (core/retention/), and the runs
+ * still open: the supervisor sends control these with its own advisors' records, and marks those
+ * of runs still open.
  */
 export const SPACE = {
   method: "GET",
   path: "/v1/space",
   what: "the rig's space",
-  answer: z.object({ builds: SpaceInventory, open_runs: z.array(z.string()) }),
+  answer: z.object({
+    builds: SpaceInventory,
+    /** The trials' session logs; none from a harness from before they were kept. */
+    trial_logs: SpaceInventory.optional(),
+    open_runs: z.array(z.string()),
+  }),
 } as const satisfies Route;
 
 /**

@@ -45,7 +45,9 @@ export interface StreamPage {
  */
 export function streamEvent(m: BusMessage): StreamEvent | undefined {
   try {
-    return { place: m.seq, read: readEventMessage(m), at: m.at };
+    // When control first stored it: kept in a header by a rebuild of the stream (events/rebuild.ts).
+    const at = m.header(EVENT_HEADERS.received) ?? m.at;
+    return { place: m.seq, read: readEventMessage(m), at };
   } catch {
     return undefined;
   }

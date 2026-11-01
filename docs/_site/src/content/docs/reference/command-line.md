@@ -293,9 +293,9 @@ usage: thermite <command> [options]
                   [--time HH:MM] [--day DAY] [--on] --control URL --token-file F [--json]
                                       a new policy (off unless --on), what a design would remove
                                       now, or a change to policy ID (only the options given;
-                                      --on turns it on too). K: builds, advisor_records,
-                                      kb_versions, store_copies or audit. KEEP: open, champions
-                                      or newest, each on unless --no-keep. Times are UTC
+                                      --on turns it on too). K: events, builds, trial_logs,
+                                      advisor_records, kb_versions, store_copies or audit. KEEP:
+                                      open, champions or newest, each on unless --no-keep. UTC
   exports delete RIG NAME... --control URL --token-file F
                                       delete exports control keeps from RIG (owner's token), as
                                       Delete on the Exports page does: their files and records,
@@ -960,14 +960,14 @@ A design's options:
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--name N` | | The policy's name, up to 80 characters. Required to create one |
-| `--kind K` | | `builds` (the judge's builds), `advisor_records` (the advisors' records), `kb_versions` (older versions of knowledge-base items), `store_copies` (copies of control's store) or `audit` (the audit log). Required to create one |
-| `--where W` | `all` | For a kind kept on rigs: `all` (every rig), `rigs` or `campaigns`. `--rig` or `--campaign` alone sets it |
+| `--kind K` | | `events` (control's copy of the rigs' events), `builds` (the judge's builds), `trial_logs` (the trials' session logs), `advisor_records` (the advisors' records), `kb_versions` (older versions of knowledge-base items), `store_copies` (copies of control's store) or `audit` (the audit log). Required to create one |
+| `--where W` | `all` | For a kind kept by rig (`events` and the rigs' kinds): `all` (every rig), `rigs` or `campaigns`. `--rig` or `--campaign` alone sets it |
 | `--rig R`, `--campaign C` | | The rigs, or the campaigns whose rigs, it acts on; each may come again |
 | `--rule R` | | `older`, `newest` or `size`. Required to create one |
 | `--older N`, `--unit U` | `30`, `days` | `older`: removes what is older than N days, weeks or months (30 days each) |
 | `--newest N`, `--per P` | `20`, `rig` | `newest`: keeps the newest N per rig, per run or in all (`all`), and removes the rest |
 | `--size GIB` | `50` | `size`: keeps under this many GiB in all; the oldest go first |
-| `--keep KEEP`, `--no-keep KEEP` | each on | What it always keeps, where its kind has it: `open` (runs still open), `champions` (each lane's champion builds), `newest` (the newest copy of the store) |
+| `--keep KEEP`, `--no-keep KEEP` | each on | What it always keeps, where its kind has it: `open` (runs still open: their events, builds, logs or records), `champions` (each lane's champion builds), `newest` (the newest copy of the store) |
 | `--when W` | `daily` | `daily`, `weekly` or `hand` (only by `run`) |
 | `--time HH:MM`, `--day DAY` | `03:00`, `sunday` | When it runs, in UTC; the day for `weekly` |
 | `--on` | off | `create` and `update`: turned on, from now |

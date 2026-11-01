@@ -4,7 +4,7 @@
 // control's own code writes, on a host port of its own. Control's side and the rigs' sign in with
 // keys made here, over TLS. Then:
 //   - control makes the streams, each rig's two consumers (bus/consumers.ts), publishes a command
-//     and a config value for rig-a, and can't delete or purge the EVENTS stream;
+//     and a config value for rig-a, can't delete the EVENTS stream, and may purge it by subject;
 //   - rig-a takes its command and reads its config through the supervisor's own code (follow and
 //     watch in common/bus), on the consumers control made;
 //   - rig-a may make no consumer of its own, push or pull, nor remove one; may not read or take
@@ -256,8 +256,14 @@ try {
     (await tried(() => jsm.streams.delete(EVENT_STREAM))) === "denied",
   );
   check(
-    "control may not purge the EVENTS stream",
-    (await tried(() => jsm.streams.purge(EVENT_STREAM))) === "denied",
+    "control may purge the EVENTS stream by subject, as a retention policy does",
+    (await tried(() =>
+      jsm.streams.purge(EVENT_STREAM, { filter: "thermite.rig.rig-none.ev.*" }),
+    )) === "allowed",
+  );
+  check(
+    "the EVENTS stream takes purges: it refuses none by its settings",
+    (await jsm.streams.info(EVENT_STREAM)).config.deny_purge !== true,
   );
 
   // Rig-a, through the supervisor's own code: its command, and its config read by its subject.

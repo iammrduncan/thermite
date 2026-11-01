@@ -3,6 +3,7 @@ import type { ReplyNow, TrialProgress } from "../../agents/live-session.ts";
 import { modelConfigFromEnv, UsageSender } from "../../agents/model/index.ts";
 import { startView, VIEW_FLAG } from "../../agents/pi-view/index.ts";
 import { type Prompt, promptRecord } from "../../agents/prompt.ts";
+import { PI_SESSION_LOG } from "../../agents/session-log.ts";
 import { KB_SERVER, type KbCall } from "../../agents/tools/index.ts";
 import { type McpCallResult, resultText } from "../../common/mcp-client.ts";
 import { KEEP_TRIAL_PROMPT } from "../../core/api/harness/prompts.ts";
@@ -202,6 +203,8 @@ async function main(): Promise<void> {
       waiting,
       sent,
       view: view?.inputs,
+      // Its session log, in its own folder, which the harness keeps when the trial ends.
+      sessionLog: PI_SESSION_LOG,
     });
     return give(await withUsage(result, usage));
   }
@@ -209,6 +212,8 @@ async function main(): Promise<void> {
   const runner = new ApiLaneRunner((path, body) => call("POST", path, body));
   const result = await runTrial(spec, {
     runner: runner as unknown as Runner,
+    // Its session log, in its own folder, which the harness keeps when the trial ends.
+    sessionLog: PI_SESSION_LOG,
     // The harness substitutes the lane tool's real argv.
     laneTool: ["lanetool"],
     model,

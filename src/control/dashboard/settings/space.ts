@@ -1,4 +1,4 @@
-import type { RetentionPolicy } from "../../../core/retention/index.ts";
+import { type RetentionPolicy, STORE_COPIES_DEFAULT_WORDS } from "../../../core/retention/index.ts";
 import { SPACE_LOOK_MS, type SpaceUse, spaceKindOf, spaceTotal } from "../../space.ts";
 import { esc, infoLabel } from "../../ui/components/index.ts";
 import { sizeWords } from "../../ui/exports.ts";
@@ -18,15 +18,21 @@ export function spaceBlock(uses: SpaceUse[], policies: readonly RetentionPolicy[
           ? `<span class="bad">not read: ${esc(u.error ?? "")}</span>`
           : `${esc(sizeWords(u.bytes))}${u.rigs !== undefined ? `<div class="muted xs">${u.rigs} rig${u.rigs === 1 ? "" : "s"} said</div>` : ""}`;
       const mine = k.policy ? policies.filter((p) => p.kind === k.policy) : [];
+      const chips = mine
+        .map(
+          (p) =>
+            `<span class="pill${p.on ? " ok" : ""}">${esc(p.name)}${p.on ? "" : " (off)"}</span>`,
+        )
+        .join(" ");
+      // Control keeps the two newest copies of its store itself while no policy of them is on.
+      const byDefault =
+        k.policy === "store_copies" && !mine.some((p) => p.on)
+          ? `<span class="muted">${esc(STORE_COPIES_DEFAULT_WORDS)}</span>`
+          : "";
       const by = k.byHand
         ? `<span class="muted">By hand, on <a href="/ui/exports">Exports</a></span>`
-        : mine.length
-          ? mine
-              .map(
-                (p) =>
-                  `<span class="pill${p.on ? " ok" : ""}">${esc(p.name)}${p.on ? "" : " (off)"}</span>`,
-              )
-              .join(" ")
+        : byDefault || chips
+          ? [byDefault, chips].filter(Boolean).join(" ")
           : `<span class="muted">Kept for good</span>`;
       return `<tr data-space="${esc(u.kind)}"><td>${infoLabel(k.label, k.words)}</td><td>${esc(k.on)}</td><td class="num">${size}</td><td>${by}</td></tr>`;
     })

@@ -119,23 +119,21 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
 }
 
 /**
- * The streams kept for good: the record of every rig's events, which a backup holds (core/backup.ts).
- * The reports stream is an inbox (report.ts), which control makes again when it was made as one
- * kept for good.
+ * The streams of record: every rig's events, which a backup holds (core/backup.ts). The reports
+ * stream is an inbox (report.ts), which control makes again when it was made as one kept for good.
  */
-export const STREAMS_KEPT_FOR_GOOD = [EVENT_STREAM] as const;
+export const RECORD_STREAMS = [EVENT_STREAM] as const;
 
 /**
- * What control's user may not do: delete or purge a stream kept for good. Such a stream refuses to
- * delete a message or to be purged (`deny_delete`, `deny_purge`), and refuses an update that would
- * undo that; but the server lets the stream itself be deleted. Both are denied here, so the rule
- * holds whatever a stream's settings say. Control's user may do the rest.
+ * What control's user may not do: delete a stream of record. It may purge the events stream by
+ * subject, which the owner's retention policies do (control/retention/). While control makes the
+ * events stream again (`rebuilding`: control/events/rebuild.ts), it may delete it, once, to make
+ * it anew: the stream it copied it to holds every message then. Control's user may do the rest.
  */
-export function controlPermissions(): { publish: { deny: string[] } } {
-  const deny = STREAMS_KEPT_FOR_GOOD.flatMap((s) => [
-    `${API}.STREAM.DELETE.${s}`,
-    `${API}.STREAM.PURGE.${s}`,
-  ]);
+export function controlPermissions(o: { rebuilding?: boolean } = {}): {
+  publish: { deny: string[] };
+} {
+  const deny = o.rebuilding ? [] : RECORD_STREAMS.map((s) => `${API}.STREAM.DELETE.${s}`);
   return { publish: { deny } };
 }
 
@@ -152,7 +150,7 @@ export const BACKUP_INBOX_PREFIX = "_INBOX.backup";
  * publish to a stream, nor delete or purge one.
  */
 export function backupPermissions(): Permissions {
-  const allow = STREAMS_KEPT_FOR_GOOD.flatMap((s) => [
+  const allow = RECORD_STREAMS.flatMap((s) => [
     `${API}.STREAM.INFO.${s}`,
     `${API}.STREAM.MSG.GET.${s}`,
     `${API}.STREAM.SNAPSHOT.${s}`,
@@ -191,6 +189,8 @@ export interface BusUserKeys {
   system: string;
   backup?: string | undefined;
   rigs: readonly { rig: string; key: string; runs?: readonly string[] | undefined }[];
+  /** Control makes the events stream again now: its user may delete it (controlPermissions). */
+  rebuilding?: boolean | undefined;
   /** The rigs on RunPod whose pod's server control's server dials as a leaf node, if any. */
   leaf?: LeafRigs | undefined;
 }
@@ -312,7 +312,7 @@ export function usersFile(u: BusUserKeys): string {
     [BUS_ACCOUNT]: {
       jetstream: "enabled",
       users: [
-        { nkey: u.control, permissions: controlPermissions() },
+        { nkey: u.control, permissions: controlPermissions({ rebuilding: u.rebuilding }) },
         ...backup.map((nkey) => ({ nkey, permissions: backupPermissions() })),
         ...rigs.map((r) => ({ nkey: r.key, permissions: rigPermissions(r.rig, r.runs) })),
       ],

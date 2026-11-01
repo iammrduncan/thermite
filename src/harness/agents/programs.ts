@@ -114,6 +114,7 @@ export async function runPiTrial(
     | "model"
     | "terminal"
     | "console"
+    | "keepSession"
   >,
   spawn: typeof spawnTrial = spawnTrial,
 ): Promise<TrialResult> {
@@ -144,6 +145,7 @@ export async function runPiTrial(
       link.signal,
       link.model,
       view,
+      link.keepSession,
     );
   } finally {
     close();

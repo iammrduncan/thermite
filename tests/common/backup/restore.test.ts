@@ -211,12 +211,30 @@ describe("a backup's parts (goal 173)", () => {
       eventsAt(places(1, 65), 60),
       "its message at 60, the backup's last place, is not the one the backup recorded",
     );
-    await refuses(folder, eventsAt(places(2, 65)), "its first place is 2, and the backup's is 1");
-    // A place with no message: the stream deletes none, so it is not the backup's.
+    // More messages than its places allow: another stream.
+    const more = await backupOf(eventsAt(places(1, 60).filter((p) => p !== 30)));
+    await refuses(
+      more,
+      eventsAt(places(1, 65)),
+      "it holds 65 messages to 65, and the backup holds 59 to 60: more messages than its places allow",
+    );
+    // The backup's last message removed since by a retention policy: it can't be told apart.
     await refuses(
       folder,
-      eventsAt(places(1, 65).filter((p) => p !== 30)),
-      "it holds 64 messages to 65, and the backup holds 60 to 60: a place holds no message, and this stream deletes none",
+      eventsAt(places(1, 65).filter((p) => p !== 60)),
+      "it holds no message at 60, the backup's last place: a retention policy removed it since the backup, so the stream can't be told to be the backup's",
+    );
+  });
+
+  test("a stream a retention policy purged since the backup is kept: places with no message, a later first", async () => {
+    const folder = await backupOf(eventsAt(places(1, 60)));
+    assert.equal(
+      await keeps(folder, eventsAt(places(1, 65).filter((p) => p !== 30))),
+      "EVENTS on the bus holds the backup's events and 5 newer ones after them, to 65: control applies them from its place, 0, as it starts",
+    );
+    assert.equal(
+      await keeps(folder, eventsAt(places(10, 60))),
+      "EVENTS is on the bus as the backup holds it",
     );
   });
 });

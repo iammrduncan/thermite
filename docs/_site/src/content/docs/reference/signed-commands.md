@@ -756,7 +756,7 @@ The harness records each input word for word with what became of it, as a `termi
 
 ### `retention_run`
 
-One of the owner's [retention policies](../how-to/operate/retention-policies.md) of a kind kept on rigs, run on this rig now: control sends it to each rig the policy covers, at the policy's time or when the owner presses **Run now**. It lives a day (24 hours): a rig away longer gets the policy's next run instead. Only the owner's issuers send it; it is never in an MCP role's list for `issue_command`.
+One of the owner's [retention policies](../how-to/operate/retention-policies.md) of a kind kept on rigs (the judge's builds, the trials' session logs, the advisors' records), run on this rig now: control sends it to each rig the policy covers, at the policy's time or when the owner presses **Run now**. It lives a day (24 hours): a rig away longer gets the policy's next run instead. Only the owner's issuers send it; it is never in an MCP role's list for `issue_command`.
 
 ```json title="retention_run (part)"
 {"policy": 3, "name": "Old builds", "rule": {"kind": "builds", "rule": "newest", "newest_n": 20, "newest_per": "rig", "older_n": 30, "older_unit": "days", "size_gib": 50, "keep": {"open": true, "champions": true, "newest": true}}, "by": "hand"}
@@ -771,6 +771,7 @@ One of the owner's [retention policies](../how-to/operate/retention-policies.md)
 The rig works out what goes from what it holds when the command arrives, with the same rule as control's preview:
 
 - **The judge's builds** (`builds`): the harness removes each stored build the rule covers, after what the policy always keeps (each run's champion and each lane's best, builds of runs still open), and never a build whose commit a judge's job is queued for or measuring. A build's record stays in the ledger, so the judge makes it again from its commit and kit when it is needed. The result is the removal.
+- **The trials' session logs** (`trial_logs`): the harness removes each trial's log it keeps (`sessions/<run>/<trial>/` in its state) that the rule covers, keeping those of runs still open when the policy says so. The result is the removal.
 - **The advisors' records** (`advisor_records`): the harness takes the command, with the result `{"kind":"advisor_records","left_to":"the supervisor"}`, and the rig's supervisor then removes the records the rule covers in its home, keeping those of runs still open, and tells the harness what went.
 - A kind kept on control is refused: `<kind> is kept on control, which removes it: not on a rig`.
 

@@ -14,6 +14,7 @@ import {
   NoStreamTakes,
   type Outgoing,
   type Published,
+  type StreamInfo,
   type StreamSettings,
   type StreamState,
 } from "../../src/common/bus/index.ts";
@@ -65,6 +66,14 @@ const TOO_LARGE = {
   err_code: 10054,
   description: "message size exceeds maximum allowed",
 };
+/** The server's words for an update that would let a stream's messages be deleted or purged again. */
+const NO_DENY_CHANGE = {
+  code: 500,
+  err_code: 10052,
+  description: "stream configuration update can not cancel deny purge",
+};
+/** The server's words for a purge of a stream that refuses them. */
+const NO_PURGE = { code: 500, err_code: 10051, description: "stream purge is not permitted" };
 /** The server's words for an update that would make a stream a work queue, or one no longer. */
 const NO_RETENTION_CHANGE = {
   code: 500,
@@ -96,6 +105,9 @@ export class FakeBus
       | "remove"
       | "streams"
       | "last"
+      | "streamInfo"
+      | "deleteStream"
+      | "purge"
       | "connected"
       | "serve"
       | "request"
@@ -147,12 +159,72 @@ export class FakeBus
     if (!this.consumers.has(at)) this.consumers.set(at, consumer);
   }
 
-  /** As the server: a stream's retention never changes to or from a work queue in place. */
+  /**
+   * As the server: a stream's retention never changes to or from a work queue in place, and a
+   * stream that refuses deletes or purges never stops refusing them. A new stream with a first
+   * place (`first_seq`) starts there.
+   */
   async makeStream(stream: StreamSettings): Promise<void> {
     const had = this.made.get(stream.name);
     if (had && (had.retention === "workqueue") !== (stream.retention === "workqueue"))
       throw new JetStreamApiError(NO_RETENTION_CHANGE);
+    if (had && ((had.deny_delete && !stream.deny_delete) || (had.deny_purge && !stream.deny_purge)))
+      throw new JetStreamApiError(NO_DENY_CHANGE);
+    if (!had && stream.first_seq && stream.first_seq > 1 && !this.seqs.has(stream.name))
+      this.seqs.set(stream.name, stream.first_seq - 1);
     this.made.set(stream.name, stream);
+  }
+
+  /** A stream's settings and places, as the server's info gives them; undefined for one not made. */
+  async streamInfo(name: string): Promise<StreamInfo | undefined> {
+    await this.hold;
+    if (this.failing) throw new Error("TimeoutError: no answer from the server");
+    const config = this.made.get(name);
+    if (!config) return undefined;
+    const kept = this.kept.filter((m) => m.stream === name);
+    const last = this.lastOf(name);
+    return {
+      config,
+      first_seq: kept[0]?.seq ?? last + 1,
+      last_seq: last,
+      messages: kept.length,
+      bytes: kept.reduce((n, m) => n + (m.bytes?.length ?? Buffer.byteLength(m.data)), 0),
+    };
+  }
+
+  /** Deletes a stream and its messages, as its user may (`refuse` names what it may not). */
+  async deleteStream(name: string): Promise<boolean> {
+    await this.hold;
+    const api = `$JS.API.STREAM.DELETE.${name}`;
+    if (this.refuse?.(api))
+      throw new errors.PermissionViolationError(
+        `Permissions Violation for Publish to "${api}"`,
+        "publish",
+        api,
+      );
+    if (!this.made.has(name)) return false;
+    this.made.delete(name);
+    this.seqs.delete(name);
+    this.ids.delete(name);
+    for (let i = this.kept.length - 1; i >= 0; i--)
+      if (this.kept[i]?.stream === name) this.kept.splice(i, 1);
+    return true;
+  }
+
+  /** The server's purge: a stream's messages on `filter`, before `seq`, or all but the newest `keep`. */
+  async purge(stream: string, o: { filter: string; seq?: number; keep?: number }): Promise<number> {
+    await this.hold;
+    if (this.failing) throw new Error("TimeoutError: no answer from the server");
+    if (this.made.get(stream)?.deny_purge) throw new JetStreamApiError(NO_PURGE);
+    const on = this.kept.filter((m) => m.stream === stream && takes(o.filter, m.subject));
+    const kept =
+      o.keep !== undefined ? new Set(on.slice(Math.max(0, on.length - o.keep))) : new Set();
+    const gone = new Set(on.filter((m) => (o.seq !== undefined ? m.seq < o.seq : !kept.has(m))));
+    for (let i = this.kept.length - 1; i >= 0; i--) {
+      const m = this.kept[i];
+      if (m && gone.has(m)) this.kept.splice(i, 1);
+    }
+    return gone.size;
   }
 
   /**

@@ -3,7 +3,7 @@ import {
   keepWords,
   kindOf,
   nextDueAt,
-  onRigs,
+  perRig,
   policyWords,
   RETENTION_KIND_KEYS,
   type RetentionPolicy,
@@ -72,7 +72,7 @@ export function specOf(store: ControlStore, input: unknown): RetentionSpec {
       `not a retention policy: ${read.error.issues.map((i) => `${i.path.join(".") || "policy"}: ${i.message}`).join("; ")}`,
     );
   const spec = read.data;
-  if (onRigs(spec.kind) && spec.where === "rigs") {
+  if (perRig(spec.kind) && spec.where === "rigs") {
     const unknown = spec.rigs.filter((r) => !knownRig(store, r));
     if (unknown.length) throw new BadInput(`control knows no rig ${unknown.join(", ")}`);
   }

@@ -121,9 +121,9 @@ export function retentionRoutes(app: Hono, api: ApiContext): void {
       said: `Deleted “${p.name}”. What it removed stays in the history.`,
     });
   });
-  app.post(RETENTION_RUN.path, admin, (c) => {
+  app.post(RETENTION_RUN.path, admin, async (c) => {
     const id = named(api, c);
     if (id === undefined) return none(c);
-    return c.json(runPolicy(deps, id, "hand", by));
+    return c.json(await runPolicy(deps, id, "hand", by));
   });
 }

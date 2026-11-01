@@ -5,6 +5,7 @@ import {
   dueNow,
   kindOf,
   onRigs,
+  type RetentionItem,
   type RetentionPolicy,
   type RetentionRemoved,
   RetentionRemoved as RetentionRemovedSchema,
@@ -14,6 +15,7 @@ import {
   wouldRemove,
 } from "../../core/retention/index.ts";
 import { listText } from "../../core/words.ts";
+import { purgeEventDays } from "../events/index.ts";
 import { issueCommand } from "../issue/index.ts";
 import { type ControlStore, RETENTION_REMOVED_ACTION } from "../store/index.ts";
 import { itemsOf, rigsOf } from "./items.ts";
@@ -21,8 +23,9 @@ import { policyOf } from "./policies.ts";
 
 /**
  * A policy's run: at its time, as control's schedule finds it due (retentionTick), or when the
- * owner presses Run now. Control removes its own kinds at once (the older versions of the
- * knowledge base's items, the copies of its store, its audit log) and records what went; for a
+ * owner presses Run now. Control removes its own kinds at once (its copy of the rigs' events, by
+ * the server's purge, the older versions of the knowledge base's items, the copies of its store,
+ * its audit log) and records what went; for a
  * rig's kind it sends each rig the policy covers a signed `retention_run`, and each rig says what
  * it removed as a `retention_removed` event (takeRigRemoval). Each removal is in the history and
  * the audit log; the audit log's entry of a removal is never removed by a policy.
@@ -48,41 +51,58 @@ interface PolicyRun {
 /** Who started a removal, as the history shows it. */
 const startedBy = (how: "schedule" | "hand") => (how === "schedule" ? "schedule" : "Run now");
 
-/** Removes what a policy of a kind kept on control covers now, and records it. */
-function removeOnControl(
+/** Removes what a policy of a kind kept on control covers now: what went, and why not all. */
+async function removeNow(
   store: ControlStore,
   p: RetentionPolicy,
-  how: "schedule" | "hand",
-  by: string,
   now: Date,
-): PolicyRun {
+): Promise<{ gone: RetentionItem[]; error?: string | undefined }> {
   const r = wouldRemove(p, itemsOf(store, p).items, now);
-  let error: string | undefined;
-  let gone = r.items;
   try {
+    if (p.kind === "events") {
+      // Whole days of a subject, oldest first, by the server's purge (events/days.ts).
+      const ids = new Set(r.items.map((x) => x.id));
+      const purged = await purgeEventDays(store, ids, now.toISOString());
+      const done = new Set(purged.days.map((d) => `${d.filter}\n${d.rig}\n${d.day}`));
+      return { gone: r.items.filter((x) => done.has(x.id)), error: purged.error };
+    }
     if (p.kind === "kb_versions") {
       const versions = r.items.map((x) => {
         const [item, version] = x.id.split(":").map(Number) as [number, number];
         return { item, version };
       });
       store.kb().removeOlderVersions(versions);
-    } else if (p.kind === "audit") {
+      return { gone: r.items };
+    }
+    if (p.kind === "audit") {
       store.auditLog.removeEntries(r.items.map((x) => Number(x.id)));
-    } else if (p.kind === "store_copies") {
-      gone = [];
-      for (const x of r.items) {
-        try {
-          rmSync(x.id, { force: true });
-          gone.push(x);
-        } catch (err) {
-          error ??= `a copy could not be removed: ${errorText(err)}`;
-        }
+      return { gone: r.items };
+    }
+    const gone: RetentionItem[] = [];
+    let error: string | undefined;
+    for (const x of r.items) {
+      try {
+        rmSync(x.id, { force: true });
+        gone.push(x);
+      } catch (err) {
+        error ??= `a copy could not be removed: ${errorText(err)}`;
       }
     }
+    return { gone, error };
   } catch (err) {
-    gone = [];
-    error = errorText(err);
+    return { gone: [], error: errorText(err) };
   }
+}
+
+/** Removes what a policy of a kind kept on control covers now, and records it. */
+async function removeOnControl(
+  store: ControlStore,
+  p: RetentionPolicy,
+  how: "schedule" | "hand",
+  by: string,
+  now: Date,
+): Promise<PolicyRun> {
+  const { gone, error } = await removeNow(store, p, now);
   const ats = gone.map((x) => x.at).sort();
   const removed = removedBody(
     { policy: p.id, name: p.name, kind: p.kind, by: how },
@@ -95,6 +115,7 @@ function removeOnControl(
     },
     error,
   );
+  const rigs = new Set(gone.flatMap((x) => (x.rig ? [x.rig] : []))).size;
   store.tx(() => {
     store.retention.addRemoval({
       at: now.toISOString(),
@@ -112,7 +133,7 @@ function removeOnControl(
     store.auditLog.add(by, RETENTION_REMOVED_ACTION, { ...removed, on: "control" });
   });
   const said = removed.count
-    ? `“${p.name}” removed ${removeWords(p.kind, removed)} from control.`
+    ? `“${p.name}” removed ${removeWords(p.kind, { ...removed, rigs })} from control.`
     : `“${p.name}” removed nothing: everything it covers is inside the rule.`;
   log("control", "a retention policy ran on control", {
     policy: p.id,
@@ -175,13 +196,13 @@ function sendToRigs(
  * Runs a policy now, whether on or off: by hand (Run now), or for the schedule. Control's kinds
  * are removed at once; a rig's kind is sent to each rig it covers.
  */
-export function runPolicy(
+export async function runPolicy(
   d: RetentionDeps,
   id: number,
   how: "schedule" | "hand",
   by: string,
   now = new Date(),
-): PolicyRun {
+): Promise<PolicyRun> {
   const p = policyOf(d.store, id);
   return onRigs(p.kind) ? sendToRigs(d, p, how, by) : removeOnControl(d.store, p, how, by, now);
 }
@@ -195,7 +216,7 @@ const RUNNING = new Set<number>();
  * never runs it again for that time; after control was away, a policy runs once for the latest
  * time it missed. Never throws: a run that fails is logged.
  */
-export function retentionTick(d: RetentionDeps, now = new Date()): number {
+export async function retentionTick(d: RetentionDeps, now = new Date()): Promise<number> {
   let ran = 0;
   for (const p of d.store.retention.list()) {
     const due = dueNow(p, now);
@@ -203,7 +224,7 @@ export function retentionTick(d: RetentionDeps, now = new Date()): number {
     RUNNING.add(p.id);
     try {
       d.store.retention.setLastDue(p.id, due.toISOString());
-      runPolicy(d, p.id, "schedule", "control:retention", now);
+      await runPolicy(d, p.id, "schedule", "control:retention", now);
       ran++;
     } catch (err) {
       const what = { policy: p.id, due: due.toISOString(), error: errorText(err) };

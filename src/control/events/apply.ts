@@ -8,6 +8,7 @@ import { MODEL_CALL_EVENT, ModelCallBody } from "../../core/usage.ts";
 import { takeRigRemoval } from "../retention/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { type FoldCache, keepFolds, streamEvent } from "../views/index.ts";
+import { EventDays, keepEventDays } from "./days.ts";
 import { readKnowledgeAgain, takeKbItem } from "./knowledge.ts";
 
 /**
@@ -30,7 +31,8 @@ export const APPLY_PAGE = BUS_READ_MAX;
 
 export interface EventsApplyOptions {
   store: ControlStore;
-  bus: Pick<Bus, "read" | "lastSeq">;
+  /** The bus it reads; with purge and message, the one a retention policy purges on (days.ts). */
+  bus: Pick<Bus, "read" | "lastSeq"> & Partial<Pick<Bus, "purge" | "message">>;
   /** How long it waits after a failure: BUS_RETRY_MS unless a test gives a shorter one. */
   retryMs?: number | undefined;
 }
@@ -50,6 +52,8 @@ export class EventsApply {
   private readonly o: EventsApplyOptions;
   /** Control's kept folds, which its views read: handed every event of the stream, in order. */
   readonly folds: FoldCache;
+  /** What the stream holds by subject, rig and day, for a retention policy of it (days.ts). */
+  readonly days = new EventDays();
   readonly since = new Date().toISOString();
   /** Messages it applied since control started. */
   applied = 0;
@@ -71,6 +75,10 @@ export class EventsApply {
   constructor(o: EventsApplyOptions) {
     this.o = o;
     this.folds = keepFolds(o.store, o.bus);
+    const { purge, message } = o.bus;
+    const bus =
+      purge && message ? { purge: purge.bind(o.bus), message: message.bind(o.bus) } : undefined;
+    keepEventDays(o.store, this.days, bus);
     this.checkedOnce = new Promise((r) => {
       this.markChecked = r;
     });
@@ -181,7 +189,8 @@ export class EventsApply {
       this.readAgain = true;
     }
     while (!this.closed) {
-      const from = Math.min(store.busPositions.of(EVENT_STREAM), this.folds.through) + 1;
+      const from =
+        Math.min(store.busPositions.of(EVENT_STREAM), this.folds.through, this.days.through) + 1;
       const read = await bus.read(EVENT_STREAM, { from, limit: APPLY_PAGE });
       if (read.next <= from) return;
       this.applyPage(read.messages, read.next - 1);
@@ -201,6 +210,7 @@ export class EventsApply {
     const folds = this.folds.through;
     const events = messages.flatMap((m) => (m.seq > folds ? (streamEvent(m) ?? []) : []));
     this.folds.take(events, through);
+    this.days.take(messages);
   }
 
   /** The messages after the store's place, applied, and the place it ends at, in one transaction. */

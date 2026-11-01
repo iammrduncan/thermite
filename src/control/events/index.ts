@@ -5,11 +5,14 @@
  * hands them to control's views (apply.ts); a store from before holds its events in a table,
  * moved to the stream once, checked there and dropped (move.ts); the knowledge base reads the
  * stream again after an upgrade, and takes each writer's item after its checks (knowledge.ts).
- * Events become messages, in batches, in batch.ts.
+ * Events become messages, in batches, in batch.ts. A stream made before v0.1.1, which refuses
+ * purges, is made again once at control's start (rebuild.ts); what it holds by day, for a
+ * retention policy, is in days.ts.
  */
 
 export { APPLY_PAGE, applyState, EventsApply, type EventsApplyOptions } from "./apply.ts";
 export { BATCH_BYTES, notForBus } from "./batch.ts";
+export { eventDaysOf, purgeEventDays } from "./days.ts";
 export { readKnowledgeAgain } from "./knowledge.ts";
 export {
   EventsMove,
@@ -18,6 +21,7 @@ export {
   type MoveStopped,
   movedEnd,
 } from "./move.ts";
+export { EventsRebuild } from "./rebuild.ts";
 export {
   APPLY_WAIT_MS,
   EventsWriter,

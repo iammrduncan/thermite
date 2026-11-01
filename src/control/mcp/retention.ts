@@ -22,7 +22,7 @@ import type { ToolContext } from "./context.ts";
  * and REST; each call is in the audit log, and each change too.
  */
 
-const DESIGN = `A policy's design: name; kind (${KINDS_WORDS}); where (all, rigs or campaigns; with rigs or campaigns named; a kind kept on control has none); rule (older: older_n with older_unit days, weeks or months; newest: keep newest_n per newest_per rig, run or all; size: keep under size_gib GiB, the oldest first); keep {open, champions, newest} (what it always keeps, each on by default, where the kind has it); when (daily or weekly at time HH:MM UTC, on day for weekly; hand: only by Run now).`;
+const DESIGN = `A policy's design: name; kind (${KINDS_WORDS}); where (all, rigs or campaigns; with rigs or campaigns named; for events and the rigs' kinds: a kind control keeps not by rig has none); rule (older: older_n with older_unit days, weeks or months; newest: keep newest_n per newest_per rig, run or all; size: keep under size_gib GiB, the oldest first); keep {open, champions, newest} (what it always keeps, each on by default, where the kind has it); when (daily or weekly at time HH:MM UTC, on day for weekly; hand: only by Run now).`;
 
 const idInput = { id: z.number().int().positive() };
 
@@ -131,7 +131,7 @@ export function registerRetention(tools: ToolContext): void {
     {
       title: "Run a retention policy now",
       description:
-        "Runs a policy now, on or off, as Run now on Settings does, after retention_preview has shown what it removes: it can't be undone. A kind kept on control is removed at once, and said; a rig's kind is sent to each rig the policy covers as a signed command, and each rig says what it removed (retention_removals). Written to the audit log. The owner's token only.",
+        "Runs a policy now, on or off, as Run now on Settings does, after retention_preview has shown what it removes: it can't be undone. A kind kept on control is removed at once, and said (control's copy of the rigs' events by the server's purge, whole days of a subject, oldest first); a rig's kind is sent to each rig the policy covers as a signed command, and each rig says what it removed (retention_removals). Written to the audit log. The owner's token only.",
       inputSchema: idInput,
     },
     audited("run_retention_policy", (a: { id: number }) => runPolicy(deps, a.id, "hand", actor)),

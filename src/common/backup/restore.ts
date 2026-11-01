@@ -89,9 +89,11 @@ const firstPlace = (e: StreamEnd) => (e.messages > 0 ? e.first_seq : e.last_seq 
 /**
  * How a stream on the bus stands to the backup's: it holds the backup's events and `after` newer
  * ones after them (0: it is the backup's own), or `why` it does not, in words. It does when it
- * starts at the backup's first place, reaches the backup's last place or further, holds one message
- * more than the backup for each place more (the stream refuses deletes, so a place with no message
- * means another stream), and holds at the backup's last place the message the backup recorded.
+ * reaches the backup's last place or further and holds there the message the backup recorded,
+ * and holds no more messages than the backup's and the places after it allow. It may hold fewer,
+ * or start later: a retention policy of control's copy of the rigs' events purged some since the
+ * backup (control/retention/). The message at the backup's last place must still be there to tell
+ * that the stream is the backup's; one a policy purged is refused in words.
  */
 async function against(
   bus: BackupBus,
@@ -100,20 +102,27 @@ async function against(
 ): Promise<{ after: number } | { why: string }> {
   const got = `${words(now.messages)} messages to ${words(now.last_seq)}`;
   const want = `${words(s.messages)} to ${words(s.last_seq)}`;
-  if (firstPlace(now) !== firstPlace(s))
+  if (firstPlace(now) < firstPlace(s))
     return {
-      why: `its first place is ${words(firstPlace(now))}, and the backup's is ${words(firstPlace(s))}`,
+      why: `its first place is ${words(firstPlace(now))}, before the backup's, ${words(firstPlace(s))}`,
     };
   if (now.last_seq < s.last_seq) return { why: `it holds ${got}, and the backup holds ${want}` };
   const after = now.last_seq - s.last_seq;
-  if (now.messages - s.messages !== after)
+  if (now.messages - s.messages > after)
     return {
-      why: `it holds ${got}, and the backup holds ${want}: a place holds no message, and this stream deletes none`,
+      why: `it holds ${got}, and the backup holds ${want}: more messages than its places allow`,
     };
-  if (s.last_sha256 && (await bus.messageSha256(s.name, s.last_seq)) !== s.last_sha256)
-    return {
-      why: `its message at ${words(s.last_seq)}, the backup's last place, is not the one the backup recorded`,
-    };
+  if (s.last_sha256) {
+    const there = await bus.messageSha256(s.name, s.last_seq);
+    if (there === undefined && s.messages > 0)
+      return {
+        why: `it holds no message at ${words(s.last_seq)}, the backup's last place: a retention policy removed it since the backup, so the stream can't be told to be the backup's`,
+      };
+    if (there !== s.last_sha256)
+      return {
+        why: `its message at ${words(s.last_seq)}, the backup's last place, is not the one the backup recorded`,
+      };
+  }
   return { after };
 }
 

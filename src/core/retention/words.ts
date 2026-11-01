@@ -1,5 +1,5 @@
 import { sizeWords } from "../words.ts";
-import { type KeepKey, kindOf, onRigs, type RetentionKind } from "./kinds.ts";
+import { type KeepKey, kindOf, perRig, type RetentionKind } from "./kinds.ts";
 import { dayWords, type Removal, type RetentionRule, type RetentionSpec } from "./policy.ts";
 import type { RetentionWhen } from "./schedule.ts";
 
@@ -8,7 +8,7 @@ import type { RetentionWhen } from "./schedule.ts";
 export function ruleWords(p: RetentionRule): string {
   if (p.rule === "older") return `older than ${p.older_n} ${p.older_unit}`;
   if (p.rule === "newest") {
-    const per = !onRigs(p.kind) ? "" : p.newest_per === "all" ? " in all" : ` per ${p.newest_per}`;
+    const per = !perRig(p.kind) ? "" : p.newest_per === "all" ? " in all" : ` per ${p.newest_per}`;
     return `all but the newest ${p.newest_n}${per}`;
   }
   return `the oldest, until under ${p.size_gib} GiB`;
@@ -27,7 +27,7 @@ export function keepWords(p: RetentionRule): string {
 export function whereWords(
   p: Pick<RetentionSpec, "kind" | "where" | "rigs" | "campaigns">,
 ): string {
-  if (!onRigs(p.kind)) return "control";
+  if (!perRig(p.kind)) return "control";
   if (p.where === "all") return "every rig";
   if (p.where === "rigs") return p.rigs.length ? p.rigs.join(", ") : "no rig chosen";
   return p.campaigns.length ? `the rigs of ${p.campaigns.join(", ")}` : "no campaign chosen";

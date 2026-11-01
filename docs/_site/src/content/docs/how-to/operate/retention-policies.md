@@ -17,10 +17,12 @@ Thermite keeps everything, everywhere, until you decide otherwise. A **retention
 
 | Kind | Kept on | What it is | It can always keep |
 | --- | --- | --- | --- |
+| **Rigs' events (control's copy)** | Control | Control's copy of every event its rigs reported, in the message bus's `EVENTS` stream. Each rig's own ledger keeps them all the same. Control builds the dashboard's history from these at each start: removed events leave it then, and can't be shown again; what the knowledge base already read of them stays. A policy of them still says **Where**, by rig, and removes whole days, oldest first (below) | Events of runs still open |
 | **Judge's builds** | Rigs | The builds the judge made of each candidate, on each rig's volume. A build removed is made again if it is ever needed: its commit and its kit stay, and so does its record in the rig's ledger. A build whose commit a judge's job is waiting for or measuring is never removed | Each lane's champion builds; builds of runs still open |
+| **Trials' session logs** | Rigs | Each trial's full session log, as its agent program wrote it (Pi's conversation, or Claude Code's, Codex's or OpenCode's own log or output), kept in the harness's state by run and trial when the trial ends, where no agent can reach it. Its summary and its events stay. At the rig's disk floor a log that would take the disk below it is not kept, and the harness's log says so. A log is as large as what the program wrote in its trial: at most the trial's own disk (**Disk per agent** on New campaign, 2 GiB unless set) | Logs of runs still open |
 | **Advisors' records** | Supervisors | The records of each round of the auditor, the teachers, the review panel and the paper's writers, and their conversations kept before each compaction, in each rig's supervisor's home. Their decisions stay in the rig's ledger | Records of runs still open |
 | **Older versions of knowledge-base items** | Control | Versions of an item that a newer version replaced. The newest version of each item always stays | |
-| **Copies of control's store** | Control | `control.db` as it was before each update that changed its tables, kept beside it so an update can be undone. Control keeps the two newest itself | The newest copy |
+| **Copies of control's store** | Control | `control.db` as it was before each update that changed its tables, kept beside it so an update can be undone. Control keeps the two newest itself, until a policy for this kind is on: from then on it keeps every copy, and the policy decides. A policy that is off changes nothing. **Space** says which applies: `Control keeps the two newest, until a policy for this kind is on.`, or the policy's name | The newest copy |
 | **Audit log** | Control | Who did what, and when, on control. Entries removed can't be shown again. Each removal by a policy is itself written to the audit log, and that entry is never removed | |
 
 Each "can always keep" is ticked when you make a policy: untick it to let the rule remove those too.
@@ -31,7 +33,7 @@ Each "can always keep" is ticked when you make a policy: untick it to let the ru
 - **A results repository.** It is your project's own Git repository. Thermite pushes to it and never removes from it.
 - **Exports.** You remove them by hand, on the **Exports** page ([Get a rig's results from control](exports-on-control.md#4-delete-exports-you-no-longer-need)).
 
-Control's copy of the rigs' events, the knowledge base's files (see [How long control keeps a file](../../reference/knowledge-base.md#how-long-control-keeps-a-file) for orphans), the kits and control's store itself are kept for good too: **Space** says **Kept for good** beside each.
+The knowledge base's files (see [How long control keeps a file](../../reference/knowledge-base.md#how-long-control-keeps-a-file) for orphans), the kits and control's store itself are kept for good too: **Space** says **Kept for good** beside each.
 
 ## 1. Start a policy
 
@@ -66,6 +68,7 @@ Each policy's switch, in the **On** column, turns it on or off at once. Off, it 
 Press **Run now** in the policy's row. The page asks first, under the row, and says exactly what it removes: `Run “Old builds” now?` `It removes 412 builds on 2 rigs, 18.40 GiB, from 2026-08-03 to 2026-09-28, as its rigs last said; each rig removes what the policy covers when the command reaches it. This can't be undone.` Press **Remove now**, or **Cancel**. **Run now** works whether the policy is on or off.
 
 - A kind kept on control is removed at once, and the page says what went: `“Old audit” removed 1,204 entries, 3.1 MiB, from 2026-06-01 to 2026-09-30 from control.`
+- Control's copy of the rigs' events goes by the message bus's purge: for each run's subjects, and each rig's own, whole days from the oldest, up to the first day the policy keeps. Control keeps each rig ledger's *floor*, its last event removed on purpose: it never asks the rig for those events again, nor takes them back if the rig sends them, as after a restore of an older store. `GET /v1/rigs/<rig>/events` lists the floors as `removed`.
 - A kind kept on rigs is sent to each rig the policy covers as a signed command, [`retention_run`](../../reference/signed-commands.md#retention_run): `Sent “Old builds” to rig-1 and rig-2: on each, it removes what the policy covers there, and says what went under What policies removed.` On each rig, the harness removes the judge's builds; the advisors' records are removed by the rig's supervisor once its harness has taken the command. Each rig works out what goes from what it holds when the command arrives, with the same rule as the preview. A rig that is away gets the command when it comes back, within a day; after that the command expires, and the policy's next run covers it.
 
 ## 6. Read what it removed
@@ -91,5 +94,6 @@ thermite retention removals --control https://control.example.com --token-file ~
 ## How to tell it worked
 
 - The policy's row says when it last ran and what it removed, and **would remove now** drops to what is left.
+- For control's copy of the rigs' events, control's log says `a retention policy purged control's copy of events` for each subject, and the rig's history on the dashboard no longer shows them after control's next start.
 - **What policies removed** has its removal, and the audit log has `retention_removed`.
 - **Space** shows less for the kind; a rig's kind shows less once the rig tells control again, within 10 minutes.

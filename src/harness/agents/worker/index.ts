@@ -13,6 +13,7 @@ import {
   type WorkerTurn,
   windowFit,
 } from "../../../agents/roles/index.ts";
+import { writeSessionLog } from "../../../agents/session-log.ts";
 import { NoteLimit } from "../../../agents/tools/index.ts";
 import { errorText } from "../../../common/errors.ts";
 import { laneLimits } from "../../../core/contract.ts";
@@ -150,6 +151,7 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     // that call would end the trial with the rest never sent and never read.
     steeringMode: "all",
   });
+  if (deps.sessionLog) writeSessionLog(agent, deps.sessionLog);
   meter?.watch(agent);
   // Near the model's window the conversation is compacted and the trial goes on (goal 070): a
   // conversation that grows never ends a trial nor asks for an early submission.

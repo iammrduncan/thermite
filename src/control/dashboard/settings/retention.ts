@@ -8,6 +8,7 @@ import {
   kindOf,
   NEVER_REMOVED,
   onRigs,
+  perRig,
   RETENTION_KIND_KEYS,
   type RetentionKind,
   type RetentionSpec,
@@ -143,7 +144,7 @@ function policyForm(
           )
           .join("")
       : `<span class="muted small">None yet.</span>`;
-  const forRigs = onRigs(spec.kind);
+  const forRigs = perRig(spec.kind);
   const keeps = (["champions", "open", "newest"] as KeepKey[])
     .map((key) => {
       const words = RETENTION_KIND_KEYS.map((k) => kindOf(k).keeps[key]).find(Boolean) ?? "";
@@ -409,9 +410,9 @@ export function retentionRoutes(app: Hono, dash: Dashboard): void {
   });
 
   // Run now's Remove now, after the confirmation in the page said what it removes.
-  app.post("/ui/settings/retention/:id/run", (c) => {
+  app.post("/ui/settings/retention/:id/run", async (c) => {
     try {
-      const r = runPolicy(deps, Number(c.req.param("id")), "hand", by);
+      const r = await runPolicy(deps, Number(c.req.param("id")), "hand", by);
       return c.redirect(backUrl("ok", r.said), 303);
     } catch (err) {
       return c.redirect(backUrl("error", errorText(err)), 303);

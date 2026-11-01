@@ -6,8 +6,9 @@ import { REPORT_MAX_BYTES, type ReportEvent, readReportEvent } from "./report.ts
 
 /**
  * The link's fifth contract (goal 168, step 4): every rig's events on the message bus, the
- * `EVENTS` stream, kept for good. A message is one event of a rig's ledger, as the rig recorded
- * it, in canonical JSON. A run's event goes on the run's subject by its kind, with the attempt's
+ * `EVENTS` stream, kept until one of the owner's retention policies removes some of control's copy
+ * (control/retention/; each rig's ledger keeps every event). A message is one event of a rig's
+ * ledger, as the rig recorded it, in canonical JSON. A run's event goes on the run's subject by its kind, with the attempt's
  * and the trial's ids in the event, not in the subject (the owner's decision of 2026-10-29: a
  * subject costs the server memory for as long as the stream lives); a change to a run's queue of
  * experiments goes on the run's queue subject, by what it did; a rig's own event, on the rig's
@@ -119,6 +120,11 @@ export const EVENT_HEADERS = {
   ledger: "Thermite-Ledger",
   report: "Thermite-Report",
   seq: "Thermite-Seq",
+  /**
+   * When control first stored the event, for a message the stream was made again with
+   * (control/events/rebuild.ts): the server's own time is the copy's then.
+   */
+  received: "Thermite-Received",
 } as const;
 /** NATS's own header for a message's id, which the stream keeps one message for. */
 const MSG_ID_HEADER = "Nats-Msg-Id";
@@ -252,9 +258,9 @@ export function readEventMessage(m: {
 const DUPLICATE_WINDOW_NS = 2 * 60 * 1e9;
 
 /**
- * The stream's settings. Events are kept for good, as the ledgers they come from are: no limit on
- * their count, bytes or age, and no message may be deleted or purged. A full disk refuses new
- * messages and never drops old ones. A page of a report goes in as one atomic batch, stored whole
+ * The stream's settings. Events are kept until a retention policy of the owner's removes some, by
+ * subject, with the server's purge (control/retention/): no limit on their count, bytes or age.
+ * A full disk refuses new messages and never drops old ones. A page of a report goes in as one atomic batch, stored whole
  * or not at all; any message may be read by its place directly. Compressed (s2): about six times
  * smaller on disk, for a little more time to read (the owner's decision of 2026-10-29).
  */
@@ -270,11 +276,61 @@ export const EVENT_STREAM_CONFIG = {
   max_msgs_per_subject: -1,
   max_msg_size: EVENT_MAX_BYTES,
   discard: "new",
-  deny_delete: true,
-  deny_purge: true,
   duplicate_window: DUPLICATE_WINDOW_NS,
   num_replicas: 1,
   allow_atomic: true,
   allow_direct: true,
   compression: "s2",
 } satisfies Partial<StreamConfig> & { name: string };
+
+/**
+ * The stream an `EVENTS` stream made before v0.1.1 is copied to while control makes it again
+ * without the settings that refused every purge (control/events/rebuild.ts): its messages on one
+ * subject, each with its own subject in a header, at the same places. Control removes it once the
+ * new `EVENTS` stream holds them all.
+ */
+export const EVENT_REBUILD_STREAM = "EVENTS_REBUILD";
+/** The one subject of the copy. */
+export const EVENT_REBUILD_SUBJECT = "thermite.rebuild.events";
+/** The header that keeps a copied message's own subject. */
+export const EVENT_SUBJECT_HEADER = "Thermite-Subject";
+
+/**
+ * How long a stream being copied into remembers a message's id, in nanoseconds: a second, so the
+ * server holds few ids in memory while the copy goes at full speed; each batch names the last
+ * place it expects, so nothing is copied twice.
+ */
+export const COPY_DUPLICATE_WINDOW_NS = 1e9;
+
+/** The copy's settings: as the events stream's, on its own subject. */
+export const EVENT_REBUILD_STREAM_CONFIG = {
+  name: EVENT_REBUILD_STREAM,
+  subjects: [EVENT_REBUILD_SUBJECT],
+  description: "A copy of the EVENTS stream while control makes it again",
+  retention: "limits",
+  storage: "file",
+  max_msgs: -1,
+  max_bytes: -1,
+  max_age: 0,
+  max_msgs_per_subject: -1,
+  max_msg_size: EVENT_MAX_BYTES,
+  discard: "new",
+  duplicate_window: COPY_DUPLICATE_WINDOW_NS,
+  num_replicas: 1,
+  allow_atomic: true,
+  allow_direct: true,
+  compression: "s2",
+} satisfies Partial<StreamConfig> & { name: string };
+
+/**
+ * The subjects of a rig's events a purge names (control/retention/): a run's (its events and its
+ * queue's changes), or the rig's own. The subject a message is on names which, and the run.
+ */
+export function purgeSubjectOf(subject: string): { filter: string; run: string | null } | null {
+  const [a, b, c, d] = subject.split(".");
+  if (a !== "thermite" || !c) return null;
+  if (b === "run" && (d === "ev" || d === "queue"))
+    return { filter: `thermite.run.${c}.>`, run: c };
+  if (b === "rig" && d === "ev") return { filter: `thermite.rig.${c}.ev.*`, run: null };
+  return null;
+}

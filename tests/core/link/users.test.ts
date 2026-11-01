@@ -12,10 +12,10 @@ import {
   controlPermissions,
   isUserKey,
   jetStreamFiguresSubject,
+  RECORD_STREAMS,
   reloadSubject,
   rigInboxPrefix,
   rigPermissions,
-  STREAMS_KEPT_FOR_GOOD,
   SYSTEM_ACCOUNT,
   userKeyFingerprint,
   usersFile,
@@ -170,7 +170,7 @@ describe("who may do what on the message bus", () => {
     ]);
   });
 
-  test("the backup's user may snapshot and restore the streams kept for good, and nothing else", () => {
+  test("the backup's user may snapshot and restore the streams of record, and nothing else", () => {
     const keys = { control: user(), system: user(), backup: user() };
     const { accounts } = readUsers(usersFile({ ...keys, rigs: [] }));
     assert.deepEqual(accounts[BUS_ACCOUNT]?.users, [
@@ -190,7 +190,7 @@ describe("who may do what on the message bus", () => {
       },
       subscribe: { allow: [`${BACKUP_INBOX_PREFIX}.>`] },
     });
-    assert.deepEqual(STREAMS_KEPT_FOR_GOOD, [EVENT_STREAM]);
+    assert.deepEqual(RECORD_STREAMS, [EVENT_STREAM]);
     // No delete, no purge, no publish to a stream's subjects.
     const text = JSON.stringify(backupPermissions());
     for (const word of ["DELETE", "PURGE", "CREATE", "thermite."])
@@ -201,12 +201,18 @@ describe("who may do what on the message bus", () => {
     );
   });
 
-  test("control may do everything but delete or purge a stream kept for good", () => {
-    // A stream's deny_delete and deny_purge guard its messages; the stream itself is guarded here.
+  test("control may do everything but delete a stream of record; it purges events by subject", () => {
+    // A retention policy purges control's copy of the events by subject (control/retention/).
     assert.deepEqual(controlPermissions(), {
-      publish: {
-        deny: [`$JS.API.STREAM.DELETE.${EVENT_STREAM}`, `$JS.API.STREAM.PURGE.${EVENT_STREAM}`],
-      },
+      publish: { deny: [`$JS.API.STREAM.DELETE.${EVENT_STREAM}`] },
+    });
+    // While control makes the events stream again, once (control/events/rebuild.ts), it may
+    // delete it; the users file says so then, and no longer after.
+    assert.deepEqual(controlPermissions({ rebuilding: true }), { publish: { deny: [] } });
+    const keys = { control: user(), system: user() };
+    const during = readUsers(usersFile({ ...keys, rigs: [], rebuilding: true }));
+    assert.deepEqual(during.accounts[BUS_ACCOUNT]?.users[0]?.permissions, {
+      publish: { deny: [] },
     });
     // The reports stream is an inbox: control may make it again, as it does once from one kept
     // for good.

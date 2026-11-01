@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import {
   type ConsumerConfig,
   type ConsumerMessages,
-  JetStreamApiCodes,
   JetStreamApiError,
   type JsMsg,
   jetstream,
@@ -22,6 +21,16 @@ import {
 } from "@nats-io/transport-node";
 import { log } from "../env.ts";
 import { removeOnceEmpty, startEmptying } from "../work-queue.ts";
+import {
+  deleteStreamOn,
+  ensureConsumer,
+  ensureStream,
+  nameOf,
+  noSuchStream,
+  purgeOn,
+  streamInfoOn,
+  streamStates,
+} from "./streams.ts";
 import { type BusTrust, tlsOf, where } from "./tls.ts";
 
 export {
@@ -169,6 +178,15 @@ export interface StreamState {
 }
 
 export type StreamSettings = Partial<StreamConfig> & { name: string };
+
+/** A stream as the server has it: its settings, and its first and last places, messages and bytes. */
+export interface StreamInfo {
+  config: StreamSettings;
+  first_seq: number;
+  last_seq: number;
+  messages: number;
+  bytes: number;
+}
 export type ConsumerSettings = Partial<ConsumerConfig> & { durable_name: string };
 
 /**
@@ -260,6 +278,15 @@ export interface Bus {
   remove(stream: string, subject: string, id: string): Promise<boolean>;
   /** The state of each of these streams the server has; a stream not made yet is left out. */
   streams(names: readonly string[]): Promise<StreamState[]>;
+  /** A stream's settings and places; undefined when the server has no such stream. */
+  streamInfo(stream: string): Promise<StreamInfo | undefined>;
+  /** Deletes a stream and every message in it; false when there was none. */
+  deleteStream(stream: string): Promise<boolean>;
+  /**
+   * The server's purge of a stream's messages on `filter` (a subject, `*` and `>` too): those
+   * before the place `seq`, or all but the newest `keep`, or all of them. How many it removed.
+   */
+  purge(stream: string, o: { filter: string; seq?: number; keep?: number }): Promise<number>;
   /**
    * Sends a request on `subject` and waits up to `timeoutMs` for its one answer (NATS's request
    * and reply, which no stream keeps). It fails when no one serves the subject, on the timeout, or
@@ -312,52 +339,7 @@ async function watch(nc: NatsConnection, server: string, up: (on: boolean) => vo
   }
 }
 
-/** Makes the stream, or brings an existing one to these settings. */
-async function ensureStream(nc: NatsConnection, stream: StreamSettings): Promise<void> {
-  const jsm = await jetstreamManager(nc);
-  try {
-    await jsm.streams.info(stream.name);
-  } catch (err) {
-    if (!(err instanceof JetStreamApiError && err.code === JetStreamApiCodes.StreamNotFound))
-      throw err;
-    await jsm.streams.add(stream);
-    log("bus", "stream made", { stream: stream.name });
-    return;
-  }
-  await jsm.streams.update(stream.name, stream);
-}
-
-/** A consumer's name, whether it is given with its settings or alone. */
-const nameOf = (c: ConsumerSettings | string) => (typeof c === "string" ? c : c.durable_name);
-
-/** Makes the durable consumer unless it exists; one named alone is another part's to make. */
-async function ensureConsumer(
-  nc: NatsConnection,
-  stream: string,
-  consumer: ConsumerSettings | string,
-  api: { apiPrefix?: string },
-): Promise<void> {
-  // No check of the account's JetStream first: a rig's user may not read the account's figures.
-  const jsm = await jetstreamManager(nc, { checkAPI: false, ...api });
-  try {
-    await jsm.consumers.info(stream, nameOf(consumer));
-  } catch (err) {
-    if (err instanceof JetStreamApiError && err.code === JetStreamApiCodes.StreamNotFound)
-      throw new Error(`no stream ${stream} on the bus yet: control makes it`, { cause: err });
-    if (!(err instanceof JetStreamApiError && err.code === JetStreamApiCodes.ConsumerNotFound))
-      throw err;
-    if (typeof consumer === "string")
-      throw new Error(`no consumer ${consumer} on the bus yet: control makes it`, { cause: err });
-    await jsm.consumers.add(stream, consumer);
-    log("bus", "consumer made", { stream, consumer: consumer.durable_name });
-  }
-}
-
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Whether the server said there is no such stream. */
-const noSuchStream = (err: unknown) =>
-  err instanceof JetStreamApiError && err.code === JetStreamApiCodes.StreamNotFound;
 
 /** No stream took a publish: none takes its subject yet, or, on a leaf node, the rig may not use it. */
 export class NoStreamTakes extends Error {
@@ -692,6 +674,15 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
         await pause(BUS_RETRY_MS);
       }
     },
+    async streamInfo(stream) {
+      return streamInfoOn(await connection(), stream);
+    },
+    async deleteStream(stream) {
+      return deleteStreamOn(await connection(), stream);
+    },
+    async purge(stream, o) {
+      return purgeOn(await connection(), stream, o);
+    },
     async remove(stream, subject, id) {
       const jsm = await jetstreamManager(await connection());
       let after = 0;
@@ -708,45 +699,7 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       return false;
     },
     async streams(names) {
-      const jsm = await jetstreamManager(await connection());
-      const out: StreamState[] = [];
-      for (const name of names) {
-        let info: Awaited<ReturnType<typeof jsm.streams.info>>;
-        try {
-          info = await jsm.streams.info(name);
-        } catch (err) {
-          if (err instanceof JetStreamApiError && err.code === JetStreamApiCodes.StreamNotFound)
-            continue;
-          throw err;
-        }
-        const st = info.state;
-        const consumers: StreamState["consumers"] = [];
-        let leftOut = 0;
-        for await (const c of jsm.consumers.list(name)) {
-          if (consumers.length >= BUS_STATE_CONSUMERS_MAX) {
-            leftOut++;
-            continue;
-          }
-          consumers.push({
-            name: c.name,
-            pending: c.num_pending,
-            ack_pending: c.num_ack_pending,
-            redelivered: c.num_redelivered,
-          });
-        }
-        const at = (ts: string) => (st.messages && !ts.startsWith("0001") ? ts : null);
-        out.push({
-          name,
-          messages: st.messages,
-          bytes: st.bytes,
-          subjects: st.num_subjects ?? 0,
-          first_at: at(st.first_ts),
-          last_at: at(st.last_ts),
-          consumers,
-          consumers_left_out: leftOut,
-        });
-      }
-      return out;
+      return streamStates(await connection(), names);
     },
     async request(subject, data, timeoutMs) {
       const nc = await connection();

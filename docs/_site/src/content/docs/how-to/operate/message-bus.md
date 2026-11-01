@@ -180,7 +180,7 @@ Each rig's supervisor makes two keys in its home, `bus-key.seed` and `bus-seal.p
 
 ## Give it more memory or disk
 
-The bus keeps its messages on disk, on the `nats-data` volume. The `EVENTS` stream keeps every rig's events for good, so the store grows with the rigs' history. Its memory holds the index of each stream's subjects and the blocks a read loads. Compose gives it 256 MiB, and tells the server's Go runtime 78% of that, so that it frees what a read loaded before the limit is reached. Its disk is 75% of the volume's free space when it starts.
+The bus keeps its messages on disk, on the `nats-data` volume. The `EVENTS` stream keeps every rig's events until a [retention policy](retention-policies.md) of control's copy removes some, so the store grows with the rigs' history. At the first start of v0.1.1, control makes a stream from before again once, and needs room for the events twice meanwhile ([A stream from before v0.1.1](../../explanation/how-the-parts-talk.md#a-stream-from-before-v011-made-again-once)). Its memory holds the index of each stream's subjects and the blocks a read loads. Compose gives it 256 MiB, and tells the server's Go runtime 78% of that, so that it frees what a read loaded before the limit is reached. Its disk is 75% of the volume's free space when it starts.
 
 1. In `.env`, set either or both:
 

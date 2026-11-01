@@ -290,6 +290,21 @@ describe("the CLI trial loop, in each program's entry", () => {
     }
   });
 
+  test("its session log is kept when it ends: the program's output, by its name in the area", async () => {
+    for (const p of PROGRAMS) {
+      const a = area();
+      const f = fakeProgramRunner(p.program, lines(p.turns(1)), { submit: true });
+      const kept: { name: string; path: string }[][] = [];
+      await trial(p, spec(a), f, { keepSession: (files) => kept.push(files) });
+      assert.equal(kept.length, 1, p.entry.name);
+      const events = `${p.entry.prefix}-events.jsonl`;
+      assert.ok(
+        kept[0]?.some((x) => x.name === events && x.path === join(a, events)),
+        `${p.entry.name}: its output, where its runs wrote it`,
+      );
+    }
+  });
+
   test("the turn cap stops the program and ends the trial in words", async () => {
     for (const p of PROGRAMS) {
       const f = fakeProgramRunner(p.program, lines(p.turns(3)), { hang: true });

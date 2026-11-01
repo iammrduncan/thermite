@@ -121,7 +121,8 @@ export class EventsWriter {
     if (!(await apply.reach(this.place, this.waitMs()))) return this.late(rig);
     // In the ledger's order, each once: the apply takes an event at or below its ledger's held
     // cursor as applied already.
-    const held = store.reportedRigs.heldCursor(rig, ledger);
+    // Its floor too: an event a retention policy removed on purpose is not taken back.
+    const held = store.reportedRigs.takenThrough(rig, ledger);
     const fresh = page.events
       .filter((e) => e.id > held)
       .sort((a, b) => a.id - b.id)

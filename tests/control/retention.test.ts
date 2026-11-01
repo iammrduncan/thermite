@@ -14,6 +14,7 @@ import {
   setPolicyOn,
 } from "../../src/control/retention/index.ts";
 import { ControlStore } from "../../src/control/store/index.ts";
+import { copiesPolicyOn } from "../../src/control/store/retention.ts";
 import { packItems, type RetentionItem } from "../../src/core/retention/index.ts";
 import { controlOnly, mcpClient } from "../helpers/control-stack.ts";
 import { applied, controlStore } from "../helpers/control-store.ts";
@@ -84,7 +85,7 @@ describe("retention policies on control", () => {
     assert.deepEqual(list.policies, [], "nothing is removed by default");
     assert.deepEqual(
       list.kinds.map((k: { kind: string }) => k.kind),
-      ["builds", "advisor_records", "kb_versions", "store_copies", "audit"],
+      ["events", "builds", "trial_logs", "advisor_records", "kb_versions", "store_copies", "audit"],
     );
 
     // Only the owner's token: an operator's, a rig's and none are refused.
@@ -180,7 +181,7 @@ describe("retention policies on control", () => {
     );
   });
 
-  test("older versions of the knowledge base's items: the newest always stays", () => {
+  test("older versions of the knowledge base's items: the newest always stays", async () => {
     const store = new ControlStore(":memory:");
     const rig = { rig: "rig-a", ledger: "ledger-a" };
     store.kb().index(rig, {
@@ -216,7 +217,7 @@ describe("retention policies on control", () => {
     );
     // Keep the newest 1 of the older versions: version 1 goes; 2 stays as the newest older one.
     assert.equal(previewOf(store, p).count, 1);
-    runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
+    await runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
     const id = (
       store.db.prepare("select id from kb_item where slot = 'worker-1'").get() as { id: number }
     ).id;
@@ -233,7 +234,7 @@ describe("retention policies on control", () => {
       false,
       "owner:ui",
     );
-    runPolicy({ store, privateKeyPem: "" }, all.id, "hand", "owner:ui");
+    await runPolicy({ store, privateKeyPem: "" }, all.id, "hand", "owner:ui");
     assert.deepEqual(
       store
         .kb()
@@ -248,7 +249,7 @@ describe("retention policies on control", () => {
     );
   });
 
-  test("copies of control's store: removed beside it, the newest kept", () => {
+  test("copies of control's store: removed beside it, the newest kept", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-retention-copies-"));
     const path = join(dir, "control.db");
     const store = new ControlStore(path);
@@ -265,14 +266,30 @@ describe("retention policies on control", () => {
       false,
       "owner:ui",
     );
-    const r = runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
+    const r = await runPolicy({ store, privateKeyPem: "" }, p.id, "hand", "owner:ui");
     assert.equal(r.removed?.count, 1);
     assert.equal(existsSync(old), false);
     assert.ok(existsSync(newest), "the newest copy is kept");
     store.db.close();
   });
 
-  test("the schedule: once for each due time, kept across a restart; off or by hand never runs", () => {
+  test("store copies: control keeps the two newest itself until a policy of them is on", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "thermite-retention-default-"));
+    const store = new ControlStore(join(dir, "control.db"));
+    assert.equal(copiesPolicyOn(store.db), false);
+    const p = createPolicy(
+      store,
+      design({ name: "Copies", kind: "store_copies", rule: "newest", newest_n: 5 }),
+      false,
+      "owner:ui",
+    );
+    assert.equal(copiesPolicyOn(store.db), false, "an off policy does not stop control's own rule");
+    setPolicyOn(store, p.id, true, "owner:ui");
+    assert.equal(copiesPolicyOn(store.db), true, "an on policy decides instead");
+    store.db.close();
+  });
+
+  test("the schedule: once for each due time, kept across a restart; off or by hand never runs", async () => {
     const dir = mkdtempSync(join(tmpdir(), "thermite-retention-schedule-"));
     const path = join(dir, "control.db");
     const store = new ControlStore(path);
@@ -282,26 +299,39 @@ describe("retention policies on control", () => {
     createPolicy(store, design({ name: "By hand", when: "hand" }), true, "owner:ui");
     oldEntry(store, "old_thing", 40);
     const at = (iso: string) => new Date(iso);
-    assert.equal(retentionTick(deps, at("2030-01-02T04:00:00Z")), 0, "off: it removes nothing");
+    assert.equal(
+      await retentionTick(deps, at("2030-01-02T04:00:00Z")),
+      0,
+      "off: it removes nothing",
+    );
     store.db
       .prepare("update retention_policy set enabled = 1, on_since = ? where id = ?")
       .run("2030-01-01T00:00:00Z", p.id);
     assert.equal(
-      retentionTick(deps, at("2030-01-02T02:59:00Z")),
+      await retentionTick(deps, at("2030-01-02T02:59:00Z")),
       1,
       "yesterday's time, missed while away",
     );
-    assert.equal(retentionTick(deps, at("2030-01-02T02:59:30Z")), 0, "once for that time");
-    assert.equal(retentionTick(deps, at("2030-01-02T03:00:00Z")), 1, "today's time");
+    assert.equal(await retentionTick(deps, at("2030-01-02T02:59:30Z")), 0, "once for that time");
+    assert.equal(await retentionTick(deps, at("2030-01-02T03:00:00Z")), 1, "today's time");
     assert.equal(store.retention.get(p.id)?.last_due, "2030-01-02T03:00:00.000Z");
     store.db.close();
     // Control starts again: the due time it ran for is kept, so it does not run again.
     const again = new ControlStore(path);
-    assert.equal(retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-02T09:00:00Z")), 0);
-    assert.equal(retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-03T03:00:00Z")), 1);
+    assert.equal(
+      await retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-02T09:00:00Z")),
+      0,
+    );
+    assert.equal(
+      await retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-03T03:00:00Z")),
+      1,
+    );
     assert.equal(again.retention.removals(10).filter((r) => r.by === "schedule").length, 3);
     setPolicyOn(again, p.id, false, "owner:ui");
-    assert.equal(retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-04T03:00:00Z")), 0);
+    assert.equal(
+      await retentionTick({ store: again, privateKeyPem: "" }, at("2030-01-04T03:00:00Z")),
+      0,
+    );
     again.db.close();
   });
 

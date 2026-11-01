@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CampaignId, RIG_ID } from "../ids.ts";
-import { kindOf, onRigs, RETENTION_KIND_KEYS, type RetentionKind } from "./kinds.ts";
+import { kindOf, perRig, RETENTION_KIND_KEYS, type RetentionKind } from "./kinds.ts";
 
 /**
  * A retention policy's design (index.ts), and the one function that says what it removes of a
@@ -136,7 +136,7 @@ const GIB = 2 ** 30;
 /**
  * What a policy's rule removes of a kind's items now, after what it always keeps. The caller gives
  * only the items where the policy acts (its rigs). Older than: an item older than the age. Beyond
- * the newest: each group (rig, run or all) keeps its newest N. Over a size: the oldest go first,
+ * the newest: each group (rig, run or all) keeps its newest items until they hold N. Over a size: the oldest go first,
  * those it keeps passed over, until what is left fits. A month is 30 days. One function for the
  * preview on control and the run on control, a rig and a supervisor alike.
  */
@@ -157,23 +157,27 @@ export function wouldRemove(p: RetentionRule, items: readonly RetentionItem[], n
     const cut = now.getTime() - p.older_n * UNIT_DAYS[p.older_unit] * DAY_MS;
     gone = items.filter((x) => Date.parse(x.at) < cut && !kept(x));
   } else if (p.rule === "newest") {
+    // Each group keeps its newest items until they hold N of the kind's unit: a group of many
+    // (a rig's events of a day, a rig's oldest packed together) is kept or removed whole.
     const groups = new Map<string, RetentionItem[]>();
     for (const x of items) {
       const g =
-        !onRigs(p.kind) || p.newest_per === "all"
+        !perRig(p.kind) || p.newest_per === "all"
           ? ""
           : p.newest_per === "rig"
             ? (x.rig ?? "")
             : (x.run ?? "");
-      groups.set(g, [...(groups.get(g) ?? []), x]);
+      const list = groups.get(g);
+      if (list) list.push(x);
+      else groups.set(g, [x]);
     }
-    for (const g of groups.values())
-      gone.push(
-        ...g
-          .sort(newestFirst)
-          .slice(p.newest_n)
-          .filter((x) => !kept(x)),
-      );
+    for (const g of groups.values()) {
+      let held = 0;
+      for (const x of g.sort(newestFirst)) {
+        if (held < p.newest_n) held += x.count;
+        else if (!kept(x)) gone.push(x);
+      }
+    }
   } else {
     const budget = p.size_gib * GIB;
     let total = items.reduce((n, x) => n + x.bytes, 0);

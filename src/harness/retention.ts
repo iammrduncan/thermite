@@ -16,11 +16,12 @@ import {
 } from "../core/retention/index.ts";
 import { BUILD_KEY, removeBuild } from "./judge/index.ts";
 import type { Ledger } from "./ledger/index.ts";
+import { removeSessions, sessionItems } from "./sessions.ts";
 
 /**
  * The owner's retention policies on the rig (core/retention/): what the harness keeps of the
  * kinds a policy may remove here, for control's preview, and a policy run on a signed command.
- * The harness removes the judge's builds; the advisors' records are its supervisor's, which
+ * The harness removes the judge's builds and the trials' session logs (sessions.ts); the advisors' records are its supervisor's, which
  * removes them once the harness took the command, and tells the harness what went. Every removal
  * is a `retention_removed` event, which reaches control as any event does.
  */
@@ -77,31 +78,64 @@ function buildItems(
   return { items, busy };
 }
 
-/** What the rig keeps of its builds, packed for control (GET /v1/space), and its open runs. */
-export function spaceOf(
-  ledger: Ledger,
-  stateDir: string,
-): { builds: SpaceInventory; open_runs: string[] } {
-  const open_runs = ledger.runs
+/** The rig's runs still open: their builds and logs a policy may keep. */
+const openRunsOf = (ledger: Ledger) =>
+  ledger.runs
     .list()
     .filter((r) => r.status !== "closed")
     .map((r) => r.id);
+
+/** A kind's items packed for control, or its read's failure in words and no items. */
+function packed(what: string, items: () => RetentionItem[]): SpaceInventory {
   try {
-    return { builds: packItems(buildItems(ledger, stateDir).items), open_runs };
+    return packItems(items());
   } catch (err) {
     const error = errorText(err).slice(0, 500);
-    log("harness", "the builds could not be read for control's Space table", { error }, "warn");
-    return { builds: { bytes: 0, runs: [], items: [], error }, open_runs };
+    log("harness", `the ${what} could not be read for control's Space table`, { error }, "warn");
+    return { bytes: 0, runs: [], items: [], error };
   }
+}
+
+/**
+ * What the rig keeps of the judge's builds and of the trials' session logs, packed for control
+ * (GET /v1/space), and its open runs.
+ */
+export function spaceOf(
+  ledger: Ledger,
+  stateDir: string,
+): { builds: SpaceInventory; trial_logs: SpaceInventory; open_runs: string[] } {
+  const open_runs = openRunsOf(ledger);
+  const open = new Set(open_runs);
+  return {
+    builds: packed("builds", () => buildItems(ledger, stateDir).items),
+    trial_logs: packed("trials' session logs", () => sessionItems(stateDir, open)),
+    open_runs,
+  };
 }
 
 type RetentionRun = z.output<(typeof CommandPayloads)["retention_run"]>;
 
+/** What went, as the event's body says it. */
+function removal(p: RetentionRun, gone: RetentionItem[], error: string | undefined) {
+  const ats = gone.map((x) => x.at).sort();
+  return removedBody(
+    { policy: p.policy, name: p.name, kind: p.rule.kind, by: p.by },
+    {
+      count: gone.length,
+      bytes: gone.reduce((n, x) => n + x.bytes, 0),
+      rigs: 0,
+      oldest: ats[0] ?? null,
+      newest: ats.at(-1) ?? null,
+    },
+    error,
+  );
+}
+
 /**
- * A policy run on the rig, on control's signed command: the judge's builds it covers are removed
- * now, and recorded as one `retention_removed` event; a build a judge's job needs now stays. The
- * advisors' records are left to the supervisor, which acts once this command is taken. A kind
- * kept on control is refused: control removes it.
+ * A policy run on the rig, on control's signed command, recorded as one `retention_removed`
+ * event: the judge's builds it covers are removed now, but a build a judge's job needs now; or the
+ * trials' session logs it covers. The advisors' records are left to the supervisor, which acts
+ * once this command is taken. A kind kept on control is refused: control removes it.
  */
 export function runRetention(
   o: { ledger: Ledger; stateDir: string; clock: () => Date },
@@ -110,6 +144,33 @@ export function runRetention(
 ): unknown {
   const kind = p.rule.kind;
   if (kind === "advisor_records") return { kind, left_to: "the supervisor" };
+  if (kind === "trial_logs") {
+    const r = wouldRemove(
+      p.rule,
+      sessionItems(o.stateDir, new Set(openRunsOf(o.ledger))),
+      o.clock(),
+    );
+    let error: string | undefined;
+    let gone: RetentionItem[] = [];
+    try {
+      removeSessions(
+        o.stateDir,
+        r.items.map((x) => x.id),
+      );
+      gone = r.items;
+    } catch (err) {
+      error = `a session log could not be removed: ${errorText(err)}`;
+    }
+    const removed = removal(p, gone, error);
+    o.ledger.appendEvent(by, "retention_removed", null, removed);
+    log("harness", "a retention policy removed trials' session logs", {
+      policy: p.policy,
+      removed: removed.count,
+      bytes: removed.bytes,
+      ...(error ? { error } : {}),
+    });
+    return removed;
+  }
   if (kind !== "builds")
     throw new Refusal(`${kindOf(kind).label} is kept on control, which removes it: not on a rig`);
   const { items, busy } = buildItems(o.ledger, o.stateDir);
@@ -126,18 +187,7 @@ export function runRetention(
       error ??= `a build could not be removed: ${errorText(err)}`;
     }
   }
-  const ats = gone.map((x) => x.at).sort();
-  const removed = removedBody(
-    { policy: p.policy, name: p.name, kind, by: p.by },
-    {
-      count: gone.length,
-      bytes: gone.reduce((n, x) => n + x.bytes, 0),
-      rigs: 0,
-      oldest: ats[0] ?? null,
-      newest: ats.at(-1) ?? null,
-    },
-    error,
-  );
+  const removed = removal(p, gone, error);
   o.ledger.appendEvent(by, "retention_removed", null, removed);
   const kept = r.items.length - gone.length;
   log("harness", "a retention policy removed builds", {

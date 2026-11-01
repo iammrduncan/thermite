@@ -4,7 +4,7 @@ import { CONFIG_STREAM } from "./link/config.ts";
 import { KB_FILES_STREAM } from "./link/kb-files.ts";
 import { LIVE_STREAM } from "./link/live.ts";
 import { REPORT_STREAM } from "./link/report.ts";
-import { STREAMS_KEPT_FOR_GOOD } from "./link/users.ts";
+import { RECORD_STREAMS } from "./link/users.ts";
 
 /**
  * A backup of control (goal 173): the folder `thermite backup` writes and `thermite restore` reads
@@ -69,8 +69,8 @@ export const backupName = (at: Date) => `thermite-backup-${at.toISOString().repl
 /** A stream's snapshot in a backup, as the server gives it: a tar, compressed with s2. */
 export const snapshotFile = (stream: string) => `${BACKUP_LAYOUT.streams}/${stream}.snapshot`;
 
-/** The streams a backup holds: those kept for good, the record of every rig's events. */
-export const STREAMS_BACKED_UP: readonly string[] = STREAMS_KEPT_FOR_GOOD;
+/** The streams a backup holds: the streams of record, every rig's events. */
+export const STREAMS_BACKED_UP: readonly string[] = RECORD_STREAMS;
 
 /**
  * The streams a backup leaves out, and why each needs no backup: control makes each again as it

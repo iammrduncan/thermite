@@ -8,9 +8,11 @@ import {
   STALL_SETTING,
 } from "../../agents/model/index.ts";
 import { PI_PROCESS_RSS, type PiConsole, runInView } from "../../agents/pi-view/index.ts";
+import { PI_SESSION_LOG } from "../../agents/session-log.ts";
 import { errorText } from "../../common/errors.ts";
 import { logWarn } from "../../common/log.ts";
 import type { Role, Runner, RunOutcome } from "../broker/index.ts";
+import type { SessionFile } from "../sessions.ts";
 import type { ResearchTrialSpec } from "./research/index.ts";
 import { TrialResult, type TrialSpec } from "./worker/index.ts";
 
@@ -106,6 +108,8 @@ export async function spawnTrial(
   /** The route the trial uses; without one, the harness's own model settings pass through. */
   model?: ModelConfig | undefined,
   view?: PiConsole | undefined,
+  /** Keeps its session log when it ends, before its folder goes (harness/sessions.ts). */
+  keepSession?: ((files: SessionFile[]) => void) | undefined,
 ): Promise<TrialResult> {
   const spec = trial.spec;
   const lane = /^lane-(\d+)$/.exec(spec.lane)?.[1];
@@ -170,6 +174,11 @@ export async function spawnTrial(
   } finally {
     signal?.removeEventListener("abort", abort);
     await runner.killRole(role).catch(() => 0);
+    // Its session log, in the folder its worker owned: taken back, then kept by run and trial.
+    if (keepSession) {
+      await runner.reclaim(dir).catch(() => undefined);
+      keepSession([{ name: PI_SESSION_LOG, path: join(dir, PI_SESSION_LOG) }]);
+    }
     await runner.remove(dir).catch(() => undefined);
   }
 }

@@ -8,6 +8,13 @@ import { listText } from "../words.ts";
 /** Where each kind is kept, and so which part removes it. */
 type KeptOn = "control" | "rigs" | "supervisors";
 
+/**
+ * What control does with its store's copies by itself while no policy of that kind is on: it keeps
+ * the two newest (the owner's decision of 2026-11-01). An on policy of the kind decides instead.
+ */
+export const STORE_COPIES_DEFAULT_WORDS =
+  "Control keeps the two newest, until a policy for this kind is on.";
+
 /** What a policy may keep of its kind, whatever the rule says. */
 export type KeepKey = "open" | "champions" | "newest";
 
@@ -28,9 +35,19 @@ interface KindInfo {
 /**
  * Each kind a policy may remove, in the order the page lists them. The rigs' kinds are removed on
  * each rig (the harness, or its supervisor) when control's signed command asks; control's kinds by
- * control itself.
+ * control itself, its copy of the rigs' events among them, which a policy still takes by rig.
  */
 const RETENTION_KINDS = {
+  events: {
+    label: "Rigs' events (control's copy)",
+    on: "control",
+    unit: "events",
+    one: "event",
+    words:
+      "Control's copy of every event its rigs reported, in the message bus's EVENTS stream. Each rig's own ledger keeps them all the same.",
+    warn: "Control builds the dashboard's history from these at each start: removed events leave it then, and can't be shown again. What the knowledge base already read of them stays, and the rigs' ledgers still hold them all.",
+    keeps: { open: "Events of runs still open" },
+  },
   builds: {
     label: "Judge's builds",
     on: "rigs",
@@ -39,6 +56,15 @@ const RETENTION_KINDS = {
     words:
       "The builds the judge made of each candidate, on each rig's volume. A build removed is made again if it is ever needed: its commit and its kit stay.",
     keeps: { champions: "Each lane's champion builds", open: "Builds of runs still open" },
+  },
+  trial_logs: {
+    label: "Trials' session logs",
+    on: "rigs",
+    unit: "logs",
+    one: "log",
+    words:
+      "Each trial's full session log, as its agent program wrote it, kept on the rig by run and trial when the trial ends. Its summary and its events stay.",
+    keeps: { open: "Logs of runs still open" },
   },
   advisor_records: {
     label: "Advisors' records",
@@ -63,8 +89,7 @@ const RETENTION_KINDS = {
     on: "control",
     unit: "copies",
     one: "copy",
-    words:
-      "control.db as it was before each update that changed its tables, kept beside it so an update can be undone. Control keeps the two newest.",
+    words: `control.db as it was before each update that changed its tables, kept beside it so an update can be undone. ${STORE_COPIES_DEFAULT_WORDS}`,
     keeps: { newest: "The newest copy" },
   },
   audit: {
@@ -84,8 +109,14 @@ export const RETENTION_KIND_KEYS = Object.keys(RETENTION_KINDS) as RetentionKind
 /** The kind's facts, typed as every kind's. */
 export const kindOf = (k: RetentionKind): KindInfo => RETENTION_KINDS[k];
 
-/** Whether a kind is kept on rigs (or their supervisors): a policy of it says where. */
+/** Whether a kind is kept on rigs (or their supervisors), which remove it on control's command. */
 export const onRigs = (k: RetentionKind): boolean => kindOf(k).on !== "control";
+
+/**
+ * Whether a policy of the kind says where, by rig: a kind kept on rigs, and control's copy of the
+ * rigs' events, which control keeps by rig.
+ */
+export const perRig = (k: RetentionKind): boolean => onRigs(k) || k === "events";
 
 /** The kinds kept on rigs, which each rig reports with their space. */
 export const RIG_KINDS = RETENTION_KIND_KEYS.filter(onRigs);

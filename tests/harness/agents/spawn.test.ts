@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { PiConsole } from "../../../src/agents/pi-view/index.ts";
+import { PI_SESSION_LOG } from "../../../src/agents/session-log.ts";
 import { spawnTrial } from "../../../src/harness/agents/spawn.ts";
 import type { Runner, RunOutcome } from "../../../src/harness/broker/index.ts";
 
@@ -81,6 +82,35 @@ test("the trials' folder may be passed through, never listed; each trial's folde
   await spawnTrial(trial, printing("{}"), scratch, 9);
   assert.equal(mode(join(scratch, "agents")), "711");
   assert.equal(mode(join(scratch, "agents", trial.spec.trialId)), "700");
+});
+
+test("its worker's session log is kept when it ends, from its folder taken back, before the folder goes", async () => {
+  const scratch = mkdtempSync(join(tmpdir(), "thermite-spawn-"));
+  const steps: string[] = [];
+  const runner: Runner = {
+    ...printing("{}"),
+    run: async () => {
+      // As the worker writes it, each message as it ends (agents/session-log.ts).
+      writeFileSync(
+        join(scratch, "agents", trial.spec.trialId, PI_SESSION_LOG),
+        '{"message":{}}\n',
+      );
+      return { stdout: "{}", stderr: "", exitCode: 0 } as unknown as RunOutcome;
+    },
+    reclaim: async () => {
+      steps.push("reclaim");
+    },
+    remove: async () => {
+      steps.push("remove");
+    },
+  };
+  const kept: string[] = [];
+  await spawnTrial(trial, runner, scratch, 9, undefined, undefined, undefined, (files) => {
+    steps.push("keep");
+    for (const f of files) kept.push(readFileSync(f.path, "utf8"));
+  });
+  assert.deepEqual(steps, ["reclaim", "keep", "remove"]);
+  assert.deepEqual(kept, ['{"message":{}}\n']);
 });
 
 test("a worker in Pi whose terminal can't start ends its trial with why, and the harness's log says so", async () => {

@@ -2,11 +2,13 @@ import { copiesOf } from "../../common/db-copy.ts";
 import { folderBytes } from "../../common/fs.ts";
 import {
   onRigs,
+  perRig,
   type RetentionItem,
   type RetentionKind,
   type RetentionSpec,
   unpackItems,
 } from "../../core/retention/index.ts";
+import { eventDaysOf } from "../events/index.ts";
 import type { ControlStore } from "../store/index.ts";
 
 /**
@@ -27,7 +29,7 @@ export const knownRig = (store: ControlStore, rig: string): boolean =>
  * names, or every rig that ran one of its campaigns. A kind kept on control covers none.
  */
 export function rigsOf(store: ControlStore, p: PolicyWhere): string[] {
-  if (!onRigs(p.kind)) return [];
+  if (!perRig(p.kind)) return [];
   const retired = (rig: string) => store.retired.get(rig) !== undefined;
   let rigs: string[];
   if (p.where === "all") rigs = store.reportedRigs.list().map((r) => r.id);
@@ -83,6 +85,13 @@ interface PolicyItems {
 }
 
 export function itemsOf(store: ControlStore, p: PolicyWhere): PolicyItems {
+  if (p.kind === "events") {
+    // Control's copy of its rigs' events, by subject, rig and day, as its apply holds it.
+    const rigs = rigsOf(store, p);
+    const days = eventDaysOf(store);
+    if (!days) return { items: [], rigs, unreported: rigs, read_at: null };
+    return { items: days.items(new Set(rigs)), rigs, unreported: [], read_at: null };
+  }
   if (!onRigs(p.kind))
     return { items: controlItems(store, p.kind), rigs: [], unreported: [], read_at: null };
   const rigs = rigsOf(store, p);

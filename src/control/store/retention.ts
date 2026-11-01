@@ -63,6 +63,50 @@ begin select raise(abort, 'the newest version of an item is never removed'); end
 `);
 }
 
+/**
+ * Whether a retention policy of control's store's copies is on, read before the store migrates:
+ * while one is, control keeps every copy and the policy decides; else it keeps the two newest
+ * (db-copy.ts). An off policy changes nothing. A store from before the policies has none.
+ */
+export function copiesPolicyOn(db: DatabaseSync): boolean {
+  const has = db
+    .prepare("select 1 from sqlite_master where type = 'table' and name = 'retention_policy'")
+    .get();
+  if (!has) return false;
+  return (
+    db
+      .prepare("select 1 from retention_policy where kind = 'store_copies' and enabled = 1 limit 1")
+      .get() !== undefined
+  );
+}
+
+/**
+ * Store migration 25: each rig ledger's floor in control's copy of its events (control/events/
+ * days.ts): the last event a retention policy removed on purpose, and the stream's place before
+ * which it purged. Control asks no rig to send an event at or below it again.
+ */
+export function eventFloorTable(db: DatabaseSync): void {
+  db.exec(`
+create table if not exists event_floor (
+  rig text not null,
+  ledger text not null,
+  through_event integer not null,
+  before_place integer not null,
+  at text not null,
+  primary key (rig, ledger)
+);
+`);
+}
+
+/** A rig ledger's floor: its last event removed on purpose, and the place before which. */
+interface EventFloor {
+  rig: string;
+  ledger: string;
+  through_event: number;
+  before_place: number;
+  at: string;
+}
+
 /** One removal by a policy: on control (rig null) or on one rig. */
 export interface RetentionRemovalRow {
   id: number;
@@ -214,6 +258,39 @@ export class RetentionPolicies extends StorePart {
             .prepare("select * from retention_removal where policy = ? order by id desc limit ?")
             .all(policy, limit);
     return (rows as Row[]).map(removalOf);
+  }
+
+  /** Raises a rig ledger's floor to an event removed on purpose; it never goes down. */
+  raiseFloor(rig: string, ledger: string, event: number, before: number, at: string): void {
+    this.db
+      .prepare(
+        `insert into event_floor (rig, ledger, through_event, before_place, at) values (?, ?, ?, ?, ?)
+         on conflict (rig, ledger) do update set
+           through_event = max(through_event, excluded.through_event),
+           before_place = max(before_place, excluded.before_place), at = excluded.at`,
+      )
+      .run(rig, ledger, event, before, at);
+  }
+
+  /** A rig ledger's floor's last event; 0 when no event of it was removed. */
+  floor(rig: string, ledger: string): number {
+    const r = this.db
+      .prepare("select through_event from event_floor where rig = ? and ledger = ?")
+      .get(rig, ledger) as Row | undefined;
+    return Number(r?.through_event ?? 0);
+  }
+
+  /** A rig's floors, by ledger. */
+  floors(rig: string): EventFloor[] {
+    return (
+      this.db.prepare("select * from event_floor where rig = ? order by ledger").all(rig) as Row[]
+    ).map((r) => ({
+      rig: String(r.rig),
+      ledger: String(r.ledger),
+      through_event: Number(r.through_event),
+      before_place: Number(r.before_place),
+      at: String(r.at),
+    }));
   }
 
   /** What a rig last said it keeps of the kinds a policy may remove there. */

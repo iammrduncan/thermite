@@ -25,6 +25,7 @@ import {
 import { throughProxy } from "../../../core/agents.ts";
 import { type LaneLimitValues, laneLimits } from "../../../core/contract.ts";
 import type { Role, Runner, RunOutcome } from "../../broker/index.ts";
+import { cliSessionFiles } from "../../sessions.ts";
 import { afterProgramFailure, type FailureCount, failingOf } from "../provider-errors.ts";
 import { stopNudging, type TrialResult } from "../worker/index.ts";
 import {
@@ -480,6 +481,8 @@ export async function runCliTrial<T extends CliTally>(
   if (compactions.count) result.compactions = compactions.count;
   // Headless: its session log against its output. In its terminal, the log is the tally's source.
   if (!term) compareSessionLog(p, run, tally);
+  // Its session log kept, by run and trial, before its area goes (harness/sessions.ts).
+  deps.keepSession?.(cliSessionFiles(area, run.home, p.prefix));
   signals?.report({ trial: run.id, program: p.id });
   if (inTurn) deps.inTurn?.(undefined);
   return result;

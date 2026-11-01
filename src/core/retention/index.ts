@@ -17,8 +17,10 @@ export {
   kindOf,
   NEVER_REMOVED,
   onRigs,
+  perRig,
   RETENTION_KIND_KEYS,
   type RetentionKind,
+  STORE_COPIES_DEFAULT_WORDS,
 } from "./kinds.ts";
 export {
   DAYS,

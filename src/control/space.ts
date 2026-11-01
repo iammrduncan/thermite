@@ -36,10 +36,10 @@ interface SpaceKindInfo {
 /** Each kind, in the order the page lists them: what it is, in words, and where it is kept. */
 export const SPACE_KINDS = {
   events: {
-    label: "Rigs' events (control's copy)",
+    label: kindOf("events").label,
     on: "Control",
-    words:
-      "Control's copy of every event its rigs reported, in the message bus's EVENTS stream. Control reads its views and the knowledge base from it, and keeps it for good. Each rig's own ledger keeps them too.",
+    policy: "events",
+    words: `${kindOf("events").words} Control reads its views from it at each start.`,
   },
   exports: {
     label: "Rigs' exports",
@@ -89,6 +89,12 @@ export const SPACE_KINDS = {
     on: "Rigs",
     policy: "builds",
     words: `${kindOf("builds").words} The sum of what each rig last said it keeps.`,
+  },
+  trial_logs: {
+    label: kindOf("trial_logs").label,
+    on: "Rigs",
+    policy: "trial_logs",
+    words: `${kindOf("trial_logs").words} The sum of what each rig last said it keeps.`,
   },
   advisor_records: {
     label: kindOf("advisor_records").label,
@@ -175,7 +181,7 @@ export async function spaceOf(
   );
   // A rig's kinds: the sum of what each rig not retired last said it keeps.
   const spaces = [...store.retention.spaces()].filter(([rig]) => !store.retired.get(rig));
-  for (const kind of ["builds", "advisor_records"] as const) {
+  for (const kind of ["builds", "trial_logs", "advisor_records"] as const) {
     const said = spaces.flatMap(([, s]) => (s.kinds[kind] ? [s.kinds[kind]] : []));
     uses.push({ kind, bytes: said.reduce((n, inv) => n + inv.bytes, 0), rigs: said.length });
   }

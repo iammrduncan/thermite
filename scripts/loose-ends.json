@@ -105,8 +105,6 @@
       "BUS_CONNECT_TIMEOUT_MS",
       "BUS_ACK_TIMEOUT_MS",
       "BUS_REMOVE_LOOK_MAX",
-      "BUS_STATE_CONSUMERS_MAX",
-      "BUS_LOOK_TIMEOUT_MS",
       "BUS_READ_TIMEOUT_MS",
       "BusSignIn"
     ],

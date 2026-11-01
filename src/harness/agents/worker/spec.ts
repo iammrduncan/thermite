@@ -73,6 +73,8 @@ export type SubmitOutcome = z.infer<typeof SubmitOutcome>;
 
 export interface TrialDeps {
   runner: Runner;
+  /** Where its session log goes, each message as it ends (agents/session-log.ts); none: no log. */
+  sessionLog?: string | undefined;
   /** argv prefix that runs the lane tool (lanetool.ts or its build). */
   laneTool: string[];
   model: ModelConfig;
