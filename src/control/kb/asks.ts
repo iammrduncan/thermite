@@ -143,6 +143,13 @@ export function answerKbAsk(
   const v = version === undefined ? versions.at(-1) : versions.find((o) => o.version === version);
   if (!v)
     return { refused: `${address} has versions 1 to ${versions.length}, not version ${version}` };
+  // A kept conversation stored before the scrubbing: an agent reads its scrubbed versions only
+  // (store/kb/kept.ts). The owner reads every version.
+  const from = kb.agentsReadFrom(x.id);
+  if (v.version < from)
+    return {
+      refused: `version ${v.version} of ${address} is not read by agents: Thermite's code scrubbed it into version ${from}, which agents read, and its newer versions`,
+    };
   log("control", "knowledge base item read", { rig, run, address, version: v.version, offset });
   const { excerpt: _e, why: _w, passage: _p, ...item } = hitOf(x);
   return {

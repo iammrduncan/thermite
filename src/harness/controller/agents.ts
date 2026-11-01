@@ -78,6 +78,13 @@ export function agentParts(
     runner,
     outboxDir: paths.outboxDir,
   });
+  // Before any agent reads them: the conversations an earlier harness kept unscrubbed, scrubbed.
+  // A failure leaves them to each run's next sync, which scrubs them first or fails.
+  try {
+    researchFolder.scrubKept();
+  } catch (err) {
+    log("harness", "kept conversations not scrubbed", { error: String(err) }, "error");
+  }
   const research = new Research(ledger, paths.stateDir, {
     outboxDir: paths.outboxDir,
     search: service.runSearch,

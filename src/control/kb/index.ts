@@ -36,6 +36,7 @@ export {
   grantProblem,
   revokeCollection,
 } from "./grants.ts";
+export { scrubKeptConversations } from "./kept.ts";
 export {
   KB_LIST_DEFAULT,
   KB_LIST_MAX,

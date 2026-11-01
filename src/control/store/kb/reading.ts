@@ -13,6 +13,7 @@ import {
 import { eventKinds } from "../../../core/names.ts";
 import { keepVersion } from "./items.ts";
 import { ORIGIN_KINDS, originTarget } from "./journal.ts";
+import { scrubbedKept } from "./kept.ts";
 
 type Row = Record<string, unknown>;
 
@@ -246,12 +247,13 @@ export class KbReading {
     const campaign = this.campaignOf(rig, ledger, run);
     if (!campaign || !ref) return;
     const old = this.stored({ rig, ledger, run, kind, ref });
-    const next = mergeItem(ref, old, f);
+    const place = { campaign, rig, ledger, run, slot: KB_RECORDS, kind, ref };
+    // A kept conversation whose text the item holds is kept scrubbed by shape (kept.ts).
+    const next = scrubbedKept(place, mergeItem(ref, old, f));
     // Nothing changed: the item keeps its seq.
     if (old && sameItem(old, next)) return;
     // A change is the item's next version: the one before stays. A file whose text control has
     // already gives it to the item's row for the words index.
-    const place = { campaign, rig, ledger, run, slot: KB_RECORDS, kind, ref };
     const fileText = next.file ? this.o.fileText(next.file.sha256) : undefined;
     keepVersion(this.db, this.o.nextSeq(), place, { ...next, fileText }, { at });
   }

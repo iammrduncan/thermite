@@ -30,6 +30,7 @@ import { kbFileFacts, keepKbFile } from "../kb/index.ts";
 import type { HypothesisRow, LaneFileChange, Ledger } from "../ledger/index.ts";
 import { cardFile, cardHistory } from "./cards.ts";
 import { copyTree, LaneCopyRefused, regularFiles } from "./copy.ts";
+import { scrubKeptFiles } from "./kept.ts";
 
 /** The order hypotheses are listed in: those that need a verdict first (goal 117). */
 const HYPOTHESIS_ORDER = ["author", "promoted", "pool", "merged", "retired"];
@@ -502,8 +503,25 @@ export class ResearchFolder {
     return readFileSync(join(this.stateRoot, run, COMPACTIONS_DIR, name), "utf8");
   }
 
-  /** The kept conversations under compactions/, where scratch lost them (after a restart). */
+  /**
+   * The conversations an earlier harness kept before it scrubbed them, scrubbed by shape once
+   * (kept.ts): the run's, or every run's as the harness starts. How many the scrub changed.
+   */
+  scrubKept(run?: string): number {
+    const runs = run ? [run] : existsSync(this.stateRoot) ? readdirSync(this.stateRoot) : [];
+    let changed = 0;
+    for (const r of runs.filter((x) => SAFE.test(x)))
+      changed += scrubKeptFiles(
+        r,
+        join(this.stateRoot, r, COMPACTIONS_DIR),
+        join(this.root(r), COMPACTIONS_DIR),
+      );
+    return changed;
+  }
+
+  /** The kept conversations under compactions/, scrubbed, where scratch lost them (after a restart). */
   private showCompactions(run: string): void {
+    this.scrubKept(run);
     const kept = join(this.stateRoot, run, COMPACTIONS_DIR);
     if (!existsSync(kept)) return;
     for (const name of readdirSync(kept)) {

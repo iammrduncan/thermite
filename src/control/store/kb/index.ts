@@ -15,6 +15,7 @@ import {
   writtenFields,
 } from "./items.ts";
 import { fieldNotesOf, runCountsOf } from "./journal.ts";
+import { agentsReadFrom, scrubKeptPage } from "./kept.ts";
 import {
   type KbFolderRow,
   type KbListAt,
@@ -208,6 +209,20 @@ export class KnowledgeBase {
   /** Every version of an item, oldest first, each with its links. */
   versions(id: number): KbVersion[] {
     return versionsOf(this.db, id);
+  }
+
+  /** The oldest version of an item an agent may read (kept.ts): 1, unless Thermite's code scrubbed it. */
+  agentsReadFrom(id: number): number {
+    return agentsReadFrom(this.db, id);
+  }
+
+  /**
+   * One page of the kept conversations stored before the scrubbing, after item `after` (kept.ts):
+   * each gets its scrubbed new version, all in one transaction.
+   */
+  scrubKept(after: number, limit: number) {
+    const at = new Date().toISOString();
+    return this.tx(() => scrubKeptPage(this.db, () => this.nextSeq(), { after, limit, at }));
   }
 
   /** A version's text as a read gives it: its own words, then its file's text once extracted. */

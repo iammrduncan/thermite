@@ -261,7 +261,7 @@
       "KbSettingKey",
       "KbSettingRow"
     ],
-    "src/control/store/kb/items.ts": ["ItemPlace", "VersionFields"],
+    "src/control/store/kb/items.ts": ["VersionFields"],
     "src/control/store/kb/search.ts": ["KbFindOptions"],
     "src/control/store/kb/stored.ts": ["KbStoredCollection", "KbStoredFile"],
     "src/control/store/kb/words.ts": ["WORDS_INDEX", "WordsPlace"],

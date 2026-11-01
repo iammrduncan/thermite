@@ -42,6 +42,7 @@ import {
   KB_TEXT_LOOK_MS,
   KbFiles,
   KbText,
+  scrubKeptConversations,
   serveKbAsks,
 } from "./kb/index.ts";
 import { KitRepos } from "./kits/index.ts";
@@ -331,6 +332,9 @@ async function main(): Promise<void> {
   // extracted text, and each look after reads the files that came since.
   void kbText.look();
   const text = every(loops, "control", "kb_text", KB_TEXT_LOOK_MS, () => kbText.look());
+  // The kept conversations stored before the scrubbing, each given its scrubbed new version once,
+  // in the background as well.
+  void scrubKeptConversations(store);
   // Searches and reads of the knowledge base for the rigs' agents, each answered from its run's scope.
   serveKbAsks(bus, store).catch((err) =>
     log("control", "knowledge base searches stopped", { error: String(err) }, "error"),
