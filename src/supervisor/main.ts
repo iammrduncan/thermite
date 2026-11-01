@@ -26,6 +26,7 @@ import {
   type SupervisorFigures,
 } from "../core/api/control/rigs.ts";
 import { COMMAND_CHECK, EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/supervisor.ts";
+import { RIG_SPACE_ASK_MS } from "../core/link/asks.ts";
 import { rigInboxPrefix } from "../core/link/users.ts";
 import type { McpConnection, McpUnavailable, McpUse } from "../core/mcp.ts";
 import { SUPERVISOR_INBOX_DIR } from "../core/paths.ts";
@@ -81,6 +82,7 @@ import {
   SEAL_KEY_FILE,
 } from "./relay/index.ts";
 import { dailyReport } from "./report.ts";
+import { onRetentionTaken, sendSpace } from "./retention.ts";
 import { controlTokenFrom, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
 import { stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
@@ -196,6 +198,11 @@ async function main(): Promise<void> {
     live: (text, run) => supervisorLive.append({ source: "supervisor", kind: "status", text, run }),
   });
   let wipeRequested = false;
+  // The owner's retention policies on this rig (retention.ts): what it keeps of the kinds a policy
+  // may remove, told to control every RIG_SPACE_ASK_MS and after each removal, and the advisors'
+  // records a policy's command covers, removed once the harness took it.
+  const retention = { home, harness, control: onBus };
+  let lastSpaceAt = 0;
   const cfg = {
     rig,
     harnessUrl,
@@ -232,8 +239,13 @@ async function main(): Promise<void> {
         },
       );
     },
-    onDelivered: (kind: string, accepted: boolean) => {
+    onDelivered: (kind: string, accepted: boolean, cmd: Parameters<typeof onRetentionTaken>[1]) => {
       if (kind === "wipe_state" && accepted) wipeRequested = true;
+      // What the policy removed changes what the rig keeps: told to control at the next round.
+      if (kind === "retention_run" && accepted)
+        void onRetentionTaken(retention, cmd).finally(() => {
+          lastSpaceAt = 0;
+        });
     },
   };
   const intervalMs = supervisorMs(env, SUPERVISOR_NUMBERS.pollSeconds);
@@ -691,6 +703,12 @@ async function main(): Promise<void> {
       );
       if (left.length !== championQueue.length) save(championQueuePath, left);
       championQueue = left;
+    }
+    if (Date.now() - lastSpaceAt >= RIG_SPACE_ASK_MS) {
+      lastSpaceAt = Date.now();
+      await sendSpace(retention).catch((err) =>
+        log("supervisor", "the rig's space not told to control", { error: String(err) }, "warn"),
+      );
     }
     try {
       await sendFigures();

@@ -17,6 +17,7 @@ import { registerControl, registerModelPrice } from "./control.ts";
 import { registerKnowledgeBase } from "./kb.ts";
 import { registerKits } from "./kits.ts";
 import { registerReads } from "./reads.ts";
+import { registerRetention } from "./retention.ts";
 import { registerRigModels } from "./rig-models.ts";
 import { registerRigReads } from "./rig-reads.ts";
 import { registerRetire, registerRigSettings } from "./rigs.ts";
@@ -64,6 +65,7 @@ function buildServer(store: ControlStore, opts: McpOptions, actor: string, role:
     registerCampaignSettings(tools);
     registerClusterRigs(tools);
     registerReachableAddresses(tools);
+    registerRetention(tools);
     registerMcpServers(tools);
     registerRetire(tools);
     registerRunpod(tools);

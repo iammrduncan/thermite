@@ -157,7 +157,8 @@ describe("a research run's teachers (goal 117)", () => {
       /refused: add "Question 1 \(index 0\): Kernel timing": this asks for a measurement \("Time each"\)/,
     );
     const { readdirSync, readFileSync } = await import("node:fs");
-    const dir = join(cfg.home, "advisors");
+    // The round's record, in its run's folder (supervisor/retention.ts).
+    const dir = join(cfg.home, "advisors", "runs", "r-1");
     const rec = readFileSync(
       join(dir, readdirSync(dir).find((f) => f.includes("teachers-r-1")) as string),
       "utf8",

@@ -49,6 +49,7 @@ import { KitRepos } from "./kits/index.ts";
 import { advanceResets, driverFromEnv } from "./lifecycle.ts";
 import { followLive, LiveTaken } from "./live/index.ts";
 import { controlParts } from "./parts.ts";
+import { RETENTION_LOOK_MS, retentionTick } from "./retention/index.ts";
 import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
 import { refreshGpuClouds } from "./runpod/index.ts";
 import { SecretBox } from "./secrets.ts";
@@ -403,6 +404,11 @@ async function main(): Promise<void> {
   });
   void disk.check();
   const diskWatch = every(loops, "control", "disk", CONTROL_DISK_CHECK_MS, () => disk.check());
+  // The owner's retention policies (retention/): each that is on runs once at each of its times.
+  // None exists until the owner makes one, so by default nothing is removed.
+  const retention = every(loops, "control", "retention", RETENTION_LOOK_MS, () => {
+    retentionTick({ store, privateKeyPem });
+  });
   // GPU clouds' prices, pods and spend, read again every 15 minutes.
   const clouds = every(loops, "control", "gpu_clouds", 15 * 60_000, () =>
     refreshGpuClouds(store, secrets).catch((err) =>
@@ -421,6 +427,7 @@ async function main(): Promise<void> {
     clearInterval(diskWatch);
     clearInterval(orphans);
     clearInterval(text);
+    clearInterval(retention);
     server.close();
     process.exit(0);
   };

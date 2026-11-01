@@ -5,7 +5,8 @@ import { type Row, StorePart } from "./part.ts";
 
 /**
  * Control's audit log (goal 125, T6): who did what, when, read a page at a time. Each entry is
- * kept for good. A refusal that repeats (the same rig or token, route and reason) is one entry,
+ * kept until an audit-log retention policy the owner made removes it; never the entry of a
+ * policy's removal (RETENTION_REMOVED_ACTION). A refusal that repeats (the same rig or token, route and reason) is one entry,
  * with how many times it came and its first and last time.
  */
 
@@ -55,7 +56,33 @@ export function cursorOf(raw: string | undefined): number | undefined {
 /** What a page reads of each entry; an entry that came once has no last time of its own. */
 const COLUMNS = "id, at, actor, action, body, count, coalesce(last_at, at) as last_at";
 
+/** The action of a retention policy's removal: no policy removes its entry. */
+export const RETENTION_REMOVED_ACTION = "retention_removed";
+
 export class AuditLog extends StorePart {
+  /**
+   * Every entry an audit-log policy may remove, as it reads them: its id, when it came and about
+   * how many bytes it takes. A policy's removal's own entry is never one of them.
+   */
+  retentionItems(): { id: number; at: string; bytes: number }[] {
+    return (
+      this.db
+        .prepare(
+          `select id, at, length(at) + length(actor) + length(action) + length(body) + 32 as bytes
+           from audit where action != ? order by id`,
+        )
+        .all(RETENTION_REMOVED_ACTION) as Row[]
+    ).map((r) => ({ id: Number(r.id), at: String(r.at), bytes: Number(r.bytes) }));
+  }
+
+  /** Removes the entries a policy covers, never a removal's own; how many went. */
+  removeEntries(ids: readonly number[]): number {
+    const del = this.db.prepare("delete from audit where id = ? and action != ?");
+    let n = 0;
+    for (const id of ids) n += Number(del.run(id, RETENTION_REMOVED_ACTION).changes);
+    return n;
+  }
+
   add(actor: string, action: string, body: unknown): void {
     this.db
       .prepare("insert into audit (at, actor, action, body) values (?, ?, ?, ?)")

@@ -3,6 +3,7 @@ import {
   chmodSync,
   closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
@@ -34,6 +35,21 @@ export function sweepTemp(dir: string): string[] {
   const left = readdirSync(dir).filter((name) => name.startsWith(".tmp-"));
   for (const name of left) rmSync(join(dir, name), { recursive: true, force: true });
   return left;
+}
+
+/** The bytes the files under `path` take, links not followed; 0 when there is nothing. */
+export function folderBytes(path: string): number {
+  let st: ReturnType<typeof lstatSync>;
+  try {
+    st = lstatSync(path);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return 0;
+    throw err;
+  }
+  if (!st.isDirectory()) return st.isFile() ? st.size : 0;
+  let total = 0;
+  for (const name of readdirSync(path)) total += folderBytes(join(path, name));
+  return total;
 }
 
 /** How much of a file fileSha256 holds at once. */

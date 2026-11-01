@@ -5,6 +5,7 @@ import { canonicalJson } from "../../core/canonical.ts";
 import { EVENT_STREAM, type EventRead, readEventMessage } from "../../core/link/events.ts";
 import { currentEvent } from "../../core/names.ts";
 import { MODEL_CALL_EVENT, ModelCallBody } from "../../core/usage.ts";
+import { takeRigRemoval } from "../retention/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { type FoldCache, keepFolds, streamEvent } from "../views/index.ts";
 import { readKnowledgeAgain, takeKbItem } from "./knowledge.ts";
@@ -292,6 +293,8 @@ function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boo
   }
   const call = e.kind === MODEL_CALL_EVENT && e.subject ? ModelCallBody.safeParse(e.body) : null;
   if (call?.success) store.usage.recordCall(rig, ledger, e.id, String(e.subject), call.data);
+  // What a retention policy removed on the rig: in the history and the audit log.
+  if (e.kind === "retention_removed") takeRigRemoval(store, rig, e);
   if (!toKb) return;
   try {
     // A savepoint: an event indexed in part is not kept.

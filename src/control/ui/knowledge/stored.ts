@@ -49,7 +49,7 @@ export function storedHtml(s: KbStored, now: number, page: (offset: number) => s
       `in ${esc(n(t.collections))} ${t.collections === 1 ? "collection" : "collections"}`,
     ),
     kpi("Files", esc(n(t.files)), `${esc(bytes(t.file_bytes))} held`),
-    kpi("Older versions", esc(n(t.older_versions)), "kept, never removed"),
+    kpi("Older versions", esc(n(t.older_versions)), "kept until a retention policy removes them"),
   ].join("")}</div>`;
   const collections = section(
     "collections",

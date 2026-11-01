@@ -37,6 +37,7 @@ import { ReachableAddresses } from "./reachable.ts";
 import { RigRefusals } from "./refusals.ts";
 import type { IngestReport } from "./report.ts";
 import { FullResets } from "./resets.ts";
+import { RetentionPolicies } from "./retention.ts";
 import { RetiredRigs } from "./retired.ts";
 import { RigReports } from "./rig-reports.ts";
 import { ReportedRigs } from "./rigs.ts";
@@ -56,7 +57,7 @@ import { UsageRecords } from "./usage.ts";
  * tables' SQL, and no other production code reads or writes them.
  */
 
-export { cursorOf } from "./audit.ts";
+export { cursorOf, RETENTION_REMOVED_ACTION } from "./audit.ts";
 export type { RigComponent, StoredBuild } from "./builds.ts";
 export type { BusIdentityName } from "./bus.ts";
 export type { CampaignSources, CopiedFrom } from "./campaigns.ts";
@@ -93,6 +94,7 @@ export type { CampaignProposal, ProposedField } from "./proposals.ts";
 export type { ModelProvider, ProviderModel } from "./providers.ts";
 export type { ReachableAddress } from "./reachable.ts";
 export type { RigRefusal } from "./refusals.ts";
+export type { RetentionRemovalRow } from "./retention.ts";
 export type { StoredRunpodRig, StoredRunpodTest } from "./runpod.ts";
 export type { RegisteredRun } from "./runs.ts";
 export type { TunnelRig } from "./tunnels.ts";
@@ -143,6 +145,8 @@ export class ControlStore {
   readonly busPositions: BusPositions;
   /** The addresses cluster rigs' harnesses may reach beside the internet, set by the owner. */
   readonly reachable: ReachableAddresses;
+  /** The owner's retention policies, what they removed, and what each rig keeps (goal 125). */
+  readonly retention: RetentionPolicies;
   private knowledge: KnowledgeBase | undefined;
 
   /** The store's file, or `:memory:`. */
@@ -188,6 +192,7 @@ export class ControlStore {
     this.proposals = new CampaignProposals(this, this.db);
     this.busPositions = new BusPositions(this, this.db);
     this.reachable = new ReachableAddresses(this, this.db);
+    this.retention = new RetentionPolicies(this, this.db);
   }
 
   /**

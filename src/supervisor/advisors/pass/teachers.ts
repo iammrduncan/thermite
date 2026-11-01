@@ -255,7 +255,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
         // Then each teacher's (and the merged by model's) field notes, once the round's work is posted.
         const noted: unknown[] = [];
         for (const j of run.journal) noted.push(await notesOut(inst.id, "teachers", j.by, j.notes));
-        record(`teachers-${inst.id}`, { ...run, posted, queued, noted });
+        record(`teachers-${inst.id}`, { ...run, posted, queued, noted }, inst.id);
       } catch (err) {
         fail(`teachers for ${inst.id}`, err, inst.id);
       }

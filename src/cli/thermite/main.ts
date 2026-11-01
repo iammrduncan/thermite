@@ -18,6 +18,7 @@ import {
 } from "./local.ts";
 import { thermiteMcp } from "./mcp.ts";
 import { thermiteStatus, thermiteSubmit } from "./proposer.ts";
+import { thermiteRetention } from "./retention.ts";
 import { thermiteRig } from "./rigs.ts";
 import { thermiteRunpod } from "./runpod.ts";
 import { fail } from "./shared.ts";
@@ -65,6 +66,8 @@ async function main(argv: string[]): Promise<void> {
       return thermiteMcp(rest);
     case "exports":
       return thermiteExports(rest);
+    case "retention":
+      return thermiteRetention(rest);
     case "command":
       return thermiteCommand(rest);
     case "invalidate":

@@ -99,8 +99,9 @@ export class KbFileRows {
 
   /**
    * The files kept before `before` that no version of any item names, the newest one included:
-   * a file whose item never arrived, or was refused. Oldest first, at most `limit`. Versions are
-   * never removed, so a file an item named once is never among them.
+   * a file whose item never arrived, or was refused, or whose versions that named it a retention
+   * policy removed (store/kb/older.ts). Oldest first, at most `limit`. An item's newest version
+   * is never removed, so a file it names is never among them.
    */
   orphans(before: string, limit: number): KbFileRow[] {
     return (

@@ -51,7 +51,7 @@ describe("a rig's asks of control on the bus", () => {
     }
     assert.equal(rigAskOf("thermite.rig.rig-a.ask.wipe"), undefined);
     // Past research is no longer copied to rigs: control serves no ask for it.
-    assert.deepEqual(RIG_ASK_KINDS, ["figures", "screens", "daily", "renew"]);
+    assert.deepEqual(RIG_ASK_KINDS, ["figures", "screens", "daily", "renew", "space"]);
     assert.equal(rigAskOf("thermite.rig.rig-a.ask.past"), undefined);
     assert.equal(rigAskOf("thermite.rig.rig-a.report"), undefined);
     assert.throws(() => rigAskSubject("Rig A", "figures"), /not a rig's name/);

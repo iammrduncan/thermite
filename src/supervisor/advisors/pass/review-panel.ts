@@ -179,12 +179,11 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         if (pkg.run)
           for (const j of journal)
             noted.push(await notesOut(pkg.run, "review_panel", j.by, j.notes));
-        record(`review-${pkg.id}`, {
-          results,
-          posted,
-          noted,
-          ...(compactions.length ? { compactions } : {}),
-        });
+        record(
+          `review-${pkg.id}`,
+          { results, posted, noted, ...(compactions.length ? { compactions } : {}) },
+          pkg.run,
+        );
       } catch (err) {
         fail(`review ${pkg.id}`, err, pkg.run);
         await tryFailed(pkg.id, next.tries[key] ?? 0, err);

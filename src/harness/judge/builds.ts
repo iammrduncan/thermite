@@ -251,6 +251,24 @@ export class BuildStore {
   }
 }
 
+/** A stored build's folder name: its key. */
+export const BUILD_KEY = /^[0-9a-f]{64}$/;
+
+/**
+ * Removes a stored build (a retention policy's, harness/retention.ts): its folders made writable
+ * again, then the whole of it. Its record in the ledger stays, so the judge makes it again from
+ * its commit and kit when it is ever needed (BuildStore.make finds no folder). A key that is not a
+ * build's, or a build already gone, removes nothing. Returns whether it removed one.
+ */
+export function removeBuild(storeDir: string, key: string): boolean {
+  if (!BUILD_KEY.test(key)) return false;
+  const dir = join(storeDir, key);
+  if (!existsSync(dir)) return false;
+  unlock(dir);
+  rmSync(dir, { recursive: true, force: true });
+  return true;
+}
+
 /**
  * Copies one build output into the store: regular files and directories only. A symlink, hard
  * link or special file is refused, never followed, so a build cannot point the store (or its

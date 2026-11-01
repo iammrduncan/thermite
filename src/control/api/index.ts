@@ -27,6 +27,7 @@ import { reachRoutes } from "./reach.ts";
 import { recordRoutes, rigRecordRoutes } from "./records.ts";
 import { relayRoutes } from "./relay.ts";
 import { resultRoutes } from "./results.ts";
+import { retentionRoutes } from "./retention.ts";
 import { rigRoutes } from "./rigs.ts";
 import { usageRoutes } from "./usage.ts";
 
@@ -149,6 +150,7 @@ export function createControlApi(
   recordRoutes(app, api);
   gpuCloudRoutes(app, api);
   reachRoutes(app, api);
+  retentionRoutes(app, api);
   commandStatusRoutes(app, api);
 
   // A draining cluster rig's pods restart once nothing runs on it, and any rig's drain past its

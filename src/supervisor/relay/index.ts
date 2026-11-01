@@ -33,8 +33,11 @@ export interface RelayConfig {
   fetchImpl?: typeof fetch | undefined;
   /** Content a command brings: relay it, wait for it, or report that it could not be had. */
   stage?: ((cmd: SignedCommand) => Promise<"ready" | "wait" | { failed: string }>) | undefined;
-  /** Told about each relayed command's outcome (a full reset's wipe acts on it). */
-  onDelivered?: ((kind: string, accepted: boolean) => void) | undefined;
+  /**
+   * Told about each relayed command's outcome, with the command: a full reset's wipe acts on it,
+   * and a retention policy's run removes the advisors' records it covers.
+   */
+  onDelivered?: ((kind: string, accepted: boolean, cmd: SignedCommand) => void) | undefined;
   /**
    * The commands taken from the bus and not delivered yet, by id, each in the newest form control
    * gave: signed again with a later expiry while its sources stage (relay/commands.ts).
@@ -259,7 +262,7 @@ async function deliverInTurn(cfg: RelayConfig, cmd: SignedCommand): Promise<bool
     if (status === "in_progress") return false;
     if (staged === "ready") {
       log("supervisor", "relayed command", { id, kind: cmd.envelope.kind, status });
-      cfg.onDelivered?.(cmd.envelope.kind, status === "delivered");
+      cfg.onDelivered?.(cmd.envelope.kind, status === "delivered", cmd);
     } else log("supervisor", "command not relayed", { id, error: staged.failed, status });
     remember(cfg.delivered, id);
     cfg.held?.delete(id);

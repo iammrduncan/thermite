@@ -136,11 +136,15 @@ export async function writePapers(ctx: AdviseContext): Promise<void> {
             `the harness refused the research paper (${ps.length} ${ps.length === 1 ? "problem" : "problems"}): ${clip(ps.map((p) => `${p.line ? `line ${p.line}: ` : ""}${p.problem}`).join("; "), 400)}. The final writer writes it again at the next round`,
           );
         }
-        record(`paper-${run}`, {
-          writer: runtime.name,
-          posted,
-          ...(r.compactions?.length ? { compactions: r.compactions } : {}),
-        });
+        record(
+          `paper-${run}`,
+          {
+            writer: runtime.name,
+            posted,
+            ...(r.compactions?.length ? { compactions: r.compactions } : {}),
+          },
+          run,
+        );
       } catch (err) {
         failed(err);
       }

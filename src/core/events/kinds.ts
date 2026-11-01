@@ -111,6 +111,7 @@ export const EVENT_KINDS = [
   "research_paper_requested",
   "research_progress",
   "research_stopped",
+  "retention_removed",
   "review_decided",
   "review_items",
   "review_panel",

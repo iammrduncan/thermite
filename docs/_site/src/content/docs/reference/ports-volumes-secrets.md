@@ -111,16 +111,20 @@ In a **slot**, a namespace the cluster's operators made for Thermite, the operat
 
 ### The space control's state takes
 
-**Settings › Space** lists the space each kind of what control keeps takes on its disk, each label with what the kind is under its ⓘ, and their sum; `/metrics` has the same as `thermite_control_space_bytes`, by `kind` ([Metrics series](rest-api.md#metrics-series)). Control reads them at most once a minute, and keeps every kind for good.
+**Settings › Space** lists the space each kind of what Thermite keeps takes, each label with what the kind is under its ⓘ, where it is kept (**Kept on**), and what removes it (**Removed by**): the [retention policies](../how-to/operate/retention-policies.md) of its kind, each with `(off)` while it is off, **By hand, on Exports**, or **Kept for good**; and their sum. `/metrics` has the same as `thermite_control_space_bytes`, by `kind` ([Metrics series](rest-api.md#metrics-series)). Control reads its own kinds at most once a minute. A rig's kinds are the sum of what each rig that is not retired last said it keeps: its supervisor tells control every 10 minutes and after each removal, and the row says how many rigs did. Thermite keeps every kind until a policy removes it.
 
-| Kind | Label | What it is |
-| --- | --- | --- |
-| `events` | Rigs' events | Control's copy of every event its rigs reported, in the message bus's `EVENTS` stream |
-| `exports` | Rigs' exports | The exports that rigs without a results repository send control, in `exports/` |
-| `store` | Control's store | `control.db`, with its write-ahead log |
-| `copies` | Copies of the store | `control.db` as it was before each update that changed its tables |
-| `kb_files` | Knowledge base files | The knowledge base's files, in `kb-files/` |
-| `kits` | Kits | The kits written or uploaded on the **New campaign** page, in `kits/` |
+| Kind | Label | Kept on | What it is |
+| --- | --- | --- | --- |
+| `events` | Rigs' events (control's copy) | Control | Control's copy of every event its rigs reported, in the message bus's `EVENTS` stream. Kept for good |
+| `exports` | Rigs' exports | Control | The exports that rigs without a results repository send control, in `exports/`. Removed only by hand |
+| `store` | Control's store | Control | `control.db`, with its write-ahead log |
+| `kb_versions` | Older versions of knowledge-base items | Control | Versions an item's newer version replaced, inside `control.db`: counted in its row, not again in the sum |
+| `audit` | Audit log | Control | Control's audit log, inside `control.db`: counted in its row, not again in the sum |
+| `copies` | Copies of the store | Control | `control.db` as it was before each update that changed its tables; control keeps the two newest |
+| `kb_files` | Knowledge base files | Control | The knowledge base's files, in `kb-files/` |
+| `kits` | Kits | Control | The kits written or uploaded on the **New campaign** page, in `kits/` |
+| `builds` | Judge's builds | Rigs | The judge's stored builds, on each rig's volume |
+| `advisor_records` | Advisors' records | Supervisors | The advisors' round records and kept conversations, in each rig's supervisor's home |
 
 A kind control can't read shows `not read:` and why on the page, and has no series.
 

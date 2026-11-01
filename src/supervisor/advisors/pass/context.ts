@@ -41,6 +41,7 @@ import type { LiveKind } from "../../../core/live.ts";
 import type { RunAdditions } from "../../../core/role-additions.ts";
 import { type AdvisorAgent, AGENT_WORDS } from "../../../core/usage.ts";
 import { askControl } from "../../kb/index.ts";
+import { advisorRecordsDir } from "../../retention.ts";
 import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage, SentPrompt } from "../call.ts";
 import { type RunningAdvisors, withRunContext } from "../config.ts";
 import { advisorFetcher } from "../fetcher.ts";
@@ -233,8 +234,10 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     s.usd += r.usd;
     spend.usd += r.usd;
   };
-  const record = (kind: string, data: unknown) => {
-    const dir = join(cfg.home, "advisors");
+  // A round's record, in its run's folder (advisors/runs/<run>/) when it has a run, so a
+  // retention policy knows its run (supervisor/retention.ts).
+  const record = (kind: string, data: unknown, run?: string | null) => {
+    const dir = advisorRecordsDir(cfg.home, run);
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${kind}.json`),

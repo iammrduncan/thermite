@@ -13,6 +13,7 @@ import { LedgerError } from "../ledger/index.ts";
 import { receivePropagation } from "../propagation.ts";
 import type { Experiment } from "../queue.ts";
 import { RESEARCH_REVIEW, setHypothesisStatus } from "../research/index.ts";
+import { runRetention } from "../retention.ts";
 import { Reviews } from "../reviews.ts";
 import { assignCampaign } from "./assignment.ts";
 import { approvePromotion, declinePromotion } from "./champion.ts";
@@ -393,6 +394,13 @@ export class Commands {
         decidingRun(svc.ledger, p.run, "conclude");
         return new Conclusions(svc.ledger).decide(p.run, p.proposal, p.accept, p.note, by);
       }
+      // One of the owner's retention policies, run now: the judge's builds it covers go.
+      case "retention_run":
+        return runRetention(
+          { ledger: svc.ledger, stateDir: svc.paths.stateDir, clock: svc.clock },
+          CommandPayloads.retention_run.parse(payload),
+          by,
+        );
       // The owner withdraws bad evidence (goal 174): a preview, or the withdrawal it previewed.
       case "invalidate_evidence":
         return invalidateEvidence(

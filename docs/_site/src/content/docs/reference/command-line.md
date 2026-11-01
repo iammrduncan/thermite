@@ -280,6 +280,22 @@ usage: thermite <command> [options]
   mcp delete NAME --control URL --token-file F
                                       forget a server and its secrets; refused while a kit
                                       names it
+  retention list|removals [--policy ID] [--limit N] --control URL --token-file F [--json]
+                                      the owner's retention policies, each with what it would
+                                      remove now, or what the policies removed (owner's token)
+  retention show|delete|on|off|run ID --control URL --token-file F [--json]
+                                      one policy: its whole record, deleted, turned on (from
+                                      now) or off, or run now; run can't be undone: preview first
+  retention create|preview|update [ID] [--name N] [--kind K] [--where all|rigs|campaigns]
+                  [--rig R]... [--campaign C]... [--rule older|newest|size]
+                  [--older N] [--unit days|weeks|months] [--newest N] [--per rig|run|all]
+                  [--size GIB] [--keep KEEP]... [--no-keep KEEP]... [--when daily|weekly|hand]
+                  [--time HH:MM] [--day DAY] [--on] --control URL --token-file F [--json]
+                                      a new policy (off unless --on), what a design would remove
+                                      now, or a change to policy ID (only the options given;
+                                      --on turns it on too). K: builds, advisor_records,
+                                      kb_versions, store_copies or audit. KEEP: open, champions
+                                      or newest, each on unless --no-keep. Times are UTC
   exports delete RIG NAME... --control URL --token-file F
                                       delete exports control keeps from RIG (owner's token), as
                                       Delete on the Exports page does: their files and records,
@@ -917,6 +933,46 @@ thermite exports delete rig-1 20261101T010000Z-0123abcd 20261101T020000Z-89abcde
 | `thermite exports delete RIG NAME...` | `POST /v1/exports/delete` | What went, in control's words: `Deleted 2 exports from control: rig-1 · 20261101T010000Z-0123abcd (4.2 KiB) and rig-1 · 20261101T020000Z-89abcdef (1.0 KiB).`, and `Control did not have rig-1 · …` for a name control does not have |
 
 All or none: when one of them is still arriving, nothing is deleted, and the command ends with control's refusal, `… -> 409 {"error":"rig-1 · 20261101T030000Z-feedface (1 of 3 files) is still arriving: control is receiving its files. Delete it once complete. Nothing was deleted."}` (exit 2).
+
+### `retention`
+
+The owner's [retention policies](../how-to/operate/retention-policies.md), with the owner's token, as **Settings › Retention policies** has them. No policy exists until you make one: Thermite keeps everything, everywhere.
+
+```sh
+thermite retention create --name "Old builds" --kind builds --rule newest --newest 20 --per rig \
+  --control https://control.example.com --token-file ~/.thermite/owner-token
+```
+
+| Command | Route | What it prints |
+| --- | --- | --- |
+| `thermite retention list` | `GET /v1/retention` | One line for each policy: its id, `on` or `off`, name, kind, where, rule and time, and what it would remove now; or `no retention policy: Thermite keeps everything, everywhere` |
+| `thermite retention show ID` | `GET /v1/retention/policies/ID` | The policy as JSON, with its words, what it would remove now (`would_remove`), its last removal and its next time |
+| `thermite retention create` | `POST /v1/retention/policies` | `Saved “Old builds”, off.` and its line. Off unless `--on` |
+| `thermite retention preview` | `POST /v1/retention/preview` | What the design would remove now, such as `It would remove 412 builds on 2 rigs, 18.40 GiB, from 2026-08-03 to 2026-09-28. 41.20 GiB of judge's builds would stay.`, and the rigs that have not said what they keep. It saves nothing |
+| `thermite retention update ID` | `PUT /v1/retention/policies/ID` | The policy as control has it, with only the options given changed; `--on` turns it on too |
+| `thermite retention on ID`, `off ID` | `POST /v1/retention/policies/ID/on` | `“Old builds” is on: it runs every day at 03:00 UTC.`, or off: it removes nothing |
+| `thermite retention run ID` | `POST /v1/retention/policies/ID/run` | What went on control, such as `“Old audit” removed 1,204 entries, 3.1 MiB, from 2026-06-01 to 2026-09-30 from control.`, or the rigs it was sent to. It can't be undone: preview it first |
+| `thermite retention removals` | `GET /v1/retention/removals` | What the policies removed, newest first: when, the policy, where (`control` or the rig), how many and their size, and who started it. `--policy ID` keeps one policy's; `--limit N` (100 by default) |
+| `thermite retention delete ID` | `DELETE /v1/retention/policies/ID` | `Deleted “Old builds”. What it removed stays in the history.` |
+
+A design's options:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--name N` | | The policy's name, up to 80 characters. Required to create one |
+| `--kind K` | | `builds` (the judge's builds), `advisor_records` (the advisors' records), `kb_versions` (older versions of knowledge-base items), `store_copies` (copies of control's store) or `audit` (the audit log). Required to create one |
+| `--where W` | `all` | For a kind kept on rigs: `all` (every rig), `rigs` or `campaigns`. `--rig` or `--campaign` alone sets it |
+| `--rig R`, `--campaign C` | | The rigs, or the campaigns whose rigs, it acts on; each may come again |
+| `--rule R` | | `older`, `newest` or `size`. Required to create one |
+| `--older N`, `--unit U` | `30`, `days` | `older`: removes what is older than N days, weeks or months (30 days each) |
+| `--newest N`, `--per P` | `20`, `rig` | `newest`: keeps the newest N per rig, per run or in all (`all`), and removes the rest |
+| `--size GIB` | `50` | `size`: keeps under this many GiB in all; the oldest go first |
+| `--keep KEEP`, `--no-keep KEEP` | each on | What it always keeps, where its kind has it: `open` (runs still open), `champions` (each lane's champion builds), `newest` (the newest copy of the store) |
+| `--when W` | `daily` | `daily`, `weekly` or `hand` (only by `run`) |
+| `--time HH:MM`, `--day DAY` | `03:00`, `sunday` | When it runs, in UTC; the day for `weekly` |
+| `--on` | off | `create` and `update`: turned on, from now |
+
+A refused design ends the command with control's words, such as `… -> 400 {"error":"not a retention policy: older_n: …"}` (exit 2), with what is wrong with each field.
 
 ### `command`
 

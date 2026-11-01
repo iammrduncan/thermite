@@ -3,6 +3,7 @@ import { COMMAND_MAX_BYTES, SignedCommand } from "../../commands.ts";
 import { HealthAnswer } from "../../health.ts";
 import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
+import { RetentionRemoved, SpaceInventory } from "../../retention/index.ts";
 import { PROGRAM_MODES } from "../../rig-settings.ts";
 import { ScreenFrame, WatchedTrials } from "../../screens.ts";
 import { ControlRoute } from "../model-route.ts";
@@ -331,6 +332,30 @@ export const EXPORTS_DONE = {
   body: z.object({ names: z.array(z.string().max(80)).max(5000) }),
   answer: z.unknown(),
   maxBytes: 256 * 1024,
+} as const satisfies Route;
+
+/**
+ * What the rig keeps of the judge's builds, each with its run, time, bytes and whether its run is
+ * open or it is a champion's (core/retention/), and the runs still open: the supervisor sends
+ * control the builds with its own advisors' records, and marks those of runs still open.
+ */
+export const SPACE = {
+  method: "GET",
+  path: "/v1/space",
+  what: "the rig's space",
+  answer: z.object({ builds: SpaceInventory, open_runs: z.array(z.string()) }),
+} as const satisfies Route;
+
+/**
+ * What the supervisor removed for a retention policy (the advisors' records), recorded as the
+ * rig's `retention_removed` event.
+ */
+export const RETENTION_REMOVED = {
+  method: "POST",
+  path: "/v1/retention/removed",
+  body: RetentionRemoved,
+  answer: z.unknown(),
+  maxBytes: 16 * 1024,
 } as const satisfies Route;
 
 /**

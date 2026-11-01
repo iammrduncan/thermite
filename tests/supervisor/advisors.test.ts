@@ -164,8 +164,10 @@ describe("advisors", () => {
         citations: ["arxiv:2"],
       },
     ]);
-    const record = readdirSync(join(home, "advisors")).find((f) => f.includes("teachers"));
-    const said = readFileSync(join(home, "advisors", String(record)), "utf8");
+    // A round's record is in its run's folder (supervisor/retention.ts), so a policy knows its run.
+    const records = join(home, "advisors", "runs", "js-1");
+    const record = readdirSync(records).find((f) => f.includes("teachers"));
+    const said = readFileSync(join(records, String(record)), "utf8");
     assert.match(said, /no citation/);
     assert.match(said, /a rule no longer takes match/);
     // The experiments went in first, so the rule names a direction the run already has.

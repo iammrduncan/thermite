@@ -189,9 +189,9 @@ describe("the teachers put ideas first (goal 081)", () => {
       lines.join("\n"),
       /js-1 text: the teachers added to the queue: Wider loads; Prefetch the next block/,
     );
-    // The supervisor's record of the round says why the third was left out.
+    // The supervisor's record of the round, in its run's folder, says why the third was left out.
     const { readdirSync, readFileSync } = await import("node:fs");
-    const dir = join(cfg.home, "advisors");
+    const dir = join(cfg.home, "advisors", "runs", "js-1");
     const rec = readFileSync(
       join(dir, readdirSync(dir).find((f) => f.includes("teachers-js-1")) as string),
       "utf8",

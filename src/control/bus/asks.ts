@@ -20,8 +20,8 @@ import { leafRigsOf } from "./leaf.ts";
 
 /**
  * Control's answers to what a rig asks of it on the message bus (core/link/asks.ts): its
- * supervisor's figures, the screens of the trials watched, its daily report, and a command's
- * newest form. Each ask comes on the rig's own subject, which only its user may publish to, and is
+ * supervisor's figures, the screens of the trials watched, its daily report, a command's newest
+ * form, and what it keeps of the kinds a retention policy may remove there. Each ask comes on the rig's own subject, which only its user may publish to, and is
  * answered at the rig's own inbox alone. A refusal is an answer in words.
  */
 
@@ -73,6 +73,10 @@ export function answerRigAsk(
     case "renew": {
       const b = RIG_ASKS.renew.body.parse(raw);
       return renewCommand(store, d.privateKeyPem, rig, b.id);
+    }
+    case "space": {
+      store.retention.takeSpace(rig, RIG_ASKS.space.body.parse(raw));
+      return { ok: true };
     }
   }
 }

@@ -4,6 +4,7 @@ import type { GoalCellValues, GoalCheck } from "../goal/index.ts";
 import type { HeldOutCell } from "../held-out.ts";
 import type { KbItemBody, KbItemFile } from "../kb.ts";
 import type { AgentPromptBody } from "../prompts.ts";
+import type { RetentionRemoved } from "../retention/index.ts";
 import type { RigSettings } from "../rig-settings.ts";
 import type { TerminalOutcome } from "../terminal-input.ts";
 import type { EventKind } from "./kinds.ts";
@@ -42,6 +43,8 @@ export interface EventBodies {
   /** A run's export at its end (service/reports.ts): the export's name and its last event. */
   run_end_exported: { export: string; through_event: number };
   wipe_requested: { export: string };
+  /** What a retention policy removed on the rig (core/retention/): its builds or records. */
+  retention_removed: RetentionRemoved;
 
   // ---------------------------------------------------------------- commands
   command: { kind: string; accepted: boolean; result: unknown };

@@ -118,12 +118,16 @@ export async function writeCards(ctx: AdviseContext): Promise<void> {
             .filter(Boolean)
             .join(". "),
         );
-        record(`cards-${run}`, {
-          synthesizer: runtime.name,
-          posted,
-          ...(none.length ? { no_card: none } : {}),
-          ...(r.compactions?.length ? { compactions: r.compactions } : {}),
-        });
+        record(
+          `cards-${run}`,
+          {
+            synthesizer: runtime.name,
+            posted,
+            ...(none.length ? { no_card: none } : {}),
+            ...(r.compactions?.length ? { compactions: r.compactions } : {}),
+          },
+          run,
+        );
       } catch (err) {
         fail(`the answer cards of ${run} (tried again at the next round)`, err, run);
       }

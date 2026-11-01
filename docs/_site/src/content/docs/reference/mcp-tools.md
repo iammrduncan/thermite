@@ -54,6 +54,8 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `kb_collections`, `kb_list`, `kb_search`, `kb_read`, `kb_stored`, `kb_note`, `kb_settings`, `exports` | Yes | Yes | No | No |
 | `kb_grant` | Yes | Yes, as a proposal the owner approves | No | No |
 | `kb_revoke`, `set_kb_settings`, `delete_exports` | Yes | No | No | No |
+| `retention_policies`, `retention_preview`, `retention_removals` | Yes | Yes | No | No |
+| `create_retention_policy`, `update_retention_policy`, `set_retention_policy_on`, `delete_retention_policy`, `run_retention_policy` | Yes | No | No | No |
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
 | `trial_session`, `control_log`, `providers`, `bus_state`, `rig_models`, `rig_settings`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
 | `runpod_rig_logs`, `agent_roles`, `agent_prompts`, `reachable_addresses` | Yes | Yes | No | No |
@@ -487,6 +489,68 @@ Returns `[{rig, name, run, end, full, from_event, through_event, files, files_ke
 | `exports` | list of `{rig, name}`, 1 to 1,000 | | The exports to delete, each by its rig and its name |
 
 Returns `{deleted: [{rig, name, bytes, files}], gone: [{rig, name}], said}`, as [`POST /v1/exports/delete`](rest-api.md#rigs-and-their-history): `said` is what went, in the words the dashboard shows, such as `Deleted 1 export from control: rig-1 · 20261101T010000Z-0123abcd (4.2 KiB).` Refused, with nothing deleted: `rig-1 · <name> (1 of 3 files) is still arriving: control is receiving its files. Delete it once complete. Nothing was deleted.` See [Delete exports](exports.md#delete-exports).
+
+### retention_policies
+
+**Retention policies.** Owner and operator.
+
+> The owner's retention policies, as Settings › Retention policies shows them: by default there are none and Thermite keeps everything, everywhere. …
+
+No input. Returns `{kinds, policies}`, as [`GET /v1/retention`](rest-api.md#retention-policies): `kinds` is each kind a policy may remove, with where it is kept (`control`, `rigs` or `supervisors`), what it is, its warning and what a policy may always keep of it; `policies` each policy with its design, `on`, its words, `would_remove`, `last` (its newest removal) and `next_at`. [Remove what Thermite keeps](../how-to/operate/retention-policies.md) says what each kind is.
+
+### retention_preview
+
+**Preview a retention policy.** Owner and operator.
+
+> What a policy's design would remove now, saved or not, as the form's If it ran now says …
+
+Its input is a policy's design, as [`POST /v1/retention/preview`](rest-api.md#retention-policies) takes it: `name`, `kind`, and the fields with their defaults there. Returns `{count, bytes, rigs, oldest, newest, words, stays, unreported}`; `unreported` names the rigs that have not said what they keep, whose items are not counted. It saves and removes nothing.
+
+### retention_removals
+
+**What retention policies removed.** Owner and operator.
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `policy` | whole number, optional | every policy | One policy's removals only |
+| `limit` | whole number, 1 to 1,000 | 100 | How many, newest first |
+
+Returns `{removals: [{id, at, policy, name, kind, rig, by, count, bytes, oldest, newest, error}]}`, as [`GET /v1/retention/removals`](rest-api.md#retention-policies): `rig` is `null` on control, and `by` is `schedule` or `Run now`.
+
+### create_retention_policy
+
+**New retention policy.** Owner only.
+
+Its input is a policy's design, and `on` (default false): a new policy is off unless `on` is true, and then runs at its time from now on. Returns `{policy}`. Written to the audit log as `retention_policy_created`. A design that is not one is refused in words, such as `not a retention policy: older_n: …`.
+
+### update_retention_policy
+
+**Change a retention policy.** Owner only.
+
+Its input is the policy's `id`, its whole design, and `on` (left out: on or off as it was). The time it last ran for stays, so it does not run again for it. Returns `{policy}`. Written to the audit log as `retention_policy_changed`, with what it was.
+
+### set_retention_policy_on
+
+**Turn a retention policy on or off.** Owner only.
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `id` | whole number | | The policy |
+| `on` | true or false | | On, from now (a time before does not run it), or off (it removes nothing) |
+
+Returns `{policy}`. Written to the audit log as `retention_policy_on` or `retention_policy_off`.
+
+### delete_retention_policy
+
+**Delete a retention policy.** Owner only. Input: its `id`. Returns `{deleted}`. What it removed stays in the history and the audit log; the delete is written there as `retention_policy_deleted`.
+
+### run_retention_policy
+
+**Run a retention policy now.** Owner only.
+
+> Runs a policy now, on or off, as Run now on Settings does, after retention_preview has shown what it removes: it can't be undone. …
+
+Input: its `id`. A kind kept on control is removed at once: `{said, removed}`, such as `“Old audit” removed 1,204 entries, 3.1 MiB, from 2026-06-01 to 2026-09-30 from control.` A rig's kind is sent to each rig the policy covers as a signed [`retention_run`](signed-commands.md#retention_run): `{said, sent: [{rig, command}], failed: [{rig, error}]}`, and each rig's removal shows in `retention_removals` once it arrives.
 
 ### kb_grant
 

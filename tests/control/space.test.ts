@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { folderBytes } from "../../src/common/fs.ts";
 import { spaceBlock } from "../../src/control/dashboard/settings/space.ts";
 import { spaceMetricsText } from "../../src/control/metrics.ts";
-import { folderBytes, SPACE_KINDS, SPACE_LOOK_MS, spaceOf } from "../../src/control/space.ts";
+import { SPACE_KINDS, SPACE_LOOK_MS, spaceOf, spaceTotal } from "../../src/control/space.ts";
 import { ControlStore } from "../../src/control/store/index.ts";
 import { esc } from "../../src/control/ui/components/index.ts";
 import { controlStack, signIn } from "../helpers/control-stack.ts";
@@ -44,13 +45,48 @@ describe("the space control's kinds take", () => {
     const was = of(first);
     assert.deepEqual(
       { ...was, store: null },
-      { events: 0, exports: 1000, store: null, copies: 0, kb_files: 30, kits: 200 },
+      {
+        events: 0,
+        exports: 1000,
+        store: null,
+        kb_versions: 0,
+        audit: 0,
+        copies: 0,
+        kb_files: 30,
+        kits: 200,
+        builds: 0,
+        advisor_records: 0,
+      },
     );
     assert.ok(Number(was.store) > 0, "the store's file");
     put(join(dir, "exports", "rig-a", "later.bin"), 500);
     assert.equal(of(await spaceOf(store, undefined, now + SPACE_LOOK_MS - 1)).exports, 1000);
     assert.equal(of(await spaceOf(store, undefined, now + SPACE_LOOK_MS)).exports, 1500);
     store.db.close();
+  });
+
+  test("a rig's kinds are the sum of what each rig not retired last said it keeps", async () => {
+    const store = new ControlStore(":memory:");
+    const inv = (bytes: number) => ({ bytes, runs: [], items: [] });
+    const at = new Date().toISOString();
+    store.retention.takeSpace("rig-a", {
+      read_at: at,
+      kinds: { builds: inv(100), advisor_records: inv(7) },
+    });
+    store.retention.takeSpace("rig-b", { read_at: at, kinds: { builds: inv(50) } });
+    store.retention.takeSpace("rig-c", { read_at: at, kinds: { builds: inv(1000) } });
+    store.retired.add("rig-c", "owner:ui");
+    const uses = await spaceOf(store, undefined);
+    const of = (kind: string) => uses.find((u) => u.kind === kind);
+    assert.deepEqual([of("builds")?.bytes, of("builds")?.rigs], [150, 2]);
+    assert.deepEqual([of("advisor_records")?.bytes, of("advisor_records")?.rigs], [7, 1]);
+    // The rows inside control's store are not counted twice in the total.
+    assert.equal(
+      spaceTotal(uses),
+      uses
+        .filter((u) => !["kb_versions", "audit"].includes(u.kind))
+        .reduce((n, u) => n + (u.bytes ?? 0), 0),
+    );
   });
 
   test("/metrics has one series for each kind, and Settings › Space shows each with its ⓘ", async () => {

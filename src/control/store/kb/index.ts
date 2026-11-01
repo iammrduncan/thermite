@@ -26,6 +26,7 @@ import {
   placeFolders,
   placeTotals,
 } from "./list.ts";
+import { type OlderVersion, olderVersions, removeOlderVersions } from "./older.ts";
 import { KbReading } from "./reading.ts";
 import { knowledgeHierarchy } from "./schema.ts";
 import { type KbScope, keepScope, scopeOf } from "./scope.ts";
@@ -50,6 +51,7 @@ export type {
   KbListOptions,
   KbTotals,
 } from "./list.ts";
+export type { OlderVersion } from "./older.ts";
 export type { KbSearchMode } from "./query.ts";
 export { knowledgeHierarchy } from "./schema.ts";
 export type { KbScope } from "./scope.ts";
@@ -204,6 +206,16 @@ export class KnowledgeBase {
   /** The items whose newest version links to this address, and how each links. */
   linksTo(address: string): { rel: string; item: KbItem }[] {
     return linksTo(this.db, address);
+  }
+
+  /** The older versions a retention policy may remove (older.ts), oldest first. */
+  olderVersions(): OlderVersion[] {
+    return olderVersions(this.db);
+  }
+
+  /** Removes older versions a policy covers, never an item's newest; how many went. */
+  removeOlderVersions(versions: readonly { item: number; version: number }[]): number {
+    return removeOlderVersions(this.db, versions);
   }
 
   /** Every version of an item, oldest first, each with its links. */

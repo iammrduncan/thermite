@@ -18,6 +18,7 @@ import { synthesizerAndWriterSlots } from "./models.ts";
 import { appliedPlacesTables } from "./positions.ts";
 import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
 import { reachableAddressTable } from "./reachable.ts";
+import { retentionTables } from "./retention.ts";
 import { runRegistryTable } from "./runs.ts";
 import { tunnelLeafColumns } from "./tunnels.ts";
 
@@ -629,6 +630,8 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   tunnelLeafColumns,
   // The knowledge base's files' text, extracted once, and its settings on control (goal 175).
   knowledgeFiles,
+  // The owner's retention policies, what they removed, and each rig's space (goal 125, T12).
+  retentionTables,
 ];
 
 /**

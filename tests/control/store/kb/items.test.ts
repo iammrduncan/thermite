@@ -105,7 +105,8 @@ describe("the knowledge base's items, versions, links and words", () => {
         [2, "Doubled on the A100 too.", 11, [{ rel: "supports", to: link.to }]],
       ],
     );
-    // No version is ever changed or removed.
+    // No version is ever changed, and an item's newest is never removed (a retention policy may
+    // remove the older ones: tests/control/retention.test.ts).
     assert.throws(
       () => store.db.prepare("update kb_version set body = 'x'").run(),
       /never changed/,

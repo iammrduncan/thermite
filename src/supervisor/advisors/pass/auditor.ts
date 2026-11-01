@@ -177,13 +177,17 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
         const noted = pkg.run
           ? await notesOut(pkg.run, "auditor", auditor.name, r.output.journal)
           : undefined;
-        record(`audit-${pkg.attempt}`, {
-          decision: r.output,
-          posted,
-          queued,
-          noted,
-          ...(r.compactions?.length ? { compactions: r.compactions } : {}),
-        });
+        record(
+          `audit-${pkg.attempt}`,
+          {
+            decision: r.output,
+            posted,
+            queued,
+            noted,
+            ...(r.compactions?.length ? { compactions: r.compactions } : {}),
+          },
+          pkg.run,
+        );
       } catch (err) {
         await failed(pkg, key, err);
       }

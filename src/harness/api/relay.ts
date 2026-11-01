@@ -6,12 +6,15 @@ import {
   EXPORTS_DONE,
   LIVE_MESSAGES,
   LIVE_PAGE_DEFAULT,
+  RETENTION_REMOVED,
   SCREENS,
   SNAPSHOT,
   SNAPSHOT_PAGE_DEFAULT,
   SNAPSHOT_PAGE_MAX,
+  SPACE,
 } from "../../core/api/harness/supervisor.ts";
 import { LIVE_BATCH_MAX } from "../../core/live.ts";
+import { recordRemoved, spaceOf } from "../retention.ts";
 import { type ApiContext, limitOf } from "./context.ts";
 
 /**
@@ -74,10 +77,19 @@ export function liveRoutes(app: Hono, { service, supervisor }: ApiContext): void
   });
 }
 
-/** The exports: those the supervisor pushed leave the outbox. */
+/**
+ * The exports: those the supervisor pushed leave the outbox. And the retention policies' part of
+ * the rig (retention.ts): what it keeps of the builds, for control, and what the supervisor
+ * removed of the advisors' records.
+ */
 export function exportRoutes(app: Hono, { service, supervisor }: ApiContext): void {
   app.post(EXPORTS_DONE.path, supervisor, limitOf(EXPORTS_DONE), async (c) => {
     const body = EXPORTS_DONE.body.parse(await c.req.json());
     return c.json({ removed: service.removeExports(body.names) });
+  });
+  app.get(SPACE.path, supervisor, (c) => c.json(spaceOf(service.ledger, service.paths.stateDir)));
+  app.post(RETENTION_REMOVED.path, supervisor, limitOf(RETENTION_REMOVED), async (c) => {
+    recordRemoved(service.ledger, RETENTION_REMOVED.body.parse(await c.req.json()));
+    return c.json({ ok: true });
   });
 }

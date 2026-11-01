@@ -250,6 +250,22 @@ export const USAGE = `usage: thermite <command> [options]
   mcp delete NAME --control URL --token-file F
                                       forget a server and its secrets; refused while a kit
                                       names it
+  retention list|removals [--policy ID] [--limit N] --control URL --token-file F [--json]
+                                      the owner's retention policies, each with what it would
+                                      remove now, or what the policies removed (owner's token)
+  retention show|delete|on|off|run ID --control URL --token-file F [--json]
+                                      one policy: its whole record, deleted, turned on (from
+                                      now) or off, or run now; run can't be undone: preview first
+  retention create|preview|update [ID] [--name N] [--kind K] [--where all|rigs|campaigns]
+                  [--rig R]... [--campaign C]... [--rule older|newest|size]
+                  [--older N] [--unit days|weeks|months] [--newest N] [--per rig|run|all]
+                  [--size GIB] [--keep KEEP]... [--no-keep KEEP]... [--when daily|weekly|hand]
+                  [--time HH:MM] [--day DAY] [--on] --control URL --token-file F [--json]
+                                      a new policy (off unless --on), what a design would remove
+                                      now, or a change to policy ID (only the options given;
+                                      --on turns it on too). K: builds, advisor_records,
+                                      kb_versions, store_copies or audit. KEEP: open, champions
+                                      or newest, each on unless --no-keep. Times are UTC
   exports delete RIG NAME... --control URL --token-file F
                                       delete exports control keeps from RIG (owner's token), as
                                       Delete on the Exports page does: their files and records,

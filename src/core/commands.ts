@@ -14,6 +14,7 @@ import { StructuredDirective } from "./directives.ts";
 import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
 import { InvalidateEvidence } from "./invalidation.ts";
 import { McpUses } from "./mcp.ts";
+import { RETENTION_NAME_MAX, RetentionRule } from "./retention/index.ts";
 import { PROGRAM_MODES } from "./rig-settings.ts";
 import { TerminalInput } from "./terminal-input.ts";
 
@@ -425,6 +426,18 @@ export const CommandPayloads = {
     accept: z.boolean(),
     note: z.string().max(2000).optional(),
   }),
+  /**
+   * One of the owner's retention policies, run on this rig now (core/retention/): at its time,
+   * as control's schedule sends it, or by the owner's Run now. The harness removes the judge's
+   * builds it covers; the advisors' records are its supervisor's, which removes them once the
+   * harness took the command. What went is a `retention_removed` event.
+   */
+  retention_run: z.strictObject({
+    policy: z.number().int().positive(),
+    name: z.string().min(1).max(RETENTION_NAME_MAX),
+    rule: RetentionRule,
+    by: z.enum(["schedule", "hand"]),
+  }),
   /** The owner withdraws bad evidence (goal 174; owner only): core/invalidation.ts. */
   invalidate_evidence: InvalidateEvidence,
   /** The owner types into a running trial's terminal (goal 169; owner only): core/terminal-input.ts. */
@@ -509,6 +522,7 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "end_wait",
   "invalidate_evidence",
   "terminal_input",
+  "retention_run",
 ]);
 
 /**
