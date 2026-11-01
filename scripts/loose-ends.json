@@ -512,7 +512,7 @@
     "src/harness/research/search/corpus.ts": ["CorpusMatch", "CorpusPage"],
     "src/harness/research/search/index.ts": ["RunHit", "RunFound", "RunSearchOptions"],
     "src/harness/research/search/items.ts": ["IndexEntry"],
-    "src/harness/research/shares.ts": ["PlannedTask", "mayTake"],
+    "src/harness/research/shares.ts": ["mayTake"],
     "src/harness/reviews.ts": ["MIN_PANEL"],
     "src/harness/run-research.ts": ["SUMMARY_ANSWER_CHARS", "folderPath"],
     "src/harness/selftest/index.ts": ["ClusterApi"],

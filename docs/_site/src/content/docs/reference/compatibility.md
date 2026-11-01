@@ -41,7 +41,7 @@ Installs need `sudo` without a password. See [Add a rig on a machine over SSH](.
 
 | Tool | Status | How it is tested |
 | --- | --- | --- |
-| Docker with `docker compose` | Supported | CI runs the compose smoke test with it |
+| Docker with `docker compose` | Supported | CI runs the compose smoke test with it, and on a version tag every acceptance check but the cluster, rig deploy and paid RunPod checks |
 | Podman with `podman compose` | Supported | Every compose acceptance script takes it, and it is their default. Not in CI |
 | podman-compose | Supported | The compose smoke test takes it (`COMPOSE="podman-compose"`). Not in CI |
 | `docker-compose` 1.x (Compose v1) | Not supported: it stops at the top-level `name:` of `compose.yaml`. `thermite doctor` fails or warns when it finds it, as the command for Docker or the program behind `podman compose` | The doctor's tests |

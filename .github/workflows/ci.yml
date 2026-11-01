@@ -5,8 +5,9 @@
 # commit and roll to lab"): the compose smoke test (control and one rig built from this commit, a
 # campaign assigned through control, a candidate judged), the one-container rig image's
 # acceptance, rigs on RunPod against the fake RunPod API, and the quick start as a tester follows
-# it. On a version tag, and when run by hand, every job runs. The heavy jobs wait only for the
-# short job that decides which of them run (heavy); the other jobs start once the run is approved.
+# it. On a version tag, and when run by hand, every job runs, and so does every other acceptance
+# check a runner can run (tag-acceptance). The heavy jobs wait only for the short job that decides
+# which of them run (heavy); the other jobs start once the run is approved.
 #
 # No run uses runners until a maintainer approves it (the owner, 2026-10-29: "prs require approval
 # before running them"): the first job, approval, deploys to the repository's environment ci,
@@ -347,6 +348,61 @@ jobs:
         if: always()
         with:
           name: quick-start-report
+          path: .dev/acceptance/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # On a version tag, and when run by hand, every other acceptance check a runner can run, each on
+  # a machine of its own (the owner's answer to the clean-up guide's question 20): the judge's
+  # adversarial set (judge: the smoke campaign's candidates with isolation, tamper, crash-recovery
+  # and A/A checks), control with two rigs, a new campaign, machines over SSH, four fake GPUs, the
+  # agents and each agent program's stand-in, the real Claude Code against a stand-in API, the
+  # terminal host, backup and restore, steering, and the message bus with its leaf nodes. Not
+  # here: the cluster and rig deploy checks, which need Podman itself (kind on Podman, rootless
+  # Podman in a systemd stand-in), and the paid RunPod check, which spends money.
+  tag-acceptance:
+    name: acceptance (${{ matrix.check }})
+    needs: approval
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - judge
+          - control
+          - campaign
+          - machine
+          - multigpu
+          - agents
+          - claude
+          - claude-real
+          - codex
+          - terminal
+          - backup
+          - steering
+          - bus
+          - leaf
+    env:
+      CHECK: ${{ matrix.check }}
+      COMPOSE: docker compose
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      # The bus and leaf checks pull nothing: the message bus's image, as compose.yaml pins it.
+      - if: matrix.check == 'bus' || matrix.check == 'leaf'
+        run: docker pull "$(grep -m1 -oE 'docker\.io/library/nats:[^ ]+' compose.yaml)"
+      - run: node "scripts/acceptance/$CHECK.mjs"
+      # What the checks that write a report found.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: acceptance-${{ matrix.check }}
           path: .dev/acceptance/
           if-no-files-found: ignore
           retention-days: 14
