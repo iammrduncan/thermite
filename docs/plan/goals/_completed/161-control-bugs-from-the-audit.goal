@@ -27,7 +27,7 @@ The control reviewer of the v0.1.1 audit (goal [160](160-v010-audit.goal)) found
 
 ## Why
 
-CONVENTIONS.md: "Every bug that is found gets a regression test", "Nothing stops silently", and errors answered as what they are. The audit's guide, [the code clean-up guide](../../code-clean-up-guide.md), puts these fixes before goal [125](../125-code-to-the-conventions.goal)'s splits, so that each split is a pure move.
+CONVENTIONS.md: "Every bug that is found gets a regression test", "Nothing stops silently", and errors answered as what they are. The audit's guide, [the code clean-up guide](../../code-clean-up-guide.md), puts these fixes before goal [125](125-code-to-the-conventions.goal)'s splits, so that each split is a pure move.
 
 ## Done when
 

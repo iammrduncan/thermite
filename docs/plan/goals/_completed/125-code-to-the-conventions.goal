@@ -1,20 +1,20 @@
 ---
 id: "125"
 title: "Code clean-up: all of Thermite's code to its conventions, from file sizes and structure to duplication"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.1"
 depends_on: ["026", "127"]
 created: 2026-10-24
-updated: 2026-10-27
+updated: 2026-11-01
 ---
 
 # 125 · Code clean-up: all of Thermite's code to its conventions, from file sizes and structure to duplication
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011) · **Depends on:** [026](_completed/026-ship-v0.1.0.goal), [127](_completed/127-clean-up-pre-audit.goal)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [026](026-ship-v0.1.0.goal), [127](127-clean-up-pre-audit.goal)
 
 ## What
 
-The clean-up of v0.1.1, worked on after v0.1.0 ships and after the pre-audit, goal [127](_completed/127-clean-up-pre-audit.goal). It brings all of Thermite's code to [CONVENTIONS.md](../../../CONVENTIONS.md), so that later changes are easier to make, to review and to trust. The conventions got their engineering rules on 2026-10-24; the code was written before them.
+The clean-up of v0.1.1, worked on after v0.1.0 ships and after the pre-audit, goal [127](127-clean-up-pre-audit.goal). It brings all of Thermite's code to [CONVENTIONS.md](../../../../CONVENTIONS.md), so that later changes are easier to make, to review and to trust. The conventions got their engineering rules on 2026-10-24; the code was written before them.
 
 It is the second half of a double audit. Goal 127 looks at the whole code, read-only, and writes a guide: the map of the code, the themes of change that cross areas, the rules of shape, the order of work and what to leave. This goal works from that guide, audits one area at a time, checks the guide's findings against what it finds there, and makes the changes.
 
@@ -26,7 +26,7 @@ Each rule of CONVENTIONS.md, in particular:
 
 1. **File size and structure.** A file over 500 lines gets a cohesion review. A file over 800 lines is split by responsibility into a folder named for it (`store/runs.ts`, never `store-runs.ts` beside it).
 2. **Folders, not names.** Files whose names share a word at the start or the end become a folder named for that word, with an `index.ts` that is its interface, and the code outside imports from it.
-3. **Tests in `tests/`.** Goal [160](_completed/160-v010-audit.goal) moved every test there, in folders that mirror `src/`. A split or a move of a source file moves its tests to the matching folder in the same commit.
+3. **Tests in `tests/`.** Goal [160](160-v010-audit.goal) moved every test there, in folders that mirror `src/`. A split or a move of a source file moves its tests to the matching folder in the same commit.
 4. **Duplication.** Knowledge kept in more than one place: a rule, a limit, a schema, a status word, a name, a route, a message. Code repeated a third time. Two ways of doing the same job. One thing with more than one name.
 5. **Module design.** Shallow modules, and layers that only pass things through. Complexity pushed onto callers. Implementation details that leak through an interface. Two modules that share knowledge of one design decision. Related code spread over many files.
 6. **Interfaces and errors.** Errors that the interface could define away. Silent catches, and errors without a type.
@@ -34,20 +34,20 @@ Each rule of CONVENTIONS.md, in particular:
 8. **Dead code and loose ends.** Code, exports, files, scripts, settings and dependencies that nothing uses. Code commented out. Placeholders that look finished. Suppressions and switched-off tests without a reason.
 9. **Limits and state.** Mechanical parts without a named limit, or without a defined result at the limit. Duplicate state that can drift. Unclear units. A run's turns, trials, time and spending keep **No default caps**: a finding never adds a limit there.
 10. **Logging.** Major branches that are not logged. Lines without the IDs that tie them to their cause. Log levels that can't be changed while the program runs.
-11. **Security.** The security rules. Findings are handled as [SECURITY.md](../../../SECURITY.md) says, and never written in this goal or in any public file.
+11. **Security.** The security rules. Findings are handled as [SECURITY.md](../../../../SECURITY.md) says, and never written in this goal or in any public file.
 12. **Tests.** Tests that can't fail. Mocks inside the system instead of at its boundaries. Missing failure, empty and over-limit cases. Fixed bugs without a regression test.
 13. **TypeScript.** `any` without a stated reason. Input at a trust boundary without a schema.
 14. **Words.** Code comments and the messages that people read, in plain words.
 
 ### How to work
 
-1. Read CONVENTIONS.md, [AGENTS.md](../../../AGENTS.md), this goal, and goal 127's guide, `docs/plan/code-clean-up-guide.md`. Set the status to `IN_PROGRESS`, with a dated line under Progress.
+1. Read CONVENTIONS.md, [AGENTS.md](../../../../AGENTS.md), this goal, and goal 127's guide, `docs/plan/code-clean-up-guide.md`. Set the status to `IN_PROGRESS`, with a dated line under Progress.
 2. **Build the size check first,** so that nothing gets worse while the rest goes on. `npm run check` and CI run it. It lists each file in scope over 500 and over 800 lines. It fails when a file over 800 lines gets bigger, or a new file is over 800 lines, unless a reason is recorded for that file. The sizes it starts from are recorded in the repository, and each split lowers them.
-3. **Work in the guide's [order of work](../code-clean-up-guide.md#4-the-order-of-work):** the size check; the accepted rules of shape, added to CONVENTIONS.md; the upgrade of the images' system packages; the bugs of goals [161](_completed/161-control-bugs-from-the-audit.goal) to [165](_completed/165-results-kept-through-remove-and-reset.goal), each with its regression test; the shared homes in `core` and `common`; the test scaffolding; the wire contracts, the domain modules out of the dashboard, the ledger's owners and the table of agent programs; the splits, largest and most-changed first, with `src/control/store.ts` last; the folder moves; then knowledge, growth, dead code, containers and CI. **Audit one area at a time** as each theme reaches it: `src/control/`, `src/harness/` (the judge in `src/harness/judge/` on its own), `src/supervisor/`, `src/cli/`, `src/core/`, `tests/`, then `scripts/`, `containers/` and `kits/`. Start from the guide's themes for the area. Record each finding under [Audit](#audit) as you go: the file, the rule, and what to change. Where the area differs from the guide, record that too, and correct the guide. The engineering and anti-slop skills in `.agents/skills/` can help to find candidates. Treat what they report as evidence, and check it against CONVENTIONS.md.
+3. **Work in the guide's [order of work](../../code-clean-up-guide.md#4-the-order-of-work):** the size check; the accepted rules of shape, added to CONVENTIONS.md; the upgrade of the images' system packages; the bugs of goals [161](161-control-bugs-from-the-audit.goal) to [165](165-results-kept-through-remove-and-reset.goal), each with its regression test; the shared homes in `core` and `common`; the test scaffolding; the wire contracts, the domain modules out of the dashboard, the ledger's owners and the table of agent programs; the splits, largest and most-changed first, with `src/control/store.ts` last; the folder moves; then knowledge, growth, dead code, containers and CI. **Audit one area at a time** as each theme reaches it: `src/control/`, `src/harness/` (the judge in `src/harness/judge/` on its own), `src/supervisor/`, `src/cli/`, `src/core/`, `tests/`, then `scripts/`, `containers/` and `kits/`. Start from the guide's themes for the area. Record each finding under [Audit](#audit) as you go: the file, the rule, and what to change. Where the area differs from the guide, record that too, and correct the guide. The engineering and anti-slop skills in `.agents/skills/` can help to find candidates. Treat what they report as evidence, and check it against CONVENTIONS.md.
 4. **Fix in small, safe steps:** one finding, or one part of a file, in each commit. Behaviour stays the same unless the fix is the point. The tests and checks that the change needs pass after each step, and a test is never weakened to let a refactor through. Split the largest files first.
 5. **Docs follow the code.** A fix that changes what Thermite does, such as a new setting for log levels or a changed message, updates the pages that describe it in the same commit.
 6. **Close each finding:** tick it when it is fixed, with the commit, or record why it stays.
-7. **At the end,** run `npm run check`, `npm run docs:build` and `npm run docs:check`, and each compose acceptance check that the changed parts need ([AGENTS.md](../../../AGENTS.md#checks)). Record which ran.
+7. **At the end,** run `npm run check`, `npm run docs:build` and `npm run docs:check`, and each compose acceptance check that the changed parts need ([AGENTS.md](../../../../AGENTS.md#checks)). Record which ran.
 
 ## Why
 
@@ -57,27 +57,27 @@ Then: "not only file sizes and restructure stuff, but also looking for DRY, etc 
 
 ## Constraints
 
-- **After v0.1.0.** Work starts once goal [026](_completed/026-ship-v0.1.0.goal) ships the release.
+- **After v0.1.0.** Work starts once goal [026](026-ship-v0.1.0.goal) ships the release.
 - **Behaviour stays the same,** except where a fix is meant to change it.
 - **Small steps,** each one reviewable on its own.
 - **Other work goes on.** Change a file when no other open branch is changing it, to avoid long merges.
-- **The design invariants and the [rules for every goal](../README.md#rules-for-every-goal) win** over a general rule, as CONVENTIONS.md says.
+- **The design invariants and the [rules for every goal](../../README.md#rules-for-every-goal) win** over a general rule, as CONVENTIONS.md says.
 - **No new dependency** for the audit or the size check without the owner's OK.
 
 ## Done when
 
 - [x] The size check, with tests, runs in `npm run check` and in CI.
-- [ ] The audit covers every area in scope, recorded below.
-- [ ] Every file in scope over 800 lines is split into a folder named for it, or has a recorded reason to stay.
-- [ ] No group of files is named in place of a folder, unless it has a recorded reason.
-- [ ] Every finding is fixed, or has a recorded reason to stay.
-- [ ] Every theme of goal 127's guide is done, or has a recorded reason to stay.
-- [ ] `npm run check`, the docs checks and the acceptance checks that the changes need pass, and the goal records which ran.
-- [x] [CONTRIBUTING.md](../../../CONTRIBUTING.md) and the site's Contributing page name the size check.
+- [x] The audit covers every area in scope, recorded below.
+- [x] Every file in scope over 800 lines is split into a folder named for it, or has a recorded reason to stay.
+- [x] No group of files is named in place of a folder, unless it has a recorded reason.
+- [x] Every finding is fixed, or has a recorded reason to stay.
+- [x] Every theme of goal 127's guide is done, or has a recorded reason to stay.
+- [x] `npm run check`, the docs checks and the acceptance checks that the changes need pass, and the goal records which ran.
+- [x] [CONTRIBUTING.md](../../../../CONTRIBUTING.md) and the site's Contributing page name the size check.
 
 ## Audit
 
-Each area was audited against the rules of CONVENTIONS.md, starting from the themes (T1 to T15) and the owner's answers to the questions (Q1 to Q26) of goal [127](_completed/127-clean-up-pre-audit.goal)'s guide, `docs/plan/code-clean-up-guide.md`. Each finding names its theme or question and what fixed it: a commit, or the date of its line under Progress. The bugs the audit found are in goals [161](_completed/161-control-bugs-from-the-audit.goal) to [165](_completed/165-results-kept-through-remove-and-reset.goal) and [171](_completed/171-bugs-on-the-wire.goal), each with its regression test. Security findings are handled as [SECURITY.md](../../../SECURITY.md) says (goal [172](172-build-v011.goal), step 10) and are not written here. "Now" means commit 63ea241b.
+Each area was audited against the rules of CONVENTIONS.md, starting from the themes (T1 to T15) and the owner's answers to the questions (Q1 to Q26) of goal [127](127-clean-up-pre-audit.goal)'s guide, `docs/plan/code-clean-up-guide.md`. Each finding names its theme or question and what fixed it: a commit, or the date of its line under Progress. The bugs the audit found are in goals [161](161-control-bugs-from-the-audit.goal) to [165](165-results-kept-through-remove-and-reset.goal) and [171](171-bugs-on-the-wire.goal), each with its regression test. Security findings are handled as [SECURITY.md](../../../../SECURITY.md) says (goal [172](../172-build-v011.goal), step 10) and are not written here. "Now" means commit 63ea241b.
 
 ### At the start and now
 
@@ -88,7 +88,7 @@ Each area was audited against the rules of CONVENTIONS.md, starting from the the
 | Groups of files named in place of a folder | 32, with 96 files | the groups under [Still open](#still-open) |
 | Exceptions to the import rule | 62 in 32 files (2026-10-27) | 2, in one file, with a reason |
 | Loose ends (`scripts/loose-ends.json`) | 692 when the check started (2026-11-01) | 679 unused exports and 2 paths |
-| Tests | all 206 test files beside the code | in `tests/`, mirroring `src/` (goal [160](_completed/160-v010-audit.goal), then 2181f7be) |
+| Tests | all 206 test files beside the code | in `tests/`, mirroring `src/` (goal [160](160-v010-audit.goal), then 2181f7be) |
 | CI's heavy jobs | picked by file paths, some missed | picked by folders (2026-10-31 23:17) |
 | Log levels | fixed when a part starts | changed while it runs (T4, Q16) |
 
@@ -109,7 +109,7 @@ Audited against file size and folders (T8, T9), repeated knowledge (T1), module 
 - **Control removed nothing it copies or derives.** Q12, as the owner answered it on 2026-11-01: Settings › Space and `thermite_control_space_bytes`; retention policies for seven kinds, each off until set (84ae73ec, cdf7c813, 546b09f3, f5c63fbe); exports only when a run ends or by hand, deleted only by hand (9a61da9a).
 - **The browser scripts had no check.** Q10: `tests/control/dashboard/browser-scripts.test.ts` parses each served script, refuses inline scripts and holds constants to `JSON.stringify`; it found 7 places, fixed with the same output (63ea241b).
 - **Control's log level was fixed at start.** Q16: a setting kept in the store, over REST, MCP and `thermite log-level control`, applied at once and audited (63ea241b).
-- **Backups, the remove guard and health:** Q13 and Q15 are goal [173](_completed/173-recovery-and-health.goal), Q14 is goal [165](_completed/165-results-kept-through-remove-and-reset.goal), all verified. T15, a thing addressed through what owns it, is goal [170](_completed/170-one-hierarchy.goal), verified.
+- **Backups, the remove guard and health:** Q13 and Q15 are goal [173](173-recovery-and-health.goal), Q14 is goal [165](165-results-kept-through-remove-and-reset.goal), all verified. T15, a thing addressed through what owns it, is goal [170](170-one-hierarchy.goal), verified.
 
 Left as it is: the two checks of every signed command, `prepareCommand`, and the REST and MCP twins, as the guide's section 5 says.
 
@@ -129,7 +129,7 @@ Audited against T1, T3, T4, T6, T7, T8, T9, T12 and T13, and Q1, Q2, Q25 and Q26
 - **Stops and resets reached the scheduler by an event it polled every second.** Q26: the service also tells the scheduler at once through `AgentSignals`, and still writes the events; ledger migration 28 acts on a reset once (63ea241b).
 - **Growth:** an hourly export copied the whole ledger, and the build store only grew. T12: a run is exported once when it ends (9a61da9a); builds and trials' session logs are kinds a policy may remove, never a champion's build (cdf7c813, 546b09f3); crash leftovers are swept at start (84ae73ec).
 - **Dead code:** `JudgeOptions.promotion`, `POST /v1/export` (84ae73ec) and `gapPlan` (c05f0a0b) are gone. `usageLimitRetry` and `setFamilyStatus`, which the guide found kept alive only by tests, now have production callers (the advisors' usage limits; the conclusions), so they stay.
-- **`Ledger.invalidate()` had no caller.** Q25: goal [174](_completed/174-invalidate-evidence.goal), verified.
+- **`Ledger.invalidate()` had no caller.** Q25: goal [174](174-invalidate-evidence.goal), verified.
 
 Left as it is: the ledger's interface, its append-only triggers, the readers of v0.1.0 ledgers' older events (`core/names.ts`, kept by the owner's decision of 2026-10-31 23:15), and the brief windows, as the guide's section 5 says.
 
@@ -163,7 +163,7 @@ Audited against the import rule (Q1, Q2, Q3), T2, T3, T4, T8, T9 and Q24.
 - **`advisors.ts` and `advise.ts`** (a function of 1,052 lines). T8 and T9: one folder, `advisors/`, with the pass in `pass/` and the tools in `tools/` (d959c88f, 1e33fa82).
 - **Four names for the review panel and two for the merging teacher.** T1 and Q11: `review_panel` and `merged_by` everywhere, with `ADVISOR_ROLES` in `core/agents.ts` (dfbf991a).
 - **The advisors file's `kb` and the teachers' `search_outside_kb` did one job two ways.** Q24: both are gone; a file that still has `kb` is read without it, with a warning, since a refusal would stop the rig at the upgrade's restart (63ea241b).
-- **Past research was copied to the rig twice for each run.** Goal [175](_completed/175-knowledge-base.goal): nothing of the knowledge base is kept on a rig (3e78db26).
+- **Past research was copied to the rig twice for each run.** Goal [175](175-knowledge-base.goal): nothing of the knowledge base is kept on a rig (3e78db26).
 - **The advisors' records only grew.** T12: a kind a policy may remove, kept under `advisors/runs/<run>/` (cdf7c813).
 - **Settings and log levels:** `SUPERVISOR_NUMBERS` (1f792d26); the level changes by the signed `log_level` command (Q16, 63ea241b).
 
@@ -171,7 +171,7 @@ Left as it is: `git-export.ts`, which commits without a checkout, as the guide's
 
 ### Agents (`src/agents/`)
 
-A part made by Q1 (2026-10-28 17:19): the model client, compaction, the MCP tools, the programs' adapters and the tools, then the roles (goal [166](_completed/166-agent-definitions.goal)) and the terminal and Pi view (goal [169](_completed/169-agents-in-their-terminal.goal)). Audited against folders and the import rule, T3, T4 and T7.
+A part made by Q1 (2026-10-28 17:19): the model client, compaction, the MCP tools, the programs' adapters and the tools, then the roles (goal [166](166-agent-definitions.goal)) and the terminal and Pi view (goal [169](169-agents-in-their-terminal.goal)). Audited against folders and the import rule, T3, T4 and T7.
 
 - **The shared runtimes lived in `harness/agents/`,** and the supervisor imported them there. Q1: they are `src/agents/` (1e33fa82).
 - **The runtimes' number settings** are one table, `AGENTS_NUMBERS` in `agents/settings.ts`, which the harness and the supervisor both read, so a bad value stops either at start (T4, 1e33fa82).
@@ -198,7 +198,7 @@ Audited against T1, T2, T11, Q2, Q4 and Q5, and the TypeScript rules.
 - **Shared words kept in each part.** T1: event kinds and bodies (`core/events/`), verdicts and lifecycles (`verdicts.ts`), held-out words (`held-out.ts`), the agents' words and roles (`agents.ts`), IDs (`ids.ts`), the old-name map (`names.ts`) and the GPU share (`hardware.ts`) (31c65370, 29aee825, 3a664e06, 26b5f11d, e9b10e03, 1b3b9d06).
 - **Contract words lived in the harness.** Q2: the kit's schema, the goals' checks and values, the research's checks, the rig's settings and ChatGPT's address (fa96518e).
 - **`core/version.ts` read `package.json`.** Q4: the read is `common/build-info.ts`; path work is `core/paths.ts`, held to Node's `path.posix` (fa96518e).
-- **Each route's schema and limits had copies.** T2: `core/api/` (e2c26448); the message bus's contracts are `core/link/` (goal [168](_completed/168-message-bus.goal)).
+- **Each route's schema and limits had copies.** T2: `core/api/` (e2c26448); the message bus's contracts are `core/link/` (goal [168](168-message-bus.goal)).
 - **The research corpus was read four ways.** T11: `core/corpus.ts` reads it for the research folder, the teachers, the knowledge base's index and control's research view, held to their earlier outputs by `tests/system/research-corpus.test.ts` (63ea241b).
 - **`RIG_MS`,** left by a blind rename: gone (T13, 84ae73ec).
 - **Retention's rule** is one function for the preview and the run, `core/retention/` (cdf7c813).
@@ -268,31 +268,19 @@ The docs followed each change in its commit. What the goal itself changed:
 
 ### Still open
 
-- **Q11 and Q23, the renames on the wire and in storage:** `family` to `direction` (the ledger's columns, the directives, MCP's `queue_add`, `queue_edit` and `redirect`); the field-note kind `note` to `other` (`core/journal.ts`); the directive kind `note` to `planner_note` (`core/directives.ts`); "research note" to "source note" (`research_note`, `add_note`); and the contract's `notes` and the signed `direction`, which take their new names as Q23 says. This goal.
-- **Q22:** 2,568 mentions of a goal number in `src/`, 2,548 of them on comment lines. This goal.
-- **T13:** 679 unused exports in `scripts/loose-ends.json` (control 260, the harness 179, `agents` 71, `core` 60, the supervisor 54, `common` 26, the command line 24, `release` 5). This goal; the check fails until each removed one is dropped from the list.
-- **Folders in place of names.** Move `src/core/kb.ts`, `kb-fields.ts`, `kb-index.ts` and `kb-index-research.ts` into `core/kb/`, and `harness/kb-part.ts` into `harness/kb/`. Rule on the two-file groups: `control/run-lists` and `run-names`, `harness/run-research` and `run-status`, `harness/agents/trial-cli` and `trial-clock`, `supervisor/model-download` and `model-route`, `cli/local-enroll` and `local-init`, `control/mcp/rig-models` and `rig-reads`; and those that share a word with a one-word file: `common/git` and `git-auth`, `control/rigs/model` and `model-routes`, `control/rigs/setup` and `setup-view`, `control/campaigns/copy` and `queue-copy`, `control/mcp/reads` and `rig-reads`, `harness/rig-settings` and `settings`, `agents/programs/opencode/events` and `session-events`. Also the guide's rule 12 on same-named files: `usage.ts` in `core`, control and the harness, and `rig-settings.ts` in `core` and the harness (`research-tools.ts` is resolved). This goal.
-- **T4, silent catches:** 21 empty `catch {}` in `src/`, about half in the pages' browser scripts. The guide counted about 40; no sweep of them is recorded. This goal.
-- **Cohesion reviews:** 121 files in scope over 500 lines (50 in `src/`) have none recorded. This goal.
-- **T12:** the measurement at 1,000,000 events (`npm run bench:views -- --events 1000000`; about 2 GB of heap). This goal.
-- **T14:** a dry run of the release workflow since the one Containerfile, and the first CI run of `tag-acceptance`. Both need a maintainer's approval. This goal and goal 172.
-- **Q16:** the dashboard's place for log levels (Settings › Logs; Edit rig › Parts of the rig) waits for a mockup. This goal.
-- **The docs' screenshots** (`docs/_site/src/assets/screenshots/`) are taken again from the one demo seed (`scripts/docs/screenshots.mjs`); none is taken from it yet. This goal.
-- **Words to correct:** CONVENTIONS.md's "One name map" ("v0.1.1 keeps no old names"), the 2026-10-26 row of [decisions.md](../decisions.md) and the guide's Q7 and rule 3 predate the owner's decision of 2026-10-31 23:15, which keeps the in-place upgrade of a v0.1.0 control's data and the readers of v0.1.0 ledgers' older events. This goal.
-- **Q17:** no goal or roadmap line holds the move to Node 24 in v0.1.2 yet.
-- **The end's checks:** `npm run check`, the docs checks and the acceptance checks the changes need, with which ran (this goal's last open box, and goal 172's step 11).
+Done since this audit was written: the renames of Q11 and Q23, the folders in place of names and the names of rule 12, the words to correct, and the end's checks (Progress, 2026-11-01). The rest moved to goal [178](../178-clean-up-continued.goal) for v0.1.2 by the owner's decision of 2026-11-01, as sweeps that change no behaviour: Q22's goal numbers in comments, T13's unused exports, T4's empty catches, the long files' cohesion, T12's 1,000,000-event measurement, Q16's dashboard place for log levels, the docs' screenshots, Q17's Node.js 24, pull mode's allow-list test and the goal contract's `min_live_families`. T14's release dry run and the first CI run of `tag-acceptance` wait for a maintainer's approval (goal [172](../172-build-v011.goal)).
 
 ## Decisions
 
 - 2026-10-24, owner: the file-size rule goes in CONVENTIONS.md, and its large files need a better handle.
 - 2026-10-24, owner: v0.1.1 is the code clean-up, to the engineering rules and the new conventions.
-- 2026-10-24, owner: one goal for all of it, to run with `/goal` after v0.1.0 ships: file sizes, the code's structure, duplication and every other rule that CONVENTIONS.md checks. Goal [124](124-file-sizes.goal) is merged into it, and CONVENTIONS.md gets rules on duplication and dead code.
-- 2026-10-24, owner: a read-only pre-audit, goal [127](_completed/127-clean-up-pre-audit.goal), comes first and writes the guide this goal works from: a double audit.
+- 2026-10-24, owner: one goal for all of it, to run with `/goal` after v0.1.0 ships: file sizes, the code's structure, duplication and every other rule that CONVENTIONS.md checks. Goal [124](../124-file-sizes.goal) is merged into it, and CONVENTIONS.md gets rules on duplication and dead code.
+- 2026-10-24, owner: a read-only pre-audit, goal [127](127-clean-up-pre-audit.goal), comes first and writes the guide this goal works from: a double audit.
 - 2026-10-24, owner: tests live in a `tests/` folder, not beside the code ("It makes reading code and finding actual code faster"); and folders and modules with proper imports, not files named `<name>-<part>.ts` side by side ("we just made tons of files putting hierarchy flat and hard to follow").
 
-- 2026-10-26: the tests' move is done by goal [160](_completed/160-v010-audit.goal), so it leaves this goal's scope.
-- 2026-10-26, owner: v0.1.1 breaks compatibility with v0.1.0 ([decisions](../decisions.md#releases-and-planning)): "its ok to say v0.1.0 things don't work in v0.1.1". The code for older data and older parts goes, and names change to the public ones everywhere, the stored and wire names included ("Do what is needed"). A ledger or database that v0.1.1 can't read is kept, never deleted, and the changelog says what an upgrade needs.
-- 2026-10-26, owner: the guide's 26 questions are answered ([the guide, section 7](../code-clean-up-guide.md#7-the-owners-questions)). Every recommendation is accepted, except questions 7 and 11, answered as above. In short:
+- 2026-10-26: the tests' move is done by goal [160](160-v010-audit.goal), so it leaves this goal's scope.
+- 2026-10-26, owner: v0.1.1 breaks compatibility with v0.1.0 ([decisions](../../decisions.md#releases-and-planning)): "its ok to say v0.1.0 things don't work in v0.1.1". The code for older data and older parts goes, and names change to the public ones everywhere, the stored and wire names included ("Do what is needed"). A ledger or database that v0.1.1 can't read is kept, never deleted, and the changelog says what an upgrade needs.
+- 2026-10-26, owner: the guide's 26 questions are answered ([the guide, section 7](../../code-clean-up-guide.md#7-the-owners-questions)). Every recommendation is accepted, except questions 7 and 11, answered as above. In short:
   1. The shared agent runtimes become a part of their own, `src/agents/`.
   2. The contract words (the kit schema, held-out words, goal values, research words and limits, model-route names, the rig settings schema) move to `core`.
   3. The import rule is a script in `npm run check` that fails, with today's exceptions listed by file.
@@ -329,7 +317,7 @@ The docs followed each change in its commit. What the goal itself changed:
 - 2026-11-01 04:50 UTC, owner, on the three kinds left after the first five were built: control's copy of the rigs' events becomes a kind a policy may remove, so control makes the bus's EVENTS stream again once, at the upgrade, without the setting that refused every delete and purge, and keeps for each rig a floor below which events were removed on purpose; rigs keep each trial's full session log after the trial ends, until a policy removes it; control keeps the two newest copies of its store by default, and a policy for that kind takes the place of that rule ("keep the two newest as default, policy can change it").
 - 2026-11-01 06:44 UTC, owner, after a correction: v0.1.0 had no message bus, so no released control has an EVENTS stream that refuses purges, and a control that moves up from v0.1.0 makes the stream with the new settings. The one-time rebuild built for the answer above serves only a deployment that ran an unreleased build, which none did: it goes, with its part of the bus check. The events kind, its purge and the floors stay.
 - 2026-11-01 18:19 UTC, owner, on the two names question 23 left open: the contract's `notes`, which the New campaign page calls "Additional information", becomes `additional_information`; the signed `direction` field of `assign_campaign`, the owner's own label for one run that no agent sees (`--note`, shown as "Note:" on the run's item), becomes `note`. Contracts and commands from before read under the new names, a contract keeping its keys as signed so its hash holds.
-- 2026-11-01 18:33 UTC, owner, asked how to reach testing: finish the renames (question 11 and 23, and the folders and file names that go with them) in v0.1.1, then test; the sweeps that change no behaviour move to goal [178](178-clean-up-continued.goal) for v0.1.2 ("Finish the renames first"): goal numbers in comments, the unused exports, the dropped errors, the long files' cohesion, the 1,000,000-event measurement, the dashboard's log levels, the screenshots, Node.js 24 and pull mode's allow-list test.
+- 2026-11-01 18:33 UTC, owner, asked how to reach testing: finish the renames (question 11 and 23, and the folders and file names that go with them) in v0.1.1, then test; the sweeps that change no behaviour move to goal [178](../178-clean-up-continued.goal) for v0.1.2 ("Finish the renames first"): goal numbers in comments, the unused exports, the dropped errors, the long files' cohesion, the 1,000,000-event measurement, the dashboard's log levels, the screenshots, Node.js 24 and pull mode's allow-list test.
 
 ## Open questions
 
@@ -339,7 +327,7 @@ The docs followed each change in its commit. What the goal itself changed:
 ## Progress
 
 - 2026-10-24: Goal written from the owner's words; goal 124 merged into it.
-- 2026-10-26: The v0.1.1 audit (goal [160](_completed/160-v010-audit.goal)) wrote the [guide](../code-clean-up-guide.md) and moved the tests to `tests/`. The scope no longer holds the tests' move, and the order of work is the guide's. Its counts, from 2026-10-26, replace the ones under Audit where they differ: 33 production files over 800 lines, `control/dashboard.ts` at 8,875 lines.
+- 2026-10-26: The v0.1.1 audit (goal [160](160-v010-audit.goal)) wrote the [guide](../../code-clean-up-guide.md) and moved the tests to `tests/`. The scope no longer holds the tests' move, and the order of work is the guide's. Its counts, from 2026-10-26, replace the ones under Audit where they differ: 33 production files over 800 lines, `control/dashboard.ts` at 8,875 lines.
 - 2026-10-26 20:41 UTC: The owner answered the guide's questions; the answers are under Decisions. v0.1.1 breaks compatibility with v0.1.0.
 - 2026-10-26 20:56 UTC: The owner named the knowledge base's folders collections, accepted the rules of shape, and put an upgrade of the images' system packages into v0.1.1's first code changes.
 - 2026-10-27 05:09 UTC: Started by goal 172. The accepted rules of shape are added to CONVENTIONS.md, with the owner's answers to the guide's questions 1, 4, 10, 18, 19 and 22 and goal 170's rule of address, for the owner's review (gate A).
@@ -394,9 +382,10 @@ The docs followed each change in its commit. What the goal itself changed:
 - 2026-11-01 14:03 UTC: Q10 is built: `tests/control/dashboard/browser-scripts.test.ts` parses every script control serves with `vm.Script`, holds the pages' script tags to the served set with no inline script, and holds every `*_JS` template to constants injected with `JSON.stringify`, another script or a function's `toString()`; it found 7 places, each fixed with the same output. T10's last item: one demo seed, `tests/helpers/demo/`, which the dashboard demo serves and the dashboard's tests read; its clock and random sequences restart on each seed. Left: the docs' screenshots are taken again from it. T13's dev init: `npm run dev:init` runs `thermite local init .dev` from the source through Node's strip-types; `scripts/dev/init.mjs` is removed.
 - 2026-11-01 14:15 UTC: Q26 is built: the service records `trial_stop_asked` and `workers_reset` as before and tells the scheduler at once (`AgentSignals`, which the scheduler sets on the service, so the service imports no scheduler); the polling of those events is gone, and the 1-second watch stays only for runs that stop running. A stop or reset recorded while no scheduler ran is acted on at the next start, a reset once (`workers_resets_applied`, ledger migration 28). Tests in `scheduler/stops.test.ts`.
 - 2026-11-01 14:15 UTC: Q16 is built: a part's level changes while it runs (`setLogLevel`, said in a line); a rig's harness or supervisor changes by the signed `log_level` command (REST, MCP for the owner and the operator, `thermite log-level`), in memory until changed again or the part restarts; control's own level is a setting control keeps (store migration 27), over REST, MCP and `thermite log-level control`, applied at once and at start; audited. The dashboard's place for them (Settings › Logs; Edit rig › Parts of the rig) waits for a mockup. Q24 is built: the advisors file's `kb` and the teachers' `search_outside_kb` are gone; a file that still has `kb` is read without it, with a warning that names the kit's MCP servers, since a refusal would stop the rig at the upgrade's restart. T11 is built: `core/corpus.ts` reads claims, findings, hypotheses and notes for the research folder, the teachers, the knowledge base's index and control's research view, held to their earlier outputs by `tests/system/research-corpus.test.ts`; the review panel's decisions are still read two ways, since their readings differ on malformed dissent entries.
-- 2026-11-01 19:32 UTC: Q11 and Q23, the public names on the wire and in storage, as the owner answered: `family` is `direction` (`direction_added`, `direction_status`; the planner's and teachers' registry is `registry`), the field-note kind `note` is `other`, the rule kind `note` is `planner_note`, a research note is a source note (`source_note`, `add_source_note`, `source-notes/`), the contract's `notes` is `additional_information`, and `assign_campaign`'s `direction` is `note`. The APIs refuse the old names in words. Ledger migration 29 and store migration 28 move the rows; events, signed commands and contracts keep their words and read under the new names through `core/names.ts`, an old contract keeping `notes` as signed so its hash holds (the example contract's hash changed with its key). Left by choice: the objective's `direction` (`max`/`min`, another meaning), the knowledge base's item kind `note` and the planner's `notes` field (not part of these renames), and the goal contract's `min_live_families`, which nothing reads (goal [178](178-clean-up-continued.goal)).
+- 2026-11-01 19:32 UTC: Q11 and Q23, the public names on the wire and in storage, as the owner answered: `family` is `direction` (`direction_added`, `direction_status`; the planner's and teachers' registry is `registry`), the field-note kind `note` is `other`, the rule kind `note` is `planner_note`, a research note is a source note (`source_note`, `add_source_note`, `source-notes/`), the contract's `notes` is `additional_information`, and `assign_campaign`'s `direction` is `note`. The APIs refuse the old names in words. Ledger migration 29 and store migration 28 move the rows; events, signed commands and contracts keep their words and read under the new names through `core/names.ts`, an old contract keeping `notes` as signed so its hash holds (the example contract's hash changed with its key). Left by choice: the objective's `direction` (`max`/`min`, another meaning), the knowledge base's item kind `note` and the planner's `notes` field (not part of these renames), and the goal contract's `min_live_families`, which nothing reads (goal [178](../178-clean-up-continued.goal)).
 - 2026-11-01 19:32 UTC: the folders and names of files: `core/kb/` (items, fields, records, research) and `harness/kb/part.ts`; `cli/local/`, `common/git/`, `control/mcp/rigs/`, `control/rigs/model/`, `control/rigs/setup/`; `opencode/session.ts`. Rule 12: `harness/model-usage.ts`, `control/usage-report.ts`, `harness/rig-settings-store.ts`; core's `usage.ts` and `rig-settings.ts` keep the words. Left with reasons: run-lists and run-names (lists cut to size, against run names), run-research and run-status (the teachers' view, against a reader of status changes), trial-cli and trial-clock (the agent's shell program, against a trial's time limit), model-download and model-route (a model file, against the agents' route), campaigns' copy and queue-copy (a whole campaign, against a run's experiments). CONVENTIONS.md, decisions.md and the guide say v0.1.1 upgrades v0.1.0's data in place, reading old names through `core/names.ts`. The parallel suite passed (2,679).
+- 2026-11-01 21:44 UTC: Verified on c4586c61: the audit covers every area (above); no file in scope is over 800 lines; every group of files is a folder or has its recorded reason; every finding and every theme of the guide is done, has a recorded reason, or moved to goal 178 by the owner's decision; `npm run check` passed whole (2,675 tests, and the judge's and broker's 165 run alone), the docs build and check passed, and every acceptance check that runs here passed on a16bdd67 (bus, leaf, control, Claude Code, Codex, steering, terminal, smoke, backup, new campaign, judge, quick start, multi-GPU, rig image, RunPod, real Claude Code, machines, cluster, rig deploy) with agents on c4586c61. Moved to `_completed/`.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/125-code-to-the-conventions.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/125-code-to-the-conventions.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

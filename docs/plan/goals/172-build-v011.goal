@@ -5,7 +5,7 @@ status: IN_PROGRESS
 version: "0.1.1"
 depends_on: ["160"]
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-11-01
 ---
 
 # 172 · Build v0.1.1: every goal the audit planned, in one order, to verified
@@ -20,7 +20,7 @@ The goals it completes:
 
 | Goal | What |
 | --- | --- |
-| [125](125-code-to-the-conventions.goal) | The code to its conventions: the size check, the rules of shape, the guide's themes T1 to T15 |
+| [125](_completed/125-code-to-the-conventions.goal) | The code to its conventions: the size check, the rules of shape, the guide's themes T1 to T15 |
 | [161](_completed/161-control-bugs-from-the-audit.goal), [162](_completed/162-research-and-knowledge-bugs.goal), [163](_completed/163-harness-bugs-from-the-audit.goal), [164](_completed/164-settings-that-fail-loudly.goal), [165](_completed/165-results-kept-through-remove-and-reset.goal), [171](_completed/171-bugs-on-the-wire.goal) | The bugs the audit found, each with a regression test |
 | [166](_completed/166-agent-definitions.goal) | Agent definitions in code, the prompt each run gives each role, shown everywhere |
 | [168](_completed/168-message-bus.goal) | NATS JetStream as the event log, the delivery and the queues between control, the supervisors and the dashboard |
@@ -79,12 +79,12 @@ The owner, 2026-10-27: "write a single .goal that outlines how to complete the a
 ## Done when
 
 - [x] Gate A is passed: the rules of shape are in CONVENTIONS.md, reviewed by the owner.
-- [ ] Goals 161, 162, 163, 164, 165 and 171 are verified.
-- [ ] Goals 166, 168, 169, 170, 173, 174, 175 and 176 are verified.
-- [ ] Goal 125 is verified: every theme of the guide is done or has a recorded reason.
-- [ ] The audit's private security items are each fixed or have a recorded reason, in `.internal/`.
+- [x] Goals 161, 162, 163, 164, 165 and 171 are verified.
+- [x] Goals 166, 168, 169, 170, 173, 174, 175 and 176 are verified.
+- [x] Goal 125 is verified: every theme of the guide is done or has a recorded reason.
+- [x] The audit's private security items are each fixed or have a recorded reason, in `.internal/`.
 - [ ] The full checks, the docs build and check, and every acceptance check the changed parts need pass on the last commit, and CI is green.
-- [ ] Every page describes what the code does, and CREDITS.md lists every new dependency.
+- [x] Every page describes what the code does, and CREDITS.md lists every new dependency.
 
 ## Decisions
 
@@ -134,6 +134,7 @@ The owner, 2026-10-27: "write a single .goal that outlines how to complete the a
 - 2026-10-30 06:23 UTC: Step 10 goes on. Built and passing the acceptance checks they touch: the advisors' programs as users of their own (d72405f3, with 8f1cbd06's fixes: empty arguments, the supervisor's probe of its own secrets' folders), and the owner's answers of 03:51 and 04:11 with control's small items (c6ffcb17: rigs' reachable addresses, orphan files kept by default, bus keys, one network per compose rig, the slot's warning, the kubeconfig's acceptance, named body limits, refusals in the audit, faults in words, the join route, Live's masking, MCP servers' sign-in calls, kit archives read in memory, health without a token); on c6ffcb17 the Claude Code, Codex, rig image, compose smoke (both podman tools), bus, control, campaign, cluster, steering and quick-start checks pass. Built, not yet committed: 17 items in the harness, supervisor and images, and RunPod's leaf node (goal 168); the local stack's rigs enrolled at start, by the owner's answer on retiring the rig-tokens file.
 - 2026-10-30 21:05 UTC: Steps 8 to 10 go on. Built and passing their acceptance checks: bus only with RunPod's leaf node (goal 168), the advisors' own users, the owner's step 10 answers of 03:51 to 18:24 UTC (reachable addresses, orphan files, bus keys, compose networks, the slot's warning, kubeconfigs, the advisors file's outside base, hidden-test words, legacy events, the release's checksum, the rig-tokens file retired with the local stack's enrollment), control's and the harness's small items, and RunPod's health watch. Every private security item is fixed or kept with the owner's reason (recorded privately); S10-71 is goal 177's, in v0.1.2. Goals 170, 173 and 174 are verified but for their final checks. Goal 169's usage windows pass the terminal, Claude Code and real Claude Code checks; the Codex check's usage-window scene is being fixed. The knowledge explorer's mockup (goal 176) waits for the owner.
 - 2026-11-01 13:19 UTC: goals 168, 169, 170, 173, 174 and 176 are verified and in `_completed/`. A full acceptance pass on 13eb14a8, with the fixes of 3e2ec85b, passed every check that runs here: bus, leaf, control, agents, Claude Code, Codex, steering, terminal, smoke (Docker and Podman), backup, new campaign, multi-GPU, rig image, RunPod, real Claude Code, machines, cluster and rig deploy; it found that agents in OpenCode reached Thermite's MCP tools only through OpenCode's Code Mode (fixed). Left: goal 175's needle test and its decision on search by meaning, goal 125's remaining themes, the first CI run of `tag-acceptance` (a maintainer's approval), and the end's full checks.
+- 2026-11-01 21:44 UTC: every goal of the build is verified, goal 125 last (c4586c61). On c4586c61 the full `npm run check` and the docs build and check passed, and every acceptance check that runs here passed (19 on a16bdd67, agents on c4586c61). Left: CI's full run on the last commit, with the first run of `tag-acceptance`, both waiting for a maintainer's approval; then the release candidate for the owner's testing.
 
 ---
 

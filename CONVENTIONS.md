@@ -173,7 +173,7 @@ These rules give the code one shape, so a reader knows where a thing lives befor
 - Hierarchy goes in folders, not in file names. Files whose names share a word at the start or the end belong in a folder named for that word: `model.ts`, `model-check.ts`, `model-source.ts` and `model-stall.ts` become `model/index.ts`, `model/check.ts`, `model/source.ts` and `model/stall.ts`; the sixteen `scripts/*-acceptance.mjs` become `scripts/acceptance/`.
 - A folder that is a module has an `index.ts`: its interface. Code outside the folder imports from `index.ts`, not from the files inside it. Where a module holds another, code outside both imports the outer one's `index.ts`. Inside a folder, files import each other directly.
 - A folder whose files are each an entry or a contract of their own is a namespace, with no `index.ts`: its files are imported one by one. The namespaces are the APIs' routes and clients (`core/api/`, `common/api/`), the events' kinds and bodies (`core/events/`), the message bus's contracts (`core/link/`), control's pages and route sections (`control/ui/`, `control/dashboard/`, apart from their folders with an `index.ts`) and the command line's commands (`cli/thermite/`). `npm run check:imports` holds production code to this rule, with no exceptions, and lists the namespaces; tests may import any file.
-- New code follows this now. Add a module to a folder; never add another `<name>-<part>.ts` beside the rest. Goal [125](docs/plan/goals/125-code-to-the-conventions.goal) moves the existing files.
+- New code follows this now. Add a module to a folder; never add another `<name>-<part>.ts` beside the rest. Goal [125](docs/plan/goals/_completed/125-code-to-the-conventions.goal) moves the existing files.
 
 ## Limits and state
 

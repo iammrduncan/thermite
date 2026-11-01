@@ -144,7 +144,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [166](goals/_completed/166-agent-definitions.goal) Agent definitions you can read and change: one definition for each role in code, and the prompt each run gives it · `VERIFIED`
 - [168](goals/_completed/168-message-bus.goal) One message bus: NATS JetStream between control, rigs and agents, with fast storage and retrieval · `VERIFIED`
 - [169](goals/_completed/169-agents-in-their-terminal.goal) Agents in their own terminal: each agent program runs its TUI, the live view shows it, steering types into it, session logs become events · `VERIFIED`
-- [125](goals/125-code-to-the-conventions.goal) Code clean-up: all of Thermite's code to its conventions, from file sizes and structure to duplication · `IN_PROGRESS`
+- [125](goals/_completed/125-code-to-the-conventions.goal) Code clean-up: all of Thermite's code to its conventions, from file sizes and structure to duplication · `VERIFIED`
 - [124](goals/124-file-sizes.goal) Files of a size you can review · `DROPPED`, merged into 125
 
 ## v0.1.2

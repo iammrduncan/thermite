@@ -1,6 +1,6 @@
 # The code clean-up guide
 
-This guide is for the clean-up of v0.1.1, goal [125](goals/125-code-to-the-conventions.goal). It is the result of goal [127](goals/_completed/127-clean-up-pre-audit.goal), the pre-audit, which was done as part of the v0.1.1 audit, goal [160](goals/_completed/160-v010-audit.goal).
+This guide is for the clean-up of v0.1.1, goal [125](goals/_completed/125-code-to-the-conventions.goal). It is the result of goal [127](goals/_completed/127-clean-up-pre-audit.goal), the pre-audit, which was done as part of the v0.1.1 audit, goal [160](goals/_completed/160-v010-audit.goal).
 
 - **What it describes:** the code as v0.1.0 shipped it (tag `v0.1.0`), with the tests already moved to `tests/` by goal 160.
 - **Part 2:** on the same evening, five more reviewers looked at the agents' definitions, every channel between the parts, NATS JetStream as a message bus, agents in their own terminal, and the hierarchy of Thermite's things. [Section 8](#8-part-2-lanes-9-to-13-goals-166-to-171) says what they change here.

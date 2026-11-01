@@ -18,7 +18,7 @@ A review of every way two of Thermite's parts exchange data: control, a rig's su
 
 1. **A catalogue of every channel:** its two ends, its transport, who starts it, each message type, where the message's schema lives, how it is authenticated, how often it runs and how large its messages are, what each end logs, and what happens when one end is down.
 2. **Performance:** the polling loops in every process, the delay they add end to end (an agent's step to the live view, a command from the dashboard to a rig, an event from the harness to control's pages), and the work each poll does.
-3. **Findings,** with evidence, in the audit's folder. Bugs become goals; the rest feeds goal [168](168-message-bus.goal), the message bus, and goal [125](../125-code-to-the-conventions.goal)'s contracts.
+3. **Findings,** with evidence, in the audit's folder. Bugs become goals; the rest feeds goal [168](168-message-bus.goal), the message bus, and goal [125](125-code-to-the-conventions.goal)'s contracts.
 4. **A public page** that explains how the parts talk, as Thermite's design. It names no deployment, host or address.
 
 ## Why

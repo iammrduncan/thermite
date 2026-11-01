@@ -10,11 +10,11 @@ updated: 2026-11-01
 
 # 178 · Code clean-up, continued: what v0.1.1 left for later
 
-**Status:** `PROPOSED` · **Version:** [v0.1.2](../roadmap.md#v012) · **Depends on:** [125](125-code-to-the-conventions.goal)
+**Status:** `PROPOSED` · **Version:** [v0.1.2](../roadmap.md#v012) · **Depends on:** [125](_completed/125-code-to-the-conventions.goal)
 
 ## What
 
-Goal [125](125-code-to-the-conventions.goal) brought Thermite's code to its conventions for v0.1.1. On 2026-11-01 the owner chose to test v0.1.1 once the renames were done and to leave the sweeps that change no behaviour for v0.1.2 (Decisions). These are they, from goal 125's audit:
+Goal [125](_completed/125-code-to-the-conventions.goal) brought Thermite's code to its conventions for v0.1.1. On 2026-11-01 the owner chose to test v0.1.1 once the renames were done and to leave the sweeps that change no behaviour for v0.1.2 (Decisions). These are they, from goal 125's audit:
 
 1. **Goal numbers in code comments** (the guide's question 22): about 2,500 comment lines in `src/` cite a goal; a comment gives its reason in words, and a goal number only where the sentence needs it.
 2. **Unused exports** (theme T13): `scripts/loose-ends.json` lists about 680 exports nothing imports, and 2 paths. Each goes, or is used, until the list is empty.
