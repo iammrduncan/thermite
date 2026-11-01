@@ -22,13 +22,11 @@ import {
 import { log } from "../env.ts";
 import { removeOnceEmpty, startEmptying } from "../work-queue.ts";
 import {
-  deleteStreamOn,
   ensureConsumer,
   ensureStream,
   nameOf,
   noSuchStream,
   purgeOn,
-  streamInfoOn,
   streamStates,
 } from "./streams.ts";
 import { type BusTrust, tlsOf, where } from "./tls.ts";
@@ -69,7 +67,7 @@ export const BUS_STATE_CONSUMERS_MAX = 200;
 /** How many messages a batch holds, at most: the server's own limit, which refuses a larger one. */
 export const BUS_BATCH_MAX = 1000;
 /** How long a look (a message, a last place, a read's start) waits for the server. It then fails. */
-export const BUS_LOOK_TIMEOUT_MS = 10_000;
+const BUS_LOOK_TIMEOUT_MS = 10_000;
 /** How many messages a read looks at, at most: the largest page control's API gives. */
 export const BUS_READ_MAX = 5000;
 /** How many bytes of messages a read gathers, at most: it ends after the message that passes it. */
@@ -178,15 +176,6 @@ export interface StreamState {
 }
 
 export type StreamSettings = Partial<StreamConfig> & { name: string };
-
-/** A stream as the server has it: its settings, and its first and last places, messages and bytes. */
-export interface StreamInfo {
-  config: StreamSettings;
-  first_seq: number;
-  last_seq: number;
-  messages: number;
-  bytes: number;
-}
 export type ConsumerSettings = Partial<ConsumerConfig> & { durable_name: string };
 
 /**
@@ -278,10 +267,6 @@ export interface Bus {
   remove(stream: string, subject: string, id: string): Promise<boolean>;
   /** The state of each of these streams the server has; a stream not made yet is left out. */
   streams(names: readonly string[]): Promise<StreamState[]>;
-  /** A stream's settings and places; undefined when the server has no such stream. */
-  streamInfo(stream: string): Promise<StreamInfo | undefined>;
-  /** Deletes a stream and every message in it; false when there was none. */
-  deleteStream(stream: string): Promise<boolean>;
   /**
    * The server's purge of a stream's messages on `filter` (a subject, `*` and `>` too): those
    * before the place `seq`, or all but the newest `keep`, or all of them. How many it removed.
@@ -673,12 +658,6 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
         }
         await pause(BUS_RETRY_MS);
       }
-    },
-    async streamInfo(stream) {
-      return streamInfoOn(await connection(), stream);
-    },
-    async deleteStream(stream) {
-      return deleteStreamOn(await connection(), stream);
     },
     async purge(stream, o) {
       return purgeOn(await connection(), stream, o);

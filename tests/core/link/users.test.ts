@@ -206,14 +206,10 @@ describe("who may do what on the message bus", () => {
     assert.deepEqual(controlPermissions(), {
       publish: { deny: [`$JS.API.STREAM.DELETE.${EVENT_STREAM}`] },
     });
-    // While control makes the events stream again, once (control/events/rebuild.ts), it may
-    // delete it; the users file says so then, and no longer after.
-    assert.deepEqual(controlPermissions({ rebuilding: true }), { publish: { deny: [] } });
+    // It may never delete it: the users file says so for control's user.
     const keys = { control: user(), system: user() };
-    const during = readUsers(usersFile({ ...keys, rigs: [], rebuilding: true }));
-    assert.deepEqual(during.accounts[BUS_ACCOUNT]?.users[0]?.permissions, {
-      publish: { deny: [] },
-    });
+    const { accounts } = readUsers(usersFile({ ...keys, rigs: [] }));
+    assert.deepEqual(accounts[BUS_ACCOUNT]?.users[0]?.permissions, controlPermissions());
     // The reports stream is an inbox: control may make it again, as it does once from one kept
     // for good.
     assert.ok(!JSON.stringify(controlPermissions()).includes(REPORT_STREAM));

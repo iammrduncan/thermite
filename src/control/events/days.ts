@@ -38,9 +38,6 @@ interface EventDay {
 /** What a purge of control's copy needs of the bus. */
 type PurgeBus = Pick<Bus, "purge" | "message">;
 
-/** When control first stored a message: its header after a rebuild, else the server's own time. */
-const receivedOf = (m: BusMessage) => m.header(EVENT_HEADERS.received) ?? m.at ?? "";
-
 export class EventDays {
   /** The stream's place through which it took every message. */
   through = 0;
@@ -56,7 +53,8 @@ export class EventDays {
       const on = purgeSubjectOf(m.subject);
       const rig = m.header(EVENT_HEADERS.rig);
       if (!on || !rig) continue;
-      const at = receivedOf(m);
+      // When control stored it, by the bus's clock.
+      const at = m.at ?? "";
       const day = at.slice(0, 10);
       const key = `${on.filter}\n${rig}\n${day}`;
       const had = this.days.get(key);

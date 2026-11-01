@@ -2,18 +2,16 @@ import { JetStreamApiCodes, JetStreamApiError, jetstreamManager } from "@nats-io
 import type { NatsConnection } from "@nats-io/transport-node";
 import { log } from "../env.ts";
 import {
-  BUS_LOOK_TIMEOUT_MS,
   BUS_STATE_CONSUMERS_MAX,
   type ConsumerSettings,
-  type StreamInfo,
   type StreamSettings,
   type StreamState,
 } from "./index.ts";
 
 /**
  * The bus client's calls on streams and consumers themselves (index.ts makes the client): make or
- * bring a stream to its settings, make a consumer, read a stream's settings and state, delete a
- * stream, and purge its messages on a subject.
+ * bring a stream to its settings, make a consumer, read a stream's state, and purge its messages
+ * on a subject.
  */
 
 /** Whether the server said there is no such stream. */
@@ -59,35 +57,6 @@ export async function ensureConsumer(
     await jsm.consumers.add(stream, consumer);
     log("bus", "consumer made", { stream, consumer: consumer.durable_name });
   }
-}
-
-/** A stream's settings and places; undefined when the server has no such stream. */
-export async function streamInfoOn(
-  nc: NatsConnection,
-  stream: string,
-): Promise<StreamInfo | undefined> {
-  const jsm = await jetstreamManager(nc, { timeout: BUS_LOOK_TIMEOUT_MS });
-  const info = await jsm.streams.info(stream).catch((err: unknown) => {
-    if (noSuchStream(err)) return undefined;
-    throw err;
-  });
-  if (!info) return undefined;
-  return {
-    config: info.config as StreamSettings,
-    first_seq: info.state.first_seq,
-    last_seq: info.state.last_seq,
-    messages: info.state.messages,
-    bytes: info.state.bytes,
-  };
-}
-
-/** Deletes a stream and every message in it; false when there was none. */
-export async function deleteStreamOn(nc: NatsConnection, stream: string): Promise<boolean> {
-  const jsm = await jetstreamManager(nc);
-  return await jsm.streams.delete(stream).catch((err: unknown) => {
-    if (noSuchStream(err)) return false;
-    throw err;
-  });
 }
 
 /** The server's purge of a stream's messages on a subject: before a place, all but some, or all. */

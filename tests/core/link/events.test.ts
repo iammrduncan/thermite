@@ -7,7 +7,6 @@ import { CONFIG_STREAM_CONFIG } from "../../../src/core/link/config.ts";
 import {
   EVENT_HEADERS,
   EVENT_MAX_BYTES,
-  EVENT_REBUILD_SUBJECT,
   EVENT_STREAM,
   EVENT_STREAM_CONFIG,
   EVENT_SUBJECTS,
@@ -317,6 +316,5 @@ describe("the events stream's contract", () => {
       run: null,
     });
     assert.equal(purgeSubjectOf("thermite.rig.rig-a.report"), null);
-    assert.equal(purgeSubjectOf(EVENT_REBUILD_SUBJECT), null);
   });
 });

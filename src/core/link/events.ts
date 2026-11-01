@@ -120,11 +120,6 @@ export const EVENT_HEADERS = {
   ledger: "Thermite-Ledger",
   report: "Thermite-Report",
   seq: "Thermite-Seq",
-  /**
-   * When control first stored the event, for a message the stream was made again with
-   * (control/events/rebuild.ts): the server's own time is the copy's then.
-   */
-  received: "Thermite-Received",
 } as const;
 /** NATS's own header for a message's id, which the stream keeps one message for. */
 const MSG_ID_HEADER = "Nats-Msg-Id";
@@ -277,45 +272,6 @@ export const EVENT_STREAM_CONFIG = {
   max_msg_size: EVENT_MAX_BYTES,
   discard: "new",
   duplicate_window: DUPLICATE_WINDOW_NS,
-  num_replicas: 1,
-  allow_atomic: true,
-  allow_direct: true,
-  compression: "s2",
-} satisfies Partial<StreamConfig> & { name: string };
-
-/**
- * The stream an `EVENTS` stream made before v0.1.1 is copied to while control makes it again
- * without the settings that refused every purge (control/events/rebuild.ts): its messages on one
- * subject, each with its own subject in a header, at the same places. Control removes it once the
- * new `EVENTS` stream holds them all.
- */
-export const EVENT_REBUILD_STREAM = "EVENTS_REBUILD";
-/** The one subject of the copy. */
-export const EVENT_REBUILD_SUBJECT = "thermite.rebuild.events";
-/** The header that keeps a copied message's own subject. */
-export const EVENT_SUBJECT_HEADER = "Thermite-Subject";
-
-/**
- * How long a stream being copied into remembers a message's id, in nanoseconds: a second, so the
- * server holds few ids in memory while the copy goes at full speed; each batch names the last
- * place it expects, so nothing is copied twice.
- */
-export const COPY_DUPLICATE_WINDOW_NS = 1e9;
-
-/** The copy's settings: as the events stream's, on its own subject. */
-export const EVENT_REBUILD_STREAM_CONFIG = {
-  name: EVENT_REBUILD_STREAM,
-  subjects: [EVENT_REBUILD_SUBJECT],
-  description: "A copy of the EVENTS stream while control makes it again",
-  retention: "limits",
-  storage: "file",
-  max_msgs: -1,
-  max_bytes: -1,
-  max_age: 0,
-  max_msgs_per_subject: -1,
-  max_msg_size: EVENT_MAX_BYTES,
-  discard: "new",
-  duplicate_window: COPY_DUPLICATE_WINDOW_NS,
   num_replicas: 1,
   allow_atomic: true,
   allow_direct: true,

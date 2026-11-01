@@ -274,26 +274,6 @@ describe("each rig's key on the message bus", () => {
     assert.equal(users.keepsFailing(), undefined, "gone as soon as the server takes the file");
   });
 
-  test("while control makes the events stream again, its user may delete it; after, never", async () => {
-    const s = setup();
-    await s.users.sync();
-    const control = () => accountsIn(s.file)[BUS_ACCOUNT]?.users[0]?.permissions;
-    assert.deepEqual(control(), controlPermissions());
-    const reloads = s.server.calls.length;
-    const during = await s.users.whileRebuilding(async () => control());
-    assert.deepEqual(during, controlPermissions({ rebuilding: true }), "the server took it first");
-    assert.deepEqual(control(), controlPermissions(), "and no longer once it ends");
-    assert.equal(s.server.calls.length, reloads + 2, "a reload each way");
-    // Whatever became of the work.
-    await assert.rejects(
-      s.users.whileRebuilding(async () => {
-        throw new Error("the bus went away");
-      }),
-      /went away/,
-    );
-    assert.deepEqual(control(), controlPermissions());
-  });
-
   test("the users file names control, its system user and each rig with its own permissions", async () => {
     const s = setup();
     const keys = { a: user(), b: user() };

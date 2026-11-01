@@ -33,7 +33,7 @@ import {
 import { Credential } from "./credential.ts";
 import { mountDashboard } from "./dashboard/index.ts";
 import { CONTROL_DISK_CHECK_MS, ControlDisk } from "./disk.ts";
-import { EventsApply, EventsMove, EventsRebuild, EventsWriter } from "./events/index.ts";
+import { EventsApply, EventsMove, EventsWriter } from "./events/index.ts";
 import { followReports } from "./ingest.ts";
 import { sendCommandsOn } from "./issue/index.ts";
 import {
@@ -277,14 +277,6 @@ async function main(): Promise<void> {
     await rigConsumers.make();
   });
   const started = performance.now();
-  // A stream made before v0.1.1 refuses every purge: made again once, before anything reads it,
-  // with control's user allowed to delete it while it does (events/rebuild.ts).
-  const rebuild = new EventsRebuild({ bus, allowDelete: (work) => busUsers.whileRebuilding(work) });
-  await rebuild.run();
-  if (rebuild.stopped) {
-    log("control", "fatal", { error: rebuild.stopped }, "error");
-    process.exit(1);
-  }
   await bus.makeStream(EVENT_STREAM_CONFIG);
   await eventsApply.start();
   // A store that applied the stream past its end holds records the stream lacks: control does

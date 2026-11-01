@@ -125,15 +125,12 @@ export function rigPermissions(rig: string, runs: readonly string[] = []): Permi
 export const RECORD_STREAMS = [EVENT_STREAM] as const;
 
 /**
- * What control's user may not do: delete a stream of record. It may purge the events stream by
- * subject, which the owner's retention policies do (control/retention/). While control makes the
- * events stream again (`rebuilding`: control/events/rebuild.ts), it may delete it, once, to make
- * it anew: the stream it copied it to holds every message then. Control's user may do the rest.
+ * What control's user may not do: delete a stream of record, ever. It may purge the events stream
+ * by subject, which the owner's retention policies do (control/retention/). Control's user may do
+ * the rest.
  */
-export function controlPermissions(o: { rebuilding?: boolean } = {}): {
-  publish: { deny: string[] };
-} {
-  const deny = o.rebuilding ? [] : RECORD_STREAMS.map((s) => `${API}.STREAM.DELETE.${s}`);
+export function controlPermissions(): { publish: { deny: string[] } } {
+  const deny = RECORD_STREAMS.map((s) => `${API}.STREAM.DELETE.${s}`);
   return { publish: { deny } };
 }
 
@@ -189,8 +186,6 @@ export interface BusUserKeys {
   system: string;
   backup?: string | undefined;
   rigs: readonly { rig: string; key: string; runs?: readonly string[] | undefined }[];
-  /** Control makes the events stream again now: its user may delete it (controlPermissions). */
-  rebuilding?: boolean | undefined;
   /** The rigs on RunPod whose pod's server control's server dials as a leaf node, if any. */
   leaf?: LeafRigs | undefined;
 }
@@ -312,7 +307,7 @@ export function usersFile(u: BusUserKeys): string {
     [BUS_ACCOUNT]: {
       jetstream: "enabled",
       users: [
-        { nkey: u.control, permissions: controlPermissions({ rebuilding: u.rebuilding }) },
+        { nkey: u.control, permissions: controlPermissions() },
         ...backup.map((nkey) => ({ nkey, permissions: backupPermissions() })),
         ...rigs.map((r) => ({ nkey: r.key, permissions: rigPermissions(r.rig, r.runs) })),
       ],
