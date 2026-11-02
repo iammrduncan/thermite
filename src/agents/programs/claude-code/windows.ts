@@ -100,3 +100,27 @@ export function mergeUsage(
     at,
   };
 }
+
+/**
+ * The windows Claude Code's status line gives in its own terminal (goal 183), from Thermite's
+ * `StatusLine` signal: `rate_limits` holds each window as `{used_percentage, resets_at}`, a
+ * percent and seconds. A window it leaves out keeps the value an earlier one gave.
+ */
+export function windowsOfStatus(payload: unknown, was: PlanWindows | undefined): PlanWindows {
+  const limits = ((payload as { rate_limits?: unknown } | null)?.rate_limits ?? {}) as Record<
+    string,
+    { used_percentage?: unknown; resets_at?: unknown } | undefined
+  >;
+  const out: PlanWindows = { ...was };
+  for (const k of WINDOWS) {
+    const w = limits[k];
+    if (typeof w?.used_percentage !== "number" || typeof w.resets_at !== "number") continue;
+    const at = new Date(w.resets_at * 1000);
+    if (Number.isNaN(at.getTime())) continue;
+    out[k] = {
+      utilization: Math.min(1, Math.max(0, w.used_percentage / 100)),
+      resets_at: at.toISOString(),
+    };
+  }
+  return out;
+}

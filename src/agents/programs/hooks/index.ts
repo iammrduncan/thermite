@@ -20,7 +20,7 @@ export const HOOK_PROGRAM = fileURLToPath(
 );
 
 /** Which program a hook runs for, as its first argument says: its signals' `src`. */
-export type HookSource = "claude-code" | "codex" | "codex-notify";
+export type HookSource = "claude-code" | "claude-code-status" | "codex" | "codex-notify";
 
 /** The hook program's command line for `src`: Node, the program and its source. */
 export const hookArgv = (src: HookSource): string[] => [process.execPath, HOOK_PROGRAM, src];

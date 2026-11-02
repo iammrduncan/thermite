@@ -30,6 +30,7 @@ import {
   newClaudeTally,
   PROMPT_VAR,
   readClaudeEvents,
+  windowsOfStatus,
 } from "../programs/index.ts";
 import type { RoleRunner } from "../runner.ts";
 import type { CliProgram, CliRun } from "./program.ts";
@@ -226,6 +227,10 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
     // SessionStart (goal 183).
     startSignal: "SessionStart",
     pastes: true,
+    // A subscription's usage windows: only its status line gives them in its terminal (goal 183).
+    status: (payload, t) => {
+      t.usage = windowsOfStatus(payload, t.usage);
+    },
     // A full usage window: it waits for the reset and goes on by itself (its settings turn
     // autoContinueAtUsageLimit on), and the trial waits with it (usage-window.ts).
     goesOnAfterLimit: true,

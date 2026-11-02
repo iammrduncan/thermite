@@ -26,6 +26,7 @@ import {
   OFFER_PATH,
   runHook,
   signalLine,
+  statusSignal,
   TAKEN_PATH,
 } from "../../../src/agents/programs/hooks/main.ts";
 import * as plugin from "../../../src/agents/programs/opencode/plugin.ts";
@@ -217,6 +218,41 @@ describe("Thermite's hook program (goal 169)", () => {
       .map(
         (l) => JSON.parse(l) as { src: string; event: string; payload: Record<string, unknown> },
       );
+
+  test("Claude Code's status line writes a subscription's usage windows when they change, and prints nothing (goal 183)", async () => {
+    const f = file();
+    const input = (five: number) =>
+      JSON.stringify({
+        model: { id: "claude-opus-5-5" },
+        rate_limits: {
+          five_hour: { used_percentage: five, resets_at: 1_793_662_412 },
+          seven_day: { used_percentage: 17, resets_at: 1_793_997_212 },
+        },
+      });
+    assert.deepEqual(await run(["claude-code-status"], input(42), env(f)), []);
+    assert.deepEqual(await run(["claude-code-status"], input(42), env(f)), []);
+    await run(["claude-code-status"], input(43), env(f));
+    const lines = written(f);
+    assert.deepEqual(
+      lines.map((l) => [
+        l.src,
+        l.event,
+        (l.payload.rate_limits as { five_hour: { used_percentage: number } }).five_hour
+          .used_percentage,
+      ]),
+      [
+        ["claude-code", "StatusLine", 42],
+        ["claude-code", "StatusLine", 43],
+      ],
+    );
+    assert.deepEqual(lines[0]?.payload.rate_limits, {
+      five_hour: { used_percentage: 42, resets_at: 1_793_662_412 },
+      seven_day: { used_percentage: 17, resets_at: 1_793_997_212 },
+    });
+    // With a key, not a subscription, it has no windows: nothing is written.
+    assert.equal(statusSignal(JSON.stringify({ model: {} }), undefined), undefined);
+    assert.equal(statusSignal("not json", undefined), undefined);
+  });
 
   test("after a tool it gives the owner's message as PostToolUse's added context, then sends the receipt", async () => {
     h.answer({ offer: "o-1", text: "the message" });

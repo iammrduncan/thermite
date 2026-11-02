@@ -263,6 +263,8 @@ export async function runCliTrial<T extends CliTally>(
     if (term) await term.stop();
     else await deps.runner.killRole(spec.lane).catch(() => 0);
   };
+  /** The windows last reported, as JSON. */
+  let windowsSaid: string | undefined;
   /** One read of the output into the tally; true when the output holds more than it read. */
   const pump = (): boolean => {
     const r = readOutput();
@@ -281,8 +283,14 @@ export async function runCliTrial<T extends CliTally>(
         tokens_in: tally.tokensIn,
         tokens_out: tally.tokensOut,
       });
-      const windows = p.windows?.(tally);
-      if (windows) deps.usage?.(windows);
+    }
+    // A subscription's windows when a read brought lines, or they changed (Claude Code's status
+    // line in its terminal comes apart from its log).
+    const windows = p.windows?.(tally);
+    const said = windows ? JSON.stringify(windows) : undefined;
+    if (windows && (r.lines || said !== windowsSaid)) {
+      windowsSaid = said;
+      deps.usage?.(windows);
     }
     return r.more;
   };

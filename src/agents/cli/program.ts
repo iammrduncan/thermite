@@ -285,6 +285,11 @@ export interface CliTerminal<T extends CliTally> {
    * the read gave before it.
    */
   take?(e: SessionEvent, t: T, at: number): void;
+  /**
+   * What its own tally takes from its status line's `StatusLine` signal in the run's signals file
+   * (Claude Code: its subscription's usage windows, which its session log does not hold).
+   */
+  status?(payload: unknown, t: T): void;
 }
 
 /** What a program's entry gives a one-prompt call in its folder, as the call's user. */

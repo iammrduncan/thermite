@@ -122,7 +122,7 @@ class Program {
  */
 function runner(
   program: (log: string) => Program,
-  o: { signalAfterMs?: number; pastesAfterMs?: number; deaf?: boolean } = {},
+  o: { signalAfterMs?: number; pastesAfterMs?: number; deaf?: boolean; status?: unknown } = {},
 ): {
   r: RoleRunner;
   started: () => Program | undefined;
@@ -150,7 +150,7 @@ function runner(
           if (signals)
             appendFileSync(
               signals,
-              `${JSON.stringify({ t: Date.now(), src: "claude-code", event: "SessionStart", payload: { session_id: "s-1" } })}\n`,
+              `${JSON.stringify({ t: Date.now(), src: "claude-code", event: "SessionStart", payload: { session_id: "s-1" } })}\n${o.status ? `${JSON.stringify({ t: Date.now(), src: "claude-code", event: "StatusLine", payload: o.status })}\n` : ""}`,
             );
         }, o.signalAfterMs ?? 0);
         const pastesAt = Date.now() + (o.pastesAfterMs ?? 0);
@@ -313,6 +313,30 @@ test("a program that turns bracketed paste on as its input comes up is typed int
   const t = times();
   assert.ok(t.pastes !== undefined && t.typed !== undefined, JSON.stringify(t));
   assert.ok(t.typed >= t.pastes + 700, `typed ${t.typed - t.pastes} ms after bracketed paste`);
+});
+
+test("Claude Code's status line gives the call its subscription's usage windows (goal 183)", async () => {
+  const k = link();
+  const resets = 1_793_662_412;
+  const { r } = runner((log) => new Program(log, k.inTurn, 3), {
+    status: { rate_limits: { five_hour: { used_percentage: 42, resets_at: resets } } },
+  });
+  const seen: unknown[] = [];
+  await terminalCall(
+    claudeProgram,
+    MODEL,
+    "plan",
+    { runner: r, apiUrl: "http://127.0.0.1:1", scratchDir: scratch },
+    {
+      role: "planner",
+      link: k.l,
+      answer: (t) => t.trimStart().startsWith("{"),
+      windows: (w) => seen.push(w),
+    },
+  );
+  assert.deepEqual(seen.at(-1), {
+    five_hour: { utilization: 0.42, resets_at: new Date(resets * 1000).toISOString() },
+  });
 });
 
 test("a message the program never takes ends the call with why, never a wait for a turn that never begins (goal 183)", async () => {

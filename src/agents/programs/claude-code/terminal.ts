@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { hookShellLine } from "../hooks/index.ts";
 import {
   literally,
   type TerminalLog,
@@ -34,8 +35,9 @@ export const CLAUDE_TERMINAL_ENV: Readonly<Record<string, string>> = {
 /**
  * Its settings in a terminal (`--settings`, which it reads whatever `--setting-sources` says): the
  * trial's (claudeTrialSettings: its hooks), with the warning about bypassed permissions taken as
- * read (it waits for a key, its default "No, exit"), no feedback survey, and a full usage window
- * waited out, the owner's choice (2026-10-27).
+ * read (it waits for a key, its default "No, exit"), no feedback survey, a full usage window
+ * waited out, the owner's choice (2026-10-27), and its status line, Thermite's hook program, which
+ * writes a subscription's usage windows to the signals file (goal 183).
  */
 export function claudeTerminalSettings(trial: string): string {
   return JSON.stringify({
@@ -43,6 +45,8 @@ export function claudeTerminalSettings(trial: string): string {
     skipDangerousModePermissionPrompt: true,
     feedbackSurveyRate: 0,
     autoContinueAtUsageLimit: true,
+    // A subscription's usage windows, which only its status line is given here (goal 183).
+    statusLine: { type: "command", command: hookShellLine("claude-code-status") },
   });
 }
 

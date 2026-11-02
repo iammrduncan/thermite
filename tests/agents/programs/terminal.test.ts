@@ -69,6 +69,9 @@ describe("each program in its own terminal", () => {
     assert.ok(settings.hooks.Stop, "the trial's hooks stay");
     assert.equal(settings.skipDangerousModePermissionPrompt, true);
     assert.equal(settings.autoContinueAtUsageLimit, true);
+    // Its status line is Thermite's hook program, for a subscription's usage windows (goal 183).
+    assert.equal(settings.statusLine.type, "command");
+    assert.match(settings.statusLine.command, /main\.ts' 'claude-code-status'$/);
     const [seed] = claudeTerminalSeeds("/area/claude-home", "/area/repo", "2.1.308");
     assert.equal(seed?.path, "/area/claude-home/.claude.json");
     assert.equal(seed?.mode, 0o600);

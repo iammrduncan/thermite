@@ -49,6 +49,7 @@ export {
   readClaudeEvents,
   type TranscriptState,
   type UsageWindow,
+  windowsOfStatus,
 } from "./claude-code/index.ts";
 export {
   type CodexTally,

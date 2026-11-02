@@ -8,6 +8,7 @@ import {
   creditsOn,
   mergeUsage,
   windowsOf,
+  windowsOfStatus,
 } from "../../../../src/agents/programs/claude-code/windows.ts";
 
 const AT = 1_793_000_000;
@@ -146,4 +147,24 @@ describe("a Claude subscription's usage credits, from Claude Code to the rig's r
     // A report that never gave them has none.
     assert.equal(mergeUsage(undefined, {}).credits, undefined);
   });
+});
+
+test("in its own terminal, the windows come from its status line's rate_limits, a percent and seconds (goal 183)", () => {
+  const was = { seven_day: { utilization: 0.1, resets_at: iso(AT + 86_400) } };
+  const w = windowsOfStatus(
+    { rate_limits: { five_hour: { used_percentage: 42, resets_at: AT } } },
+    was,
+  );
+  assert.deepEqual(w, {
+    five_hour: { utilization: 0.42, resets_at: iso(AT) },
+    seven_day: was.seven_day,
+  });
+  assert.deepEqual(windowsOfStatus({}, undefined), {});
+  assert.deepEqual(
+    windowsOfStatus(
+      { rate_limits: { five_hour: { used_percentage: "x", resets_at: AT } } },
+      undefined,
+    ),
+    {},
+  );
 });

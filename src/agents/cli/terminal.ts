@@ -203,6 +203,8 @@ export class RoleTerminal<T extends CliTally> {
   private limit: { resetsAt?: string | undefined } | undefined;
   /** The run's signals file's size when the host started: its start signal comes after it. */
   private signalsFrom = 0;
+  /** Where the next read of the signals file for status lines starts. */
+  private statusNext = 0;
   /** The program's last screen, once it ended or was ended, and the host it was taken from. */
   private last: ScreenSnapshot | undefined;
   private lastOf: Terminal | undefined;
@@ -321,6 +323,26 @@ export class RoleTerminal<T extends CliTally> {
       return;
     }
     await this.took(h);
+  }
+
+  /**
+   * Its status line's signals since the last read, into its tally (Claude Code's usage windows):
+   * for a program that takes them, whose session log is not the signals file itself.
+   */
+  private readStatus(): void {
+    const status = this.p.terminal.status;
+    if (!status || this.p.terminal.log.from === "signals") return;
+    const r = readNew(this.o.signalsFile, this.statusNext);
+    this.statusNext = r.next;
+    for (const l of r.lines) {
+      if (!l.includes('"StatusLine"')) continue;
+      try {
+        const o = JSON.parse(l) as { event?: unknown; payload?: unknown };
+        if (o.event === "StatusLine") status(o.payload, this.o.tally);
+      } catch {
+        // A line cut short: the next status line gives the windows again.
+      }
+    }
   }
 
   /** Whether the program has given its start signal since its host started; true without one. */
@@ -446,6 +468,7 @@ export class RoleTerminal<T extends CliTally> {
    * size, and the log holds more now.
    */
   read(): { live: { kind: LiveKind; text: string }[]; lines: number; more: boolean } {
+    this.readStatus();
     const r = readNew(this.logFile, this.next);
     this.next = r.next;
     const lines = r.lines.filter((l) => l.trim());
