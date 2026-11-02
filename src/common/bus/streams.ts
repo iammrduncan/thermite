@@ -33,6 +33,12 @@ export async function ensureStream(nc: NatsConnection, stream: StreamSettings): 
   await jsm.streams.update(stream.name, stream);
 }
 
+/**
+ * A stream or consumer that control makes and has not made yet: a rig's supervisor may start
+ * before control enrolls it, and follows once control has made them.
+ */
+export class NotYetOnBus extends Error {}
+
 /** A consumer's name, whether it is given with its settings or alone. */
 export const nameOf = (c: ConsumerSettings | string) =>
   typeof c === "string" ? c : c.durable_name;
@@ -50,11 +56,13 @@ export async function ensureConsumer(
     await jsm.consumers.info(stream, nameOf(consumer));
   } catch (err) {
     if (noSuchStream(err))
-      throw new Error(`no stream ${stream} on the bus yet: control makes it`, { cause: err });
+      throw new NotYetOnBus(`no stream ${stream} on the bus yet: control makes it`, { cause: err });
     if (!(err instanceof JetStreamApiError && err.code === JetStreamApiCodes.ConsumerNotFound))
       throw err;
     if (typeof consumer === "string")
-      throw new Error(`no consumer ${consumer} on the bus yet: control makes it`, { cause: err });
+      throw new NotYetOnBus(`no consumer ${consumer} on the bus yet: control makes it`, {
+        cause: err,
+      });
     await jsm.consumers.add(stream, consumer);
     log("bus", "consumer made", { stream, consumer: consumer.durable_name });
   }

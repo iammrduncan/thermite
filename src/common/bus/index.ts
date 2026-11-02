@@ -24,6 +24,7 @@ import { removeOnceEmpty, startEmptying } from "../work-queue.ts";
 import {
   ensureConsumer,
   ensureStream,
+  NotYetOnBus,
   nameOf,
   noSuchStream,
   purgeOn,
@@ -62,6 +63,8 @@ export const BUS_CONNECT_TIMEOUT_MS = 10_000;
 export const BUS_ACK_TIMEOUT_MS = 30_000;
 /** How long a consumer, or a stream not made, waits after a failure to try again. */
 export const BUS_RETRY_MS = 5_000;
+/** How long a stream or consumer control makes may be missing before a follower warns once. */
+const NOT_YET_WARN_MS = 60_000;
 /** How many messages on a subject a removal looks at, at most: then it says it found none. */
 export const BUS_REMOVE_LOOK_MAX = 1000;
 /** How many consumers of a stream its state lists, at most: then it says how many it left out. */
@@ -491,8 +494,12 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
   ): Promise<void> => {
     const name = typeof stream === "string" ? stream : stream.name;
     const durable = nameOf(consumer);
-    // A failure is logged as an error once, and again only after following worked.
+    // A failure is logged as an error once, and again only after following worked. A stream or
+    // consumer control has not made yet is no error: logged as news, and as a warning once if it
+    // is still not there after NOT_YET_WARN_MS.
     let failing = false;
+    let waitingSince: number | undefined;
+    let warnedLate = false;
     following: while (!closed) {
       let reading: ConsumerMessages | undefined;
       try {
@@ -511,6 +518,8 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
         reading = await c.consume();
         readings.add(reading);
         failing = false;
+        waitingSince = undefined;
+        warnedLate = false;
         log("bus", "following", { stream: name, consumer: durable });
         for await (const m of reading) {
           let handled: Handled;
@@ -531,8 +540,20 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
       } catch (err) {
         if (closed) break;
         const error = String(err);
-        const level = failing ? "debug" : "error";
-        log("bus", "following failed; trying again", { stream: name, error }, level);
+        const notYet = err instanceof NotYetOnBus;
+        if (notYet) waitingSince ??= Date.now();
+        const late =
+          notYet && !warnedLate && Date.now() - (waitingSince ?? Date.now()) >= NOT_YET_WARN_MS;
+        const level = late ? "warn" : failing ? "debug" : notYet ? "info" : "error";
+        log(
+          "bus",
+          notYet
+            ? "following waits for control to make it; trying again"
+            : "following failed; trying again",
+          { stream: name, error },
+          level,
+        );
+        if (late) warnedLate = true;
         failing = true;
       } finally {
         if (reading) {
