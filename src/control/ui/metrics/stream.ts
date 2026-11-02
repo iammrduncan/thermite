@@ -27,7 +27,7 @@ export function streamPageBody(p: MessagesPage): string {
     )
     .join("");
   const table = rows
-    ? `<div class="card flat"><div class="utw"><table><thead><tr><th class="num">Place</th><th>Subject</th><th>Stored</th><th class="num">Size</th><th>Starts with</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
+    ? `<div class="card flat sys-msgs"><div class="utw"><table><thead><tr><th class="num">Place</th><th>Subject</th><th>Stored</th><th class="num">Size</th><th>Starts with</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
     : `<div class="card"><div class="empty">${p.subject === ">" ? "The stream holds no message here." : "No message on that subject here."}</div></div>`;
   return `<div class="block">${w ? `<p class="muted">${esc(w.carries)}. Kept: ${esc(w.kept.toLowerCase())}.</p>` : ""}<p class="muted small">Read with the server's own lookup: nothing is made, handed, acked or removed, so reading here changes nothing for the rigs. The messages are what rigs and control sent.</p>${filter}</div>
 ${p.cut ? `<div class="card warn sys-note">${esc(p.cut)}</div>` : ""}${nav}${table}${p.messages.length > 8 ? nav : ""}`;

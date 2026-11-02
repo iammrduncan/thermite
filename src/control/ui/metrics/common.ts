@@ -79,16 +79,22 @@ export function spark(values: (number | null)[], max: number): string {
   return `<svg class="sys-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="the last few minutes"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`;
 }
 
-/** Places that hold state, each with what it uses, what it may still take, and its size. */
-export function placesTable(places: Place[], tips: { used: string; available: string }): string {
-  if (!places.length) return `<div class="empty">Nothing to show.</div>`;
-  const rows = places
-    .map((p) => {
-      const full = p.total ? p.used / p.total : null;
-      return `<tr><td><b>${esc(p.name)}</b><div class="muted small">${esc(p.of)}</div></td><td class="num">${esc(size(p.used))}</td><td class="num">${esc(size(p.available))}</td><td class="num">${esc(size(p.total))}</td><td class="sys-barcell">${full === null ? `<span class="muted small">no limit known</span>` : `${bar(full)}<span class="muted small">${share(full)} used</span>`}</td></tr>`;
-    })
+/** Places that hold state, in groups, each with what it uses, what it may still take, and its size. */
+export function placesTable(
+  groups: { title: string; places: Place[] }[],
+  tips: { used: string; available: string },
+): string {
+  const row = (p: Place) => {
+    const full = p.total ? p.used / p.total : null;
+    return `<tr><td><b>${esc(p.name)}</b><div class="muted small">${esc(p.of)}</div></td><td class="num">${esc(size(p.used))}</td><td class="num">${esc(size(p.available))}</td><td class="num">${esc(size(p.total))}</td><td class="sys-barcell">${full === null ? `<span class="muted small">no limit known</span>` : `${bar(full)}<span class="muted small">${share(full)} used</span>`}</td></tr>`;
+  };
+  const body = groups
+    .map(
+      (g) =>
+        `<tr class="sys-group"><th colspan="5">${esc(g.title)}</th></tr>${g.places.length ? g.places.map(row).join("") : `<tr><td colspan="5" class="muted">Nothing to show.</td></tr>`}`,
+    )
     .join("");
-  return `<div class="utw"><table><thead><tr><th>Place</th><th class="num">${infoLabel("Used", tips.used)}</th><th class="num">${infoLabel("Available", tips.available)}</th><th class="num">Total</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="utw"><table><thead><tr><th>Place</th><th class="num">${infoLabel("Used", tips.used)}</th><th class="num">${infoLabel("Available", tips.available)}</th><th class="num">Total</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 /** A block: its heading, a count, words on the right, and its body. */

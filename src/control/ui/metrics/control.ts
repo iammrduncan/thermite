@@ -87,7 +87,7 @@ export function controlTab(f: ControlFigures, now: number): string {
         `<tr${l.late ? ` class="sys-warnrow"` : ""}><td><b>${esc(name)}</b></td><td class="num">${count(l.age_seconds)} s ago</td><td class="num">${esc(duration(l.limit_seconds))}</td><td>${l.late ? `<span class="chip bad">late</span>` : l.busy ? `<span class="chip">busy: ${esc(l.busy)}</span>` : `<span class="chip ok">on time</span>`}</td></tr>`,
     )
     .join("");
-  return `${f.ok ? "" : `<div class="card warn sys-note">A loop of control's is late: its health answers 503 until it comes around again.</div>`}${tiles}
+  return `${f.ok ? "" : `<div class="card warn sys-note">A loop of control's is late: its health answers 503 until it comes around again.</div>`}<div class="block">${tiles}</div>
 ${block("Memory", "control's process, by part", memory)}
 ${block(`Loops ${infoLabel("", TIP.loops)}`, "each of control's loops and when it last came around", `<div class="card flat"><div class="utw"><table><thead><tr><th>Loop</th><th class="num">Last round</th><th class="num">Late after</th><th>State</th></tr></thead><tbody>${loops || `<tr><td colspan="4" class="muted">No loop yet.</td></tr>`}</tbody></table></div></div>`)}`;
 }
@@ -95,7 +95,13 @@ ${block(`Loops ${infoLabel("", TIP.loops)}`, "each of control's loops and when i
 /** Metrics' Storage tab: memory and disk, each place's used and available, and control.db. */
 export function storageTab(f: StorageFigures): string {
   const tips = { used: TIP.used, available: TIP.available };
-  const where = `<div class="card flat"><h3 class="sys-h3">In memory</h3>${placesTable(f.memory, tips)}<h3 class="sys-h3">On disk</h3>${placesTable(f.disk, tips)}</div>`;
+  const where = `<div class="card flat">${placesTable(
+    [
+      { title: "In memory", places: f.memory },
+      { title: "On disk", places: f.disk },
+    ],
+    tips,
+  )}</div>`;
   const kinds = [
     ...f.streams.map((s) => ({ label: `bus: ${s.name}`, bytes: s.bytes })),
     ...f.kinds

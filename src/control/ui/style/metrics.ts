@@ -24,7 +24,8 @@ export const METRICS = `/* the tabs' row: the tabs, and the live switch at its e
 .sys-split .s5, .sys-legend .s5 { background: color-mix(in srgb, var(--primary) 45%, var(--card)); }
 .sys-split .s6, .sys-legend .s6 { background: var(--error); }
 .sys-barcell { min-width: 120px; } .sys-barcell .bar { margin-bottom: 2px; }
-.sys-h3 { margin: 0; padding: 12px 16px 4px; font-size: 13px; }
+tr.sys-group th { padding-top: 14px; font-size: 12.5px; font-weight: 600; color: var(--foreground); background: var(--muted); }
+[data-part="sys"] td.num, .sys-msgs td.num { white-space: nowrap; }
 .sys-gap { margin: 10px 0 0; } .sys-pad { margin: 0; padding: 8px 12px; }
 .sys-note { margin-bottom: 12px; }
 
