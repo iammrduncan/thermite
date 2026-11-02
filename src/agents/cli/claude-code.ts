@@ -225,6 +225,7 @@ export const claudeProgram: CliProgram<ClaudeTally> = {
     // Still for a moment while it starts, before its input box is up: typed into after its hook's
     // SessionStart (goal 183).
     startSignal: "SessionStart",
+    pastes: true,
     // A full usage window: it waits for the reset and goes on by itself (its settings turn
     // autoContinueAtUsageLimit on), and the trial waits with it (usage-window.ts).
     goesOnAfterLimit: true,

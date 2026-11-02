@@ -130,6 +130,8 @@ export const codexProgram: CliProgram<CodexTally> = {
   // In its own terminal: its configuration with the workspace trusted (else it asks), its thread
   // resumed after a crash, its rollout copied (goal 169).
   terminal: {
+    // Typed into once its input is up (goal 183).
+    pastes: true,
     start: (run, at) => ({
       args: codexTerminalArgs(run.model, {
         cwd: at.cwd,

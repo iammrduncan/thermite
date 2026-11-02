@@ -168,6 +168,8 @@ export const TerminalStatus = z.object({
   rows: z.number().int(),
   /** Bytes the program has written to its terminal. */
   output: z.number().int().min(0),
+  /** The program has turned bracketed paste on: a program that does so once its input is up. */
+  pastes: z.boolean().optional(),
   mirror: MirrorState.optional(),
   exit: ProgramExit.optional(),
 });

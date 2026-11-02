@@ -116,19 +116,20 @@ class Program {
 
 /**
  * The runner: the host is the stand-in; the setup and the version check do nothing. Its program
- * writes Claude Code's SessionStart signal `signalAfterMs` after it starts; a deaf one never takes
- * what is typed into it, as Claude Code typed into before its input box is up (goal 183).
+ * writes Claude Code's SessionStart signal `signalAfterMs` after it starts, and turns bracketed
+ * paste on `pastesAfterMs` after (at once by default); a deaf one never takes what is typed into
+ * it, as Claude Code typed into before its input box is up (goal 183).
  */
 function runner(
   program: (log: string) => Program,
-  o: { signalAfterMs?: number; deaf?: boolean } = {},
+  o: { signalAfterMs?: number; pastesAfterMs?: number; deaf?: boolean } = {},
 ): {
   r: RoleRunner;
   started: () => Program | undefined;
-  times: () => { signal?: number; typed?: number };
+  times: () => { signal?: number; typed?: number; pastes?: number };
 } {
   let p: Program | undefined;
-  const times: { signal?: number; typed?: number } = {};
+  const times: { signal?: number; typed?: number; pastes?: number } = {};
   let end: ((o: RoleRunOutcome) => void) | undefined;
   const done = (): RoleRunOutcome => ({
     exitCode: 0,
@@ -152,10 +153,17 @@ function runner(
               `${JSON.stringify({ t: Date.now(), src: "claude-code", event: "SessionStart", payload: { session_id: "s-1" } })}\n`,
             );
         }, o.signalAfterMs ?? 0);
+        const pastesAt = Date.now() + (o.pastesAfterMs ?? 0);
+        times.pastes = pastesAt;
         let buffer = "";
         const screen = { cols: 120, rows: 40 };
         const host = {
-          status: async () => ({ state: "running", ...screen, output: 1 }),
+          status: async () => ({
+            state: "running",
+            ...screen,
+            output: 1,
+            pastes: Date.now() >= pastesAt,
+          }),
           type: async (text: string, enter: boolean) => {
             times.typed ??= Date.now();
             if (o.deaf) return;
@@ -288,6 +296,23 @@ test("Claude Code is typed into only once it has started: its SessionStart signa
   const t = times();
   assert.ok(t.signal !== undefined && t.typed !== undefined, JSON.stringify(t));
   assert.ok(t.typed >= t.signal + 700, `typed ${t.typed - t.signal} ms after its signal`);
+});
+
+test("a program that turns bracketed paste on as its input comes up is typed into only after it has (goal 183)", async () => {
+  // Codex, typed into before its input box was up, took the text as keys and Enter as a new line.
+  const k = link();
+  const { r, times } = runner((log) => new Program(log, k.inTurn, 3), { pastesAfterMs: 1500 });
+  const tally = await terminalCall(
+    claudeProgram,
+    MODEL,
+    "plan",
+    { runner: r, apiUrl: "http://127.0.0.1:1", scratchDir: scratch },
+    { role: "planner", link: k.l, answer: (t) => t.trimStart().startsWith("{") },
+  );
+  assert.equal(tally.lastText, DRAFT);
+  const t = times();
+  assert.ok(t.pastes !== undefined && t.typed !== undefined, JSON.stringify(t));
+  assert.ok(t.typed >= t.pastes + 700, `typed ${t.typed - t.pastes} ms after bracketed paste`);
 });
 
 test("a message the program never takes ends the call with why, never a wait for a turn that never begins (goal 183)", async () => {

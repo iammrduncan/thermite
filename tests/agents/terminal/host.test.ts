@@ -190,6 +190,13 @@ describe("the terminal host", { skip }, () => {
     await f.t.type("a\x03b\x1b[Ac");
     await seen(f, "user", (r) => r.text === "ab[Ac");
     assert.equal(f.records().filter((r) => r.type === "interrupt").length, 0);
+    // It turned bracketed paste on as its input came up, and the status says so (goal 183).
+    assert.equal((await f.t.status()).pastes, true);
+    // A long message in pieces arrives whole, and its Enter, once the program is still, sends it.
+    const long = `${"x".repeat(6000)}\n${"y".repeat(6000)}`;
+    await f.t.type(long.slice(0, 7000), false);
+    await f.t.type(long.slice(7000));
+    await seen(f, "user", (r) => r.text === long);
     await f.t.end();
   });
 

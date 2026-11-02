@@ -56,7 +56,8 @@ const TYPE_PIECE = 16 * 1024;
 /**
  * A new host's program is typed into once it has written something and then nothing for
  * READY_STILL_MS, or after READY_MAX_MS: how much it wrote only times the typing. A program with a
- * start signal (Claude Code) is still that long after the signal too.
+ * start signal (Claude Code) is still that long after the signal too, and one that turns bracketed
+ * paste on as its input comes up (Codex, Claude Code) after it has.
  */
 const READY_STILL_MS = 750;
 const READY_MAX_MS = 20_000;
@@ -124,12 +125,14 @@ async function typeIn(host: Terminal, text: string): Promise<void> {
 
 /**
  * Once the program has written and then been still, and has given its start signal when it has
- * one (`started`), or after READY_MAX_MS, or it has ended.
+ * one (`started`) and turned bracketed paste on when it does (`pastes`), or after READY_MAX_MS, or
+ * it has ended.
  */
 async function ready(
   host: Terminal,
   stopping: () => boolean,
   started: () => boolean,
+  pastes: boolean,
 ): Promise<void> {
   const until = Date.now() + READY_MAX_MS;
   let output = -1;
@@ -138,7 +141,8 @@ async function ready(
   while (Date.now() < until && !stopping()) {
     const st = await host.status();
     if (st.state !== "running") return;
-    if (signalled === undefined && started()) signalled = Date.now();
+    if (signalled === undefined && started() && (!pastes || st.pastes === true))
+      signalled = Date.now();
     if (st.output !== output) {
       output = st.output;
       since = Date.now();
@@ -306,6 +310,7 @@ export class RoleTerminal<T extends CliTally> {
             h,
             () => this.stopping,
             () => this.startSignalled(),
+            this.p.terminal.pastes === true,
           );
         if (!this.stopping && this.host === h) await typeIn(h, text);
       });

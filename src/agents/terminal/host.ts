@@ -5,7 +5,15 @@ import { dirname, join } from "node:path";
 import { errorText } from "../../common/errors.ts";
 import { log, logWarn } from "../../common/log.ts";
 import { TERMINAL_PROFILES, type TerminalKey, type TerminalStep } from "../programs/index.ts";
-import { ENTER, ENTER_GAP_MS, KEY_GAP_MS, keyBytes, typedText } from "./keys.ts";
+import {
+  ENTER,
+  ENTER_GAP_MS,
+  ENTER_WAIT_MS,
+  KEY_GAP_MS,
+  keyBytes,
+  LONG_TEXT,
+  typedText,
+} from "./keys.ts";
 import { Mirror } from "./mirror.ts";
 import type {
   HOST_STATES,
@@ -96,6 +104,10 @@ export class TerminalHost {
   private program: PtyProgram | undefined;
   private server: ChildProcess | undefined;
   private output = 0;
+  /** When the program last wrote to its terminal. */
+  private wroteAt = 0;
+  /** Characters typed in since the last Enter. */
+  private typedSince = 0;
   private exit: ProgramExit | undefined;
   /** The inputs, one at a time, in the order they came. */
   private inputs: Promise<unknown> = Promise.resolve();
@@ -167,6 +179,7 @@ export class TerminalHost {
         token: this.start.token,
         output: (d) => {
           this.output += Buffer.byteLength(d);
+          this.wroteAt = Date.now();
           this.screen.write(d);
         },
       });
@@ -252,6 +265,7 @@ export class TerminalHost {
       cols: this.start.cols,
       rows: this.start.rows,
       output: this.output,
+      pastes: this.screen.bracketedPaste,
       ...(this.mirror ? { mirror: this.mirror.state() } : {}),
       ...(this.exit ? { exit: this.exit } : {}),
     };
@@ -282,8 +296,14 @@ export class TerminalHost {
   private async text(p: PtyProgram, text: string, enter: boolean): Promise<void> {
     await this.screen.settled();
     p.write(typedText(text, this.screen.bracketedPaste));
+    this.typedSince += text.length;
     if (!enter) return;
+    const long = this.typedSince >= LONG_TEXT;
+    this.typedSince = 0;
+    const until = Date.now() + ENTER_WAIT_MS;
     await sleep(ENTER_GAP_MS);
+    // After a long text, Enter once the program has read it all: it has written nothing since.
+    while (long && Date.now() < until && Date.now() - this.wroteAt < ENTER_GAP_MS) await sleep(50);
     p.write(ENTER);
   }
 

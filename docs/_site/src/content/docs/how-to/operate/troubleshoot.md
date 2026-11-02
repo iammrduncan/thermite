@@ -463,7 +463,7 @@ The dashboard refuses to start a research run with agents in the last case. A ru
 ### A trial or an advisor ends: the program did not take its message
 
 - **You see:** in **Live**, a trial ends, or an advisor's line says it gave no review, with `<program> did not take its message: no turn began in its session log within 60 s of it being typed in. Its screen shows: …`.
-- **Why:** on a rig whose agent programs run in their own terminal, the message was typed in, and the program never started a turn with it: its screen had something else up, which its last lines show.
+- **Why:** on a rig whose agent programs run in their own terminal, the message was typed in, and the program never started a turn with it: its screen had something else up, which its last lines show. When the lines show the message itself still in the program's input, the Enter after it was taken as a new line: the program was typed into before its input box was up. The harness waits for that (Claude Code and Codex turn bracketed paste on as it comes up), so report it.
 - **Do:** read the screen's lines in the reason. A trial's experiment goes back to the queue, and the advisor tries again at its next round. If it happens each time, set **Edit rig › 2 · The agents › Advanced › Agent programs run** to **Headless** until it is fixed, and report the screen's lines.
 
 ### A trial makes no progress for a long time

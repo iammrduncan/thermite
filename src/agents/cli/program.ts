@@ -262,6 +262,12 @@ export interface CliTerminal<T extends CliTally> {
    * (goal 183). None: once its screen has been still.
    */
   startSignal?: string | undefined;
+  /**
+   * It turns bracketed paste on once its input is up (Codex, Claude Code): it is typed into only
+   * after that, since text typed before goes in as keys, and Enter after it is a new line in it
+   * (goal 183).
+   */
+  pastes?: boolean | undefined;
   start(run: CliRun, at: TerminalAt): TerminalPlan;
   /**
    * Its session log: the adapter that reads it, and where it is read, the host's copy of the
