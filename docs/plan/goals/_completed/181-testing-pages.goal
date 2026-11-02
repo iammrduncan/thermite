@@ -1,7 +1,7 @@
 ---
 id: "181"
 title: "Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals"
-status: IN_PROGRESS
+status: VERIFIED
 version: "0.1.1"
 depends_on: []
 created: 2026-11-02
@@ -10,7 +10,7 @@ updated: 2026-11-02
 
 # 181 · Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals
 
-**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011)
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011)
 
 ## What
 
@@ -26,7 +26,7 @@ The dashboard's pages from the owner's testing notes of 2026-11-02, built from a
 ## Done when
 
 - [x] The owner approved a mockup of each page.
-- [ ] Each page is built as approved, with the pages that describe it, and its tests and acceptance checks pass.
+- [x] Each page is built as approved, with the pages that describe it, and its tests and acceptance checks pass.
 
 ## Decisions
 
@@ -39,7 +39,8 @@ The dashboard's pages from the owner's testing notes of 2026-11-02, built from a
 - 2026-11-02: Reports (item 2) built: each closed run's report, newest first (the run view keeps `status_at`, when its status last changed), by mode and campaign, the rig checks' runs only when asked. A full reset under way moved to a card on its rig's page with its state, its detail, Cancel and Confirm, and its actions come back there. The supervisors' daily summaries stay for MCP and REST; their removal is a question for goal 178.
 - 2026-11-02: Live (item 16) built: a run's Live opens on Terminals while one of its agents works in its terminal, each lane's trial and the planner's call a pane of a grid with its own console (ui/terminal.ts's pane, its script set up for each pane, each pane's inputs a part of their own), with Lines and Advisors as tabs; the ⌨ Terminals list is gone.
 - 2026-11-02: Settings (item 8) built: a page for each area (SETTINGS_AREAS in ui/components: Providers, Model prices and Rigs' models under Models; MCP servers and Addresses rigs may reach under Agents; Knowledge base, Space and Retention policies under Data; Message bus under System), at `/ui/settings/<area>` with `/ui/settings` as Providers. In Settings the shell draws Settings' own navigation, under Back to Thermite, collapsing to icons as the main one does. Each form's answer comes back to its area's page, and the words that named Settings › Providers for prices, the rigs' models or MCP servers now name their page.
+- 2026-11-02: Verified. Settings is 2249e87e, on top of the other four pages. On it the control (06:31Z), quick-start (06:39Z), agents (06:46Z) and Codex (06:50Z) acceptance checks passed; on e0d719a5 the RunPod (05:49Z) and control (05:53Z) checks passed; the full tests, the fast checks and the docs checks passed on each commit. The owner's notes items 1, 2, 4 to 8 and 16 are done.
 
 ---
 
-Run with `/goal Complete docs/plan/goals/181-testing-pages.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+Run with `/goal Complete docs/plan/goals/181-testing-pages.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

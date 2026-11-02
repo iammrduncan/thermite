@@ -129,7 +129,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [172](goals/172-build-v011.goal) Build v0.1.1: every goal the audit planned, in one order, to verified · `IN_PROGRESS`
 - [179](goals/_completed/179-system-view.goal) The whole system on Metrics: the message bus, control, its storage and each rig, live · `VERIFIED`
 - [180](goals/180-testing-bugs-exports-checks-cli.goal) Testing's first bugs: exports of what changed, a check's stale refusal, a command line behind its code · `IN_PROGRESS`
-- [181](goals/181-testing-pages.goal) Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals · `IN_PROGRESS`
+- [181](goals/_completed/181-testing-pages.goal) Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals · `VERIFIED`
 - [182](goals/182-campaigns-and-kits-for-agents.goal) Campaigns and kits for agents: a kit from git, a campaign from a champion, grants that reach running runs, the metrics a contract uses · `IN_PROGRESS`
 - [173](goals/_completed/173-recovery-and-health.goal) Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks · `VERIFIED`
 - [174](goals/_completed/174-invalidate-evidence.goal) Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows · `VERIFIED`
