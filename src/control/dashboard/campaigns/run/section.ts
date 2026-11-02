@@ -53,6 +53,7 @@ import {
 } from "../../../views/index.ts";
 import type { Ctx, Dashboard } from "../../context.ts";
 import { campaignHelpers } from "../shared.ts";
+import { runGitParts } from "./git.ts";
 
 export type RunViewName = RunTab;
 
@@ -63,6 +64,7 @@ export type RunViewName = RunTab;
 export function runHelpers(dash: Dashboard) {
   const { cmdForm, csrf, needs, store } = dash;
   const { goalChecksFor } = campaignHelpers(dash);
+  const git = runGitParts(dash);
 
   /**
    * A run's model use and cost (goal 075), for the top of its page above the tabs and its Stats
@@ -338,17 +340,18 @@ export function runHelpers(dash: Dashboard) {
       i.published && store.championPatches.get(u.id, u.ledger_id, i.id, i.published.seq)
         ? `<a href="${championPatchHref(i, i.published.seq)}">download champion #${i.published.seq} as a patch</a> <span class="muted small">(${appliesTo})</span>`
         : "";
-    // The champions, newest first: what each one changed and what it gained.
+    // The champions, newest first: what each one changed and what it gained, and its commit in git.
+    const onRig = x;
     const ladder =
       i.mode === "hill_climb"
-        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat"><div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}${i.champion
+        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat">${git.gitLine(x, now)}<div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}${i.champion
             .filter((x) => !x.reopened)
             .slice()
             .reverse()
             .slice(0, 12)
             .map((x) => {
               const a = x.attempt ? i.attempts.find((y) => y.id === x.attempt) : undefined;
-              return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span>${championGuardLine(i, x.seq)}</div>`;
+              return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span>${championGuardLine(i, x.seq)}${git.championGit(onRig, x.seq, store.championPatches.get(u.id, u.ledger_id, i.id, x.seq) ? `<a class="mi" href="${championPatchHref(i, x.seq)}">Download as a patch<span class="muted small">against the run's starting commit</span></a>` : "")}</div>`;
             })
             .join("")}</div></div>`
         : "";

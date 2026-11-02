@@ -4,7 +4,8 @@
  * (queue-copy.ts), a campaign's context settings (context.ts), the owner's additions to its roles
  * (additions.ts), which roles write in its collection of the knowledge base (kb-writes.ts), the
  * operator's proposals of those two for the owner to approve (proposals.ts), archive and folders
- * (folders.ts), and the campaign an assignment issued by hand names, saved (assigned.ts).
+ * (folders.ts), the campaign an assignment issued by hand names, saved (assigned.ts), and a new
+ * campaign from another run's champion in git (from-champion.ts).
  */
 
 export {
@@ -51,6 +52,7 @@ export {
   type ShelfOutcome,
   unarchiveCampaign,
 } from "./folders.ts";
+export { runBranchesOf, StartCampaignBody, startFromChampion } from "./from-champion.ts";
 export {
   CampaignKbWritesBody,
   campaignKbWrites,

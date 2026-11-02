@@ -86,6 +86,20 @@ const choice = (
 ) =>
   `<div class="ch${on ? " on" : ""}${dis ? " dis" : ""}" data-group="${esc(group)}" data-value="${esc(value)}" tabindex="0"><span class="dotx"></span><span><b>${esc(title)}</b><span class="muted">${body}</span></span></div>`;
 
+/**
+ * Where each run's work goes in git (goal 185): branches of the project's repository, of a
+ * separate results repository, or control only; the Git access that pushes; and a check that it
+ * can, which writes nothing.
+ */
+function resultsBlock(accessOptions: string): string {
+  return `<div class="sec" data-part="results" style="margin:18px 0 0;max-width:860px"><h2 style="font-size:14px">Where each run's work goes</h2><p class="lead">Control always keeps every champion as a patch you can download. Git gives you real commits besides, that you can check out, compare and start a new campaign from.</p>
+<div class="chs">${choice("results", "project", "Branches of this repository (recommended)", 'Thermite pushes only branches under <code>thermite/</code>, never your default branch: <span class="mono" data-results-names>thermite/&lt;run&gt;/champion, thermite/&lt;run&gt;/lane-1, …</span>. Needs a Git access that can push.')}${choice("results", "repository", "A separate results repository", "The same branches, in a repository of their own: your project's repository is left alone.")}${choice("results", "control", "Only on control", "No push. Each champion is a patch you download from its page, applied to the run's starting commit.", true)}</div>
+<div data-results-push style="margin-top:12px"><div data-results-git hidden style="max-width:560px">${field("Results repository", "An empty repository, or one Thermite pushed to before, as https://… or git@host:path. Thermite writes only branches under thermite/.", `<input name="results_git" placeholder="git@github.com:you/project-results.git">`)}</div>
+<div style="max-width:420px">${field("Push with", "A Git access that can push to the repository: a deploy key with write access, or an HTTPS token with write access, from Settings › Git access. Only the supervisors of rigs that run this campaign receive it; the harness and the agents never do.", `<select name="results_access"><option value="same">The repository access above</option>${accessOptions}</select>`)}</div>
+<div class="act"><button class="sm" id="push-check">Check it can push</button><span class="muted small" id="push-check-out">Control asks the repository whether this access may push, and pushes nothing.</span></div>
+<div class="card warn" data-results-public hidden style="margin-top:10px"><b>This repository is public.</b> Every attempt the agents make, and what each tried, will be public on its lane's branch.</div></div></div>`;
+}
+
 const step = (n: number, id: string, title: string, modes = "") =>
   `<li data-step="${id}"${modes ? ` data-modes="${modes}"` : ""}><span class="k">${n}</span>${esc(title)}</li>`;
 
@@ -189,6 +203,7 @@ ${field("Files the agents may change", "Patterns, one per line. A change to any 
 <details class="adv"><summary>Advanced</summary><div>
 ${field("Lines never allowed", "Regular expressions, one per line. A change that adds a matching line is refused before building, for example one that reads the benchmark's clock.", `<textarea name="forbidden_patterns" placeholder="clock_gettime"></textarea>`)}
 </div></details>
+${resultsBlock(accessOptions)}
 <div class="act" style="margin-top:12px"><button data-back>Back</button><button class="primary" data-next>Next</button></div></div></section>
 
 <section class="pane" data-pane="measure" hidden><div class="sec"><h2>How to measure</h2><p class="lead">The kit: how the judge builds your project, runs it on test cases and checks the output. Agents never see it. Thermite times every run with its own clock; nothing the program prints counts as a score.</p>

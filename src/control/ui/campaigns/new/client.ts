@@ -116,6 +116,34 @@ ${BRIEF_PAGE_JS}
   };
   $("#probe")?.addEventListener("click", (e) => { e.preventDefault(); probe(); });
 
+  // ------------------------------------------------ where each run's work goes (goal 185)
+  const pushAccess = () => (val("results_access") === "same" ? val("project_access") : val("results_access"));
+  const pushUrl = () => (choice.results === "repository" ? val("results_git") : val("project_url"));
+  const resultsShow = () => {
+    const to = choice.results || "control";
+    const push = $("[data-results-push]"), git = $("[data-results-git]"), pub = $("[data-results-public]");
+    if (push) push.hidden = to === "control";
+    if (git) git.hidden = to !== "repository";
+    if (pub) pub.hidden = !(to === "project" && !val("project_access") && /github.com|gitlab.com|codeberg.org/.test(val("project_url")));
+    const names = $("[data-results-names]");
+    const name = val("campaign");
+    if (names && name) names.textContent = "thermite/" + name + "-1/champion, thermite/" + name + "-1/lane-1, …";
+  };
+  $("#push-check")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const out = $("#push-check-out");
+    out.className = "muted small";
+    if (!pushUrl()) { out.textContent = "Give the repository's address first."; return; }
+    out.textContent = "Asking the repository…";
+    try {
+      const body = new URLSearchParams({ csrf: form.elements.csrf.value, url: pushUrl(), access: pushAccess() });
+      const res = await fetch("/ui/campaigns/new/push-check", { method: "POST", body, credentials: "same-origin" });
+      const j = await res.json();
+      out.className = "small " + (j.ok ? "ok" : "bad");
+      out.textContent = (j.ok ? "✓ " : "✗ ") + (j.said || "Control could not ask the repository.");
+    } catch { out.className = "small bad"; out.textContent = "✗ Control could not reach the repository."; }
+  });
+
   // ------------------------------------------------ the draft
   const repoName = (url) => (url.replace(/\\.git$/, "").split(/[/:]/).pop() || "project").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[^a-z0-9]+/, "").slice(0, 64) || "project";
   const files = [];
@@ -370,6 +398,8 @@ ${BRIEF_PAGE_JS}
     // The kit's MCP servers: ticked here, or read from a kit in a repository.
     const servers = mcpList();
     if (servers) d.mcp_servers = servers;
+    const to = choice.results || "control";
+    d.results = to === "control" ? { to } : { to, access: pushAccess(), ...(to === "repository" ? { git: val("results_git") } : {}) };
     const url = val("project_url");
     d.project = { url, ...(val("project_access") ? { access: val("project_access") } : {}), ref: val("project_ref") || undefined, commit: found ? found.commit : undefined, repo: repoName(url), ...(folder() ? { folder: folder() } : {}), editable_paths: lines("editable_paths"), forbidden_patterns: lines("forbidden_patterns") };
     if ((choice.kit || "here") === "here") {
@@ -451,6 +481,7 @@ ${BRIEF_PAGE_JS}
 
   // ------------------------------------------------ what the page says back
   const update = () => {
+    resultsShow();
     mcpUpdate();
     briefUpdate();
     const cc = ccUpdate();
@@ -499,6 +530,12 @@ ${BRIEF_PAGE_JS}
     // The brief's lists, one box for each entry (goal 078).
     blFill("ideas", back.ideas); blFill("hypotheses", back.hypotheses);
     set("links", back.mode === "research" ? back.research && back.research.seeds : back.links);
+    if (back.results && back.results.to) {
+      choice.results = back.results.to;
+      $$('.ch[data-group="results"]').forEach((x) => x.classList.toggle("on", x.dataset.value === back.results.to));
+      set("results_git", back.results.git);
+      if (back.results.access) set("results_access", back.results.access === (back.project && back.project.access) ? "same" : back.results.access);
+    }
     if (back.project) { set("project_access", back.project.access); set("project_url", back.project.url); set("project_ref", back.project.ref); set("project_folder", back.project.folder); set("editable_paths", back.project.editable_paths); set("forbidden_patterns", back.project.forbidden_patterns); }
     if (back.kit && back.kit.source === "here") { for (const k of ["build", "run", "check"]) set(k, back.kit[k]); set("outputs", back.kit.outputs); set("runs_per_case", back.kit.runs_per_case); }
     if (back.score) {

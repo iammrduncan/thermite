@@ -28,11 +28,13 @@ import {
   proposeSetting,
   renameFolder,
   type ShelfOutcome,
+  StartCampaignBody,
   type StartRunBody,
   setCampaignAdditions,
   setCampaignContext,
   setCampaignKbWrites,
   startARun,
+  startFromChampion,
   startRunAnswer,
   startRunFields,
   startRunRequest,
@@ -109,6 +111,22 @@ export function registerRunStarts(tools: ToolContext): void {
         );
         if (out.state === "refused") throw new Error(out.error);
         return copyCampaignAnswer(out);
+      }),
+    );
+    // A new campaign from another run's champion in git (goal 185).
+    server.registerTool(
+      "start_campaign",
+      {
+        title: "Start a campaign from a champion",
+        description:
+          "A new campaign whose starting point is another run's champion: its commit on the run's branch in git (thermite/<run>/champion), which the run's rig pushes after each export when the run's work goes to git. The new campaign keeps the run's kit, MCP servers and where its work goes; its contract is the run's own, or `contract`, a whole changed contract (its campaign and version become the new campaign's). With `rig`, its first run starts there, with start_run's checks; without, it is saved only. With `grant`, its runs may also read the source campaign's collection in the knowledge base, read only. Returns {campaign, version, contract_sha, commit, run?, command?, said?}: `said` when it was saved and no run started, and why. Refused in words: a name that is taken or not valid, a run whose work does not go to git, a champion not pushed yet, a contract that is not valid.",
+        inputSchema: StartCampaignBody.shape,
+      },
+      audited("start_campaign", async (a: z.infer<typeof StartCampaignBody>) => {
+        const out = await startFromChampion(opts.parts, a, actor, role === "owner");
+        if (!out.ok) throw new Error(out.error);
+        const { ok: _ok, ...answer } = out;
+        return answer;
       }),
     );
   }

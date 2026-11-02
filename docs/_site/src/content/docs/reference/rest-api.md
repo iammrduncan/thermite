@@ -506,6 +506,12 @@ Control refuses, and saves nothing:
 
 Each refusal is in the audit log as `refused`, with the route's path and why. MCP's [`copy_campaign`](mcp-tools.md#copy_campaign) and [`thermite campaign copy`](command-line.md#campaign-copy) do the same. [Compare two models from zero](../how-to/campaigns/start-from-dashboard.md#compare-two-models-from-zero) says when to copy.
 
+#### Start a campaign from a champion
+
+| Route | Token | What it does | Request | Answer |
+| --- | --- | --- | --- | --- |
+| `POST /v1/campaigns/from-champion` | Owner | Saves a new campaign whose starting point is a run's champion, its commit on `thermite/<run>/champion` in git, with the run's kit, MCP servers and where its work goes, as **Start a campaign from #n** on the run's page does; with `rig`, starts its first run there, with **Start a run**'s checks. Control records `owner:api` as who made it | `{name, from: {run, champion}, contract?, rig?, grant?}`: `contract`, a whole changed contract (the run's own when left out); `grant`, its runs may read the source campaign's collection. At most 4 MiB | 201 `{campaign, version, contract_sha, commit, run?, command?, said?}`: `said` when it was saved and no run started, with why. 400, 404 or 409 `{"error":"<why>"}`: a name taken or not valid, a run whose work does not go to git, a champion not pushed yet, a contract that is not valid |
+
 #### A campaign's context settings
 
 `POST /v1/campaigns/<campaign>/context` sets the context window and the compaction point that every agent of the campaign's runs works with: the workers, the planner and the advisors, as **Agents' context** on the campaign's page does. The rig sets the defaults, with each agent's model ([above](#the-agents-model)); a campaign may set its own.

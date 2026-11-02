@@ -204,6 +204,13 @@ export const CLIENT_JS = `
     }
     const close = ev.target.closest && ev.target.closest("[data-close]");
     if (close) { const w = close.closest(".drawer-wrap"); if (w) { ev.preventDefault(); w.hidden = true; } }
+    // A button that copies its text, such as a champion's commit (goal 185).
+    const copy = ev.target.closest && ev.target.closest("button[data-copy]");
+    if (copy) {
+      ev.preventDefault();
+      const done = () => { copy.dataset.copied = "1"; setTimeout(() => delete copy.dataset.copied, 1500); };
+      try { navigator.clipboard.writeText(copy.dataset.copy).then(done, () => window.prompt("Copy it:", copy.dataset.copy)); } catch { window.prompt("Copy it:", copy.dataset.copy); }
+    }
     // A link out of a panel to a part of the same page: the panel closes, the part shows.
     const to = ev.target.closest && ev.target.closest("[data-close-to]");
     const part = to && $(to.dataset.closeTo);

@@ -55,7 +55,7 @@ Research campaigns skip this step.
 
 | Field | What to enter |
 | --- | --- |
-| **Repository** | The project's address, such as `https://git.example.com/you/project.git`. Rigs fetch it themselves. Thermite never pushes to it |
+| **Repository** | The project's address, such as `https://git.example.com/you/project.git`. Rigs fetch it themselves. Thermite pushes to it only when you choose its branches under **Where each run's work goes**, and then only branches under `thermite/` |
 | **Start from** | A branch, a tag or a full commit. Empty: the default branch. Control pins it to one commit, so every run starts from the same code |
 | **Folder in the repository** | Empty when the project is the whole repository. For a project in one folder of a repository, the folder's path from the top, such as `examples/matmul-cpu/project`. The rig fetches the whole repository, and the run starts from the folder: the agents see only its files. **Files the agents may change**, the kit's commands and the champion's patch are then paths inside the folder |
 | **Repository access** | **Public: no key**, or a Git access from **Settings** |
@@ -70,6 +70,18 @@ Press **Look it up**. Control reads the repository's file names, not their conte
 - A folder the commit doesn't have gives `main has no folder examples/none, or the folder has no files`, and a path that leaves the repository, such as `../src`, gives `The folder is a path in the repository, such as examples/matmul-cpu/project: no / at either end, and no part that starts with a dot.`
 - If you change **Repository**, **Start from** or **Folder in the repository** after **Look it up**, press it again: the page keeps the commit it found first.
 :::
+
+### Where each run's work goes
+
+Under **Where each run's work goes**, choose where each run pushes its work in git, besides the patches control always keeps:
+
+| Choice | What happens |
+| --- | --- |
+| **Only on control** (chosen at first) | No push. Each champion is a patch you download from its page ([Take the result](take-the-result.md)) |
+| **Branches of this repository (recommended)** | Each run pushes `thermite/<run>/champion`, a commit for each champion, and `thermite/<run>/<lane>`, each lane's attempts as patches, to the project's repository ([A run's work in git](take-the-result.md#a-runs-work-in-git)) |
+| **A separate results repository** | The same branches, in the repository you give as **Results repository** (`https://…` or `git@host:path`) |
+
+**Push with** is the Git access that pushes: **The repository access above**, or another from **Settings**. It needs write rights in that repository, such as a deploy key with write access or a token that may push; only the supervisors of rigs that run the campaign receive it. Press **Check it can push**: control asks the repository whether that access may push, without pushing anything, and says `This access may push there: rigs can push this campaign's branches.` or why not, such as `No: the repository refused a push with this access: give it write access on the code host, or choose another.` For a public repository on GitHub, GitLab or Codeberg with **Branches of this repository**, the page warns that every attempt the agents make will be public on its lane's branch. A choice of branches with no access that can push is refused when you start: `Where each run's work goes: choose a Git access that can push there, or Only on control.`
 
 ## 4. How to measure
 
@@ -337,6 +349,18 @@ A script or an agent does the same with [`POST /v1/campaigns/<campaign>/addition
 The prompts carry the additions as your own words, so an operator's change to them waits for you. So does an operator's change to which roles write in the campaign's collection, and an operator's grant of another campaign's collection ([A proposed grant](../../reference/knowledge-base.md#a-proposed-grant)). With the operator's token, `set_campaign_additions` and `set_campaign_kb_writes` check the change as they would yours, keep it as a proposal, and save nothing: they answer `Proposed to the owner: additions to its roles of sort-speed. Nothing changes until the owner approves it on the campaign's page; the campaign's runs keep what they have.` A newer proposal of the same setting replaces one still waiting.
 
 The campaign's page then has a block **Proposed to you**, above **Your additions to the agents' roles**, and **Needs you** has the same card: who proposed it, and, when you open it, the setting now and as proposed. **Approve** saves a new version of the contract with it, as your own change, and the block says `Approved: version 5 of sort-speed has the additions to its roles owner:operator proposed. Runs started from now take it.` **Decline** changes nothing. Your own changes, on this page, over REST and with your token on MCP, take effect at once.
+
+## Start a campaign from a champion
+
+A campaign whose work goes to git can start a new campaign from any of its champions: the new one starts from the champion's commit on the run's champion branch, so a rig that never ran the first campaign can fetch it.
+
+1. On the run's **Overview**, under **Champions**, each champion pushed to git shows its commit, such as `4f1c2a9`, and a **⋯** menu. The line above the chart says where: `In git: thermite/<run>/champion`, how many commits and when the rig last pushed.
+2. Press **⋯**, then **Start a campaign from #3**. The menu also has **Copy its commit** and **Download as a patch**.
+3. In the drawer, give the new campaign a **Name**. Under **Contract**, keep **The same as this run's**, or choose **Change it** and edit the contract in the box: control checks it before anything starts, and its `campaign` and `version` become the new campaign's.
+4. Leave **Its runs may read <campaign>'s collection** ticked to give the new campaign's runs what the first campaign's runs found in the knowledge base, read only (a grant you can revoke), or untick it to start from nothing.
+5. Choose the rig under **First run on**, or **None: save it only**, then press **Start the campaign**.
+
+The new campaign keeps the first one's kit, its MCP servers and where its work goes. A champion its rig has not pushed yet is refused with `Champion #3 of <run> is not in git yet: its rig pushes each champion after its next export. Press Export on the rig's page, or wait for the hourly one.`; a run whose work does not go to git has no commits to start from. `POST /v1/campaigns/from-champion` and MCP's [`start_campaign`](../../reference/mcp-tools.md#start_campaign) do the same from a script or an agent.
 
 ## Compare two models from zero
 

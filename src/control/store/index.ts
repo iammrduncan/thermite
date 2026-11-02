@@ -69,7 +69,7 @@ export {
 } from "./audit.ts";
 export type { RigComponent, StoredBuild } from "./builds.ts";
 export type { BusIdentityName } from "./bus.ts";
-export type { CampaignSources, CopiedFrom } from "./campaigns.ts";
+export type { CampaignResults, CampaignSources, CopiedFrom } from "./campaigns.ts";
 export type {
   Cluster,
   ClusterRig,

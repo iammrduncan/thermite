@@ -7,7 +7,7 @@ import { McpUses } from "../../../core/mcp.ts";
 import { askOwnerFrom, ownModels, startCampaign } from "../../campaigns/index.ts";
 import { kitSummary, unpackKit } from "../../kits/index.ts";
 import { sameModel } from "../../providers/index.ts";
-import { probeRepository, readKitManifest } from "../../repo-probe.ts";
+import { probeRepository, pushCheck, readKitManifest } from "../../repo-probe.ts";
 import {
   agentsModelMissing,
   giveRigModel,
@@ -126,6 +126,29 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       );
     } catch (err) {
       return c.json({ error: errorText(err) }, 400);
+    }
+  });
+  // Whether a Git access may push to where the runs' work goes (goal 185): a dry run, which
+  // writes nothing. A POST with the form's token, as it unseals a Git access.
+  app.post("/ui/campaigns/new/push-check", async (c) => {
+    const f = await c.req.parseBody();
+    const one = (k: string) => (typeof f[k] === "string" ? String(f[k]) : "");
+    const url = one("url");
+    try {
+      const why = await (opts.pushCheck ?? pushCheck)(
+        url,
+        accessFor(one("access") || undefined, url),
+      );
+      return c.json(
+        why
+          ? { ok: false, said: `No: ${why}.` }
+          : {
+              ok: true,
+              said: "This access may push there: rigs can push this campaign's branches.",
+            },
+      );
+    } catch (err) {
+      return c.json({ ok: false, said: errorText(err) });
     }
   });
   // A kit uploaded on the page: unpacked and checked now, its archive kept beside the kit

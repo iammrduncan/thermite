@@ -99,4 +99,12 @@ details.matrix .card { border: 0; border-radius: 0; }
 .fl:last-child { border-bottom: 0; }
 .fl code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fl-bar { display: flex; height: 8px; } .fl-bar i { display: block; } .fl-bar .add { background: var(--success); } .fl-bar .rem { background: var(--error); }
-.fl-n { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }`;
+.fl-n { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* a run's work in git (goal 185): its branch, each champion's commit and menu, the drawer */
+.gitline { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.lad-sha { grid-column: 2 / -1; font-size: 12px; color: var(--muted-foreground); }
+.lad-menu { position: relative; } .lad-menu > summary { list-style: none; cursor: pointer; color: var(--muted-foreground); padding: 0 6px; border-radius: 6px; }
+.lad-menu > summary::-webkit-details-marker { display: none; } .lad-menu > summary:hover { background: var(--muted); }
+.lad-menu .menu-pop { top: 24px; width: min(300px, 86vw); } .lad-menu .mi { display: grid; text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 6px; color: inherit; cursor: pointer; font: inherit; }
+.lad-menu .mi:hover { background: var(--muted); text-decoration: none; } button[data-copied]::after { content: " ✓"; color: var(--success-foreground); }
+#from-champion [data-when-change] { display: none; margin-top: 6px; } #from-champion fieldset:has(input[value="change"]:checked) [data-when-change] { display: block; }`;

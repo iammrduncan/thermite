@@ -488,6 +488,17 @@ export const CAMPAIGN_COPY = {
   answer: z.unknown(),
 } as const satisfies Route;
 
+/**
+ * A new campaign from another run's champion in git (goal 185), and its first run when a rig is
+ * named (control/campaigns/from-champion.ts checks the request).
+ */
+export const CAMPAIGN_FROM_CHAMPION = {
+  method: "POST",
+  path: "/v1/campaigns/from-champion",
+  body: SharedFields,
+  answer: z.unknown(),
+} as const satisfies Route;
+
 /** A kit control keeps, as the command line lists it. */
 const KitLine = z.looseObject({
   name: z.string(),

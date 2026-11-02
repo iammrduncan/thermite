@@ -6,6 +6,7 @@ import {
   CAMPAIGN_ADDITIONS,
   CAMPAIGN_CONTEXT,
   CAMPAIGN_COPY,
+  CAMPAIGN_FROM_CHAMPION,
   CAMPAIGN_KB_WRITES,
   START_RUN,
 } from "../../core/api/control/owner.ts";
@@ -29,11 +30,13 @@ import {
   moveCampaign,
   renameFolder,
   type ShelfOutcome,
+  StartCampaignBody,
   StartRunBody,
   setCampaignAdditions,
   setCampaignContext,
   setCampaignKbWrites,
   startARun,
+  startFromChampion,
   startRunAnswer,
   startRunRequest,
   unarchiveCampaign,
@@ -89,6 +92,30 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     }
     return c.json(copyCampaignAnswer(out), 201);
   });
+
+  // A new campaign from another run's champion in git (goal 185): MCP's start_campaign's twin.
+  // Its first run starts when a rig is named.
+  app.post(
+    CAMPAIGN_FROM_CHAMPION.path,
+    admin,
+    bodyLimit({ maxSize: 4 * 1024 * 1024 }),
+    async (c) => {
+      const raw: unknown = await c.req.json().catch(() => undefined);
+      const body = StartCampaignBody.safeParse(raw);
+      const out = body.success
+        ? await startFromChampion(parts, body.data, "owner:api", true)
+        : ({ ok: false, error: bodyRefusal(body.error), status: 400 } as const);
+      if (!out.ok) {
+        store.auditLog.refusal("owner:api", "refused", {
+          path: CAMPAIGN_FROM_CHAMPION.path,
+          why: redact(out.error),
+        });
+        return c.json({ error: out.error }, out.status);
+      }
+      const { ok: _ok, ...answer } = out;
+      return c.json(answer, 201);
+    },
+  );
 
   // A campaign's own context window and compaction point for all its runs' agents (goal 070):
   // the twin of MCP's set_campaign_context. A new version of its contract; an empty body removes

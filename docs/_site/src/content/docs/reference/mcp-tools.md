@@ -59,7 +59,7 @@ Control checks a token against the owner's first, then the operator's, the agent
 | `rig_setup` | Yes | Yes | No | Yes, without each step's `detail` |
 | `trial_session`, `control_log`, `control_log_level`, `providers`, `bus_state`, `system_state`, `rig_models`, `rig_settings`, `mcp_servers`, `runpod_tests`, `runpod_rigs`, `campaign_folders`, `kits` | Yes | Yes | No | Yes |
 | `runpod_rig_logs`, `agent_roles`, `agent_prompts`, `reachable_addresses` | Yes | Yes | No | No |
-| `add_cluster_rig`, `set_rig_model`, `set_model_price`, `start_run`, `copy_campaign`, `kit_add`, `set_campaign_context`, `set_campaign_additions`, `archive_campaign`, `unarchive_campaign`, `create_campaign_folder`, `rename_campaign_folder`, `delete_campaign_folder`, `move_campaign`, `cluster_rig`, `update_rig_images`, `set_cluster_slots`, `runpod_test_start`, `runpod_test_end` | Yes | Yes | No | No |
+| `add_cluster_rig`, `set_rig_model`, `set_model_price`, `start_run`, `copy_campaign`, `start_campaign`, `kit_add`, `set_campaign_context`, `set_campaign_additions`, `archive_campaign`, `unarchive_campaign`, `create_campaign_folder`, `rename_campaign_folder`, `delete_campaign_folder`, `move_campaign`, `cluster_rig`, `update_rig_images`, `set_cluster_slots`, `runpod_test_start`, `runpod_test_end` | Yes | Yes | No | No |
 | `set_rig_settings` | Yes | Yes, but not the promotion rule or the GPU split | No | No |
 | `set_cluster_rig_resources` | Yes | Yes, but not `judge_gpus` (the GPU split) | No | No |
 | `retire_rig`, `bring_back_rig`, `runpod_launch`, `runpod_rig_limits`, `runpod_rig`, `set_reachable_addresses`, `set_control_log_level`, `bus_messages`, `mcp_server_add`, `mcp_server_change`, `mcp_server_check`, `mcp_server_sign_in`, `mcp_server_delete` | Yes | No | No | No |
@@ -1116,6 +1116,22 @@ Errors:
 - `A research run's planner takes no MCP server: it plans from the run's own records. Give <server> to the workers or the advisors.`
 - `A context window is a whole number of tokens from 4,096 to 100,000,000.` and `The compaction point is a whole percent of the context window, from 50 to 95.`: `agents_context` out of range
 - `Ideas to try are for hill-climb and goal campaigns. A research campaign has questions and hypotheses.`: `ideas` for a research campaign
+
+### start_campaign
+
+**Start a campaign from a champion.** Owner and operator.
+
+> A new campaign whose starting point is another run's champion: its commit on the run's branch in git (thermite/<run>/champion), which the run's rig pushes after each export when the run's work goes to git. The new campaign keeps the run's kit, MCP servers and where its work goes; its contract is the run's own, or `contract`, a whole changed contract (its campaign and version become the new campaign's). With `rig`, its first run starts there, with start_run's checks; without, it is saved only. With `grant`, its runs may also read the source campaign's collection in the knowledge base, read only. Returns {campaign, version, contract_sha, commit, run?, command?, said?}: `said` when it was saved and no run started, and why. Refused in words: a name that is taken or not valid, a run whose work does not go to git, a champion not pushed yet, a contract that is not valid.
+
+It does what [`POST /v1/campaigns/from-champion`](rest-api.md#start-a-campaign-from-a-champion) does, with the same refusals.
+
+| Input | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `name` | string | | The new campaign's name: lowercase letters, digits, dashes and underscores, at most 64, starting with a letter or a digit |
+| `from` | `{run, champion}` | | The run, and the number of the champion its new campaign starts from |
+| `contract` | object | the run's own | A whole changed contract |
+| `rig` | string | none: saved only | The rig its first run starts on |
+| `grant` | boolean | `false` | Its runs may read the source campaign's collection, read only |
 
 ### kits
 

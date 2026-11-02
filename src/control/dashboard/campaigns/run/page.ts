@@ -25,6 +25,7 @@ import {
 import { earlierWords } from "../../../ui/words/index.ts";
 import type { RunOnRig } from "../../../views/index.ts";
 import type { Ctx, Dashboard } from "../../context.ts";
+import { runGitParts, runGitRoutes } from "./git.ts";
 import { runHelpers } from "./section.ts";
 
 /**
@@ -35,6 +36,9 @@ import { runHelpers } from "./section.ts";
 export function runPageRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, moreMenu, page, pauseMenu, runOf, store, views } = dash;
   const { runSection } = runHelpers(dash);
+  const { fromDrawer } = runGitParts(dash);
+  // A new campaign from one of the run's champions in git (goal 185).
+  runGitRoutes(app, dash);
 
   /**
    * A run that is starting, until its rig reports it: how the start goes, in words, following its
@@ -157,7 +161,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
         active: "campaigns",
         actions: actions(c, x, back),
       },
-      `${said}${earlierCard}${kind}${searches}${runSection(c, x, vs, now, tab, prompts)}`,
+      `${said}${earlierCard}${kind}${searches}${runSection(c, x, vs, now, tab, prompts)}${tab === "overview" ? fromDrawer(c, x, vs) : ""}`,
       vs,
     );
   };

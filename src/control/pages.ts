@@ -8,7 +8,7 @@ import type { DeploymentDriver, RunpodDriver } from "./lifecycle.ts";
 import type { McpServers } from "./mcp-servers/index.ts";
 import type { ControlParts } from "./parts.ts";
 import type { ChatGPTLogins } from "./providers/index.ts";
-import type { probeRepository, readKitManifest } from "./repo-probe.ts";
+import type { probeRepository, pushCheck, readKitManifest } from "./repo-probe.ts";
 import type { RigUpdates } from "./rigs/index.ts";
 import type { RunpodRigs, RunpodTests } from "./runpod/index.ts";
 import type { SecretBox } from "./secrets.ts";
@@ -39,6 +39,8 @@ export interface PageOptions {
   kits?: KitRepos | undefined;
   /** How control reads a project's repository (tests give their own). */
   probeRepo?: typeof probeRepository | undefined;
+  /** How control checks that a Git access may push to a repository (tests give their own). */
+  pushCheck?: typeof pushCheck | undefined;
   /** How control reads a kit's kit.json from its repository (tests give their own). */
   readKit?: typeof readKitManifest | undefined;
   /** How control reaches GPU clouds' APIs (tests give their own). */
