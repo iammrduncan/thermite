@@ -18,6 +18,8 @@
  *   pod log's "Reading…"; a form with data-autoread is sent once as the page opens.
  * - A page with data-every (Metrics' system tabs) draws its parts again every so often while it
  *   is shown, until its Pause.
+ * - A list's filters (form[data-filters]) are sent as a choice changes, and the drop-down opens
+ *   again on the page that comes back.
  *
  * FOLLOW_CORE_JS touches no page, and the tests run it as the browser does
  * (action-progress.test.ts). Without this script every form posts as before, and control answers
@@ -289,6 +291,28 @@ export const FOLLOW_JS = `
     }
     poll();
   }, 1000);
+  // ---------------------------------------------------------- a list's filters
+  // components/filters.ts: a choice changed sends the form, and its drop-down opens again on the
+  // page that comes back. A click outside an open drop-down, or Escape, closes it.
+  for (const f of document.querySelectorAll("form[data-filters]")) {
+    f.addEventListener("change", (ev) => {
+      const box = ev.target.closest("details[data-dd]");
+      if (!box || ev.target.type !== "checkbox") return;
+      const open = document.createElement("input");
+      open.type = "hidden"; open.name = "open"; open.value = box.dataset.dd;
+      f.appendChild(open);
+      if (f.requestSubmit) f.requestSubmit(); else f.submit();
+    });
+    const again = new URLSearchParams(location.search).get("open");
+    const box = again ? f.querySelector('details[data-dd="' + CSS.escape(again) + '"]') : null;
+    if (box) box.open = true;
+  }
+  const closeDropdowns = (except) => {
+    for (const d of document.querySelectorAll("form[data-filters] details[data-dd][open]")) if (d !== except) d.open = false;
+  };
+  document.addEventListener("click", (ev) => closeDropdowns(ev.target.closest("details[data-dd]")));
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeDropdowns(null); });
+
   // ---------------------------------------------------------- a page that draws itself again
   // Metrics' system tabs (data-every on their live switch, outside the parts): the page draws its
   // parts again every so often while it is shown, until the owner pauses it. What the owner opened

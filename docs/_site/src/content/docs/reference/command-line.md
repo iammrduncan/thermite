@@ -1065,7 +1065,7 @@ npx thermite command --control https://control.example.com --token-file ~/thermi
   --kind terminal_input --payload '{"run":"run-1","trial":"t-0123456789abcdef","text":"then run the tests","follow_up":true}'
 ```
 
-Control refuses `wipe_state` with `400 {"error":"wipe_state is issued only by a full reset"}`, and a payload that does not fit its kind with `400 {"error":"bad <kind> payload: …"}` (an unknown rig: `404`). `GET /v1/commands/<id>` and the dashboard's **Commands** page show the command's status. A command the rig refuses, such as a `queue_move` for an experiment that is no longer queued, shows there as `failed`, with the reason.
+Control refuses `wipe_state` with `400 {"error":"wipe_state is issued only by a full reset"}`, and a payload that does not fit its kind with `400 {"error":"bad <kind> payload: …"}` (an unknown rig: `404`). `GET /v1/commands/<id>` and the **Audit log**'s commands on the dashboard show the command's status. A command the rig refuses, such as a `queue_move` for an experiment that is no longer queued, shows there as `failed`, with the reason.
 
 ### `log-level`
 

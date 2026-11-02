@@ -47,8 +47,8 @@ Every part of Thermite writes one JSON object per line, such as `{"at":"…","le
 | A rig on RunPod | Its page's **Pod log** ([A rig's page](../../reference/rig-page.md#pod-log)): RunPod's own lines and what the container printed |
 | What a rig did | The rig's page: **Recent** for its history, **Checks** for its checks, and the **Set up by control** or **You run it yourself** block for each setup step. For a rig control set up, the MCP tool `rig_setup` lists the same steps |
 | What a run's agents and advisors are doing | **Live** in the sidebar, or **Live** on the run's page: the run's lines as they come. Choose **Advisors** for each step of the advisors' rounds, with each advisor error and its reason. Choose **You** for your messages, who read them and the advisors' answers |
-| What control did, refused or failed at | **Audit log** in the sidebar (300 entries a page, newest first: **Older** and **Newer** below the list go through the rest), `GET /v1/audit`, or the MCP tool `control_log`. Both page through every entry with `before` and `after`: see [the REST API](../../reference/rest-api.md#audit-log) and [`control_log`](../../reference/mcp-tools.md#control_log). Refusals, from the dashboard, an MCP tool or a command sent over the REST API, are entries named `refused`, and requests that ended in an error are named `failed`, each with the reason (for a refusal shown as a plain page, such as `bad form token`, only its HTTP status). A refusal that repeats, from the same rig or token, on the same route and for the same reason, is one entry: the page says how many times it came and when the last came, under its first time |
-| Where each command went | **Commands** in the sidebar: each command's status (`pending`, `delivered`, `rejected`, `failed`, `expired`) and the rig's answer in **Outcome** |
+| What control did, refused or failed at | **Audit log** in the sidebar (50 entries a page, newest first: **Newest**, **‹ Newer** and **Older ›** below the list go through the rest; **Type**, **Who** and **Rig** above it filter it, and MCP calls show only when you pick them under **Type**), `GET /v1/audit`, or the MCP tool `control_log`. Both page through every entry with `before` and `after`: see [the REST API](../../reference/rest-api.md#audit-log) and [`control_log`](../../reference/mcp-tools.md#control_log). Refusals, from the dashboard, an MCP tool or a command sent over the REST API, are entries named `refused`, and requests that ended in an error are named `failed`, each with the reason (for a refusal shown as a plain page, such as `bad form token`, only its HTTP status). A refusal that repeats, from the same rig or token, on the same route and for the same reason, is one entry: the page says how many times it came and when the last came, under its first time |
+| Where each command went | **Audit log** in the sidebar, with **Commands** picked under **Type**: each command's status (`pending`, `delivered`, `rejected`, `failed`, `cancelled`, `expired`), the rig's reason for a refusal beside it, and the rig's whole answer under **Detail** |
 
 There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/027-logs-page.goal)).
 
@@ -280,7 +280,7 @@ The banner goes by itself once the rig's reports come on the bus again. A rig wh
 
 ### Commands wait for the message bus
 
-- **You see:** the rig's page has a banner `A command waits for the message bus.`, or how many wait, and **Needs you** a **Commands wait** card. The commands stay **pending** on **Commands**.
+- **You see:** the rig's page has a banner `A command waits for the message bus.`, or how many wait, and **Needs you** a **Commands wait** card. The commands stay **pending** among the **Audit log**'s commands.
 - **Why:** the bus did not take them. The banner says why: `the rig's queue on the bus holds 100 commands it has not taken`, when the rig does not take its commands; `the bus did not take it: …`, while the bus is away; or `100 commands wait their turn for the bus already`. Control holds them, and publishes them again every 10 seconds, each rig's oldest first.
 - **Do:** for a full queue, check that the rig is on the bus and that its supervisor runs: its page says whether it is broken, and its log says why. For a bus that is away, bring the bus's server back. The commands go by themselves once the bus takes them, each before its own expiry; [cancel](cancel-a-command.md) one you no longer want.
 
@@ -397,7 +397,7 @@ Two causes are common on a laptop:
 
 ### A campaign doesn't start: `staging:`
 
-- **You see:** the run never appears. On **Commands**, in the sidebar, the **assign campaign** row is **failed**, and its **Outcome** holds `"accepted":false` and `"result":{"error":"staging: …"}`. The supervisor's log has a `staging failed` line with the same error, then `command not relayed`: the supervisor gave the command to the harness with the reason, and the harness recorded it as not applied, which reached control in the rig's next report.
+- **You see:** the run never appears. On the **Audit log**, with **Commands** picked under **Type**, the **command issued** row of `assign_campaign` is **failed**, and its **Detail** holds `"accepted":false` and `"result":{"error":"staging: …"}`. The supervisor's log has a `staging failed` line with the same error, then `command not relayed`: the supervisor gave the command to the harness with the reason, and the harness recorded it as not applied, which reached control in the rig's next report.
 - **Why:** before the rig takes a campaign, its supervisor fetches the project, the kit and any model the command names. That fetch failed. The supervisor's log line `staged sources` means it worked.
 - **Do:** read the reason:
 
@@ -410,13 +410,13 @@ Two causes are common on a laptop:
 
 ### A campaign doesn't start: the kit does not fit the contract
 
-- **You see:** the run never appears. On **Commands**, the **assign campaign** row is **failed**, and its **Outcome** has `the kit does not fit the contract:` and what doesn't fit, such as `cells names cell large, which the kit does not have` or `the kit measures on cuda-gpu, and this rig's target is cpu`.
+- **You see:** the run never appears. On the **Audit log**'s commands, the `assign_campaign` row is **failed**, and its **Detail** has `the kit does not fit the contract:` and what doesn't fit, such as `cells names cell large, which the kit does not have` or `the kit measures on cuda-gpu, and this rig's target is cpu`.
 - **Why:** when the rig takes a campaign, it checks the contract against the kit's `kit.json`. Every test case (a "cell" in `kit.json` and the contract), metric and verifier the contract names must be in the kit, and the kit's target must be the rig's. A kit with a broken `kit.json` fails with `has no valid kit.json:` instead.
 - **Do:** fix the contract or the kit, then start the campaign again. See [Write a contract](../campaigns/write-a-contract.md) and [Write a kit](../campaigns/write-a-kit.md). For a kit described or uploaded on the **New campaign** page, the page runs the same check before it sends anything.
 
 ### A campaign doesn't start: the commit has no folder
 
-- **You see:** the run never appears. On **Commands**, the **assign campaign** row is **failed**, and its **Outcome** has `commit <commit> has no folder <folder>`. On the **New campaign** page, **Look it up** says `main has no folder examples/none, or the folder has no files` (with your branch and folder).
+- **You see:** the run never appears. On the **Audit log**'s commands, the `assign_campaign` row is **failed**, and its **Detail** has `commit <commit> has no folder <folder>`. On the **New campaign** page, **Look it up** says `main has no folder examples/none, or the folder has no files` (with your branch and folder).
 - **Why:** the campaign's project is one folder of its repository (**Folder in the repository**, or `project.folder` in the contract), and the commit the run starts from has no such folder. The path is from the top of the repository, and git's names are case-sensitive.
 - **Do:** check the folder's path on your Git host, at the branch or commit you start from. Then open **New campaign** again, fill it in with the same campaign name and the folder fixed, and start it. See [Start a campaign from the dashboard](../campaigns/start-from-dashboard.md#3-project).
 
@@ -487,8 +487,8 @@ The dashboard refuses to start a research run with agents in the last case. A ru
 ### A message to the agents was refused
 
 - **You see:** after **Send** in **Live**, your message never shows in the stream, and the line under the message box says why:
-  - when control refused the message, `Not sent:` and its reason show at once, what you wrote stays in the box, and the message is not on **Commands**;
-  - when the rig refused it, the line says `rig-1 refused it:` and the rig's reason, with the rig's next report, within a minute, and with no refresh, and a strip above the box says **Not sent.** `The rig refused your last message:` and the reason. On **Commands**, the message's **message agent** row is **failed**, with the rig's reason in **Outcome**.
+  - when control refused the message, `Not sent:` and its reason show at once, what you wrote stays in the box, and the message is not among the **Audit log**'s commands;
+  - when the rig refused it, the line says `rig-1 refused it:` and the rig's reason, with the rig's next report, within a minute, and with no refresh, and a strip above the box says **Not sent.** `The rig refused your last message:` and the reason. Among the **Audit log**'s commands, the message's `message_agent` row is **failed**, with the rig's reason beside it.
 
   The rig's refusal stays until a later message to the run goes through, and shows also for a message sent over MCP, the REST API or the command line. A message from **Tell the planner**, on a run's **Planner** tab, shows its refusal in that card, above the box.
 - **Why:** a message that nothing would read is refused. Control refuses, before signing it, a message with no words (`Write a message first.`), and one to a recipient that **Live** greys out, with the same words: everyone working, a lane or the planner of a run without agents, such as a try; a part that is off on **Edit rig**, such as `The planner is off on this rig (Edit rig), so nothing would read it.`; an advisor the rig's supervisor hasn't set up, such as `This rig's supervisor has no auditor set up, so nothing would read it.`; the auditor of a research run (`A research run has no attempts to audit.`); or the review panel of a run with no goal it reviews, such as a hill climb (a research run's review panel reads messages). The rig refuses what control can't check, such as a lane the run doesn't have. [Steer a run](../campaigns/steer-a-run.md#if-a-message-doesnt-arrive) lists control's reasons, and [`message_agent`](../../reference/signed-commands.md#message_agent) the rig's.
@@ -504,7 +504,7 @@ The dashboard refuses to start a research run with agents in the last case. A ru
 
 Each run has an [experiment queue](../campaigns/choose-what-runs-next.md): the experiments up next, in order, which the planner gives to free lanes, and the lanes' ideas, which wait for the planner or you.
 
-- **You see:** on a run's **Experiments** or **Planner** tab, you pressed **Add**, **↑ Top**, **Save** under **Edit**, **Drop it**, **Queue it**, **Drop** or **Remove**, or dragged an experiment. A line said `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.`, then `rig-1 refused it:` and the rig's reason, and the tab doesn't change. On **Commands**, the command's row, such as **queue move** or **drop directive**, is **failed**, with the rig's reason in **Outcome**.
+- **You see:** on a run's **Experiments** or **Planner** tab, you pressed **Add**, **↑ Top**, **Save** under **Edit**, **Drop it**, **Queue it**, **Drop** or **Remove**, or dragged an experiment. A line said `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.`, then `rig-1 refused it:` and the rig's reason, and the tab doesn't change. Among the **Audit log**'s commands, the command's row, such as `queue_move` or `drop_directive`, is **failed**, with the rig's reason beside it.
 - **Why:** most often, the queue changed on the rig before your command reached it. A lane took the experiment, or the planner queued or dropped an idea first. A change that worked shows on the tab after the rig's next report, within a minute by default.
 - **Do:** act on what the tab shows now: it is drawn again when the rig answers.
 
@@ -590,17 +590,17 @@ A reason about one experiment names its state, then the rule: `only queued exper
 
 ### A run does not start: the kit names an MCP server
 
-- **You see:** `The kit names the MCP server paper-search, and Settings has no server of that name. Add an MCP server named paper-search in Settings › Providers, or take it out of the kit. Then start the campaign again.`; or, on **Commands**, a failed `assign_campaign` whose outcome says `the kit names the MCP servers …, and the assignment names …`.
+- **You see:** `The kit names the MCP server paper-search, and Settings has no server of that name. Add an MCP server named paper-search in Settings › Providers, or take it out of the kit. Then start the campaign again.`; or, among the **Audit log**'s commands, a failed `assign_campaign` whose **Detail** says `the kit names the MCP servers …, and the assignment names …`.
 - **Do:** add the server in **Settings** with that exact name, or take it out of the kit. From **New campaign**, the campaign is saved all the same: then press **Start the campaign** again, or start the saved campaign with **Start a run** on its page. A run assigned with `thermite assign` or over MCP needs the kit's list in its `mcp_servers` ([Give agents MCP tools](../campaigns/give-agents-mcp-tools.md#3-start-the-run)).
 
 ## Something was refused
 
 Thermite says why it refuses something. Where you see it depends on how you asked:
 
-- **The dashboard** shows `Not done.` and the reason on the rig and Providers pages, `Not started.` in a campaign's **Start a run** panel, and `Not sent:` and the reason under the message box in a run's **Live** and in **Tell the planner** on its **Planner** tab. A button that sends something to a rig shows `Not sent:` and the reason beside it, or at the top of the page. Without the page's script, some actions answer with a plain page that says `refused:` and the reason: use your browser's **Back** button. A command that control sent but the rig refused shows as **failed** on **Commands**, as for the [queue](#a-change-to-the-queue-or-a-rule-didnt-take).
+- **The dashboard** shows `Not done.` and the reason on the rig and Providers pages, `Not started.` in a campaign's **Start a run** panel, and `Not sent:` and the reason under the message box in a run's **Live** and in **Tell the planner** on its **Planner** tab. A button that sends something to a rig shows `Not sent:` and the reason beside it, or at the top of the page. Without the page's script, some actions answer with a plain page that says `refused:` and the reason: use your browser's **Back** button. A command that control sent but the rig refused shows as **failed** among the **Audit log**'s commands, as for the [queue](#a-change-to-the-queue-or-a-rule-didnt-take).
 - **The REST API** answers `401 {"error":"unauthorized"}` for a token that isn't the owner's, and `400 {"error":"invalid request"}` for a body with a wrong field, without saying which. A command that control refuses answers **400** with the reason, for example `{"error":"bad pause_run payload: run: …"}` or a message that nothing would read, or **404** `{"error":"unknown rig rig-9"}`; control's audit log has it as a `refused` entry, with the kind and the reason. Other refusals while control does the work, such as a refused propagation, answer **500** with the reason.
 - **MCP** tools answer `{"error":"…"}` with the reason, and control's audit log has it as a `refused` entry, with the tool's name. A command kind that the token may not issue, such as `queue_add` with an agent's token, fails the tool's own input check with `Input validation error` instead, and leaves no audit entry.
-- **A rig** that refuses a command marks it `rejected` or `failed` on **Commands**, with the reason in **Outcome**. For example, `not now: …` for a busy rig, or `<kind> is the owner's to issue, not …'s` for a command only the owner may give.
+- **A rig** that refuses a command marks it `rejected` or `failed` among the **Audit log**'s commands, with the reason beside it. For example, `not now: …` for a busy rig, or `<kind> is the owner's to issue, not …'s` for a command only the owner may give.
 
 Control writes the dashboard's `Not done.`, `Not started.` and `refused:` answers, its own `Not sent:` refusals of a message, the MCP tools' refusals, and failed requests, to its audit log as well. To list them over MCP, call `control_log` with `action: "refused"` or `action: "failed"`.
 

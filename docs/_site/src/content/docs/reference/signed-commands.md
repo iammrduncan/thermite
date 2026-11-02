@@ -53,7 +53,7 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 | 5. Apply | Harness | The supervisor hands the command to the harness, which checks it, applies it once, and records it in its ledger: a `command` event with its outcome, or `command_rejected` for one it refuses. Only then does the supervisor ack it on the bus |
 | 6. Confirm | Control | When the rig's next signed report brings that record, control takes the command's status and outcome from it: the only way control learns them |
 
-`GET /v1/commands/<id>`, the MCP tool `command_status` and the dashboard's **Commands** page, which lists the newest 200 commands, show a command's status and outcome.
+`GET /v1/commands/<id>`, the MCP tool `command_status` and the **Audit log**'s commands on the dashboard (**Commands** under **Type**, 50 to a page) show a command's status and outcome.
 
 ### A command about one run
 

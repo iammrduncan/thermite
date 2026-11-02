@@ -141,7 +141,7 @@ Open **Campaigns** in the sidebar. Under **At work now**, a card shows `matmul-a
 For the first few minutes the judge measures the project as it is (step 9 says more), and then the **planner**, an agent that decides what each lane tries, plans the first round. Meanwhile the card's `lanes` line says `waiting for the first round`. `lane-1` takes its place once the planner has given the lane its work.
 
 :::tip[If the run does not appear]
-Open **Commands** in the sidebar. The `assign campaign` line shows **failed**, and its outcome says why:
+Open the **Audit log** in the sidebar and pick **Commands** under **Type**. The `assign_campaign` line shows **failed**, and the reason beside it says why:
 
 - `commit` and a commit id, then `has no folder examples/matmul-cpu/project`: the folder's path in step 6 has a typing mistake.
 - `staging:` and a reason: the rig could not fetch the repository, for example without an internet connection. See [A campaign doesn't start: staging](../how-to/operate/troubleshoot.md#a-campaign-doesnt-start-staging).

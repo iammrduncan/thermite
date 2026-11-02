@@ -43,7 +43,7 @@ A champion beyond the starting point can be sent once its rig has published it. 
 2. Beside **Send champion #N**, choose the receiving run, shown as `<run> on <rig>`. The list holds other rigs' runs of the same campaign.
 3. Press **Send champion #N**.
 
-The dashboard opens the receiving run's page. The receiving run must be running when the champion arrives: if it is paused or finished, the command fails, and **Commands** in the sidebar shows the reason, such as `run sort-speed-1 is paused`. Resume the run, then send the champion again.
+The dashboard opens the receiving run's page. The receiving run must be running when the champion arrives: if it is paused or finished, the command fails, and the **Audit log**'s commands, in the sidebar, show the reason, such as `run sort-speed-1 is paused`. Resume the run, then send the champion again.
 
 You can also send it with the owner's token over the REST API, `POST /v1/propagate` with `{"run": "sort-speed-1", "to_run": "sort-speed-2"}`, or with the MCP tool `propagate_champion` and the same two fields. `run` and `to_run` are the two runs' names, as the list beside **Send champion #N** shows them. A run's name is used once on control, on every rig: **Start a run** numbers a campaign's runs across all its rigs, so the run on `local-2` is `sort-speed-2`, and control knows the rig each run is on.
 
@@ -75,4 +75,4 @@ After **Send champion #N**, the dashboard answers with a plain page that says `r
 | `<run> runs <campaign>, not <campaign>` | The receiving run is another campaign's |
 | `the target works on <repo>, the champion is in <repo>` | The two runs work on different projects |
 
-If the receiving rig can't find the champion in the results repository, the command stays **pending** on the **Commands** page and expires after 24 hours. Check that both rigs push to the same results repository: each rig's page shows **Results** with `pushed … ago`, or `no results repository`.
+If the receiving rig can't find the champion in the results repository, the command stays **pending** among the **Audit log**'s commands and expires after 24 hours. Check that both rigs push to the same results repository: each rig's page shows **Results** with `pushed … ago`, or `no results repository`.

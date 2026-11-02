@@ -57,7 +57,7 @@ On **Campaigns › New campaign**:
 
 ## 5. Check that the rig fetched it
 
-Stay on the campaign's page: once the rig reports the run, within a minute or so, the page opens the run's own page by itself. If the rig could not fetch the project, the card at the top says `Not started:`, the run, and `rig-1 refused it: staging:` with the reason. On **Commands** in the sidebar, the **assign campaign** row is **failed**, with the same reason.
+Stay on the campaign's page: once the rig reports the run, within a minute or so, the page opens the run's own page by itself. If the rig could not fetch the project, the card at the top says `Not started:`, the run, and `rig-1 refused it: staging:` with the reason. Among the **Audit log**'s commands, in the sidebar, the `assign_campaign` row is **failed**, with the same reason.
 
 | Reason | What to do |
 | --- | --- |

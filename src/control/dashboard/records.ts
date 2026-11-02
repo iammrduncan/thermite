@@ -7,62 +7,64 @@ import {
   exportsToDelete,
   stillReceiving,
 } from "../exports.ts";
-import { cursorOf } from "../store/index.ts";
-import { commandRow } from "../ui/commands/index.ts";
+import { AUDIT_ACTORS, AUDIT_KINDS, cursorOf } from "../store/index.ts";
+import { AUDIT_DEFAULT_KINDS, AUDIT_PAGE, type AuditQuery, auditBody } from "../ui/audit.ts";
 import { ago, avatar, esc, icon, meter, pct, valuesPairWords } from "../ui/components/index.ts";
-import { exportsBody, exportsHref, pickedExport } from "../ui/exports.ts";
+import { exportRun, exportsBody, exportsHref, pickedExport } from "../ui/exports.ts";
 import { runHref } from "../ui/urls.ts";
 import { leaderboard } from "../views/index.ts";
 import { backTo, type Dashboard } from "./context.ts";
 
-/** The Commands, Audit, Leaderboard, Exports (goal 103) and Reports pages. */
+/** The Audit log (with the commands), Leaderboard, Exports (goal 103) and Reports pages. */
 export function recordRoutes(app: Hono, dash: Dashboard): void {
   const { csrf, opts, page, said, store, views } = dash;
 
   // ---------------------------------------------------------------- commands, audit, leaderboard, reports
-  app.get("/ui/commands", (c) => {
-    const now = Date.now();
-    const rows = store.commands
-      .list(200)
-      .map((x) => commandRow(x, now))
-      .join("");
-    return page(
-      c,
-      {
-        title: "Commands",
-        summary: "every signed command control issued, newest first",
-        active: "commands",
-      },
-      `<div class="card flat"><table><thead><tr><th>Issued</th><th>Rig</th><th>Kind</th><th>By</th><th>Status</th><th>Outcome</th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="empty">No command yet.</td></tr>`}</tbody></table></div>`,
-    );
-  });
+  // The Commands page is the audit log's commands now (goal 181).
+  app.get("/ui/commands", (c) => c.redirect("/ui/audit?type=command", 302));
 
+  // The audit log (goals 015 and 181): AUDIT_PAGE entries a page, newest first, filtered by kind,
+  // by who and by rig, with the commands' delivery and outcome. MCP calls only when asked for.
   app.get("/ui/audit", (c) => {
     const now = Date.now();
-    // 300 entries a page, newest first; Older and Newer page through every entry (goal 015).
-    const before = cursorOf(c.req.query("before"));
+    const many = (k: string) => (c.req.queries(k) ?? []).filter(Boolean);
+    const query: AuditQuery = {
+      type: many("type").filter((k) => (AUDIT_KINDS as readonly string[]).includes(k)),
+      who: many("who").filter((k) => (AUDIT_ACTORS as readonly string[]).includes(k)),
+      rig: many("rig"),
+      q: c.req.query("q") ?? "",
+      before: cursorOf(c.req.query("before")),
+      after: cursorOf(c.req.query("after")),
+    };
+    const filter = {
+      kinds: query.type.length ? query.type : AUDIT_DEFAULT_KINDS,
+      actors: query.who,
+      rigs: query.rig,
+      words: query.q,
+    };
     const p = store.auditLog.page(
-      300,
-      {},
-      before !== undefined ? { before } : { after: cursorOf(c.req.query("after")) },
+      AUDIT_PAGE,
+      filter,
+      query.before !== undefined ? { before: query.before } : { after: query.after },
     );
-    // A refusal that repeats is one entry: when it came first, how often, and when last.
-    const when = (x: { at: string; count: number; last_at: string }) =>
-      `${esc(ago(x.at, now))} ago${x.count > 1 ? `<div class="xs">${x.count} times, the last ${esc(ago(x.last_at, now))} ago</div>` : ""}`;
-    const rows = p.entries
-      .map(
-        (x) =>
-          `<tr><td class="muted nowrap">${when(x)}</td><td>${esc(x.actor)}</td><td><b>${esc(x.action.replace(/_/g, " "))}</b> <span class="muted xs">${esc(x.action)}</span></td><td class="clip"><code class="muted">${esc(JSON.stringify(x.body).slice(0, 200))}</code></td></tr>`,
-      )
-      .join("");
-    const links = [
-      p.newer !== null ? `<a href="/ui/audit?after=${p.newer}">Newer</a>` : "",
-      p.older !== null ? `<a href="/ui/audit?before=${p.older}">Older</a>` : "",
-    ].filter(Boolean);
+    const first = p.entries[0]?.id;
+    const vs = views();
+    const rigs = [...new Set([...vs.map((u) => u.id), ...query.rig])].sort();
     return page(
       c,
       { title: "Audit log", summary: "who did what through control", active: "audit" },
-      `<div class="card flat"><table><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead><tbody>${rows || `<tr><td colspan="4" class="empty">No entry here.</td></tr>`}</tbody></table></div>${links.length ? `<div class="pager">${links.join("")}</div>` : ""}`,
+      auditBody({
+        entries: p.entries,
+        query,
+        rigs,
+        command: (id) => store.commands.row(id),
+        from: first === undefined ? 0 : store.auditLog.count(filter, first) + 1,
+        total: store.auditLog.count(filter),
+        older: p.older,
+        newer: p.newer,
+        now,
+      }),
+      vs,
     );
   });
 
@@ -101,9 +103,23 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
     const vs = views();
     const now = Date.now();
     const all = store.exports.all(1000);
-    const rig = c.req.query("rig") || undefined;
-    const rigs = [...new Set([...all.map((e) => e.rig), ...vs.map((u) => u.id)])].sort();
-    if (rig && !rigs.includes(rig)) rigs.push(rig);
+    const many = (k: string) => (c.req.queries(k) ?? []).filter(Boolean);
+    const at = Number(c.req.query("at"));
+    const query = {
+      rig: many("rig"),
+      kind: many("kind"),
+      campaign: many("campaign"),
+      q: c.req.query("q") ?? "",
+      at: Number.isInteger(at) && at > 0 ? at : 0,
+    };
+    const rigs = [
+      ...new Set([...all.map((e) => e.rig), ...vs.map((u) => u.id), ...query.rig]),
+    ].sort();
+    const campaignOf = (e: (typeof all)[number]) => {
+      const run = exportRun(e);
+      return run ? (store.runRegistry.campaignOf(run, e.rig) ?? undefined) : undefined;
+    };
+    const rig = query.rig.length === 1 ? query.rig[0] : undefined;
     let confirm: Parameters<typeof exportsBody>[0]["confirm"];
     if (c.req.query("delete")) {
       const refs = (c.req.queries("pick") ?? []).flatMap((v) => pickedExport(v) ?? []);
@@ -128,7 +144,8 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
         {
           exports: all,
           rigs,
-          rig,
+          campaignOf,
+          query,
           kept: files !== undefined,
           now,
           csrf: csrf(c),

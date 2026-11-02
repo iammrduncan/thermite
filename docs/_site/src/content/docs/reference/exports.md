@@ -104,22 +104,23 @@ Control never deletes an export by itself. They take room in control's state vol
 
 ## Download an export
 
-The dashboard's **Exports** page, in the sidebar, lists the exports control keeps, for every rig, newest first: the newest 1,000. To see one rig's, press the rig's name above the table (each name says how many exports it has; **All rigs** shows them all again), follow **its exports on control** on the rig's **Results** row or the **Exports page** link under **Export**, or add `?rig=<rig>`. Only the owner reads it: the dashboard signs in with the owner's token.
+The dashboard's **Exports** page, in the sidebar, lists the exports control keeps, for every rig, newest first, 25 to a page (of the newest 1,000): **Newest**, **‹ Newer** and **Older ›** under the list move through them, and the line beside them says where you are, such as `26–50 of 132`. Only the owner reads it: the dashboard signs in with the owner's token.
+
+Above the list, three drop-downs filter it, each with a box for each choice and how many exports have it among those the other filters leave: **Rig**, the rig that sent it; **Kind**, a run's export at its end, a run's export asked for, full, or what changed (made before v0.1.1); and **Campaign**, a run's export's campaign. Ticking a box shows the list at once. The box beside them finds a run or an export by its name. Each choice in force shows as a chip that takes it away, and **Clear** takes them all. The filters are in the page's address (`?rig=rig-1&kind=full`), so a link keeps them: **its exports on control**, on a rig's **Results** row, and the **Exports page** link under **Export** open the page for that rig.
 
 | Column | Meaning |
 | --- | --- |
 | (a box) | Tick it to delete the export ([Delete exports](#delete-exports)). The box in the heading ticks every export shown. An export control is still receiving has no box to tick |
-| **Rig** | The rig that sent it |
-| **Export** | Its name: the time the harness made it, and 8 hexadecimal characters |
+| **Made** | When control received its start, and under it the export's name: the time the harness made it, and 8 hexadecimal characters |
+| **Run** | The run a run's export holds, with its campaign under it; `every run` for a full export |
 | **Kind** | `full`, `run <id>` for [a run's export](#a-runs-export), followed by `at its end` for [one the rig made at the run's end](#a-runs-export-at-its-end), or `what changed` for one made before v0.1.1 |
-| **Made** | When control received its start |
-| **Complete** | When its last file reached control and passed its check, or `still arriving` |
+| **Rig** | The rig that sent it |
+| **Size** | The size of all its files |
+| **Download** | One `.tar.gz` of the export, for a complete one only: when its last file reached control and passed its check. One that is not says `still arriving`; on a control with no folder for exports, a complete one says `not kept` |
 | **Events** | The rig's ledger events it holds, such as `181–245`, or `none new (through 245)`; for a run's export, `the run's, through 245` |
 | **Files** | How many files it holds, or `k of n` while they arrive |
-| **Size** | The size of all its files |
-| **Download** | One `.tar.gz` of the export, for a complete one only. One that is not says `still arriving`; on a control with no folder for exports, a complete one says `not kept` |
 
-With no export yet, the page says `No export on control yet.` (`No export from rig-1 on control.` for one rig). A control started without its folder for exports says `Control keeps no exports: it has no folder for them, so rigs send none here.` above the table.
+With no export yet, the page says `No export on control yet.`; with filters that leave none, `No export on control matches.` A control started without its folder for exports says `Control keeps no exports: it has no folder for them, so rigs send none here.` above the table.
 
 The download is `<rig>-<export>.tar.gz`. It holds one folder, `<rig>-<export>/`, with the export's `manifest.json` and every file at its path in the export, each as control checked it against the manifest's SHA-256. Control builds the archive from what it keeps as it sends it, so it never holds a second copy. A tar archive in the POSIX format, compressed with gzip, which `tar -xzf` unpacks on Linux and macOS. Each download is in the audit log as `export_downloaded`.
 

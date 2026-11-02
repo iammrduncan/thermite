@@ -402,20 +402,47 @@ describe("Export and the Exports page (goal 103)", () => {
     assert.deepEqual(rows.map((r) => r[1]).sort(), [NAME, PART].sort());
     const done = rows.find((r) => r[1] === NAME)?.[3] ?? "";
     const arriving = rows.find((r) => r[1] === PART)?.[3] ?? "";
-    assert.match(done, /<b>rig-a<\/b>/);
+    // Goal 181's columns: made (with its name), run, kind, rig, size, Download, events, files.
+    assert.match(done, /<a href="\/ui\/rigs\/rig-a">rig-a<\/a>/);
+    assert.match(done, /<span class="muted">every run<\/span>/, "a full export holds every run");
     assert.match(done, /<span class="chip ok">full<\/span>/);
-    assert.match(done, /<td class="num nowrap">1–7<\/td>/, "its event range");
-    assert.match(done, /<td class="num">7<\/td>/, "its files");
+    assert.match(done, /<td class="num nowrap muted small">1–7<\/td>/, "its event range");
+    assert.match(done, /<td class="num muted small">7<\/td>/, "its files");
     assert.match(done, /KiB<\/td>/, "its size");
     assert.match(done, new RegExp(`href="/ui/exports/rig-a/${NAME}/archive" download>Download`));
     assert.match(arriving, /what changed/);
     assert.match(arriving, /still arriving/);
     assert.doesNotMatch(arriving, /archive/, "no Download for an export still arriving");
 
-    // The rig's filter, as the rig's page links to it.
+    // The rig's filter, as the rig's page links to it: a drop-down of several choices, with
+    // each choice's count, and the choice in force as a chip.
     const other = await (await get("/ui/exports?rig=rig-b")).text();
     assert.doesNotMatch(other, /<tr data-export=/);
-    assert.match(other, /No export from rig-b on control/);
+    assert.match(other, /No export on control matches/);
+    assert.match(other, /<form class="flt" method="get" action="\/ui\/exports" data-filters>/);
+    assert.match(
+      other,
+      /<input type="checkbox" name="rig" value="rig-b" checked><span>rig-b<\/span><span class="n">0<\/span>/,
+    );
+    assert.match(
+      other,
+      /<input type="checkbox" name="rig" value="rig-a"><span>rig-a<\/span><span class="n">2<\/span>/,
+    );
+    assert.match(
+      other,
+      /<a class="flt-chip" href="\/ui\/exports" aria-label="Remove the filter Rig: rig-b">/,
+    );
+    // By kind: the full one alone, then what changed alone.
+    const full = await (await get("/ui/exports?kind=full")).text();
+    assert.deepEqual(
+      [...full.matchAll(/<tr data-export="([^"]+)"/g)].map((m) => m[1]),
+      [NAME],
+    );
+    const old = await (await get("/ui/exports?kind=old&rig=rig-a")).text();
+    assert.deepEqual(
+      [...old.matchAll(/<tr data-export="([^"]+)"/g)].map((m) => m[1]),
+      [PART],
+    );
 
     // The dashboard's Download: the same archive, for the owner's session only.
     const dl = await get(`/ui/exports/rig-a/${NAME}/archive`);

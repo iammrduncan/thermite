@@ -16,6 +16,7 @@ import { STYLE } from "../style/index.ts";
 import { campaignHref } from "../urls.ts";
 import { ICON_LINKS } from "./icons.ts";
 
+export { type Filter, filterForm, pagerHtml } from "./filters.ts";
 export {
   bestGainWords,
   championCard,
@@ -585,7 +586,6 @@ export function shell(s: Shell, body: string): string {
     ${nav("/ui/metrics", "metrics", icon.chart, "Metrics")}
     ${nav("/ui/live", "live", icon.terminal, "Live")}
     ${nav("/ui/knowledge", "knowledge", icon.book, "Knowledge")}
-    ${nav("/ui/commands", "commands", icon.list, "Commands")}
     ${nav("/ui/reports", "reports", icon.file, "Reports")}
     ${nav("/ui/exports", "exports", icon.download, "Exports")}
     ${nav("/ui/audit", "audit", icon.shield, "Audit log")}

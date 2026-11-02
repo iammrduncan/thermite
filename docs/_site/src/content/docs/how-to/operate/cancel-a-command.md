@@ -31,7 +31,7 @@ You can also find the id elsewhere:
 
 - The command that issued it printed it, for example `thermite command` or `thermite assign`: `{"id":"…","status":"pending"}`.
 - Over MCP, the `list_commands` tool lists commands with their ids.
-- On the dashboard, **Commands** in the sidebar lists every command with its status but not its id. **Audit log**, also in the sidebar, shows the id in the detail of the `command_issued` entry.
+- On the dashboard, the **Audit log** in the sidebar, with **Commands** picked under **Type**, lists every command with its status, and shows the id in the detail of the `command_issued` entry.
 
 ## 2. Cancel it
 
@@ -50,7 +50,7 @@ curl -sS -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" \
   http://127.0.0.1:8800/v1/commands/0b6d3e52-6f1a-4c2e-9a57-3f4e1d2c8b90
 ```
 
-A cancelled command shows `{"status":"failed","outcome":{"cancelled_by":"owner:api"}}` over REST and MCP: there is no separate "cancelled" status. On the **Commands** page it shows as **cancelled**, in a grey chip, with `cancelled_by` in its **Outcome**. **Audit log** has a `command_cancelled` entry.
+A cancelled command shows `{"status":"failed","outcome":{"cancelled_by":"owner:api"}}` over REST and MCP: there is no separate "cancelled" status. Among the **Audit log**'s commands it shows as **cancelled**, in a grey chip, with `cancelled_by` under its **Detail**. **Audit log** has a `command_cancelled` entry.
 
 The rig still applies it if its supervisor had taken it from the bus before you cancelled: a command is pending until the rig's report with its outcome comes, up to a minute after the harness applied it. The command's status then changes to `delivered` at that report.
 

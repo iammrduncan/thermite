@@ -112,39 +112,73 @@ describe("paging through control's audit log (goal 015)", () => {
     });
   });
 
-  test("the Audit log page shows 300 entries at a time, with Older and Newer links", async () => {
+  test("the Audit log page shows 50 entries at a time, with Newest, Newer and Older links", async () => {
     const { store, control } = controlOnly({ tokens: { rigs: {} } });
     for (let i = 1; i <= 650; i++) store.auditLog.add("owner:api", `step_${i}`, { i });
     const { page } = await signIn(control);
     const shown = (html: string) =>
       [...html.matchAll(/<span class="muted xs">(step_\d+)<\/span>/g)].map((m) => m[1]);
     const link = (html: string, word: string) =>
-      new RegExp(`<a href="(/ui/audit\\?(?:before|after)=\\d+)">${word}</a>`).exec(html)?.[1];
-    // The newest page: the login entry, then the newest 299 steps; nothing newer.
+      new RegExp(
+        `<a class="btn sm" href="(/ui/audit(?:\\?(?:before|after)=\\d+)?)">${word}</a>`,
+      ).exec(html)?.[1];
+    // The newest page: the sign-in's entry, then the newest 49 steps; nothing newer.
     const newest = await page("/ui/audit");
     assert.deepEqual(shown(newest).slice(0, 2), ["step_650", "step_649"]);
-    assert.equal(shown(newest).length, 299);
-    assert.equal(link(newest, "Newer"), undefined);
-    const olderHref = link(newest, "Older");
+    assert.equal(shown(newest).length, 49);
+    assert.match(newest, /1–50 of 651/);
+    assert.equal(link(newest, "‹ Newer"), undefined);
+    const olderHref = link(newest, "Older ›");
     assert.ok(olderHref);
     const middle = await page(olderHref);
-    assert.deepEqual(shown(middle).slice(0, 1), ["step_351"]);
-    assert.equal(shown(middle).length, 300);
-    const lastHref = link(middle, "Older");
-    assert.ok(lastHref);
-    const last = await page(lastHref);
-    assert.deepEqual(
-      shown(last),
-      Array.from({ length: 51 }, (_, i) => `step_${51 - i}`),
-    );
-    assert.equal(link(last, "Older"), undefined, "the first entry is on the last page");
-    const newerHref = link(last, "Newer");
+    assert.deepEqual(shown(middle).slice(0, 1), ["step_601"]);
+    assert.equal(shown(middle).length, 50);
+    assert.match(middle, /51–100 of 651/);
+    assert.equal(link(middle, "Newest"), "/ui/audit");
+    // Older, page by page, to the first entry.
+    let last = middle;
+    for (let pages = 0; link(last, "Older ›") && pages < 20; pages++)
+      last = await page(link(last, "Older ›") as string);
+    assert.deepEqual(shown(last), ["step_1"], "the first entry is on the last page");
+    assert.match(last, /651–651 of 651/);
+    const newerHref = link(last, "‹ Newer");
     assert.ok(newerHref);
-    assert.deepEqual(shown(await page(newerHref)), shown(middle));
+    assert.deepEqual(shown(await page(newerHref)).slice(-1), ["step_2"]);
     // Past the newest entry, the page says so and links back.
     const empty = await page("/ui/audit?after=100000");
-    assert.match(empty, /No entry here\./);
-    assert.ok(link(empty, "Older"));
+    assert.match(empty, /No entry matches\./);
+    assert.ok(link(empty, "Older ›"));
+  });
+
+  test("the Audit log page filters by kind, who and words, and leaves MCP calls out unless asked", async () => {
+    const { store, control } = controlOnly({ tokens: { rigs: {} } });
+    store.auditLog.add("owner:ui", "command_issued", {
+      id: "c-1",
+      rig: "rig-a",
+      kind: "pause_run",
+    });
+    store.auditLog.add("owner:mcp", "mcp:list_rigs", {});
+    store.auditLog.add("rig:rig-b", "join_throttled", { rig: "rig-b" });
+    store.auditLog.add("control", "export_deleted", { rig: "rig-a", name: "x" });
+    const { page, get } = await signIn(control);
+    const actions = (html: string) =>
+      [...html.matchAll(/<span class="muted xs">([a-z_:]+)<\/span>/g)].map((m) => m[1]);
+    assert.deepEqual(
+      actions(await page("/ui/audit")).filter((a) => a !== "login"),
+      ["export_deleted", "join_throttled", "command_issued"],
+      "no MCP call by default",
+    );
+    assert.deepEqual(actions(await page("/ui/audit?type=mcp")), ["mcp:list_rigs"]);
+    assert.deepEqual(actions(await page("/ui/audit?type=command")), ["command_issued"]);
+    assert.deepEqual(actions(await page("/ui/audit?who=rig")), ["join_throttled"]);
+    assert.deepEqual(actions(await page("/ui/audit?rig=rig-a")), [
+      "export_deleted",
+      "command_issued",
+    ]);
+    assert.deepEqual(actions(await page("/ui/audit?q=deleted")), ["export_deleted"]);
+    // The Commands page is the audit log's commands.
+    const old = await get("/ui/commands");
+    assert.deepEqual([old.status, old.headers.get("location")], [302, "/ui/audit?type=command"]);
   });
 
   test("a refusal that repeats is one entry, with its count and its first and last time; the rest stay", async () => {

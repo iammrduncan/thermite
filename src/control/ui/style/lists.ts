@@ -47,4 +47,21 @@ details.kmore > summary { cursor: pointer; text-align: center; padding: 8px; fon
 details.menu { position: relative; display: inline-block; }
 details.menu > summary { list-style: none; }
 details.menu > summary::-webkit-details-marker { display: none; }
-.menu-pop { position: absolute; right: 0; top: 38px; z-index: 30; width: 280px; padding: 10px; display: grid; gap: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgb(0 0 0 / 14%); font-size: 13px; }`;
+.menu-pop { position: absolute; right: 0; top: 38px; z-index: 30; width: 280px; padding: 10px; display: grid; gap: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgb(0 0 0 / 14%); font-size: 13px; }
+
+/* A list's filters and pages (components/filters.ts) */
+.flt { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.flt-dd > summary .flt-n { margin-left: 6px; background: var(--primary); color: var(--primary-foreground); border-radius: 999px; font-size: 11px; padding: 0 6px; }
+.menu-pop.flt-pop { left: 0; right: auto; top: 34px; width: 250px; max-height: 60vh; overflow-y: auto; gap: 2px; }
+.flt-head { padding: 2px 6px 6px; font-size: 12px; color: var(--muted-foreground); }
+.flt-opt { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+.flt-opt:hover { background: var(--accent); }
+.flt-opt.zero { color: var(--muted-foreground); }
+.flt-opt .n { margin-left: auto; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.flt-q { min-width: 200px; height: 30px; }
+.flt-chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--accent); font-size: 12px; color: var(--foreground); }
+.flt-chip:hover { text-decoration: none; border-color: var(--input); }
+.flt-clear { font-size: 12px; color: var(--muted-foreground); }
+.flt-pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
+.flt-pages { display: flex; gap: 6px; }
+.flt-pages [aria-disabled="true"] { opacity: .45; pointer-events: none; }`;

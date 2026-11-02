@@ -284,7 +284,7 @@
     "src/control/ui/commands/index.ts": ["ListedCommand"],
     "src/control/ui/components/gains.ts": ["metricUnit"],
     "src/control/ui/components/index.ts": ["verdictColor", "NavCampaigns", "emptyFolder"],
-    "src/control/ui/exports.ts": ["EXPORT_CHOICE_TIP", "exportDownloadHref", "exportRun"],
+    "src/control/ui/exports.ts": ["EXPORT_CHOICE_TIP", "exportDownloadHref"],
     "src/control/ui/knowledge/explorer.ts": ["ExplorerHit", "ExplorerRun", "ExplorerPage"],
     "src/control/ui/knowledge/folder.ts": ["GrantForms"],
     "src/control/ui/knowledge/item.ts": ["ReaderItem", "ReaderLinks", "fileHref"],

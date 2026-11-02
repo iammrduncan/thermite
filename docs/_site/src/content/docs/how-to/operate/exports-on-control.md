@@ -29,8 +29,8 @@ The button says `Sending…`, then `Sent`. A line at the top of the page says `S
 
 ## 2. Download it from the Exports page
 
-1. Press **Exports** in the sidebar. To see one rig's exports only, follow **its exports on control** on the rig's **Results** row, or press the rig's name above the table.
-2. Find the export: the newest is first. **Kind** says `full` or `run <id>` (followed by `at its end` for one the rig made when the run ended), or `what changed` for an export made before v0.1.1, and **Complete** says when its last file reached control.
+1. Press **Exports** in the sidebar. To see one rig's exports only, follow **its exports on control** on the rig's **Results** row, or tick the rig under **Rig** above the list. **Kind** and **Campaign** narrow it the same way, and the box beside them finds a run by name.
+2. Find the export: the newest is first, 25 to a page (**Older ›** goes on). **Kind** says `full` or `run <id>` (followed by `at its end` for one the rig made when the run ended), or `what changed` for an export made before v0.1.1, and **Download** shows once its last file reached control.
 3. Press **Download**. The browser saves `<rig>-<export>.tar.gz`, such as `rig-1-20261020T120000-0123abcd.tar.gz`.
 
 An export whose **Complete** says `still arriving` has no **Download** yet: control has not all its files. The rig sends the rest every round, a minute by default; press **refresh** in the status bar.

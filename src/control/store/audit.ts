@@ -41,10 +41,71 @@ export function auditRepeats(db: DatabaseSync): void {
   db.exec("create unique index if not exists audit_repeat on audit (actor, action, repeat)");
 }
 
-/** Which audit entries a list keeps: `action` those whose action contains it; `mcp` false, no MCP calls. */
+/**
+ * Which audit entries a list keeps: `action` those whose action contains it; `mcp` false, no MCP
+ * calls; `kinds` those of these kinds (AUDIT_KINDS), `actors` those of these kinds of actor
+ * (AUDIT_ACTORS), `rigs` those about these rigs (the entry's `rig`), `words` those whose action
+ * or body holds them. An empty list keeps every entry.
+ */
 export interface AuditFilter {
   action?: string | undefined;
   mcp?: boolean | undefined;
+  kinds?: readonly string[] | undefined;
+  actors?: readonly string[] | undefined;
+  rigs?: readonly string[] | undefined;
+  words?: string | undefined;
+}
+
+/** The kinds of entry the audit log page filters by (goal 181), each from its action's form. */
+export const AUDIT_KINDS = [
+  "command",
+  "refusal",
+  "export",
+  "rig",
+  "kb",
+  "session",
+  "other",
+  "mcp",
+] as const;
+
+/** An entry's kind, as SQL works it out from its action (GLOB: `_` is itself); order matters. */
+const KIND_SQL = `case
+  when action glob 'mcp:*' then 'mcp'
+  when action glob 'command_*' then 'command'
+  when action = 'refused' or action glob '*refused*' or action glob '*throttled*' then 'refusal'
+  when action glob 'export*' then 'export'
+  when action glob 'kb_*' then 'kb'
+  when action glob 'rig_*' or action glob 'runpod_*' or action glob 'machine_*'
+    or action glob 'cluster_*' or action glob 'tunnel_*' or action glob 'join*' then 'rig'
+  when action glob 'login*' or action glob 'session*' or action glob 'sign*' then 'session'
+  else 'other' end`;
+
+/** The kinds of actor the audit log page filters by, from the actor's form. */
+export const AUDIT_ACTORS = ["owner", "operator", "agent", "rig", "control"] as const;
+const ACTOR_SQL = `case
+  when actor glob 'owner*' then 'owner'
+  when actor glob 'operator*' then 'operator'
+  when actor glob 'agent*' then 'agent'
+  when actor glob 'rig:*' then 'rig'
+  else 'control' end`;
+
+/** A filter as SQL: its condition and its values, in order. */
+function filterSql(f: AuditFilter): { where: string; args: (string | number)[] } {
+  const parts = ["(? or action not like 'mcp:%')", "instr(action, ?) > 0"];
+  const args: (string | number)[] = [f.mcp === false ? 0 : 1, f.action ?? ""];
+  const among = (expr: string, values: readonly string[] | undefined) => {
+    if (!values?.length) return;
+    parts.push(`${expr} in (${values.map(() => "?").join(", ")})`);
+    args.push(...values);
+  };
+  among(KIND_SQL, f.kinds);
+  among(ACTOR_SQL, f.actors);
+  among("json_extract(body, '$.rig')", f.rigs);
+  if (f.words?.trim()) {
+    parts.push("instr(lower(action || ' ' || body), lower(?)) > 0");
+    args.push(f.words.trim());
+  }
+  return { where: parts.join(" and "), args };
 }
 
 /** An audit page's cursor from a query string: a whole number of 0 or more, or none. */
@@ -121,8 +182,7 @@ export class AuditLog extends StorePart {
     filter: AuditFilter = {},
     cursor: { before?: number | undefined; after?: number | undefined } = {},
   ): { entries: AuditEntry[]; older: number | null; newer: number | null } {
-    const match = "(? or action not like 'mcp:%') and instr(action, ?) > 0";
-    const args = [filter.mcp === false ? 0 : 1, filter.action ?? ""] as const;
+    const { where: match, args } = filterSql(filter);
     const { before, after } = cursor;
     const rows = (
       after !== undefined
@@ -159,6 +219,19 @@ export class AuditLog extends StorePart {
       older: lo !== undefined && any("<", lo) ? lo : null,
       newer: hi !== undefined && any(">", hi) ? hi : null,
     };
+  }
+
+  /**
+   * How many entries match: all of them, and those newer than `after` (where a page starts in the
+   * list), for the audit log page's "1–50 of N".
+   */
+  count(filter: AuditFilter = {}, after?: number): number {
+    const { where, args } = filterSql(filter);
+    const more = after === undefined ? "" : " and id > ?";
+    const r = this.db
+      .prepare(`select count(*) as n from audit where ${where}${more}`)
+      .get(...args, ...(after === undefined ? [] : [after])) as { n: number };
+    return Number(r.n);
   }
 
   /**

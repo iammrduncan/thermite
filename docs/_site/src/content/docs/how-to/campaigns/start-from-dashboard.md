@@ -216,7 +216,7 @@ The **Campaigns** list shows a campaign only once a rig reports a run of it. A c
   - `Codex runs only with a ChatGPT subscription or an OpenAI-compatible provider: choose Pi or OpenCode v2 for this provider.` Choose another harness under **The agents run in**, or a model from a ChatGPT subscription or an OpenAI-compatible provider.
   - For research, with one of OpenCode's free models and the agents in Pi: `… is one of OpenCode's free models, which work only inside OpenCode, and rig-1's agents would run in Pi: a research run there could not work. Set the agents' harness to OpenCode, or give the rig a model Pi can use.` Choose **OpenCode v2** under **The agents run in**, or another model.
   - `The agents' context: The compaction point is a whole percent of the context window, from 50 to 95.`, or the same for a window out of range: correct **Agents' context** in step 5.
-- If the run never shows, open **Commands** in the sidebar. The newest **assign campaign** row is **failed**, with the reason.
+- If the run never shows, open the **Audit log** in the sidebar and pick **Commands** under **Type**. The newest `assign_campaign` row is **failed**, with the reason.
 
 | The reason starts with | What to do |
 | --- | --- |

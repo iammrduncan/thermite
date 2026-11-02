@@ -59,7 +59,14 @@ import { UsageRecords } from "./usage.ts";
  * tables' SQL, and no other production code reads or writes them.
  */
 
-export { cursorOf, RETENTION_REMOVED_ACTION } from "./audit.ts";
+export {
+  AUDIT_ACTORS,
+  AUDIT_KINDS,
+  type AuditEntry,
+  type AuditFilter,
+  cursorOf,
+  RETENTION_REMOVED_ACTION,
+} from "./audit.ts";
 export type { RigComponent, StoredBuild } from "./builds.ts";
 export type { BusIdentityName } from "./bus.ts";
 export type { CampaignSources, CopiedFrom } from "./campaigns.ts";
