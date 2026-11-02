@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import type { CampaignDraft } from "../../../src/control/campaigns/builder.ts";
 import { startCampaign } from "../../../src/control/campaigns/new.ts";
-import { issueCommand } from "../../../src/control/issue/index.ts";
+import { prepareCommand } from "../../../src/control/issue/index.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { McpServers } from "../../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
@@ -160,7 +160,8 @@ async function stack() {
       source: { git: "https://git.example.com/team/my-project.git" },
     },
   ];
-  issueCommand(store, keys.privateKeyPem, {
+  // Signed before control saved an assignment's campaign (goal 182): known by the assignment alone.
+  const gs3 = prepareCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",
     payload: {
@@ -178,6 +179,7 @@ async function stack() {
     },
     issuedBy: "owner:api",
   });
+  store.commands.enqueue(gs3);
 
   const rest = (from: string, body: unknown, token?: string) =>
     api("POST", `/v1/campaigns/${from}/copy`, body, token);

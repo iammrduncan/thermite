@@ -3,8 +3,8 @@
  * copy (copy.ts), Start a run (start-run.ts) and the queue it copies from a past run
  * (queue-copy.ts), a campaign's context settings (context.ts), the owner's additions to its roles
  * (additions.ts), which roles write in its collection of the knowledge base (kb-writes.ts), the
- * operator's proposals of those two for the owner to approve (proposals.ts), and archive and
- * folders (folders.ts).
+ * operator's proposals of those two for the owner to approve (proposals.ts), archive and folders
+ * (folders.ts), and the campaign an assignment issued by hand names, saved (assigned.ts).
  */
 
 export {
@@ -14,6 +14,7 @@ export {
   contractAdditions,
   setCampaignAdditions,
 } from "./additions.ts";
+export { keepAssignedCampaign } from "./assigned.ts";
 export {
   CampaignContextBody,
   campaignContextAnswer,

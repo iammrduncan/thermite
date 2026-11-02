@@ -452,6 +452,46 @@ try {
     new RegExp(`reads .*${commit.slice(0, 7)}`).test(after),
     after,
   );
+  // A kit from git (goal 182): the kit control wrote, in a repository of its own on the same host,
+  // read by control itself with the deploy key, as MCP's kit_add and REST take its address.
+  const kitWork = join(root, "kit-work");
+  cpSync(kitDir, kitWork, { recursive: true });
+  for (const a of [
+    ["init", "--quiet", "-b", "main"],
+    ["add", "-A"],
+    ["commit", "--quiet", "-m", "kit"],
+  ])
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: kitWork });
+  execFileSync("git", ["clone", "--quiet", "--bare", kitWork, join(root, "kit.git")]);
+  execFileSync(engine, ["cp", join(root, "kit.git"), `${gitBox}:/home/thermite/kit.git`]);
+  execFileSync(engine, [
+    "exec",
+    gitBox,
+    "chown",
+    "-R",
+    "thermite:thermite",
+    "/home/thermite/kit.git",
+  ]);
+  const kitHead = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: kitWork,
+    encoding: "utf8",
+  }).trim();
+  const fromGit = await fetch(`${control}/v1/kits/acc-git-kit`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${secret("control-admin-token")}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      git: { url: `ssh://thermite@${gitBox}/home/thermite/kit.git`, access: "acc-deploy" },
+    }),
+  });
+  const gitKit = /** @type {{head?: string, said?: string}} */ (await fromGit.json());
+  check(
+    "control read a kit from its git address with the deploy key, and keeps it at that commit",
+    fromGit.status === 201 && gitKit.head === kitHead,
+    gitKit,
+  );
   const fromPrivate = await fetch(`${control}/ui/campaigns/new`, {
     method: "POST",
     body: new URLSearchParams({

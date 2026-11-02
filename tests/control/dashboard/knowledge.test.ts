@@ -266,7 +266,7 @@ test("grants: given and ended on the collection's pane in the explorer, said fir
   });
   assert.match(
     s.where(ok),
-    /\?ok=gemv-speed's agents may now read survey-study's collection\. Runs started from now can include it in their search/,
+    /\?ok=gemv-speed's agents may now read survey-study's collection\. It joins the search of its runs at work at once/,
   );
   assert.deepEqual(s.store.kb().reads("gemv-speed"), ["survey-study"]);
   assert.ok(

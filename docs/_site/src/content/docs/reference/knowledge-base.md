@@ -313,7 +313,7 @@ An attempt measured as the run's starting point has none. When an attempt's verd
 
 ## A run's scope
 
-A run's **scope** is what its agents search: its campaign's whole collection (**continue**, the default), or only the run's own items (**fresh**), and the granted collections it includes. Either way, the run's items go into its campaign's collection, and runs that continue it find them. **Start a run** sets it as the run starts, on the dashboard, over [REST](rest-api.md#campaigns), [MCP](mcp-tools.md#start_run) and with [`thermite run start`](command-line.md#run-start), and nothing changes it later: a grant given afterwards does not join it, and a grant removed leaves it at once. A run started before runs had a scope, or assigned another way (`thermite assign`, `issue_command`), reads the whole collection and the collections its campaign was granted when control assigned the run or saw it start, while they stay granted: a grant given later reaches only runs started after it. A run control has no record of reads every collection its campaign is granted now. The run's page says what its agents search, under its title: "Its agents search the campaign's whole collection in the knowledge base, and `<collections>`, read only: set when the run started."
+A run's **scope** is what its agents search: its campaign's whole collection (**continue**, the default), or only the run's own items (**fresh**), and the granted collections it includes. Either way, the run's items go into its campaign's collection, and runs that continue it find them. **Start a run** sets it as the run starts, on the dashboard, over [REST](rest-api.md#campaigns), [MCP](mcp-tools.md#start_run) and with [`thermite run start`](command-line.md#run-start), and a grant changes it at once: a grant given afterwards joins it, and a grant removed leaves it. A collection the run left out as it started stays out. A run started before runs had a scope, or assigned another way (`thermite assign`, `issue_command`), reads the whole collection and every collection its campaign is granted now. The run's page says what its agents search, under its title: "Its agents search the campaign's whole collection in the knowledge base, and `<collections>`, read only: set when the run started, with the grants given since."
 
 ## Search
 
@@ -573,7 +573,7 @@ The campaign's page then has a block **Proposed to you**, and **Needs you** has 
 
 | | When the owner grants a collection | When the owner removes it |
 | --- | --- | --- |
-| Runs at work | Their agents' searches leave it out: a run's [scope](#a-runs-scope) was fixed when it started | Their agents' searches leave it out at once, also a run that included it when it started |
+| Runs at work | Their agents' searches include it at once, but for a run that left it out as it started ([scope](#a-runs-scope)) | Their agents' searches leave it out at once, also a run that included it when it started |
 | New runs | May include it: Start a run includes every granted collection unless told otherwise | Start without it |
 | **Start a run** › **From past research** | Searches it | No longer searches it |
 | A briefing sent over MCP | May name its items | Items from it are left out |
@@ -586,7 +586,7 @@ Every surface says the same: the Knowledge page on the collection's pane, REST i
 
 | Message | When |
 | --- | --- |
-| "`<campaign>`'s agents may now read `<other>`'s collection. Runs started from now can include it in their search; runs at work keep their search as it started." | A grant |
+| "`<campaign>`'s agents may now read `<other>`'s collection. It joins the search of its runs at work at once, and runs started from now can include it." | A grant |
 | "`<campaign>` reads `<other>` already." | The grant was there already |
 | "`<campaign>`'s agents no longer read `<other>`'s collection: it left every run's search at once. Nothing is deleted." | A grant removed |
 | "Choose a collection to add." | No collection named |

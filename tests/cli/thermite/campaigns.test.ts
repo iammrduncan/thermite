@@ -36,7 +36,8 @@ async function cli(...args: string[]): Promise<{ code: number; stdout: string; s
 describe("thermite campaign copy (goal 069)", () => {
   test("copies a campaign through control, and says its refusals", async () => {
     const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
-    // sort-speed was assigned over the API before, with a real contract, and the rig ran it.
+    // sort-speed was assigned over the API before, with a real contract, and the rig ran it;
+    // control saved it as version 1 as it sent the assignment (goal 182).
     enrollRigs(store, ["rig-a"]);
     const goal = JSON.parse(
       readFileSync(
@@ -92,7 +93,7 @@ describe("thermite campaign copy (goal 069)", () => {
         campaign: "sort-speed-b",
         version: 1,
         contract_sha: saved.sha,
-        from: { campaign: "sort-speed", rig: "rig-a", run: "sort-speed-1" },
+        from: { campaign: "sort-speed", version: 1 },
       });
       assert.equal((saved.contract as { campaign: string }).campaign, "sort-speed-b");
       assert.equal(saved.created_by, "owner:api");
@@ -168,7 +169,14 @@ describe("thermite campaign copy (goal 069)", () => {
         ...at,
       );
       assert.equal(extra.code, 2);
-      assert.equal(store.campaigns.versions().length, 1, "only the one copy was saved");
+      assert.deepEqual(
+        store.campaigns
+          .versions()
+          .map((v) => v.campaign)
+          .sort(),
+        ["sort-speed", "sort-speed-b"].sort(),
+        "only the one copy was saved, beside the version the assignment saved",
+      );
     } finally {
       server.close();
     }

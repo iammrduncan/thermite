@@ -270,13 +270,13 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
       String((await assign(TOKENS.operator, "r-unsaved", unsaved)).content[0]?.text),
       /control has no saved version of elsewhere, so this assignment may not change the additions to its roles\./,
     );
-    // One control knows only by the owner's assignment: the operator's carries what that one did.
+    // The owner's assignment saves the campaign (goal 182): the operator's carries what it saved.
     assert.ok(!(await assign(ADMIN, "r-loose-1", unsaved)).isError);
     assert.ok(!(await assign(TOKENS.operator, "r-loose-2", unsaved)).isError);
     const other = { ...unsaved, role_additions: { worker: "y" } };
     assert.match(
       String((await assign(TOKENS.operator, "r-loose-3", other)).content[0]?.text),
-      /in the additions to its roles, this assignment differs from the last assignment of elsewhere\./,
+      /in the additions to its roles, this assignment differs from version 1 of elsewhere, as the owner saved it\./,
     );
   });
 

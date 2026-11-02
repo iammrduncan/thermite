@@ -142,7 +142,7 @@ export const startRunFields = {
     .max(100)
     .optional()
     .describe(
-      "The collections of other campaigns the run's agents also search, read only: each one the owner granted this campaign. Left out: every collection it is granted now; [] for none. Fixed when the run starts; a grant revoked later leaves it",
+      "The collections of other campaigns the run's agents also search, read only: each one the owner granted this campaign. Left out: every collection it is granted now; [] for none. Set when the run starts: a grant given later joins it, and one revoked later leaves it",
     ),
 };
 

@@ -96,19 +96,27 @@ describe("control's answers to a rig's searches and reads", () => {
     );
   });
 
-  test("a grant removed leaves a run's search at once; one given after the run started never joins it", () => {
+  test("a grant removed leaves a run's search at once; one given since the run started joins it at once (goal 182)", () => {
     const s = setup();
-    // gs-1 has no scope of its own: it reads the grants gemv had when control assigned it.
+    // gs-1 has no scope of its own: it reads every grant gemv has.
     assert.deepEqual(runs(search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
     assert.equal(s.kb().revoke("gemv", "survey"), true);
     const cut = search(s, "gs-1");
     assert.deepEqual(cut.scope.granted, []);
     assert.deepEqual(runs(cut), ["gs-1", "gs-2"], "the next search finds nothing of survey");
-    // Granted again, after gs-1 started: it reaches runs started from now, not gs-1.
+    // Granted again: it joins gs-1's search at once.
     assert.equal(s.kb().grant("gemv", "survey", "owner:ui"), true);
-    assert.deepEqual(runs(search(s, "gs-1")), ["gs-1", "gs-2"]);
-    // A run that included it when it started, whose grant was removed, reads none of it meanwhile.
-    s.kb().setScope("gemv", "gs-2", { fresh: false, granted: ["survey"] }, "owner:ui");
+    assert.deepEqual(runs(search(s, "gs-1")), ["gs-1", "gs-2", "survey-1"]);
+    // gs-2 left survey out as it started: it stays out while that grant stands.
+    s.db.prepare("update kb_read set granted_at = '2026-01-01T00:00:00.000Z'").run();
+    s.kb().setScope("gemv", "gs-2", { fresh: false, granted: [] }, "owner:ui");
+    assert.deepEqual(runs(search(s, "gs-2")), ["gs-1", "gs-2"]);
+    // Removed and given again since gs-2 started, it joins gs-2's search too.
+    s.kb().revoke("gemv", "survey");
+    s.kb().grant("gemv", "survey", "owner:ui");
+    s.db.prepare("update kb_read set granted_at = '2099-01-01T00:00:00.000Z'").run();
+    assert.deepEqual(runs(search(s, "gs-2")), ["gs-1", "gs-2", "survey-1"]);
+    // Removed again, it leaves at once.
     s.kb().revoke("gemv", "survey");
     assert.deepEqual(runs(search(s, "gs-2")), ["gs-1", "gs-2"]);
   });

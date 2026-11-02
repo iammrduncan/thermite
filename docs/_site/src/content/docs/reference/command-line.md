@@ -243,8 +243,8 @@ usage: thermite <command> [options]
   kb revoke CAMPAIGN READS --control URL --token-file F
                                       let CAMPAIGN's agents read READS's collection in the
                                       knowledge base, read only (owner's token), or stop them:
-                                      a grant reaches runs started from then that include it;
-                                      a revoke leaves every run's search at once. It prints the
+                                      a grant joins the search of its runs at work at once, and a
+                                      revoke leaves every run's search at once. It prints the
                                       campaign's grants both ways, as JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each

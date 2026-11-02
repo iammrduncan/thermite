@@ -88,6 +88,8 @@ The judge works out each metric itself, never from what the program prints:
 
 Every value must be above zero. A goal's `metric_threshold` must name one of these metrics: to use a number the check prints, declare it as a `from: "check"` metric.
 
+One kit can serve several campaigns, each deciding by some of its metrics. A run needs only the metrics its contract decides by, in every case it runs; the kit's others are kept where the check gives them. So a metric one campaign adds, such as a prefill speed only some cases measure, does not make another campaign's runs invalid ([Metrics](../../reference/kit-manifest.md#metrics)).
+
 ## 5. Write the run command
 
 The run command runs one stored build on one cell, as another user. It is timed as a whole, so start-up counts.
@@ -231,6 +233,6 @@ Control can keep the kit's repository itself, with its history: you give it the 
 
    The kit's import names `{"control": "kits/project-kit"}` as its source ([Imports](../../reference/signed-commands.md#imports)). Later runs, from the campaign's page or with `thermite run start`, use the same import.
 
-Over the REST API, send the bundle's bytes to `POST /v1/kits/<name>`, with `?ref=` and `?force=true` as needed. An agent with the owner's or the operator's token uses MCP's [`kit_add`](../../reference/mcp-tools.md#kit_add), with the bundle in base64: at most 3,000,000 bytes of bundle, as an MCP request is at most 4 MiB. The command line and REST take up to 64 MiB. `thermite kit list`, `GET /v1/kits` and MCP's `kits` show each kit control keeps, with its head.
+Over the REST API, send the bundle's bytes to `POST /v1/kits/<name>`, with `?ref=` and `?force=true` as needed. An agent with the owner's or the operator's token uses MCP's [`kit_add`](../../reference/mcp-tools.md#kit_add), with the bundle in base64: at most 3,000,000 bytes of bundle, as an MCP request is at most 4 MiB. For a larger kit, or to skip the bundle, give `kit_add` the kit repository's address instead, `{"git": {"url": "https://git.example.com/you/project-kit.git", "ref": "main"}}`, with `"access"` naming a [Git access](private-repository.md) for a private repository: control reads the repository itself. The command line and REST take up to 64 MiB. `thermite kit list`, `GET /v1/kits` and MCP's `kits` show each kit control keeps, with its head.
 
 For a later version of the kit, make a new bundle and add it again: the kit's head moves forward. Control refuses a head that does not descend from the head it keeps, unless you add `--force`. Even then, control keeps the old head's commits, so a contract that names one still runs.

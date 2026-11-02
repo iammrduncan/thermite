@@ -7,7 +7,8 @@ import { campaignModes, type RigView } from "../views/index.ts";
  * REST (`POST` and `DELETE /v1/campaigns/<campaign>/kb-grants`), MCP (`kb_grant`, `kb_revoke`)
  * and with `thermite kb grant` and `kb revoke`, all through these two functions, with the same
  * words. A grant removed leaves every run's search at once (store/kb/scope.ts); a grant added
- * reaches the runs started from then that include it. Each change is in control's audit log.
+ * joins the search of the campaign's runs at work at once (goal 182), and runs started from then
+ * can include it. Each change is in control's audit log.
  */
 
 /** A grant's change, with the campaign's grants both ways after it; or why not, in words. */
@@ -68,7 +69,7 @@ export function grantCollection(
     store,
     g.campaign,
     true,
-    `${g.campaign}'s agents may now read ${reads}'s collection. Runs started from now can include it in their search; runs at work keep their search as it started.`,
+    `${g.campaign}'s agents may now read ${reads}'s collection. It joins the search of its runs at work at once, and runs started from now can include it.`,
   );
 }
 
@@ -91,7 +92,7 @@ export function revokeCollection(
 
 /** What a grant opens and what removing one does, said before either is done. */
 export const GRANT_WORDS = {
-  add: "The campaign's agents may then read the collection you choose, read only, and never write to it. Runs started from then can include it in their search. Runs at work keep their search as it started.",
+  add: "The campaign's agents may then read the collection you choose, read only, and never write to it. It joins the search of the campaign's runs at work at once, and runs started from then can include it.",
   remove: (campaign: string, reads: string) =>
     `${campaign}'s agents stop reading ${reads}'s collection: it leaves every run's search at once. Nothing is deleted, and you can add it again.`,
 };

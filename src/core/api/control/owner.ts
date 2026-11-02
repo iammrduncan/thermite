@@ -505,7 +505,20 @@ export const KITS = {
 /** The largest kit bundle control takes, over REST (MCP's requests are smaller). */
 export const KIT_BUNDLE_MAX = 64 * 1024 * 1024;
 
-/** A kit repository as a git bundle, in the body's bytes (`?ref=`, `?force=`). */
+/**
+ * A kit's repository as control reads it itself (goal 182): its git address, a branch, tag or
+ * commit (HEAD when none), and a Git access's name for a private one.
+ */
+export const KitGitSource = z.strictObject({
+  url: z.string().min(1).max(2048),
+  ref: z.string().min(1).max(256).optional(),
+  access: z.string().min(1).max(64).optional(),
+});
+
+/**
+ * A kit repository as a git bundle, in the body's bytes (`?ref=`, `?force=`); or, with a JSON
+ * body, `{git: KitGitSource}`, which control reads.
+ */
 export const KIT_ADD = {
   method: "POST",
   path: "/v1/kits/:name",

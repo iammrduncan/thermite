@@ -87,6 +87,13 @@ export interface MeasureContext {
    * in every later job of the run. The kit's run command and driver never get it.
    */
   baselineDir?: string | undefined;
+  /**
+   * The metrics the run's contract decides by (core/kit.ts's contractMetrics, goal 182): a run
+   * without one of them is invalid, or an infrastructure error for a rate's work; the kit's
+   * others are kept when a run gives them, and left out when it doesn't. None: every metric of
+   * the kit is needed.
+   */
+  uses?: ReadonlySet<string> | undefined;
 }
 
 /**
@@ -268,11 +275,13 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
     }
     const seconds = outcome.wallMs / 1000;
     const metrics: Record<string, number> = {};
+    const needed = (name: string) => !ctx.uses || ctx.uses.has(name);
     for (const [name, m] of Object.entries(ctx.kit.metrics)) {
       if ("from" in m && m.from === "check") {
         // The judge's check worked it out from the outputs; it must be a number above zero.
         const v = Number(check.details[m.field]);
         if (!Number.isFinite(v) || v <= 0) {
+          if (!needed(name)) continue;
           return {
             kind: "invalid",
             failure: "metric",
@@ -291,6 +300,7 @@ async function runArmInner(ctx: MeasureContext, arm: Arm, cell: string): Promise
       }
       const amount = Number(params[m.work]);
       if (!Number.isFinite(amount) || amount <= 0) {
+        if (!needed(name)) continue;
         throw new Error(`kit metric ${name}: bad work ${params[m.work]} or time ${seconds}`);
       }
       metrics[name] = amount / seconds;

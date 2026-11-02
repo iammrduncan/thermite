@@ -258,6 +258,26 @@ export function paramsText(params: Record<string, number | string | boolean>): s
 }
 
 /**
+ * The metrics a contract decides by (goal 182): its objective's, its guards', its hard limits'
+ * and its threshold goals'. The judge needs each of them in every run a contract measures; the
+ * kit's other metrics it keeps where a run reports them, and a run without them is not invalid.
+ * A research contract measures none.
+ */
+export function contractMetrics(contract: Contract): Set<string> {
+  const out = new Set<string>();
+  if (contract.mode === "hill_climb") {
+    out.add(contract.objective.primary.metric);
+    for (const s of contract.objective.secondary) out.add(s.metric);
+    for (const g of contract.guards) out.add(g.metric);
+    for (const h of contract.hard_constraints) if (h.kind !== "check") out.add(h.metric);
+  }
+  if (contract.mode === "goal")
+    for (const g of contract.goals)
+      if (g.verify.type === "metric_threshold") out.add(g.verify.metric);
+  return out;
+}
+
+/**
  * What a contract asks of its kit that the kit does not have, found when the campaign is
  * assigned rather than when the judge first runs: the target, cells, metrics and verifiers the
  * contract names. Empty when they all fit.
@@ -293,12 +313,14 @@ export function kitProblems(contract: Contract, kit: Kit, targetType?: string): 
       }
     }
   }
-  // Every run works out every metric of the kit, and a rate divides its cell's `work` parameter
-  // by the run's time. A cell the contract runs without that parameter, as a number above zero,
-  // would fail every run as an infrastructure error (whose words would carry the cell's
-  // parameters and time), so it is refused here.
+  // Every run works out every metric the contract decides by, and a rate divides its cell's
+  // `work` parameter by the run's time. A cell the contract runs without that parameter, as a
+  // number above zero, would fail every run as an infrastructure error (whose words would carry
+  // the cell's parameters and time), so it is refused here. A rate the contract does not use is
+  // left out of a run whose cell has no such parameter.
+  const used = contractMetrics(contract);
   const rates = Object.entries(kit.metrics).flatMap(([name, m]) =>
-    "work" in m ? [{ name, work: m.work }] : [],
+    "work" in m && used.has(name) ? [{ name, work: m.work }] : [],
   );
   for (const c of rates.length ? cellsRun(contract, kit) : []) {
     const params = cellParams(kit, c);

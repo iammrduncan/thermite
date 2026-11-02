@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { parseContract } from "../../src/core/contract.ts";
-import { cellParams, cellTimeoutS, KitSchema, kitProblems } from "../../src/core/kit.ts";
+import {
+  cellParams,
+  cellTimeoutS,
+  contractMetrics,
+  KitSchema,
+  kitProblems,
+} from "../../src/core/kit.ts";
 import { expandArgv } from "../../src/harness/judge/kits.ts";
 import { makeJudgeEnv } from "../helpers/judge-env.ts";
 
@@ -301,6 +307,19 @@ describe("kit commands", () => {
       // The verifier's gate runs too; a cell no part of the contract runs is not checked.
       [need("gate"), need("text")],
     );
+    // A rate the contract does not decide by needs no such parameter (goal 182): its runs leave
+    // it out where a cell has none.
+    const both = KitSchema.parse({
+      ...rated,
+      metrics: { ...rated.metrics, secs: { from: "time" } },
+    });
+    const bySecs = contract({
+      mode: "hill_climb",
+      objective: { primary: { metric: "secs", direction: "min", min_effect: 0.05 } },
+      cells: ["none"],
+    });
+    assert.deepEqual(kitProblems(bySecs, both), []);
+    assert.deepEqual([...contractMetrics(bySecs)], ["secs"]);
     // A kit with no rate needs no such parameter.
     assert.deepEqual(
       kitProblems(

@@ -174,7 +174,7 @@ export function decideProposal(
     });
     return {
       state: "approved",
-      said: `Approved: every agent of ${p.campaign} may now search and read ${reads}'s collection, read only, as ${p.proposed_by} proposed. Runs started from now may search it; runs at work get it at their next sync.`,
+      said: `Approved: every agent of ${p.campaign} may now search and read ${reads}'s collection, read only, as ${p.proposed_by} proposed. It joins the search of its runs at work at once, and runs started from now may search it.`,
     };
   }
   const saved = setField(store, p.campaign, p.field, (p.value ?? undefined) as Value, by, false);

@@ -4,7 +4,7 @@ import { errorText } from "../../common/errors.ts";
 import { logError } from "../../common/log.ts";
 import type { Contract, GoalContract, HillClimbContract } from "../../core/contract.ts";
 import type { EventToRecord } from "../../core/events/bodies.ts";
-import type { Kit } from "../../core/kit.ts";
+import { contractMetrics, type Kit } from "../../core/kit.ts";
 import { toFraction } from "../../core/stats.ts";
 import { builderRole, checkerRole, driverRole, type Runner, runRole } from "../broker/index.ts";
 import type { JobRow, Ledger } from "../ledger/index.ts";
@@ -285,6 +285,7 @@ export class JudgeContext {
       runsDir,
       modelsDir: join(this.o.service.paths.stateDir, "models"),
       ...(folder ? { baselineDir: folder } : {}),
+      ...(contract ? { uses: contractMetrics(contract) } : {}),
       runRole: runRole(this.o.card?.index ?? 0),
       checkerRole: checkerRole(this.o.card?.index ?? 0),
       driverRole: driverRole(this.o.card?.index ?? 0),

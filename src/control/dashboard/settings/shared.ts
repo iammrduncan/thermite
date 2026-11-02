@@ -1,7 +1,5 @@
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { errorText } from "../../../common/errors.ts";
-import { gitHost } from "../../../common/git/index.ts";
+import { gitAccessFor } from "../../git-access.ts";
 import { readRunpod } from "../../runpod/index.ts";
 import type { ProviderType } from "../../store/index.ts";
 import type { Dashboard } from "../context.ts";
@@ -42,28 +40,8 @@ export function settingsHelpers(dash: Dashboard) {
    * Git access for control's own lookup of `url`: the secret unsealed, host keys pinned per
    * access. Refused, in words, for a URL on a host other than the one the access is for.
    */
-  const accessFor = (name: string | undefined, url: string) => {
-    if (!name) return undefined;
-    const g = store.gitAccess.get(name);
-    if (!g) throw new Error(`no Git access named ${name}`);
-    if (!g.host)
-      throw new Error(
-        `the Git access ${name} is for no host yet: set the host it is for in Settings › Providers`,
-      );
-    const host = gitHost(url);
-    if (host !== g.host)
-      throw new Error(
-        `the Git access ${name} is for ${g.host} only, and ${url} is on ${host ?? "no host"}`,
-      );
-    const secret = opts.secrets.open(g.secret_sealed);
-    return {
-      auth:
-        g.kind === "ssh"
-          ? ({ kind: "ssh", privateKey: secret } as const)
-          : ({ kind: "token", token: secret, username: g.username ?? undefined } as const),
-      knownHostsFile: join(opts.kits?.dir ?? tmpdir(), "..", "known_hosts", name),
-    };
-  };
+  const accessFor = (name: string | undefined, url: string) =>
+    gitAccessFor(store, opts.secrets, opts.kits?.dir, name, url);
 
   /** Reads a GPU cloud's account now with its key, and keeps what it found or why it could not. */
   const checkCloudNow = async (name: string): Promise<string | null> => {

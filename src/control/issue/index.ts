@@ -19,7 +19,11 @@ import {
 import { McpUses, sameUses, usesWords } from "../../core/mcp.ts";
 import { oldCommandKeys } from "../../core/names.ts";
 import { typesIntoTerminals } from "../../core/terminal-input.ts";
-import { campaignContextRefusal, savedSettingsRefusal } from "../campaigns/index.ts";
+import {
+  campaignContextRefusal,
+  keepAssignedCampaign,
+  savedSettingsRefusal,
+} from "../campaigns/index.ts";
 import { controlDiskOf } from "../disk.ts";
 import { mcpRefusal } from "../mcp-servers/index.ts";
 import { usedRunRefusal } from "../run-names.ts";
@@ -309,6 +313,7 @@ export function issueCommand(
 ): { id: string } {
   const signed = prepareCommand(store, privateKeyPem, input);
   store.commands.enqueue(signed);
+  keepAssignedCampaign(store, signed);
   auditChange(store, signed);
   publishCommand(store, signed);
   return { id: signed.envelope.id };
@@ -401,6 +406,7 @@ export async function issueWaking(
     }
   }
   store.commands.enqueue(signed);
+  keepAssignedCampaign(store, signed);
   auditChange(store, signed);
   publishCommand(store, signed);
   return { id: signed.envelope.id, woke };

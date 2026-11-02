@@ -58,7 +58,13 @@ describe("run.copy", () => {
  * (LocalRunner: no users, the same pipes and limits). The candidate squares each number it reads;
  * the driver sends one, reads the answer and writes it as the output; the check reads that.
  */
-async function drivenRun(o: { candidate: string; driver: string; check?: string }): Promise<{
+async function drivenRun(o: {
+  candidate: string;
+  driver: string;
+  check?: string;
+  metrics?: Record<string, unknown>;
+  uses?: ReadonlySet<string>;
+}): Promise<{
   r: ArmRun;
   ms: number;
 }> {
@@ -90,7 +96,7 @@ process.stdout.write(JSON.stringify({ pass: true, reasons: [], value: r.value, c
       driver: [node, "{kit:run/driver.mjs}", "{params_json}", "{out}"],
       timeout_s: 20,
     },
-    metrics: { time: { from: "time" } },
+    metrics: o.metrics ?? { time: { from: "time" } },
     check: { command: [node, "{kit:check.mjs}", "{out}"] },
   });
   const started = Date.now();
@@ -102,6 +108,7 @@ process.stdout.write(JSON.stringify({ pass: true, reasons: [], value: r.value, c
       kitDir: kit,
       runsDir,
       modelsDir: join(scratch, "models"),
+      ...(o.uses ? { uses: o.uses } : {}),
     },
     { name: "candidate", dir: scratch, manifest: { key: "k" } as unknown as BuildManifest },
     "five",
@@ -137,6 +144,34 @@ describe("a kit's driver beside the candidate", () => {
     const { r, ms } = await drivenRun({ candidate: forever, driver: DRIVER });
     assert.equal(r.kind, "ok", JSON.stringify(r));
     assert.ok(ms < 15_000, `ended at once, not at its time limit (${ms} ms)`);
+  });
+
+  test("the contract's metrics are needed in every run; the kit's others are kept where the check gives them (goal 182)", async () => {
+    // The check reports value, and no prefill_tps: a metric of the kit for another campaign.
+    const metrics = {
+      time: { from: "time" },
+      squared: { from: "check", field: "value" },
+      prefill: { unit: "tok/s", from: "check", field: "prefill_tps" },
+      tokens: { unit: "tok/s", work: "prompt_tokens" },
+    };
+    const run = (uses?: ReadonlySet<string>) =>
+      drivenRun({ candidate: SQUARES, driver: DRIVER, metrics, ...(uses ? { uses } : {}) });
+    const { r } = await run(new Set(["squared"]));
+    assert.equal(r.kind, "ok", JSON.stringify(r));
+    if (r.kind !== "ok") return;
+    assert.equal(r.metrics.squared, 25);
+    assert.ok(r.metrics.time && r.metrics.time > 0, "time is always there");
+    assert.deepEqual(Object.keys(r.metrics).sort(), ["squared", "time"]);
+    // The contract decides by prefill: a run without it is invalid, as before.
+    const needed = (await run(new Set(["squared", "prefill"]))).r;
+    assert.equal(needed.kind, "invalid");
+    if (needed.kind !== "invalid") return;
+    assert.equal(needed.failure, "metric");
+    assert.equal(needed.reason, "the check reported no prefill_tps above zero (got null)");
+    // A rate the contract decides by, on a cell without its work: an infrastructure error.
+    await assert.rejects(run(new Set(["tokens"])), /kit metric tokens: bad work undefined/);
+    // No contract named: every metric of the kit is needed.
+    assert.equal((await run()).r.kind, "invalid");
   });
 
   test("a driver that fails is the run's crash, with its words", async () => {
