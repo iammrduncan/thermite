@@ -1,0 +1,39 @@
+---
+id: "183"
+title: "A program in its terminal takes its message: typed in when ready, a message never taken ends the run, audits never wait behind the teachers"
+status: IN_PROGRESS
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 183 · A program in its terminal takes its message: typed in when ready, a message never taken ends the run, audits never wait behind the teachers
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011)
+
+## What
+
+Found in testing, from the owner's report of 2026-11-02: "Auditing seems broken. No champion is getting promoted. It seems teachers still haven't launched."
+
+On a rig whose agent programs run in their own terminal, a teacher's call in Claude Code waited for 11 hours for a turn that never began, and the advisors' whole loop waited with it: no teacher round finished, no audit ran, and a confirmed win was never promoted. The supervisor's log, its processes and the call's folder showed why. Claude Code started, its SessionStart hook fired about 3 seconds later, and no message was ever submitted to it: its session log was never written, and its signals file holds the SessionStart line alone. The terminal host types the first message once the program has written something and then been still for 750 ms, and Claude Code was still for that long before its input was ready, so the message went nowhere. Nothing then checks that the program took it, and an advisor's call has no limit of its own, so it waits for good. The auditor runs after the teachers in each advisor round, so it waited too.
+
+1. **Typed in when ready.** A program whose hooks write the run's signals (Claude Code, Codex) is typed into only once its SessionStart signal is there and its screen has been still since; others as before.
+2. **A message never taken ends the run.** After a message is typed in, a turn must begin in the program's session log. When none begins within a minute, the run fails with the reason in words, as a run that could not start does: the advisor's call ends, and the round goes on without it; a worker's trial ends, and its experiment goes back to the queue. No key is sent to the program to try again: its screen may be a menu that takes any key as an answer.
+3. **Audits never wait behind the teachers.** In each advisor round, the teachers run beside the auditor, the synthesizer, the review panel and the final writer, not before them.
+4. **No audit skipped at a start.** Just after the supervisor starts, before the message bus has given it the advisors' models, it told the harness that no auditor decides, and the harness let a confirmed win go on unaudited. It now says so only once the routes came.
+5. **The Live menus open.** The chips' bar on a run's Live page scrolled sideways, which clipped the menus that drop out of it (the kept messages', and before goal 181 the terminals'): the owner saw only a shadow. The chips wrap instead.
+
+## Done when
+
+- [ ] Each of the five, with its tests and the pages that describe it, and the terminal, Claude Code and steering acceptance checks pass.
+
+## Decisions
+
+- 2026-11-02, owner: the lab's stuck call is cleared by restarting only that rig's supervisor (not its harness), which the lab's infrastructure session does.
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's report and the lab session's read-only look at the supervisor (its log, its processes and the call's folder).
+- 2026-11-02: Restarting only the supervisor did not clear it: the new call lost its prompt the same way, every time, so not a race of one start. The first teacher, in Codex, took its prompt (a large one: its typing took about 90 s). The supervisor's restart, in the half second before the bus gave the routes, told the harness no auditor decides, and the harness promoted the held win unaudited (item 4). On this Mac, Claude Code 2.1.316 took every message typed as the host types it: 25,000 to 1,000,000 characters, typed at once or over 40 s, with its own network traffic on, with an MCP server that does not answer. The lab's screen could not be read (the Terminals menu's dropdown was clipped: item 5), so the reason now carries the screen's last lines.
+- 2026-11-02: Built: the start signal (CliTerminal.startSignal, Claude Code's SessionStart) in ready(); RoleTerminal.took() fails the run after TAKE_MS (60 s) with no turn begun, with the screen's last lines; adviseOnce runs teachRuns beside the rest; harnessAdvisors.none() tells the harness no advisor decides only once the routes came; the Live chips wrap. Tests in agents/cli/call.test.ts, supervisor/advisors/harness.test.ts and dashboard/steering/message-box.test.ts.

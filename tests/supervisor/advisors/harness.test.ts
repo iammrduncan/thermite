@@ -68,3 +68,29 @@ test("the harness's refusals of the advisors' calls are logged once each, with t
   await link.tell(told);
   assert.match(JSON.stringify(lines[3]), /"error":".*(fetch failed|ECONNREFUSED)/);
 });
+
+test("no advisor is said to the harness only once the bus gave the advisors' routes: before, its audits stay held (goal 183)", async (t) => {
+  const told: unknown[] = [];
+  const server = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      if (req.url === "/v1/advisors") told.push(JSON.parse(body));
+      res.writeHead(200, { "content-type": "application/json" }).end("{}");
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => server.close());
+  const link = harnessAdvisors(
+    `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    "tok",
+    () => undefined,
+  );
+  // Just after a start: the routes have not come, so nothing is said, and nothing to say again.
+  await link.none(false);
+  await link.retell();
+  assert.deepEqual(told, []);
+  // The routes came and name no advisor: the harness hears it.
+  await link.none(true);
+  assert.deepEqual(told, [{ auditor: false, review_panel: 0, writer: false }]);
+});

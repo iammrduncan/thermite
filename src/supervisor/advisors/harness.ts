@@ -84,5 +84,15 @@ export function harnessAdvisors(harnessUrl: string, harnessToken: string, say: t
   };
   const retell = () => (Date.now() - toldAt >= 60_000 ? tell() : undefined);
 
-  return { settings, last: () => last, tell, retell };
+  /**
+   * No role has an advisor: the harness then lets the audits it holds go on by each run's rules.
+   * Said only once the bus has given the advisors' routes (`routesKnown`): before that, just after
+   * the supervisor starts, the harness goes on holding them (goal 183: a win went on unaudited in
+   * the moment before the routes came).
+   */
+  const none = async (routesKnown: boolean): Promise<void> => {
+    if (routesKnown) await tell({ auditor: false, review_panel: 0, writer: false });
+  };
+
+  return { settings, last: () => last, tell, retell, none };
 }

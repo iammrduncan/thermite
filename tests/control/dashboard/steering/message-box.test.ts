@@ -139,6 +139,10 @@ describe("Live's message box", () => {
       live,
       /📌 1 kept<\/summary>[\s\S]*?<b>To everyone:<\/b> Keep the public API unchanged\./,
     );
+    // Its menu opens over the page: the chips' bar never clips what drops out of it (goal 183).
+    const bar = /\.lchips \{[^}]*\}/.exec(live)?.[0] ?? "";
+    assert.match(bar, /flex-wrap: wrap/);
+    assert.doesNotMatch(bar, /overflow/);
 
     // The readers, as the rig's harness gives them the text: each lane's Pi worker at its next
     // step, the planner at its next plan, and the advisors in their round or package (the

@@ -256,6 +256,12 @@ export interface CliTerminal<T extends CliTally> {
   newSession?(): string;
   /** It attaches to a server of its own (OpenCode), on a port the loop finds free. */
   server?: boolean | undefined;
+  /**
+   * The signal its hooks write to the run's signals file once it has started (Claude Code's
+   * SessionStart): it is typed into only after that, since its input box may not be up before
+   * (goal 183). None: once its screen has been still.
+   */
+  startSignal?: string | undefined;
   start(run: CliRun, at: TerminalAt): TerminalPlan;
   /**
    * Its session log: the adapter that reads it, and where it is read, the host's copy of the

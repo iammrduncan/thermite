@@ -75,6 +75,8 @@ export interface CallLink extends WindowLink {
   draining?: (() => boolean) | undefined;
   /** How often its session log is read (tests make it short). */
   pollMs?: number | undefined;
+  /** How long its turn may take to begin once its message is typed in (tests make it short). */
+  takeMs?: number | undefined;
 }
 
 /** What a call in its own terminal takes from its caller's runtime. */
@@ -166,6 +168,7 @@ export async function terminalCall<T extends CliTally>(
       env,
       signalsFile,
       tally,
+      takeMs: link.takeMs,
     });
     const unprepared = await term.prepare();
     if (unprepared) {

@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { errorText, Refusal } from "../../common/errors.ts";
@@ -54,10 +55,18 @@ const SETTLE_MS = 1_000;
 const TYPE_PIECE = 16 * 1024;
 /**
  * A new host's program is typed into once it has written something and then nothing for
- * READY_STILL_MS, or after READY_MAX_MS: how much it wrote only times the typing.
+ * READY_STILL_MS, or after READY_MAX_MS: how much it wrote only times the typing. A program with a
+ * start signal (Claude Code) is still that long after the signal too.
  */
 const READY_STILL_MS = 750;
 const READY_MAX_MS = 20_000;
+/**
+ * A turn begins in the program's session log within this long of its message being typed in, or
+ * the program never took it, and the run fails (goal 183).
+ */
+const TAKE_MS = 60_000;
+/** The screen's last lines a message never taken shows in its reason. */
+const SCREEN_SHOWN = 6;
 /** The lines above the screen kept at the end, for the live view after the trial. */
 const SCREEN_SCROLLBACK = 500;
 /** The last text of this many turns is kept, newest last, for a call's answer (turnTexts). */
@@ -93,6 +102,15 @@ function freePort(): Promise<number> {
   });
 }
 
+/** A file's size now; 0 when it is not there yet. */
+function sizeOf(file: string): number {
+  try {
+    return statSync(file).size;
+  } catch {
+    return 0;
+  }
+}
+
 /** Text typed into the program, then Enter: in pieces, Enter after the last. */
 async function typeIn(host: Terminal, text: string): Promise<void> {
   for (let at = 0; at < text.length; ) {
@@ -104,18 +122,32 @@ async function typeIn(host: Terminal, text: string): Promise<void> {
   }
 }
 
-/** Once the program has written and then been still, or after READY_MAX_MS, or it has ended. */
-async function ready(host: Terminal, stopping: () => boolean): Promise<void> {
+/**
+ * Once the program has written and then been still, and has given its start signal when it has
+ * one (`started`), or after READY_MAX_MS, or it has ended.
+ */
+async function ready(
+  host: Terminal,
+  stopping: () => boolean,
+  started: () => boolean,
+): Promise<void> {
   const until = Date.now() + READY_MAX_MS;
   let output = -1;
   let since = Date.now();
+  let signalled: number | undefined;
   while (Date.now() < until && !stopping()) {
     const st = await host.status();
     if (st.state !== "running") return;
+    if (signalled === undefined && started()) signalled = Date.now();
     if (st.output !== output) {
       output = st.output;
       since = Date.now();
-    } else if (output > 0 && Date.now() - since >= READY_STILL_MS) return;
+    } else if (
+      output > 0 &&
+      signalled !== undefined &&
+      Date.now() - Math.max(since, signalled) >= READY_STILL_MS
+    )
+      return;
     await sleep(100);
   }
 }
@@ -132,6 +164,8 @@ export interface RoleTerminalDeps<T extends CliTally> {
   signalsFile: string;
   /** The tally the loop reads, which the session log fills. */
   tally: T;
+  /** How long a turn may take to begin once its message is typed in (tests make it short). */
+  takeMs?: number | undefined;
 }
 
 /** One role's program in its own terminal: one host at a time, for as long as its run lasts. */
@@ -163,6 +197,8 @@ export class RoleTerminal<T extends CliTally> {
    * is ended by SIGTERM alone (its screen may take any key as an answer: a menu that buys more).
    */
   private limit: { resetsAt?: string | undefined } | undefined;
+  /** The run's signals file's size when the host started: its start signal comes after it. */
+  private signalsFrom = 0;
   /** The program's last screen, once it ended or was ended, and the host it was taken from. */
   private last: ScreenSnapshot | undefined;
   private lastOf: Terminal | undefined;
@@ -265,14 +301,60 @@ export class RoleTerminal<T extends CliTally> {
       // On the one typing chain from the start: the owner's input typed while a new program gets
       // ready goes in after its message, never before.
       await this.typed(async () => {
-        if (started) await ready(h, () => this.stopping);
+        if (started)
+          await ready(
+            h,
+            () => this.stopping,
+            () => this.startSignalled(),
+          );
         if (!this.stopping && this.host === h) await typeIn(h, text);
       });
     } catch (err) {
       // The program ended meanwhile: its end settles the run, and the next turn resumes it.
       const gone = await Promise.race([host.done.then(() => true), sleep(2_000).then(() => false)]);
       if (!gone) throw err;
+      return;
     }
+    await this.took(h);
+  }
+
+  /** Whether the program has given its start signal since its host started; true without one. */
+  private startSignalled(): boolean {
+    const signal = this.p.terminal.startSignal;
+    if (!signal) return true;
+    let text: string;
+    try {
+      text = readFileSync(this.o.signalsFile).subarray(this.signalsFrom).toString();
+    } catch {
+      return false;
+    }
+    return text.includes(`"event":${JSON.stringify(signal)}`);
+  }
+
+  /**
+   * A turn begins in its log once the program takes what was typed in. None within TAKE_MS (goal
+   * 183: Claude Code typed into before its input box was up, and the message went nowhere): the
+   * run fails with why, as one that could not start does, and is never left waiting for a turn
+   * that never begins. No key is sent to try again: its screen may be a menu that takes any key
+   * as an answer.
+   */
+  private async took(h: Terminal): Promise<void> {
+    const waiting = () =>
+      !this.began && !this.stopping && this.host === h && this.ends !== undefined && !this.limit;
+    const takeMs = this.o.takeMs ?? TAKE_MS;
+    const until = Date.now() + takeMs;
+    while (waiting() && Date.now() < until) await sleep(Math.min(250, takeMs));
+    if (!waiting()) return;
+    // What its screen shows then, in the words: what the program put in the message's way.
+    const screen = await h.screen().catch(() => undefined);
+    const shown = (screen?.lines ?? [])
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .slice(-SCREEN_SHOWN)
+      .map((l) => l.slice(0, 200));
+    this.fail(
+      `${this.p.name} did not take its message: no turn began in its session log within ${takeMs / 1000} s of it being typed in${shown.length ? `. Its screen shows: ${shown.join(" | ")}` : ""}`,
+    );
   }
 
   /** A host for a new session, or one resumed. */
@@ -287,6 +369,7 @@ export class RoleTerminal<T extends CliTally> {
       port: p.terminal.server ? await freePort() : undefined,
     });
     const limits = this.o.limits;
+    this.signalsFrom = sizeOf(this.o.signalsFile);
     const host = await startTerminal(this.o.runner, {
       role: this.run.role,
       area: this.run.area,

@@ -448,8 +448,8 @@ async function main(): Promise<void> {
       const advisors = await refreshAdvisors();
       if (!advisors) {
         // No role has an advisor: look again later (the owner may give one a model), or as soon
-        // as the bus gives the advisors new routes.
-        await tellAdvisors({ auditor: false, review_panel: 0, writer: false });
+        // as the bus gives the advisors new routes; the harness hears so once the routes came.
+        await harnessLink.none(known.revision("advisor-routes") !== undefined);
         const until = Date.now() + Math.max(intervalMs, 30_000);
         const seen = known.revision("advisor-routes");
         while (!stopping && Date.now() < until && known.revision("advisor-routes") === seen) {

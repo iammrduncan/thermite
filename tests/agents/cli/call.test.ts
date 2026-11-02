@@ -114,12 +114,21 @@ class Program {
   }
 }
 
-/** The runner: the host is the stand-in; the setup and the version check do nothing. */
-function runner(program: (log: string) => Program): {
+/**
+ * The runner: the host is the stand-in; the setup and the version check do nothing. Its program
+ * writes Claude Code's SessionStart signal `signalAfterMs` after it starts; a deaf one never takes
+ * what is typed into it, as Claude Code typed into before its input box is up (goal 183).
+ */
+function runner(
+  program: (log: string) => Program,
+  o: { signalAfterMs?: number; deaf?: boolean } = {},
+): {
   r: RoleRunner;
   started: () => Program | undefined;
+  times: () => { signal?: number; typed?: number };
 } {
   let p: Program | undefined;
+  const times: { signal?: number; typed?: number } = {};
   let end: ((o: RoleRunOutcome) => void) | undefined;
   const done = (): RoleRunOutcome => ({
     exitCode: 0,
@@ -134,11 +143,22 @@ function runner(program: (log: string) => Program): {
         const start = JSON.parse(req.stdin ?? "{}") as { secret: string };
         const prog = program(join(req.cwd, "claude-session.jsonl"));
         p = prog;
+        const signals = req.env?.THERMITE_SIGNALS;
+        setTimeout(() => {
+          times.signal = Date.now();
+          if (signals)
+            appendFileSync(
+              signals,
+              `${JSON.stringify({ t: Date.now(), src: "claude-code", event: "SessionStart", payload: { session_id: "s-1" } })}\n`,
+            );
+        }, o.signalAfterMs ?? 0);
         let buffer = "";
         const screen = { cols: 120, rows: 40 };
         const host = {
           status: async () => ({ state: "running", ...screen, output: 1 }),
           type: async (text: string, enter: boolean) => {
+            times.typed ??= Date.now();
+            if (o.deaf) return;
             buffer += text;
             if (!enter) return;
             prog.typed(buffer);
@@ -150,7 +170,7 @@ function runner(program: (log: string) => Program): {
             ...screen,
             cursor: { x: 0, y: 0 },
             alternate: false,
-            lines: [],
+            lines: o.deaf ? ["Welcome to the stand-in", "", "> "] : [],
           }),
           screenSnapshot: async () => ({ ...screen, data: "" }),
           end: async () => {
@@ -175,7 +195,7 @@ function runner(program: (log: string) => Program): {
     remove: async (path) => rmSync(path, { recursive: true, force: true }),
     killRole: async () => 0,
   };
-  return { r, started: () => p };
+  return { r, started: () => p, times: () => times };
 }
 
 /** The call's link: an owner's inbox, its console and its in-turn delivery, as the harness's. */
@@ -252,4 +272,42 @@ test("no message comes: the call answers with its first turn's text", async () =
   );
   assert.equal(tally.lastText, DRAFT);
   assert.deepEqual(k.given, []);
+});
+
+test("Claude Code is typed into only once it has started: its SessionStart signal, then a still screen (goal 183)", async () => {
+  const k = link();
+  const { r, times } = runner((log) => new Program(log, k.inTurn, 3), { signalAfterMs: 1500 });
+  const tally = await terminalCall(
+    claudeProgram,
+    MODEL,
+    "plan",
+    { runner: r, apiUrl: "http://127.0.0.1:1", scratchDir: scratch },
+    { role: "planner", link: k.l, answer: (t) => t.trimStart().startsWith("{") },
+  );
+  assert.equal(tally.lastText, DRAFT);
+  const t = times();
+  assert.ok(t.signal !== undefined && t.typed !== undefined, JSON.stringify(t));
+  assert.ok(t.typed >= t.signal + 700, `typed ${t.typed - t.signal} ms after its signal`);
+});
+
+test("a message the program never takes ends the call with why, never a wait for a turn that never begins (goal 183)", async () => {
+  const k = link();
+  const { r } = runner((log) => new Program(log, k.inTurn, 3), { deaf: true });
+  const began = Date.now();
+  const tally = await terminalCall(
+    claudeProgram,
+    MODEL,
+    "plan",
+    { runner: r, apiUrl: "http://127.0.0.1:1", scratchDir: scratch },
+    {
+      role: "planner",
+      link: { ...k.l, takeMs: 400 },
+      answer: (t) => t.trimStart().startsWith("{"),
+    },
+  );
+  assert.match(
+    tally.errors.join("\n"),
+    /Claude Code did not take its message: no turn began in its session log within 0\.4 s of it being typed in\. Its screen shows: Welcome to the stand-in \| >$/m,
+  );
+  assert.ok(Date.now() - began < 8_000, "it ended, not waited");
 });
