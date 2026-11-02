@@ -83,7 +83,7 @@ describe("the reader", () => {
       p,
       /<code>gemv\/gs-1\/worker-1\/finding:1<\/code><button type="button" class="ghost sm" data-copy=/,
     );
-    assert.match(p, /<div class="kx-text">Measured again over 30 runs/);
+    assert.match(p, /<div class="kx-text md"><p>Measured again over 30 runs/);
     // The table marks the row that is open.
     assert.match(open.html, new RegExp(`<tr data-item-href="[^"]*item=${q(FINDING)}" class="on">`));
     // An item the knowledge base has not: said in the pane.

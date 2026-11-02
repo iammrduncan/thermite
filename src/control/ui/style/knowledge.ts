@@ -183,6 +183,7 @@ dl.kx-fmeta dt { color: var(--muted-foreground); } dl.kx-fmeta dd { margin: 0; o
 details.kx-filetext > summary { list-style: none; } details.kx-filetext > summary::-webkit-details-marker { display: none; }
 details.kx-filetext[open] { display: grid; gap: 8px; flex-basis: 100%; } details.kx-filetext[open] > summary { justify-self: start; }
 .kx-text { font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.kx-text.md { white-space: normal; }
 .kx-text.mono { max-height: 320px; overflow: auto; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--code-background); font-size: 12px; }
 details.kx-sec { border-top: 1px solid var(--border); }
 details.kx-sec > summary { list-style: none; display: flex; align-items: center; gap: 6px; padding: 10px 0; font-size: 13px; font-weight: 600; cursor: pointer; }

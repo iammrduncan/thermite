@@ -133,7 +133,10 @@ describe("the knowledge explorer", () => {
       /<code>gemv\/gs-1\/planner\/decision:1<\/code><button type="button" class="ghost sm" data-copy="gemv\/gs-1\/planner\/decision:1" aria-label="Copy the address">/,
     );
     assert.match(item.html, /<summary class="kx-ddb">Version 1 of 1<svg/);
-    assert.match(item.html, /<div class="kx-text">Tiling comes after the loads\.<\/div>/);
+    assert.match(
+      item.html,
+      /<div class="kx-text md"><p>Tiling comes after the loads\.<\/p><\/div>/,
+    );
     assert.match(
       item.html,
       /<a class="kx-link" href="\/ui\/knowledge\/gemv\/gs-1\/worker-1\/finding:1"><span class="chip ">follows<\/span>[\s\S]*?<span class="kx-addr">gemv\/gs-1\/worker-1\/finding:1<\/span>/,
@@ -393,7 +396,7 @@ describe("the knowledge explorer", () => {
         assert.match(m[1] ?? "", /^\/ui\/knowledge(\/|\?|$)/, `${path}: ${m[1]}`);
     }
     const item = (await s.page("/ui/knowledge/gemv/gs-1/worker-1/finding:1")).html;
-    assert.match(item, /See \[the doc\]\(\/ui\/settings\)\.<\/div>/);
+    assert.match(item, /See \[the doc\]\(\/ui\/settings\)\.<\/p><\/div>/);
   });
 
   test("nothing on the page alone: its folders, rows and counts are kb_list's, the same over REST and MCP", async () => {

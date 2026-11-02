@@ -1,6 +1,6 @@
 import { KB_READ_PAGE } from "../../../core/link/kb.ts";
 import { KB_NOTE_MAX, type KbReadAnswer, NOTE_WORDS } from "../../kb/index.ts";
-import { ago, esc, fmtInt, icon, infoLabel } from "../components/index.ts";
+import { ago, esc, fmtInt, icon, infoLabel, mdHtml } from "../components/index.ts";
 import { sizeWords } from "../exports.ts";
 import { knowledgeHref } from "../urls.ts";
 import { outcomeChip, TYPE_ICON } from "./explorer.ts";
@@ -147,8 +147,16 @@ function readersHtml(x: ReaderItem): string {
 }
 
 /**
+ * Whether an item's text reads as Markdown: its file is Markdown, or it has none, as the words
+ * Thermite and the agents write (reports, papers, documents, notes) are Markdown. A file of another
+ * type, such as a PDF's extracted text or plain text, is shown as it is.
+ */
+const readsAsMarkdown = (x: ReaderItem) => !x.file || x.file.type === "text/markdown";
+
+/**
  * The text a page at a time: on the item's page with its parts; in the pane, its first. A file's
- * extracted text goes in its card, under Show text.
+ * extracted text goes in its card, under Show text. Markdown is shown formatted (mdHtml, which
+ * escapes everything and lets no HTML through), with no link: an agent's words are data.
  */
 function textHtml(x: ReaderItem, links: ReaderLinks): string {
   if (!x.text) return "";
@@ -170,7 +178,10 @@ function textHtml(x: ReaderItem, links: ReaderLinks): string {
             ? `<span class="muted">${fmtInt(x.offset + 1)} to ${fmtInt(x.offset + x.text.length)} of ${fmtInt(x.chars)} characters</span>`
             : "",
         ].join("");
-  return `<div class="kx-text">${esc(x.text)}</div>${parts ? `<div class="kx-pager">${parts}</div>` : ""}`;
+  const body = readsAsMarkdown(x)
+    ? `<div class="kx-text md">${mdHtml(x.text, { links: false })}</div>`
+    : `<div class="kx-text">${esc(x.text)}</div>`;
+  return `${body}${parts ? `<div class="kx-pager">${parts}</div>` : ""}`;
 }
 
 /** The reader: in the pane, with its head; on the page, as its main part. */
