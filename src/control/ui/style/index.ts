@@ -6,6 +6,7 @@ import { KNOWLEDGE } from "./knowledge.ts";
 import { LAYOUT } from "./layout.ts";
 import { LISTS } from "./lists.ts";
 import { LIVE } from "./live.ts";
+import { METRICS } from "./metrics.ts";
 import { PANELS } from "./panels.ts";
 import { PLANNER } from "./planner.ts";
 import { RETENTION } from "./retention.ts";
@@ -59,5 +60,6 @@ ${PLANNER}
 ${KNOWLEDGE}
 ${RUNPOD}
 ${USAGE}
+${METRICS}
 ${RETENTION}
 `;

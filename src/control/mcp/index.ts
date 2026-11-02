@@ -26,6 +26,7 @@ import {
 } from "./rigs/index.ts";
 import { registerRunpod } from "./runpod.ts";
 import { registerMcpServers } from "./servers.ts";
+import { registerSystem } from "./system.ts";
 
 export type { McpOptions } from "./context.ts";
 
@@ -57,6 +58,8 @@ function buildServer(store: ControlStore, opts: McpOptions, actor: string, role:
     // The agents' roles and a run's prompts (goal 166): the owner's and an operator's.
     registerAgentReads(tools);
     registerControl(tools);
+    // The whole system's figures, and a stream's messages for the owner (goal 179).
+    registerSystem(tools);
     registerAddClusterRig(tools);
     // Each agent's model, as Edit rig's section "2 · The agents" (goal 029): read by every
     // token but the agent's, as Providers is; set by the owner's and an operator's.

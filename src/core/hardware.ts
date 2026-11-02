@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * What a rig runs on, as its harness reports it (inside the signed report's summary) and the
  * dashboard shows it. Collected once when the harness starts: the device, its driver, the
@@ -43,6 +45,32 @@ export interface HardwareDevice {
   /** PCIe generation and width, as "gen3 x16". */
   pcie: string | null;
   vbios: string | null;
+}
+
+/**
+ * What a part of Thermite uses now (goal 179): its container's CPU and memory as the control
+ * groups count them, or its process's where it runs in none. Control reads its own; each rig's
+ * harness puts its own in its report's summary (`usage`), and its supervisor in its figures.
+ */
+export const PartUse = z.object({
+  at: z.string().max(40),
+  /** What was counted: the part's container, or only its own process. */
+  of: z.enum(["container", "process"]),
+  /** CPUs busy on average since the reading before: 0.5 is half of one. Null on the first. */
+  cpu: z.number().nonnegative().nullable(),
+  /** CPUs it may use: its container's quota, or those it may run on. */
+  cpus: z.number().positive(),
+  /** Memory in use, without the page cache the kernel may take back. */
+  memory_bytes: z.number().int().nonnegative(),
+  /** Its container's memory limit; null where it has none. */
+  memory_limit_bytes: z.number().int().positive().nullable(),
+});
+export type PartUse = z.infer<typeof PartUse>;
+
+/** A part's use as a report gives it, read loosely: anything malformed is null, never trusted. */
+export function readPartUse(x: unknown): PartUse | null {
+  const r = PartUse.safeParse(x);
+  return r.success ? r.data : null;
 }
 
 /** Reads a reported hardware object loosely: anything malformed is dropped, never trusted. */

@@ -17,6 +17,7 @@ import type { RigImages, RigUpdates } from "../rigs/index.ts";
 import type { ControlTunnels, RunpodRigs, RunpodTests } from "../runpod/index.ts";
 import type { SecretBox } from "../secrets.ts";
 import type { ControlStore } from "../store/index.ts";
+import type { FiguresAsker } from "../system/index.ts";
 import { checkRig, recheckRefusals } from "../versions.ts";
 
 /**
@@ -137,6 +138,10 @@ export interface ControlOptions {
   busConfig?: ConfigWriter | undefined;
   /** The message bus, for its state (REST, MCP, /metrics): a test's control gives its own. */
   bus?: BusView | undefined;
+  /** How control asks the bus's server for its figures, for Metrics (goal 179): a test's fake. */
+  serverLook?: FiguresAsker | undefined;
+  /** Control's own keys on the bus, which name its connections on Metrics. */
+  busOwnKeys?: (() => readonly string[]) | undefined;
   /** Control's loops, for its health route (goal 173): a test's control gives its own clock. */
   loops?: Loops | undefined;
   /**

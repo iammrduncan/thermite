@@ -10,6 +10,7 @@ import type { Prompt } from "../../agents/prompt.ts";
 import { buildInfo } from "../../common/build-info.ts";
 import { Loops } from "../../common/health.ts";
 import type { McpConnect } from "../../common/mcp-client.ts";
+import { ResourceUse } from "../../common/usage.ts";
 import type { InTurn } from "../../core/agents.ts";
 import type { AdvisorQueueRequest } from "../../core/api/harness/advisors.ts";
 import type { SubmitRequest } from "../../core/api/harness/proposer.ts";
@@ -232,6 +233,8 @@ export class HarnessService {
    * judge's job or export starts. None: no floor (tests).
    */
   disk: DiskWatch | undefined;
+  /** The harness container's CPU and memory, which each report's summary carries (goal 179). */
+  readonly resourceUse = new ResourceUse();
   /** How long a drain waits before its deadline when its command gives none (main.ts sets it). */
   drainMinutes: number = HARNESS_NUMBERS.drainMinutes.fallback;
 

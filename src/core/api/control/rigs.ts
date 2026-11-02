@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PartUse } from "../../hardware.ts";
 import { LoopAges } from "../../health.ts";
 import { LIVE_FIGURE_SUBJECTS } from "../../link/live.ts";
 import type { Route } from "../route.ts";
@@ -185,6 +186,8 @@ export const SupervisorFigures = z.object({
   config: ConfigFigures.optional().catch(undefined),
   /** Its loops' ages, as its health route gives them (goal 173). A malformed one is dropped. */
   loops: LoopAges.optional().catch(undefined),
+  /** Its container's CPU and memory now (goal 179). A malformed one is dropped. */
+  usage: PartUse.optional().catch(undefined),
 });
 
 /**

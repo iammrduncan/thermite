@@ -382,6 +382,16 @@ export class FakeBus
     return m ? asMessage(m) : undefined;
   }
 
+  /** The first message at or after `from` on `subject` (a pattern), as the server's lookup finds it. */
+  async next(stream: string, from: number, subject: string): Promise<BusMessage | undefined> {
+    await this.hold;
+    if (this.failing) throw new Error("TimeoutError: no answer from the server");
+    const m = this.kept
+      .filter((k) => k.stream === stream && k.seq >= from && takes(subject, k.subject))
+      .sort((a, b) => a.seq - b.seq)[0];
+    return m ? asMessage(m) : undefined;
+  }
+
   /** A stream's last place: 0 before its first message, or for a stream not made. */
   async lastSeq(stream: string): Promise<number> {
     await this.hold;
@@ -522,6 +532,7 @@ export function asMessage(m: Kept): BusMessage {
     seq: m.seq,
     data: m.bytes ?? new TextEncoder().encode(m.data),
     header: (name) => headers[name],
+    headers: () => ({ ...headers }),
     at: m.at,
   };
 }

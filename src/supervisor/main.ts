@@ -20,6 +20,7 @@ import { log, optionalSecretFromFile, redact, requireEnv, secretFromFile } from 
 import { Loops } from "../common/health.ts";
 import { startLogging } from "../common/log.ts";
 import { readNumber } from "../common/settings.ts";
+import { ResourceUse } from "../common/usage.ts";
 import {
   FIGURE_EXPORTS_MAX,
   FIGURE_TEXT_MAX,
@@ -374,6 +375,7 @@ async function main(): Promise<void> {
     const error = errors.find(Boolean);
     return error ? redact(error).slice(0, FIGURE_TEXT_MAX) : null;
   };
+  const usage = new ResourceUse();
   const figures = (): z.input<typeof SupervisorFigures> => ({
     at: new Date().toISOString(),
     relay: { cursor: state.cursor },
@@ -421,6 +423,8 @@ async function main(): Promise<void> {
     live: liveCounts.figures(),
     config: configCounts.figures(),
     loops: loops.health().loops,
+    // The supervisor container's CPU and memory now, for Metrics' Rigs tab (goal 179).
+    usage: usage.read(),
   });
 
   // The rig's keys registered with control over HTTPS, with its figures, before anything on the

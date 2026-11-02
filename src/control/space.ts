@@ -104,7 +104,7 @@ export const SPACE_KINDS = {
   },
 } as const satisfies Record<string, SpaceKindInfo>;
 
-type SpaceKind = keyof typeof SPACE_KINDS;
+export type SpaceKind = keyof typeof SPACE_KINDS;
 
 /** A kind's facts, typed as every kind's. */
 export const spaceKindOf = (k: SpaceKind): SpaceKindInfo => SPACE_KINDS[k];

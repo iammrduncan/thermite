@@ -50,6 +50,17 @@ function queueOp(kind: string): QueueOp | undefined {
   return (QUEUE_OPS as readonly string[]).includes(op) ? (op as QueueOp) : undefined;
 }
 
+/**
+ * The kind of the event a message on this subject carries, as eventSubject put it there: its last
+ * token, or `experiment_<op>` for a run's queue change. Undefined for a subject of no event.
+ */
+export function eventKindOfSubject(subject: string): string | undefined {
+  const t = subject.split(".");
+  if (t.length !== 5 || t[0] !== "thermite") return undefined;
+  if (t[1] === "run" && t[3] === "queue") return `${QUEUE_KIND_PREFIX}${t[4]}`;
+  return (t[1] === "run" || t[1] === "rig") && t[3] === "ev" ? t[4] : undefined;
+}
+
 /** An event's kind as a subject's last token: a word of a-z, 0-9 and _. */
 const EVENT_KIND = /^[a-z0-9][a-z0-9_]{0,63}$/;
 const EVENT_KIND_WORDS = "a kind is up to 64 of a-z, 0-9 and _, starting with a letter or digit";

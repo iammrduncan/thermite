@@ -95,3 +95,66 @@ export const BusReach = z.discriminatedUnion("state", [
   }),
 ]);
 export type BusReach = z.infer<typeof BusReach>;
+
+/**
+ * The whole system's figures (goal 179; src/control/api/bus.ts answers it, MCP's `system_state`
+ * gives the same, and Metrics shows it): `bus`, the bus's server, streams, consumers, connections,
+ * leaf nodes and the events' sizes by kind, from the server's own monitoring; `control`, its
+ * process's CPU, memory, event loop and loops; `storage`, where control's state sits, in memory and
+ * on disk, each place's used and available space and control.db's tables; `rigs`, each rig's
+ * parts' CPU and memory as they report them. `?part=` names some of the four, by commas.
+ */
+const SystemAnswer = z.looseObject({
+  bus: z
+    .looseObject({ at: z.string(), streams: z.array(z.looseObject({ name: z.string() })) })
+    .optional(),
+  control: z.looseObject({ at: z.string() }).optional(),
+  storage: z.looseObject({ at: z.string() }).optional(),
+  rigs: z.array(z.looseObject({ rig: z.string() })).optional(),
+});
+
+export const SYSTEM = {
+  method: "GET",
+  path: "/v1/system",
+  what: "the system's figures",
+  answer: SystemAnswer,
+} as const satisfies Route;
+
+/** A stream's message as a page of them lists it: no data, its size and the start of its text. */
+const MessageRow = z.looseObject({
+  seq: z.number(),
+  subject: z.string(),
+  at: z.string().nullable(),
+  bytes: z.number(),
+  headers: z.record(z.string(), z.string()),
+  preview: z.string().nullable(),
+});
+
+/**
+ * A page of a stream's messages, newest first (goal 179): `?subject=` filters (`*` and `>` too),
+ * `?before=<seq>` gives the page older than a place and `?after=<seq>` the page newer. Read with
+ * the server's message lookup alone: no consumer is made, nothing is acked or removed. The owner's
+ * token only, since the previews show what the messages hold.
+ */
+export const BUS_MESSAGES = {
+  method: "GET",
+  path: "/v1/bus/streams/:stream/messages",
+  what: "a stream's messages",
+  answer: z.looseObject({
+    stream: z.string(),
+    subject: z.string(),
+    last_seq: z.number(),
+    messages: z.array(MessageRow),
+    older: z.number().nullable(),
+    newer: z.number().nullable(),
+    cut: z.string().nullable(),
+  }),
+} as const satisfies Route;
+
+/** One message of a stream whole: its data as `text` when it is text, else as `base64`. */
+export const BUS_MESSAGE = {
+  method: "GET",
+  path: "/v1/bus/streams/:stream/messages/:seq",
+  what: "a stream's message",
+  answer: MessageRow.extend({ text: z.string().nullable(), base64: z.string().nullable() }),
+} as const satisfies Route;

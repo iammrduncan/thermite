@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import { knownTimeZone, type UsagePeriod } from "../../core/usage.ts";
 import { campaignFilter, campaignsListBody, isRigCheck } from "../ui/campaigns/list.ts";
 import { ago, esc } from "../ui/components/index.ts";
+import { metricsTab } from "../ui/metrics/index.ts";
 import { runBrief, timeline } from "../ui/operator/index.ts";
 import { campaignHref } from "../ui/urls.ts";
 import { metricsBody } from "../ui/usage.ts";
@@ -17,6 +18,7 @@ import {
 } from "../views/index.ts";
 import { campaignHelpers, copiedBy, headline } from "./campaigns/shared.ts";
 import { campaignOfRun, type Dashboard } from "./context.ts";
+import { modelUseTabs, systemTabPage } from "./metrics.ts";
 
 /** The Overview, Campaigns and Metrics pages: the first pages of the navigation. */
 export function overviewRoutes(app: Hono, dash: Dashboard): void {
@@ -161,10 +163,13 @@ ${live.length ? live.join("") : `<div class="card"><div class="empty">${camps.le
   });
 
   // ---------------------------------------------------------------- Metrics (goal 075)
-  // The whole system's model use and cost, by model and by campaign: today, the last 7 days (the
-  // default) or all. Today starts at midnight in the viewer's own time zone, which the page
+  // Its first tab, Model use: the whole system's model use and cost, by model and by campaign:
+  // today, the last 7 days (the default) or all. Today starts at midnight in the viewer's own time zone, which the page
   // script adds to the address (tz); without it, UTC, and the line under the title says so.
   app.get("/ui/metrics", (c) => {
+    // Bus, Control, Storage and Rigs (goal 179): metrics.ts draws them.
+    const tab = metricsTab(c.req.query("tab"));
+    if (tab !== "use") return systemTabPage(c, dash, tab);
     const now = Date.now();
     const vs = views();
     const p = c.req.query("period");
@@ -180,18 +185,20 @@ ${live.length ? live.join("") : `<div class="card"><div class="empty">${camps.le
         summary: `every campaign and rig · times in ${esc(tz)}`,
         active: "metrics",
       },
-      metricsBody({
-        report: d.report,
-        rows: d.rows,
-        podRigs: [...new Set(d.pods.map((x) => x.rig))],
-        // A campaign no rig reports now: its mode as control saved it, when it did.
-        mode: (k) => {
-          const saved = (store.campaigns.versions(k)[0]?.contract as { mode?: unknown } | undefined)
-            ?.mode;
-          return modes.get(k) ?? (typeof saved === "string" ? saved : null);
-        },
-        now,
-      }),
+      modelUseTabs() +
+        metricsBody({
+          report: d.report,
+          rows: d.rows,
+          podRigs: [...new Set(d.pods.map((x) => x.rig))],
+          // A campaign no rig reports now: its mode as control saved it, when it did.
+          mode: (k) => {
+            const saved = (
+              store.campaigns.versions(k)[0]?.contract as { mode?: unknown } | undefined
+            )?.mode;
+            return modes.get(k) ?? (typeof saved === "string" ? saved : null);
+          },
+          now,
+        }),
       vs,
     );
   });

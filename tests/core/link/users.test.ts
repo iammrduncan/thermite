@@ -133,7 +133,7 @@ describe("who may do what on the message bus", () => {
     assert.equal(runs[0], "thermite.run.run-0.live.*", "the newest first");
   });
 
-  test("the users file: control may do everything, each rig its own, and a system user reloads", () => {
+  test("the users file: control may do everything, each rig its own, and a system user reloads and reads figures", () => {
     const keys = { control: user(), system: user(), a: user(), b: user() };
     const text = usersFile({
       control: keys.control,
@@ -157,7 +157,16 @@ describe("who may do what on the message bus", () => {
       {
         nkey: keys.system,
         permissions: {
-          publish: { allow: ["$SYS.REQ.SERVER.*.RELOAD", "$SYS.REQ.SERVER.*.JSZ"] },
+          // A reload, and the server's figures for Metrics (goal 179): nothing else.
+          publish: {
+            allow: [
+              "$SYS.REQ.SERVER.*.RELOAD",
+              "$SYS.REQ.SERVER.*.VARZ",
+              "$SYS.REQ.SERVER.*.CONNZ",
+              "$SYS.REQ.SERVER.*.LEAFZ",
+              "$SYS.REQ.SERVER.*.JSZ",
+            ],
+          },
           subscribe: { allow: ["_INBOX.>"] },
         },
       },

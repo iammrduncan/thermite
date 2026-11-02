@@ -16,6 +16,8 @@
  * - Start a run and Edit rig's Save post as before (the page they open follows the action), and
  *   their button says "Sending…" at once. A button with data-busy says that instead, such as the
  *   pod log's "Reading…"; a form with data-autoread is sent once as the page opens.
+ * - A page with data-every (Metrics' system tabs) draws its parts again every so often while it
+ *   is shown, until its Pause.
  *
  * FOLLOW_CORE_JS touches no page, and the tests run it as the browser does
  * (action-progress.test.ts). Without this script every form posts as before, and control answers
@@ -287,6 +289,25 @@ export const FOLLOW_JS = `
     }
     poll();
   }, 1000);
+  // ---------------------------------------------------------- a page that draws itself again
+  // Metrics' system tabs (data-every on their live switch, outside the parts): the page draws its
+  // parts again every so often while it is shown, until the owner pauses it. What the owner opened
+  // stays open (swap), and a part they are in waits (busy).
+  const every = document.querySelector("[data-every]");
+  if (every) {
+    let paused = false;
+    const ms = Math.max(1000, Number(every.dataset.every) || 2000);
+    const words = every.querySelector("[data-live-words]");
+    const pause = every.querySelector("[data-pause]");
+    if (pause) pause.addEventListener("click", () => {
+      paused = !paused;
+      every.classList.toggle("paused", paused);
+      pause.textContent = paused ? "Resume" : "Pause";
+      if (words) words.textContent = paused ? "Paused" : "Live, every " + ms / 1000 + " s";
+      if (!paused) redraw();
+    });
+    setInterval(() => { if (!paused && !document.hidden) redraw(); }, ms);
+  }
   scan(document);
   // A block read on demand that has nothing to show yet reads once as the page opens (a RunPod
   // rig's pod log before the rig reports).

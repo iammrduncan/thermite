@@ -14,6 +14,7 @@ import type { RigImages } from "./rigs/index.ts";
 import { ControlTunnels, RunpodRigs, RunpodTests } from "./runpod/index.ts";
 import { SecretBox } from "./secrets.ts";
 import type { ControlStore } from "./store/index.ts";
+import { type FiguresAsker, SystemFigures } from "./system/index.ts";
 import { keepFolds, type RigView, type RunOnRig } from "./views/index.ts";
 
 /**
@@ -62,6 +63,8 @@ export interface ControlParts {
   bus?: BusView | undefined;
   /** Control's loops and when each last came around, for its health route (goal 173). */
   loops: Loops;
+  /** The whole system's figures, for Metrics, `GET /v1/system` and `system_state` (goal 179). */
+  system: SystemFigures;
   /** Why a dashboard form failed, kept for the page it returns to (notes.ts). */
   notes: PageNotes;
   /** The screens of the trials the owner watches, in memory only (goal 169). */
@@ -100,6 +103,10 @@ export interface PartsOptions {
   bus?: BusView | undefined;
   /** Control's loops (tests give their own clock). */
   loops?: Loops | undefined;
+  /** How control asks the bus's server for its figures, as its system user (bus/system.ts). */
+  serverLook?: FiguresAsker | undefined;
+  /** Control's own keys on the bus (BusUsers.ownKeys), which name its connections on Metrics. */
+  busOwnKeys?: (() => readonly string[]) | undefined;
 }
 
 /** Control's parts, made from the store, its key and its options. */
@@ -130,6 +137,7 @@ export function controlParts(
       staleAfterMs: opts.staleAfterMs,
       privateKeyPem,
     });
+  const loops = opts.loops ?? new Loops();
   return {
     store,
     privateKeyPem,
@@ -151,7 +159,15 @@ export function controlParts(
     runpodRigs,
     runpodDriver: new RunpodDriver(runpodRigs),
     bus: opts.bus,
-    loops: opts.loops ?? new Loops(),
+    loops,
+    system: new SystemFigures({
+      store,
+      bus: opts.bus,
+      look: opts.serverLook,
+      loops,
+      build: viewOpts.control,
+      ownKeys: opts.busOwnKeys,
+    }),
     notes: new PageNotes(),
     screens: new Screens(),
     views: () => folds.views(viewOpts),

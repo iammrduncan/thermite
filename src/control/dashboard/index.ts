@@ -12,6 +12,7 @@ import { commandRoutes } from "./commands.ts";
 import { type DashboardOptions, dashboardContext } from "./context.ts";
 import { knowledgeRoutes } from "./knowledge.ts";
 import { liveRoutes } from "./live/index.ts";
+import { metricsRoutes } from "./metrics.ts";
 import { overviewRoutes } from "./overview.ts";
 import { recordRoutes } from "./records.ts";
 import { addRigRoutes } from "./rigs/add.ts";
@@ -54,6 +55,7 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   const dash = dashboardContext(store, opts);
   sessionRoutes(app, dash);
   overviewRoutes(app, dash);
+  metricsRoutes(app, dash);
   newCampaignRoutes(app, dash);
   campaignPageRoutes(app, dash);
   runPageRoutes(app, dash);

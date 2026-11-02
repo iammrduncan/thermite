@@ -80,6 +80,8 @@ export function snapshot(
       work: svc.work(),
       // The rig's free disk against its floor, as last read, and its loops' ages (goal 173).
       ...(svc.disk ? { disk: svc.disk.summary() } : {}),
+      // The harness container's CPU and memory now, for Metrics' Rigs tab (goal 179).
+      usage: svc.resourceUse.read(),
       loops: svc.loops.health().loops,
       ...(svc.gpuSplit ? { gpu_split: svc.gpuSplit } : {}),
       ...(svc.subscriptionUsage && svc.models?.info().source !== "none"

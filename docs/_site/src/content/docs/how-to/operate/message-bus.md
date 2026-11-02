@@ -47,6 +47,7 @@ curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"bus":"connected","degr
    - **Bus streams**: each stream, what it carries, its messages and space, and how long it keeps them.
 
    Each column's ⓘ says what it counts.
+5. For the bus live, open **Metrics** and its **Bus** tab: the server's memory and store against their limits, each stream with its messages, bytes, subjects and rate, each consumer with what waits for it, the events' sizes by kind, and every connection with its traffic, what the server queues for it and its subscriptions. A warning at the top says what looks wrong. A click on a stream opens its messages, and a message its headers and data, read without touching the stream ([Metrics: the system view](../../reference/system-view.md)).
 
 Each time a rig's supervisor starts, its history, on its page, gets the step "It registered its keys on the message bus with control": its one call to control over HTTPS. The first time, it also gets "Its key on the message bus registered". A rig that registered its keys and then sends nothing on the bus shows **Broken**: [A rig off the bus](#a-rig-off-the-bus).
 
@@ -210,6 +211,8 @@ The bus keeps its messages on disk, on the `nats-data` volume. The `EVENTS` stre
    ```
 
 To tell that it worked: the server's log as it starts, `docker compose logs nats`, says `Max Memory` at 75% of what Go is told (149.76 MB for 256 MiB), and `Max Storage` at the store's size (`20G` shows as 18.63 GB).
+
+To see which needs more: **Metrics › Storage** gives the bus's store, used and available, and **Metrics › Bus** its server's memory and each stream's bytes and subjects; a stream with many subjects costs memory even with small messages.
 
 Control keeps 5 GiB of the store free, `THERMITE_DISK_FLOOR_GIB`: with less left under its limit, it starts no new run until there is room ([Control's disk is at its floor](troubleshoot.md#controls-disk-is-at-its-floor)). A [restore](backup-and-restore.md#restore-a-backup) needs more memory than the bus's own for its run: about 1 KiB for each event, over 128 MiB.
 

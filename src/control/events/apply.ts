@@ -10,6 +10,7 @@ import type { ControlStore } from "../store/index.ts";
 import { type FoldCache, keepFolds, streamEvent } from "../views/index.ts";
 import { EventDays, keepEventDays } from "./days.ts";
 import { readKnowledgeAgain, takeKbItem } from "./knowledge.ts";
+import { EventSizes } from "./sizes.ts";
 
 /**
  * What control derives from its rigs' events, written from the `EVENTS` stream (goal 168, step 4).
@@ -54,6 +55,8 @@ export class EventsApply {
   readonly folds: FoldCache;
   /** What the stream holds by subject, rig and day, for a retention policy of it (days.ts). */
   readonly days = new EventDays();
+  /** The sizes of the events the stream stored in the last hour, by kind, for Metrics (sizes.ts). */
+  readonly sizes = new EventSizes();
   readonly since = new Date().toISOString();
   /** Messages it applied since control started. */
   applied = 0;
@@ -211,6 +214,7 @@ export class EventsApply {
     const events = messages.flatMap((m) => (m.seq > folds ? (streamEvent(m) ?? []) : []));
     this.folds.take(events, through);
     this.days.take(messages);
+    this.sizes.take(messages);
   }
 
   /** The messages after the store's place, applied, and the place it ends at, in one transaction. */

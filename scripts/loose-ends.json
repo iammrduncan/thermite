@@ -123,7 +123,7 @@
     "src/control/bus/cert.ts": ["BUS_CA_NAME", "BUS_SERVER_NAME", "ServerCertOptions"],
     "src/control/bus/config.ts": ["ConfigBus", "ConfigParts", "ConfigWriterOptions"],
     "src/control/bus/consumers.ts": ["RigConsumersOptions"],
-    "src/control/bus/state.ts": ["BUS_STREAMS", "RigLive"],
+    "src/control/bus/state.ts": ["RigLive"],
     "src/control/bus/system.ts": ["BUS_SYSTEM_TIMEOUT_MS"],
     "src/control/bus/tls.ts": ["BUS_PORT", "BUS_PUBLIC_URL_SETTING", "BusTlsOptions"],
     "src/control/bus/users.ts": ["BusUsersOptions"],

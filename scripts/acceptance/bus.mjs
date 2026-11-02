@@ -18,6 +18,9 @@
 //     KB_FILE_CHUNKS_WAITING_PER_RIG of one rig's chunks, each at most KB_FILE_MAX_MESSAGE_BYTES:
 //     the next is refused, and rig-b's still go;
 //   - rig-b retired (its user taken out of the users file, and the server reloaded) is cut off;
+//   - Metrics' figures: control's system user reads the server's monitoring, shaped as the Bus tab
+//     shows it, and may ask nothing else; the stream inspector reads a work queue with no
+//     consumer made (lib/system-figures.mjs);
 //   - a retention policy of one rig purges the EVENTS stream by subject, as control runs one, and
 //     keeps the other rig's events of a run both used (lib/events-purge.mjs).
 // It needs Podman or Docker and the server's image pulled already (it pulls nothing). It runs the
@@ -38,6 +41,7 @@ import { connect, errors, nkeyAuthenticator } from "@nats-io/transport-node";
 import { acceptanceChecks } from "./lib/checks.mjs";
 import { eventsPurgeChecks } from "./lib/events-purge.mjs";
 import { engine, natsInitRun, natsService, sh } from "./lib/smoke-env.mjs";
+import { systemFiguresChecks } from "./lib/system-figures.mjs";
 
 // Control's own code, as control runs it (Node.js strips the types of these files).
 const { natsBus } = await import("../../src/common/bus/index.ts");
@@ -467,6 +471,14 @@ try {
     after !== "allowed" && again !== "allowed",
     { publish: after, sign_in: again },
   );
+
+  // Metrics' figures of the bus, and its stream inspector, on the real server (goal 179).
+  const system = await signIn(keys.system);
+  try {
+    await systemFiguresChecks({ check, tried, url, trust, keys, bus, control, system });
+  } finally {
+    await system.close();
+  }
 
   // A retention policy's purge of control's copy of the rigs' events.
   await eventsPurgeChecks({ check, tried, control, bus, rigA, store });

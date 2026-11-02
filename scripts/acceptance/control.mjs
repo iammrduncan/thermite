@@ -8,7 +8,9 @@
 //     control's audit;
 //   - with control stopped, rigs keep researching, and their reports catch up when it returns;
 //   - with a supervisor stopped, its harness keeps running, the rig shows stale, then recovers;
-//   - control's view of a rig is the same before and after a control restart.
+//   - control's view of a rig is the same before and after a control restart;
+//   - Metrics' system view (goal 179): the bus's figures through control's system user on the
+//     real server, each rig's parts' use in its reports, the Bus tab and the stream inspector.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/control.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -174,6 +176,40 @@ try {
 
   // Dashboard commands on rig 1.
   const ui = await dashboard();
+
+  // Metrics' system view on the real bus (goal 179): control asks its server for its figures as
+  // its system user, through the users file it writes, and each rig's parts report their use.
+  /** @type {{ bus: { streams: { name: string }[], connections: { user: string | null }[], errors: string[] }, control: { use: { memory_bytes: number } }, storage: { disk: { name: string }[] } }} */
+  const sys = (await api("/v1/system")).body;
+  check(
+    "Metrics' figures: the bus's streams and connections, control's use, its storage",
+    sys.bus.errors.length === 0 &&
+      sys.bus.streams.some((x) => x.name === "EVENTS") &&
+      sys.bus.connections.some((x) => x.user === "rig local-1") &&
+      sys.control.use.memory_bytes > 0 &&
+      sys.storage.disk.some((x) => x.name === "the bus's store"),
+    { errors: sys.bus.errors, users: sys.bus.connections.map((x) => x.user) },
+  );
+  await until(
+    "each rig's harness and supervisor report their use",
+    async () => {
+      /** @type {{ harness: unknown, supervisor: unknown }[]} */
+      const rigs = (await api("/v1/system?part=rigs")).body.rigs;
+      return rigs.length >= 2 && rigs.every((x) => x.harness && x.supervisor);
+    },
+    120_000,
+  );
+  check("each rig's harness and supervisor report their CPU and memory", true);
+  const busTab = await ui.page("/ui/metrics?tab=bus");
+  check(
+    "Metrics' Bus tab lists the streams and the rigs' supervisors",
+    busTab.includes('href="/ui/metrics/streams/EVENTS"') && busTab.includes("supervisor local-1"),
+  );
+  const listed = await ui.page("/ui/metrics/streams/EVENTS");
+  check(
+    "the stream inspector lists EVENTS's messages",
+    /href="\/ui\/metrics\/streams\/EVENTS\/\d+"/.test(listed),
+  );
   check(
     "dashboard pause accepted",
     (await ui.post({

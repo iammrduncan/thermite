@@ -53,7 +53,9 @@ export const BUS_STATE_TIMEOUT_MS = 5_000;
 export interface BusView {
   /** The server's host and port. */
   server: string;
-  bus: Pick<Bus, "streams" | "connected" | "lastSeq" | "link">;
+  /** With its message lookups, for Metrics' stream inspector; a test's bus may leave them out. */
+  bus: Pick<Bus, "streams" | "connected" | "lastSeq" | "link"> &
+    Partial<Pick<Bus, "next" | "message">>;
   events: EventsWriter;
   move: Pick<EventsMove, "published">;
   apply: EventsApply;

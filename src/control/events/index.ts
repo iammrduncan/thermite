@@ -6,7 +6,7 @@
  * moved to the stream once, checked there and dropped (move.ts); the knowledge base reads the
  * stream again after an upgrade, and takes each writer's item after its checks (knowledge.ts).
  * Events become messages, in batches, in batch.ts. What the stream holds by day, for a retention
- * policy, is in days.ts.
+ * policy, is in days.ts; the sizes of the events it stored in the last hour, by kind, in sizes.ts.
  */
 
 export { APPLY_PAGE, applyState, EventsApply, type EventsApplyOptions } from "./apply.ts";
@@ -20,6 +20,7 @@ export {
   type MoveStopped,
   movedEnd,
 } from "./move.ts";
+export { EVENT_SIZES_WINDOW_MS, type EventKindSize, EventSizes } from "./sizes.ts";
 export {
   APPLY_WAIT_MS,
   EventsWriter,

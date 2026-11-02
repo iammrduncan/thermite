@@ -23,8 +23,8 @@ import { reportSubject } from "./report.ts";
 /** The account every stream is in, with control's user, the backup's and each rig's. */
 export const BUS_ACCOUNT = "THERMITE";
 /**
- * The server's own account: control's system user, which asks the server to reload and reads how
- * much of its store JetStream uses.
+ * The server's own account: control's system user, which asks the server to reload and reads the
+ * server's figures (SERVER_FIGURES).
  */
 export const SYSTEM_ACCOUNT = "SYS";
 
@@ -168,12 +168,29 @@ export function reloadSubject(serverId: string): string {
  * much of its store JetStream uses, and its limit (the server's monitoring, as `/jsz`).
  */
 export function jetStreamFiguresSubject(serverId: string): string {
-  return `$SYS.REQ.SERVER.${serverId}.JSZ`;
+  return serverFiguresSubject(serverId, "JSZ");
 }
 
-/** What control's system user may do: ask for a reload and for JetStream's figures, and read the answers. */
+/**
+ * The server's own figures control's system user may ask for (goal 179), for Metrics: the server
+ * (`/varz`), its connections (`/connz`), its leaf nodes (`/leafz`) and JetStream (`/jsz`).
+ */
+const SERVER_FIGURES = ["VARZ", "CONNZ", "LEAFZ", "JSZ"] as const;
+export type ServerFigures = (typeof SERVER_FIGURES)[number];
+
+/** The subject control's system user asks the server with this id for one of its figures on. */
+export function serverFiguresSubject(serverId: string, what: ServerFigures): string {
+  return `$SYS.REQ.SERVER.${serverId}.${what}`;
+}
+
+/**
+ * What control's system user may do: ask for a reload and for the server's figures, and read the
+ * answers. Nothing else: not another account's messages, not a change to the server.
+ */
 const SYSTEM_PERMISSIONS: Permissions = {
-  publish: { allow: [reloadSubject("*"), jetStreamFiguresSubject("*")] },
+  publish: {
+    allow: [reloadSubject("*"), ...SERVER_FIGURES.map((w) => serverFiguresSubject("*", w))],
+  },
   subscribe: { allow: ["_INBOX.>"] },
 };
 

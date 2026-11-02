@@ -141,6 +141,8 @@ export interface BusMessage {
   seq: number;
   data: Uint8Array;
   header(name: string): string | undefined;
+  /** Every header it has, by name; for a reader that shows them all (Metrics' stream inspector). */
+  headers?: (() => Record<string, string>) | undefined;
   /** When the stream stored it, by its server's clock; undefined where nothing says. */
   at?: string | undefined;
 }
@@ -235,6 +237,12 @@ export interface Bus {
   ): Promise<BusRead>;
   /** The message at this place in the stream; undefined when it has none there, or no such stream. */
   message(stream: string, seq: number): Promise<BusMessage | undefined>;
+  /**
+   * The first message at or after the place `from` on `subject` (`*` and `>` too), by the
+   * server's own lookup: nothing is made, handed or acked, so it reads a work queue as it reads
+   * any stream. Undefined when there is none, or no such stream.
+   */
+  next(stream: string, from: number, subject: string): Promise<BusMessage | undefined>;
   /** The place of the stream's last message: 0 when it has had none, or there is no such stream. */
   lastSeq(stream: string): Promise<number>;
   /**
@@ -362,6 +370,7 @@ const asBusMessage = (m: JsMsg | StoredMsg, h: MsgHdrs | undefined): BusMessage 
   seq: m.seq,
   data: m.data,
   header: (k) => h?.get(k) || undefined,
+  headers: () => Object.fromEntries((h?.keys() ?? []).map((k) => [k, h?.get(k) ?? ""])),
   at: m.time.toISOString(),
 });
 
@@ -658,6 +667,17 @@ export function natsBus(url: string, name: string, signIn?: BusSignIn): Bus {
     async message(stream, seq) {
       const jsm = await jetstreamManager(await connection(), { timeout: BUS_LOOK_TIMEOUT_MS });
       const m = await jsm.streams.getMessage(stream, { seq }).catch((err: unknown) => {
+        if (noSuchStream(err)) return null;
+        throw err;
+      });
+      return m ? asBusMessage(m, m.header) : undefined;
+    },
+    async next(stream, from, subject) {
+      const jsm = await jetstreamManager(await connection(), { timeout: BUS_LOOK_TIMEOUT_MS });
+      // The server's message lookup takes next_by_subj (its MSG.GET); the client's type names only
+      // the direct lookup's, which a stream must allow, and only CONFIG does.
+      const query = { seq: Math.max(1, from), next_by_subj: subject } as unknown as { seq: number };
+      const m = await jsm.streams.getMessage(stream, query).catch((err: unknown) => {
         if (noSuchStream(err)) return null;
         throw err;
       });

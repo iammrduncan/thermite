@@ -1,28 +1,13 @@
-import {
-  COMMAND_QUEUE_MAX,
-  COMMAND_STREAM,
-  commandConsumerName,
-} from "../../../core/link/commands.ts";
+import { COMMAND_STREAM, commandConsumerName } from "../../../core/link/commands.ts";
 import { CONFIG_STREAM, configConsumerName } from "../../../core/link/config.ts";
-import { EVENT_STREAM } from "../../../core/link/events.ts";
-import { KB_FILES_STREAM } from "../../../core/link/kb-files.ts";
-import {
-  LIVE_KEPT_BYTES,
-  LIVE_KEPT_PER_SUBJECT,
-  LIVE_KEPT_SECONDS,
-  LIVE_STREAM,
-} from "../../../core/link/live.ts";
-import {
-  REPORT_STREAM,
-  REPORTS_WAITING_PER_RIG,
-  reportSubject,
-} from "../../../core/link/report.ts";
+import { REPORT_STREAM, reportSubject } from "../../../core/link/report.ts";
 import { busReach, type busState } from "../../bus/index.ts";
 import { controlDiskOf } from "../../disk.ts";
 import { heldCommands } from "../../issue/index.ts";
 import type { ControlStore } from "../../store/index.ts";
 import { ago, esc, infoLabel } from "../../ui/components/index.ts";
 import { sizeWords } from "../../ui/exports.ts";
+import { STREAM_WORDS } from "../../ui/metrics/index.ts";
 import { podStopped, type RigView } from "../../views/index.ts";
 
 /**
@@ -40,34 +25,6 @@ type BusState = Awaited<ReturnType<typeof busState>>;
 /** A time as the page says it: 2026-11-01 05:20 UTC. */
 const utc = (at: string) => `${at.slice(0, 16).replace("T", " ")} UTC`;
 const count = (n: number) => n.toLocaleString("en-US");
-
-/** What each stream carries, and how long it keeps a message, in words. */
-const STREAMS: Record<string, { carries: string; kept: string }> = {
-  [EVENT_STREAM]: {
-    carries: "Every event each rig reported: control's copy of the rigs' ledgers",
-    kept: "Until a retention policy removes some; never deleted",
-  },
-  [REPORT_STREAM]: {
-    carries: "Each rig's reports, until control takes them",
-    kept: `Until taken · ${REPORTS_WAITING_PER_RIG} waiting per rig at most`,
-  },
-  [COMMAND_STREAM]: {
-    carries: "Signed commands, until each rig acknowledges them",
-    kept: `Until acknowledged, or its time limit · ${COMMAND_QUEUE_MAX} waiting per rig at most`,
-  },
-  [LIVE_STREAM]: {
-    carries: "The agents' live lines, for Live",
-    kept: `The newest ${LIVE_KEPT_SECONDS / 3600} hour, ${count(LIVE_KEPT_PER_SUBJECT)} a subject, ${sizeWords(LIVE_KEPT_BYTES)} at most`,
-  },
-  [CONFIG_STREAM]: {
-    carries: "Each rig's model routes, MCP servers and Git accesses, sealed to its key",
-    kept: "The newest of each",
-  },
-  [KB_FILES_STREAM]: {
-    carries: "Knowledge-base files on their way to control",
-    kept: "Until taken",
-  },
-};
 
 const TIPS = {
   connection:
@@ -148,7 +105,7 @@ function rigRows(
 function streamRows(state: Extract<BusState, { on: true }>): string {
   return state.streams
     .map((s) => {
-      const w = STREAMS[s.name] ?? { carries: "", kept: "" };
+      const w = STREAM_WORDS[s.name] ?? { carries: "", kept: "" };
       return `<tr data-stream="${esc(s.name)}"><td><code>${esc(s.name)}</code></td><td>${esc(w.carries)}</td><td class="num">${count(s.messages)}</td><td class="num">${esc(sizeWords(s.bytes))}</td><td>${esc(w.kept)}</td></tr>`;
     })
     .join("");
@@ -178,5 +135,5 @@ export function busSettingsBlock(o: {
       ? `<table><thead><tr><th>Stream</th><th>What it carries</th><th class="num">Messages</th><th class="num">Space</th><th>${infoLabel("Kept", TIPS.kept)}</th></tr></thead><tbody>${streamRows(state)}</tbody></table>`
       : `<div class="empty">${state.reachable ? "No stream yet: control makes them as it starts." : `The bus's server was not reached: ${esc(state.error ?? "no answer")}.`}</div>`
   }
-<p class="muted small" style="margin-bottom:0">The same figures: <code>thermite bus</code>, <code>GET /v1/bus</code> and MCP's <code>bus_state</code>; each rig's connection also in <code>GET /v1/rigs</code> and <code>list_rigs</code>.</p></div></div>`;
+<p class="muted small" style="margin-bottom:0">The same figures: <code>thermite bus</code>, <code>GET /v1/bus</code> and MCP's <code>bus_state</code>; each rig's connection also in <code>GET /v1/rigs</code> and <code>list_rigs</code>. Live, with every connection and each stream's messages: <a href="/ui/metrics?tab=bus">Metrics › Bus</a>.</p></div></div>`;
 }

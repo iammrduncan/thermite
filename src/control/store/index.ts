@@ -46,6 +46,7 @@ import { RunpodStore } from "./runpod.ts";
 import { RunRegistry } from "./runs.ts";
 import { type MigrateGiven, migrateStore } from "./schema.ts";
 import { UiSessions } from "./sessions.ts";
+import { StoreSize } from "./size.ts";
 import { TunnelRigs } from "./tunnels.ts";
 import { RigUpdates } from "./updates.ts";
 import { UsageRecords } from "./usage.ts";
@@ -98,6 +99,7 @@ export type { RigRefusal } from "./refusals.ts";
 export type { RetentionRemovalRow } from "./retention.ts";
 export type { StoredRunpodRig, StoredRunpodTest } from "./runpod.ts";
 export type { RegisteredRun } from "./runs.ts";
+export type { DbFigures } from "./size.ts";
 export type { TunnelRig } from "./tunnels.ts";
 export type { RunningRun } from "./usage.ts";
 export type { IngestReport };
@@ -150,6 +152,8 @@ export class ControlStore {
   readonly ownSettings: OwnSettings;
   /** The owner's retention policies, what they removed, and what each rig keeps (goal 125). */
   readonly retention: RetentionPolicies;
+  /** control.db's own size, as SQLite counts it, for Metrics (goal 179). */
+  readonly size: StoreSize;
   private knowledge: KnowledgeBase | undefined;
 
   /** The store's file, or `:memory:`. */
@@ -197,6 +201,7 @@ export class ControlStore {
     this.reachable = new ReachableAddresses(this, this.db);
     this.ownSettings = new OwnSettings(this, this.db);
     this.retention = new RetentionPolicies(this, this.db);
+    this.size = new StoreSize(this, this.db);
   }
 
   /**

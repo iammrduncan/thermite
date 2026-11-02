@@ -28,6 +28,7 @@ import {
   controlBusUrl,
   RigConsumers,
   reloadBus,
+  ServerLook,
   serveRigAsks,
 } from "./bus/index.ts";
 import { Credential } from "./credential.ts";
@@ -196,6 +197,9 @@ async function main(): Promise<void> {
       rigBus: rigBusUrl ? { url: rigBusUrl, ca: busTls.caCert } : undefined,
       // A rig on RunPod joins the bus through a leaf node in its pod, which trusts this authority.
       busCa: busTls.caCert,
+      // The server's figures for Metrics, asked as control's system user on one kept connection.
+      serverLook: new ServerLook({ url: natsUrl, seed: busUsers.systemSeed, trust }),
+      busOwnKeys: () => busUsers.ownKeys(),
       bus: {
         server: new URL(natsUrl).host,
         bus,
