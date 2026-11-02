@@ -42,8 +42,13 @@ test("an Enter on a shell command or a sign-in's line is held once; the next Ent
   assert.equal(c.held, undefined);
   // A change to the line after the hold asks again.
   await c.keystrokes("/login\r", (l) => lines.push(l));
-  await c.keystrokes("x\r", (l) => lines.push(l));
-  assert.equal(c.held, "/loginx");
+  assert.equal(c.held, "/login");
+  await c.keystrokes(" now\r", (l) => lines.push(l));
+  assert.equal(c.held, "/login now");
+  // A command that only starts like one is not held.
+  await c.keystrokes("\x15/loginx\r", (l) => lines.push(l));
+  assert.equal(c.held, undefined);
+  assert.equal(lines.at(-1), "/loginx");
 });
 
 test("a Pi view takes typed lines, not keys, and an ended trial takes nothing (goal 187)", async () => {

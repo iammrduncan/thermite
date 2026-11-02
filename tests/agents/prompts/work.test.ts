@@ -27,9 +27,11 @@ import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 import { makeResearchRun } from "../../helpers/research-run.ts";
 import { golden, kept, keptInput, laneTool, PLAN, recorder, sections } from "./capture.ts";
 
-// OpenCode named at a path, as on a machine that has it: the commands below read the same on one
-// without it on PATH (they record what would run; nothing runs it).
+// The programs named at a path, as on a machine that has them: the commands below read the same on
+// one without them on PATH (they record what would run; nothing runs them).
 process.env.THERMITE_OPENCODE_BIN = "/opt/opencode/bin/opencode";
+process.env.THERMITE_CODEX_BIN = "/opt/codex/bin/codex";
+process.env.THERMITE_CLAUDE_BIN = "/opt/claude/bin/claude";
 
 /**
  * The work's roles' whole prompts: the planners, the workers and the research workers, in Pi and in

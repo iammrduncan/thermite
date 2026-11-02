@@ -343,14 +343,30 @@ describe("ledger", () => {
 
   test("a champion judged before verdicts carried guards has them sent once, from the ledger's record (goal 184)", () => {
     const { ledger } = setup();
-    confirmed(ledger, "a1");
-    // As a harness before goal 184 kept it: the guards in the verdict's row, not in its event.
+    attempt(ledger, "a1");
+    // As a harness before goal 184 kept it: the guards in the verdict's row (append-only, so
+    // written at once), and none in its event.
     const guards = [
       { metric: "mem_mib", status: "ok", estimate: Math.log(0.99), low: -0.02, high: 0.0 },
     ];
-    ledger.db
-      .prepare("update verdict set guards = ? where attempt = ?")
-      .run(JSON.stringify(guards), "a1");
+    const id = Number(
+      ledger.db
+        .prepare(
+          `insert into verdict (attempt, verdict, delta, ci_low, ci_high, guards, depends_on_jobs,
+             reasons, judged_by, supersedes, created_at)
+           values ('a1', 'win_confirmed', 0.1, null, null, ?, '[]', 't', 'judge', null, ?)`,
+        )
+        .run(JSON.stringify(guards), new Date().toISOString()).lastInsertRowid,
+    );
+    ledger.appendEvent("judge", "verdict", "a1", {
+      id,
+      verdict: "win_confirmed",
+      delta: 0.1,
+      ci_low: null,
+      ci_high: null,
+      reasons: "t",
+      supersedes: null,
+    });
     assert.deepEqual(ledger.champions.promote(promoteArgs("a1")), { ok: true, seq: 2 });
     assert.equal(ledger.verdicts.sendChampionGuards("judge"), 1);
     const e = ledger.eventsAfter(0, 1000).events.find((x) => x.kind === "verdict_guards");

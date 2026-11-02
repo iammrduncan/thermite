@@ -381,7 +381,7 @@ describe("a trial's terminal on Live", () => {
     const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live?view=advisors");
     assert.match(
       run,
-      /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=advisor-auditor-js-1-1" data-trial="advisor-auditor-js-1-1"><summary><b>auditor \(advisor\)<\/b>/,
+      /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=advisor-auditor-js-1-1" data-trial="advisor-auditor-js-1-1">\n<div class="term-bar"><b>auditor \(advisor\)<\/b>/,
     );
     // Its screen is the supervisor's own: the harness is not asked for it.
     s.asked.length = 0;
@@ -423,7 +423,7 @@ describe("a trial's terminal on Live", () => {
       html,
       /data-term-pi hidden>The Pi view: words steer the agent; <b>Esc<\/b> stops its reply; its commands are \/status, \/compact, \/mcp, \/mcp reconnect \[server\] and \/skill:NAME\./,
     );
-    assert.match(TERMINAL_JS, /el\.hidden = !f\.pi_view/);
+    assert.match(TERMINAL_JS, /el\.hidden = !piView/);
     const csrf = s.owner.csrfOf(html);
     await s.owner.post("/ui/rigs/rig-a/live/terminal", {
       csrf,
