@@ -443,13 +443,13 @@ try {
     promoted.audits,
   );
 
-  // 3. Propagation and cross-verification. A rig publishes its champion with an export of what
-  // changed, asked for here: nothing is exported on a timer.
+  // 3. Propagation and cross-verification. A rig publishes its champion with a full export, asked
+  // for here: nothing is exported on a timer, and a run's own export comes at its end (goal 180).
   const asked = await api("/v1/commands", {
     method: "POST",
-    body: JSON.stringify({ rig: "local-1", kind: "export_now", payload: {} }),
+    body: JSON.stringify({ rig: "local-1", kind: "export_now", payload: { full: true } }),
   });
-  check("an export of what changed is asked for", asked.status === 201, asked.body);
+  check("a full export is asked for", asked.status === 201, asked.body);
   await until(
     "the champion published",
     async () => (await runOf("local-1"))?.published?.seq === 2,
