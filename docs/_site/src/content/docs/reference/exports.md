@@ -22,25 +22,24 @@ curl -fsS -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" \
 | Export | When | What it is |
 | --- | --- | --- |
 | [A run's export at its end](#a-runs-export-at-its-end) | Each run, once, when it ends, while the rig's **Exports** switch on **Edit rig** is on | A run's export with the run's champion, made by the rig on its own |
-| [A run's export](#a-runs-export) | When you choose **This run** under **Export** on a run's page | The run alone |
-| [A normal export](#normal-and-full-exports) | When you choose **What changed** under **Export**, and when a RunPod pod's stop sends its results out | What the rig recorded since its last normal or full export |
-| [A full export](#normal-and-full-exports) | When you choose **Full export** under **Export**, and in a full reset and a RunPod pod's terminate | A normal export, with every run's research folder and a copy of the ledger |
+| [A run's export](#a-runs-export) | When you choose **This run** under **Export** on a run's page, and when a RunPod pod's stop sends out each of its runs that is not closed | The run alone |
+| [A full export](#full-exports) | When you choose **Full export** under **Export**, and in a full reset and a RunPod pod's terminate | Every event since the rig's last full export, with every run's research folder and a copy of the ledger |
 
-The command `export_now` asks for the last three ([`export_now`](signed-commands.md#export_now)). Nothing else exports: there are no exports on a timer.
+The command `export_now` asks for both ([`export_now`](signed-commands.md#export_now)). Nothing else exports: there are no exports on a timer. An export of what the rig recorded since its last one, which the dashboard called **What changed**, was taken away in v0.1.1; those made before show on the Exports page as `what changed` until you delete them.
 
-## Normal and full exports
+## Full exports
 
-A normal export is made when you choose **What changed** under **Export**, or send `export_now` with `{}`. A full export is made when you choose **Full export** under **Export**, and by a full reset, a RunPod pod's terminate and the command `export_now` with `{"full": true}`. Its manifest says `"full": true`.
+A full export is made when you choose **Full export** under **Export**, and by a full reset, a RunPod pod's terminate and the command `export_now` with `{"full": true}`. Its manifest says `"full": true`.
 
-| Part | A normal export | A full export |
-| --- | --- | --- |
-| Events, attempts, champion patches, field notes, source notes, briefings, knowledge items and the prompts the agents were sent (`prompts.jsonl.gz`) since the last export | Yes | Yes |
-| `research/<run>/folder/…`: the [research folder](../explanation/campaign-modes.md#research) of each run that finished in this export (a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation) | Yes | Yes |
-| `research/<run>/folder-<export>/…`: the research folder of every other research run, and of every other hill-climb or goal run that recorded sources, claims or notes, or compacted a conversation, as it stands now: running, paused, closed or broken | No | Yes |
-| `research/<run>/…`, other files: each run's archive of the web pages it fetched | No | Yes |
-| `ledger.sqlite`: a snapshot of the ledger, which holds every event, claim, source, finding, report and note, without the table of held-out results | No | Always, and it always leaves the rig |
+| Part | A full export |
+| --- | --- |
+| Events, attempts, champion patches, field notes, source notes, briefings, knowledge items and the prompts the agents were sent (`prompts.jsonl.gz`) since the rig's last full export | Yes |
+| `research/<run>/folder/…`: the [research folder](../explanation/campaign-modes.md#research) of each run that finished since the last full export (a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation) | Yes |
+| `research/<run>/folder-<export>/…`: the research folder of every other research run, and of every other hill-climb or goal run that recorded sources, claims or notes, or compacted a conversation, as it stands now: running, paused, closed or broken | Yes |
+| `research/<run>/…`, other files: each run's archive of the web pages it fetched | Yes |
+| `ledger.sqlite`: a snapshot of the ledger, which holds every event, claim, source, finding, report and note, without the table of held-out results | Always, and it always leaves the rig |
 
-A run's folder in a full export goes beside the place a normal export puts a finished run's folder, under the export's name, because a results repository never replaces a file it already has: the folder a normal export takes when the run finishes still reaches `research/<run>/folder/`. A folder leaves out the working areas, and a `knowledge/` folder an older build left in it: other runs' records are in their own runs' exports. [Set up the results repository](../how-to/operate/results-repository.md#what-gets-pushed) lists every file.
+A run's folder that still runs goes under the export's name, because a results repository never replaces a file it already has: the folder of a run that finished still reaches `research/<run>/folder/`. A folder leaves out the working areas, and a `knowledge/` folder an older build left in it: other runs' records are in their own runs' exports. [Set up the results repository](../how-to/operate/results-repository.md#what-gets-pushed) lists every file.
 
 ## A run's export
 
@@ -65,7 +64,7 @@ When a run ends, the rig writes that run's export on its own, once: the same par
 - **The Exports switch.** Off on **Edit rig**: a run that ends is not exported, and its results stay on the rig only. Turned on again, each run that ended meanwhile is exported then.
 - **The disk.** At the rig's [disk floor](limits-and-pacing.md#the-rig-and-control) it waits, as every export does, and the rig's history says why, once.
 - **A failure.** An export that fails, such as when git can't read a patch, is tried again 10 minutes later; the harness's log says why each time (`the run's export at its end failed: it is tried again in 10 minutes`).
-- **Its champion.** A hill climb's or a goal run's champion beyond its starting point, when no export published it yet, goes as a patch from the run's starting commit, `champions/<run>/<n>.patch` with its `.json`, as a normal export publishes one. So, with no one asking, it reaches the results repository, or control for a rig without one, ready to [take](../how-to/campaigns/take-the-result.md) or to [send to another rig](../how-to/campaigns/several-rigs.md). A champion of a run that still runs is published by an export of what changed.
+- **Its champion.** A hill climb's or a goal run's champion beyond its starting point, when no export published it yet, goes as a patch from the run's starting commit, `champions/<run>/<n>.patch` with its `.json`, as a full export publishes one. So, with no one asking, it reaches the results repository, or control for a rig without one, ready to [take](../how-to/campaigns/take-the-result.md) or to [send to another rig](../how-to/campaigns/several-rigs.md). A champion of a run that still runs is published by a full export.
 - **What it leaves out.** The rig's own checks are runs too, and export nothing at their end. A run that closed before the rig ran this version is not exported at its end.
 
 ## Where exports go
@@ -112,7 +111,7 @@ The dashboard's **Exports** page, in the sidebar, lists the exports control keep
 | (a box) | Tick it to delete the export ([Delete exports](#delete-exports)). The box in the heading ticks every export shown. An export control is still receiving has no box to tick |
 | **Rig** | The rig that sent it |
 | **Export** | Its name: the time the harness made it, and 8 hexadecimal characters |
-| **Kind** | `full`, `what changed` for a normal export, or `run <id>` for [a run's export](#a-runs-export), followed by `at its end` for [one the rig made at the run's end](#a-runs-export-at-its-end) |
+| **Kind** | `full`, `run <id>` for [a run's export](#a-runs-export), followed by `at its end` for [one the rig made at the run's end](#a-runs-export-at-its-end), or `what changed` for one made before v0.1.1 |
 | **Made** | When control received its start |
 | **Complete** | When its last file reached control and passed its check, or `still arriving` |
 | **Events** | The rig's ledger events it holds, such as `181–245`, or `none new (through 245)`; for a run's export, `the run's, through 245` |

@@ -56,4 +56,28 @@ describe("a rig check's row", () => {
     );
     assert.deepEqual([waiting.state, waiting.since], ["running", at]);
   });
+
+  test("a check refused while one ran shows that one's result once it ends, not the refusal", () => {
+    // A new model route started the rig's own check at 03:14:34; one asked at 03:14:36 was
+    // refused as still running, and the rig's check passed at 03:14:39.
+    const refused: CommandRow = {
+      ...cmd("chk-b", "2026-11-02T03:14:36.000Z"),
+      outcome: { accepted: false, result: { error: "the model check is still running" } },
+    };
+    const row = checkRow(
+      "model",
+      run("chk-own", "2026-11-02T03:14:34.000Z", "2026-11-02T03:14:39.000Z"),
+      refused,
+      now,
+    );
+    assert.equal(row.state, "passed");
+    // A refusal after the last result still shows, with the result beside it.
+    const later = checkRow(
+      "model",
+      run("chk-own", "2026-11-02T03:14:34.000Z", "2026-11-02T03:14:39.000Z"),
+      { ...refused, issued_at: "2026-11-02T03:20:00.000Z", acked_at: "2026-11-02T03:20:00.000Z" },
+      now,
+    );
+    assert.deepEqual([later.state, later.why], ["refused", "The model check is still running."]);
+  });
 });

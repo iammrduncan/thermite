@@ -468,9 +468,11 @@ describe("Export and the Exports page (goal 103)", () => {
       runForm,
       /<input type="radio" name="full" value="run" checked[^>]*><span><b>This run<\/b>/,
     );
+    // No export of what changed (goal 180): the run alone, or the rig's full export.
+    assert.doesNotMatch(runForm, /What changed|value="false"/);
     assert.match(
       runForm,
-      /<input type="radio" name="full" value="false"(?! checked)[^>]*><span><b>What changed \(all of rig-a\)<\/b>/,
+      /<input type="radio" name="full" value="true"(?! checked)[^>]*><span><b>Full export \(all of rig-a\)<\/b>/,
     );
     assert.match(runForm, /<input type="hidden" name="run" value="r-1">/);
     const runHidden = Object.fromEntries(
@@ -504,8 +506,8 @@ describe("Export and the Exports page (goal 103)", () => {
       form,
       /<span class="lb">What to export<i class="ii" tabindex="0" data-tip="[^"]+">i<\/i><\/span>/,
     );
-    assert.match(form, /<input type="radio" name="full" value="false" checked/);
-    assert.match(form, /<input type="radio" name="full" value="true"(?! checked)/);
+    assert.match(form, /<input type="radio" name="full" value="true" checked/);
+    assert.doesNotMatch(form, /value="false"|What changed/);
     assert.match(form, /<a href="\/ui\/exports\?rig=rig-a">Exports page<\/a>/);
     const hidden = Object.fromEntries(
       [...form.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)].map((m) => [
@@ -515,7 +517,7 @@ describe("Export and the Exports page (goal 103)", () => {
     );
     assert.equal(hidden.kind, "export_now");
     // As the page's script sends the form, with each choice.
-    for (const full of ["true", "false"]) {
+    for (const full of ["true"]) {
       const r = await s.control.request("/ui/commands", {
         method: "POST",
         body: new URLSearchParams({ ...hidden, full }),
@@ -533,10 +535,7 @@ describe("Export and the Exports page (goal 103)", () => {
       const cmd = s.store.commands.row(id);
       assert.equal(cmd?.kind, "export_now");
       assert.deepEqual(cmd?.payload, { full: full === "true" });
-      assert.match(
-        a.said,
-        full === "true" ? /A full export was asked for\./ : /An export was asked for\./,
-      );
+      assert.match(a.said, /A full export was asked for\./);
       assert.match(a.said, /it shows on the Exports page/);
     }
     // Without the script: the page it lands on says so too.

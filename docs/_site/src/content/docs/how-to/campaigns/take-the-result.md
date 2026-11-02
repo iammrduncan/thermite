@@ -13,7 +13,7 @@ This is the result of a hill climb or a goal campaign. A research campaign chang
 ## Before you start
 
 - The run has a champion beyond its starting point: on the run's **Overview** tab, **The run** block shows **Champion** as `#2` or higher. The starting point itself is champion #1. In a hill climb whose seed the judge could not measure, the first setup change it could measure became the run's starting point as a new champion ([Setup](../../reference/verdicts.md#setup)), and its patch holds the fix that made the project build and run.
-- The rig has published that champion with an export. A run's export at its end publishes it, with no one asking, while the rig's **Exports** switch on **Edit rig** is on. For a run that still runs, publish it now: open the rig's page, press **Export**, choose **What changed**, then press **Export** under the choice.
+- The rig has published that champion with an export. A run's export at its end publishes it, with no one asking, while the rig's **Exports** switch on **Edit rig** is on. For a run that still runs, publish it now: open the rig's page, press **Export**, choose **Full export**, then press **Export** under the choice.
 - A minute or two after the export, the rig's supervisor has uploaded the patch to control. Control keeps it only if it matches what the rig published. This works on every rig, with or without a results repository.
 
 ## 1. Download the patch

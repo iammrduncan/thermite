@@ -338,6 +338,14 @@ export class Commands {
         return receivePropagation(svc, CommandPayloads.propagate.parse(payload), by);
       case "export_now": {
         const p = CommandPayloads.export_now.parse(payload);
+        if (p.open_runs) {
+          const names = await svc.exportOpenRuns(by);
+          return {
+            export: names.at(-1) ?? null,
+            exports: names,
+            through_event: svc.ledger.exports.last()?.through_event ?? 0,
+          };
+        }
         const r = await svc.export(by, p);
         return {
           export: r.dir.split("/").pop(),

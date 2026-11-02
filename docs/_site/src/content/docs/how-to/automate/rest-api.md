@@ -130,7 +130,7 @@ For each hill-climb campaign, best first: each run's champion, its `gain` over t
 
 ## Download a champion
 
-A run's champion is a patch from the run's starting commit. It reaches control with the run's export at its end, or with an export of what changed on its rig: nothing is exported on a timer. For a run that still runs, send an `export_now` command (payload `{}`), or press **Export** on the rig's page, then **Export** under the choice; the patch is there within a minute. Then download it by run and champion number:
+A run's champion is a patch from the run's starting commit. It reaches control with the run's export at its end, or with a full export of its rig: nothing is exported on a timer. For a run that still runs, send an `export_now` command (payload `{"full": true}`), or press **Export** on the rig's page, then **Export** under **Full export**; the patch is there within a minute. Then download it by run and champion number:
 
 ```sh
 curl -sS -H "$AUTH" -D headers.txt -o run-1-champion-2.patch \

@@ -1,0 +1,40 @@
+---
+id: "182"
+title: "Campaigns and kits for agents: a kit from git, a campaign from a champion, grants that reach running runs, the metrics a contract uses"
+status: PROPOSED
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 182 · Campaigns and kits for agents: a kit from git, a campaign from a champion, grants that reach running runs, the metrics a contract uses
+
+**Status:** `PROPOSED` · **Version:** [v0.1.1](../roadmap.md#v011)
+
+## What
+
+What an agent working for the owner could not do through control, from the owner's testing notes of 2026-11-02:
+
+1. **A kit from git** (item 11): "MCP kit_add takes the bundle as inline base64, so a full kit bundle (584 KB) is impractical for an agent". Control takes a kit from a git repository's address too, as a campaign's sources already can.
+2. **A campaign from a champion** (item 12): "no way on control or the dashboard to start a new campaign from another run's champion with a changed contract; had to hand-build a signed assign_campaign". Control starts a run from another run's champion, and saves a whole new contract, over MCP and REST and on the dashboard.
+3. **A campaign assigned by command is saved, and grants reach running runs** (item 13): "a campaign assigned over MCP only exists on control once its first run starts, and a run's knowledge-base scope is fixed at start". An `assign_campaign` saves its campaign on control, and a grant reaches the runs already going, at once, as a revoke does.
+4. **The metrics a contract uses** (item 15): "kit metrics are kit-wide: adding one metric for one campaign (prefill_tps) forces every decode cell to report it, or the judge marks the run invalid." The judge measures the metrics the contract names; the kit's others are kept when the check reports them, and never make a run invalid.
+
+Item 14 of the notes ("kb_grant over MCP gets blocked by Claude Code's auto-mode classifier") is not Thermite's: the caller's Claude Code needs a rule that allows the tool.
+
+## Done when
+
+- [ ] Each of the four, with its tests, its pages, and the acceptance checks it touches.
+
+## Decisions
+
+- 2026-11-02, owner: a grant reaches the runs already going ("Yes, at once"); the judge measures only the metrics the contract uses ("Yes").
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's notes, with what control does today.
+
+---
+
+Run with `/goal Complete docs/plan/goals/182-campaigns-and-kits-for-agents.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

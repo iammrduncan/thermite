@@ -17,7 +17,8 @@ export function formPayload(kind: CommandKind, f: Record<string, unknown>): unkn
     end_wait: { run },
     close_run: { run, reason: String(f.reason ?? "").trim() },
     reset_workers: { run },
-    // Export (goal 103): what changed since the last export, or a full one, as the owner chose.
+    // Export (goal 103): the run alone, or a full one, as the owner chose (goal 180: no export of
+    // what changed).
     export_now: exportForm(f).payload,
     rig_check: { check: String(f.check ?? ""), ...(f.force === "true" ? { force: true } : {}) },
     approve_promotion: { run, attempt: String(f.attempt ?? "") },

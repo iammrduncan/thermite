@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
-  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import type { Ledger } from "../ledger/index.ts";
@@ -250,7 +250,7 @@ export function prepareBaselineDir(stateDir: string, run: string, job: number): 
  * Keeps a baseline job's sealed folder (sealBaselineDir), which the job's checks wrote in the
  * scratch folder it handed them, in its folder in the judge's state (prepareBaselineDir): files
  * 0440 and folders 0550, in the checkers' group, so later jobs' checks read them and change
- * nothing.
+ * nothing. Each file is written anew there, so it takes the folder's group.
  */
 export function keepBaselineDir(from: string, to: string): void {
   const dirs: string[] = [to];
@@ -262,7 +262,9 @@ export function keepBaselineDir(from: string, to: string): void {
         dirs.push(d);
         copy(s, d);
       } else {
-        copyFileSync(s, d);
+        // Written anew, not copied: a copy keeps the source's group (the judge's own), so the
+        // checkers could not read it; a new file takes the folder's group, the checkers'.
+        writeFileSync(d, readFileSync(s));
         chmodSync(d, 0o440);
       }
     }

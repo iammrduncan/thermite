@@ -63,7 +63,7 @@ npm ci
 npm run build
 ```
 
-Run `npx thermite` in your `thermite-source` folder; from another folder, `npx` may fetch some other package of that name. With the link, the guides' paths, such as `--token-file .dev/secrets/control-admin-token`, work there too. The [command line reference](../../reference/command-line.md) lists its commands. The stack doesn't need the command line: each image has its own copy, as `thermite`. Only `thermite doctor`, which checks the computer itself, must run here and not in a container.
+Run `npx thermite` in your `thermite-source` folder; from another folder, `npx` may fetch some other package of that name. After a `git pull` with no new `npm run build`, the build is older than the source: it then runs the source, and says `thermite: this build is older than its source, so the source runs; npm run build makes the build current`. With the link, the guides' paths, such as `--token-file .dev/secrets/control-admin-token`, work there too. The [command line reference](../../reference/command-line.md) lists its commands. The stack doesn't need the command line: each image has its own copy, as `thermite`. Only `thermite doctor`, which checks the computer itself, must run here and not in a container.
 
 ## What runs
 

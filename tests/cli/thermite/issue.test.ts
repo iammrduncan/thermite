@@ -380,7 +380,14 @@ describe("thermite command on a RunPod rig whose pod is stopped (goal 022)", () 
         ["stop", "start"],
       );
       // The pod runs now: the next command says nothing more.
-      const next = await cli("command", ...at, "--kind", "export_now", "--payload", "{}");
+      const next = await cli(
+        "command",
+        ...at,
+        "--kind",
+        "export_now",
+        "--payload",
+        '{"full":true}',
+      );
       assert.equal(next.code, 0, next.stderr);
       assert.equal(next.stderr, "");
       assert.deepEqual(Object.keys(JSON.parse(next.stdout)), ["id", "status"]);

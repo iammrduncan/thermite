@@ -225,7 +225,8 @@ export class RunpodLifecycle {
       by,
       why === "owner" ? "the owner stops the rig's pod" : `control stops the rig's pod: ${words}`,
     );
-    op.command = this.issue(r.rig, "export_now", { full: false }, by);
+    // Each run not closed is exported first, as the owner chose (goal 180); its volume stays.
+    op.command = this.issue(r.rig, "export_now", { open_runs: true }, by);
     s.op = op;
     this.history(
       r.rig,
@@ -381,11 +382,14 @@ export class RunpodLifecycle {
       case "exporting": {
         const c = op.command ? this.store.commands.get(op.command) : undefined;
         const done = c && c.status !== "pending" && harnessConfirmed(c.outcome);
-        const name = done
-          ? (c.outcome as { result?: { export?: string } } | null)?.result?.export
+        const result = done
+          ? (c.outcome as { result?: { export?: string | null; exports?: unknown } } | null)?.result
           : undefined;
-        if (done && c.status === "delivered" && name) {
-          op.export = name;
+        const name = result?.export ?? undefined;
+        // A stop's export of each open run makes none when every run is closed: nothing waits.
+        const none = Array.isArray(result?.exports) && result.exports.length === 0;
+        if (done && c.status === "delivered" && (name || none)) {
+          op.export = name ?? null;
           this.phase(op, "leaving");
           return this.leave(r, s, key, op);
         }

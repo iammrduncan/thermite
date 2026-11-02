@@ -1,0 +1,44 @@
+---
+id: "180"
+title: "Testing's first bugs: exports of what changed, a check's stale refusal, a command line behind its code"
+status: IN_PROGRESS
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 180 · Testing's first bugs: exports of what changed, a check's stale refusal, a command line behind its code
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011)
+
+## What
+
+Three bugs from the owner's testing notes of 2026-11-02 (items 3, 9 and 10):
+
+1. **Exports of what changed** (item 3, "I still see 'what changed' types of exports on the exports page. Those were supposed to be removed..."). The owner's rule since goal 125: no export comes by itself but a run's at its end, and only the owner deletes one. The exports on the page were the old hourly ones, kept because deletion is by hand; but control still made new ones: the Export menu offered "What changed" (the default on a rig's page), MCP's `export_now` took it by default, and stopping a RunPod rig asked for one. The kind goes: an export is a run's, or full. Stopping a RunPod rig exports each of its runs that is not closed.
+2. **A check's stale refusal** (item 9, "cpu-box-1-a shows 'Not run: the rig refused it at 03:15 UTC. The model check is still running.' but also shows it as passing..."). A new model route starts the rig's model check by itself; a check asked two seconds later was refused while that one ran, and the rig page kept the refusal beside the newer pass. A result that came after the refused command answers it.
+3. **A command line behind its code** (item 10, "npx thermite contract validate runs the built dist/, which can be older than src: it passed a contract with 'notes' that the rig refuses"). In a checkout, a build older than its source runs the source instead, and says so; an image, which has no source, runs its build.
+4. **A baseline the checkers can't read** (found by the lab's infrastructure session on 2026-11-02, as the GPU rig's judge failed two calibrate jobs: "PermissionError: [Errno 13] Permission denied: '/var/lib/thermite/baselines/<run>/job-260/dec-code.json'"). The judge kept a baseline job's files with a copy, which keeps the source's group (the judge's own) instead of the folder's (the checkers'). Each kept file is written anew, so it takes the folder's group.
+
+## Done when
+
+- [ ] No path makes an export of what changed: the Export menu offers this run (on a run's page) and full, `export_now` names a run or is full, and a RunPod rig's stop exports each open run before it stops; the words that named the kind are gone.
+- [ ] The 195 old exports of what changed are deleted, by hand, through control.
+- [x] A check's row shows a result that came after a refused command, not the refusal.
+- [x] `npx thermite` in a checkout runs the source when its build is older, and says so; in an image, the build.
+- [ ] A baseline job's kept files are in the checkers' group, so later jobs' checks read them.
+- [ ] The pages that describe these match; the tests, the fast checks, the docs checks and the RunPod and control acceptance checks pass.
+
+## Decisions
+
+- 2026-11-02, owner: "Remove it; keep a run export on stop" (the kind goes everywhere; a RunPod rig's stop still exports, its runs); "Delete them" (the old exports of what changed).
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's notes; causes found (the old hourly exports; the rig's own check after a new route, then a second asked while it ran; `bin` naming dist/).
+- 2026-11-02: A check's row: a result that ended after a refused command answers it (command-progress.ts), with a test. The command line: package.json's `bin` moved to a launcher of the source first, but npx keeps its own link to the old target in its cache, so the build itself now looks: a checkout's build older than any file of src/ runs the source and says so (cli/thermite/fresh.ts). Checked by hand: after `npm run build`, `npx thermite contract validate` refused a contract with `notes`; after a source file changed, it ran the source, said so, and refused it too. Exports: `export_now` is exactly one of `run`, `open_runs` (new: each run not closed, each its own run's export, for a RunPod rig's stop) or `full`; the Export menu offers this run and full; the words and pages that named an export of what changed say a full one (which publishes a champion, as the chain's exports did). The harness keeps its chain of full exports inside; no command asks for the old kind. Baselines: each kept file written anew (judge/baseline.ts). The old exports wait for this session's MCP to list delete_exports (the owner reconnects it).
+
+---
+
+Run with `/goal Complete docs/plan/goals/180-testing-bugs-exports-checks-cli.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

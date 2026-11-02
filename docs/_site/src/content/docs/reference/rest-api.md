@@ -836,7 +836,7 @@ How each one goes:
 | | Stop | Start | Restart | Terminate |
 | --- | --- | --- | --- | --- |
 | Runs | Pauses the running runs, with the reason `the owner stops the rig's pod` | Resumes the runs the last stop paused | Leaves them: they go on after the restart | Pauses the running runs, with the reason `the owner terminates the rig's pod` |
-| Results | An export (`export_now`); the pod stops once it and every export and champion's patch waiting on the rig have left, or after 15 minutes, when what did not leave stays on the volume | | None: the volume keeps them | First no judge job and no command may wait (1 hour at most), then a full export (30 minutes at most), then every result must leave (1 hour at most) |
+| Results | An export of each run that is not closed (`export_now` with `open_runs`); the pod stops once they and every export and champion's patch waiting on the rig have left, or after 15 minutes, when what did not leave stays on the volume | | None: the volume keeps them | First no judge job and no command may wait (1 hour at most), then a full export (30 minutes at most), then every result must leave (1 hour at most) |
 | RunPod | Stops the pod: its GPU is no longer billed, its volume stays | Starts the pod | Stops the pod, then starts it once RunPod says it stopped | Removes the pod and its volume |
 | When it can't | It stops all the same, and its history says what stayed on the volume | Refused, in words; the pod stays stopped | The start is refused: the pod stays stopped, and its history says why | Refused: the pod keeps running, with its runs paused, `error` says why, and its history has `runpod_terminate_refused` |
 

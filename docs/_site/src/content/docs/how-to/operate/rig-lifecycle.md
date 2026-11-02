@@ -248,7 +248,7 @@ A full reset gives a rig a clean start: it exports everything, checks that the e
    | --- | --- | --- |
    | `start` | Control pauses the rig's running runs, with the reason "full reset" | |
    | `quiescing` | Control waits until the rig reports its runs paused, the judge has no job under way and none queued for a run that still runs, and no command waits for the rig. A paused run's queued jobs stay in the queue, and the export carries them | 1 hour |
-   | `exporting` | The rig takes a [full export](../../reference/exports.md#normal-and-full-exports): what is new since its last export, plus its research archive, every run's research folder and a copy of its ledger | 30 minutes |
+   | `exporting` | The rig takes a [full export](../../reference/exports.md#full-exports): what is new since its last full export, plus its research archive, every run's research folder and a copy of its ledger | 30 minutes |
    | `verifying` | Control waits until the supervisor reports that export pushed to the results repository, or, for a rig without one, until control holds every file of it | 1 hour |
    | `awaiting_owner` | Control waits for you | 24 hours |
    | `confirmed` | You confirmed; control sends the wipe | |

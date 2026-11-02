@@ -16,14 +16,13 @@ A rig without a [results repository](results-repository.md), such as a rig that 
 
 ## 1. Ask for an export
 
-A run that ended needs no step: the rig exports it on its own, once, and it is on the **Exports** page already, its **Kind** `run <id> at its end` ([A run's export at its end](../../reference/exports.md#a-runs-export-at-its-end)). Ask for an export to take a run that still runs, what changed on the whole rig, or all of it.
+A run that ended needs no step: the rig exports it on its own, once, and it is on the **Exports** page already, its **Kind** `run <id> at its end` ([A run's export at its end](../../reference/exports.md#a-runs-export-at-its-end)). Ask for an export to take a run that still runs, or all of the rig.
 
 1. Open the rig's page (**Rigs** in the sidebar, then the rig), or the page of a run on it.
 2. Press **Export** in the page's header. A small menu opens and names what it exports: `Export rig-1.`, or, on a run's page, `Export sort-speed-1, or rig-1, the rig that holds it.`
 3. Under **What to export**, choose one:
    - **This run**, on a run's page only, and chosen there: the run alone, from its start: its events, attempts and notes, its research folder as it stands, with its paper when it has one, and the pages it fetched. No other run is in it, and no snapshot of the ledger, which holds every run.
-   - **What changed**: what the rig recorded since its last export, with the research folders of the runs that finished since. On a run's page it reads **What changed (all of rig-1)**.
-   - **Full export**: also a snapshot of the ledger, which holds every event, claim, source, finding, report and note; every run's research folder, finished or not; and each run's archive of the web pages it fetched. Choose it to take every run's record off the rig, even runs that still run, are paused or are broken. On a run's page it reads **Full export (all of rig-1)**.
+   - **Full export**: a snapshot of the ledger, which holds every event, claim, source, finding, report and note; every run's research folder, finished or not; and each run's archive of the web pages it fetched. Choose it to take every run's record off the rig, even runs that still run, are paused or are broken. On a run's page it reads **Full export (all of rig-1)**.
 4. Press **Export** under the choice.
 
 The button says `Sending…`, then `Sent`. A line at the top of the page says `Sent to rig-1 at 12:00 UTC. Waiting for the rig to take it. A full export was asked for.` (or `An export of sort-speed-1 alone was asked for.`), then where the export will show: `When all its files reach control, it shows on the Exports page, ready to download. A rig with a results repository pushes it there instead.` Once the rig has made it, the line begins `Done. rig-1 took it at 12:00 UTC. It made the full export 20261020T120000-0123abcd.`
@@ -31,7 +30,7 @@ The button says `Sending…`, then `Sent`. A line at the top of the page says `S
 ## 2. Download it from the Exports page
 
 1. Press **Exports** in the sidebar. To see one rig's exports only, follow **its exports on control** on the rig's **Results** row, or press the rig's name above the table.
-2. Find the export: the newest is first. **Kind** says `full`, `what changed`, or `run <id>` (followed by `at its end` for one the rig made when the run ended), and **Complete** says when its last file reached control.
+2. Find the export: the newest is first. **Kind** says `full` or `run <id>` (followed by `at its end` for one the rig made when the run ended), or `what changed` for an export made before v0.1.1, and **Complete** says when its last file reached control.
 3. Press **Download**. The browser saves `<rig>-<export>.tar.gz`, such as `rig-1-20261020T120000-0123abcd.tar.gz`.
 
 An export whose **Complete** says `still arriving` has no **Download** yet: control has not all its files. The rig sends the rest every round, a minute by default; press **refresh** in the status bar.

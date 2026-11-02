@@ -35,7 +35,7 @@ describe("RunPod rigs: stop", () => {
       sent.map((c) => [c.kind, c.payload]),
       [
         ["pause_run", { run: "run-1", reason: "the owner stops the rig's pod" }],
-        ["export_now", { full: false }],
+        ["export_now", { full: false, open_runs: true }],
       ],
     );
     // Nothing leaves yet: the pod runs on.

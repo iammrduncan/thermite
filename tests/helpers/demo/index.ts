@@ -53,7 +53,7 @@ export async function seedDemo(
   for (const [rig, kind, payload] of [
     ["gpu-1", "pause_run", { run: "decode-a", reason: "owner check" }],
     ["gpu-1", "resume_run", { run: "decode-a" }],
-    ["gpu-2", "export_now", {}],
+    ["gpu-2", "export_now", { full: true }],
     [
       "gpu-3",
       "redirect",

@@ -525,7 +525,7 @@ export async function propagateChampion(
   if (!champ || champ.seq <= 1) throw new Refusal("the source run has no champion beyond its seed");
   if (!pub || pub.seq !== champ.seq) {
     throw new Refusal(
-      `champion seq ${champ.seq} is not published yet: the run's export at its end publishes it, or an export of what changed on ${from.rig.id} does now (Export on its page)`,
+      `champion seq ${champ.seq} is not published yet: the run's export at its end publishes it, or a full export of ${from.rig.id} does now (Export on its page)`,
     );
   }
   if (dst.campaign !== src.campaign) {

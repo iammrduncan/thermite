@@ -738,6 +738,11 @@ export class HarnessService {
     return reports.exportForSupervisor(this, actor, o);
   }
 
+  /** Each run that is not closed, each as its own run's export: service/reports.ts. */
+  exportOpenRuns(actor: string) {
+    return reports.exportOpenRuns(this, actor);
+  }
+
   /** Each run's export at its end, once its closing work is done: service/reports.ts. */
   exportRunEnds(actor: string, closingFailed: (run: string) => boolean = () => false) {
     return reports.exportRunEnds(this, actor, closingFailed);

@@ -5,22 +5,22 @@ import { ago, esc, infoLabel } from "./components/index.ts";
 
 /**
  * Export on a rig's or a run's page, and the Exports page (goal 103). Export asks the rig for an
- * export (export_now), normal or full; the Exports page lists every export control keeps, for
+ * export (export_now), of the run or full; the Exports page lists every export control keeps, for
  * every rig, newest first, and downloads a complete one as one .tar.gz.
  */
 
 /** What the choice of export means, on the info icon of its label. */
 export const EXPORT_CHOICE_TIP =
-  "This run (on a run's page): the run alone, from its start: its events, attempts and notes, its research folder as it stands, with its paper when it has one, and the pages it fetched; no other run, and no ledger snapshot. What changed: what the rig recorded since its last export, with the research folders of the runs that finished since. Full: also a snapshot of the ledger, which holds every event, claim, source, finding, report and note, every run's research folder, finished or not, and each run's archive of the pages it fetched. A full export is larger and takes longer.";
+  "This run (on a run's page): the run alone, from its start: its events, attempts and notes, its research folder as it stands, with its paper when it has one, and the pages it fetched; no other run, and no ledger snapshot. Full: a snapshot of the ledger, which holds every event, claim, source, finding, report and note, with every run's research folder, finished or not, and each run's archive of the pages it fetched. A full export is larger and takes longer. A run's export at its end comes by itself.";
 
 // An export's words are the domain's (command-progress.ts): the pages and the follow routes share
 // them. Bytes in words are core's: the domain's answers say sizes the same way.
 export { EXPORT_WHERE, exportWords, sizeWords };
 
-/** Export's form: its export_now payload, this run's or the rig's, full or not, and its words. */
+/** Export's form: its export_now payload, this run's or the rig's full one, and its words. */
 export function exportForm(f: Record<string, unknown>) {
   const run = f.full === "run" && typeof f.run === "string" && f.run ? f.run : undefined;
-  const payload = run ? { run } : { full: f.full === "true" };
+  const payload = run ? { run } : { full: true };
   return { payload, asked: exportWords(payload).asked };
 }
 
@@ -44,7 +44,7 @@ export function exportMenu(o: {
   /** A run's page: the run the rig holds. */
   run?: string | undefined;
 }): string {
-  const first = o.run ? "run" : "false";
+  const first = o.run ? "run" : "true";
   const choice = (value: string, title: string, line: string) =>
     `<label class="ch"><input type="radio" name="full" value="${value}"${value === first ? " checked" : ""} style="margin:2px 8px 0 0"><span><b>${esc(title)}</b><span class="muted small">${esc(line)}</span></span></label>`;
   const what = o.run ? `Export ${o.run}, or ${o.rig}, the rig that holds it.` : `Export ${o.rig}.`;
@@ -53,7 +53,6 @@ export function exportMenu(o: {
 <div class="small"><b>${esc(what)}</b> <span class="muted">The rig writes the export and sends it on. A rig without a results repository sends it to control: it shows on the <a href="${exportsHref(o.rig)}">Exports page</a>.</span></div>
 <div>${infoLabel("What to export", EXPORT_CHOICE_TIP)}</div>
 ${o.run ? choice("run", "This run", "This run alone, from its start: its events, attempts and notes, its research folder as it stands, with its paper, and the pages it fetched. No other run.") : ""}
-${choice("false", `What changed${rig}`, "Since the last export: new events, attempts, notes, and the research folders of runs that finished.")}
 ${choice("true", `Full export${rig}`, "Also a ledger snapshot (every event, claim, source, finding, report and note), every run's research folder, finished or not, and the pages each run fetched.")}
 <button class="primary">Export</button></form></div></details>`;
 }
@@ -83,7 +82,10 @@ export function pickedExport(v: unknown): { rig: string; name: string } | undefi
   return at > 0 && at < v.length - 1 ? { rig: v.slice(0, at), name: v.slice(at + 1) } : undefined;
 }
 
-/** An export's kind, as the page shows it: a run's (at its end or asked for), full or what changed. */
+/**
+ * An export's kind, as the page shows it: a run's (at its end or asked for), full, or, made before
+ * goal 180 took that kind away, what changed.
+ */
 function kindCell(e: RigExport): string {
   const run = exportRun(e);
   if (run)

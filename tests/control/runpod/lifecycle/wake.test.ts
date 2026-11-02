@@ -88,7 +88,7 @@ describe("RunPod rigs: a run assigned or resumed on a stopped pod starts it firs
     // A pause or an export waits for the pod: it does not start it.
     for (const [kind, payload] of [
       ["pause_run", { run: "run-1", reason: "later" }],
-      ["export_now", {}],
+      ["export_now", { full: true }],
     ] as const) {
       const r = await s.call("/v1/commands", { rig, kind, payload });
       assert.equal(r.status, 201);

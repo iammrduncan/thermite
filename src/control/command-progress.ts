@@ -19,7 +19,7 @@ export interface Progress {
 }
 
 /** An export_now's payload in words (goal 103): what was asked for, and what the rig made. */
-export function exportWords(p: { full?: unknown; run?: unknown }) {
+export function exportWords(p: { full?: unknown; run?: unknown; open_runs?: unknown }) {
   const run = typeof p.run === "string" ? p.run : undefined;
   const full = p.full === true;
   return {
@@ -27,7 +27,9 @@ export function exportWords(p: { full?: unknown; run?: unknown }) {
       ? `An export of ${run} alone was asked for.`
       : full
         ? "A full export was asked for."
-        : "An export was asked for.",
+        : p.open_runs === true
+          ? "An export of each run not closed was asked for."
+          : "An export was asked for.",
     made: (name: string) =>
       `It made ${run ? `the export of ${run}` : full ? "the full export" : "export"} ${name}.`,
   };
@@ -190,6 +192,7 @@ export interface CheckRow {
  * - running: the rig took it (its answer names the check it started), or reported the start;
  * - passed or failed: the result of the newest run;
  * - refused or expired: the newest command did not run; the last result stays beside the reason.
+ *   A refusal answered by a run that ended after the command shows that run's result instead.
  * A run of the check that started after the command was sent, or that still runs, is newer than
  * the command (the rig ran it by itself, or will refuse the command for it), and shows.
  */
@@ -225,6 +228,10 @@ export function checkRow(
   if (last && (after(last.started_at) || last.finished_at === null)) return fromRig();
   if (commandExpired(cmd, now)) return row("expired", { at: cmd.expires_at });
   if (cmd.status === "pending") return row("sent", { at: cmd.issued_at });
+  // Refused while a run of the check was going, which ended after the command: that run's result
+  // answers it (a new model route starts the rig's check by itself, and a check asked meanwhile
+  // is refused as still running).
+  if (last?.finished_at && after(last.finished_at)) return fromRig();
   return row("refused", {
     at: cmd.acked_at ?? cmd.issued_at,
     why: sentence(capital(refusalOf(cmd) ?? "")),

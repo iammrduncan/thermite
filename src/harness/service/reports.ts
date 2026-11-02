@@ -161,6 +161,20 @@ export async function exportForSupervisor(
   });
 }
 
+/**
+ * Each run of the rig that is not closed, each as its own run's export (export_now's `open_runs`,
+ * which a RunPod rig's stop asks for before its pod stops). The rig's own checks export nothing.
+ * Returns the names of the exports written, in order; none when every run is closed.
+ */
+export async function exportOpenRuns(svc: HarnessService, actor: string): Promise<string[]> {
+  const written: string[] = [];
+  for (const r of svc.ledger.runs.list()) {
+    if (r.status === "closed" || isRigCheck(r.campaign)) continue;
+    written.push((await exportForSupervisor(svc, actor, { run: r.id })).name);
+  }
+  return written;
+}
+
 /** How long a run's export at its end waits after it failed before it is tried again. */
 const END_EXPORT_RETRY_MS = 10 * 60_000;
 /** When each run's export at its end last failed, for each service: kept in memory only. */

@@ -6,6 +6,7 @@ import { thermiteBus } from "./bus.ts";
 import { thermiteCampaign, thermiteRun } from "./campaigns.ts";
 import { thermiteInvalidate } from "./evidence.ts";
 import { thermiteExports } from "./exports.ts";
+import { sourceInstead } from "./fresh.ts";
 import { thermiteAssign, thermiteAssignPayload, thermiteCommand } from "./issue.ts";
 import { thermiteKb } from "./kb.ts";
 import { thermiteKit } from "./kits.ts";
@@ -96,4 +97,5 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
-main(process.argv.slice(2)).catch((err) => fail(errorText(err)));
+// A checkout's build older than its source runs the source instead (fresh.ts).
+if (!(await sourceInstead())) main(process.argv.slice(2)).catch((err) => fail(errorText(err)));

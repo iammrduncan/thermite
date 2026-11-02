@@ -337,10 +337,21 @@ export const CommandPayloads = {
     import: ImportSpec,
   }),
   /**
-   * A full export (a full reset's) also carries the research archive and the ledger snapshot.
-   * With `run`, an export of that run alone (goal 103), outside the rig's chain of exports.
+   * An export, of one of three: one run alone (`run`, goal 103); each run of the rig that is not
+   * closed, each as its own run's export (`open_runs`, as a RunPod rig's stop asks for); or full
+   * (`full`, a full reset's and the owner's), which also carries the research archive and the
+   * ledger snapshot. An export of what changed since the last one is no more (goal 180).
    */
-  export_now: z.object({ full: z.boolean().default(false), run: RunId.optional() }),
+  export_now: z
+    .object({
+      full: z.boolean().default(false),
+      run: RunId.optional(),
+      open_runs: z.literal(true).optional(),
+    })
+    .refine(
+      (p) => [p.full, p.run !== undefined, p.open_runs === true].filter(Boolean).length === 1,
+      "an export is of one run (run), of each run not closed (open_runs: true), or full (full: true)",
+    ),
   /**
    * The rig drains before its images change (goal 079): no new trial, plan or judge job starts,
    * and those running end as they would. The rig's report says what still runs; control restarts

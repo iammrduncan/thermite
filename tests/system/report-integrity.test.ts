@@ -98,7 +98,7 @@ describe("the command queue", () => {
     const expired = issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
-      payload: {},
+      payload: { full: true },
       ttlMinutes: 0.001,
       issuedBy: "owner:test",
     });
@@ -106,7 +106,7 @@ describe("the command queue", () => {
     const cancel = issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
-      payload: {},
+      payload: { full: true },
       issuedBy: "owner:test",
     });
     const r = await control.request(`/v1/commands/${cancel.id}/cancel`, {
@@ -117,7 +117,7 @@ describe("the command queue", () => {
     const keep = issueCommand(store, env.keys.privateKeyPem, {
       rig: "rig-a",
       kind: "export_now",
-      payload: {},
+      payload: { full: true },
       issuedBy: "owner:test",
     });
     assert.deepEqual(

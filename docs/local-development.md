@@ -31,7 +31,7 @@ git clone https://github.com/iammrduncan/thermite.git
 cd thermite
 npm ci
 npm run dev:init         # writes local tokens to .dev/ (git-ignored)
-npm run build            # the command line on your computer: npx thermite
+npm run build            # the command line on your computer: npx thermite (a build older than the source runs the source, and says so)
 docker compose up -d --build     # or: podman compose up -d --build
 ```
 

@@ -56,7 +56,7 @@ describe("the rig's disk floor (goal 173)", () => {
       /an export waits: the rig's disk is at its floor/,
     );
     await env.service.applyCommand(env.assign);
-    const out = await env.service.applyCommand(env.sign("export_now", {}));
+    const out = await env.service.applyCommand(env.sign("export_now", { full: true }));
     assert.ok(out.status === "applied" && !out.accepted, JSON.stringify(out));
     assert.match(JSON.stringify(out), /disk is at its floor/);
 
