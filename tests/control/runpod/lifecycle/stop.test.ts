@@ -6,6 +6,7 @@ import {
   exportName,
   exportOnControl,
   harnessApplies,
+  harnessExportsNoRun,
   harnessRefusesExport,
   pendingOf,
   supervisorReports,
@@ -71,6 +72,19 @@ describe("RunPod rigs: stop", () => {
     assert.equal(audit.find((a) => a.action === "runpod_rig_stop")?.actor, "owner:api");
     const stoppedAudit = audit.find((a) => a.action === "runpod_rig_stopped");
     assert.equal((stoppedAudit?.body as { why?: string } | undefined)?.why, "owner");
+  });
+
+  test("with every run closed, the stop exports nothing, and the pod stops once nothing waits", async () => {
+    const s = setup();
+    const rig = await working(s);
+    await s.call(`/v1/rigs/${rig}/runpod/stop`, {});
+    harnessExportsNoRun(s.store, rig);
+    supervisorReports(s.store, rig);
+    await s.advance();
+    await s.advance();
+    assert.deepEqual(s.cloud.stops(), [{ action: "stop" }]);
+    const v = s.view(rig);
+    assert.deepEqual([v.status, v.last_export, v.last_export_left], ["EXITED", null, true]);
   });
 
   test("stops all the same when the export fails or takes too long: the volume keeps the rest", async () => {

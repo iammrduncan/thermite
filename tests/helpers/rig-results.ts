@@ -26,6 +26,15 @@ export function harnessApplies(store: ControlStore, rig: string, name: string): 
     });
 }
 
+/** The harness applied every command waiting; an export of each open run found every run closed. */
+export function harnessExportsNoRun(store: ControlStore, rig: string): void {
+  for (const c of pendingOf(store, rig))
+    answerCommand(store, rig, c.id, "delivered", {
+      source: "harness",
+      result: c.kind === "export_now" ? { export: null, exports: [], through_event: 9 } : {},
+    });
+}
+
 /** The harness refused the rig's waiting export_now, in its signed outcome. */
 export function harnessRefusesExport(store: ControlStore, rig: string): void {
   for (const c of pendingOf(store, rig))

@@ -294,6 +294,8 @@ export interface RunView {
   };
   status: string;
   pause_reason: string | null;
+  /** When its status last changed: when a closed run ended. Null before its first change. */
+  status_at: string | null;
   champion: ChampionStep[];
   /** The owner's withdrawals of evidence in the run (goal 174), oldest first. */
   invalidations: InvalidationView[];

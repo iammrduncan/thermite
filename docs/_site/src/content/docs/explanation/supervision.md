@@ -242,7 +242,7 @@ A closed run's audits are no one's to decide: the auditor gets none of them, the
 - A run's **Experiments** tab shows who added each experiment, such as **teachers** or **auditor**, and its **Planner** tab shows the rules in force, with who set each.
 - **Needs you**, on the **Overview** page, lists the auditor's blocks; the changes and reviews the run asks you about; the changes the auditor sent you or could not answer; and audits held on a rig with no auditor. It leaves out a closed run's.
 - The rig's page has an **Advisors** row with their counts and spending.
-- Once a day, the supervisor sends control a **daily report** that code writes, not a model: each open run's champion, recent verdicts, directions and directives, then the supervisor's exports and the advisors' work. It is on **Reports** in the sidebar, and over MCP with `rig_reports`.
+- Once a day, the supervisor sends control a **daily report** that code writes, not a model: each open run's champion, recent verdicts, directions and directives, then the supervisor's exports and the advisors' work. It is over MCP with `rig_reports` and REST's `GET /v1/reports`; the dashboard's **Reports** page shows each finished run's report instead ([Reports](../reference/reports.md)).
 
 ## Spending
 

@@ -240,7 +240,7 @@ A full reset gives a rig a clean start: it exports everything, checks that the e
 
 1. On the rig's page, open the **⋯** menu. Under **Full reset**, type `reset rig-1` and press **Start the full reset**. For a rig launched on RunPod, the **Full reset** box is under **The pod**.
 
-   You land on **Reports**, a page in the sidebar. The **Full resets** table shows the rig and its state. Press **refresh** in the status bar, the line along the bottom of the page, to follow it.
+   You stay on the rig's page. A card at its top, **A full reset is under way**, shows the reset's state and its **Detail**. Press **refresh** in the status bar, the line along the bottom of the page, to follow it.
 
 2. Control goes through these states. Each must finish within its time limit, or the reset fails:
 
@@ -265,7 +265,7 @@ A full reset gives a rig a clean start: it exports everything, checks that the e
 
    For a rig that sends its exports to control, the **Detail** says `export <name> is on control, every file checked against its manifest; check it there (GET /v1/rigs/<rig>/exports/<name>), then confirm the wipe`. Find that export on the **Exports** page, or read its listing as in [Get a rig's results from control](exports-on-control.md#the-scripted-way): it is complete (`complete_at` is set), and its kind is `full` (`full` is `true`).
 
-4. Press **Confirm the wipe**, on **Reports** or in the **Wipe** item of **Needs you**. To stop instead, press **Cancel** on **Reports** or **Cancel the reset** in **Needs you**. You can cancel until the wipe starts.
+4. Press **Confirm the wipe**, on the rig's card or in the **Wipe** item of **Needs you**. To stop instead, press **Cancel the reset** on either. You can cancel until the wipe starts.
 
 5. When the reset is `done`, the rig starts again with an empty ledger. Its old runs no longer show on its page or on the leaderboard. They stay on their campaigns' pages, under **Earlier runs**, marked `before <rig>'s full reset`: each opens like any run, with its attempts, its history and its champions' patches, from the events control keeps. They take no more commands. Start new campaigns on it as usual, and check **Edit rig**: the choices made there are wiped, and the rig is back to its defaults.
 

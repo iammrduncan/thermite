@@ -9,8 +9,9 @@ import {
 } from "../exports.ts";
 import { AUDIT_ACTORS, AUDIT_KINDS, cursorOf } from "../store/index.ts";
 import { AUDIT_DEFAULT_KINDS, AUDIT_PAGE, type AuditQuery, auditBody } from "../ui/audit.ts";
-import { ago, avatar, esc, icon, meter, pct, valuesPairWords } from "../ui/components/index.ts";
+import { avatar, esc, icon, meter, pct, valuesPairWords } from "../ui/components/index.ts";
 import { exportRun, exportsBody, exportsHref, pickedExport } from "../ui/exports.ts";
+import { reportsBody, reportsQuery } from "../ui/reports.ts";
 import { runHref } from "../ui/urls.ts";
 import { leaderboard } from "../views/index.ts";
 import { backTo, type Dashboard } from "./context.ts";
@@ -182,35 +183,18 @@ export function recordRoutes(app: Hono, dash: Dashboard): void {
     ),
   );
 
+  // Reports (goal 181): what each finished run produced, newest first.
   app.get("/ui/reports", (c) => {
-    const now = Date.now();
-    const t = csrf(c);
-    const act = (id: unknown, what: string, label2: string, primary = false) =>
-      `<form class="inline" method="post" action="/ui/resets/${esc(id)}/${what}"><input type="hidden" name="csrf" value="${t}"><button class="sm${primary ? " primary" : ""}">${label2}</button></form>`;
-    const resets = store.fullResets
-      .list(20)
-      .map(
-        (r) =>
-          `<tr><td><b>${esc(r.rig)}</b></td><td><span class="chip ${String(r.state) === "done" ? "ok" : String(r.state) === "failed" ? "bad" : "warn"}">${esc(r.state)}</span></td><td class="clip">${esc(r.detail ?? "")}</td><td class="muted nowrap">${esc(ago(String(r.updated_at), now))} ago</td>
-<td class="num">${String(r.state) === "awaiting_owner" ? act(r.id, "confirm", "Confirm the wipe", true) : ""} ${["start", "quiescing", "exporting", "verifying", "awaiting_owner"].includes(String(r.state)) ? act(r.id, "cancel", "Cancel") : ""}</td></tr>`,
-      )
-      .join("");
-    const rows = store.rigReports
-      .list(30)
-      .map(
-        (r) =>
-          `<div class="card"><div class="card-head">${avatar(r.rig)}<span class="title">${esc(r.rig)}</span><span class="sub">${esc(r.kind)} report</span><span class="right muted small">${esc(ago(r.at, now))} ago</span></div><pre class="report" style="margin-top:10px">${esc(r.body)}</pre></div>`,
-      )
-      .join("");
+    const vs = views();
+    const query = reportsQuery(
+      (k) => c.req.query(k),
+      (k) => (c.req.queries(k) ?? []).filter(Boolean),
+    );
     return page(
       c,
-      {
-        title: "Reports",
-        summary: "daily reports from each rig's supervisor, and full resets",
-        active: "reports",
-      },
-      `${resets ? `<div class="block"><div class="head"><h2>Full resets</h2></div><div class="card flat"><table><thead><tr><th>Rig</th><th>State</th><th>Detail</th><th>Updated</th><th></th></tr></thead><tbody>${resets}</tbody></table></div></div>` : ""}
-<div class="block"><div class="head"><h2>Daily reports</h2></div>${rows || `<div class="card"><div class="empty">No daily report yet.</div></div>`}</div>`,
+      { title: "Reports", summary: "what each finished run produced", active: "reports" },
+      reportsBody({ views: vs, query }),
+      vs,
     );
   });
 }

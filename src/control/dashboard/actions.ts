@@ -40,6 +40,11 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
       : c.json({ error: "not found" }, 404);
   });
 
+  // A reset's Confirm and Cancel, from its rig's page or Needs you: back to the rig's page.
+  const resetRig = (id: number) => {
+    const r = store.fullResets.list(200).find((x) => Number(x.id) === id);
+    return r ? `/ui/rigs/${encodeURIComponent(String(r.rig))}` : "/ui";
+  };
   app.post("/ui/resets/:id/confirm", async (c) => {
     try {
       confirmReset(store, Number(c.req.param("id")), "owner:ui");
@@ -52,7 +57,7 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
     } catch (err) {
       return c.text(`refused: ${errorText(err)}`, 400);
     }
-    return c.redirect("/ui/reports", 303);
+    return c.redirect(resetRig(Number(c.req.param("id"))), 303);
   });
 
   // The owner's choice at a drain's deadline, on any rig (goal 173): the change now, stopping what
@@ -78,7 +83,7 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
     } catch (err) {
       return c.text(`refused: ${errorText(err)}`, 400);
     }
-    return c.redirect("/ui/reports", 303);
+    return c.redirect(resetRig(Number(c.req.param("id"))), 303);
   });
 
   // A stuck trial the owner leaves running (goal 143): its card stays away until it is stuck again.
@@ -175,6 +180,6 @@ export function actionRoutes(app: Hono, dash: Dashboard): void {
     } catch (err) {
       return c.text(`refused: ${errorText(err)}`, 400);
     }
-    return c.redirect("/ui/reports", 303);
+    return c.redirect(`/ui/rigs/${encodeURIComponent(rig)}`, 303);
   });
 }

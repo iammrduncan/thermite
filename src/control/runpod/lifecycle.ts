@@ -421,9 +421,10 @@ export class RunpodLifecycle {
 
   /** Waits until the op's export and every result with it have left the pod, then acts. */
   private async leave(r: StoredRunpodRig, s: RigState, key: string, op: RigOp): Promise<boolean> {
-    const name = op.export as string;
+    // A stop with every run closed asked for no export (goal 180): it waits only for what waits.
+    const name = op.export ?? undefined;
     const all = resultsLeft(this.store, r.rig, { export: name });
-    const never = exportLeft(this.store, r.rig, name).never;
+    const never = name !== undefined && exportLeft(this.store, r.rig, name).never;
     const nowMs = this.now();
     if (op.kind === "stop") {
       if (all.left) {

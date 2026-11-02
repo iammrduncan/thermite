@@ -14,6 +14,7 @@ export function emptyRun(id: string): RunView {
     ask_owner: {},
     status: "unknown",
     pause_reason: null,
+    status_at: null,
     champion: [],
     invalidations: [],
     attempts: [],
@@ -123,6 +124,7 @@ export const RUNS: Handlers = {
     const v = f.run(String(e.subject));
     v.status = String(b.status);
     v.pause_reason = (b.reason as string | null) ?? null;
+    v.status_at = e.at;
     if (v.status === "running") f.running = v.id;
     else if (f.running === v.id) f.running = null;
   },

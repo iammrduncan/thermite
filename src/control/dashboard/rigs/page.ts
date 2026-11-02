@@ -36,6 +36,7 @@ import { diskBanner, diskFree } from "../../ui/rigs/disk.ts";
 import { drainView } from "../../ui/rigs/drain.ts";
 import { busKeysHtml } from "../../ui/rigs/keys.ts";
 import { rigReachHtml, slotIngressWarning } from "../../ui/rigs/reach.ts";
+import { resetCard } from "../../ui/rigs/reset.ts";
 import {
   HISTORY_FILTERS,
   podBlock,
@@ -445,6 +446,8 @@ ${
 }
 <div class="divider" style="margin:2px 0"></div>
 ${retireForm}</div></details>`;
+    // A full reset under way, with Cancel, or Confirm once it waits for the owner (goal 181).
+    const resetNow = store.fullResets.open(u.id);
     return page(
       c,
       {
@@ -455,7 +458,7 @@ ${retireForm}</div></details>`;
         active: "rigs",
       },
       `<p class="run-said" data-part="said">${said}</p>
-${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Control can't read ${esc(u.id)}'s events now.</b> ${esc(u.unreadable)}. Until it can, its runs, checks and the judge's jobs are not shown here; the rest of this page is from its last report. Every other rig's pages are as they were.</div>` : ""}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc(updateProgress(u.id).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}</div>${keyCard}
+${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Control can't read ${esc(u.id)}'s events now.</b> ${esc(u.unreadable)}. Until it can, its runs, checks and the judge's jobs are not shown here; the rest of this page is from its last report. Every other rig's pages are as they were.</div>` : ""}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc(updateProgress(u.id).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}${resetNow ? resetCard(resetNow, t, now) : ""}</div>${keyCard}
 ${rp ? podSection(c, u.id, now) : ""}
 <div data-part="at-work">${runsNow ? `<div class="block"><div class="head"><h2>At work</h2><span class="n">${live.length}</span></div>${runsNow}</div>` : ""}</div>
 <div class="cols run-cols"><div>

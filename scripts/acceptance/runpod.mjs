@@ -15,7 +15,8 @@
 //   enroll     control enrolls the pod through the proxy and pins its keys;
 //   report     the supervisor registers its keys through the proxy, and the rig's reports reach
 //              control on the bus, through the pod's leaf node;
-//   stop       the runs are paused, an export leaves the pod for control, the stop takes a
+//   stop       the runs are paused, each open run's export leaves the pod (this pod runs none, so
+//              it asks for none), the stop takes a
 //              snapshot of the state onto the volume, sealed with the pod's snapshot key from
 //              the launch, then the pod stops; nothing on the volume was ever given an owner but
 //              root, and nothing there is in plain text;
@@ -376,12 +377,12 @@ try {
     const v = rigs.view(rig);
     return v?.status === "EXITED" && !v.op ? v : undefined;
   });
-  const stopExport = stopped.last_export;
+  // A stop exports each run that is not closed (goal 180); this pod runs none, so it asks for
+  // no export, and stops once nothing waits on it. The terminate below proves an export leaving.
   check(
-    "its export left the pod for control before the pod stopped",
-    stopped.last_export_left === true &&
-      Boolean(store.exports.get(rig, /** @type {string} */ (stopExport))?.complete_at),
-    `${stopExport}: ${JSON.stringify(store.rigHistory.list(rig).at(-1)?.detail)}`,
+    "with no run open, the stop asked for no export, and the pod stopped once nothing waited",
+    stopped.last_export === null && stopped.last_export_left === true,
+    `${stopped.last_export}: ${JSON.stringify(store.rigHistory.list(rig).at(-1)?.detail)}`,
   );
   check(
     "the pod's container stopped cleanly",

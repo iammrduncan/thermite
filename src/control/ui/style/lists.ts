@@ -64,4 +64,13 @@ details.menu > summary::-webkit-details-marker { display: none; }
 .flt-clear { font-size: 12px; color: var(--muted-foreground); }
 .flt-pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
 .flt-pages { display: flex; gap: 6px; }
-.flt-pages [aria-disabled="true"] { opacity: .45; pointer-events: none; }`;
+.flt-pages [aria-disabled="true"] { opacity: .45; pointer-events: none; }
+
+/* Reports: each finished run's card */
+.rp-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.rp-bar .flt { margin-bottom: 0; }
+.rp-list { display: grid; gap: 10px; margin-top: 12px; }
+.rp-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.rp-when { margin-left: auto; }
+.rp-head { margin: 6px 0 2px; font-size: 15px; }
+.rp-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }`;
