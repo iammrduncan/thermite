@@ -133,6 +133,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [182](goals/_completed/182-campaigns-and-kits-for-agents.goal) Campaigns and kits for agents: a kit from git, grants that reach running runs, the metrics a contract uses · `VERIFIED`
 - [183](goals/183-advisors-take-their-message.goal) A program in its terminal takes its message: typed in when ready, a message never taken ends the run, audits never wait behind the teachers · `IN_PROGRESS`
 - [184](goals/184-guards-beside-the-main-metric.goal) A hill climb's guards beside its main metric: in each verdict, under each champion, beside each attempt · `IN_PROGRESS`
+- [187](goals/187-type-into-the-terminal.goal) Type straight into an agent's terminal on Live: keys as you press them, one terminal filling the pane · `IN_PROGRESS`
 - [185](goals/185-a-runs-work-in-git.goal) A run's work in git: a branch for its champions, one for each lane, and new campaigns from a champion's commit · `IN_PROGRESS`
 - [173](goals/_completed/173-recovery-and-health.goal) Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks · `VERIFIED`
 - [174](goals/_completed/174-invalidate-evidence.goal) Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows · `VERIFIED`

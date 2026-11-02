@@ -70,6 +70,8 @@ const TAKE_MS = 60_000;
 const SCREEN_SHOWN = 6;
 /** The lines above the screen kept at the end, for the live view after the trial. */
 const SCREEN_SCROLLBACK = 500;
+/** The lines above the screen a live frame carries, so the live view scrolls back through them. */
+const LIVE_SCROLLBACK = 300;
 /** The last text of this many turns is kept, newest last, for a call's answer (turnTexts). */
 const TURN_TEXTS_KEPT = 50;
 
@@ -591,6 +593,17 @@ export class RoleTerminal<T extends CliTally> {
     );
   }
 
+  /** Keys as the owner pressed them on Live (goal 187): to the program as they came. */
+  async ownerRaw(data: string): Promise<void> {
+    const host = this.host;
+    if (this.stopping) throw new Refusal(`${this.p.name} is being ended: nothing more goes in`);
+    if (!host)
+      throw new Refusal(
+        `${this.p.name} is not running now: it starts again in its session at its next turn, if it has one`,
+      );
+    await this.typed(() => host.raw(data));
+  }
+
   /**
    * The program's screen now, for the live view, or its last one once it has ended; undefined
    * before it drew one. Only ever shown: no decision reads it.
@@ -599,7 +612,7 @@ export class RoleTerminal<T extends CliTally> {
     const host = this.host;
     if (host && !this.stopping) {
       try {
-        return await host.snapshot(0);
+        return await host.snapshot(LIVE_SCROLLBACK);
       } catch {
         // It ended meanwhile: its last screen.
       }

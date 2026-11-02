@@ -40,6 +40,11 @@ export const ScreenFrame = z.object({
    * takes words (to steer, or as a follow-up), Esc and the Pi view's commands.
    */
   pi_view: z.literal(true).optional(),
+  /**
+   * A line the owner typed on Live whose Enter is held (goal 187): it starts with `!` or runs
+   * /login, /logout, /config or /permissions, and a second Enter sends it.
+   */
+  held: z.string().max(500).optional(),
   /** When the harness took it. */
   at: z.string().max(40),
 });
@@ -47,6 +52,18 @@ export type ScreenFrame = z.infer<typeof ScreenFrame>;
 
 /** The watched trials one ask names. */
 export const WatchedTrials = z.array(TerminalId).max(SCREENS_WATCHED_MAX);
+
+/**
+ * Keys the owner pressed on Live (goal 187), as control hands them to the rig in its answer to
+ * the `screens` ask: for which terminal, and the keys as a browser's terminal sends them.
+ */
+export const KEYS_MAX = 4096;
+export const PressedKeys = z
+  .array(z.object({ trial: TerminalId, data: z.string().min(1).max(KEYS_MAX) }))
+  .max(64);
+export type PressedKeys = z.infer<typeof PressedKeys>;
+/** How soon the supervisor asks again while the owner types: the echo comes back with it. */
+export const SCREENS_TYPING_MS = 200;
 
 /** The most bytes of one ask of frames: every watched screen at its largest, as JSON. */
 export const SCREENS_MAX_BYTES = SCREENS_WATCHED_MAX * SCREEN_DATA_MAX * 6 + 64 * 1024;

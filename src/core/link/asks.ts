@@ -3,7 +3,7 @@ import { SupervisorFigures } from "../api/control/rigs.ts";
 import { RIG_ID } from "../ids.ts";
 import { KB_FILES_HELD_MAX, KbFileSha256 } from "../kb/index.ts";
 import { RigSpace } from "../retention/index.ts";
-import { SCREENS_WATCHED_MAX, ScreenFrame, WatchedTrials } from "../screens.ts";
+import { PressedKeys, SCREENS_WATCHED_MAX, ScreenFrame, WatchedTrials } from "../screens.ts";
 import { ReportPlace } from "./report.ts";
 
 /**
@@ -85,7 +85,12 @@ export const RIG_ASKS = {
   },
   screens: {
     body: z.object({ frames: z.array(ScreenFrame).max(SCREENS_WATCHED_MAX) }),
-    answer: z.looseObject({ watch: WatchedTrials }),
+    // With the keys the owner pressed on Live since (goal 187); `soon`: ask again soon, the owner types.
+    answer: z.looseObject({
+      watch: WatchedTrials,
+      keys: PressedKeys.optional(),
+      soon: z.boolean().optional(),
+    }),
   },
   daily: {
     body: z.object({ kind: z.enum(["daily"]), body: z.string().min(1).max(REPORT_MAX_CHARS) }),

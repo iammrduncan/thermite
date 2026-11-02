@@ -178,6 +178,11 @@ export class Terminal {
     await this.ask({ op: "keys", keys }, Done);
   }
 
+  /** Keys as the owner pressed them on Live (goal 187). */
+  async raw(data: string): Promise<void> {
+    await this.ask({ op: "raw", data }, Done);
+  }
+
   /** The program's own steps to interrupt the agent's turn. */
   async interrupt(): Promise<void> {
     await this.ask({ op: "interrupt" }, Done);

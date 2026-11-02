@@ -65,7 +65,13 @@ export function answerRigAsk(
     case "screens": {
       const { frames } = RIG_ASKS.screens.body.parse(raw);
       d.screens.take(rig, frames);
-      return { watch: d.screens.watched(rig) };
+      // With the keys the owner pressed since (goal 187), and, while the owner types, a sooner ask.
+      const keys = d.screens.takeKeys(rig);
+      return {
+        watch: d.screens.watched(rig),
+        ...(keys.length ? { keys } : {}),
+        ...(d.screens.typing(rig) ? { soon: true } : {}),
+      };
     }
     case "daily": {
       const b = RIG_ASKS.daily.body.parse(raw);

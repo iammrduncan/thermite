@@ -5,7 +5,7 @@ import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { errorText } from "../../../common/errors.ts";
 import { log } from "../../../common/log.ts";
-import { SCREENS_WATCHED_MAX, type ScreenFrame } from "../../../core/screens.ts";
+import { KEYS_MAX, SCREENS_WATCHED_MAX, type ScreenFrame } from "../../../core/screens.ts";
 import {
   confirmFirst,
   inputWords,
@@ -125,11 +125,24 @@ function inputs(dash: Dashboard, rig: string, run: string, trial: string): TermI
       .filter((e) => e.body.outcome === "typed_after_reset" || e.body.outcome === "dropped")
       .map((e) => [String(e.body.command), e.body]),
   );
-  return dash.store.commands
+  const sent = dash.store.commands
     .latest(rig, "terminal_input", 200)
     .filter((cmd) => cmd.payload.trial === trial)
     .slice(0, INPUTS_LISTED)
     .map((cmd) => ({ at: cmd.issued_at, ...inputOf(cmd.payload), ...outcomeOf(cmd, later, now) }));
+  // The lines typed straight into the terminal on Live (goal 187), each recorded at its Enter.
+  const typed: TermInputRow[] = timeline
+    .filter(
+      (e) => e.kind === "terminal_input" && e.body.trial === trial && e.body.command === "live",
+    )
+    .map((e) => ({
+      at: e.at,
+      words: String(e.body.text ?? ""),
+      keys: false,
+      outcome: "typed on Live",
+      tone: "ok" as const,
+    }));
+  return [...sent, ...typed].sort((a, b) => b.at.localeCompare(a.at)).slice(0, INPUTS_LISTED);
 }
 
 /** A trial's terminal as a page shows it: its frames' address, its console's, its inputs. */
@@ -141,6 +154,8 @@ function terminalPaneOf(
   return {
     stream: `${rigHref(o.rig)}/live/screen?trial=${encodeURIComponent(o.trial)}`,
     action: `${rigHref(o.rig)}/live/terminal`,
+    // A trial's terminal takes keys on Live (goal 187); a planner's or an advisor's call, lines.
+    keys: /^t-[0-9a-f]+$/.test(o.trial) ? `${rigHref(o.rig)}/live/keys` : "",
     csrf: dash.csrf(c),
     run: o.run,
     trial: o.trial,
@@ -242,6 +257,27 @@ export function terminalRoutes(app: Hono, dash: Dashboard): void {
         stop();
       }
     });
+  });
+
+  // Keys the owner pressed into a watched terminal on Live (goal 187): queued for the rig, which
+  // takes them with its next ask for screens. The page batches them as they come.
+  app.post("/ui/rigs/:rig/live/keys", async (c) => {
+    const f = await c.req.parseBody();
+    const rig = c.req.param("rig");
+    const trial = String(f.trial ?? "");
+    const data = String(f.data ?? "");
+    if (!store.reportedRigs.listed(rig)) return c.json({ error: "no such rig" }, 404);
+    if (!TERMINAL_ID.test(trial) || !data || data.length > KEYS_MAX)
+      return c.json({ error: "not keys for a terminal" }, 400);
+    if (!parts.screens.press(rig, trial, data))
+      return c.json(
+        {
+          error:
+            "Not sent: this terminal is not watched now, or too many keys wait. Load the page again.",
+        },
+        409,
+      );
+    return c.json({ ok: true });
   });
 
   // The console: one input into a trial's or a planner's call's terminal, as the owner's signed

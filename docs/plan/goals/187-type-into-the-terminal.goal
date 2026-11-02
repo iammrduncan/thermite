@@ -1,0 +1,42 @@
+---
+id: "187"
+title: "Type straight into an agent's terminal on Live: keys as you press them, one terminal filling the pane"
+status: IN_PROGRESS
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 187 · Type straight into an agent's terminal on Live: keys as you press them, one terminal filling the pane
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011)
+
+## What
+
+From the owner's testing on the lab, 2026-11-02: "this looks funky, no scroll back, not the full terminal. its stuck inside a pane inside a pane inside a pane inside a pane", then "I would expect to see the input box for the actual terminal TUI... not a separate one. Why can't I just interact with the terminal TUI directly?"
+
+A run's Live showed each lane's terminal as a small card with its own scrolling box and a console form under it, and the screen carried no scrollback. Typing went in as a signed `terminal_input` command, one per message, in a box apart from the program's own input.
+
+1. **Scrollback.** A live frame carries 300 lines above the screen, and the page keeps a viewer's place when a new frame comes.
+2. **One terminal filling the pane.** The Terminals view has a tab for each lane and **Side by side**; the terminal fills the run's pane, scaled to fit its width, with no card inside a card. Your inputs are a small menu in the terminal's bar.
+3. **Type straight into it.** Click the terminal and type: each key goes to the program as you press it, and the program's own input box shows it. Keys travel with the screens: control queues them, the rig's supervisor takes them with its next screens ask and hands them to the harness, which writes them to the program's terminal; while the owner types, control asks the supervisor to come back sooner. Each line is recorded at Enter, as a `terminal_input` event. An Enter on a line that starts with `!` or runs `/login`, `/logout`, `/config` or `/permissions` is held: the screen says so, and a second Enter sends it. A worker in Pi's view keeps its typed lines.
+4. **The message bar** at the bottom stays for messages only (everyone working, the planner).
+
+## Done when
+
+- [ ] The four, with their tests and the pages that describe them, and the terminal and control acceptance checks pass.
+
+## Decisions
+
+- 2026-11-02, owner: "Type directly into it": keys go straight to the program; recorded per line at each Enter; a held Enter for a risky line; keys over control's link to the rig instead of one signed command per message (this replaces goal 169's signed `terminal_input` for typing into a terminal; the Pi view keeps its typed lines).
+- 2026-11-02, owner, on the layout mockup (https://claude.ai/artifact/YKsUG3VzdBXcbLHwhkxwXZ): simpler, one input bar, no separate console.
+
+## Progress
+
+- 2026-11-02: Goal written. Scrollback built: RoleTerminal.screen() takes 300 lines above the screen (LIVE_SCROLLBACK), and the page's script keeps a viewer's place, counted from the bottom.
+- 2026-11-02: Built (no tests run on the Mac, at the owner's request). The terminal host's `raw` op writes keys as pressed (agents/terminal); RoleTerminal.ownerRaw; TrialConsole.keystrokes keeps the line the keys make up (an escape is a key, a pasted block's line breaks are text) and tells each at its Enter, holding an Enter on a CONFIRM_FIRST line once (`held`, which the frame carries). The harness's consoles record each line as a `terminal_input` event with `command: "live"`; its route TERMINAL_KEYS takes the keys from the supervisor. Control's Screens keeps keys for watched terminals (press, takeKeys, typing), its `screens` answer carries them with `soon`, and the supervisor hands them to the harness and asks again within SCREENS_TYPING_MS while the owner types. The page: a tab for each terminal and Side by side, the chosen terminal filling the pane and scaled to fit its width, keys taken where the pane names where they go (a trial's; the planner's and the advisors' calls and a Pi view keep the field of typed lines), Your inputs as a menu in its bar, lines typed on Live among them. Tests in tests/agents/cli/keystrokes.test.ts and tests/control/dashboard/terminal.test.ts.
+
+---
+
+Run with `/goal Complete docs/plan/goals/187-type-into-the-terminal.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

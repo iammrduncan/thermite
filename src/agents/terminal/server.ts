@@ -15,7 +15,7 @@ import { REQUEST_MAX, TerminalRequest } from "./protocol.ts";
 
 type Host = Pick<
   TerminalHost,
-  "status" | "type" | "sendKeys" | "interrupt" | "screenText" | "screenSnapshot" | "end"
+  "status" | "type" | "sendKeys" | "raw" | "interrupt" | "screenText" | "screenSnapshot" | "end"
 >;
 
 type Request = z.infer<typeof TerminalRequest>;
@@ -30,6 +30,9 @@ async function answer(host: Host, r: Request): Promise<object> {
       return {};
     case "keys":
       await host.sendKeys(r.keys);
+      return {};
+    case "raw":
+      await host.raw(r.data);
       return {};
     case "interrupt":
       await host.interrupt();

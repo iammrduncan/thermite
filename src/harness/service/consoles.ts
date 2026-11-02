@@ -159,6 +159,29 @@ export class TerminalConsoles {
   }
 
   /**
+   * Keys the owner pressed on Live into a running trial's terminal (goal 187), from control by way
+   * of the supervisor: to its program as they came. Each line, at its Enter, is a `terminal_input`
+   * event with the line word for word (`command: "live"`). Refused in words for a terminal that
+   * takes no keys here: none, headless, ended, an advisor's call, or a worker's Pi view.
+   */
+  async keystrokes(trial: string, data: string, by: string): Promise<void> {
+    const c = this.open.get(trial) as Partial<TrialConsole> | "headless" | undefined;
+    const t = this.svc.ledger.trials.get(trial);
+    if (!t || !c || c === "headless" || typeof c.keystrokes !== "function")
+      throw new LedgerError("conflict", `${trial} has no terminal here that takes keys`);
+    await c.keystrokes(data, (text) => {
+      this.svc.ledger.appendEvent(by, "terminal_input", t.run, {
+        command: "live",
+        trial,
+        lane: t.lane,
+        text,
+        wait: "now",
+        outcome: "typed",
+      });
+    });
+  }
+
+  /**
    * terminal_input: the owner's input into one running trial's terminal, or a call's, typed now or
    * queued for its usage window's reset. Each outcome is a `terminal_input` event with the input
    * word for word: refused (with why), typed or queued now, and later typed after the reset or

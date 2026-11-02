@@ -6,7 +6,7 @@ import { KbAskAnswer, KbReadAsk, KbSearchAsk } from "../../link/kb.ts";
 import { McpConnection, McpUnavailable } from "../../mcp.ts";
 import { RetentionRemoved, SpaceInventory } from "../../retention/index.ts";
 import { PROGRAM_MODES } from "../../rig-settings.ts";
-import { ScreenFrame, WatchedTrials } from "../../screens.ts";
+import { PressedKeys, ScreenFrame, WatchedTrials } from "../../screens.ts";
 import { ControlRoute } from "../model-route.ts";
 import type { Route } from "../route.ts";
 
@@ -248,6 +248,22 @@ export const LIVE_MESSAGES = {
  * The screens of the trials control's viewers watch (goal 169; core/screens.ts): a running trial's
  * now, an ended one's last. For the live view only: nothing records them.
  */
+/**
+ * Keys the owner pressed on Live (goal 187), which control handed the supervisor with its answer
+ * to the `screens` ask: each to its trial's terminal, in order. A terminal that takes no keys here
+ * is named in `refused`, with why; the others went in.
+ */
+export const TERMINAL_KEYS = {
+  method: "POST",
+  path: "/v1/terminal-keys",
+  what: "terminal keys",
+  body: z.object({ keys: PressedKeys }),
+  answer: z.looseObject({
+    refused: z.array(z.object({ trial: z.string(), why: z.string() })),
+  }),
+  maxBytes: 512 * 1024,
+} as const satisfies Route;
+
 export const SCREENS = {
   method: "POST",
   path: "/v1/screens",

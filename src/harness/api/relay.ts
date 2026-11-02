@@ -1,4 +1,5 @@
 import type { Context, Hono } from "hono";
+import { errorText } from "../../common/errors.ts";
 import {
   COMMAND_CHECK,
   COMMAND_UNSTAGED,
@@ -12,6 +13,7 @@ import {
   SNAPSHOT_PAGE_DEFAULT,
   SNAPSHOT_PAGE_MAX,
   SPACE,
+  TERMINAL_KEYS,
 } from "../../core/api/harness/supervisor.ts";
 import { LIVE_BATCH_MAX } from "../../core/live.ts";
 import { recordRemoved, spaceOf } from "../retention.ts";
@@ -74,6 +76,16 @@ export function liveRoutes(app: Hono, { service, supervisor }: ApiContext): void
   app.post(SCREENS.path, supervisor, limitOf(SCREENS), async (c) => {
     const { trials } = SCREENS.body.parse(await c.req.json());
     return c.json({ screens: await service.consoles.screens(trials) });
+  });
+  // The keys the owner pressed on Live (goal 187), each to its trial's terminal, in order.
+  app.post(TERMINAL_KEYS.path, supervisor, limitOf(TERMINAL_KEYS), async (c) => {
+    const { keys } = TERMINAL_KEYS.body.parse(await c.req.json());
+    const refused: { trial: string; why: string }[] = [];
+    for (const k of keys)
+      await service.consoles
+        .keystrokes(k.trial, k.data, "owner:live")
+        .catch((err) => refused.push({ trial: k.trial, why: errorText(err) }));
+    return c.json({ refused });
   });
 }
 

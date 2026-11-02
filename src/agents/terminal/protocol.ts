@@ -25,6 +25,8 @@ export const SCROLLBACK_MAX = 10_000;
 export const TEXT_MAX = 64 * 1024;
 /** The most keys in one request. */
 export const KEYS_MAX = 64;
+/** The most characters of keys pressed one request carries (the owner typing on Live, goal 187). */
+const RAW_MAX = 4096;
 /** The most bytes of one request's line; a longer one is refused. */
 export const REQUEST_MAX = 2 * TEXT_MAX + 4096;
 /** The most bytes of one answer's line the harness reads (a snapshot with its scrollback). */
@@ -107,6 +109,8 @@ export const TerminalRequest = z.discriminatedUnion("op", [
     secret,
     keys: z.array(z.enum(TERMINAL_KEYS)).min(1).max(KEYS_MAX),
   }),
+  /** Keys as the owner pressed them on Live, as a browser's terminal sends them (goal 187). */
+  z.object({ op: z.literal("raw"), secret, data: z.string().min(1).max(RAW_MAX) }),
   /** The program's own steps to interrupt the agent's turn. */
   z.object({ op: z.literal("interrupt"), secret }),
   /** The screen as plain lines, or as a snapshot that restores it in a terminal of its size. */

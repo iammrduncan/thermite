@@ -129,12 +129,21 @@ describe("a trial's terminal on Live", () => {
     for (const k of TERMINAL_KEYS) assert.match(html, new RegExp(`name="key" value="${k}"`));
     assert.match(html, /<script src="\/ui\/assets\/xterm\.js" defer>/);
     assert.match(html, /Nothing typed yet/);
-    // The run's Live opens on each lane's terminal when the rig runs its programs in them (goal
-    // 181): one pane each, side by side, each with its console; the lines are a tab.
+    // A trial's terminal takes keys on Live (goal 187): where they go, and its typed console
+    // only for a Pi view.
+    assert.match(html, /data-keys="\/ui\/rigs\/rig-a\/live\/keys"/);
+    assert.match(html, /data-term-console hidden/);
+    // The run's Live opens on each lane's terminal when the rig runs its programs in them (goals
+    // 181, 187): a tab each and Side by side, the chosen terminal filling the pane; the lines are
+    // a tab of the run's own.
     const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
     assert.match(
       run,
-      /<div class="term-grid"><details class="term compact" open data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=t-0123456789abcdef" data-trial="t-0123456789abcdef"><summary><b>lane-1 · /,
+      /<div class="term-tabs" role="tablist"><button type="button" class="term-tab on" data-term-tab="t-0123456789abcdef">lane-1 · /,
+    );
+    assert.match(
+      run,
+      /<div class="term-area" data-term-area><section class="term" data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=t-0123456789abcdef" data-trial="t-0123456789abcdef"/,
     );
     assert.match(
       run,
@@ -147,7 +156,7 @@ describe("a trial's terminal on Live", () => {
     );
     const lines = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live?view=lines");
     assert.match(lines, /id="transcript"/);
-    assert.doesNotMatch(lines, /class="term-grid"/);
+    assert.doesNotMatch(lines, /class="term-area"/);
     const xterm = await s.owner.get("/ui/assets/xterm.js");
     assert.equal(xterm.status, 200);
     assert.equal(
@@ -160,7 +169,8 @@ describe("a trial's terminal on Live", () => {
     const js = await (await s.owner.get("/ui/assets/terminal.js")).text();
     assert.equal(js, TERMINAL_JS);
     assert.doesNotThrow(() => new Function(TERMINAL_JS));
-    assert.match(TERMINAL_JS, /disableStdin: true/);
+    // It takes keys only where the page names where they go (goal 187).
+    assert.match(TERMINAL_JS, /disableStdin: !keysTo/);
     assert.match(TERMINAL_JS, /linkHandler: \{ activate: \(\) => \{\} \}/);
   });
 
@@ -329,7 +339,7 @@ describe("a trial's terminal on Live", () => {
     const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
     assert.match(
       run,
-      /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=planner-js-1-2" data-trial="planner-js-1-2"><summary><b>planner<\/b>/,
+      /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=planner-js-1-2" data-trial="planner-js-1-2">\n<div class="term-bar"><b>planner<\/b>/,
     );
     const sent = await s.owner.post("/ui/rigs/rig-a/live/terminal", {
       csrf: s.owner.csrfOf(html),

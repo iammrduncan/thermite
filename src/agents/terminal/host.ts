@@ -329,6 +329,17 @@ export class TerminalHost {
     return this.input("text", (p) => this.text(p, text, enter));
   }
 
+  /**
+   * Keys as the owner pressed them on Live (goal 187), written as they came: a browser's terminal
+   * sends Enter as CR and the arrows as their escapes. Only NUL is taken out.
+   */
+  raw(data: string): Promise<void> {
+    this.note("keys pressed", { chars: data.length });
+    return this.input("keys pressed", async (p) => {
+      p.write(data.replaceAll("\u0000", ""));
+    });
+  }
+
   sendKeys(keys: readonly TerminalKey[]): Promise<void> {
     this.note("keys sent", { keys });
     return this.input("keys", (p) => this.keys(p, keys));

@@ -56,12 +56,7 @@
     "src/agents/terminal/client.ts": ["READY_MS", "TerminalRun"],
     "src/agents/terminal/host.ts": ["MIRROR_EVERY_MS"],
     "src/agents/terminal/mirror.ts": ["MIRROR_STEP_MAX", "MIRROR_MAX"],
-    "src/agents/terminal/protocol.ts": [
-      "DEFAULT_SCROLLBACK",
-      "SCROLLBACK_MAX",
-      "KEYS_MAX",
-      "END_HOWS"
-    ],
+    "src/agents/terminal/protocol.ts": ["DEFAULT_SCROLLBACK", "SCROLLBACK_MAX", "END_HOWS"],
     "src/agents/tools/fetcher.ts": ["FetchPolicy"],
     "src/agents/tools/kb.ts": ["KbToolInfo"],
     "src/agents/tools/notes.ts": ["writeNote"],

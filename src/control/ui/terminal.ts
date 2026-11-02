@@ -1,9 +1,4 @@
-import {
-  CONFIRM_FIRST,
-  TERMINAL_KEYS,
-  TERMINAL_TEXT_MAX,
-  type TerminalKey,
-} from "../../core/terminal-input.ts";
+import { TERMINAL_KEYS, TERMINAL_TEXT_MAX, type TerminalKey } from "../../core/terminal-input.ts";
 import { esc } from "./components/index.ts";
 
 /** The Pi view's commands, as every Pi view takes them (src/agents/pi-view/). */
@@ -44,26 +39,31 @@ const KEY_LABELS: Record<TerminalKey, string> = {
 
 /** The console's styles beside xterm.js's own; the page carries both, as CSP allows. */
 const TERM_STYLE = `
-.term { border-bottom: 1px solid var(--border); background: var(--card); }
-.term > summary { display: flex; align-items: center; gap: 8px; padding: 8px 16px; cursor: pointer; font-size: 13px; }
-.term-state { color: var(--muted-foreground); font-size: 12px; }
-.term-view { margin: 0 16px; padding: 6px; background: #0b0d10; border-radius: 8px; overflow: auto; max-height: 58vh; }
+.term-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--muted); overflow-x: auto; }
+.term-tab { border: 0; background: none; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--muted-foreground); border-bottom: 2px solid transparent; white-space: nowrap; }
+.term-tab.on { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
+.term-tabs .grow, .term-bar .grow { flex: 1; }
+.term-area { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 70vh; flex: 1; }
+.term-area.split { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.term-area:not(.split):not(.one) > .term:not(.on) { display: none; }
+.term { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--border); background: #0b0d10; }
+.term:last-child { border-right: 0; }
+.term-bar { display: flex; gap: 10px; align-items: center; padding: 6px 12px; font-size: 12.5px; color: #8b949e; background: #0b0d10; }
+.term-bar b { color: #e6e6e6; font-weight: 600; }
+.term-state { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.term-newest { border: 0; background: var(--primary); color: var(--primary-foreground); border-radius: 999px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.term-menu > summary { list-style: none; cursor: pointer; color: #c9d1d9; } .term-menu > summary::-webkit-details-marker { display: none; }
+.term-menu .menu-pop { top: 24px; width: min(420px, 86vw); color: var(--foreground); }
+.term-held { padding: 6px 12px; font-size: 12.5px; background: var(--warning-surface); color: var(--warning-foreground); }
+.term-view { flex: 1; min-height: 0; padding: 4px 8px 8px; overflow: hidden; outline: none; }
+.term-view:focus-within { box-shadow: inset 0 0 0 1px var(--primary); }
 .term-view:empty::before { content: "No screen yet."; color: #8b949e; font-size: 12px; }
-.term-console { display: flex; flex-direction: column; gap: 6px; padding: 8px 16px; }
+.term-console { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; background: var(--card); border-top: 1px solid var(--border); }
 .term-row { display: flex; gap: 6px; }
 .term-row input[name=text] { flex: 1; font-family: var(--mono, ui-monospace, monospace); }
-.term-keys { display: flex; flex-wrap: wrap; gap: 4px; }
-.term-keys button { min-width: 34px; }
-.term-wait { padding: 6px 10px; border-radius: 8px; background: var(--warning-surface); font-size: 12.5px; }
-.term-wait label { margin-left: 10px; }
+.term-keys { display: flex; flex-wrap: wrap; gap: 4px; } .term-keys button { min-width: 34px; }
 .term-confirm { font-size: 12.5px; }
-.term-inputs { padding: 0 16px 10px; font-size: 12.5px; }
-.term-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 12px; padding: 12px 16px; align-content: start; overflow: auto; flex: 1; }
-.term.compact { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.term.compact > summary { padding: 6px 10px; }
-.term.compact .term-view { margin: 0 8px; max-height: 46vh; }
-.term.compact .term-console { padding: 6px 10px; }
-.term-more { padding: 0 10px 6px; } .term-more > summary { cursor: pointer; }
+.term-inputs { font-size: 12.5px; }
 .term-inputs ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
 .term-inputs code { white-space: pre-wrap; }
 .term-inputs .bad { color: var(--destructive); }
@@ -97,6 +97,8 @@ export function termInputsHtml(rows: readonly TermInputRow[], part = "term-input
 export interface TerminalPane {
   stream: string;
   action: string;
+  /** Where the keys pressed into it go (goal 187); empty for one that takes typed lines only. */
+  keys: string;
   csrf: string;
   run: string;
   trial: string;
@@ -106,48 +108,61 @@ export interface TerminalPane {
   error?: string | undefined;
   /** Its heading on a page of several terminals (goal 181), such as the lane and its direction. */
   title?: string | undefined;
-  /** One of several on a page: smaller, its keys and its list of inputs folded away. */
-  compact?: boolean | undefined;
 }
 
 /** What every page with a terminal carries once: xterm.js's styles and the console's, the scripts. */
 const terminalAssets = (xtermCss: string) =>
   `<style>${xtermCss}${TERM_STYLE}</style><script src="/ui/assets/xterm.js" defer></script><script src="/ui/assets/terminal.js" defer></script>`;
 
-/** One terminal and its console. */
+/**
+ * One terminal (goal 187): a bar with its name, what it shows, the owner's inputs as a menu and a
+ * way back to the newest lines, then the screen, which takes keys as they are pressed. A worker in
+ * Pi's view takes typed lines: its console shows only for such a screen.
+ */
 function terminalPaneHtml(o: TerminalPane): string {
   const keys = TERMINAL_KEYS.map(
     (k) =>
       `<button class="sm ghost" name="key" value="${esc(k)}" title="Send ${esc(KEY_LABELS[k])}">${esc(KEY_LABELS[k])}</button>`,
   ).join("");
-  const console = o.ended
-    ? `<div class="term-console muted small">The trial has ended: its terminal takes no more input.</div>`
-    : `<form class="term-console" method="post" action="${esc(o.action)}" data-act data-term-console>
+  // A terminal that takes no keys from Live (a planner's or an advisor's call, a worker in Pi's
+  // view) takes typed lines, each a signed command; a trial's shows it only for a Pi view.
+  const typedLines = o.ended
+    ? ""
+    : `<form class="term-console" method="post" action="${esc(o.action)}" data-act data-term-console${o.keys ? " hidden" : ""}>
 <input type="hidden" name="csrf" value="${esc(o.csrf)}"><input type="hidden" name="run" value="${esc(o.run)}"><input type="hidden" name="trial" value="${esc(o.trial)}">
 ${o.error ? `<div class="small bad">Not sent: ${esc(o.error)}</div>` : ""}
-<div class="term-wait" data-term-wait hidden><b>The program waits for its usage window to reset<span data-term-until></span>.</b> Your input:<label><input type="radio" name="wait" value="queue" checked> waits for the reset</label><label><input type="radio" name="wait" value="now"> goes in now (the program may start its wait again)</label></div>
 <div class="term-row"><input name="text" maxlength="${TERMINAL_TEXT_MAX}" autocomplete="off" spellcheck="false" aria-label="Type into the agent's terminal" placeholder="Type into the agent's terminal: words, a /command or a skill. Enter sends it, then presses Enter there"><button class="primary sm">Send</button></div>
 <label class="term-confirm" data-term-pi hidden><input type="checkbox" name="follow_up" value="1"> Follow-up: give my words when the agent would stop (a reply that calls no tool), not before its next model call</label>
 <div class="term-confirm muted" data-term-pi hidden>The Pi view: words steer the agent; <b>Esc</b> stops its reply; its commands are ${esc(PI_VIEW_COMMANDS)}.</div>
-<label class="term-confirm" data-term-confirm><input type="checkbox" name="confirm" value="1"> Confirm an input that starts with <code>!</code> (a shell command) or runs <code>/login</code>, <code>/logout</code>, <code>/config</code> or <code>/permissions</code></label>
-${o.compact ? `<details class="term-more"><summary class="muted small">Keys</summary><div class="term-keys" role="group" aria-label="Keys">${keys}</div></details>` : `<div class="term-keys" role="group" aria-label="Keys">${keys}</div>`}
+<label class="term-confirm"><input type="checkbox" name="confirm" value="1"> Confirm an input that starts with <code>!</code> (a shell command) or runs <code>/login</code>, <code>/logout</code>, <code>/config</code> or <code>/permissions</code></label>
+<input type="hidden" name="wait" value="queue"><div class="term-keys" role="group" aria-label="Keys">${keys}</div>
 </form>`;
-  const list = termInputsHtml(o.inputs, o.compact ? `term-inputs-${o.trial}` : "term-inputs");
-  return `<details class="term${o.compact ? " compact" : ""}" open data-term="${esc(o.stream)}" data-trial="${esc(o.trial)}"><summary>${o.title ? `<b>${esc(o.title)}</b>` : "<b>Terminal</b>"}<span class="term-state" data-term-state>Waiting for the rig to send its screen…</span></summary>
-<div class="term-view" data-term-view></div>
-${console}
-${o.compact ? `<details class="term-more"><summary class="muted small">Your inputs</summary>${list}</details>` : list}
-</details>`;
+  const list = termInputsHtml(o.inputs, `term-inputs-${o.trial}`);
+  const takesKeys = !o.ended && Boolean(o.keys);
+  return `<section class="term" data-term="${esc(o.stream)}" data-trial="${esc(o.trial)}"${takesKeys ? ` data-keys="${esc(o.keys)}" data-csrf="${esc(o.csrf)}"` : ""}>
+<div class="term-bar"><b>${esc(o.title ?? "Terminal")}</b><span class="term-state" data-term-state>Waiting for the rig to send its screen…</span><span class="grow"></span><button type="button" class="term-newest" data-term-newest hidden>↓ Newest</button><details class="menu term-menu"><summary>${o.inputs.length ? `${o.inputs.length} input${o.inputs.length === 1 ? "" : "s"}` : "Inputs"} ▾</summary><div class="menu-pop">${list}</div></details></div>
+<div class="term-held" data-term-held hidden></div>
+<div class="term-view" data-term-view${takesKeys ? ` tabindex="-1" title="Click, then type: keys go straight to the agent's program"` : ""}></div>
+${typedLines}
+</section>`;
 }
 
-/** A page's one terminal and its console, with what the page carries for it. */
+/** A page's one terminal, with what the page carries for it. */
 export function terminalHtml(o: TerminalPane & { xtermCss: string }): string {
-  return `${terminalAssets(o.xtermCss)}\n${terminalPaneHtml(o)}`;
+  return `${terminalAssets(o.xtermCss)}\n<div class="term-area one">${terminalPaneHtml(o)}</div>`;
 }
 
-/** Several terminals side by side (goal 181: a run's Live opens on its agents' terminals). */
+/**
+ * A run's terminals (goal 187): a tab for each, and Side by side; the chosen one fills the pane.
+ */
 export function terminalGridHtml(panes: readonly TerminalPane[], xtermCss: string): string {
-  return `${terminalAssets(xtermCss)}<div class="term-grid">${panes.map((p) => terminalPaneHtml({ ...p, compact: true })).join("")}</div>`;
+  const tabs = panes
+    .map(
+      (p, i) =>
+        `<button type="button" class="term-tab${i ? "" : " on"}" data-term-tab="${esc(p.trial)}">${esc(p.title ?? p.trial)}</button>`,
+    )
+    .join("");
+  return `${terminalAssets(xtermCss)}<div class="term-tabs" role="tablist">${tabs}<span class="grow"></span>${panes.length > 1 ? `<button type="button" class="term-tab" data-term-split>Side by side</button>` : ""}</div><div class="term-area" data-term-area>${panes.map((p) => terminalPaneHtml(p)).join("")}</div>`;
 }
 
 /**
@@ -159,55 +174,89 @@ export function terminalGridHtml(panes: readonly TerminalPane[], xtermCss: strin
 export const TERMINAL_JS = `
 (() => {
   "use strict";
-  // Each terminal on the page: one, or several side by side (a run's Live).
+  // The run's terminals: a tab for each, one shown, or all side by side (goal 187).
+  const area = document.querySelector("[data-term-area]");
+  if (area) {
+    const panes = [...area.querySelectorAll("[data-term]")];
+    const tabs = [...document.querySelectorAll("[data-term-tab]")];
+    const split = document.querySelector("[data-term-split]");
+    const show = (trial) => {
+      area.classList.remove("split");
+      if (split) split.classList.remove("on");
+      for (const p of panes) p.classList.toggle("on", p.dataset.trial === trial);
+      for (const t of tabs) t.classList.toggle("on", t.dataset.termTab === trial);
+      window.dispatchEvent(new Event("resize"));
+    };
+    for (const t of tabs) t.addEventListener("click", () => show(t.dataset.termTab));
+    if (split) split.addEventListener("click", () => {
+      const on = !area.classList.contains("split");
+      area.classList.toggle("split", on);
+      split.classList.toggle("on", on);
+      for (const t of tabs) t.classList.toggle("on", !on && t === tabs.find((x) => panes.find((p) => p.classList.contains("on") && p.dataset.trial === x.dataset.termTab)));
+      window.dispatchEvent(new Event("resize"));
+    });
+    if (tabs[0]) show(tabs[0].dataset.termTab);
+  }
   const boxes = document.querySelectorAll("[data-term]");
   if (!boxes.length) return;
   const setup = (box) => {
   const view = box.querySelector("[data-term-view]");
   const state = box.querySelector("[data-term-state]");
-  const wait = box.querySelector("[data-term-wait]");
-  const until = box.querySelector("[data-term-until]");
+  const held = box.querySelector("[data-term-held]");
+  const newest = box.querySelector("[data-term-newest]");
   const form = box.querySelector("[data-term-console]");
   const say = (t) => { if (state) state.textContent = t; };
-  const pis = box.querySelectorAll("[data-term-pi]");
-  // The same rule as control's: such an input is sent only once confirmed.
-  const risky = new RegExp(${JSON.stringify(CONFIRM_FIRST.source)});
-  if (form) {
-    const text = form.querySelector("input[name=text]");
-    const confirm = form.querySelector("[data-term-confirm]");
-    const check = () => { if (confirm && text) confirm.hidden = !risky.test(text.value); };
-    if (text) text.addEventListener("input", check);
-    check();
-    // Sent: the field empties once the form's words have gone (after the page's own sender).
-    form.addEventListener("submit", (ev) => {
-      if (ev.submitter && ev.submitter.name === "key") return;
-      setTimeout(() => {
-        if (text) text.value = "";
-        for (const tick of form.querySelectorAll("input[type=checkbox]")) tick.checked = false;
-        check();
-      }, 0);
-    });
-  }
   if (!window.Terminal || !window.EventSource) { say("This browser can't draw the terminal."); return; }
+  // Keys pressed into it go to the agent's program, a few at a time (goal 187).
+  const keysTo = box.dataset.keys;
+  let pending = "", flushing = null, piView = false;
+  const flush = async () => {
+    flushing = null;
+    if (!pending) return;
+    const data = pending; pending = "";
+    try {
+      const res = await fetch(keysTo, { method: "POST", credentials: "same-origin", body: new URLSearchParams({ csrf: box.dataset.csrf, trial: box.dataset.trial, data }) });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); say(j.error || "Your keys were not sent."); }
+    } catch { say("Your keys were not sent: control could not be reached."); }
+  };
+  const press = (d) => { if (!keysTo || piView) return; pending += d; if (!flushing) flushing = setTimeout(flush, 30); };
   let term = null, cols = 0, rows = 0, last = "";
+  // The screen at the size the agent's program has, scaled so its width fits the pane.
+  const fit = () => {
+    if (!term || !cols) return;
+    const w = view.clientWidth - 16;
+    const size = Math.max(8, Math.min(14, Math.floor(w / (cols * 0.602))));
+    if (term.options.fontSize !== size) term.options.fontSize = size;
+  };
+  window.addEventListener("resize", fit);
+  const atBottom = () => !term || term.buffer.active.viewportY >= term.buffer.active.baseY;
   const draw = (f) => {
     if (typeof f.data !== "string") return;
     if (!term || f.cols !== cols || f.rows !== rows) {
       if (term) term.dispose();
       cols = f.cols; rows = f.rows; last = "";
       term = new window.Terminal({
-        cols, rows, scrollback: 1000, disableStdin: true, cursorBlink: false, fontSize: 13,
+        cols, rows, scrollback: 1000, disableStdin: !keysTo, cursorBlink: false, fontSize: 13,
         // Links in the screen open nothing.
         linkHandler: { activate: () => {} },
         theme: { background: "#0b0d10" },
       });
       term.open(view);
+      term.onData(press);
+      term.onScroll(() => { if (newest) newest.hidden = atBottom(); });
+      fit();
     }
     if (f.data === last) return;
     last = f.data;
+    // A frame holds the screen and the lines above it: drawn anew, it keeps the place of a viewer
+    // who scrolled back, counted from the bottom.
+    const b = term.buffer.active;
+    const back = b.baseY - b.viewportY;
     term.reset();
-    term.write(f.data);
+    term.write(f.data, () => { if (back > 0) term.scrollToLine(Math.max(0, term.buffer.active.baseY - back)); if (newest) newest.hidden = atBottom(); });
   };
+  if (newest) newest.addEventListener("click", () => { if (term) term.scrollToBottom(); newest.hidden = true; });
+  view.addEventListener("click", () => { if (term) term.focus(); });
   const said = (ev) => { try { return JSON.parse(ev.data); } catch { return {}; } };
   const pushed = new EventSource(box.dataset.term);
   pushed.addEventListener("frame", (ev) => {
@@ -220,13 +269,16 @@ export const TERMINAL_JS = `
       return;
     }
     view.hidden = false;
-    if (form) form.hidden = false;
-    for (const el of pis) el.hidden = !f.pi_view;
+    // A worker in Pi's view takes typed lines: its console; any other terminal takes keys.
+    piView = Boolean(f.pi_view);
+    if (form) form.hidden = f.state === "ended" || (Boolean(keysTo) && !piView);
+    for (const el of box.querySelectorAll("[data-term-pi]")) el.hidden = !piView;
     draw(f);
-    say((f.state === "ended" ? "Its last screen, kept when the trial ended" + (box.classList.contains("compact") ? ": refresh for its next trial" : "") + " · " : "Live, read only · ") + at + (f.queued ? " · " + f.queued + " of your inputs wait for the reset" : ""));
-    if (wait) {
-      wait.hidden = !f.limit;
-      if (until) until.textContent = f.limit && f.limit.resets_at ? " at " + String(f.limit.resets_at).replace("T", " ").slice(0, 16) + " UTC" : "";
+    const typing = keysTo && !piView && f.state !== "ended";
+    say((f.state === "ended" ? "Its last screen, kept when the trial ended · " : typing ? "Live · click it and type · " : "Live, read only · ") + at + (f.queued ? " · " + f.queued + " of your inputs wait for the reset" : "") + (f.limit ? " · it waits for its usage window" : ""));
+    if (held) {
+      held.hidden = !f.held;
+      held.textContent = f.held ? "Enter held: “" + f.held + "” runs a shell command or changes its sign-in or settings. Press Enter again to send it." : "";
     }
   });
   pushed.addEventListener("waiting", () => say("Waiting for the rig to send its screen…"));

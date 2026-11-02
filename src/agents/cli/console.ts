@@ -1,6 +1,7 @@
 import { errorText, Refusal } from "../../common/errors.ts";
 import { SCREEN_DATA_MAX, type ScreenFrame } from "../../core/screens.ts";
 import {
+  CONFIRM_FIRST,
   TERMINAL_QUEUE_MAX,
   type TerminalInput,
   type TerminalOutcome,
@@ -23,6 +24,8 @@ import type { ScreenSnapshot } from "../terminal/index.ts";
  */
 export interface ConsoleTerminal {
   ownerInput(i: Pick<TerminalInput, "text" | "keys" | "follow_up">): Promise<void>;
+  /** Keys as pressed on Live (goal 187); none for a Pi view, which takes typed lines. */
+  ownerRaw?(data: string): Promise<void>;
   limitShown(): { resetsAt?: string | undefined } | undefined;
   screen(): Promise<ScreenSnapshot | undefined>;
   lastScreen(): ScreenSnapshot | undefined;
@@ -84,6 +87,62 @@ export class TrialConsole {
     }
     await this.term.ownerInput(inputOf(i));
     return { outcome: "typed" };
+  }
+
+  /** The line the owner types on Live, as its keys made it, and one whose Enter is held (goal 187). */
+  private line = "";
+  private heldLine: string | undefined;
+  /** Inside a pasted block: its line breaks are text, not Enter. */
+  private pasting = false;
+
+  /**
+   * Keys the owner pressed on Live (goal 187): to the program as they came, while the line they
+   * make up is kept, and at each Enter `typed` is told the line. An Enter on a line that
+   * CONFIRM_FIRST matches is held, and left out, once: the next Enter on the same line sends it.
+   * Refused in words when the trial has ended, or the terminal takes typed lines only (Pi's view).
+   */
+  async keystrokes(data: string, typed: (line: string) => void): Promise<void> {
+    if (this.closed) throw new Refusal(this.closed);
+    const raw = this.term.ownerRaw?.bind(this.term);
+    if (!raw)
+      throw new Refusal("this terminal is a worker's Pi view, which takes typed lines: send words");
+    let out = "";
+    for (let i = 0; i < data.length; i++) {
+      const ch = data[i] as string;
+      if (ch === "\x1b") {
+        // An escape: a pasted block's ends, or a key's (the arrows, Home, a function key).
+        // biome-ignore lint/suspicious/noControlCharactersInRegex: an escape is what it reads.
+        const seq = /^\x1b(?:\[[0-9;?]*[@-~]|O.|.)?/.exec(data.slice(i))?.[0] ?? ch;
+        if (seq === "\x1b[200~") this.pasting = true;
+        else if (seq === "\x1b[201~") this.pasting = false;
+        out += seq;
+        i += seq.length - 1;
+        continue;
+      }
+      if (ch === "\r" && !this.pasting) {
+        if (CONFIRM_FIRST.test(this.line) && this.heldLine !== this.line) {
+          this.heldLine = this.line;
+          continue;
+        }
+        if (this.line.trim()) typed(this.line);
+        this.line = "";
+        this.heldLine = undefined;
+        out += ch;
+        continue;
+      }
+      if (ch === "\x7f" || ch === "\b") this.line = this.line.slice(0, -1);
+      else if (ch === "\x15" || ch === "\x03") this.line = "";
+      else if (ch >= " " || ch === "\t" || (ch === "\r" && this.pasting))
+        this.line += ch === "\r" ? "\n" : ch;
+      if (this.heldLine !== undefined && this.line !== this.heldLine) this.heldLine = undefined;
+      out += ch;
+    }
+    if (out) await raw(out);
+  }
+
+  /** A line whose Enter is held, for the live view to say so; undefined when none is. */
+  get held(): string | undefined {
+    return this.heldLine;
   }
 
   /** How many inputs wait for the reset. */
@@ -161,7 +220,9 @@ const fit = (s: ScreenSnapshot) => ({
  */
 export async function screenFrame(o: {
   id: string;
-  console?: Pick<TrialConsole, "screen" | "limit" | "queued"> | undefined;
+  console?:
+    | (Pick<TrialConsole, "screen" | "limit" | "queued"> & { held?: string | undefined })
+    | undefined;
   last?: ScreenSnapshot | undefined;
   /** Its screen is a worker's or a planner's Pi view. */
   piView?: boolean | undefined;
@@ -177,6 +238,7 @@ export async function screenFrame(o: {
       ...(s ? fit(s) : {}),
       ...(limit ? { limit: limit.resetsAt ? { resets_at: limit.resetsAt } : {} } : {}),
       ...(c.queued ? { queued: c.queued } : {}),
+      ...(c.held ? { held: c.held.slice(0, 500) } : {}),
       ...(o.piView ? { pi_view: true as const } : {}),
       at: o.at,
     };

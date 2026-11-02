@@ -6,7 +6,7 @@ sidebar:
   order: 18
 ---
 
-A worker in Claude Code, Codex or OpenCode works in that program's own terminal, as a person would use it, when its rig runs its agent programs in their own terminal ([Agents in their own terminal](../../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)). A worker in Pi draws Thermite's Pi view there instead ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). The planner plans in that program's terminal too, or, in Pi, in its own Pi view ([The planner's terminal](#the-planners-terminal)), and so do the teachers, the auditor and the review panel's reviewers, in their program's terminal or, in Pi, in their own Pi view ([An advisor's terminal](#an-advisors-terminal)). You can watch that terminal from the dashboard and type into it: words for the agent, a slash command such as `/compact`, a skill, or a key for one of the program's menus. Each input is a signed command, [`terminal_input`](../../reference/signed-commands.md#terminal_input), that only you can send, and the rig records it word for word with what became of it.
+A worker in Claude Code, Codex or OpenCode works in that program's own terminal, as a person would use it, when its rig runs its agent programs in their own terminal ([Agents in their own terminal](../../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)). A worker in Pi draws Thermite's Pi view there instead ([The Pi view](../../explanation/agents-lanes-planner.md#the-pi-view)). The planner plans in that program's terminal too, or, in Pi, in its own Pi view ([The planner's terminal](#the-planners-terminal)), and so do the teachers, the auditor and the review panel's reviewers, in their program's terminal or, in Pi, in their own Pi view ([An advisor's terminal](#an-advisors-terminal)). You can watch that terminal from the dashboard and type into it: words for the agent, a slash command such as `/compact`, a skill, or a key for one of the program's menus. A worker's terminal takes your keys as you press them, and the rig records each line you type at its Enter, word for word. The planner's and an advisor's terminals, and a Pi view, take typed lines instead, each a signed command, [`terminal_input`](../../reference/signed-commands.md#terminal_input). Only you can type into any of them.
 
 To tell the agents something without typing into a program, send a message instead: every agent reads one ([Send the agents a message](steer-a-run.md#send-the-agents-a-message)).
 
@@ -19,24 +19,24 @@ To tell the agents something without typing into a program, send a message inste
 
 1. Open **Live** in the sidebar, and choose the run in the list on the left.
 
-   The run's Live opens on **Terminals**: each lane's trial at work, side by side, each pane named for its lane and its direction, such as `lane-1 · shared memory tiling`, with its screen and its console. Typing into a pane, as in step 2, works as on the trial's own page.
+   The run's Live opens on **Terminals**: a tab for each lane's trial at work, named for its lane and its direction, such as `lane-1 · shared memory tiling`, and **Side by side**, which shows them all at once. The chosen terminal fills the pane, its screen scaled to fit the width. Typing into it, as in step 2, works as on the trial's own page.
 
    For one trial alone, open the rig's page, press **Live**, and choose the trial under **Sessions**.
 
-The trial's page opens, at `/ui/rigs/<rig>/live?source=trial:<trial>`. At its top, **Terminal** says `Waiting for the rig to send its screen…`, then shows the program's screen, at the size of the agent's terminal, with `Live, read only` and the time of the screen beside **Terminal**. The screen follows the program about once a second: the rig's supervisor sends it to control on the message bus while a page watches the trial, and no screen is kept ([Live view](../../reference/live-view.md#a-trials-terminal)). It is only a view: a key you press on it goes nowhere, and a link in it opens nothing.
+The trial's page opens, at `/ui/rigs/<rig>/live?source=trial:<trial>`. Its terminal's bar says `Waiting for the rig to send its screen…`, then the terminal shows the program's screen at the size of the agent's terminal, with `Live · click it and type` and the time of the screen in its bar. The screen follows the program about once a second, and several times a second while you type: the rig's supervisor sends it to control on the message bus while a page watches the trial, and no screen is kept ([Live view](../../reference/live-view.md#a-trials-terminal)). Scroll up in it to read the 300 lines above the screen; a new screen keeps your place, and **↓ Newest** takes you back down. A link in it opens nothing.
 
 ## 2. Type into it
 
-1. Write in the field under the screen: words, a slash command such as `/compact` or `/mcp`, or a skill's command.
-2. Press **Send**, or Enter.
+1. Click the terminal.
+2. Type, as you would in the program: words, a slash command such as `/compact` or `/mcp`, or a skill's command, then Enter. Answer one of its menus with its keys: Enter, Esc, Tab, the arrows.
 
-The rig types the text into the program, then presses Enter there, as you would. A line that starts with `!` runs a shell command in Claude Code and Codex, and `/login`, `/logout`, `/config` and `/permissions` change the program's sign-in or settings: for these, tick **Confirm an input that starts with !…** under the field first, or the dashboard says `Not sent: Confirm it first: …`.
+Each key goes to the program as you press it, by way of control and the rig's supervisor, and the program shows it in its own input box within a moment. The rig records each line you type at its Enter, word for word. A line that starts with `!` runs a shell command in Claude Code and Codex, and `/login`, `/logout`, `/config` and `/permissions` change the program's sign-in or settings: for these, the Enter is held, and the terminal's bar says `Enter held: “<the line>” runs a shell command or changes its sign-in or settings. Press Enter again to send it.` Press Enter again to send it. If a key can't go in, the bar says why, such as `Not sent: this terminal is not watched now, or too many keys wait. Load the page again.` To stop the agent, [stop its trial](decide-what-waits.md#stuck-trials) or [pause the run](steer-a-run.md).
 
-To answer one of the program's menus, press the keys under the field: **Enter**, **Esc**, **Tab**, the arrows, **PgUp**, **PgDn** and the digits. Each press is one input. There is no Ctrl+C: to stop the agent, [stop its trial](decide-what-waits.md#stuck-trials) or [pause the run](steer-a-run.md).
+The planner's and an advisor's terminals, and a Pi view, take typed lines instead: a field under the screen, with **Send**, the keys as buttons, and **Confirm an input that starts with !…** to tick for those lines, each line a signed command.
 
 ## 3. See what became of each input
 
-Under the keys, the list of your inputs shows each one, newest first, with its outcome:
+The menu in the terminal's bar, such as **3 inputs ▾**, lists your inputs, newest first, with what became of each. A line typed straight into a worker's terminal says `typed on Live`; a signed one has one of these:
 
 | It says | What happened |
 | --- | --- |
