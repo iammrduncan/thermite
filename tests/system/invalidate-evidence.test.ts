@@ -136,7 +136,8 @@ describe("withdrawing evidence through control (goal 174)", () => {
     assert.equal(status.outcome.result.reach.for_good, false);
     assert.match(status.outcome.result.words.join(" "), /measurements of judge job/);
 
-    // Champion #3 is published: an export carries its patch out of the rig.
+    // Champions #2 and #3 are published: an export carries the patch of each champion no export
+    // published yet out of the rig (goal 185).
     await env.service.export("owner", {});
     await stack.relay();
     assert.equal(runOf(stack).published?.seq, 3);
@@ -159,11 +160,14 @@ describe("withdrawing evidence through control (goal 174)", () => {
     assert.deepEqual(
       previewed.outcome.result.reach.champions.map((c) => [c.seq, c.published]),
       [
-        [2, false],
+        [2, true],
         [3, true],
       ],
     );
-    assert.match(previewed.outcome.result.words.join(" "), /Champion #3 was published already/);
+    assert.match(
+      previewed.outcome.result.words.join(" "),
+      /Champions #2 and #3 were published already/,
+    );
     await call("issue_command", {
       kind: "invalidate_evidence",
       payload: { run: RUN, attempt: a.attempt, reason: "slow card", reach: sha },

@@ -36,6 +36,13 @@ A run's code lives as commits in its rig's own git and as patches on control. A 
 - **When to push:** with each export, as the results repository does now.
 - The dashboard's part is drawn as a mockup for the owner first.
 
+## Plan
+
+1. **The assignment says where.** `assign_campaign` gains `results: {git, access, folder?}`: the repository to push to, the Git access that pushes, and the project's folder when it is one. None: control only. Control gives the rig the access while the assignment names it, as it does a fetch's.
+2. **The supervisor builds and pushes the branches** after each export, beside its results repository's: `thermite/<run>/champion`, a commit for each champion, the seed's tree with the champion's patch applied (checked against the tree the rig published), on the one before; `thermite/<run>/lane-<n>`, a commit for each attempt adding `attempts/<nnn>-<attempt>.patch` and `.json`. A project in a folder: the champion's tree grafted into the project's commit at that folder. Fast-forwards only, refs under `thermite/<run>/` only. Its report says what is on the remote: each champion's commit, the lanes' tips, when and any error.
+3. **Control shows and uses it:** **New campaign** (and the copy and Start a run drawers) choose where, with **Check it can push** (a `git push --dry-run`, which writes nothing); the run's **Champions** block shows the branch, each champion's commit and its menu (Start a campaign from it, Copy its commit, Download as a patch); **Start a campaign from #n** keeps the contract or opens New campaign filled from it; MCP and REST `start_campaign {name, from: {run, champion}, contract?}`.
+4. Pages, decisions.md, tests, and the campaign acceptance check pushing to its git daemon.
+
 ## Done when
 
 - [ ] The four, with their tests and the pages that describe them (Take the result, Set up the results repository, Exports, New campaign, Start a run), decisions.md's 2026-10-14 row replaced, and the campaign, control and judge acceptance checks pass.
@@ -44,6 +51,7 @@ A run's code lives as commits in its rig's own git and as patches on control. A 
 
 - 2026-10-27, owner: the creator chooses where a run's results go; the default is branches of the project's own repository, one for the champion and one for each lane, named for the run; the other choice is a separate results repository (issue 39).
 - 2026-11-02, owner: "branch per lane and patches for their work, main champion has a branch for the run and commits for champions. branches for each champion would get unwieldly fast."
+- 2026-11-02, owner, on the [mockup](https://claude.ai/artifact/WWPowtivBuJe1ydq9VjXkf): "Build it as drawn"; the push credential is a Git access with write rights, chosen as **Push with** (only the supervisor of a rig running the campaign gets it; the harness and the agents never do); the record stays on control alone, git gets code only; built in v0.1.1, now.
 
 ## Progress
 
@@ -52,3 +60,4 @@ A run's code lives as commits in its rig's own git and as patches on control. A 
 ---
 
 Run with `/goal Complete docs/plan/goals/185-a-runs-work-in-git.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
+- 2026-11-02: Steps 1 and 2 built. `assign_campaign` takes `results: {git, access?, folder?}` (core/commands.ts RunResults), and control gives the rig the access it names (store/commands.ts gitAccessesOf). The harness publishes every champion of a run that no export published yet, oldest first, up to 50 (propagation.ts championFiles), so none is skipped. The supervisor's run-branches.ts records a run's `results` as the harness takes its assignment, builds `thermite/<run>/champion` (the start's tree with the champion's patch applied in a scratch index of the results repository, the source's objects borrowed by alternates, checked against the published tree, grafted into the start commit at a folder) and `thermite/<run>/<lane>` (patches, a README) after each export, pushes fast-forwards with the run's Git access, and reports `run_branches` in its figures. Tests in tests/supervisor/run-branches.test.ts (a whole repository, a folder, a tree mismatch, another history on the remote).

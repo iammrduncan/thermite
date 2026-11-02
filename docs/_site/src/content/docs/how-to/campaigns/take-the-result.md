@@ -1,12 +1,12 @@
 ---
 title: "Take the result"
-description: "Download a run's best change as a patch and apply it to your project."
+description: "Download a run's best change as a patch and apply it to your project, or check out its commit from the run's branch in git."
 type: how-to
 sidebar:
   order: 13
 ---
 
-A run's result is its [champion](../../reference/glossary.md): the best version of your project that the judge has confirmed. Thermite never pushes to your project. You download the champion as a patch and apply it yourself, to the commit the run started from.
+A run's result is its [champion](../../reference/glossary.md): the best version of your project that the judge has confirmed. You download the champion as a patch and apply it yourself, to the commit the run started from. A run whose assignment says where its work goes in git also has each champion as a commit there ([below](#a-runs-work-in-git)).
 
 This is the result of a hill climb or a goal campaign. A research campaign changes no code: its result is its report, which **Latest report** on the run's **Overview** opens, and its research folder, which the run's export at its end carries once the final report is written, and any full export at any time ([Get a rig's results from control](../operate/exports-on-control.md)). A research run whose questions the review panel found answered also has its [research paper](../../explanation/campaign-modes.md#the-research-paper), which starts its final report: on the run's **Overview**, **Research paper** opens it, and the `paper.md` link in the **Research paper** line opens it as plain text, named `<run>-paper.md` when you save it. The research folder holds it as `paper.md`.
 
@@ -50,6 +50,15 @@ git apply --directory=examples/matmul-cpu/project ~/Downloads/sort-speed-1-champ
 ```
 
 If your branch has moved on since that commit, either commit the change on a branch made from that commit and merge it into yours, or apply it on your branch with `git apply -3`, which falls back on a three-way merge and marks any conflicts. `-3` needs that commit in your clone.
+
+## A run's work in git
+
+A run whose assignment has `results` ([`assign_campaign`](../../reference/signed-commands.md#assign_campaign)) has its rig's supervisor push its work to that repository after each export, beside every other export's work:
+
+- `thermite/<run>/champion`: the run's starting commit, then a commit for each champion, each on the one before. A champion's commit holds the whole project as the champion has it: for a project in a folder, the champion's folder in the starting commit's repository. Its message names the champion and the change, such as `Champion #3 of sort-speed-1: Tile the inner loop by 8`. Check it out, or start a new campaign from it.
+- `thermite/<run>/<lane>`: each lane's attempts in the order they came, a commit for each: `attempts/<nnn>-<attempt>.patch`, the change against its parent commit, and `attempts/<nnn>-<attempt>.json`, the attempt as the rig recorded it and its verdict, with a `README.md`.
+
+The supervisor pushes with the Git access `results` names, which needs write rights in that repository, and only fast-forwards of branches under `thermite/<run>/`: a branch the repository already has with other history is never overwritten, and the run's push fails in words, in the supervisor's report. The run's record (its events, notes, knowledge base and ledger) stays on control. The supervisor checks each champion's commit against the tree the rig published for it before it pushes.
 
 ## Download it from a script
 

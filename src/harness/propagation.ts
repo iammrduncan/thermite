@@ -191,6 +191,9 @@ export function settlePropagations(ledger: Ledger, by: string): number {
  * published yet, or `run`'s alone, the binary patch from the seed and a manifest with the tree and
  * the patch's sha256. Returns the files written (relative paths) and the publications to announce.
  */
+/** The most champions of one run an export publishes: the newest that are not published yet. */
+const CHAMPIONS_PUBLISHED_MAX = 50;
+
 export async function championFiles(input: {
   ledger: Ledger;
   mirrorFor: (repo: string) => string;
@@ -217,13 +220,25 @@ export async function championFiles(input: {
   }[] = [];
   for (const inst of input.ledger.runs.list()) {
     if (inst.mode === "research" || (input.run !== undefined && inst.id !== input.run)) continue;
-    const champ = input.ledger.champions.current(inst.id);
-    if (champ.seq <= 1 || !champ.attempt) continue;
-    const published = input.ledger.events.newest("champion_published", {
-      subject: inst.id,
-      body: { seq: champ.seq },
-    });
-    if (published) continue;
+    // Every champion that stands and is not published yet, oldest first: each becomes a commit of
+    // the run's champion branch in git (goal 185), so none is skipped when two came between exports.
+    const published = new Set(
+      input.ledger.events
+        .list("champion_published", { subject: inst.id })
+        .map((e) => Number((e.body as { seq?: unknown }).seq)),
+    );
+    const todo = input.ledger.champions
+      .newest(inst.id, CHAMPIONS_PUBLISHED_MAX)
+      .filter((c) => c.seq > 1 && c.attempt && !published.has(c.seq))
+      .reverse();
+    for (const champ of todo) await publishOne(inst, champ);
+  }
+  return out;
+
+  async function publishOne(
+    inst: ReturnType<Ledger["runs"]["list"]>[number],
+    champ: { seq: number; attempt: string | null; commit_sha: string },
+  ) {
     const mirror = input.mirrorFor(inst.seed_repo);
     const patch = await patchBytes(mirror, inst.seed_commit, champ.commit_sha);
     const tree = await treeOf(mirror, champ.commit_sha);
@@ -250,5 +265,4 @@ export async function championFiles(input: {
       path,
     });
   }
-  return out;
 }

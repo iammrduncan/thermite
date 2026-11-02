@@ -51,7 +51,7 @@ A run's folder that still runs goes under the export's name, because a results r
 | `research/<run>/folder-<export>/…` | The run's research folder as it stands, with its paper as `paper.md` when it has one |
 | `research/<run>/…`, other files | The run's archive of the web pages it fetched |
 | `ledger.sqlite` | No: the ledger holds every run |
-| Champion patches | Only in [a run's export at its end](#a-runs-export-at-its-end): the run's champion, when no export published it yet. A run's export you ask for publishes none |
+| Champion patches | Only in [a run's export at its end](#a-runs-export-at-its-end): the run's champions no export published yet. A run's export you ask for publishes none |
 
 A run's export stays outside the rig's chain of exports: the next normal or full export starts where the last export of the chain ended, so it still holds everything the run's export also held. A full reset never takes a run's export as its full export. A supervisor pushes it to the results repository with its research folder and pages, or sends it to control, as it does the rig's exports. Once it is pushed or sent, it leaves the outbox, as they do.
 
@@ -64,7 +64,7 @@ When a run ends, the rig writes that run's export on its own, once: the same par
 - **The Exports switch.** Off on **Edit rig**: a run that ends is not exported, and its results stay on the rig only. Turned on again, each run that ended meanwhile is exported then.
 - **The disk.** At the rig's [disk floor](limits-and-pacing.md#the-rig-and-control) it waits, as every export does, and the rig's history says why, once.
 - **A failure.** An export that fails, such as when git can't read a patch, is tried again 10 minutes later; the harness's log says why each time (`the run's export at its end failed: it is tried again in 10 minutes`).
-- **Its champion.** A hill climb's or a goal run's champion beyond its starting point, when no export published it yet, goes as a patch from the run's starting commit, `champions/<run>/<n>.patch` with its `.json`, as a full export publishes one. So, with no one asking, it reaches the results repository, or control for a rig without one, ready to [take](../how-to/campaigns/take-the-result.md) or to [send to another rig](../how-to/campaigns/several-rigs.md). A champion of a run that still runs is published by a full export.
+- **Its champions.** Each of a hill climb's or a goal run's champions beyond its starting point that no export published yet, up to its newest 50, goes as a patch from the run's starting commit, so a champion promoted between two exports is never skipped, `champions/<run>/<n>.patch` with its `.json`, as a full export publishes one. So, with no one asking, it reaches the results repository, or control for a rig without one, ready to [take](../how-to/campaigns/take-the-result.md) or to [send to another rig](../how-to/campaigns/several-rigs.md). A champion of a run that still runs is published by a full export.
 - **What it leaves out.** The rig's own checks are runs too, and export nothing at their end. A run that closed before the rig ran this version is not exported at its end.
 
 ## Where exports go

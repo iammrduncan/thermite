@@ -113,7 +113,7 @@ Each rig has two branches. Commits are made by `thermite <thermite@localhost>`.
 | Branch | Path | What it holds |
 | --- | --- | --- |
 | `thermite/<rig>/attempts` | `attempts/<attempt>.patch` and `.json` | Each attempt's change, and its record with the verdict |
-| | `champions/<run>/<seq>.patch` and `.json` | Each published champion, as a patch from the run's starting commit |
+| | `champions/<run>/<seq>.patch` and `.json` | Each published champion, as a patch from the run's starting commit: each export publishes every champion of a run that no export published yet |
 | | `events/<export>.jsonl` | The export's events, one per line. They include the text of your messages to the run's agents and advisors, and the advisors' answers |
 | | `journal/<export>.jsonl` | The [field notes](../../explanation/journals-and-knowledge.md) the agents recorded since the last export, one per line: the short notes the workers, the planner and the advisors keep as they work. Every export has this file, empty when there are none |
 | | `source-notes/<export>.jsonl` | The source notes recorded since the last export, each with the sources it cites. Only when there are some. Exports before v0.1.1 put them in `research-notes/` |

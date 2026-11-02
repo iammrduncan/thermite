@@ -121,7 +121,7 @@ export function verifyExport(dir: string): { problems: string[]; manifest?: Mani
 }
 
 /** Adds files (path in tree -> file on disk) on top of a branch and commits. */
-async function commitFiles(
+export async function commitFiles(
   repo: string,
   branch: string,
   files: Record<string, string>,

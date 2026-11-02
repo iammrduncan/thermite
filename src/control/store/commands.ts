@@ -212,12 +212,19 @@ export class IssuedCommands extends StorePart {
     const names = new Set<string>();
     for (const r of rows) {
       try {
-        const imports = (
+        const payload = (
           JSON.parse(r.signed) as {
-            envelope?: { payload?: { imports?: { source?: { access?: string } }[] } };
+            envelope?: {
+              payload?: {
+                imports?: { source?: { access?: string } }[];
+                results?: { access?: string };
+              };
+            };
           }
-        ).envelope?.payload?.imports;
-        for (const i of imports ?? []) if (i.source?.access) names.add(i.source.access);
+        ).envelope?.payload;
+        for (const i of payload?.imports ?? []) if (i.source?.access) names.add(i.source.access);
+        // The access its run's branches are pushed with (goal 185).
+        if (payload?.results?.access) names.add(payload.results.access);
       } catch {
         // A row control signed is JSON: one that is not names no access.
       }

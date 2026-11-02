@@ -85,6 +85,7 @@ import {
 } from "./relay/index.ts";
 import { dailyReport } from "./report.ts";
 import { onRetentionTaken, sendSpace } from "./retention.ts";
+import { RunBranches } from "./run-branches.ts";
 import { controlTokenFrom, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
 import { stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
@@ -243,6 +244,8 @@ async function main(): Promise<void> {
     },
     onDelivered: (kind: string, accepted: boolean, cmd: Parameters<typeof onRetentionTaken>[1]) => {
       if (kind === "wipe_state" && accepted) wipeRequested = true;
+      // A run whose work goes to git (goal 185): its branches are built after each export.
+      if (kind === "assign_campaign" && accepted) runBranches.assigned(cmd);
       if (kind === "log_level" && accepted) onLogLevelTaken(cmd);
       // What the policy removed changes what the rig keeps: told to control at the next round.
       if (kind === "retention_run" && accepted)
@@ -252,6 +255,12 @@ async function main(): Promise<void> {
     },
   };
   const intervalMs = supervisorMs(env, SUPERVISOR_NUMBERS.pollSeconds);
+  const runBranches = new RunBranches(join(home, "run-branches.json"), {
+    repo: join(home, "results.git"),
+    outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
+    sourcesDir: join(home, "sources"),
+    gitAccess: (name: string) => gitAccessFrom(known, name),
+  });
   const exportPath = join(home, "export-state.json");
   let exportState: ExportState = load(exportPath, { done: [] });
   // Champion patches waiting to reach control (kept across restarts).
@@ -400,6 +409,12 @@ async function main(): Promise<void> {
       champions_waiting: championQueue.length,
       last_error: exportErrorOf(remote ? undefined : uploadState.lastError, exportState.lastError),
     },
+    run_branches: Object.fromEntries(
+      Object.entries(runBranches.figures()).map(([run, f]) => [
+        run,
+        { ...f, error: f.error ? redact(f.error).slice(0, FIGURE_TEXT_MAX) : null },
+      ]),
+    ),
     models: models.list(),
     advisors: advisors
       ? {
@@ -666,6 +681,7 @@ async function main(): Promise<void> {
           save(uploadPath, uploadState);
         }
       }
+      await runBranches.afterExport(fresh);
       if (next.done.length !== before || next.lastError !== exportState.lastError) {
         save(exportPath, next);
         log("supervisor", "exported", {

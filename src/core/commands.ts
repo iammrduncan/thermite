@@ -59,6 +59,14 @@ const FileSource = z.object({
     .regex(/^https?:\/\//, "an http(s) URL"),
 });
 
+/** Where a run's work goes in git (goal 185), in its assignment. */
+export const RunResults = z.object({
+  git: GitSource.options[0].shape.git,
+  access: GitSource.options[0].shape.access,
+  folder: z.string().max(500).optional(),
+});
+export type RunResults = z.infer<typeof RunResults>;
+
 export const ImportSpec = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("repo_bundle"),
@@ -219,6 +227,12 @@ export const CommandPayloads = {
     queue: z.array(QueueSeed).max(500).optional(),
     /** Background from past research for every agent's brief (goal 065), in order. */
     briefing: z.array(BriefingSeed).max(200).optional(),
+    /**
+     * Where the run's work goes in git (goal 185): the repository its supervisor pushes
+     * `thermite/<run>/champion` and `thermite/<run>/lane-<n>` to, the Git access that pushes, and
+     * the project's folder when it is one. None: the run's work stays on control.
+     */
+    results: RunResults.optional(),
     /**
      * The MCP servers the run's kit names (a research contract's, for a research run), with the
      * agents that get each one (goal 068). Control fills it in and refuses a server Settings

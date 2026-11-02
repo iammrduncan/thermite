@@ -127,6 +127,26 @@ export const SupervisorFigures = z.object({
       last_error: Short.nullable(),
     })
     .optional(),
+  /**
+   * Each run's branches in git (goal 185), by run: where they go, the champion branch, each
+   * champion's commit by its number, each lane's branch tip, whether commits wait for a push, the
+   * last push and its error. A malformed one is dropped, not the report.
+   */
+  run_branches: z
+    .record(
+      z.string().max(FIGURE_RUN_MAX),
+      z.object({
+        git: z.string().max(2000),
+        branch: z.string().max(300),
+        champions: z.record(z.string().max(12), z.string().regex(/^[0-9a-f]{40,64}$/)),
+        lanes: z.record(z.string().max(300), z.string().regex(/^[0-9a-f]{40,64}$/)),
+        waiting: z.boolean(),
+        pushed_at: Short.nullable(),
+        error: Short.nullable(),
+      }),
+    )
+    .optional()
+    .catch(undefined),
   /** Model files it downloads or downloaded for the harness (model-download.ts), newest first. */
   models: z
     .array(
