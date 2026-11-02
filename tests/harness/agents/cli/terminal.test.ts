@@ -483,7 +483,9 @@ describe("the trial loop's terminal mode on the fake TUI", { skip }, () => {
       typed.map((s) => s.how),
       ["typed"],
     );
-    assert.match((await c.screen())?.data ?? "", /fake-tui/);
+    // Its screen now, with the owner's input among its newest lines (the long brief before them
+    // pushes the program's first line out of view).
+    assert.match((await c.screen())?.data ?? "", /user: OWNER-INPUT-1/);
     stop.abort();
     await running;
     await assert.rejects(c.input({ text: "too late", wait: "now" }, later), /trial has ended/);

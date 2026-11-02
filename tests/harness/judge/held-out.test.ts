@@ -26,6 +26,15 @@ import {
 } from "../../helpers/held-out-env.ts";
 import { FAST_KERNEL } from "../../helpers/judge-env.ts";
 
+/** The seed's kernel, idling 5 s on "big" (SEED_KERNEL idles 2 s): it can't meet a 25M goal there. */
+const SLOWER_SEED = `export function work(n) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n / 20000);
+  let s = 0;
+  for (let i = 0; i < n; i++) s += i % 7;
+  return s;
+}
+`;
+
 /**
  * Goal 082: a confirmation that fails on its held-out cells is named safely. The owner sees each
  * held-out case's name, kind and value against its threshold (the held_out record, its event,
@@ -196,10 +205,13 @@ describe("held-out failures, named safely (goal 082)", () => {
   });
 
   test("a goal's held-out threshold: the case, its value and threshold for the owner; the kind for the agents", async () => {
-    // 20 million a second: any machine that runs the tests meets it on "big", and the candidate
-    // that idles 1.2 s on the hidden size can't (at most 12.5 million there).
+    // 25 million a second, between what the starting point does on "big" (it idles 5 s there, so
+    // at most 20 million on any machine: the run stays open) and what the candidate does there
+    // (any machine that runs the tests does more), which idles 1.2 s on the hidden size (at most
+    // 12.5 million there).
     const env = await setup({
-      goal: { opsPerSecond: 20e6 },
+      seedKernel: SLOWER_SEED,
+      goal: { opsPerSecond: 25e6 },
       kitCells: CELLS,
       contract: {
         held_out_cells: [HIDDEN],
@@ -212,7 +224,7 @@ describe("held-out failures, named safely (goal 082)", () => {
               type: "metric_threshold",
               metric: "ops_per_s",
               op: ">=",
-              value: 20e6,
+              value: 25e6,
               cells: ["big", HIDDEN],
             },
           },
@@ -241,10 +253,10 @@ describe("held-out failures, named safely (goal 082)", () => {
     assert.equal(cell.goal, "fast");
     assert.equal(cell.kind, "threshold_missed");
     assert.equal(cell.op, ">=");
-    assert.equal(cell.threshold, 20e6);
+    assert.equal(cell.threshold, 25e6);
     assert.equal(cell.measure, "ops_per_s");
     assert.equal(cell.unit, "op/s");
-    assert.ok(Number(cell.value) > 0 && Number(cell.value) < 20e6, String(cell.value));
+    assert.ok(Number(cell.value) > 0 && Number(cell.value) < 25e6, String(cell.value));
     assert.ok(Number(cell.low) <= Number(cell.value) && Number(cell.value) <= Number(cell.high));
     // The hidden case never ran as a measurement, a goal check or a report.
     assert.equal(
@@ -266,7 +278,7 @@ describe("held-out failures, named safely (goal 082)", () => {
         `<td><code>${HIDDEN}</code></td><td>goal <b>fast</b></td><td><span class="chip bad">missed its threshold</span></td>`,
       ),
     );
-    assert.match(page, /&gt;= 2\.000e\+7 op\/s/);
+    assert.match(page, /&gt;= 2\.500e\+7 op\/s/);
     // The agent token: the goal's checks without the held-out case, which the owner sees.
     const owner = JSON.parse(await env.mcp("get_run", { run: "js-1" })) as {
       goal_checks: { goals: { goal: string; cells: { name: string }[] }[] };

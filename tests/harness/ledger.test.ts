@@ -354,8 +354,9 @@ describe("ledger", () => {
     assert.deepEqual(ledger.champions.promote(promoteArgs("a1")), { ok: true, seq: 2 });
     assert.equal(ledger.verdicts.sendChampionGuards("judge"), 1);
     const e = ledger.eventsAfter(0, 1000).events.find((x) => x.kind === "verdict_guards");
-    assert.equal(e?.subject, "a1");
-    const g = (e?.body as { guards: { metric: string; change: number }[] }).guards[0];
+    assert.ok(e);
+    assert.equal(e.subject, "a1");
+    const g = (e.body as { guards: { metric: string; change: number }[] }).guards[0];
     assert.equal(g?.metric, "mem_mib");
     assert.ok(Math.abs((g?.change ?? 0) + 0.01) < 1e-9);
     // Sent once: a restart sends nothing more.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { after, before, describe, test } from "node:test";
 import { PiConsole } from "../../../src/agents/pi-view/index.ts";
 import type { Terminal } from "../../../src/agents/terminal/index.ts";
 
@@ -24,6 +24,13 @@ function host(data = "the view") {
 }
 
 describe("a Pi view's console", () => {
+  // The console's waits hold no handle on the process, as it should be in the harness; here
+  // nothing else does, and Node would end the test while it waits (seen on Linux).
+  let keep: ReturnType<typeof setInterval> | undefined;
+  before(() => {
+    keep = setInterval(() => undefined, 60_000);
+  });
+  after(() => clearInterval(keep));
   test("an input waits for the worker's ask, is given once, and settles with its outcome", async () => {
     const c = new PiConsole();
     const typed = c.ownerInput({ text: "look at the loop order" });
