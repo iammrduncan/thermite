@@ -50,6 +50,9 @@ const V010 = readFileSync(
 const fresh = () => join(mkdtempSync(join(tmpdir(), "thermite-move-")), "control.db");
 const version = (db: DatabaseSync) =>
   (db.prepare("select max(version) as v from schema_migrations").get() as { v: number }).v;
+/** Every migration applied but the events table's drop (12), which waits for the move. */
+const dropWaits = (db: DatabaseSync) =>
+  !db.prepare("select 1 from schema_migrations where version = 12").get() && version(db) === 28;
 const hasTable = (db: DatabaseSync) =>
   Boolean(db.prepare("select 1 from sqlite_master where name = 'rig_event'").get());
 const onStream = (bus: FakeBus) => bus.kept.filter((k) => k.stream === EVENT_STREAM);
@@ -170,7 +173,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
     assert.ok(!copiesOf(path).some((c) => c.path === move.copy), "outside the rotation");
     const copy = new DatabaseSync(move.copy ?? "", { readOnly: true });
     assert.equal((copy.prepare("select count(*) as n from rig_event").get() as { n: number }).n, 8);
-    assert.equal(version(copy), 11);
+    assert.equal(dropWaits(copy), true);
     copy.close();
     // Control's records came from the stream: each ledger's held cursor, the registry.
     assert.equal(store.reportedRigs.heldCursor("rig-a", "la-1"), 4);
@@ -253,7 +256,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       [0],
     );
     assert.equal(keptCopies(path).length, 1);
-    assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v11\..*\.kept$/);
+    assert.match(keptCopies(path)[0] ?? "", /^control\.db\.v28\..*\.kept$/);
     assert.equal(hasTable(store.db), false);
     assert.equal(version(store.db), 28);
     const kept = onStream(busOf(store).bus);
@@ -436,7 +439,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       "the stream holds rows to seq 5, past the table's last, 3: control's store is older than the stream",
     );
     assert.equal(hasTable(a.db), true);
-    assert.equal(version(a.db), 11);
+    assert.equal(dropWaits(a.db), true);
     // The stream holds one moved row, then an event published first: the table's other rows
     // can't go before it.
     const first = new FakeBus();
@@ -490,7 +493,7 @@ describe("a store's events table, moved to the events stream once, and dropped",
       "the events stream lacks rows of control's events table: it holds 199 of the table's 200 rows, the last at seq 200, where the table's last is 200",
     );
     assert.equal(hasTable(store.db), true, "the table stays");
-    assert.equal(version(store.db), 11);
+    assert.equal(dropWaits(store.db), true);
     assert.deepEqual(keptCopies(path), [], "no copy made: nothing dropped");
     closeBus(store);
     store.db.close();

@@ -16,6 +16,9 @@ const V010 = readFileSync(
 const fresh = () => join(mkdtempSync(join(tmpdir(), "thermite-store-")), "control.db");
 const version = (db: DatabaseSync) =>
   (db.prepare("select max(version) as v from schema_migrations").get() as { v: number }).v;
+/** Every migration applied but the events table's drop (12), which waits for the move. */
+const dropWaits = (db: DatabaseSync) =>
+  !db.prepare("select 1 from schema_migrations where version = 12").get() && version(db) === 28;
 
 describe("control's store migrations", () => {
   test("a store that v0.1.0 wrote is copied, then migrated, and keeps its data", () => {
@@ -263,7 +266,7 @@ describe("control's store migrations", () => {
     );
   });
 
-  test("the events table's drop waits for the move: the store stays at version 11, and nothing is copied again", () => {
+  test("the events table's drop alone waits for the move: every other migration runs, and a start that migrates nothing copies nothing", () => {
     const path = fresh();
     const old = new ControlStore(path);
     withEventsTable(old.db);
@@ -274,24 +277,29 @@ describe("control's store migrations", () => {
     old.db.close();
     for (let start = 0; start < 2; start++) {
       const store = new ControlStore(path);
-      assert.equal(version(store.db), 11, "the drop waits");
+      assert.equal(dropWaits(store.db), true, "the drop waits, every other migration ran");
       assert.equal(store.eventsTable.size().rows, 2);
       store.db.close();
     }
-    assert.deepEqual(copiesOf(path), [], "a start that migrates nothing copies nothing");
+    // The first start ran the migrations after the drop, with a copy first; the second ran none.
+    assert.equal(copiesOf(path).length, 1, "a start that migrates nothing copies nothing");
     // A move that found other than the table holds: the drop still waits.
     const store = new ControlStore(path);
     assert.equal(store.migrate({ eventsMoved: { rows: 1, lastSeq: 2 } }), undefined);
-    assert.equal(version(store.db), 11);
+    assert.equal(dropWaits(store.db), true);
     // The move found the stream to hold the table whole: the table goes, its copy kept outside
     // the rotation, and the rig's last cursor with it.
     const kept = store.migrate({ eventsMoved: { rows: 2, lastSeq: 2 } });
-    assert.match(kept ?? "", /control\.db\.v11\..*\.kept$/);
+    assert.match(kept ?? "", /control\.db\.v28\..*\.kept$/);
     assert.equal(version(store.db), 28);
     assert.equal(store.eventsTable.exists(), false);
     const rigCols = store.db.prepare("pragma table_info(rig)").all() as { name: string }[];
     assert.ok(!rigCols.some((c) => c.name === "last_cursor"));
-    assert.deepEqual(copiesOf(path), [], "not one of the copies the rotation removes");
+    assert.equal(copiesOf(path).length, 1, "the first start's copy, alone in the rotation");
+    assert.ok(
+      !copiesOf(path).some((c) => c.path === kept),
+      "not one of the copies the rotation removes",
+    );
     const copy = new DatabaseSync(kept ?? "", { readOnly: true });
     assert.equal((copy.prepare("select count(*) as n from rig_event").get() as { n: number }).n, 2);
     copy.close();

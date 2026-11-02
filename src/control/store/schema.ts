@@ -658,8 +658,10 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
  * The migration that drops control's events table (goal 168). It waits until the move of the
  * table's rows to the events stream has checked them there (control/events/move.ts), which needs
  * the bus, and so runs after the store is open: control then migrates again, given what the move
- * found (ControlStore.migrate). The migrations after it wait with it. The copy before it is kept
- * outside the copies' rotation, until the owner removes it: it is the last copy of the table.
+ * found (ControlStore.migrate). It alone waits: the migrations after it touch no events table,
+ * and control's start before the move reads their tables (its log level, the audit log, the bus's
+ * users, the events' floors). The copy before it is kept outside the copies' rotation, until the
+ * owner removes it: it is the last copy of the table.
  */
 const EVENTS_TABLE_GOES = 12;
 
@@ -716,15 +718,23 @@ export function migrateStore(
   const versioned = db
     .prepare("select 1 from sqlite_master where type = 'table' and name = 'schema_migrations'")
     .get();
-  const row = versioned
-    ? (db.prepare("select max(version) as v from schema_migrations").get() as { v: number | null })
-    : undefined;
-  const current = row?.v ?? 0;
+  const applied = new Set(
+    versioned
+      ? (db.prepare("select version from schema_migrations").all() as { version: number }[]).map(
+          (r) => r.version,
+        )
+      : [],
+  );
+  const current = Math.max(0, ...applied);
   const known = STORE_MIGRATIONS.length;
   if (current > known) throw new Error(newerSchemaWords("control store", path, current, known));
-  const waits = current < EVENTS_TABLE_GOES && !eventsTableMayGo(db, given.eventsMoved);
-  const to = waits ? EVENTS_TABLE_GOES - 1 : known;
-  if (current >= to) return undefined;
+  const waits = !applied.has(EVENTS_TABLE_GOES) && !eventsTableMayGo(db, given.eventsMoved);
+  // Each migration not applied yet, in order; the events table's drop waits for the move alone.
+  const due = STORE_MIGRATIONS.map((_, i) => i + 1).filter(
+    (v) => !applied.has(v) && !(waits && v === EVENTS_TABLE_GOES),
+  );
+  if (!due.length) return undefined;
+  const to = Math.max(...due);
   const tables = db
     .prepare(
       "select count(*) as n from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != 'schema_migrations'",
@@ -737,7 +747,7 @@ export function migrateStore(
     );
   let kept: string | undefined;
   if (path !== ":memory:" && tables.n > 0) {
-    if (to >= EVENTS_TABLE_GOES && eventsTableHoldsRows(db))
+    if (due.includes(EVENTS_TABLE_GOES) && eventsTableHoldsRows(db))
       kept = keepCopyBefore(db, path, current, to, "the last copy of control's events table");
     else
       copyBeforeMigration(
@@ -751,7 +761,7 @@ export function migrateStore(
   }
   db.exec("create table if not exists schema_migrations (version integer primary key)");
   // Each migration in a transaction of its own, as the ledger's: all of it, or none.
-  for (let version = current + 1; version <= to; version++)
+  for (const version of due)
     transaction(db, () => {
       STORE_MIGRATIONS[version - 1]?.(db);
       db.prepare("insert into schema_migrations (version) values (?)").run(version);
