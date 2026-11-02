@@ -134,6 +134,7 @@ export const EVENT_KINDS = [
   "trial_stop_asked",
   "trial_stopped",
   "verdict",
+  "verdict_guards",
   "wipe_requested",
   "workers_reset",
 ] as const;

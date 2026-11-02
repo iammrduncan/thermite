@@ -54,6 +54,9 @@ export function openState(ctx: ControllerContext): {
   if (left.length)
     log("harness", "removed the exports a crash left half written", { left: left.length });
   const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"));
+  // The guards of champions judged before verdicts carried them, sent once (goal 184).
+  const guarded = ledger.verdicts.sendChampionGuards("judge");
+  if (guarded) log("harness", "sent the guards of champions judged before", { champions: guarded });
   // After a wipe: commands issued before it belonged to the old ledger.
   const notBefore = join(paths.stateDir, "ledger", NOT_BEFORE_FILE);
   if (existsSync(notBefore)) {

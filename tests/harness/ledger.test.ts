@@ -341,6 +341,27 @@ describe("ledger", () => {
     );
   });
 
+  test("a champion judged before verdicts carried guards has them sent once, from the ledger's record (goal 184)", () => {
+    const { ledger } = setup();
+    confirmed(ledger, "a1");
+    // As a harness before goal 184 kept it: the guards in the verdict's row, not in its event.
+    const guards = [
+      { metric: "mem_mib", status: "ok", estimate: Math.log(0.99), low: -0.02, high: 0.0 },
+    ];
+    ledger.db
+      .prepare("update verdict set guards = ? where attempt = ?")
+      .run(JSON.stringify(guards), "a1");
+    assert.deepEqual(ledger.champions.promote(promoteArgs("a1")), { ok: true, seq: 2 });
+    assert.equal(ledger.verdicts.sendChampionGuards("judge"), 1);
+    const e = ledger.eventsAfter(0, 1000).events.find((x) => x.kind === "verdict_guards");
+    assert.equal(e?.subject, "a1");
+    const g = (e?.body as { guards: { metric: string; change: number }[] }).guards[0];
+    assert.equal(g?.metric, "mem_mib");
+    assert.ok(Math.abs((g?.change ?? 0) + 0.01) < 1e-9);
+    // Sent once: a restart sends nothing more.
+    assert.equal(ledger.verdicts.sendChampionGuards("judge"), 0);
+  });
+
   test("promotion is compare-and-swap: a stale expected seq loses", () => {
     const { ledger } = setup();
     confirmed(ledger, "a1");

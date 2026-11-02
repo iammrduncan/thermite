@@ -151,10 +151,10 @@ test("each guard across the champions: the start, the limit and each champion's 
   assert.equal(g?.start, 30);
   assert.ok(Math.abs((g?.limit as number) - 29.7) < 1e-9);
   assert.deepEqual(g?.points, [
-    { seq: 1, value: 30 },
-    { seq: 2, value: 29.9 },
-    { seq: 3, value: 29.75 },
-    { seq: 4, value: null },
+    { seq: 1, value: 30, estimated: false },
+    { seq: 2, value: 29.9, estimated: false },
+    { seq: 3, value: 29.75, estimated: false },
+    { seq: 4, value: null, estimated: false },
   ]);
   // An older harness's event has no guards; a malformed one is left out.
   assert.deepEqual(guardsOf(undefined), []);
@@ -198,4 +198,35 @@ test("an attempt shows each guard's change against its champion, red when the ju
   );
   assert.match(html, />decode_tps -0\.8%</);
   assert.equal(attemptGuards(r, { guards: [] }), "");
+});
+
+test("a champion judged before verdicts carried guard values is placed from its change against the start, marked; one value alone is words (goal 184)", () => {
+  const r = run() as unknown as {
+    attempts: { id: string; guards: ReturnType<typeof guardsOf> }[];
+    champion: unknown[];
+  };
+  // The ledger's guards for the older champion, sent once: a change against the start (−0.5%).
+  const old = r.attempts.find((a) => a.id === "a-old");
+  assert.ok(old);
+  old.guards = guardsOf([
+    {
+      metric: "decode_tps",
+      status: "ok",
+      change: -0.001,
+      vs_start: { change: -0.005, spent: false },
+    },
+  ]);
+  const view = r as unknown as Parameters<typeof championGuards>[0];
+  const [g] = championGuards(view);
+  const p4 = g?.points.find((p) => p.seq === 4);
+  assert.equal(p4?.estimated, true);
+  assert.ok(Math.abs((p4?.value as number) - 30 * 0.995) < 1e-9);
+  assert.match(guardCharts(view), /class="gpt est"/);
+  assert.match(guardCharts(view), /≈ estimated: judged before verdicts carried guard values/);
+  assert.match(championGuardLine(view, 4), /<b>≈29\.85 tok\/s<\/b>/);
+  // With only the start known, no empty chart: the start and the limit in words.
+  const startOnly = { ...r, champion: r.champion.slice(0, 1) } as unknown as typeof view;
+  const words = guardCharts(startOnly);
+  assert.doesNotMatch(words, /<svg/);
+  assert.match(words, /start <b>30 tok\/s<\/b> · limit <b class="bad">29\.7<\/b> \(−1%\)/);
 });

@@ -62,15 +62,24 @@ export interface ChampionGuard {
   /** The starting point's value, from the run's baseline, and the limit no champion may pass. */
   start: number | null;
   limit: number | null;
-  /** Each champion since the starting point, oldest first: its value, null when not known. */
-  points: { seq: number; value: number | null }[];
+  /**
+   * Each champion since the starting point, oldest first: its value, null when not known, and
+   * whether it is an estimate (from the judge's change, not its measured values).
+   */
+  points: { seq: number; value: number | null; estimated: boolean }[];
 }
+
+/** A value `change` better than `from` in the guard's direction (a fraction, positive is better). */
+const moved = (from: number, change: number, direction: "max" | "min") =>
+  direction === "max" ? from * (1 + change) : from / (1 + change);
 
 /**
  * Each guard the run's baseline names, with the starting point's value, the limit the contract
  * sets against it (`max_total_regression`), and each champion's value since: the starting point's
- * own, then each later champion's from its confirming verdict. A champion judged before its
- * verdicts carried guard values has none. Empty for a run without a baseline.
+ * own, then each later champion's from its confirming verdict's measured values. A champion judged
+ * before verdicts carried values is estimated from its change against the starting point, or
+ * else from its change against the champion before; with neither, it has none. Empty for a run
+ * without a baseline.
  */
 export function championGuards(
   r: Pick<RunView, "baseline" | "champion" | "attempts">,
@@ -90,11 +99,25 @@ export function championGuards(
         : direction === "max"
           ? start * (1 - g.max_total_regression)
           : start * (1 + g.max_total_regression);
+    let before = start;
     const points = steps.map((c) => {
-      if (c.seq === b.champion_seq) return { seq: c.seq, value: start };
+      if (c.seq === b.champion_seq) {
+        before = start;
+        return { seq: c.seq, value: start, estimated: false };
+      }
       const a = c.attempt ? r.attempts.find((x) => x.id === c.attempt) : undefined;
       const v = a?.guards.find((x) => x.metric === g.metric);
-      return { seq: c.seq, value: v ? guardValue(v) : null };
+      const measured = v ? guardValue(v) : null;
+      const vsStart = v?.vs_start?.change;
+      const value =
+        measured ??
+        (typeof vsStart === "number" && start !== null
+          ? moved(start, vsStart, direction)
+          : typeof v?.change === "number" && before !== null
+            ? moved(before, v.change, direction)
+            : null);
+      before = value;
+      return { seq: c.seq, value, estimated: measured === null && value !== null };
     });
     return {
       metric: g.metric,

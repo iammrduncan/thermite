@@ -122,6 +122,12 @@ export const ATTEMPTS: Handlers = {
       f.confirmDelta.set(a.id, b.delta);
     }
   },
+  // A champion's guards from a harness that judged it before verdicts carried them (goal 184):
+  // only when its verdict gave none.
+  verdict_guards(f, e, b) {
+    const a = f.attempts.get(String(e.subject));
+    if (a && !a.guards.length) a.guards = frozen(guardsOf(b.guards));
+  },
   held_out_checked(f, e, b) {
     // A goal run's champion's check names its champion (goal 086); else it is an attempt's.
     if (typeof b.champion_seq === "number") {

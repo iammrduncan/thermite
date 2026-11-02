@@ -142,6 +142,41 @@ export class LedgerVerdicts extends LedgerPart {
     return id;
   }
 
+  /**
+   * Each standing champion's guards (goal 184), sent once as a `verdict_guards` event when its
+   * confirmed win's event did not carry them (a harness before goal 184 judged it): the ledger's
+   * record of the guards, as fractions, without their values. Control's charts place such a
+   * champion from its change against the starting point. Returns how many it sent.
+   */
+  sendChampionGuards(judgedBy: string): number {
+    let sent = 0;
+    for (const run of this.ledger.runs.list()) {
+      if (run.mode !== "hill_climb") continue;
+      for (const c of this.ledger.champions.newest(run.id, 500)) {
+        if (!c.attempt || c.seq <= 1) continue;
+        const v = this.confirmedWin(c.attempt);
+        const guards = v ? (JSON.parse(v.guards) as unknown[]) : [];
+        if (!v || !Array.isArray(guards) || !guards.length) continue;
+        const carried = this.ledger.events
+          .list("verdict", { subject: c.attempt })
+          .some(
+            (e) =>
+              Number((e.body as { id?: unknown }).id) === v.id &&
+              (e.body as { guards?: unknown }).guards,
+          );
+        if (carried) continue;
+        if (this.ledger.events.newest("verdict_guards", { subject: c.attempt, body: { id: v.id } }))
+          continue;
+        this.ledger.appendEvent(judgedBy, "verdict_guards", c.attempt, {
+          id: v.id,
+          guards: guardsForEvent(guards),
+        });
+        sent++;
+      }
+    }
+    return sent;
+  }
+
   /** A verdict, by its id. */
   get(id: number): VerdictRow | undefined {
     const r = this.row<Row>("select * from verdict where id = ?", id);

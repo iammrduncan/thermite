@@ -86,6 +86,11 @@ export interface EventBodies {
     guards?: VerdictGuard[] | undefined;
   };
   /**
+   * A confirmed win's guards, sent once for a champion whose verdict's event came from a harness
+   * that did not carry them (goal 184): from the ledger's record of the verdict, without values.
+   */
+  verdict_guards: { id: number; guards: VerdictGuard[] };
+  /**
    * The owner withdrew evidence (goal 174): the invalidation's id, its subject, the attempts it
    * reached, the `invalidated` verdicts it recorded and the champions it reopened.
    */

@@ -153,6 +153,10 @@ const BODIES = {
       .nullish(),
     guards: list({ metric: str, status: str, change: num, low: num, high: num }),
   }),
+  verdict_guards: z.object({
+    id: num,
+    guards: list({ metric: str, status: str, change: num, low: num, high: num }),
+  }),
   invalidation: z.object({
     id: num,
     run: str,
