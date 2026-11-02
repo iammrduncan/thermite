@@ -8,6 +8,7 @@ import { newToken } from "../../common/secrets.ts";
 import type { TerminalKey } from "../programs/index.ts";
 import type { RoleRunner, RoleRunOutcome } from "../runner.ts";
 import { END_WAIT_MS, SERVER_READY_MS, TERM_WAIT_MS } from "./host.ts";
+import { ENTER_WAIT_MS } from "./keys.ts";
 import {
   ANSWER_MAX,
   ProgramExit,
@@ -169,7 +170,8 @@ export class Terminal {
 
   /** Text typed into the program, then Enter, sent apart, unless `enter` is false. */
   async type(text: string, enter = true): Promise<void> {
-    await this.ask({ op: "type", text, enter }, Done);
+    // With Enter, the host may wait for the program to have read the text first (keys.ts).
+    await this.ask({ op: "type", text, enter }, Done, enter ? ASK_MS + ENTER_WAIT_MS : ASK_MS);
   }
 
   async keys(keys: TerminalKey[]): Promise<void> {

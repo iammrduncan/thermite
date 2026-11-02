@@ -10,12 +10,14 @@ import type { TerminalKey } from "../programs/index.ts";
  * Enter, and the gap before it after text: a quick Enter after text is a new line in Codex. After
  * a long text, of LONG_TEXT characters or more since the last Enter, Enter goes once the program
  * has also written nothing for ENTER_GAP_MS, so it has read all of it (a slow machine takes a while
- * over a long message), or after ENTER_WAIT_MS.
+ * over a long message), or after ENTER_WAIT_MS: a program that keeps redrawing (Codex while its
+ * MCP servers start) never goes still. A request that types with Enter has that much longer to be
+ * answered (client.ts).
  */
 export const ENTER = "\r";
 export const ENTER_GAP_MS = 500;
 export const LONG_TEXT = 4096;
-export const ENTER_WAIT_MS = 30_000;
+export const ENTER_WAIT_MS = 10_000;
 /** The gap between two keys of one request, so a program reads each by itself. */
 export const KEY_GAP_MS = 50;
 
