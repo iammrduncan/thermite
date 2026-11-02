@@ -3,6 +3,7 @@ import type { RigSettings } from "../../core/rig-settings.ts";
 import type { RunpodRigView } from "../runpod/index.ts";
 import type { RigVersions } from "../versions.ts";
 import type { GoalChecks, GoalValues, RigCheckView } from "./fold/index.ts";
+import type { GuardView } from "./guards.ts";
 import type { MetricValues } from "./metric-values.ts";
 import type { ReportingState, RigModelView } from "./report.ts";
 import type {
@@ -102,6 +103,8 @@ export interface AttemptView {
   delta: number | null;
   /** The main metric's values its latest verdict's gain comes from (goal 133). */
   values: MetricValues | null;
+  /** Its latest verdict's guards: each one's change and values (goal 184). */
+  guards: GuardView[];
   hypothesis: string | null;
   recorded_at: string;
   updated_at: string;

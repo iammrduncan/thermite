@@ -1,5 +1,6 @@
 import { HELD_OUT_EVENT_CELLS } from "../../../core/held-out.ts";
 import { clip } from "../../../core/kb/index.ts";
+import { guardsOf } from "../guards.ts";
 import { metricValuesOf } from "../metric-values.ts";
 import { frozen } from "../sharing.ts";
 import type { AttemptView, HeldOutView } from "../types.ts";
@@ -50,6 +51,7 @@ export const ATTEMPTS: Handlers = {
       verdict: null,
       delta: null,
       values: null,
+      guards: [],
       hypothesis: (b.hypothesis as string | null) ?? null,
       recorded_at: e.at,
       updated_at: e.at,
@@ -110,6 +112,7 @@ export const ATTEMPTS: Handlers = {
     a.verdict = String(b.verdict);
     a.delta = typeof b.delta === "number" ? b.delta : null;
     a.values = metricValuesOf(b.values);
+    a.guards = frozen(guardsOf(b.guards));
     a.ci =
       typeof b.ci_low === "number" && typeof b.ci_high === "number" ? [b.ci_low, b.ci_high] : null;
     a.reasons = typeof b.reasons === "string" ? b.reasons : null;

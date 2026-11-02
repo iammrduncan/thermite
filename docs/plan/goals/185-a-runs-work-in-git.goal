@@ -1,0 +1,54 @@
+---
+id: "185"
+title: "A run's work in git: a branch for its champions, one for each lane, and new campaigns from a champion's commit"
+status: IN_PROGRESS
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 185 · A run's work in git: a branch for its champions, one for each lane, and new campaigns from a champion's commit
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011)
+
+## What
+
+From the owner's testing notes of 2026-11-02, and [issue 39](https://github.com/iammrduncan/thermite/issues/39):
+
+- Item 12: "no way on control or the dashboard to start a new campaign from another run's champion with a changed contract; had to hand-build a signed assign_campaign naming the champion's commit, with the whole contract (13 KB) inline."
+- Item 17: "no way to get a run's champion out as git (issue 39): a champion patch applies to the run's seed, and [that run]'s seed is a commit Thermite made on [another rig] that [the project's repository] never got; rebuilding it needs [an earlier run]'s attempt patch, which control never received."
+
+A run's code lives as commits in its rig's own git and as patches on control. A champion's patch applies to the run's starting commit, and that commit may exist only on the rig that made it: a run started from an earlier run's champion starts from a commit no repository has. So a champion can't be taken out as git, and a new campaign can't start from it on another rig.
+
+1. **A branch for the run's champions.** The supervisor pushes `thermite/<run>/champion` to the project's repository: one commit for each champion, with the champion's tree, each on the one before, so the branch only moves forward. Its first commit is the run's starting point.
+2. **A branch for each lane, with its work as patches.** `thermite/<run>/lane-<n>` holds the lane's attempts as patches, with what each tried and its verdict, committed as they come; not a branch for each attempt or each champion, which would soon be too many to read.
+3. **A new campaign from a champion's commit.** **Start a run**, a copy of a campaign, MCP and REST start a run from another run's champion by its commit on the champion branch, with a whole new contract saved as a new version of the campaign. No hand-built `assign_campaign`.
+4. **Where the results go is the creator's choice**, on **New campaign** and in the contract or assignment: branches of the project's repository (the default), or a separate results repository set from control, on every rig: the local stack, joined rigs, machines, clusters and RunPod.
+
+## To work out
+
+- **Write access.** Pushing needs a Git access that can push to the project's repository; today's only fetches. **New campaign** checks that it can push, as **Try it** checks a fetch, and says the results stay on control when it can't. SSH keys and HTTPS tokens.
+- **Only Thermite's branches.** Only branches under `thermite/`; never the default branch or another's; a branch that already exists with other history is refused.
+- **A public repository.** Pushing to a public repository publishes the agents' attempts; the page says so before the first push.
+- **A project in a folder** (`project.folder`): the run's commits hold only that folder.
+- **The record** (events, field notes, the knowledge base, the ledger): on control alone, or also to a results repository.
+- **When to push:** with each export, as the results repository does now.
+- The dashboard's part is drawn as a mockup for the owner first.
+
+## Done when
+
+- [ ] The four, with their tests and the pages that describe them (Take the result, Set up the results repository, Exports, New campaign, Start a run), decisions.md's 2026-10-14 row replaced, and the campaign, control and judge acceptance checks pass.
+
+## Decisions
+
+- 2026-10-27, owner: the creator chooses where a run's results go; the default is branches of the project's own repository, one for the champion and one for each lane, named for the run; the other choice is a separate results repository (issue 39).
+- 2026-11-02, owner: "branch per lane and patches for their work, main champion has a branch for the run and commits for champions. branches for each champion would get unwieldly fast."
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's notes, issue 39 and the owner's design of the branches. Item 2 of goal 182 (a campaign from a champion) moved here: it needs the champion's commit in git.
+
+---
+
+Run with `/goal Complete docs/plan/goals/185-a-runs-work-in-git.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

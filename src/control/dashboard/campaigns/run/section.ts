@@ -12,11 +12,13 @@ import {
 import {
   ago,
   championCard,
+  championGuardLine,
   deltaCell,
   esc,
   fmtInt,
   gainChart,
   gainChip,
+  guardCharts,
   kpi,
   moreText,
   num,
@@ -339,14 +341,14 @@ export function runHelpers(dash: Dashboard) {
     // The champions, newest first: what each one changed and what it gained.
     const ladder =
       i.mode === "hill_climb"
-        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat"><div class="ladder-chart">${gainChart(i)}</div>${i.champion
+        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat"><div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}${i.champion
             .filter((x) => !x.reopened)
             .slice()
             .reverse()
             .slice(0, 12)
             .map((x) => {
               const a = x.attempt ? i.attempts.find((y) => y.id === x.attempt) : undefined;
-              return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span></div>`;
+              return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span>${championGuardLine(i, x.seq)}</div>`;
             })
             .join("")}</div></div>`
         : "";

@@ -6,7 +6,7 @@ import {
   type RunView,
   runCampaign,
 } from "../../views/index.ts";
-import { ago, esc, gainChip, reportingTag, sparkline } from "../components/index.ts";
+import { ago, attemptGuards, esc, gainChip, reportingTag, sparkline } from "../components/index.ts";
 import { attemptHref, runHref } from "../urls.ts";
 import { attemptState, clip, jobText, runOfAttempt, signed } from "../words/index.ts";
 import { cap } from "./change.ts";
@@ -175,7 +175,7 @@ export function attemptRows(u: RigView, r: RunView, xs: AttemptView[], now: numb
             ? `${a.gained?.length ? `<span class="chip ok">+${a.gained.length} goal${a.gained.length === 1 ? "" : "s"}</span>` : ""}${a.lost.length ? `<span class="chip bad">−${a.lost.length}</span>` : ""}`
             : ""
           : typeof a.delta === "number"
-            ? gainChip(r, a)
+            ? `${gainChip(r, a)}${attemptGuards(r, a)}`
             : "";
       const where =
         o.word === "Blocked" ? "the judge measured it; the auditor blocked it" : attemptState(a);

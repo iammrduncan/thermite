@@ -329,6 +329,7 @@ export class JudgeContext {
           estimate: g.interval.estimate,
           low: g.interval.low,
           high: g.interval.high,
+          values: g.values,
           ...(s ? { vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent } } : {}),
         };
       }),

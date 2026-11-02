@@ -130,8 +130,10 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [179](goals/_completed/179-system-view.goal) The whole system on Metrics: the message bus, control, its storage and each rig, live · `VERIFIED`
 - [180](goals/180-testing-bugs-exports-checks-cli.goal) Testing's first bugs: exports of what changed, a check's stale refusal, a command line behind its code · `IN_PROGRESS`
 - [181](goals/_completed/181-testing-pages.goal) Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals · `VERIFIED`
-- [182](goals/182-campaigns-and-kits-for-agents.goal) Campaigns and kits for agents: a kit from git, a campaign from a champion, grants that reach running runs, the metrics a contract uses · `IN_PROGRESS`
+- [182](goals/_completed/182-campaigns-and-kits-for-agents.goal) Campaigns and kits for agents: a kit from git, grants that reach running runs, the metrics a contract uses · `VERIFIED`
 - [183](goals/183-advisors-take-their-message.goal) A program in its terminal takes its message: typed in when ready, a message never taken ends the run, audits never wait behind the teachers · `IN_PROGRESS`
+- [184](goals/184-guards-beside-the-main-metric.goal) A hill climb's guards beside its main metric: in each verdict, under each champion, beside each attempt · `IN_PROGRESS`
+- [185](goals/185-a-runs-work-in-git.goal) A run's work in git: a branch for its champions, one for each lane, and new campaigns from a champion's commit · `IN_PROGRESS`
 - [173](goals/_completed/173-recovery-and-health.goal) Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks · `VERIFIED`
 - [174](goals/_completed/174-invalidate-evidence.goal) Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows · `VERIFIED`
 - [175](goals/_completed/175-knowledge-base.goal) The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot · `VERIFIED`
@@ -166,6 +168,7 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
 - [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
 - [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
+- [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
 
 ## v0.1.3
 

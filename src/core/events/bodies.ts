@@ -82,6 +82,8 @@ export interface EventBodies {
     reasons: string;
     supersedes: number | null;
     values?: unknown;
+    /** Each guard's status, changes (fractions, positive is better) and values (goal 184). */
+    guards?: VerdictGuard[] | undefined;
   };
   /**
    * The owner withdrew evidence (goal 174): the invalidation's id, its subject, the attempts it
@@ -699,6 +701,17 @@ interface JobRequeued {
   fence: number;
   expiries: number;
   state: string;
+}
+
+/** A guard in a verdict's event (goal 184). */
+interface VerdictGuard {
+  metric: string;
+  status: string;
+  change: number | null;
+  low: number | null;
+  high: number | null;
+  values?: unknown;
+  vs_start?: { change: number | null; spent: boolean } | undefined;
 }
 
 /** A champion from another rig, judged here. */

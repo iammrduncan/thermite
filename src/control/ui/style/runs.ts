@@ -56,7 +56,22 @@ details.more[open] > summary .more-part { display: none; } details.more[open] > 
 .ar-out { justify-content: center; }
 .ar-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ar-main b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ar-effect { display: flex; gap: 4px; justify-content: flex-end; }
+.ar-effect { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; align-items: center; }
+.ar-guards { display: flex; flex-wrap: wrap; gap: 2px 10px; justify-content: flex-end; flex-basis: 100%; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.ag.bad { color: var(--error-foreground); font-weight: 600; } .ag.warn { color: var(--warning-foreground); }
+/* a hill climb's guards (goal 184): a chart for each, and a line under each champion */
+.guards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; padding: 8px 14px 6px; border-bottom: 1px solid var(--border); }
+.gchart { min-width: 0; } .gchart-title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; margin-bottom: 2px; }
+svg.chart .gline { fill: none; stroke: var(--info); stroke-width: 2; }
+svg.chart .gpt { fill: var(--card); stroke: var(--info); stroke-width: 2; } svg.chart .gpt.near { stroke: var(--warning); }
+svg.chart .start { stroke: var(--muted-foreground); stroke-width: 1; stroke-dasharray: 2 3; }
+svg.chart .limit { stroke: var(--error); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg.chart .lbl-limit { fill: var(--error-foreground); font-weight: 600; } svg.chart .glast { fill: var(--foreground); font-weight: 600; }
+.guard-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 4px 14px 10px; border-bottom: 1px solid var(--border); }
+.guard-legend i { display: inline-block; width: 18px; vertical-align: middle; margin-right: 6px; border-top: 2px solid var(--info); }
+.guard-legend .lg-start { border-top: 1px dotted var(--muted-foreground); } .guard-legend .lg-limit { border-top: 2px dashed var(--error); }
+.lad-guards { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.lad-guards b { color: var(--foreground); font-weight: 600; } .lad-guards .near, .lad-guards .near b { color: var(--warning-foreground); }
 .ar-lane { color: var(--muted-foreground); font-family: var(--font-mono); font-size: 12px; }
 .ar-age { color: var(--muted-foreground); font-size: 12px; text-align: right; }
 /* an attempt's page */

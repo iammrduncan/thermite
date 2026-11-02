@@ -1,4 +1,6 @@
 import { canonicalJson } from "../../core/canonical.ts";
+import type { EventBodies } from "../../core/events/bodies.ts";
+import { toFraction } from "../../core/stats.ts";
 import { clipReason, REASONS_CHARS } from "../judge/index.ts";
 import { LedgerError, LedgerPart, type Row } from "./part.ts";
 
@@ -42,6 +44,32 @@ export interface VerdictRow {
 }
 
 const num = (x: unknown) => (x === null || x === undefined ? null : Number(x));
+
+/**
+ * The guards for the verdict's event (goal 184): each guard's status, its change against the
+ * champion and the interval's ends as fractions in its direction (positive is better), its
+ * measured values, and at confirmation its change against the starting point. The ledger's row
+ * keeps them as the judge gave them, as log ratios.
+ */
+function guardsForEvent(guards: unknown): NonNullable<EventBodies["verdict"]["guards"]> {
+  const frac = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? toFraction(x) : null);
+  return (Array.isArray(guards) ? guards : []).flatMap((x) => {
+    const g = (x ?? {}) as Record<string, unknown>;
+    if (typeof g.metric !== "string") return [];
+    const s = g.vs_start as Record<string, unknown> | undefined;
+    return [
+      {
+        metric: g.metric,
+        status: String(g.status),
+        change: frac(g.estimate),
+        low: frac(g.low),
+        high: frac(g.high),
+        ...(g.values ? { values: g.values } : {}),
+        ...(s ? { vs_start: { change: frac(s.estimate), spent: s.spent === true } } : {}),
+      },
+    ];
+  });
+}
 
 function toVerdict(r: Row): VerdictRow {
   return {
@@ -109,6 +137,7 @@ export class LedgerVerdicts extends LedgerPart {
       reasons: clipReason(v.reasons, REASONS_CHARS),
       supersedes: v.supersedes ?? null,
       ...(v.values ? { values: v.values } : {}),
+      ...(Array.isArray(v.guards) && v.guards.length ? { guards: guardsForEvent(v.guards) } : {}),
     });
     return id;
   }

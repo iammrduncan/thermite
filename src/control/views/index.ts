@@ -37,6 +37,13 @@ export {
 export { runDirections } from "./directions.ts";
 export { championsInForce, currentChampion, runCampaign } from "./facts.ts";
 export type { RigCheckView } from "./fold/index.ts";
+export {
+  type ChampionGuard,
+  championGuards,
+  type GuardView,
+  guardMeasured,
+  nearLimit,
+} from "./guards.ts";
 export { type LeaderEntry, leaderboard } from "./leaderboard.ts";
 export type { MetricValues } from "./metric-values.ts";
 export {

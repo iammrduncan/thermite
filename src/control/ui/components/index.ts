@@ -25,6 +25,7 @@ export {
   startWords,
   valuesPairWords,
 } from "./gains.ts";
+export { attemptGuards, championGuardLine, guardCharts } from "./guards.ts";
 export { APPLE_TOUCH_ICON, FAVICON_ICO, FAVICON_SVG, ICON_LINKS } from "./icons.ts";
 export { MD_CORE_JS, mdHtml } from "./markdown.ts";
 export { card } from "./need-card.ts";
