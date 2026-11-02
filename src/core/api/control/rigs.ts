@@ -147,6 +147,23 @@ export const SupervisorFigures = z.object({
     )
     .optional()
     .catch(undefined),
+  /**
+   * A Claude subscription's usage windows its advisors' Claude Code reported (goal 183), by the
+   * provider's name, as the harness reports its agents': percent used and reset times, and the
+   * account's usage credits. A malformed one is dropped, not the report.
+   */
+  subscription_usage: z
+    .record(
+      z.string().max(200),
+      z.object({
+        five_hour: z.object({ utilization: z.number(), resets_at: Short }).optional(),
+        seven_day: z.object({ utilization: z.number(), resets_at: Short }).optional(),
+        credits: z.object({ on: z.boolean(), since: Short.nullable() }).optional(),
+        at: Short,
+      }),
+    )
+    .optional()
+    .catch(undefined),
   /** Model files it downloads or downloaded for the harness (model-download.ts), newest first. */
   models: z
     .array(

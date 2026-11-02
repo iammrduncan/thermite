@@ -70,10 +70,13 @@ const label = (minutes: number | null) =>
         ? "Weekly"
         : `${Math.round(minutes / 60)}-hour`;
 
-/** A Claude subscription's windows, from the rigs' newest report of them; undefined: none yet. */
+/**
+ * A Claude subscription's windows, from the rigs' newest report of them: a harness's, for its
+ * agents, or a supervisor's, for its advisors (goal 183). Undefined: none yet.
+ */
 export function claudeUsage(
   name: string,
-  rigs: { id: string; summary: unknown }[],
+  rigs: { id: string; summary: unknown; supervisor?: unknown }[],
 ): PlanUsage | undefined {
   type W = { utilization?: unknown; resets_at?: unknown } | undefined;
   type C = { on?: unknown; since?: unknown } | undefined;
@@ -82,17 +85,21 @@ export function claudeUsage(
   // The credits from the newest report that gives them: a report may give windows alone.
   let credits: PlanCredits | undefined;
   for (const u of rigs) {
-    const r = (u.summary as { subscription_usage?: R } | null)?.subscription_usage;
-    if (r?.provider !== name || !r.at) continue;
-    if (!best || r.at > (best.r.at ?? "")) best = { r, rig: u.id };
-    const c = r.credits;
-    if (typeof c?.on === "boolean" && (!credits || r.at > credits.at))
-      credits = {
-        on: c.on,
-        since: typeof c.since === "string" ? c.since : null,
-        rig: u.id,
-        at: r.at,
-      };
+    const agents = (u.summary as { subscription_usage?: R } | null)?.subscription_usage;
+    const advisors = (u.supervisor as { subscription_usage?: Record<string, R> } | null)
+      ?.subscription_usage?.[name];
+    for (const r of [agents?.provider === name ? agents : undefined, advisors]) {
+      if (!r?.at) continue;
+      if (!best || r.at > (best.r.at ?? "")) best = { r, rig: u.id };
+      const c = r.credits;
+      if (typeof c?.on === "boolean" && (!credits || r.at > credits.at))
+        credits = {
+          on: c.on,
+          since: typeof c.since === "string" ? c.since : null,
+          rig: u.id,
+          at: r.at,
+        };
+    }
   }
   if (!best?.r.at) return undefined;
   const windows: PlanWindow[] = [];
@@ -201,7 +208,11 @@ export class PlanUsageReader {
     if (p.type === "claude")
       return claudeUsage(
         p.name,
-        this.store.reportedRigs.list().map((r) => ({ id: r.id, summary: r.summary })),
+        this.store.reportedRigs.list().map((r) => ({
+          id: r.id,
+          summary: r.summary,
+          supervisor: this.store.reportedRigs.supervisor(r.id),
+        })),
       );
     if (p.type !== "chatgpt") return undefined;
     let k = this.kept.get(p.name);

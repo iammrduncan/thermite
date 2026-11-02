@@ -213,6 +213,9 @@ function runTui(): void {
     });
   };
 
+  // Its session has started, as Claude Code's SessionStart hook says: the harness types into
+  // Claude Code only after it (goal 183).
+  hook("SessionStart", { source: "startup" });
   if (first !== undefined) {
     record({ type: "user", text: first, how: "first" });
     hook("UserPromptSubmit", { prompt: first });

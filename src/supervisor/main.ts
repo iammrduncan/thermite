@@ -11,6 +11,7 @@ import { basename, dirname, join } from "node:path";
 import type { z } from "zod";
 import { McpGateway } from "../agents/mcp/index.ts";
 import { modelStallMs } from "../agents/model/index.ts";
+import { mergeUsage, type PlanWindows } from "../agents/programs/index.ts";
 import { controlClient } from "../common/api/control.ts";
 import { harnessClient } from "../common/api/harness.ts";
 import { buildInfo } from "../common/build-info.ts";
@@ -371,9 +372,14 @@ async function main(): Promise<void> {
   // The rig's settings and which advisors decide, from and to the harness.
   const harnessLink = harnessAdvisors(harnessUrl, harnessToken);
   // The advisors in their programs' own terminals, on a rig set so (goal 169).
+  // A Claude subscription's usage windows its advisors' Claude Code reported, by provider, for
+  // control's Providers (goal 183): the harness reports its own agents'.
+  const advisorWindows = new Map<string, PlanWindows & { at: string }>();
   const { consoles: advisorConsoles, terminals } = advisorTerminals({
     harness,
     live: (line) => supervisorLive.append({ source: "supervisor", ...line }),
+    windows: (provider, w) =>
+      advisorWindows.set(provider, mergeUsage(advisorWindows.get(provider), w)),
   });
   const { tell: tellAdvisors, retell } = harnessLink;
 
@@ -415,6 +421,7 @@ async function main(): Promise<void> {
         { ...f, error: f.error ? redact(f.error).slice(0, FIGURE_TEXT_MAX) : null },
       ]),
     ),
+    ...(advisorWindows.size ? { subscription_usage: Object.fromEntries(advisorWindows) } : {}),
     models: models.list(),
     advisors: advisors
       ? {

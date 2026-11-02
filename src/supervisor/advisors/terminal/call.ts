@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { type CallLink, type MessageInbox, terminalCall } from "../../../agents/cli/index.ts";
 import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import type { ModelConfig, ProviderErrorAnswer } from "../../../agents/model/index.ts";
+import type { PlanWindows } from "../../../agents/programs/index.ts";
 import { messageText } from "../../../agents/prompt.ts";
 import { renderAdvisorTurn } from "../../../agents/roles/index.ts";
 import type { RoleRunner } from "../../../agents/runner.ts";
@@ -50,6 +51,11 @@ export interface AdvisorTerminals {
   draining?: (() => boolean) | undefined;
   /** How often its session log and the owner's messages are read (tests make it short). */
   pollMs?: number | undefined;
+  /**
+   * A subscription's usage windows its program reported (Claude Code's 5-hour and weekly), by
+   * the provider's name, for the supervisor's report to control.
+   */
+  windows?: ((provider: string, w: PlanWindows) => void) | undefined;
 }
 
 /** One advisor's call in its terminal: the run it advises, and the role its owner's messages name. */
@@ -297,6 +303,9 @@ export async function runInTerminal<S extends z.ZodType>(
         tools: rt.runtime === "claude-code" ? "" : undefined,
         compaction,
         usage: (u) => usage.push(u),
+        // A subscription's windows, under its provider's name (goal 183).
+        windows:
+          rt.provider && t.windows ? (w) => t.windows?.(rt.provider as string, w) : undefined,
         answer: (text) => parseAnswer(text, input.schema).ok,
       },
     );

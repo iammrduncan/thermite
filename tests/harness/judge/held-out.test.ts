@@ -196,8 +196,10 @@ describe("held-out failures, named safely (goal 082)", () => {
   });
 
   test("a goal's held-out threshold: the case, its value and threshold for the owner; the kind for the agents", async () => {
+    // 20 million a second: any machine that runs the tests meets it on "big", and the candidate
+    // that idles 1.2 s on the hidden size can't (at most 12.5 million there).
     const env = await setup({
-      goal: { opsPerSecond: 70e6 },
+      goal: { opsPerSecond: 20e6 },
       kitCells: CELLS,
       contract: {
         held_out_cells: [HIDDEN],
@@ -210,7 +212,7 @@ describe("held-out failures, named safely (goal 082)", () => {
               type: "metric_threshold",
               metric: "ops_per_s",
               op: ">=",
-              value: 70e6,
+              value: 20e6,
               cells: ["big", HIDDEN],
             },
           },
@@ -239,10 +241,10 @@ describe("held-out failures, named safely (goal 082)", () => {
     assert.equal(cell.goal, "fast");
     assert.equal(cell.kind, "threshold_missed");
     assert.equal(cell.op, ">=");
-    assert.equal(cell.threshold, 70e6);
+    assert.equal(cell.threshold, 20e6);
     assert.equal(cell.measure, "ops_per_s");
     assert.equal(cell.unit, "op/s");
-    assert.ok(Number(cell.value) > 0 && Number(cell.value) < 70e6, String(cell.value));
+    assert.ok(Number(cell.value) > 0 && Number(cell.value) < 20e6, String(cell.value));
     assert.ok(Number(cell.low) <= Number(cell.value) && Number(cell.value) <= Number(cell.high));
     // The hidden case never ran as a measurement, a goal check or a report.
     assert.equal(
@@ -264,7 +266,7 @@ describe("held-out failures, named safely (goal 082)", () => {
         `<td><code>${HIDDEN}</code></td><td>goal <b>fast</b></td><td><span class="chip bad">missed its threshold</span></td>`,
       ),
     );
-    assert.match(page, /&gt;= 7\.000e\+7 op\/s/);
+    assert.match(page, /&gt;= 2\.000e\+7 op\/s/);
     // The agent token: the goal's checks without the held-out case, which the owner sees.
     const owner = JSON.parse(await env.mcp("get_run", { run: "js-1" })) as {
       goal_checks: { goals: { goal: string; cells: { name: string }[] }[] };

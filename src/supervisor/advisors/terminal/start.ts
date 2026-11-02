@@ -10,7 +10,11 @@ import { AdvisorConsoles } from "./consoles.ts";
  * the runner, as the runner the agent runtimes share, and the owner's messages from the harness.
  * Without a runner (development, tests), the advisors run headless, whatever the rig's setting.
  */
-export function advisorTerminals(o: { harness: HarnessClient; live: AdvisorTerminals["live"] }): {
+export function advisorTerminals(o: {
+  harness: HarnessClient;
+  live: AdvisorTerminals["live"];
+  windows?: AdvisorTerminals["windows"];
+}): {
   consoles: AdvisorConsoles;
   terminals: AdvisorTerminals | undefined;
 } {
@@ -26,6 +30,7 @@ export function advisorTerminals(o: { harness: HarnessClient; live: AdvisorTermi
       waiting: async (run, role) =>
         (await o.harness.call(ADVISOR_MESSAGES_WAITING, { query: { run, role } })).messages,
       live: o.live,
+      windows: o.windows,
     },
   };
 }

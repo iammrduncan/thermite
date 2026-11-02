@@ -432,8 +432,9 @@ describe("agent scheduler: the agents stop", () => {
       tokensIn: 500,
       tokensOut: 50,
     };
-    const results2 = [wall(almost), worked, wall(60_000)];
-    const two = provider(env2, () => results2.shift() ?? worked);
+    // Made when each trial ends too: on a slow machine the rounds before would use up the 300 ms.
+    const results2 = [() => wall(almost), () => worked, () => wall(60_000)];
+    const two = provider(env2, () => (results2.shift() ?? (() => worked))());
     await two.round();
     await two.round();
     await new Promise((r) => setTimeout(r, 400));
