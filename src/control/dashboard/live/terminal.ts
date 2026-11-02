@@ -23,7 +23,13 @@ import {
 } from "../../command-progress.ts";
 import { issueCommand } from "../../issue/index.ts";
 import type { CommandRow } from "../../store/index.ts";
-import { TERMINAL_JS, type TermInputRow, terminalHtml } from "../../ui/terminal.ts";
+import {
+  TERMINAL_JS,
+  type TermInputRow,
+  type TerminalPane,
+  terminalGridHtml,
+  terminalHtml,
+} from "../../ui/terminal.ts";
 import { rigHref, terminalHref } from "../../ui/urls.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { LIVE_PUSH_BEAT_MS, LIVE_PUSH_RETRY_MS } from "./push.ts";
@@ -126,16 +132,13 @@ function inputs(dash: Dashboard, rig: string, run: string, trial: string): TermI
     .map((cmd) => ({ at: cmd.issued_at, ...inputOf(cmd.payload), ...outcomeOf(cmd, later, now) }));
 }
 
-/**
- * The terminal on a trial's Live page: its screen and its console, for the owner (the page's only
- * reader). `ended`: the trial has ended, and its console takes no more input.
- */
-export function terminalPanel(
+/** A trial's terminal as a page shows it: its frames' address, its console's, its inputs. */
+function terminalPaneOf(
   dash: Dashboard,
   c: Ctx,
-  o: { rig: string; run: string; trial: string; ended: boolean },
-): string {
-  return terminalHtml({
+  o: { rig: string; run: string; trial: string; ended: boolean; title?: string | undefined },
+): TerminalPane {
+  return {
     stream: `${rigHref(o.rig)}/live/screen?trial=${encodeURIComponent(o.trial)}`,
     action: `${rigHref(o.rig)}/live/terminal`,
     csrf: dash.csrf(c),
@@ -143,9 +146,30 @@ export function terminalPanel(
     trial: o.trial,
     ended: o.ended,
     inputs: inputs(dash, o.rig, o.run, o.trial),
-    xtermCss: xtermFile("xterm.css") ?? "",
     error: dash.said(c, "termerror"),
-  });
+    title: o.title,
+  };
+}
+
+/** A trial's own page's terminal (goal 169), with what the page carries for it. */
+export function terminalPanel(
+  dash: Dashboard,
+  c: Ctx,
+  o: { rig: string; run: string; trial: string; ended: boolean },
+): string {
+  return terminalHtml({ ...terminalPaneOf(dash, c, o), xtermCss: xtermFile("xterm.css") ?? "" });
+}
+
+/** Several trials' terminals side by side: a run's Live (goal 181). */
+export function terminalGrid(
+  dash: Dashboard,
+  c: Ctx,
+  panes: Parameters<typeof terminalPaneOf>[2][],
+): string {
+  return terminalGridHtml(
+    panes.map((p) => terminalPaneOf(dash, c, p)),
+    xtermFile("xterm.css") ?? "",
+  );
 }
 
 export function terminalRoutes(app: Hono, dash: Dashboard): void {

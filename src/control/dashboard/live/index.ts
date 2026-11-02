@@ -33,7 +33,6 @@ import {
   runLiveHref,
   runLiveStreamHref,
   runMessageHref,
-  terminalHref,
 } from "../../ui/urls.ts";
 import { clip, earlierWords, signed } from "../../ui/words/index.ts";
 import {
@@ -48,7 +47,7 @@ import {
 } from "../../views/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { type LiveFeed, type PushedLine, pushLive, pushStart, recheckIds } from "./push.ts";
-import { terminalPanel, terminalRoutes } from "./terminal.ts";
+import { terminalGrid, terminalPanel, terminalRoutes } from "./terminal.ts";
 
 /**
  * Live, one run at a time (goal 063), under the run's address, with the owner's messages to its
@@ -113,7 +112,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const w = c.req.query("w") || "all";
     // The filters: everyone, each lane (working or not), the planner, the judge, the advisors, you.
     const chip = (key: string, label: string, title = "", working = false) =>
-      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : ""}${esc(label)}</a>`;
+      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key, view: "lines" })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : ""}${esc(label)}</a>`;
     const chips = [
       chip("all", "Everyone"),
       ...lanes.map((l) => {
@@ -141,12 +140,48 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     // The planner's call, while it plans this run in its own terminal, and the advisors' calls in
     // theirs (goal 169).
     const calls = (workOf(u.summary)?.terminals ?? []).filter((x) => x.run === r.id);
-    const planning = calls.some((x) => x.role === "planner");
     const advising = calls.filter((x) => terminalSource(x.id) === "supervisor");
-    const terminals =
-      inTerminals.length || planning || advising.length
-        ? `<details class="lkept"><summary class="lchip" title="Each agent in its own terminal: watch it, and type into it">⌨ Terminals</summary><div class="menu-pop">${planning ? `<div><a href="${liveHref(u.id, "planner")}">the planner's terminal</a></div>` : ""}${advising.map((x) => `<div><a href="${terminalHref(u.id, x.id)}">${esc(x.role)}'s terminal</a> <span class="muted small">(advisor)</span></div>`).join("")}${inTerminals.map(([lane, work]) => `<div><a href="${liveHref(u.id, `trial:${work.trial}`)}">${esc(lane)}'s terminal</a> <span class="muted small">(${esc(work.direction)})</span></div>`).join("")}</div></details>`
-        : "";
+    // Live opens on the agents' terminals while some run in one (goal 181, from the owner's
+    // mockup): each lane's trial at work and the planner's call side by side, each with its own
+    // console; the lines and the advisors' terminals are tabs beside it.
+    const terminalMode = u.settings?.program_mode === "terminal" && !sel.earlier;
+    const lanePanes = inTerminals.map(([lane, work]) => ({
+      rig: u.id,
+      run: r.id,
+      trial: work.trial,
+      ended: false,
+      title: `${lane} · ${work.direction}`,
+    }));
+    const plannerCall = calls.find((x) => x.role === "planner");
+    const agentPanes = [
+      ...lanePanes,
+      ...(plannerCall
+        ? [{ rig: u.id, run: r.id, trial: plannerCall.id, ended: false, title: "planner" }]
+        : []),
+    ];
+    const advisorPanes = advising.map((x) => ({
+      rig: u.id,
+      run: r.id,
+      trial: x.id,
+      ended: false,
+      title: `${x.role} (advisor)`,
+    }));
+    const asked = c.req.query("view");
+    const view =
+      asked === "lines" || asked === "advisors" || asked === "terminals"
+        ? asked
+        : c.req.query("w") || !terminalMode || !agentPanes.length
+          ? "lines"
+          : "terminals";
+    const tab = (v: typeof view, label: string, n?: number) =>
+      `<a class="lchip ltab${view === v ? " on" : ""}" href="${runLiveHref(r, { view: v })}">${esc(label)}${n ? ` <span class="muted">${n}</span>` : ""}</a>`;
+    const tabs = terminalMode
+      ? `<nav class="ltabs" aria-label="Views">${tab("terminals", "Terminals", agentPanes.length)}${tab("lines", "Lines")}${tab("advisors", "Advisors", advisorPanes.length)}</nav>`
+      : "";
+    const grid = (panes: typeof agentPanes, none: string) =>
+      panes.length
+        ? terminalGrid(dash, c, panes)
+        : `<div class="empty" style="margin:auto">${none}</div>`;
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
       ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${kept
@@ -256,8 +291,22 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         active: "live",
         flush: true,
       },
-      `<div class="lwrap" id="lwrap">${nav}<section class="lcol">${head}<div data-fw-top></div><div class="lchips">${chips}<span class="grow"></span>${terminals}<span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
-<div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>
+      `<div class="lwrap" id="lwrap">${nav}<section class="lcol">${head}<div data-fw-top></div>${
+        view === "lines"
+          ? `<div class="lchips">${tabs}${chips}<span class="grow"></span><span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
+<div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>`
+          : `<div class="lchips">${tabs}<span class="grow"></span><span data-part="lkept">${keptBox}</span></div>${
+              view === "terminals"
+                ? grid(
+                    agentPanes,
+                    "No agent of this run is at work in its terminal now. A lane's trial and the planner's call show here as they start.",
+                  )
+                : grid(
+                    advisorPanes,
+                    "No advisor of this run is at work now. The teachers, the auditor and the review panel each show here, in their terminal, while they work.",
+                  )
+            }`
+      }
 <div data-part="lnotice">${notice}</div>${box}</section></div>`,
       vs,
     );

@@ -56,7 +56,9 @@ describe("Live's lanes", () => {
           begun();
         }),
     });
-    const LIVE = "/ui/campaigns/js-sum/runs/js-1/live";
+    // Live's lines, where each lane's filter says whether it works (goal 181: Live opens on the
+    // terminals while the rig runs its programs in them).
+    const LIVE = "/ui/campaigns/js-sum/runs/js-1/live?view=lines";
     /** Whether Live's lane-1 filter marks the lane as working. */
     const working = (html: string) =>
       /data-w="lane-1"[^>]*>(<span class="dot ok"><\/span>)?lane-1</.exec(html)?.[1] !== undefined;

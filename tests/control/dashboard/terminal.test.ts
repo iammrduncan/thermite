@@ -129,12 +129,25 @@ describe("a trial's terminal on Live", () => {
     for (const k of TERMINAL_KEYS) assert.match(html, new RegExp(`name="key" value="${k}"`));
     assert.match(html, /<script src="\/ui\/assets\/xterm\.js" defer>/);
     assert.match(html, /Nothing typed yet/);
-    // The run's Live lists each lane's terminal when the rig runs its programs in them.
+    // The run's Live opens on each lane's terminal when the rig runs its programs in them (goal
+    // 181): one pane each, side by side, each with its console; the lines are a tab.
     const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
     assert.match(
       run,
-      /<a href="\/ui\/rigs\/rig-a\/live\?source=trial%3At-0123456789abcdef">lane-1's terminal<\/a>/,
+      /<div class="term-grid"><details class="term compact" open data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=t-0123456789abcdef" data-trial="t-0123456789abcdef"><summary><b>lane-1 · /,
     );
+    assert.match(
+      run,
+      /<a class="lchip ltab on" href="\/ui\/campaigns\/js-sum\/runs\/js-1\/live\?view=terminals">Terminals <span class="muted">1<\/span><\/a>/,
+    );
+    assert.match(
+      run,
+      /data-part="term-inputs-t-0123456789abcdef"/,
+      "each pane's inputs are a part of their own",
+    );
+    const lines = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live?view=lines");
+    assert.match(lines, /id="transcript"/);
+    assert.doesNotMatch(lines, /class="term-grid"/);
     const xterm = await s.owner.get("/ui/assets/xterm.js");
     assert.equal(xterm.status, 200);
     assert.equal(
@@ -166,10 +179,7 @@ describe("a trial's terminal on Live", () => {
     );
     await s.relay();
     const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
-    assert.match(
-      run,
-      /<a href="\/ui\/rigs\/rig-a\/live\?source=trial%3At-0123456789abcdef">lane-1's terminal<\/a>/,
-    );
+    assert.match(run, /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=t-0123456789abcdef"/);
     const html = await s.owner.page(PAGE);
     assert.match(html, /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=t-0123456789abcdef"/);
     assert.match(html, /data-term-console/);
@@ -319,7 +329,7 @@ describe("a trial's terminal on Live", () => {
     const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
     assert.match(
       run,
-      /<a href="\/ui\/rigs\/rig-a\/live\?source=planner">the planner's terminal<\/a>/,
+      /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=planner-js-1-2" data-trial="planner-js-1-2"><summary><b>planner<\/b>/,
     );
     const sent = await s.owner.post("/ui/rigs/rig-a/live/terminal", {
       csrf: s.owner.csrfOf(html),
@@ -357,10 +367,11 @@ describe("a trial's terminal on Live", () => {
     await s.relay();
     const html = await s.owner.page("/ui/rigs/rig-a/live?source=supervisor");
     assert.match(html, /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=advisor-auditor-js-1-1"/);
-    const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live");
+    // The run's Live has the advisors' terminals under their own tab (goal 181).
+    const run = await s.owner.page("/ui/campaigns/js-sum/runs/js-1/live?view=advisors");
     assert.match(
       run,
-      /<a href="\/ui\/rigs\/rig-a\/live\?source=supervisor&call=advisor-auditor-js-1-1">auditor's terminal<\/a>/,
+      /data-term="\/ui\/rigs\/rig-a\/live\/screen\?trial=advisor-auditor-js-1-1" data-trial="advisor-auditor-js-1-1"><summary><b>auditor \(advisor\)<\/b>/,
     );
     // Its screen is the supervisor's own: the harness is not asked for it.
     s.asked.length = 0;

@@ -58,6 +58,12 @@ const TERM_STYLE = `
 .term-wait label { margin-left: 10px; }
 .term-confirm { font-size: 12.5px; }
 .term-inputs { padding: 0 16px 10px; font-size: 12.5px; }
+.term-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 12px; padding: 12px 16px; align-content: start; overflow: auto; flex: 1; }
+.term.compact { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.term.compact > summary { padding: 6px 10px; }
+.term.compact .term-view { margin: 0 8px; max-height: 46vh; }
+.term.compact .term-console { padding: 6px 10px; }
+.term-more { padding: 0 10px 6px; } .term-more > summary { cursor: pointer; }
 .term-inputs ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
 .term-inputs code { white-space: pre-wrap; }
 .term-inputs .bad { color: var(--destructive); }
@@ -73,22 +79,22 @@ export interface TermInputRow {
   tone: "" | "ok" | "warn" | "bad";
 }
 
-/** The inputs' list: newest first, a part of the page drawn again as each command moves. */
-export function termInputsHtml(rows: readonly TermInputRow[]): string {
+/**
+ * The inputs' list: newest first, a part of the page drawn again as each command moves. A page
+ * with several terminals names each list's part after its trial.
+ */
+export function termInputsHtml(rows: readonly TermInputRow[], part = "term-inputs"): string {
   const row = (r: TermInputRow) =>
     `<li><span class="muted">${esc(r.at.slice(11, 19))} UTC</span> ${r.keys ? esc(r.words) : `<code>${esc(r.words)}</code>`} · <span class="${r.tone}">${esc(r.outcome)}</span></li>`;
-  return `<div class="term-inputs" data-part="term-inputs">${
+  return `<div class="term-inputs" data-part="${esc(part)}">${
     rows.length
       ? `<div class="muted">Your inputs, newest first:</div><ol>${rows.map(row).join("")}</ol>`
       : `<div class="muted">Nothing typed yet. Each input is a signed command, recorded word for word with what became of it.</div>`
   }</div>`;
 }
 
-/**
- * The terminal and its console. `stream`: the frames' address; `action`: where the console posts;
- * `error`: why the last input was not sent.
- */
-export function terminalHtml(o: {
+/** A terminal's inputs: its frames' address, where its console posts, its run and trial. */
+export interface TerminalPane {
   stream: string;
   action: string;
   csrf: string;
@@ -96,9 +102,20 @@ export function terminalHtml(o: {
   trial: string;
   ended: boolean;
   inputs: readonly TermInputRow[];
-  xtermCss: string;
+  /** Why the last input was not sent. */
   error?: string | undefined;
-}): string {
+  /** Its heading on a page of several terminals (goal 181), such as the lane and its direction. */
+  title?: string | undefined;
+  /** One of several on a page: smaller, its keys and its list of inputs folded away. */
+  compact?: boolean | undefined;
+}
+
+/** What every page with a terminal carries once: xterm.js's styles and the console's, the scripts. */
+const terminalAssets = (xtermCss: string) =>
+  `<style>${xtermCss}${TERM_STYLE}</style><script src="/ui/assets/xterm.js" defer></script><script src="/ui/assets/terminal.js" defer></script>`;
+
+/** One terminal and its console. */
+function terminalPaneHtml(o: TerminalPane): string {
   const keys = TERMINAL_KEYS.map(
     (k) =>
       `<button class="sm ghost" name="key" value="${esc(k)}" title="Send ${esc(KEY_LABELS[k])}">${esc(KEY_LABELS[k])}</button>`,
@@ -113,15 +130,24 @@ ${o.error ? `<div class="small bad">Not sent: ${esc(o.error)}</div>` : ""}
 <label class="term-confirm" data-term-pi hidden><input type="checkbox" name="follow_up" value="1"> Follow-up: give my words when the agent would stop (a reply that calls no tool), not before its next model call</label>
 <div class="term-confirm muted" data-term-pi hidden>The Pi view: words steer the agent; <b>Esc</b> stops its reply; its commands are ${esc(PI_VIEW_COMMANDS)}.</div>
 <label class="term-confirm" data-term-confirm><input type="checkbox" name="confirm" value="1"> Confirm an input that starts with <code>!</code> (a shell command) or runs <code>/login</code>, <code>/logout</code>, <code>/config</code> or <code>/permissions</code></label>
-<div class="term-keys" role="group" aria-label="Keys">${keys}</div>
+${o.compact ? `<details class="term-more"><summary class="muted small">Keys</summary><div class="term-keys" role="group" aria-label="Keys">${keys}</div></details>` : `<div class="term-keys" role="group" aria-label="Keys">${keys}</div>`}
 </form>`;
-  return `<style>${o.xtermCss}${TERM_STYLE}</style>
-<details class="term" open data-term="${esc(o.stream)}"><summary><b>Terminal</b><span class="term-state" data-term-state>Waiting for the rig to send its screen…</span></summary>
+  const list = termInputsHtml(o.inputs, o.compact ? `term-inputs-${o.trial}` : "term-inputs");
+  return `<details class="term${o.compact ? " compact" : ""}" open data-term="${esc(o.stream)}" data-trial="${esc(o.trial)}"><summary>${o.title ? `<b>${esc(o.title)}</b>` : "<b>Terminal</b>"}<span class="term-state" data-term-state>Waiting for the rig to send its screen…</span></summary>
 <div class="term-view" data-term-view></div>
 ${console}
-${termInputsHtml(o.inputs)}
-</details>
-<script src="/ui/assets/xterm.js" defer></script><script src="/ui/assets/terminal.js" defer></script>`;
+${o.compact ? `<details class="term-more"><summary class="muted small">Your inputs</summary>${list}</details>` : list}
+</details>`;
+}
+
+/** A page's one terminal and its console, with what the page carries for it. */
+export function terminalHtml(o: TerminalPane & { xtermCss: string }): string {
+  return `${terminalAssets(o.xtermCss)}\n${terminalPaneHtml(o)}`;
+}
+
+/** Several terminals side by side (goal 181: a run's Live opens on its agents' terminals). */
+export function terminalGridHtml(panes: readonly TerminalPane[], xtermCss: string): string {
+  return `${terminalAssets(xtermCss)}<div class="term-grid">${panes.map((p) => terminalPaneHtml({ ...p, compact: true })).join("")}</div>`;
 }
 
 /**
@@ -133,8 +159,10 @@ ${termInputsHtml(o.inputs)}
 export const TERMINAL_JS = `
 (() => {
   "use strict";
-  const box = document.querySelector("[data-term]");
-  if (!box) return;
+  // Each terminal on the page: one, or several side by side (a run's Live).
+  const boxes = document.querySelectorAll("[data-term]");
+  if (!boxes.length) return;
+  const setup = (box) => {
   const view = box.querySelector("[data-term-view]");
   const state = box.querySelector("[data-term-state]");
   const wait = box.querySelector("[data-term-wait]");
@@ -195,7 +223,7 @@ export const TERMINAL_JS = `
     if (form) form.hidden = false;
     for (const el of pis) el.hidden = !f.pi_view;
     draw(f);
-    say((f.state === "ended" ? "Its last screen, kept when the trial ended · " : "Live, read only · ") + at + (f.queued ? " · " + f.queued + " of your inputs wait for the reset" : ""));
+    say((f.state === "ended" ? "Its last screen, kept when the trial ended" + (box.classList.contains("compact") ? ": refresh for its next trial" : "") + " · " : "Live, read only · ") + at + (f.queued ? " · " + f.queued + " of your inputs wait for the reset" : ""));
     if (wait) {
       wait.hidden = !f.limit;
       if (until) until.textContent = f.limit && f.limit.resets_at ? " at " + String(f.limit.resets_at).replace("T", " ").slice(0, 16) + " UTC" : "";
@@ -203,5 +231,7 @@ export const TERMINAL_JS = `
   });
   pushed.addEventListener("waiting", () => say("Waiting for the rig to send its screen…"));
   pushed.addEventListener("busy", (ev) => { say(said(ev).said || "Not shown now."); pushed.close(); });
+  };
+  for (const box of boxes) setup(box);
 })();
 `;

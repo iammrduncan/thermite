@@ -16,12 +16,19 @@ Live has three pages: one run at a time, a rig's sessions, and one session: a tr
 
 **Live** in the sidebar opens `/ui/live`, which shows the first run at work. A run's own Live is at `/ui/campaigns/<campaign>/runs/<run>/live`, and **Live** in a run's header opens it.
 
+On a rig that runs its agent programs in their own terminal, the run's Live has three tabs under its header, and opens on **Terminals** while one of the run's agents works in its terminal:
+
+- **Terminals** (`?view=terminals`): each lane's trial at work and the planner's call, while it plans the run, side by side, one pane each. A pane's heading names it, such as `lane-1 · shared memory tiling` or `planner`, and it shows the program's screen and the console that types into it, as [a trial's terminal](#a-trials-terminal) does: the named keys and the list of your inputs fold under **Keys** and **Your inputs**. A pane keeps its trial: when the lane's trial ends, it shows its last screen and says to refresh for the lane's next one. With none at work: `No agent of this run is at work in its terminal now.`
+- **Lines** (`?view=lines`): the stream of lines, with its filters, as below. A filter's link opens Lines.
+- **Advisors** (`?view=advisors`): the advisors' terminals while they work on the run, each marked `(advisor)`.
+
+A run on a rig that runs its programs headless, an earlier run, and a run with no agent in a terminal open on Lines.
+
 | Part | What it shows |
 | --- | --- |
 | The list of runs, on the left | **At work**: each running run, with its rig, its mode, how many of its lanes work, and how many decisions wait for you. **Idle rigs**: rigs with no run at work. **Ended in the last day**: runs that paused or finished lately. On a narrow screen, **☰** shows and hides it |
 | The header | The run, its state, its rig, its round and its progress, **Open the run**, and, while it runs, **Pause** and **⋯** (with **Restart the lanes**), or **Resume** for a paused run |
 | The filters | **Everyone**, each lane (a green dot while it works; a lane that starts while the page is open gets one too), **Planner**, **Judge** (not in a research run), **Advisors** and **You**: your messages and who read them |
-| **⌨ Terminals** | While the run is running on a rig that runs its agent programs in their own terminal, each lane at work, with its direction: `lane-1's terminal` opens that trial's page, with its [terminal](#a-trials-terminal). While the planner plans the run in its own terminal, `the planner's terminal` comes first, and opens the planner's page ([The planner's terminal](#the-planners-terminal)); then, while an advisor works on the run in its own terminal, `auditor's terminal`, `teacher-1's terminal` or `reviewer-2's terminal`, marked `(advisor)`, each opening the supervisor's page with that call ([An advisor's terminal](#an-advisors-terminal)) |
 | **📌 &lt;n&gt; kept** | Your messages kept in force, each with **Remove** |
 | **↓ Follow** | On: the stream scrolls to each new line |
 | The stream | The lines of the filter chosen: the agents' text, thinking, tool calls with their results, status lines, your messages and the advisors' answers. Empty: `No live lines yet. They appear here as the run's agents and judge work.` |

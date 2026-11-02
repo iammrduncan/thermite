@@ -65,11 +65,17 @@ export const runHref = (r: RunRef, tab: RunTab = "overview") =>
 export const attemptHref = (r: RunRef, attempt: string) => `${runHref(r)}/attempts/${enc(attempt)}`;
 
 /**
- * Live for one run: its lanes, judge, planner and advisors, and the message box. `w` shows one of
- * them (a lane, planner, judge, advisors or you); `compose` puts the cursor in the message box.
+ * Live for one run: its lanes, judge, planner and advisors, and the message box. `view` opens its
+ * agents' terminals (the default while some run in one), its lines or its advisors' terminals; `w`
+ * shows one of them in the lines (a lane, planner, judge, advisors or you); `compose` puts the
+ * cursor in the message box.
  */
-export const runLiveHref = (r: RunRef, o: { w?: string; compose?: boolean } = {}) => {
+export const runLiveHref = (
+  r: RunRef,
+  o: { w?: string; compose?: boolean; view?: "terminals" | "lines" | "advisors" } = {},
+) => {
   const q = new URLSearchParams();
+  if (o.view) q.set("view", o.view);
   if (o.w && o.w !== "all") q.set("w", o.w);
   if (o.compose) q.set("compose", "1");
   const query = q.toString();

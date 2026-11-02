@@ -18,9 +18,10 @@ To tell the agents something without typing into a program, send a message inste
 ## 1. Open the trial's terminal
 
 1. Open **Live** in the sidebar, and choose the run in the list on the left.
-2. Press **⌨ Terminals**, above the stream, and choose the lane, such as `lane-1's terminal`.
 
-   You can also open the rig's page, press **Live**, and choose the trial under **Sessions**.
+   The run's Live opens on **Terminals**: each lane's trial at work, side by side, each pane named for its lane and its direction, such as `lane-1 · shared memory tiling`, with its screen and its console. Typing into a pane, as in step 2, works as on the trial's own page.
+
+   For one trial alone, open the rig's page, press **Live**, and choose the trial under **Sessions**.
 
 The trial's page opens, at `/ui/rigs/<rig>/live?source=trial:<trial>`. At its top, **Terminal** says `Waiting for the rig to send its screen…`, then shows the program's screen, at the size of the agent's terminal, with `Live, read only` and the time of the screen beside **Terminal**. The screen follows the program about once a second: the rig's supervisor sends it to control on the message bus while a page watches the trial, and no screen is kept ([Live view](../../reference/live-view.md#a-trials-terminal)). It is only a view: a key you press on it goes nowhere, and a link in it opens nothing.
 
@@ -78,7 +79,7 @@ An input still waiting when the trial ends is dropped, and the list says so. The
 
 While the planner plans a round on a rig that runs its agent programs in their own terminal, its call has a terminal of its own, named `planner-<run>-<round>`, such as `planner-matmul-1-3`. In Claude Code, Codex or OpenCode it is that program's terminal; in Pi it is the planner's Pi view, which Thermite draws of the planner's own session as it draws a worker's. Both tries of a round have the same name.
 
-1. Open **Live**, choose the run, and press **⌨ Terminals**: while the planner plans this run, the list starts with `the planner's terminal`.
+1. Open **Live** and choose the run: while the planner plans this run, **Terminals** has a pane named `planner` beside the lanes'.
 
    You can also open the rig's page, press **Live**, and choose **Planner** under **Sessions**.
 
@@ -92,7 +93,7 @@ When the round's plan is in, the call ends: its page no longer shows a terminal,
 
 The advisors the owner's messages reach (the teachers, the auditor and the review panel's reviewers) run in the supervisor, each call in its program's own terminal when it runs in Claude Code, Codex or OpenCode, and in its own Pi view when it runs in Pi, on a rig that runs its agent programs in their own terminal. Each call has a terminal of its own, named `advisor-<advisor>-<run>-<n>`, such as `advisor-auditor-matmul-1-4`. The teachers' merged by model, the synthesizer and the final writer take no message, and an advisor that runs a command (`cli`) runs as before, with no terminal. Each terminal takes about 550 MiB in Claude Code's, so on a Kubernetes cluster control gives the supervisor 4 GiB of the rig's memory while its agent programs run in their own terminal, rather than 2 GiB headless; compose, a machine over SSH and RunPod set no limit on it ([The supervisor's share](../install/rig-on-a-cluster.md#the-supervisors-share)).
 
-1. Open **Live**, choose the run, and press **⌨ Terminals**: while an advisor works on this run, the list shows `auditor's terminal`, `teacher-1's terminal` or `reviewer-2's terminal`, each marked `(advisor)`.
+1. Open **Live**, choose the run, and press **Advisors**: while an advisor works on this run, it has a pane, named such as `auditor (advisor)`, `teacher-1 (advisor)` or `reviewer-2 (advisor)`.
 
    You can also open the rig's page, press **Live**, and choose **Supervisor** under **Sessions**: the page shows the first advisor's terminal that runs.
 
