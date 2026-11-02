@@ -60,7 +60,7 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
   );
 
   section("Hand the work to agents, 2: give the rig the model");
-  const rows = await page("/ui/settings");
+  const rows = await page("/ui/settings/routes");
   check(
     `the rig's row says "${plan.agents.noModel}"`,
     pageText(rows.html).includes(plan.agents.noModel),

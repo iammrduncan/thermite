@@ -511,7 +511,8 @@ try {
   });
   keysSeen.clear();
   const routeCheck = await rigCheck("model");
-  const pages = [await ui.page("/ui/settings"), await ui.page("/ui/rigs/local-1")].join("");
+  const shown = ["/ui/settings", "/ui/settings/routes", "/ui/rigs/local-1"];
+  const pages = (await Promise.all(shown.map((p) => ui.page(p)))).join("");
   check(
     "a provider from the settings page lists its models, reaches the rig and its model, and its key shows nowhere",
     /1 model/.test(listed) &&

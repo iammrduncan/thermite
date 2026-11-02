@@ -190,7 +190,7 @@ export function registerReachableAddresses(tools: ToolContext): void {
     {
       title: "Addresses cluster rigs may reach",
       description:
-        "The owner's list in Settings › Addresses cluster rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.",
+        "The owner's list in Settings › Addresses rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.",
       inputSchema: {},
     },
     audited("reachable_addresses", () => ({ addresses: store.reachable.list() })),
@@ -200,7 +200,7 @@ export function registerReachableAddresses(tools: ToolContext): void {
     "set_reachable_addresses",
     {
       title: "Set the addresses cluster rigs may reach",
-      description: `Sets the whole list in Settings › Addresses cluster rigs may reach, in place of the one before (an empty list removes every address). Each entry: address, one IPv4 or IPv6 address in the private, shared or link-local ranges, never a range; ports, 1 to ${REACH_MAX_PORTS} TCP ports; note, what it is. At most ${REACH_MAX_ENTRIES} addresses, each once. Control writes the list at once into the network rules of each rig it set up in a namespace it created (a step "network" in each rig's history); a joined rig keeps the list its join command gave it; a slot's rules are its operators', and control's check of a slot accepts a rule that opens exactly a listed address on its listed ports. Returns {addresses, said}. The owner's token only.`,
+      description: `Sets the whole list in Settings › Addresses rigs may reach, in place of the one before (an empty list removes every address). Each entry: address, one IPv4 or IPv6 address in the private, shared or link-local ranges, never a range; ports, 1 to ${REACH_MAX_PORTS} TCP ports; note, what it is. At most ${REACH_MAX_ENTRIES} addresses, each once. Control writes the list at once into the network rules of each rig it set up in a namespace it created (a step "network" in each rig's history); a joined rig keeps the list its join command gave it; a slot's rules are its operators', and control's check of a slot accepts a rule that opens exactly a listed address on its listed ports. Returns {addresses, said}. The owner's token only.`,
       inputSchema: {
         addresses: z
           .array(

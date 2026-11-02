@@ -805,7 +805,7 @@ It refuses with the same words as **Add a rig**:
 - `The volume size is a whole number of GB, from 1 to 10000.`
 - `Choose a free slot.`
 - `The slot <namespace> is in use.`
-- `Refused: in the slot <namespace>, <why>. A rig's harness may reach only DNS, the internet, its model and the addresses in Settings › Addresses cluster rigs may reach: ask the cluster's operators for a network rule that keeps it off the cluster.` A rule that opens an address of that list is accepted only when it opens it alone on some of its listed TCP ports: otherwise `<why>` is `the rule "<name>" opens every port of <address>, which the list gives only <ports>` or `the rule "<name>" opens <address> on more than its listed TCP ports (<ports>)`
+- `Refused: in the slot <namespace>, <why>. A rig's harness may reach only DNS, the internet, its model and the addresses in Settings › Addresses rigs may reach: ask the cluster's operators for a network rule that keeps it off the cluster.` A rule that opens an address of that list is accepted only when it opens it alone on some of its listed TCP ports: otherwise `<why>` is `the rule "<name>" opens every port of <address>, which the list gives only <ports>` or `the rule "<name>" opens <address> on more than its listed TCP ports (<ports>)`
 - `"<namespace>" is not a namespace name.`
 - `Give the rig both its CPUs and its memory, or neither.`
 - `a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals: its supervisor takes 4 GiB for the advisors' terminals, and its harness at least 4 GiB`
@@ -1055,14 +1055,14 @@ It returns one of these:
 
 - The run started: `{started: true, campaign, rig, run, command, status: "pending", woke?, notes?, agents_context?, knowledge}`. `knowledge` is `{collection, granted}`: what its agents search, fixed now. `run` is the new run's name, such as `gemv-speed-2`, or `gemv-speed-try-1` for a try. `command` is the `assign_campaign` command's id, for [`command_status`](#command_status). `woke` is there when control started the rig's stopped RunPod pod first, as for [`issue_command`](#issue_command). `notes` is there when there is more to know: `<run> is at work on <rig>, and pauses when this run starts (a rig runs one run at a time).`, `<run> on <rig> has no untried experiments: the new run's queue starts empty.`, or what applies to the agents' context, below.
 - `agents_context` is there when the campaign sets its own context window or compaction point ([`set_campaign_context`](#set_campaign_context)) and the run has agents: `{campaign, agents}`. `campaign` is the campaign's settings; `agents` has one key for each model the run's agents work with: `workers`, `planner`, `teachers`, `second_teacher` (only when control gives two teachers), `merged_by`, `auditor` and `review_panel` (for a research run, `workers`, `planner`, `teachers`, `second_teacher`, `merged_by`, `synthesizer` and `final_writer`), each `{model, context_window, compact_at}`. The synthesizer and the final writer with no model of their own have the first teacher's. `model` is the model control gives that agent, or `null` for the rig's own settings or its advisors file. `context_window` is the lower of the campaign's window and the agent's own (its provider's window, or the rig's cap on it); with no model from control, it is the campaign's, as the most the agent works with, or `null`. `compact_at` is the campaign's point, else the agent's own, else 80; `null` when control does not know it. One of the notes says the same in words: `This campaign sets a context window of 131,072 tokens, compaction at 70% of the window. The lower window wins on each agent. Workers: 131,072 tokens (wide-model), compacted at 70% of the window. …`, with `Teachers: …`, `Teachers (second model): …`, `Teachers (merged by): …`, `Auditor: …` and `Review panel: …` (or, for a research run, `Synthesizer: …` and `Final writer: …`) after it, and `(the rig's advisors file)` for an advisor with no model from control
-- The rig was given a model first: `{started: false, said}`, with `said` `<rig> takes <model> within a minute; Settings › Providers shows it taking the model until then. Then start the run again.` Call `start_run` again, without `agents_model`, once [`list_rigs`](#list_rigs) or **Settings › Providers** shows the rig runs the model.
+- The rig was given a model first: `{started: false, said}`, with `said` `<rig> takes <model> within a minute; Settings › Rigs' models shows it taking the model until then. Then start the run again.` Call `start_run` again, without `agents_model`, once [`list_rigs`](#list_rigs) or **Settings › Providers** shows the rig runs the model.
 
 Errors, in the words of **Start a run**:
 
 - `Control has no saved version or earlier assignment of this campaign.`
 - `No rig is called <rig>. Choose a rig.`
 - `<rig> has no model for its agents, so they could not work: choose one under "The agents' model", or give it one on its Edit rig page.`
-- `<rig> has not taken <model> yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then): start the run after that.`
+- `<rig> has not taken <model> yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then): start the run after that.`
 - `<rig> measures on <type>, and this campaign's kit measures on <type>: choose a rig with that hardware`
 - `<model> is one of OpenCode's free models, which work only inside OpenCode, and <rig>'s agents would run in Pi: a research run there could not work. Set the agents' harness to OpenCode, or give the rig a model Pi can use.`
 - `A try (agents off) takes no model, no experiments and no background: leave them out, or start the run with agents.`
@@ -1430,7 +1430,7 @@ Returns `{cluster, slots}`. Errors: `no such cluster`, `<cluster> puts rigs in n
 
 **Addresses cluster rigs may reach.** Owner and operator.
 
-> The owner's list in Settings › Addresses cluster rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.
+> The owner's list in Settings › Addresses rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.
 
 No inputs. Returns `{addresses}`, each `{address, ports, note, set_at, set_by}`, as [`GET /v1/reachable-addresses`](rest-api.md#addresses-cluster-rigs-may-reach) gives them.
 
@@ -1438,7 +1438,7 @@ No inputs. Returns `{addresses}`, each `{address, ports, note, set_at, set_by}`,
 
 **Set the addresses cluster rigs may reach.** Owner.
 
-> Sets the whole list in Settings › Addresses cluster rigs may reach, in place of the one before (an empty list removes every address). …
+> Sets the whole list in Settings › Addresses rigs may reach, in place of the one before (an empty list removes every address). …
 
 | Input | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -1450,7 +1450,7 @@ Control writes the list at once into the network rules of each rig it set up in 
 
 **MCP servers.** Owner, operator and reader.
 
-> The MCP servers in Settings › Providers: each one's address, how it signs in, its state, its last error, its tools (with whether each only reads) and the kits that name it. Never a key, a client secret or a sign-in: only a secret's last four characters.
+> The MCP servers in Settings › MCP servers: each one's address, how it signs in, its state, its last error, its tools (with whether each only reads) and the kits that name it. Never a key, a client secret or a sign-in: only a secret's last four characters.
 
 No inputs. Returns `{servers}`: each server as `GET /v1/mcp-servers` gives it ([The REST API](rest-api.md#mcp-servers)), with `named_by`, the kits that name it.
 

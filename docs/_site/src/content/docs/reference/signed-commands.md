@@ -139,7 +139,7 @@ A command that passes these checks and that the harness then refuses is `failed`
 | Kind | Dashboard (`owner:ui`) | REST and `thermite` (`owner:api`) | MCP owner (`owner:mcp`) | MCP operator (`owner:operator`) | MCP agent (`agent:mcp`) | Owner only |
 | --- | --- | --- | --- | --- | --- | --- |
 | `assign_campaign` | **New campaign**; **Start the run** in the **Start a run** panel of a campaign's page | Yes; `thermite assign` | Yes | Yes | Yes | |
-| `rig_check` | **Run it** in a rig's **Checks**; **Check** on **Settings** | Yes | Yes | Yes | Yes | |
+| `rig_check` | **Run it** in a rig's **Checks**; **Check** on **Settings › Rigs' models** | Yes | Yes | Yes | Yes | |
 | `pause_run` | **Pause**, then **Pause the run** in its menu, in a run's header, in the header of the run's **Live**, and on the run's card under **At work now** | Yes | Yes | Yes | Yes | |
 | `resume_run` | **Resume** in a run's header, in the header of the run's **Live**, and on a paused run's row under **Earlier runs** | Yes | Yes | Yes | Yes | |
 | `close_run` | **⋯**, then **Close the run**, in the header of a run's page, while the run is running or paused | Yes | Yes | No | No | Yes |
@@ -166,7 +166,7 @@ A command that passes these checks and that the harness then refuses is `failed`
 | `invalidate_evidence` | **Withdraw its evidence…**, then **See what it reaches**, then **Withdraw the evidence**, on an attempt's page | Yes; `thermite invalidate` | Yes | No | No | Yes |
 | `terminal_input` | **Send**, or a key's button, in the console under a trial's, the planner's or an advisor's terminal on its **Live** page ([Watch and steer an agent in its terminal](../how-to/campaigns/agent-terminal.md)) | Yes | Yes | No | No | Yes |
 | `rig_settings` | **Save changes** on **Edit rig**; **GPUs for the judge** on **New campaign** and in the **Start a run** panel | `POST /v1/rigs/<rig>/settings`, or `POST /v1/commands`; `POST /v1/rigs/<rig>/cluster/resources` with a new number of GPUs | `set_rig_settings`; `start_run` with `judge_gpus`; `set_cluster_rig_resources` with a new number of GPUs | `set_rig_settings`, but not `promotion` or `judge_gpus`; `set_cluster_rig_resources` with a new number of GPUs, which sends the new default share only | No | Yes |
-| `retention_run` | **Remove now**, after **Run now**, on a retention policy of a rig's kind on **Settings**; control issues it at the policy's time as `owner:retention` ([Remove what Thermite keeps](../how-to/operate/retention-policies.md)) | `POST /v1/retention/policies/<id>/run`; `thermite retention run` | `run_retention_policy` | No | No | Yes |
+| `retention_run` | **Remove now**, after **Run now**, on a retention policy of a rig's kind on **Settings › Retention policies**; control issues it at the policy's time as `owner:retention` ([Remove what Thermite keeps](../how-to/operate/retention-policies.md)) | `POST /v1/retention/policies/<id>/run`; `thermite retention run` | `run_retention_policy` | No | No | Yes |
 | `log_level` | None | Yes (`POST /v1/commands`); `thermite log-level harness` or `supervisor` | Yes | Yes | No | Yes |
 | `wipe_state` | Only as a step of a full reset | No: `wipe_state is issued only by a full reset` | No | No | No | Yes |
 

@@ -44,11 +44,11 @@ import {
   type ProviderType,
 } from "../../store/index.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
-import { ago, esc } from "../../ui/components/index.ts";
+import { ago, esc, SETTINGS_AREAS, type SettingsArea } from "../../ui/components/index.ts";
 import { creditsChip, creditsNote, usageBlock, usageChips } from "../../ui/providers/usage.ts";
 import { checkFollowUrl, modelCheckHtml } from "../../ui/rigs/checks.ts";
 import { modelPricesBlock } from "../../ui/usage.ts";
-import type { Dashboard } from "../context.ts";
+import type { Ctx, Dashboard } from "../context.ts";
 import { busSettingsBlock } from "./bus.ts";
 import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
@@ -57,9 +57,16 @@ import { draftOf, retentionBlocks } from "./retention.ts";
 import { modelPrefix, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
 import { spaceBlock } from "./space.ts";
 
+/** Each Settings area's page title (goal 181). */
+const AREA_TITLES = Object.fromEntries(SETTINGS_AREAS.map((a) => [a.area, a.label])) as Record<
+  SettingsArea,
+  string
+>;
+
 /**
- * Settings › Providers: what can be added, the providers with their rows, the harness and model
- * for each rig, model prices and MCP servers.
+ * Settings, a page for each area: the providers with their rows and what can be added, model
+ * prices, the harness and model for each rig, MCP servers, the addresses cluster rigs may reach,
+ * the knowledge base's settings, Space, retention policies and the message bus.
  */
 export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, mcpServers, opts, page, parts, said, store, views } = dash;
@@ -117,7 +124,14 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
   const typeSelect = (sel?: ProviderType) =>
     `<select name="type">${KEY_TYPES.map((t) => `<option value="${t}"${t === sel ? " selected" : ""}>${t === "opencode" ? "OpenCode (its own models)" : TYPES[t]}</option>`).join("")}</select>`;
 
-  app.get("/ui/settings", async (c) => {
+  // Settings, an area at a time (goal 181, from the owner's mockup): each has its page, and the
+  // left navigation is Settings' own. `/ui/settings` is Providers, or the area a form's answer
+  // names (`at`), as before the split.
+  const settingsPage = async (c: Ctx) => {
+    const named = c.req.param("area");
+    const at = c.req.query("at") ?? (c.req.query("retention") ? "retention" : undefined);
+    const area = (named ?? (at && at in AREA_TITLES ? at : "providers")) as SettingsArea;
+    if (!(area in AREA_TITLES)) return c.notFound();
     const now = Date.now();
     const vs = views();
     const t = csrf(c);
@@ -142,15 +156,11 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
             given[rig]?.provider === name ||
             Object.values(store.agentModels.byRole(rig)).some((r) => r?.provider === name),
         );
-    // What an MCP server's form did is said in its own block (at=mcp), where the page opens.
-    const atMcp = c.req.query("at") === "mcp";
-    // So is what Save prices did (at=prices), in Model prices.
-    const atPrices = c.req.query("at") === "prices";
-    // And what the addresses cluster rigs may reach said (at=reach), and the knowledge base's
-    // settings (at=kb), in theirs.
-    const elsewhere = atMcp || atPrices || ["reach", "kb"].includes(c.req.query("at") ?? "");
-    const ok = elsewhere ? undefined : c.req.query("ok");
-    const error = elsewhere ? undefined : said(c);
+    // What a form did is said on its area's page: at the top of Providers and of Rigs' models,
+    // and in its own block on the others, which read it themselves.
+    const atPrices = area === "prices";
+    const ok = c.req.query("ok");
+    const error = said(c);
     // Model prices (goal 075): one table under the providers, for every model not on a plan.
     const prices = modelPricesBlock({
       providers,
@@ -335,32 +345,57 @@ ${
           : waits
             ? ` data-follow="${esc(checkFollowUrl(u.id, "model"))}" data-follow-state="${chk.state}"`
             : "";
-        return `<div class="ck rr-route"${follow}><span class="ck-res"><a href="/ui/rigs/${encodeURIComponent(u.id)}"><b>${esc(u.id)}</b></a></span><span class="ck-main"><span>${esc(uses)}${moving}</span><span class="ck-sum ${bad ? "bad" : ""}">${modelCheckHtml(chk, now)}</span></span><span class="route-acts"><form class="inline" method="post" action="/ui/settings/rigs" data-act><input type="hidden" name="csrf" value="${t}"><input type="hidden" name="rig" value="${esc(u.id)}"><select name="harness" class="harness" aria-label="harness for ${esc(u.id)}">${HARNESSES.map((h) => `<option value="${h}"${(want?.harness ?? "pi") === h ? " selected" : ""}>${HARNESS_NAMES[h]}</option>`).join("")}</select><select name="choice" aria-label="model for ${esc(u.id)}">${options(want)}</select><button>Use</button></form>${cmdForm(c, { rig: u.id, kind: "rig_check", fields: { check: "model" }, label: "Check", back: "/ui/settings", disabled: waits })}</span></div>`;
+        return `<div class="ck rr-route"${follow}><span class="ck-res"><a href="/ui/rigs/${encodeURIComponent(u.id)}"><b>${esc(u.id)}</b></a></span><span class="ck-main"><span>${esc(uses)}${moving}</span><span class="ck-sum ${bad ? "bad" : ""}">${modelCheckHtml(chk, now)}</span></span><span class="route-acts"><form class="inline" method="post" action="/ui/settings/rigs" data-act><input type="hidden" name="csrf" value="${t}"><input type="hidden" name="rig" value="${esc(u.id)}"><select name="harness" class="harness" aria-label="harness for ${esc(u.id)}">${HARNESSES.map((h) => `<option value="${h}"${(want?.harness ?? "pi") === h ? " selected" : ""}>${HARNESS_NAMES[h]}</option>`).join("")}</select><select name="choice" aria-label="model for ${esc(u.id)}">${options(want)}</select><button>Use</button></form>${cmdForm(c, { rig: u.id, kind: "rig_check", fields: { check: "model" }, label: "Check", back: "/ui/settings/routes", disabled: waits })}</span></div>`;
       })
       .join("");
+    const intro = `<p class="run-said">Providers are what Thermite uses: model providers serve the agents' models, Git access lets rigs fetch private repositories, and machines, clusters and GPU clouds are where rigs run. Add each once with its sign-in or key. Control seals every secret, never shows it again, and gives a rig only what it uses.</p>`;
+    const query = (k: string) => (k === "error" ? said(c) : c.req.query(k));
+    const body =
+      area === "providers"
+        ? `${intro}${note}
+<div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}${machineRows(t)}${clusterRows(t)}${cloudRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
+<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>`
+        : area === "prices"
+          ? prices
+          : area === "routes"
+            ? `<p class="run-said">The harness each rig's agents run in (Pi, OpenCode v2, Claude Code or Codex) and their model, from the providers'.</p>${note}<div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>`
+            : area === "mcp"
+              ? mcpSettingsBlocks(store, mcpServers, t, now, query)
+              : area === "reach"
+                ? reachBlock(store, t, now, (k) => c.req.query(k))
+                : area === "kb"
+                  ? kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) =>
+                      c.req.query(k),
+                    )
+                  : area === "space"
+                    ? spaceBlock(await spaceOf(store, opts.parts.bus), store.retention.list())
+                    : area === "bus"
+                      ? busSettingsBlock({
+                          state: await busState(store, opts.parts.bus),
+                          store,
+                          views: vs,
+                          now,
+                        })
+                      : retentionBlocks(
+                          store,
+                          t,
+                          (k) => c.req.query(k),
+                          draftOf(dash, c.req.query("draft")),
+                        );
     return page(
       c,
       {
-        title: "Providers",
+        title: AREA_TITLES[area],
         active: "settings",
+        area,
         crumbs: [{ href: "/ui/settings", text: "Settings" }],
       },
-      `<p class="run-said">Providers are what Thermite uses: model providers serve the agents' models, Git access lets rigs fetch private repositories, and machines, clusters and GPU clouds are where rigs run. MCP servers give the agents tools from outside Thermite. Add each once with its sign-in or key. Control seals every secret, never shows it again, and gives a rig only what it uses. Then choose, for each rig, the harness its agents run in (Pi, OpenCode v2, Claude Code or Codex) and their model.</p>
-${note}
-<div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}${machineRows(t)}${clusterRows(t)}${cloudRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
-${prices}
-<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>
-${mcpSettingsBlocks(store, mcpServers, t, now, (k) => (k === "error" ? said(c) : c.req.query(k)))}
-${reachBlock(store, t, now, (k) => c.req.query(k))}
-${kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) => c.req.query(k))}
-${spaceBlock(await spaceOf(store, opts.parts.bus), store.retention.list())}
-${busSettingsBlock({ state: await busState(store, opts.parts.bus), store, views: vs, now })}
-${retentionBlocks(store, t, (k) => c.req.query(k), draftOf(dash, c.req.query("draft")))}
-<div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>
-<script src="/ui/assets/providers.js" defer></script>`,
+      `${body}<script src="/ui/assets/providers.js" defer></script>`,
       vs,
     );
-  });
+  };
+  app.get("/ui/settings", settingsPage);
+  app.get("/ui/settings/:area{[a-z]+}", settingsPage);
 
   // ---------------------------------------------------------------- Git access (Settings)
   const gitRows = (t: string) =>

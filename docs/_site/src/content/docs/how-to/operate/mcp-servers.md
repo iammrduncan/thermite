@@ -14,7 +14,7 @@ This page is for an MCP server that is already in **Settings › Providers**: ho
 
 ## See whether a server works
 
-Press the cog icon, **Settings**, at the foot of the sidebar. The block **MCP servers** has one row for each server:
+Press the cog icon, **Settings**, at the foot of the sidebar, then **MCP servers** in Settings' navigation. The block **MCP servers** has one row for each server:
 
 - its name and how it signs in: `gbrain · key in a header`;
 - its state: `Connected · 31 tools · read 3m ago`, `Its tools are not read yet. Press Read tools again.`, or, in red, `Not signed in yet. Sign in to read its tools.`, `The sign-in ended. Sign in again.` or the last error and when it came, such as `the server answered 401: check the key (3m ago)`;

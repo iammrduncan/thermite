@@ -280,7 +280,7 @@ Control keeps the knowledge base's two settings in its store. The owner reads an
 
 A read answers `{max_file_mib, orphan_hours, orphan_hours_from, orphan_hours_default, set_by, set_at}`. `orphan_hours_from` is `setting` when the owner set it on control, or `environment` when it comes from `THERMITE_CONTROL_KB_ORPHAN_HOURS`, whose value is `orphan_hours_default`; `set_by` and `set_at` are the last change's. A change answers the same, with `said`: the settings in words, such as `The knowledge base takes files up to 64 MiB; a file no item names is removed after 72 hours.` Over REST and MCP, a field left out stays as it is, and `null` puts it back to its default. A number below 0, or not a number, is refused: `bad request: max_file_mib: …` over REST.
 
-On **Settings**, the **Knowledge base** block, under **Addresses cluster rigs may reach**, has the two fields, each with its ⓘ, the environment's value as the hours' placeholder, and **Save the settings**, which keeps both: an empty field is its default. Before the button it says what Save does: `Save keeps both. A limit applies to the files that come from then on. Control looks for orphan files at its start and every hour.` After a save, the block says the settings in words, or **Not saved.** and why, such as `Largest file takes a number, 0 or more, not "lots".`
+On **Settings › Knowledge base**, the **Knowledge base** block has the two fields, each with its ⓘ, the environment's value as the hours' placeholder, and **Save the settings**, which keeps both: an empty field is its default. Before the button it says what Save does: `Save keeps both. A limit applies to the files that come from then on. Control looks for orphan files at its start and every hour.` After a save, the block says the settings in words, or **Not saved.** and why, such as `Largest file takes a number, 0 or more, not "lots".`
 
 ## The words index
 
@@ -752,6 +752,6 @@ Each export of a rig's harness holds, besides its events and attempts, the field
 
 ## Other knowledge bases, over MCP
 
-Another knowledge base you run, such as GBrain or your team's notes, is an ordinary [MCP server](../how-to/campaigns/give-agents-mcp-tools.md): you add it once in **Settings › Providers › MCP servers**, and a campaign's kit names it for the agents that should use its tools. It is optional: Thermite's knowledge base is complete without one. Control copies nothing to it; an agent that is given a server's write tools may write there itself.
+Another knowledge base you run, such as GBrain or your team's notes, is an ordinary [MCP server](../how-to/campaigns/give-agents-mcp-tools.md): you add it once in **Settings › MCP servers**, and a campaign's kit names it for the agents that should use its tools. It is optional: Thermite's knowledge base is complete without one. Control copies nothing to it; an agent that is given a server's write tools may write there itself.
 
 Before 0.1.0, control could copy campaigns' collections, then called folders, to an "outside knowledge base" and let a campaign's teachers search it through a grant. At the update, each one became an MCP server with its token, its copies stopped and those grants were removed ([Manage MCP servers](../how-to/operate/mcp-servers.md#after-the-update-from-an-outside-knowledge-base)).

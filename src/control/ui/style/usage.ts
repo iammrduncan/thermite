@@ -75,7 +75,7 @@ export const USAGE = `/* goal 075: model use and cost (a run's top and Stats tab
 .u-calls { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 10px 24px; align-items: end; }
 .u-calls .uspark { height: 64px; margin: 0; gap: 4px; }
 .u-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11.5px; color: var(--muted-foreground); }
-/* Settings › Providers: Model prices, one table under the providers. */
+/* Settings › Model prices: one table. */
 .mp-t td { vertical-align: middle; }
 .mp-t input { width: 76px; height: 28px; padding: 0 8px; text-align: right; font-variant-numeric: tabular-nums; }
 .mp-t input.bad { border-color: var(--error); }

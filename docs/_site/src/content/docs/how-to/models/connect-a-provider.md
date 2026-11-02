@@ -21,7 +21,7 @@ This guide covers providers reached with an API key, or with no key for OpenCode
 
 1. Press the cog icon, **Settings**, at the foot of the sidebar.
 
-   The **Providers** page opens. Its blocks, in order: **Providers**, **Model prices**, **Add a provider**, **MCP servers**, **Add an MCP server** and **Harness and model for each rig**.
+   Settings opens on its **Providers** page, with the blocks **Providers** and **Add a provider**. While you are in Settings, the left navigation lists its pages instead of the dashboard's: **Providers**, **Model prices** and **Rigs' models** under **Models**; **MCP servers** and **Addresses rigs may reach** under **Agents**; **Knowledge base**, **Space** and **Retention policies** under **Data**; and **Message bus** under **System**. **Back to Thermite**, at its top, goes back to the dashboard.
 
 2. In **Add a provider**, choose the **Type**. The group **Models by API key** has three types:
 
@@ -31,7 +31,7 @@ This guide covers providers reached with an API key, or with no key for OpenCode
    | **Anthropic** | Anthropic's own API | Leave empty for `https://api.anthropic.com` | Required |
    | **OpenCode (its own models)** | OpenCode's own service. Its models run only in OpenCode v2 | Leave empty for `https://opencode.ai/zen/v1` | Leave empty for the free models |
 
-   The list's other groups hold subscriptions, Git access and the places where rigs run. MCP servers, such as GBrain, have a block of their own lower on the page, **Add an MCP server**: see [Give agents MCP tools](../campaigns/give-agents-mcp-tools.md).
+   The list's other groups hold subscriptions, Git access and the places where rigs run. MCP servers, such as GBrain, have a page of their own, **Settings › MCP servers**: see [Give agents MCP tools](../campaigns/give-agents-mcp-tools.md).
 
 3. Fill in the fields. Each label has an ⓘ icon; hover over it to read its description:
 
@@ -47,13 +47,13 @@ This guide covers providers reached with an API key, or with no key for OpenCode
 
 4. Press **Add and list its models**.
 
-   Control seals the key and reads the provider's model list at once. The page shows `"my-litellm" is saved and lists 12 models. Choose one for a rig below.` with your name and count.
+   Control seals the key and reads the provider's model list at once. The page shows `"my-litellm" is saved and lists 12 models. Choose one for a rig on Rigs' models.` with your name and count.
 
    The provider now has a row under **Providers**: its name and type, how many models it lists, its base URL, the end of its key (for example `key …abcd`; OpenCode without a key shows `no key: its free models`), `not HTTPS` for an `http://` address, and which rigs use it. Open the row to see each model.
 
 ## Give a rig one of its models
 
-1. In **Harness and model for each rig**, find the rig's row.
+1. Open **Rigs' models** in Settings' navigation. Under **Harness and model for each rig**, find the rig's row.
 2. Choose the **worker harness**, the program the agents run in: **Pi**, **OpenCode v2**, **Claude Code** or **Codex**. Pi is the default. **Codex**, the Codex CLI, takes an OpenAI-compatible provider whose server answers OpenAI's Responses API (`/responses`), as OpenAI's own API does. [Choose a model](choose-a-model.md#where-the-agents-run) says which worker harness works with which provider.
 3. Choose the model. The list groups the models by provider. A group marked "OpenCode harness only" needs **OpenCode v2**. Without a key, OpenCode serves only the models whose names end in `-free`.
 4. Press **Use**.
@@ -67,11 +67,11 @@ The rig's row now says "Its agents run under Pi with my-model from my-litellm." 
 You can also give a rig its agents' model where you start a run:
 
 - under **The agents' model** on the **New campaign** page ([Start a campaign from the dashboard](../campaigns/start-from-dashboard.md#5-where-it-runs));
-- in a campaign's **Start a run** panel, which shows **The agents' model** when the chosen rig has no model and **Agents** is **On**. Its ⓘ says: "For a rig with no model for its agents: the model to give it, as on its Edit rig page. Control gives it to the rig, which takes it within a minute; then start the run again here." Control gives the rig the model and says "rig-1 takes my-model within a minute; Settings › Providers shows it taking the model until then. Then start the run again." The run doesn't start yet: when the rig's row here says it runs the model, open **Start a run** again and press **Start the run**.
+- in a campaign's **Start a run** panel, which shows **The agents' model** when the chosen rig has no model and **Agents** is **On**. Its ⓘ says: "For a rig with no model for its agents: the model to give it, as on its Edit rig page. Control gives it to the rig, which takes it within a minute; then start the run again here." Control gives the rig the model and says "rig-1 takes my-model within a minute; Settings › Rigs' models shows it taking the model until then. Then start the run again." The run doesn't start yet: when the rig's row here says it runs the model, open **Start a run** again and press **Start the run**.
 
 An agent can do it over MCP with [`set_rig_model`](../../reference/mcp-tools.md#set_rig_model). All three work like **Use** here.
 
-**Start a run** starts a run with agents only once the rig has taken the model that control gave it, wherever you gave it: with **Use** here, on **Edit rig**, over MCP, or in an earlier **Start a run** or its twins (`agents_model` over REST and MCP, `--provider` and `--model` on `thermite run start`). Pressed too early, **Start the run** answers **Not started.** "rig-1 has not taken my-model yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then): start the run after that." Until then, **Start the campaign** on the **New campaign** page saves the campaign without starting it, and says "Saved. rig-1 has not taken my-model yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then). Then start the run here."
+**Start a run** starts a run with agents only once the rig has taken the model that control gave it, wherever you gave it: with **Use** on **Rigs' models**, on **Edit rig**, over MCP, or in an earlier **Start a run** or its twins (`agents_model` over REST and MCP, `--provider` and `--model` on `thermite run start`). Pressed too early, **Start the run** answers **Not started.** "rig-1 has not taken my-model yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then): start the run after that." Until then, **Start the campaign** on the **New campaign** page saves the campaign without starting it, and says "Saved. rig-1 has not taken my-model yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then). Then start the run here."
 
 A failed check says `Its model check FAILED`, then why. With OpenCode's free models, two reasons are common:
 
@@ -107,7 +107,7 @@ An agent does the same with [`set_rig_model`](../../reference/mcp-tools.md#set_r
 
 - The cap is at least 4,096 tokens, and at most the provider's window. A larger one is refused: `my-model takes at most 204,800 tokens.` When the provider lists no window, control uses the cap as given.
 - Each request sets the cap anew. Give the model again without `context_window` and the cap goes: the rig gets the provider's window.
-- **Use** on this page keeps the cap while the rig keeps the same model, and another model there removes it. On **Edit rig**, the workers' **Context** cell shows the cap and changes it.
+- **Use** on **Rigs' models** keeps the cap while the rig keeps the same model, and another model there removes it. On **Edit rig**, the workers' **Context** cell shows the cap and changes it.
 - This cap is for the workers' model, and for the planner when it follows the workers. The planner with its own model and each advisor take their own cap, with `agent` in the same request: see [Set an agent's context window and compaction](model-per-agent.md#set-an-agents-context-window-and-compaction).
 - A campaign can set its own window for all its runs; each agent then works with the lower of the two. See [Set a campaign's own context window](model-per-agent.md#set-a-campaigns-own-context-window).
 
@@ -148,7 +148,7 @@ Some providers serve models that their list does not show. Open the provider's r
 
 [Model usage](../../reference/model-use.md) costs each call at its model's price. When the provider's list gives prices, as OpenRouter's and Nous Portal's do, control keeps them with the list and uses them. OpenAI's own list, Anthropic's and OpenCode Zen's give none, so their models' calls show `no price` until you set one, in US dollars for a million tokens. A provider whose list makes every model free says `free, from the provider` in its row.
 
-1. Open **Settings › Providers**. Under the providers, **Model prices** lists every model of every provider that is not a subscription, in $ for a million tokens. Its **Price from** column says `provider's list`, `free`, `yours` or `no price`.
+1. Open **Settings › Model prices**. Its table lists every model of every provider that is not a subscription, in $ for a million tokens. Its **Price from** column says `provider's list`, `free`, `yours` or `no price`.
 2. In the model's row, type its **In** and **Out** prices, and **Cached in** if the provider charges less for tokens it reads from its cache (empty: the **In** price). A model whose list gives a price shows it as text: it can't be changed here.
 3. Press **Save prices**.
 
@@ -215,7 +215,7 @@ THERMITE_MODEL_BASE_URL=http://host.docker.internal:8000/v1 THERMITE_MODEL=my-mo
 
 For a model server on the same computer, such as llama.cpp's `llama-server`, vLLM or Ollama, set `THERMITE_MODEL_MAX_TOKENS` and `THERMITE_MODEL_CONTEXT_WINDOW` to the server's limits too: Thermite sends no reply limit by default, and the server's own default may cut replies short.
 
-If the rig has a model from control, choose **its own settings** for it in **Harness and model for each rig** and press **Use**. Within a minute the rig's row says "Its agents use the rig's own settings (my-model, under Pi)", followed by the model check's result.
+If the rig has a model from control, choose **its own settings** for it on **Settings › Rigs' models** and press **Use**. Within a minute the rig's row says "Its agents use the rig's own settings (my-model, under Pi)", followed by the model check's result.
 
 If you change only the key file, restart the harness so that it reads the file again: `docker compose restart harness`.
 

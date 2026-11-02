@@ -587,6 +587,7 @@ try {
   );
   const everything = JSON.stringify([
     await page("/ui/settings"),
+    await page("/ui/settings/routes"),
     await page("/ui/rigs/local-1"),
     await events(),
     (await api("/v1/rigs/local-1/view")).body,

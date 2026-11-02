@@ -89,7 +89,10 @@ describe("control dashboard", () => {
       at: new Date().toISOString(),
     };
     await s.relay();
-    page = await (await s.get("/ui/settings")).text();
+    // Providers holds the windows; Rigs' models what each rig's agents run under (goal 181).
+    page =
+      (await (await s.get("/ui/settings")).text()) +
+      (await (await s.get("/ui/settings/routes")).text());
     assert.match(page, /<b>5-hour window<\/b> · 34% used · resets 2026-10-18 15:40 UTC/);
     assert.match(page, /<b>Weekly window<\/b> · 61% used/);
     assert.match(page, /Its agents run under Claude Code with claude-opus-5-5 from claude-max/);
@@ -280,7 +283,7 @@ describe("control dashboard", () => {
       /name="harness" data-runs-in="workers"[^>]*>(?:(?!<\/select>)[\s\S])*<option value="codex" selected>Codex<\/option>/,
     );
     assert.match(edit, /data-ctx-sum="planner"><span class="muted">as the workers: [^<]+ · 80%</);
-    page = await (await s.get("/ui/settings")).text();
+    page = await (await s.get("/ui/settings/routes")).text();
     assert.match(page, /<option value="codex" selected>Codex<\/option>/);
     // Left to control, a ChatGPT sign-in keeps Pi.
     await s.post("/ui/settings/rigs", { csrf, rig: "rig-a", choice: "chatgpt-pro|gpt-test" });

@@ -545,13 +545,15 @@ describe("model use on the screens (goal 075)", () => {
     );
   });
 
-  test("Settings › Providers: one Model prices table under the providers, no subscription in it; Save prices sets and clears a price", async () => {
+  test("Settings › Model prices: one table, no subscription in it; Save prices sets and clears a price", async () => {
     const s = await stack();
-    let html = await s.page("/ui/settings");
-    // Under the providers, before Add a provider; nothing about prices inside a provider.
-    assert.ok(html.indexOf("<h2>Providers</h2>") < html.indexOf('id="model-prices"'));
-    assert.ok(html.indexOf('id="model-prices"') < html.indexOf("<h2>Add a provider</h2>"));
-    assert.doesNotMatch(html, /Prices, \$ for a million tokens|So far:|data-pr-prov/);
+    // Its own page (goal 181); nothing about prices inside a provider.
+    assert.doesNotMatch(
+      await s.page("/ui/settings"),
+      /id="model-prices"|Prices, \$ for a million tokens|So far:|data-pr-prov/,
+    );
+    let html = await s.page("/ui/settings/prices");
+    assert.match(html, /<a href="\/ui\/settings\/prices" class="on">/);
     const block = from(html, '<div class="block" id="model-prices">', "</form>");
     assert.match(
       block,
@@ -594,7 +596,7 @@ describe("model use on the screens (goal 075)", () => {
     };
     let r = await s.post("/ui/settings/prices", form);
     assert.equal(r.status, 303);
-    assert.equal(r.to, "/ui/settings?at=prices&ok=saved#model-prices");
+    assert.equal(r.to, "/ui/settings/prices?ok=saved#model-prices");
     assert.deepEqual(
       s.store.usage.prices().map((x) => [x.provider, x.model, x.price]),
       [["lab", "small-model", { input: 0.6, cached_input: 0.1, output: 2.5 }]],
@@ -603,7 +605,7 @@ describe("model use on the screens (goal 075)", () => {
       s.store.modelProviders.get("lab")?.models.find((m) => m.id === "wide-model")?.price?.input,
       3,
     );
-    html = await s.page("/ui/settings?at=prices&ok=saved");
+    html = await s.page("/ui/settings/prices?ok=saved");
     const saved = from(html, '<div class="block" id="model-prices">', "</form>");
     assert.match(saved, /<b class="ok">Saved\.<\/b> Every cost follows\./);
     const mine = rowWith(saved, '<span class="u-m">small-model</span>');
@@ -618,15 +620,15 @@ describe("model use on the screens (goal 075)", () => {
     // The same again changes nothing; refusals in words, and nothing changes.
     assert.equal(
       (await s.post("/ui/settings/prices", form)).to,
-      "/ui/settings?at=prices&ok=same#model-prices",
+      "/ui/settings/prices?ok=same#model-prices",
     );
     r = await s.post("/ui/settings/prices", { ...form, in0: "lots" });
     assert.match(
       r.to,
-      /&error=small-model of lab: a price is a number, such as 0\.60\.#model-prices$/,
+      /\?error=small-model of lab: a price is a number, such as 0\.60\.#model-prices$/,
     );
     r = await s.post("/ui/settings/prices", { ...form, out0: "" });
-    assert.match(r.to, /&error=small-model of lab: set In and Out, or leave all three empty\./);
+    assert.match(r.to, /\?error=small-model of lab: set In and Out, or leave all three empty\./);
     assert.equal(s.store.usage.prices()[0]?.price.output, 2.5);
     // A subscription's model, posted anyway, is refused in words.
     r = await s.post("/ui/settings/prices", {
@@ -636,9 +638,9 @@ describe("model use on the screens (goal 075)", () => {
       cached0: "",
       out0: "1",
     });
-    assert.match(r.to, /&error=sub is a subscription: its calls are on its plan/);
+    assert.match(r.to, /\?error=sub is a subscription: its calls are on its plan/);
     html = await s.page(
-      `/ui/settings?at=prices&error=${encodeURIComponent("small-model of lab: a price is a number, such as 0.60.")}`,
+      `/ui/settings/prices?error=${encodeURIComponent("small-model of lab: a price is a number, such as 0.60.")}`,
     );
     assert.match(
       from(html, '<div class="block" id="model-prices">', "</form>"),
@@ -685,7 +687,7 @@ describe("model use on the screens (goal 075)", () => {
         cached0: v.cached,
         out0: v.out,
       });
-      assert.equal(r.to, `/ui/settings?at=prices&error=small-model of lab: ${why}#model-prices`);
+      assert.equal(r.to, `/ui/settings/prices?error=small-model of lab: ${why}#model-prices`);
     }
     // What the script lets through, the server saves.
     assert.match(

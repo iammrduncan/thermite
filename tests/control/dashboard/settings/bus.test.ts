@@ -74,7 +74,7 @@ test("Settings › Message bus: control's connection, each rig on the bus or off
     });
   noteOffBusCall(store, "rig-b");
   const ui = await signIn(s.control);
-  const page = await ui.page("/ui/settings");
+  const page = await ui.page("/ui/settings/bus");
 
   // Control's connection.
   assert.match(page, /<h2>Message bus<\/h2>/);
@@ -132,7 +132,7 @@ test("Settings › Message bus: control's connection, each rig on the bus or off
   // Away: control says so, and the server's state the page could not read.
   view.bus.connected = () => false;
   view.bus.link = () => ({ since: null, version: null });
-  const away = await ui.page("/ui/settings");
+  const away = await ui.page("/ui/settings/bus");
   assert.match(
     away,
     /<span class="dot bad"><\/span> <b class="bad">Away<\/b>: control holds no connection to the bus/,
@@ -142,6 +142,6 @@ test("Settings › Message bus: control's connection, each rig on the bus or off
 test("Settings › Message bus without control's bus, as only a test makes it: it says so", async () => {
   const s = controlOnly();
   const ui = await signIn(s.control);
-  const page = await ui.page("/ui/settings");
+  const page = await ui.page("/ui/settings/bus");
   assert.match(page, /Control runs without its message bus: only a test makes it so\./);
 });

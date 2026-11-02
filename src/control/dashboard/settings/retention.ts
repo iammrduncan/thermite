@@ -59,7 +59,7 @@ export const RETENTION_TIPS = {
 
 /** Back to Settings' policies, with what happened said there. */
 const backUrl = (k: "ok" | "error", m: string, more = "") =>
-  `/ui/settings?${k}=${encodeURIComponent(m)}&at=retention${more}#retention`;
+  `/ui/settings/retention?${k}=${encodeURIComponent(m)}&at=retention${more}#retention`;
 
 /** What a policy's preview says of rigs that have not told control what they keep. */
 const unreportedWords = (p: PolicyPreview) =>
@@ -219,7 +219,7 @@ ${field(
   infoLabel("If it ran now", RETENTION_TIPS.preview),
   `<div class="rt-preview" id="rt-preview"><b data-big>${esc(p?.words ?? "It would remove nothing now.")}</b><span class="muted small" data-small>${esc(p ? `${p.stays}${unreportedWords(p) ? ` ${unreportedWords(p)}` : ""}` : "")}</span></div>`,
 )}
-<div class="form-end rt-foot"><button class="primary" name="save" value="on"${spec.name.trim() ? "" : ' disabled title="Give it a name first"'}>Save and turn on</button><button name="save" value="off"${spec.name.trim() ? "" : " disabled"}>Save, off</button><a class="btn" href="/ui/settings#retention">Cancel</a><span class="muted small" id="rt-first">${esc(firstRunWords(spec, now))}</span></div>
+<div class="form-end rt-foot"><button class="primary" name="save" value="on"${spec.name.trim() ? "" : ' disabled title="Give it a name first"'}>Save and turn on</button><button name="save" value="off"${spec.name.trim() ? "" : " disabled"}>Save, off</button><a class="btn" href="/ui/settings/retention">Cancel</a><span class="muted small" id="rt-first">${esc(firstRunWords(spec, now))}</span></div>
 </form></div>`;
 }
 
@@ -233,13 +233,13 @@ function policyRow(t: string, v: PolicyView, confirm: boolean): string {
   const row = `<tr data-policy="${v.id}"><td><form method="post" action="/ui/settings/retention/${v.id}/on" class="inline"><input type="hidden" name="csrf" value="${t}"><label class="sw" title="${esc(onTitle)}"><input type="checkbox" name="on" value="1"${v.on ? " checked" : ""} data-autosubmit aria-label="Turn ${esc(v.name)} on or off"><span class="knob"></span></label><noscript><button class="sm">Save</button></noscript></form></td>
 <td><b>${esc(v.name)}</b><div class="muted small">${esc(v.label)}</div></td><td>${esc(v.where_words)}</td><td>Removes ${esc(v.rule_words)}${keep}</td>
 <td>${v.on ? esc(v.when_words) : `<span class="muted">off</span>`}</td><td>${runs}</td>
-<td class="nowrap"><a class="btn sm" href="/ui/settings?retention=run&amp;policy=${v.id}#retention">Run now</a> <a class="btn sm" href="/ui/settings?retention=edit&amp;policy=${v.id}#retention">Edit</a> <form method="post" action="/ui/settings/retention/${v.id}/delete" class="inline"><input type="hidden" name="csrf" value="${t}"><button class="sm danger">Delete</button></form></td></tr>`;
+<td class="nowrap"><a class="btn sm" href="/ui/settings/retention?retention=run&amp;policy=${v.id}#retention">Run now</a> <a class="btn sm" href="/ui/settings/retention?retention=edit&amp;policy=${v.id}#retention">Edit</a> <form method="post" action="/ui/settings/retention/${v.id}/delete" class="inline"><input type="hidden" name="csrf" value="${t}"><button class="sm danger">Delete</button></form></td></tr>`;
   if (!confirm) return row;
   const ask = r.count
     ? `It removes ${esc(removeWords(v.kind, r))}${onRigs(v.kind) ? ", as its rigs last said; each rig removes what the policy covers when the command reaches it" : ""}. This can't be undone.${unreportedWords(r) ? ` ${esc(unreportedWords(r))}` : ""}`
     : `It would remove nothing now: everything it covers is inside the rule.${unreportedWords(r) ? ` ${esc(unreportedWords(r))}` : ""}`;
   const can = r.count > 0 || r.unreported.length > 0;
-  return `${row}<tr class="rt-confirm-row"><td colspan="7"><div class="rt-confirm" id="rt-confirm"><b>Run “${esc(v.name)}” now?</b><span>${ask}</span><div class="act"><form method="post" action="/ui/settings/retention/${v.id}/run" class="inline"><input type="hidden" name="csrf" value="${t}"><button class="danger solid"${can ? "" : " disabled"}>Remove now</button></form><a class="btn" href="/ui/settings#retention">Cancel</a></div></div></td></tr>`;
+  return `${row}<tr class="rt-confirm-row"><td colspan="7"><div class="rt-confirm" id="rt-confirm"><b>Run “${esc(v.name)}” now?</b><span>${ask}</span><div class="act"><form method="post" action="/ui/settings/retention/${v.id}/run" class="inline"><input type="hidden" name="csrf" value="${t}"><button class="danger solid"${can ? "" : " disabled"}>Remove now</button></form><a class="btn" href="/ui/settings/retention">Cancel</a></div></div></td></tr>`;
 }
 
 /** What the policies removed, newest first. */
@@ -291,8 +291,8 @@ export function retentionBlocks(
     form = policyForm(store, t, spec as RetentionSpec, kindSizes(store), preview, now);
   }
   const list = views.length
-    ? `<div class="card flat" style="overflow-x:auto"><table class="ktable"><thead><tr><th>On</th><th>Policy</th><th>Where</th><th>Rule</th><th>When</th><th>Runs</th><th></th></tr></thead><tbody>${views.map((v) => policyRow(t, v, asked === "run" && v.id === id)).join("")}</tbody></table></div>${form ? "" : `<div><a class="btn primary" href="/ui/settings?retention=new#retention">New policy</a></div>`}`
-    : `<div class="card empty rt-empty"><b>No policy. Thermite keeps everything, everywhere.</b><span class="muted">A policy removes one kind of thing, where you say, by the rule you set, on the days you choose. Each is off until you turn it on, and shows what it would remove before it does.</span>${form ? "" : `<a class="btn primary" href="/ui/settings?retention=new#retention">New policy</a>`}</div>`;
+    ? `<div class="card flat" style="overflow-x:auto"><table class="ktable"><thead><tr><th>On</th><th>Policy</th><th>Where</th><th>Rule</th><th>When</th><th>Runs</th><th></th></tr></thead><tbody>${views.map((v) => policyRow(t, v, asked === "run" && v.id === id)).join("")}</tbody></table></div>${form ? "" : `<div><a class="btn primary" href="/ui/settings/retention?retention=new#retention">New policy</a></div>`}`
+    : `<div class="card empty rt-empty"><b>No policy. Thermite keeps everything, everywhere.</b><span class="muted">A policy removes one kind of thing, where you say, by the rule you set, on the days you choose. Each is off until you turn it on, and shows what it would remove before it does.</span>${form ? "" : `<a class="btn primary" href="/ui/settings/retention?retention=new#retention">New policy</a>`}</div>`;
   const never = NEVER_REMOVED.map(
     (n) =>
       `<div><b>${esc(n.label)}</b><span class="muted">${n.label === "Exports" ? `Removed only by hand, on the <a href="/ui/exports">Exports</a> page.` : esc(n.words)}</span></div>`,

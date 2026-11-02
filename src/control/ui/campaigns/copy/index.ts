@@ -163,7 +163,7 @@ function researchServers(p: CopyPanel): string {
   return `<div class="sfd"><span class="lb">MCP servers for its agents<i class="ii" tabindex="0" data-tip="${esc("The tools from outside Thermite that the copy's agents can call. The list starts as the source has it. Change it to give the copy's agents other servers or tools. A research run's planner takes no servers: its workers and advisors do. Open Advanced under a server to choose its tools for each kind of agent. Servers are added in Settings › MCP servers.")}">i</i></span><input type="hidden" name="mcp" value="1">${
     rows
       ? `<div class="mcp-pick" data-c-mcp>${rows}</div>`
-      : `<div class="card"><div class="empty">No MCP server in Settings yet. <a href="/ui/settings#add-mcp">Add one in Settings</a>: the copy's agents have only Thermite's own tools until then.</div></div>`
+      : `<div class="card"><div class="empty">No MCP server in Settings yet. <a href="/ui/settings/mcp#add-mcp">Add one in Settings</a>: the copy's agents have only Thermite's own tools until then.</div></div>`
   }<div class="cp-mcp-sum" data-c-mcp-sum aria-live="polite">${
     same
       ? `<span class="ok">✓ The same as ${esc(p.campaign)}.</span>`

@@ -268,7 +268,7 @@ ${BRIEF_PAGE_JS}
         st.textContent = found ? "In Settings · " + toolsOf(x.name) + " tools" + (bad(x.name) ? " · it doesn't work now" : "") : "Not in Settings. Add an MCP server named " + x.name + " in Settings, or this campaign can't start.";
         main.append(head, st);
         const act = document.createElement("span");
-        if (!found) { const a = document.createElement("a"); a.className = "btn sm"; a.href = "/ui/settings#add-mcp"; a.textContent = "Add it in Settings"; act.append(a); }
+        if (!found) { const a = document.createElement("a"); a.className = "btn sm"; a.href = "/ui/settings/mcp#add-mcp"; a.textContent = "Add it in Settings"; act.append(a); }
         row.append(res, main, act); box.append(row);
       }
     }

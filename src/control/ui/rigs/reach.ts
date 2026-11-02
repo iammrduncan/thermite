@@ -24,7 +24,7 @@ export const reachEntryWords = (e: { address: string; ports: number[]; note?: st
  * what of the list the slot's rules opened when control added the rig.
  */
 export function rigReachHtml(r: ClusterRig, list: ReachEntry[]): string {
-  const settings = `<a href="/ui/settings#reach">the list in Settings</a>`;
+  const settings = `<a href="/ui/settings/reach">the list in Settings</a>`;
   if (r.placement === "slot") {
     const open = r.spec.openings ?? [];
     return open.length

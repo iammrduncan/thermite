@@ -141,6 +141,7 @@ export const icon = {
   ),
   cpu: svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/>', 18),
   logout: svg('<path d="M15 4h4v16h-4M10 17l5-5-5-5M15 12H3"/>'),
+  back: svg('<path d="M19 12H5M11 18l-6-6 6-6"/>'),
   cog: svg(
     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   ),
@@ -473,6 +474,49 @@ export interface Shell {
   nav?: NavCampaigns | undefined;
   /** The left navigation shows only its icons: the owner collapsed it in this browser (NAV_COOKIE). */
   rail?: boolean | undefined;
+  /** In Settings, the area shown: the left navigation is Settings' own (goal 181). */
+  area?: SettingsArea | undefined;
+}
+
+/** Settings' areas, each a page of its own, in its navigation's groups and order (goal 181). */
+export const SETTINGS_AREAS = [
+  { area: "providers", group: "Models", label: "Providers" },
+  { area: "prices", group: "Models", label: "Model prices" },
+  { area: "routes", group: "Models", label: "Rigs' models" },
+  { area: "mcp", group: "Agents", label: "MCP servers" },
+  { area: "reach", group: "Agents", label: "Addresses rigs may reach" },
+  { area: "kb", group: "Data", label: "Knowledge base" },
+  { area: "space", group: "Data", label: "Space" },
+  { area: "retention", group: "Data", label: "Retention policies" },
+  { area: "bus", group: "System", label: "Message bus" },
+] as const;
+export type SettingsArea = (typeof SETTINGS_AREAS)[number]["area"];
+
+/** A Settings area's page. */
+const settingsHref = (area: SettingsArea) =>
+  area === "providers" ? "/ui/settings" : `/ui/settings/${area}`;
+
+const AREA_ICON: Record<SettingsArea, string> = {
+  providers: icon.key,
+  prices: icon.chart,
+  routes: icon.cpu,
+  mcp: icon.chip,
+  reach: icon.live,
+  kb: icon.book,
+  space: icon.archive,
+  retention: icon.clock,
+  bus: icon.list,
+};
+
+/** Settings' own navigation: back to the rest of the dashboard, then each area by its group. */
+function settingsNav(active: SettingsArea, rail: boolean): string {
+  let group = "";
+  const rows = SETTINGS_AREAS.map((a) => {
+    const head = a.group !== group ? `<div class="section">${esc(a.group)}</div>` : "";
+    group = a.group;
+    return `${head}<a href="${settingsHref(a.area)}" class="${a.area === active ? "on" : ""}"${rail ? ` title="${esc(a.label)}"` : ""}>${AREA_ICON[a.area]}<span>${esc(a.label)}</span></a>`;
+  }).join("");
+  return `<nav class="nav set-nav" aria-label="Settings"><a href="/ui" class="set-back"${rail ? ` title="Back to Thermite"` : ""}>${icon.back}<span>Back to Thermite</span></a>${rows}</nav>`;
 }
 
 /**
@@ -579,7 +623,10 @@ export function shell(s: Shell, body: string): string {
 <body><div class="app${s.rail ? " rail" : ""}">
 <aside class="sidebar" id="sidebar">
   <div class="side-top"><a class="brand" href="/ui"><span class="mark">Th</span><span class="brand-name">Thermite</span></a><button type="button" class="ib side-tog" id="side-tog" aria-controls="sidebar" aria-expanded="${s.rail ? "false" : "true"}" aria-label="${fold}" title="${fold}">${icon.panel}</button></div>
-  <nav class="nav">
+  ${
+    s.area
+      ? settingsNav(s.area, Boolean(s.rail))
+      : `<nav class="nav">
     ${nav("/ui", "overview", icon.home, "Overview", s.needs ? `<span class="badge">${s.needs}</span>` : "")}
     ${nav("/ui/campaigns", "campaigns", icon.trophy, "Campaigns", `<span class="count">${campCount}</span>`)}
     ${nav("/ui/rigs", "rigs", icon.rigs, "Rigs", `<span class="count">${s.rigs.length}</span>`)}
@@ -590,7 +637,8 @@ export function shell(s: Shell, body: string): string {
     ${nav("/ui/exports", "exports", icon.download, "Exports")}
     ${nav("/ui/audit", "audit", icon.shield, "Audit log")}
   </nav>
-  ${navCampaigns(camps, s.nav)}
+  ${navCampaigns(camps, s.nav)}`
+  }
   <div class="side-foot"><form method="post" action="/ui/logout"><button class="ghost sm">${icon.logout}<span>Sign out</span></button></form><a class="cog${s.active === "settings" ? " on" : ""}" href="/ui/settings" title="Settings" aria-label="Settings">${icon.cog}</a></div>
 </aside>
 <div class="main">

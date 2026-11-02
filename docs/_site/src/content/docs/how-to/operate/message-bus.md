@@ -41,7 +41,7 @@ curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"bus":"connected","degr
    ```
 
    Its first line says `bus nats:4222: reached`, then each stream with its messages and its consumers.
-4. Or open **Settings** and scroll to **Message bus**, on the dashboard. It shows the same figures in three blocks:
+4. Or open **Settings › Message bus** on the dashboard: the cog at the foot of the sidebar, then **Message bus** in Settings' navigation. It shows the same figures in three blocks:
    - **Message bus**, control's connection: its **State** (`Connected, since` the time, or **Away**), the **Server** (its version, address and TLS), **Its store** (what the bus's store uses of its room, and the disk floor below which control holds new runs) and the **Rigs' events** (the stream's place written and applied through, and how many messages are behind);
    - **Rigs on the bus**: each rig's **Connection** (`On the bus, since` its last registration, or **Off the bus** since a time, broken until it comes back), its **Reports waiting** on the bus, its **Commands waiting** (on the bus and not acknowledged, or held by control), the messages **Sent again** to it (its commands and its config), and its **Last report**;
    - **Bus streams**: each stream, what it carries, its messages and space, and how long it keeps them.

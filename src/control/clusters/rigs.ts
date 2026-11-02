@@ -204,7 +204,7 @@ export async function addClusterRig(
     );
     if (!net.ok)
       return fail(
-        `Refused: in the slot ${namespace}, ${net.why}. A rig's harness may reach only DNS, the internet, its model and the addresses in Settings › Addresses cluster rigs may reach: ask the cluster's operators for a network rule that keeps it off the cluster.`,
+        `Refused: in the slot ${namespace}, ${net.why}. A rig's harness may reach only DNS, the internet, its model and the addresses in Settings › Addresses rigs may reach: ask the cluster's operators for a network rule that keeps it off the cluster.`,
       );
     openings = net.openings;
     ingress = net.ingress;

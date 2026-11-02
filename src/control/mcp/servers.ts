@@ -13,7 +13,7 @@ export function registerMcpServers(tools: ToolContext): void {
       {
         title: "MCP servers",
         description:
-          "The MCP servers in Settings › Providers: each one's address, how it signs in, its state, its last error, its tools (with whether each only reads) and the kits that name it. Never a key, a client secret or a sign-in: only a secret's last four characters.",
+          "The MCP servers in Settings › MCP servers: each one's address, how it signs in, its state, its last error, its tools (with whether each only reads) and the kits that name it. Never a key, a client secret or a sign-in: only a secret's last four characters.",
         inputSchema: {},
       },
       audited("mcp_servers", () => ({ servers: mcp.list().map((s) => serverJson(store, s)) })),

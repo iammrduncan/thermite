@@ -386,7 +386,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     return c.redirect(
       settingsUrl(
         "ok",
-        `"${name}" is saved: its ${CLAUDE_MODELS.length} models run only in Claude Code. Choose one for a rig below.`,
+        `"${name}" is saved: its ${CLAUDE_MODELS.length} models run only in Claude Code. Choose one for a rig on Rigs' models.`,
       ),
       303,
     );
@@ -437,7 +437,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         ? settingsUrl("error", `"${name}" is signed in, but ${listError}.`)
         : settingsUrl(
             "ok",
-            `"${name}" is signed in: its ${n} model${n === 1 ? "" : "s"} run in Pi, OpenCode v2 or Codex. Choose one for a rig below.`,
+            `"${name}" is signed in: its ${n} model${n === 1 ? "" : "s"} run in Pi, OpenCode v2 or Codex. Choose one for a rig on Rigs' models.`,
           ),
       303,
     );
@@ -501,7 +501,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
           )
         : settingsUrl(
             "ok",
-            `"${name}" is saved and lists ${listed} model${listed === 1 ? "" : "s"}. Choose one for a rig below.`,
+            `"${name}" is saved and lists ${listed} model${listed === 1 ? "" : "s"}. Choose one for a rig on Rigs' models.`,
           ),
       303,
     );
@@ -563,7 +563,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/settings/prices", async (c) => {
     const f = await c.req.parseBody();
     const back = (k: "ok" | "error", m: string) =>
-      c.redirect(`/ui/settings?at=prices&${k}=${encodeURIComponent(m)}#model-prices`, 303);
+      c.redirect(`/ui/settings/prices?${k}=${encodeURIComponent(m)}#model-prices`, 303);
     const owner = new Map(
       store.usage.prices().map((x) => [JSON.stringify([x.provider, x.model]), x.price]),
     );
@@ -659,7 +659,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
               follow: modelFollowUrl(rig),
             })
           : c.json(notSent(m), 400)
-        : c.redirect(settingsUrl(k, m), 303);
+        : c.redirect(settingsUrl(k, m, "routes"), 303);
     if (!store.reportedRigs.list().some((x) => x.id === rig))
       return answer("error", "No such rig.");
     if (!choice) {

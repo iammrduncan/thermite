@@ -459,7 +459,7 @@ describe("what a rig gets", () => {
     assert.equal(changed.status, 200);
     assert.ok(!(await changed.text()).includes("anotherkeyfortests"));
     // The settings page shows the row, its tools and its hint, never the key.
-    const page = await (await signIn(app)).page("/ui/settings");
+    const page = await (await signIn(app)).page("/ui/settings/mcp");
     assert.match(page, /<h2>MCP servers<\/h2>/);
     assert.match(page, /data-mcp="gbrain"/);
     assert.match(page, /put_page/);

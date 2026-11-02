@@ -23,18 +23,18 @@ It takes half an hour to an hour, most of it waiting. An agent works on one thin
 
 A **provider** is where your agents' models come from. OpenCode is a program that runs coding agents, and its service offers some models for free.
 
-1. Press the cog icon at the foot of the sidebar, beside **Sign out**. Its tooltip says **Settings**. It opens the **Providers** page, whose heading reads `Settings › Providers`.
+1. Press the cog icon at the foot of the sidebar, beside **Sign out**. Its tooltip says **Settings**. It opens the **Providers** page, whose heading reads `Settings › Providers`. While you are in Settings, the left navigation lists Settings' pages; **Back to Thermite**, at its top, goes back.
 2. Under **Add a provider**, set:
    - **Type**: **OpenCode (its own models)**
    - **Name**: `opencode`
    - **Base URL** and **API key**: leave them empty.
 3. Press **Add and list its models**.
 
-A green line says `"opencode" is saved and lists` a number of models, then `Choose one for a rig below.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **runs in the OpenCode harness**.
+A green line says `"opencode" is saved and lists` a number of models, then `Choose one for a rig on Rigs' models.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **runs in the OpenCode harness**.
 
 ## 2. Give the rig a free model
 
-Find **Harness and model for each rig** at the bottom of the page. The row for `local-1` says `Its agents have no model: they wait.`
+Press **Rigs' models** in the left navigation. Under **Harness and model for each rig**, the row for `local-1` says `Its agents have no model: they wait.`
 
 1. In its first list, choose **OpenCode v2**. This is the **worker harness**: the program the agents work in. (It is not the rig's `harness` container, which runs it.) OpenCode's free models run only in OpenCode's own program.
 2. In its second list, under **opencode (OpenCode harness only)**, choose the first model whose name ends in `-free`. Those are the models OpenCode serves without a key. OpenCode decides which they are, and the list changes over time.

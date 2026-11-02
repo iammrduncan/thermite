@@ -345,7 +345,7 @@ Each refusal is in the [audit log](#audit-log-actions) as `refused`, with the ro
 
 ### Addresses cluster rigs may reach
 
-**Settings › Addresses cluster rigs may reach**: the addresses, each with its TCP ports, that the harnesses of rigs on Kubernetes clusters reach beside DNS and the internet ([Reach a model server on a private or Tailscale address](../how-to/install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address)). Only the owner's token may use these routes; over MCP the operator reads the list with [`reachable_addresses`](mcp-tools.md#reachable_addresses), and the owner sets it with [`set_reachable_addresses`](mcp-tools.md#set_reachable_addresses).
+**Settings › Addresses rigs may reach**: the addresses, each with its TCP ports, that the harnesses of rigs on Kubernetes clusters reach beside DNS and the internet ([Reach a model server on a private or Tailscale address](../how-to/install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address)). Only the owner's token may use these routes; over MCP the operator reads the list with [`reachable_addresses`](mcp-tools.md#reachable_addresses), and the owner sets it with [`set_reachable_addresses`](mcp-tools.md#set_reachable_addresses).
 
 | Route | Token | What it does | Request | Answer |
 | --- | --- | --- | --- | --- |
@@ -431,7 +431,7 @@ Each refusal is in the [audit log](#audit-log-actions) as `refused`, with the ro
 | `collection` | `continue` or `fresh` | `continue` | What the run's agents search in Thermite's knowledge base: the campaign's whole collection, or only the run's own items. Either way the run's items go into the collection. Fixed when the run starts ([A run's scope](knowledge-base.md#a-runs-scope)) |
 | `granted` | array of strings | every collection the campaign is granted now | The granted collections its agents also search, read only; `[]` for none |
 
-The queue holds at most 500 experiments. In the 201 answer, `run` is the new run's name and `command` its `assign_campaign` command's id, for `GET /v1/commands/<id>`. `woke` is there when control started the rig's stopped RunPod pod first, as [below](#signed-commands) for `POST /v1/commands`. `notes` is there when there is more to know, such as `sort-speed-1 is at work on rig-1, and pauses when this run starts (a rig runs one run at a time).` or `sort-speed-1 has no untried experiments: the new run's queue starts empty.` `agents_context` is there when the campaign sets its own context settings and the run has agents: what each agent works with on the rig, as MCP's [`start_run`](mcp-tools.md#start_run) says, and a note says it in words. In the 202 answer, `said` is `<rig> takes <model> within a minute; Settings › Providers shows it taking the model until then. Then start the run again.`
+The queue holds at most 500 experiments. In the 201 answer, `run` is the new run's name and `command` its `assign_campaign` command's id, for `GET /v1/commands/<id>`. `woke` is there when control started the rig's stopped RunPod pod first, as [below](#signed-commands) for `POST /v1/commands`. `notes` is there when there is more to know, such as `sort-speed-1 is at work on rig-1, and pauses when this run starts (a rig runs one run at a time).` or `sort-speed-1 has no untried experiments: the new run's queue starts empty.` `agents_context` is there when the campaign sets its own context settings and the run has agents: what each agent works with on the rig, as MCP's [`start_run`](mcp-tools.md#start_run) says, and a note says it in words. In the 202 answer, `said` is `<rig> takes <model> within a minute; Settings › Rigs' models shows it taking the model until then. Then start the run again.`
 
 Control refuses, in the words of **Start a run**, and signs nothing:
 
@@ -447,7 +447,7 @@ Control refuses, in the words of **Start a run**, and signs nothing:
 | 400 | `That provider does not list that model.`, and the other refusals of a model on **Edit rig** |
 | 400 | `<rig> has no GPU set to split: its GPUs are set where it is deployed.` or `With <n> GPUs the judge takes 1 to <m> of them, and the agents at most 8.` |
 | 409 | `<rig> has no model for its agents, so they could not work: choose one under "The agents' model", or give it one on its Edit rig page.` |
-| 409 | `<rig> has not taken <model> yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then): start the run after that.` |
+| 409 | `<rig> has not taken <model> yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then): start the run after that.` |
 | 409 | `<rig> measures on <type>, and this campaign's kit measures on <type>: choose a rig with that hardware` |
 | 409 | `<model> is one of OpenCode's free models, which work only inside OpenCode, and <rig>'s agents would run in Pi: a research run there could not work. …`, for a research campaign |
 | 409 | `This campaign sets a context window of <n> tokens. <model>, the model of the <agent> on <rig>, takes at most <m> tokens. Set the campaign's window to <m> or less, or give that agent another model.`: the campaign's window is above what a provider lists for the model control gives one of the rig's agents |
@@ -876,7 +876,7 @@ curl -X PUT -H "Authorization: Bearer $(cat owner.token)" -H "Content-Type: appl
 
 ### MCP servers
 
-The MCP servers that campaigns' kits name for their agents, as **Settings › Providers › MCP servers** keeps them ([Manage MCP servers](../how-to/operate/mcp-servers.md)). Only the owner's token may use these routes; MCP has the same as [`mcp_server_add`](mcp-tools.md#mcp_server_add) and its sisters, and the command line the [`mcp` commands](command-line.md#mcp). No answer holds a secret: a key or a client secret shows only as its last four characters, `secret_hint`.
+The MCP servers that campaigns' kits name for their agents, as **Settings › MCP servers** keeps them ([Manage MCP servers](../how-to/operate/mcp-servers.md)). Only the owner's token may use these routes; MCP has the same as [`mcp_server_add`](mcp-tools.md#mcp_server_add) and its sisters, and the command line the [`mcp` commands](command-line.md#mcp). No answer holds a secret: a key or a client secret shows only as its last four characters, `secret_hint`.
 
 | Route | Token | What it does | Request | Answer |
 | --- | --- | --- | --- | --- |

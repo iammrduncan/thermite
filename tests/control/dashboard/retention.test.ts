@@ -28,7 +28,9 @@ const location = (r: Response) =>
 describe("Settings › Retention policies", () => {
   test("by default: no policy, Space says where each kind is kept and what removes it", async () => {
     const { control } = controlOnly({ tokens: { admin: OWNER } });
-    const html = await (await signIn(control, OWNER)).page("/ui/settings");
+    const s = await signIn(control, OWNER);
+    // Space and the policies are two areas of Settings (goal 181).
+    let html = await s.page("/ui/settings/space");
     assert.match(
       html,
       /<th>Kind<\/th><th>Kept on<\/th><th class="num">Space<\/th><th>Removed by<\/th>/,
@@ -45,10 +47,11 @@ describe("Settings › Retention policies", () => {
     );
     assert.match(row("trial_logs"), /<td>Rigs<\/td>/);
     assert.match(row("events"), /Kept for good/);
+    html = await s.page("/ui/settings/retention");
     assert.match(html, /<b>No policy\. Thermite keeps everything, everywhere\.<\/b>/);
     assert.match(
       html,
-      /<a class="btn primary" href="\/ui\/settings\?retention=new#retention">New policy<\/a>/,
+      /<a class="btn primary" href="\/ui\/settings\/retention\?retention=new#retention">New policy<\/a>/,
     );
     assert.match(html, /<h2>Never removed by a policy<\/h2>/);
     for (const never of ["Rigs' ledgers", "Results repositories", "Exports"])
@@ -101,7 +104,7 @@ describe("Settings › Retention policies", () => {
     const [p] = store.retention.list();
     assert.equal(p?.on, false, "Save, off");
     assert.equal(p?.when, "weekly");
-    const html = await s.page("/ui/settings");
+    const html = await s.page("/ui/settings/retention");
     const row = html.slice(html.indexOf(`data-policy="${p?.id}"`)).slice(0, 3000);
     assert.match(row, /<b>Old audit<\/b><div class="muted small">Audit log<\/div>/);
     assert.match(row, /<td>control<\/td><td>Removes older than 30 days<\/td>/);
@@ -175,10 +178,12 @@ describe("Settings › Retention policies", () => {
       save: "off",
     });
     const [p] = store.retention.list();
-    const list = await s.page("/ui/settings");
+    const list = await s.page("/ui/settings/retention");
     assert.match(
       list,
-      new RegExp(`href="/ui/settings\\?retention=run&amp;policy=${p?.id}#retention">Run now</a>`),
+      new RegExp(
+        `href="/ui/settings/retention\\?retention=run&amp;policy=${p?.id}#retention">Run now</a>`,
+      ),
     );
     assert.match(list, /would remove now: \d+ B/);
     assert.doesNotMatch(list, /id="rt-confirm"/, "nothing asked before Run now");
@@ -193,7 +198,7 @@ describe("Settings › Retention policies", () => {
     );
     assert.match(card, new RegExp(`action="/ui/settings/retention/${p?.id}/run"`));
     assert.match(card, /<button class="danger solid">Remove now<\/button>/);
-    assert.match(card, /<a class="btn" href="\/ui\/settings#retention">Cancel<\/a>/);
+    assert.match(card, /<a class="btn" href="\/ui\/settings\/retention">Cancel<\/a>/);
     assert.equal(
       store.auditLog.list(100).filter((a) => a.action === "old_thing").length,
       2,
@@ -203,7 +208,7 @@ describe("Settings › Retention policies", () => {
     const done = await s.post(`/ui/settings/retention/${p?.id}/run`, { csrf });
     assert.match(location(done), /ok=“Old audit” removed 2 entries/);
     assert.equal(store.auditLog.list(100).filter((a) => a.action === "old_thing").length, 0);
-    const after = await s.page("/ui/settings");
+    const after = await s.page("/ui/settings/retention");
     assert.match(
       after,
       /<tr data-removal="\d+"><td class="nowrap">[^<]+ UTC<\/td><td>Old audit<\/td><td>2 entries, [^<]+ on control<\/td><td class="num">[^<]+<\/td><td>you, Run now<\/td><\/tr>/,
@@ -214,7 +219,7 @@ describe("Settings › Retention policies", () => {
     // Delete: the policy goes; what it removed stays.
     await s.post(`/ui/settings/retention/${p?.id}/delete`, { csrf });
     assert.equal(store.retention.list().length, 0);
-    assert.match(await s.page("/ui/settings"), /<td>Old audit<\/td>/);
+    assert.match(await s.page("/ui/settings/retention"), /<td>Old audit<\/td>/);
   });
 
   test("If it ran now follows the form: the page's script asks control as the design changes", async () => {

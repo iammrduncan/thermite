@@ -8,14 +8,14 @@ import { portsWords } from "../../ui/rigs/reach.ts";
 import type { Dashboard } from "../context.ts";
 
 /**
- * Settings › Addresses cluster rigs may reach: the owner's list of addresses, each with its TCP
+ * Settings › Addresses rigs may reach: the owner's list of addresses, each with its TCP
  * ports and a note, that cluster rigs' harnesses reach beside DNS and the internet
  * (clusters/reach.ts); a row for each, with Remove, and the form that adds one or changes one.
  */
 
 /** Back to Settings, with what happened said in this block (at=reach). */
 const reachUrl = (k: "ok" | "error", m: string) =>
-  `/ui/settings?${k}=${encodeURIComponent(m)}&at=reach#reach`;
+  `/ui/settings/reach?${k}=${encodeURIComponent(m)}&at=reach#reach`;
 
 const ADDRESS_TIP =
   "One IPv4 or IPv6 address in the private, shared or link-local ranges, such as a model server on your own network or a Tailscale address. One host, never a range: the harness reaches no neighbour of it.";

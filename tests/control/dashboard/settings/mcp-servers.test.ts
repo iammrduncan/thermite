@@ -91,7 +91,7 @@ function everyLabelExplained(html: string) {
 describe("Settings › MCP servers", () => {
   test("added with a key: kept, read, shown with its tools and its last four characters only", async (t) => {
     const s = await stack(t);
-    const empty = await s.page("/ui/settings");
+    const empty = await s.page("/ui/settings/mcp");
     const block = between(
       empty,
       '<div class="block" id="mcp">',
@@ -140,7 +140,7 @@ describe("Settings › MCP servers", () => {
       sources: { mcp_servers: [{ name: "gbrain", agents: ["workers"] }] },
       by: "owner:test",
     });
-    const failing = await s.page("/ui/settings");
+    const failing = await s.page("/ui/settings/mcp");
     const bad = between(failing, 'data-mcp="gbrain"', "</details>");
     assert.match(failing, /<details class="dq dq-bad" data-mcp="gbrain"/);
     assert.match(bad, /named by q4-gemv-kit/);
@@ -175,7 +175,7 @@ describe("Settings › MCP servers", () => {
     const back = new URL(allowed.headers.get("location") ?? "");
     const done = await s.control.request(`/v1/mcp-oauth/callback${back.search}`);
     assert.match(decodeURIComponent(done.headers.get("location") ?? ""), /Signed in to notion/);
-    const row = between(await s.page("/ui/settings"), 'data-mcp="notion"', "</details>");
+    const row = between(await s.page("/ui/settings/mcp"), 'data-mcp="notion"', "</details>");
     assert.match(row, /signed in · the sign-in renews itself/);
     assert.match(row, /Sign in again with another account/);
   });
@@ -280,7 +280,7 @@ describe("New campaign › MCP servers for the agents", () => {
     assert.equal(res.status, 200);
     assert.match(
       await res.text(),
-      /The kit names the MCP server paper-search, and Settings has no server of that name\. Add an MCP server named paper-search in Settings › Providers, or take it out of the kit\./,
+      /The kit names the MCP server paper-search, and Settings has no server of that name\. Add an MCP server named paper-search in Settings › MCP servers, or take it out of the kit\./,
     );
   });
 

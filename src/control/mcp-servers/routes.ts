@@ -171,7 +171,7 @@ export function mountMcpServerRoutes(
     const code = c.req.query("code") ?? "";
     const back = (k: "ok" | "error", m: string) =>
       c.redirect(
-        `/ui/settings?${k}=${encodeURIComponent(k === "error" ? notes.put(m) : m)}&at=mcp#mcp`,
+        `/ui/settings/mcp?${k}=${encodeURIComponent(k === "error" ? notes.put(m) : m)}&at=mcp#mcp`,
         303,
       );
     if (!state) return back("error", "The sign-in came back without its state. Start it again.");

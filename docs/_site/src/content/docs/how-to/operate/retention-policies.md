@@ -37,7 +37,7 @@ The knowledge base's files (see [How long control keeps a file](../../reference/
 
 ## 1. Start a policy
 
-Open **Settings** and find **Retention policies**, under **Space**. With no policy, it says `No policy. Thermite keeps everything, everywhere.` Press **New policy**. The form opens under the list, headed **New policy**. Every label has an ⓘ: hover over it, or focus it, for what the field means.
+Open **Settings › Retention policies**: the cog at the foot of the sidebar, then **Retention policies** in Settings' navigation. With no policy, it says `No policy. Thermite keeps everything, everywhere.` Press **New policy**. The form opens under the list, headed **New policy**. Every label has an ⓘ: hover over it, or focus it, for what the field means.
 
 ## 2. Design it
 

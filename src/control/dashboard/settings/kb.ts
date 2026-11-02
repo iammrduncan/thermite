@@ -13,7 +13,7 @@ import type { Dashboard } from "../context.ts";
 
 /** Back to Settings, with what happened said in this block (at=kb). */
 const kbUrl = (k: "ok" | "error", m: string) =>
-  `/ui/settings?${k}=${encodeURIComponent(m)}&at=kb#kb`;
+  `/ui/settings/kb?${k}=${encodeURIComponent(m)}&at=kb#kb`;
 
 /** A field's value as the form shows it: empty for its default. */
 const shown = (n: number | null) => (n === null ? "" : String(n));

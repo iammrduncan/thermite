@@ -13,7 +13,7 @@ import { infoLabel } from "../../ui/campaigns/new/index.ts";
 import { ago, esc } from "../../ui/components/index.ts";
 
 /**
- * Settings › Providers › MCP servers (goal 068, as the owner approved it on 2026-10-20): a row
+ * Settings › MCP servers (goal 068, as the owner approved it on 2026-10-20): a row
  * for each server with its state, its sign-in (only a secret's last four characters), the kits
  * that name it and its tools; its fields, to change them; and the form to add one. The routes
  * behind them use the dashboard's session and form token. An OAuth sign-in is a link that opens
@@ -60,7 +60,7 @@ const TOOLS_SHOWN = 8;
 
 /** Back to Settings, with what happened said in the MCP servers block (at=mcp), not at the top. */
 export const settingsUrl = (k: "ok" | "error", m: string, more = "") =>
-  `/ui/settings?${k}=${encodeURIComponent(m)}&at=mcp${more}#mcp`;
+  `/ui/settings/mcp?${k}=${encodeURIComponent(m)}&at=mcp${more}#mcp`;
 
 /** The row's chip: what signs the server in, as its last four characters only. */
 function secretChip(s: McpServer): string {

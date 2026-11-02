@@ -17,6 +17,10 @@ export const SHELL = `/* -------------------------------------------------------
 .nav a .icon { color: var(--muted-foreground); }
 .nav a .count { margin-left: auto; font-size: 12px; color: var(--muted-foreground); }
 .nav a .badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #c2410c; color: #fff; font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; }
+/* Settings' own navigation (goal 181): back to the dashboard, then its areas by group */
+.set-nav .set-back { color: var(--muted-foreground); margin-bottom: 4px; }
+.set-nav .set-back:hover { color: var(--foreground); }
+.set-nav .section:first-of-type { margin-top: 8px; }
 .section { margin: 16px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); }
 .side-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: var(--control-radius); font-size: 13px; }
 .side-row:hover { background: var(--sidebar-row-hover); text-decoration: none; }
@@ -81,7 +85,7 @@ details.side-folder > summary .n { margin-left: auto; font-size: 11px; color: va
 .app.rail .brand-name, .app.rail .nav a > span:not(.count):not(.badge), .app.rail .side-foot button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .app.rail .nav a .count { display: none; }
 .app.rail .nav a .badge { position: absolute; top: 1px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
-.app.rail .side-head, .app.rail .side-camps, .app.rail .side-say { display: none; }
+.app.rail .side-head, .app.rail .side-camps, .app.rail .side-say, .app.rail .set-nav .section { display: none; }
 .app.rail .side-foot { flex-direction: column; gap: 6px; padding: 12px 0 0; }
 .app.rail .side-foot button { padding: 0 7px; }
 

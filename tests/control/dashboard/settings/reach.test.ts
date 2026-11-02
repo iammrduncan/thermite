@@ -31,7 +31,7 @@ describe("addresses cluster rigs may reach", () => {
       placement: "created",
       namespace_pattern: "thermite-{rig}",
     });
-    let page = await s.page("/ui/settings");
+    let page = await s.page("/ui/settings/reach");
     assert.match(page, /<h2>Addresses cluster rigs may reach<\/h2><span class="n">0<\/span>/);
     assert.match(page, /No address: cluster rigs' harnesses reach DNS and the internet only/);
     // Every label has its hover description.
@@ -91,7 +91,7 @@ describe("addresses cluster rigs may reach", () => {
         .map((e) => [e.ok, e.detail]),
       [[true, "1 address of the list"]],
     );
-    page = await s.page("/ui/settings");
+    page = await s.page("/ui/settings/reach");
     assert.match(
       page,
       /<code>100\.64\.0\.7<\/code><span class="small">on ports 8000 and 8443 · the model server/,
@@ -100,7 +100,7 @@ describe("addresses cluster rigs may reach", () => {
     assert.match(rigPage, /Its network rules applied with the list of addresses rigs may reach/);
     assert.match(
       rigPage,
-      /<dt>Its harness reaches<\/dt><dd>DNS, the internet, and <a href="\/ui\/settings#reach">the list in Settings<\/a>: 100\.64\.0\.7 on ports 8000 and 8443 \(the model server\)/,
+      /<dt>Its harness reaches<\/dt><dd>DNS, the internet, and <a href="\/ui\/settings\/reach">the list in Settings<\/a>: 100\.64\.0\.7 on ports 8000 and 8443 \(the model server\)/,
     ); // public-check: allow (a shared address, for the test)
     // The same address again takes the new ports in place of its own; Remove takes it out.
     await s.post("/ui/settings/reach", { address: MODEL, ports: "8000" });
@@ -227,7 +227,7 @@ describe("addresses cluster rigs may reach", () => {
     await new Promise((r) => setTimeout(r, 20));
     assert.match(
       await s.page("/ui/rigs/k8s-b-1"),
-      /<dt>Its harness reaches<\/dt><dd>DNS, the internet, and what the slot's rules open of <a href="\/ui\/settings#reach">the list in Settings<\/a>: 100\.64\.0\.7 on port 8000, by the rule &quot;thermite-harness&quot;/, // public-check: allow (a shared address, for the test)
+      /<dt>Its harness reaches<\/dt><dd>DNS, the internet, and what the slot's rules open of <a href="\/ui\/settings\/reach">the list in Settings<\/a>: 100\.64\.0\.7 on port 8000, by the rule &quot;thermite-harness&quot;/, // public-check: allow (a shared address, for the test)
     );
     // Control writes no rule in a slot: a change of the list applies nothing there.
     const applies = f.calls.filter((c) => c.args[0] === "apply").length;

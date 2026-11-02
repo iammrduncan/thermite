@@ -470,7 +470,7 @@ describe("the left navigation", () => {
       /<button type="button" class="ib side-tog" id="side-tog" aria-controls="sidebar" aria-expanded="true" aria-label="Collapse the navigation" title="Collapse the navigation">/,
     );
     assert.match(open, /<a href="\/ui\/knowledge" class="">/, "no title while each name shows");
-    for (const path of ["/ui", "/ui/knowledge/gemv", "/ui/campaigns", "/ui/settings"]) {
+    for (const path of ["/ui", "/ui/knowledge/gemv", "/ui/campaigns"]) {
       const r = await s.control.request(path, {
         headers: { cookie: `${s.cookie}; thermite_nav=rail` },
       });
@@ -479,6 +479,15 @@ describe("the left navigation", () => {
       assert.match(html, /aria-expanded="false" aria-label="Expand the navigation"/, path);
       assert.match(html, /<a href="\/ui\/knowledge" class="[^"]*" title="Knowledge">/, path);
     }
+    // Settings' own navigation (goal 181) collapses the same way, each name in its title.
+    const settings = await (
+      await s.control.request("/ui/settings", {
+        headers: { cookie: `${s.cookie}; thermite_nav=rail` },
+      })
+    ).text();
+    assert.match(settings, /<div class="app rail">/);
+    assert.match(settings, /<a href="\/ui" class="set-back" title="Back to Thermite">/);
+    assert.match(settings, /<a href="\/ui\/settings\/kb" class="" title="Knowledge base">/);
     const other = await s.control.request("/ui", {
       headers: { cookie: `${s.cookie}; thermite_nav=open` },
     });

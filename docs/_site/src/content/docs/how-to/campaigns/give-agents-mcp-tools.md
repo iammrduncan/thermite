@@ -32,7 +32,7 @@ Every agent already has one MCP server of Thermite's own, `thermite`, with the t
 
 ## 1. Add the server in Settings
 
-1. Press the cog icon, **Settings**, at the foot of the sidebar. The **Providers** page opens. Scroll to **Add an MCP server**, below **MCP servers**.
+1. Press the cog icon, **Settings**, at the foot of the sidebar, then **MCP servers** in Settings' navigation. **Add an MCP server** is below the list of servers.
 2. Fill in **Name**, for example `gbrain`. Its ⓘ says "How kits name this server, for example gbrain or github. Lowercase letters, digits and dashes."
 3. Fill in **MCP URL**, for example `https://brain.example.com/mcp`.
 4. Choose **Sign-in**. The form shows that kind's fields, and **What happens** says what pressing the button does:
@@ -78,7 +78,7 @@ In `kit.json`, each server has its `name` and its `agents`. `tools` is there onl
 Press **Start the campaign** on **Review and start**. Control checks that **Settings** has every server the kit names. When one is missing, the run does not start, and the page says why, for example:
 
 ```text
-The kit names the MCP server paper-search, and Settings has no server of that name. Add an MCP server named paper-search in Settings › Providers, or take it out of the kit. Then start the campaign again.
+The kit names the MCP server paper-search, and Settings has no server of that name. Add an MCP server named paper-search in Settings › MCP servers, or take it out of the kit. Then start the campaign again.
 ```
 
 The campaign is saved all the same. Add the server, or take it out of the kit, then press **Start the campaign** again, or start the saved campaign with **Start a run** on its page. A server that is in **Settings** but fails later does not stop a run.

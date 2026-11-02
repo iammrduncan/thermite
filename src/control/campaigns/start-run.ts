@@ -273,14 +273,14 @@ export async function startARun(
     if (!sameModel(rig.model?.model, model))
       return {
         state: "model_given",
-        said: `${rig.id} takes ${model} within a minute; Settings › Providers shows it taking the model until then. Then start the run again.`,
+        said: `${rig.id} takes ${model} within a minute; Settings › Rigs' models shows it taking the model until then. Then start the run again.`,
       };
   }
   // Control gave the rig a model it has not taken yet: the agents would start with none.
   const given = store.agentModels.byRig()[rig.id];
   if (agents && !req.model && given && !sameModel(rig.model?.model, given.model))
     return refuse(
-      `${rig.id} has not taken ${given.model} yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then): start the run after that.`,
+      `${rig.id} has not taken ${given.model} yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then): start the run after that.`,
     );
   if (agents && !req.model && agentsModelMissing(store, rig))
     return refuse(

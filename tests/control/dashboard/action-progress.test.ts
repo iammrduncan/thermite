@@ -241,7 +241,7 @@ describe("Run it on a rig's checks (goal 080)", () => {
       (await s.send("/ui/commands", { rig: "rig-a", kind: "rig_check", check: "model" })).text,
     ) as Answer;
     assert.equal(a.follow, "/ui/rigs/rig-a/checks/model.json");
-    let settings = await s.page("/ui/settings");
+    let settings = await s.page("/ui/settings/routes");
     assert.match(
       settings,
       /Its model check was sent to the rig at \d\d:\d\d UTC\. It starts when the rig takes it\./,
@@ -252,12 +252,12 @@ describe("Run it on a rig's checks (goal 080)", () => {
     );
     assert.match(settings, /<button class="" disabled>Check<\/button>/);
     await s.relay();
-    settings = await s.page("/ui/settings");
+    settings = await s.page("/ui/settings/routes");
     assert.match(settings, /Its model check is running · <span data-since="[^"]+">\d+ s<\/span>\./);
     model.end({ ok: true, summary: "m answered with a correct tool call in 1.2 s" });
     await tick();
     await s.relay();
-    settings = await s.page("/ui/settings");
+    settings = await s.page("/ui/settings/routes");
     assert.match(settings, /Its model check passed \d+s ago: m answered with a correct tool call/);
     assert.match(settings, /<button class="">Check<\/button>/);
   });
@@ -429,7 +429,7 @@ describe("every button that sends a command (goal 080)", () => {
     assert.equal(a.follow, "/ui/rigs/rig-a/model.json");
     assert.match(a.said, /rig-a takes m from "lab" under Pi within a minute, and checks it/);
     assert.match(
-      await s.page("/ui/settings"),
+      await s.page("/ui/settings/routes"),
       /data-follow="\/ui\/rigs\/rig-a\/model\.json" data-follow-state="taking"/,
     );
     const r = await s.send("/ui/settings/rigs", { rig: "no-such-rig", choice: "lab|m" });

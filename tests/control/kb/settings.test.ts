@@ -151,7 +151,7 @@ describe("the knowledge base's settings", () => {
   test("Settings › Knowledge base: each label has its ⓘ, and Save says what it kept, or why not", async () => {
     const s = stack();
     const ui = await signIn(s.control);
-    const page = await ui.page("/ui/settings");
+    const page = await ui.page("/ui/settings/kb");
     assert.match(page, /<div class="block" id="kb"><div class="head"><h2>Knowledge base<\/h2>/);
     for (const label of ["Largest file, in MiB", "Orphan files kept, in hours"])
       assert.match(page, new RegExp(`${label}<i class="ii" tabindex="0" data-tip="[^"]+">i</i>`));

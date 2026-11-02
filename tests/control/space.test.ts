@@ -101,7 +101,7 @@ describe("the space control's kinds take", () => {
         metrics,
         new RegExp(`^thermite_control_space_bytes\\{kind="${kind}"\\} \\d+$`, "m"),
       );
-    const html = await (await signIn(control)).page("/ui/settings");
+    const html = await (await signIn(control)).page("/ui/settings/space");
     for (const [kind, k] of Object.entries(SPACE_KINDS)) {
       const row = html.slice(html.indexOf(`data-space="${kind}"`));
       assert.ok(row.length < html.length, kind);

@@ -22,8 +22,9 @@ export const TYPES: Record<ProviderType, string> = {
 /** How a provider's models show in the model lists: a subscription's with its program. */
 export const modelPrefix = (type: ProviderType) =>
   type === "claude" ? "claude-code:" : type === "chatgpt" ? "chatgpt:" : "";
-export const settingsUrl = (k: "ok" | "error", m: string) =>
-  `/ui/settings?${k}=${encodeURIComponent(m)}`;
+/** Back to a Settings area (goal 181), with what happened said there; Providers by default. */
+export const settingsUrl = (k: "ok" | "error", m: string, area = "") =>
+  `/ui/settings${area ? `/${area}` : ""}?${k}=${encodeURIComponent(m)}`;
 export const machineUrl = (k: "ok" | "error", m: string) => settingsUrl(k, m);
 export const usd = (n: number | null) => (n === null ? "–" : `$${n.toFixed(2)}`);
 /** The add form's box for a cluster whose connection control can't check, and its words. */

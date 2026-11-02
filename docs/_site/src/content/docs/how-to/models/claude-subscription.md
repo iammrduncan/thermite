@@ -78,7 +78,7 @@ For rigs that control sets up on your machines or clusters, build the images wit
 4. Paste the token into **Token from claude setup-token**. Its ⓘ says: "The long-lived token that Claude Code prints. Control seals it at once and never shows it again. Only Claude Code, Anthropic's own program, uses it on the rigs: Anthropic does not allow other programs to use a subscription."
 5. Press **Add the subscription**.
 
-The page shows `"claude-max" is saved: its 5 models run only in Claude Code. Choose one for a rig below.` Control makes no call to Anthropic with the token. Its list of models is fixed. `opus-5.5` and `opus-5.5[1m]` are the same model with the same context, so either one will do:
+The page shows `"claude-max" is saved: its 5 models run only in Claude Code. Choose one for a rig on Rigs' models.` Control makes no call to Anthropic with the token. Its list of models is fixed. `opus-5.5` and `opus-5.5[1m]` are the same model with the same context, so either one will do:
 
 | Model | Context |
 | --- | --- |
@@ -90,7 +90,7 @@ The page shows `"claude-max" is saved: its 5 models run only in Claude Code. Cho
 
 ## 4. Give a rig one of its models
 
-1. In **Harness and model for each rig**, find the rig's row.
+1. Open **Rigs' models** in Settings' navigation, and find the rig's row.
 2. Choose a model from the group "claude-max (Claude subscription: runs in Claude Code)". Thermite sets the [worker harness](../../reference/glossary.md), the program the agents run in, to **Claude Code** for you.
 3. Press **Use**.
 
