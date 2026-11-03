@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { ApiError, UPLOAD_TIMEOUT_MS } from "../common/api/call.ts";
 import { controlClient } from "../common/api/control.ts";
 import { log } from "../common/env.ts";
-import { git } from "../common/git.ts";
+import { git } from "../common/git/index.ts";
 import { CHAMPION_PATCH, CHAMPION_PATCH_MAX } from "../core/api/control/rigs.ts";
 
 /**

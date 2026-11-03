@@ -11,13 +11,21 @@
 //     (model.mjs): no screen waits once seeded, its rollout copied, a typed message taken in, and
 //     `/exit`;
 //   - the real OpenCode, its server started first with a password of its own and its terminal
-//     attached, against the same stand-in: its first message and a typed one taken in, `/exit`,
-//     and its server ended with it;
+//     attached, against the same stand-in: its first message and a typed one taken in, its server
+//     refusing lane-2's requests without the password, `/exit`, and its server ended with it;
 //   - the real Claude Code, when the image has it (built with CLAUDE_CODE_VERSION), against
-//     containers/test-anthropic's stand-in, with a made-up sign-in on file descriptor 3: its
+//     tests/stand-ins/anthropic's stand-in, with a made-up sign-in on file descriptor 3: its
 //     transcript, which only lane-1 may read, copied; its hooks' signals; `/exit`;
 //   - one short trial through the trial loop's terminal mode for the fake TUI in Claude Code's
-//     place, the real Codex and the real OpenCode (trials.mjs).
+//     place, the real Codex and the real OpenCode, and the owner's input (terminal_input's) through
+//     a trial's console into the fake and the real Codex; then a full usage window waited out by
+//     the fake (going on by itself, as Claude Code) and by the real OpenCode (the loop's
+//     continuation after the reset), with the owner's input queued during it (trials.mjs);
+//   - for each real program, the peak memory of its run in its terminal, the host with it, as the
+//     broker recorded it: the figure its limits note states;
+//   - a worker in Pi in its Pi view, the host and the worker run as agent-1 in the worker's own
+//     folder, one short trial to its result with the owner's inputs through its console, and what
+//     lane-1 and another agent may reach of its folder (pi-view.mjs).
 // THERMITE_SRC names the code it imports: the image's build (/opt/thermite/dist), or a mounted
 // source tree (TypeScript, run as it is).
 import { execFileSync } from "node:child_process";
@@ -26,13 +34,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { startModel } from "./model.mjs";
+import { piViewTrial } from "./pi-view.mjs";
 import { loopTrials } from "./trials.mjs";
 
 const SRC = process.env.THERMITE_SRC ?? "/opt/thermite/dist";
 const ext = SRC.endsWith("/dist") ? "js" : "ts";
 const load = (path) => import(`${SRC}/${path}.${ext}`);
 const { BrokerClient } = await load("harness/broker/client");
-const { startTerminal } = await load("harness/terminal/index");
+const { startTerminal } = await load("agents/terminal/index");
 const programs = await load("agents/programs/index");
 const { hookArgv } = await load("agents/programs/hooks/index");
 
@@ -111,6 +120,14 @@ const laneProcesses = () =>
         return false;
       }
     });
+
+/** The peak memory of a program's run in its terminal, the host and its commands with it. */
+const peak = (name, done) =>
+  check(
+    `${name} in its terminal, with the terminal host, used this much memory at its peak`,
+    true,
+    `${Math.round((done.outcome.peakRssBytes ?? 0) / 2 ** 20)} MiB`,
+  );
 
 const limits = {
   timeoutMs: 600_000,
@@ -349,7 +366,7 @@ async function codex() {
     }
     const ended = await t.end();
     check("/exit ends Codex", ended.how === "end steps" && ended.code === 0, ended);
-    await t.done;
+    peak("Codex", await t.done);
   } finally {
     api.close();
   }
@@ -364,6 +381,42 @@ const freePort = () =>
       s.close(() => resolve(port));
     });
   });
+
+/**
+ * Each path asked of a server on 127.0.0.1:`port` with no password, by lane-2's user through the
+ * broker, as another lane's commands would ask it: each path's HTTP status, or its error.
+ */
+async function otherLaneAsks(port, paths) {
+  const dir = join("/scratch/thermite/lanes", "lane-2", `ask-${randomUUID().slice(0, 8)}`);
+  mkdirSync(dir, { recursive: true });
+  await runner.handOver(dir, "lane-2");
+  const script = `const out = {};
+for (const p of ${JSON.stringify(paths)}) {
+  try {
+    const r = await fetch("http://127.0.0.1:${port}" + p, { signal: AbortSignal.timeout(5000) });
+    out[p] = r.status === 401 ? 401 : \`\${r.status} \${r.headers.get("content-type") ?? ""}\`.trim();
+    await r.body?.cancel();
+  } catch (err) {
+    out[p] = String(err);
+  }
+}
+process.stdout.write(JSON.stringify(out));`;
+  try {
+    const r = await runner.run({
+      role: "lane-2",
+      argv: [process.execPath, "--input-type=module", "-e", script],
+      cwd: dir,
+      timeoutMs: 30_000,
+    });
+    try {
+      return JSON.parse(r.stdout);
+    } catch {
+      return { error: `exit ${r.exitCode}: ${r.stderr.slice(-300)}` };
+    }
+  } finally {
+    await runner.remove(dir).catch(() => undefined);
+  }
+}
 
 async function opencode() {
   if (!existsSync("/usr/local/bin/opencode")) {
@@ -426,6 +479,16 @@ async function opencode() {
       await t.type("TERMINAL-CHECK-2: reply again.");
       await until("a typed message's call", () => api.calls["TERMINAL-CHECK-2"] >= 1, 60_000);
       check("a message typed into OpenCode's terminal was taken in", true, api.calls);
+      const refused = await otherLaneAsks(port, ["/api/event", "/api/session", "/"]);
+      // Its API needs the trial's password; "/" may be the web app's own page, which holds no
+      // session's data: never JSON there.
+      check(
+        "OpenCode's server, on the localhost every lane shares, refuses another lane its API without the trial's password",
+        refused["/api/event"] === 401 &&
+          refused["/api/session"] === 401 &&
+          (refused["/"] === 401 || /^200 text\/html/.test(String(refused["/"]))),
+        refused,
+      );
     } catch (err) {
       check("OpenCode's turns ran", false, {
         error: String(err),
@@ -435,7 +498,7 @@ async function opencode() {
     }
     await sleep(2000);
     const ended = await t.end();
-    await t.done;
+    peak("OpenCode, its server and its terminal", await t.done);
     await sleep(500);
     check(
       "/exit ends OpenCode, and its server with it",
@@ -524,12 +587,15 @@ async function claude() {
       );
       await t.type("Say ok again.");
       await until("its second turn's end", () => stops() >= 2, 60_000);
+      // The transcript's records land after the Stop hook, and the host copies every 250 ms.
+      const replies = () => lines(copy).filter((r) => r.type === "assistant").length;
+      await until("both replies in the copy", () => replies() >= 2, 10_000).catch(() => false);
       check(
         "its transcript, lane-1's alone, was copied for the harness, with both turns",
-        lines(copy).filter((r) => r.type === "assistant").length >= 2,
+        replies() >= 2,
         lines(copy)
           .map((r) => r.type)
-          .slice(-8),
+          .slice(-12),
       );
     } catch (err) {
       check("Claude Code's turns ended", false, {
@@ -539,7 +605,7 @@ async function claude() {
     }
     const ended = await t.end();
     check("/exit ends Claude Code", ended.how === "end steps" && ended.code === 0, ended);
-    await t.done;
+    peak("Claude Code", await t.done);
   } finally {
     await api.close();
   }
@@ -552,8 +618,10 @@ for (const [name, part] of [
   ["Claude Code", claude],
   [
     "the loop's terminal mode",
-    () => loopTrials({ load, runner, check, area, laneProcesses, sleep, LANE, TOKEN }),
+    () =>
+      loopTrials({ load, runner, check, area, lines, laneProcesses, sleep, until, LANE, TOKEN }),
   ],
+  ["the Pi view", () => piViewTrial({ load, runner, check, area, sleep, until, LANE })],
 ]) {
   try {
     await part();

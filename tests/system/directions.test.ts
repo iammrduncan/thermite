@@ -44,9 +44,9 @@ async function stack() {
   return { env, store, control, relay, api, last };
 }
 
-const rule = (family: string, kind = "avoid") => ({
+const rule = (direction: string, kind = "avoid") => ({
   run: "js-1",
-  directives: [{ kind, family, rationale: "slower twice" }],
+  directives: [{ kind, direction, rationale: "slower twice" }],
   replace: false,
 });
 
@@ -56,7 +56,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
     const add = await s.api("POST", "/v1/commands", {
       rig: "rig-a",
       kind: "queue_add",
-      payload: { run: "js-1", title: "stage the tiles", family: ":Shared memory tiling:" },
+      payload: { run: "js-1", title: "stage the tiles", direction: ":Shared memory tiling:" },
     });
     assert.equal(add.status, 201);
     await s.relay();
@@ -68,7 +68,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
     });
     assert.equal(named.status, 201, await named.clone().text());
     assert.deepEqual(s.last().payload.directives, [
-      { kind: "try", family: "shared-memory-tiling", rationale: "slower twice", citations: [] },
+      { kind: "try", direction: "shared-memory-tiling", rationale: "slower twice", citations: [] },
     ]);
     await s.relay();
     assert.equal(s.last().status, "delivered");
@@ -85,11 +85,11 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
     for (const [payload, why] of [
       [
         { run: "js-1", directives: [{ kind: "avoid", match: "anything slow", rationale: "r" }] },
-        /^bad redirect payload: directives\.0: a rule no longer takes match: name its direction in family, in plain words or as :name:/,
+        /^bad redirect payload: directives\.0: a rule no longer takes match: give its direction in direction, in plain words or as :name:/,
       ],
       [
         rule("anything with $hared memory!"),
-        /directives\.0\.family: "anything with \$hared memory!" is not a direction's name/,
+        /directives\.0\.direction: "anything with \$hared memory!" is not a direction's name/,
       ],
     ] as const) {
       const r = await s.api("POST", "/v1/commands", { rig: "rig-a", kind: "redirect", payload });
@@ -102,7 +102,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
     const body = (await got.json()) as {
       run: string;
       directions: DirectionView[];
-      rules: { id: number; legacy: boolean; body: { family?: string } }[];
+      rules: { id: number; legacy: boolean; body: { direction?: string } }[];
     };
     assert.deepEqual(
       body.directions.map((d) => [d.name, d.queued, d.to_design, d.rules.map((x) => x.kind)]),
@@ -112,7 +112,7 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
       ],
     );
     assert.deepEqual(
-      body.rules.map((r) => [r.body.family, r.legacy]),
+      body.rules.map((r) => [r.body.direction, r.legacy]),
       [
         ["shared-memory-tiling", false],
         ["timer-code", false],
@@ -139,10 +139,10 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
       total: number;
       from: number;
       to: number;
-      entries: { body: { family?: string } }[];
+      entries: { body: { direction?: string } }[];
     };
     assert.deepEqual(
-      [page.total, page.from, page.to, page.entries.map((r) => r.body.family)],
+      [page.total, page.from, page.to, page.entries.map((r) => r.body.direction)],
       [2, 0, 1, ["shared-memory-tiling"]],
     );
     assert.equal((await s.api("GET", "/v1/runs/js-1?limit=0")).status, 400);
@@ -164,7 +164,10 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
       payload: rule(":vector loads:", "mandate"),
     });
     assert.ok(!ok.isError, ok.content[0]?.text);
-    assert.equal((s.last().payload.directives as { family: string }[])[0]?.family, "vector-loads");
+    assert.equal(
+      (s.last().payload.directives as { direction: string }[])[0]?.direction,
+      "vector-loads",
+    );
     const words = await call("issue_command", {
       rig: "rig-a",
       kind: "redirect",
@@ -229,7 +232,10 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
       const sent = await cli(rule(":loop tiling:"));
       assert.equal(sent.code, 0, sent.stderr);
       assert.match(sent.stdout, /"status":"pending"/);
-      assert.equal((s.last().payload.directives as { family: string }[])[0]?.family, "loop-tiling");
+      assert.equal(
+        (s.last().payload.directives as { direction: string }[])[0]?.direction,
+        "loop-tiling",
+      );
       const refused = await cli({
         run: "js-1",
         directives: [{ kind: "avoid", match: "anything with loops", rationale: "r" }],
@@ -261,11 +267,11 @@ describe("rules name directions over REST, MCP and the command line (goal 066)",
       ],
       summary: {},
     });
-    const post = (family: string) =>
+    const post = (direction: string) =>
       api("POST", "/v1/commands", {
         rig: "rig-r",
         kind: "redirect",
-        payload: { run: "r-1", directives: [{ kind: "avoid", family, rationale: "r" }] },
+        payload: { run: "r-1", directives: [{ kind: "avoid", direction, rationale: "r" }] },
       });
     const bad = await post("blog posts");
     assert.equal(bad.status, 400);

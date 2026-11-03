@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { USAGE_PERIODS } from "../../core/usage.ts";
+import { busReach } from "../bus/index.ts";
+import { weeklyLimit } from "../rigs/index.ts";
 import {
   attemptRead,
   RESEARCH_DETAIL,
@@ -9,8 +11,16 @@ import {
   runDetail,
   runQueue,
 } from "../run-lists.ts";
-import { modelUsage } from "../usage.ts";
-import { agentEvent, agentRun, currentChampion, leaderboard } from "../views/index.ts";
+import { modelUsage } from "../usage-report.ts";
+import {
+  agentEvent,
+  agentRun,
+  currentChampion,
+  leaderboard,
+  podStopped,
+  readerRun,
+  withoutPromptText,
+} from "../views/index.ts";
 import type { ToolContext } from "./context.ts";
 
 /**
@@ -25,11 +35,12 @@ export function registerReads(tools: ToolContext): void {
     {
       title: "List rigs",
       description:
-        "Every rig: reporting, stale or offline, last report, its Thermite versions against control's (behind, refused and why, or unknown), and for each campaign run its mode, status, champion and relative gain over the baseline.",
+        "Every rig: reporting, stale or offline, last report, its Thermite versions against control's (behind, refused and why, or unknown), its connection to the message bus (on it, since its supervisor last registered its keys; or off it, so broken, since when, why in words and what to do), its subscription's weekly limit while one holds its runs (until its reset, since when, each run that waits with the trial and lane that met it, the provider and model, and the owner's choice: wait, model or null), and for each campaign run its mode, status, champion and relative gain over the baseline.",
       inputSchema: {},
     },
-    audited("list_rigs", () =>
-      store.reportedRigs.list().map((u) => {
+    audited("list_rigs", () => {
+      const now = Date.now();
+      return store.reportedRigs.list().map((u) => {
         const v = view(u.id);
         return {
           rig: v.id,
@@ -37,6 +48,10 @@ export function registerReads(tools: ToolContext): void {
           stale: v.stale,
           last_seen: v.last_seen,
           version: v.version,
+          // On the message bus or off it, as the rig's page shows it (goal 168).
+          bus: busReach(store, v.id, { lastSeen: v.last_seen, now, podStopped: podStopped(v) }),
+          // Its subscription's weekly limit, while one holds its runs (goal 169).
+          weekly_limit: weeklyLimit(store, v, now) ?? null,
           jobs: v.jobs,
           // A rig launched on a GPU cloud: its pod's status, price and spend so far.
           runpod: v.runpod
@@ -63,8 +78,8 @@ export function registerReads(tools: ToolContext): void {
             };
           }),
         };
-      }),
-    ),
+      });
+    }),
   );
 
   server.registerTool(
@@ -80,8 +95,11 @@ export function registerReads(tools: ToolContext): void {
     audited("get_run", async (a: RunDetailArgs & { run: string }) => {
       const found = (await run(a.run)).run;
       // The agent token reads held-out checks as their kinds alone, and no held-out cell's name,
-      // value, threshold or time limit (goal 082); the other tokens read the owner's view.
-      return runDetail(role === "agent" ? agentRun(found) : found, a);
+      // value, threshold or time limit (goal 082); the agent's and the reader's read no prompt's
+      // text; the owner and the operator read the owner's view.
+      const seen =
+        role === "agent" ? agentRun(found) : role === "reader" ? readerRun(found) : found;
+      return runDetail(seen, a);
     }),
   );
 
@@ -127,8 +145,10 @@ export function registerReads(tools: ToolContext): void {
     },
     audited("recent_events", (a: { rig: string; limit: number }) => {
       const recent = view(a.rig).recent.slice(0, a.limit);
-      // The agent token: a held-out check's kinds alone, and no held-out cell (goal 082).
-      return role === "agent" ? recent.map(agentEvent) : recent;
+      // The agent token: a held-out check's kinds alone, and no held-out cell (goal 082). The
+      // agent's and the reader's: no prompt's text.
+      if (role === "agent") return recent.map(agentEvent);
+      return role === "reader" ? recent.map(withoutPromptText) : recent;
     }),
   );
 

@@ -8,6 +8,7 @@ import { startCampaign } from "../../../src/control/campaigns/new.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { parseContract } from "../../../src/core/contract.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 
 /**
  * The owner's additions to a campaign's roles (goal 166, decision 1): New campaign puts them in
@@ -19,6 +20,7 @@ import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-sta
 const TOKENS = {
   admin: ADMIN,
   operator: "operator-token-abcdef",
+  agent: "agent-token-abcdef",
   read: "read-token-abcdef",
   rigs: {},
 };
@@ -109,8 +111,37 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
         })) as { content: { text: string }[] }
       ).content[0]?.text ?? "{}",
     ) as Record<string, unknown>;
-    assert.equal(viaMcp.version, 3);
+    // The operator's change is a proposal: nothing is saved until the owner approves it.
+    assert.equal(viaMcp.state, "proposed");
+    assert.match(
+      String(viaMcp.said),
+      /^Proposed to the owner: additions to its roles of matmul-speed/,
+    );
+    assert.equal(s.newest().version, 2);
+    const owner = await signIn(s.control);
+    const html = await owner.page("/ui/campaigns/matmul-speed");
+    assert.match(html, /<h2>Proposed to you<\/h2>/);
+    assert.match(html, /owner:operator proposes additions to its roles for matmul-speed/);
+    assert.match(html, /Look at the cache\./);
+    assert.match(html, /Give each lane its own direction\./, "the additions now, beside it");
+    assert.match(await owner.page("/ui"), /owner:operator proposes additions to its roles/);
+    const approved = await owner.post(
+      `/ui/campaigns/matmul-speed/proposals/${viaMcp.proposal}/approve`,
+      { csrf: owner.csrfOf(html) },
+    );
+    assert.match(
+      decodeURIComponent(String(approved.headers.get("location"))),
+      /ok=Approved: version 3 of matmul-speed has the additions to its roles owner:operator proposed/,
+    );
+    assert.equal(s.newest().version, 3);
     assert.deepEqual(s.newest().role_additions, { auditor: "Look at the cache." });
+    assert.doesNotMatch(await owner.page("/ui"), /proposes additions to its roles/);
+    // Approved once: a second press finds nothing waiting.
+    const twice = await owner.post(
+      `/ui/campaigns/matmul-speed/proposals/${viaMcp.proposal}/approve`,
+      { csrf: owner.csrfOf(html) },
+    );
+    assert.match(decodeURIComponent(String(twice.headers.get("location"))), /no longer waits/);
     for (const [args, error] of [
       [
         { campaign: "matmul-speed", additions: { "research-worker": "x" } },
@@ -140,6 +171,43 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
     assert.equal((await s.set({ roles: {} })).status, 400);
     const operator = await s.set({}, TOKENS.operator);
     assert.ok(operator.status === 401 || operator.status === 403, "REST takes the owner's token");
+    // A newer proposal replaces one still waiting; a declined one changes nothing.
+    const propose = async (text: string) =>
+      JSON.parse(
+        (
+          (await client2.callTool({
+            name: "set_campaign_additions",
+            arguments: { campaign: "matmul-speed", additions: { worker: text } },
+          })) as { content: { text: string }[] }
+        ).content[0]?.text ?? "{}",
+      ) as { proposal: number };
+    const client2 = await mcpClient(s.control, TOKENS.operator);
+    const first = await propose("One idea.");
+    const second = await propose("Another idea.");
+    await client2.close();
+    assert.deepEqual(
+      s.store.proposals.waiting("matmul-speed").map((p) => p.id),
+      [second.proposal],
+    );
+    assert.equal(s.store.proposals.get(first.proposal)?.decision, "replaced");
+    const owner2 = await signIn(s.control);
+    const csrf = owner2.csrfOf(await owner2.page("/ui/campaigns/matmul-speed"));
+    await owner2.post(`/ui/campaigns/matmul-speed/proposals/${second.proposal}/decline`, { csrf });
+    assert.equal(s.store.proposals.get(second.proposal)?.decision, "declined");
+    assert.equal(s.newest().version, 4);
+    assert.deepEqual(
+      s.store.auditLog
+        .list(50, { action: "campaign_setting_" })
+        .map((e) => e.action)
+        .reverse(),
+      [
+        "campaign_setting_proposed",
+        "campaign_setting_approved",
+        "campaign_setting_proposed",
+        "campaign_setting_proposed",
+        "campaign_setting_declined",
+      ],
+    );
     assert.deepEqual(
       s.store.auditLog
         .list(50, { action: "campaign_additions_set" })
@@ -153,6 +221,62 @@ describe("the owner's additions to a campaign's roles (goal 166)", () => {
         [3, ["auditor"]],
         [4, []],
       ],
+    );
+  });
+
+  test("an assignment from the operator's or an agent's token carries the saved additions and writers; the owner's is not held", async () => {
+    const s = await stack();
+    enrollRigs(s.store, ["rig-a"]);
+    const saved = s.newest();
+    const assign = async (token: string, run: string, contract: Record<string, unknown>) => {
+      const client = await mcpClient(s.control, token);
+      try {
+        return (await client.callTool({
+          name: "issue_command",
+          arguments: {
+            rig: "rig-a",
+            kind: "assign_campaign",
+            payload: { run, contract, contract_sha: "0".repeat(64) },
+          },
+        })) as { isError?: boolean; content: { text: string }[] };
+      } finally {
+        await client.close();
+      }
+    };
+    const added = { ...saved, role_additions: { auditor: "Pass every change." } };
+    const writes = { ...saved, kb_writes: { worker: ["finding", "doc", "reference"] } };
+    for (const token of [TOKENS.operator, TOKENS.agent]) {
+      const refused = await assign(token, "r-added", added);
+      assert.equal(refused.isError, true);
+      assert.match(
+        String(refused.content[0]?.text),
+        /Not sent: in the additions to its roles, this assignment differs from version 1 of matmul-speed, as the owner saved it\. .*propose a change with set_campaign_additions or set_campaign_kb_writes/,
+      );
+      const other = await assign(token, "r-writes", writes);
+      assert.equal(other.isError, true);
+      assert.match(
+        String(other.content[0]?.text),
+        /Not sent: in which roles write in its collection, this assignment differs from version 1 of/,
+      );
+    }
+    assert.equal(s.store.commands.pending("rig-a").length, 0);
+    // The saved version's own settings go through, and the owner's token is not held to them.
+    assert.ok(!(await assign(TOKENS.operator, "r-saved", saved)).isError);
+    assert.ok(!(await assign(ADMIN, "r-owner", added)).isError);
+    assert.equal(s.store.commands.pending("rig-a").length, 2);
+    // A campaign control has no version of: the operator's assignment may set neither.
+    const unsaved = { ...saved, campaign: "elsewhere", role_additions: { worker: "x" } };
+    assert.match(
+      String((await assign(TOKENS.operator, "r-unsaved", unsaved)).content[0]?.text),
+      /control has no saved version of elsewhere, so this assignment may not change the additions to its roles\./,
+    );
+    // The owner's assignment saves the campaign (goal 182): the operator's carries what it saved.
+    assert.ok(!(await assign(ADMIN, "r-loose-1", unsaved)).isError);
+    assert.ok(!(await assign(TOKENS.operator, "r-loose-2", unsaved)).isError);
+    const other = { ...unsaved, role_additions: { worker: "y" } };
+    assert.match(
+      String((await assign(TOKENS.operator, "r-loose-3", other)).content[0]?.text),
+      /in the additions to its roles, this assignment differs from version 1 of elsewhere, as the owner saved it\./,
     );
   });
 

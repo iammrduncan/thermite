@@ -122,9 +122,6 @@ export const CallContext = z.strictObject({
 });
 export type CallContext = z.infer<typeof CallContext>;
 
-/** One record: its run, its context and its measure. */
-export type ModelCall = { run: string } & CallContext & CallUsage;
-
 /** Where an agent's calls go: its harness, its provider (null: none named) and its model. */
 export interface UsageRoute {
   harness: UsageHarness;

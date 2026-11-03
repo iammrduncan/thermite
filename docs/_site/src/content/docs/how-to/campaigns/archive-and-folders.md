@@ -6,9 +6,11 @@ sidebar:
   order: 16
 ---
 
-The dashboard's left navigation lists every campaign that a rig has reported a run of and that is not archived, finished ones too, each with its state. A campaign saved with no run yet is only at its address, `/ui/campaigns/<name>`. Archive a campaign you are done with, and put the others in folders. Neither changes a campaign's runs, results, kits or its folder in Thermite's [knowledge base](../../reference/knowledge-base.md).
+The dashboard's left navigation lists every campaign that a rig has reported a run of and that is not archived, finished ones too, each with its state. A campaign saved with no run yet is only at its address, `/ui/campaigns/<name>`. Archive a campaign you are done with, and put the others in folders. Neither changes a campaign's runs, results, kits or its collection in Thermite's [knowledge base](../../reference/knowledge-base.md).
 
 The navigation does not list the rigs. **Rigs**, in the main navigation, opens the [Rigs list](../../reference/rigs-list.md), with each rig's state; the status bar along the bottom of every page still counts them.
+
+The button beside **Thermite**, at the top of the navigation, collapses it to a column of icons, which shows neither campaigns nor folders; press it again to open the navigation. The browser remembers which you chose, on every page.
 
 ## Before you start
 

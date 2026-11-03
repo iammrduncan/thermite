@@ -14,7 +14,9 @@ export function emptyRun(id: string): RunView {
     ask_owner: {},
     status: "unknown",
     pause_reason: null,
+    status_at: null,
     champion: [],
+    invalidations: [],
     attempts: [],
     verdicts: {},
     pending_promotions: [],
@@ -36,6 +38,7 @@ export function emptyRun(id: string): RunView {
       attempts: 0,
     },
     agents_stopped: null,
+    agents_wait: null,
     research: null,
     cards: [],
     card_refusals: [],
@@ -51,7 +54,7 @@ export function emptyRun(id: string): RunView {
     champion_held_out: null,
     goal_checks: null,
     audits: [],
-    promotion_waits: {},
+    promotion_waits: Object.create(null),
     reviews: [],
     paper: null,
     conclusions: [],
@@ -64,12 +67,13 @@ export function emptyRun(id: string): RunView {
     epoch: null,
     round_starts: [],
     trials: [],
-    at_work: {},
+    // Keyed by the lane its events name: no prototype, so no name reaches Object's own.
+    at_work: Object.create(null),
     timeline: [],
     has_agents: true,
     rules: [],
     directions: [],
-    families: [],
+    registry: [],
     queue: [],
     handouts: [],
     messages: [],
@@ -120,6 +124,7 @@ export const RUNS: Handlers = {
     const v = f.run(String(e.subject));
     v.status = String(b.status);
     v.pause_reason = (b.reason as string | null) ?? null;
+    v.status_at = e.at;
     if (v.status === "running") f.running = v.id;
     else if (f.running === v.id) f.running = null;
   },
@@ -128,16 +133,16 @@ export const RUNS: Handlers = {
     v.calibration = { at: e.at, sigma: Number(b.sigma), summary: String(b.summary ?? "") };
   },
   conclusion_proposed(f, e, b) {
-    const families = (Array.isArray(b.approaches) ? b.approaches : []).map((x) => {
+    const directions = (Array.isArray(b.approaches) ? b.approaches : []).map((x) => {
       const y = (x ?? {}) as Record<string, unknown>;
-      return { family: String(y.family ?? ""), attempts: Number(y.attempts ?? 0) };
+      return { direction: String(y.direction ?? ""), attempts: Number(y.attempts ?? 0) };
     });
     f.run(String(e.subject)).conclusions.push({
       proposal: Number(b.proposal),
       decision: null,
-      approaches: families.length,
+      approaches: directions.length,
       at: e.at,
-      families,
+      directions,
     });
   },
   conclusion_accepted: concluded,

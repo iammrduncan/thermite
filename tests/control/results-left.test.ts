@@ -8,6 +8,7 @@ import { exportLeft, resultsLeft } from "../../src/control/results-left.ts";
 import { ControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { controlOnly, signIn } from "../helpers/control-stack.ts";
+import { figuresCall } from "../helpers/control-store.ts";
 
 const NAME = "20261020T120000Z-0123abcd";
 const OWNER = "owner-token-abcdef";
@@ -210,14 +211,10 @@ describe("model downloads in the rig's report and history", () => {
       ...o,
     });
     const report = (models: unknown[], extra: Record<string, unknown> = {}) =>
-      control.request("/v1/rigs/rig-a/supervisor", {
-        method: "POST",
-        headers: { authorization: `Bearer ${RIG}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          ...figures({ uploaded: [NAME], last_upload_at: new Date().toISOString(), waiting: 2 }),
-          models,
-          ...extra,
-        }),
+      figuresCall(store, "rig-a", {
+        ...figures({ uploaded: [NAME], last_upload_at: new Date().toISOString(), waiting: 2 }),
+        models,
+        ...extra,
       });
     assert.equal((await report([model({})])).status, 200);
     assert.equal((await report([model({})])).status, 200, "the same download again: no new step");

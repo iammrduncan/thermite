@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AdvisorQueueRequest } from "../../core/api/harness/advisors.ts";
-import { StructuredDirective } from "../../core/commands.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
+import { StructuredDirective } from "../../core/directives.ts";
 import { ideaWords, ruleRefusal } from "../../core/queue-target.ts";
 import { labelledQuestion, measurementIn, measurementRefusal } from "../../core/research-check.ts";
 import { LedgerError } from "../ledger/index.ts";
@@ -13,8 +13,8 @@ import { openRun, requireRun } from "./runs.ts";
 
 /**
  * What the supervisor's advisors write into a run: their rules, their additions and moves for its
- * queue, their field notes, their receipts and answers for the owner's messages, and past research
- * for its folder. Nothing here can touch a verdict, a contract or a worker's brief.
+ * queue, their field notes, and their receipts and answers for the owner's messages. Nothing here
+ * can touch a verdict, a contract or a worker's brief.
  */
 
 /**
@@ -37,8 +37,8 @@ export function setAdvisorRules(
   if (uncited.length) {
     throw new LedgerError("invalid", `${uncited.length} directive(s) without a citation`);
   }
-  if (parsed.filter((d) => d.kind === "note").length > 3) {
-    throw new LedgerError("invalid", "at most 3 notes per directive set");
+  if (parsed.filter((d) => d.kind === "planner_note").length > 3) {
+    throw new LedgerError("invalid", "at most 3 planner_note rules per directive set");
   }
   conflictCheck(parsed);
   type Rule = (typeof parsed)[number];
@@ -53,10 +53,10 @@ export function setAdvisorRules(
   const known = svc.queue.directions(run);
   const unknown = research ? unknownIn(parsed, known) : [];
   const unknownWhy = unknown.length ? researchDirectionRefusal(unknown) : "";
-  const isUnknown = (d: Rule) => !!d.family && unknown.includes(d.family);
+  const isUnknown = (d: Rule) => !!d.direction && unknown.includes(d.direction);
   const keep = parsed.filter((d) => !isUnknown(d) && !refused.has(d));
   const named = (d: Rule) =>
-    `${d.kind}${d.family ? ` ${d.family}` : ""}${typeof d.value === "string" ? ` "${d.value.slice(0, 80)}"` : ""}`;
+    `${d.kind}${d.direction ? ` ${d.direction}` : ""}${typeof d.value === "string" ? ` "${d.value.slice(0, 80)}"` : ""}`;
   return svc.ledger.tx(() => {
     if (unknown.length)
       svc.ledger.appendEvent(author, "directives_left_out", run, {
@@ -184,21 +184,6 @@ export function advisorNotes(
     actor: "supervisor",
     source: "supervisor",
   });
-}
-
-/**
- * Past research for a run's folder (the supervisor, from control's knowledge base): each item
- * a file under the run's knowledge/, overwritten when it changed. With `folders` (the campaign
- * folders the run may read now), a folder no longer among them is removed.
- */
-export function writeKnowledge(
-  svc: HarnessService,
-  run: string,
-  items: unknown[],
-  folders?: string[] | undefined,
-): { written: number; updated: number; removed: string[]; skipped: number } {
-  requireRun(svc.ledger, run);
-  return svc.knowledge.write(run, items, folders);
 }
 
 /** An advisor role's receipts and answers for the owner's messages in a run. */

@@ -1,20 +1,13 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sweepTemp } from "../../common/fs.ts";
 import { log } from "../../common/log.ts";
-import { generateSigningKeys } from "../../core/commands.ts";
+import { fingerprint, generateSigningKeys } from "../../core/commands.ts";
 import { PROGRAM_MODE_DEFAULT } from "../../core/rig-settings.ts";
 import type { PromotionPolicy } from "../judge/index.ts";
 import { Ledger } from "../ledger/index.ts";
-import { lanesFromEnv, RigSettingsStore, trialMinutesFromEnv } from "../rig-settings.ts";
-import { NOT_BEFORE_FILE, wipeIfRequested } from "../service/index.ts";
+import { lanesFromEnv, RigSettingsStore, trialMinutesFromEnv } from "../rig-settings-store.ts";
+import { gapAtStart, NOT_BEFORE_FILE, wipeIfRequested } from "../service/index.ts";
 import type { ControllerContext } from "./context.ts";
 
 /**
@@ -29,11 +22,13 @@ export function openState(ctx: ControllerContext): {
 } {
   const { paths } = ctx;
   // Private state: only the controller's user may enter. Builds and models are reachable by
-  // exact path only (0711), because the run user executes builds and loads models.
+  // exact path only (0711), because the run user executes builds and loads models. The kits are
+  // entered by the checkers' group too (0710), which the broker gives the folder: the kit's check
+  // reads its kit.
   for (const [dir, mode] of [
     ["ledger", 0o700],
     ["git", 0o700],
-    ["kits", 0o700],
+    ["kits", 0o710],
     ["imports", 0o700],
     ["models", 0o711],
   ] as const) {
@@ -41,19 +36,12 @@ export function openState(ctx: ControllerContext): {
     chmodSync(join(paths.stateDir, dir), mode);
   }
   // A full reset's wipe, requested by the last controller run: done before anything opens.
-  if (
-    wipeIfRequested(paths, [
-      "rig-signing.key",
-      "rig-signing.key.pub",
-      "unit-signing.key",
-      "unit-signing.key.pub",
-    ])
-  ) {
+  if (wipeIfRequested(paths, ["rig-signing.key", "rig-signing.key.pub"])) {
     log("harness", "state wiped (full reset); starting with a fresh ledger");
     for (const [dir, mode] of [
       ["ledger", 0o700],
       ["git", 0o700],
-      ["kits", 0o700],
+      ["kits", 0o710],
       ["imports", 0o700],
       ["models", 0o711],
     ] as const) {
@@ -61,7 +49,18 @@ export function openState(ctx: ControllerContext): {
       chmodSync(join(paths.stateDir, dir), mode);
     }
   }
+  // An export a crash stopped half written, swept before the next is written.
+  const left = sweepTemp(paths.outboxDir);
+  if (left.length)
+    log("harness", "removed the exports a crash left half written", { left: left.length });
   const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"));
+  // The time since the harness last ran, before anything this start records hides it: a research
+  // run's clock leaves it out (service/gaps.ts). The service looks again as it starts, and finds
+  // this gap the newest event then.
+  gapAtStart(ledger, Date.now());
+  // The guards of champions judged before verdicts carried them, sent once (goal 184).
+  const guarded = ledger.verdicts.sendChampionGuards("judge");
+  if (guarded) log("harness", "sent the guards of champions judged before", { champions: guarded });
   // After a wipe: commands issued before it belonged to the old ledger.
   const notBefore = join(paths.stateDir, "ledger", NOT_BEFORE_FILE);
   if (existsSync(notBefore)) {
@@ -70,12 +69,6 @@ export function openState(ctx: ControllerContext): {
   }
   // The rig's report-signing key: created once, kept with the ledger (0700).
   const rigKeyPath = join(paths.stateDir, "ledger", "rig-signing.key");
-  // Before the 2026-10-15 rename the key was the "unit" key: kept, so control's pin still holds.
-  const oldKeyPath = join(paths.stateDir, "ledger", "unit-signing.key");
-  if (!existsSync(rigKeyPath) && existsSync(oldKeyPath) && existsSync(`${oldKeyPath}.pub`)) {
-    renameSync(`${oldKeyPath}.pub`, `${rigKeyPath}.pub`);
-    renameSync(oldKeyPath, rigKeyPath);
-  }
   if (!existsSync(rigKeyPath)) {
     const k = generateSigningKeys();
     writeFileSync(rigKeyPath, k.privateKeyPem, { mode: 0o600 });
@@ -85,6 +78,11 @@ export function openState(ctx: ControllerContext): {
     privateKeyPem: readFileSync(rigKeyPath, "utf8"),
     publicKeyPem: readFileSync(`${rigKeyPath}.pub`, "utf8"),
   };
+  // At every start, so the owner can compare it with the fingerprint control shows for the rig.
+  log("harness", "the rig's report key", {
+    rig: ctx.rig,
+    fingerprint: fingerprint(rigKeys.publicKeyPem),
+  });
   return { ledger, rigKeys };
 }
 

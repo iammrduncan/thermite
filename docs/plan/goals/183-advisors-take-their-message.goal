@@ -1,0 +1,43 @@
+---
+id: "183"
+title: "A program in its terminal takes its message: typed in when ready, a message never taken ends the run, audits never wait behind the teachers"
+status: IN_PROGRESS
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 183 · A program in its terminal takes its message: typed in when ready, a message never taken ends the run, audits never wait behind the teachers
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011)
+
+## What
+
+Found in testing, from the owner's report of 2026-11-02: "Auditing seems broken. No champion is getting promoted. It seems teachers still haven't launched."
+
+On a rig whose agent programs run in their own terminal, a teacher's call in Claude Code waited for 11 hours for a turn that never began, and the advisors' whole loop waited with it: no teacher round finished, no audit ran, and a confirmed win was never promoted. The supervisor's log, its processes and the call's folder showed why. Claude Code started, its SessionStart hook fired about 3 seconds later, and no message was ever submitted to it: its session log was never written, and its signals file holds the SessionStart line alone. The terminal host types the first message once the program has written something and then been still for 750 ms, and Claude Code was still for that long before its input was ready, so the message went nowhere. Nothing then checks that the program took it, and an advisor's call has no limit of its own, so it waits for good. The auditor runs after the teachers in each advisor round, so it waited too.
+
+1. **Typed in when ready.** Claude Code is typed into only once its SessionStart signal is there and its screen has been still since; Claude Code and Codex only once they have turned bracketed paste on, which each does as its input box comes up; others as before. After a long message, Enter goes once the program has read it all.
+2. **A message never taken ends the run.** After a message is typed in, a turn must begin in the program's session log. When none begins within a minute, the run fails with the reason in words, as a run that could not start does: the advisor's call ends, and the round goes on without it; a worker's trial ends, and its experiment goes back to the queue. No key is sent to the program to try again: its screen may be a menu that takes any key as an answer.
+3. **Audits never wait behind the teachers.** In each advisor round, the teachers run beside the auditor, the synthesizer, the review panel and the final writer, not before them.
+4. **No audit skipped at a start.** Just after the supervisor starts, before the message bus has given it the advisors' models, it told the harness that no auditor decides, and the harness let a confirmed win go on unaudited. It now says so only once the routes came.
+5. **The Live menus open.** The chips' bar on a run's Live page scrolled sideways, which clipped the menus that drop out of it (the kept messages', and before goal 181 the terminals'): the owner saw only a shadow. The chips wrap instead.
+
+## Done when
+
+- [ ] Each of the five, with its tests and the pages that describe it, and the terminal, Claude Code and steering acceptance checks pass.
+
+## Decisions
+
+- 2026-11-02, owner: the lab's stuck call is cleared by restarting only that rig's supervisor (not its harness), which the lab's infrastructure session does.
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's report and the lab session's read-only look at the supervisor (its log, its processes and the call's folder).
+- 2026-11-02: Restarting only the supervisor did not clear it: the new call lost its prompt the same way, every time, so not a race of one start. The first teacher, in Codex, took its prompt (a large one: its typing took about 90 s). The supervisor's restart, in the half second before the bus gave the routes, told the harness no auditor decides, and the harness promoted the held win unaudited (item 4). On this Mac, Claude Code 2.1.316 took every message typed as the host types it: 25,000 to 1,000,000 characters, typed at once or over 40 s, with its own network traffic on, with an MCP server that does not answer. The lab's screen could not be read (the Terminals menu's dropdown was clipped: item 5), so the reason now carries the screen's last lines.
+- 2026-11-02: Built: the start signal (CliTerminal.startSignal, Claude Code's SessionStart) in ready(); RoleTerminal.took() fails the run after TAKE_MS (60 s) with no turn begun, with the screen's last lines; adviseOnce runs teachRuns beside the rest; harnessAdvisors.none() tells the harness no advisor decides only once the routes came; the Live chips wrap. Tests in agents/cli/call.test.ts, supervisor/advisors/harness.test.ts and dashboard/steering/message-box.test.ts.
+- 2026-11-02: On the lab after the roll, the teachers' round ran: Claude Code took its 63,000-character prompt, and Codex did not. The new reason showed why: Codex's screen held the end of the prompt in its input, so its Enter had gone in as a new line. Reproduced here with Codex 0.166 and the terminal check's stand-in model: typed 50 ms after its start, before its input box was up, the text goes in as keys and is never sent; typed 300 ms after, it is taken. Codex turns bracketed paste on as its input box comes up, as Claude Code does: the host's status now says whether the program has (`pastes`), and both are typed into only after (CliTerminal.pastes). After a long text (4096 characters or more since the last Enter), Enter now waits until the program has been still for 500 ms, at most 30 s, so a slow machine has read it all. With the fix, typed at the earliest moment, Codex took the 63,000 characters each of 3 times. Tests in agents/cli/call.test.ts and agents/terminal/host.test.ts (Linux only).
+- 2026-11-02: The owner saw a Claude subscription used by two rigs with "No usage reported yet". Claude Code gives the windows in `rate_limit_event`, which only its headless output has; in its own terminal Thermite reads its transcript, which has none, so a rig whose agents run in their terminal reported none, and an advisor's call in the supervisor never passed them on at all. Claude Code 2.1.316's status line input has `rate_limits` (`five_hour`, `seven_day`: `used_percentage`, `resets_at`), shown here with the stand-in API sending a subscription's headers. Built: in its terminal, Claude Code's status line is Thermite's hook program (`claude-code-status`), which writes the windows as a `StatusLine` signal when they change; RoleTerminal reads it into the tally (CliTerminal.status, windowsOfStatus), and the trial loop reports windows that changed even without new log lines. Advisors' windows are left for later. Tests in agents/programs/hooks.test.ts, claude-code/windows.test.ts, programs/terminal.test.ts and agents/cli/call.test.ts.
+- 2026-11-02: On the lab at c6267595, the first teachers' round: Claude Code took its 63,000-character prompt and worked about 6 minutes; Codex's call failed with "the terminal host did not answer within 15 s", 18 s after Codex started. The host's wait for the program to go still before Enter (up to 30 s) was longer than the 15 s a request has to be answered, and Codex kept redrawing. Fixed: the wait is at most 10 s (ENTER_WAIT_MS), and a request that types with Enter has 15 s plus that to be answered (client.ts). Claude Code's `StatusLine` signal is among the hooks the signal reader leaves out on purpose, not counted as unknown.
+- 2026-11-02: The lab's test VM (Linux, 4 cores) ran the unit tests this Mac skips. The terminal trial loop's tests waited 20 s at each start: the fake TUI never fired SessionStart, which Claude Code's start now waits for (fixed: tests/helpers/fake-tui.ts fires it). An advisor's windows reach control too: its terminal call passes them, by its provider's name, to the supervisor, which reports `subscription_usage` in its figures; control's Providers takes the newest report of the harness's and the supervisor's (providers/plan-usage.ts). Three tests no longer depend on the machine: the prompts test names OpenCode at a fixed path, the scheduler's 30-minute test makes each trial's result when it ends, and the held-out threshold test's goal is 20 million a second, which the slow candidate misses on the hidden size on any machine.

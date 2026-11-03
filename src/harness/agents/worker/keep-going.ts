@@ -1,5 +1,6 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
 import type { Compactor } from "../../../agents/compaction/index.ts";
+import { lastAssistant } from "../../../agents/live-session.ts";
 import { messageText, type Prompt } from "../../../agents/prompt.ts";
 import { renderWorkerTurn, type TrialTurn } from "../../../agents/roles/index.ts";
 import {
@@ -179,26 +180,4 @@ async function sleepUnlessDone(ms: number, done: () => boolean): Promise<void> {
   while (Date.now() < until && !done()) {
     await new Promise((r) => setTimeout(r, Math.min(500, until - Date.now())));
   }
-}
-
-export function lastAssistant(
-  agent: Agent,
-): { stopReason: string; errorMessage?: string; input: number; output: number } | undefined {
-  const messages = agent.state.messages as {
-    role?: string;
-    stopReason?: string;
-    errorMessage?: string;
-    usage?: { input?: number; output?: number };
-  }[];
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (m?.role === "assistant" && m.stopReason)
-      return {
-        stopReason: m.stopReason,
-        ...(m.errorMessage ? { errorMessage: m.errorMessage } : {}),
-        input: m.usage?.input ?? 0,
-        output: m.usage?.output ?? 0,
-      };
-  }
-  return undefined;
 }

@@ -84,6 +84,66 @@ describe("agent scheduler", () => {
     await scheduler.idle();
   });
 
+  test("a change the owner declined stops being its lane's best, and never becomes one", async () => {
+    const env = makeJudgeEnv({ lanes: { count: 1, trials_per_epoch: 1 } });
+    await env.start();
+    const scheduler = new Scheduler({
+      service: env.service,
+      runner: new LocalRunner(env.paths.scratchDir),
+      model: {
+        baseUrl: "http://127.0.0.1:9",
+        model: "m",
+        apiKey: "k",
+        contextWindow: 1,
+        maxTokens: 1,
+      },
+      owner: "s",
+      runTrial: async () => ({
+        stopped: "no_submission",
+        turns: 0,
+        toolCalls: 0,
+        tokensIn: 0,
+        tokensOut: 0,
+      }),
+    });
+    const win = async (code: string, delta: number) => {
+      const id = (
+        await env.service.submitAttempt(
+          {
+            run: "js-1",
+            lane: "lane-1",
+            patch_base64: env.patch(code),
+            hypothesis: code.slice(-8),
+            known_flaws: [],
+          },
+          "t",
+        )
+      ).attempt;
+      env.ledger.verdicts.record({
+        attempt: id,
+        verdict: "win_screened",
+        delta,
+        reasons: "t",
+        judgedBy: "t",
+      });
+      return id;
+    };
+    const a = await win(FAST_KERNEL, 0.1);
+    await scheduler.tick();
+    assert.equal(scheduler.registry.laneBest("js-1", "lane-1"), a);
+    // The owner declines it: the lane no longer builds on it.
+    env.ledger.attempts.setLifecycle(a, "declined", "owner:api");
+    await scheduler.tick();
+    assert.equal(scheduler.registry.laneBest("js-1", "lane-1"), null);
+    // A larger win the owner declined is passed over; the next one the owner left alone is kept.
+    const b = await win(`${FAST_KERNEL}// b\n`, 0.3);
+    env.ledger.attempts.setLifecycle(b, "declined", "owner:api");
+    const c = await win(`${FAST_KERNEL}// c\n`, 0.2);
+    await scheduler.tick();
+    assert.equal(scheduler.registry.laneBest("js-1", "lane-1"), c);
+    await scheduler.idle();
+  });
+
   test("a fork round at a third of the wall budget sends every lane back to the champion", async () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },

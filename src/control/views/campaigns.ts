@@ -49,8 +49,24 @@ export function campaignViews(vs: RigView[]): CampaignView[] {
 
 /**
  * Every campaign control knows, with its mode: from the runs rigs report, the versions saved on
- * control, the assignments it signed, and the knowledge base's folders (goal 065).
+ * control, the assignments it signed, and the knowledge base's collections (goal 065).
  */
+/**
+ * Whether control knows a campaign of this name, as campaignModes would list it, read without any
+ * rig's view: a run a rig created under it, a saved version, an assignment or a collection.
+ */
+export function campaignKnown(store: ControlStore, name: string): boolean {
+  return (
+    store.runRegistry.ofCampaign(name).length > 0 ||
+    store.campaigns.versions().some((v) => v.campaign === name) ||
+    [...store.commands.latestAssignments()].some(([campaign]) => campaign === name) ||
+    store
+      .kb()
+      .collections()
+      .some((f) => f.campaign === name)
+  );
+}
+
 export function campaignModes(store: ControlStore, vs: RigView[]): Map<string, string | null> {
   const out = new Map<string, string | null>();
   const modeOf = (contract: unknown) => {
@@ -62,6 +78,6 @@ export function campaignModes(store: ControlStore, vs: RigView[]): Map<string, s
     if (!out.get(v.campaign)) out.set(v.campaign, modeOf(v.contract));
   for (const [name, a] of store.commands.latestAssignments())
     if (!out.get(name)) out.set(name, modeOf(a.payload.contract));
-  for (const f of store.kb().folders()) if (!out.has(f.campaign)) out.set(f.campaign, null);
+  for (const f of store.kb().collections()) if (!out.has(f.campaign)) out.set(f.campaign, null);
   return out;
 }

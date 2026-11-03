@@ -3,7 +3,7 @@ import { questionName } from "../../core/research-check.ts";
 import { type AuditDecision, type AuditPackage, Audits } from "../audits.ts";
 import { Conclusions } from "../conclusions.ts";
 import { patchBetween } from "../git.ts";
-import { briefingData, pastResearchLine } from "../knowledge.ts";
+import { briefingData } from "../knowledge.ts";
 import { LedgerError } from "../ledger/index.ts";
 import type { AdvisorRole, OwnerMessages } from "../messages.ts";
 import {
@@ -114,7 +114,7 @@ export function recordReviewPanel(
 
 /**
  * A research review's results (goals 112 and 117): each reviewer's answers to the items it was
- * asked to decide, checked by code against the package it was given (research/review.ts), and
+ * asked to decide, checked by code against the package it was given (research/review/), and
  * recorded with each failed check's reason; each item's decision is the panel's majority
  * (reviews.ts). The decisions go in the run's journal, and, when items stay open, what each
  * reviewer found open. A pass (every question has an end, every required hypothesis a verdict)
@@ -297,25 +297,16 @@ export function reviewPackages(
   });
 }
 
-/** A run's background from past research, for an advisor's brief or package (when it has one). */
 /**
- * What an advisor's brief or package carries from past research: the background the owner
- * picked, and what the run's knowledge/ holds with how to search it (the supervisor gives the
- * advisors the search, read only). Both are data, never instructions.
+ * What an advisor's brief or package carries from past research: the background the owner picked
+ * (when it has one), data, never instructions. The advisors search the knowledge base themselves.
  */
 export function backgroundFor(
   svc: HarnessService,
   run: string,
-): {
-  background?: ReturnType<typeof briefingData>;
-  past_research?: string;
-} {
+): { background?: ReturnType<typeof briefingData> } {
   const items = svc.ledger.runs.briefing(run);
-  const knowledge = svc.knowledge.summary(run);
-  return {
-    ...(items.length ? { background: briefingData(items) } : {}),
-    ...(knowledge ? { past_research: pastResearchLine(knowledge, "tool") } : {}),
-  };
+  return items.length ? { background: briefingData(items) } : {};
 }
 
 function ownerMessagesFor(messages: OwnerMessages, run: string, role: AdvisorRole) {

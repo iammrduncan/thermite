@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -10,8 +18,7 @@ import { describe, test } from "node:test";
 import { serve } from "@hono/node-server";
 import { KitRepos } from "../../src/control/kits/repos.ts";
 import type { SignedCommand } from "../../src/core/commands.ts";
-import { relayOnce } from "../../src/supervisor/relay/index.ts";
-import { type StageResult, stageCommand } from "../../src/supervisor/staging.ts";
+import { type StageResult, stageCommand, stageSigned } from "../../src/supervisor/staging.ts";
 import { controlOnly, controlStack } from "../helpers/control-stack.ts";
 import { makeJudgeEnv } from "../helpers/judge-env.ts";
 
@@ -51,11 +58,13 @@ function setup() {
   const root = mkdtempSync(join(tmpdir(), "thermite-stage-"));
   const inboxDir = join(root, "inbox");
   mkdirSync(inboxDir);
+  // The tests' repositories are on this disk, and their files are served on this machine.
   const cfg = {
     rig: "rig-a",
     inboxDir,
     resultsRepo: join(root, "home", "results.git"),
     sourcesDir: join(root, "home", "sources"),
+    localSources: true,
   };
   return { root, inboxDir, cfg };
 }
@@ -110,6 +119,7 @@ describe("staging sources by reference", () => {
 
   test("a project's commit is fetched from its repository and lands in the inbox as a bundle", async () => {
     const { root, inboxDir, cfg } = setup();
+    chmodSync(inboxDir, 0o755);
     const repo = join(root, "project");
     mkdirSync(repo);
     git(repo, "init", "--quiet", "-b", "main");
@@ -136,6 +146,34 @@ describe("staging sources by reference", () => {
     assert.match(heads, new RegExp(`^${first} refs/thermite/stage/${first}$`));
     // Already there: the next command naming it relays at once, without fetching.
     assert.equal(await stageCommand(cfg, assign("c-2", imports)), "ready");
+    // Under compose and on a machine the inbox lets other users in (the harness's controller is
+    // one of them): the bundle does too.
+    assert.equal(statSync(bundle).mode & 0o777, 0o644);
+  });
+
+  test("a bundle in an inbox closed to other users is read by the inbox's group only", async () => {
+    const { root, inboxDir, cfg } = setup();
+    // As the one-container image and a cluster's volume have it: the supervisor's, with the
+    // controller's group, closed to everyone else.
+    chmodSync(inboxDir, 0o2750);
+    const repo = join(root, "kit");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "-b", "main");
+    writeFileSync(join(repo, "kit.json"), "{}\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "--quiet", "-m", "kit");
+    const commit = git(repo, "rev-parse", "HEAD");
+    const imports = [
+      {
+        kind: "kit_bundle",
+        path: "repos/kit.bundle",
+        repo: "kit",
+        commit,
+        source: { git: `file://${repo}` },
+      },
+    ];
+    assert.equal(await staged(cfg, assign("k-closed", imports)), "ready");
+    assert.equal(statSync(join(inboxDir, "repos", "kit.bundle")).mode & 0o777, 0o640);
   });
 
   test("a model is downloaded and kept only with the signed hash; a missing commit fails", async () => {
@@ -180,6 +218,118 @@ describe("staging sources by reference", () => {
     } finally {
       server.close();
     }
+  });
+
+  test("a command's sources are fetched only once the harness says control signed it", async () => {
+    const { root, inboxDir, cfg } = setup();
+    const repo = join(root, "project");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "one\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "--quiet", "-m", "one");
+    const commit = git(repo, "rev-parse", "HEAD");
+    const imports = [
+      {
+        kind: "repo_bundle",
+        path: "repos/p.bundle",
+        repo: "p",
+        commit,
+        source: { git: `file://${repo}` },
+      },
+    ];
+    const asked: string[] = [];
+    const refuse = async (c: SignedCommand) => {
+      asked.push(c.envelope.id);
+      return "bad signature";
+    };
+    // Refused: nothing is fetched, and the command goes on to the harness, which refuses it again.
+    assert.equal(await stageSigned(cfg, assign("forged-1", imports), refuse), "ready");
+    assert.deepEqual(asked, ["forged-1"]);
+    assert.ok(!existsSync(join(inboxDir, "repos", "p.bundle")));
+    assert.ok(!existsSync(cfg.sourcesDir), "no source was fetched");
+    // Signed: staged, and the harness is asked once however often staging is asked again.
+    const sign = async (c: SignedCommand) => {
+      asked.push(c.envelope.id);
+      return undefined;
+    };
+    let r: StageResult = "wait";
+    for (let i = 0; i < 200 && r === "wait"; i++) {
+      r = await stageSigned(cfg, assign("signed-1", imports), sign);
+      if (r === "wait") await new Promise((res) => setTimeout(res, 50));
+    }
+    assert.equal(r, "ready");
+    assert.deepEqual(asked, ["forged-1", "signed-1"]);
+    assert.ok(existsSync(join(inboxDir, "repos", "p.bundle")));
+    // A kind with no content to stage is not asked about.
+    const pause = {
+      ...assign("p-1", []),
+      envelope: { ...assign("p-1", []).envelope, kind: "pause_run" },
+    };
+    assert.equal(await stageSigned(cfg, pause as SignedCommand, refuse), "ready");
+    assert.deepEqual(asked, ["forged-1", "signed-1"]);
+  });
+
+  test("a source on the rig's own disk is refused, and a source with no Git access is offered no key", async () => {
+    const { root, inboxDir } = setup();
+    const repo = join(root, "project");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "one\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "--quiet", "-m", "one");
+    const commit = git(repo, "rev-parse", "HEAD");
+    const results = join(root, "results-key");
+    writeFileSync(results, "not a real key\n", { mode: 0o600 });
+    // As a rig runs it: no tests' switch, and the results repository's deploy key at hand.
+    const cfg = {
+      rig: "rig-a",
+      inboxDir,
+      resultsRepo: join(root, "home", "results.git"),
+      sourcesDir: join(root, "home", "sources"),
+      sshKeyFile: results,
+    };
+    const local = await staged(
+      cfg,
+      assign("f-1", [
+        {
+          kind: "repo_bundle",
+          path: "repos/f.bundle",
+          repo: "f",
+          commit,
+          source: { git: `file://${repo}` },
+        },
+      ]),
+    );
+    assert.match(JSON.stringify(local), /a file:\/\/ source is refused/);
+    assert.ok(!existsSync(join(inboxDir, "repos", "f.bundle")));
+    // An SSH source that names no access: the ssh git runs (a stand-in on PATH) gets no key.
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    const said = join(root, "ssh-args");
+    writeFileSync(join(bin, "ssh"), `#!/bin/sh\necho "$@" >> '${said}'\nexit 1\n`, { mode: 0o755 });
+    const path = process.env.PATH;
+    process.env.PATH = `${bin}:${path}`;
+    try {
+      const ssh = await staged(
+        cfg,
+        assign("s-1", [
+          {
+            kind: "repo_bundle",
+            path: "repos/s.bundle",
+            repo: "s",
+            commit,
+            source: { git: "ssh://git@source.example/s.git" },
+          },
+        ]),
+      );
+      assert.match(JSON.stringify(ssh), /staging:/);
+    } finally {
+      process.env.PATH = path;
+    }
+    const args = readFileSync(said, "utf8");
+    assert.match(args, /PubkeyAuthentication=no/);
+    assert.ok(!args.includes(results), args);
   });
 
   test("a command transport is never run, whatever the URL says", async () => {
@@ -242,11 +392,11 @@ describe("staging sources by reference", () => {
       inboxDir: env.paths.inboxDir,
       resultsRepo: join(env.root, "supervisor", "results.git"),
       sourcesDir: join(env.root, "supervisor", "sources"),
+      localSources: true,
     };
-    const cfg = { ...s.cfg, stage: (cmd: SignedCommand) => stageCommand(stagingCfg, cmd) };
-    let state = { cursor: 0 };
+    s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
     for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
-      state = await relayOnce(cfg, state);
+      await s.relay();
       await new Promise((res) => setTimeout(res, 25));
     }
     assert.equal(
@@ -314,12 +464,12 @@ describe("staging sources by reference", () => {
       inboxDir: env.paths.inboxDir,
       resultsRepo: join(env.root, "supervisor", "results.git"),
       sourcesDir: join(env.root, "supervisor", "sources"),
+      localSources: true,
     };
-    const cfg = { ...s.cfg, stage: (cmd: SignedCommand) => stageCommand(stagingCfg, cmd) };
-    let state = { cursor: 0 };
+    s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
     for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
-      state = await relayOnce(cfg, state);
-      await new Promise((r) => setTimeout(r, 25));
+      await s.relay();
+      await new Promise((res) => setTimeout(res, 25));
     }
     assert.equal(
       store.commands.get(id)?.status,

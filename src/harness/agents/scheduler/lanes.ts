@@ -9,6 +9,8 @@ import type { SchedulerContext } from "./context.ts";
  */
 
 const KEEP = new Set(["win_screened", "win_confirmed"]);
+/** The lifecycle of a change the owner declined to promote (service/champion.ts). */
+const DECLINED = "declined";
 
 /**
  * Relative gain of the current champion over the run's starting point (the seed, or the
@@ -26,7 +28,8 @@ export function championGain(ledger: Ledger, run: string): number {
  * Keeps each lane's best (SLA keep rule): a judged win of the lane, measured against the
  * current champion, that beats its previous best. Deltas measured against different champions
  * are never compared: when the champion moves, an older best is dropped. A best whose win did
- * not hold (failed confirmation, invalidation) or that became the champion is dropped too.
+ * not hold (failed confirmation, invalidation), that the owner declined or that became the
+ * champion is dropped too, and a change the owner declined never becomes one.
  */
 export function updateLaneBests(sched: SchedulerContext, run: string, lanes: string[]): void {
   const champion = sched.ledger.champions.current(run);
@@ -38,13 +41,15 @@ export function updateLaneBests(sched: SchedulerContext, run: string, lanes: str
       const why =
         !a || a.invalidated_by !== null
           ? "invalidated"
-          : !verdict || !KEEP.has(verdict)
-            ? `its verdict is now ${verdict ?? "none"}`
-            : best === champion.attempt
-              ? "it is the champion"
-              : Number(a.baseline_champion_seq) !== champion.seq
-                ? "the champion has moved since it was measured"
-                : undefined;
+          : String(a.lifecycle) === DECLINED
+            ? "the owner declined it"
+            : !verdict || !KEEP.has(verdict)
+              ? `its verdict is now ${verdict ?? "none"}`
+              : best === champion.attempt
+                ? "it is the champion"
+                : Number(a.baseline_champion_seq) !== champion.seq
+                  ? "the champion has moved since it was measured"
+                  : undefined;
       if (why) {
         sched.registry.clearLaneBest(run, lane, sched.o.owner, why);
         best = null;
@@ -64,6 +69,7 @@ export function updateLaneBests(sched: SchedulerContext, run: string, lanes: str
       : null;
     for (const e of sched.registry.evidence(run, 20, lane)) {
       if (!e.verdict || !KEEP.has(e.verdict) || e.delta === null || e.attempt === best) continue;
+      if (e.lifecycle === DECLINED) continue;
       if (e.attempt === champion.attempt || !current(e.attempt)) continue;
       if (bestDelta === null || e.delta > bestDelta) {
         sched.registry.setLaneBest(run, lane, e.attempt, sched.o.owner);

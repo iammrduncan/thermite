@@ -1,19 +1,41 @@
 #!/usr/bin/env node
+// @ts-check
 // Codex CLI acceptance under compose, with a stand-in for the Codex CLI mounted in the harness
-// (containers/test-codex; no ChatGPT plan and no download needed) and a scripted provider on this
+// (tests/stand-ins/codex; no ChatGPT plan and no download needed) and a scripted provider on this
 // machine that answers OpenAI's Responses API. Through the dashboard: an OpenAI-compatible
 // provider added in Providers, its model given to the rig in Codex, then:
 //   - the rig takes the route; its model check runs one shell call through Codex, as the model
 //     check's own user;
-//   - the planner plans through Codex, as the planner's own user, with a credential minted for it;
-//   - a worker trial runs Codex as the lane's user, with its own home and configuration, its
-//     approvals and sandbox off, edits the code and submits with thermite-trial;
+//   - the planner plans in Codex's own terminal (goal 169: the default), as the planner's own user,
+//     as planner-<run>-<round>, through the proxy with a credential bound to its call: one owner's
+//     message to it goes in inside its turn, through its Stop hook, and the owner's console types
+//     into it;
+//   - a worker trial runs Codex in its own terminal (goal 169: the default, on a rig nobody set),
+//     as the lane's user, with its own home and configuration, its workspace trusted (no screen
+//     waits), its approvals and sandbox off and its rollout copied for the harness, edits the
+//     code and submits with thermite-trial;
+//   - its first turn meets a full usage window (goal 169): the provider answers the stand-in's
+//     call with a 429 and a reset 30 s away, through the harness's proxy; Codex ends its turn with
+//     its own usage-limit error and does not wait. The trial waits for the reset in its terminal,
+//     the reset from the proxy's answer (the rollout gives it only in words), with the run's wait
+//     recorded (`agents_wait_for_limit`, in the trial); the owner's input sent during the wait
+//     (`terminal_input`) is queued for the reset; after the reset the harness types its
+//     continuation, the queued input goes into that turn (`typed_after_reset`), and the same trial
+//     submits. The owner's two messages below are sent only then: sent during the wait, they would
+//     wait for the reset and go in with the continuation, which carries the messages that wait;
+
 //   - it compacts once: its compaction prompt (Thermite's) names where the run keeps the
 //     conversation, and the harness keeps the conversation from Codex's rollout and records it;
-//   - Thermite's hooks run in it (`codex exec` with --dangerously-bypass-hook-trust) as the
-//     lane's user and reach the harness with the trial's token: of two owner's messages sent to
-//     the running trial, the PostToolUse hook gives the first after a command and the Stop hook
-//     the second at the end of the turn, each read once with how it went in;
+//   - Thermite's hooks run in it (with --dangerously-bypass-hook-trust) as the lane's user and
+//     reach the harness with the trial's token: of two owner's messages sent to the running
+//     trial, the PostToolUse hook gives the first after a command and the Stop hook the second at
+//     the end of the turn, each read once with how it went in;
+//   - the rig set to headless over REST, a later trial runs `codex exec` headless, with the same
+//     home, flags, hooks and two messages inside its turn, and submits: headless stays an
+//     advanced choice, so both modes keep a trial here;
+//   - before each of the two trials submits, Codex calls the harness's `thermite` MCP server's
+//     kb_write (goal 175): its finding lands in its own slot (worker-1), where control holds it,
+//     and a write naming another slot is refused and never reaches control;
 //   - the auditor, given the same model in Codex over REST (goal 073), audits a large gain in
 //     the Codex CLI in the supervisor: in its own folder, with the read-only sandbox, no
 //     approvals asked, no shell, through the supervisor's proxy for the call with a credential
@@ -29,6 +51,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { deniedItems } from "./lib/kb-agents.mjs";
 import { hostName as containersHost } from "./lib/scripted-model.mjs";
 import {
   api,
@@ -38,6 +61,7 @@ import {
   control,
   dc,
   events,
+  plannerInTerminal,
   prepare,
   secret,
   submit,
@@ -45,7 +69,7 @@ import {
 } from "./lib/smoke-env.mjs";
 
 const KEY = "provider-key-codex-acceptance"; // public-check: allow (a made-up key for the stand-in)
-const files = ["-f", "compose.yaml", "-f", "containers/test-codex/compose.yaml"];
+const files = ["-f", "compose.yaml", "-f", "tests/stand-ins/codex/compose.yaml"];
 const composeEnv = {
   THERMITE_POLL_SECONDS: "2",
   THERMITE_PROMOTION: "auto",
@@ -54,15 +78,49 @@ const composeEnv = {
   THERMITE_MODEL_ROUTE_POLL_SECONDS: "2",
 };
 const { check, results } = acceptanceChecks({ max: 400 });
+/** @typedef {import("../../src/core/link/kb.ts").KbHit} KbHit */
+/** @typedef {import("../../src/control/views/index.ts").RunView} RunView */
 
-/** The provider: its model list for control, and a short Responses stream for each call. */
-const seen = { keys: new Set(), paths: [] };
+/** Seconds from the usage window the provider answers to its reset. */
+const WINDOW_S = 30;
+/**
+ * The provider: its model list for control, and a short Responses stream for each call, but for
+ * the stand-in's first `usage-window` call, which meets a full usage window: a 429 with the reset in
+ * its Retry-After, as Codex's own usage-limit error.
+ */
+/** @type {{ keys: Set<string>, paths: string[], window: string | undefined }} */
+const seen = { keys: new Set(), paths: [], window: undefined };
 const provider = createServer((req, res) => {
   // What each Responses call carried (control's own model list carries the key too).
   if (req.url === "/v1/responses") seen.keys.add(String(req.headers.authorization ?? ""));
   seen.paths.push(`${req.method} ${req.url}`);
-  req.resume();
+  let raw = "";
+  req.on("data", (d) => {
+    raw += d;
+  });
   req.on("end", () => {
+    if (req.method === "POST" && req.url === "/v1/responses" && !seen.window) {
+      let input;
+      try {
+        input = JSON.parse(raw).input;
+      } catch {
+        input = undefined;
+      }
+      if (input === "usage-window") {
+        seen.window = new Date(Date.now() + WINDOW_S * 1000).toISOString();
+        res.writeHead(429, { "content-type": "application/json", "retry-after": String(WINDOW_S) });
+        res.end(
+          JSON.stringify({
+            error: {
+              type: "usage_limit_reached",
+              message: "The usage limit has been reached",
+              resets_in_seconds: WINDOW_S,
+            },
+          }),
+        );
+        return;
+      }
+    }
     if (req.method === "GET" && req.url === "/v1/models") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ data: [{ id: "scripted", context_length: 32768 }] }));
@@ -82,8 +140,8 @@ const provider = createServer((req, res) => {
     res.end(JSON.stringify({ error: { message: "only the model list and Responses here" } }));
   });
 });
-await new Promise((r) => provider.listen(0, "0.0.0.0", r));
-const base = `http://${containersHost()}:${provider.address().port}/v1`;
+await /** @type {Promise<void>} */ (new Promise((r) => provider.listen(0, "0.0.0.0", r)));
+const base = `http://${containersHost()}:${/** @type {import("node:net").AddressInfo} */ (provider.address()).port}/v1`;
 
 const env = prepare();
 const contract = JSON.parse(readFileSync(env.contractFile, "utf8"));
@@ -94,15 +152,28 @@ writeFileSync(env.contractFile, JSON.stringify(contract));
 dc(composeEnv, ...files, "up", "-d", "--build");
 try {
   await until("control health", async () => (await fetch(`${control}/v1/health`)).ok);
-  await until("the rig reports", async () => (await api("/v1/rigs/local-1/view")).body?.hardware);
+  const reported = await until("the rig reports its settings", async () => {
+    const view = (await api("/v1/rigs/local-1/view")).body;
+    return view?.hardware && view.settings ? view : undefined;
+  });
+  check(
+    "a rig nobody set runs its agent programs in their own terminal (the default)",
+    reported.settings?.program_mode === "terminal",
+    reported.settings,
+  );
   const login = await fetch(`${control}/ui/login`, {
     method: "POST",
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const page = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
+  const page = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
   const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page("/ui/settings"))?.[1] ?? "";
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) =>
     decodeURIComponent(
       String(
@@ -167,6 +238,20 @@ try {
     modelCheck.body.summary,
   );
   await assign(env, "smoke-1");
+  // Goal 169: the planner's call runs in Codex's own terminal (the default), as
+  // planner-<run>-<round>, with a credential bound to the call; one owner's message to the planner
+  // goes in inside its turn, at its end (the Stop hook), and the owner's console types into it.
+  const plannerCall = await plannerInTerminal();
+  await command("message_agent", {
+    run: "smoke-1",
+    to: "planner",
+    text: "OWNER-PLANNER Plan the tidy-up first.",
+  });
+  const plannerTyped = await command("terminal_input", {
+    run: "smoke-1",
+    trial: plannerCall.id,
+    text: "Plan the tidy-up first.",
+  });
   const epoch = await until(
     "the first epoch, planned",
     async () => (await events()).find((e) => e.kind === "epoch_started" && e.subject === "smoke-1"),
@@ -175,16 +260,27 @@ try {
   );
   const planned = String(epoch.body.notes ?? "");
   check(
-    "the planner planned through Codex, as the planner's user, through the proxy with a minted credential",
+    "the planner planned in Codex's own terminal, as the planner's user, through the proxy with its call's credential",
     epoch.body.source === "planner" &&
       epoch.body.planner_valid === true &&
-      epoch.body.assignments?.[0]?.family === "cx-tidy" &&
+      epoch.body.assignments?.[0]?.direction === "cx-tidy" &&
+      /in its terminal/.test(planned) &&
       /uid=10040 /.test(planned) &&
-      /auth=proxy /.test(planned) &&
+      /auth=call /.test(planned) &&
       /proxied=200 /.test(planned),
     { source: epoch.body.source, valid: epoch.body.planner_valid, notes: planned },
   );
-  // Goal 169: two messages to the trial while it runs; the stand-in waits for both to wait.
+  const plannerRead = (await events()).find(
+    (e) => e.kind === "agent_message_read" && e.body.by === "planner",
+  );
+  check(
+    "the planner's call in its terminal took the owner's message inside its turn, at its end, and the owner's input was typed into it",
+    /^planner-smoke-1-\d+$/.test(plannerCall.id) &&
+      plannerRead?.body.how === "turn-end" &&
+      /the owner's message came inside its turn/.test(planned) &&
+      plannerTyped.outcome?.result?.outcome === "typed",
+    { call: plannerCall, read: plannerRead?.body, typed: plannerTyped.outcome },
+  );
   const started = await until(
     "the Codex trial started",
     async () => (await events()).find((e) => e.kind === "trial_started" && e.subject === "smoke-1"),
@@ -192,8 +288,86 @@ try {
     2000,
   );
   const trialId = String(started.body.trial);
+  const messaged = new Set([trialId]);
+  // Its first turn meets a full usage window, which resets 30 s later: the trial waits in its
+  // terminal, and the owner's input sent meanwhile waits for the reset.
+  const wait = await until(
+    "the trial waits for its usage window in its terminal",
+    async () =>
+      (await events()).find((e) => e.kind === "agents_wait_for_limit" && e.body.trial === trialId),
+    300_000,
+    1000,
+  );
+  const queued = await command("terminal_input", {
+    run: "smoke-1",
+    trial: trialId,
+    text: "OWNER-QUEUED-1 Look at the tests too.",
+  });
+  const resetAt = Date.parse(String(wait.body.until));
+  check(
+    "Codex's full usage window is the run's wait, recorded in the trial, until the reset in the proxy's answer, and the owner's input sent during it waits for the reset",
+    wait.body.in_trial === true &&
+      seen.window !== undefined &&
+      Math.abs(resetAt - Date.parse(seen.window)) < 5_000 &&
+      queued.outcome?.result?.outcome === "queued",
+    { wait: wait.body, window: seen.window, queued: queued.outcome },
+  );
+  // Goal 169: two messages to the trial once it is at work again after the reset; the stand-in
+  // waits for both to wait, and its hooks give them inside its turn.
+  await until(
+    "the queued input typed after the reset",
+    async () =>
+      (await events()).find(
+        (e) =>
+          e.kind === "terminal_input" &&
+          e.body.trial === trialId &&
+          e.body.outcome === "typed_after_reset",
+      ),
+    300_000,
+    1000,
+  );
   for (const text of ["Look at the inner loop first.", "Keep the change small."])
     await command("message_agent", { run: "smoke-1", to: `trial:${trialId}`, text });
+  // Once the trial has its first message, it runs in the mode it started with: the rig is set to
+  // headless for the trials after it.
+  await until(
+    "the terminal trial read its first message",
+    async () =>
+      (await events()).find((e) => e.kind === "agent_message_read" && e.body.trial === trialId),
+    300_000,
+    2000,
+  );
+  const headless = await api("/v1/rigs/local-1/settings", {
+    method: "POST",
+    body: JSON.stringify({ program_mode: "headless" }),
+  });
+  check(
+    "the rig is set to run its agent programs headless over REST",
+    headless.status === 200 && headless.body.sent?.program_mode === "headless",
+    headless.body,
+  );
+  // From here on, each trial that starts gets the owner's two messages within seconds, while the
+  // steps below wait for other things: a headless trial waits for them only so long (the
+  // stand-in's WAIT_MESSAGES_MS), and the audit below can take many minutes.
+  let messaging = true;
+  const messenger = (async () => {
+    while (messaging) {
+      try {
+        for (const e of (await events()).filter(
+          (x) => x.kind === "trial_started" && x.subject === "smoke-1",
+        )) {
+          const id = String(e.body.trial);
+          if (messaged.has(id)) continue;
+          messaged.add(id);
+          for (const text of ["Look at the inner loop first.", "Keep the change small."])
+            await command("message_agent", { run: "smoke-1", to: `trial:${id}`, text });
+        }
+      } catch (err) {
+        console.log("messaging the trials:", err instanceof Error ? err.message : String(err));
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  })();
   const attempt = await until(
     "a trial in Codex submitted",
     async () =>
@@ -206,14 +380,14 @@ try {
   );
   const said = String(attempt.body.hypothesis);
   check(
-    "Codex ran as the lane's user with its own home, approvals and sandbox off, reached the model through the proxy with the trial's token, and submitted with thermite-trial",
+    "Codex ran in its own terminal as the lane's user with its own home, its workspace trusted, approvals and sandbox off, reached the model through the proxy with the trial's token, and submitted with thermite-trial",
     /uid=10101 /.test(said) &&
       /home=own /.test(said) &&
       /proxy_url=harness /.test(said) &&
       /auth=trial /.test(said) &&
       /proxied=200 /.test(said) &&
       /bypass=true /.test(said) &&
-      /ignore_rules=true /.test(said) &&
+      / mode=terminal tty=true trusted=yes no_daemon=true hook_trust=true /.test(said) &&
       /model=scripted\)/.test(said),
     said,
   );
@@ -227,9 +401,24 @@ try {
     2000,
   );
   check(
-    "the controller followed Codex's output (turns counted)",
-    Number(trial.body.turns) >= 1,
+    "the controller followed Codex's rollout in its terminal (turns and tokens counted)",
+    Number(trial.body.turns) >= 1 && Number(trial.body.tokens_in) > 0,
     trial.body,
+  );
+  const inputs = (await events()).filter(
+    (e) => e.kind === "terminal_input" && e.body.trial === trialId,
+  );
+  const typedAt = Date.parse(
+    String(inputs.find((e) => e.body.outcome === "typed_after_reset")?.at ?? ""),
+  );
+  check(
+    "after the reset the harness typed its continuation into Codex, the queued input went into that turn, nothing was typed during the wait, and the same trial submitted",
+    / window=went-on typed=OWNER-QUEUED-1 typed_in_wait=0 /.test(said) &&
+      inputs.map((e) => e.body.outcome).join(",") === "queued,typed_after_reset" &&
+      typedAt >= resetAt &&
+      trial.body.trial === trialId &&
+      trial.body.stopped === "submitted",
+    { said, inputs: inputs.map((e) => ({ at: e.at, ...e.body })), trial: trial.body },
   );
   const reads = (await events()).filter(
     (e) => e.kind === "agent_message_read" && e.body.trial === trialId,
@@ -246,9 +435,30 @@ try {
   // read Codex's rollout of the thread from the lane's area and kept it in the run's research
   // folder, with Codex's summary.
   const compacted = (await events()).find(
-    (e) => e.kind === "context_compacted" && e.body.harness === "codex",
+    (e) => e.kind === "context_compacted" && e.body.harness === "codex" && e.body.trial === trialId,
   );
   const kept = String(compacted?.body.snapshot ?? "");
+  // The conversation reaches the knowledge base whole, as its item's file (goal 175), so the
+  // event holds its size and hash, not its words: they are read there once control has its text.
+  const keptText = compacted?.body.file
+    ? await until(
+        "the kept conversation whole in the knowledge base",
+        async () => {
+          const q = encodeURIComponent("conversation before compaction");
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find(
+            (/** @type {KbHit} */ h) => JSON.stringify(h).includes(trialId),
+          );
+          if (!hit) return undefined;
+          const { item } = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`))
+            .body;
+          return /from the Codex CLI's own rollout of the thread/.test(String(item?.text))
+            ? String(item.text)
+            : undefined;
+        },
+        180_000,
+        3000,
+      ).catch(() => "")
+    : String(compacted?.body.text ?? "");
   check(
     "Codex's compaction kept its own rollout in the run's research folder, with a summary naming the file",
     /compacted=rollout /.test(said) &&
@@ -256,9 +466,14 @@ try {
       compacted?.body.how === "harness" &&
       /^compactions\/[A-Za-z0-9._-]+-1\.md$/.test(kept) &&
       String(compacted?.body.summary ?? "").endsWith(`/${kept}.`) &&
-      /from the Codex CLI's own rollout of the thread/.test(String(compacted?.body.text ?? "")) &&
+      /from the Codex CLI's own rollout of the thread/.test(keptText) &&
       Number(trial.body.compactions) === 1,
-    { said, compacted: compacted?.body, compactions: trial.body.compactions },
+    {
+      said,
+      compacted: { ...compacted?.body, summary: undefined },
+      kept_text: keptText.slice(0, 200),
+      compactions: trial.body.compactions,
+    },
   );
   const good = submit(
     composeEnv,
@@ -270,14 +485,16 @@ try {
     "the good kernel's audit, in Codex in the supervisor",
     async () =>
       (await api("/v1/rigs/local-1/view")).body.runs
-        ?.find((r) => r.id === "smoke-1")
-        ?.audits?.find((a) => a.attempt === good.attempt && a.decision),
+        ?.find((/** @type {RunView} */ r) => r.id === "smoke-1")
+        ?.audits?.find(
+          (/** @type {RunView["audits"][number]} */ a) => a.attempt === good.attempt && a.decision,
+        ),
     1_200_000,
     3000,
   );
   const why = String(audited.reasons ?? "");
   check(
-    "the auditor ran in Codex in the supervisor, in its own folder, with the read-only sandbox, no approvals asked and no shell, through the supervisor's proxy with a credential made for the call",
+    "the auditor ran in Codex in the supervisor, as an advisor user in its own folder, with the read-only sandbox, no approvals asked and no shell, through the supervisor's proxy with a credential made for the call",
     audited.decision === "clear" &&
       /Codex stand-in/.test(why) &&
       /sandbox=read-only /.test(why) &&
@@ -288,11 +505,93 @@ try {
       /compact_prompt=supervisor /.test(why) &&
       /bypass=false /.test(why) &&
       /own_folder=true /.test(why) &&
-      /uid=10001 /.test(why) &&
+      // As one of the advisor users (advisor-1..advisor-8), never the supervisor's own.
+      /uid=100(8[1-8]) /.test(why) &&
       /auth=proxy /.test(why) &&
       /proxied=200 /.test(why) &&
       /model=scripted\)/.test(why),
     audited,
+  );
+  // The later trial, headless: each trial that starts has had the owner's two messages since the
+  // rig went headless (above), until one submits headless.
+  const later = await until(
+    "a trial in Codex submitted headless",
+    async () =>
+      (await events()).find(
+        (e) =>
+          e.kind === "attempt_recorded" &&
+          /codex harness/.test(String(e.body.hypothesis ?? "")) &&
+          String(e.body.hypothesis).includes(" mode=headless "),
+      ),
+    900_000,
+    3000,
+  );
+  const saidLater = String(later.body.hypothesis);
+  const laterTrial = await until(
+    "the headless trial's end",
+    async () =>
+      (await events()).find((e) => e.kind === "trial_finished" && e.body.attempt === later.subject),
+    120_000,
+    2000,
+  );
+  messaging = false;
+  await messenger;
+  const laterReads = (await events()).filter(
+    (e) => e.kind === "agent_message_read" && e.body.trial === laterTrial.body.trial,
+  );
+  check(
+    "a trial after the change ran `codex exec` headless, with its own home, the proxy, its flags and hooks, gave the owner's two messages inside its turn, and submitted",
+    /uid=10101 /.test(saidLater) &&
+      /home=own /.test(saidLater) &&
+      /auth=trial /.test(saidLater) &&
+      /proxied=200 /.test(saidLater) &&
+      /bypass=true /.test(saidLater) &&
+      /ignore_rules=true /.test(saidLater) &&
+      /steered=after-tool:owner,turn-end:owner /.test(saidLater) &&
+      laterReads.map((e) => e.body.how).join(",") === "after-tool,turn-end" &&
+      Number(laterTrial.body.turns) >= 1,
+    { said: saidLater, reads: laterReads.map((e) => e.body), trial: laterTrial.body },
+  );
+  // The knowledge base (goal 175): each trial's finding, written through Thermite's MCP server,
+  // in its own slot, where control holds it; each write naming another slot refused.
+  const kbOfSaid = (/** @type {string} */ s) => ({
+    address: /kb=(\S+)/.exec(s)?.[1],
+    refused: /kb_refused=yes/.test(s),
+  });
+  const kbTerminal = kbOfSaid(said);
+  const kbHeadless = kbOfSaid(saidLater);
+  const ownSlot = (/** @type {string | undefined} */ a) =>
+    /^smoke-cpu\/smoke-1\/worker-1\/finding:\d+$/.test(String(a));
+  const kbStored = await until(
+    "control holds Codex's two items",
+    async () => {
+      const hits = (await api("/v1/kb/search?q=kbprobecx")).body.hits ?? [];
+      const both = [kbTerminal.address, kbHeadless.address].map((a) =>
+        hits.find((/** @type {KbHit} */ h) => h.address === a),
+      );
+      return both.every((h) => h?.slot === "worker-1") ? both : undefined;
+    },
+    180_000,
+    3000,
+  ).catch(() => undefined);
+  // A kept conversation quotes the refused call: only an item the write made counts.
+  const kbDenied = await deniedItems();
+  check(
+    "Codex's trials, in its terminal and headless, each write a finding into their own slot with Thermite's MCP server's kb_write, which control holds there; a write naming another slot is refused and never reaches control",
+    ownSlot(kbTerminal.address) &&
+      ownSlot(kbHeadless.address) &&
+      kbTerminal.address !== kbHeadless.address &&
+      kbTerminal.refused &&
+      kbHeadless.refused &&
+      Boolean(kbStored) &&
+      kbDenied.held.length === 0,
+    {
+      terminal: kbTerminal,
+      headless: kbHeadless,
+      denied: kbDenied.held,
+      quoted: kbDenied.quoted,
+      stored: kbStored,
+    },
   );
   check(
     "every Responses call reached the provider with its own key, added by the proxy, never a run's credential",
@@ -303,13 +602,18 @@ try {
   );
   const everything = JSON.stringify([
     await page("/ui/settings"),
+    await page("/ui/settings/routes"),
     await page("/ui/rigs/local-1"),
     await events(),
     (await api("/v1/rigs/local-1/view")).body,
   ]);
   check("the key shows in no page, event or rig record", !everything.includes(KEY));
 } catch (err) {
-  check("acceptance run", false, String(err?.stack ?? err));
+  check(
+    "acceptance run",
+    false,
+    String(/** @type {{ stack?: unknown } | null | undefined} */ (err)?.stack ?? err),
+  );
 } finally {
   provider.close();
   if (process.env.KEEP !== "1") dc(composeEnv, ...files, "down", "-v");

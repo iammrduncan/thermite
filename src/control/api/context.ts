@@ -1,11 +1,11 @@
-import type { Hono, MiddlewareHandler } from "hono";
+import type { Context, Hono, MiddlewareHandler } from "hono";
 import { buildInfo } from "../../common/build-info.ts";
 import type { Loops } from "../../common/health.ts";
-import { sameSecret } from "../../common/secrets.ts";
 import { type BuildInfo, buildFromHeaders } from "../../core/version.ts";
 import type { BusUsers, BusView, ConfigWriter } from "../bus/index.ts";
 import type { ClusterKubectl } from "../clusters/index.ts";
 import { Credential } from "../credential.ts";
+import type { KbFiles } from "../kb/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import type { DeploymentDriver } from "../lifecycle.ts";
 import type { MachineSsh, RigBus } from "../machines/index.ts";
@@ -17,6 +17,7 @@ import type { RigImages, RigUpdates } from "../rigs/index.ts";
 import type { ControlTunnels, RunpodRigs, RunpodTests } from "../runpod/index.ts";
 import type { SecretBox } from "../secrets.ts";
 import type { ControlStore } from "../store/index.ts";
+import type { FiguresAsker } from "../system/index.ts";
 import { checkRig, recheckRefusals } from "../versions.ts";
 
 /**
@@ -45,8 +46,6 @@ export interface ControlTokens {
    * stay the owner's.
    */
   operator?: string | Credential | undefined;
-  /** rig id -> token */
-  rigs: Record<string, string>;
 }
 
 /** A list size from a query string: a whole number from 1 to 5000, or the default. */
@@ -55,7 +54,14 @@ export function clampLimit(raw: string | undefined, fallback: number): number {
   return Number.isInteger(n) ? Math.min(5000, Math.max(1, n)) : fallback;
 }
 
-function bearer(header: string | undefined): string {
+/** The address a request came from, as its socket gives it; empty where there is no socket. */
+export function clientOf(c: Context): string {
+  const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+  return env?.incoming?.socket?.remoteAddress ?? "";
+}
+
+/** The token an Authorization header carries as `Bearer <token>`; empty when it carries none. */
+export function bearer(header: string | undefined): string {
   return header?.startsWith("Bearer ") ? header.slice(7) : "";
 }
 
@@ -83,6 +89,8 @@ export interface ControlOptions {
   kits?: KitRepos | undefined;
   /** Where control keeps the exports rigs send it (none: it takes none). */
   exportsDir?: string | undefined;
+  /** The knowledge base's files in control's state, which the owner downloads (none: none are served). */
+  kbFiles?: KbFiles | undefined;
   /** How the new-campaign page reads a project's repository (tests give their own). */
   probeRepo?: typeof probeRepository | undefined;
   /** How the new-campaign page reads a kit's kit.json from its repository (tests give their own). */
@@ -93,7 +101,7 @@ export interface ControlOptions {
   machineSsh?: MachineSsh | undefined;
   /** The images control deploys rigs from on machines. */
   rigImages?: RigImages | undefined;
-  /** The message bus as the rigs control sets up reach it (none: they keep to HTTP). */
+  /** The message bus as the rigs control sets up reach it (none: control sets no rig up). */
   rigBus?: RigBus | undefined;
   /** How control reaches Kubernetes clusters (tests give their own). */
   clusterKubectl?: ClusterKubectl | undefined;
@@ -130,6 +138,10 @@ export interface ControlOptions {
   busConfig?: ConfigWriter | undefined;
   /** The message bus, for its state (REST, MCP, /metrics): a test's control gives its own. */
   bus?: BusView | undefined;
+  /** How control asks the bus's server for its figures, for Metrics (goal 179): a test's fake. */
+  serverLook?: FiguresAsker | undefined;
+  /** Control's own keys on the bus, which name its connections on Metrics. */
+  busOwnKeys?: (() => readonly string[]) | undefined;
   /** Control's loops, for its health route (goal 173): a test's control gives its own clock. */
   loops?: Loops | undefined;
   /**
@@ -166,6 +178,11 @@ export interface ApiContext {
   rigAuth: MiddlewareHandler;
   /** The owner's token or the read token: what guards the reads a scraper or an observer makes. */
   reader: MiddlewareHandler;
+  /**
+   * Who a guard let this request through as, by its audit actor (`owner:api`, `reader:api` or
+   * `rig:<rig>`); none when no guard took it.
+   */
+  callerOf(c: Context): string | undefined;
 }
 
 /**
@@ -179,7 +196,6 @@ export function apiContext(
   privateKeyPem: string,
   opts: ControlOptions,
 ): ApiContext {
-  store.enrollments.setConfiguredRigs(Object.keys(tokens.rigs));
   const control = opts.build ?? buildInfo();
   // A rig refused by an earlier control may work with this one.
   recheckRefusals(store, control);
@@ -222,12 +238,15 @@ export function apiContext(
   const given = Object.values(creds).filter((x): x is Credential => x !== undefined);
   if (given.some((x, i) => given.slice(i + 1).some((y) => x.same(y))))
     throw new Error("the admin, operator, agent and read tokens must all be different");
+  // Who each guard let a request through as, for the audit log's entries of what it then refused.
+  const callers = new WeakMap<Context, string>();
   const admin: MiddlewareHandler = async (c, next) => {
     if (!owner.matches(bearer(c.req.header("authorization"))))
       return c.json({ error: "unauthorized" }, 401);
+    callers.set(c, "owner:api");
     await next();
   };
-  // A rig's token is in the rig tokens file, or was made by control when the rig was enrolled.
+  // A rig's token was made by control when the rig was enrolled: control keeps its hash only.
   // A rig control reaches through a proxy has no token: its calls come in-process, from control's
   // own end of the tunnel (src/control/runpod/tunnel.ts), which verified them. Only an in-process call
   // can carry that binding; a request from the network never has it.
@@ -239,12 +258,8 @@ export function apiContext(
         return c.json({ error: "unauthorized" }, 401);
     } else {
       const token = bearer(c.req.header("authorization"));
-      const expected = tokens.rigs[rig];
-      const ok =
-        expected !== undefined
-          ? sameSecret(token, expected)
-          : store.enrollments.tokenMatches(rig, token);
-      if (!ok) return c.json({ error: "unauthorized" }, 401);
+      if (!store.enrollments.tokenMatches(rig, token))
+        return c.json({ error: "unauthorized" }, 401);
       // A retired rig is refused until the owner brings it back, whatever token it holds.
       if (store.retired.get(rig)) return c.json({ error: "this rig is retired in control" }, 403);
     }
@@ -252,24 +267,22 @@ export function apiContext(
     // build makes is from before version checks: unknown, and never refused for it.
     const route = c.req.path.slice(`/v1/rigs/${encodeURIComponent(rig)}/`.length);
     const supervisorBuild = buildFromHeaders((h) => c.req.header(h));
-    if (supervisorBuild || ["ingest", "supervisor", "commands/pending"].includes(route))
+    if (supervisorBuild || route === "supervisor")
       store.builds.setRig(rig, "supervisor", supervisorBuild);
-    // A report brings its harness's build: the ingest route checks that one, once it verifies.
-    const refused =
-      route === "ingest"
-        ? checkRig(store, rig, control, { harness: null, endRefusal: false })
-        : checkRig(store, rig, control);
+    const refused = checkRig(store, rig, control);
     if (refused) {
       // Counted, so the rig's page can say that it still calls.
       store.refusals.countCall(rig);
       return c.json({ error: refused }, 409);
     }
+    callers.set(c, `rig:${rig}`);
     await next();
   };
   // Metrics: the read token is enough (a scraper should not hold the owner's credential).
   const reader: MiddlewareHandler = async (c, next) => {
     const t = bearer(c.req.header("authorization"));
     if (!owner.matches(t) && !creds.read?.matches(t)) return c.json({ error: "unauthorized" }, 401);
+    callers.set(c, owner.matches(t) ? "owner:api" : "reader:api");
     await next();
   };
   return {
@@ -284,5 +297,6 @@ export function apiContext(
     admin,
     rigAuth,
     reader,
+    callerOf: (c) => callers.get(c),
   };
 }

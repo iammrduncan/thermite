@@ -73,7 +73,7 @@ async function seeded(): Promise<ControlStore> {
     ev("experiment_added", "r-1", {
       id: "x-1",
       title: "tile 64",
-      family: "tiling",
+      direction: "tiling",
       by: "planner",
       state: "queued",
     }),
@@ -207,7 +207,7 @@ describe("control's readers of the rigs' events read what it keeps already", () 
         {
           from: from("r-1", "x-1"),
           title: "tile 64, then 128",
-          family: "tiling",
+          direction: "tiling",
           why: "it won before",
           by: "planner",
         },

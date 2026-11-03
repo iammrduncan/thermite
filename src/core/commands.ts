@@ -7,12 +7,18 @@ import {
   type KeyObject,
 } from "node:crypto";
 import { z } from "zod";
-import { canonicalJson } from "./canonical.ts";
+import { canonicalJson, sha256Hex } from "./canonical.ts";
 import { CommitSchema, IdSchema, MAX_LANES, MAX_LANES_REASON, Sha256Schema } from "./contract.ts";
-import { DirectionRef, directionName } from "./directions.ts";
+import { directionName } from "./directions.ts";
+import { StructuredDirective } from "./directives.ts";
 import { ExperimentId, inner, RunId, TRIAL_ID } from "./ids.ts";
+import { InvalidateEvidence } from "./invalidation.ts";
+import { LOG_LEVELS, LOG_PARTS } from "./log-levels.ts";
 import { McpUses } from "./mcp.ts";
+import { currentCommand } from "./names.ts";
+import { RETENTION_NAME_MAX, RetentionRule } from "./retention/index.ts";
 import { PROGRAM_MODES } from "./rig-settings.ts";
+import { TerminalInput } from "./terminal-input.ts";
 
 /**
  * Control commands. Control signs every command with its Ed25519 key; the harness verifies
@@ -52,6 +58,14 @@ const FileSource = z.object({
     .max(4000)
     .regex(/^https?:\/\//, "an http(s) URL"),
 });
+
+/** Where a run's work goes in git (goal 185), in its assignment. */
+export const RunResults = z.object({
+  git: GitSource.options[0].shape.git,
+  access: GitSource.options[0].shape.access,
+  folder: z.string().max(500).optional(),
+});
+export type RunResults = z.infer<typeof RunResults>;
 
 export const ImportSpec = z.discriminatedUnion("kind", [
   z.object({
@@ -94,86 +108,6 @@ export const ImportSpec = z.discriminatedUnion("kind", [
 ]);
 export type ImportSpec = z.infer<typeof ImportSpec>;
 
-/**
- * Low-power steering. Strict: a directive cannot carry anything but these fields, so it cannot
- * set a verdict, a contract or text for workers. AVOID, TRY and MANDATE name a direction (goal
- * 066), in plain words or as `:name:`, kept as its name; code keeps them at every hand-out. A
- * direction the run doesn't have yet is the planner's to design at its next round. PRIORITY ranks a
- * direction; LANE_COUNT sets the lanes (up to the contract's count); TRIAL_MINUTES sets how long
- * one trial lasts, in minutes (value, 1 to 1,440), over the contract's; KEEP_WORKING turns the
- * run's lanes keeping working while the judge works on or off (value, on or off), over the
- * contract's; NOTE is free text for the
- * planner only. The planner sees rationales and notes; workers never do. A rule in words that
- * names no direction (`match`) is no longer made: one already in a ledger stays in force as
- * legacy (isLegacyRule) until the planner's next round converts it to a named direction.
- */
-/** The kinds of directive. None of them is ever a direction's name (a lane "on try"). */
-export const DIRECTIVE_KINDS = [
-  "avoid",
-  "try",
-  "mandate",
-  "priority",
-  "lane_count",
-  "trial_minutes",
-  "keep_working",
-  "note",
-] as const;
-
-export const StructuredDirective = z
-  .strictObject(
-    {
-      kind: z.enum(DIRECTIVE_KINDS),
-      /** The direction the directive is about: plain words or `:name:`, kept as its name. */
-      family: DirectionRef.optional(),
-      value: z.union([z.string().max(1000), z.number()]).optional(),
-      /** Why, with citations; shown to the planner, never to workers. */
-      rationale: z.string().min(1).max(2000),
-      citations: z.array(z.string().min(1).max(500)).max(20).default([]),
-    },
-    {
-      error: (iss) =>
-        iss.code === "unrecognized_keys" && iss.keys.includes("match")
-          ? "a rule no longer takes match: name its direction in family, in plain words or as :name:"
-          : undefined,
-    },
-  )
-  // A research run's TRY or MANDATE may name a question by its number (value) instead.
-  .refine(
-    (d) =>
-      !["avoid", "try", "mandate"].includes(d.kind) ||
-      d.family !== undefined ||
-      (d.kind !== "avoid" && d.value !== undefined),
-    {
-      message: "an avoid, try or mandate rule names a direction (family)",
-      path: ["family"],
-    },
-  )
-  .refine(
-    (d) =>
-      d.kind !== "trial_minutes" ||
-      (Number.isInteger(d.value) && Number(d.value) >= 1 && Number(d.value) <= 1440),
-    {
-      message: "a trial_minutes rule gives value: minutes, a whole number from 1 to 1440",
-      path: ["value"],
-    },
-  )
-  .refine((d) => d.kind !== "keep_working" || d.value === "on" || d.value === "off", {
-    message: "a keep_working rule gives value: on or off",
-    path: ["value"],
-  });
-export type StructuredDirective = z.infer<typeof StructuredDirective>;
-
-/**
- * A rule as a ledger holds it: a directive, the owner's message a planner's rule came from, and,
- * for an old rule in words (legacy), its words. A rule the planner converted from an old rule in
- * words names that rule and its words (`converted_from`).
- */
-export type StoredRule = StructuredDirective & {
-  from_message?: number | undefined;
-  match?: string | undefined;
-  converted_from?: { rule: number; words: string } | undefined;
-};
-
 export { ExperimentId };
 
 /** Where an experiment goes among the queued ones: first, last, or at an index (0 first). */
@@ -192,10 +126,10 @@ export const ExperimentText = {
   title: z.string().trim().min(1).max(200),
   details: z.string().max(EXPERIMENT_DETAILS),
   /**
-   * The direction (approach family): a direction's name, or words, whose direction is the name
+   * The direction: a direction's name, or words, whose direction is the name
    * they make (directionOf). Written `:name:`, it is kept without the colons.
    */
-  family: z
+  direction: z
     .string()
     .trim()
     .min(1)
@@ -214,7 +148,7 @@ export const ExperimentText = {
 export const QueueSeed = z.strictObject({
   title: z.string().min(1).max(200),
   details: z.string().max(4000).optional(),
-  family: z.string().min(1).max(80).optional(),
+  direction: z.string().min(1).max(80).optional(),
   why: z.string().max(2000).optional(),
   by: z.string().min(1).max(80),
   state: z.enum(["queued", "proposed"]),
@@ -276,7 +210,8 @@ export const CommandPayloads = {
     contract_sha: Sha256Schema,
     /** The starting commit; research campaigns have none. */
     seed: z.object({ repo: IdSchema, commit: CommitSchema }).optional(),
-    direction: z.string().min(1).optional(),
+    /** The owner's label for the run (`--note`), shown as its note; no agent sees it. */
+    note: z.string().min(1).optional(),
     imports: z.array(ImportSpec).default([]),
     /** False: a judge-only run. No worker agents run; the judge still works. */
     agents: z.boolean().optional(),
@@ -292,6 +227,12 @@ export const CommandPayloads = {
     queue: z.array(QueueSeed).max(500).optional(),
     /** Background from past research for every agent's brief (goal 065), in order. */
     briefing: z.array(BriefingSeed).max(200).optional(),
+    /**
+     * Where the run's work goes in git (goal 185): the repository its supervisor pushes
+     * `thermite/<run>/champion` and `thermite/<run>/lane-<n>` to, the Git access that pushes, and
+     * the project's folder when it is one. None: the run's work stays on control.
+     */
+    results: RunResults.optional(),
     /**
      * The MCP servers the run's kit names (a research contract's, for a research run), with the
      * agents that get each one (goal 068). Control fills it in and refuses a server Settings
@@ -353,7 +294,7 @@ export const CommandPayloads = {
     run: RunId,
     title: ExperimentText.title,
     details: ExperimentText.details.optional(),
-    family: ExperimentText.family.optional(),
+    direction: ExperimentText.direction.optional(),
     why: ExperimentText.why.optional(),
     position: QueuePosition.default("end"),
   }),
@@ -364,16 +305,16 @@ export const CommandPayloads = {
       id: ExperimentId,
       title: ExperimentText.title.optional(),
       details: ExperimentText.details.optional(),
-      family: ExperimentText.family.optional(),
+      direction: ExperimentText.direction.optional(),
       why: ExperimentText.why.optional(),
     })
     .refine(
       (p) =>
         p.title !== undefined ||
         p.details !== undefined ||
-        p.family !== undefined ||
+        p.direction !== undefined ||
         p.why !== undefined,
-      { message: "change at least one of title, details, family and why" },
+      { message: "change at least one of title, details, direction and why" },
     ),
   queue_drop: z.strictObject({
     run: RunId,
@@ -410,10 +351,21 @@ export const CommandPayloads = {
     import: ImportSpec,
   }),
   /**
-   * A full export (a full reset's) also carries the research archive and the ledger snapshot.
-   * With `run`, an export of that run alone (goal 103), outside the rig's chain of exports.
+   * An export, of one of three: one run alone (`run`, goal 103); each run of the rig that is not
+   * closed, each as its own run's export (`open_runs`, as a RunPod rig's stop asks for); or full
+   * (`full`, a full reset's and the owner's), which also carries the research archive and the
+   * ledger snapshot. An export of what changed since the last one is no more (goal 180).
    */
-  export_now: z.object({ full: z.boolean().default(false), run: RunId.optional() }),
+  export_now: z
+    .object({
+      full: z.boolean().default(false),
+      run: RunId.optional(),
+      open_runs: z.literal(true).optional(),
+    })
+    .refine(
+      (p) => [p.full, p.run !== undefined, p.open_runs === true].filter(Boolean).length === 1,
+      "an export is of one run (run), of each run not closed (open_runs: true), or full (full: true)",
+    ),
   /**
    * The rig drains before its images change (goal 079): no new trial, plan or judge job starts,
    * and those running end as they would. The rig's report says what still runs; control restarts
@@ -438,6 +390,12 @@ export const CommandPayloads = {
     trial: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "a trial's id"),
     reason: z.string().trim().min(1).max(500).optional(),
   }),
+  /**
+   * The owner (or an operator, for the owner) ends a run's wait for its provider's limit now: its
+   * new trials and plans start again at once. A trial that waits in its own conversation goes on
+   * at its own time. A run that does not wait has nothing to end.
+   */
+  end_wait: z.strictObject({ run: RunId }),
   /**
    * Owner-only full reset, after control verified that `export` (an export_now's result) was
    * pushed to the results repository. The harness refuses if research was recorded after it.
@@ -496,6 +454,32 @@ export const CommandPayloads = {
     accept: z.boolean(),
     note: z.string().max(2000).optional(),
   }),
+  /**
+   * One of the owner's retention policies, run on this rig now (core/retention/): at its time,
+   * as control's schedule sends it, or by the owner's Run now. The harness removes the judge's
+   * builds it covers; the advisors' records are its supervisor's, which removes them once the
+   * harness took the command. What went is a `retention_removed` event.
+   */
+  retention_run: z.strictObject({
+    policy: z.number().int().positive(),
+    name: z.string().min(1).max(RETENTION_NAME_MAX),
+    rule: RetentionRule,
+    by: z.enum(["schedule", "hand"]),
+  }),
+  /** The owner withdraws bad evidence (goal 174; owner only): core/invalidation.ts. */
+  invalidate_evidence: InvalidateEvidence,
+  /** The owner types into a running trial's terminal (goal 169; owner only): core/terminal-input.ts. */
+  terminal_input: TerminalInput,
+  /**
+   * The level a rig part writes its log at, from now on (the guide's question 16): the harness's
+   * or the supervisor's, each on its own; null: back to its THERMITE_LOG_LEVEL. It lasts until
+   * another changes it or the part restarts (core/log-levels.ts). The harness takes it; the
+   * supervisor's is its supervisor's, which sets it once the harness took the command.
+   */
+  log_level: z.strictObject({
+    part: z.enum(LOG_PARTS),
+    level: z.enum(LOG_LEVELS).nullable(),
+  }),
 } as const;
 
 export type CommandKind = keyof typeof CommandPayloads;
@@ -518,14 +502,16 @@ export const MCP_AGENT_KINDS = [
   "rig_check",
 ] as const satisfies readonly CommandKind[];
 /**
- * An operator (a token the owner gives an operating agent) may also message the run's agents and
- * stop a trial (goal 136), on the owner's behalf; it never approves, accepts or wipes.
+ * An operator (a token the owner gives an operating agent) may also message the run's agents,
+ * stop a trial (goal 136), end a run's wait for its provider and change a rig part's log level,
+ * on the owner's behalf; it never approves, accepts or wipes.
  */
 export const MCP_OPERATOR_KINDS = [
   ...MCP_AGENT_KINDS,
   "message_agent",
   "unkeep_message",
   "stop_trial",
+  "end_wait",
   // The experiment queue and the rules for the plan (goal 064): the owner's and operators'.
   "queue_add",
   "queue_move",
@@ -533,6 +519,8 @@ export const MCP_OPERATOR_KINDS = [
   "queue_drop",
   "queue_accept",
   "drop_directive",
+  // A rig part's log level, to look into a fault (the guide's question 16).
+  "log_level",
 ] as const satisfies readonly CommandKind[];
 /**
  * The owner (admin token) may also approve or decline promotions over MCP, and close a run for
@@ -545,6 +533,8 @@ export const MCP_OWNER_KINDS = [
   "close_run",
   // A research run's hypotheses (goal 117): which need the review panel's verdict.
   "hypothesis_status",
+  "invalidate_evidence",
+  "terminal_input",
 ] as const satisfies readonly CommandKind[];
 
 /**
@@ -569,6 +559,11 @@ export const OWNER_ONLY_KINDS: ReadonlySet<string> = new Set<CommandKind>([
   "drop_directive",
   "hypothesis_status",
   "stop_trial",
+  "end_wait",
+  "invalidate_evidence",
+  "terminal_input",
+  "retention_run",
+  "log_level",
 ]);
 
 /**
@@ -593,10 +588,13 @@ export const RUN_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>([
   "hypothesis_status",
   "propagate",
   "stop_trial",
+  "end_wait",
   "approve_promotion",
   "decline_promotion",
   "accept_review",
   "conclude",
+  "invalidate_evidence",
+  "terminal_input",
 ]);
 
 export const Envelope = z.object({
@@ -637,6 +635,15 @@ export function generateSigningKeys(): KeyPairPem {
   };
 }
 
+/**
+ * A signing key's short fingerprint, for logs, the dashboard and the audit log: the first 16 hex
+ * digits of the SHA-256 of its public key's PEM, trimmed. The rig's harness logs its own at start,
+ * and control shows the one it pinned, so the owner can compare the two.
+ */
+export function fingerprint(pubkeyPem: string): string {
+  return sha256Hex(pubkeyPem.trim()).slice(0, 16);
+}
+
 export function signEnvelope(envelope: Envelope, privateKeyPem: string): SignedCommand {
   const key = createPrivateKey(privateKeyPem);
   const signature = edSign(null, Buffer.from(canonicalJson(envelope)), key).toString("base64");
@@ -665,13 +672,9 @@ export function verifyCommand(
   rig: string,
   now: Date = new Date(),
 ): VerifyResult {
-  // A command signed before the 2026-10-15 rename names its "unit" and "instance": its
-  // signature is checked over the envelope as it was signed, then it is read under the new names.
-  const legacy = legacyEnvelope(input);
-  const parsed = SignedCommand.safeParse(legacy ? legacy.normalized : input);
+  const parsed = SignedCommand.safeParse(input);
   if (!parsed.success) return { ok: false, reason: "malformed command" };
   const { envelope, signature } = parsed.data;
-  const signedForm = legacy ? legacy.signed : envelope;
   let key: KeyObject;
   try {
     key = createPublicKey(publicKeyPem);
@@ -682,7 +685,7 @@ export function verifyCommand(
   try {
     valid = edVerify(
       null,
-      Buffer.from(canonicalJson(signedForm)),
+      Buffer.from(canonicalJson(envelope)),
       key,
       Buffer.from(signature, "base64"),
     );
@@ -698,7 +701,10 @@ export function verifyCommand(
     return { ok: false, reason: "issued in the future", authenticId };
   }
   if (expires < now.getTime()) return { ok: false, reason: "expired", authenticId };
-  const payload = CommandPayloads[envelope.kind].safeParse(envelope.payload);
+  // A command signed before v0.1.1 is read under the public names (core/names.ts).
+  const payload = CommandPayloads[envelope.kind].safeParse(
+    currentCommand(envelope.kind, envelope.payload),
+  );
   if (!payload.success) {
     return {
       ok: false,
@@ -707,38 +713,6 @@ export function verifyCommand(
     };
   }
   return { ok: true, envelope, payload: payload.data };
-}
-
-const LEGACY_KINDS: Record<string, string> = {
-  pause_instance: "pause_run",
-  resume_instance: "resume_run",
-};
-const LEGACY_KEYS: Record<string, string> = {
-  instance: "run",
-  source_instance: "source_run",
-  source_unit: "source_rig",
-};
-
-/** An envelope from before the rename: as signed, and read under the new names. */
-function legacyEnvelope(input: unknown): { signed: unknown; normalized: unknown } | undefined {
-  const cmd = input as { envelope?: Record<string, unknown>; signature?: unknown } | undefined;
-  const env = cmd?.envelope;
-  if (!env || typeof env !== "object" || "rig" in env || !("unit" in env)) return undefined;
-  const { unit, kind, payload, ...rest } = env;
-  const p =
-    payload && typeof payload === "object" && !Array.isArray(payload)
-      ? Object.fromEntries(
-          Object.entries(payload as Record<string, unknown>).map(([k, v]) => [
-            LEGACY_KEYS[k] ?? k,
-            v,
-          ]),
-        )
-      : payload;
-  const k = typeof kind === "string" ? (LEGACY_KINDS[kind] ?? kind) : kind;
-  return {
-    signed: env,
-    normalized: { ...cmd, envelope: { ...rest, rig: unit, kind: k, payload: p } },
-  };
 }
 
 /** Signs any JSON value (canonical form) with an Ed25519 key. Returns base64. */

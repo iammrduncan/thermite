@@ -21,7 +21,17 @@ export interface CampaignSources {
    * copy's runs take them as they are, as Start a run assigns such a campaign again.
    */
   assignment?: Record<string, unknown> | undefined;
+  /**
+   * Where its runs' work goes in git (goal 185): branches of the project's repository, or of a
+   * separate results repository (`git`), pushed with the Git access `access`. None: control only.
+   */
+  results?: CampaignResults | undefined;
 }
+
+/** Where a campaign's runs' work goes in git (goal 185). */
+export type CampaignResults =
+  | { to: "project"; access: string }
+  | { to: "repository"; git: string; access: string };
 
 /**
  * Where a copied campaign came from (goal 069): the campaign, and the version copied, or the
@@ -71,7 +81,8 @@ export class CampaignVersions extends StorePart {
 
   /**
    * Stores a campaign version, approved by whoever created it, with where its runs fetch from
-   * and, for a copy, where it was copied from.
+   * and, for a copy, where it was copied from. The campaign's collection in the knowledge base is
+   * made with its first version.
    */
   put(c: {
     campaign: string;
@@ -98,6 +109,7 @@ export class CampaignVersions extends StorePart {
         c.by,
         c.copiedFrom ? canonicalJson(c.copiedFrom) : null,
       );
+    this.store.kb().makeCollection(c.campaign);
     this.store.auditLog.add(c.by, "campaign_version_created", {
       campaign: c.campaign,
       version: c.version,

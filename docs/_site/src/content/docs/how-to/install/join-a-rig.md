@@ -40,7 +40,7 @@ podman --version                                  # 4.4 or later
 systemctl --version | head -n 1                   # systemd is there
 loginctl show-user "$(id -un)" -p Linger          # Linger=yes (not needed as root)
 nvidia-ctk cdi list                               # GPUs only: nvidia.com/gpu=0, and one line for each GPU
-curl -fsS https://control.example.com/v1/health   # {"ok":true,"loops":{…},"bus":"connected"}
+curl -fsS https://control.example.com/v1/health   # {"ok":true,"bus":"connected","degraded":false}
 nc -zv control.example.com 4222                   # the message bus's port answers
 ```
 
@@ -87,7 +87,7 @@ Copy the command and run it within the hour. On a machine, you can first `podman
 
   Then it writes the rig's files and services, pulls the images, starts the rig and prints `started`. It sets the rig up the same way control does over SSH, with the message bus's address and the certificate of control's authority for the bus among the files; [What control writes on the machine](rig-on-a-machine.md#what-control-writes-on-the-machine) lists them.
 
-- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS and addresses outside the private ranges, and only its supervisor reaches the harness. The supervisor's deployment carries the message bus's address and the certificate of control's authority in its environment.
+- **In a namespace**, where `kubectl` reaches the cluster, with your own rights. `kubectl` lists the objects it creates: the same as control applies on a cluster, with the same network rules: the harness reaches only DNS, addresses outside the private, shared and link-local ranges, and the addresses in **Settings › Addresses rigs may reach** as the list is when the command runs, and only its supervisor reaches the harness. The supervisor's deployment carries the message bus's address and the certificate of control's authority in its environment.
 
   | You see | Do this |
   | --- | --- |
@@ -112,7 +112,7 @@ The rig's page shows **You run it yourself**, with its status:
 - "fetched its files; waiting for its first report";
 - "running", once it reports. The page then fills in: "rig-1 is live; it reported … ago."
 
-Once the command is used, control waits up to an hour for the first report, since pulling the images can take a while on a new machine. (This is a second hour: the first was how long the command worked.) After that the status says "no first report yet"; it still changes to running when the rig reports. If it doesn't report, look at the rig's logs: see [Where the logs are](../operate/troubleshoot.md#where-the-logs-are).
+The rig reports on the message bus, the only way it talks to control but for the registration of its keys and its results: a machine or pods that can't reach the bus's port never report, and 5 minutes after the rig registered its keys, its page shows it **Broken** ([A rig off the bus](../operate/message-bus.md#a-rig-off-the-bus)). Once the command is used, control waits up to an hour for the first report, since pulling the images can take a while on a new machine. (This is a second hour: the first was how long the command worked.) After that the status says "no first report yet"; it still changes to running when the rig reports. If it doesn't report, look at the rig's logs: see [Where the logs are](../operate/troubleshoot.md#where-the-logs-are).
 
 ## 4. Make a new one, or revoke it
 

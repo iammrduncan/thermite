@@ -5,7 +5,7 @@ status: IN_PROGRESS
 version: "0.1.1"
 depends_on: ["160"]
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-11-01
 ---
 
 # 172 · Build v0.1.1: every goal the audit planned, in one order, to verified
@@ -20,16 +20,16 @@ The goals it completes:
 
 | Goal | What |
 | --- | --- |
-| [125](125-code-to-the-conventions.goal) | The code to its conventions: the size check, the rules of shape, the guide's themes T1 to T15 |
+| [125](_completed/125-code-to-the-conventions.goal) | The code to its conventions: the size check, the rules of shape, the guide's themes T1 to T15 |
 | [161](_completed/161-control-bugs-from-the-audit.goal), [162](_completed/162-research-and-knowledge-bugs.goal), [163](_completed/163-harness-bugs-from-the-audit.goal), [164](_completed/164-settings-that-fail-loudly.goal), [165](_completed/165-results-kept-through-remove-and-reset.goal), [171](_completed/171-bugs-on-the-wire.goal) | The bugs the audit found, each with a regression test |
 | [166](_completed/166-agent-definitions.goal) | Agent definitions in code, the prompt each run gives each role, shown everywhere |
-| [168](168-message-bus.goal) | NATS JetStream as the event log, the delivery and the queues between control, the supervisors and the dashboard |
-| [169](169-agents-in-their-terminal.goal) | Every role that takes the owner's messages in its program's own terminal, session logs as events, the Pi view, usage windows |
-| [170](170-one-hierarchy.goal) | One hierarchy: run IDs unique across rigs, a run registry, run-scoped addresses |
-| [173](173-recovery-and-health.goal) | Recovery and health: a copy before every migration, backup and restore, a disk floor, drains that end, bounded logs, health that checks |
-| [174](174-invalidate-evidence.goal) | Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows |
-| [175](175-knowledge-base.goal) | The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot, writes as durable events on NATS |
-| [176](176-knowledge-explorer.goal) | The knowledge explorer: the owner reads, searches and sees what the knowledge base stores |
+| [168](_completed/168-message-bus.goal) | NATS JetStream as the event log, the delivery and the queues between control, the supervisors and the dashboard |
+| [169](_completed/169-agents-in-their-terminal.goal) | Every role that takes the owner's messages in its program's own terminal, session logs as events, the Pi view, usage windows |
+| [170](_completed/170-one-hierarchy.goal) | One hierarchy: run IDs unique across rigs, a run registry, run-scoped addresses |
+| [173](_completed/173-recovery-and-health.goal) | Recovery and health: a copy before every migration, backup and restore, a disk floor, drains that end, bounded logs, health that checks |
+| [174](_completed/174-invalidate-evidence.goal) | Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows |
+| [175](_completed/175-knowledge-base.goal) | The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot, writes as durable events on NATS |
+| [176](_completed/176-knowledge-explorer.goal) | The knowledge explorer: the owner reads, searches and sees what the knowledge base stores |
 
 The [code clean-up guide](../code-clean-up-guide.md) holds the map of the code, the themes, the rules of shape, what to leave and the review guide; its section 8 places goals 166 to 171 in its order.
 
@@ -79,16 +79,20 @@ The owner, 2026-10-27: "write a single .goal that outlines how to complete the a
 ## Done when
 
 - [x] Gate A is passed: the rules of shape are in CONVENTIONS.md, reviewed by the owner.
-- [ ] Goals 161, 162, 163, 164, 165 and 171 are verified.
-- [ ] Goals 166, 168, 169, 170, 173, 174, 175 and 176 are verified.
-- [ ] Goal 125 is verified: every theme of the guide is done or has a recorded reason.
-- [ ] The audit's private security items are each fixed or have a recorded reason, in `.internal/`.
+- [x] Goals 161, 162, 163, 164, 165 and 171 are verified.
+- [x] Goals 166, 168, 169, 170, 173, 174, 175 and 176 are verified.
+- [x] Goal 125 is verified: every theme of the guide is done or has a recorded reason.
+- [x] The audit's private security items are each fixed or have a recorded reason, in `.internal/`.
 - [ ] The full checks, the docs build and check, and every acceptance check the changed parts need pass on the last commit, and CI is green.
-- [ ] Every page describes what the code does, and CREDITS.md lists every new dependency.
+- [x] Every page describes what the code does, and CREDITS.md lists every new dependency.
 
 ## Decisions
 
 - 2026-10-27, owner: one goal to launch and finish all the v0.1.1 work the audit planned.
+- 2026-10-30 03:51 UTC, owner, in step 10: control keeps a list of addresses and ports that cluster rigs' harnesses may reach beside the internet ("Allow control to define a list of addresses/ports that rigs can access"); control writes it into each rig's network rules and accepts a pre-made slot whose rules open exactly listed ones. The other answers of step 10 are recorded privately, apart from those that shape the product: bus only (goal [168](_completed/168-message-bus.goal)) and the knowledge base's orphan files (goal [175](_completed/175-knowledge-base.goal)).
+- 2026-11-01 18:33 UTC, owner: v0.1.1 is handed for testing once goal 125's renames are done and their acceptance checks pass; goal 125's sweeps move to goal [178](178-clean-up-continued.goal) for v0.1.2.
+- 2026-11-01 23:01 UTC, owner: CI's full run on v0.1.1, with the first run of `tag-acceptance`, waits until the owner has tested v0.1.1 and worked with it ("lets just move on and do that after we have tested things"); the lab builds its images from the v0.1.1 branch for that testing, and the release workflow first runs at the v0.1.1 tag. The box for CI stays open until then.
+- 2026-11-03 00:51 UTC, owner: no acceptance check of an upgrade from v0.1.0 ("We don't need to focus on upgrade from v0.1.0 to v0.1.1 cause v0.1.1 is breaking change"). This drops the check owed since 2026-11-02 00:40 UTC; the unit test of a store v0.1.0 ran stays.
 
 ## Open questions
 
@@ -126,6 +130,15 @@ The owner, 2026-10-27: "write a single .goal that outlines how to complete the a
 - 2026-10-28 20:00 UTC: Step 7's folder moves are done (T9): each file beside its folder moved in as its `index.ts`; control's, the dashboard's, the harness's and the scripts' groups are folders; the contract words are in `core` and the shared agent runtimes in `src/agents/` (the guide's questions 1, 2 and 4); every folder that is a module has an `index.ts` and is imported through it, which the import check holds; the tests mirror `src/` again; import exceptions went from 56 to 2, with their reason. Goal 170's run-scoped addresses are built with them: a run's pages under its campaign, `/v1/runs/<run>`, MCP's run tools by run with `get_attempt`, and a run's view from control's run registry, so runs of a retired rig or from before a full reset are under the campaign's Earlier runs. The acceptance checks of step 6's end and step 7's first rounds passed on d023f95f; those of the later rounds run now.
 - 2026-10-28 21:37 UTC: Step 7 is pushed: every acceptance check passed on a0469130 (fifteen) and on 737a76ad (ten: the run addresses). Step 8 starts with two parts built side by side and committed together, since they share files: goal 168's step 2 (the live lines on the bus's `LIVE` stream and the dashboard's Live pushed by server-sent events, the live polls gone, the bus's state in REST, MCP and `/metrics`) and goal 166's record of every prompt and its surfaces. Next in step 8: goal 168's steps 3 (the config bucket; the knowledge base's writes and searches go with goal 175 in step 9), 4 and 5, goal 166's model slots for the synthesizer and the final writer, and goal 169.
 - 2026-10-29 05:05 UTC: Goal 166 is verified and moved to `_completed/` (the agents, Claude Code, Codex and steering acceptance on a502148e; the full suite on be9d9662). Goal 168's step 4 goes on: 4.1 to 4.3 are pushed (the readers moved, the `EVENTS` contract and tools, control's copy of its events into the stream with the move at start), each with its touched acceptance checks passed; the NATS service has a memory limit with `GOMEMLIMIT`. From now on each commit gets the fast checks and its touched tests, is pushed, and its touched acceptance checks run behind it (the owner, 2026-10-29); the full set runs at step 4.5 and at the end.
+- 2026-10-29 19:49 UTC: Steps 8 and 9 go on: goal 168's step 4 is built (control's one copy of the events is the `EVENTS` stream; the reports stream an inbox; commands keep their table) and its checks passed; goal 169's terminal is the default for the workers; goal 173's items are built, backup and restore checked under compose; goal 174 is built; goal 175's steps 1 to 4 are built, and its spike runs with the owner's yes at gate B. Step 10 is under way: the private review is in `.internal/`, the owner decided the first questions, and a first group of fixes is in.
+- 2026-10-30 01:23 UTC: Steps 8 to 10 go on. Goal 169's console (`terminal_input`) and live view are pushed (d9fe27e3) with step 10's third group of fixes; the cluster acceptance passes again (cdc78d1c: the cluster's prepare step); goal 175's agent-grade words search is pushed (c1e6c471) and its needle test's first half measured. The owner decided four more of step 10's questions (recorded privately). The touched acceptance checks run on c1e6c471.
+- 2026-10-30 03:49 UTC: Step 10 goes on. Every acceptance check the console, the live view and the third group of fixes touch passes (smoke under podman compose and podman-compose, quick start, campaign, machines, rig deploy, control, agents, Claude Code, real Claude Code, Codex, terminal, steering, judge, multi-GPU, rig image, RunPod, cluster), after three fixes they found: the cluster's prepare step (cdc78d1c), the broker's own group kept unchanged so the isolation check reads its environment (87b9537f), and the checks' reading of notes and of the fake program's screen. The owner's decisions of 01:17 and 02:39 UTC are built (cc1b41fa: Resume now, spend from the proxy, grants the owner's, HTTPS for rigs; f1f00a63: closed ranges for cluster harnesses, repeated refusals merged in the audit, the advisors' run-as helper's core), each with its checks passed; the advisors' own user is being wired in. Four more questions wait for the owner.
+- 2026-10-30 06:23 UTC: Step 10 goes on. Built and passing the acceptance checks they touch: the advisors' programs as users of their own (d72405f3, with 8f1cbd06's fixes: empty arguments, the supervisor's probe of its own secrets' folders), and the owner's answers of 03:51 and 04:11 with control's small items (c6ffcb17: rigs' reachable addresses, orphan files kept by default, bus keys, one network per compose rig, the slot's warning, the kubeconfig's acceptance, named body limits, refusals in the audit, faults in words, the join route, Live's masking, MCP servers' sign-in calls, kit archives read in memory, health without a token); on c6ffcb17 the Claude Code, Codex, rig image, compose smoke (both podman tools), bus, control, campaign, cluster, steering and quick-start checks pass. Built, not yet committed: 17 items in the harness, supervisor and images, and RunPod's leaf node (goal 168); the local stack's rigs enrolled at start, by the owner's answer on retiring the rig-tokens file.
+- 2026-10-30 21:05 UTC: Steps 8 to 10 go on. Built and passing their acceptance checks: bus only with RunPod's leaf node (goal 168), the advisors' own users, the owner's step 10 answers of 03:51 to 18:24 UTC (reachable addresses, orphan files, bus keys, compose networks, the slot's warning, kubeconfigs, the advisors file's outside base, hidden-test words, legacy events, the release's checksum, the rig-tokens file retired with the local stack's enrollment), control's and the harness's small items, and RunPod's health watch. Every private security item is fixed or kept with the owner's reason (recorded privately); S10-71 is goal 177's, in v0.1.2. Goals 170, 173 and 174 are verified but for their final checks. Goal 169's usage windows pass the terminal, Claude Code and real Claude Code checks; the Codex check's usage-window scene is being fixed. The knowledge explorer's mockup (goal 176) waits for the owner.
+- 2026-11-01 13:19 UTC: goals 168, 169, 170, 173, 174 and 176 are verified and in `_completed/`. A full acceptance pass on 13eb14a8, with the fixes of 3e2ec85b, passed every check that runs here: bus, leaf, control, agents, Claude Code, Codex, steering, terminal, smoke (Docker and Podman), backup, new campaign, multi-GPU, rig image, RunPod, real Claude Code, machines, cluster and rig deploy; it found that agents in OpenCode reached Thermite's MCP tools only through OpenCode's Code Mode (fixed). Left: goal 175's needle test and its decision on search by meaning, goal 125's remaining themes, the first CI run of `tag-acceptance` (a maintainer's approval), and the end's full checks.
+- 2026-11-01 21:44 UTC: every goal of the build is verified, goal 125 last (c4586c61). On c4586c61 the full `npm run check` and the docs build and check passed, and every acceptance check that runs here passed (19 on a16bdd67, agents on c4586c61). Left: CI's full run on the last commit, with the first run of `tag-acceptance`, both waiting for a maintainer's approval; then the release candidate for the owner's testing.
+- 2026-11-02 00:40 UTC: the lab's roll found that a v0.1.1 control stopped at its first start on a store v0.1.0 ran: such a store held back every migration after the events table's drop until the move to the bus, and control's start read one of their tables (its log level) before the move. Fixed in 6802210: only the drop waits, with a test that opens a store v0.1.0 ran (`tests/control/store/upgrade-from-v010.test.ts`). Owed before the v0.1.1 tag: an acceptance check that starts this version's control, in compose, on a store v0.1.0 ran with events in its table, through the move.
+- 2026-11-03 01:58 UTC: on the owner's word ("go ahead and cut a v0.1.1 release on github. I'll test installing it on a custom VM"), v0.1.1 is cut from the branch: package.json and the docs site's at 0.1.1, the changelog's section dated with a summary and the note to install fresh, the install and tutorial pages, the README and the public roadmap naming v0.1.1. Before it, on a test machine at 514eb817: the full `npm run check` and the docs build and check passed; the backup, compose and Codex acceptance checks were running. The images pinned by digest were checked against their registries: all present, Node's tag built again upstream, its pin kept as tested. The per-feature acceptance checks (terminal, Claude Code, steering, judge, control, campaign) and CI's full run on the tag are still to run; this goal's last box stays open until they pass.
 
 ---
 

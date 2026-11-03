@@ -18,8 +18,8 @@ export function mcpRefusal(store: ControlStore, uses: readonly McpUse[] | undefi
   if (!missing.length) return "";
   const list = missing.join(", ");
   return missing.length === 1
-    ? `The kit names the MCP server ${list}, and Settings has no server of that name. Add an MCP server named ${list} in Settings › Providers, or take it out of the kit. Then start the campaign again.`
-    : `The kit names the MCP servers ${list}, and Settings has none of these names. Add them in Settings › Providers, or take them out of the kit. Then start the campaign again.`;
+    ? `The kit names the MCP server ${list}, and Settings has no server of that name. Add an MCP server named ${list} in Settings › MCP servers, or take it out of the kit. Then start the campaign again.`
+    : `The kit names the MCP servers ${list}, and Settings has none of these names. Add them in Settings › MCP servers, or take them out of the kit. Then start the campaign again.`;
 }
 
 /**

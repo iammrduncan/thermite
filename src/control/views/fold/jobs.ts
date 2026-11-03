@@ -50,6 +50,11 @@ export const JOBS: Handlers = {
   crash_infra: blockedOrAgain,
   job_lease_expired: blockedOrAgain,
   job_unblocked: blockedOrAgain,
+  // Cancelled for good (goal 174): its attempt's evidence was withdrawn.
+  job_cancelled(f, e) {
+    const j = f.jobs.get(String(e.subject));
+    if (j) Object.assign(j, { finished_at: e.at, state: "cancelled" });
+  },
   job_finished(f, e, b) {
     const j = f.jobs.get(String(e.subject));
     if (!j) return;

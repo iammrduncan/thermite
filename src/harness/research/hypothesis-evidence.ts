@@ -123,7 +123,7 @@ export function hypothesisTask(
         q === null
           ? `${GAP_LINE}${gap}`.slice(0, EXPERIMENT_DETAILS)
           : taskDetails(q, questions[q] ?? "", gap),
-      family: "primary",
+      direction: "primary",
       question: q,
       why: `the review panel gives hypothesis ${h.id} a verdict, and no claim for or against it stands yet`,
       by,

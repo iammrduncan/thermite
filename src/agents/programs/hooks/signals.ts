@@ -30,8 +30,13 @@ import {
  * Usage is in no hook: the program's output and session log give it.
  */
 
-/** Hooks left out on purpose: they say nothing the events carry. */
+/**
+ * Hooks left out on purpose: they say nothing the events carry. Claude Code's status line
+ * (`StatusLine`, goal 183) carries a subscription's usage windows, which the terminal's run reads
+ * from the signals file itself.
+ */
 const IGNORED = new Set([
+  "StatusLine",
   "Notification",
   "PermissionRequest",
   "PreCompact",

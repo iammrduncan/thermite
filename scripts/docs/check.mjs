@@ -9,6 +9,7 @@
 //   - no page names an agent by an old name (goal 074): "teacher pair", "combiner", "panelist",
 //     "the supervisor's advisors", or "panel" alone for the review panel, outside code;
 //   - the Credits page is CREDITS.md, as `npm run docs:credits` writes it;
+//   - the Changelog page is CHANGELOG.md, as `npm run docs:changelog` writes it;
 //   - the Agent roles page is src/agents/roles/, as `npm run docs:agents` writes it;
 //   - after `npm run docs:build`: llms.txt lists every page, llms-full.txt holds every page, and
 //     every page has its Markdown copy.
@@ -18,6 +19,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { agentsPage, agentsPageFile } from "./agents-page.mjs";
+import { changelogFile, changelogPage, changelogPageFile } from "./changelog-page.mjs";
 import { creditsFile, creditsPage, creditsPageFile } from "./credits-page.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -87,7 +89,8 @@ const pages = walk(docsRoot, /\.mdx?$/)
       .split(sep)
       .join("/")
       .replace(/\.mdx?$/, "");
-    return { file, slug, text: readFileSync(file, "utf8") };
+    // The Changelog page is history: it names what is gone, by the names it had.
+    return { file, slug, text: readFileSync(file, "utf8"), history: file === changelogPageFile };
   })
   .filter((page) => page.slug !== "404");
 
@@ -151,7 +154,7 @@ function oldNames(body) {
   return found;
 }
 for (const page of pages) {
-  if (!page.body) continue;
+  if (!page.body || page.history) continue;
   for (const found of oldNames(`${page.title ?? ""}\n${page.description ?? ""}\n${page.body}`))
     problem(page.file, found);
 }
@@ -287,6 +290,8 @@ function checkCommandLine(page, text) {
 const codeFiles = walk(join(root, "src"), /\.ts$/);
 const otherFiles = [
   ...walk(join(root, "containers"), /.*/),
+  // The stand-ins the acceptance scripts start inside images read settings of their own.
+  ...walk(join(root, "tests/stand-ins"), /.*/),
   ...walk(join(root, "scripts"), /\.(mjs|ts|sh)$/),
   ...["compose.yaml", "compose.lifecycle.yaml"].map((f) => join(root, f)),
 ].filter((f) => existsSync(f) && !f.endsWith("docs-check.mjs"));
@@ -313,6 +318,14 @@ const internalSettings = new Map([
   ["THERMITE_PROPOSER_TOKEN", "the broker passes the token's value to the harness's controller"],
   ["THERMITE_MODEL_API_KEY", "the broker passes the key's value to the harness's controller"],
   ["THERMITE_BROKER_SOCKET", "the broker tells the controller where its socket is"],
+  [
+    "THERMITE_ADVISOR_SOCKET",
+    "the supervisor's entry, or the broker in one container, tells the supervisor where its advisors' runner is",
+  ],
+  [
+    "THERMITE_ADVISOR_RUNS_DIR",
+    "the supervisor's entry, or the broker in one container, tells the supervisor where to make each advisor's folder",
+  ],
   ["THERMITE_HARNESS_URL", "the controller tells workers where the harness API is"],
   ["THERMITE_TRIAL_AUTH", "the controller gives a trial its token"],
   ["THERMITE_PROXY_AUTH", "the controller gives a trial its model proxy token"],
@@ -351,7 +364,7 @@ function checkSettings(page, texts) {
 const schemas = {
   contract: (await import("../../src/core/contract.ts")).ContractSchema,
   kit: (await import("../../src/core/kit.ts")).KitSchema,
-  advisors: (await import("../../src/supervisor/advisors/index.ts")).AdvisorsConfig,
+  advisors: (await import("../../src/supervisor/advisors/index.ts")).AdvisorsFile,
 };
 function exampleKind(title) {
   if (/\(part\)/i.test(title)) return null;
@@ -362,6 +375,7 @@ function exampleKind(title) {
 }
 
 for (const page of pages) {
+  if (page.history) continue;
   const body = page.body ?? "";
   const blocks = codeBlocks(body);
   const inline = inlineCode(body);
@@ -456,6 +470,27 @@ else {
       have === null
         ? "missing: run `npm run docs:credits` to write it from CREDITS.md"
         : "does not match CREDITS.md: run `npm run docs:credits`, and change CREDITS.md, not the page",
+    );
+}
+
+// --- The Changelog page ----------------------------------------------------------------------
+
+// CHANGELOG.md is the one copy: the site's page is it below its heading (scripts/docs/changelog-page.mjs).
+if (!existsSync(changelogFile)) problems.push("CHANGELOG.md: missing");
+else {
+  let want;
+  try {
+    want = changelogPage();
+  } catch (err) {
+    problem(changelogFile, err instanceof Error ? err.message : String(err));
+  }
+  const have = existsSync(changelogPageFile) ? readFileSync(changelogPageFile, "utf8") : null;
+  if (want !== undefined && have !== want)
+    problem(
+      changelogPageFile,
+      have === null
+        ? "missing: run `npm run docs:changelog` to write it from CHANGELOG.md"
+        : "does not match CHANGELOG.md: run `npm run docs:changelog`, and change CHANGELOG.md, not the page",
     );
 }
 

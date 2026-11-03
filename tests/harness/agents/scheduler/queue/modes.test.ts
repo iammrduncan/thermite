@@ -97,7 +97,7 @@ describe("research runs use the queue", () => {
     );
     // A task of the owner's waits: before, it shifted the plan one question on, past question 0.
     await env.service.applyCommand(
-      env.sign("queue_add", { run: "r-1", title: "Read the vendor's notes", family: "primary" }),
+      env.sign("queue_add", { run: "r-1", title: "Read the vendor's notes", direction: "primary" }),
     );
     const scheduler = new Scheduler({
       service: env.service,
@@ -111,6 +111,7 @@ describe("research runs use the queue", () => {
       },
       owner: "research-test",
       research: new Research(env.service.ledger, env.service.paths.stateDir, {
+        outboxDir: env.service.paths.outboxDir,
         allowPrivate: true,
       }),
       maxConcurrent: 2,
@@ -155,7 +156,7 @@ describe("research runs use the queue", () => {
       env.sign("queue_add", {
         run: "r-1",
         title: "Check the vendor's own benchmark",
-        family: "primary",
+        direction: "primary",
         details: "Question 0",
       }),
     );
@@ -169,6 +170,7 @@ describe("research runs use the queue", () => {
       false,
     );
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const briefs: string[] = [];
@@ -204,7 +206,7 @@ describe("research runs use the queue", () => {
     assert.equal(tasks.length, 2, "the plan added one task: the owner's was there");
     const planned = tasks.find((x) => x.added_by === "planner");
     assert.ok(planned);
-    assert.ok(["explore", "primary", "contradict", "consolidate"].includes(planned.family));
+    assert.ok(["explore", "primary", "contradict", "consolidate"].includes(planned.direction));
     // Its details name the gap it closes (goal 117), then its question.
     assert.match(
       planned.details,

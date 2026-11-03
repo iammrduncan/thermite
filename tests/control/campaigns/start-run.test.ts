@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { ADMIN, controlOnly, mcpClient, signIn } from "../../helpers/control-stack.ts";
-import { ingestReport } from "../../helpers/control-store.ts";
+import { enrollRigs, ingestReport } from "../../helpers/control-store.ts";
 
 /**
  * Start a run's twins (goal 029): REST's POST /v1/campaigns/<name>/runs and MCP's start_run take
@@ -70,7 +70,7 @@ async function stack() {
     options: { staleAfterMs: 600_000 },
   });
   // The assignment that started gs-3, before the rig reported it.
-  store.enrollments.setConfiguredRigs(["rig-a"]);
+  enrollRigs(store, ["rig-a"]);
   issueCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",
@@ -92,7 +92,7 @@ async function stack() {
         id: "x-1",
         title: "Load int4 weights with vector loads",
         details: "128-bit loads of the packed weights",
-        family: "memory-layout",
+        direction: "memory-layout",
         by: "teacher",
       },
     ],
@@ -229,6 +229,8 @@ describe("Start a run over REST (goal 029)", () => {
       notes: [
         "gs-3 is at work on rig-a, and pauses when this run starts (a rig runs one run at a time).",
       ],
+      // What its agents search, fixed as it starts: the whole collection and every grant.
+      knowledge: { collection: "continue", granted: ["survey-study"] },
     });
     assert.deepEqual([panel.issued_by, api.issued_by], ["owner:ui", "owner:api"]);
     // The same assignment, but for the run's name.
@@ -272,6 +274,40 @@ describe("Start a run over REST (goal 029)", () => {
     assert.equal(s.assigned().at(-1)?.payload.queue, undefined);
     // Nothing asked: no ask_owner is sent (hands-off by default).
     assert.equal(s.assigned().at(-1)?.payload.ask_owner, undefined);
+  });
+
+  test("what its agents search, fixed as it starts: continue or fresh, and the granted collections it includes; the panel too, and the run's page shows it", async () => {
+    const s = await stack();
+    // Over REST: fresh, with no granted collection.
+    const fresh = await s.rest("gemv-speed", { rig: "rig-a", collection: "fresh", granted: [] });
+    assert.equal(fresh.status, 201);
+    const out = await json<{ run: string; knowledge: unknown }>(fresh);
+    assert.deepEqual(out.knowledge, { collection: "fresh", granted: [] });
+    assert.deepEqual(s.store.kb().scope("gemv-speed", out.run), { fresh: true, granted: [] });
+    // A collection the campaign is not granted is refused, and nothing is sent.
+    const before = s.assigned().length;
+    const refused = await s.rest("gemv-speed", { rig: "rig-a", granted: ["secret-study"] });
+    assert.equal(refused.status, 400);
+    assert.match(
+      (await json<{ error: string }>(refused)).error,
+      /gemv-speed may not read secret-study: grant it under Reads on the campaign's collection in Knowledge, or leave it out\./,
+    );
+    assert.equal(s.assigned().length, before);
+    // On the panel: Start fresh, with the granted collection left unticked.
+    const page = await s.form("gemv-speed", [
+      ["rig", "rig-a"],
+      ["agents", "on"],
+      ["collection", "fresh"],
+      ["granted_shown", "1"],
+    ]);
+    assert.equal(page.status, 303);
+    const run = String(page.headers.get("location")).split("/").pop()?.split("?")[0] ?? "";
+    assert.deepEqual(s.store.kb().scope("gemv-speed", run), { fresh: true, granted: [] });
+    // Left as it is: the whole collection, and every collection granted now.
+    const plain = await json<{ run: string; knowledge: unknown }>(
+      await s.rest("gemv-speed", { rig: "rig-a" }),
+    );
+    assert.deepEqual(plain.knowledge, { collection: "continue", granted: ["survey-study"] });
   });
 
   test("refusals in words, as Start a run gives them; nothing is sent", async () => {
@@ -371,7 +407,7 @@ describe("Start a run over REST (goal 029)", () => {
     assert.equal(given.status, 202);
     assert.deepEqual(await json(given), {
       started: false,
-      said: "rig-b takes glm-5.3-flash-free within a minute; Settings › Providers shows it taking the model until then. Then start the run again.",
+      said: "rig-b takes glm-5.3-flash-free within a minute; Settings › Rigs' models shows it taking the model until then. Then start the run again.",
     });
     assert.deepEqual(s.store.agentModels.byRig()["rig-b"], {
       provider: "zen",

@@ -174,6 +174,7 @@ describe("a run's teachers read what the run found (goal 098)", () => {
     const pages = await servePages();
     t.after(() => pages.close());
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const a = (await research.fetch("js-1", "lane-1", `${pages.base}/a.html`)) as {

@@ -51,11 +51,11 @@ int main(int argc, char **argv) {
   float *b = malloc(sizeof(float) * n * n);
   float *c = malloc(sizeof(float) * n * n);
   if (!a || !b || !c) return 3;
-  for (int i = 0; i < n * n; i++) a[i] = lcg();
-  for (int i = 0; i < n * n; i++) b[i] = lcg();
-  /* Every rep changes one input element, so no rep's result can be reused for another. */
+  /* Every rep has inputs of its own, all of A and B new, so no rep's work can be reused for
+   * another. */
   for (long r = 0; r < reps; r++) {
-    a[(r * 7919) % ((long)n * n)] = lcg();
+    for (int i = 0; i < n * n; i++) a[i] = lcg();
+    for (int i = 0; i < n * n; i++) b[i] = lcg();
     matmul(a, b, c, n);
   }
 

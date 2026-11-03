@@ -5,7 +5,8 @@
  *
  * Pods move as RunPod's do, one step per read of the pod: a new pod is PROVISIONING and a started
  * one STARTING until control reads it, then RUNNING; a stopped pod is EXITED with no GPU; a
- * terminated pod is gone. A running pod costs its GPU's price times its GPUs an hour.
+ * terminated pod is gone. A running pod costs its GPU's price times its GPUs an hour, and its
+ * record (GET /v2/pods/{id}) gives each of its TCP ports a public address and port.
  *
  * Hooks put something real behind a pod: the RunPod acceptance (scripts/acceptance/runpod.mjs)
  * starts a container of the rig image for each pod and points the pod's proxy address at it.
@@ -88,6 +89,11 @@ export interface FakePod {
   env: Record<string, string>;
   /** Where its proxy addresses lead (a hook sets it); none: the test's `proxy`, or a 404. */
   upstream?: string | undefined;
+  /**
+   * The public address and port of each TCP port it was made with, while it runs (`runtime.ports`
+   * in its record); a hook or the test sets them. None given: a made-up address for each.
+   */
+  tcp?: Record<number, { ip: string; public: number }> | undefined;
   /** Its log, oldest first (FakeRunpod.log adds to it). */
   logs: FakeLogLine[];
 }
@@ -200,12 +206,25 @@ export function fakeRunpod(o: FakeRunpodOptions = {}): FakeRunpod {
     const g = gpus.find((x) => x.id === p.gpu);
     return (p.cloud === "COMMUNITY" ? g?.price.community : g?.price.secure) ?? 0;
   };
-  const podJson = (p: FakePod) => ({
+  /** Its TCP ports' public addresses now, as RunPod's record of one pod has them while it runs. */
+  const runtimeOf = (p: FakePod) => {
+    if (p.status !== "RUNNING") return null;
+    const tcp = ((p.body.ports ?? []) as string[]).filter((x) => x.endsWith("/tcp"));
+    const ports = tcp.map((x, i) => {
+      const inside = Number(x.split("/")[0]);
+      const at = p.tcp?.[inside] ?? { ip: "203.0.113.10", public: 40000 + i };
+      return { private: inside, public: at.public, type: "tcp", ip: at.ip };
+    });
+    return { ports };
+  };
+  /** A pod as RunPod answers it: one pod's record has its runtime; the list of pods has none. */
+  const podJson = (p: FakePod, one = false) => ({
     id: p.id,
     status: p.status,
     cost: p.status === "RUNNING" ? perGpu(p) * p.gpus : 0,
     gpu: { id: p.gpu, count: p.gpus },
     dataCenterId: p.datacenter,
+    runtime: one ? runtimeOf(p) : null,
   });
 
   const viaProxy = async (url: URL, init?: RequestInit): Promise<Response> => {
@@ -255,7 +274,7 @@ export function fakeRunpod(o: FakeRunpodOptions = {}): FakeRunpod {
       return json({ records: [], metadata: { totals: { totalAmount: 0 } } });
     }
     if (path === "/v2/pods" && method === "GET")
-      return json({ pods: [...pods.values()].map(podJson) });
+      return json({ pods: [...pods.values()].map((p) => podJson(p)) });
     if (path === "/v2/pods" && method === "POST") {
       const b = body as {
         gpu: { id: string; count: number };
@@ -329,7 +348,7 @@ export function fakeRunpod(o: FakeRunpodOptions = {}): FakeRunpod {
     }
     // Each read moves a pod that is being made or started on, as RunPod does in its own time.
     if (p.status === "PROVISIONING" || p.status === "STARTING") p.status = "RUNNING";
-    return json(podJson(p));
+    return json(podJson(p, true));
   }) as typeof fetch;
 
   const actions = () =>

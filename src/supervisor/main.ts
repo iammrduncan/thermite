@@ -11,70 +11,84 @@ import { basename, dirname, join } from "node:path";
 import type { z } from "zod";
 import { McpGateway } from "../agents/mcp/index.ts";
 import { modelStallMs } from "../agents/model/index.ts";
+import { mergeUsage, type PlanWindows } from "../agents/programs/index.ts";
 import { controlClient } from "../common/api/control.ts";
 import { harnessClient } from "../common/api/harness.ts";
 import { buildInfo } from "../common/build-info.ts";
-import { busTrust, busUrl, natsBus } from "../common/bus.ts";
+import { BUS_URL_SETTING, busTrust, busUrl, natsBus } from "../common/bus/index.ts";
 import { GIB } from "../common/disk.ts";
-import { log, optionalSecretFromFile, requireEnv, secretFromFile } from "../common/env.ts";
+import { log, optionalSecretFromFile, redact, requireEnv, secretFromFile } from "../common/env.ts";
 import { Loops } from "../common/health.ts";
 import { startLogging } from "../common/log.ts";
 import { readNumber } from "../common/settings.ts";
+import { ResourceUse } from "../common/usage.ts";
 import {
   FIGURE_EXPORTS_MAX,
   FIGURE_TEXT_MAX,
-  FIGURES,
-  REPORTS,
   type SupervisorFigures,
 } from "../core/api/control/rigs.ts";
-import { EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/supervisor.ts";
-import { untoldKinds } from "../core/kb.ts";
+import { COMMAND_CHECK, EXPORTS_DONE, MCP_EVENTS } from "../core/api/harness/supervisor.ts";
+import { RIG_SPACE_ASK_MS } from "../core/link/asks.ts";
 import { rigInboxPrefix } from "../core/link/users.ts";
 import type { McpConnection, McpUnavailable, McpUse } from "../core/mcp.ts";
+import { SUPERVISOR_INBOX_DIR } from "../core/paths.ts";
+import { advisorIsolation } from "./advisor-runs/index.ts";
 import {
   type AdviseState,
-  AdvisorsConfig,
   adviseOnce,
   advisorsFileReport,
   advisorsOf,
+  advisorTerminals,
   type ControlAdvisors,
   emptyAdviseState,
-  fetchControlAdvisors,
   harnessAdvisors,
   mergeAdvisors,
+  readAdvisorsFile,
+  relayAdvisorTerminals,
   teachersCalled,
 } from "./advisors/index.ts";
+import { ask } from "./ask.ts";
 import { type ChampionUpload, championsIn, uploadChampions } from "./champions.ts";
-import { applyConfig, ConfigCounts, followConfig, keepConfig, RigConfig } from "./config/index.ts";
+import {
+  applyConfig,
+  ConfigCounts,
+  followConfig,
+  gitAccessFrom,
+  keepConfig,
+  RigConfig,
+} from "./config/index.ts";
 import { type UploadState, uploadExportsOnce } from "./export-upload.ts";
 import { type ExportState, exportOnce } from "./git-export.ts";
 import { serveHealth } from "./health.ts";
-import { emptyKbSyncState, type KbSyncState, syncKnowledgeOnce } from "./kb-sync.ts";
+import { putKbFiles, relayKbAsks, removeHeldKbFiles } from "./kb/index.ts";
+import { startPodBus } from "./leaf.ts";
 import {
   LiveCounts,
   type LiveRelayState,
   publishLiveOnce,
-  relayLiveOnce,
+  relayScreens,
   supervisorLive,
 } from "./live/index.ts";
+import { onLogLevelTaken } from "./log-level.ts";
 import { ModelDownloads } from "./model-download.ts";
+import { registerKeys } from "./register.ts";
 import {
   BUS_KEY_FILE,
   busKey,
   busKeyFigure,
-  commandPollMs,
   followCommands,
   healCursor,
   oneAtATime,
   RelayError,
   type RelayState,
-  relayCommandsOnce,
   relayOnce,
   SEAL_KEY_FILE,
 } from "./relay/index.ts";
 import { dailyReport } from "./report.ts";
-import { SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
-import { stageCommand } from "./staging.ts";
+import { onRetentionTaken, sendSpace } from "./retention.ts";
+import { RunBranches } from "./run-branches.ts";
+import { controlTokenFrom, SUPERVISOR_NUMBERS, supervisorMs } from "./settings.ts";
+import { stageSigned } from "./staging.ts";
 import { waitForHarness } from "./startup.ts";
 import { startPullMode } from "./tunnel-pod.ts";
 
@@ -95,10 +109,12 @@ function notYetExported(outboxDir: string, state: ExportState): number {
 }
 
 /**
- * Supervisor entry point: the 60-second report and command relay loop (with content staging,
- * model downloads among it), exports (pushed to the results repository, or, without one, sent to
- * control), supervisor figures and a daily report to control, and, when advisors are configured,
- * the teachers, auditor and review panel in a loop of their own.
+ * Supervisor entry point: the rig's keys registered with control over HTTPS, then everything on
+ * the message bus: the 60-second report loop, commands as control issues them (with content
+ * staging, model downloads among it), the rig's config, live lines and screens, supervisor figures
+ * and a daily report; exports (pushed to the results repository, or, without one, sent to control
+ * over HTTPS), and, when advisors are configured, the teachers, auditor and review panel in a loop
+ * of their own.
  */
 async function main(): Promise<void> {
   const env = process.env;
@@ -110,47 +126,59 @@ async function main(): Promise<void> {
   const statePath = join(home, "relay-state.json");
   let state: RelayState = load(statePath, { cursor: 0 });
   const rig = requireEnv("THERMITE_RIG_ID");
-  // Its report, command and live loops, and its health route on them (goal 173).
-  const loops = new Loops();
-  serveHealth(env, rig, loops);
   const harnessUrl = requireEnv("HARNESS_URL").replace(/\/$/, "");
   const harnessToken = secretFromFile("THERMITE_HARNESS_TOKEN_FILE");
+  // Its report and live loops, and its health route on them (goal 173).
+  const loops = new Loops();
+  serveHealth(env, rig, loops, harnessToken);
   const harness = harnessClient({ url: harnessUrl, token: harnessToken });
   // Pull mode (a rig on RunPod): this rig never connects to control. Control connects to the
   // tunnel's port; the supervisor's calls go to the tunnel's local port and wait there for it.
   const pull = await startPullMode(env, rig, home);
+  // On RunPod the bus is the pod's own server, which control's server dials as a leaf node. A pod
+  // launched before the leaf node has none, and can't reach control.
+  const podBus = pull ? startPodBus(env, home) : undefined;
+  if (pull && !podBus)
+    throw new Error(
+      "this pod was launched with no leaf node on the message bus, and a rig reaches control only on the bus: terminate the rig and launch a new one",
+    );
   const controlUrl = pull?.controlUrl ?? env.CONTROL_URL?.replace(/\/$/, "");
-  const controlToken = pull?.controlToken ?? optionalSecretFromFile("THERMITE_CONTROL_TOKEN_FILE");
-  const control =
-    controlUrl && controlToken
-      ? controlClient({ url: controlUrl, token: controlToken, rig })
-      : undefined;
-  // The message bus (goal 168): with THERMITE_NATS_URL, reports go there instead of to control's
-  // ingest route, and commands and the rig's config come from there; a bad address stops the
-  // supervisor here. It signs in with the rig's own key, which control learns from the
-  // supervisor's figures with the seal key its config is sealed to, over TLS, trusting the server
-  // through control's authority (THERMITE_NATS_CA or THERMITE_NATS_CA_FILE).
-  const natsUrl = busUrl(env);
-  const trust = natsUrl ? busTrust(env) : undefined;
-  const key = natsUrl ? busKey(home) : undefined;
-  const bus =
-    natsUrl && key
-      ? natsBus(natsUrl, `supervisor ${rig}`, {
-          seed: key.seed,
-          inboxPrefix: rigInboxPrefix(rig),
-          trust,
-        })
-      : undefined;
-  if (natsUrl)
-    log("supervisor", "reports, commands, live lines and the rig's config go over the bus", {
-      bus: new URL(natsUrl).host,
-      trusts: trust ? ("caFile" in trust ? trust.caFile : "THERMITE_NATS_CA") : "the system's",
-    });
+  const controlToken = pull?.controlToken ?? controlTokenFrom(env, controlUrl);
+  if (!controlUrl || !controlToken)
+    throw new Error(
+      "CONTROL_URL or THERMITE_CONTROL_TOKEN_FILE is not set: a rig registers its keys on the message bus with control, at its address, with its token",
+    );
+  const control = controlClient({ url: controlUrl, token: controlToken, rig });
+  // The message bus (goal 168), the one way the rig and control talk, but for the registration of
+  // its keys and the large files, over HTTPS: reports, commands, the rig's config, live lines,
+  // screens, figures and the knowledge base. A rig that can't reach it doesn't work. It signs in
+  // with the rig's own key, which it registers with control at its start with the seal key its
+  // config is sealed to, over TLS, trusting the server through control's authority
+  // (THERMITE_NATS_CA or THERMITE_NATS_CA_FILE). On RunPod the bus is the pod's own server.
+  const natsUrl = podBus?.url ?? busUrl(env);
+  if (!natsUrl)
+    throw new Error(
+      `${BUS_URL_SETTING} is not set: a rig reaches control only on its message bus. Set it to the bus's address control gives the rigs it sets up, or set the rig up again from control`,
+    );
+  const trust = podBus?.trust ?? busTrust(env);
+  const key = busKey(home);
+  const bus = natsBus(natsUrl, `supervisor ${rig}`, {
+    seed: key.seed,
+    inboxPrefix: rigInboxPrefix(rig),
+    trust,
+    apiPrefix: podBus?.apiPrefix,
+  });
+  log("supervisor", "the rig talks to control on the message bus", {
+    bus: new URL(natsUrl).host,
+    trusts: trust ? ("caFile" in trust ? trust.caFile : "THERMITE_NATS_CA") : "the system's",
+  });
+  // Where the supervisor asks control: its rig's subjects on the bus.
+  const onBus = { rig, bus };
   // The live lines it published to the bus and dropped there, and the config updates it took
   // and refused, by subject, for its figures; and the rig's config as the bus gave it.
-  const liveCounts = bus ? new LiveCounts() : undefined;
-  const configCounts = bus ? new ConfigCounts() : undefined;
-  const known = bus ? new RigConfig() : undefined;
+  const liveCounts = new LiveCounts();
+  const configCounts = new ConfigCounts();
+  const known = new RigConfig();
   // A full reset keeps the tunnel's keys and enrollment, and the rig's keys on the bus: control's
   // trust in the rig stays.
   const keepOnWipe = new Set(
@@ -161,7 +189,9 @@ async function main(): Promise<void> {
   const remote = env.THERMITE_RESULTS_REMOTE || undefined;
   const sshKeyFile = env.THERMITE_RESULTS_KEY_FILE || undefined;
   const knownHostsFile = env.THERMITE_RESULTS_KNOWN_HOSTS || undefined;
-  const inboxDir = env.THERMITE_INBOX_DIR ?? "/inbox";
+  const inboxDir = env.THERMITE_INBOX_DIR ?? SUPERVISOR_INBOX_DIR;
+  // What an advisor user reaches, for the isolation check: at the start, and before each check.
+  const isolation = advisorIsolation({ env, home, inboxDir, harnessUrl, harnessToken });
   // The free space a model download leaves where it lands (goal 173): read now, so a bad value
   // stops the supervisor here.
   const floorBytes = readNumber(env, SUPERVISOR_NUMBERS.diskFloorGib) * GIB;
@@ -172,20 +202,25 @@ async function main(): Promise<void> {
     live: (text, run) => supervisorLive.append({ source: "supervisor", kind: "status", text, run }),
   });
   let wipeRequested = false;
+  // The owner's retention policies on this rig (retention.ts): what it keeps of the kinds a policy
+  // may remove, told to control every RIG_SPACE_ASK_MS and after each removal, and the advisors'
+  // records a policy's command covers, removed once the harness took it.
+  const retention = { home, harness, control: onBus };
+  let lastSpaceAt = 0;
   const cfg = {
     rig,
     harnessUrl,
     harnessToken,
-    controlUrl,
-    controlToken,
     bus,
     held: new Map(),
     staging: new Set<string>(),
-    // Commands from the bus and from the poll over HTTP: each delivered once, one at a time.
+    // Commands from the bus: each delivered once, one at a time.
     delivered: new Set<string>(),
     turn: oneAtATime(),
-    stage: (cmd: Parameters<typeof stageCommand>[1]) =>
-      stageCommand(
+    // Sources are fetched only for a command the harness found control signed for this rig.
+    stage: async (cmd: Parameters<typeof stageSigned>[1]) => {
+      await isolation.before(cmd);
+      return stageSigned(
         {
           rig,
           inboxDir,
@@ -193,6 +228,7 @@ async function main(): Promise<void> {
           sourcesDir: join(home, "sources"),
           controlUrl,
           controlToken,
+          gitAccess: (name: string) => gitAccessFrom(known, name),
           remote,
           sshKeyFile,
           knownHostsFile,
@@ -201,19 +237,38 @@ async function main(): Promise<void> {
           floorBytes,
         },
         cmd,
-      ),
-    onDelivered: (kind: string, accepted: boolean) => {
+        async (c) => {
+          const r = await harness.call(COMMAND_CHECK, { body: c });
+          return r.ok ? undefined : (r.reason ?? "refused");
+        },
+      );
+    },
+    onDelivered: (kind: string, accepted: boolean, cmd: Parameters<typeof onRetentionTaken>[1]) => {
       if (kind === "wipe_state" && accepted) wipeRequested = true;
+      // A run whose work goes to git (goal 185): its branches are built after each export.
+      if (kind === "assign_campaign" && accepted) runBranches.assigned(cmd);
+      if (kind === "log_level" && accepted) onLogLevelTaken(cmd);
+      // What the policy removed changes what the rig keeps: told to control at the next round.
+      if (kind === "retention_run" && accepted)
+        void onRetentionTaken(retention, cmd).finally(() => {
+          lastSpaceAt = 0;
+        });
     },
   };
   const intervalMs = supervisorMs(env, SUPERVISOR_NUMBERS.pollSeconds);
+  const runBranches = new RunBranches(join(home, "run-branches.json"), {
+    repo: join(home, "results.git"),
+    outboxDir: env.THERMITE_OUTBOX_DIR ?? "/outbox",
+    sourcesDir: join(home, "sources"),
+    gitAccess: (name: string) => gitAccessFrom(known, name),
+  });
   const exportPath = join(home, "export-state.json");
   let exportState: ExportState = load(exportPath, { done: [] });
   // Champion patches waiting to reach control (kept across restarts).
   const championQueuePath = join(home, "champion-uploads.json");
   let championQueue: ChampionUpload[] = load(championQueuePath, []);
   // Without a results repository, exports leave the rig as uploads to control (export-upload.ts).
-  const uploadToControl = !remote && Boolean(controlUrl && controlToken);
+  const uploadToControl = !remote;
   const uploadPath = join(home, "export-uploads.json");
   let uploadState: UploadState = load(uploadPath, { queue: [], uploaded: [] });
   const exportCfg = {
@@ -247,26 +302,15 @@ async function main(): Promise<void> {
     }),
   };
   const advisorsFile = env.THERMITE_ADVISORS_FILE;
-  const fileAdvisors = advisorsFile
-    ? AdvisorsConfig.parse(JSON.parse(readFileSync(advisorsFile, "utf8")))
-    : undefined;
+  const fileAdvisors = advisorsFile ? readAdvisorsFile(advisorsFile) : undefined;
   // The roles control gives models (the owner's choice per rig) over the file's; read each round,
-  // from the rig's config on the bus, or from control.
+  // from the rig's config on the bus.
   let controlAdvisors: ControlAdvisors = {};
   let advisors = mergeAdvisors(fileAdvisors, controlAdvisors);
   const refreshAdvisors = async () => {
-    if (known) {
-      // Nothing from the bus yet: the roles taken last stay.
-      const onBus = known.get("advisor-routes");
-      if (onBus) controlAdvisors = advisorsOf(onBus);
-    } else if (controlUrl && controlToken) {
-      try {
-        controlAdvisors = await fetchControlAdvisors({ rig, controlUrl, controlToken });
-      } catch (err) {
-        // Control unreachable: the last roles it gave stay.
-        log("supervisor", "advisor routes unavailable", { error: String(err).slice(0, 300) });
-      }
-    }
+    // Nothing from the bus yet: the roles taken last stay.
+    const given = known.get("advisor-routes");
+    if (given) controlAdvisors = advisorsOf(given);
     advisors = mergeAdvisors(fileAdvisors, controlAdvisors);
     return advisors;
   };
@@ -278,7 +322,6 @@ async function main(): Promise<void> {
     rig,
     build: buildInfo(),
     interval_ms: intervalMs,
-    control: Boolean(controlUrl),
     pull_mode: Boolean(pull),
     results_remote: Boolean(remote),
     results_to: remote ? "repository" : uploadToControl ? "control" : "none",
@@ -306,22 +349,48 @@ async function main(): Promise<void> {
       .catch((err) =>
         log("supervisor", "pull mode's ports did not close on the stop", { error: String(err) }),
       );
+    void podBus?.stop();
   };
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));
 
-  // The supervisor's figures, its regular call; control's answer names its place in the reports.
-  const sendFigures = async () =>
-    control ? await control.call(FIGURES, { body: figures() }) : undefined;
+  // The supervisor's figures, its regular call on the bus; control's answer names its place in the
+  // reports, where the reports go back to after a page control refused.
+  const sendFigures = async () => {
+    const answer = await ask(onBus, "figures", figures());
+    const healed = healCursor(state, answer);
+    if (healed !== state) {
+      state = healed;
+      save(statePath, state);
+    }
+  };
 
   // The harness may still be starting: wait for it once, before the relays begin.
   await waitForHarness(harnessUrl, () => stopping);
+  void isolation.report("the supervisor's start");
 
   // The rig's settings and which advisors decide, from and to the harness.
   const harnessLink = harnessAdvisors(harnessUrl, harnessToken);
+  // The advisors in their programs' own terminals, on a rig set so (goal 169).
+  // A Claude subscription's usage windows its advisors' Claude Code reported, by provider, for
+  // control's Providers (goal 183): the harness reports its own agents'.
+  const advisorWindows = new Map<string, PlanWindows & { at: string }>();
+  const { consoles: advisorConsoles, terminals } = advisorTerminals({
+    harness,
+    live: (line) => supervisorLive.append({ source: "supervisor", ...line }),
+    windows: (provider, w) =>
+      advisorWindows.set(provider, mergeUsage(advisorWindows.get(provider), w)),
+  });
   const { tell: tellAdvisors, retell } = harnessLink;
 
   // The supervisor's figures for control, its regular call: git sync, advisors, relay.
+  // An export's last failure, as control shows it: credentials a git or HTTP error echoed are
+  // taken out before it leaves the rig.
+  const exportErrorOf = (...errors: (string | undefined)[]) => {
+    const error = errors.find(Boolean);
+    return error ? redact(error).slice(0, FIGURE_TEXT_MAX) : null;
+  };
+  const usage = new ResourceUse();
   const figures = (): z.input<typeof SupervisorFigures> => ({
     at: new Date().toISOString(),
     relay: { cursor: state.cursor },
@@ -344,10 +413,15 @@ async function main(): Promise<void> {
             ? uploadState.queue.length
             : 0),
       champions_waiting: championQueue.length,
-      last_error:
-        ((!remote && uploadState.lastError) || exportState.lastError)?.slice(0, FIGURE_TEXT_MAX) ??
-        null,
+      last_error: exportErrorOf(remote ? undefined : uploadState.lastError, exportState.lastError),
     },
+    run_branches: Object.fromEntries(
+      Object.entries(runBranches.figures()).map(([run, f]) => [
+        run,
+        { ...f, error: f.error ? redact(f.error).slice(0, FIGURE_TEXT_MAX) : null },
+      ]),
+    ),
+    ...(advisorWindows.size ? { subscription_usage: Object.fromEntries(advisorWindows) } : {}),
     models: models.list(),
     advisors: advisors
       ? {
@@ -368,18 +442,25 @@ async function main(): Promise<void> {
       : null,
     // The rig's keys on the bus, their public parts: control gives it a user, and seals its config
     // to the second.
-    ...busKeyFigure(key),
-    ...(liveCounts ? { live: liveCounts.figures() } : {}),
-    ...(configCounts ? { config: configCounts.figures() } : {}),
+    live: liveCounts.figures(),
+    config: configCounts.figures(),
     loops: loops.health().loops,
+    // The supervisor container's CPU and memory now, for Metrics' Rigs tab (goal 179).
+    usage: usage.read(),
   });
 
-  // With the bus, the figures go once now, before the first report: control gives the rig's key
-  // its user, and the reports and commands on the bus need it.
-  if (bus)
-    await sendFigures().catch((err) =>
-      log("supervisor", "control report error", { error: String(err) }, "error"),
-    );
+  // The rig's keys registered with control over HTTPS, with its figures, before anything on the
+  // bus: control gives the rig's key its user there, which the reports and commands need. Tried
+  // again until control has them; meanwhile the loops on the bus wait for the user.
+  await registerKeys({
+    control,
+    body: () => ({ ...figures(), ...busKeyFigure(key) }),
+    stopping: () => stopping,
+    answered: (answer) => {
+      state = healCursor(state, answer);
+      save(statePath, state);
+    },
+  });
 
   // How often the pause between advisor rounds looks for a new owner's message to the teachers.
   const ownerCheckMs = 5000;
@@ -389,11 +470,11 @@ async function main(): Promise<void> {
       const advisors = await refreshAdvisors();
       if (!advisors) {
         // No role has an advisor: look again later (the owner may give one a model), or as soon
-        // as the bus gives the advisors new routes.
-        await tellAdvisors({ auditor: false, review_panel: 0, writer: false });
+        // as the bus gives the advisors new routes; the harness hears so once the routes came.
+        await harnessLink.none(known.revision("advisor-routes") !== undefined);
         const until = Date.now() + Math.max(intervalMs, 30_000);
-        const seen = known?.revision("advisor-routes");
-        while (!stopping && Date.now() < until && known?.revision("advisor-routes") === seen) {
+        const seen = known.revision("advisor-routes");
+        while (!stopping && Date.now() < until && known.revision("advisor-routes") === seen) {
           await new Promise((r) => setTimeout(r, 250));
           await retell();
         }
@@ -429,6 +510,8 @@ async function main(): Promise<void> {
             mcp: advisorMcp,
             // The deployment's STE checker for research papers (goal 112), when it gives one.
             steChecker: env.THERMITE_STE_CHECKER || undefined,
+            kb: onBus,
+            ...(on.terminal && terminals ? { terminals } : {}),
           },
           adviseState,
         );
@@ -479,23 +562,16 @@ async function main(): Promise<void> {
   const advisingDone = advising();
 
   // The live view: the harness's live log (signed) and the supervisor's own lines, every few
-  // seconds. Independent of the 60 s report relay. With the bus, published there instead of
-  // posted to control.
+  // seconds, published on the bus. Independent of the 60 s report relay.
   const liveMs = supervisorMs(env, SUPERVISOR_NUMBERS.liveIntervalMs);
   const living = async () => {
     let liveState: LiveRelayState = { cursor: 0, ownCursor: 0 };
     let failing = false;
-    const on = { rig, harnessUrl, harnessToken };
-    if ((bus || controlUrl) && liveMs > 0) loops.add("live", liveMs);
-    while (!stopping && (bus || controlUrl) && liveMs > 0) {
+    const on = { rig, harnessUrl, harnessToken, bus, counts: liveCounts, own: supervisorLive };
+    if (liveMs > 0) loops.add("live", liveMs);
+    while (!stopping && liveMs > 0) {
       try {
-        liveState =
-          bus && liveCounts
-            ? await publishLiveOnce(
-                { ...on, bus, counts: liveCounts, own: supervisorLive },
-                liveState,
-              )
-            : await relayLiveOnce({ ...on, controlUrl, controlToken }, liveState);
+        liveState = await publishLiveOnce(on, liveState);
         failing = false;
       } catch (err) {
         if (!failing) log("supervisor", "live relay error", { error: String(err) }, "error");
@@ -507,34 +583,17 @@ async function main(): Promise<void> {
     }
   };
   const livingDone = living();
+  // The terminal view (goal 169): the screens of the trials someone watches on control.
+  const screensDone = relayScreens(
+    { harnessUrl, harnessToken, control: onBus, own: advisorConsoles },
+    () => stopping,
+  );
 
-  // Commands on their own short interval: a pause or a message should not wait for the next
-  // report. The report loop below leaves commands to this one. With the bus, each command comes
-  // from there as control issues it, and this poll is a slow fallback for one the bus never had.
-  if (bus && controlUrl && controlToken)
-    followCommands(bus, cfg).catch((err) =>
-      log("supervisor", "commands from the bus stopped", { error: String(err) }, "error"),
-    );
-  const commandMs = commandPollMs(env, Boolean(bus));
-  const commanding = async () => {
-    let failing = false;
-    if (controlUrl && commandMs > 0) loops.add("commands", commandMs);
-    while (!stopping && controlUrl && commandMs > 0) {
-      try {
-        await relayCommandsOnce(cfg);
-        failing = false;
-      } catch (err) {
-        if (!failing) log("supervisor", "command relay error", { error: String(err) }, "error");
-        failing = true;
-      }
-      loops.tick("commands");
-      if (wipeRequested) break;
-      const until = Date.now() + commandMs;
-      while (!stopping && !wipeRequested && Date.now() < until)
-        await new Promise((r) => setTimeout(r, 250));
-    }
-  };
-  const commandingDone = commanding();
+  // Commands from the bus, each as control issues it: a pause or a message never waits for the
+  // next report.
+  followCommands(bus, cfg).catch((err) =>
+    log("supervisor", "commands from the bus stopped", { error: String(err) }, "error"),
+  );
 
   // The agents' model route, from control's settings page: checked every half minute.
   const routeMs = supervisorMs(env, SUPERVISOR_NUMBERS.modelRoutePollSeconds);
@@ -544,15 +603,13 @@ async function main(): Promise<void> {
       await new Promise((r) => setTimeout(r, 250));
   };
   // The agents' model route and the MCP servers control gives the rig (goal 068): the harness gets
-  // its workers' and planner's share, and the advisors' share stays here, in memory. With the bus,
-  // each change comes from the rig's config there and is applied at once; on this beat the
-  // supervisor only hands its harness again what it lost. Without it, control is asked on this beat.
+  // its workers' and planner's share, and the advisors' share stays here, in memory. Each change
+  // comes from the rig's config on the bus and is applied at once; on this beat the supervisor only
+  // hands its harness again what it lost.
   const keep = {
     rig,
     harnessUrl,
     harnessToken,
-    controlUrl,
-    controlToken,
     known,
     setAdvisorMcp: (servers: McpConnection[], unavailable: McpUnavailable[]) =>
       advisorMcp.gateway.set(servers, unavailable),
@@ -560,73 +617,53 @@ async function main(): Promise<void> {
     stopping: () => stopping,
     pause,
   };
-  if (bus && known && configCounts && key)
-    followConfig(bus, {
-      rig,
-      sealKey: key.seal.privatePem,
-      known,
-      counts: configCounts,
-      apply: (k) => applyConfig(keep, known, k),
-    }).catch((err) =>
-      log("supervisor", "the rig's config from the bus stopped", { error: String(err) }, "error"),
-    );
+  followConfig(bus, {
+    rig,
+    sealKey: key.seal.privatePem,
+    known,
+    counts: configCounts,
+    apply: (k) => applyConfig(keep, known, k),
+  }).catch((err) =>
+    log("supervisor", "the rig's config from the bus stopped", { error: String(err) }, "error"),
+  );
   const routingDone = keepConfig(keep);
 
-  // Past research for each running run, from control's knowledge base into the run's research
-  // folder (knowledge/), every few minutes. The cursor of each run is kept here.
-  const kbPath = join(home, "kb-state.json");
-  let kbState: KbSyncState = load(kbPath, emptyKbSyncState());
-  const kbMs = supervisorMs(env, SUPERVISOR_NUMBERS.kbSyncSeconds);
-  const syncingKb = async () => {
-    let failing = false;
-    // Kinds of item from a newer control that this build left out: each is logged once.
-    const toldKinds = new Set<string>();
-    while (!stopping && controlUrl && controlToken && kbMs > 0) {
-      try {
-        const r = await syncKnowledgeOnce(
-          { rig, controlUrl, controlToken, harnessUrl, harnessToken },
-          kbState,
-        );
-        if (JSON.stringify(r.state) !== JSON.stringify(kbState)) save(kbPath, r.state);
-        kbState = r.state;
-        if (r.items) log("supervisor", "past research synced", { items: r.items });
-        for (const [kind, items] of untoldKinds(toldKinds, r.unknownKinds))
-          log(
-            "supervisor",
-            "past research of an unknown kind left out",
-            {
-              kind,
-              items,
-              why: "control is newer than this rig: update the rig's images to get these items",
-            },
-            "warn",
-          );
-        if (r.errors.length && !failing)
-          log("supervisor", "past research sync error", { errors: r.errors.slice(0, 5) }, "error");
-        failing = r.errors.length > 0;
-      } catch (err) {
-        if (!failing)
-          log("supervisor", "past research sync error", { error: String(err) }, "error");
-        failing = true;
-      }
-      const until = Date.now() + kbMs;
-      while (!stopping && !wipeRequested && Date.now() < until)
-        await new Promise((r) => setTimeout(r, 250));
-    }
-  };
-  const syncingKbDone = syncingKb();
+  // The agents' searches and reads of the knowledge base (goal 175): taken from the harness as
+  // they come, and asked of control on the bus.
+  // Not waited for at a stop: its call held open to the harness ends with the process.
+  void relayKbAsks({ harness, control: onBus, stopping: () => stopping });
+  // The owner's inputs to the advisors' terminals, which the harness checked (goal 169).
+  void relayAdvisorTerminals({ harness, consoles: advisorConsoles, stopping: () => stopping });
 
   loops.add("report", intervalMs);
   while (!stopping) {
+    // The knowledge base's files first, on the bus, so that control has an item's file as soon
+    // as it can: the item's event goes in the report, and the two meet on control by the file's
+    // SHA-256, whichever comes first (goal 175).
     try {
-      const next = await relayOnce({ ...cfg, skipCommands: commandMs > 0 }, state);
+      const files = await putKbFiles({ rig, outboxDir: exportCfg.outboxDir, home, bus });
+      if (files.error || files.spoilt.length)
+        log("supervisor", "files for the knowledge base wait", { ...files }, "warn");
+      // Those control holds, with an item that names each, leave the outbox.
+      const held = await removeHeldKbFiles({
+        outboxDir: exportCfg.outboxDir,
+        home,
+        control: onBus,
+        harness,
+      });
+      if (held.error) log("supervisor", "files for the knowledge base stay", { ...held }, "warn");
+    } catch (err) {
+      log("supervisor", "files for the knowledge base wait", { error: String(err) }, "error");
+    }
+    try {
+      const next = await relayOnce(cfg, state);
       if (next.cursor !== state.cursor || next.ledgerId !== state.ledgerId) {
         save(statePath, next);
         log("supervisor", "reported", { cursor: next.cursor });
       }
       state = next;
     } catch (err) {
-      // Reporting failed; commands were still relayed. Keep whatever progress the round made.
+      // Reporting failed. Keep whatever progress the round made.
       if (err instanceof RelayError) state = err.state;
       log("supervisor", "relay error", { error: String(err) }, "error");
     }
@@ -651,6 +688,7 @@ async function main(): Promise<void> {
           save(uploadPath, uploadState);
         }
       }
+      await runBranches.afterExport(fresh);
       if (next.done.length !== before || next.lastError !== exportState.lastError) {
         save(exportPath, next);
         log("supervisor", "exported", {
@@ -667,7 +705,7 @@ async function main(): Promise<void> {
           ? []
           : next.done.filter((n) => !exportState.done.includes(n));
       exportState = next;
-      if (uploadToControl && uploadState.queue.length && controlUrl && controlToken) {
+      if (uploadToControl && uploadState.queue.length) {
         const before = uploadState;
         uploadState = await uploadExportsOnce(
           { rig, outboxDir: exportCfg.outboxDir, controlUrl, controlToken },
@@ -693,7 +731,7 @@ async function main(): Promise<void> {
     } catch (err) {
       log("supervisor", "export error", { error: String(err) }, "error");
     }
-    if (championQueue.length && controlUrl && controlToken) {
+    if (championQueue.length) {
       const left = await uploadChampions(
         { rig, controlUrl, controlToken, resultsRepo: join(home, "results.git") },
         championQueue,
@@ -701,15 +739,14 @@ async function main(): Promise<void> {
       if (left.length !== championQueue.length) save(championQueuePath, left);
       championQueue = left;
     }
+    if (Date.now() - lastSpaceAt >= RIG_SPACE_ASK_MS) {
+      lastSpaceAt = Date.now();
+      await sendSpace(retention).catch((err) =>
+        log("supervisor", "the rig's space not told to control", { error: String(err) }, "warn"),
+      );
+    }
     try {
-      const answer = await sendFigures();
-      // On the bus, control's answer names its place in the rig's events: after a page it
-      // refused, the reports go back there.
-      const healed = bus ? healCursor(state, answer) : state;
-      if (healed !== state) {
-        state = healed;
-        save(statePath, state);
-      }
+      await sendFigures();
       const lastDaily = reportState.lastDailyAt ? Date.parse(reportState.lastDailyAt) : 0;
       if (Date.now() - lastDaily >= 24 * 3_600_000) {
         const body = await dailyReport({
@@ -720,7 +757,7 @@ async function main(): Promise<void> {
           uploadState: uploadToControl ? uploadState : undefined,
           adviseState,
         });
-        await control?.call(REPORTS, { body: { kind: "daily", body } });
+        await ask(onBus, "daily", { kind: "daily", body });
         reportState = { lastDailyAt: new Date().toISOString() };
         save(reportPath, reportState);
       }
@@ -729,15 +766,14 @@ async function main(): Promise<void> {
     }
     loops.tick("report");
     const until = Date.now() + intervalMs;
-    // A wipe the command loop delivered is acted on at once, not at the next report.
+    // A wipe the bus's commands consumer delivered is acted on at once, not at the next report.
     while (!stopping && !wipeRequested && Date.now() < until)
       await new Promise((r) => setTimeout(r, 250));
   }
   await advisingDone;
   await livingDone;
-  await commandingDone;
+  await screensDone;
   await routingDone;
-  await syncingKbDone;
   process.exit(0);
 }
 

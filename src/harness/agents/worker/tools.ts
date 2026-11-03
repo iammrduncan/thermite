@@ -1,12 +1,18 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { type TSchema, Type } from "@earendil-works/pi-ai";
+import type { McpForAgent } from "../../../agents/mcp/index.ts";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";
-import { CODE_RESEARCH_TOOLS, NOTE_TOOL, type NoteLimit } from "../../../agents/tools/index.ts";
+import {
+  CODE_RESEARCH_TOOLS,
+  kbAgentTools,
+  NOTE_TOOL,
+  type NoteLimit,
+} from "../../../agents/tools/index.ts";
 import { errorText } from "../../../common/errors.ts";
 import { type LaneLimitValues, SHARED_DEV_RUN_S } from "../../../core/contract.ts";
 import { IDEA_TOOL, proposeIdea, researchAgentTools } from "../tools/index.ts";
 import type { TrialClock } from "../trial-clock.ts";
-import type { McpForAgent, TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
+import type { TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
 
 /**
  * A worker trial's tools in Pi (runTrial, worker.ts): each acts as the lane's user through the
@@ -209,6 +215,20 @@ export function trialTools(
             }
           },
           { run: spec.run, lane: spec.lane },
+          () => {
+            result.toolCalls++;
+          },
+        )
+      : []),
+    // Thermite's knowledge base (goal 175): kb_search, kb_read, and kb_write when it may write.
+    ...(deps.kb && spec.kbWrites
+      ? kbAgentTools(
+          async (t, args) =>
+            // A submission ends the trial: nothing runs after it.
+            result.submitted
+              ? { text: "the trial ended with your submission", isError: true }
+              : (deps.kb as NonNullable<TrialDeps["kb"]>)(t, args),
+          spec.kbWrites,
           () => {
             result.toolCalls++;
           },

@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { offBus, offBusFix } from "../../bus/index.ts";
 import { resourcesWords, rigWork, sizeWords, workWords } from "../../clusters/index.ts";
 import {
   checkRow,
@@ -8,8 +9,9 @@ import {
   modelFollowUrl,
   takingModel,
 } from "../../command-progress.ts";
+import { heldCommands } from "../../issue/index.ts";
 import { exportLeft, removeWords, resultsLeft } from "../../results-left.ts";
-import { controlAddress, controlImages } from "../../rigs/index.ts";
+import { controlAddress, controlImages, weeklyLimit } from "../../rigs/index.ts";
 import { MIN_IDLE_STOP_MINUTES } from "../../runpod/index.ts";
 import {
   type ClusterRig,
@@ -26,11 +28,15 @@ import {
   runRow,
   type TimelineRow,
   timeline,
+  waitEnd,
   waitingOn,
 } from "../../ui/operator/index.ts";
 import { checkRowHtml } from "../../ui/rigs/checks.ts";
 import { diskBanner, diskFree } from "../../ui/rigs/disk.ts";
 import { drainView } from "../../ui/rigs/drain.ts";
+import { busKeysHtml } from "../../ui/rigs/keys.ts";
+import { rigReachHtml, slotIngressWarning } from "../../ui/rigs/reach.ts";
+import { resetCard } from "../../ui/rigs/reset.ts";
 import {
   HISTORY_FILTERS,
   podBlock,
@@ -76,7 +82,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
     const joined = store.joinedRigs.get(c.req.param("rig"));
     const pulled = store.tunnels.get(c.req.param("rig"));
     const flashOk = c.req.query("ok");
-    const flashError = c.req.query("error");
+    const flashError = dash.said(c);
     // A command the green line is about (Edit rig's settings): the page says how it stands.
     const flashCmd = flashOk ? store.commands.row(c.req.query("cmd") ?? "") : undefined;
     const flashing = flashCmd ? commandProgress(flashCmd, Date.now()) : undefined;
@@ -165,6 +171,8 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
     const rp = u.runpod;
     const podStopped = Boolean(rp?.active && rp.status === "EXITED");
     const steps = store.rigHistory.list(u.id);
+    // Off the message bus, the rig is broken (bus/reach.ts).
+    const off = offBus(store, u.id, { lastSeen: u.last_seen, now, podStopped });
     const stateIn = {
       u,
       place,
@@ -175,6 +183,8 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
       steps,
       updating: updates.waiting(u.id),
       podStopped,
+      offBus: off ? { ...off, fix: offBusFix(store, u.id, off) } : undefined,
+      held: heldCommands(store, u.id),
       csrf: t,
       now,
     };
@@ -208,6 +218,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
       form: (f) => cmdForm(c, { rig: u.id, back, ...f }),
     });
     const live = u.runs.filter((i) => i.status === "running");
+    const weekly = weeklyLimit(store, u, now);
     const runsNow = live
       .map((i) =>
         runBrief(store, u, i, now, {
@@ -249,11 +260,17 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
             ? `<b class="bad">${esc(u.id)} has ${neverReported(u) ? "not reported yet" : `not reported for ${esc(span(u.last_seen, now))}`}.</b>`
             : `${esc(u.id)} is live; it reported ${esc(ago(u.last_seen, now))} ago.`,
       drain?.said ?? "",
-      live.length
-        ? `It runs ${live.map((i) => `<a href="${runHref(i)}">${esc(runCampaign(i))} › ${esc(i.id)}</a>`).join(" and ")}.`
-        : u.runs.length
-          ? "No run is at work on it."
-          : "No campaign is assigned to it.",
+      // Its subscription's weekly limit (goal 169): the quiet note once the owner chose to wait.
+      weekly
+        ? `<span class="warn" data-part="weekly-limit">${esc(u.id)} waits for its subscription's weekly limit to reset, ${esc(waitEnd(weekly.until))}: new trials, its planner and its advisors start again after it.${weekly.chose ? "" : " Needs you asks what to do meanwhile."}</span>`
+        : "",
+      u.unreadable
+        ? `<b class="bad">Control can't read its events now.</b>`
+        : live.length
+          ? `It runs ${live.map((i) => `<a href="${runHref(i)}">${esc(runCampaign(i))} › ${esc(i.id)}</a>`).join(" and ")}.`
+          : u.runs.length
+            ? "No run is at work on it."
+            : "No campaign is assigned to it.",
       j
         ? `The judge is ${jobHtml(u, j)}${queued ? `, with ${queued} more queued` : ""}.`
         : `The judge is idle${queued ? `, with ${queued} queued` : ""}.`,
@@ -368,6 +385,7 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
         : []),
       ...(place.words ? [["Placed on", esc(place.words)]] : []),
       ["Key", `<code>${esc(key.pubkey ? fingerprint(key.pubkey) : "not pinned")}</code>`],
+      ["Keys on the bus", busKeysHtml(store, u.id, now)],
       ["Ledger", `<code>${esc(u.ledger_id ?? "")}</code>`],
       ...(sup
         ? [
@@ -428,6 +446,8 @@ ${
 }
 <div class="divider" style="margin:2px 0"></div>
 ${retireForm}</div></details>`;
+    // A full reset under way, with Cancel, or Confirm once it waits for the owner (goal 181).
+    const resetNow = store.fullResets.open(u.id);
     return page(
       c,
       {
@@ -438,7 +458,7 @@ ${retireForm}</div></details>`;
         active: "rigs",
       },
       `<p class="run-said" data-part="said">${said}</p>
-${flash}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc(updateProgress(u.id).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}</div>${keyCard}
+${flash}${u.unreadable ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Control can't read ${esc(u.id)}'s events now.</b> ${esc(u.unreadable)}. Until it can, its runs, checks and the judge's jobs are not shown here; the rest of this page is from its last report. Every other rig's pages are as they were.</div>` : ""}<div data-part="banners"${stateIn.updating ? ` data-follow="${esc(updateFollowUrl(u.id))}" data-follow-state="${esc(updateProgress(u.id).state)}"` : ""}>${stateBanners(stateIn)}${diskBanner(u, now)}${drain?.banner ?? ""}${resetNow ? resetCard(resetNow, t, now) : ""}</div>${keyCard}
 ${rp ? podSection(c, u.id, now) : ""}
 <div data-part="at-work">${runsNow ? `<div class="block"><div class="head"><h2>At work</h2><span class="n">${live.length}</span></div>${runsNow}</div>` : ""}</div>
 <div class="cols run-cols"><div>
@@ -494,7 +514,7 @@ ${rp ? "" : events}
             : s.controlUrl && controlAddress(parts) && s.controlUrl !== controlAddress(parts)
               ? `<div class="small" style="margin-top:12px">Control's address for rigs changed: the rig reports to <span class="mono">${esc(s.controlUrl)}</span>, control is now at <span class="mono">${esc(controlAddress(parts) ?? "")}</span>.</div><div class="small muted" style="margin:4px 0 6px">Its pods restart with the new address, on the same images. ${keeps}</div>${act("images", "Give it control's new address")}`
               : "";
-    return `<div class="block" ${placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Cluster</dt><dd><a href="/ui/settings">${esc(r.cluster)}</a> (Providers)</dd><dt>Namespace</dt><dd>${esc(r.namespace)} <span class="muted">(${r.placement === "created" ? "made by control" : "a slot"})</span></dd><dt>GPUs</dt><dd>${s.gpus ? `${s.gpus} through ${s.gpuMode === "dra" ? `DRA (${esc(s.deviceClass ?? "")})` : "NVIDIA's device plugin"}: ${splitWords(s.gpus, s.judgeGpus)}` : "none: it measures on the CPU"}${s.node ? ` · on ${esc(s.node)}` : ""}</dd><dt>CPUs and memory</dt><dd>${s.resources ? esc(resourcesWords(s.resources)) : "the namespace's defaults"}${manage ? ` · <a href="/ui/rigs/${rName}/edit">change on Edit rig</a>` : ""}</dd><dt>Storage</dt><dd>${s.storageGi} GB${s.storageClass ? ` · ${esc(s.storageClass)}` : ""}</dd><dt>Images</dt><dd class="mono small">${esc(s.images.harness)}<br>${esc(s.images.supervisor)}</dd></dl>
+    return `<div class="block" ${placeAttrs(r.rig, r.status)}><div class="head"><h2>Set up by control</h2><span class="right">${esc(r.status)}</span></div><div class="card"><dl class="facts"><dt>Cluster</dt><dd><a href="/ui/settings">${esc(r.cluster)}</a> (Providers)</dd><dt>Namespace</dt><dd>${esc(r.namespace)} <span class="muted">(${r.placement === "created" ? "made by control" : "a slot"})</span></dd><dt>GPUs</dt><dd>${s.gpus ? `${s.gpus} through ${s.gpuMode === "dra" ? `DRA (${esc(s.deviceClass ?? "")})` : "NVIDIA's device plugin"}: ${splitWords(s.gpus, s.judgeGpus)}` : "none: it measures on the CPU"}${s.node ? ` · on ${esc(s.node)}` : ""}</dd><dt>CPUs and memory</dt><dd>${s.resources ? esc(resourcesWords(s.resources)) : "the namespace's defaults"}${manage ? ` · <a href="/ui/rigs/${rName}/edit">change on Edit rig</a>` : ""}</dd><dt>Storage</dt><dd>${s.storageGi} GB${s.storageClass ? ` · ${esc(s.storageClass)}` : ""}</dd><dt>Its harness reaches</dt><dd>${rigReachHtml(r, store.reachable.list())}</dd><dt>Images</dt><dd class="mono small">${esc(s.images.harness)}<br>${esc(s.images.supervisor)}</dd></dl>${slotIngressWarning(r)}
 <div class="tl" style="margin-top:10px">${setupSteps(r.rig) || `<div class="muted small">No step yet.</div>`}</div>${manage}${update}</div></div>`;
   };
   /** A rig in pull mode: its pod, its enrollment, control's last connection and the refusals. */
@@ -511,7 +531,13 @@ ${rp ? "" : events}
           ? `<span class="bad">The code expired ${esc(ago(r.code_expires_at, now))} ago. Launch the rig again.</span>`
           : `Not yet. The code expires in ${esc(span(new Date(now).toISOString(), Date.parse(r.code_expires_at)))}.`
         : "Not yet. The code does not expire.";
-    return `<div class="block"><div class="head"><h2>Pull mode</h2><span class="right">${esc(state)}</span></div><div class="card"><p class="small" style="margin-top:0">Control connects to this rig through RunPod's proxy. The rig never connects to control. The pod answers only requests that control signed.</p><dl class="facts"><dt>Pod</dt><dd>${r.pod ? esc(r.pod) : `<span class="muted">not launched yet</span>`}</dd>${r.url ? `<dt>Address</dt><dd class="mono small">${esc(r.url)}</dd>` : ""}<dt>Enrollment</dt><dd>${enrollment}</dd><dt>Last exchange</dt><dd>${r.last_exchange_at ? `${esc(ago(r.last_exchange_at, now))} ago` : `<span class="muted">none yet</span>`}</dd><dt>Refused requests</dt><dd>${r.refused_total}${r.refused_total ? ` <span class="muted small">Requests that control did not sign. The pod gave each one an empty 404.</span>` : ""}</dd>${r.error ? `<dt>Last error</dt><dd class="bad">${esc(r.error)}</dd>` : ""}</dl></div></div>`;
+    // Where control's bus reaches the pod's leaf node, as RunPod gives it (bus/leaf.ts).
+    const bus = !r.leaf_ca
+      ? `<span class="bad">Not on it: launched before the pod's leaf node, so it can't report. Terminate it and launch a new one.</span>`
+      : r.leaf_address
+        ? `Control's bus dials the pod's leaf node at <span class="mono">${esc(r.leaf_address)}</span>, the address RunPod gave it ${esc(ago(r.leaf_address_at ?? "", now))} ago.`
+        : `<span class="muted">No address from RunPod now: the pod is starting or stopped, or RunPod gives it no public address for its port 7422. Its reports wait for one.</span>`;
+    return `<div class="block"><div class="head"><h2>Pull mode</h2><span class="right">${esc(state)}</span></div><div class="card"><p class="small" style="margin-top:0">Control connects to this rig through RunPod's proxy, for its enrollment, the registration of its keys on the message bus, its results and the kits it fetches; everything else goes on the bus, through the pod's leaf node. The rig never connects to control. The pod answers only requests that control signed.</p><dl class="facts"><dt>Pod</dt><dd>${r.pod ? esc(r.pod) : `<span class="muted">not launched yet</span>`}</dd>${r.url ? `<dt>Address</dt><dd class="mono small">${esc(r.url)}</dd>` : ""}<dt>Enrollment</dt><dd>${enrollment}</dd><dt>Message bus</dt><dd>${bus}</dd><dt>Last exchange</dt><dd>${r.last_exchange_at ? `${esc(ago(r.last_exchange_at, now))} ago` : `<span class="muted">none yet</span>`}</dd><dt>Refused requests</dt><dd>${r.refused_total}${r.refused_total ? ` <span class="muted small">Requests that control did not sign. The pod gave each one an empty 404.</span>` : ""}</dd>${r.error ? `<dt>Last error</dt><dd class="bad">${esc(r.error)}</dd>` : ""}</dl></div></div>`;
   };
   const placeAttrs = (rig: string, status: string) =>
     `data-part="placed"${PLACE_BUSY.has(status) ? ` data-follow="${esc(placeFollowUrl(rig))}" data-follow-state="${esc(placeProgress(rig).state)}"` : ""}`;

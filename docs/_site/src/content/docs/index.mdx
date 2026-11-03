@@ -11,8 +11,8 @@ hero:
   image:
     file: ../../assets/hero.svg
   actions:
-    - text: Start here
-      link: start-here/
+    - text: Install on one machine
+      link: tutorials/first-run/
       icon: right-arrow
     - text: How it works
       link: "#how-a-campaign-runs"
@@ -29,6 +29,12 @@ hero:
 
 import { Card, CardGrid, LinkButton, LinkCard, Steps } from "@astrojs/starlight/components";
 import HowItWorks from "../../components/HowItWorks.astro";
+
+Ask your agent to set it up for you:
+
+```text
+Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt
+```
 
 <div class="home-shot">
 
@@ -92,7 +98,7 @@ Each campaign is one of three kinds, called **modes**:
 - **Agents never grade their own work.** They submit a change and what they expect it to do. Only the judge's measurement counts.
 - **The judge holds the clock.** In a hill climb it first measures where the run starts, and holds every later change against it. It times each change and the champion in alternating blocks on the same device, decides with statistics, and times the champion against itself once a day to learn how noisy the machine is.
 - **A surprising win gets a second look.** On a rig with an auditor, an unusually large gain is audited before it is kept. You can also ask to approve every new champion yourself.
-- **You can watch it catch cheats.** Thermite's own smoke check submits a dozen changes whose right verdicts are known: a real speed-up, a no-op, a timer edit, a fallback to the reference code, NaN output, memory and disk exhaustion, and an attempt to overwrite the champion. Each must get its expected verdict. [Your first run](tutorials/first-run.md) shows it on your computer.
+- **You can watch it catch cheats.** Thermite's own smoke check submits a dozen changes whose right verdicts are known: a real speed-up, a no-op, a timer edit, a fallback to the reference code, NaN output, memory and disk exhaustion, and an attempt to overwrite the champion. Each must get its expected verdict. [Install on one machine](tutorials/first-run.md) shows it on your computer.
 
 [Why agents never judge](explanation/why-agents-never-judge.md) follows a change through every step.
 
@@ -130,37 +136,18 @@ Thermite has two kinds of part. **Control** is the one place you watch and steer
 ### A run, step by step
 
 1. **You start a campaign** on control: from **New campaign** on the dashboard, over the REST API or MCP, or with the `thermite` command line. Its **contract** says what counts: a number to push up in a **hill climb**, or a list of goals to meet in a **goal** campaign (see [Campaign modes](explanation/campaign-modes.md)). Its **kit** says how to build and measure your project. Control sends the rig you choose a signed command to start the run.
-2. **The rig takes it.** The supervisor fetches the project, the kit and any model files the command names, each by its commit or its hash, and hands the command to the harness. The harness checks the signature, and that what was fetched is what the command named.
+2. **The rig takes it.** The supervisor takes the signed command from control's message bus, fetches the project, the kit and any model files the command names, each by its commit or its hash, and hands the command to the harness. The harness checks the signature, and that what was fetched is what the command named.
 3. **The planner hands out the work.** The run has one **experiment queue**, a list of what to try. At the start of each round, the planner gives each **lane** its next experiment, and a starting point: the champion, or the lane's own best result. No two lanes get the same experiment.
 4. **A worker tries it.** Each **trial** is a fresh agent session, which the harness builds from its records: the experiment, the lane's recent results with the judge's reasons, and the campaign's brief. The worker changes its own copy of the code, may test it in runs that never count, and submits one change with what it expects it to do.
 5. **The judge decides.** It builds the change and runs the kit's check on it. In a hill climb, it then times the change against the champion on the same device, in alternating blocks; in a goal campaign, it checks each goal. A change that looks better is measured again on fresh runs, and on hidden test cases when the contract has them, before it counts. No agent can read or change the judge.
 6. **A confirmed win becomes the champion,** the code that the next trials build on. When the campaign calls for an audit, the auditor's clear is the last step. When you asked to decide yourself, the win waits for you under **Needs you**.
 7. **The advisors steer.** The teachers read the results and the champion's code, add ideas to the queue and give the planner rules, each with its reasons. The review panel scores goals that code can't measure. The advisors never set a verdict.
-8. **Everything is recorded, and reaches you.** The rig's **ledger** keeps every experiment, attempt, measurement and verdict. The supervisor sends it all to control, where you follow the run on **Live** and its page, and steer it with signed commands: pause it, message its agents, add experiments. It pushes the results to git, and control files each campaign's records in its folder of the knowledge base, for later runs to read.
+8. **Everything is recorded, and reaches you.** The rig's **ledger** keeps every experiment, attempt, measurement and verdict. The supervisor sends it all to control, where you follow the run on **Live** and its page, and steer it with signed commands: pause it, message its agents, add experiments. It pushes the results to git, and control files each campaign's records in its collection of the knowledge base, for later runs to read.
 9. **Round after round,** until the goals are met, a budget or stop time you set runs out, or you stop it. Nothing stops a campaign by default.
 
 The third mode, **research**, has no project to change and no kit. Its workers read sources through the rig's archiving fetcher and record claims with exact quotes. Code finds every quote, word for word, in the archived page before a claim counts. Once the review panel finds every question answered, its research stops adding, or its maximum duration is up, the run ends with its final report, led by a research paper that code checks.
 
 [How the parts fit together](explanation/how-it-fits-together.md) explains each part, [Agents, lanes and the planner](explanation/agents-lanes-planner.md) a trial, [Why agents never judge](explanation/why-agents-never-judge.md) the judge, and [Supervision](explanation/supervision.md) the advisors.
-
-## Try it
-
-You need Linux or macOS, Docker or Podman, and about twenty minutes. No GPU, no paid model and no account: the first tutorials use a free model, or none.
-
-<CardGrid>
-  <LinkCard
-    title="1. Your first run"
-    description="Start Thermite on your computer and watch its judge give a dozen known changes, cheats included, their right verdicts."
-    href="tutorials/first-run/"
-  />
-  <LinkCard
-    title="2. Hand the work to agents"
-    description="Connect a free model and watch agents make a small program faster, while the judge measures every change."
-    href="tutorials/agents-with-a-free-model/"
-  />
-</CardGrid>
-
-Thermite is young and changes every day. Its agents run the code that a model writes on your computer, so read [Known limits](reference/known-limits.md) before you give it a model.
 
 ## Join the community
 
@@ -199,4 +186,4 @@ There are four kinds of pages, and each one does one job:
 
 The whole site is available to AI agents as plain text: [`llms.txt`](/llms.txt) lists every page, and [`llms-full.txt`](/llms-full.txt) holds all of them in one file. Every page is also published as Markdown at its own address with `.md` added.
 
-Thermite is open source under the MIT license.
+Thermite is open source under the Apache License 2.0.

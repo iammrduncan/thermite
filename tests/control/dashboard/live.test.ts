@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { runMessages } from "../../../src/control/views/index.ts";
+import { figuresCall } from "../../helpers/control-store.ts";
 import { pushedOf, readPushed } from "../../helpers/sse.ts";
 import { stack } from "./stack.ts";
 
@@ -276,15 +277,11 @@ describe("control dashboard", () => {
     s.env.service.settings.set({ planner: false });
     await s.relay();
     // The supervisor reports it has no advisors set up: no teachers, auditor or review panel.
-    const sup = await s.control.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-      body: JSON.stringify({
-        at: new Date().toISOString(),
-        relay: { cursor: 3 },
-        export: { remote: false, exports: 0, pushed: [], last_push_at: null, last_error: null },
-        advisors: null,
-      }),
+    const sup = await figuresCall(s.store, "rig-a", {
+      at: new Date().toISOString(),
+      relay: { cursor: 3 },
+      export: { remote: false, exports: 0, pushed: [], last_push_at: null, last_error: null },
+      advisors: null,
     });
     assert.equal(sup.status, 200, await sup.clone().text());
     const live = await (await s.get("/ui/campaigns/js-sum/runs/js-1/live")).text();

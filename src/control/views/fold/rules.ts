@@ -33,12 +33,12 @@ export const RULES: Handlers = {
     const old = from?.rules.find((x) => x.id === Number(was));
     if (old) {
       old.id = Number(b.id);
-      old.family = typeof body.family === "string" ? body.family : null;
+      old.direction = typeof body.direction === "string" ? body.direction : null;
     } else if (from)
       from.rules.push({
         id: Number(b.id),
         kind: String(body.kind ?? ""),
-        family: typeof body.family === "string" ? body.family : null,
+        direction: typeof body.direction === "string" ? body.direction : null,
         rationale: String(body.rationale ?? ""),
         by: e.actor,
         at: e.at,
@@ -54,17 +54,17 @@ export const RULES: Handlers = {
       if (from)
         from.left_out.push({
           kind: String(r.kind ?? ""),
-          family: typeof r.family === "string" ? r.family : null,
+          direction: typeof r.direction === "string" ? r.direction : null,
           at: e.at,
         });
     }
   },
-  family_added(f, e, b) {
-    const name = typeof b.family === "string" ? b.family : "";
+  direction_added(f, e, b) {
+    const name = typeof b.direction === "string" ? b.direction : "";
     if (!name) return;
     const v = f.run(String(e.subject));
-    if (v.families.some((x) => x.name === name)) return;
-    v.families.push(
+    if (v.registry.some((x) => x.name === name)) return;
+    v.registry.push(
       frozen({
         name,
         description: typeof b.description === "string" ? b.description : "",

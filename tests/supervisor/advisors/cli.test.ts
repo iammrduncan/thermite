@@ -88,7 +88,7 @@ const out = (e) => process.stdout.write(JSON.stringify(e) + "\\n");
     const r = await fetch(mcpUrl, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(auth ? { authorization: "Bearer " + auth } : {}) },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search_past_research", arguments: { query: "tiling" } } }),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "kb_search", arguments: { query: "tiling" } } }),
     });
     return r.status === 200 ? JSON.stringify(await r.json()) : String(r.status);
   };
@@ -157,7 +157,10 @@ async function call(kind: "codex" | "opencode", runtime: AdvisorRuntime) {
       schema: Facts,
       answerSchema: Type.Object({ decision: Type.String() }),
       tools: {
-        pastSearch: async (query) => [{ kind: "experiment", title: `found for ${query}` }],
+        kb: {
+          writes: [],
+          call: async (_tool, a) => ({ text: `found for ${String(a.query)}` }),
+        },
       },
     });
   } finally {
@@ -167,7 +170,7 @@ async function call(kind: "codex" | "opencode", runtime: AdvisorRuntime) {
 }
 
 describe("advisors in OpenCode and the Codex CLI", () => {
-  test("Codex: its own folder, the read-only sandbox, no tools of its own, the model through the call's proxy, the past research over MCP", async (t) => {
+  test("Codex: its own folder, the read-only sandbox, no tools of its own, the model through the call's proxy, the knowledge base over MCP", async (t) => {
     const p = await provider(t);
     const r = await call("codex", {
       name: "auditor",
@@ -217,7 +220,7 @@ describe("advisors in OpenCode and the Codex CLI", () => {
       p.seen.map((s) => [s.path, s.headers.authorization]),
       [["POST /v1/responses", `Bearer ${KEY}`]],
     );
-    // The past research over MCP, its token in the environment only.
+    // The knowledge base over MCP, its token in the environment only.
     assert.deepEqual(f.mcp_servers, ["thermite"]);
     assert.match(f.config, /bearer_token_env_var = "THERMITE_MCP_AUTH"/);
     assert.match(f.config, /default_tools_approval_mode = "approve"/);
@@ -422,6 +425,73 @@ describe("advisors in OpenCode and the Codex CLI", () => {
   });
 });
 
+describe("an advisor in Codex at a full usage window", () => {
+  test("the reset comes from the provider's answer its proxy saw, where Codex's words give a clock time only", async (t) => {
+    // A full ChatGPT plan: OpenAI's code, no reset.
+    const server = createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(429, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: { code: "subscription_sharing_usage_limit_exceeded" } }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    t.after(() => new Promise<void>((r) => server.close(() => r())));
+    // Codex as it ends at its usage limit: it calls its provider, then says so in its events.
+    const dir = mkdtempSync(join(tmpdir(), "thermite-fake-codex-"));
+    const bin = join(dir, "codex");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.readFileSync(0, "utf8");
+const config = fs.readFileSync(require("node:path").join(process.env.CODEX_HOME, "config.toml"), "utf8");
+const base = /\\[model_providers\\.thermite\\][^[]*base_url = "([^"]*)"/.exec(config)[1];
+(async () => {
+  await fetch(base + "/responses", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + process.env.THERMITE_PROXY_AUTH }, body: "{}" });
+  const out = (e) => process.stdout.write(JSON.stringify(e) + "\\n");
+  out({ type: "thread.started", thread_id: "t-1" });
+  out({ type: "error", message: "You've hit your usage limit. Try again at 5:53 AM." });
+  out({ type: "turn.failed", error: { message: "You've hit your usage limit. Try again at 5:53 AM." } });
+  process.exit(1);
+})();
+`,
+    );
+    chmodSync(bin, 0o755);
+    const before = process.env.THERMITE_CODEX_BIN;
+    process.env.THERMITE_CODEX_BIN = bin;
+    try {
+      const started = Date.now();
+      const r = await runAdvisor({
+        runtime: {
+          name: "auditor",
+          runtime: "codex",
+          api: "chatgpt",
+          base_url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`,
+          model: "gpt-test",
+          api_key: KEY,
+          context_window: 128_000,
+          timeout_s: 60,
+        },
+        prompt: testPrompt("You audit.", "Audit this."),
+        schema: z.object({ decision: z.string() }),
+        answerSchema: Type.Object({ decision: Type.String() }),
+      });
+      assert.equal(r.output, undefined);
+      const until = Date.parse(r.limit?.until ?? "");
+      // The 15 minutes agents wait for a full ChatGPT plan.
+      assert.ok(
+        until >= started + 15 * 60_000 && until <= Date.now() + 15 * 60_000,
+        `waits until ${r.limit?.until}`,
+      );
+      assert.match(r.limit?.words ?? "", /subscription_sharing_usage_limit_exceeded/);
+    } finally {
+      if (before === undefined) delete process.env.THERMITE_CODEX_BIN;
+      else process.env.THERMITE_CODEX_BIN = before;
+    }
+  });
+});
+
 describe("the advisor's model proxy", () => {
   test("it takes only the call's credential, adds the route's key, and keeps a ChatGPT sign-in to what OpenAI accepts", async (t) => {
     const p = await provider(t);
@@ -456,5 +526,44 @@ describe("the advisor's model proxy", () => {
     });
     assert.equal(ok.status, 200);
     assert.equal(p.seen.at(-1)?.headers.authorization, "Bearer access");
+  });
+
+  test("a full ChatGPT plan reaches an advisor in Codex as Codex's own usage limit, and the supervisor hears OpenAI's answer", async (t) => {
+    const server = createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(429, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: { code: "subscription_sharing_usage_limit_exceeded" } }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    t.after(() => new Promise<void>((r) => server.close(() => r())));
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
+    const heard: string[] = [];
+    const ask = async (program: "codex" | "opencode") => {
+      const proxy = await serveAdvisorModel(
+        { api: "chatgpt", baseUrl: base, key: "access" },
+        (a) => heard.push(a.body),
+        program,
+      );
+      t.after(() => proxy.close());
+      return fetch(`${proxy.root}/responses`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${proxy.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ model: "m", input: "hi" }),
+      });
+    };
+    const codex = await ask("codex");
+    assert.equal(codex.status, 429);
+    assert.equal(codex.headers.get("retry-after"), "900");
+    const said = (await codex.json()) as { error: { type: string; resets_in_seconds: number } };
+    assert.equal(said.error.type, "usage_limit_reached");
+    assert.equal(said.error.resets_in_seconds, 900);
+    const opencode = await ask("opencode");
+    assert.deepEqual(await opencode.json(), {
+      error: { code: "subscription_sharing_usage_limit_exceeded" },
+    });
+    assert.equal(heard.length, 2);
+    for (const body of heard) assert.match(body, /subscription_sharing_usage_limit_exceeded/);
   });
 });

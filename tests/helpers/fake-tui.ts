@@ -1,5 +1,5 @@
 // Test only: a stand-in for an agent program's terminal UI, which the terminal host's tests run
-// (tests/harness/terminal/) and the harness image's check (tests/stand-ins/terminal/check.mjs). It
+// (tests/agents/terminal/) and the harness image's check (tests/stand-ins/terminal/check.mjs). It
 // imports nothing of Thermite's. It draws a screen and a prompt, reads typed text, pastes and keys
 // in raw mode, writes a session log as Claude Code writes its transcript (0600, in a 0700 folder
 // of its home), and runs the hook its settings name, as Claude Code does. Each thing it saw is one
@@ -7,7 +7,8 @@
 //   start      its process, its terminal (both ends a terminal, the size, a controlling terminal
 //              or not, TERM), its session and whether it was resumed, and the sign-in on file
 //              descriptor 3, when CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR names it (its length
-//              and a hash, never it)
+//              and a hash, never it), and what its open file descriptors are, where /proc shows
+//              them (Linux)
 //   query      whether its device-attributes query (ESC [ c) was answered
 //   user       a message: the first one (after `--`), or one typed or pasted, then Enter
 //   key        a named key: tab, up, down, left, right, page-up, page-down
@@ -39,13 +40,26 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
+  readlinkSync,
   readSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { dirname, join } from "node:path";
+
+/** What this process's open file descriptors are (Linux), each as /proc names it. */
+function openFiles(): string[] {
+  return readdirSync("/proc/self/fd").flatMap((n) => {
+    try {
+      return [readlinkSync(`/proc/self/fd/${n}`)];
+    } catch {
+      return [];
+    }
+  });
+}
 
 const args = process.argv.slice(2);
 const dash = args.indexOf("--");
@@ -155,6 +169,7 @@ function runTui(): void {
     ctty,
     term: process.env.TERM,
     ...(token ? { token } : {}),
+    ...(existsSync("/proc/self/fd") ? { fds: openFiles() } : {}),
   });
   /** One step of a scripted turn. */
   type Step =
@@ -198,6 +213,9 @@ function runTui(): void {
     });
   };
 
+  // Its session has started, as Claude Code's SessionStart hook says: the harness types into
+  // Claude Code only after it (goal 183).
+  hook("SessionStart", { source: "startup" });
   if (first !== undefined) {
     record({ type: "user", text: first, how: "first" });
     hook("UserPromptSubmit", { prompt: first });

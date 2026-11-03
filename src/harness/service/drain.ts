@@ -1,5 +1,6 @@
 import { MAX_LANES } from "../../core/contract.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
+import type { AgentSignals } from "./index.ts";
 import type { TrialFacts } from "./watch.ts";
 
 /**
@@ -137,6 +138,11 @@ export interface Work {
   judge_jobs: number;
   draining: Draining | null;
   open?: OpenTrial[];
+  /**
+   * The calls outside a trial that run in their own terminal now (goal 169): a planner's, by the
+   * id its console and screens take. Control's Live shows each one's terminal.
+   */
+  terminals?: { id: string; run: string; role: string }[];
 }
 
 /** What the harness's watch knows of a trial; none outside the service (a drain's own event). */
@@ -231,23 +237,31 @@ export function drainCommand(
 
 /**
  * stop_trial (goal 136): the trial must still run, in that run. The ledger records the ask
- * (`trial_stop_asked`), and the scheduler stops the trial within a second (`scheduler/stops.ts`),
+ * (`trial_stop_asked`), and the scheduler, told at once, stops the trial (`agents/scheduler/stops.ts`),
  * as a restart would: it ends as interrupted, and its experiment goes back to the top of the
  * run's queue. A trial that ends meanwhile is left as it ended.
  */
 export function askStop(
-  ledger: Ledger,
+  svc: { ledger: Ledger; agents?: AgentSignals | undefined },
   p: { run: string; trial: string; reason?: string | undefined },
   by: string,
 ): { run: string; trial: string; lane: string; stopping: true } {
-  const t = ledger.trials.get(p.trial);
+  const t = svc.ledger.trials.get(p.trial);
   if (!t || t.run !== p.run)
     throw new LedgerError("not_found", `run ${p.run} has no trial ${p.trial}`);
   if (t.ended_at) throw new LedgerError("conflict", `trial ${p.trial} has ended already`);
-  ledger.appendEvent(by, "trial_stop_asked", p.run, {
+  const event = svc.ledger.appendEvent(by, "trial_stop_asked", p.run, {
     trial: p.trial,
     lane: t.lane,
     ...(p.reason ? { reason: p.reason } : {}),
+  });
+  svc.agents?.onStopAsked({
+    event,
+    run: p.run,
+    trial: p.trial,
+    lane: t.lane,
+    reason: p.reason,
+    by,
   });
   return { run: p.run, trial: p.trial, lane: t.lane, stopping: true };
 }

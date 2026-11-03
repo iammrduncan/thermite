@@ -1,13 +1,18 @@
 import { z } from "zod";
 import { RIG_ID_SENTENCE } from "../../core/ids.ts";
+import { REACH_MAX_ENTRIES, REACH_MAX_PORTS } from "../../core/reach.ts";
 import {
   addClusterRig,
   type ClusterResourcesBody,
   clusterResourcesFields,
   clusterResourcesRequest,
   clusterRigAction,
+  HARNESS_LEAST,
+  leastRigSize,
+  SUPERVISOR_SHARE,
   setClusterRigResources,
   setClusterSlots,
+  setReachableAddresses,
   updateRigImages,
 } from "../clusters/index.ts";
 import type { ToolContext } from "./context.ts";
@@ -21,8 +26,7 @@ export function registerAddClusterRig(tools: ToolContext): void {
       "add_cluster_rig",
       {
         title: "Add a rig on a cluster",
-        description:
-          "Adds a rig on a Kubernetes cluster in Providers, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows. The rig's first key may wait for the owner's acceptance.",
+        description: `Adds a rig on a Kubernetes cluster in Providers, as Rigs › Add a rig does, with the same checks, and sets it up in the background (follow it with list_rigs and the rig's setup events). For a cluster of slots, name a free slot. CPUs and memory default to what the slot's quota allows; a new rig's agent programs run in their own terminals, so its supervisor takes half a CPU and ${SUPERVISOR_SHARE.terminal.memoryGi} GiB of them and the harness the rest, and a size below ${leastRigSize("terminal").cpus} CPUs and ${leastRigSize("terminal").memoryGi} GiB is refused. The rig's first key may wait for the owner's acceptance.`,
         inputSchema: {
           rig: z.string().min(1).describe(RIG_ID_SENTENCE),
           cluster: z.string().min(1),
@@ -139,7 +143,7 @@ export function registerClusterRigs(tools: ToolContext): void {
       "set_cluster_rig_resources",
       {
         title: "Change a cluster rig's GPUs, CPUs and memory",
-        description: `For a rig control set up on a cluster: changes how many GPUs its harness pod asks for, and its CPUs and memory, as Edit rig does, keeping its volume, tokens, runs and results. Give only what changes. Checked as Add a rig checks them: 1 to 16 GPUs through the rig's own way (NVIDIA's device plugin, against its nodes as control last read them, or its DRA device class); at least 1.5 CPUs and 6 GiB, both or neither (null for both: the namespace's defaults); and, in a slot, the slot's quota (CPUs, memory, requests.nvidia.com/gpu, or the device class's devices), which control reads again first. A rig on the CPU can't take GPUs, nor a GPU rig move to none: add a new rig for that. With a new number of GPUs, judge_gpus sets the judge's share (1 to min(8, gpus - 1), the agents at most 8); left out, the judge gets half, rounded up, as when a rig is added, and a share the rig kept from Edit rig follows. Its pods restart with the new size on the images it runs, as update_rig_images moves them: by default it drains first (rig_setup shows it draining, and the change it waits for in pending); wait false restarts them now, also during its drain (a call with no other field then makes the change the drain waits for). Follow it with rig_setup and list_rigs. Returns {rig, said}. Refused in words: no such rig, one still being set up, updating, starting or draining for an image update, a value out of range or above the slot's quota, and judge_gpus without a new number of GPUs.${owner ? "" : " judge_gpus is the owner's alone: a call with it is refused, and nothing changes."}`,
+        description: `For a rig control set up on a cluster: changes how many GPUs its harness pod asks for, and its CPUs and memory, as Edit rig does, keeping its volume, tokens, runs and results. Give only what changes. Checked as Add a rig checks them: 1 to 16 GPUs through the rig's own way (NVIDIA's device plugin, against its nodes as control last read them, or its DRA device class); CPUs and memory both or neither (null for both: the namespace's defaults), with the supervisor's share for how the rig's agent programs run as its report says (half a CPU and ${SUPERVISOR_SHARE.terminal.memoryGi} GiB in their own terminals, ${SUPERVISOR_SHARE.headless.memoryGi} GiB headless) and at least ${HARNESS_LEAST.cpus} CPU and ${HARNESS_LEAST.memoryGi} GiB for the harness, so at least ${leastRigSize("terminal").cpus} CPUs and ${leastRigSize("terminal").memoryGi} GiB, or ${leastRigSize("headless").memoryGi} GiB headless, for the size it keeps too; and, in a slot, the slot's quota (CPUs, memory, requests.nvidia.com/gpu, or the device class's devices), which control reads again first. A rig on the CPU can't take GPUs, nor a GPU rig move to none: add a new rig for that. With a new number of GPUs, judge_gpus sets the judge's share (1 to min(8, gpus - 1), the agents at most 8); left out, the judge gets half, rounded up, as when a rig is added, and a share the rig kept from Edit rig follows. Its pods restart with the new size on the images it runs, as update_rig_images moves them: by default it drains first (rig_setup shows it draining, and the change it waits for in pending); wait false restarts them now, also during its drain (a call with no other field then makes the change the drain waits for). Follow it with rig_setup and list_rigs. Returns {rig, said}. Refused in words: no such rig, one still being set up, updating, starting or draining for an image update, a value out of range or above the slot's quota, and judge_gpus without a new number of GPUs.${owner ? "" : " judge_gpus is the owner's alone: a call with it is refused, and nothing changes."}`,
         inputSchema: { rig: z.string().min(1), ...clusterResourcesFields },
       },
       audited("set_cluster_rig_resources", async (a: ClusterResourcesBody & { rig: string }) => {
@@ -172,4 +176,47 @@ export function registerClusterRigs(tools: ToolContext): void {
       }),
     );
   }
+}
+
+/**
+ * The addresses cluster rigs' harnesses may reach beside the internet, as Settings keeps them: read
+ * by the owner and the operator, set by the owner alone.
+ */
+export function registerReachableAddresses(tools: ToolContext): void {
+  const { server, store, opts, actor, role, audited } = tools;
+  if (role !== "owner" && role !== "operator") return;
+  server.registerTool(
+    "reachable_addresses",
+    {
+      title: "Addresses cluster rigs may reach",
+      description:
+        "The owner's list in Settings › Addresses rigs may reach: each address (one IPv4 or IPv6 host in the private, shared or link-local ranges) with the TCP ports cluster rigs' harnesses reach it on beside DNS and the internet, its note, and who set it when.",
+      inputSchema: {},
+    },
+    audited("reachable_addresses", () => ({ addresses: store.reachable.list() })),
+  );
+  if (role !== "owner") return;
+  server.registerTool(
+    "set_reachable_addresses",
+    {
+      title: "Set the addresses cluster rigs may reach",
+      description: `Sets the whole list in Settings › Addresses rigs may reach, in place of the one before (an empty list removes every address). Each entry: address, one IPv4 or IPv6 address in the private, shared or link-local ranges, never a range; ports, 1 to ${REACH_MAX_PORTS} TCP ports; note, what it is. At most ${REACH_MAX_ENTRIES} addresses, each once. Control writes the list at once into the network rules of each rig it set up in a namespace it created (a step "network" in each rig's history); a joined rig keeps the list its join command gave it; a slot's rules are its operators', and control's check of a slot accepts a rule that opens exactly a listed address on its listed ports. Returns {addresses, said}. The owner's token only.`,
+      inputSchema: {
+        addresses: z
+          .array(
+            z.object({
+              address: z.string(),
+              ports: z.array(z.number().int()),
+              note: z.string().optional(),
+            }),
+          )
+          .max(REACH_MAX_ENTRIES),
+      },
+    },
+    audited("set_reachable_addresses", (a: { addresses: unknown[] }) => {
+      const r = setReachableAddresses(opts.parts, a.addresses, actor);
+      if ("error" in r) throw new Error(r.error);
+      return { addresses: store.reachable.list(), said: r.ok };
+    }),
+  );
 }

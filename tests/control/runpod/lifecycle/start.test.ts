@@ -107,6 +107,7 @@ describe("RunPod rigs: start and restart", () => {
     const v = s.view(rig);
     assert.deepEqual([v.status, v.op, v.stopped_by], ["RUNNING", null, null]);
     assert.deepEqual(s.steps(rig).slice(1), [
+      ["runpod_leaf_address", true],
       ["runpod_restarting", true],
       ["runpod_starting", true],
       ["runpod_running", true],

@@ -14,6 +14,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { serve } from "@hono/node-server";
+import { claudeProgram } from "../../../../src/agents/cli/claude-code.ts";
+import { codexProgram } from "../../../../src/agents/cli/codex.ts";
+import { OFFER_MS, TurnMessages } from "../../../../src/agents/cli/in-turn.ts";
+import { opencodeProgram } from "../../../../src/agents/cli/opencode.ts";
+import type { CliProgram, CliTally } from "../../../../src/agents/cli/program.ts";
 import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import { codexHooks } from "../../../../src/agents/programs/codex/index.ts";
 import {
@@ -27,12 +32,7 @@ import type { MessageHow } from "../../../../src/core/agents.ts";
 import { TURN_OFFER, TURN_TAKEN } from "../../../../src/core/api/harness/turn.ts";
 import { signEnvelope } from "../../../../src/core/commands.ts";
 import { partText } from "../../../../src/core/prompts.ts";
-import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts";
-import { codexProgram } from "../../../../src/harness/agents/cli/codex.ts";
-import { OFFER_MS, TurnMessages } from "../../../../src/harness/agents/cli/in-turn.ts";
 import { runCliTrial } from "../../../../src/harness/agents/cli/loop.ts";
-import { opencodeProgram } from "../../../../src/harness/agents/cli/opencode.ts";
-import type { CliProgram, CliTally } from "../../../../src/harness/agents/cli/program.ts";
 import { Registry } from "../../../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../../../src/harness/api/index.ts";
 import type { Runner, RunOutcome, RunRequest } from "../../../../src/harness/broker/runner.ts";
@@ -63,7 +63,7 @@ describe("TurnMessages: one message at a time, offered, then read with how it we
     const lines: string[] = [];
     const t = new TurnMessages({
       inbox: box.inbox,
-      render: (text, turn) =>
+      render: ({ text }, turn) =>
         renderWorkerTurn({ program: "claude-code", turn, kind: "owner", text }),
       next: () => ++said,
       held: () => held,
@@ -212,7 +212,7 @@ describe("an owner's message inside the agent's turn, the whole way in (goal 169
       run: "js-1",
       lane,
       epoch: n,
-      family: "f",
+      direction: "f",
       parent: "p",
       token,
     });
@@ -267,7 +267,7 @@ describe("an owner's message inside the agent's turn, the whole way in (goal 169
     // The other trial's own way in, as its loop sets it: its inbox is its own.
     const theirs = new TurnMessages({
       inbox: env.service.trialInbox({ id: other.id, run: "js-1", lane: "lane-2" }),
-      render: (text, turn) =>
+      render: ({ text }, turn) =>
         renderWorkerTurn({ program: "claude-code", turn, kind: "owner", text }),
       next: () => 1,
       held: () => [],

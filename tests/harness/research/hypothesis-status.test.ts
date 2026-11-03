@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { CommandKind } from "../../../src/core/commands.ts";
 import type { ResearchContract } from "../../../src/core/contract.ts";
-import { indexEvent, type KbFields } from "../../../src/core/kb-index.ts";
+import { indexEvent, type KbFields } from "../../../src/core/kb/index.ts";
 import { HYPOTHESIS_STATUS } from "../../../src/harness/research/research/index.ts";
 import { researchPackage } from "../../../src/harness/research/review/index.ts";
 import { hillClimbFixture } from "../../helpers/fixtures.ts";

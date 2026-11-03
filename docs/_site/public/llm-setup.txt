@@ -1,0 +1,126 @@
+# Set up Thermite: instructions for an AI agent
+
+You are an AI agent helping a person set up Thermite on their computer. Thermite is open-source
+autoresearch: AI agents run experiments on a project in a loop, and a judge the agents cannot
+see or change keeps only what it measures as better. Its documentation is https://usethermite.com.
+
+Follow these steps in order. Run the commands yourself where you can, say what each one does
+before you run it, and stop to ask the person when a step needs their choice or their hands.
+
+## Rules while you work
+
+- Never read, print, copy or paste a token, key or password: not into this chat, not into a
+  file, not into a command line. Where a step needs one, tell the person the command that shows
+  it, and let them copy it themselves.
+- Never publish Thermite's ports to the internet. Its dashboard stays at 127.0.0.1:8800. To
+  reach it from other machines, use a private network (step 6).
+- Thermite's agents run code that an AI model writes, on this computer. Before the person gives
+  Thermite a model, have them read Known limits: https://usethermite.com/reference/known-limits/
+  and, before they use a paid key, set a budget:
+  https://usethermite.com/how-to/campaigns/budget-and-stop-time/
+- Use the latest release, as below. Don't build Thermite from source unless the person asks:
+  that is for contributors.
+
+## 1. Check what the computer has
+
+Thermite needs:
+
+- Linux or macOS, with a few CPU cores, a few gigabytes of free memory, and several gigabytes of
+  free disk (its images take about 2.5 GB).
+- Docker with Docker Compose 2 or later (`docker compose version`), or Podman with
+  `podman compose` (`podman compose version`) and a compose program behind it: podman-compose
+  (`pipx install podman-compose`) or Docker Compose 2. Not `docker-compose` 1.x: it can't read
+  Thermite's compose file. On a Mac with Podman, its virtual machine must be running
+  (`podman machine start`), and the free disk must be inside it.
+- curl, and an internet connection.
+
+If something is missing, tell the person what, and how to install it for their system, and ask
+before you install anything.
+
+Below, write `docker compose` for Docker, or `podman compose` for Podman.
+
+## 2. Get Thermite
+
+```sh
+mkdir thermite
+cd thermite
+curl -fsSLO https://github.com/iammrduncan/thermite/releases/latest/download/compose.yaml
+```
+
+Check the file: the notes of https://github.com/iammrduncan/thermite/releases/latest give its
+SHA-256 and the command that checks it, which prints `compose.yaml: OK`. If it prints `FAILED`,
+download it again; don't use it.
+
+## 3. Make the local tokens
+
+```sh
+docker compose run --rm init
+```
+
+Its last line is `local init: .dev ready (… made, … kept)`. The tokens are in `.dev/secrets/`.
+Don't open them.
+
+## 4. Start Thermite
+
+```sh
+docker compose up -d
+docker compose ps
+```
+
+The first start downloads the images, which can take a few minutes. `ps` lists four containers
+whose status starts with `Up`: control, nats, harness and supervisor. `init` and `enroll` may
+show `Exited (0)`: that is right. Then check control:
+
+```sh
+curl -s http://127.0.0.1:8800/v1/health
+```
+
+It answers `{"ok":true,"bus":"connected","degraded":false}`. A container that isn't Up: read its
+log (`docker compose logs <name>`), then
+https://usethermite.com/how-to/operate/troubleshoot/
+
+## 5. Have the person sign in
+
+Tell the person to run this themselves and copy what it shows, their owner's token:
+
+```sh
+cat .dev/secrets/control-admin-token
+```
+
+Then to open http://127.0.0.1:8800/ui, paste it into **Admin token** and press **Sign in**. The
+Overview says `1 of 1 rigs reporting` once the rig has reported, within a minute.
+
+The tutorial these steps come from, with what each screen shows:
+https://usethermite.com/tutorials/first-run/
+
+## 6. Next, by what the person wants
+
+Ask what they want to do next, and take them to the page for it. Every page is also published as
+Markdown at its address with `.md` added, which is easier for you to read.
+
+- Run a first campaign, with a free model and no account:
+  https://usethermite.com/tutorials/agents-with-a-free-model/
+- Add a second machine: https://usethermite.com/tutorials/second-machine/
+- Reach Thermite from other devices or machines, privately, with Tailscale or WireGuard:
+  https://usethermite.com/how-to/install/private-network/
+- Use this computer's NVIDIA GPUs:
+  https://usethermite.com/how-to/install/one-machine/#use-the-machines-nvidia-gpus
+- Work on the person's own project: https://usethermite.com/tutorials/your-own-project/
+- A campaign that ends when a goal is met: https://usethermite.com/tutorials/first-goal-campaign/
+- Choose between a hill climb, a goal campaign and a research campaign:
+  https://usethermite.com/how-to/campaigns/choose-a-mode/
+- Give the agents a model, free or paid, or a Claude or ChatGPT subscription:
+  https://usethermite.com/how-to/models/choose-a-model/
+- Rigs elsewhere: on a Kubernetes cluster
+  https://usethermite.com/how-to/install/rig-on-a-cluster/ , or a GPU on RunPod
+  https://usethermite.com/how-to/install/runpod-rig/
+- Let an AI agent (such as you) run campaigns through Thermite's MCP server:
+  https://usethermite.com/how-to/automate/agent-over-mcp/
+- Keep Thermite running for real work: its settings, ports, updates and backups:
+  https://usethermite.com/how-to/install/one-machine/ and
+  https://usethermite.com/how-to/operate/backup-and-restore/
+- Something went wrong: https://usethermite.com/how-to/operate/troubleshoot/
+
+Every page, listed with what it covers: https://usethermite.com/llms.txt . All of them in one
+file: https://usethermite.com/llms-full.txt . What changed in each release:
+https://usethermite.com/project/changelog/

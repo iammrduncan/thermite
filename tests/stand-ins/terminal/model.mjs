@@ -2,8 +2,10 @@
 // own terminals: OpenAI's Responses API, which the Codex CLI calls, and chat completions, which
 // OpenCode's OpenAI-compatible provider calls. It answers every call with a short text, streamed
 // as each API streams it, naming the last marker (`TERMINAL-CHECK-<n>`) the conversation's user
-// wrote, and the model list a program may ask for. It counts the calls by marker, and keeps no
-// prompt.
+// wrote, and the model list a program may ask for. It counts the calls by marker, with when each
+// call with tools came, and keeps no prompt. The first call with tools for WINDOW_MARKER meets a full usage window:
+// a 429 whose words say so and whose Retry-After is WINDOW_S away, as the spike's stand-in answered
+// OpenCode 2.1.4, which fails the step at once as `provider.quota` with that time.
 import { createServer } from "node:http";
 
 const textOf = (c) =>
@@ -24,6 +26,10 @@ function marker(messages) {
 }
 
 const USAGE = { input_tokens: 100, output_tokens: 5 };
+
+/** The marker whose first call with tools meets a full usage window, and its reset's distance. */
+export const WINDOW_MARKER = "TERMINAL-CHECK-3";
+export const WINDOW_S = 5;
 
 /** A Responses API stream of one message saying `text`. */
 function responses(res, id, model, text) {
@@ -88,9 +94,15 @@ function chat(res, id, model, text) {
   res.end("data: [DONE]\n\n");
 }
 
-/** Starts the stand-in on localhost; `calls` counts the model calls by marker. */
+/**
+ * Starts the stand-in on localhost; `calls` counts the model calls by marker, `times` gives when
+ * each call with tools came, and `window` when the usage window it answered resets (ISO), once it
+ * has.
+ */
 export async function startModel() {
   const calls = {};
+  const times = {};
+  const state = { window: undefined };
   let n = 0;
   const server = createServer((req, res) => {
     let raw = "";
@@ -123,10 +135,33 @@ export async function startModel() {
       const id = ++n;
       const m = marker(api === "responses" ? (body.input ?? []) : (body.messages ?? []));
       calls[m] = (calls[m] ?? 0) + 1;
+      // A program's own calls, such as a title for the session, offer no tools.
+      const tools = Array.isArray(body.tools) && body.tools.length > 0;
+      if (tools) times[m] = [...(times[m] ?? []), Date.now()];
+      if (m === WINDOW_MARKER && tools && !state.window) {
+        state.window = new Date(Date.now() + WINDOW_S * 1000).toISOString();
+        res.writeHead(429, { "content-type": "application/json", "retry-after": String(WINDOW_S) });
+        res.end(
+          JSON.stringify({
+            error: {
+              type: "rate_limit_exceeded",
+              code: "rate_limit_exceeded",
+              message: "Rate limit reached; usage limit reached",
+            },
+          }),
+        );
+        return;
+      }
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
       (api === "responses" ? responses : chat)(res, id, body.model, `${m} done.`);
     });
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  return { port: server.address().port, calls, close: () => server.close() };
+  return {
+    port: server.address().port,
+    calls,
+    times,
+    window: () => state.window,
+    close: () => server.close(),
+  };
 }

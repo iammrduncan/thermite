@@ -1,5 +1,5 @@
 ---
-title: "Hand the work to agents"
+title: "Run your first campaign"
 description: "Give your rig a free AI model, start a campaign on the sample project in Thermite's repository, and watch agents propose changes that the judge measures."
 type: tutorial
 sidebar:
@@ -14,7 +14,7 @@ It takes half an hour to an hour, most of it waiting. An agent works on one thin
 
 ## What you need
 
-- Everything from [Your first run](first-run.md): Thermite running on your computer, the dashboard signed in, and `local-1` on the **Rigs** page.
+- Everything from [Install on one machine](first-run.md): Thermite running on your computer, the dashboard signed in, and `local-1` on the **Rigs** page.
 - **git**, to get the sample from Thermite's source code (step 4).
 - An internet connection. Your rig fetches the sample from GitHub, and the free models run on OpenCode's own service. You need no account and no key. The model sees the code the agents read, which here is only the sample project.
 - A look at [Known limits](../reference/known-limits.md), if you haven't read it yet. From this tutorial on, agents run the code that a model writes, on your computer.
@@ -23,18 +23,18 @@ It takes half an hour to an hour, most of it waiting. An agent works on one thin
 
 A **provider** is where your agents' models come from. OpenCode is a program that runs coding agents, and its service offers some models for free.
 
-1. Press the cog icon at the foot of the sidebar, beside **Sign out**. Its tooltip says **Settings**. It opens the **Providers** page, whose heading reads `Settings › Providers`.
+1. Press the cog icon at the foot of the sidebar, beside **Sign out**. Its tooltip says **Settings**. It opens the **Providers** page, whose heading reads `Settings › Providers`. While you are in Settings, the left navigation lists Settings' pages; **Back to Thermite**, at its top, goes back.
 2. Under **Add a provider**, set:
    - **Type**: **OpenCode (its own models)**
    - **Name**: `opencode`
    - **Base URL** and **API key**: leave them empty.
 3. Press **Add and list its models**.
 
-A green line says `"opencode" is saved and lists` a number of models, then `Choose one for a rig below.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **runs in the OpenCode harness**.
+A green line says `"opencode" is saved and lists` a number of models, then `Choose one for a rig on Rigs' models.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **runs in the OpenCode harness**.
 
 ## 2. Give the rig a free model
 
-Find **Harness and model for each rig** at the bottom of the page. The row for `local-1` says `Its agents have no model: they wait.`
+Press **Rigs' models** in the left navigation. Under **Harness and model for each rig**, the row for `local-1` says `Its agents have no model: they wait.`
 
 1. In its first list, choose **OpenCode v2**. This is the **worker harness**: the program the agents work in. (It is not the rig's `harness` container, which runs it.) OpenCode's free models run only in OpenCode's own program.
 2. In its second list, under **opencode (OpenCode harness only)**, choose the first model whose name ends in `-free`. Those are the models OpenCode serves without a key. OpenCode decides which they are, and the list changes over time.
@@ -65,12 +65,12 @@ The dashboard takes a kit as one file. In a terminal in your `thermite` folder, 
 
 ```sh
 cd ..
-git clone --branch v0.1.0 https://github.com/iammrduncan/thermite.git thermite-source
+git clone --branch v0.1.1 https://github.com/iammrduncan/thermite.git thermite-source
 cd thermite-source
 tar -czf matmul-cpu-kit.tar.gz -C examples/matmul-cpu kit
 ```
 
-`v0.1.0` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.0`. If yours names another one, put a `v` before it and use it in place of `v0.1.0`, here and in step 6.
+`v0.1.1` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.1`. If yours names another one, put a `v` before it and use it in place of `v0.1.1`, here and in step 6.
 
 The last command prints nothing. Your `thermite-source` folder now holds the file `matmul-cpu-kit.tar.gz`.
 
@@ -94,10 +94,10 @@ The sample is one folder of Thermite's repository. Your rig fetches the whole re
 On **3 Project**:
 
 1. **Repository**: `https://github.com/iammrduncan/thermite.git`
-2. **Start from**: `v0.1.0`, the release of step 4. The sample then matches your images.
+2. **Start from**: `v0.1.1`, the release of step 4. The sample then matches your images.
 3. **Folder in the repository**: `examples/matmul-cpu/project`
 4. **Repository access**: keep **Public: no key**.
-5. Press **Look it up**. Control reads the folder's file names and says `Found: v0.1.0 is at`, a short commit id, then `· 4 files in examples/matmul-cpu/project. Rigs fetch it from there.` Every run starts from exactly that commit.
+5. Press **Look it up**. Control reads the folder's file names and says `Found: v0.1.1 is at`, a short commit id, then `· 4 files in examples/matmul-cpu/project. Rigs fetch it from there.` Every run starts from exactly that commit.
 6. **Files the agents may change**: `src/kernel/**`. The path is inside the folder, and `**` matches every file below `src/kernel`. A change to any other file is refused before it is built.
 7. Open **Advanced**, below that field. In **Lines never allowed**, type these three lines:
 
@@ -116,7 +116,7 @@ On **4 How to measure**:
 
 1. Choose the card **Upload a kit**.
 2. Under **Kit archive**, choose the file `matmul-cpu-kit.tar.gz` in your `thermite-source` folder. Control unpacks it and checks it. The page says `matmul-cpu-kit.tar.gz: checked.`, then sums the kit up: `matmul-cpu: measures on cpu, 3 cases, scores flops_per_s.`
-3. Under **The kit's cases**, keep `small` and `large` at **Measured**, and set `held` to **Hidden test**. The judge measures every change on `small` and `large`. It runs the hidden test, `held`, only to double-check a change that already looks faster. So a change can't win by helping only the cases the agents can see.
+3. Under **The kit's cases**, keep `small` and `large` at **Measured**, and set `held` to **Hidden test**. The judge measures every change on `small` and `large`. It runs the hidden test, `held`, only to double-check a change that already looks faster: the change must give the right answer there too, and may be slower there than the champion by no more than 1%.
 4. **The score** shows `flops_per_s: a rate (FLOP/s)`: the speed of the matrix multiply, in floating-point operations a second. Keep **Better is** at **higher**, and **Smallest gain that counts (%)** at `5`. A change must be at least 5% faster to count.
 5. Press **Next**.
 
@@ -141,7 +141,7 @@ Open **Campaigns** in the sidebar. Under **At work now**, a card shows `matmul-a
 For the first few minutes the judge measures the project as it is (step 9 says more), and then the **planner**, an agent that decides what each lane tries, plans the first round. Meanwhile the card's `lanes` line says `waiting for the first round`. `lane-1` takes its place once the planner has given the lane its work.
 
 :::tip[If the run does not appear]
-Open **Commands** in the sidebar. The `assign campaign` line shows **failed**, and its outcome says why:
+Open the **Audit log** in the sidebar and pick **Commands** under **Type**. The `assign_campaign` line shows **failed**, and the reason beside it says why:
 
 - `commit` and a commit id, then `has no folder examples/matmul-cpu/project`: the folder's path in step 6 has a typing mistake.
 - `staging:` and a reason: the rig could not fetch the repository, for example without an internet connection. See [A campaign doesn't start: staging](../how-to/operate/troubleshoot.md#a-campaign-doesnt-start-staging).
@@ -185,7 +185,7 @@ The card **Ideas from the lanes** holds what an agent proposes beyond its own ex
 
 The next tab, **Journal**, holds the agents' **field notes**: what they observe, the decisions they make and why, and what they learn, written as they work. Later runs can read them: see [Use past research in a new run](../how-to/campaigns/use-past-research.md).
 
-Choose **Attempts**. Each change the agent submitted is an **attempt**, with one word for how it ended. The word sums up the judge's verdict, as in [Your first run](first-run.md#7-see-what-the-judge-decided):
+Choose **Attempts**. Each change the agent submitted is an **attempt**, with one word for how it ended. The word sums up the judge's verdict, as in [Install on one machine](first-run.md#7-see-what-the-judge-decided):
 
 | You see | It means |
 | --- | --- |
@@ -229,6 +229,7 @@ You gave a rig a free model and checked it, and started a hill climb from the **
 
 ## Next
 
+- Step 3, [Add a second machine](second-machine.md): let control set a rig up on another machine, and run the campaign there too.
 - [Your first goal campaign](first-goal-campaign.md): a campaign that ends by itself when its goal is met. It needs no model.
 - [Choose a campaign mode](../how-to/campaigns/choose-a-mode.md): when to run a hill climb, a goal campaign or a research campaign.
 - [Agents, lanes and the planner](../explanation/agents-lanes-planner.md): how the planner and the workers share the work.

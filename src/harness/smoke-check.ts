@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { git as gitRun, gitText } from "../common/git.ts";
+import { git as gitRun, gitText } from "../common/git/index.ts";
 import { RIG_CHECK_PREFIX } from "../core/ids.ts";
 import { JUDGED_LIFECYCLES } from "../core/verdicts.ts";
 import type { RigCheckReport } from "./agents/index.ts";

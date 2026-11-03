@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import { KEY_PROVIDER_TYPES } from "../../../core/agents.ts";
 import { compactAtWords } from "../../../core/compaction.ts";
 import { isFree } from "../../../core/usage.ts";
+import { busState } from "../../bus/index.ts";
 import { type ClusterFacts, clusterLine } from "../../clusters/index.ts";
 import {
   checkRow,
@@ -24,6 +25,7 @@ import {
   ANTHROPIC_BASE,
   CHATGPT_REDIRECT,
   capWords,
+  creditsNoteDismissedAt,
   isOpencodeOwn,
 } from "../../providers/index.ts";
 import { HARNESS_NAMES } from "../../rigs/index.ts";
@@ -34,6 +36,7 @@ import {
   runpodLine,
   type TestView,
 } from "../../runpod/index.ts";
+import { spaceOf } from "../../space.ts";
 import {
   HARNESSES,
   type Machine,
@@ -41,20 +44,32 @@ import {
   type ProviderType,
 } from "../../store/index.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
-import { ago, esc } from "../../ui/components/index.ts";
-import { usageBlock, usageChips } from "../../ui/providers/usage.ts";
+import { ago, esc, SETTINGS_AREAS, type SettingsArea } from "../../ui/components/index.ts";
+import { creditsChip, creditsNote, usageBlock, usageChips } from "../../ui/providers/usage.ts";
 import { checkFollowUrl, modelCheckHtml } from "../../ui/rigs/checks.ts";
 import { modelPricesBlock } from "../../ui/usage.ts";
-import type { Dashboard } from "../context.ts";
+import type { Ctx, Dashboard } from "../context.ts";
+import { busSettingsBlock } from "./bus.ts";
+import { kbSettingsBlock } from "./kb.ts";
 import { mcpSettingsBlocks } from "./mcp-servers.ts";
-import { modelPrefix, TYPES, usd } from "./shared.ts";
+import { reachBlock } from "./reach.ts";
+import { draftOf, retentionBlocks } from "./retention.ts";
+import { modelPrefix, TYPES, UNCHECKED_LABEL, UNCHECKED_TIP, usd } from "./shared.ts";
+import { spaceBlock } from "./space.ts";
+
+/** Each Settings area's page title (goal 181). */
+const AREA_TITLES = Object.fromEntries(SETTINGS_AREAS.map((a) => [a.area, a.label])) as Record<
+  SettingsArea,
+  string
+>;
 
 /**
- * Settings › Providers: what can be added, the providers with their rows, the harness and model
- * for each rig, model prices and MCP servers.
+ * Settings, a page for each area: the providers with their rows and what can be added, model
+ * prices, the harness and model for each rig, MCP servers, the addresses cluster rigs may reach,
+ * the knowledge base's settings, Space, retention policies and the message bus.
  */
 export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
-  const { cmdForm, csrf, mcpServers, opts, page, parts, store, views } = dash;
+  const { cmdForm, csrf, mcpServers, opts, page, parts, said, store, views } = dash;
 
   // ---------------------------------------------------------------- settings: model providers
   /** The types reached with an API key (a subscription is added differently). */
@@ -109,7 +124,14 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
   const typeSelect = (sel?: ProviderType) =>
     `<select name="type">${KEY_TYPES.map((t) => `<option value="${t}"${t === sel ? " selected" : ""}>${t === "opencode" ? "OpenCode (its own models)" : TYPES[t]}</option>`).join("")}</select>`;
 
-  app.get("/ui/settings", async (c) => {
+  // Settings, an area at a time (goal 181, from the owner's mockup): each has its page, and the
+  // left navigation is Settings' own. `/ui/settings` is Providers, or the area a form's answer
+  // names (`at`), as before the split.
+  const settingsPage = async (c: Ctx) => {
+    const named = c.req.param("area");
+    const at = c.req.query("at") ?? (c.req.query("retention") ? "retention" : undefined);
+    const area = (named ?? (at && at in AREA_TITLES ? at : "providers")) as SettingsArea;
+    if (!(area in AREA_TITLES)) return c.notFound();
     const now = Date.now();
     const vs = views();
     const t = csrf(c);
@@ -134,12 +156,11 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
             given[rig]?.provider === name ||
             Object.values(store.agentModels.byRole(rig)).some((r) => r?.provider === name),
         );
-    // What an MCP server's form did is said in its own block (at=mcp), where the page opens.
-    const atMcp = c.req.query("at") === "mcp";
-    // So is what Save prices did (at=prices), in Model prices.
-    const atPrices = c.req.query("at") === "prices";
-    const ok = atMcp || atPrices ? undefined : c.req.query("ok");
-    const error = atMcp || atPrices ? undefined : c.req.query("error");
+    // What a form did is said on its area's page: at the top of Providers and of Rigs' models,
+    // and in its own block on the others, which read it themselves.
+    const atPrices = area === "prices";
+    const ok = c.req.query("ok");
+    const error = said(c);
     // Model prices (goal 075): one table under the providers, for every model not on a plan.
     const prices = modelPricesBlock({
       providers,
@@ -167,9 +188,12 @@ export function settingsPageRoutes(app: Hono, dash: Dashboard): void {
     const claudeRow = (p: (typeof providers)[number], rigs: string[]) => {
       const pName = encodeURIComponent(p.name);
       const windows = usageBlock("claude", usage.get(p.name), now);
+      // Its usage credits, while Claude Code reports them on (goal 169): a chip, and a note the
+      // owner may dismiss.
+      const dismissed = creditsNoteDismissedAt(store, p.name);
       return `<details class="dq" data-k="provider-${esc(p.name)}"><summary>
 <span class="dq-kind"><span class="kind m">Subscription</span></span>
-<span class="dq-main"><span class="dq-head">${esc(p.name)} <span class="muted" style="font-weight:400">· Claude subscription</span></span><span class="dq-why">${p.models.length} models · runs only in Claude Code, Anthropic's own program</span><span class="dq-sub"><span class="chip">token ${esc(p.key_hint)}</span>${usageChips(usage.get(p.name))}<span class="dq-where">${rigs.length ? `used by ${rigs.map((x) => esc(x)).join(", ")}` : "no rig uses it"}</span></span></span>
+<span class="dq-main"><span class="dq-head">${esc(p.name)} <span class="muted" style="font-weight:400">· Claude subscription</span></span><span class="dq-why">${p.models.length} models · runs only in Claude Code, Anthropic's own program</span><span class="dq-sub"><span class="chip">token ${esc(p.key_hint)}</span>${usageChips(usage.get(p.name))}${creditsChip(usage.get(p.name), dismissed)}<span class="dq-where">${rigs.length ? `used by ${rigs.map((x) => esc(x)).join(", ")}` : "no rig uses it"}</span></span></span>
 </summary><div class="dq-body">${windows}${PLAN_LINE}
 <div class="chips" style="margin:12px 0">${p.models.map((m) => `<span class="chip">claude-code:${esc(m.id)}</span>`).join("")}</div>
 <form method="post" action="/ui/settings/providers" class="form-grid" autocomplete="off"><input type="hidden" name="csrf" value="${t}"><input type="hidden" name="name" value="${esc(p.name)}"><input type="hidden" name="type" value="claude">
@@ -179,7 +203,7 @@ ${
   rigs.length
     ? `<div class="muted small">In use: give its rigs another model before deleting it.</div>`
     : `<form class="inline" method="post" action="/ui/settings/providers/${pName}/delete"><input type="hidden" name="csrf" value="${t}"><button class="danger">Delete this subscription</button></form>`
-}</div></details>`;
+}</div></details>${creditsNote(p.name, usage.get(p.name), dismissed, t)}`;
     };
     /** A ChatGPT subscription: its sign-in, its models, and how to sign in again. */
     const chatgptRow = (p: (typeof providers)[number], rigs: string[]) => {
@@ -244,6 +268,7 @@ ${
 <label>${infoLabel("Name", "How it shows in Thermite, and how rigs and campaigns refer to it: for example my-litellm or github-deploy. Letters, digits, dots, dashes and underscores: capitals become lowercase and spaces become dashes.")}<input name="name" required maxlength="64" pattern="\\s*[A-Za-z0-9][A-Za-z0-9._ \\-]*\\s*" title="Letters, digits, dots, dashes, underscores and spaces" placeholder="for example my-litellm"></label>
 <label data-for="${models}">${infoLabel("Base URL", BASE_TIP)}<input name="base_url" maxlength="500" placeholder="https://…/v1 (Anthropic and OpenCode: empty for their own)"></label>
 <label data-for="${models}">${infoLabel("API key", "The provider's key. Control seals it at once and never shows it again. OpenCode: leave it empty for its free models.")}<input name="api_key" type="password" autocomplete="new-password" maxlength="4096" placeholder="never shown again"></label>
+<label data-for="gitkey gittoken" hidden>${infoLabel("Host", "The Git server this access is for, such as github.com: its name alone. Control and the rigs use the key or token only for repositories on this host, and refuse any other.")}<input name="host" maxlength="253" placeholder="github.com"></label>
 <label data-for="gittoken" hidden>${infoLabel("Token", "An access token for the Git host, read-only if the host allows. Control seals it at once and never shows it again.")}<input name="token" type="password" autocomplete="new-password" maxlength="4096" placeholder="never shown again"></label>
 <label data-for="gittoken" hidden>${infoLabel("User name", "The name the host expects with the token. GitHub takes x-access-token (the default); GitLab takes oauth2.")}<input name="username" maxlength="100" placeholder="x-access-token"></label>
 <label data-for="ssh" hidden>${infoLabel("Address", "The machine's host name or IP address, as control reaches it.")}<input name="address" maxlength="253" placeholder="gpu-box.example.com"></label>
@@ -254,6 +279,7 @@ ${
 <label data-for="k8s" hidden>${infoLabel("Placement", "Where each rig goes. Namespaces control creates: one namespace per rig, with its own network rules. Slots: namespaces the cluster's operators made for Thermite, with their own quotas and rules; control only deploys into a free one.")}<select name="placement"><option value="created">A namespace control creates for each rig</option><option value="slot">Slots the cluster's operators made</option></select></label>
 <label data-for="k8s" hidden>${infoLabel("Namespace for each rig", "For created namespaces: the name of each rig's namespace. {rig} becomes the rig's name.")}<input name="namespace_pattern" maxlength="63" value="thermite-{rig}"></label>
 <label data-for="k8s" hidden>${infoLabel("Slots", "For slots: the slot namespaces, separated by commas. Control checks that it may deploy into each one.")}<input name="slots" maxlength="2000" placeholder="thermite-slot-1, thermite-slot-2"></label>
+<label data-for="k8s" hidden style="grid-column:1/-1">${infoLabel("Unchecked connection", UNCHECKED_TIP)}<span class="row small" style="gap:8px"><input type="checkbox" name="unchecked" value="1" style="height:auto;width:auto"> ${UNCHECKED_LABEL}.</span></label>
 <div data-for="claude" hidden class="card flat" style="grid-column:1/-1;padding:12px 14px"><b>Get the token on your own computer.</b> <span class="muted small">Control cannot open Anthropic's sign-in page for you.</span><ol class="small" style="margin:8px 0 0 18px;line-height:1.7"><li>Install Claude Code there, if it is not installed: <code>npm install -g @anthropic-ai/claude-code</code></li><li>Run <code>claude setup-token</code> and sign in with your Claude account in the browser.</li><li>Copy the token it prints, and paste it below. It is good for one year.</li></ol></div>
 <label data-for="claude" hidden style="grid-column:1/-1">${infoLabel("Token from claude setup-token", "The long-lived token that Claude Code prints. Control seals it at once and never shows it again. Only Claude Code, Anthropic's own program, uses it on the rigs: Anthropic does not allow other programs to use a subscription.")}<input name="claude_token" type="password" autocomplete="new-password" maxlength="4096" placeholder="sk-ant-oat01-… never shown again"></label>
 <div data-for="chatgpt" hidden class="card flat" style="grid-column:1/-1;padding:12px 14px"><b>Sign in with ChatGPT, then paste one address.</b> <span class="muted small">For your own use only: a Thermite that several people use takes API keys.</span><ol class="small" style="margin:8px 0 0 18px;line-height:1.7"><li>Press <b>Sign in with ChatGPT</b>. A ChatGPT page opens in a new tab. Sign in there and allow Thermite.</li><li>The tab then goes to an address that starts with <code>${esc(CHATGPT_REDIRECT)}</code> and shows an error. That is expected: the address is for an app on your own computer.</li><li>Copy that whole address from the tab's address bar, and paste it below.</li></ol><div class="act" style="margin-top:10px"><a class="btn sm" href="/ui/settings/chatgpt/start" target="_blank" rel="noopener">Sign in with ChatGPT ↗</a></div></div>
@@ -319,27 +345,57 @@ ${
           : waits
             ? ` data-follow="${esc(checkFollowUrl(u.id, "model"))}" data-follow-state="${chk.state}"`
             : "";
-        return `<div class="ck rr-route"${follow}><span class="ck-res"><a href="/ui/rigs/${encodeURIComponent(u.id)}"><b>${esc(u.id)}</b></a></span><span class="ck-main"><span>${esc(uses)}${moving}</span><span class="ck-sum ${bad ? "bad" : ""}">${modelCheckHtml(chk, now)}</span></span><span class="route-acts"><form class="inline" method="post" action="/ui/settings/rigs" data-act><input type="hidden" name="csrf" value="${t}"><input type="hidden" name="rig" value="${esc(u.id)}"><select name="harness" class="harness" aria-label="harness for ${esc(u.id)}">${HARNESSES.map((h) => `<option value="${h}"${(want?.harness ?? "pi") === h ? " selected" : ""}>${HARNESS_NAMES[h]}</option>`).join("")}</select><select name="choice" aria-label="model for ${esc(u.id)}">${options(want)}</select><button>Use</button></form>${cmdForm(c, { rig: u.id, kind: "rig_check", fields: { check: "model" }, label: "Check", back: "/ui/settings", disabled: waits })}</span></div>`;
+        return `<div class="ck rr-route"${follow}><span class="ck-res"><a href="/ui/rigs/${encodeURIComponent(u.id)}"><b>${esc(u.id)}</b></a></span><span class="ck-main"><span>${esc(uses)}${moving}</span><span class="ck-sum ${bad ? "bad" : ""}">${modelCheckHtml(chk, now)}</span></span><span class="route-acts"><form class="inline" method="post" action="/ui/settings/rigs" data-act><input type="hidden" name="csrf" value="${t}"><input type="hidden" name="rig" value="${esc(u.id)}"><select name="harness" class="harness" aria-label="harness for ${esc(u.id)}">${HARNESSES.map((h) => `<option value="${h}"${(want?.harness ?? "pi") === h ? " selected" : ""}>${HARNESS_NAMES[h]}</option>`).join("")}</select><select name="choice" aria-label="model for ${esc(u.id)}">${options(want)}</select><button>Use</button></form>${cmdForm(c, { rig: u.id, kind: "rig_check", fields: { check: "model" }, label: "Check", back: "/ui/settings/routes", disabled: waits })}</span></div>`;
       })
       .join("");
+    const intro = `<p class="run-said">Providers are what Thermite uses: model providers serve the agents' models, Git access lets rigs fetch private repositories, and machines, clusters and GPU clouds are where rigs run. Add each once with its sign-in or key. Control seals every secret, never shows it again, and gives a rig only what it uses.</p>`;
+    const query = (k: string) => (k === "error" ? said(c) : c.req.query(k));
+    const body =
+      area === "providers"
+        ? `${intro}${note}
+<div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}${machineRows(t)}${clusterRows(t)}${cloudRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
+<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>`
+        : area === "prices"
+          ? prices
+          : area === "routes"
+            ? `<p class="run-said">The harness each rig's agents run in (Pi, OpenCode v2, Claude Code or Codex) and their model, from the providers'.</p>${note}<div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>`
+            : area === "mcp"
+              ? mcpSettingsBlocks(store, mcpServers, t, now, query)
+              : area === "reach"
+                ? reachBlock(store, t, now, (k) => c.req.query(k))
+                : area === "kb"
+                  ? kbSettingsBlock(store, opts.kbFiles?.orphanHoursDefault ?? 0, t, now, (k) =>
+                      c.req.query(k),
+                    )
+                  : area === "space"
+                    ? spaceBlock(await spaceOf(store, opts.parts.bus), store.retention.list())
+                    : area === "bus"
+                      ? busSettingsBlock({
+                          state: await busState(store, opts.parts.bus),
+                          store,
+                          views: vs,
+                          now,
+                        })
+                      : retentionBlocks(
+                          store,
+                          t,
+                          (k) => c.req.query(k),
+                          draftOf(dash, c.req.query("draft")),
+                        );
     return page(
       c,
       {
-        title: "Providers",
+        title: AREA_TITLES[area],
         active: "settings",
+        area,
         crumbs: [{ href: "/ui/settings", text: "Settings" }],
       },
-      `<p class="run-said">Providers are what Thermite uses: model providers serve the agents' models, Git access lets rigs fetch private repositories, and machines, clusters and GPU clouds are where rigs run. MCP servers give the agents tools from outside Thermite. Add each once with its sign-in or key. Control seals every secret, never shows it again, and gives a rig only what it uses. Then choose, for each rig, the harness its agents run in (Pi, OpenCode v2, Claude Code or Codex) and their model.</p>
-${note}
-<div class="block"><div class="head"><h2>Providers</h2><span class="n">${providers.length + gitCount}</span><span class="right">models are read from each provider itself</span></div>${providers.length + gitCount ? `<div class="dqs">${providerRows}${gitRows(t)}${machineRows(t)}${clusterRows(t)}${cloudRows(t)}</div>` : `<div class="card"><div class="empty">No provider yet: add one below.</div></div>`}</div>
-${prices}
-<div class="block"><div class="head"><h2>Add a provider</h2></div><div class="card">${addForm}</div></div>
-${mcpSettingsBlocks(store, mcpServers, t, now, (k) => c.req.query(k))}
-<div class="block" data-part="routes"><div class="head"><h2>Harness and model for each rig</h2><span class="right">a rig takes a change within a minute; then check it</span></div><div class="card flat">${rigRows || `<div class="empty">No rig has reported yet.</div>`}</div></div>
-<script src="/ui/assets/providers.js" defer></script>`,
+      `${body}<script src="/ui/assets/providers.js" defer></script>`,
       vs,
     );
-  });
+  };
+  app.get("/ui/settings", settingsPage);
+  app.get("/ui/settings/:area{[a-z]+}", settingsPage);
 
   // ---------------------------------------------------------------- Git access (Settings)
   const gitRows = (t: string) =>
@@ -351,8 +407,12 @@ ${mcpSettingsBlocks(store, mcpServers, t, now, (k) => c.req.query(k))}
         const ssh = g.kind === "ssh";
         return `<details class="dq" data-k="git-${esc(g.name)}"><summary>
 <span class="dq-kind"><span class="kind g">Git access</span></span>
-<span class="dq-main"><span class="dq-head">${esc(g.name)} <span class="muted" style="font-weight:400">· ${ssh ? "SSH deploy key" : "HTTPS token"}</span></span><span class="dq-why">${ssh ? `fingerprint ${esc(g.fingerprint ?? "")}` : `token ${esc(g.hint)}${g.username ? ` · user ${esc(g.username)}` : ""}`}</span><span class="dq-sub"><span class="dq-where">${ssh ? "for ssh:// and git@host:path addresses" : "for https:// addresses"}</span><span class="dq-where">${users.length ? `used by ${users.map((x) => esc(x)).join(", ")}` : "no campaign uses it"}</span></span></span>
+<span class="dq-main"><span class="dq-head">${esc(g.name)} <span class="muted" style="font-weight:400">· ${ssh ? "SSH deploy key" : "HTTPS token"}</span></span><span class="dq-why">${ssh ? `fingerprint ${esc(g.fingerprint ?? "")}` : `token ${esc(g.hint)}${g.username ? ` · user ${esc(g.username)}` : ""}`}</span><span class="dq-sub"><span class="dq-where">${g.host ? `for ${esc(g.host)} only` : `<b class="bad">for no host yet</b>`}, ${ssh ? "with ssh:// and git@host:path addresses" : "with https:// addresses"}</span><span class="dq-where">${users.length ? `used by ${users.map((x) => esc(x)).join(", ")}` : "no campaign uses it"}</span></span></span>
 </summary><div class="dq-body">${
+          g.host
+            ? ""
+            : `<form method="post" action="/ui/settings/git/${gName}/host" class="form-grid" autocomplete="off"><input type="hidden" name="csrf" value="${t}"><label>${infoLabel("Host", "The Git server this access is for, such as github.com. Until it has one, control and the rigs use it nowhere: campaigns that name it can't start.")}<input name="host" required maxlength="253" placeholder="github.com"></label><div class="form-end"><button class="primary">Set the host</button></div></form>`
+        }${
           ssh && g.public_key
             ? `<div class="muted small" style="margin:0 0 4px">Add this public key to the repository (or the account) as a <b>read-only</b> deploy key. Its private half stays sealed in control.</div><pre class="json" style="white-space:pre-wrap;word-break:break-all">${esc(g.public_key)}</pre>`
             : ""
@@ -476,6 +536,9 @@ ${form("delete", "Delete this machine", false).replace('class="sm"', 'class="sm 
         const f = k.facts as ClusterFacts | null;
         const kName = encodeURIComponent(k.name);
         const rigsHere = store.clusters.rigs(k.name).filter((r) => r.status !== "removed");
+        const unchecked = k.unchecked
+          ? ` <span class="chip warn" title="${esc(k.unchecked.what.join("; "))}">connection not checked: you accepted it ${esc(ago(k.unchecked.at, Date.now()))} ago</span>`
+          : "";
         const status = k.check_error
           ? `<span class="dq-why bad">${esc(k.check_error)}${f ? " (showing the last check)" : ""}</span>`
           : f
@@ -515,7 +578,7 @@ ${form("delete", "Delete this machine", false).replace('class="sm"', 'class="sm 
           `<form class="inline" method="post" action="/ui/settings/clusters/${kName}/${action}"><input type="hidden" name="csrf" value="${t}"><button class="${cls}">${label}</button></form>`;
         return `<details class="dq${k.check_error ? " dq-bad" : ""}" data-k="cluster-${esc(k.name)}"><summary>
 <span class="dq-kind"><span class="kind r">Cluster</span></span>
-<span class="dq-main"><span class="dq-head">${esc(k.name)} <span class="muted" style="font-weight:400">· Kubernetes</span></span>${status}<span class="dq-sub"><span class="dq-where">${esc(k.context || "its current context")}</span><span class="dq-where">${esc(where)}</span><span class="dq-where">${rigsHere.length ? `runs ${rigsHere.map((r) => esc(r.rig)).join(", ")}` : "no rig yet"}</span></span></span>
+<span class="dq-main"><span class="dq-head">${esc(k.name)} <span class="muted" style="font-weight:400">· Kubernetes</span></span>${status}<span class="dq-sub"><span class="dq-where">${esc(k.context || "its current context")}</span><span class="dq-where">${esc(where)}</span><span class="dq-where">${rigsHere.length ? `runs ${rigsHere.map((r) => esc(r.rig)).join(", ")}` : "no rig yet"}</span>${unchecked}</span></span>
 <span class="dq-side"><span class="dq-btns">${form("check", "Check again")}</span></span>
 </summary><div class="dq-body">${facts}${
           k.placement === "slot"

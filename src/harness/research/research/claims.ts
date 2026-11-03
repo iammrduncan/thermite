@@ -189,7 +189,7 @@ export function addClaim(ctx: ResearchContext, run: string, lane: string | null,
         verified: false,
         problems,
         ...how,
-        note: "this same claim, with the same quotes, was refused before for the same reasons: read_source the passage and copy its words exactly into the quote, or record what you learned as a note (add_note) instead",
+        note: "this same claim, with the same quotes, was refused before for the same reasons: read_source the passage and copy its words exactly into the quote, or record what you learned as a note (add_source_note) instead",
       };
   }
   const id = `c-${randomUUID().replace(/-/g, "").slice(0, 12)}`;

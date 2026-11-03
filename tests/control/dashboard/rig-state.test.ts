@@ -10,7 +10,7 @@ import { rigView } from "../../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import type { BuildInfo } from "../../../src/core/version.ts";
 import { controlOnly, RIG_TOKEN, signIn } from "../../helpers/control-stack.ts";
-import { applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
+import { answerCommand, applied, controlStore, ingestReport } from "../../helpers/control-store.ts";
 
 const CONTROL: BuildInfo = { version: "0.1.0", commit: null, protocol: 1, oldest_protocol: 1 };
 const OLD = { version: "0.0.9", commit: null, protocol: 1, oldest_protocol: 1 };
@@ -231,7 +231,7 @@ describe("a rig's page: its version", () => {
     await s.post("/ui/rigs/gpu-1/update");
     await until(() => s.store.commands.pending("gpu-1").length === 1);
     const pause = s.store.commands.pending("gpu-1")[0]?.envelope;
-    s.store.commands.ack("gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
+    answerCommand(s.store, "gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
     await until(() => /Moving its containers/.test(s.updates.waiting("gpu-1") ?? ""));
     // Control starts again on the same store: the update it kept there ends.
     const after = new RigUpdates({
@@ -277,7 +277,10 @@ describe("a rig's page: its version", () => {
       /ok=The update of gpu-1 to 0\.1\.0 began\. Its steps show below as they happen\./,
     );
     // Another update waits for this one.
-    assert.match(await s.post("/ui/rigs/gpu-1/update"), /error=An update of gpu-1 is under way/);
+    assert.match(
+      await s.page(await s.post("/ui/rigs/gpu-1/update")),
+      /An update of gpu-1 is under way/,
+    );
     // The page's script follows the steps (goal 080): the banners name the route, whose state
     // changes with each step, final once the update ended. Its refusal comes in words.
     const follow = async () =>
@@ -296,7 +299,7 @@ describe("a rig's page: its version", () => {
     const pause = s.store.commands.pending("gpu-1")[0]?.envelope;
     assert.equal(pause?.kind, "pause_run");
     assert.deepEqual(pause?.payload, { run: "run-1", reason: "control updates the rig to 0.1.0" });
-    s.store.commands.ack("gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
+    answerCommand(s.store, "gpu-1", pause?.id ?? "", "delivered", { source: "harness" });
     // 2. Control's images, over SSH: pulled first, the units written again, both services restarted.
     await until(() => m.calls.some((c) => c.script.includes("echo updated")));
     const script = m.calls.find((c) => c.script.includes("echo updated"))?.script ?? "";
@@ -430,7 +433,7 @@ describe("a rig's page: its version", () => {
       s.store.commands.pending("gpu-1").some((c) => c.envelope.kind === "rig_check"),
     );
     const check = s.store.commands.pending("gpu-1").find((c) => c.envelope.kind === "rig_check");
-    s.store.commands.ack("gpu-1", check?.envelope.id ?? "", "failed", {
+    answerCommand(s.store, "gpu-1", check?.envelope.id ?? "", "failed", {
       source: "harness",
       error: "not now: 1 open trial(s) and 0 judge job(s)",
     });
@@ -465,7 +468,7 @@ describe("a rig's page: its version", () => {
     const s = await control();
     await s.report("cpu-9");
     // A rig newer than control's protocol calls: refused, and the call is counted.
-    const call = await s.api.request("/v1/rigs/cpu-9/commands/pending", {
+    const call = await s.api.request("/v1/rigs/cpu-9/git/kits/k.git/info/refs", {
       headers: {
         authorization: `Bearer ${RIG_TOKEN}`,
         "x-thermite-version": "9.0.0",
@@ -474,7 +477,7 @@ describe("a rig's page: its version", () => {
       },
     });
     assert.equal(call.status, 409);
-    await s.api.request("/v1/rigs/cpu-9/commands/pending", {
+    await s.api.request("/v1/rigs/cpu-9/git/kits/k.git/info/refs", {
       headers: {
         authorization: `Bearer ${RIG_TOKEN}`,
         "x-thermite-version": "9.0.0",
@@ -575,8 +578,10 @@ describe("a rig's page: stale and offline", () => {
     assert.match(page, />Check the cluster</);
     assert.match(page, /data-confirm="retire wc-1"/);
     assert.match(page, /Offline: no report for 15 minutes\./);
+    // The cluster's own words stay on control: the address names them by an ID.
     const checked = await s.post("/ui/rigs/wc-1/check");
-    assert.match(checked, /error=cluster-1's API did not answer: .*connection refused/);
+    assert.match(checked, /error=note-[0-9a-f]+$/);
+    assert.match(await s.page(checked), /cluster-1's API did not answer: .*connection refused/);
     assert.match(
       await s.page("/ui/rigs/wc-1"),
       /Control checked the cluster 0s ago\. cluster-1's API did not answer/,

@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
+
 /**
  * The release bundle: a compose file that pins the published images by digest, and a short
- * readme. The release workflow (.github/workflows/release.yml) pushes the images, then
- * scripts/release/bundle.ts fills in the templates in containers/release/ with their digests.
- * These functions do the filling and the checks, with no files or network of their own.
+ * readme, which is also the release's notes and gives the compose file's SHA-256. The release
+ * workflow (.github/workflows/release.yml) pushes the images, then scripts/release/bundle.ts
+ * fills in the templates in containers/release/ with their digests. These functions do the
+ * filling and the checks, with no files or network of their own.
  */
 
 const BOTH = ["linux/amd64", "linux/arm64"] as const;
@@ -138,6 +141,7 @@ export const README_NEEDS = [
   "VERSION",
   "TAG",
   "REPO_URL",
+  "COMPOSE_SHA256",
   "CONTROL_IMAGE",
   "HARNESS_IMAGE",
   "HARNESS_CUDA_IMAGE",
@@ -146,13 +150,35 @@ export const README_NEEDS = [
   "RIG_CUDA_IMAGE",
 ];
 
+/**
+ * The bundle's two files from their templates: the compose file, and the readme, which gives the
+ * compose file's SHA-256 (hexadecimal), so whoever downloads it can check it is this release's.
+ */
+export function bundleFiles(
+  input: BundleInput,
+  templates: { compose: string; readme: string },
+): { compose: string; readme: string; composeSha256: string } {
+  const values = placeholders(input);
+  const compose = render(templates.compose, values, COMPOSE_NEEDS);
+  const composeSha256 = createHash("sha256").update(compose).digest("hex");
+  const readme = render(
+    templates.readme,
+    { ...values, COMPOSE_SHA256: composeSha256 },
+    README_NEEDS,
+  );
+  return { compose, readme, composeSha256 };
+}
+
 // --- Keeping the template in step with compose.yaml -------------------------------------------
 
-/** The `image:` line that stands for each `build:` line of compose.yaml in the template. */
+/** The one Containerfile compose.yaml builds its images from, each image a target of it. */
+const CONTAINERFILE = "containers/Containerfile";
+
+/** The `image:` line that stands for each `build:` line of compose.yaml in the template, by target. */
 const BUILD_TO_IMAGE: Record<string, string> = {
-  "containers/control/Containerfile": "@@CONTROL_IMAGE@@",
-  "containers/harness/Containerfile": "@@HARNESS_IMAGE@@",
-  "containers/supervisor/Containerfile": "@@SUPERVISOR_IMAGE@@",
+  control: "@@CONTROL_IMAGE@@",
+  harness: "@@HARNESS_IMAGE@@",
+  supervisor: "@@SUPERVISOR_IMAGE@@",
 };
 
 /** A compose file's lines without comments and blank lines, and without trailing spaces. */
@@ -171,11 +197,12 @@ function meaningful(text: string): string[] {
 export function templateDrift(composeYaml: string, template: string): string[] {
   const expected = meaningful(composeYaml).map((line) => {
     // A build line, with or without its build arguments (the published images carry theirs).
-    const build = /^(\s*)build: \{ context: \., dockerfile: ([^\s,]+)(?:, args: \{.*\})? \}$/.exec(
-      line,
-    );
-    if (!build) return line;
-    const image = BUILD_TO_IMAGE[build[2] ?? ""];
+    const build =
+      /^(\s*)build: \{ context: \., dockerfile: ([^\s,]+), target: ([\w-]+)(?:, args: \{.*\})? \}$/.exec(
+        line,
+      );
+    if (!build || build[2] !== CONTAINERFILE) return line;
+    const image = BUILD_TO_IMAGE[build[3] ?? ""];
     return image ? `${build[1]}image: ${image}` : line;
   });
   const lines = meaningful(template);

@@ -47,14 +47,19 @@ describe("loops that tick, and health that checks them (goal 173)", () => {
     assert.equal(loops.health().loops.resets?.late, false);
   });
 
-  test("the harness answers its health with each loop's age, and 503 for a hung loop", async () => {
+  test("the harness answers its health, each loop's age to the supervisor, and 503 for a hung loop", async () => {
     const env = makeHarnessEnv();
     let now = 0;
     env.service.loops = new Loops(() => now);
     env.service.loops.add("scheduler", 2000);
     env.service.loops.add("exports", 5000);
     const api = createHarnessApi(env.service, { supervisor: "s", proposer: "p" });
-    let res = await api.request("/v1/health");
+    // A probe, and a lane's token, get whether it is well; the supervisor's token, the rest.
+    const asked = (token?: string) =>
+      api.request("/v1/health", token ? { headers: { authorization: `Bearer ${token}` } } : {});
+    assert.deepEqual(await (await asked()).json(), { ok: true });
+    assert.deepEqual(await (await asked("p")).json(), { ok: true });
+    let res = await asked("s");
     assert.equal(res.status, 200);
     let body = (await res.json()) as { ok: boolean; rig: string; loops: Record<string, unknown> };
     assert.equal(body.ok, true);
@@ -63,7 +68,8 @@ describe("loops that tick, and health that checks them (goal 173)", () => {
     // The exports loop goes on; the scheduler hangs past its limit.
     now = 31 * 60_000;
     env.service.loops.tick("exports");
-    res = await api.request("/v1/health");
+    assert.deepEqual(await (await asked()).json(), { ok: false });
+    res = await asked("s");
     assert.equal(res.status, 503);
     body = (await res.json()) as typeof body;
     assert.equal(body.ok, false);

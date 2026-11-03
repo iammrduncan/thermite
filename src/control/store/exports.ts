@@ -109,6 +109,12 @@ export class RigExports extends StorePart {
     ).map(rigExportOf);
   }
 
+  /** Forgets an export (control/exports.ts deletes its files first): whether there was one. */
+  remove(rig: string, name: string): boolean {
+    const r = this.db.prepare("delete from rig_export where rig = ? and name = ?").run(rig, name);
+    return Number(r.changes) > 0;
+  }
+
   /** A file of an export arrived with its SHA-256; the export is complete with its last file. */
   fileDone(rig: string, name: string, path: string): { complete: boolean } {
     return this.tx(() => {

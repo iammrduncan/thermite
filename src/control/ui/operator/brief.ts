@@ -16,7 +16,7 @@ const introText = (s: string) => s.replace(/^(research )?trial on [^:]+: /, "");
  * What a run is doing now, one line each: every lane's focus and for how long, the judge, and the
  * planner when it waits. With `heading`, the run's name, progress and champion lead; with
  * `detail`, each lane also shows its last step and the judge its latest line; `lane` adds to a
- * lane's row and below it (a drain's trial: ui/drain.ts).
+ * lane's row and below it (a drain's trial: ui/rigs/drain.ts).
  */
 export function runBrief(
   store: ControlStore,
@@ -54,8 +54,8 @@ export function runBrief(
         work?.focus ||
         plan?.focus ||
         introText(t?.intro ?? "") ||
-        work?.family ||
-        plan?.family ||
+        work?.direction ||
+        plan?.direction ||
         "";
       const last =
         opts.detail && t?.last_tool
@@ -78,7 +78,7 @@ export function runBrief(
         r.status !== "running"
           ? "stopped"
           : plan
-            ? `next: ${esc(clip(plan.focus || plan.family, 160))}`
+            ? `next: ${esc(clip(plan.focus || plan.direction, 160))}`
             : `between trials${done ? ` <span class="muted">· the last ${done.attempt ? "submitted a change" : `ended: ${esc(done.stopped.replace(/_/g, " "))}`} ${esc(ago(done.at, now))} ago</span>` : ""}`,
         "",
         "muted",

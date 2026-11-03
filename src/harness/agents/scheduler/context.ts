@@ -1,31 +1,33 @@
+import type { CliHarness } from "../../../agents/cli/index.ts";
 import type { OnceKeeping } from "../../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
-import type { StoredRule } from "../../../core/commands.ts";
+import type { Prompt } from "../../../agents/prompt.ts";
 import type { Contract } from "../../../core/contract.ts";
+import type { StoredRule } from "../../../core/directives.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Runner } from "../../broker/index.ts";
 import type { Ledger } from "../../ledger/index.ts";
 import type { Research } from "../../research/index.ts";
 import type { HarnessService } from "../../service/index.ts";
-import type { CliHarness } from "../cli/index.ts";
 import { Coordinator, lanesAtWork, rulesInForce } from "../coordinator.ts";
+import type { PlannerCallSpec, PlannerViewCall } from "../planner/index.ts";
 import { Registry } from "../registry.ts";
 import type { ResearchTrialSpec } from "../research/index.ts";
 import type { TrialResult, TrialSpec } from "../worker/index.ts";
-import { lastStopAsked } from "./stops.ts";
+import { stopsAskedBefore } from "./stops.ts";
 
 /** How much of the judge's reasons a brief shows: for each of a lane's attempts, for each goal. */
 export const BRIEF_REASON_CHARS = 1200;
 export const BRIEF_GOAL_CHARS = 600;
 
 /**
- * A planner call through another harness: a folder it may read (its past research), the MCP
- * servers it may call with the gateway's credential made for this call (goal 068), and where its
- * model usage goes, as the program's output reports it (goal 075).
+ * A planner call through another harness: the MCP servers it may call with the gateway's
+ * credential made for this call (goal 068), and where its model usage goes, as the program's
+ * output reports it (goal 075).
  */
 export interface PlannerCallOptions {
-  read?: string | undefined;
-  mcp?: { auth: string; servers: string[] } | undefined;
+  /** The kit's MCP servers, and Thermite's own with the knowledge base's tools (goal 175). */
+  mcp?: { auth: string; servers: string[]; kb?: boolean | undefined } | undefined;
   usage?: ((u: CallUsage) => void) | undefined;
   /**
    * Where the call's conversation is kept before each compaction, and who records it (goal 070):
@@ -44,8 +46,7 @@ export interface SchedulerOptions {
   model?: ModelConfig | (() => ModelConfig | undefined) | undefined;
   /**
    * A planner call through a program other than Pi (`via`: OpenCode, Claude Code or Codex, as
-   * plannerHarness picks it): the answer's text. `read`: a folder it may read and search (the
-   * run's past research), which its user may read and not change.
+   * plannerHarness picks it): the answer's text.
    */
   ask?:
     | ((
@@ -55,6 +56,18 @@ export interface SchedulerOptions {
         signal?: AbortSignal,
         o?: PlannerCallOptions,
       ) => Promise<string>)
+    | undefined;
+  /**
+   * A planner call in Pi in a process of its own, in its Pi view (goal 169), on a rig whose agents
+   * run in their own terminal (planner/view.ts); none: in this process.
+   */
+  planInView?:
+    | ((
+        c: Omit<PlannerViewCall, "runner" | "scratchDir" | "port">,
+        sent: Prompt,
+        spec: PlannerCallSpec,
+        signal?: AbortSignal,
+      ) => Promise<unknown>)
     | undefined;
   /** The planner's own model route, when control gave the planner one. */
   plannerModel?: (() => ModelConfig | undefined) | undefined;
@@ -108,6 +121,7 @@ export const MCP_WAIT_MS = 2 * 60_000;
 
 type Optional =
   | "model"
+  | "planInView"
   | "research"
   | "runResearchTrial"
   | "devRuns"
@@ -140,9 +154,11 @@ export interface SchedulerContext {
   /** The planner call in flight, if any. */
   planning: { run: string; ctrl: AbortController } | undefined;
   watcher: ReturnType<typeof setInterval> | undefined;
-  /** The newest workers_reset and trial_stop_asked events acted on. */
-  resetSeen: number;
-  stopSeen: number;
+  /**
+   * The resets of a run's workers to finish at the next step, oldest first (watch.ts), each with
+   * its `workers_reset` event: told by the service, or left by an earlier process.
+   */
+  resets: { event: number; run: string }[];
   reportNoted: string;
   /** Shutting down: no new plan or trial (goal 079). */
   stopping: boolean;
@@ -151,7 +167,8 @@ export interface SchedulerContext {
    * results (goal 079): a trial that ends at its own time limit while its calls fail passes it on.
    */
   failingSince: Map<string, number>;
-  limitNoted: string | undefined;
+  /** The provider's limit each run waits for, as Live last said it. */
+  limitNoted: Map<string, string>;
   /** Runs waiting for their MCP servers on this harness, since when (ms). */
   mcpWaits: Map<string, number>;
   /** Runs whose wait for their MCP servers is over on this harness. */
@@ -178,8 +195,9 @@ export function schedulerContext(opts: SchedulerOptions): SchedulerContext {
     queue: opts.service.queue,
     registry,
   });
-  // Resume after a restart: nothing of an earlier process is running any more, and the
-  // experiments those trials had go back to the queue.
+  // Resume after a restart: the owner's stops asked meanwhile are recorded, nothing of an earlier
+  // process is running any more, and the experiments those trials had go back to the queue.
+  stopsAskedBefore(ledger);
   registry.interruptUnfinished(opts.owner);
   coordinator.finishOrphans(opts.owner);
   return {
@@ -194,12 +212,14 @@ export function schedulerContext(opts: SchedulerOptions): SchedulerContext {
     laneRun: new Map(),
     planning: undefined,
     watcher: undefined,
-    resetSeen: ledger.events.lastId("workers_reset"),
-    stopSeen: lastStopAsked(ledger),
+    // The resets an earlier process recorded and did not finish.
+    resets: ledger.events
+      .list("workers_reset", { after: ledger.trials.resetsApplied() })
+      .flatMap((e) => (e.subject === null ? [] : [{ event: e.id, run: e.subject }])),
     reportNoted: "",
     stopping: false,
     failingSince: new Map(),
-    limitNoted: undefined,
+    limitNoted: new Map(),
     mcpWaits: new Map(),
     mcpReady: new Set(),
     confirmNoted: new Map(),

@@ -58,9 +58,6 @@ export const STATUS_KINDS = {
   503: "unavailable",
 } as const;
 
-/** What became of a call that got no answer to read: none came, in time or at all, or no JSON. */
-export const CALL_FAILURES = ["unreachable", "timeout", "bad_answer"] as const;
-
 /** An error's kind from an answer's status, for an answer that names no code of its own. */
 export function statusKind(status: number): string {
   return STATUS_KINDS[status as keyof typeof STATUS_KINDS] ?? (status >= 500 ? "server" : "other");

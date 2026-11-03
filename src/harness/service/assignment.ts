@@ -3,12 +3,12 @@ import { join } from "node:path";
 import type { z } from "zod";
 import { BadInput, Refusal } from "../../common/errors.ts";
 import type { CommandPayloads, ImportSpec } from "../../core/commands.ts";
-import { contractSha, parseContract } from "../../core/contract.ts";
+import { contractSha, parseContract, parseStoredContract } from "../../core/contract.ts";
 import { goalChecks } from "../../core/goal/index.ts";
 import { type Kit, KitSchema, kitProblems } from "../../core/kit.ts";
 import { canonicalUses, type McpUse, sameUses, usesWords } from "../../core/mcp.ts";
 import { folderCommit, hasCommit, initMirror, showFile, updateRef } from "../git.ts";
-import { importBundle, importFile } from "../imports.ts";
+import { importBundle, importFile, importRoom } from "../imports.ts";
 import { ExperimentInput } from "../queue.ts";
 import { startingHypotheses } from "../research/index.ts";
 import type { HarnessService } from "./index.ts";
@@ -41,6 +41,7 @@ async function runImport(
         importId,
         expectedCommit: spec.commit,
         expectedSha256: spec.sha256,
+        room: importRoom(svc.disk, `the bundle ${spec.path}`),
       });
       svc.ledger.imports.record({
         kind: spec.kind,
@@ -59,6 +60,7 @@ async function runImport(
         rel: spec.path,
         expectedSha256: spec.sha256,
         storeDir: join(svc.paths.stateDir, "models"),
+        room: importRoom(svc.disk, `the model ${spec.name}`),
       });
       svc.ledger.imports.record({
         kind: "model",
@@ -116,7 +118,8 @@ export async function assignCampaign(
   by: string,
   inboxDir = svc.paths.inboxDir,
 ): Promise<unknown> {
-  const parsed = parseContract(p.contract);
+  // A contract signed before v0.1.1 keeps its keys, so its hash holds (core/names.ts).
+  const parsed = parseStoredContract(p.contract);
   if (!parsed.ok) throw new BadInput(`invalid contract: ${parsed.errors.join("; ")}`);
   if (parsed.sha !== p.contract_sha)
     throw new BadInput("contract hash does not match contract_sha");
@@ -216,7 +219,7 @@ export async function assignCampaign(
       seedRepo: seed.repo,
       seedCommit: start,
       ...(folder ? { seedFolder: { folder, commit: seed.commit } } : {}),
-      direction: p.direction,
+      note: p.note,
       agents: p.agents,
       promotion: p.promotion,
       askOwner: p.ask_owner,
@@ -248,7 +251,7 @@ export async function assignCampaign(
         {
           title: s.title,
           details: s.details,
-          family: s.family,
+          direction: s.direction,
           why: s.why,
           by: s.by,
           state: s.state,

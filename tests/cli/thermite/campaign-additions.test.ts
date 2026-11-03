@@ -10,6 +10,7 @@ import { serve } from "@hono/node-server";
 import { issueCommand } from "../../../src/control/issue/index.ts";
 import { parseContract } from "../../../src/core/contract.ts";
 import { controlOnly } from "../../helpers/control-stack.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 
 const run = promisify(execFile);
 const CLI = join(import.meta.dirname, "../../../src/cli/thermite/main.ts");
@@ -42,7 +43,7 @@ describe("thermite campaign additions (goal 166)", () => {
     ) as Record<string, unknown>;
     const contract = parseContract({ ...goal, campaign: "sort-speed" });
     assert.ok(contract.ok);
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",

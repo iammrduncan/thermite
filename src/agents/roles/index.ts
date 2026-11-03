@@ -17,14 +17,17 @@ import {
 import {
   PLAN_LIMITS_TEXT,
   PLANNER_ASK_SYSTEM,
+  PLANNER_OWNER_TURN,
   PLANNER_PI_SYSTEM,
   renderPlanner,
+  renderPlannerTurn,
 } from "./planner.ts";
 import {
   RESEARCH_PLAN_LIMITS_TEXT,
   RESEARCH_PLANNER_ASK_SYSTEM,
   RESEARCH_PLANNER_PI_SYSTEM,
   renderResearchPlanner,
+  renderResearchPlannerTurn,
 } from "./research-planner.ts";
 import {
   RESEARCH_WORKER_GO_ON,
@@ -39,7 +42,15 @@ import {
   renderResearchReviewer,
   renderReviewer,
 } from "./reviewer.ts";
-import { TRIAL_TURN_TEXTS } from "./shared.ts";
+import {
+  ADVISOR_OWNER_TURN,
+  ADVISOR_OWNER_TURN_PI,
+  FAILED_GO_ON,
+  KB_GUIDE,
+  OWNER_TURN_HEAD,
+  renderAdvisorTurn,
+  TRIAL_TURN_TEXTS,
+} from "./shared.ts";
 import { renderSynthesizer, SYNTHESIZER_SYSTEM } from "./synthesizer.ts";
 import { RESEARCH_TEACHER_SYSTEM, renderTeacher, TEACHER_SYSTEM } from "./teacher.ts";
 import {
@@ -78,7 +89,10 @@ export {
   PLANNER_ASK_SYSTEM,
   PLANNER_PI_SYSTEM,
   type PlannerInput,
+  type PlannerTurn,
+  type PlannerTurnInput,
   renderPlanner,
+  renderPlannerTurn,
 } from "./planner.ts";
 export {
   PROMOTE_PER_ROUND,
@@ -86,6 +100,7 @@ export {
   RESEARCH_PLANNER_ASK_SYSTEM,
   RESEARCH_PLANNER_PI_SYSTEM,
   renderResearchPlanner,
+  renderResearchPlannerTurn,
 } from "./research-planner.ts";
 export {
   RESEARCH_WORKER_NOTES,
@@ -103,10 +118,13 @@ export {
   renderReviewer,
 } from "./reviewer.ts";
 export {
+  ADVISOR_OWNER_TURN,
   type AdvisorFrame,
+  type AdvisorTurn,
   advisorPackage,
   limitsNote,
   orderedPackage,
+  renderAdvisorTurn,
   renderOwnerMessages,
   type TrialTurn,
   timeLeftWords,
@@ -177,6 +195,70 @@ export interface RoleDefinition {
 /** Every role that runs in Pi with compaction goes on from renderCompacted's message after one. */
 const PI_TURNS = [renderCompacted] as const;
 
+/**
+ * The later turns of a planner's call in its program's own terminal (goal 169): an owner's message
+ * inside its turn, what it goes on from after a usage window, and in its Pi view the words the
+ * owner types into its console.
+ */
+const PLANNER_TERMINAL_TEXTS: readonly RoleText[] = [
+  {
+    id: "owner-terminal",
+    what: "in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id",
+    text: PLANNER_OWNER_TURN,
+  },
+  {
+    id: "failed-terminal",
+    what: "in its program's own terminal, after it waited for a full usage window, after the limit's words",
+    text: FAILED_GO_ON,
+  },
+  {
+    id: "owner-typed",
+    what: "in its Pi view, the words you type into its console, after this",
+    text: OWNER_TURN_HEAD,
+  },
+];
+
+/**
+ * The later turns of an advisor's call in its program's own terminal (goal 169), for the roles the
+ * owner's messages reach: an owner's message inside its turn, and what it goes on from after a
+ * usage window.
+ */
+const ADVISOR_TERMINAL_TEXTS: readonly RoleText[] = [
+  {
+    id: "owner-terminal",
+    what: "in its program's own terminal, each of your messages that goes in inside its turn, after this, as JSON with its id",
+    text: ADVISOR_OWNER_TURN,
+  },
+  {
+    id: "owner-pi",
+    what: "in its Pi view, each of your messages that goes in before its next model call, after this, as JSON with its id",
+    text: ADVISOR_OWNER_TURN_PI,
+  },
+  {
+    id: "failed-terminal",
+    what: "in its program's own terminal, after it waited for a full usage window, after the limit's words",
+    text: FAILED_GO_ON,
+  },
+  {
+    id: "owner-typed",
+    what: "in its Pi view, the words you type into its console, after this",
+    text: OWNER_TURN_HEAD,
+  },
+];
+
+/** The later turns of an advisor the owner's messages reach: Pi's, and those in its terminal. */
+const ADVISOR_TURNS = [...PI_TURNS, renderAdvisorTurn] as const;
+
+/**
+ * The knowledge base's part of every role's prompt but the model check's and compaction's (goal
+ * 175), after the role's instructions; for a role the campaign lets write, kb_write's line follows.
+ */
+const KB_TEXT: RoleText = {
+  id: "kb",
+  what: "Thermite's knowledge base and its tools, after its instructions; for a role the campaign lets write, a line on kb_write and the kinds it may write follows",
+  text: KB_GUIDE,
+};
+
 const WORKER_PROGRAMS = ["Pi", "OpenCode", "Claude Code", "Codex"] as const;
 const ADVISOR_PROGRAMS = ["Pi", "Claude Code", "OpenCode", "Codex", "a command (cli)"] as const;
 
@@ -227,6 +309,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: WORKER_SUBMIT_NOW,
       },
       ...TRIAL_TURN_TEXTS,
+      KB_TEXT,
     ],
   },
   {
@@ -248,6 +331,7 @@ export const ROLES: readonly RoleDefinition[] = [
         text: RESEARCH_WORKER_GO_ON,
       },
       ...TRIAL_TURN_TEXTS,
+      KB_TEXT,
     ],
   },
   {
@@ -259,7 +343,7 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: WORKER_PROGRAMS,
     messages: true,
     render: renderPlanner,
-    turns: PI_TURNS,
+    turns: [...PI_TURNS, renderPlannerTurn],
     texts: [
       {
         id: "pi",
@@ -272,6 +356,8 @@ export const ROLES: readonly RoleDefinition[] = [
         text: PLANNER_ASK_SYSTEM,
       },
       { id: "limits", what: "the limits of its answer", text: PLAN_LIMITS_TEXT },
+      ...PLANNER_TERMINAL_TEXTS,
+      KB_TEXT,
     ],
   },
   {
@@ -283,7 +369,7 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: WORKER_PROGRAMS,
     messages: true,
     render: renderResearchPlanner,
-    turns: PI_TURNS,
+    turns: [...PI_TURNS, renderResearchPlannerTurn],
     texts: [
       {
         id: "pi",
@@ -296,6 +382,8 @@ export const ROLES: readonly RoleDefinition[] = [
         text: RESEARCH_PLANNER_ASK_SYSTEM,
       },
       { id: "limits", what: "the limits of its answer", text: RESEARCH_PLAN_LIMITS_TEXT },
+      ...PLANNER_TERMINAL_TEXTS,
+      KB_TEXT,
     ],
   },
   {
@@ -307,8 +395,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderTeacher,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: TEACHER_SYSTEM }],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: TEACHER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "research-teacher",
@@ -319,8 +411,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderTeacher,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_TEACHER_SYSTEM }],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: RESEARCH_TEACHER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "merged-by",
@@ -332,7 +428,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: false,
     render: renderMergedBy,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: MERGED_BY_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: MERGED_BY_SYSTEM }, KB_TEXT],
   },
   {
     id: "research-merged-by",
@@ -344,7 +440,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: false,
     render: renderMergedBy,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_MERGED_BY_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: RESEARCH_MERGED_BY_SYSTEM }, KB_TEXT],
   },
   {
     id: "auditor",
@@ -355,8 +451,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderAuditor,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: AUDITOR_SYSTEM }],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: AUDITOR_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "reviewer",
@@ -367,8 +467,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderReviewer,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: REVIEWER_SYSTEM }],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: REVIEWER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "research-reviewer",
@@ -379,8 +483,12 @@ export const ROLES: readonly RoleDefinition[] = [
     programs: ADVISOR_PROGRAMS,
     messages: true,
     render: renderResearchReviewer,
-    turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: RESEARCH_REVIEWER_SYSTEM }],
+    turns: ADVISOR_TURNS,
+    texts: [
+      { id: "system", what: "its instructions", text: RESEARCH_REVIEWER_SYSTEM },
+      ...ADVISOR_TERMINAL_TEXTS,
+      KB_TEXT,
+    ],
   },
   {
     id: "synthesizer",
@@ -392,7 +500,7 @@ export const ROLES: readonly RoleDefinition[] = [
     messages: false,
     render: renderSynthesizer,
     turns: PI_TURNS,
-    texts: [{ id: "system", what: "its instructions", text: SYNTHESIZER_SYSTEM }],
+    texts: [{ id: "system", what: "its instructions", text: SYNTHESIZER_SYSTEM }, KB_TEXT],
   },
   {
     id: "final-writer",
@@ -407,6 +515,7 @@ export const ROLES: readonly RoleDefinition[] = [
     texts: [
       { id: "system", what: "its instructions", text: FINAL_WRITER_SYSTEM },
       { id: "ste", what: "the short STE rules, with no STE checker", text: STE_SHORT_RULES },
+      KB_TEXT,
     ],
   },
   {

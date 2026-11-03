@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { BUS_READ_MAX } from "../../../src/common/bus.ts";
+import { BUS_READ_MAX } from "../../../src/common/bus/index.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { RigFold } from "../../../src/control/views/fold/index.ts";
 import {
@@ -210,8 +210,13 @@ test("control reads every rig's view through the folds it keeps for its store", 
     [["rig-a", "ledger-a", 30]],
   );
   await reported(store, "rig-a", "ledger-a", hillClimbEvents("r-1").slice(30), {}, 30);
-  const again = await (await api("GET", "/v1/rigs/rig-a/view")).json();
+  // The route adds the rig's connection to the bus and its weekly limit to the folded view.
+  const { bus, weekly_limit, ...again } = (await (
+    await api("GET", "/v1/rigs/rig-a/view")
+  ).json()) as Record<string, unknown>;
   assert.deepStrictEqual(again, JSON.parse(JSON.stringify(await fresh(store, "rig-a"))));
+  assert.deepEqual(bus, { state: "on", since: null });
+  assert.equal(weekly_limit, null);
 });
 
 test("a read of a view folds nothing more and asks the store for no event", async () => {
@@ -282,10 +287,11 @@ test("a read of the stream that fails changes no fold: the apply reads it again,
   assert.deepStrictEqual(rigView(store, "rig-h", OPTS), await fresh(store, "rig-h"));
 });
 
-test("a fold that fails on an event is dropped, its rig's views say why, and its next ledger starts again", async () => {
+test("a fold that fails on an event is dropped, its rig's views say why, every other rig is read as before, and its next ledger starts again", async () => {
   const store = controlStore();
   const folds = keepFolds(store);
   await reported(store, "rig-a", "ledger-1", goalEvents("g-1").slice(0, 4));
+  await reported(store, "rig-b", "ledger-b", goalEvents("g-b").slice(0, 4));
   const fold = RigFold.prototype.apply;
   RigFold.prototype.apply = function (this: RigFold, e) {
     if (e.kind === "run_status") throw new Error("a handler's mistake");
@@ -307,7 +313,22 @@ test("a fold that fails on an event is dropped, its rig's views say why, and its
     () => rigView(store, "rig-a", OPTS),
     /rig rig-a's view failed on its event 5 \(run_status\): a handler's mistake/,
   );
-  assert.deepEqual(folds.held(), []);
+  assert.deepEqual(
+    folds.held().map((h) => h.rig),
+    ["rig-b"],
+  );
+  // Every rig's views: rig-b as it is, rig-a with why and none of its events.
+  const all = folds.views(OPTS);
+  const a = all.find((v) => v.id === "rig-a");
+  const b = all.find((v) => v.id === "rig-b");
+  assert.match(String(a?.unreadable), /rig rig-a's view failed on its event 5 \(run_status\)/);
+  assert.deepEqual(a?.runs, []);
+  assert.equal(b?.unreadable, undefined);
+  assert.deepEqual(b, rigView(store, "rig-b", OPTS));
+  assert.deepEqual(
+    b?.runs.map((r) => r.id),
+    ["g-b"],
+  );
   // A full reset: the new ledger's fold starts again.
   await reported(store, "rig-a", "ledger-2", goalEvents("g-2").slice(0, 3));
   assert.deepEqual(

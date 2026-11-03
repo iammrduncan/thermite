@@ -187,12 +187,14 @@ function fillResearch(
 ): { x: Experiment; stalled: boolean } {
   const question = q.index;
   const avoid = new Set(
-    directives.filter((d) => d.body.kind === "avoid" && d.body.family).map((d) => d.body.family),
+    directives
+      .filter((d) => d.body.kind === "avoid" && d.body.direction)
+      .map((d) => d.body.direction),
   );
   const rank = (id: string) =>
-    directives.some((d) => d.body.kind === "mandate" && d.body.family === id)
+    directives.some((d) => d.body.kind === "mandate" && d.body.direction === id)
       ? 0
-      : directives.some((d) => d.body.kind === "try" && d.body.family === id)
+      : directives.some((d) => d.body.kind === "try" && d.body.direction === id)
         ? 1
         : 2;
   const stalled = noveltyFell(sched, run);
@@ -221,7 +223,7 @@ function fillResearch(
     {
       title: `${questionLabel(question)}: ${kind.description}`,
       details: taskDetails(question, contract.questions[question] ?? "", gap),
-      family: kind.id,
+      direction: kind.id,
       question,
       why: (stalled
         ? `${why}; novelty fell, so primary sources and contradictions first`

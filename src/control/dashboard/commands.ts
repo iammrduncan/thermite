@@ -40,17 +40,21 @@ export function commandRoutes(app: Hono, dash: Dashboard): void {
     }
     // Close run (goal 087) takes the owner's reason and the typed words, as its form asks.
     const closing =
-      kind === "hypothesis_status"
+      kind === "invalidate_evidence"
         ? String(f.reason ?? "").trim()
           ? ""
-          : "write why you change the hypothesis first"
-        : kind !== "close_run"
-          ? ""
-          : !String(f.reason ?? "").trim()
-            ? "write why you close the run first"
-            : String(f.confirm ?? "").trim() !== `close ${run}`
-              ? `type close ${run} to confirm`
-              : "";
+          : "write why you withdraw it first"
+        : kind === "hypothesis_status"
+          ? String(f.reason ?? "").trim()
+            ? ""
+            : "write why you change the hypothesis first"
+          : kind !== "close_run"
+            ? ""
+            : !String(f.reason ?? "").trim()
+              ? "write why you close the run first"
+              : String(f.confirm ?? "").trim() !== `close ${run}`
+                ? `type close ${run} to confirm`
+                : "";
     if (closing) return json ? c.json(notSent(closing), 400) : c.text(`refused: ${closing}`, 400);
     let woke: string | null;
     let id: string;

@@ -12,18 +12,20 @@ import {
 import {
   ago,
   championCard,
+  championGuardLine,
   deltaCell,
   esc,
   fmtInt,
   gainChart,
   gainChip,
+  guardCharts,
   kpi,
   moreText,
   num,
   stackBar,
   startWords,
 } from "../../../ui/components/index.ts";
-import { journalTab } from "../../../ui/knowledge.ts";
+import { JOURNAL_SHOWN, journalTab } from "../../../ui/knowledge/index.ts";
 import {
   attemptRows,
   baselineBlock,
@@ -34,12 +36,13 @@ import {
   leftByClose,
   runBrief,
   timeline,
+  waitWords,
 } from "../../../ui/operator/index.ts";
 import { promptsTab } from "../../../ui/prompts.ts";
 import { attemptHref, championPatchHref, type RunTab, runHref } from "../../../ui/urls.ts";
 import { type RunUsage, runStatsTab, runUsageTop } from "../../../ui/usage.ts";
 import { auditReason, clip, jobText, runStatusText, signed } from "../../../ui/words/index.ts";
-import { pricingOf, usageData } from "../../../usage.ts";
+import { pricingOf, usageData } from "../../../usage-report.ts";
 import {
   championsInForce,
   currentChampion,
@@ -50,6 +53,7 @@ import {
 } from "../../../views/index.ts";
 import type { Ctx, Dashboard } from "../../context.ts";
 import { campaignHelpers } from "../shared.ts";
+import { runGitParts } from "./git.ts";
 
 export type RunViewName = RunTab;
 
@@ -60,6 +64,7 @@ export type RunViewName = RunTab;
 export function runHelpers(dash: Dashboard) {
   const { cmdForm, csrf, needs, store } = dash;
   const { goalChecksFor } = campaignHelpers(dash);
+  const git = runGitParts(dash);
 
   /**
    * A run's model use and cost (goal 075), for the top of its page above the tabs and its Stats
@@ -314,6 +319,8 @@ export function runHelpers(dash: Dashboard) {
           : "No lane is at work."
         : `It is ${esc(runStatusText(i))}.`,
       i.status === "running" ? confirmingWords(i) : "",
+      // A wait for the provider's limit: Resume now in the header ends it.
+      esc(waitWords(i, now)),
       // A hill climb's baseline (goal 115): the judge measures the starting point first.
       i.status === "running" ? esc(baselineWords(i)) : "",
       judging
@@ -333,17 +340,18 @@ export function runHelpers(dash: Dashboard) {
       i.published && store.championPatches.get(u.id, u.ledger_id, i.id, i.published.seq)
         ? `<a href="${championPatchHref(i, i.published.seq)}">download champion #${i.published.seq} as a patch</a> <span class="muted small">(${appliesTo})</span>`
         : "";
-    // The champions, newest first: what each one changed and what it gained.
+    // The champions, newest first: what each one changed and what it gained, and its commit in git.
+    const onRig = x;
     const ladder =
       i.mode === "hill_climb"
-        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat"><div class="ladder-chart">${gainChart(i)}</div>${i.champion
+        ? `<div class="block"><div class="head"><h2>Champions</h2><span class="n">${championsInForce(i).length}</span><span class="right">gain over the starting point, measured on this rig</span></div><div class="card flat">${git.gitLine(x, now)}<div class="ladder-chart">${gainChart(i)}</div>${guardCharts(i)}${i.champion
             .filter((x) => !x.reopened)
             .slice()
             .reverse()
             .slice(0, 12)
             .map((x) => {
               const a = x.attempt ? i.attempts.find((y) => y.id === x.attempt) : undefined;
-              return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span></div>`;
+              return `<div class="lad"><span class="lad-n">#${x.seq}</span><span class="lad-main">${x.attempt ? `<a href="${attemptHref(i, x.attempt)}">${esc(clip(a?.hypothesis ?? x.attempt, 140))}</a>` : `<span class="muted">the starting point</span>`}</span><span>${x.attempt ? gainChip(i, { delta: x.delta, values: a?.values }, "ok") : esc(startWords(i))}</span><b class="fig">${esc(signed(x.cumulative - 1))}</b><span class="lad-age">${esc(ago(x.at, now))}</span>${championGuardLine(i, x.seq)}${git.championGit(onRig, x.seq, store.championPatches.get(u.id, u.ledger_id, i.id, x.seq) ? `<a class="mi" href="${championPatchHref(i, x.seq)}">Download as a patch<span class="muted small">against the run's starting commit</span></a>` : "")}</div>`;
             })
             .join("")}</div></div>`
         : "";
@@ -438,6 +446,9 @@ export function runHelpers(dash: Dashboard) {
                 ? journalTab({
                     r: i,
                     now,
+                    field: u.ledger_id
+                      ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, JOURNAL_SHOWN)
+                      : { total: 0, items: [] },
                     counts: u.ledger_id ? store.kb().runCounts(u.id, u.ledger_id, i.id) : {},
                     reads: i.campaign ? store.kb().reads(i.campaign) : [],
                   })
@@ -449,11 +460,11 @@ export function runHelpers(dash: Dashboard) {
                       csrf: t,
                       back,
                       cmd: (f) => cmdForm(c, f),
-                      families: [
+                      directions: [
                         ...new Set([
-                          ...i.queue.map((x) => x.family),
-                          ...i.trials.map((x) => x.family ?? ""),
-                          ...(i.epoch?.assignments.map((a) => a.family) ?? []),
+                          ...i.queue.map((x) => x.direction),
+                          ...i.trials.map((x) => x.direction ?? ""),
+                          ...(i.epoch?.assignments.map((a) => a.direction) ?? []),
                         ]),
                       ].filter(Boolean),
                     })
@@ -476,7 +487,7 @@ ${goals}${championHeldOutBlock(i, now)}${research}${baselineBlock(i, now)}${ladd
 <div class="block" data-part="recent"><div class="head"><h2>Recent</h2><span class="right"><a href="${runHref(i, "history")}">Full history</a></span></div>${recent}</div>
 </div></div>`;
     return `${usage ? runUsageTop(usage) : ""}<section class="block" id="run-${esc(i.id)}">
-<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${n} note${n === 1 ? "" : "s"}`)(i.journal.filter((n) => n.id > 0).length)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}</nav>
+<nav class="tabs">${sub("overview", "Overview", waiting ? ` <span class="dot warn"></span>` : "")}${sub("experiments", researchRun ? "Tasks" : "Experiments", ` <span class="muted">${i.queue.filter((x) => x.state === "queued").length} up next</span>`)}${sub("journal", "Journal", ` <span class="muted">${((n) => `${fmtInt(n)} note${n === 1 ? "" : "s"}`)(u.ledger_id ? store.kb().fieldNotes(u.id, u.ledger_id, i.id, 0).total : 0)}</span>`)}${researchRun ? `${sub("reviews", "Reviews", ` <span class="muted">${i.reviews.filter((r) => r.goal === RESEARCH_REVIEW).length}</span>`)}${sub("hypotheses", "Hypotheses", ` <span class="muted">${i.hypotheses.length}</span>`)}` : ""}${sub("attempts", "Attempts", ` <span class="muted">${i.attempts.length}</span>`)}${sub("history", "History")}${sub("planner", "Planner")}${i.has_agents ? sub("prompts", "Prompts") : ""}${usage ? sub("stats", "Stats") : ""}</nav>
 ${body}
 </section>`;
   };

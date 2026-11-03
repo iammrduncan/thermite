@@ -3,6 +3,7 @@ import type { RigSettings } from "../../core/rig-settings.ts";
 import type { RunpodRigView } from "../runpod/index.ts";
 import type { RigVersions } from "../versions.ts";
 import type { GoalChecks, GoalValues, RigCheckView } from "./fold/index.ts";
+import type { GuardView } from "./guards.ts";
 import type { MetricValues } from "./metric-values.ts";
 import type { ReportingState, RigModelView } from "./report.ts";
 import type {
@@ -31,6 +32,11 @@ export interface StoredEvent {
   kind: string;
   subject: string | null;
   body: Record<string, unknown>;
+  /**
+   * Why control's views can't read this event, in words (core/events/schemas.ts): its body is
+   * then empty and nothing is folded from it. The rig's events keep it as the rig sent it.
+   */
+  unreadable?: string | undefined;
 }
 
 /** A rig as control shows it: its report, runs, judge's jobs, checks and newest events. */
@@ -63,6 +69,12 @@ export interface RigView {
   gpu_split: { set: number; judge: number } | null;
   /** A rig the owner launched on a GPU cloud: its pod, its price and what it has cost so far. */
   runpod?: RunpodRigView | undefined;
+  /**
+   * Why control can't read the rig's events now, in words (its fold failed on one, or is being
+   * read again from the message bus): its runs, events and judge are then empty, and the rest of
+   * the view comes from its last report.
+   */
+  unreadable?: string | undefined;
 }
 
 /**
@@ -91,6 +103,8 @@ export interface AttemptView {
   delta: number | null;
   /** The main metric's values its latest verdict's gain comes from (goal 133). */
   values: MetricValues | null;
+  /** Its latest verdict's guards: each one's change and values (goal 184). */
+  guards: GuardView[];
   hypothesis: string | null;
   recorded_at: string;
   updated_at: string;
@@ -100,7 +114,7 @@ export interface AttemptView {
   /** Flaws its author declared when submitting it (they trigger an audit). */
   known_flaws: string[];
   /** The planner's direction for the trial that made it. */
-  family: string | null;
+  direction: string | null;
   trial: string | null;
   /** Goal campaigns: what the judge's latest finished job found against the champion. */
   gained: string[] | null;
@@ -188,6 +202,26 @@ export interface ChampionStep {
 }
 
 /**
+ * The owner withdrew evidence in a run (goal 174), from the rig's `invalidation` event: its subject
+ * (an attempt, for good, or a judge's job whose measurements were withdrawn), who and why, the
+ * attempts it reached, how many `invalidated` verdicts it recorded, the champions it reopened, and
+ * where the run's champion moved back to (`champion_moved_back`).
+ */
+export interface InvalidationView {
+  id: number;
+  at: string;
+  /** Who withdrew it, as the rig recorded it: `control:owner:ui`, `control:owner:api`… */
+  by: string;
+  kind: "attempt" | "job";
+  subject: string;
+  reason: string;
+  attempts: string[];
+  verdicts: number;
+  champions: number[];
+  champion: { from: number; to: number; attempt: string | null } | null;
+}
+
+/**
  * A hill climb's baseline (goal 115): the judge's values of its starting point, measured alone
  * on every measured cell before any change was judged. Never a held-out cell's.
  */
@@ -263,7 +297,11 @@ export interface RunView {
   };
   status: string;
   pause_reason: string | null;
+  /** When its status last changed: when a closed run ended. Null before its first change. */
+  status_at: string | null;
   champion: ChampionStep[];
+  /** The owner's withdrawals of evidence in the run (goal 174), oldest first. */
+  invalidations: InvalidationView[];
   attempts: AttemptView[];
   verdicts: Record<string, number>;
   /** Confirmed wins that wait for the owner's approval; none in a closed run (goal 087). */
@@ -304,6 +342,19 @@ export interface RunView {
     /** What found it: a trial, the model check. */
     by: string;
     since: string;
+  } | null;
+  /**
+   * The run's newest wait for its provider's limit (`agents_wait_for_limit`): no new trial or plan
+   * starts before `until`, unless the owner ends it (`end_wait`). Null when none was asked since
+   * the last one ended; one whose time has passed stays until the next. `trial`: the trial that
+   * met it; `weekly`: a weekly window (goal 169), whose reset is `until`, which Needs you shows.
+   */
+  agents_wait: {
+    until: string;
+    reason: string;
+    since: string;
+    trial: string | null;
+    weekly: boolean;
   } | null;
   /** Research mode: the newest digest's figures and report. */
   research: Record<string, unknown> | null;
@@ -425,8 +476,8 @@ export interface RunView {
     decision: string | null;
     approaches: number;
     at: string;
-    /** The refuted approach families, each with its judged attempts. */
-    families: { family: string; attempts: number }[];
+    /** The refuted directions, each with its judged attempts. */
+    directions: { direction: string; attempts: number }[];
   }[];
   /** The newest champion published for propagation (what another rig can import). */
   published: {
@@ -444,7 +495,13 @@ export interface RunView {
    * and repository. Control keeps a champion's patch only if its SHA-256 is the newest one here
    * for its seq.
    */
-  published_patches: { seq: number; sha256: string; base_commit: string; repo: string | null }[];
+  published_patches: {
+    seq: number;
+    sha256: string;
+    base_commit: string;
+    repo: string | null;
+    path: string;
+  }[];
   /** Champions received from other rigs, and how this rig's judge decided them. */
   propagations: {
     attempt: string | null;
@@ -461,7 +518,7 @@ export interface RunView {
     n: number;
     at: string;
     source: string;
-    assignments: { lane: string; family: string; parent: string; focus: string | null }[];
+    assignments: { lane: string; direction: string; parent: string; focus: string | null }[];
   } | null;
   /** When each of its rounds started, oldest first: a run page's model calls in each round. */
   round_starts: string[];
@@ -469,7 +526,7 @@ export interface RunView {
   trials: {
     trial: string;
     lane: string | null;
-    family: string | null;
+    direction: string | null;
     attempt: string | null;
     stopped: string;
     error: string | null;
@@ -484,7 +541,7 @@ export interface RunView {
     string,
     {
       trial: string;
-      family: string | null;
+      direction: string | null;
       focus: string | null;
       since: string;
     } & Partial<TrialDoing>
@@ -508,8 +565,8 @@ export interface RunView {
   }[];
   /** The run's directions (goal 066), by name, with what each holds and the rules naming it. */
   directions: DirectionView[];
-  /** The directions the run's registry has, from family_added events: what each means, and who added it. */
-  families: { name: string; description: string; by: string; at: string; for_rules: number[] }[];
+  /** The run's direction registry, from direction_added events: what each direction means, and who added it. */
+  registry: { name: string; description: string; by: string; at: string; for_rules: number[] }[];
   /** The experiment queue (goal 064): every experiment, with its state; up next in order. */
   queue: ExperimentView[];
   /** The planner's hand-outs, newest last (at most 50): what went to which lane, and why. */
@@ -522,13 +579,13 @@ export interface RunView {
   }[];
   /** The owner's messages to the run's agents (goal 063), newest last, with who read them. */
   messages: MessageView[];
-  /** The agents' field notes and research notes (goal 065), oldest first; all of them. */
+  /** The agents' field notes and source notes (goal 065), oldest first; all of them. */
   journal: JournalNoteView[];
 }
 
 /**
  * One note an agent wrote as it worked (goal 065): an observation, a decision and why, a surprise,
- * an open question or a lesson (field notes), or a research note ("note"). Agents' words: data.
+ * an open question or a lesson (field notes), or a source note ("note"). Agents' words: data.
  */
 export interface JournalNoteView {
   id: number;
@@ -543,7 +600,7 @@ export interface JournalNoteView {
 }
 
 /**
- * One of a run's directions (goal 066): an approach family its experiments belong to. A rule names
+ * One of a run's directions (goal 066): an approach its experiments take. A rule names
  * one; a picker lists them.
  */
 export interface DirectionView {
@@ -569,7 +626,7 @@ export interface ExperimentView {
   id: string;
   title: string;
   details: string;
-  family: string;
+  direction: string;
   why: string;
   by: string;
   state: "proposed" | "queued" | "assigned" | "done" | "dropped";
@@ -616,7 +673,7 @@ export interface MessageView {
   rules: {
     id: number;
     kind: string;
-    family: string | null;
+    direction: string | null;
     rationale: string;
     by: string;
     at: string;
@@ -625,5 +682,5 @@ export interface MessageView {
    * Rules the planner made from it that the harness left out: rules the owner removed, which
    * only the owner's own `redirect` sets again (`directives_left_out`).
    */
-  left_out: { kind: string; family: string | null; at: string }[];
+  left_out: { kind: string; direction: string | null; at: string }[];
 }

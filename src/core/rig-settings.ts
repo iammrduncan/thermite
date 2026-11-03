@@ -22,7 +22,7 @@ export interface RigSettings {
   auditor: boolean;
   teachers: boolean;
   review: boolean;
-  /** Hourly exports for the supervisor to push. */
+  /** Each run's export when it ends, for the supervisor to push or send; off: none. */
   exports: boolean;
   /** A trial's length when its contract sets none, in minutes; null: none (goal 079). */
   trial_minutes: number | null;
@@ -34,9 +34,8 @@ export interface RigSettings {
    */
   quiet_minutes: number | null;
   /**
-   * How a trial's agent program runs, where it can run a terminal UI (Claude Code, Codex,
-   * OpenCode; goal 169): in its own terminal, held by the terminal host, or headless. Pi, which
-   * runs in the harness, has no such choice.
+   * How a trial's agent program runs (goal 169): in its own terminal, held by the terminal host
+   * (a worker in Pi draws its Pi view there), or headless.
    */
   program_mode: ProgramMode;
   promotion: "auto" | "owner_approval";
@@ -52,11 +51,12 @@ export const PROGRAM_MODES = ["terminal", "headless"] as const;
 export type ProgramMode = (typeof PROGRAM_MODES)[number];
 
 /**
- * A rig's mode until someone sets one: headless, for now. The owner chose the terminal as the
- * default where a program can run one (2026-10-26); it becomes the default once the stand-in
- * programs and the acceptance checks run trials in a terminal.
+ * A rig's mode until someone sets one: the terminal, the owner's choice where a program can run
+ * one (2026-10-26); headless is an advanced option. A rig's settings file keeps only what someone
+ * set, so every rig nobody set follows this default. A harness that reports no mode is older than
+ * the terminal mode and runs headless (control's readSettings).
  */
-export const PROGRAM_MODE_DEFAULT: ProgramMode = "headless";
+export const PROGRAM_MODE_DEFAULT: ProgramMode = "terminal";
 
 /** The rig_settings payload: only the fields that change. */
 export type RigSettingsChange = z.infer<(typeof CommandPayloads)["rig_settings"]>;

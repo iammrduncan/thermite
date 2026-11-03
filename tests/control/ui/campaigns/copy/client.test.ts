@@ -39,7 +39,7 @@ describe("the Copy panel's script (goal 069)", () => {
     );
     assert.equal(
       core.nameCheck("old-sweep", TAKEN, ["old-sweep"]).say,
-      "There is a campaign named old-sweep already. It has no runs now, but its folder is in the knowledge base. Choose another name.",
+      "There is a campaign named old-sweep already. It has no runs now, but its collection is in the knowledge base. Choose another name.",
     );
     assert.deepEqual(core.nameCheck("rig-check-1", TAKEN, []), {
       ok: false,

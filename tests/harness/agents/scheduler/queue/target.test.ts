@@ -48,12 +48,12 @@ describe("the queue's target drives ideas (goal 081)", () => {
       s.q.add(RUN, { title, by: "lane-1", state: "proposed", ...more }, "lane-1").id;
     const fuse = idea("fuse the two loops");
     const repeat = idea("Wider loads!");
-    const avoided = idea("tile the loops", { family: "tiling" });
+    const avoided = idea("tile the loops", { direction: "tiling" });
     const table = idea("use a lookup table");
     s.env.ledger.directives.addSet(
       RUN,
       "control:owner",
-      [{ kind: "avoid", family: "tiling", rationale: "null", citations: [] }],
+      [{ kind: "avoid", direction: "tiling", rationale: "null", citations: [] }],
       false,
     );
     await s.round();
@@ -183,8 +183,8 @@ describe("the queue's target drives ideas (goal 081)", () => {
     const s = await setup(t, {
       planner: () => ({
         assignments: [
-          { lane: "lane-1", title: "a", family: "memory", why: "a" },
-          { lane: "lane-2", title: "b", family: "memory", why: "b" },
+          { lane: "lane-1", title: "a", direction: "memory", why: "a" },
+          { lane: "lane-2", title: "b", direction: "memory", why: "b" },
         ],
       }),
     });
@@ -194,12 +194,12 @@ describe("the queue's target drives ideas (goal 081)", () => {
       "supervisor",
       [
         {
-          kind: "note",
+          kind: "planner_note",
           value: "Do not add queue entries",
           rationale: "steady",
           citations: ["a-1"],
         },
-        { kind: "try", family: "memory", rationale: "reads dominate", citations: ["a-2"] },
+        { kind: "try", direction: "memory", rationale: "reads dominate", citations: ["a-2"] },
       ],
       true,
     );
@@ -214,7 +214,7 @@ describe("the queue's target drives ideas (goal 081)", () => {
     assert.deepEqual(
       brief.directives.map((d) => [d.body.kind, Boolean(d.refused)]),
       [
-        ["note", true],
+        ["planner_note", true],
         ["try", false],
       ],
     );

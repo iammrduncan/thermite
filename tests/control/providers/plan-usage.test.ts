@@ -175,6 +175,28 @@ describe("a subscription's usage on Providers (goal 151)", () => {
       ],
     );
     assert.equal(claudeUsage("claude-2", [{ id: "rig-a", summary: {} }]), undefined);
+    // An advisor's Claude Code reports through the supervisor, by provider (goal 183): the newest
+    // report wins, whichever part made it.
+    const advisors = claudeUsage("claude-2", [
+      { id: "rig-a", summary: report("claude-2", "2026-10-26T01:00:00.000Z", 0.1) },
+      {
+        id: "rig-e",
+        summary: null,
+        supervisor: {
+          subscription_usage: {
+            "claude-2": {
+              five_hour: { utilization: 0.6, resets_at: "2026-10-26T04:00:00.000Z" },
+              at: "2026-10-26T03:00:00.000Z",
+            },
+          },
+        },
+      },
+    ]);
+    assert.equal(advisors?.rig, "rig-e");
+    assert.deepEqual(
+      advisors?.windows.map((w) => [w.label, w.used_percent]),
+      [["5-hour", 60]],
+    );
   });
 
   test("the row: chips on its closed line, marked from 80%; in full, with its source or why none", () => {

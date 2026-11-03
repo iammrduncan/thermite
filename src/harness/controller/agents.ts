@@ -12,6 +12,7 @@ import {
   DevRuns,
   laneCacheEnv,
   ModelSource,
+  plannerInView,
   programOf,
   researchProgramOf,
   researchRefusal,
@@ -21,11 +22,12 @@ import {
 import { effectiveGpuLists } from "../broker/index.ts";
 import { Compactions, compactionOf } from "../compactions.ts";
 import type { Ledger } from "../ledger/index.ts";
+import { routeOf } from "../model-usage.ts";
 import { keepPrompt } from "../prompts.ts";
 import { Research, ResearchFolder, SAVED_LANES_DIR } from "../research/index.ts";
-import type { RigSettingsStore } from "../rig-settings.ts";
+import type { RigSettingsStore } from "../rig-settings-store.ts";
 import type { HarnessService } from "../service/index.ts";
-import { routeOf } from "../usage.ts";
+import { keepSession } from "../sessions.ts";
 import type { ControllerContext } from "./context.ts";
 import type { Targets } from "./targets.ts";
 
@@ -69,16 +71,24 @@ export function agentParts(
   });
 
   // Each run's research folder: what it has learned, as files its workers search (and, in a
-  // research run, add to), with past research under knowledge/ (the same folders the service's
-  // knowledge store writes).
+  // research run, add to).
   const researchFolder = new ResearchFolder({
     ledger,
     scratchRoot: join(paths.scratchDir, "research"),
     stateRoot: join(paths.stateDir, SAVED_LANES_DIR),
     runner,
-    knowledge: service.knowledge,
+    outboxDir: paths.outboxDir,
   });
+  // Before any agent reads them: the conversations an earlier harness kept unscrubbed, scrubbed.
+  // A failure leaves them to each run's next sync, which scrubs them first or fails.
+  try {
+    researchFolder.scrubKept();
+  } catch (err) {
+    log("harness", "kept conversations not scrubbed", { error: String(err) }, "error");
+  }
   const research = new Research(ledger, paths.stateDir, {
+    outboxDir: paths.outboxDir,
+    search: service.runSearch,
     maxCorpusBytes: numbers.researchMaxBytes,
     onChange: (run) => void researchFolder.sync(run),
   });
@@ -107,6 +117,8 @@ export interface AgentLinks {
   modelFor: (run: string) => ModelConfig | undefined;
   /** What a one-prompt call (a planner call, a model check) takes from the harness. */
   once: CliOnceDeps;
+  /** The harness API's port, which a Pi process reaches. */
+  port: number;
   /** Takes the subscription's windows into the rig's report. */
   windows: (u: PlanWindows) => void;
   /** What a trial takes from the harness. */
@@ -168,10 +180,21 @@ export function agentLinks(
       // Its hooks or plugin take the owner's messages inside the agent's turn, through the
       // trial's routes (goal 169).
       inTurn: (d) => service.inTurn(spec.trialId, d),
+      // The owner's console into its terminal, and its screen for Live (goal 169); a worker in
+      // Pi asks its Pi view's side for the owner's inputs over its trial's routes.
+      console: (c, piView) => service.consoles.set(spec.trialId, c, piView),
       usage: windows,
       // A compaction the program reported (goal 070): kept and recorded as a Pi worker's are,
       // with the program's own conversation where Thermite could read it.
       compacted: (harness, c) => service.compactions?.fromHarness(compactionOf(trial), harness, c),
+      // Its session log, kept by run and trial when it ends (sessions.ts; goal 125, T12).
+      keepSession: (files) =>
+        void keepSession(
+          { stateDir: paths.stateDir, disk: service.disk },
+          spec.run,
+          spec.trialId,
+          files,
+        ),
       // Where its conversation is kept before each compaction, for the program's own summary to
       // name it: the run's research folder, which the worker may read (goal 070).
       keptAt: service.compactions?.keptAt(compactionOf(trial), true),
@@ -181,16 +204,26 @@ export function agentLinks(
       modelUsage: m
         ? service.usage.recorder(spec.run, { trial: spec.trialId, agent: "workers" }, routeOf(m))
         : undefined,
-      handOverUsage: (harness) => {
+      // A Pi worker's own code also reports its session's counters and its waits for the
+      // provider; a command-line program's trial loop reports them here, in the harness.
+      handOver: (harness) => {
         if (m) service.usage.open(trial, routeOf(m, harness));
-        return () => service.usage.close(spec.trialId);
+        const own = service.reportsOwnSession(spec.trialId);
+        return () => {
+          own();
+          service.usage.close(spec.trialId);
+        };
       },
+      // The tokens the model proxy sees of its calls, which its run's budget counts.
+      throughProxy: () => service.ledger.trials.countByProxy(spec.trialId),
       // The provider's error answers the model proxy saw, and each wait for it (goal 079).
       providerAnswer: (since) => service.providerAnswerSince(spec.trialId, since),
       waiting: (w) => service.trialWait(trial, w),
+      // A drain ends a trial that waits in its terminal for its usage window (goal 169).
+      draining: () => service.draining !== undefined,
       env: laneCacheEnv(paths.scratchDir, spec.lane),
-      // Claude Code, Codex or OpenCode in its own terminal, or headless: the rig's setting when
-      // the trial starts (goal 169). Pi has no terminal.
+      // Each program in its own terminal (a worker in Pi in its Pi view), or headless: the rig's
+      // setting when the trial starts (goal 169).
       terminal: service.settings.get().program_mode === "terminal",
       // The prompt that starts the trial, kept whole in the ledger (goal 166).
       sent: (p) =>
@@ -198,7 +231,7 @@ export function agentLinks(
       signal,
     };
   };
-  return { models, model, modelFor, once, windows, link };
+  return { models, model, modelFor, once, port, windows, link };
 }
 
 /**
@@ -245,9 +278,18 @@ export function createScheduler(
       const m = modelFor(spec.run);
       return programOf(m).runTrial({ mode: "code", spec }, link(spec, m, signal));
     },
-    // The planner through OpenCode, Claude Code or Codex, as the planner's own user (cli/once.ts).
+    // The planner through OpenCode, Claude Code or Codex, as the planner's own user (agents/cli/once.ts).
     ask: (via, m, prompt, signal, o) =>
       CLI_PROGRAMS[via].ask(m, prompt, once, { ...o, signal, windows }),
+    // A planner in Pi on a rig whose agents run in their own terminal: in a process of its own,
+    // in its Pi view, as the planner's user (goal 169).
+    planInView: (c, sent, spec, signal) =>
+      plannerInView(
+        { ...c, runner, scratchDir: once.scratchDir, port: links.port },
+        sent,
+        spec,
+        signal,
+      ),
     // The planner's own model, when control gave it one.
     plannerModel: () => models.planner(),
     research,

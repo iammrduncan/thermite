@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -27,6 +28,7 @@ import { CpuDriver } from "../../../src/harness/targets/cpu.ts";
 import {
   CRASH_KERNEL,
   FAST_KERNEL,
+  FAST_KERNEL_RESTATED,
   makeJudgeEnv,
   SEED_KERNEL,
   WRONG_KERNEL,
@@ -96,7 +98,6 @@ describe("a hill climb's baseline (goal 115)", () => {
       runner: new LocalRunner(env.paths.scratchDir),
       driver: new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
       owner: "judge-test",
-      promotion: "auto",
       readyRetries: 0,
       calibrationBlocks: 2,
     });
@@ -266,10 +267,13 @@ describe("a hill climb's baseline (goal 115)", () => {
   });
 
   test("a setup change measured after the run left setup is screened as any change is", async () => {
-    const env = await setup({ seedKernel: CRASH_KERNEL });
+    // The stand-in runner times the kernels: b screened against a, a change with the same effect,
+    // is an A/A comparison, which real runs on a loaded machine can show as a win, and then b is
+    // confirmed too. The test is about where b's measurement goes, not about the timing.
+    const env = await setup({ seedKernel: CRASH_KERNEL, realRuns: false });
     await env.drain();
     const a = await env.submit(FAST_KERNEL, "make it run");
-    const b = await env.submit(`${FAST_KERNEL}// restated\n`, "make it run, restated");
+    const b = await env.submit(FAST_KERNEL_RESTATED, "make it run, restated");
     await env.drain();
     assert.equal(env.ledger.verdicts.current(a)?.verdict, "starting_point", env.explain(a));
     // b was queued as a setup change; once a is the starting point, it is judged against it.
@@ -407,11 +411,14 @@ process.stdout.write(JSON.stringify({ pass: true, reasons: [], has_dir: dir ? 1 
       },
     ]);
     assert.equal(b.bytes, content.length);
-    // The judge's alone, and sealed.
-    assert.equal(statSync(join(env.paths.stateDir, "baselines")).mode & 0o777, 0o700);
-    assert.equal(statSync(join(env.paths.stateDir, "baselines", "js-1")).mode & 0o777, 0o700);
-    assert.equal(statSync(dir).mode & 0o777, 0o500);
-    assert.equal(statSync(join(dir, "ref-20000000.json")).mode & 0o777, 0o400);
+    // The judge's, entered by the checkers' group alone (the broker gives it in the image), and
+    // sealed: read by the group, written by no one.
+    assert.equal(statSync(join(env.paths.stateDir, "baselines")).mode & 0o777, 0o710);
+    assert.equal(statSync(join(env.paths.stateDir, "baselines", "js-1")).mode & 0o777, 0o710);
+    assert.equal(statSync(dir).mode & 0o777, 0o550);
+    assert.equal(statSync(join(dir, "ref-20000000.json")).mode & 0o777, 0o440);
+    // The checks wrote to a folder of the job's in scratch, which is gone.
+    assert.ok(!existsSync(join(env.paths.scratchDir, "runs", `job-${b.job}`, "baseline")));
     // What each check saw, from the receipts: the baseline's could write, later ones could only
     // read the same reference; no run command got the folder.
     const seen = (kind: string) =>

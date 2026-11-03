@@ -1,4 +1,4 @@
-import { BUS_BATCH_MAX, type Bus, type Outgoing } from "../../common/bus.ts";
+import { BUS_BATCH_MAX, type Bus, type Outgoing } from "../../common/bus/index.ts";
 import { errorText } from "../../common/errors.ts";
 import {
   EVENT_MAX_BYTES,

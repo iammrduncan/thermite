@@ -1,17 +1,12 @@
 import { z } from "zod";
+import type { MessageInbox, TurnDelivery } from "../../agents/cli/index.ts";
 import { stalledFor } from "../../agents/model/index.ts";
 import { log } from "../../common/env.ts";
 import type { InTurn } from "../../core/agents.ts";
 import { ExperimentText } from "../../core/commands.ts";
 import type { LiveKind } from "../../core/live.ts";
 import { measurementIn, measurementRefusal } from "../../core/research-check.ts";
-import {
-  KIND_WORDS,
-  type MessageInbox,
-  type ProviderErrorKind,
-  Registry,
-  type TurnDelivery,
-} from "../agents/index.ts";
+import { holdUntil, KIND_WORDS, type ProviderErrorKind, Registry } from "../agents/index.ts";
 import { Journal } from "../journal.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { messageText, type OwnerMessages } from "../messages.ts";
@@ -29,7 +24,7 @@ import type { ReplyNow } from "./watch.ts";
 export const IdeaRequest = z.strictObject({
   title: ExperimentText.title,
   details: ExperimentText.details.optional(),
-  family: ExperimentText.family.optional(),
+  direction: ExperimentText.direction.optional(),
   why: ExperimentText.why.optional(),
   /** In a research run, the question the task is about, an index from 0 (goal 117). */
   question: z.number().int().min(0).optional(),
@@ -50,7 +45,7 @@ export function proposeIdea(
   const idea = IdeaRequest.parse(input);
   if (svc.ledger.runs.get(t.run)?.mode === "research") {
     const measures = measurementIn(
-      [idea.title, idea.details ?? "", idea.why ?? "", idea.family ?? ""].join("\n"),
+      [idea.title, idea.details ?? "", idea.why ?? "", idea.direction ?? ""].join("\n"),
     );
     if (measures) throw new LedgerError("invalid", measurementRefusal(measures));
   }
@@ -132,11 +127,13 @@ export function trialReport(
 /**
  * A trial waits for its provider and then goes on in the same conversation (goal 079): a line in
  * its session, and for a rate limit, a wait the scheduler and the research clock read: no new
- * trial starts before it ends, and a research run's clock stops meanwhile.
+ * trial of its run starts before it ends, at most one trial's length from now (holdUntil), and a
+ * research run's clock stops meanwhile. A planner's call in its own terminal waits the same way
+ * for its usage window (goal 169), its line in the planner's session (`source`).
  */
 export function trialWait(
   svc: HarnessService,
-  trial: { id: string; run: string; lane: string },
+  trial: { id: string; run: string; lane: string; source?: string | undefined },
   w: { until: string; kind: string; words: string },
 ): void {
   const at = new Date(w.until);
@@ -150,7 +147,7 @@ export function trialWait(
       seconds: Number(silent),
     });
   svc.live.append({
-    source: `trial:${trial.id}`,
+    source: trial.source ?? `trial:${trial.id}`,
     kind: "status",
     text:
       silent !== undefined
@@ -159,13 +156,22 @@ export function trialWait(
     lane: trial.lane,
     run: trial.run,
   });
-  if (w.kind === "rate_limit" && !Number.isNaN(at.getTime()))
+  if (w.kind === "rate_limit" && !Number.isNaN(at.getTime())) {
+    const minutes = svc.settings.get().trial_minutes;
+    const until = holdUntil(
+      svc.ledger,
+      trial.run,
+      svc.contractFor(trial.run),
+      minutes === null ? undefined : minutes * 60_000,
+      at.toISOString(),
+    );
     svc.ledger.appendEvent("scheduler", "agents_wait_for_limit", trial.run, {
-      until: at.toISOString(),
+      until,
       trial: trial.id,
       reason: w.words.slice(0, 600),
       in_trial: true,
     });
+  }
 }
 
 /**

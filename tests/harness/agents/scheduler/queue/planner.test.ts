@@ -17,14 +17,14 @@ describe("the planner as the queue's coordinator", () => {
           { id: ids.stale, why: "the champion already does it" },
           { id: ids.idea2, why: "lane-1's idea covers it" },
         ],
-        add: [{ ref: "n1", title: "wider loads", family: "memory", why: "reads dominate" }],
+        add: [{ ref: "n1", title: "wider loads", direction: "memory", why: "reads dominate" }],
         move: [{ id: ids.later, position: "end", why: "after the loads" }],
         // The owner's plain words make a rule for a new direction the planner designs.
-        new_families: [{ id: "Timer code", description: "any change to the timing code" }],
+        new_directions: [{ id: "Timer code", description: "any change to the timing code" }],
         rules: [
           {
             kind: "avoid",
-            family: ":timer code:",
+            direction: ":timer code:",
             rationale: "the owner asked",
             from_message: 1,
           },
@@ -97,12 +97,12 @@ describe("the planner as the queue's coordinator", () => {
     const rule = events(s.env, "directive").find((e) => e.actor === "planner");
     assert.deepEqual(body(rule).body, {
       kind: "avoid",
-      family: "timer-code",
+      direction: "timer-code",
       rationale: "the owner asked",
       citations: [],
       from_message: 1,
     });
-    const made = events(s.env, "family_added").find((e) => body(e).family === "timer-code");
+    const made = events(s.env, "direction_added").find((e) => body(e).direction === "timer-code");
     assert.equal(made?.actor, "planner:planner");
     assert.equal(body(made).description, "any change to the timing code");
     assert.ok(s.q.directions(RUN).includes("timer-code"));
@@ -121,17 +121,17 @@ describe("the planner as the queue's coordinator", () => {
       planner: (_p, call) =>
         call === 1
           ? {
-              rules: [{ kind: "avoid", family: "unroll", rationale: "r", from_message: 9 }],
+              rules: [{ kind: "avoid", direction: "unroll", rationale: "r", from_message: 9 }],
               assignments: [
                 { lane: "lane-1", experiment: x, why: "w" },
-                { lane: "lane-2", title: "inline one", family: "misc", why: "w" },
+                { lane: "lane-2", title: "inline one", direction: "misc", why: "w" },
               ],
             }
           : {
               drop: [{ id: x, why: "no" }],
               assignments: [
                 { lane: "lane-1", experiment: x, why: "w" },
-                { lane: "lane-2", title: "inline one", family: "misc", why: "w" },
+                { lane: "lane-2", title: "inline one", direction: "misc", why: "w" },
               ],
             },
     });
@@ -151,14 +151,14 @@ describe("the planner as the queue's coordinator", () => {
       planner: (_p, call) => ({
         ...(call > 1
           ? {
-              new_families: [
+              new_directions: [
                 { id: "shared-memory-tiling", description: "tiles staged in shared memory" },
               ],
               add: [
                 {
                   ref: "n1",
                   title: "stage the tiles in shared memory",
-                  family: "shared memory tiling",
+                  direction: "shared memory tiling",
                   why: "the rule asks for it",
                 },
               ],
@@ -172,7 +172,12 @@ describe("the planner as the queue's coordinator", () => {
     const r = await command(s.env, "redirect", {
       run: RUN,
       directives: [
-        { kind: "try", family: "Shared memory tiling", rationale: "won elsewhere", citations: [] },
+        {
+          kind: "try",
+          direction: "Shared memory tiling",
+          rationale: "won elsewhere",
+          citations: [],
+        },
       ],
       replace: false,
     });
@@ -186,14 +191,14 @@ describe("the planner as the queue's coordinator", () => {
     assert.equal(epoch.source, "planner");
     assert.match(
       JSON.stringify(epoch.refused),
-      /names :shared-memory-tiling:, a direction this run doesn't have yet: design it in new_families/,
+      /names :shared-memory-tiling:, a direction this run doesn't have yet: design it in new_directions/,
     );
-    const made = events(s.env, "family_added").find(
-      (e) => body(e).family === "shared-memory-tiling",
+    const made = events(s.env, "direction_added").find(
+      (e) => body(e).direction === "shared-memory-tiling",
     );
     assert.equal(made?.actor, "planner:planner");
     assert.deepEqual(body(made), {
-      family: "shared-memory-tiling",
+      direction: "shared-memory-tiling",
       description: "tiles staged in shared memory",
       for_rules: [Number((r.directives as number[])[0])],
     });

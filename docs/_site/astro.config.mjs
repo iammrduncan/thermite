@@ -34,6 +34,8 @@ export default defineConfig({
     // in the Markdown copies. This turns them into site addresses.
     remarkPlugins: [[remarkRelativeLinks, { base }]],
   },
+  // The roadmap page became the changelog: its old address leads there.
+  redirects: { "/project/roadmap/": "/project/changelog/" },
   integrations: [
     // astro-mermaid must come before Starlight.
     mermaid({ theme: "neutral", autoTheme: true }),
@@ -68,8 +70,21 @@ export default defineConfig({
       customCss: ["./src/styles/custom.css"],
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
       sidebar: [
+        // The first experience: install on one machine, a first campaign, a second machine.
+        {
+          label: "Get started",
+          items: [
+            { label: "1 · Install on one machine", link: "/tutorials/first-run/" },
+            { label: "2 · Run your first campaign", link: "/tutorials/agents-with-a-free-model/" },
+            { label: "3 · Add a second machine", link: "/tutorials/second-machine/" },
+            { label: "4 · Tailscale / WireGuard", link: "/how-to/install/private-network/" },
+          ],
+        },
         { label: "Start here", link: "/start-here/" },
-        { label: "Tutorials", items: [{ autogenerate: { directory: "tutorials" } }] },
+        {
+          label: "Tutorials",
+          items: ["tutorials/first-goal-campaign", "tutorials/your-own-project"],
+        },
         {
           label: "How-to guides",
           items: [

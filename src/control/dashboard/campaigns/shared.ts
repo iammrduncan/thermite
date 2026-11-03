@@ -1,10 +1,10 @@
-import { parseContract } from "../../../core/contract.ts";
+import { parseStoredContract } from "../../../core/contract.ts";
 import { type GoalChecks, goalChecks } from "../../../core/goal/index.ts";
 import { KitSchema } from "../../../core/kit.ts";
-import { type KbKind, PICKABLE } from "../../kb.ts";
+import { type KbKind, PICKABLE } from "../../kb/index.ts";
 import type { ChecksSource } from "../../ui/campaigns/goal-checks.ts";
-import { isRigCheck, workCard } from "../../ui/campaigns/list.ts";
-import { bestGainWords, icon, modeName, num, pct } from "../../ui/components/index.ts";
+import { workCard } from "../../ui/campaigns/list.ts";
+import { bestGainWords, icon, num, pct } from "../../ui/components/index.ts";
 import { runBrief } from "../../ui/operator/index.ts";
 import { runLiveHref } from "../../ui/urls.ts";
 import {
@@ -39,12 +39,6 @@ export const headline = (k: CampaignView): { value: string; sub: string; best?: 
 export const copiedBy = (by: string) =>
   by === "owner:operator" ? "the operator" : by === "owner" || by.startsWith("owner:") ? "you" : by;
 
-/** A campaign's mode in words, for folders: hill climb, goal, research or rig check. */
-export const modeWords =
-  (modes: Map<string, string | null>) =>
-  (name: string): string =>
-    isRigCheck(name) ? "rig check" : modeName(modes.get(name) ?? null) || "campaign";
-
 /**
  * What the campaigns' pages share: a run at work as a card, how each goal is checked, what a
  * campaign is for, and past research a new run can start from. The Campaigns list, a campaign's
@@ -52,7 +46,7 @@ export const modeWords =
  */
 export function campaignHelpers(dash: Dashboard) {
   const { opts, pauseMenu, store } = dash;
-  /** Past research a new run of a campaign can start from: its readable folders' newest matches. */
+  /** Past research a new run of a campaign can start from: its readable collections' newest matches. */
   const pastResults = (campaign: string, q: string) => {
     const kb = store.kb();
     return kb.search(q, kb.readable(campaign), {
@@ -92,7 +86,7 @@ export function campaignHelpers(dash: Dashboard) {
     if (rig && run?.goal_checks) return { checks: run.goal_checks, source: { from: "rig", rig } };
     const v = store.campaigns.versions(name)[0];
     const raw = v?.contract ?? store.commands.latestAssignments().get(name)?.payload.contract;
-    const parsed = raw ? parseContract(raw) : undefined;
+    const parsed = raw ? parseStoredContract(raw) : undefined;
     const contract = parsed?.ok && parsed.contract.mode === "goal" ? parsed.contract : undefined;
     const ref = contract?.project.kit;
     const kept = v?.sources.kit !== undefined && "control" in v.sources.kit;

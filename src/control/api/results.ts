@@ -1,50 +1,215 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { jsonBody } from "../../common/errors.ts";
-import { PROPAGATE } from "../../core/api/control/owner.ts";
-import { CHAMPION_PATCH, KB, KB_NOT_ASSIGNED, REPORTS } from "../../core/api/control/rigs.ts";
+import {
+  CAMPAIGN_KB_GRANT,
+  CAMPAIGN_KB_REVOKE,
+  KB_FILE,
+  KB_ITEM,
+  KB_LIST,
+  KB_NOTE,
+  KB_SEARCH,
+  KB_SETTINGS,
+  KB_STORED,
+  PROPAGATE,
+  SET_KB_SETTINGS,
+} from "../../core/api/control/owner.ts";
+import { CHAMPION_PATCH } from "../../core/api/control/rigs.ts";
 import { keepChampionPatch } from "../champions.ts";
 import { type ExportFiles, mountExports } from "../exports.ts";
 import { propagateChampion } from "../issue/index.ts";
+import {
+  type GrantOutcome,
+  grantCollection,
+  KbListQuery,
+  KbNoteQuery,
+  KbReadQuery,
+  KbSearchQuery,
+  kbFileOf,
+  kbFileResponse,
+  kbSettingsOf,
+  kbStored,
+  ownerKbList,
+  ownerKbRead,
+  ownerKbSearch,
+  revokeCollection,
+  setKbSettings,
+  writeOwnerNote,
+} from "../kb/index.ts";
 import { resultsLeft } from "../results-left.ts";
-import { leaderboard } from "../views/index.ts";
+import { leaderboard, rigViews } from "../views/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 
 /**
- * What rigs' runs produce, and the owner reads: the knowledge base's items for a run's agents,
- * champions' patches as the rigs upload them (the owner reads them under the run: api/runs.ts),
- * exports (`exportFiles`: where control keeps them; none, it takes none),
- * daily reports, the leaderboard, and a champion propagated to another rig.
+ * What rigs' runs produce, and the owner reads: the knowledge base (its search, an item, a
+ * place's list), champions' patches as the rigs upload them (the owner reads them under the run:
+ * api/runs.ts), exports (`exportFiles`: where control keeps them; none, it takes none), daily
+ * reports (the rigs send them on the message bus: bus/asks.ts), the leaderboard, and a champion
+ * propagated to another rig.
  */
 export function resultRoutes(
   app: Hono,
   api: ApiContext,
   exportFiles: ExportFiles | undefined,
 ): void {
-  const { store, privateKeyPem, opts, admin, rigAuth } = api;
+  const { store, privateKeyPem, opts, admin, rigAuth, viewOpts } = api;
 
-  // Past research for a run's agents (goal 065): the items of the folders the run's campaign may
-  // read, after the supervisor's cursor. Only the rig's own runs; never a folder not granted.
-  app.get(KB.path, rigAuth, (c) => {
-    c.header("cache-control", "no-store");
-    const run = c.req.query("run") ?? "";
-    const after = Number(c.req.query("after") ?? "0");
-    if (!run) return c.json({ error: "run is required" }, 400);
-    if (!Number.isSafeInteger(after) || after < 0)
-      return c.json({ error: "after is a whole number from 0" }, 400);
-    // Only a run control assigned to this rig, of the campaign control assigned: a rig cannot
-    // read another campaign's folders by naming it in its own events.
-    const assigned = store.runRegistry.assignedCampaigns(c.req.param("rig")).get(run);
-    if (!assigned) {
-      const error = `control did not assign run ${run} to this rig`;
-      return c.json({ error, code: KB_NOT_ASSIGNED }, 404);
-    }
-    const sync = store.kb().sync(c.req.param("rig"), run, after);
-    if (!sync) return c.json({ error: `this rig has no run ${run}` }, 404);
-    if (sync.campaign !== assigned)
-      return c.json({ error: `run ${run} is not of the campaign control assigned` }, 409);
-    return c.json(sync);
+  // The owner's search of the knowledge base, and one item read (goal 175): as MCP's kb_search and
+  // kb_read. A list of names is given with commas, or as a repeated parameter; more queries
+  // (`query`) and the addresses seen (`seen`) only as a repeated parameter.
+  app.get(KB_SEARCH.path, admin, (c) => {
+    const list = (k: string) =>
+      (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);
+    const many = (k: string) => (c.req.queries(k) ?? []).filter(Boolean);
+    const num = (k: string) => {
+      const v = c.req.query(k);
+      return v === undefined ? {} : { [k]: Number(v) };
+    };
+    const lists = {
+      collections: list("collection"),
+      kinds: list("kind"),
+      outcomes: list("outcome"),
+    };
+    const more = {
+      runs: list("run"),
+      slots: list("slot"),
+      types: list("type"),
+      queries: many("query"),
+      seen: many("seen"),
+    };
+    const q = KbSearchQuery.safeParse({
+      q: c.req.query("q") ?? "",
+      ...Object.fromEntries(Object.entries({ ...lists, ...more }).filter(([, v]) => v.length)),
+      ...(c.req.query("mode") ? { mode: c.req.query("mode") } : {}),
+      ...(c.req.query("like") ? { like: c.req.query("like") } : {}),
+      ...(c.req.query("as") ? { as: c.req.query("as") } : {}),
+      ...num("offset"),
+      ...num("limit"),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    const r = ownerKbSearch(store, q.data);
+    return "error" in r ? c.json(r, 400) : c.json(r);
   });
+  app.get(KB_ITEM.path, admin, (c) => {
+    const v = c.req.query("version");
+    const at = c.req.query("offset");
+    const q = KbReadQuery.safeParse({
+      address: c.req.query("address") ?? "",
+      ...(v !== undefined ? { version: Number(v) } : {}),
+      ...(at !== undefined ? { offset: Number(at) } : {}),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    const r = ownerKbRead(store, rigViews(store, viewOpts), q.data);
+    return "error" in r ? c.json(r, 404) : c.json(r);
+  });
+
+  // One version's file (goal 176): always an attachment, sent as bytes unless its type is passive.
+  app.get(KB_FILE.path, admin, (c) => {
+    const v = c.req.query("version");
+    const q = KbReadQuery.safeParse({
+      address: c.req.query("address") ?? "",
+      ...(v !== undefined ? { version: Number(v) } : {}),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    const f = kbFileOf(store, opts.kbFiles, q.data.address, q.data.version);
+    return "error" in f ? c.json({ error: f.error }, f.status) : kbFileResponse(f);
+  });
+
+  // The owner's list of one place (goal 176): as MCP's kb_list, and the Knowledge page.
+  // What the knowledge base stores (goal 176): as MCP's kb_stored and the What's stored page.
+  app.get(KB_STORED.path, admin, async (c) => {
+    const at = c.req.query("offset");
+    const offset = at === undefined ? 0 : Number(at);
+    if (!Number.isInteger(offset) || offset < 0)
+      return c.json({ error: "bad request: offset: a whole number, 0 or more" }, 400);
+    return c.json(await kbStored(store, api.parts.bus, { offset }));
+  });
+  // The knowledge base's settings on control (goal 175): as MCP's kb_settings and set_kb_settings,
+  // `thermite kb settings` and Settings › Knowledge base.
+  const orphanHoursDefault = opts.kbFiles?.orphanHoursDefault ?? 0;
+  app.get(KB_SETTINGS.path, admin, (c) => c.json(kbSettingsOf(store, orphanHoursDefault)));
+  app.put(
+    SET_KB_SETTINGS.path,
+    admin,
+    bodyLimit({ maxSize: SET_KB_SETTINGS.maxBytes }),
+    async (c) => {
+      const body = await c.req.json().catch(() => undefined);
+      const o = setKbSettings(store, body, orphanHoursDefault, "owner:api");
+      return o.ok
+        ? c.json({ ...o.settings, said: o.said })
+        : c.json({ error: `bad request: ${o.error}` }, 400);
+    },
+  );
+  app.get(KB_LIST.path, admin, (c) => {
+    const list = (k: string) =>
+      (c.req.queries(k) ?? []).flatMap((v) => v.split(",")).filter(Boolean);
+    const given = {
+      kinds: list("kind"),
+      outcomes: list("outcome"),
+      types: list("type"),
+      slots: list("slot"),
+    };
+    const words = (k: "sort" | "order") => (c.req.query(k) ? { [k]: c.req.query(k) } : {});
+    const num = (k: string) => {
+      const v = c.req.query(k);
+      return v === undefined ? {} : { [k]: Number(v) };
+    };
+    const q = KbListQuery.safeParse({
+      at: c.req.query("at") ?? "",
+      ...Object.fromEntries(Object.entries(given).filter(([, v]) => v.length)),
+      ...words("sort"),
+      ...words("order"),
+      ...num("offset"),
+      ...num("limit"),
+    });
+    if (!q.success) return c.json({ error: queryRefusal(q.error) }, 400);
+    const r = ownerKbList(store, rigViews(store, viewOpts), q.data);
+    return "error" in r ? c.json(r, 404) : c.json(r);
+  });
+
+  // Grants (goal 176): as MCP's kb_grant and kb_revoke and the Knowledge page, the same code.
+  const granted = (c: Context, o: GrantOutcome, created: boolean) =>
+    o.ok
+      ? c.json(
+          {
+            campaign: o.campaign,
+            changed: o.changed,
+            reads: o.reads,
+            read_by: o.read_by,
+            said: o.said,
+          },
+          created && o.changed ? 201 : 200,
+        )
+      : c.json({ error: o.error }, o.status);
+  app.post(
+    CAMPAIGN_KB_GRANT.path,
+    admin,
+    bodyLimit({ maxSize: CAMPAIGN_KB_GRANT.maxBytes }),
+    async (c) => {
+      const body = CAMPAIGN_KB_GRANT.body.safeParse(await c.req.json().catch(() => undefined));
+      if (!body.success) return c.json({ error: queryRefusal(body.error) }, 400);
+      const g = { campaign: c.req.param("campaign"), reads: body.data.reads };
+      return granted(c, grantCollection(store, rigViews(store, viewOpts), g, "owner:api"), true);
+    },
+  );
+  // The owner's note on an item (goal 176): as MCP's kb_note and the reader's Add a note.
+  app.post(KB_NOTE.path, admin, bodyLimit({ maxSize: KB_NOTE.maxBytes }), async (c) => {
+    const body = KbNoteQuery.safeParse(await c.req.json().catch(() => undefined));
+    if (!body.success) return c.json({ error: queryRefusal(body.error) }, 400);
+    const o = writeOwnerNote(store, body.data, "owner:api");
+    return o.ok ? c.json(o, 201) : c.json({ error: o.error }, 400);
+  });
+  app.delete(CAMPAIGN_KB_REVOKE.path, admin, (c) =>
+    granted(
+      c,
+      revokeCollection(
+        store,
+        { campaign: c.req.param("campaign"), reads: c.req.param("reads") },
+        "owner:api",
+      ),
+      false,
+    ),
+  );
 
   // A champion's patch, uploaded by the rig's supervisor once its export is published. It is
   // kept only if its sha256 is the one the rig's signed champion_published event names.
@@ -77,11 +242,6 @@ export function resultRoutes(
     c.json(resultsLeft(store, c.req.param("rig"), { export: c.req.query("export") || undefined })),
   );
 
-  app.post(REPORTS.path, rigAuth, bodyLimit({ maxSize: REPORTS.maxBytes }), async (c) => {
-    const body = REPORTS.body.parse(await jsonBody(c.req));
-    return c.json({ id: store.rigReports.add(c.req.param("rig"), body.kind, body.body) }, 201);
-  });
-
   app.get("/v1/reports", admin, (c) =>
     c.json({
       reports: store.rigReports.list(
@@ -96,7 +256,7 @@ export function resultRoutes(
   );
 
   // One run's published champion to another run of its campaign, each named alone (goal 170).
-  app.post(PROPAGATE.path, admin, async (c) => {
+  app.post(PROPAGATE.path, admin, bodyLimit({ maxSize: PROPAGATE.maxBytes }), async (c) => {
     const body = PROPAGATE.body.parse(await jsonBody(c.req));
     const r = await propagateChampion(store, privateKeyPem, {
       run: body.run,
@@ -106,4 +266,9 @@ export function resultRoutes(
     });
     return c.json(r, 201);
   });
+}
+
+/** A query refused, in words: each field and what is wrong with it. */
+function queryRefusal(err: { issues: { path: PropertyKey[]; message: string }[] }): string {
+  return `bad request: ${err.issues.map((i) => `${i.path.join(".") || "query"}: ${i.message}`).join("; ")}`;
 }

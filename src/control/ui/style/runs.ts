@@ -56,7 +56,24 @@ details.more[open] > summary .more-part { display: none; } details.more[open] > 
 .ar-out { justify-content: center; }
 .ar-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ar-main b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ar-effect { display: flex; gap: 4px; justify-content: flex-end; }
+.ar-effect { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; align-items: center; }
+.ar-guards { display: flex; flex-wrap: wrap; gap: 2px 10px; justify-content: flex-end; flex-basis: 100%; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.ag.bad { color: var(--error-foreground); font-weight: 600; } .ag.warn { color: var(--warning-foreground); }
+/* a hill climb's guards (goal 184): a chart for each, and a line under each champion */
+.guards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px 24px; padding: 10px 14px 8px; border-bottom: 1px solid var(--border); }
+.gchart { min-width: 0; } .gchart-title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
+.gchart svg.chart { max-height: 150px; } .gchart-words .small { color: var(--muted-foreground); } .gchart-words b { color: var(--foreground); font-weight: 600; } .gchart-words b.bad { color: var(--error-foreground); }
+svg.chart .gpt.est { stroke-dasharray: 2 2; } .guard-legend .lg-est { width: 9px; height: 9px; border: 1.5px dashed var(--info); border-radius: 50%; vertical-align: -1px; }
+svg.chart .gline { fill: none; stroke: var(--info); stroke-width: 2; }
+svg.chart .gpt { fill: var(--card); stroke: var(--info); stroke-width: 2; } svg.chart .gpt.near { stroke: var(--warning); }
+svg.chart .start { stroke: var(--muted-foreground); stroke-width: 1; stroke-dasharray: 2 3; }
+svg.chart .limit { stroke: var(--error); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg.chart .lbl-limit { fill: var(--error-foreground); font-weight: 600; } svg.chart .glast { fill: var(--foreground); font-weight: 600; }
+.guard-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 4px 14px 10px; border-bottom: 1px solid var(--border); }
+.guard-legend i { display: inline-block; width: 18px; vertical-align: middle; margin-right: 6px; border-top: 2px solid var(--info); }
+.guard-legend .lg-start { border-top: 1px dotted var(--muted-foreground); } .guard-legend .lg-limit { border-top: 2px dashed var(--error); }
+.lad-guards { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.lad-guards b { color: var(--foreground); font-weight: 600; } .lad-guards .near, .lad-guards .near b { color: var(--warning-foreground); }
 .ar-lane { color: var(--muted-foreground); font-family: var(--font-mono); font-size: 12px; }
 .ar-age { color: var(--muted-foreground); font-size: 12px; text-align: right; }
 /* an attempt's page */
@@ -84,4 +101,12 @@ details.matrix .card { border: 0; border-radius: 0; }
 .fl:last-child { border-bottom: 0; }
 .fl code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fl-bar { display: flex; height: 8px; } .fl-bar i { display: block; } .fl-bar .add { background: var(--success); } .fl-bar .rem { background: var(--error); }
-.fl-n { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }`;
+.fl-n { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* a run's work in git (goal 185): its branch, each champion's commit and menu, the drawer */
+.gitline { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.lad-sha { grid-column: 2 / -1; font-size: 12px; color: var(--muted-foreground); }
+.lad-menu { position: relative; } .lad-menu > summary { list-style: none; cursor: pointer; color: var(--muted-foreground); padding: 0 6px; border-radius: 6px; }
+.lad-menu > summary::-webkit-details-marker { display: none; } .lad-menu > summary:hover { background: var(--muted); }
+.lad-menu .menu-pop { top: 24px; width: min(300px, 86vw); } .lad-menu .mi { display: grid; text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 6px; color: inherit; cursor: pointer; font: inherit; }
+.lad-menu .mi:hover { background: var(--muted); text-decoration: none; } button[data-copied]::after { content: " ✓"; color: var(--success-foreground); }
+#from-champion [data-when-change] { display: none; margin-top: 6px; } #from-champion fieldset:has(input[value="change"]:checked) [data-when-change] { display: block; }`;

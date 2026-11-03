@@ -1,7 +1,9 @@
 import type { McpGateway } from "../../../agents/mcp/index.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import type { McpUse } from "../../../core/mcp.ts";
+import type { KbControl } from "../../kb/index.ts";
 import type { RunningAdvisors } from "../config.ts";
+import type { AdvisorTerminals } from "../terminal/index.ts";
 
 export interface AdviseConfig {
   harnessUrl: string;
@@ -23,6 +25,16 @@ export interface AdviseConfig {
    * a script run with Node. None: the papers are not checked for style, and say so.
    */
   steChecker?: string | undefined;
+  /**
+   * Where the advisors' kb_search and kb_read ask control (goal 175): the bus, or control's HTTP
+   * API. None: the advisors get no knowledge base tools.
+   */
+  kb?: KbControl | undefined;
+  /**
+   * On a rig whose agents run in their own terminal (goal 169): what the teachers', the auditor's
+   * and the reviewers' calls take there. None: they run headless.
+   */
+  terminals?: AdvisorTerminals | undefined;
 }
 
 export interface AdviseState {
@@ -50,6 +62,12 @@ export interface AdviseState {
    * owner gives once its tries are spent.
    */
   auditErrors?: Record<string, string> | undefined;
+  /**
+   * Each advisor that waits for its provider's full usage window to reset, by its name: when it
+   * resets (ISO). A headless call that met it is not a failed try (the owner's decision of
+   * 2026-10-27); the advisor's open audits and reviews wait until then (limit.ts).
+   */
+  limits?: Record<string, string> | undefined;
   stats: {
     teacher_runs: number;
     directive_sets: number;
@@ -70,7 +88,8 @@ export interface AdviseState {
 
 /**
  * An audit is tried at most this often before it is left to the owner; a review's try from this
- * one on posts it, each reviewer that gave no answer failing it.
+ * one on posts it, each reviewer that gave no answer failing it. A try that met a full usage
+ * window is not counted.
  */
 export const MAX_TRIES = 5;
 

@@ -142,7 +142,7 @@ describe("the prompts a run's agents were sent (goal 166)", () => {
       run: RUN,
       lane: "lane-2",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seedCommit,
       token: "tok-later",
     });
@@ -184,7 +184,7 @@ describe("the prompts a run's agents were sent (goal 166)", () => {
     assert.equal(p.role, "worker");
     assert.equal(partText(p.sections, "message"), messageText(sent));
     // Nothing is written in the run's research folder, which the workers read.
-    const folder = env.service.knowledge.folder(RUN);
+    const folder = env.service.researchRoot(RUN);
     assert.ok(!existsSync(join(folder, PROMPTS_FILE)));
   });
 });

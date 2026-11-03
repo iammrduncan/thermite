@@ -13,6 +13,7 @@ import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../../src/core/commands.ts";
 import { parseContract } from "../../../src/core/contract.ts";
+import { TEST_BUS_CA } from "../../helpers/bus-ca.ts";
 import { controlOnly } from "../../helpers/control-stack.ts";
 import { ingestReport } from "../../helpers/control-store.ts";
 import { FAKE_RUNPOD_KEY, fakeRunpod } from "../../helpers/fake-runpod.ts";
@@ -81,7 +82,7 @@ describe("thermite assign --queue-from (goal 067)", () => {
         "run_created",
         { campaign: "smoke-cpu", mode: "hill_climb", version: 1, agents: true },
       ],
-      add("x-000000000001", "planner", { family: "tiling", why: "the profile says so" }),
+      add("x-000000000001", "planner", { direction: "tiling", why: "the profile says so" }),
       add("x-000000000002", "owner", { position: 0 }),
       add("x-000000000003", "lane-2", { state: "proposed" }),
       add("x-000000000004", "teacher", { details: "first words" }),
@@ -156,7 +157,7 @@ describe("thermite assign --queue-from (goal 067)", () => {
         { title: "try x-000000000002", by: "owner", state: "queued", from: from("x-000000000002") },
         {
           title: "try x-000000000001",
-          family: "tiling",
+          direction: "tiling",
           why: "the profile says so",
           by: "planner",
           state: "queued",
@@ -243,32 +244,36 @@ describe("thermite assign --note (goal 066)", () => {
     "--bundle",
     "repos/smoke.bundle",
   ];
-  const OLD_NAME = "--direction is now --note: a direction is now a named line of experiments";
 
-  test("--note keeps a text with the run, in the signed field direction; without it there is none", async () => {
+  test("--note keeps a text with the run, in the signed field note; without it there is none", async () => {
     for (const cmd of [assign, assignPayload]) {
       const r = await cli(...cmd, "--note", "memory first");
       assert.equal(r.code, 0, r.stderr);
       assert.equal(r.stderr, "", `${cmd[0]} says nothing more`);
-      assert.equal(JSON.parse(r.stdout).direction, "memory first", cmd[0]);
+      const sent = JSON.parse(r.stdout);
+      assert.equal(sent.note, "memory first", cmd[0]);
+      assert.equal(sent.direction, undefined, `${cmd[0]}: the name before v0.1.1 is not sent`);
       const none = await cli(...cmd);
       assert.equal(none.code, 0, none.stderr);
-      assert.equal(JSON.parse(none.stdout).direction, undefined, cmd[0]);
+      assert.equal(JSON.parse(none.stdout).note, undefined, cmd[0]);
     }
   });
 
-  test("--direction, the old name, still works and says on standard error that it is now --note", async () => {
+  test("--instance and --unit, the names of --run and --rig before v0.1.0, are refused", async () => {
+    const instance = await cli(...assignPayload.map((a) => (a === "--run" ? "--instance" : a)));
+    assert.notEqual(instance.code, 0);
+    assert.match(instance.stderr, /Unknown option '--instance'/);
+    const unit = await cli("command", "--unit", "rig-1", "--kind", "pause_run");
+    assert.notEqual(unit.code, 0);
+    assert.match(unit.stderr, /Unknown option '--unit'/);
+  });
+
+  test("--direction, the name before v0.1.0, is refused as an unknown option", async () => {
     for (const cmd of [assign, assignPayload]) {
       const r = await cli(...cmd, "--direction", "memory first");
-      assert.equal(r.code, 0, r.stderr);
-      assert.equal(r.stderr.trim(), OLD_NAME, cmd[0]);
-      assert.equal(JSON.parse(r.stdout).direction, "memory first", cmd[0]);
-      const both = await cli(...cmd, "--note", "a", "--direction", "b");
-      assert.deepEqual(
-        [both.code, both.stderr.trim()],
-        [2, "--direction is the old name of --note: give only --note"],
-        cmd[0],
-      );
+      assert.notEqual(r.code, 0, cmd[0]);
+      assert.match(r.stderr, /Unknown option '--direction'/, cmd[0]);
+      assert.equal(r.stdout, "", cmd[0]);
     }
   });
 });
@@ -334,7 +339,7 @@ describe("thermite command on a RunPod rig whose pod is stopped (goal 022)", () 
       by: "owner:ui",
     });
     const cloud = fakeRunpod();
-    const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem);
+    const tunnels = new ControlTunnels(store, secrets, keys.privateKeyPem, { busCa: TEST_BUS_CA });
     const rigs = new RunpodRigs(store, secrets, tunnels, {
       fetch: cloud.fetch,
       image: "ghcr.io/example/thermite-rig:test-cuda",
@@ -375,7 +380,14 @@ describe("thermite command on a RunPod rig whose pod is stopped (goal 022)", () 
         ["stop", "start"],
       );
       // The pod runs now: the next command says nothing more.
-      const next = await cli("command", ...at, "--kind", "export_now", "--payload", "{}");
+      const next = await cli(
+        "command",
+        ...at,
+        "--kind",
+        "export_now",
+        "--payload",
+        '{"full":true}',
+      );
       assert.equal(next.code, 0, next.stderr);
       assert.equal(next.stderr, "");
       assert.deepEqual(Object.keys(JSON.parse(next.stdout)), ["id", "status"]);

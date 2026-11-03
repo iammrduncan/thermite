@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ControlStore } from "../store/index.ts";
-import { campaignModes, campaignViews, type RigView } from "../views/index.ts";
+import { campaignKnown, campaignViews, type RigView } from "../views/index.ts";
 
 /**
  * Archive a campaign, and folders for campaigns in the dashboard's left navigation (goal 077).
@@ -12,7 +12,7 @@ import { campaignModes, campaignViews, type RigView } from "../views/index.ts";
  *   archived campaign keeps its folder (the owner, 2026-10-21): the navigation leaves it out of
  *   the folder and its count while it is archived, and unarchiving brings it back into the folder.
  * - **Folders.** A folder groups campaigns in the navigation, and nothing else: it is not a
- *   campaign's folder in the knowledge base. A campaign is in one folder or in none, archived or
+ *   campaign's collection in the knowledge base. A campaign is in one folder or in none, archived or
  *   not. A folder with campaigns in it, archived ones too, is not deleted.
  *
  * The dashboard, REST (`/v1/campaigns/<campaign>/archive`, `/unarchive` and `/folder`,
@@ -66,8 +66,8 @@ export function archiveRefusal(store: ControlStore, vs: RigView[], campaign: str
 }
 
 /** Whether control knows a campaign by this name: from a rig's report, a saved version, an assignment or the knowledge base. */
-const knows = (store: ControlStore, vs: RigView[], campaign: string) =>
-  campaignModes(store, vs).has(campaign) || store.archive.get(campaign) !== undefined;
+const knows = (store: ControlStore, campaign: string) =>
+  campaignKnown(store, campaign) || store.archive.get(campaign) !== undefined;
 
 export interface ArchiveAnswer {
   campaign: string;
@@ -88,8 +88,7 @@ export function archiveCampaign(
   campaign: string,
   by: string,
 ): ShelfOutcome<ArchiveAnswer> {
-  if (!knows(store, vs, campaign))
-    return refused(`Control has no campaign named ${campaign}.`, 404);
+  if (!knows(store, campaign)) return refused(`Control has no campaign named ${campaign}.`, 404);
   const folder = store.folders.of(campaign)?.name ?? null;
   const was = store.archive.get(campaign);
   if (was)
@@ -104,12 +103,10 @@ export function archiveCampaign(
 /** Unarchives a campaign: it comes back to the navigation, in the folder it kept. */
 export function unarchiveCampaign(
   store: ControlStore,
-  vs: RigView[],
   campaign: string,
   by: string,
 ): ShelfOutcome<ArchiveAnswer> {
-  if (!knows(store, vs, campaign))
-    return refused(`Control has no campaign named ${campaign}.`, 404);
+  if (!knows(store, campaign)) return refused(`Control has no campaign named ${campaign}.`, 404);
   const folder = store.folders.of(campaign)?.name ?? null;
   const changed = store.archive.remove(campaign);
   if (changed) store.auditLog.add(by, "campaign_unarchived", { campaign, folder });
@@ -225,13 +222,11 @@ export function deleteFolder(
  */
 export function moveCampaign(
   store: ControlStore,
-  vs: RigView[],
   campaign: string,
   folder: string | null,
   by: string,
 ): ShelfOutcome<{ campaign: string; folder: string | null; changed: boolean }> {
-  if (!knows(store, vs, campaign))
-    return refused(`Control has no campaign named ${campaign}.`, 404);
+  if (!knows(store, campaign)) return refused(`Control has no campaign named ${campaign}.`, 404);
   const want = folder?.trim() ? store.folders.get(folder.trim()) : null;
   if (want === undefined) return refused(`There is no folder named ${folder}.`, 404);
   const was = store.folders.of(campaign) ?? null;

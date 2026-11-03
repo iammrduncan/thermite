@@ -1,9 +1,14 @@
 import { chownSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { ADVISOR_RUNS_SOCKET } from "../../core/advisor-runs.ts";
+import type { SupervisorIsolation } from "../../core/api/harness/supervisor.ts";
+import { laneCacheDir, plannerRouteFile, ROUTE_FILE } from "../agents/index.ts";
 import {
   BrokerClient,
   builderRole,
   cardsOf,
+  checkerRole,
+  driverRole,
   IDS,
   judgeCardOf,
   type Role,
@@ -13,6 +18,7 @@ import {
   walk,
 } from "../broker/index.ts";
 import { copyForRun } from "../judge/index.ts";
+import { checksDir } from "../smoke-check.ts";
 import { isolationBusy } from "./busy.ts";
 import {
   containerChecks,
@@ -24,7 +30,9 @@ import { deviceProbes, deviceSide, isFailure, PROBE, type Probe } from "./probes
 import {
   firstBaselineFile,
   firstBuildFile,
+  firstInboxFile,
   firstKitFile,
+  imageChecksProbes,
   readsResearch,
   removeOwnTree,
   researchProbeFolder,
@@ -32,6 +40,7 @@ import {
 } from "./targets.ts";
 
 export { busyReason, callsBusy, isolationBusy } from "./busy.ts";
+export { CAPS_ATTR, fileCapsCheck } from "./capabilities.ts";
 export {
   containerChecks,
   controlKeyCheck,
@@ -48,17 +57,32 @@ export {
   supervisorUserCheck,
 } from "./container.ts";
 export { deviceProbes, isFailure, PROBE, type Probe } from "./probes.ts";
-export { readsResearch, researchProbeFolder } from "./targets.ts";
+export {
+  keepSupervisorIsolation,
+  readSupervisorIsolation,
+  SUPERVISOR_ISOLATION_FILE,
+} from "./supervisor.ts";
+export {
+  firstInboxFile,
+  imageChecksProbes,
+  readsResearch,
+  researchProbeFolder,
+} from "./targets.ts";
 
 /**
  * Isolation self-test, run as root inside the harness container (`thermite selftest
  * isolation`). For each role it asks the broker to run a probe as that role's user, which tries
- * to read, list or write what the role must not reach. Every probe must be refused, except a
- * `readable` or `reachable` probe, which must succeed. In the one-container rig image it also
- * checks the container as a whole (containerChecks): the supervisor's user, its GPU access,
- * set-id files, RunPod's variables, the enrollment code, in pull mode control's key, and the state
- * snapshot (THERMITE_STATE_SNAPSHOT_DIR): its folder holds nothing but sealed files, and only
- * root has its key. Each role probes the folder and the key too.
+ * to read, list or write what the role must not reach, the inbox and the smoke check's own kits
+ * and a file in each among them, in every placement. Every probe must be refused, except a
+ * `readable` or `reachable` probe, which must succeed; a checker must read a kit and a baseline's
+ * file by their paths. On Kubernetes, lane 1 also tries to connect to the cluster's API server,
+ * which the rig's network rules must keep it from. In the one-container rig image it also checks
+ * the container as a whole (containerChecks):
+ * the supervisor's user, its GPU access, set-id files, RunPod's variables, the enrollment code, in
+ * pull mode control's key, and the state snapshot (THERMITE_STATE_SNAPSHOT_DIR): its folder holds
+ * nothing but sealed files, and only root has its key. Each role probes the folder and the key too.
+ * The supervisor's part, what its advisor users reached, is the one the supervisor last said
+ * (supervisor.ts): it probes at its start and before it hands over each isolation check.
  *
  * Its parts are in selftest/: probes.ts (what each role probes, and the script it runs),
  * container.ts (the one-container image's checks), targets.ts (what the probes aim at) and busy.ts
@@ -72,6 +96,8 @@ export interface IsolationReport {
   roles: Record<string, Record<string, string>>;
   /** The one-container rig image: checks of the container as a whole (containerChecks). */
   container?: Record<string, string>;
+  /** What the supervisor's advisor users reached, as the supervisor last said, and when. */
+  supervisor?: { at: string; probes: Record<string, string> };
   skipped: string[];
 }
 
@@ -79,9 +105,48 @@ function controllerPid(): number | undefined {
   return pidsRunning("dist/harness/main.js")[0];
 }
 
+/** The cluster's API server, as Kubernetes tells every pod. */
+export interface ClusterApi {
+  host: string;
+  port: string;
+}
+
 /**
- * The roles probed by default: each judge card's builder and timing user, the planner's and the
- * model check's users, and lane 1's users (every lane's are made the same way).
+ * The API server where the harness runs on Kubernetes (KUBERNETES_SERVICE_HOST and _PORT, which
+ * the kubelet sets in every container), else undefined.
+ */
+export function clusterApi(env: NodeJS.ProcessEnv): ClusterApi | undefined {
+  const host = env.KUBERNETES_SERVICE_HOST;
+  return host ? { host, port: env.KUBERNETES_SERVICE_PORT || "443" } : undefined;
+}
+
+/**
+ * The rig's secret files, which no role may read: the records of the routes control set for the
+ * agents and for the planner (each 0600 in the state folder; the keys are in memory only), the tokens and the model key
+ * from the harness's settings, and in one container with the supervisor (pull mode) the keys its
+ * tunnel signs with. The rig check's selftest and `thermite selftest isolation` both probe these.
+ */
+export function rigSecretFiles(env: NodeJS.ProcessEnv, stateDir: string): string[] {
+  const route = join(stateDir, ROUTE_FILE);
+  return [
+    route,
+    plannerRouteFile(route),
+    env.THERMITE_SUPERVISOR_TOKEN_FILE,
+    env.THERMITE_PROPOSER_TOKEN_FILE,
+    env.THERMITE_MODEL_API_KEY_FILE,
+    env.THERMITE_TUNNEL_DIR ? join(env.THERMITE_TUNNEL_DIR, "keys.json") : undefined,
+  ].filter((f): f is string => Boolean(f));
+}
+
+/** The probes a checker must pass where every other role is refused. */
+const CHECKER_READS = ["kit-by-path", "baseline-by-path"];
+
+/** The probe of the cluster's network: a lane's connection to the cluster's API server. */
+const CLUSTER_NETWORK = "cluster-network";
+
+/**
+ * The roles probed by default: each judge card's builder, timing user, checker and driver, the
+ * planner's and the model check's users, and lane 1's users (every lane's are made the same way).
  */
 export function probedRoles(judgeCards = 1): Role[] {
   const more = Array.from({ length: Math.max(0, judgeCards - 1) }, (_, i) => i + 1);
@@ -91,6 +156,11 @@ export function probedRoles(judgeCards = 1): Role[] {
     ...more.map(builderRole),
     "run",
     ...more.map(runRole),
+    // Each card's user of the kit's check, and of a kit's driver.
+    "checker",
+    ...more.map(checkerRole),
+    "driver",
+    ...more.map(driverRole),
     "planner",
     "model-check",
     "lane-1",
@@ -104,6 +174,8 @@ export async function isolationSelftest(opts: {
   stateDir: string;
   scratchDir: string;
   outboxDir: string;
+  /** The inbox, which the supervisor fills for the controller alone. */
+  inboxDir: string;
   secretFiles: string[];
   roles?: Role[];
   /** The rig is configured for a dedicated development card (THERMITE_DEV_GPU_INDEX). */
@@ -116,6 +188,10 @@ export async function isolationSelftest(opts: {
   oneContainer?: OneContainerTargets | undefined;
   /** THERMITE_STATE_SNAPSHOT_DIR: no role may list the state's snapshot or write in it. */
   snapshotDir?: string | undefined;
+  /** On Kubernetes (clusterApi): the API server, which no lane may reach. */
+  clusterApi?: ClusterApi | undefined;
+  /** The supervisor's part, as it last said (readSupervisorIsolation); none: not said yet. */
+  supervisor?: SupervisorIsolation | undefined;
 }): Promise<IsolationReport> {
   const busy = opts.force ? undefined : isolationBusy(opts.stateDir);
   if (busy) throw new Error(`the rig is busy: ${busy}; rerun with --force to probe anyway`);
@@ -141,6 +217,7 @@ export async function isolationSelftest(opts: {
     { name: "broker-socket", op: "access", path: opts.socketPath },
     { name: "outbox-write", op: "access", path: opts.outboxDir },
     { name: "outbox-read", op: "list", path: opts.outboxDir },
+    { name: "inbox-list", op: "list", path: opts.inboxDir },
     { name: "runs-list", op: "list", path: join(opts.scratchDir, "thermite", "runs") },
     { name: "tmp-create", op: "create", path: "/tmp" },
     { name: "var-tmp-create", op: "create", path: "/var/tmp" },
@@ -155,7 +232,8 @@ export async function isolationSelftest(opts: {
     probes.push(
       { name: "supervisor-home", op: "list", path: pod.supervisorHome },
       { name: "supervisor-token", op: "read", path: pod.supervisorToken },
-      { name: "inbox-list", op: "list", path: pod.inboxDir },
+      // The runner that starts each advisor's program as an advisor user: the supervisor's alone.
+      { name: "advisor-runner", op: "access", path: ADVISOR_RUNS_SOCKET },
     );
     const sup = pidsRunning(SUPERVISOR_SCRIPT)[0];
     if (sup) probes.push({ name: "supervisor-environ", op: "read", path: `/proc/${sup}/environ` });
@@ -171,9 +249,22 @@ export async function isolationSelftest(opts: {
       { name: "state-snapshot", op: "sealed", path: opts.snapshotDir },
       { name: "snapshot-key", op: "environ", path: "/proc", expect: SNAPSHOT_KEY_VAR },
     );
+  // A file the supervisor fetched (a kit's bundle, say), reached by its full path.
+  const fetched = firstInboxFile(opts.inboxDir);
+  if (fetched) probes.push({ name: "inbox-read", op: "read", path: fetched });
+  else skipped.push("inbox-read (nothing in the inbox yet)");
+  // Lane 1's compiler cache (ccache and the like), kept across its trials and the rig's starts:
+  // its lane's alone, so every other role, another lane's users among them, is refused.
+  const laneCache = laneCacheDir(join(opts.scratchDir, "thermite"), "lane-1");
+  const cached = existsSync(laneCache);
+  if (!cached) skipped.push("lane-cache (lane 1 has no cache yet)");
   const kitFile = firstKitFile(join(opts.stateDir, "kits"));
   if (kitFile) probes.push({ name: "kit-by-path", op: "read", path: kitFile });
   else skipped.push("kit-by-path (no kit checked out yet)");
+  // The smoke check's own kits and projects, which the image keeps for the controller alone.
+  const imageChecks = imageChecksProbes(checksDir());
+  if (imageChecks.length) probes.push(...imageChecks);
+  else skipped.push("image-checks (no kit where the smoke check looks for its own)");
   for (const f of opts.secretFiles) probes.push({ name: `secret:${f}`, op: "read", path: f });
   const build = firstBuildFile(join(opts.stateDir, "builds"));
   if (build) probes.push({ name: "build-overwrite", op: "write", path: build });
@@ -248,14 +339,18 @@ export async function isolationSelftest(opts: {
         ]
       : [{ key: role as string, role, gpu: false, card: judgeCardOf(role) ?? 0 }],
   );
+  const sup = opts.supervisor;
+  if (!sup) skipped.push("supervisor (its advisor users have not been probed yet)");
   const report: IsolationReport = {
     ok:
       card.error === undefined &&
       sharedError === undefined &&
-      !Object.values(container ?? {}).some(isFailure),
+      !Object.values(container ?? {}).some(isFailure) &&
+      !Object.values(sup?.probes ?? {}).some(isFailure),
     devices,
     roles: {},
     ...(container ? { container } : {}),
+    ...(sup ? { supervisor: { at: sup.at, probes: sup.probes } } : {}),
     skipped,
   };
   try {
@@ -263,12 +358,28 @@ export async function isolationSelftest(opts: {
       const cwd = join(opts.scratchDir, "thermite", `selftest-${key}`);
       mkdirSync(cwd, { recursive: true });
       await client.handOver(cwd, role);
-      const mine = [...probes, ...deviceProbes(nodes, deviceSide(role, gpu), card.layout, n)];
+      // A kit's check reads its kit and the files a baseline kept, by their paths, and nothing
+      // else of the judge's: those two must succeed for a checker.
+      const reads = /^checker(-\d)?$/.test(role) ? CHECKER_READS : [];
+      const mine = [
+        ...probes.map((p) => (reads.includes(p.name) ? { ...p, op: "readable" as const } : p)),
+        ...deviceProbes(nodes, deviceSide(role, gpu), card.layout, n),
+      ];
       if (judgeCardOf(role) !== undefined)
         mine.push({ name: "run-kit-read", op: "readable", path: driver });
       if (readsResearch(role))
         mine.push({ name: "research-read", op: "readable", path: research.claim });
       if (role !== "builder") mine.push({ name: "build-work", op: "list", path: buildWork });
+      if (cached && role !== "lane-1")
+        mine.push({ name: "lane-cache", op: "list", path: laneCache });
+      // The rig's network rules hold for the whole pod: the lane's plain commands try them once.
+      if (key === "lane-1" && opts.clusterApi)
+        mine.push({
+          name: CLUSTER_NETWORK,
+          op: "connect",
+          path: opts.clusterApi.host,
+          expect: opts.clusterApi.port,
+        });
       const r = await client.run({
         role,
         argv: [process.execPath, "-e", PROBE, JSON.stringify(mine)],
@@ -295,15 +406,28 @@ export async function isolationSelftest(opts: {
   return report;
 }
 
-/** A selftest's outcome in a sentence: what passed, or which probes a role got through. */
+/**
+ * A selftest's outcome in a sentence: what passed, or which probes a role got through. A lane
+ * that reached the cluster's API server is said in words first.
+ */
 export function isolationSummary(report: IsolationReport): string {
+  const failed = (results: Record<string, string>) =>
+    Object.entries(results).filter(([, v]) => isFailure(v));
+  const cluster = Object.entries(report.roles).flatMap(([role, results]) =>
+    failed(results)
+      .filter(([probe]) => probe === CLUSTER_NETWORK)
+      .map(
+        ([, v]) =>
+          `the cluster does not hold the rig's network rules: ${role} reached the cluster's API server (${v})`,
+      ),
+  );
   const bad = [
-    ...Object.entries(report.container ?? {})
-      .filter(([, v]) => isFailure(v))
-      .map(([check, v]) => `container ${check}: ${v}`),
+    ...cluster,
+    ...failed(report.container ?? {}).map(([check, v]) => `container ${check}: ${v}`),
+    ...failed(report.supervisor?.probes ?? {}).map(([probe, v]) => `supervisor ${probe}: ${v}`),
     ...Object.entries(report.roles).flatMap(([role, results]) =>
-      Object.entries(results)
-        .filter(([, v]) => isFailure(v))
+      failed(results)
+        .filter(([probe]) => probe !== CLUSTER_NETWORK)
         .map(([probe, v]) => `${role} ${probe}: ${v}`),
     ),
   ];

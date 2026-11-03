@@ -18,7 +18,7 @@ export function untriedOf(r: RunView): QueueSeed[] {
   ].map((e) => ({
     title: e.title,
     ...(e.details ? { details: e.details } : {}),
-    ...(e.family ? { family: e.family } : {}),
+    ...(e.direction ? { direction: e.direction } : {}),
     ...(e.why ? { why: e.why } : {}),
     by: e.by,
     state: e.state === "proposed" ? "proposed" : "queued",
@@ -69,14 +69,20 @@ export async function copiedFromRecords(
     const details = [rec.details, result ? `In ${run} (${source}) it was ${result}.` : ""]
       .filter(Boolean)
       .join("\n");
-    const { title: _t, details: _d, family: _f, why: _w, ...rest } = x as Record<string, unknown>;
+    const {
+      title: _t,
+      details: _d,
+      direction: _f,
+      why: _w,
+      ...rest
+    } = x as Record<string, unknown>;
     return {
       ...rest,
       title: rec.title,
       ...(details
         ? { details: details.length > 4000 ? `${details.slice(0, 3999)}…` : details }
         : {}),
-      ...(rec.family ? { family: rec.family } : {}),
+      ...(rec.direction ? { direction: rec.direction } : {}),
       ...(rec.why ? { why: rec.why } : {}),
       by: rec.by,
     };

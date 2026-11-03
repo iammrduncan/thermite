@@ -138,6 +138,8 @@ try {
   // A run's page and its Live, under the campaign (goal 170).
   const run = await firstMatch(`^${campaign}/runs/[^/?#]+$`);
   const live = await firstMatch(`^${campaign}/runs/[^/?#]+/live$`);
+  // The Journal of the demo's run whose agents keep field notes.
+  const noted = (await firstMatch(`^${campaign}/runs/decode-a$`)) ?? run;
   await go(`${values.demo}/ui/rigs`);
   // A rig's own page, not Add a rig, which comes first on the Rigs page.
   const rig = await firstLink("/ui/rigs/", ["/ui/rigs/add"]);
@@ -147,9 +149,13 @@ try {
     ["campaigns", "/ui/campaigns"],
     ["run", run],
     ["experiments", run && `${run}/experiments`],
-    ["journal", run && `${run}/journal`],
+    ["journal", noted && `${noted}/journal`],
     ["live", live],
-    ["knowledge", "/ui/knowledge"],
+    // The Knowledge page open at the run's records: the tree down to its slots, and their table.
+    [
+      "knowledge",
+      run?.replace(/^\/ui\/campaigns\/([^/]+)\/runs\/([^/]+)$/, "/ui/knowledge/$1/$2/records"),
+    ],
     ["rig", rig],
   ];
   for (const [name, path] of shots) {

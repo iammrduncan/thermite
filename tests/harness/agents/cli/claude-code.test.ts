@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
+import { claudeProgram } from "../../../../src/agents/cli/index.ts";
 import { modelConfigFromEnv } from "../../../../src/agents/model/index.ts";
 import {
   claudeArgs,
@@ -17,10 +18,7 @@ import {
 import { WORKER_CLAUDE_CODE_SYSTEM } from "../../../../src/agents/roles/worker.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
 import type { CallUsage } from "../../../../src/core/usage.ts";
-import {
-  claudeModelCheck,
-  runClaudeTrial,
-} from "../../../../src/harness/agents/cli/claude-code.ts";
+import { cliModelCheck, runCliTrial } from "../../../../src/harness/agents/cli/index.ts";
 import { ControlRoute } from "../../../../src/harness/agents/model/source.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import type { Runner, RunOutcome, RunRequest } from "../../../../src/harness/broker/runner.ts";
@@ -248,17 +246,21 @@ describe("Claude Code", () => {
     const f = fakeRunner(events(), { submit: true });
     const seen: unknown[] = [];
     const calls: CallUsage[] = [];
-    const r = await runClaudeTrial(spec(a, join(a, "repo")), {
-      runner: f.runner,
-      model,
-      apiUrl: "http://127.0.0.1:8700",
-      live: () => undefined,
-      progress: () => undefined,
-      usage: (u) => seen.push(u),
-      modelUsage: (u) => calls.push(u),
-      submitted: () => (f.submitted() ? { attempt: "a-1", lifecycle: "queued" } : undefined),
-      pollMs: 5,
-    });
+    const r = await runCliTrial(
+      claudeProgram,
+      { mode: "code", spec: spec(a, join(a, "repo")) },
+      {
+        runner: f.runner,
+        model,
+        apiUrl: "http://127.0.0.1:8700",
+        live: () => undefined,
+        progress: () => undefined,
+        usage: (u) => seen.push(u),
+        modelUsage: (u) => calls.push(u),
+        submitted: () => (f.submitted() ? { attempt: "a-1", lifecycle: "queued" } : undefined),
+        pollMs: 5,
+      },
+    );
     assert.equal(r.stopped, "submitted");
     assert.equal(r.turns, 2);
     // The run's usage, from its result, reaches the harness once.
@@ -324,16 +326,20 @@ describe("Claude Code", () => {
         return 1;
       },
     } as unknown as Runner;
-    const r = await runClaudeTrial(spec(a, join(a, "repo")), {
-      runner,
-      model,
-      apiUrl: "http://127.0.0.1:8700",
-      live: () => undefined,
-      progress: () => undefined,
-      submitted: () => (submittedAt ? { attempt: "a-1", lifecycle: "queued" } : undefined),
-      pollMs: 5,
-      afterSubmitMs: 50,
-    });
+    const r = await runCliTrial(
+      claudeProgram,
+      { mode: "code", spec: spec(a, join(a, "repo")) },
+      {
+        runner,
+        model,
+        apiUrl: "http://127.0.0.1:8700",
+        live: () => undefined,
+        progress: () => undefined,
+        submitted: () => (submittedAt ? { attempt: "a-1", lifecycle: "queued" } : undefined),
+        pollMs: 5,
+        afterSubmitMs: 50,
+      },
+    );
     assert.equal(r.stopped, "submitted");
     assert.ok(killedAt - submittedAt >= 50, "the submit command gets its moment to finish");
     assert.ok(killedAt - submittedAt < 2_000, `stopped ${killedAt - submittedAt} ms after it`);
@@ -357,10 +363,14 @@ describe("Claude Code", () => {
       const f = fakeRunner(events(), { submit: o.submit });
       const owner = inbox(["look at the inner loop"]);
       // The worker keeps working each run: the campaign's nudges of 2 (goal 079: none by default).
-      const r = await runClaudeTrial(
-        spec(a, join(a, "repo"), {
-          limits: { ...laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }), nudges: 2 },
-        }),
+      const r = await runCliTrial(
+        claudeProgram,
+        {
+          mode: "code",
+          spec: spec(a, join(a, "repo"), {
+            limits: { ...laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }), nudges: 2 },
+          }),
+        },
         {
           runner: f.runner,
           model,
@@ -393,29 +403,37 @@ describe("Claude Code", () => {
   test("a full usage window ends the trial with when it resets; a turn cap stops it", async () => {
     const a = area();
     const limited = fakeRunner(events({ limited: true }));
-    const r = await runClaudeTrial(spec(a, join(a, "repo")), {
-      runner: limited.runner,
-      model,
-      apiUrl: "http://127.0.0.1:8700",
-      live: () => undefined,
-      progress: () => undefined,
-      submitted: () => undefined,
-      pollMs: 5,
-    });
+    const r = await runCliTrial(
+      claudeProgram,
+      { mode: "code", spec: spec(a, join(a, "repo")) },
+      {
+        runner: limited.runner,
+        model,
+        apiUrl: "http://127.0.0.1:8700",
+        live: () => undefined,
+        progress: () => undefined,
+        submitted: () => undefined,
+        pollMs: 5,
+      },
+    );
     assert.equal(r.stopped, "error");
     assert.equal(r.retryAfter, new Date(RESET * 1000).toISOString());
     assert.match(r.error ?? "", /usage window is full until/);
     const b = area();
     const capped = fakeRunner(events());
-    const c = await runClaudeTrial(spec(b, join(b, "repo"), { maxTurns: 1 }), {
-      runner: capped.runner,
-      model,
-      apiUrl: "http://127.0.0.1:8700",
-      live: () => undefined,
-      progress: () => undefined,
-      submitted: () => undefined,
-      pollMs: 5,
-    });
+    const c = await runCliTrial(
+      claudeProgram,
+      { mode: "code", spec: spec(b, join(b, "repo"), { maxTurns: 1 }) },
+      {
+        runner: capped.runner,
+        model,
+        apiUrl: "http://127.0.0.1:8700",
+        live: () => undefined,
+        progress: () => undefined,
+        submitted: () => undefined,
+        pollMs: 5,
+      },
+    );
     assert.equal(c.stopped, "turns");
     assert.ok(capped.killed.includes("lane-1"));
   });
@@ -445,7 +463,7 @@ describe("Claude Code", () => {
       handOver: async () => undefined,
       remove: async () => undefined,
     } as unknown as Runner;
-    const r = await claudeModelCheck(model, {
+    const r = await cliModelCheck(claudeProgram, model, {
       runner,
       apiUrl: "http://127.0.0.1:8700",
       scratchDir: mkdtempSync(join(tmpdir(), "thermite-cc-check-")),

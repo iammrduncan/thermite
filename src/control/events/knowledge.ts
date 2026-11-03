@@ -1,9 +1,75 @@
-import { BUS_READ_MAX, type Bus } from "../../common/bus.ts";
+import { BUS_READ_MAX, type Bus } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
+import {
+  KB_RECORDS,
+  KB_WRITES_DEFAULT,
+  type KbItemBody,
+  kindsForSlot,
+  readKbItem,
+  slotOfWriter,
+} from "../../core/kb/index.ts";
 import { EVENT_STREAM, type EventRead, kindSubjects } from "../../core/link/events.ts";
+import { overLimitWords } from "../kb/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { streamEvent } from "../views/index.ts";
+
+/**
+ * A writer's `kb_item` event (goal 175), as the apply of the events stream takes it: the item goes
+ * into its writer's slot of the event's run, after control's checks, in the page's transaction.
+ * The report it came in was signed by the rig's harness, and control checked that signature
+ * before it published the event (control/ingest.ts): control alone writes the events stream.
+ * Then: the event reads as an item; the run is the rig's, in this ledger, by control's run
+ * registry; the slot is the event's writer's (slotOfWriter: records from Thermite's code, an
+ * agent's own slot from that agent), never one the item names for another writer; and the item is
+ * new in its slot or the next version of the writer's own (store/kb/); and an agent's kind is one
+ * the campaign lets the agent's role write, as the run's signed assignment says (core/kb/items.ts); and
+ * a file is no larger than the largest the owner lets the knowledge base take, when one is set. A
+ * refused item is recorded in control's audit log (`kb_item_refused`) and its log, and the rest of
+ * the page goes on. Its file meets it by its SHA-256 (control/kb/files.ts), whichever comes first.
+ */
+export function takeKbItem(
+  store: ControlStore,
+  src: { rig: string; ledger: string },
+  e: { id: number; at: string; actor: string; subject: string | null; body: unknown },
+): void {
+  const run = e.subject ?? "";
+  const read = readKbItem(e.body);
+  const why =
+    "refused" in read
+      ? `not an item: ${read.refused}`
+      : storeItem(store, { ...src, run }, e, read.body);
+  if (!why) return;
+  const slot = "body" in read ? read.body.slot : null;
+  const what = { ...src, event: e.id, run, writer: e.actor, slot, why };
+  log("control", "an item for the knowledge base refused", what, "warn");
+  store.auditLog.add("control", "kb_item_refused", what);
+}
+
+/** An item stored after control's checks; else why not, in words. */
+function storeItem(
+  store: ControlStore,
+  src: { rig: string; ledger: string; run: string },
+  e: { id: number; at: string; actor: string },
+  b: KbItemBody,
+): string | undefined {
+  if (!src.run || store.runRegistry.ledgerOf(src.run, src.rig) !== src.ledger)
+    return `run ${src.run || "(none)"} is not this rig's: control's run registry has no such run of this ledger`;
+  const own = slotOfWriter(e.actor);
+  if (!own) return `${e.actor} has no slot in the knowledge base: it writes no item`;
+  if (own !== b.slot)
+    return `${e.actor} writes only in its own slot, ${own}: not in ${b.slot}, another writer's`;
+  // An agent writes the kinds its role may; Thermite's code, any kind in its records slot.
+  // A run control signed no assignment of (one a rig assigned itself) keeps to the default.
+  const writes = store.commands.assignedKbWrites(src.rig, src.run) ?? KB_WRITES_DEFAULT;
+  const kinds = kindsForSlot(writes, b.slot);
+  if (b.slot !== KB_RECORDS && !kinds.includes(b.kind))
+    return `the campaign lets ${b.slot} write ${kinds.length ? kinds.join(", ") : "nothing"} in run ${src.run}: not a ${b.kind}`;
+  // No limit unless the owner set one on control (control/kb/settings.ts).
+  const limit = store.kb().settings.maxFileBytes();
+  if (b.file && limit > 0 && b.file.bytes > limit) return overLimitWords(b.file, limit);
+  return store.kb().write({ ...src, event: e.id, at: e.at }, b);
+}
 
 /**
  * Once, after an upgrade of the knowledge base's reading (goal 162), the events it read before, of

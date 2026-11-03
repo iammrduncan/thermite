@@ -10,6 +10,8 @@ import { JOURNAL_FIELD } from "../../../agents/tools/index.ts";
  * and the research plan (research/planner.ts) each have their own.
  */
 export interface PlannerCallSpec {
+  /** Which call it is, as a planner's own process names it (goal 169). */
+  id: "plan" | "research";
   render(i: PlannerInput): Prompt;
   description: string;
   parameters: TSchema;
@@ -45,7 +47,7 @@ const PLAN_PARAMETERS = Type.Object({
           description: "Or what to try, in words: past its title, it goes in details",
         }),
       ),
-      family: Type.Optional(Type.String({ maxLength: PLAN_LIMITS.family })),
+      direction: Type.Optional(Type.String({ maxLength: PLAN_LIMITS.direction })),
       details: Type.Optional(Type.String({ maxLength: PLAN_LIMITS.details })),
     }),
   ),
@@ -55,7 +57,7 @@ const PLAN_PARAMETERS = Type.Object({
         ref: Type.Optional(Type.String({ maxLength: PLAN_LIMITS.ref })),
         title: Type.String({ minLength: 1, maxLength: PLAN_LIMITS.title }),
         details: Type.Optional(Type.String({ maxLength: PLAN_LIMITS.details })),
-        family: Type.Optional(Type.String({ maxLength: PLAN_LIMITS.family })),
+        direction: Type.Optional(Type.String({ maxLength: PLAN_LIMITS.direction })),
         why: Type.String({ minLength: 1, maxLength: PLAN_LIMITS.why }),
         position: Type.Optional(Position),
       }),
@@ -93,10 +95,10 @@ const PLAN_PARAMETERS = Type.Object({
     Type.Array(
       Type.Object({
         kind: Type.String({ description: "avoid | try | mandate" }),
-        family: Type.String({
+        direction: Type.String({
           maxLength: 200,
           description:
-            "The rule's direction: one in directions, or a new one you design in new_families. A message's :name: names one exactly",
+            "The rule's direction: one in directions, or a new one you design in new_directions. A message's :name: names one exactly",
         }),
         rationale: Type.String({ minLength: 1, maxLength: PLAN_LIMITS.why }),
         from_message: Type.Number(),
@@ -108,10 +110,10 @@ const PLAN_PARAMETERS = Type.Object({
     Type.Array(
       Type.Object({
         rule: Type.Number({ description: "An old rule in words, by its id" }),
-        family: Type.String({
+        direction: Type.String({
           maxLength: 200,
           description:
-            "The direction its words mean: one in directions, or a new one you design in new_families",
+            "The direction its words mean: one in directions, or a new one you design in new_directions",
         }),
       }),
       {
@@ -120,7 +122,7 @@ const PLAN_PARAMETERS = Type.Object({
       },
     ),
   ),
-  new_families: Type.Optional(
+  new_directions: Type.Optional(
     Type.Array(
       Type.Object({
         id: Type.String({ description: "A new direction's name, in a few words" }),
@@ -131,7 +133,7 @@ const PLAN_PARAMETERS = Type.Object({
         }),
       }),
       {
-        maxItems: PLAN_LIMITS.newFamilies,
+        maxItems: PLAN_LIMITS.newDirections,
         description:
           "New directions you design: each one in to_design, and any a rule or a conversion of yours names",
       },
@@ -143,6 +145,7 @@ const PLAN_PARAMETERS = Type.Object({
 
 /** The hill climb's and goal campaign's planner call. */
 export const PLAN_SPEC: PlannerCallSpec = {
+  id: "plan",
   render: renderPlanner,
   description: "Submit this round's plan: each lane's experiment, and your changes to the queue.",
   parameters: PLAN_PARAMETERS,

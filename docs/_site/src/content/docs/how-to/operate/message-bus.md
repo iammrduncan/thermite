@@ -1,21 +1,21 @@
 ---
 title: "Run the message bus"
-description: "Check the message bus beside control, follow control's events to it and back, see an older store's events table moved there, open its port to rigs on other machines and clusters, give it more memory or disk, and turn the rigs off it."
+description: "Check the message bus beside control, follow control's events to it and back, see an older store's events table moved there, open its port to rigs on other machines and clusters, follow a RunPod rig's leaf node and the rigs' keys on it, give it more memory or disk, and mend a rig that is off it."
 type: how-to
 sidebar:
   order: 11
 ---
 
-The message bus carries the rigs' reports and live lines to control, and control's commands and each rig's config to the rigs, as soon as each is there, and it keeps every rig's events for control, which writes its records from them. It is a NATS server with JetStream, and it runs beside control: the compose stack's `nats` service. Control needs it, and does not start without it. This page says how to tell that it works, what you see while control keeps its events there and applies them, while it moves an older store's events there, and while it makes an older reports stream again, what to open so that rigs on other machines and clusters reach it, what control keeps for its certificate, how to give it more memory or disk, and how to keep the rigs off it. [How the parts talk](../../explanation/how-the-parts-talk.md#reports-over-the-message-bus) explains what travels on it and why.
+The message bus carries the rigs' reports, live lines, screens and figures to control, and control's commands and each rig's config to the rigs, as soon as each is there, and it keeps every rig's events for control, which writes its records from them. It is a NATS server with JetStream, and it runs beside control: the compose stack's `nats` service. Control needs it, and does not start without it. A rig needs it too: a rig and control talk only on the bus, but for the registration of the rig's keys and its large files, over HTTPS. A rig that can't reach the bus doesn't work, and control shows it **Broken**. This page says how to tell that it works, what you see while control keeps its events there and applies them, while it moves an older store's events there, and while it makes an older reports stream again, what to open so that rigs on other machines and clusters reach it, how it reaches a rig on RunPod, what control keeps for its certificate, what control does with the rigs' keys on it, how to give it more memory or disk, and what to do for a rig that is off it. [How the parts talk](../../explanation/how-the-parts-talk.md#reports-over-the-message-bus) explains what travels on it and why.
 
 ```sh
 docker compose ps nats                      # or: podman compose ps nats
-curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"loops":{…},"bus":"connected"}
+curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"bus":"connected","degraded":false}
 ```
 
 ## Before you start
 
-- Thermite runs from the compose file of a release, or of the source code: [Install Thermite on one machine](../install/one-machine.md).
+- Thermite runs from the compose file of a release, or of the source code: [The one-machine stack](../install/one-machine.md).
 - Your owner's token, for `GET /v1/bus`.
 
 ## Check it
@@ -34,13 +34,26 @@ curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"loops":{…},"bus":"co
    ```
 
    `"bus":"connected"` says control holds a connection to the server now; `"away"` says it holds none and tries again every 5 seconds. Once control serves, the answer is 200 in both: control's own pages and routes serve whatever the bus does, though what control writes from the rigs' new events waits for the bus. While control starts, it builds its views from the bus's events first: its health then answers 503 with `"starting":true`, and every other route 503, until its log says `control's views built from the events stream`.
-3. For the bus's streams and what each consumer still has to take, ask `GET /v1/bus` with the owner's token, or call the MCP tool `bus_state`: [The message bus](../../reference/rest-api.md#the-message-bus).
+3. For the bus's streams and what each consumer still has to take, ask `GET /v1/bus` with the owner's token, call the MCP tool `bus_state`, or run [`thermite bus`](../../reference/command-line.md#bus): [The message bus](../../reference/rest-api.md#the-message-bus).
 
-A rig on the bus has the step "Its key on the message bus registered" in its history, on its page. A rig that never got that step reports over HTTP.
+   ```sh
+   npx thermite bus --control http://127.0.0.1:8800 --token-file .dev/secrets/control-admin-token
+   ```
+
+   Its first line says `bus nats:4222: reached`, then each stream with its messages and its consumers.
+4. Or open **Settings › Message bus** on the dashboard: the cog at the foot of the sidebar, then **Message bus** in Settings' navigation. It shows the same figures in three blocks:
+   - **Message bus**, control's connection: its **State** (`Connected, since` the time, or **Away**), the **Server** (its version, address and TLS), **Its store** (what the bus's store uses of its room, and the disk floor below which control holds new runs) and the **Rigs' events** (the stream's place written and applied through, and how many messages are behind);
+   - **Rigs on the bus**: each rig's **Connection** (`On the bus, since` its last registration, or **Off the bus** since a time, broken until it comes back), its **Reports waiting** on the bus, its **Commands waiting** (on the bus and not acknowledged, or held by control), the messages **Sent again** to it (its commands and its config), and its **Last report**;
+   - **Bus streams**: each stream, what it carries, its messages and space, and how long it keeps them.
+
+   Each column's ⓘ says what it counts.
+5. For the bus live, open **Metrics** and its **Bus** tab: the server's memory and store against their limits, each stream with its messages, bytes, subjects and rate, each consumer with what waits for it, the events' sizes by kind, and every connection with its traffic, what the server queues for it and its subscriptions. A warning at the top says what looks wrong. A click on a stream opens its messages, and a message its headers and data, read without touching the stream ([Metrics: the system view](../../reference/system-view.md)).
+
+Each time a rig's supervisor starts, its history, on its page, gets the step "It registered its keys on the message bus with control": its one call to control over HTTPS. The first time, it also gets "Its key on the message bus registered". A rig that registered its keys and then sends nothing on the bus shows **Broken**: [A rig off the bus](#a-rig-off-the-bus).
 
 ## Follow control's events to the bus and back
 
-Control keeps every rig's events on the bus's `EVENTS` stream, and nowhere else. It publishes each report's new events there, whether its rig reported over the bus or over HTTP, and answers the rig once it has applied them: from that stream, in its order, control writes what it derives from the events (a run a rig created in its run registry, a command's outcome as the harness gave it, each model call's usage, and the knowledge base's items), and its pages, REST and MCP read the rigs' events from there ([Control's events on the message bus](../../explanation/how-the-parts-talk.md#controls-events-on-the-message-bus)). When control starts, it applies the stream from the place its store applied through and builds its views from the stream's first event; only then does it serve its pages and take reports. 100,000 events took about a second to build the views from when measured.
+Control keeps every rig's events on the bus's `EVENTS` stream, and nowhere else. It publishes each report's new events there, as the rigs' reports come on the bus, and takes the next report once it has applied them: from that stream, in its order, control writes what it derives from the events (a run a rig created in its run registry, a command's outcome as the harness gave it, each model call's usage, and the knowledge base's items), and its pages, REST and MCP read the rigs' events from there ([Control's events on the message bus](../../explanation/how-the-parts-talk.md#controls-events-on-the-message-bus)). When control starts, it applies the stream from the place its store applied through and builds its views from the stream's first event; only then does it serve its pages and take reports. 100,000 events took about a second to build the views from when measured.
 
 1. Read control's log as it starts:
 
@@ -73,7 +86,7 @@ A store from v0.1.0, or from a control that kept its events in a table and copie
    docker compose logs control | grep "events table"     # or: podman compose logs control | grep "events table"
    ```
 
-   `moving control's events table to the events stream` says how many rows it has to move (`behind`), and every 100,000 how far it got (`moved`) and how many are `left`. `control's events table moved to the events stream` says when it is done, in how many `seconds`; `the events stream holds control's events table whole` that the check passed; then `control's events table dropped: the events stream keeps every event`, with the copy's path (`copy`).
+   `moving control's events table to the events stream` says how many rows it has to move (`behind`), and every 100,000 how far it got (`moved`) and how many are `left`. `control's events table moved to the events stream` says when it is done, in how many `seconds`; `the events stream holds control's events table whole` that the check passed; then `control's events table dropped: the events stream keeps every event`, with the copy's path (`copy`). A line `an event of control's events table moved under the kind legacy` names a v0.1.0 event that the bus can't carry as it was: its kind is not one a subject holds, or it is larger than a message. It is on the stream under the kind `legacy`, with its own kind, and in the **Audit log** as `event_moved_as_legacy`; with `"with_body": false`, its body is only in the kept copy ([A store from before](../../explanation/how-the-parts-talk.md#a-store-from-before-its-events-table-moved-once)).
 2. Find the copy beside the store, in control's state folder, the `control-state` volume:
 
    ```sh
@@ -132,9 +145,34 @@ A rig that control sets up on a machine or a cluster, or that you join yourself,
    docker compose up -d     # or: podman compose up -d
    ```
 
-Each rig set up from then on gets the bus's address and the certificate of control's authority with its other files. A rig set up before gets them when it moves onto new images (**Update to** control's version, or **Update to these images** on a cluster): until then, it reports over HTTP as before.
+Each rig control sets up gets the bus's address and the certificate of control's authority with its other files. Control refuses to set up a rig, to make a join command, or to update a rig on a machine or a cluster, when it has no address for rigs on its bus: `Control has no address for rigs on its message bus (THERMITE_NATS_PUBLIC_URL, or the host of THERMITE_CONTROL_PUBLIC_URL with port 4222), so a rig could not reach it: a rig works only on the bus.` A rig set up before the bus has neither, and is broken until it is set up again: [A rig from before the bus](#a-rig-from-before-the-bus).
 
-To tell that it worked: from a rig's machine, `nc -zv control.example.com 4222` connects, and the rig's page shows "Its key on the message bus registered". A rig that can't reach the port never reports: its setup ends with "no report after 10 minutes", and its supervisor's log says `following failed; trying again` or `making the stream failed; trying again`.
+To tell that it worked: from a rig's machine, `nc -zv control.example.com 4222` connects, and the rig's page shows "Its key on the message bus registered". A rig that can't reach the port never reports: its setup ends with "no report after 10 minutes", its supervisor's log says `following failed; trying again` or `making the stream failed; trying again`, and 5 minutes after it registered its keys, its page shows it **Broken**.
+
+## A rig on RunPod: its leaf node
+
+A rig on RunPod never reaches the bus's port: control's NATS server dials a small NATS server in the pod, as a leaf node, at the public address and port RunPod gives the pod's port 7422 ([A rig on RunPod](../../explanation/how-the-parts-talk.md#a-rig-on-runpod)). Nothing on control's side needs opening for it, but a way out to the internet for the `nats` service, to any TCP port: RunPod chooses the pod's port.
+
+To tell that it works:
+
+1. Read the pod's address. `GET /v1/rigs/<rig>/runpod` answers it in `bus_leaf`, such as `"203.0.113.5:40123"`, and the rig's **History** has `Control's bus dials the pod's leaf node at the address RunPod gave it: 203.0.113.5:40123.` It is `null` until RunPod gives the port a public address, and while the pod is stopped.
+2. See control's server connect to it, a few seconds later:
+
+   ```sh
+   docker compose logs nats | grep -i leafnode     # or: podman compose logs nats
+   ```
+
+   The line `Leafnode connection created for account: LEAF_<rig>` says the server reached the pod and each side took the other's certificate. Control first names the rig's account, `LEAF_<rig>`, in the bus's users file, and the pod's address only at its next look, 5 seconds later at most, once the server has taken the account.
+3. See the rig's reports arrive: its page shows its newest events, as for any rig.
+
+What you see when it does not work:
+
+- `Error trying to connect as leafnode to remote server "203.0.113.5:40123"` with `connection refused` or `i/o timeout`: nothing answers at the pod's address. The pod may still be starting, or a firewall in front of control keeps the `nats` service from that port. The server tries again about every second, and logs its tries.
+- `Error trying to connect as leafnode to remote server "<rig>.leaf.thermite.invalid:7422"`: harmless. The server's connection names that address for the pod's certificate's name alone, and it never resolves.
+- `TLS leafnode handshake error: … certificate signed by unknown authority`: the server at that address is not the rig's pod. Control's server takes only the certificate control made for that pod at its launch.
+- In the pod's log ([A pod's log](../../reference/rest-api.md#a-pods-log)), `the pod's bus server's sign-in check failed`, then `the pod's bus server is unhealthy: ending it to start it again`: the pod's own server hung, and its supervisor killed it and starts it again. Control's server dials it again once it is back ([Restarts and stops](../../reference/harness-image.md#restarts-and-stops)).
+
+A pod that RunPod gives no public address for its port 7422 can't join the bus: after 5 minutes with no address and nothing from the pod on the bus, its page shows it **Broken**. Terminate it and launch a new one; RunPod may give the new pod an address. A rig on RunPod launched before this version has no leaf node, so it can't report at all: its page shows it **Broken** and its **Pull mode** block says `Not on it: launched before the pod's leaf node, so it can't report. Terminate it and launch a new one.`
 
 ## The certificate
 
@@ -142,12 +180,21 @@ Every connection to the bus is over TLS. Control keeps its own certificate autho
 
 - **The server's certificate** names the hosts control and the rigs reach the bus by: `nats`, and the host of `THERMITE_NATS_PUBLIC_URL` or of control's address for rigs. It is valid for 397 days. Control makes a new one when the names change, and when the certificate ends within 30 days; the server takes it without a restart, and the rigs' connections stay. Control's log says `the bus's server certificate made`.
 - **The rigs** trust the server through the authority's certificate alone, which control gives each rig it sets up: as a file on a machine and in the compose stack, in the supervisor's environment on a cluster. A connection that does not come from such a rig, or that trusts another authority, is refused, and so is one without TLS.
+- **The server's certificate is good for a client too.** The server shows it when it dials a RunPod pod's server, which takes no other. A certificate control made before this version, for a server alone, is made anew at control's next start.
 
 Keep `bus-ca.key` with control's other state: a backup of the `control-state` volume holds it. If it is lost, delete `bus-ca.pem` too and start control again: it makes a new authority, and every rig on the bus needs its certificate again, by moving onto new images. Until then those rigs can't connect.
 
+## A rig's keys on the bus
+
+Each rig's supervisor makes two keys in its home, `bus-key.seed` and `bus-seal.pem`, the first time it starts, and registers their public parts with control over HTTPS at each start, before anything goes on the bus. Until control has them, it tries again every 30 seconds, and its log says `the rig's keys on the message bus are not registered yet`, with control's words. The rig's page shows their fingerprints under **The rig**, as **Keys on the bus**: `<fingerprint> its user · <fingerprint> its seal key`, or "none registered yet".
+
+- **A key changes at once.** A supervisor whose home was emptied makes new keys at its next start. Control takes them at once: the old key no longer signs in, and nothing waits for you. The rig's page says "changed … ago" beside its keys, and its **Recent** list has the step, such as `Its key on the message bus changed: fingerprint 5a1c… → 9e02….`. **Needs you** shows a **Key changed** card, with each change and its time in UTC, until you press **Seen**: the card leaves, and the changes stay in the rig's history. If you didn't empty the rig's home or set it up again, look at who holds the rig's token ([Tokens and roles](../../reference/tokens.md)).
+- **A key another holds is refused.** Control refuses a key that another rig, a retired one too, or control itself already holds. The supervisor's log shows the refusal, `bus_key is refused: another rig or control holds that key on the message bus. …`, and the rig can't use the bus until it has keys of its own. The rig's history and a **Key refused** card under **Needs you** say which rig, or control, holds it. This happens when one rig's supervisor home was copied from another's: give the rig a home of its own, and its supervisor makes new keys at its next start.
+- **A reload that keeps failing shows too.** Control writes the bus's users and asks the server to reload them each time they change, and tries again every 5 seconds when the reload fails. When the server has not taken the file for a minute, or control can't write it, **Needs you** shows a **Bus users** card with the last error, such as `connection refused: nats:4222`. Until the server takes the file, a new or changed key, a retired rig and a new run's live lines wait; users signed in already go on. Check that the `nats` service runs and that control reaches it; the card goes away by itself once a reload works, and control's log says `the bus's server takes its users again`.
+
 ## Give it more memory or disk
 
-The bus keeps its messages on disk, on the `nats-data` volume. The `EVENTS` stream keeps every rig's events for good, so the store grows with the rigs' history. Its memory holds the index of each stream's subjects and the blocks a read loads. Compose gives it 256 MiB, and tells the server's Go runtime 78% of that, so that it frees what a read loaded before the limit is reached. Its disk is 75% of the volume's free space when it starts.
+The bus keeps its messages on disk, on the `nats-data` volume. The `EVENTS` stream keeps every rig's events until a [retention policy](retention-policies.md) of control's copy removes some, so the store grows with the rigs' history. Its memory holds the index of each stream's subjects and the blocks a read loads. Compose gives it 256 MiB, and tells the server's Go runtime 78% of that, so that it frees what a read loaded before the limit is reached. Its disk is 75% of the volume's free space when it starts.
 
 1. In `.env`, set either or both:
 
@@ -165,18 +212,41 @@ The bus keeps its messages on disk, on the `nats-data` volume. The `EVENTS` stre
 
 To tell that it worked: the server's log as it starts, `docker compose logs nats`, says `Max Memory` at 75% of what Go is told (149.76 MB for 256 MiB), and `Max Storage` at the store's size (`20G` shows as 18.63 GB).
 
-## Keep the rigs off it
+To see which needs more: **Metrics › Storage** gives the bus's store, used and available, and **Metrics › Bus** its server's memory and each stream's bytes and subjects; a stream with many subjects costs memory even with small messages.
 
-Control always uses its bus: it keeps every rig's events there. A rig may still report over HTTP, and take its commands and config from control's API, as Thermite did before the bus: control keeps its events on the bus all the same. To keep the compose stack's own rigs off the bus, set `THERMITE_NATS_URL` to nothing in `.env`, then start the stack again:
+Control keeps 5 GiB of the store free, `THERMITE_DISK_FLOOR_GIB`: with less left under its limit, it starts no new run until there is room ([Control's disk is at its floor](troubleshoot.md#controls-disk-is-at-its-floor)). A [restore](backup-and-restore.md#restore-a-backup) needs more memory than the bus's own for its run: about 1 KiB for each event, over 128 MiB.
 
-```sh title=".env (part)"
-THERMITE_NATS_URL=
-```
+## A rig off the bus
 
-Both of the stack's supervisors then report over HTTP. Control stays on the bus, and `/v1/health` still says `"bus":"connected"`. The line never reaches control: its own `THERMITE_NATS_URL` is fixed in the compose file. Take the line out of `.env` and start the stack again to put the rigs back on the bus.
+A rig and control talk only on the bus. A rig that can't reach it gets no command and sends no report, so control shows it **Broken**, in words, with what to do:
 
-A rig that control sets up on a machine or a cluster gets the bus's address with its other files, and reports over the bus: open the bus's port to it ([Let rigs on other machines reach it](#let-rigs-on-other-machines-reach-it)). A rig whose supervisor has no `THERMITE_NATS_URL`, such as one you join yourself without it, reports over HTTP.
+- on its page, a banner `Broken: <rig> is off the message bus.`, with what control knows, since when, and `To fix it:` for where the rig runs;
+- in its page's top line, `broken · off the message bus`;
+- on the **Rigs** list, the chip **Broken: off the bus**, under the filter **Stale, offline or broken**, and in the summary, `N broken, off the bus`;
+- under **Needs you**, a **Broken** card, `<rig> is broken: it is off the message bus`;
+- in `GET /v1/rigs`, `GET /v1/rigs/<rig>/view` and the MCP tool `list_rigs`, the rig's `bus`, `{"state":"off", why, words, since, fix}`, with the same words ([A rig's connection to the bus](../../reference/rest-api.md#a-rigs-connection-to-the-bus)), and in [`thermite rig list`](../../reference/command-line.md#rig-list), a line under the rig.
 
-A rig on RunPod never uses the bus: control reaches it in [pull mode](../../explanation/trust.md#rigs-in-pull-mode), and keeps its events on the bus as it keeps any rig's.
+Control sees a rig off the bus three ways. The banner's words say which:
 
-A control without `THERMITE_NATS_URL` stops at start, with `control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. …` in its log.
+| What control knows | What it means | To fix it |
+| --- | --- | --- |
+| `It calls control over HTTP, with no keys on the message bus: …` | The rig runs a version from before the bus was the only way, such as v0.1.0, or it was set up without the bus. Control refuses its call with 409 and `this rig has no keys on the message bus: …`. The rig shows broken while it keeps calling, and for 15 minutes after its last call; its history gets the step "It calls control over HTTP with no keys on the message bus: it is broken until it is set up again", once a day at most | Set it up again with this version: [A rig from before the bus](#a-rig-from-before-the-bus) |
+| `It registered its keys with control over HTTPS, but nothing came from it on the message bus since: …` | Its supervisor registered its keys at its start, and no report came from it on the bus within 5 minutes. It can't reach the bus's address, or the bus refuses it | Check that the rig reaches the bus's address and port, 4222 unless control names another on **Add a rig**, through every firewall and network rule between them, and read the supervisor's log, which says why it could not sign in ([Troubleshooting](troubleshoot.md#a-rig-shows-broken-off-the-message-bus)) |
+| `Its pod was launched before RunPod's rigs joined the message bus …`, or `RunPod gives its pod no public address for the leaf node's port (7422) …` | A pod with no leaf node, or one RunPod has given no public address for port 7422 for 5 minutes while it runs | Terminate the rig and launch a new one ([A rig on RunPod: its leaf node](#a-rig-on-runpod-its-leaf-node)) |
+
+A rig on RunPod whose pod is stopped is not broken: it is **Stopped**. The banner goes once the rig's reports come on the bus again.
+
+### A rig from before the bus
+
+A rig of v0.1.0 reports over HTTP, which control no longer takes: it shows **Broken** until it is set up again with this version. How depends on where it runs:
+
+| Where it runs | Set it up again |
+| --- | --- |
+| The compose stack | Take this version's images and its `compose.yaml`, and start the stack again: the stack's supervisors always reach the bus at `nats://nats:4222` |
+| A machine control set up | **Update to** control's version, on its page: control writes its files again with the bus's address and control's authority. The machine must reach the bus's port ([Let rigs on other machines reach it](#let-rigs-on-other-machines-reach-it)) |
+| A cluster | **Update to these images**, on its page, or the MCP tool `update_rig_images`: its deployments get the bus's address and control's authority. The cluster's network rules must let it reach the bus's port |
+| A rig you joined | Remove it where it runs, with the commands on its page, then make a new join command there and run it ([Join a rig yourself](../install/join-a-rig.md#4-make-a-new-one-or-revoke-it)) |
+| RunPod | Terminate it, and launch a new one |
+| A rig set up by hand | Give its supervisor the bus's address and control's authority, `THERMITE_NATS_URL` and `THERMITE_NATS_CA_FILE`, as the files [`thermite rig add`](../../reference/command-line.md#rig-add) writes for a new rig hold them, and this version's images |
+
+A control without `THERMITE_NATS_URL` stops at start, with `control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. …` in its log. A supervisor without it, or without `CONTROL_URL` and `THERMITE_CONTROL_TOKEN_FILE`, stops at start too, in words: `THERMITE_NATS_URL is not set: a rig reaches control only on its message bus. …`.

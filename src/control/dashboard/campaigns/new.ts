@@ -7,7 +7,7 @@ import { McpUses } from "../../../core/mcp.ts";
 import { askOwnerFrom, ownModels, startCampaign } from "../../campaigns/index.ts";
 import { kitSummary, unpackKit } from "../../kits/index.ts";
 import { sameModel } from "../../providers/index.ts";
-import { probeRepository, readKitManifest } from "../../repo-probe.ts";
+import { probeRepository, pushCheck, readKitManifest } from "../../repo-probe.ts";
 import {
   agentsModelMissing,
   giveRigModel,
@@ -63,6 +63,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
   const newCampaignPage = (
     c: Ctx,
     extra: { draft?: Record<string, unknown>; errors?: string[] } = {},
+    vs = views(),
   ) =>
     page(
       c,
@@ -73,7 +74,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       },
       newCampaignBody({
         csrf: csrf(c),
-        rigs: views(),
+        rigs: vs,
         access: store.gitAccess.list(),
         // The MCP servers in Settings, for the kit's MCP servers block (goal 068).
         mcp: mcpServers.list(),
@@ -89,19 +90,23 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
             })),
           })),
         // The Agents' context checks a window against each rig's agents' models (goal 070).
-        agentModels: Object.fromEntries(views().map((u) => [u.id, ownModels(store, u.id)])),
+        agentModels: Object.fromEntries(vs.map((u) => [u.id, ownModels(store, u.id)])),
         ...extra,
       }),
+      vs,
     );
   app.get("/ui/campaigns/new", (c) =>
     opts.kits ? newCampaignPage(c) : c.text("This control keeps no kits.", 404),
   );
   // The project's head at a ref and its paths (not its contents), for the page's suggestions:
-  // a project in a folder of its repository gets that folder's paths.
-  app.get("/ui/campaigns/new/probe", async (c) => {
-    const url = c.req.query("url") ?? "";
-    const ref = c.req.query("ref") || "HEAD";
-    const folder = c.req.query("folder") || undefined;
+  // a project in a folder of its repository gets that folder's paths. A POST with the form's
+  // token, as it may unseal a Git access.
+  app.post("/ui/campaigns/new/probe", async (c) => {
+    const f = await c.req.parseBody();
+    const one = (k: string) => (typeof f[k] === "string" ? String(f[k]) : "");
+    const url = one("url");
+    const ref = one("ref") || "HEAD";
+    const folder = one("folder") || undefined;
     if (folder && !FolderSchema.safeParse(folder).success)
       return c.json(
         {
@@ -115,12 +120,35 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
         await (opts.probeRepo ?? probeRepository)(
           url,
           ref,
-          accessFor(c.req.query("access")),
+          accessFor(one("access") || undefined, url),
           folder,
         ),
       );
     } catch (err) {
       return c.json({ error: errorText(err) }, 400);
+    }
+  });
+  // Whether a Git access may push to where the runs' work goes (goal 185): a dry run, which
+  // writes nothing. A POST with the form's token, as it unseals a Git access.
+  app.post("/ui/campaigns/new/push-check", async (c) => {
+    const f = await c.req.parseBody();
+    const one = (k: string) => (typeof f[k] === "string" ? String(f[k]) : "");
+    const url = one("url");
+    try {
+      const why = await (opts.pushCheck ?? pushCheck)(
+        url,
+        accessFor(one("access") || undefined, url),
+      );
+      return c.json(
+        why
+          ? { ok: false, said: `No: ${why}.` }
+          : {
+              ok: true,
+              said: "This access may push there: rigs can push this campaign's branches.",
+            },
+      );
+    } catch (err) {
+      return c.json({ ok: false, said: errorText(err) });
     }
   });
   // A kit uploaded on the page: unpacked and checked now, its archive kept beside the kit
@@ -150,13 +178,16 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
     return unpackKit(readFileSync(`${p}.name`, "utf8"), readFileSync(p));
   };
   // A kit in a repository: the MCP servers its kit.json names at that commit (goal 068), for
-  // the page to show beside Settings' servers. Control reads kit.json alone.
-  app.get("/ui/campaigns/new/kit-repo", async (c) => {
+  // the page to show beside Settings' servers. Control reads kit.json alone. A POST with the
+  // form's token, as it may unseal a Git access.
+  app.post("/ui/campaigns/new/kit-repo", async (c) => {
+    const f = await c.req.parseBody();
+    const one = (k: string) => (typeof f[k] === "string" ? String(f[k]) : "");
     try {
       const manifest = (await (opts.readKit ?? readKitManifest)(
-        c.req.query("url") ?? "",
-        c.req.query("commit") ?? "",
-        accessFor(c.req.query("access") || undefined),
+        one("url"),
+        one("commit"),
+        accessFor(one("access") || undefined, one("url")),
       )) as { name?: unknown; mcp_servers?: unknown };
       const uses = McpUses.safeParse(manifest?.mcp_servers ?? []);
       if (!uses.success)
@@ -208,7 +239,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
           await (opts.probeRepo ?? probeRepository)(
             project.url,
             project.ref || "HEAD",
-            accessFor((project as { access?: string }).access),
+            accessFor((project as { access?: string }).access, project.url),
             folder.success ? folder.data : undefined,
           )
         ).commit;
@@ -248,7 +279,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       // Not on the rig yet: it arrives within a minute. Starting now would fail the first trials.
       if (startValue === "start" && !sameModel(rig.model?.model, model)) {
         startValue = "save";
-        modelNote = `${rig.id} takes ${model} within a minute. Settings › Providers shows the rig taking it until then; then start the run here.`;
+        modelNote = `${rig.id} takes ${model} within a minute. Settings › Rigs' models shows the rig taking it until then; then start the run here.`;
       }
     }
     // Control gave the rig a model it has not taken yet: saved now, started once it has.
@@ -260,7 +291,7 @@ export function newCampaignRoutes(app: Hono, dash: Dashboard): void {
       !sameModel(rig.model?.model, pending.model)
     ) {
       startValue = "save";
-      modelNote = `${rig.id} has not taken ${pending.model} yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then). Then start the run here.`;
+      modelNote = `${rig.id} has not taken ${pending.model} yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then). Then start the run here.`;
     }
     if (!chosen && startValue === "start" && agentsModelMissing(store, rig))
       return newCampaignPage(c, {

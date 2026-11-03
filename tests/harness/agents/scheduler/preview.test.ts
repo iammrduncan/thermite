@@ -14,14 +14,19 @@ const auth = { authorization: "Bearer sup" };
 test("a role's next prompt is previewed on the rig with no side effect (goal 166)", async () => {
   const env = makeJudgeEnv({
     lanes: { count: 1, trials_per_epoch: 1 },
-    contract: { notes: "The kernel sums an array of numbers." },
+    contract: { additional_information: "The kernel sums an array of numbers." },
   });
   await env.start();
   const run = (env.assign.envelope.payload as { run: string }).run;
   const command = (kind: Parameters<typeof env.sign>[0], payload: unknown) =>
     env.service.applyCommand(env.sign(kind, payload));
   await command("message_agent", { run, to: "all", text: "Prefer a change a reader can follow." });
-  await command("queue_add", { run, title: "Unroll the loop by four", family: "loops", why: "w" });
+  await command("queue_add", {
+    run,
+    title: "Unroll the loop by four",
+    direction: "loops",
+    why: "w",
+  });
   const api = createHarnessApi(env.service, { supervisor: "sup" });
   const preview = (q: string) =>
     api.request(`/v1/runs/${run}/prompt-preview?${q}`, { headers: auth });
@@ -53,7 +58,7 @@ test("a role's next prompt is previewed on the rig with no side effect (goal 166
   // Nothing kept, no message given, no file written.
   assert.deepEqual(env.service.ledger.prompts.list(run), []);
   assert.equal(env.service.ledger.events.newest("agent_message_read", {}), undefined);
-  assert.ok(!existsSync(join(env.service.knowledge.folder(run), BRIEF_FILE)));
+  assert.ok(!existsSync(join(env.service.researchRoot(run), BRIEF_FILE)));
 
   const planner = scheduler.preview(run, { role: "planner" });
   assert.equal(planner.role, "planner");

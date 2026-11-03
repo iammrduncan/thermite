@@ -1,5 +1,5 @@
-import type { StoredRule } from "../../core/commands.ts";
 import { type Contract, type LaneLimitValues, laneLimits, MAX_LANES } from "../../core/contract.ts";
+import type { StoredRule } from "../../core/directives.ts";
 import { ideaWords, ruleRefusal } from "../../core/queue-target.ts";
 import { JUDGED_LIFECYCLES } from "../../core/verdicts.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
@@ -7,10 +7,10 @@ import {
   directionOf,
   type Experiment,
   type ExperimentQueue,
-  inFamily,
+  inDirection,
   type TaskYield,
 } from "../queue.ts";
-import type { NewFamily, QueuePlan } from "./planner/index.ts";
+import type { NewDirection, QueuePlan } from "./planner/index.ts";
 import type { Assignment, Registry } from "./registry.ts";
 
 /**
@@ -20,7 +20,7 @@ import type { Assignment, Registry } from "./registry.ts";
  * as the planner's (`planner`), and each hand-out is one `planner_handout` event.
  *
  * The fixed rules: lanes take queued experiments in order, skipping those an AVOID rule names by
- * family, MANDATE families first and TRY families next. Among the next experiments in order
+ * direction, MANDATE directions first and TRY directions next. Among the next experiments in order
  * (as many as the run has lanes), a lane prefers one in its last direction, so it builds on what
  * it learned. An experiment goes to one lane only.
  */
@@ -29,7 +29,7 @@ import type { Assignment, Registry } from "./registry.ts";
 export const PLANNER = "planner";
 
 /**
- * A rule in force. One in words (legacy, goal 066) has no family: code never keeps it, until the
+ * A rule in force. One in words (legacy, goal 066) has no direction: code never keeps it, until the
  * planner's round converts it to a rule on a named direction.
  */
 export type Directive = { id: number; body: StoredRule };
@@ -62,13 +62,23 @@ export function focusOf(x: Pick<Experiment, "title" | "details">): string {
 }
 
 /**
- * The rules for the plan in force. The owner's (issued through control) come first: a supervisor
- * directive about a family the owner has a directive for, or a supervisor lane count when the
- * owner set one, does not apply.
+ * Who set a rule, as the planner reads it: `owner` for the owner (or an operator on the owner's
+ * behalf), else its author as the ledger records it, such as a teacher, the planner or an agent.
  */
-export function rulesInForce(ledger: Ledger, run: string): { id: number; body: StoredRule }[] {
+export const ruleBy = (author: string): string =>
+  author === "control:owner" || author.startsWith("control:owner:") ? "owner" : author;
+
+/**
+ * The rules for the plan in force, each with who set it (ruleBy). The owner's (issued through
+ * control) come first: a supervisor directive about a direction the owner has a directive for, or a
+ * supervisor lane count when the owner set one, does not apply.
+ */
+export function rulesInForce(
+  ledger: Ledger,
+  run: string,
+): { id: number; body: StoredRule; by: string }[] {
   // An old rule in words (legacy, goal 066) stays in force for the planner's model until its
-  // round converts it; it has no family, so the code below and the fixed rules never keep it.
+  // round converts it; it has no direction, so the code below and the fixed rules never keep it.
   // An advisor's rule that freezes the queue's size or pins an experiment, set before code
   // refused them (goal 081), never reaches the plan.
   const all = ledger.directives
@@ -78,19 +88,20 @@ export function rulesInForce(ledger: Ledger, run: string): { id: number; body: S
       id: d.id,
       owner: d.author.startsWith("control:"),
       body: d.body as StoredRule,
+      by: ruleBy(d.author),
     }));
-  const ownerFamilies = new Set(
-    all.filter((d) => d.owner && d.body.family).map((d) => d.body.family),
+  const ownerDirections = new Set(
+    all.filter((d) => d.owner && d.body.direction).map((d) => d.body.direction),
   );
   const ownerLanes = all.some((d) => d.owner && d.body.kind === "lane_count");
   return all
     .filter(
       (d) =>
         d.owner ||
-        ((!d.body.family || !ownerFamilies.has(d.body.family)) &&
+        ((!d.body.direction || !ownerDirections.has(d.body.direction)) &&
           !(d.body.kind === "lane_count" && ownerLanes)),
     )
-    .map((d) => ({ id: d.id, body: d.body }));
+    .map((d) => ({ id: d.id, body: d.body, by: d.by }));
 }
 
 /**
@@ -162,7 +173,7 @@ export class Coordinator {
       const x = this.ledger.experiments.lastOfLane(run, lane);
       const t = x ? undefined : this.ledger.trials.lastOfLane(run, lane);
       out[lane] = {
-        direction: x ? x.family || null : (t?.family ?? null),
+        direction: x ? x.direction || null : (t?.direction ?? null),
         experiment: x?.title ?? null,
       };
     }
@@ -180,16 +191,16 @@ export class Coordinator {
   ): Experiment | undefined {
     const fam = (k: string) =>
       o.directives
-        .filter((d) => d.body.kind === k && d.body.family)
-        .map((d) => String(d.body.family));
+        .filter((d) => d.body.kind === k && d.body.direction)
+        .map((d) => String(d.body.direction));
     const avoid = fam("avoid");
     const mandate = fam("mandate");
     const tried = fam("try");
     const rank = (x: Experiment) =>
-      mandate.some((f) => inFamily(x, f)) ? 0 : tried.some((f) => inFamily(x, f)) ? 1 : 2;
+      mandate.some((f) => inDirection(x, f)) ? 0 : tried.some((f) => inDirection(x, f)) ? 1 : 2;
     const candidates = this.queue
       .queued(run)
-      .filter((x) => !o.exclude.has(x.id) && !avoid.some((f) => inFamily(x, f)))
+      .filter((x) => !o.exclude.has(x.id) && !avoid.some((f) => inDirection(x, f)))
       .map((x, i) => ({ x, i, r: rank(x) }))
       .sort((a, b) => a.r - b.r || a.i - b.i);
     const first = candidates[0];
@@ -199,7 +210,7 @@ export class Coordinator {
       last &&
       candidates
         .slice(0, Math.max(1, o.window))
-        .find((c) => c.r === first.r && sameDirection(c.x.family, last));
+        .find((c) => c.r === first.r && sameDirection(c.x.direction, last));
     return (same || first).x;
   }
 
@@ -208,32 +219,32 @@ export class Coordinator {
     const ruled = directives.find(
       (d) =>
         (d.body.kind === "mandate" || d.body.kind === "try") &&
-        d.body.family &&
-        inFamily(x, d.body.family),
+        d.body.direction &&
+        inDirection(x, d.body.direction),
     );
     if (ruled)
-      return `a ${ruled.body.kind.toUpperCase()} rule (${ruled.id}) names its direction, ${ruled.body.family}`;
+      return `a ${ruled.body.kind.toUpperCase()} rule (${ruled.id}) names its direction, ${ruled.body.direction}`;
     const last = this.laneState(run, [lane])[lane]?.direction;
-    if (last && sameDirection(x.family, last))
-      return `next in the queue in ${lane}'s last direction (${x.family}), so it builds on what it learned`;
+    if (last && sameDirection(x.direction, last))
+      return `next in the queue in ${lane}'s last direction (${x.direction}), so it builds on what it learned`;
     return "next in the queue";
   }
 
   /**
-   * A MANDATE family with nothing queued or in progress gets one experiment, at the top, so the
+   * A MANDATE direction with nothing queued or in progress gets one experiment, at the top, so the
    * fixed rules can keep it: a lane always works in every MANDATE direction.
    */
   ensureMandates(run: string, directives: Directive[]): void {
     const waiting = [...this.queue.queued(run), ...this.queue.assigned(run)];
     for (const d of directives) {
-      const f = d.body.family;
-      if (d.body.kind !== "mandate" || !f || waiting.some((x) => inFamily(x, f))) continue;
+      const f = d.body.direction;
+      if (d.body.kind !== "mandate" || !f || waiting.some((x) => inDirection(x, f))) continue;
       waiting.push(
         this.queue.add(
           run,
           {
             title: `Work on the "${f}" direction`,
-            family: f,
+            direction: f,
             why: `a MANDATE rule (${d.id}) asks for the "${f}" direction, and nothing queued was in it`,
             by: PLANNER,
             position: "top",
@@ -248,13 +259,13 @@ export class Coordinator {
    * The fixed plan fills an empty queue: an experiment in the direction it gives a lane, added
    * by the planner. `a` is the fixed plan's (or the round's) assignment for the lane.
    */
-  fill(run: string, a: Pick<Assignment, "family" | "focus">, why: string): Experiment {
+  fill(run: string, a: Pick<Assignment, "direction" | "focus">, why: string): Experiment {
     return this.queue.add(
       run,
       {
         title: clip(a.focus.split("\n")[0] ?? a.focus, 200),
         ...(a.focus.length > 200 || a.focus.includes("\n") ? { details: clip(a.focus, 4000) } : {}),
-        family: a.family,
+        direction: a.direction,
         why,
         by: PLANNER,
       },
@@ -326,7 +337,7 @@ export class Coordinator {
         {
           title: a.title,
           details: a.details,
-          family: a.family,
+          direction: a.direction,
           why: a.why,
           by: PLANNER,
           position: a.position,
@@ -346,7 +357,7 @@ export class Coordinator {
         PLANNER,
         plan.rules.map((r) => ({
           kind: r.kind,
-          family: r.family,
+          direction: r.direction,
           rationale: r.rationale,
           citations: [],
           from_message: r.from_message,
@@ -356,7 +367,7 @@ export class Coordinator {
     // Each old rule in words becomes a rule on the direction the model named (goal 066).
     for (const c of plan.convert)
       tryIt(`convert rule ${c.rule}`, () => {
-        this.ledger.directives.convertRule(run, c.rule, c.family, PLANNER);
+        this.ledger.directives.convertRule(run, c.rule, c.direction, PLANNER);
       });
     const handout: (Handout & { parent: "champion" | "lane_best" })[] = [];
     for (const h of plan.handout) {
@@ -375,18 +386,18 @@ export class Coordinator {
     return { handout, skipped, refs };
   }
 
-  /** The direction-registry family for an experiment's direction (registered if new). */
-  direction(run: string, x: Experiment, families: NewFamily[] = []): string {
-    const id = directionOf(x.family) ?? "general";
-    const described = families.find((f) => f.id === id)?.description;
-    this.registry.addFamily(
+  /** The registered direction an experiment's words stand for (registered if new). */
+  direction(run: string, x: Experiment, directions: NewDirection[] = []): string {
+    const id = directionOf(x.direction) ?? "general";
+    const described = directions.find((f) => f.id === id)?.description;
+    this.registry.addDirection(
       run,
       id,
       described ??
         (id === "general"
           ? "Any correct change that improves the primary metric"
-          : x.family && x.family !== id
-            ? x.family
+          : x.direction && x.direction !== id
+            ? x.direction
             : `the "${id}" direction (first: ${clip(x.title, 200)})`),
       PLANNER,
     );
@@ -473,8 +484,10 @@ export class Coordinator {
   }
 }
 
-/** Whether an experiment's direction is a lane's last one (the same words, or the same family). */
-function sameDirection(family: string, last: string): boolean {
-  if (!family) return false;
-  return family === last || (directionOf(family) ?? family) === (directionOf(last) ?? last);
+/** Whether an experiment's direction is a lane's last one (the same words, or the same direction). */
+function sameDirection(direction: string, last: string): boolean {
+  if (!direction) return false;
+  return (
+    direction === last || (directionOf(direction) ?? direction) === (directionOf(last) ?? last)
+  );
 }

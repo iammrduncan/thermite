@@ -101,7 +101,8 @@ ${BRIEF_PAGE_JS}
     if (!url) return;
     out.textContent = "Looking it up…";
     try {
-      const res = await fetch("/ui/campaigns/new/probe?" + new URLSearchParams({ url, ref, access: val("project_access"), folder: folder() }), { credentials: "same-origin" });
+      const body = new URLSearchParams({ csrf: form.elements.csrf.value, url, ref, access: val("project_access"), folder: folder() });
+      const res = await fetch("/ui/campaigns/new/probe", { method: "POST", body, credentials: "same-origin" });
       const j = await res.json();
       if (!res.ok) { found = null; out.textContent = j.error || "Control could not read it."; update(); return; }
       found = j;
@@ -114,6 +115,34 @@ ${BRIEF_PAGE_JS}
     } catch { out.textContent = "Control could not reach the repository."; }
   };
   $("#probe")?.addEventListener("click", (e) => { e.preventDefault(); probe(); });
+
+  // ------------------------------------------------ where each run's work goes (goal 185)
+  const pushAccess = () => (val("results_access") === "same" ? val("project_access") : val("results_access"));
+  const pushUrl = () => (choice.results === "repository" ? val("results_git") : val("project_url"));
+  const resultsShow = () => {
+    const to = choice.results || "control";
+    const push = $("[data-results-push]"), git = $("[data-results-git]"), pub = $("[data-results-public]");
+    if (push) push.hidden = to === "control";
+    if (git) git.hidden = to !== "repository";
+    if (pub) pub.hidden = !(to === "project" && !val("project_access") && /github.com|gitlab.com|codeberg.org/.test(val("project_url")));
+    const names = $("[data-results-names]");
+    const name = val("campaign");
+    if (names && name) names.textContent = "thermite/" + name + "-1/champion, thermite/" + name + "-1/lane-1, …";
+  };
+  $("#push-check")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const out = $("#push-check-out");
+    out.className = "muted small";
+    if (!pushUrl()) { out.textContent = "Give the repository's address first."; return; }
+    out.textContent = "Asking the repository…";
+    try {
+      const body = new URLSearchParams({ csrf: form.elements.csrf.value, url: pushUrl(), access: pushAccess() });
+      const res = await fetch("/ui/campaigns/new/push-check", { method: "POST", body, credentials: "same-origin" });
+      const j = await res.json();
+      out.className = "small " + (j.ok ? "ok" : "bad");
+      out.textContent = (j.ok ? "✓ " : "✗ ") + (j.said || "Control could not ask the repository.");
+    } catch { out.className = "small bad"; out.textContent = "✗ Control could not reach the repository."; }
+  });
 
   // ------------------------------------------------ the draft
   const repoName = (url) => (url.replace(/\\.git$/, "").split(/[/:]/).pop() || "project").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[^a-z0-9]+/, "").slice(0, 64) || "project";
@@ -267,7 +296,7 @@ ${BRIEF_PAGE_JS}
         st.textContent = found ? "In Settings · " + toolsOf(x.name) + " tools" + (bad(x.name) ? " · it doesn't work now" : "") : "Not in Settings. Add an MCP server named " + x.name + " in Settings, or this campaign can't start.";
         main.append(head, st);
         const act = document.createElement("span");
-        if (!found) { const a = document.createElement("a"); a.className = "btn sm"; a.href = "/ui/settings#add-mcp"; a.textContent = "Add it in Settings"; act.append(a); }
+        if (!found) { const a = document.createElement("a"); a.className = "btn sm"; a.href = "/ui/settings/mcp#add-mcp"; a.textContent = "Add it in Settings"; act.append(a); }
         row.append(res, main, act); box.append(row);
       }
     }
@@ -284,7 +313,8 @@ ${BRIEF_PAGE_JS}
     repoKit = { key, list: null, said: "Reading the kit's kit.json…" };
     update();
     try {
-      const res = await fetch("/ui/campaigns/new/kit-repo?" + new URLSearchParams({ url, commit, access: val("kit_access") }), { credentials: "same-origin" });
+      const body = new URLSearchParams({ csrf: form.elements.csrf.value, url, commit, access: val("kit_access") });
+      const res = await fetch("/ui/campaigns/new/kit-repo", { method: "POST", body, credentials: "same-origin" });
       const j = await res.json();
       repoKit = res.ok ? { key, list: j.mcp_servers, said: "" } : { key, list: null, said: j.error || "Control could not read the kit's kit.json." };
     } catch { repoKit = { key, list: null, said: "Control could not reach the kit's repository." }; }
@@ -368,6 +398,8 @@ ${BRIEF_PAGE_JS}
     // The kit's MCP servers: ticked here, or read from a kit in a repository.
     const servers = mcpList();
     if (servers) d.mcp_servers = servers;
+    const to = choice.results || "control";
+    d.results = to === "control" ? { to } : { to, access: pushAccess(), ...(to === "repository" ? { git: val("results_git") } : {}) };
     const url = val("project_url");
     d.project = { url, ...(val("project_access") ? { access: val("project_access") } : {}), ref: val("project_ref") || undefined, commit: found ? found.commit : undefined, repo: repoName(url), ...(folder() ? { folder: folder() } : {}), editable_paths: lines("editable_paths"), forbidden_patterns: lines("forbidden_patterns") };
     if ((choice.kit || "here") === "here") {
@@ -449,6 +481,7 @@ ${BRIEF_PAGE_JS}
 
   // ------------------------------------------------ what the page says back
   const update = () => {
+    resultsShow();
     mcpUpdate();
     briefUpdate();
     const cc = ccUpdate();
@@ -472,7 +505,7 @@ ${BRIEF_PAGE_JS}
     const bf = briefFieldsNow(), bd = briefDraft(mode, bf);
     const qs = mode === "research" ? briefList(blItems("questions")).length : 0, nl = briefLinks(bf.links).links.length;
     const count = (n, one, many) => n.toLocaleString("en-US") + " " + (n === 1 ? one : many);
-    const bparts = [qs ? count(qs, "question", "questions") : "", bd.notes ? count(bd.notes.length, "character", "characters") + " of additional information" : "", nl ? count(nl, "starting link", "starting links") : "", bd.ideas ? count(bd.ideas.length, "idea", "ideas") + " to try" : "", bd.hypotheses ? count(bd.hypotheses.length, "hypothesis", "hypotheses") : ""].filter(Boolean);
+    const bparts = [qs ? count(qs, "question", "questions") : "", bd.additional_information ? count(bd.additional_information.length, "character", "characters") + " of additional information" : "", nl ? count(nl, "starting link", "starting links") : "", bd.ideas ? count(bd.ideas.length, "idea", "ideas") + " to try" : "", bd.hypotheses ? count(bd.hypotheses.length, "hypothesis", "hypotheses") : ""].filter(Boolean);
     // Only a brief with something in it is said: an empty one adds nothing to the sentence.
     const brief = bparts.length ? " Its brief: " + bparts.join(", ") + "." : "";
     const s = (val("campaign") || "The campaign") + " will " + aim + proj + ". " + lanes + (Number(lanes) === 1 ? " agent works" : " agents work") + " on " + (rig || "(no rig chosen)") + "." + ctx + brief;
@@ -493,10 +526,16 @@ ${BRIEF_PAGE_JS}
   const back = form.dataset.draft ? JSON.parse(form.dataset.draft) : null;
   if (back) {
     const set = (n, v) => { if (form.elements[n] && v !== undefined && v !== null) form.elements[n].value = Array.isArray(v) ? v.join(n === "editable_paths" || n === "forbidden_patterns" || n === "links" ? "\\n" : " ") : v; };
-    set("campaign", back.campaign); set("title", back.title); set("notes", back.notes); set("lanes", back.lanes); set("queue_target", back.queue_target);
+    set("campaign", back.campaign); set("title", back.title); set("additional_information", back.additional_information); set("lanes", back.lanes); set("queue_target", back.queue_target);
     // The brief's lists, one box for each entry (goal 078).
     blFill("ideas", back.ideas); blFill("hypotheses", back.hypotheses);
     set("links", back.mode === "research" ? back.research && back.research.seeds : back.links);
+    if (back.results && back.results.to) {
+      choice.results = back.results.to;
+      $$('.ch[data-group="results"]').forEach((x) => x.classList.toggle("on", x.dataset.value === back.results.to));
+      set("results_git", back.results.git);
+      if (back.results.access) set("results_access", back.results.access === (back.project && back.project.access) ? "same" : back.results.access);
+    }
     if (back.project) { set("project_access", back.project.access); set("project_url", back.project.url); set("project_ref", back.project.ref); set("project_folder", back.project.folder); set("editable_paths", back.project.editable_paths); set("forbidden_patterns", back.project.forbidden_patterns); }
     if (back.kit && back.kit.source === "here") { for (const k of ["build", "run", "check"]) set(k, back.kit[k]); set("outputs", back.kit.outputs); set("runs_per_case", back.kit.runs_per_case); }
     if (back.score) {

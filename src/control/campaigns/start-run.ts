@@ -2,7 +2,7 @@ import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
 import type { BriefingSeed } from "../../core/commands.ts";
 import { AskOwner } from "../../core/commands.ts";
-import { briefingSeedOf, type KbItem, PICKABLE, queueSeedOf } from "../kb.ts";
+import { briefingSeedOf, type KbItem, PICKABLE, queueSeedOf } from "../kb/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import type { ControlParts } from "../parts.ts";
 import { sameModel } from "../providers/index.ts";
@@ -52,6 +52,13 @@ export interface StartRunRequest {
   queueFrom?: string | undefined;
   /** Items of Thermite's knowledge base, by id: experiments join the queue, the rest the briefing. */
   past?: number[] | undefined;
+  /**
+   * What the run's agents search in the knowledge base (goal 175), fixed as it starts: the
+   * campaign's whole collection (continue, the default), or only the run's own items (fresh).
+   */
+  collection?: "continue" | "fresh" | undefined;
+  /** The granted collections it includes; undefined: every one the campaign is granted now. */
+  granted?: string[] | undefined;
 }
 
 /** What came of it: a run started, a model given first (start again later), or a refusal. */
@@ -73,6 +80,8 @@ export type StartRunOutcome =
        * when the campaign sets any; its words are one of the notes.
        */
       context?: ContextApplies | undefined;
+      /** What its agents search in the knowledge base, fixed now (goal 175). */
+      scope: { collection: "continue" | "fresh"; granted: string[] };
     }
   | { state: "model_given"; said: string }
   | { state: "refused"; error: string; status: 400 | 404 | 409 };
@@ -120,7 +129,20 @@ export const startRunFields = {
     .array(z.number().int())
     .optional()
     .describe(
-      "Items of Thermite's knowledge base by id (kb_search gives them), from folders the campaign may read: experiments join the queue after the copied ones; findings, claims, notes and reports go to every agent's brief as background",
+      "Items of Thermite's knowledge base by id (kb_search gives them), from collections the campaign may read: experiments join the queue after the copied ones; findings, claims, notes and reports go to every agent's brief as background",
+    ),
+  collection: z
+    .enum(["continue", "fresh"])
+    .optional()
+    .describe(
+      "What the run's agents search in Thermite's knowledge base: continue (the default) searches the campaign's whole collection, every earlier run's items too; fresh searches only this run's own items. Either way, the run's items go into the campaign's collection. Fixed when the run starts",
+    ),
+  granted: z
+    .array(z.string().min(1).max(200))
+    .max(100)
+    .optional()
+    .describe(
+      "The collections of other campaigns the run's agents also search, read only: each one the owner granted this campaign. Left out: every collection it is granted now; [] for none. Set when the run starts: a grant given later joins it, and one revoked later leaves it",
     ),
 };
 
@@ -140,6 +162,8 @@ export function startRunRequest(campaign: string, b: StartRunBody): StartRunRequ
     judgeGpus: b.judge_gpus,
     queueFrom: b.queue_from,
     past: b.past,
+    collection: b.collection,
+    granted: b.granted,
   };
 }
 
@@ -175,6 +199,8 @@ export function startRunAnswer(
     ...(notes.length ? { notes } : {}),
     // What applies to the run's agents, when the campaign sets its own context (goal 070).
     ...(out.context ? { agents_context: out.context } : {}),
+    // What its agents search in the knowledge base, fixed now (goal 175).
+    knowledge: out.scope,
   };
 }
 
@@ -247,14 +273,14 @@ export async function startARun(
     if (!sameModel(rig.model?.model, model))
       return {
         state: "model_given",
-        said: `${rig.id} takes ${model} within a minute; Settings › Providers shows it taking the model until then. Then start the run again.`,
+        said: `${rig.id} takes ${model} within a minute; Settings › Rigs' models shows it taking the model until then. Then start the run again.`,
       };
   }
   // Control gave the rig a model it has not taken yet: the agents would start with none.
   const given = store.agentModels.byRig()[rig.id];
   if (agents && !req.model && given && !sameModel(rig.model?.model, given.model))
     return refuse(
-      `${rig.id} has not taken ${given.model} yet (it does within a minute of being given it; Settings › Providers shows it taking the model until then): start the run after that.`,
+      `${rig.id} has not taken ${given.model} yet (it does within a minute of being given it; Settings › Rigs' models shows it taking the model until then): start the run after that.`,
     );
   if (agents && !req.model && agentsModelMissing(store, rig))
     return refuse(
@@ -262,7 +288,7 @@ export async function startARun(
     );
   const split = splitFor(rig, String(req.judgeGpus ?? ""));
   if (typeof split === "string") return refuse(split, 400);
-  // From past research (goal 065): only items of folders this campaign may read, looked up
+  // From past research (goal 065): only items of collections this campaign may read, looked up
   // here by id. Experiments join the queue; findings, claims, notes and reports brief the agents.
   const kb = store.kb();
   const readable = new Set(kb.readable(campaign));
@@ -273,6 +299,16 @@ export async function startARun(
       400,
     );
   const past = picked.filter((x): x is KbItem => x !== undefined);
+  // What the run's agents search, fixed as it starts (goal 175): only collections granted now.
+  const reads = kb.reads(campaign);
+  const granted = req.granted ?? reads;
+  const notGranted = granted.filter((c) => !reads.includes(c));
+  if (notGranted.length)
+    return refuse(
+      `${campaign} may not read ${notGranted.join(", ")}: grant it under Reads on the campaign's collection in Knowledge, or leave it out.`,
+      400,
+    );
+  const scope = { collection: req.collection ?? "continue", granted: [...new Set(granted)] };
   const pastQueue = past
     .filter((x) => PICKABLE[x.kind] === "queue")
     .map((x) => queueSeedOf(x, kb.resultOf(x)))
@@ -324,6 +360,7 @@ export async function startARun(
     r = { ok: false, errors: [errorText(err)] };
   }
   if (!r.ok) return refuse(r.errors.join(" "));
+  kb.setScope(campaign, r.run, { fresh: scope.collection === "fresh", granted: scope.granted }, by);
   if (split !== undefined) sendSplit(store, parts.privateKeyPem, rig.id, split, by);
   // The campaign's own context settings, and what each agent works with on this rig (goal 070).
   const context = agents
@@ -340,5 +377,6 @@ export async function startARun(
     pauses: busy?.id,
     notes,
     ...(context ? { context } : {}),
+    scope,
   };
 }

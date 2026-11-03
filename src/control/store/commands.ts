@@ -1,7 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { canonicalJson } from "../../core/canonical.ts";
 import type { SignedCommand } from "../../core/commands.ts";
+import { type KbWrites, kbWritesOf } from "../../core/kb/index.ts";
 import { type McpUse, McpUses } from "../../core/mcp.ts";
+import { currentCommand } from "../../core/names.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
@@ -126,7 +128,7 @@ export class IssuedCommands extends StorePart {
     const out: SignedCommand[] = [];
     for (const r of this.db
       .prepare(
-        "select id, signed from command where rig = ? and status = 'pending' order by issued_at",
+        "select id, signed from command where rig = ? and status = 'pending' order by issued_at, rowid",
       )
       .all(rig) as Row[]) {
       const cmd = JSON.parse(String(r.signed)) as SignedCommand;
@@ -145,8 +147,8 @@ export class IssuedCommands extends StorePart {
   }
 
   /**
-   * A harness's own record of a command it applied, from the rig's report: authoritative (it is
-   * signed with the rig's key); the supervisor's acknowledgement is only the fast path.
+   * A harness's own record of a command it applied, from the rig's report: the only outcome
+   * control takes (signed with the rig's key).
    */
   confirmApplied(
     rig: string,
@@ -160,6 +162,19 @@ export class IssuedCommands extends StorePart {
         "update command set status = ?, outcome = ?, acked_at = coalesce(acked_at, ?) where id = ? and rig = ?",
       )
       .run(status, outcome, at, id, rig);
+  }
+
+  /**
+   * A command the rig's harness refused (its command_rejected event names it): its signature, its
+   * rig, its time or its payload. Only a command still pending: one the harness recorded an
+   * outcome for keeps it.
+   */
+  confirmRejected(rig: string, id: string, outcome: string, at: string): void {
+    this.db
+      .prepare(
+        "update command set status = 'rejected', outcome = ?, acked_at = ? where id = ? and rig = ? and status = 'pending'",
+      )
+      .run(outcome, at, id, rig);
   }
 
   /** A pending command signed again with a later expiry, while its sources still stage. */
@@ -180,42 +195,41 @@ export class IssuedCommands extends StorePart {
     return Number(r.changes) > 0;
   }
 
-  ack(
-    rig: string,
-    id: string,
-    status: "delivered" | "rejected" | "failed",
-    outcome: unknown,
-  ): boolean {
-    const r = this.db
-      .prepare(
-        "update command set status = ?, outcome = ?, acked_at = ? where id = ? and rig = ? and status = 'pending'",
-      )
-      .run(status, canonicalJson(outcome ?? {}), new Date().toISOString(), id, rig);
-    if (Number(r.changes) > 0)
-      this.store.auditLog.add(`rig:${rig}`, "command_acked", { id, status });
-    return Number(r.changes) > 0;
-  }
-
   /**
-   * Whether a rig was assigned a campaign that names this Git access in an import: the only
-   * rigs control hands it to.
+   * The Git accesses the rig's live assignments name in an import: the only ones control gives the
+   * rig, and only while they last. Live: pending or delivered, and its run not among the rig's
+   * `closed` runs. Sorted, each once.
    */
-  rigUsesGitAccess(rig: string, name: string): boolean {
-    const rows = this.db
-      .prepare("select signed from command where rig = ? and kind = 'assign_campaign'")
-      .all(rig) as { signed: string }[];
-    return rows.some((r) => {
+  gitAccessesOf(rig: string, closed: ReadonlySet<string>): string[] {
+    const rows = (
+      this.db
+        .prepare(
+          `select run, signed from command where rig = ? and kind = 'assign_campaign'
+           and status in ('pending', 'delivered')`,
+        )
+        .all(rig) as { run: string | null; signed: string }[]
+    ).filter((r) => r.run === null || !closed.has(r.run));
+    const names = new Set<string>();
+    for (const r of rows) {
       try {
-        const imports = (
+        const payload = (
           JSON.parse(r.signed) as {
-            envelope?: { payload?: { imports?: { source?: { access?: string } }[] } };
+            envelope?: {
+              payload?: {
+                imports?: { source?: { access?: string } }[];
+                results?: { access?: string };
+              };
+            };
           }
-        ).envelope?.payload?.imports;
-        return (imports ?? []).some((i) => i.source?.access === name);
+        ).envelope?.payload;
+        for (const i of payload?.imports ?? []) if (i.source?.access) names.add(i.source.access);
+        // The access its run's branches are pushed with (goal 185).
+        if (payload?.results?.access) names.add(payload.results.access);
       } catch {
-        return false;
+        // A row control signed is JSON: one that is not names no access.
       }
-    });
+    }
+    return [...names].sort();
   }
 
   /**
@@ -236,7 +250,7 @@ export class IssuedCommands extends StorePart {
          from command where kind in ('assign_campaign', 'resume_run') and run <> ''
            and (status = 'pending' or (status = 'delivered' and kind = 'assign_campaign' and acked_at > ?))
            and (kind = 'resume_run' or campaign = ?)
-         order by issued_at`,
+         order by issued_at, rowid`,
       )
       .all(since, campaign) as Row[]) {
       const rig = String(r.rig);
@@ -267,7 +281,7 @@ export class IssuedCommands extends StorePart {
   > {
     const rows = this.db
       .prepare(
-        "select id, rig, campaign, issued_at from command where kind = 'assign_campaign' and campaign is not null and status in ('pending', 'delivered') order by issued_at desc",
+        "select id, rig, campaign, issued_at from command where kind = 'assign_campaign' and campaign is not null and status in ('pending', 'delivered') order by issued_at desc, rowid desc",
       )
       .all() as { id: string; rig: string; campaign: string; issued_at: string }[];
     const out = new Map<
@@ -279,8 +293,11 @@ export class IssuedCommands extends StorePart {
     for (const r of rows) {
       if (out.has(r.campaign)) continue;
       const { signed: json } = signed.get(r.id) as { signed: string };
-      const payload = (JSON.parse(json) as { envelope: { payload: Record<string, unknown> } })
-        .envelope.payload;
+      // Signed before v0.1.1, it is read under the public names (core/names.ts).
+      const payload = currentCommand(
+        "assign_campaign",
+        (JSON.parse(json) as { envelope: { payload: Record<string, unknown> } }).envelope.payload,
+      );
       out.set(r.campaign, {
         id: r.id,
         rig: r.rig,
@@ -303,7 +320,7 @@ export class IssuedCommands extends StorePart {
   ): { refused: string | null; issued_at: string } | undefined {
     const rows = this.db
       .prepare(
-        "select signed, status, outcome, issued_at from command where rig = ? and kind = 'message_agent' order by issued_at desc limit 30",
+        "select signed, status, outcome, issued_at from command where rig = ? and kind = 'message_agent' order by issued_at desc, rowid desc limit 30",
       )
       .all(rig) as Row[];
     for (const r of rows) {
@@ -344,7 +361,7 @@ export class IssuedCommands extends StorePart {
     return (
       this.db
         .prepare(
-          "select id, rig, kind, issued_by, issued_at, status, acked_at, outcome from command order by issued_at desc limit ?",
+          "select id, rig, kind, issued_by, issued_at, status, acked_at, outcome from command order by issued_at desc, rowid desc limit ?",
         )
         .all(limit) as Row[]
     ).map((r) => ({
@@ -369,7 +386,7 @@ export class IssuedCommands extends StorePart {
       .prepare(
         `select id, rig, kind, signed, issued_at, status, acked_at, outcome from command
          where kind in ('approve_promotion', 'decline_promotion', 'accept_review', 'conclude')
-         order by issued_at desc limit ?`,
+         order by issued_at desc, rowid desc limit ?`,
       )
       .all(limit) as Row[];
     return rows.map((r) => {
@@ -423,30 +440,50 @@ export class IssuedCommands extends StorePart {
     return (
       this.db
         .prepare(
-          "select id, rig, kind, signed, issued_by, issued_at, status, outcome, acked_at from command where rig = ? and kind = ? order by issued_at desc limit ?",
+          "select id, rig, kind, signed, issued_by, issued_at, status, outcome, acked_at from command where rig = ? and kind = ? order by issued_at desc, rowid desc limit ?",
         )
         .all(rig, kind, limit) as Row[]
     ).map(commandRowOf);
   }
 
   /**
-   * The MCP servers each run control assigned a rig names (its own signed commands, never the rig's
-   * reports), by run.
+   * The MCP servers each live run control assigned a rig names (its own signed commands, never the
+   * rig's reports), by run. Live: its assignment pending or delivered, and the run not among the
+   * rig's `closed` runs.
    */
-  assignedMcpServers(rig: string): Map<string, McpUse[]> {
+  assignedMcpServers(rig: string, closed: ReadonlySet<string>): Map<string, McpUse[]> {
     const out = new Map<string, McpUse[]>();
     // Each assignment's MCP servers alone, as JSON, of those that name a run.
     for (const r of this.db
       .prepare(
         `select run, signed -> '$.envelope.payload.mcp_servers' as uses from command
          where rig = ? and kind = 'assign_campaign' and run is not null
-           and status not in ('failed', 'rejected', 'expired')
-         order by issued_at`,
+           and status in ('pending', 'delivered')
+         order by issued_at, rowid`,
       )
       .all(rig) as { run: string; uses: string | null }[]) {
+      if (closed.has(r.run)) continue;
       const uses = McpUses.safeParse(r.uses === null ? [] : JSON.parse(r.uses)).data ?? [];
       if (uses.length) out.set(r.run, uses);
     }
     return out;
+  }
+
+  /**
+   * What the campaign lets each role write in the knowledge base for a run control assigned this
+   * rig (goal 175): its newest signed assignment's contract's `kb_writes`, or the default when it
+   * sets none. Undefined for a run control did not assign the rig.
+   */
+  assignedKbWrites(rig: string, run: string): KbWrites | undefined {
+    const r = this.db
+      .prepare(
+        `select signed -> '$.envelope.payload.contract' as contract from command
+         where rig = ? and kind = 'assign_campaign' and run = ?
+           and status not in ('failed', 'rejected', 'expired')
+         order by issued_at desc, rowid desc limit 1`,
+      )
+      .get(rig, run) as { contract: string | null } | undefined;
+    if (!r) return undefined;
+    return kbWritesOf(r.contract === null ? undefined : JSON.parse(r.contract));
   }
 }

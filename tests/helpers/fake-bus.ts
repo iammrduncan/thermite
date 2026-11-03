@@ -8,13 +8,15 @@ import {
   type Bus,
   type BusMessage,
   type BusRead,
+  type BusRequest,
   type ConsumerSettings,
   type Handled,
+  NoStreamTakes,
   type Outgoing,
   type Published,
   type StreamSettings,
   type StreamState,
-} from "../../src/common/bus.ts";
+} from "../../src/common/bus/index.ts";
 
 /** A message the fake bus keeps. */
 export interface Kept {
@@ -25,6 +27,8 @@ export interface Kept {
   /** Its id; none for a message published without one. */
   id: string | undefined;
   data: string;
+  /** Its data as bytes, for a message published as bytes (a file's chunk): `data` is empty then. */
+  bytes?: Uint8Array | undefined;
   headers: Record<string, string>;
   /** When the stream stored it. */
   at?: string | undefined;
@@ -70,7 +74,7 @@ const NO_RETENTION_CHANGE = {
 
 /**
  * A stand-in for the NATS server, in memory, for tests of what control and the supervisor do on
- * the message bus (common/bus.ts talks to a real one). It keeps the streams made, each message
+ * the message bus (common/bus/index.ts talks to a real one). It keeps the streams made, each message
  * published to a subject one of them takes, once by its id within its stream, each stream's
  * places counted on their own; removes one by its id; gives a subject's newest, a message by its
  * place, a stream's last place, and reads a stream in order. A batch is stored whole or not at
@@ -88,14 +92,26 @@ export class FakeBus
       | "lastSeq"
       | "makeStream"
       | "follow"
+      | "makeConsumer"
       | "remove"
       | "streams"
       | "last"
+      | "purge"
       | "connected"
+      | "serve"
+      | "request"
     >
 {
   /** Whether the part holds a connection to the server now, as control's health says. */
   up = true;
+  /**
+   * The inbox a request's answer goes to, as the asking part's user has it: a rig's
+   * (rigInboxPrefix) for a rig's asks. Each request gets its own subject under it.
+   */
+  inbox = "_INBOX.test";
+  /** The subjects served, by pattern, as `serve` registered them. */
+  private readonly served = new Map<string, (r: BusRequest) => Promise<string | undefined>>();
+  private requests = 0;
   connected(): boolean {
     return this.up;
   }
@@ -121,17 +137,47 @@ export class FakeBus
 
   /** Each durable consumer's place in a stream that keeps what it hands (not a work queue). */
   private readonly places = new Map<string, number>();
+  /** The consumers made for another part (makeConsumer), by `<stream>.<name>`, with their settings. */
+  readonly consumers = new Map<string, ConsumerSettings>();
 
-  /** As the server: a stream's retention never changes to or from a work queue in place. */
-  async makeStream(stream: StreamSettings): Promise<void> {
-    const had = this.made.get(stream.name);
-    if (had && (had.retention === "workqueue") !== (stream.retention === "workqueue"))
-      throw new JetStreamApiError(NO_RETENTION_CHANGE);
-    this.made.set(stream.name, stream);
+  /** As the server: a consumer made unless one of its name exists; none on a stream not made. */
+  async makeConsumer(stream: string, consumer: ConsumerSettings): Promise<void> {
+    if (!this.made.has(stream))
+      throw new Error(`no stream ${stream} on the bus yet: control makes it`);
+    const at = `${stream}.${consumer.durable_name}`;
+    if (!this.consumers.has(at)) this.consumers.set(at, consumer);
   }
 
   /**
-   * As common/bus.ts's follow, in one pass: the stream made or brought to its settings, then each
+   * As the server, through the library's update: settings put on a stream that exists go over its
+   * own, and those they do not name stay as they were. A stream's retention never changes to or
+   * from a work queue in place.
+   */
+  async makeStream(stream: StreamSettings): Promise<void> {
+    const had = this.made.get(stream.name);
+    const next = had ? { ...had, ...stream } : stream;
+    if (had && (had.retention === "workqueue") !== (next.retention === "workqueue"))
+      throw new JetStreamApiError(NO_RETENTION_CHANGE);
+    this.made.set(stream.name, next);
+  }
+
+  /** The server's purge: a stream's messages on `filter`, before `seq`, or all but the newest `keep`. */
+  async purge(stream: string, o: { filter: string; seq?: number; keep?: number }): Promise<number> {
+    await this.hold;
+    if (this.failing) throw new Error("TimeoutError: no answer from the server");
+    const on = this.kept.filter((m) => m.stream === stream && takes(o.filter, m.subject));
+    const kept =
+      o.keep !== undefined ? new Set(on.slice(Math.max(0, on.length - o.keep))) : new Set();
+    const gone = new Set(on.filter((m) => (o.seq !== undefined ? m.seq < o.seq : !kept.has(m))));
+    for (let i = this.kept.length - 1; i >= 0; i--) {
+      const m = this.kept[i];
+      if (m && gone.has(m)) this.kept.splice(i, 1);
+    }
+    return gone.size;
+  }
+
+  /**
+   * As common/bus/index.ts's follow, in one pass: the stream made or brought to its settings, then each
    * message the consumer has yet to take handed to `handle`, in order, until one is asked for
    * again, which stays for the next call; a test calls it again for what comes later. A stream on
    * the fake with another retention than the work queue it is now is emptied first, as
@@ -140,20 +186,21 @@ export class FakeBus
    */
   async follow(
     stream: StreamSettings | string,
-    consumer: ConsumerSettings,
+    consumer: ConsumerSettings | string,
     handle: (m: BusMessage) => Handled | Promise<Handled>,
   ): Promise<void> {
     const name = typeof stream === "string" ? stream : stream.name;
+    const durable = typeof consumer === "string" ? consumer : consumer.durable_name;
     const had = this.made.get(name);
     if (typeof stream !== "string") {
       if (had && stream.retention === "workqueue" && had.retention !== "workqueue") {
         this.made.set(name, { ...had, subjects: [name] });
-        if (!(await this.hand(name, consumer.durable_name, handle))) return;
+        if (!(await this.hand(name, durable, handle))) return;
         this.removeStream(name);
       }
       await this.makeStream(stream);
     } else if (!had) return;
-    await this.hand(name, consumer.durable_name, handle);
+    await this.hand(name, durable, handle);
   }
 
   /** Hands a consumer its messages in order; false at the first the handler asks for again. */
@@ -198,7 +245,7 @@ export class FakeBus
     const stream = [...this.made.values()].find((s) =>
       (s.subjects ?? []).some((p) => takes(p, m.subject)),
     );
-    if (!stream) throw new Error(`no stream on the bus takes ${m.subject} yet: control makes it`);
+    if (!stream) throw new NoStreamTakes(m.subject, undefined);
     if (this.full) throw new JetStreamApiError(FULL);
     const bytes =
       Buffer.byteLength(m.data) +
@@ -224,13 +271,15 @@ export class FakeBus
     if (m.id !== undefined) ids.add(m.id);
     const seq = this.lastOf(stream) + 1;
     this.seqs.set(stream, seq);
-    const { subject, id, data } = m;
+    const { subject, id } = m;
+    const bytes = typeof m.data === "string" ? undefined : m.data;
     this.kept.push({
       stream,
       subject,
       seq,
       id,
-      data,
+      data: typeof m.data === "string" ? m.data : "",
+      ...(bytes ? { bytes } : {}),
       headers: m.headers ?? {},
       at: new Date().toISOString(),
     });
@@ -243,7 +292,7 @@ export class FakeBus
 
   async publish(
     subject: string,
-    data: string,
+    data: string | Uint8Array,
     o: { id: string; headers?: Record<string, string> | undefined },
   ): Promise<Published> {
     await this.hold;
@@ -256,7 +305,7 @@ export class FakeBus
    * nothing (with that message's own refusal, where the server says only that the batch is
    * incomplete); a first message that expects another last place than the stream's refuses it
    * too. A batch whose stream has some of its ids is published a message at a time, as
-   * common/bus.ts does.
+   * common/bus/index.ts does.
    */
   async publishBatch(batch: readonly Outgoing[]): Promise<BatchPublished> {
     await this.hold;
@@ -287,7 +336,7 @@ export class FakeBus
     return { seq, stored, duplicate: stored === 0 };
   }
 
-  /** A stream's messages in order, as common/bus.ts reads them, the same limits and header test. */
+  /** A stream's messages in order, as common/bus/index.ts reads them, the same limits and header test. */
   async read(
     stream: string,
     o: {
@@ -314,7 +363,7 @@ export class FakeBus
     );
     let bytes = 0;
     for (const [i, m] of on.entries()) {
-      bytes += Buffer.byteLength(m.data);
+      bytes += m.bytes?.length ?? Buffer.byteLength(m.data);
       out.next = m.seq + 1;
       const message = asMessage(m);
       if (Object.entries(o.headers ?? {}).every(([k, v]) => message.header(k) === v))
@@ -330,6 +379,16 @@ export class FakeBus
     await this.hold;
     if (this.failing) throw new Error("TimeoutError: no answer from the server");
     const m = this.kept.find((k) => k.stream === stream && k.seq === seq);
+    return m ? asMessage(m) : undefined;
+  }
+
+  /** The first message at or after `from` on `subject` (a pattern), as the server's lookup finds it. */
+  async next(stream: string, from: number, subject: string): Promise<BusMessage | undefined> {
+    await this.hold;
+    if (this.failing) throw new Error("TimeoutError: no answer from the server");
+    const m = this.kept
+      .filter((k) => k.stream === stream && k.seq >= from && takes(subject, k.subject))
+      .sort((a, b) => a.seq - b.seq)[0];
     return m ? asMessage(m) : undefined;
   }
 
@@ -356,24 +415,47 @@ export class FakeBus
     return m ? asMessage(m) : undefined;
   }
 
-  /** Each stream made, with the messages it keeps; no consumers. */
-  async streams(names: readonly string[]): Promise<StreamState[]> {
+  /** Each stream made, with the messages it keeps, by subject for those `counts` names; no consumers. */
+  async streams(
+    names: readonly string[],
+    o?: { counts?: readonly string[] | undefined },
+  ): Promise<StreamState[]> {
     return names.flatMap((name) => {
       if (!this.made.has(name)) return [];
       const kept = this.kept.filter((m) => m.stream === name);
+      const counts: Record<string, number> = {};
+      for (const m of kept) counts[m.subject] = (counts[m.subject] ?? 0) + 1;
       return [
         {
           name,
           messages: kept.length,
-          bytes: kept.reduce((n, m) => n + Buffer.byteLength(m.data), 0),
+          bytes: kept.reduce((n, m) => n + (m.bytes?.length ?? Buffer.byteLength(m.data)), 0),
           subjects: new Set(kept.map((m) => m.subject)).size,
           first_at: null,
           last_at: null,
           consumers: [],
           consumers_left_out: 0,
+          ...(o?.counts?.includes(name) ? { counts } : {}),
         },
       ];
     });
+  }
+
+  /** A stream's settings and messages, as its snapshot holds them; undefined for one not made. */
+  streamCopy(name: string): { settings: StreamSettings; messages: Kept[] } | undefined {
+    const settings = this.made.get(name);
+    if (!settings) return undefined;
+    return {
+      settings,
+      messages: this.kept.filter((m) => m.stream === name).map((m) => ({ ...m })),
+    };
+  }
+
+  /** Makes a stream from a copy, each message at its own place, as the server's restore does. */
+  putStream(settings: StreamSettings, messages: readonly Kept[]): void {
+    this.made.set(settings.name, settings);
+    for (const m of messages) this.kept.push({ ...m, stream: settings.name });
+    this.seqs.set(settings.name, messages.at(-1)?.seq ?? 0);
   }
 
   /** The duplicate window passes: a message id published before is new again, in every stream. */
@@ -406,6 +488,39 @@ export class FakeBus
     }
     return { acked, again };
   }
+
+  /** As the server: each request on `subject` is answered by `answer`, until the test ends. */
+  async serve(
+    subject: string,
+    answer: (r: BusRequest) => Promise<string | undefined>,
+  ): Promise<void> {
+    this.served.set(subject, answer);
+  }
+
+  /**
+   * As the server: the request goes to the subject's server, with an answer subject under
+   * `inbox`; no server, no answer, or the bus away fails as the real one does.
+   */
+  async request(
+    subject: string,
+    data: string | Uint8Array,
+    _timeoutMs: number,
+  ): Promise<Uint8Array> {
+    if (this.failing || !this.up) throw new Error("TimeoutError: no answer from the server");
+    if (this.refuse?.(subject))
+      throw new errors.PermissionViolationError(
+        `Permissions Violation for Publish to "${subject}"`,
+        "publish",
+        subject,
+      );
+    const answer = [...this.served].find(([pattern]) => takes(pattern, subject))?.[1];
+    if (!answer) throw new Error(`503: no one serves ${subject}`);
+    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+    const reply = `${this.inbox}.${++this.requests}`;
+    const out = await answer({ subject, reply, data: bytes });
+    if (out === undefined) throw new Error("TimeoutError: no answer to the request");
+    return new TextEncoder().encode(out);
+  }
 }
 
 /** A kept message as a handler sees it, its id among its headers as the server keeps it. */
@@ -415,8 +530,9 @@ export function asMessage(m: Kept): BusMessage {
   return {
     subject: m.subject,
     seq: m.seq,
-    data: new TextEncoder().encode(m.data),
+    data: m.bytes ?? new TextEncoder().encode(m.data),
     header: (name) => headers[name],
+    headers: () => ({ ...headers }),
     at: m.at,
   };
 }

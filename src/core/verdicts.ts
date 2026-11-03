@@ -3,14 +3,16 @@
  * and the groups control, the harness and the dashboard read them by, each in one place.
  */
 
-/** Every verdict the ledger records. */
+/**
+ * Every verdict the ledger records. `neutral_simplify` is gone (goal 174): nothing ever recorded
+ * it, and the judge has no measure of simpler code to give it; a ledger never held one.
+ */
 export const VERDICTS = [
   "win_screened",
   "win_confirmed",
   "not_confirmed",
   "regress",
   "neutral",
-  "neutral_simplify",
   "tradeoff",
   "infeasible",
   "no_progress",
@@ -27,11 +29,7 @@ export const VERDICTS = [
 export type Verdict = (typeof VERDICTS)[number];
 
 /** Verdicts that may move a champion. Goal mode's: meets more goals than the champion, loses none. */
-export const PROMOTABLE_VERDICTS: readonly string[] = [
-  "win_confirmed",
-  "neutral_simplify",
-  "goal_progress",
-];
+export const PROMOTABLE_VERDICTS: readonly string[] = ["win_confirmed", "goal_progress"];
 
 /** A change that won: confirmed on fresh runs, in either mode. */
 export const WON_VERDICTS: readonly string[] = ["win_confirmed", "goal_progress"];

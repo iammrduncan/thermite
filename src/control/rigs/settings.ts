@@ -8,7 +8,9 @@ import {
   type RigSettings,
   type RigSettingsChange,
 } from "../../core/rig-settings.ts";
+import { prepareModeChange } from "../clusters/index.ts";
 import { issueCommand } from "../issue/index.ts";
+import type { ControlParts } from "../parts.ts";
 import type { ControlStore } from "../store/index.ts";
 import { rigSettingsOf } from "../views/index.ts";
 
@@ -21,7 +23,9 @@ import { rigSettingsOf } from "../views/index.ts";
  * its twins build the change here (rigSettingsChange): only what differs from what the rig
  * reports, checked against the rig's GPU split and the rig_settings payload, refused in the same
  * words. The change goes to the rig as one signed owner command, rig_settings, which the rig's
- * harness takes only from an `owner:` issuer. The agents' models are rigs/model.ts's.
+ * harness takes only from an `owner:` issuer. The agents' models are rigs/model/request.ts's. On a rig
+ * control set up on a cluster, a new program_mode moves its supervisor's share of its memory, so
+ * it changes the rig's size too, as set_cluster_rig_resources does (clusters/resize.ts).
  */
 
 /** The parts of a rig that switch on and off, in Edit rig's order. */
@@ -77,30 +81,36 @@ export function quietField(u: { summary: unknown }, value: number | null): strin
 
 /** Edit rig's description of how the agent programs run (goal 169), beside its field. */
 export const PROGRAM_MODE_TIP =
-  "How Claude Code, Codex and OpenCode run a worker's trial. In their own terminal: the program's own screen, as you would run it, and Thermite follows its session log and its hooks. Headless: one command for each turn, and Thermite reads its output. Headless is the default for now. Pi runs inside the harness and has no terminal. A trial that runs keeps its mode; the next trial takes the new one.";
+  "How Claude Code, Codex, OpenCode and Pi run a worker's trial. In their own terminal (the default): the program's own screen, as you would run it, and Thermite follows its session log and its hooks; a worker in Pi draws Thermite's Pi view of its own session there. Headless: one command for each turn, and Thermite reads its output; a worker in Pi runs with no view. A trial that runs keeps its mode; the next trial takes the new one.";
 
-/** Edit rig's choices of how the agent programs run, in its list's order. */
+/** Edit rig's choices of how the agent programs run, in its list's order: the default first. */
 const PROGRAM_MODE_WORDS: Record<ProgramMode, string> = {
-  headless: "Headless",
   terminal: "In their own terminal",
+  headless: "Headless",
 };
 
 /**
  * Edit rig's field for how the agent programs run (goal 169). A rig whose harness is older reports
  * no program_mode and would refuse the whole change, so there the field is off and says why.
+ * `moves`: a new mode restarts the rig's pods, as on a cluster rig with its CPUs and memory set,
+ * whose supervisor's share follows it; the page's list of changes then says so (data-moves).
  */
-export function programModeField(u: { summary: unknown }, value: ProgramMode): string {
+export function programModeField(
+  u: { summary: unknown },
+  value: ProgramMode,
+  moves = false,
+): string {
   const reported = (u.summary as { settings?: Record<string, unknown> } | null)?.settings;
   const takes = !!reported && Object.hasOwn(reported, "program_mode");
   if (!takes)
     return `<select name="program_mode" disabled><option>update the rig first</option></select>`;
-  const options = (["headless", "terminal"] as const)
+  const options = (Object.keys(PROGRAM_MODE_WORDS) as ProgramMode[])
     .map(
       (m) =>
         `<option value="${m}"${m === value ? " selected" : ""}>${PROGRAM_MODE_WORDS[m]}</option>`,
     )
     .join("");
-  return `<select name="program_mode" data-label="how agent programs run">${options}</select>`;
+  return `<select name="program_mode" data-label="how agent programs run"${moves ? " data-moves" : ""}>${options}</select>`;
 }
 
 /** Edit rig's words when a new GPU split is sent, as its page says them under the field. */
@@ -182,16 +192,19 @@ export type RigSettingsOutcome =
  * rigSettingsChange, sent as one signed rig_settings command issued by `by`. `owner`: whether the
  * owner's token asks. Another token (an operator's, on MCP) may not change the promotion rule,
  * which decides whether a win waits for the owner, nor the GPU split, which restarts the rig's
- * harness: as start_run, it is refused in words when the change holds either.
+ * harness: as start_run, it is refused in words when the change holds either. A new program_mode
+ * on a rig control set up on a cluster with its CPUs and memory set moves its supervisor's share:
+ * checked before anything is sent, refused in the same words as a size, and applied after the
+ * command, its pods restarting (draining first while it works).
  */
-export function setRigSettings(
-  store: ControlStore,
-  privateKeyPem: string,
+export async function setRigSettings(
+  parts: ControlParts,
   rig: string,
   want: RigSettingsWanted,
   by: string,
   owner: boolean,
-): RigSettingsOutcome {
+): Promise<RigSettingsOutcome> {
+  const { store, privateKeyPem } = parts;
   const refuse = (error: string, status: 400 | 403 | 404 | 409): RigSettingsOutcome => ({
     state: "refused",
     error,
@@ -215,6 +228,10 @@ export function setRigSettings(
     );
   if (!owner && change.judge_gpus !== undefined)
     return refuse("Only the owner's token changes a rig's GPU split: leave out judge_gpus.", 403);
+  const resize = change.program_mode
+    ? await prepareModeChange(parts, rig, change.program_mode, by, { owner })
+    : undefined;
+  if (resize && "error" in resize) return refuse(`Not saved: ${resize.error}`, resize.status);
   let id: string;
   try {
     ({ id } = issueCommand(store, privateKeyPem, {
@@ -228,12 +245,19 @@ export function setRigSettings(
     return refuse(errorText(err), 409);
   }
   const restarts = change.judge_gpus !== undefined;
+  // Last, its supervisor's new share: its pods restart (or it drains first).
+  const moved = resize ? await resize.go() : undefined;
+  const sizeSaid = !moved
+    ? ""
+    : "error" in moved
+      ? ` Its supervisor's memory did not change: ${moved.error}`
+      : ` ${moved.ok}`;
   return {
     state: "sent",
     id,
     sent: change,
     restarts,
-    said: `Control sent ${settingsCount(Object.keys(change).length)} to ${rig}. The rig takes the change in less than one minute.${restarts ? ` ${SPLIT_RESTARTS}` : ""}`,
+    said: `Control sent ${settingsCount(Object.keys(change).length)} to ${rig}. The rig takes the change in less than one minute.${restarts ? ` ${SPLIT_RESTARTS}` : ""}${sizeSaid}`,
   };
 }
 
@@ -283,7 +307,7 @@ export const rigSettingsFields = {
     "The review panel (used only if the rig has one). Off: goals that need judgement stay open",
   ),
   exports: part(
-    "Hourly exports of the rig's results. Off: results stay on the rig only; if the rig is lost, they are lost",
+    "Export each run when it ends: the rig writes the run's results for its supervisor to send off the rig. Off: a run that ends stays on the rig only, and if the rig is lost, it is lost; it is exported once this is on again",
   ),
   trial_minutes: z
     .number()
@@ -313,7 +337,7 @@ export const rigSettingsFields = {
     .enum(PROGRAM_MODES)
     .optional()
     .describe(
-      "How a trial's agent program runs, where it can run a terminal UI (Claude Code, Codex, OpenCode): terminal (in its own terminal, as a person runs it) or headless (one command for each turn, the default for now). Pi has no such choice. The next trial takes it",
+      "How a trial's agent program runs: terminal (in its own terminal, as a person runs it, a worker in Pi in its Pi view; the default) or headless (one command for each turn; Pi with no view). The next trial takes it",
     ),
   promotion: z
     .enum(["auto", "owner_approval"])

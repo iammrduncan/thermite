@@ -12,11 +12,13 @@ import {
   claudeExe,
   claudeHookSettings,
   claudeResultUsage,
+  claudeTranscript as transcriptLog,
 } from "../../../agents/programs/index.ts";
 import { messageText } from "../../../agents/prompt.ts";
 import type { UsageRoute } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorResult } from "../call.ts";
 import { type AdvisorRuntime, advisorRoute } from "../config.ts";
+import { type AdvisorLimit, limitUntil } from "../limit.ts";
 import { serveAdvisorTools } from "../tools/index.ts";
 import { callId, collectCompactions, lastJsonObject, runCli } from "./cli.ts";
 
@@ -33,9 +35,9 @@ export async function runClaudeCode<S extends z.ZodType>(
   // only those servers and only their tools allowed.
   const t = input.tools;
   const past =
-    t?.pastSearch || t?.mcp?.servers.length || t?.code || t?.research || t?.paper
+    t?.kb || t?.mcp?.servers.length || t?.code || t?.research || t?.paper
       ? await serveAdvisorTools({
-          pastSearch: t.pastSearch,
+          kb: t.kb,
           mcp: t.mcp,
           code: t.code,
           research: t.research,
@@ -72,6 +74,8 @@ export async function runClaudeCode<S extends z.ZodType>(
               });
             }
           : undefined,
+        // A full usage window: its transcript gives the reset as a number, where its words may not.
+        limitFrom: limitInTranscript,
         argv: [
           claudeExe() ?? claudeBin(),
           "-p",
@@ -113,6 +117,7 @@ export async function runClaudeCode<S extends z.ZodType>(
         input.prompt({
           program: "claude-code",
           mcpServers: t?.mcp?.servers ?? [],
+          kbWrites: t?.kb?.writes,
           answerSchema: input.answerSchema,
         }),
       ),
@@ -121,4 +126,17 @@ export async function runClaudeCode<S extends z.ZodType>(
   } finally {
     await past?.close();
   }
+}
+
+/**
+ * The usage limit Claude Code's transcript in the call's folder shows last, with its reset (its
+ * session-log adapter reads it), when that reset is less than a day away; else none.
+ */
+function limitInTranscript(home: string): AdvisorLimit | undefined {
+  const text = claudeTranscript(home, []);
+  if (!text) return undefined;
+  const events = transcriptLog.read(text.split("\n"), transcriptLog.newState());
+  const last = events.filter((e) => e.type === "limit").at(-1);
+  if (last?.type !== "limit" || !last.resetsAt) return undefined;
+  return limitUntil(last.resetsAt, last.message ?? "Claude Code's usage window is full");
 }

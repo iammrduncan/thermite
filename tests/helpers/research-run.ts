@@ -12,7 +12,7 @@ import { makeHarnessEnv } from "./harness-env.ts";
 /**
  * A research run with some of everything its workers record (goal 098's tests): two sources from a
  * tiny local "web", claims verified and draft for two questions, the author's hypothesis, a supported and a
- * draft finding, a research note, a report section, a digest, and a lane's files saved as the
+ * draft finding, a source note, a report section, a digest, and a lane's files saved as the
  * research folder saves them when a trial ends.
  */
 
@@ -67,7 +67,10 @@ export async function researchEnv(
     }),
   );
   if (!(out.status === "applied" && out.accepted)) throw new Error(JSON.stringify(out));
-  const research = new Research(env.service.ledger, env.service.paths.stateDir, { allowPrivate });
+  const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+    outboxDir: env.service.paths.outboxDir,
+    allowPrivate,
+  });
   return { env, research, contract: parsed.contract };
 }
 
@@ -100,11 +103,13 @@ export async function makeResearchRun(
   const { stateDir, scratchDir } = env.service.paths;
   const folder = new ResearchFolder({
     ledger: env.service.ledger,
+    outboxDir: env.service.paths.outboxDir,
     scratchRoot: join(scratchDir, "research"),
     stateRoot: join(stateDir, SAVED_LANES_DIR),
     runner: new LocalRunner(scratchDir),
   });
   const research = new Research(env.service.ledger, stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     allowPrivate: true,
     onChange: (r) => void folder.sync(r),
   });
@@ -154,7 +159,7 @@ export async function fillResearch(r: Awaited<ReturnType<typeof makeResearchRun>
     why_it_matters: "Size matters for the archive.",
     supporting: [draft.claim],
   });
-  const note = research.addNote(run, "lane-1", "Look for a second site that says the same.", [
+  const note = research.addSourceNote(run, "lane-1", "Look for a second site that says the same.", [
     a.source,
   ]);
   research.updateSection(run, "lane-1", "synthesis", "Two sites so far.\nBoth agree.");

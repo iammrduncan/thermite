@@ -207,6 +207,51 @@ export class LedgerJobs extends LedgerPart {
     });
   }
 
+  /** The jobs of these attempts that are queued or leased, oldest first. */
+  openOf(
+    attempts: readonly string[],
+  ): { id: number; kind: string; attempt: string; state: string }[] {
+    if (!attempts.length) return [];
+    return this.rows<Row>(
+      `select id, kind, attempt, state from job where state in ('queued', 'leased')
+         and attempt in (${attempts.map(() => "?").join(", ")}) order by id`,
+      ...attempts,
+    ).map((r) => ({
+      id: Number(r.id),
+      kind: String(r.kind),
+      attempt: String(r.attempt),
+      state: String(r.state),
+    }));
+  }
+
+  /**
+   * Cancels a queued or leased job for good, with a `job_cancelled` event (goal 174): it never runs,
+   * and a judge that holds its lease can no longer write its outcome, as after a lost lease.
+   */
+  cancel(
+    jobId: number,
+    actor: string,
+    why: { run: string | null; reason: string; invalidation?: number | undefined },
+  ): void {
+    this.tx(() => {
+      const job = this.get(jobId);
+      if (!job || (job.state !== "queued" && job.state !== "leased")) return;
+      this.execute(
+        "update job set state = 'cancelled', lease_owner = null, lease_until = null, updated_at = ? where id = ?",
+        this.now(),
+        jobId,
+      );
+      this.ledger.appendEvent(actor, "job_cancelled", String(jobId), {
+        run: why.run,
+        attempt: job.attempt ?? null,
+        kind: job.kind,
+        was: job.state,
+        reason: why.reason,
+        ...(why.invalidation !== undefined ? { invalidation: why.invalidation } : {}),
+      });
+    });
+  }
+
   /** The leased jobs `where` picks go back to the queue, or are blocked, each with a `kind` event. */
   private requeue(where: string, arg: SQLInputValue, actor: string, kind: EventKind): number[] {
     return this.tx(() => {

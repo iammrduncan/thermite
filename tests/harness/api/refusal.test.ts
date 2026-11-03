@@ -116,7 +116,7 @@ async function trialApi(t: TestContext) {
     run: r.run,
     lane: "lane-1",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: "p",
     token: "tok-1",
   });

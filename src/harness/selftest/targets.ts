@@ -1,11 +1,13 @@
-import { chmodSync, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, type Dirent, existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { writeAtomic } from "../../common/fs.ts";
 import { LAYOUT_FILE, type LayoutRecord, type Role, walk } from "../broker/index.ts";
+import type { Probe } from "./probes.ts";
 
 /**
  * What the role probes aim at in the rig's folders: a research folder written for the selftest,
- * the first kit, build and baseline file there are, and the broker's record of shared mode; and
+ * the first file in the inbox, the first kit, build and baseline file there are, the smoke check's
+ * own kits, and the broker's record of shared mode; and
  * the removal of what the selftest made.
  */
 
@@ -44,6 +46,29 @@ export function sharedRecord(socketPath: string): LayoutRecord | undefined {
   }
 }
 
+/** The most entries the inbox's walk looks at for a file to probe. */
+const INBOX_LOOK_MAX = 1000;
+
+/** A file in the inbox (a bundle or a model the supervisor fetched), by its full path. */
+export function firstInboxFile(inboxDir: string): string | undefined {
+  const stack = [inboxDir];
+  for (let seen = 0; stack.length && seen < INBOX_LOOK_MAX; ) {
+    const dir = stack.pop() as string;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      seen++;
+      if (e.isFile()) return join(dir, e.name);
+      if (e.isDirectory()) stack.push(join(dir, e.name));
+    }
+  }
+  return undefined;
+}
+
 export function firstKitFile(kitsDir: string): string | undefined {
   if (!existsSync(kitsDir)) return undefined;
   for (const commit of readdirSync(kitsDir)) {
@@ -51,6 +76,21 @@ export function firstKitFile(kitsDir: string): string | undefined {
     if (existsSync(f)) return f;
   }
   return undefined;
+}
+
+/**
+ * The probes of the smoke check's own kits and projects, where the smoke check reads them
+ * (checksDir in smoke-check.ts: the image's /opt/thermite/checks). Like every kit, they are the
+ * judge's alone: only the controller's group reads the folder, so every role must be refused its
+ * list, and a kit file in it by its full path. None where the folder holds no kit.
+ */
+export function imageChecksProbes(checksDir: string): Probe[] {
+  const kit = firstKitFile(join(checksDir, "kits"));
+  if (!kit) return [];
+  return [
+    { name: "image-checks-list", op: "list", path: checksDir },
+    { name: "image-kit-read", op: "read", path: kit },
+  ];
 }
 
 /** A file a kit's check kept with a hill climb's baseline (goal 115), by its full path. */

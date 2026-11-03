@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { ModelSource } from "../../../src/harness/agents/model/source.ts";
-import { syncModelRoute } from "../../../src/supervisor/model-route.ts";
+import { handModelRoute } from "../../../src/supervisor/model-route.ts";
 import { stack } from "./stack.ts";
 
 /**
@@ -70,17 +70,15 @@ describe("control dashboard", () => {
       choice: "claude-max|opus-5.5%5B1m%5D",
     });
     assert.equal(s.store.agentModels.byRig()["rig-a"]?.harness, "claude-code");
-    const route = (await (
-      await s.control.request("/v1/rigs/rig-a/model-route", {
-        headers: { authorization: "Bearer rig-token-abcdef" },
-      })
-    ).json()) as { route: { type: string; harness: string; model: string; api_key: string } };
+    const route = (await s.rigConfig("model-route")) as unknown as {
+      route: { type: string; harness: string; model: string; api_key: string };
+    };
     assert.equal(route.route.type, "claude");
     assert.equal(route.route.harness, "claude-code");
     assert.equal(route.route.model, "claude-opus-5-5");
     assert.equal(route.route.api_key, token);
     const sync = s.cfg;
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     const m = s.env.service.models.current();
     assert.equal(m?.api, "claude");
     assert.equal(m?.harness, "claude-code");
@@ -91,7 +89,10 @@ describe("control dashboard", () => {
       at: new Date().toISOString(),
     };
     await s.relay();
-    page = await (await s.get("/ui/settings")).text();
+    // Providers holds the windows; Rigs' models what each rig's agents run under (goal 181).
+    page =
+      (await (await s.get("/ui/settings")).text()) +
+      (await (await s.get("/ui/settings/routes")).text());
     assert.match(page, /<b>5-hour window<\/b> · 34% used · resets 2026-10-18 15:40 UTC/);
     assert.match(page, /<b>Weekly window<\/b> · 61% used/);
     assert.match(page, /Its agents run under Claude Code with claude-opus-5-5 from claude-max/);
@@ -230,11 +231,10 @@ describe("control dashboard", () => {
       harness: "opencode",
     });
     const asRig = async () =>
-      (await (
-        await s.control.request("/v1/rigs/rig-a/model-route", {
-          headers: { authorization: "Bearer rig-token-abcdef" },
-        })
-      ).json()) as { route: Record<string, unknown> | null; error?: string };
+      (await s.rigConfig("model-route")) as unknown as {
+        route: Record<string, unknown> | null;
+        error?: string;
+      };
     const [a, b] = await Promise.all([asRig(), asRig()]);
     assert.equal(a.route?.type, "chatgpt");
     assert.equal(a.route?.harness, "opencode");
@@ -283,7 +283,7 @@ describe("control dashboard", () => {
       /name="harness" data-runs-in="workers"[^>]*>(?:(?!<\/select>)[\s\S])*<option value="codex" selected>Codex<\/option>/,
     );
     assert.match(edit, /data-ctx-sum="planner"><span class="muted">as the workers: [^<]+ · 80%</);
-    page = await (await s.get("/ui/settings")).text();
+    page = await (await s.get("/ui/settings/routes")).text();
     assert.match(page, /<option value="codex" selected>Codex<\/option>/);
     // Left to control, a ChatGPT sign-in keeps Pi.
     await s.post("/ui/settings/rigs", { csrf, rig: "rig-a", choice: "chatgpt-pro|gpt-test" });
@@ -300,7 +300,7 @@ describe("control dashboard", () => {
       undefined,
     );
     const sync = s.cfg;
-    assert.equal(await syncModelRoute(sync), "set");
+    assert.equal(await handModelRoute(sync, (await s.rigConfig("model-route")) as never), "set");
     assert.equal(s.env.service.models?.current()?.api, "chatgpt");
     // Signing in again keeps the issued client ID and the host ID.
     const again = new URL(

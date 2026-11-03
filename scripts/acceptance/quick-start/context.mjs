@@ -1,3 +1,4 @@
+// @ts-check
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { engineOf, quickStartPlan } from "../../../tests/helpers/quick-start.ts";
@@ -21,6 +22,23 @@ export const MODEL = "scripted";
 
 // ---------------------------------------------------------------- reporting
 
+/** One step of the test in its report, with the minutes it took once the next one starts. */
+/** @typedef {{ name: string, minutes?: number }} ReportStep */
+/**
+ * The test's report: its steps and checks, and at the end its minutes, whether it passed and the
+ * error that stopped it, if one did.
+ * @typedef {{
+ *   started_at: string,
+ *   compose: string,
+ *   steps: ReportStep[],
+ *   checks: import("../lib/checks.mjs").CheckRecord[],
+ *   error?: string,
+ *   minutes?: number,
+ *   ok?: boolean,
+ * }} QuickStartReport
+ */
+
+/** @type {QuickStartReport} */
 export const report = {
   started_at: new Date().toISOString(),
   compose: COMPOSE,
@@ -28,12 +46,15 @@ export const report = {
   checks: [],
 };
 export const t0 = Date.now();
-const minutes = (ms) => `${(ms / 60_000).toFixed(1)} min`;
+const minutes = (/** @type {number} */ ms) => `${(ms / 60_000).toFixed(1)} min`;
 let stepAt = t0;
+/** @param {string} name */
 export function section(name) {
   const now = Date.now();
   if (report.steps.length)
-    report.steps.at(-1).minutes = Number(((now - stepAt) / 60_000).toFixed(2));
+    /** @type {ReportStep} */ (report.steps.at(-1)).minutes = Number(
+      ((now - stepAt) / 60_000).toFixed(2),
+    );
   stepAt = now;
   report.steps.push({ name });
   console.log(`\n== ${name} (at ${minutes(now - t0)})`);

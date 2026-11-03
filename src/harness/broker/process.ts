@@ -1,6 +1,7 @@
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import type { Stream } from "node:stream";
 
 /**
  * Supervised child processes: wall time measured here (outside the child), memory and disk
@@ -51,6 +52,13 @@ export interface SupervisedRun {
   nproc?: number | undefined;
   /** Written to the child's stdin, then closed. */
   stdin?: string | undefined;
+  /**
+   * One of a pair (pair.ts): "first", its standard input and output are pipes the second run
+   * takes, so none of its output is kept here; or, for the second, those two pipes' other ends.
+   */
+  pair?: "first" | { stdin: Stream; stdout: Stream } | undefined;
+  /** Told of the process as soon as it is started: a pair's first run hands its pipes on. */
+  started?: ((child: ChildProcess) => void) | undefined;
   /** Bytes of stdout and stderr kept (the tail). */
   captureBytes?: number | undefined;
   /** With uid: the run is the user's processes holding this group (real, effective or extra). */
@@ -365,11 +373,17 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
       cwd: spec.cwd,
       env: spec.env,
       detached: true,
-      stdio: [spec.stdin !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
+      stdio:
+        spec.pair === "first"
+          ? ["pipe", "pipe", "pipe"]
+          : spec.pair
+            ? [spec.pair.stdin, spec.pair.stdout, "pipe"]
+            : [spec.stdin !== undefined ? "pipe" : "ignore", "pipe", "pipe"],
       ...(uid !== undefined ? { uid } : {}),
       ...(gid !== undefined ? { gid } : {}),
     });
     const pgid = child.pid ?? -1;
+    spec.started?.(child);
     if (spec.stdin !== undefined && child.stdin) {
       child.stdin.on("error", () => undefined); // the child may exit without reading
       child.stdin.end(spec.stdin);
@@ -380,9 +394,10 @@ export function runSupervised(spec: SupervisedRun): Promise<SupervisedResult> {
       const next = prev + d.toString("utf8");
       return next.length > cap ? next.slice(next.length - cap) : next;
     };
-    child.stdout?.on("data", (d: Buffer) => {
-      stdout = keep(stdout, d);
-    });
+    if (spec.pair !== "first")
+      child.stdout?.on("data", (d: Buffer) => {
+        stdout = keep(stdout, d);
+      });
     child.stderr?.on("data", (d: Buffer) => {
       stderr = keep(stderr, d);
     });

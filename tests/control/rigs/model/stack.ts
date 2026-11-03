@@ -6,7 +6,7 @@ import { ingestReport } from "../../../helpers/control-store.ts";
  * Each agent's model over REST and MCP (goal 029): POST /v1/rigs/<rig>/model and set_rig_model
  * set one agent's model, or clear it, as its row on Edit rig does; GET /v1/rigs/<rig>/model and
  * rig_models read them all. The rig takes the planner's model with its model route and the
- * advisors' with its advisor routes.
+ * advisors' with its advisor routes, in its config on the message bus (bus/config.ts).
  */
 
 export const TOKENS = {
@@ -23,7 +23,11 @@ export const TOKENS = {
  */
 export async function stack() {
   const secrets = SecretBox.ephemeral();
-  const { store, control: api } = controlOnly({
+  const {
+    store,
+    control: api,
+    rigConfig,
+  } = controlOnly({
     tokens: TOKENS,
     options: { staleAfterMs: 600_000, secrets },
   });
@@ -88,10 +92,15 @@ export async function stack() {
     const r = await owner("POST", body);
     return { status: r.status, body: (await r.json()) as Record<string, unknown> };
   };
-  const asRig = async (path: string) =>
-    (await (
-      await api.request(path, { headers: { authorization: `Bearer ${RIG_TOKEN}` } })
-    ).json()) as Record<string, Record<string, unknown> | null>;
+  // What the rig's config on the bus holds for it, as control writes it there: its model route
+  // (`/v1/rigs/<rig>/model-route`) or its advisors' routes (`…/advisor-routes`).
+  const asRig = async (path: string) => {
+    const [, rig = "", key] =
+      /^\/v1\/rigs\/([^/]+)\/(model-route|advisor-routes)$/.exec(path) ?? [];
+    if (key !== "model-route" && key !== "advisor-routes")
+      throw new Error(`not a rig's config key: ${path}`);
+    return await rigConfig(key, rig);
+  };
   return { store, api, as, owner, give, asRig };
 }
 

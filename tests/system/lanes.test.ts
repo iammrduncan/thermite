@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { CampaignDraft } from "../../src/control/campaigns/builder.ts";
 import { assignRefusal } from "../../src/control/issue/index.ts";
+import { ADVISOR_USERS } from "../../src/core/advisor-runs.ts";
 import { CommandPayloads, MESSAGE_TARGET } from "../../src/core/commands.ts";
 import {
   LANE_PROCESSES,
@@ -14,8 +14,16 @@ import {
 import { CHECK_ROLE, PLANNER_ROLE } from "../../src/harness/agents/cli/common.ts";
 import { IDS, RoleSchema, RunRequest, roleIds } from "../../src/harness/broker/runner.ts";
 import { ALL_ROLES, nprocFor } from "../../src/harness/broker/server.ts";
-import { lanesFromEnv } from "../../src/harness/rig-settings.ts";
+import { lanesFromEnv } from "../../src/harness/rig-settings-store.ts";
 import { probedRoles } from "../../src/harness/selftest/index.ts";
+import {
+  BUILD_SCRIPTS,
+  finalStage,
+  instructions,
+  RUN_SCRIPT,
+  repoFile,
+  usersMade,
+} from "../helpers/containerfile.ts";
 
 /** A small valid research contract with the given lane count. */
 const research = (count: number) => ({
@@ -33,7 +41,7 @@ const research = (count: number) => ({
 
 describe("the most lanes a rig runs", () => {
   test("the harness image has a user for each lane, and no more", () => {
-    const file = readFileSync(new URL("../../containers/harness/Containerfile", import.meta.url));
+    const file = finalStage("harness");
     const loop =
       /for n in \$\(seq 1 (\d+)\); do\s*\\\s*groupadd -g \$\(\(10100 \+ n\)\) lane-\$n/.exec(
         String(file),
@@ -72,9 +80,7 @@ describe("the most lanes a rig runs", () => {
       for (const lane of laneUsers)
         assert.notEqual(roleIds(r).uid, roleIds(lane).uid, `${r} and ${lane}`);
     // The planner's and the model check's users are in the image, with the broker's ids.
-    const file = String(
-      readFileSync(new URL("../../containers/harness/Containerfile", import.meta.url)),
-    );
+    const file = finalStage("harness");
     for (const role of [PLANNER_ROLE, CHECK_ROLE]) {
       const { uid, gid } = roleIds(role);
       assert.match(file, new RegExp(`groupadd -g ${gid} ${role} &&`), role);
@@ -84,11 +90,62 @@ describe("the most lanes a rig runs", () => {
     for (const role of [PLANNER_ROLE, CHECK_ROLE]) assert.ok(probedRoles().includes(role), role);
   });
 
-  test("each judge card builds as a builder of its own, in the image and probed by the selftest (goal 135)", () => {
-    const file = readFileSync(
-      new URL("../../containers/harness/Containerfile", import.meta.url),
-      "utf8",
+  test("the images make every role's user with the broker's ids, and the supervisor's and the advisors' with theirs, each written once", () => {
+    // The harness's users: its one step that makes them, run with stand-ins that print each call.
+    const step = instructions(finalStage("harness")).find((s) => s.startsWith("RUN groupadd "));
+    assert.ok(step, "the harness's step that makes its users");
+    const harness = usersMade(step.slice("RUN ".length));
+    const gidOf = (group: string, groups: Map<string, number>) =>
+      /^\d+$/.test(group) ? Number(group) : groups.get(group);
+    // A lane's development user's entry has `gpudev`, so a plain runuser never reaches the judge's
+    // card; the broker gives it the gpu group by number when it runs one (the Containerfile says so).
+    const entry = (role: string) =>
+      /-dev$/.test(role) ? { ...roleIds(role), gid: IDS.gpuDevGroup } : roleIds(role);
+    const want = new Map<string, { uid: number; gid: number }>(
+      ALL_ROLES.map((role) => [role, entry(role)]),
     );
+    want.set("thermite", IDS.thermite);
+    for (const [name, ids] of want) {
+      const user = harness.users.get(name);
+      assert.ok(user, `the harness image makes ${name}`);
+      assert.deepEqual({ uid: user.uid, gid: gidOf(user.group, harness.groups) }, ids, name);
+    }
+    // No user the broker does not know, and the groups it sets by number.
+    assert.deepEqual([...harness.users.keys()].sort(), [...want.keys()].sort());
+    assert.equal(harness.groups.get("gpu"), IDS.gpuGroup);
+    assert.equal(harness.groups.get("gpudev"), IDS.gpuDevGroup);
+    assert.equal(harness.groups.get("gpuctl"), IDS.gpuCtlGroup);
+    assert.equal(harness.groups.get("checkers"), IDS.checkersGroup);
+    for (let i = 1; i < IDS.maxCards; i++) {
+      assert.equal(harness.groups.get(`gpu-j${i}`), IDS.gpuJudgeBase + i);
+      assert.equal(harness.groups.get(`gpu-d${i}`), IDS.gpuDevBase + i);
+    }
+    // The supervisor's and the advisors' users: one script, which the supervisor image and the
+    // one-container rig image both run, and nothing else makes them.
+    const supervisor = usersMade(repoFile(`${BUILD_SCRIPTS}/supervisor-users.sh`));
+    const sup = supervisor.users.get("supervisor");
+    assert.deepEqual(
+      sup && { uid: sup.uid, gid: gidOf(sup.group, supervisor.groups) },
+      IDS.supervisor,
+    );
+    for (let n = 1; n <= ADVISOR_USERS.count; n++) {
+      const user = supervisor.users.get(`advisor-${n}`);
+      const id = ADVISOR_USERS.base + n;
+      assert.deepEqual(user && { uid: user.uid, gid: gidOf(user.group, supervisor.groups) }, {
+        uid: id,
+        gid: id,
+      });
+    }
+    assert.equal(supervisor.users.size, ADVISOR_USERS.count + 1);
+    for (const image of ["supervisor", "rig"] as const) {
+      const final = finalStage(image);
+      assert.ok(final.includes(RUN_SCRIPT("supervisor-users.sh")), image);
+      assert.doesNotMatch(final, /useradd|groupadd/, image);
+    }
+  });
+
+  test("each judge card builds as a builder of its own, in the image and probed by the selftest (goal 135)", () => {
+    const file = finalStage("harness");
     assert.match(file, /groupadd -g \$\(\(10020 \+ i\)\) builder-\$i/);
     for (let i = 1; i <= 7; i++) {
       const role = `builder-${i}`;
@@ -101,6 +158,30 @@ describe("the most lanes a rig runs", () => {
     assert.deepEqual(
       probedRoles(2).filter((r) => r.startsWith("builder") || r.startsWith("run")),
       ["builder", "builder-1", "run", "run-1"],
+    );
+  });
+
+  test("each judge card checks as a checker and drives a kit's driver as a driver of its own, in the image and probed by the selftest", () => {
+    const file = finalStage("harness");
+    assert.match(file, /groupadd -g 10049 checkers/);
+    assert.equal(IDS.checkersGroup, 10049);
+    assert.match(file, /useradd -u \$\(\(10050 \+ i\)\) -g checker\$s .* checker\$s/);
+    assert.match(file, /useradd -u \$\(\(10060 \+ i\)\) -g driver\$s .* driver\$s/);
+    for (let i = 0; i <= 7; i++) {
+      const s = i ? `-${i}` : "";
+      for (const [role, base] of [
+        [`checker${s}`, IDS.checker.uid],
+        [`driver${s}`, IDS.driver.uid],
+      ] as const) {
+        assert.ok(RoleSchema.safeParse(role).success, role);
+        assert.deepEqual(roleIds(role), { uid: base + i, gid: base + i });
+        assert.ok(ALL_ROLES.includes(role), role);
+      }
+    }
+    assert.ok(!RoleSchema.safeParse("checker-8").success);
+    assert.deepEqual(
+      probedRoles(2).filter((r) => /^(checker|driver)/.test(r)),
+      ["checker", "checker-1", "driver", "driver-1"],
     );
   });
 

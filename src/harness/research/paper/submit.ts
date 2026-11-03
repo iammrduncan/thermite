@@ -1,6 +1,7 @@
 import type { PaperExperiment, PaperSubmission } from "../../../core/api/harness/research.ts";
 import { newExperimentId } from "../../../core/ids.ts";
 import { PAPER_ACCEPTED, PAPER_REFUSED } from "../../../core/research-check.ts";
+import { kbFileFacts, keepKbFile } from "../../kb/index.ts";
 import { ANSWERED, researchEnd } from "../review/index.ts";
 import { claimsAppendix, numberCitations, panelAppendix, referencesPart } from "./appended.ts";
 import { paperBasis } from "./basis.ts";
@@ -40,7 +41,7 @@ export function checkDraft(
  * A paper the supervisor posts for a run that waits for one: checked by code, then accepted or
  * refused with its problems. Accepted, its citations become numbered references, and it is kept
  * whole with the References and the appendices that code appends; each next experiment becomes
- * an experiment of the campaign's knowledge-base folder.
+ * an experiment of the campaign's knowledge-base collection.
  */
 export function submit(
   ctx: PapersContext,
@@ -115,6 +116,11 @@ export function submit(
         counts: input.ste.counts,
       }
     : { checked: false, why: input.ste.why };
+  // The paper whole, for the campaign's collection in the knowledge base: kept in the outbox by its
+  // SHA-256, which the supervisor puts on the message bus (goal 175).
+  const bytes = new TextEncoder().encode(paper);
+  const file = kbFileFacts(bytes, { name: "paper.md", type: "text/markdown" });
+  keepKbFile(ctx.outboxDir, bytes, file);
   ctx.ledger.appendEvent(by, PAPER_ACCEPTED, run, {
     review: basis.review,
     writer: input.writer,
@@ -126,6 +132,7 @@ export function submit(
     experiments,
     chars: paper.length,
     paper,
+    file,
   });
   return {
     accepted: true,

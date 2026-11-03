@@ -7,6 +7,7 @@ import {
   type Harness,
   type ProviderType,
 } from "../../core/agents.ts";
+import { fingerprint } from "../../core/commands.ts";
 import { RIG_ID } from "../../core/ids.ts";
 import { CampaignArchive } from "./archive.ts";
 import { AuditLog } from "./audit.ts";
@@ -25,16 +26,19 @@ import { GpuClouds } from "./gpu-clouds.ts";
 import { RigHistory } from "./history.ts";
 import { JoinedRigs } from "./joined.ts";
 import { KnowledgeBase } from "./kb/index.ts";
-import { fingerprint } from "./keys.ts";
 import { LiveLines } from "./live.ts";
 import { Machines } from "./machines.ts";
 import { McpServerRows } from "./mcp-servers.ts";
 import { ModelAssignments } from "./models.ts";
+import { OwnSettings } from "./own-settings.ts";
 import { BusPositions } from "./positions.ts";
+import { CampaignProposals } from "./proposals.ts";
 import { ModelProviders } from "./providers.ts";
+import { ReachableAddresses } from "./reachable.ts";
 import { RigRefusals } from "./refusals.ts";
 import type { IngestReport } from "./report.ts";
 import { FullResets } from "./resets.ts";
+import { RetentionPolicies } from "./retention.ts";
 import { RetiredRigs } from "./retired.ts";
 import { RigReports } from "./rig-reports.ts";
 import { ReportedRigs } from "./rigs.ts";
@@ -42,6 +46,7 @@ import { RunpodStore } from "./runpod.ts";
 import { RunRegistry } from "./runs.ts";
 import { type MigrateGiven, migrateStore } from "./schema.ts";
 import { UiSessions } from "./sessions.ts";
+import { StoreSize } from "./size.ts";
 import { TunnelRigs } from "./tunnels.ts";
 import { RigUpdates } from "./updates.ts";
 import { UsageRecords } from "./usage.ts";
@@ -54,10 +59,17 @@ import { UsageRecords } from "./usage.ts";
  * tables' SQL, and no other production code reads or writes them.
  */
 
-export { cursorOf } from "./audit.ts";
+export {
+  AUDIT_ACTORS,
+  AUDIT_KINDS,
+  type AuditEntry,
+  type AuditFilter,
+  cursorOf,
+  RETENTION_REMOVED_ACTION,
+} from "./audit.ts";
 export type { RigComponent, StoredBuild } from "./builds.ts";
 export type { BusIdentityName } from "./bus.ts";
-export type { CampaignSources, CopiedFrom } from "./campaigns.ts";
+export type { CampaignResults, CampaignSources, CopiedFrom } from "./campaigns.ts";
 export type {
   Cluster,
   ClusterRig,
@@ -67,16 +79,34 @@ export type {
 export type { CommandRow, Decision } from "./commands.ts";
 export type { EventsMoved, StoredEvent } from "./events.ts";
 export type { RigExport } from "./exports.ts";
-export type { GitAccess } from "./git-access.ts";
+export { GIT_HOST, GIT_HOST_WORDS, type GitAccess } from "./git-access.ts";
 export type { JoinedRig } from "./joined.ts";
+export type {
+  KbCounts,
+  KbFind,
+  KbFindAnswer,
+  KbFolderRow,
+  KbListAt,
+  KbListCounts,
+  KbListed,
+  KbSettingKey,
+  KbStoredFigures,
+  KbTextState,
+  KbTotals,
+} from "./kb/index.ts";
+export { KB_STORED_FILES } from "./kb/index.ts";
 export { OPEN_TRIAL_LINES } from "./live.ts";
 export type { Machine, MachineRig } from "./machines.ts";
 export type { McpServerRows } from "./mcp-servers.ts";
 export { AGENT_ROLES, type AgentRole, codexTakes, harnessOf } from "./models.ts";
+export type { CampaignProposal, ProposedField } from "./proposals.ts";
 export type { ModelProvider, ProviderModel } from "./providers.ts";
+export type { ReachableAddress } from "./reachable.ts";
 export type { RigRefusal } from "./refusals.ts";
+export type { RetentionRemovalRow } from "./retention.ts";
 export type { StoredRunpodRig, StoredRunpodTest } from "./runpod.ts";
 export type { RegisteredRun } from "./runs.ts";
+export type { DbFigures } from "./size.ts";
 export type { TunnelRig } from "./tunnels.ts";
 export type { RunningRun } from "./usage.ts";
 export type { IngestReport };
@@ -119,8 +149,18 @@ export class ControlStore {
   readonly busKeys: BusKeys;
   readonly rigUpdates: RigUpdates;
   readonly mcpServers: McpServerRows;
+  /** Changes the operator proposes to a campaign's settings, for the owner to approve. */
+  readonly proposals: CampaignProposals;
   /** How far the store applied the bus's streams: the events stream's apply (control/events). */
   readonly busPositions: BusPositions;
+  /** The addresses cluster rigs' harnesses may reach beside the internet, set by the owner. */
+  readonly reachable: ReachableAddresses;
+  /** Control's own settings the owner sets on control (store migration 27). */
+  readonly ownSettings: OwnSettings;
+  /** The owner's retention policies, what they removed, and what each rig keeps (goal 125). */
+  readonly retention: RetentionPolicies;
+  /** control.db's own size, as SQLite counts it, for Metrics (goal 179). */
+  readonly size: StoreSize;
   private knowledge: KnowledgeBase | undefined;
 
   /** The store's file, or `:memory:`. */
@@ -163,7 +203,12 @@ export class ControlStore {
     this.busKeys = new BusKeys(this, this.db);
     this.rigUpdates = new RigUpdates(this, this.db);
     this.mcpServers = new McpServerRows(this, this.db);
+    this.proposals = new CampaignProposals(this, this.db);
     this.busPositions = new BusPositions(this, this.db);
+    this.reachable = new ReachableAddresses(this, this.db);
+    this.ownSettings = new OwnSettings(this, this.db);
+    this.retention = new RetentionPolicies(this, this.db);
+    this.size = new StoreSize(this, this.db);
   }
 
   /**

@@ -1,16 +1,22 @@
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { type TSchema, Type } from "@earendil-works/pi-ai";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
+import { linkSession, type SessionLink } from "../../../agents/live-session.ts";
 import { mcpAgentTools } from "../../../agents/mcp/index.ts";
 import { buildModel, type ModelConfig, PiMeter } from "../../../agents/model/index.ts";
+import { type RoleView, swappableTools } from "../../../agents/pi-view/index.ts";
 import { messageText, type Prompt, type Section, systemText } from "../../../agents/prompt.ts";
 import {
   renderCompacted,
   renderResearchWorker,
   renderResearchWorkerTurn,
+  type TrialTurn,
   windowFit,
 } from "../../../agents/roles/index.ts";
+import { writeSessionLog } from "../../../agents/session-log.ts";
 import {
+  type KbCall,
+  kbAgentTools,
   NOTE_TOOL,
   NoteLimit,
   type NoteRequest,
@@ -23,7 +29,6 @@ import { errorText } from "../../../common/errors.ts";
 import { type LaneLimitValues, laneLimits } from "../../../core/contract.ts";
 import type { OwnerAddition } from "../../../core/role-additions.ts";
 import type { CallUsage } from "../../../core/usage.ts";
-import { linkSession, type SessionLink } from "../live-session.ts";
 import { type FailureCount, failingOf, ProviderWatch } from "../provider-errors.ts";
 import { guardRepeats } from "../repeats.ts";
 import {
@@ -43,8 +48,8 @@ import { keepGoing, PI_TRIAL, watchedStream, withoutPastThinking } from "../work
 
 /**
  * A research trial in Pi: a fresh agent session with the research tools and file tools over its
- * research folder, and no shell. (In OpenCode, cli/opencode.ts, the agent keeps its shell and files
- * and runs the same research tools as commands.) Every research action goes through the
+ * research folder, and no shell. (In OpenCode, the CLI trial loop's research mode, the agent keeps
+ * its shell and files and runs the same research tools as commands.) Every research action goes through the
  * harness's research service: the harness fetches and archives, and code decides whether a claim
  * or a finding holds. The agent cannot end the campaign; a trial just ends.
  */
@@ -69,6 +74,8 @@ export interface ResearchTrialSpec {
   folder?: ResearchFolderPaths | undefined;
   /** The MCP servers the run's kit gives its workers (goal 068), by name (see TrialSpec). */
   mcpServers?: string[] | undefined;
+  /** The kinds it may write in the knowledge base (goal 175; see TrialSpec). */
+  kbWrites?: string[] | undefined;
   /** The owner's addition to the research worker for the campaign (goal 166; see TrialSpec). */
   addition?: OwnerAddition | undefined;
 }
@@ -84,6 +91,8 @@ export interface ResearchDeps {
   note?: ((req: NoteRequest) => Promise<{ note: number }>) | undefined;
   /** The MCP tools the run's kit gives its workers (goal 068), through the harness's gateway. */
   mcp?: McpForAgent | undefined;
+  /** The knowledge base's tools (goal 175), run by the harness for the trial's own slot. */
+  kb?: KbCall | undefined;
   /** Where a compaction keeps the conversation, and where it is said (goal 070). */
   compaction?: CompactionLink | undefined;
   /** Each model call's usage, as the trial's code measures it (goal 075). */
@@ -92,6 +101,10 @@ export interface ResearchDeps {
   waiting?: ((w: ProviderWait) => void) | undefined;
   /** Keeps each later turn the trial sends its worker (goal 166; see TrialDeps). */
   sent?: ((p: Prompt) => void) | undefined;
+  /** The trial's Pi view, when its worker draws one in its terminal (goal 169; see TrialDeps). */
+  view?: RoleView | undefined;
+  /** Where its session log goes, each message as it ends (agents/session-log.ts); none: no log. */
+  sessionLog?: string | undefined;
 }
 
 const out = (value: unknown) => ({
@@ -102,7 +115,13 @@ const out = (value: unknown) => ({
 /** A research trial's prompt in Pi (goal 166), from the research worker's definition. */
 export function piResearchPrompt(
   spec: ResearchTrialSpec,
-  o: { mcpServers: readonly string[]; idea: boolean; note: boolean; fit?: number | undefined },
+  o: {
+    mcpServers: readonly string[];
+    kbWrites?: readonly string[] | undefined;
+    idea: boolean;
+    note: boolean;
+    fit?: number | undefined;
+  },
 ): Prompt {
   return renderResearchWorker({
     program: PI_TRIAL,
@@ -128,7 +147,10 @@ export async function runResearchTrial(
   // Near a set length's end, each tool result says the time left, and the end stops a tool (goal 144).
   const clock = new TrialClock(spec.wallMs);
   const notes = new NoteLimit(spec.limits?.notesPerTurn); // the notes of one reply (goal 147)
-  const tools: AgentTool[] = [
+  // Its tools, with the MCP tools the gateway listed; the owner may have them listed again in the
+  // trial's Pi view (goal 169).
+  let mcpNow = deps.mcp;
+  const toolsWith = (mcp: McpForAgent | undefined): AgentTool[] => [
     ...researchAgentTools(
       RESEARCH_TOOLS.map((t) => t.name),
       deps.call,
@@ -172,14 +194,20 @@ export async function runResearchTrial(
           } as AgentTool,
         ]
       : []),
-    ...(deps.mcp
+    ...(mcp
       ? mcpAgentTools(
-          deps.mcp.tools,
-          (s, t, a) => (deps.mcp as McpForAgent).call(s, t, a),
+          mcp.tools,
+          (s, t, a) => mcp.call(s, t, a),
           () => {
             result.toolCalls++;
           },
         )
+      : []),
+    // Thermite's knowledge base (goal 175): kb_search, kb_read, and kb_write when it may write.
+    ...(deps.kb && spec.kbWrites
+      ? kbAgentTools(deps.kb, spec.kbWrites, () => {
+          result.toolCalls++;
+        })
       : []),
   ];
 
@@ -193,6 +221,7 @@ export async function runResearchTrial(
     spec.sent ??
     piResearchPrompt(spec, {
       mcpServers: [...new Set((deps.mcp?.tools ?? []).map((t) => t.server))],
+      kbWrites: deps.kb ? spec.kbWrites : undefined,
       idea: deps.idea !== undefined,
       note: deps.note !== undefined,
       fit: windowFit(deps.model.contextWindow, deps.model.compactAt),
@@ -201,14 +230,19 @@ export async function runResearchTrial(
     initialState: {
       systemPrompt: systemText(sent),
       model,
-      tools: clock.wrap(guardRepeats(tools, () => compactor.count)),
+      tools: clock.wrap(guardRepeats(toolsWith(mcpNow), () => compactor.count)),
       thinkingLevel,
     },
     streamFn: watchedStream(models, watch, meter),
     convertToLlm: withoutPastThinking,
     // One tool call at a time: each is a request to the harness, in the order the model chose.
     toolExecution: "sequential",
+    // Every later turn that waits goes in before its next model call: the owner's words typed into
+    // its view and the owner's messages alike. Pi's default takes one a call, and a trial that
+    // ends after that call would leave the rest never sent and never read.
+    steeringMode: "all",
   });
+  if (deps.sessionLog) writeSessionLog(agent, deps.sessionLog);
   meter?.watch(agent);
   // The later turns of this trial (goal 166), numbered after its first message.
   let said = 0;
@@ -251,10 +285,36 @@ export async function runResearchTrial(
   if (deps.link)
     linkSession(agent, {
       ...deps.link,
-      ownerTurn: (text) =>
-        renderResearchWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+      ownerTurn: (m) =>
+        renderResearchWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text: m.text }),
       sent: deps.sent,
     });
+  // Its Pi view's console (goal 169): each of the owner's calls is one of these levers.
+  const swapTools = deps.view ? swappableTools(agent) : undefined;
+  deps.view?.attach({
+    agent,
+    compact: () => compactor.force("asked"),
+    ownerTurn: (text) =>
+      renderResearchWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+    sent: deps.sent,
+    mcp: () => mcpNow,
+    setMcp: (m) => {
+      mcpNow = m;
+      swapTools?.(clock.wrap(guardRepeats(toolsWith(m), () => compactor.count)));
+    },
+    status: () => ({
+      turns: result.turns,
+      toolCalls: result.toolCalls,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      compactions: compactor.count,
+      msLeft: clock.leftMs(),
+      maxTurns: spec.maxTurns,
+      model: deps.model.model,
+    }),
+    closed: () =>
+      result.stopped !== "no_submission" ? `the trial is ending (${result.stopped})` : undefined,
+  });
   // A trial's length only when the campaign or the rig sets one (goal 079).
   const wall =
     spec.wallMs !== undefined
@@ -267,34 +327,42 @@ export async function runResearchTrial(
   const failures: FailureCount = { failures: 0, rateWaits: 0 };
   try {
     // With the note tool, the brief says how to keep field notes, and how they differ from
-    // research notes.
+    // source notes.
     await agent.prompt(messageText(sent));
+    // What it is told comes from its role's definition, kept as it is sent (goal 166).
+    const say = (t: TrialTurn | { kind: "go-on" }) => {
+      const p = renderResearchWorkerTurn({ program: "pi", turn: ++said, ...t });
+      deps.sent?.(p);
+      return p;
+    };
     // A cut-off reply, a failed call or a full context (compacted) does not end a research trial
     // before its time; only a conversation that does not fit even compacted does, and failures
     // that stop the run's agents.
-    const end = await keepGoing(
-      agent,
-      () => result.stopped !== "no_submission",
-      deps.model.contextWindow,
-      compactor,
-      {
-        failuresInARow: spec.limits?.failuresInARow,
-        cutoffsInARow: spec.limits?.cutoffsInARow,
-        watch,
-        onWait: deps.waiting,
-        count: failures,
-        // What it is told comes from its role's definition, kept as it is sent (goal 166).
-        say: (t) => {
-          const p = renderResearchWorkerTurn({ program: "pi", turn: ++said, ...t });
-          deps.sent?.(p);
-          return p;
+    for (;;) {
+      const end = await keepGoing(
+        agent,
+        () => result.stopped !== "no_submission",
+        deps.model.contextWindow,
+        compactor,
+        {
+          failuresInARow: spec.limits?.failuresInARow,
+          cutoffsInARow: spec.limits?.cutoffsInARow,
+          watch,
+          onWait: deps.waiting,
+          count: failures,
+          say,
         },
-      },
-    );
-    if (end) {
-      result.stopped = end.stopped;
-      result.error = end.error;
-      if (end.kind) result.errorKind = end.kind;
+      );
+      if (end) {
+        result.stopped = end.stopped;
+        result.error = end.error;
+        if (end.kind) result.errorKind = end.kind;
+      }
+      // The owner interrupted the reply in the trial's Pi view (goal 169): not the agent's own
+      // end, so the trial goes on at once, with the owner's words that wait, or told to go on.
+      if (end || result.stopped !== "no_submission" || !deps.view?.interrupted()) break;
+      if (agent.hasQueuedMessages()) await agent.continue();
+      else await agent.prompt(messageText(say({ kind: "go-on" })));
     }
     if (result.stopped === "no_submission") result.stopped = "finished";
   } catch (err) {

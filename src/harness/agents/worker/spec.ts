@@ -1,15 +1,16 @@
+import { z } from "zod";
 import type { CompactionReport } from "../../../agents/compaction/index.ts";
+import type { SessionLink } from "../../../agents/live-session.ts";
+import type { McpForAgent } from "../../../agents/mcp/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
+import type { RoleView } from "../../../agents/pi-view/index.ts";
 import type { Prompt, Section } from "../../../agents/prompt.ts";
-import type { NoteRequest } from "../../../agents/tools/index.ts";
-import type { McpCallResult } from "../../../common/mcp-client.ts";
+import type { KbCall, NoteRequest } from "../../../agents/tools/index.ts";
 import type { LaneLimitValues } from "../../../core/contract.ts";
-import type { McpToolInfo } from "../../../core/mcp.ts";
 import type { OwnerAddition } from "../../../core/role-additions.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, Runner } from "../../broker/index.ts";
-import type { SessionLink } from "../live-session.ts";
-import type { ProviderErrorKind, TrialFailing } from "../provider-errors.ts";
+import { PROVIDER_ERROR_KINDS, type ProviderErrorKind, TrialFailing } from "../provider-errors.ts";
 import type { IdeaInput } from "../tools/index.ts";
 
 /**
@@ -52,19 +53,28 @@ export interface TrialSpec {
    * through the harness's gateway with its own token.
    */
   mcpServers?: string[] | undefined;
+  /**
+   * The kinds the worker may write in the knowledge base, as the run's contract lets a worker
+   * (goal 175): it gets kb_search and kb_read, and kb_write when it may write one. Undefined: no
+   * knowledge base tools.
+   */
+  kbWrites?: string[] | undefined;
   /** The owner's addition to the worker for the run's campaign (goal 166); none: no section. */
   addition?: OwnerAddition | undefined;
 }
 
-export interface SubmitOutcome {
-  attempt: string;
-  lifecycle: string;
-  violations?: string[];
-  duplicate_of?: string;
-}
+export const SubmitOutcome = z.object({
+  attempt: z.string(),
+  lifecycle: z.string(),
+  violations: z.array(z.string()).optional(),
+  duplicate_of: z.string().optional(),
+});
+export type SubmitOutcome = z.infer<typeof SubmitOutcome>;
 
 export interface TrialDeps {
   runner: Runner;
+  /** Where its session log goes, each message as it ends (agents/session-log.ts); none: no log. */
+  sessionLog?: string | undefined;
   /** argv prefix that runs the lane tool (lanetool.ts or its build). */
   laneTool: string[];
   model: ModelConfig;
@@ -83,8 +93,10 @@ export interface TrialDeps {
   idea?(req: IdeaInput): Promise<{ experiment: string }>;
   /** A field note: written by this lane, in the run's journal. */
   note?(req: NoteRequest): Promise<{ note: number }>;
-  /** The research service (sources, claims and notes in the run's folder): one operation. */
+  /** The research service (sources, claims and source notes in the run's folder): one operation. */
   research?(op: string, args: Record<string, unknown>): Promise<unknown>;
+  /** The knowledge base's tools (goal 175), run by the harness for the trial's own slot. */
+  kb?: KbCall | undefined;
   /** The live view: the session's turns out, the owner's messages in. */
   link?: SessionLink | undefined;
   /** The MCP tools the run's kit gives its workers, and how to call one (the harness's gateway). */
@@ -100,6 +112,8 @@ export interface TrialDeps {
    * continuation. The harness keeps the trial's first prompt itself.
    */
   sent?: ((p: Prompt) => void) | undefined;
+  /** The trial's Pi view, when its worker draws one in its terminal (goal 169). */
+  view?: RoleView | undefined;
 }
 
 /** A trial waits for its provider and then goes on in the same conversation (goal 079). */
@@ -121,44 +135,50 @@ export interface CompactionLink {
   done(r: CompactionReport): Promise<unknown>;
 }
 
-/** An agent's MCP tools in Pi: what the gateway listed for it, and a call through the gateway. */
-export interface McpForAgent {
-  tools: McpToolInfo[];
-  call(server: string, tool: string, args: Record<string, unknown>): Promise<McpCallResult>;
-}
+/** How a trial stopped. */
+export const TRIAL_STOPS = [
+  "submitted",
+  "no_submission",
+  "finished",
+  "interrupted",
+  "turns",
+  "wall",
+  "context",
+  "error",
+] as const;
 
-export interface TrialResult {
-  submitted?: SubmitOutcome | undefined;
-  stopped:
-    | "submitted"
-    | "no_submission"
-    | "finished"
-    | "interrupted"
-    | "turns"
-    | "wall"
-    | "context"
-    | "error";
-  turns: number;
-  toolCalls: number;
-  tokensIn: number;
-  tokensOut: number;
+/** A count a trial reports: a whole number from 0. */
+const count = z.number().int().min(0);
+
+/**
+ * A trial's result. A worker process (worker-main.ts) runs as the lane's agent user and prints it
+ * as its last line: the harness reads it with this schema, and refuses anything else.
+ */
+export const TrialResult = z.object({
+  submitted: SubmitOutcome.optional(),
+  stopped: z.enum(TRIAL_STOPS),
+  turns: count,
+  toolCalls: count,
+  tokensIn: count,
+  tokensOut: count,
   /** How many times the trial's conversation was compacted (goal 070). */
-  compactions?: number | undefined;
+  compactions: count.optional(),
   /** Model calls whose usage the worker could not hand to the harness (goal 075). */
-  usageUnrecorded?: number | undefined;
-  error?: string | undefined;
+  usageUnrecorded: count.optional(),
+  error: z.string().optional(),
   /**
    * The kind of the provider's error a trial ended on (goal 079): no credits, a refused key or an
    * unserved model stop the run's agents until a model check passes.
    */
-  errorKind?: ProviderErrorKind | undefined;
+  errorKind: z.enum(PROVIDER_ERROR_KINDS).optional(),
   /** The model's provider refused for now (a subscription's full usage window): not before this (ISO). */
-  retryAfter?: string | undefined;
+  retryAfter: z.string().optional(),
   /**
    * The trial ended while its model calls were failing with the provider's passing faults or the
    * model's own errors, with no call that worked since (goal 079): since when, and the newest
    * failure. Once that has lasted 30 minutes, in this trial or across the run's trials, the
    * scheduler stops the run's agents as for no credits.
    */
-  failing?: TrialFailing | undefined;
-}
+  failing: TrialFailing.optional(),
+});
+export type TrialResult = z.infer<typeof TrialResult>;

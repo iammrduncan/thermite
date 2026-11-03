@@ -37,7 +37,7 @@ describe("agent scheduler", () => {
       run: "js-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seed,
       token: "tok",
     });
@@ -82,7 +82,7 @@ describe("agent scheduler", () => {
         run: "js-1",
         lane,
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: env.seed,
         token: `tok-${lane}`,
       });
@@ -118,7 +118,7 @@ describe("agent scheduler", () => {
       run: "js-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seed,
       token: "tok",
     });
@@ -182,7 +182,7 @@ describe("agent scheduler", () => {
         run: "js-1",
         lane,
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: env.seed,
         token: `tok-${lane}`,
       });
@@ -246,7 +246,7 @@ describe("agent scheduler", () => {
         run: "js-1",
         lane,
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: env.seed,
         token: `tok-${lane}`,
       });

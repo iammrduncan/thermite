@@ -173,15 +173,22 @@ export class McpGateway {
     }
   }
 
-  /** A server's tools as it lists them (kept for a few minutes), or why not. */
-  private async listed(c: McpCaller, server: string): Promise<McpListedTool[] | string> {
+  /**
+   * A server's tools as it lists them (kept for a few minutes), or why not. `fresh`: asked of the
+   * server now, whatever is kept (the owner's /mcp reconnect in the Pi view, goal 169).
+   */
+  private async listed(
+    c: McpCaller,
+    server: string,
+    fresh = false,
+  ): Promise<McpListedTool[] | string> {
     const conn = this.reachable(server);
     if (typeof conn === "string") {
       this.failed(c, server, conn);
       return conn;
     }
     const kept = this.lists.get(server);
-    if (kept && kept.revision === conn.revision && Date.now() - kept.at < LIST_MS)
+    if (!fresh && kept && kept.revision === conn.revision && Date.now() - kept.at < LIST_MS)
       return kept.tools;
     try {
       const tools = await this.session(conn, (s) => s.listTools());
@@ -195,23 +202,31 @@ export class McpGateway {
     }
   }
 
-  /** One server's tools that this caller may use (none when it fails). */
-  async serverTools(c: McpCaller, server: string): Promise<McpListedTool[] | string> {
+  /** One server's tools that this caller may use (none when it fails); `fresh`: listed now. */
+  async serverTools(
+    c: McpCaller,
+    server: string,
+    fresh = false,
+  ): Promise<McpListedTool[] | string> {
     const g = this.given(c.run, c.kind).find((x) => x.name === server);
     if (!g) return `the ${c.kind} of this run ${verb(c.kind, "does", "do")} not get ${server}`;
-    const tools = await this.listed(c, server);
+    const tools = await this.listed(c, server, fresh);
     if (typeof tools === "string") return tools;
     return g.tools ? tools.filter((t) => g.tools?.includes(t.name)) : tools;
   }
 
-  /** Every tool this caller may use, with the servers that failed and why. */
+  /**
+   * Every tool this caller may use, with the servers that failed and why. `fresh`: the servers are
+   * asked now, whatever was kept: `true` every one, or one by its name.
+   */
   async tools(
     c: McpCaller,
+    fresh: boolean | string = false,
   ): Promise<{ tools: McpToolInfo[]; unavailable: { server: string; why: string }[] }> {
     const tools: McpToolInfo[] = [];
     const unavailable: { server: string; why: string }[] = [];
     for (const g of this.given(c.run, c.kind)) {
-      const listed = await this.serverTools(c, g.name);
+      const listed = await this.serverTools(c, g.name, fresh === true || fresh === g.name);
       if (typeof listed === "string") {
         unavailable.push({ server: g.name, why: listed });
         continue;

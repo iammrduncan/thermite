@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { log, logError } from "../../common/log.ts";
 import { type Broker, fatalExit, SECRET_VARS, TG, TU, tryDo } from "./context.ts";
 import { emptyScratchKeepingCaches, restoreLaneCaches } from "./lane-caches.ts";
-import { type Role, roleIds } from "./runner.ts";
+import { IDS, type Role, roleIds } from "./runner.ts";
 
 /**
  * The broker's folders, as root: at its start, the state, scratch, outbox and socket folders, each
@@ -36,6 +36,7 @@ export function prepareDirectories(broker: Broker): void {
     );
   }
   chmodSync(broker.stateDir, 0o711);
+  shareWithCheckers(broker.stateDir);
   // Scratch is disposable: whatever an earlier run left (including hostile trees) goes now. The
   // lanes' cache folders are kept (goal 079): each a real folder its own lane's user owns.
   chownSync(broker.scratchDir, 0, 0);
@@ -67,6 +68,32 @@ export function prepareDirectories(broker: Broker): void {
     });
   }
   prepareOutbox(broker);
+}
+
+/**
+ * The kits and the baselines: the controller's, and entered by the checkers' group too, which
+ * the kit's check runs with (runner.ts): it reads the kit, and later jobs' checks the files a
+ * hill climb's baseline kept. No other role may enter either. Every folder under the baselines
+ * keeps the group (setgid), and what is there already gets it, readable by the group. Root here
+ * has no CAP_FSETID, and a folder keeps its setgid mark only when its group is the process's own:
+ * these calls run in children with the checkers' group as theirs. The broker's own group never
+ * changes, since a process whose group changed stays undumpable, its environment closed to root.
+ */
+function shareWithCheckers(stateDir: string): void {
+  const group = `${TU}:${IDS.checkersGroup}`;
+  const asCheckers = { stdio: "ignore", gid: IDS.checkersGroup } as const;
+  tryDo("share the kits and the baselines with the checkers", () => {
+    const kits = join(stateDir, "kits");
+    mkdirSync(kits, { recursive: true });
+    chownSync(kits, TU, IDS.checkersGroup);
+    chmodSync(kits, 0o710);
+    const baselines = join(stateDir, "baselines");
+    mkdirSync(baselines, { recursive: true });
+    execFileSync("chown", ["-R", "-P", group, baselines], asCheckers);
+    execFileSync("chmod", ["-R", "g+rX,g-w", baselines], asCheckers);
+    execFileSync("find", [baselines, "-type", "d", "-exec", "chmod", "g+s", "{}", "+"], asCheckers);
+    execFileSync("chmod", ["2710", baselines], asCheckers);
+  });
 }
 
 /** The broker's socket directory, and a clean socket path to listen on (at broker start only). */
@@ -125,12 +152,7 @@ export function readSecrets(broker: Broker): Record<string, string> {
 export function wipeIfMarked(broker: Broker): boolean {
   const marker = join(broker.stateDir, WIPE_MARKER);
   if (!existsSync(marker)) return false;
-  const keep = new Set([
-    "rig-signing.key",
-    "rig-signing.key.pub",
-    "unit-signing.key",
-    "unit-signing.key.pub",
-  ]);
+  const keep = new Set(["rig-signing.key", "rig-signing.key.pub"]);
   const rm = (p: string) =>
     execFileSync("rm", ["-rf", "--one-file-system", "--", p], { stdio: "ignore" });
   for (const name of readdirSync(broker.stateDir)) {

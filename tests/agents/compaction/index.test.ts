@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { CompactionReport } from "../../../src/agents/compaction/index.ts";
+import { type CompactionReport, Compactor } from "../../../src/agents/compaction/index.ts";
 import type { Section } from "../../../src/agents/prompt.ts";
-import { renderOwnerMessages } from "../../../src/agents/roles/index.ts";
+import { renderCompacted, renderOwnerMessages } from "../../../src/agents/roles/index.ts";
 import { runResearchTrial } from "../../../src/harness/agents/research/worker.ts";
 import { type CompactionLink, runTrial } from "../../../src/harness/agents/worker/index.ts";
 import { prepareWorkspace } from "../../../src/harness/agents/workspace.ts";
@@ -337,6 +337,45 @@ describe("compaction in Pi (goal 070)", () => {
     assert.equal(calls, 1);
     assert.equal(summaries, 1);
     assert.equal(r.compactions, undefined, "no compaction was applied");
+  });
+
+  test("a compaction the owner asks for (the Pi view's /compact) comes at the next request, whatever its size, and never ends the trial", async () => {
+    const stops: string[] = [];
+    const reports: CompactionReport[] = [];
+    const c = new Compactor({
+      window: 200,
+      convert: (m) => m as never,
+      // A summary larger than the window: the compacted conversation still does not fit.
+      summarize: async () => "SUMMARY ".repeat(400),
+      keep: async () => ({ path: "compactions/t-1.md" }),
+      done: async (r) => {
+        reports.push(r);
+      },
+      stop: (why) => stops.push(why),
+      title: "Trial t-1 (lane-1)",
+      after: (x) => renderCompacted({ role: "worker", turn: 1, ...x }),
+    });
+    const user = (text: string) => ({ role: "user", content: text, timestamp: 0 });
+    const assistant = (text: string) => ({
+      role: "assistant",
+      content: [{ type: "text", text }],
+      stopReason: "stop",
+      usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15 },
+      timestamp: 0,
+    });
+    const messages = [user("the brief"), assistant("a reply"), user("go on"), assistant("more")];
+    const agent = { state: { messages } };
+    const hook = c.hook(agent as never);
+    const request = () =>
+      hook({ context: { messages } as never, model: {} as never, thinkingLevel: "off" });
+    // Small, under the point: no compaction until asked.
+    assert.equal(await request(), undefined);
+    c.force("asked");
+    assert.ok(await request(), "compacted at the next request");
+    assert.equal(c.count, 1);
+    assert.deepEqual(stops, [], "left to the provider, not ended");
+    assert.equal(reports.length, 1);
+    assert.equal(await request(), undefined, "once");
   });
 
   test("an estimate over the window alone sends the request: the provider decides", async () => {

@@ -29,6 +29,7 @@ import {
 import {
   PLAN_LIMITS_TEXT,
   PLANNER_ASK_SYSTEM,
+  PLANNER_OWNER_TURN,
   PLANNER_PI_SYSTEM as PLANNER_SYSTEM,
   PLANNER_TASK,
 } from "../../../src/agents/roles/planner.ts";
@@ -46,11 +47,15 @@ import {
 import { RESEARCH_REVIEWER_SYSTEM, REVIEWER_SYSTEM } from "../../../src/agents/roles/reviewer.ts";
 import {
   ADVISOR_NOTES,
+  ADVISOR_OWNER_TURN,
+  ADVISOR_OWNER_TURN_PI,
   AT_WORK_GUIDE,
   BRIEF_GUIDE,
   CONTEXT_FULL_TURN,
   CUT_OFF_TURN,
   FAILED_GO_ON,
+  KB_GUIDE,
+  kbWriteLine,
   OWNER_LINE_HEAD,
   OWNER_TURN_HEAD,
   PAST_GUIDE,
@@ -92,6 +97,7 @@ const TEXTS: Record<string, string> = {
   "planner.limits": PLAN_LIMITS_TEXT,
   "planner.pi.system": PLANNER_SYSTEM,
   "planner.ask.system": PLANNER_ASK_SYSTEM,
+  "planner.owner-terminal": PLANNER_OWNER_TURN,
   "research-planner.task": RESEARCH_PLANNER_TASK,
   "research-planner.limits": RESEARCH_PLAN_LIMITS_TEXT,
   "research-planner.pi.system": RESEARCH_PLANNER_SYSTEM,
@@ -101,6 +107,11 @@ const TEXTS: Record<string, string> = {
   "advisors.at-work-guide": AT_WORK_GUIDE,
   "advisors.past-guide": PAST_GUIDE,
   "advisors.research-guide": RESEARCH_GUIDE,
+  "advisors.owner-terminal": ADVISOR_OWNER_TURN,
+  "advisors.owner-pi": ADVISOR_OWNER_TURN_PI,
+  // The knowledge base's part of every role's prompt (goal 175), and kb_write's line.
+  "shared.kb-guide": KB_GUIDE,
+  "shared.kb-write": kbWriteLine(["note", "finding"]),
   "teacher.system": TEACHER_SYSTEM,
   "merged-by.system": MERGED_BY_SYSTEM,
   "research-teacher.system": RESEARCH_TEACHER_SYSTEM,

@@ -9,7 +9,7 @@ import {
 } from "../../../src/control/bus/index.ts";
 import type { McpServers } from "../../../src/control/mcp-servers/index.ts";
 import { ChatGPTLogins } from "../../../src/control/providers/index.ts";
-import { STEP_WORDS } from "../../../src/control/rigs/setup.ts";
+import { STEP_WORDS } from "../../../src/control/rigs/setup/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import {
@@ -23,6 +23,7 @@ import {
 } from "../../../src/core/link/config.ts";
 import type { McpConnection, McpUnavailable } from "../../../src/core/mcp.ts";
 import { controlOnly, RIG_TOKEN } from "../../helpers/control-stack.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 import { FakeBus } from "../../helpers/fake-bus.ts";
 
 /**
@@ -46,7 +47,7 @@ function setup(
   o: { store?: ControlStore; secrets?: SecretBox; seals?: Record<string, SealKey> } = {},
 ) {
   const store = o.store ?? new ControlStore(":memory:");
-  store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+  enrollRigs(store, ["rig-a", "rig-b"]);
   const secrets = o.secrets ?? SecretBox.ephemeral();
   const seals = o.seals ?? { "rig-a": newSealKey(), "rig-b": newSealKey() };
   for (const [rig, seal] of Object.entries(seals)) {
@@ -97,10 +98,10 @@ describe("each rig's config on the message bus", () => {
     await s.writer.write();
     t.mock.restoreAll();
     // The log says what was written, by rig, key and revision: never a value.
-    assert.equal(said.join("").match(/a rig's config written to the bus/g)?.length, 6);
+    assert.equal(said.join("").match(/a rig's config written to the bus/g)?.length, 8);
     assert.ok(!said.join("").includes("made-up-key-one"));
     for (const rig of ["rig-a", "rig-b"])
-      for (const key of ["model-route", "advisor-routes", "mcp-servers"])
+      for (const key of ["model-route", "advisor-routes", "mcp-servers", "git-access"])
         assert.equal(s.values(rig, key).length, 1, `${rig} ${key}`);
     const [route] = s.values("rig-a", "model-route");
     const value = route?.value as { route: { model: string; api_key: string }; planner: null };
@@ -119,12 +120,13 @@ describe("each rig's config on the message bus", () => {
       "model-route": 2,
       "advisor-routes": 2,
       "mcp-servers": 2,
+      "git-access": 2,
     });
-    assert.equal(s.figures.rigs.get("rig-a"), 3);
+    assert.equal(s.figures.rigs.get("rig-a"), 4);
     // A second look, a third: nothing changed, nothing written.
     await s.writer.write();
     await s.writer.write();
-    assert.equal(s.bus.kept.length, 6);
+    assert.equal(s.bus.kept.length, 8);
   });
 
   test("a change rewrites only its key: the route's key, then the MCP servers, then the seal key", async () => {
@@ -184,7 +186,7 @@ describe("each rig's config on the message bus", () => {
     one.giveModel("rig-a");
     await one.writer.start();
     await one.writer.write();
-    assert.equal(one.bus.kept.length, 3);
+    assert.equal(one.bus.kept.length, 4);
     const mcpServers = { forRig: one.mcp.forRig, handed: one.mcp.handed_ } as unknown as McpServers;
     const writer = (box: SecretBox) =>
       new ConfigWriter({
@@ -196,13 +198,13 @@ describe("each rig's config on the message bus", () => {
     const again = writer(secrets);
     await again.start();
     await again.write();
-    assert.equal(one.bus.kept.length, 3);
+    assert.equal(one.bus.kept.length, 4);
     // With another secrets key, the revisions differ: each key is written again.
     const other = writer(SecretBox.ephemeral());
     await other.start();
     await other.write();
     // The route's key does not open with it: that value is not written, and the rig keeps it.
-    assert.equal(one.bus.kept.length, 5);
+    assert.equal(one.bus.kept.length, 7);
   });
 
   test("a rig without a seal key, a retired rig and an unknown rig get nothing", async () => {
@@ -214,7 +216,8 @@ describe("each rig's config on the message bus", () => {
     s.store.retired.add("rig-a", "owner");
     await s.writer.write();
     assert.equal(s.bus.kept.length, 0);
-    s.store.retired.remove("rig-a");
+    // Enrolled again, it is back, and gets its config.
+    enrollRigs(s.store, ["rig-a"]);
     await s.writer.write();
     assert.deepEqual([...new Set(s.bus.kept.map((m) => m.subject.split(".")[2]))], ["rig-a"]);
   });
@@ -242,10 +245,10 @@ describe("each rig's config on the message bus", () => {
     await s.writer.start();
     s.bus.failing = true;
     await s.writer.write();
-    assert.equal(s.figures.failed, 3, "each key's read back failed");
+    assert.equal(s.figures.failed, 4, "each key's read back failed");
     s.bus.failing = false;
     await s.writer.write();
-    assert.equal(s.bus.kept.length, 3);
+    assert.equal(s.bus.kept.length, 4);
     assert.equal(s.figures.written["model-route"], 1);
   });
 
@@ -253,7 +256,7 @@ describe("each rig's config on the message bus", () => {
     const s = setup({ seals: { "rig-a": newSealKey() } });
     await s.writer.start();
     await s.writer.write();
-    assert.equal(s.bus.kept.length, 3);
+    assert.equal(s.bus.kept.length, 4);
     // The bus lost its store: its stream, every value and the ids it had seen with it.
     s.bus.made.clear();
     s.bus.kept.length = 0;
@@ -265,6 +268,7 @@ describe("each rig's config on the message bus", () => {
     await s.writer.write();
     assert.deepEqual(s.bus.kept.map((m) => m.subject.split(".").at(-1)).sort(), [
       "advisor-routes",
+      "git-access",
       "mcp-servers",
       "model-route",
     ]);
@@ -345,9 +349,10 @@ describe("a rig's seal key on the supervisor's call", () => {
       await bad.text(),
       /bus_seal_key is not an X25519 public key: base64 of its DER form, on one line/,
     );
+    // Without the rig's key, the call is one of a rig off the bus: refused, and the rig broken.
     const alone = await s.figures({ bus_seal_key: newSealKey().publicKey });
-    assert.equal(alone.status, 400);
-    assert.match(await alone.text(), /bus_seal_key comes only with bus_key/);
+    assert.equal(alone.status, 409);
+    assert.match(await alone.text(), /this rig has no keys on the message bus/);
     assert.equal(s.store.busKeys.rigKey("rig-a"), undefined);
   });
 });

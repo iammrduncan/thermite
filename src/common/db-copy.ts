@@ -46,7 +46,8 @@ export function copiesOf(path: string): DbCopy[] {
 
 /**
  * Copies the database before a migration from `version` to `to`, then keeps only the newest
- * copies. Returns the copy's path.
+ * `keep` copies (COPIES_KEPT unless given; null keeps every copy, as control does while a
+ * retention policy of its store's copies is on and decides instead). Returns the copy's path.
  */
 export function copyBeforeMigration(
   db: DatabaseSync,
@@ -54,10 +55,12 @@ export function copyBeforeMigration(
   version: number,
   to: number,
   now: Date = new Date(),
+  keep: number | null = COPIES_KEPT,
 ): string {
   const copy = `${path}.v${version}.${now.toISOString().replace(/[:.]/g, "-")}.copy`;
   db.prepare("vacuum into ?").run(copy);
-  for (const old of copiesOf(path).slice(COPIES_KEPT)) rmSync(old.path, { force: true });
+  if (keep !== null)
+    for (const old of copiesOf(path).slice(keep)) rmSync(old.path, { force: true });
   log("db", "copied the database before a migration", { path, copy, from: version, to });
   return copy;
 }

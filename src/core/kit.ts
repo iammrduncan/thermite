@@ -12,7 +12,7 @@ import { normalizePath } from "./paths.ts";
  *   {kit}    the kit checkout in the check; in a run, the run's read-only copy of `run.copy`
  *   {build}  the verified build directory of the arm being run (read-only)
  *   {params} a file with the cell's parameters as key=value lines ({params_json}: as JSON)
- *   {out}    the run's output directory
+ *   {out}    the run's output directory (with run.driver, the driver's alone)
  *   {models} the imported models, one read-only file per sha256: `{models:<sha256>}` (run and
  *            check only; the contract's `models` list names them)
  *
@@ -91,6 +91,13 @@ const KitFields = z.strictObject({
      */
     copy: z.array(KitPath).default([]),
     command: Argv,
+    /**
+     * The kit's driver, where a run needs one beside the candidate: started with `command`, as a
+     * user of its own, its standard output the command's standard input and the command's output
+     * its input. It writes {out}, and the run ends when it does; the judge times it. It gets no
+     * {build}: it never runs the candidate's code. Without it, `command` runs alone.
+     */
+    driver: Argv.optional(),
     timeout_s: Seconds.default(300),
     rss_mib: Mib.default(1024),
     disk_mib: Mib.default(256),
@@ -187,22 +194,39 @@ export const KitSchema = KitFields.superRefine((kit, ctx) => {
     }
   }
   // A run reaches only the kit paths it copies.
-  for (const arg of kit.run.command) {
-    for (const m of arg.matchAll(/\{kit(?::([^}]+))?\}/g)) {
-      const sub = m[1] === undefined ? undefined : normalizePath(m[1]);
-      const covered =
-        sub === undefined
-          ? kit.run.copy.length > 0
-          : kit.run.copy.some((c) => sub === c || sub.startsWith(`${c}/`));
-      if (!covered) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["run", "command"],
-          message: `${m[0]} is not in run.copy (a run cannot read the kit)`,
-        });
+  for (const field of ["command", "driver"] as const) {
+    for (const arg of kit.run[field] ?? []) {
+      for (const m of arg.matchAll(/\{kit(?::([^}]+))?\}/g)) {
+        const sub = m[1] === undefined ? undefined : normalizePath(m[1]);
+        const covered =
+          sub === undefined
+            ? kit.run.copy.length > 0
+            : kit.run.copy.some((c) => sub === c || sub.startsWith(`${c}/`));
+        if (!covered) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["run", field],
+            message: `${m[0]} is not in run.copy (a run cannot read the kit)`,
+          });
+        }
       }
     }
   }
+  // A driver writes the outputs and never reaches the candidate's build.
+  const uses = (argv: readonly string[], name: string) =>
+    argv.some((a) => new RegExp(`\\{${name}(?::[^}]+)?\\}`).test(a));
+  if (kit.run.driver && uses(kit.run.driver, "build"))
+    ctx.addIssue({
+      code: "custom",
+      path: ["run", "driver"],
+      message: "{build} is not for the driver: the candidate's build runs as run.command alone",
+    });
+  if (kit.run.driver && uses(kit.run.command, "out"))
+    ctx.addIssue({
+      code: "custom",
+      path: ["run", "command"],
+      message: "with run.driver, the driver writes {out}: the candidate's command gets none",
+    });
 });
 export type Kit = z.infer<typeof KitSchema>;
 
@@ -231,6 +255,26 @@ export function paramsText(params: Record<string, number | string | boolean>): s
   return `${Object.entries(params)
     .map(([k, v]) => `${k}=${v}`)
     .join("\n")}\n`;
+}
+
+/**
+ * The metrics a contract decides by (goal 182): its objective's, its guards', its hard limits'
+ * and its threshold goals'. The judge needs each of them in every run a contract measures; the
+ * kit's other metrics it keeps where a run reports them, and a run without them is not invalid.
+ * A research contract measures none.
+ */
+export function contractMetrics(contract: Contract): Set<string> {
+  const out = new Set<string>();
+  if (contract.mode === "hill_climb") {
+    out.add(contract.objective.primary.metric);
+    for (const s of contract.objective.secondary) out.add(s.metric);
+    for (const g of contract.guards) out.add(g.metric);
+    for (const h of contract.hard_constraints) if (h.kind !== "check") out.add(h.metric);
+  }
+  if (contract.mode === "goal")
+    for (const g of contract.goals)
+      if (g.verify.type === "metric_threshold") out.add(g.verify.metric);
+  return out;
 }
 
 /**
@@ -269,12 +313,14 @@ export function kitProblems(contract: Contract, kit: Kit, targetType?: string): 
       }
     }
   }
-  // Every run works out every metric of the kit, and a rate divides its cell's `work` parameter
-  // by the run's time. A cell the contract runs without that parameter, as a number above zero,
-  // would fail every run as an infrastructure error (whose words would carry the cell's
-  // parameters and time), so it is refused here.
+  // Every run works out every metric the contract decides by, and a rate divides its cell's
+  // `work` parameter by the run's time. A cell the contract runs without that parameter, as a
+  // number above zero, would fail every run as an infrastructure error (whose words would carry
+  // the cell's parameters and time), so it is refused here. A rate the contract does not use is
+  // left out of a run whose cell has no such parameter.
+  const used = contractMetrics(contract);
   const rates = Object.entries(kit.metrics).flatMap(([name, m]) =>
-    "work" in m ? [{ name, work: m.work }] : [],
+    "work" in m && used.has(name) ? [{ name, work: m.work }] : [],
   );
   for (const c of rates.length ? cellsRun(contract, kit) : []) {
     const params = cellParams(kit, c);

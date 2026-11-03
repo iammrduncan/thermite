@@ -447,7 +447,6 @@ export function makeJudgeEnv(
       ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
       : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
     owner: "judge-test",
-    promotion: opts.promotion ?? "auto",
     readyRetries: 0,
     calibrationBlocks: 0,
   });

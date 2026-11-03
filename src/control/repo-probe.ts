@@ -2,8 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { errorText } from "../common/errors.ts";
-import { gitText } from "../common/git.ts";
-import { type GitAuth, withGitAuth } from "../common/git-auth.ts";
+import { type GitAuth, gitText, withGitAuth } from "../common/git/index.ts";
 
 /**
  * What the new-campaign page shows about a project before it starts: the commit a branch or tag
@@ -186,4 +185,66 @@ export function suggestions(paths: string[]): string[] {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([p]) => p);
+}
+
+/**
+ * Whether a Git access may push to a repository (goal 185), for the page's **Check it can push**:
+ * a `git push --dry-run` of a commit made here to a `thermite/` branch. The host checks the right
+ * to push when the push begins, and a dry run sends nothing, so nothing is written there. Undefined
+ * when it may; else why not, in words.
+ */
+export async function pushCheck(
+  url: string,
+  access?: { auth: GitAuth; knownHostsFile: string },
+): Promise<string | undefined> {
+  if (!access)
+    return "a push needs a Git access: a public repository can be read without one, but not pushed to";
+  const ssh = access.auth.kind === "ssh";
+  if (
+    ssh
+      ? !/^(?:ssh:\/\/[^\s]+|[\w.-]+@[\w.-]+:[^\s]+)$/.test(url)
+      : !/^https:\/\/[^\s@]+$/.test(url)
+  )
+    return ssh
+      ? "with an SSH deploy key, the repository is an ssh:// or git@host:path address"
+      : "with a token, the repository is an https:// address";
+  const dir = mkdtempSync(join(tmpdir(), "thermite-push-check-"));
+  try {
+    return await withGitAuth(access.auth, access.knownHostsFile, async (g) => {
+      const git = probe({ ...g.env, GIT_ALLOW_PROTOCOL: g.protocols }, 1024 * 1024);
+      await git(["init", "--quiet", "--bare", dir]);
+      const tree = await git(["-C", dir, "mktree"]).catch(() => "");
+      const empty = tree.trim() || "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+      const commit = (
+        await gitText(["-C", dir, "commit-tree", empty, "-m", "Thermite's push check"], {
+          only: true,
+          env: {
+            GIT_AUTHOR_NAME: "thermite",
+            GIT_AUTHOR_EMAIL: "thermite@localhost",
+            GIT_COMMITTER_NAME: "thermite",
+            GIT_COMMITTER_EMAIL: "thermite@localhost",
+          },
+        })
+      ).trim();
+      try {
+        await git([
+          "-C",
+          dir,
+          "push",
+          "--dry-run",
+          "--quiet",
+          url,
+          `${commit}:refs/heads/thermite/push-check`,
+        ]);
+        return undefined;
+      } catch (err) {
+        const msg = errorText(err);
+        return /read.only|denied|403|401|not allowed|Authentication|could not read/i.test(msg)
+          ? "the repository refused a push with this access: give it write access on the code host, or choose another"
+          : `control could not push there: ${msg.split("\n").filter(Boolean).at(-1)?.slice(0, 200)}`;
+      }
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }

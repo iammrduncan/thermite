@@ -1,3 +1,5 @@
+import { NAV_COOKIE } from "./components/index.ts";
+
 /**
  * The dashboard's only script, served from control itself (CSP script-src 'self'; nothing inline
  * runs). It streams the live view, from control's push of new lines (server-sent events, on
@@ -183,9 +185,11 @@ export const CLIENT_JS = `
     tip.style.top = y + "px";
   };
   const hideTip = () => (tip.style.display = "none");
-  document.addEventListener("mouseover", (ev) => { const i = ev.target.closest && ev.target.closest(".ii"); if (i) showTip(i); });
-  document.addEventListener("mouseout", (ev) => { if (ev.target.closest && ev.target.closest(".ii")) hideTip(); });
-  document.addEventListener("focusin", (ev) => { const i = ev.target.closest && ev.target.closest(".ii"); if (i) showTip(i); });
+  // A mark with its reason (.tipped, such as withdrawn evidence) shows it the same way.
+  const tipped = (t) => t.closest && t.closest(".ii, .tipped");
+  document.addEventListener("mouseover", (ev) => { const i = tipped(ev.target); if (i) showTip(i); });
+  document.addEventListener("mouseout", (ev) => { if (tipped(ev.target)) hideTip(); });
+  document.addEventListener("focusin", (ev) => { const i = tipped(ev.target); if (i) showTip(i); });
   document.addEventListener("focusout", hideTip);
 
   // ------------------------------------------------ panels: open in place, close with Esc
@@ -200,6 +204,13 @@ export const CLIENT_JS = `
     }
     const close = ev.target.closest && ev.target.closest("[data-close]");
     if (close) { const w = close.closest(".drawer-wrap"); if (w) { ev.preventDefault(); w.hidden = true; } }
+    // A button that copies its text, such as a champion's commit (goal 185).
+    const copy = ev.target.closest && ev.target.closest("button[data-copy]");
+    if (copy) {
+      ev.preventDefault();
+      const done = () => { copy.dataset.copied = "1"; setTimeout(() => delete copy.dataset.copied, 1500); };
+      try { navigator.clipboard.writeText(copy.dataset.copy).then(done, () => window.prompt("Copy it:", copy.dataset.copy)); } catch { window.prompt("Copy it:", copy.dataset.copy); }
+    }
     // A link out of a panel to a part of the same page: the panel closes, the part shows.
     const to = ev.target.closest && ev.target.closest("[data-close-to]");
     const part = to && $(to.dataset.closeTo);
@@ -290,7 +301,7 @@ export const CLIENT_JS = `
         if (!list.children.length) {
           const d = document.createElement("div");
           d.className = "muted small";
-          d.textContent = "Nothing found in these folders.";
+          d.textContent = "Nothing found in these collections.";
           list.append(d);
         }
       } catch {}
@@ -323,6 +334,25 @@ export const CLIENT_JS = `
     chips("#jk [data-jk]", (b) => (jk = b.dataset.jk));
     if (words) words.addEventListener("input", apply);
   }
+
+  // ------------------------------------------------ the left navigation: open, or only its icons
+  // This browser keeps the choice in a cookie control reads (NAV_COOKIE), so every page is drawn
+  // as the navigation was left, before this script runs.
+  const tog = $("#side-tog");
+  if (tog) tog.addEventListener("click", () => {
+    const app = $(".app");
+    const rail = !app.classList.contains("rail");
+    app.classList.toggle("rail", rail);
+    const words = rail ? "Expand the navigation" : "Collapse the navigation";
+    tog.setAttribute("aria-expanded", String(!rail));
+    tog.setAttribute("aria-label", words);
+    tog.title = words;
+    document.querySelectorAll(".sidebar .nav a").forEach((a) => {
+      const t = a.querySelector("span");
+      if (rail && t) a.title = t.textContent; else a.removeAttribute("title");
+    });
+    document.cookie = ${JSON.stringify(NAV_COOKIE)} + "=" + (rail ? "rail" : "open") + "; path=/ui; max-age=31536000; samesite=strict";
+  });
 
   // ------------------------------------------------ the navigation's campaigns and folders (goal 077)
   // A folder folds and opens, and this browser remembers which are folded. A campaign dragged
@@ -476,6 +506,12 @@ export const CLIENT_JS = `
   });
   document.addEventListener("input", (ev) => { if (ev.target.matches && ev.target.matches("input[data-confirm]")) confirms(); });
   confirms();
+
+  // ------------------------------------------------ the Exports page: one box ticks every export shown
+  const xall = $("#xall");
+  if (xall) xall.addEventListener("change", () => {
+    document.querySelectorAll("#xrows input[name=pick]").forEach((b) => { b.checked = xall.checked; });
+  });
 
   // ------------------------------------------------ a rig's history: everything, the pod, the runs or the judge
   const hf = $("#hf");

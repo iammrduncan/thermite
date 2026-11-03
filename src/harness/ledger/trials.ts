@@ -1,8 +1,13 @@
 import { canonicalJson, sha256Hex } from "../../core/canonical.ts";
 import { LedgerPart, type Row } from "./part.ts";
 
-/** A family's standing in the direction registry. */
-export type FamilyStatus = "live" | "blocked" | "exhausted";
+/**
+ * A direction's standing in the direction registry: `live`, or `exhausted` once a "not possible"
+ * proposal counts it as refuted, and `live` again when that proposal is rejected (conclusions.ts).
+ * The direction table's check also names `blocked`, which nothing sets: the check is an old
+ * migration's, kept as written (schema/before-rename.ts).
+ */
+export type DirectionStatus = "live" | "exhausted";
 
 /** Who planned an epoch: the planner, or the rules in code. */
 export type EpochSource = "planner" | "fallback";
@@ -13,7 +18,7 @@ export interface TrialRow {
   run: string;
   lane: string;
   epoch: number;
-  family: string | null;
+  direction: string | null;
   parent_commit: string;
   attempt: string | null;
   stopped: string | null;
@@ -49,7 +54,7 @@ function toTrial(r: Row): TrialRow {
     run: String(r.run),
     lane: String(r.lane),
     epoch: Number(r.epoch),
-    family: textOrNull(r.family),
+    direction: textOrNull(r.direction),
     parent_commit: String(r.parent_commit),
     attempt: textOrNull(r.attempt),
     stopped: textOrNull(r.stopped),
@@ -63,12 +68,33 @@ function toTrial(r: Row): TrialRow {
   };
 }
 
-const TRIAL_COLS = `id, run, lane, epoch, family, parent_commit, attempt, stopped, turns, tool_calls,
+const TRIAL_COLS = `id, run, lane, epoch, direction, parent_commit, attempt, stopped, turns, tool_calls,
   tokens_in, tokens_out, error, started_at, ended_at`;
 
 /**
- * The `trial`, `lane`, `epoch` and `family` tables: the workers' trials, each lane's retained
- * best, the planner's epochs and the direction registry's families.
+ * Ledger migration 26: the tokens the model proxy saw in the provider's answers to a trial's calls,
+ * for a trial whose program reaches its provider through the proxy (OpenCode, Codex). Null for
+ * any other trial, whose own counters count.
+ */
+export const TRIAL_PROXY_TOKENS = `
+alter table trial add column proxy_tokens_in integer;
+alter table trial add column proxy_tokens_out integer;
+`;
+
+/** Where the meta table keeps the newest `workers_reset` the scheduler applied. */
+const RESETS_APPLIED = "workers_resets_applied";
+
+/**
+ * Ledger migration 28: the scheduler records each reset of a run's workers it applied, so one that
+ * a restart cut off is applied when the harness starts again. The resets a ledger recorded before
+ * this version were applied as they came: in a new ledger, every reset counts.
+ */
+export const RESETS_APPLIED_FROM = `insert or ignore into meta (key, value)
+  select '${RESETS_APPLIED}', coalesce(max(id), 0) from event where kind = 'workers_reset';`;
+
+/**
+ * The `trial`, `lane`, `epoch` and `direction` tables: the workers' trials, each lane's retained
+ * best, the planner's epochs and the direction registry.
  */
 export class LedgerTrials extends LedgerPart {
   /** A new trial. Only its token's hash is stored. */
@@ -77,17 +103,17 @@ export class LedgerTrials extends LedgerPart {
     run: string;
     lane: string;
     epoch: number;
-    family: string;
+    direction: string;
     parent: string;
     token?: string | undefined;
   }): void {
     this.execute(
-      "insert into trial (id, run, lane, epoch, family, parent_commit, token_sha, started_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+      "insert into trial (id, run, lane, epoch, direction, parent_commit, token_sha, started_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
       t.id,
       t.run,
       t.lane,
       t.epoch,
-      t.family,
+      t.direction,
       t.parent,
       t.token ? sha256Hex(t.token) : null,
       this.now(),
@@ -236,10 +262,37 @@ export class LedgerTrials extends LedgerPart {
     return r ? toTrial(r) : undefined;
   }
 
-  /** The tokens a run's trials used. */
+  /**
+   * A trial whose program reaches its provider through the model proxy: from now on, its tokens are
+   * those the proxy sees in the provider's answers (proxySaw), whatever its program reports.
+   */
+  countByProxy(id: string): void {
+    this.execute(
+      `update trial set proxy_tokens_in = coalesce(proxy_tokens_in, 0),
+         proxy_tokens_out = coalesce(proxy_tokens_out, 0) where id = ?`,
+      id,
+    );
+  }
+
+  /** The tokens one of the provider's answers to a trial's call reported, as the proxy saw it. */
+  proxySaw(id: string, t: { in: number; out: number }): void {
+    this.execute(
+      `update trial set proxy_tokens_in = coalesce(proxy_tokens_in, 0) + ?,
+         proxy_tokens_out = coalesce(proxy_tokens_out, 0) + ? where id = ?`,
+      t.in,
+      t.out,
+      id,
+    );
+  }
+
+  /**
+   * The tokens a run's trials used: what the model proxy saw of a trial through it, else what the
+   * trial reported.
+   */
   tokens(run: string): { in: number; out: number } {
     const r = this.row<Row>(
-      "select coalesce(sum(tokens_in), 0) as i, coalesce(sum(tokens_out), 0) as o from trial where run = ?",
+      `select coalesce(sum(coalesce(proxy_tokens_in, tokens_in)), 0) as i,
+         coalesce(sum(coalesce(proxy_tokens_out, tokens_out)), 0) as o from trial where run = ?`,
       run,
     );
     return { in: Number(r?.i ?? 0), out: Number(r?.o ?? 0) };
@@ -278,6 +331,22 @@ export class LedgerTrials extends LedgerPart {
         "update lane set lane_best_attempt = null where id = ? and lane_best_attempt is not null",
         `${run}:${lane}`,
       ).changes > 0
+    );
+  }
+
+  /** The newest reset of a run's workers the scheduler applied: its `workers_reset` event's id. */
+  resetsApplied(): number {
+    return Number(
+      this.row<Row>("select value from meta where key = ?", RESETS_APPLIED)?.value ?? 0,
+    );
+  }
+
+  /** A reset of a run's workers applied: its `workers_reset` event's id. */
+  resetApplied(event: number): void {
+    this.execute(
+      "insert or replace into meta (key, value) values (?, ?)",
+      RESETS_APPLIED,
+      String(event),
     );
   }
 
@@ -330,13 +399,13 @@ export class LedgerTrials extends LedgerPart {
     );
   }
 
-  // The direction registry's families.
+  // The direction registry.
 
-  /** Adds a family to a run's registry, unless the run has it: whether it did. */
-  addFamily(run: string, id: string, description: string, by: string): boolean {
+  /** Adds a direction to a run's registry, unless the run has it: whether it did. */
+  addDirection(run: string, id: string, description: string, by: string): boolean {
     return (
       this.execute(
-        "insert or ignore into family (run, id, description, created_by, created_at) values (?, ?, ?, ?, ?)",
+        "insert or ignore into direction (run, id, description, created_by, created_at) values (?, ?, ?, ?, ?)",
         run,
         id,
         description.slice(0, 500),
@@ -346,36 +415,38 @@ export class LedgerTrials extends LedgerPart {
     );
   }
 
-  /** Sets a family's status; with `from`, only when it has that one. Whether it changed. */
-  setFamilyStatus(run: string, id: string, status: FamilyStatus, from?: FamilyStatus): boolean {
-    const r =
-      from === undefined
-        ? this.execute("update family set status = ? where run = ? and id = ?", status, run, id)
-        : this.execute(
-            "update family set status = ? where run = ? and id = ? and status = ?",
-            status,
-            run,
-            id,
-            from,
-          );
+  /** Sets a direction's status, only while it has `from`: whether it changed. */
+  setDirectionStatus(
+    run: string,
+    id: string,
+    status: DirectionStatus,
+    from: DirectionStatus,
+  ): boolean {
+    const r = this.execute(
+      "update direction set status = ? where run = ? and id = ? and status = ?",
+      status,
+      run,
+      id,
+      from,
+    );
     return r.changes > 0;
   }
 
-  /** A run's families with their status, oldest first. */
-  families(run: string): { id: string; description: string; status: FamilyStatus }[] {
+  /** A run's directions with their status, oldest first. */
+  directions(run: string): { id: string; description: string; status: DirectionStatus }[] {
     return this.rows<Row>(
-      "select id, description, status from family where run = ? order by created_at",
+      "select id, description, status from direction where run = ? order by created_at",
       run,
     ).map((f) => ({
       id: String(f.id),
       description: String(f.description),
-      status: String(f.status) as FamilyStatus,
+      status: String(f.status) as DirectionStatus,
     }));
   }
 
-  /** A run's families and what each tries, in no set order. */
-  familyDescriptions(run: string): { id: string; description: string }[] {
-    return this.rows<Row>("select id, description from family where run = ?", run).map((f) => ({
+  /** A run's directions and what each tries, in no set order. */
+  directionDescriptions(run: string): { id: string; description: string }[] {
+    return this.rows<Row>("select id, description from direction where run = ?", run).map((f) => ({
       id: String(f.id),
       description: String(f.description),
     }));

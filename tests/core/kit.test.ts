@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { parseContract } from "../../src/core/contract.ts";
-import { cellParams, cellTimeoutS, KitSchema, kitProblems } from "../../src/core/kit.ts";
+import {
+  cellParams,
+  cellTimeoutS,
+  contractMetrics,
+  KitSchema,
+  kitProblems,
+} from "../../src/core/kit.ts";
 import { expandArgv } from "../../src/harness/judge/kits.ts";
 import { makeJudgeEnv } from "../helpers/judge-env.ts";
 
@@ -51,6 +57,24 @@ describe("kit commands", () => {
         `${JSON.stringify(copy)} ${arg}`,
       );
     }
+  });
+
+  test("a kit's driver writes the outputs, reaches only the kit paths in run.copy, and never the build", () => {
+    const driven = withRun({
+      copy: ["run"],
+      command: ["{build:out/bench}", "{params}"],
+      driver: ["python3", "{kit:run/drive.py}", "{params_json}", "{out}"],
+    });
+    assert.deepEqual(KitSchema.parse(driven).run.driver?.[1], "{kit:run/drive.py}");
+    assert.equal(KitSchema.parse(base).run.driver, undefined, "a run alone needs no driver");
+    const refused = (run: Record<string, unknown>, message: RegExp) =>
+      assert.throws(() => KitSchema.parse({ ...driven, run: { ...driven.run, ...run } }), message);
+    refused({ driver: ["{kit:check.py}"] }, /not in run\.copy/);
+    refused(
+      { driver: ["{kit:run/drive.py}", "{build:out/bench}"] },
+      /\{build\} is not for the driver/,
+    );
+    refused({ command: ["{build:out/bench}", "{out}"] }, /the driver writes \{out\}/);
   });
 
   test("a cell may set its own time limit; a cell of parameters alone keeps the kit's", () => {
@@ -283,6 +307,19 @@ describe("kit commands", () => {
       // The verifier's gate runs too; a cell no part of the contract runs is not checked.
       [need("gate"), need("text")],
     );
+    // A rate the contract does not decide by needs no such parameter (goal 182): its runs leave
+    // it out where a cell has none.
+    const both = KitSchema.parse({
+      ...rated,
+      metrics: { ...rated.metrics, secs: { from: "time" } },
+    });
+    const bySecs = contract({
+      mode: "hill_climb",
+      objective: { primary: { metric: "secs", direction: "min", min_effect: 0.05 } },
+      cells: ["none"],
+    });
+    assert.deepEqual(kitProblems(bySecs, both), []);
+    assert.deepEqual([...contractMetrics(bySecs)], ["secs"]);
     // A kit with no rate needs no such parameter.
     assert.deepEqual(
       kitProblems(

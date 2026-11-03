@@ -8,10 +8,11 @@ import {
   X509Certificate,
 } from "node:crypto";
 import { isIP, isIPv4 } from "node:net";
+import { CONTROL_LEAF_NAME } from "../../core/link/leaf.ts";
 
 /**
- * The certificates of the message bus's TLS (goal 168): control's own certificate authority, and
- * the server's certificate it signs. Node can read a certificate but not make one, so this module
+ * The certificates of the message bus's TLS (goal 168): control's own certificate authority, the
+ * server's certificate it signs, and each RunPod pod's authority and certificate (leaf.ts). Node can read a certificate but not make one, so this module
  * writes the few DER structures of an X.509 certificate itself (RFC 5280); every key is made and
  * every signature is made by node:crypto. Keys are ECDSA on P-256, signed with SHA-256.
  */
@@ -91,6 +92,7 @@ const OID = {
   authorityKeyId: [2, 5, 29, 35],
   extKeyUsage: [2, 5, 29, 37],
   serverAuth: [1, 3, 6, 1, 5, 5, 7, 3, 1],
+  clientAuth: [1, 3, 6, 1, 5, 5, 7, 3, 2],
 } as const;
 
 const ALGORITHM = sequence(oid(OID.ecdsaSha256));
@@ -111,8 +113,8 @@ const pem = (body: Buffer) =>
 
 /** The bus's certificate authority's name, as its certificates show it. */
 export const BUS_CA_NAME = "Thermite control: the message bus's certificate authority";
-/** The bus's server certificate's name. */
-export const BUS_SERVER_NAME = "Thermite: the message bus's server";
+/** The bus's server certificate's name: a pod's server takes it as control's (core/link/leaf.ts). */
+export const BUS_SERVER_NAME = CONTROL_LEAF_NAME;
 
 /** How long before `from` a certificate is valid: an hour, for a clock a little behind. */
 const EARLY_MS = 3_600_000;
@@ -148,14 +150,17 @@ function certificate(m: Making): string {
 const keyPair = () => generateKeyPairSync("ec", { namedCurve: "P-256" });
 const keyPem = (key: KeyObject) => key.export({ type: "pkcs8", format: "pem" }).toString();
 
-/** A certificate authority, valid from `from` for `days`: it signs certificates and nothing else. */
-export function makeCa(from: Date, days: number): CertAndKey {
+/**
+ * A certificate authority named `subject` (the bus's own by default), valid from `from` for
+ * `days`: it signs certificates and nothing else.
+ */
+export function makeCa(from: Date, days: number, subject: string = BUS_CA_NAME): CertAndKey {
   const { publicKey, privateKey } = keyPair();
   const id = keyId(publicKey);
   const cert = certificate({
-    subject: BUS_CA_NAME,
+    subject,
     publicKey,
-    issuer: { name: BUS_CA_NAME, key: privateKey },
+    issuer: { name: subject, key: privateKey },
     from,
     days,
     extensions: [
@@ -168,6 +173,19 @@ export function makeCa(from: Date, days: number): CertAndKey {
   return { cert, key: keyPem(privateKey) };
 }
 
+/** Who else a server's certificate names, and whether it may also sign in as a client. */
+export interface ServerCertOptions {
+  /** Its own name (the bus's server by default). */
+  subject?: string | undefined;
+  /** The authority's name, as makeCa gave it (the bus's own by default). */
+  caName?: string | undefined;
+  /**
+   * Also good for a client's side of TLS: the bus's server shows it when it dials a RunPod pod's
+   * server as a leaf node, and the pod's server takes no other.
+   */
+  client?: boolean | undefined;
+}
+
 /**
  * A server's certificate for these names (host names or addresses), signed by the authority,
  * valid from `from` for `days`. Throws on a name that is neither.
@@ -177,6 +195,7 @@ export function makeServerCert(
   names: readonly string[],
   from: Date,
   days: number,
+  o: ServerCertOptions = {},
 ): CertAndKey {
   if (!names.length) throw new Error("a server certificate needs at least one name");
   const altNames = names.map((n) => {
@@ -187,17 +206,18 @@ export function makeServerCert(
   });
   const authorityKeyId = keyId(new X509Certificate(ca.cert).publicKey);
   const { publicKey, privateKey } = keyPair();
+  const uses = [oid(OID.serverAuth), ...(o.client ? [oid(OID.clientAuth)] : [])];
   const cert = certificate({
-    subject: BUS_SERVER_NAME,
+    subject: o.subject ?? BUS_SERVER_NAME,
     publicKey,
-    issuer: { name: BUS_CA_NAME, key: createPrivateKey(ca.key) },
+    issuer: { name: o.caName ?? BUS_CA_NAME, key: createPrivateKey(ca.key) },
     from,
     days,
     extensions: [
       extension(OID.basicConstraints, true, sequence()),
       // digitalSignature.
       extension(OID.keyUsage, true, bits(Buffer.from([0x80]), 7)),
-      extension(OID.extKeyUsage, false, sequence(oid(OID.serverAuth))),
+      extension(OID.extKeyUsage, false, sequence(...uses)),
       extension(OID.altNames, false, sequence(...altNames)),
       extension(OID.subjectKeyId, false, octets(keyId(publicKey))),
       extension(OID.authorityKeyId, false, sequence(der(0x80, authorityKeyId))),

@@ -2,6 +2,7 @@ import type { Hardware } from "../../../core/hardware.ts";
 import { isRigCheck } from "../../../core/ids.ts";
 import { ANSWERED, RESEARCH_REVIEW } from "../../../core/research-check.ts";
 import { SCREENED_VERDICTS, WON_VERDICTS } from "../../../core/verdicts.ts";
+import type { BuildInfo } from "../../../core/version.ts";
 import {
   type CampaignView,
   campaignViews,
@@ -16,6 +17,7 @@ import { STYLE } from "../style/index.ts";
 import { campaignHref } from "../urls.ts";
 import { ICON_LINKS } from "./icons.ts";
 
+export { type Filter, filterForm, pagerHtml } from "./filters.ts";
 export {
   bestGainWords,
   championCard,
@@ -24,6 +26,7 @@ export {
   startWords,
   valuesPairWords,
 } from "./gains.ts";
+export { attemptGuards, championGuardLine, guardCharts } from "./guards.ts";
 export { APPLE_TOUCH_ICON, FAVICON_ICO, FAVICON_SVG, ICON_LINKS } from "./icons.ts";
 export { MD_CORE_JS, mdHtml } from "./markdown.ts";
 export { card } from "./need-card.ts";
@@ -122,6 +125,14 @@ export const icon = {
     15,
   ),
   chevron: svg('<path d="m9 6 6 6-6 6"/>', 12),
+  down: svg('<path d="m6 9 6 6 6-6"/>', 12),
+  search: svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', 14),
+  panel: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>'),
+  record: svg('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'),
+  blurb: svg('<path d="M20 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>'),
+  doc: svg(
+    '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+  ),
   archive: svg(
     '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
     14,
@@ -132,6 +143,7 @@ export const icon = {
   ),
   cpu: svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/>', 18),
   logout: svg('<path d="M15 4h4v16h-4M10 17l5-5-5-5M15 12H3"/>'),
+  back: svg('<path d="M19 12H5M11 18l-6-6 6-6"/>'),
   cog: svg(
     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   ),
@@ -335,24 +347,6 @@ export function verdictColor(v: string): string {
   if (v === "inconclusive" || v === "crash_infra") return "#d4d4d8";
   return "#a1a1aa";
 }
-export function verdictChip(v: string | null, lifecycle: string): string {
-  const k = v ?? lifecycle;
-  const cls =
-    WON_VERDICTS.includes(k) || k === "promoted" || k === "starting_point"
-      ? "ok"
-      : k === "regress" || k === "crash_candidate"
-        ? "bad"
-        : k === "invalid" ||
-            k === "rejected_v0" ||
-            k === "duplicate" ||
-            k === "awaiting_audit" ||
-            k === "awaiting_approval"
-          ? "warn"
-          : k === "queued" || k === "screening" || k === "confirming"
-            ? "info"
-            : "";
-  return `<span class="chip ${cls}">${esc(k.replace(/_/g, " "))}</span>`;
-}
 
 export function stackBar(counts: Record<string, number>): string {
   const entries = Object.entries(counts)
@@ -480,7 +474,60 @@ export interface Shell {
   flush?: boolean | undefined;
   /** The left navigation's folders and archived campaigns (goal 077); none: no folders. */
   nav?: NavCampaigns | undefined;
+  /** The left navigation shows only its icons: the owner collapsed it in this browser (NAV_COOKIE). */
+  rail?: boolean | undefined;
+  /** In Settings, the area shown: the left navigation is Settings' own (goal 181). */
+  area?: SettingsArea | undefined;
+  /** Control's own build, named at the bottom of every page. */
+  build?: BuildInfo | undefined;
 }
+
+/** Settings' areas, each a page of its own, in its navigation's groups and order (goal 181). */
+export const SETTINGS_AREAS = [
+  { area: "providers", group: "Models", label: "Providers" },
+  { area: "prices", group: "Models", label: "Model prices" },
+  { area: "routes", group: "Models", label: "Rigs' models" },
+  { area: "mcp", group: "Agents", label: "MCP servers" },
+  { area: "reach", group: "Agents", label: "Addresses rigs may reach" },
+  { area: "kb", group: "Data", label: "Knowledge base" },
+  { area: "space", group: "Data", label: "Space" },
+  { area: "retention", group: "Data", label: "Retention policies" },
+  { area: "bus", group: "System", label: "Message bus" },
+] as const;
+export type SettingsArea = (typeof SETTINGS_AREAS)[number]["area"];
+
+/** A Settings area's page. */
+const settingsHref = (area: SettingsArea) =>
+  area === "providers" ? "/ui/settings" : `/ui/settings/${area}`;
+
+const AREA_ICON: Record<SettingsArea, string> = {
+  providers: icon.key,
+  prices: icon.chart,
+  routes: icon.cpu,
+  mcp: icon.chip,
+  reach: icon.live,
+  kb: icon.book,
+  space: icon.archive,
+  retention: icon.clock,
+  bus: icon.list,
+};
+
+/** Settings' own navigation: back to the rest of the dashboard, then each area by its group. */
+function settingsNav(active: SettingsArea, rail: boolean): string {
+  let group = "";
+  const rows = SETTINGS_AREAS.map((a) => {
+    const head = a.group !== group ? `<div class="section">${esc(a.group)}</div>` : "";
+    group = a.group;
+    return `${head}<a href="${settingsHref(a.area)}" class="${a.area === active ? "on" : ""}"${rail ? ` title="${esc(a.label)}"` : ""}>${AREA_ICON[a.area]}<span>${esc(a.label)}</span></a>`;
+  }).join("");
+  return `<nav class="nav set-nav" aria-label="Settings"><a href="/ui" class="set-back"${rail ? ` title="Back to Thermite"` : ""}>${icon.back}<span>Back to Thermite</span></a>${rows}</nav>`;
+}
+
+/**
+ * The cookie that keeps the left navigation collapsed in one browser, `rail` when it is: control
+ * reads it for each page, so a collapsed navigation is drawn so, before the page's script runs.
+ */
+export const NAV_COOKIE = "thermite_nav";
 
 /** What the left navigation shows of the campaigns besides their runs (goal 077). */
 export interface NavCampaigns {
@@ -499,7 +546,7 @@ export interface NavCampaigns {
 /** A folder's name in the navigation, at most this long (campaigns/folders.ts checks it too). */
 const FOLDER_NAME_MAX = 40;
 const FOLDER_TIP =
-  "A folder groups campaigns in this navigation, and nothing else: a campaign's runs, results and folder in the knowledge base stay as they are. Up to 40 characters; each name once.";
+  "A folder groups campaigns in this navigation, and nothing else: a campaign's runs, results and collection in the knowledge base stay as they are. Up to 40 characters; each name once.";
 
 /** What an empty folder says: a folder that holds only archived campaigns says so. */
 export const emptyFolder = (archived: number) =>
@@ -568,7 +615,8 @@ export function shell(s: Shell, body: string): string {
     { queued: 0, leased: 0 },
   );
   const nav = (href: string, key: Shell["active"], ic: string, text: string, right = "") =>
-    `<a href="${href}" class="${s.active === key ? "on" : ""}">${ic}<span>${esc(text)}</span>${right}</a>`;
+    `<a href="${href}" class="${s.active === key ? "on" : ""}"${s.rail ? ` title="${esc(text)}"` : ""}>${ic}<span>${esc(text)}</span>${right}</a>`;
+  const fold = s.rail ? "Expand the navigation" : "Collapse the navigation";
   // No list of rigs here (goal 077): the Rigs page lists them, with their state.
   const camps = campaignViews(s.rigs);
   const archived = s.nav?.archived;
@@ -576,23 +624,26 @@ export function shell(s: Shell, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(s.title)} · Thermite</title>${ICON_LINKS}
 <style>${STYLE}</style><script src="/ui/assets/app.js" defer></script></head>
-<body><div class="app">
-<aside class="sidebar">
-  <a class="brand" href="/ui"><span class="mark">Th</span>Thermite</a>
-  <nav class="nav">
+<body><div class="app${s.rail ? " rail" : ""}">
+<aside class="sidebar" id="sidebar">
+  <div class="side-top"><a class="brand" href="/ui"><span class="mark">Th</span><span class="brand-name">Thermite</span></a><button type="button" class="ib side-tog" id="side-tog" aria-controls="sidebar" aria-expanded="${s.rail ? "false" : "true"}" aria-label="${fold}" title="${fold}">${icon.panel}</button></div>
+  ${
+    s.area
+      ? settingsNav(s.area, Boolean(s.rail))
+      : `<nav class="nav">
     ${nav("/ui", "overview", icon.home, "Overview", s.needs ? `<span class="badge">${s.needs}</span>` : "")}
     ${nav("/ui/campaigns", "campaigns", icon.trophy, "Campaigns", `<span class="count">${campCount}</span>`)}
     ${nav("/ui/rigs", "rigs", icon.rigs, "Rigs", `<span class="count">${s.rigs.length}</span>`)}
     ${nav("/ui/metrics", "metrics", icon.chart, "Metrics")}
     ${nav("/ui/live", "live", icon.terminal, "Live")}
     ${nav("/ui/knowledge", "knowledge", icon.book, "Knowledge")}
-    ${nav("/ui/commands", "commands", icon.list, "Commands")}
     ${nav("/ui/reports", "reports", icon.file, "Reports")}
     ${nav("/ui/exports", "exports", icon.download, "Exports")}
     ${nav("/ui/audit", "audit", icon.shield, "Audit log")}
   </nav>
-  ${navCampaigns(camps, s.nav)}
-  <div class="side-foot"><form method="post" action="/ui/logout"><button class="ghost sm">${icon.logout}Sign out</button></form><a class="cog${s.active === "settings" ? " on" : ""}" href="/ui/settings" title="Settings" aria-label="Settings">${icon.cog}</a></div>
+  ${navCampaigns(camps, s.nav)}`
+  }
+  <div class="side-foot"><form method="post" action="/ui/logout"><button class="ghost sm">${icon.logout}<span>Sign out</span></button></form><a class="cog${s.active === "settings" ? " on" : ""}" href="/ui/settings" title="Settings" aria-label="Settings">${icon.cog}</a></div>
 </aside>
 <div class="main">
   <header class="topbar">
@@ -608,9 +659,14 @@ export function shell(s: Shell, body: string): string {
   <span class="spacer"></span>
   <span class="item">${running} running <span class="sub">runs</span></span>
   <span class="item">${jobs.leased} judging · ${jobs.queued} queued <span class="sub">judge</span></span>
+  ${s.build ? buildItem(s.build) : ""}
   <span class="item" id="live-state"><span class="sub">page from ${esc(new Date(s.now).toISOString().slice(11, 19))} UTC</span><a href="" title="Load this page again with what control knows now">refresh</a></span>
 </footer></div></body></html>`;
 }
+
+/** Control's version and the commit it was built from, short, with the whole commit on hover. */
+const buildItem = (b: BuildInfo) =>
+  `<span class="item" title="${esc(b.commit ? `Control runs Thermite ${b.version}, built from commit ${b.commit}` : `Control runs Thermite ${b.version}; its image did not record the commit it was built from`)}"><span class="sub">control</span>v${esc(b.version)}${b.commit ? ` · <code>${esc(b.commit.slice(0, 8))}</code>` : ""}</span>`;
 
 const gib = (mib: number | null | undefined) =>
   typeof mib === "number"

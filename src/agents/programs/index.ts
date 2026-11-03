@@ -6,14 +6,14 @@
  * that read each one's own session log into one set of events (session-log.ts); and Thermite's
  * hook program for Claude Code and Codex, with the adapter of its signals (hooks/); and how each
  * runs in its own terminal (terminal.ts and each program's `terminal.ts`, goal 169), which
- * Thermite's terminal host (src/harness/terminal/) drives. The harness's trial loop for them is
- * src/harness/agents/cli/.
+ * Thermite's terminal host (src/agents/terminal/) drives. Each program's entry, as every role runs
+ * it, is src/agents/cli/, and the harness's trial loop for them src/harness/agents/cli/.
  */
 
 import { CLAUDE_TERMINAL } from "./claude-code/index.ts";
 import { CODEX_TERMINAL } from "./codex/index.ts";
 import { OPENCODE_TERMINAL } from "./opencode/index.ts";
-import type { TerminalProfile, TerminalProgram } from "./terminal.ts";
+import { PI_VIEW_TERMINAL, type TerminalProfile, type TerminalProgram } from "./terminal.ts";
 
 export {
   CLAUDE_BASE_ENV,
@@ -40,6 +40,7 @@ export {
   claudeTranscript,
   claudeTrialSettings,
   closeClaudeRun,
+  creditsOn,
   mergeUsage,
   NO_CLAUDE_CODE,
   newClaudeTally,
@@ -48,6 +49,7 @@ export {
   readClaudeEvents,
   type TranscriptState,
   type UsageWindow,
+  windowsOfStatus,
 } from "./claude-code/index.ts";
 export {
   type CodexTally,
@@ -110,6 +112,7 @@ export {
 } from "./session-log.ts";
 export {
   literally,
+  PI_VIEW_TERMINAL,
   TERMINAL_KEYS,
   TERMINAL_PROGRAMS,
   type TerminalKey,
@@ -125,4 +128,5 @@ export const TERMINAL_PROFILES: Readonly<Record<TerminalProgram, TerminalProfile
   "claude-code": CLAUDE_TERMINAL,
   codex: CODEX_TERMINAL,
   opencode: OPENCODE_TERMINAL,
+  pi: PI_VIEW_TERMINAL,
 };

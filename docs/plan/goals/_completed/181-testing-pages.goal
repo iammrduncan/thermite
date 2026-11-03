@@ -1,0 +1,46 @@
+---
+id: "181"
+title: "Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals"
+status: VERIFIED
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 181 · Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011)
+
+## What
+
+The dashboard's pages from the owner's testing notes of 2026-11-02, built from a mockup the owner approves first:
+
+1. **One audit log** (item 1): "we likely don't need a commands page and an audit page ... Just have a single audit page and allow filtering by type (like commands)." The audit log records who issued a command; its delivery and outcome are in control's commands, which the merged page shows on a command's row.
+2. **Campaigns' reports** (item 2): "the reports page is kindof useless ... it should become reports that are the final report outputs from a campaign." Today it holds each rig's daily summary and the full resets, which need a home of their own. A research run writes a final report and a paper; a hill climb's and a goal's end is their champion or outcome.
+3. **Exports to find** (items 4, 5, 6): drop-down filters of several choices in place of the chips, the columns in the order a first look needs, and pages.
+4. **The audit log's pages** (item 7): it pages already, 300 at a time, but every MCP call is in it; filters, the MCP calls hidden unless asked for, and a way back to the newest.
+5. **Settings with their own navigation** (item 8): "settings page is a mile long. when in settings the left hand nav should change to show nav through settings areas ... top of nav is 'exit settings' or 'back'".
+6. **Live on the agents' terminals** (item 16): "the live views are still normal what they were.. not the live TUI of the agent". Each agent does run in its terminal (the rig's program mode is terminal), but a run's Live opens on the lines, and the terminals hide behind a chip; Live opens on them instead.
+
+## Done when
+
+- [x] The owner approved a mockup of each page.
+- [x] Each page is built as approved, with the pages that describe it, and its tests and acceptance checks pass.
+
+## Decisions
+
+- 2026-11-02, owner, on the mockup of the five pages (one audit log with commands, campaign reports, exports with drop-down filters and pages, settings with their own navigation, Live opening on the agents' terminals): "mockups look good".
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's notes, with what each page does today.
+- 2026-11-02: Exports (items 4, 5, 6) and the audit log with the commands (items 1, 7) built: a drop-down filter of several choices, its chips and the pages are one component (ui/components/filters.ts), with the page script sending the filters as a choice changes. The audit log filters by kind, by who and by rig in the store (AUDIT_KINDS, by the action's form; AUDIT_ACTORS, by the actor's), counts for "1–50 of N", leaves MCP calls out unless picked, and shows each command's status and outcome; `/ui/commands` opens it with Commands picked. The pages that named the Commands page now name the audit log's commands.
+- 2026-11-02: Reports (item 2) built: each closed run's report, newest first (the run view keeps `status_at`, when its status last changed), by mode and campaign, the rig checks' runs only when asked. A full reset under way moved to a card on its rig's page with its state, its detail, Cancel and Confirm, and its actions come back there. The supervisors' daily summaries stay for MCP and REST; their removal is a question for goal 178.
+- 2026-11-02: Live (item 16) built: a run's Live opens on Terminals while one of its agents works in its terminal, each lane's trial and the planner's call a pane of a grid with its own console (ui/terminal.ts's pane, its script set up for each pane, each pane's inputs a part of their own), with Lines and Advisors as tabs; the ⌨ Terminals list is gone.
+- 2026-11-02: Settings (item 8) built: a page for each area (SETTINGS_AREAS in ui/components: Providers, Model prices and Rigs' models under Models; MCP servers and Addresses rigs may reach under Agents; Knowledge base, Space and Retention policies under Data; Message bus under System), at `/ui/settings/<area>` with `/ui/settings` as Providers. In Settings the shell draws Settings' own navigation, under Back to Thermite, collapsing to icons as the main one does. Each form's answer comes back to its area's page, and the words that named Settings › Providers for prices, the rigs' models or MCP servers now name their page.
+- 2026-11-02: Verified. Settings is 2249e87e, on top of the other four pages. On it the control (06:31Z), quick-start (06:39Z), agents (06:46Z) and Codex (06:50Z) acceptance checks passed; on e0d719a5 the RunPod (05:49Z) and control (05:53Z) checks passed; the full tests, the fast checks and the docs checks passed on each commit. The owner's notes items 1, 2, 4 to 8 and 16 are done.
+
+---
+
+Run with `/goal Complete docs/plan/goals/181-testing-pages.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

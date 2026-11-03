@@ -2,9 +2,13 @@ import { z } from "zod";
 import { canonicalSha } from "./canonical.ts";
 import { AgentsContext } from "./compaction.ts";
 import { DURATION_PATTERN, parseDuration } from "./duration.ts";
-import { CampaignId } from "./ids.ts";
+import { CampaignId, MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
+import { KbWritesInContract } from "./kb/index.ts";
 import { McpUses } from "./mcp.ts";
+import { CONTRACT_KEYS } from "./names.ts";
 import { additionRefusals, RoleAdditions } from "./role-additions.ts";
+
+export { MAX_LANES, MAX_LANES_REASON } from "./ids.ts";
 
 /**
  * Campaign contract, schema version 1.
@@ -36,21 +40,6 @@ const RegexSchema = z
       return false;
     }
   }, "invalid regular expression");
-
-const SearchPolicy = z.strictObject({
-  /** What public search may be used for, stated for agents and auditors. */
-  allowed_purposes: z.array(z.string().min(1)).default([]),
-  /** Regular expressions; matching queries are refused and logged. */
-  blocked_patterns: z.array(RegexSchema).default([]),
-});
-
-/**
- * The most lanes a rig can run: its harness image has a user for each of lanes 1 to 16
- * (containers/harness/Containerfile; IDS.maxLanes in src/harness/broker/runner.ts). A contract's
- * lanes.count, a rig's workers at a time and the campaign builder refuse more, with this reason.
- */
-export const MAX_LANES = 16;
-export const MAX_LANES_REASON = `at most ${MAX_LANES}: a rig has users for lanes 1 to ${MAX_LANES} only`;
 
 /**
  * What a worker's lane may use. Optional and without schema defaults, so contracts written
@@ -161,11 +150,16 @@ const Common = {
     .default({ max_open_attempts: 4 }),
   min_duration: DurationSchema.optional(),
   max_duration: DurationSchema.optional(),
-  search_policy: SearchPolicy.optional(),
   /**
    * The campaign's additional information, from its author (goal 078): background, links, what
    * was tried, limits and what good looks like, in Markdown, with no length limit. The planner,
    * the workers and the advisors get it as data to weigh, never as a rule (brief.ts).
+   */
+  additional_information: z.string().optional(),
+  /**
+   * The additional information's key in a contract written before v0.1.1 (core/names.ts). Such a
+   * contract keeps its keys as it was signed, so its hash holds (parseStoredContract), and is read
+   * with this as `additional_information` (currentContract). A new contract may not use it.
    */
   notes: z.string().optional(),
   /**
@@ -187,6 +181,14 @@ const Common = {
    * keep their hash.
    */
   role_additions: RoleAdditions.optional(),
+  /**
+   * Which kinds of item each role may write in its own slot of Thermite's knowledge base (goal
+   * 175): planner, worker, teachers, merged_by, auditor, review_panel, synthesizer and
+   * final_writer, each with its kinds. Left out: core/kb/items.ts's KB_WRITES_DEFAULT. Optional and
+   * without a default, so contracts written before it keep their hash; a contract that names a
+   * role as the slots were spelled before keeps it as signed, and kbWritesOf reads it.
+   */
+  kb_writes: KbWritesInContract.optional(),
 };
 
 const EditPolicy = {
@@ -323,7 +325,7 @@ export const GoalContract = z
       .default({ allowed: false }),
     /** Epochs during which lanes get no cross-lane evidence. */
     independence_epochs: z.number().int().min(0).default(2),
-    /** Approach families that must stay alive at once. */
+    /** Directions that must stay alive at once. */
     min_live_families: z.number().int().min(1).default(2),
     /** Runs per cell when a metric threshold is checked; its interval needs several. */
     threshold_reps: z.number().int().min(2).max(20).default(5),
@@ -468,8 +470,25 @@ export type ContractParse =
   | { ok: true; contract: Contract; sha: string }
   | { ok: false; errors: string[] };
 
-/** Validates a contract and returns it with defaults applied and its content hash. */
+/**
+ * Validates a new contract and returns it with defaults applied and its content hash. A key a
+ * contract had before v0.1.1 is refused, with its new name (core/names.ts).
+ */
 export function parseContract(input: unknown): ContractParse {
+  const old =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? [...CONTRACT_KEYS].filter(([k]) => k in input)
+      : [];
+  if (old.length)
+    return { ok: false, errors: old.map(([k, now]) => `${k}: \`${k}\` is now \`${now}\``) };
+  return parseStoredContract(input);
+}
+
+/**
+ * Validates a contract as it was signed, a stored one included: a contract written before v0.1.1
+ * keeps its old keys, so its hash holds. Read it under the new names with currentContract.
+ */
+export function parseStoredContract(input: unknown): ContractParse {
   const r = ContractSchema.safeParse(input);
   if (!r.success) {
     return {

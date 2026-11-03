@@ -4,7 +4,7 @@ Thank you for helping. Fixes, documentation, kits, bug reports and ideas are all
 
 ## The terms
 
-- Thermite is under the [MIT license](LICENSE). What you contribute is published under it.
+- Thermite is under the [Apache License 2.0](LICENSE). What you contribute is published under it: section 5 of the license says a contribution you submit is under its terms.
 - There is no contributor agreement to sign, and no sign-off line to add to your commits.
 - Everyone in the project follows the [code of conduct](CODE_OF_CONDUCT.md), the Contributor Covenant 2.1.
 
@@ -41,9 +41,10 @@ Run these from the repository root before each commit:
 | `npm run check:public` | That no tracked or staged file holds private names or addresses. Stage new files first |
 | `npm run check:sizes` | That no file over 800 lines grows, and no file newly passes 800 lines. After a split, `npm run check:sizes -- --lower` lowers its recorded size |
 | `npm run check:imports` | That no new import breaks the rule of the parts in CONVENTIONS.md, and that code outside a folder that is a module imports its `index.ts`. After a move, `npm run check:imports -- --lower` drops the exceptions that are gone |
+| `npm run check:loose-ends` | That no export of `src/` is left that no other file names, and no path in a comment or a page names a file that isn't there. After a removal or a fix, `npm run check:loose-ends -- --lower` drops the exceptions that are gone |
 | `npm run docs:build` and `npm run docs:check` | The documentation site, when you change it or anything that a page describes. Run `npm run docs:install` once first |
 
-`npm run check` runs the typecheck, the lint, every test, the public check, the size check and the import check. Changes to containers, the judge, control or the agents also need a test that starts containers: the [contributor guide](docs/local-development.md) and [AGENTS.md](AGENTS.md#checks) say which.
+`npm run check` runs the typecheck, the lint, every test, the public check, the size check, the import check and the loose-ends check. Changes to containers, the judge, control or the agents also need a test that starts containers: the [contributor guide](docs/local-development.md) and [AGENTS.md](AGENTS.md#checks) say which.
 
 ## The rules every change keeps
 

@@ -1,7 +1,8 @@
 import type { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { redact } from "../../common/env.ts";
 import { errorText, jsonBody } from "../../common/errors.ts";
-import { ISSUE } from "../../core/api/control/owner.ts";
+import { COMMAND, ISSUE } from "../../core/api/control/owner.ts";
 import { issueWaking, WakeRefused } from "../issue/index.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 
@@ -10,7 +11,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
   const { store, privateKeyPem, parts, admin } = api;
   const { runpodRigs } = parts;
 
-  app.post(ISSUE.path, admin, async (c) => {
+  app.post(ISSUE.path, admin, bodyLimit({ maxSize: ISSUE.maxBytes }), async (c) => {
     const body = ISSUE.body.parse(await jsonBody(c.req));
     // A wipe goes only through the full reset (export, verified push, the owner's confirmation).
     if (body.kind === "wipe_state")
@@ -31,7 +32,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
       // A refused command (a bad payload, a message nothing would read) is the client's to fix,
       // and in the audit log as the dashboard's and MCP's refusals are.
       const error = errorText(err);
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: "/v1/commands",
         kind: body.kind,
         why: redact(error),
@@ -57,7 +58,7 @@ export function commandRoutes(app: Hono, api: ApiContext): void {
 export function commandStatusRoutes(app: Hono, api: ApiContext): void {
   const { store, admin } = api;
 
-  app.get("/v1/commands/:id", admin, (c) => {
+  app.get(COMMAND.path, admin, (c) => {
     const cmd = store.commands.get(c.req.param("id"));
     return cmd ? c.json(cmd) : c.json({ error: "not found" }, 404);
   });

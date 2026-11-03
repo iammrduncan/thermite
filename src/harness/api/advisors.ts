@@ -1,7 +1,9 @@
 import type { Hono } from "hono";
 import { z } from "zod";
+import { ADVISOR_ROLES } from "../../core/agents.ts";
 import {
   ADVISOR_MESSAGES,
+  ADVISOR_MESSAGES_WAITING,
   AUDITS,
   AUDITS_PENDING,
   BRIEF,
@@ -15,8 +17,6 @@ import {
   EVIDENCE,
   EvidenceQuery,
   JOURNAL,
-  KNOWLEDGE,
-  KnowledgeQuery,
   LinesQuery,
   PAPER,
   PAPER_CHECK,
@@ -36,17 +36,17 @@ import {
   SourceQuery,
 } from "../../core/api/harness/advisors.ts";
 import { RESEARCH_KINDS } from "../../core/api/harness/research.ts";
-import { ADVISORS, KB } from "../../core/api/harness/supervisor.ts";
+import { ADVISORS } from "../../core/api/harness/supervisor.ts";
 import { additionsOf } from "../../core/role-additions.ts";
 import { type ApiContext, limitOf } from "./context.ts";
 
 /**
  * The supervisor's advisors (the teachers, the auditor, the review panel, the synthesizer and the
  * final writer): their reads of a run, the packages they decide on, and where their rules,
- * decisions, cards, papers, receipts, queue changes, notes and past research go.
+ * decisions, cards, papers, receipts, queue changes and notes go.
  */
 export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): void {
-  app.post(DIRECTIVES.path, supervisor, async (c) => {
+  app.post(DIRECTIVES.path, supervisor, limitOf(DIRECTIVES), async (c) => {
     const body = DIRECTIVES.body.parse(await c.req.json());
     // Rules naming a direction the run doesn't have are left out, each with why (goal 066).
     return c.json(service.setAdvisorRules(body.run, body.directives, "supervisor"));
@@ -147,13 +147,17 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
   app.get(RESEARCH_SEARCH.path, supervisor, (c) => {
     const q = SearchQuery.parse({
       q: c.req.query("q") ?? undefined,
+      mode: c.req.query("mode") || undefined,
       kinds: c.req.query("kinds") || undefined,
       limit: numberOf(c.req.query("limit")),
+      offset: numberOf(c.req.query("offset")),
     });
     return c.json(
       service.runResearch.search(runOf(c), q.q, {
         kinds: q.kinds?.split(",").map((k) => k.trim()),
         limit: q.limit,
+        offset: q.offset,
+        mode: q.mode,
       }),
     );
   });
@@ -246,6 +250,17 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
     c.json(service.advisorMessages(ADVISOR_MESSAGES.body.parse(await c.req.json()))),
   );
 
+  // The owner's messages that wait for an advisor role in a run, as its package gives them: an
+  // advisor's call in its program's own terminal takes them inside its turn (goal 169).
+  app.get(ADVISOR_MESSAGES_WAITING.path, supervisor, (c) => {
+    const role = z.enum(ADVISOR_ROLES).safeParse(c.req.query("role"));
+    if (!role.success) return c.json({ error: "role is teachers, auditor or review_panel" }, 400);
+    const messages = service.messages
+      .waitingForAdvisor(c.req.query("run") ?? "", role.data)
+      .map((m) => ({ id: m.id, text: m.text }));
+    return c.json({ messages });
+  });
+
   // The advisors' additions and moves for a run's experiment queue, each recorded with the
   // advisor role as who made it. Advisors add and reorder; they don't drop or give out work.
   app.post(QUEUE.path, supervisor, limitOf(QUEUE), async (c) =>
@@ -257,31 +272,4 @@ export function advisorRoutes(app: Hono, { service, supervisor }: ApiContext): v
   app.post(JOURNAL.path, supervisor, limitOf(JOURNAL), async (c) =>
     c.json(service.advisorNotes(JOURNAL.body.parse(await c.req.json()))),
   );
-
-  // Past research for a run's folder, from control's knowledge base (the supervisor syncs it):
-  // each item a file under the run's knowledge/. `folders` (the folders the run's campaign may
-  // read now) removes a folder whose grant was revoked.
-  app.post(KB.path, supervisor, limitOf(KB), async (c) => {
-    const body = KB.body.parse(await c.req.json());
-    return c.json(service.writeKnowledge(body.run, body.items, body.folders));
-  });
-
-  // A search of a run's past research for its advisors, read only (the supervisor gives it to
-  // them as a tool): the items of its knowledge/ with every word given, newest first, marked as
-  // data. Nothing here writes.
-  app.get(KNOWLEDGE.path, supervisor, (c) => {
-    const q = KnowledgeQuery.parse({
-      run: c.req.query("run"),
-      q: c.req.query("q") ?? undefined,
-      kinds: c.req.query("kinds") ?? undefined,
-      limit: c.req.query("limit") ?? undefined,
-    });
-    if (!service.ledger.runs.get(q.run)) return c.json({ error: `no run ${q.run}` }, 404);
-    return c.json(
-      service.knowledge.search(q.run, q.q, {
-        kinds: q.kinds ? q.kinds.split(",").map((k) => k.trim()) : undefined,
-        limit: q.limit,
-      }),
-    );
-  });
 }

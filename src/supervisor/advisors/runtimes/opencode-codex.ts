@@ -10,7 +10,7 @@ import {
   opencodeOwn,
   readUnder,
 } from "../../../agents/compaction/index.ts";
-import type { ModelConfig } from "../../../agents/model/index.ts";
+import type { ModelConfig, ProviderErrorAnswer } from "../../../agents/model/index.ts";
 import {
   codexBin,
   codexExe,
@@ -23,6 +23,7 @@ import {
 } from "../../../agents/programs/index.ts";
 import { messageText, type Prompt } from "../../../agents/prompt.ts";
 import type { AdvisorFrame } from "../../../agents/roles/index.ts";
+import { KB_SERVER } from "../../../agents/tools/index.ts";
 import type { UsageRoute } from "../../../core/usage.ts";
 import type { AdvisorKeeper, AdvisorResult, AdvisorTools } from "../call.ts";
 import {
@@ -34,9 +35,40 @@ import {
   readOpencodeAnswer,
 } from "../cli.ts";
 import { type AdvisorRuntime, advisorRoute } from "../config.ts";
+import { limitInAnswer } from "../limit.ts";
 import { serveAdvisorModel } from "../proxy.ts";
 import { serveAdvisorTools } from "../tools/index.ts";
 import { callId, collectCompactions, runCli } from "./cli.ts";
+
+/**
+ * The model an advisor in OpenCode or the Codex CLI reaches, with the key the call's proxy adds
+ * (none for OpenCode's own models, which take no proxy); else why it can't run, in words.
+ */
+export function cliHarnessModel(
+  rt: Extract<AdvisorRuntime, { runtime: "opencode" | "codex" }>,
+): { model: ModelConfig; key: string; native: boolean } | string {
+  const native = rt.runtime === "opencode" && rt.api === "opencode";
+  if (!native && !rt.base_url) return `advisor ${rt.name} has no base_url`;
+  const key = native
+    ? ""
+    : (rt.api_key ?? (rt.api_key_file ? readFileSync(rt.api_key_file, "utf8").trim() : ""));
+  if (!native && !key) return `advisor ${rt.name} has no key`;
+  const model: ModelConfig = {
+    api: rt.api === "openai" ? undefined : rt.api,
+    baseUrl: (rt.base_url ?? "").replace(/\/$/, ""),
+    model: rt.model,
+    // The key stays in the supervisor: the proxy adds it.
+    apiKey: "",
+    // The window and the point the CLI compacts with, in its own settings, as the workers' are
+    // (goal 070): OpenCode's limit.context and compaction.buffer, Codex's model_context_window and
+    // model_auto_compact_token_limit.
+    contextWindow: rt.context_window,
+    ...(rt.compact_at !== undefined ? { compactAt: rt.compact_at } : {}),
+    maxTokens: 0,
+    reasoning: rt.runtime === "codex" ? rt.reasoning : undefined,
+  };
+  return { model, key, native };
+}
 
 /**
  * An advisor in OpenCode or the Codex CLI (goal 073): the past research and the kit's MCP servers
@@ -55,44 +87,36 @@ export async function runCliHarness<S extends z.ZodType>(
   },
 ): Promise<AdvisorResult<z.infer<S>>> {
   const fail = (error: string) => ({ output: undefined, error, tokensIn: 0, tokensOut: 0, usd: 0 });
-  const native = rt.runtime === "opencode" && rt.api === "opencode";
   // Where the conversation is kept before each of the program's own compactions (goal 070):
   // OpenCode's through Thermite's plugin, Codex's from its rollout, which the call then keeps.
   const call = callId();
   const keeper = input.keeper;
   const at = keeper?.at?.(rt.name, call);
-  if (!native && !rt.base_url) return fail(`advisor ${rt.name} has no base_url`);
-  const key = native
-    ? ""
-    : (rt.api_key ?? (rt.api_key_file ? readFileSync(rt.api_key_file, "utf8").trim() : ""));
-  if (!native && !key) return fail(`advisor ${rt.name} has no key`);
-  const model: ModelConfig = {
-    api: rt.api === "openai" ? undefined : rt.api,
-    baseUrl: (rt.base_url ?? "").replace(/\/$/, ""),
-    model: rt.model,
-    // The key stays in the supervisor: the proxy adds it.
-    apiKey: "",
-    // The window and the point the CLI compacts with, in its own settings, as the workers' are
-    // (goal 070): OpenCode's limit.context and compaction.buffer, Codex's model_context_window and
-    // model_auto_compact_token_limit.
-    contextWindow: rt.context_window,
-    ...(rt.compact_at !== undefined ? { compactAt: rt.compact_at } : {}),
-    maxTokens: 0,
-    reasoning: rt.runtime === "codex" ? rt.reasoning : undefined,
-  };
+  const route = cliHarnessModel(rt);
+  if (typeof route === "string") return fail(route);
+  const { model, key, native } = route;
   const t = input.tools;
   let tools: Awaited<ReturnType<typeof serveAdvisorTools>> | undefined;
   let proxy: Awaited<ReturnType<typeof serveAdvisorModel>> | undefined;
+  // The newest error answer of the provider's the call's proxy saw: a full usage window's reset.
+  let answered: ProviderErrorAnswer | undefined;
   try {
-    if (t?.pastSearch || t?.mcp?.servers.length || t?.code || t?.research || t?.paper)
+    if (t?.kb || t?.mcp?.servers.length || t?.code || t?.research || t?.paper)
       tools = await serveAdvisorTools({
-        pastSearch: t.pastSearch,
+        kb: t.kb,
         mcp: t.mcp,
         code: t.code,
         research: t.research,
         paper: t.paper,
       });
-    if (!native) proxy = await serveAdvisorModel({ api: model.api, baseUrl: model.baseUrl, key });
+    if (!native)
+      proxy = await serveAdvisorModel(
+        { api: model.api, baseUrl: model.baseUrl, key },
+        (a) => {
+          answered = a;
+        },
+        rt.runtime,
+      );
     const servers = tools?.servers ?? [];
     const opencode = rt.runtime === "opencode";
     const env = {
@@ -104,7 +128,7 @@ export async function runCliHarness<S extends z.ZodType>(
     const root = proxy?.root ?? "";
     const exe = opencode ? (opencodeExe() ?? opencodeBin()) : (codexExe() ?? codexBin());
     const title = `Advisor ${rt.name}`;
-    return await runCli(
+    const r = await runCli(
       {
         argv: [
           exe,
@@ -168,12 +192,17 @@ export async function runCliHarness<S extends z.ZodType>(
       messageText(
         input.prompt({
           program: rt.runtime,
-          mcpServers: servers.map((s) => s.name),
+          // The kit's servers: Thermite's own has its own part of the prompt (goal 175).
+          mcpServers: servers.map((s) => s.name).filter((s) => s !== KB_SERVER),
+          kbWrites: t?.kb?.writes,
           answerSchema: input.answerSchema,
         }),
       ),
       input.schema,
     );
+    // A full usage window the provider's answer showed, where the program's words gave no reset.
+    const limit = !r.output && !r.limit && answered ? limitInAnswer(answered) : undefined;
+    return limit ? { ...r, limit } : r;
   } finally {
     await proxy?.close();
     await tools?.close();

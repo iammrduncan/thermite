@@ -1,19 +1,21 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { promisify } from "node:util";
-import { LOCAL_TOKEN_FILES } from "../../src/cli/local-init.ts";
+import { LOCAL_RIGS, LOCAL_TOKEN_FILES } from "../../src/cli/local/index.ts";
 import { BUS_TLS_FILES, BUS_USERS_FILE } from "../../src/control/bus/index.ts";
+import { BUS_SIGN_IN_SECONDS, BUS_TLS_SECONDS } from "../../src/core/link/leaf.ts";
 import {
   type BundleInput,
+  bundleFiles,
   COMPOSE_NEEDS,
   checkInput,
   IMAGE_KEYS,
   placeholders,
-  README_NEEDS,
   render,
   templateDrift,
 } from "../../src/release/bundle.ts";
@@ -99,17 +101,35 @@ describe("the release bundle", () => {
     );
     assert.equal(serviceKey(compose, "init", "network_mode"), "none");
     assert.equal(serviceKey(compose, "init", "cap_drop"), "[ALL]");
-    // Every secret the services read is a file the init service writes.
-    const made = [...LOCAL_TOKEN_FILES, "model-api-key", "control-rig-tokens.json"];
+    // Every secret the services read is a file the init service writes; each rig's token for
+    // control is the one its enroll service writes in place, into the file init made empty.
+    const made: string[] = [...LOCAL_TOKEN_FILES, ...Object.values(LOCAL_RIGS), "model-api-key"];
     const files = [...compose.matchAll(/\{ file: \.\/\.dev\/secrets\/([a-z0-9.-]+) \}/g)].map(
       (m) => m[1],
     );
-    assert.equal(files.length, 10);
+    assert.equal(files.length, 9);
     for (const name of files) assert.ok(made.includes(name ?? ""), `${name} is made by init`);
+    for (const [rig, file] of Object.entries(LOCAL_RIGS)) {
+      const service = rig === "local-1" ? "enroll" : "enroll-2";
+      assert.equal(
+        serviceKey(compose, service, "command"),
+        `["thermite", "local", "enroll", "${rig}", "--control", "http://control:8800", "--token-file", "/run/secrets/control-admin-token", "--out", "/enroll/${file}"]`,
+      );
+    }
+    assert.ok(!compose.includes("RIG_TOKENS_FILE"), "control reads no rig tokens file");
   });
 
   test("the template matches compose.yaml but for images and the init service", () => {
     assert.deepEqual(templateDrift(COMPOSE, TEMPLATE), []);
+    // Each build line stands for its image by its target of the one Containerfile: a build from
+    // another file, or of another target, is drift.
+    const harness = "dockerfile: containers/Containerfile, target: harness";
+    assert.ok(COMPOSE.includes(harness));
+    for (const other of [
+      "dockerfile: containers/harness/Containerfile, target: harness",
+      "dockerfile: containers/Containerfile, target: harness-dev",
+    ])
+      assert.match(templateDrift(COMPOSE.replace(harness, other), TEMPLATE).join(), /build: \{/);
     const changed = COMPOSE.replace(
       "THERMITE_TARGET: cpu\n      THERMITE_CONTROL_PUBKEY_FILE",
       'THERMITE_TARGET: cpu\n      THERMITE_NEW_SETTING: "1"\n      THERMITE_CONTROL_PUBKEY_FILE',
@@ -137,7 +157,7 @@ describe("the release bundle", () => {
     );
   });
 
-  test("the message bus runs beside control, over TLS; control is always on it, and the rigs can be turned off it", () => {
+  test("the message bus runs beside control, over TLS; control, its backup and both rigs are always on it", () => {
     for (const compose of [COMPOSE, render(TEMPLATE, placeholders(input()), COMPOSE_NEEDS)]) {
       assert.equal(
         serviceKey(compose, "nats", "profiles"),
@@ -153,25 +173,53 @@ describe("the release bundle", () => {
         serviceKey(compose, "nats", "ports") ?? "",
         /^\["\$\{THERMITE_NATS_PUBLISH:-127\.0\.0\.1:4222\}:4222"\]$/,
       );
-      // It reads the certificate's key through control's group.
-      assert.equal(serviceKey(compose, "nats", "user"), '"0:10001"');
-      // The files control writes for it, by the names control's code gives them.
+      // A user of its own, not root, with no capability; it reads the certificate's key through
+      // control's group. A one-shot service gives the folders to their users before it starts.
+      assert.equal(serviceKey(compose, "nats", "user"), '"10002:10001"');
+      assert.equal(serviceKey(compose, "nats", "cap_drop"), "[ALL]");
+      assert.equal(serviceKey(compose, "nats", "cap_add"), undefined);
+      assert.match(
+        compose,
+        /\n {4}depends_on:\n {6}control: \{ condition: service_started \}\n {6}nats-init: \{ condition: service_completed_successfully \}\n {4}networks: \[control\]\n/,
+      );
+      assert.equal(serviceKey(compose, "nats-init", "user"), '"0:0"');
+      assert.equal(serviceKey(compose, "nats-init", "network_mode"), "none");
+      assert.equal(serviceKey(compose, "nats-init", "cap_add"), "[CHOWN, DAC_READ_SEARCH]");
+      assert.equal(serviceKey(compose, "nats-init", "image"), serviceKey(compose, "nats", "image"));
+      assert.match(
+        serviceKey(compose, "nats-init", "command") ?? "",
+        /\|\| \{ chown 0:0 \. && touch \.keep; \}; \} && chown 10001:10001 \. && .* && find \/data ! -user 10002 -exec chown 10002:10001/,
+      );
+      // Its limits: connections, and the time a connection has for TLS and to sign in.
+      assert.match(compose, /\n {8}max_connections: 1024\n/);
+      assert.ok(
+        compose.includes(
+          `\n          timeout: ${BUS_TLS_SECONDS}\n        }\n        authorization { timeout: ${BUS_SIGN_IN_SECONDS} }\n`,
+        ),
+      );
+      // The files control writes for it, by the names control's code gives them, included from
+      // its settings in /tmp.
       const dir = "/etc/nats/thermite";
       assert.ok(compose.includes(`cert_file: "${dir}/${BUS_TLS_FILES.cert}"`));
       assert.ok(compose.includes(`key_file: "${dir}/${BUS_TLS_FILES.key}"`));
-      assert.ok(compose.includes(`include thermite/${BUS_USERS_FILE}`));
+      assert.ok(compose.includes("cat > /tmp/thermite.conf <<EOF"));
+      assert.ok(compose.includes(`include ..${dir}/${BUS_USERS_FILE}`));
+      assert.ok(compose.includes("exec nats-server -c /tmp/thermite.conf"));
       for (const name of [BUS_USERS_FILE, BUS_TLS_FILES.cert, BUS_TLS_FILES.key])
         assert.ok(compose.includes(`[ -s ${dir}/${name} ]`), `it waits for ${name}`);
       // Its health check: the server answers, with JetStream on.
       assert.match(compose, /healthz\?js-enabled-only=true/);
-      // Control is always on it; both rigs' supervisors are unless THERMITE_NATS_URL is set to
-      // nothing in .env.
+      // Control is always on it, and its backup service reaches it as control does; so are both
+      // rigs' supervisors, which reach control only there: nothing in .env turns one off it.
       const fixed = "\n      THERMITE_NATS_URL: nats://nats:4222\n";
-      assert.equal(compose.split(fixed).length - 1, 1);
+      assert.equal(compose.split(fixed).length - 1, 4);
       const at = compose.indexOf(fixed);
       assert.ok(compose.indexOf("\n  control:\n") < at && at < compose.indexOf("\n  nats:\n"));
-      const on = /THERMITE_NATS_URL: "\$\{THERMITE_NATS_URL-nats:\/\/nats:4222\}"/g;
-      assert.equal(compose.match(on)?.length, 2);
+      const backup = compose.indexOf(fixed, at + 1);
+      assert.ok(
+        compose.indexOf("\n  backup:\n") < backup && backup < compose.indexOf("\n  harness:\n"),
+      );
+      assert.doesNotMatch(compose, /\$\{THERMITE_NATS_URL/);
       assert.equal(compose.split("THERMITE_NATS_CA_FILE: /keys/bus-ca.pem").length - 1, 2);
       assert.match(compose, /THERMITE_NATS_CA_EXPORT: \/keys\/bus-ca\.pem/);
       assert.match(compose, /THERMITE_NATS_CONFIG_DIR: \/nats-config/);
@@ -179,7 +227,7 @@ describe("the release bundle", () => {
   });
 
   test("the readme names the version, the images and their tags", () => {
-    const readme = render(README, placeholders(input()), README_NEEDS);
+    const { readme } = bundleFiles(input(), { compose: TEMPLATE, readme: README });
     assert.match(readme, new RegExp(`^# Thermite ${PACKAGE_VERSION.replace(/\./g, "\\.")}\n`));
     assert.ok(
       readme.includes(
@@ -192,6 +240,23 @@ describe("the release bundle", () => {
     assert.ok(readme.includes(`ghcr.io/example/thermite-control@${digest("a")}`));
     assert.ok(readme.includes(`ghcr.io/example/thermite-rig:${PACKAGE_VERSION}-cuda`));
     assert.ok(readme.includes(`ghcr.io/example/thermite-rig@${digest("e")}`));
+  });
+
+  test("the readme gives the compose file's SHA-256, and the command that checks it", () => {
+    const { compose, readme, composeSha256 } = bundleFiles(input(), {
+      compose: TEMPLATE,
+      readme: README,
+    });
+    assert.equal(composeSha256, createHash("sha256").update(compose).digest("hex"));
+    assert.ok(readme.includes(`**SHA-256 of \`compose.yaml\`:** \`${composeSha256}\``));
+    assert.ok(readme.includes(`echo "${composeSha256}  compose.yaml" | sha256sum -c -`));
+    assert.ok(readme.includes("`shasum -a 256 -c -`"), "and on macOS");
+    // Another image, another file, another SHA-256.
+    const other = bundleFiles(input({ digests: { ...input().digests, control: digest("9") } }), {
+      compose: TEMPLATE,
+      readme: README,
+    });
+    assert.notEqual(other.composeSha256, composeSha256);
   });
 
   test("refuses bad input", () => {
@@ -249,6 +314,12 @@ describe("the release bundle", () => {
     const done = await run(process.execPath, args);
     assert.match(done.stdout, /wrote .*compose\.yaml and .*README\.md/);
     const compose = readFileSync(join(out, "compose.yaml"), "utf8");
+    // The readme, the release's notes, gives the SHA-256 of the file written beside it.
+    const sha = createHash("sha256")
+      .update(readFileSync(join(out, "compose.yaml")))
+      .digest("hex");
+    assert.match(done.stdout, new RegExp(`compose\\.yaml's SHA-256 is ${sha}\n$`));
+    assert.ok(readFileSync(join(out, "README.md"), "utf8").includes(`echo "${sha}  compose.yaml"`));
     assert.equal(
       serviceKey(compose, "control", "image"),
       `ghcr.io/example/thermite-control@${digest("1")}`,

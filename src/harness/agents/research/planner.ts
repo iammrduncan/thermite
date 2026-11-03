@@ -35,7 +35,7 @@ import {
   type PlannerCallSpec,
   type PlannerCompaction,
   type PlannerMcp,
-  type PlannerPast,
+  type PlannerView,
   type PlanTry,
   plannerTries,
   type QueuePlan,
@@ -167,7 +167,6 @@ export interface ResearchPlannerInput {
   campaignBrief?: BriefData | undefined;
   notes?: ReturnType<typeof notesData> | undefined;
   briefing?: BriefingItem[] | undefined;
-  pastResearch?: string | undefined;
   /** The owner's addition to the research planner (goal 166; see PlannerInput). */
   addition?: OwnerAddition | undefined;
 }
@@ -273,8 +272,8 @@ function kindRules(directives: Directive[]) {
   const of = (k: string) =>
     new Set(
       directives
-        .filter((d) => d.body.kind === k && d.body.family)
-        .map((d) => String(d.body.family)),
+        .filter((d) => d.body.kind === k && d.body.direction)
+        .map((d) => String(d.body.direction)),
     );
   return { avoid: of("avoid"), mandate: of("mandate"), tryKinds: of("try") };
 }
@@ -421,7 +420,7 @@ export function validateResearchPlan(
         if (problem) errors.push(problem);
       }
     }
-    const kind = added ? added.kind : known?.family || "explore";
+    const kind = added ? added.kind : known?.direction || "explore";
     if (avoid.has(kind))
       errors.push(`${a.lane}: task ${id} is of kind ${kind}, under an AVOID rule`);
     handout.push({
@@ -437,7 +436,7 @@ export function validateResearchPlan(
   for (const h of twice)
     errors.push(`${h.lane}: task ${h.experiment} is given to another lane too`);
   const kindOf = (id: string) =>
-    tasks.find((x) => x.ref === id)?.kind ?? (queued.get(id) ?? proposed.get(id))?.family ?? "";
+    tasks.find((x) => x.ref === id)?.kind ?? (queued.get(id) ?? proposed.get(id))?.direction ?? "";
   for (const m of mandate)
     if (!handout.some((h) => kindOf(h.experiment) === m))
       errors.push(`MANDATE rule: give a lane a task of kind ${m} (add one if the queue has none)`);
@@ -505,7 +504,7 @@ export function validateResearchPlan(
             `What to read: ${t.source_kind.replace(/\s+/g, " ").trim()}`,
             ...(t.details?.trim() ? [t.details.trim()] : []),
           ]),
-          family: t.kind,
+          direction: t.kind,
           why: t.why,
           question: t.question,
           ...(t.position !== undefined ? { position: t.position } : {}),
@@ -598,7 +597,6 @@ export function researchPlannerContext(input: ResearchPlannerInput): string {
     ...(input.campaignBrief ? { campaign_brief: input.campaignBrief } : {}),
     ...(input.notes?.length ? { field_notes: { note: NOTES_ARE_DATA, notes: input.notes } } : {}),
     ...(input.briefing?.length ? { background: briefingData(input.briefing) } : {}),
-    ...(input.pastResearch ? { past_research: input.pastResearch } : {}),
   });
 }
 
@@ -630,6 +628,7 @@ const Change = Type.Object({
 
 /** The research planner's call: its prompts and its tool. */
 export const RESEARCH_PLAN_SPEC: PlannerCallSpec = {
+  id: "research",
   render: renderResearchPlanner,
   description:
     "Submit this round's research plan: each lane's task, your changes to the queue, and the hypotheses you promote or retire.",
@@ -709,12 +708,13 @@ export async function planResearch(
   model?: ModelConfig,
   signal?: AbortSignal,
   ask?: Ask,
-  past?: PlannerPast,
   mcp?: PlannerMcp,
   compaction?: PlannerCompaction,
   usage?: (u: CallUsage) => void,
   /** Keeps each try's prompt, as it is sent (goal 166). */
   sent?: (p: Prompt) => void,
+  /** In Pi, in its own process and its Pi view (goal 169). */
+  view?: PlannerView,
 ): Promise<ResearchPlanResult> {
   if (!model) return { source: "fallback", tries: 0, valid: false, rawViolations: [] };
   const r = await plannerTries({
@@ -725,11 +725,11 @@ export async function planResearch(
     check: (raw) => validateResearchPlan(raw, input),
     signal,
     ask,
-    past,
     mcp,
     compaction,
     usage,
     sent,
+    view,
   });
   return {
     source: r.plan ? "planner" : "fallback",

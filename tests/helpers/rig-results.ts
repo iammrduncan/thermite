@@ -1,4 +1,5 @@
 import type { ControlStore } from "../../src/control/store/index.ts";
+import { answerCommand } from "./control-store.ts";
 
 /**
  * A rig's results as control sees them, for tests: the harness's signed answer to an export, and
@@ -19,16 +20,26 @@ export function pendingOf(store: ControlStore, rig: string) {
 /** The harness applied every command waiting for the rig; an export_now makes the export `name`. */
 export function harnessApplies(store: ControlStore, rig: string, name: string): void {
   for (const c of pendingOf(store, rig))
-    store.commands.ack(rig, c.id, "delivered", {
+    answerCommand(store, rig, c.id, "delivered", {
       source: "harness",
       result: c.kind === "export_now" ? { export: name, through_event: 9 } : {},
+    });
+}
+
+/** The harness applied every command waiting; an export of each open run found every run closed. */
+export function harnessExportsNoRun(store: ControlStore, rig: string): void {
+  for (const c of pendingOf(store, rig))
+    answerCommand(store, rig, c.id, "delivered", {
+      source: "harness",
+      result: c.kind === "export_now" ? { export: null, exports: [], through_event: 9 } : {},
     });
 }
 
 /** The harness refused the rig's waiting export_now, in its signed outcome. */
 export function harnessRefusesExport(store: ControlStore, rig: string): void {
   for (const c of pendingOf(store, rig))
-    store.commands.ack(
+    answerCommand(
+      store,
       rig,
       c.id,
       c.kind === "export_now" ? "failed" : "delivered",

@@ -1,25 +1,30 @@
-import { logError } from "../../../common/log.ts";
+import { log, logError } from "../../../common/log.ts";
 import { idle, type SchedulerContext } from "./context.ts";
-import { stopTrials } from "./stops.ts";
+import { stopRunsNotRunning } from "./stops.ts";
 
 /**
- * Work in flight, watched while it runs: the stops that apply at once (stops.ts), the owner's
- * reset of a run's workers, and the harness's own shutdown (goal 079).
+ * Work in flight, watched while it runs: the runs that stop running (stops.ts), the owner's reset
+ * of a run's workers, and the harness's own shutdown (goal 079).
  */
 
 /**
- * Work in flight that must stop stops at once (scheduler/stops.ts): the trials of a run that is
- * no longer running (paused, closed) and those the owner asked to stop are killed, and a planner
- * call for a run no longer running is cancelled, instead of running to their end.
+ * Work in flight for a run no longer running (paused, closed) stops at once: its trials are
+ * killed, and its planner call is cancelled, instead of running to their end.
  */
 export function applyStops(sched: SchedulerContext): void {
-  const o = { aborts: sched.aborts, laneRun: sched.laneRun, owner: sched.o.owner };
-  sched.stopSeen = stopTrials(sched.ledger, { ...o, seen: sched.stopSeen });
+  stopRunsNotRunning(sched.ledger, {
+    aborts: sched.aborts,
+    laneRun: sched.laneRun,
+    owner: sched.o.owner,
+  });
   const p = sched.planning;
   if (p && sched.ledger.runs.get(p.run)?.status !== "running") p.ctrl.abort();
 }
 
-/** Checks every second while trials or a planner call are in flight (the tick may be waiting). */
+/**
+ * Checks every second while trials or a planner call are in flight (the tick may be waiting):
+ * a run's status changes in many parts of the harness (the owner's pause, the judge, a budget).
+ */
 export function watch(sched: SchedulerContext): void {
   if (sched.watcher) return;
   sched.watcher = setInterval(() => {
@@ -36,20 +41,43 @@ export function watch(sched: SchedulerContext): void {
   sched.watcher.unref?.();
 }
 
+/** The running trials of a run are killed: the start of its reset. */
+function abortRun(sched: SchedulerContext, run: string): void {
+  for (const [lane, ctrl] of sched.aborts) if (sched.laneRun.get(lane) === run) ctrl.abort();
+}
+
 /**
- * reset_workers: running trials of the run are killed, lane bests cleared and the
- * epoch ended, so the next tick plans afresh.
+ * reset_workers, as the service recorded it: the run's running trials are killed now, and the
+ * rest of the reset waits for the scheduler's next step (applyResets), before it plans.
+ */
+export function resetAsked(sched: SchedulerContext, reset: { event: number; run: string }): void {
+  if (sched.resets.some((r) => r.event === reset.event)) return;
+  sched.resets.push(reset);
+  abortRun(sched, reset.run);
+}
+
+/**
+ * The resets waiting, oldest first: once the run's trials have ended, its lane bests are cleared
+ * and its epoch ended, so the next tick plans afresh. The ledger records each reset applied with
+ * what it changed, so one a restart cut off waits again at the next start.
  */
 export async function applyResets(sched: SchedulerContext): Promise<void> {
-  for (const r of sched.ledger.events.list("workers_reset", { after: sched.resetSeen })) {
-    sched.resetSeen = r.id;
-    for (const a of sched.aborts.values()) a.abort();
+  for (let r = sched.resets[0]; r; r = sched.resets[0]) {
+    const { event, run } = r;
+    abortRun(sched, run);
     await idle(sched);
-    if (r.subject === null) continue;
-    for (const lane of sched.ledger.trials.lanes(r.subject))
-      sched.registry.clearLaneBest(r.subject, lane, sched.o.owner, "workers reset");
-    const epoch = sched.registry.currentEpoch(r.subject);
-    if (epoch && !epoch.ended_at) sched.registry.endEpoch(r.subject, epoch.n, sched.o.owner);
+    sched.ledger.tx(() => {
+      for (const lane of sched.ledger.trials.lanes(run))
+        sched.registry.clearLaneBest(run, lane, sched.o.owner, "workers reset");
+      const epoch = sched.registry.currentEpoch(run);
+      if (epoch && !epoch.ended_at) sched.registry.endEpoch(run, epoch.n, sched.o.owner);
+      sched.ledger.trials.resetApplied(event);
+    });
+    sched.resets.shift();
+    log("scheduler", "a run's workers reset: lane bests cleared and the round ended", {
+      run,
+      event,
+    });
   }
 }
 

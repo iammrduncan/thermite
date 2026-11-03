@@ -68,7 +68,7 @@ With neither `--seed` nor `--seed-commit`, the contract's `project.commit` must 
 
 ## 3. Check that it started
 
-- On the dashboard, open **Commands** in the sidebar. The **assign campaign** row shows **delivered** once the harness took it, or **failed** with the reason: see [If it is refused](#if-it-is-refused).
+- On the dashboard, open the **Audit log** in the sidebar and pick **Commands** under **Type**. The `assign_campaign` row shows **delivered** once the rig's report says the harness took it, within a minute, or **failed** with the reason: see [If it is refused](#if-it-is-refused).
 - Open **Campaigns**. The run shows under **At work now**, and the campaign in the list below, once the rig reports the run, usually within a minute. Press **refresh** in the status bar, the line along the bottom of the page: pages don't reload by themselves.
 - From a script, ask control with the owner's token:
 
@@ -100,9 +100,9 @@ npx thermite run start sort-speed --rig local-1 --queue-from sort-speed-1 \
 
 It needs no contract and no commit: control reuses those of the campaign's newest assignment, and prints the new run's name and command id. [Start a run from a script or an agent](start-from-dashboard.md#start-a-run-from-a-script-or-an-agent) gives its other options.
 
-Or open the campaign's page on the dashboard and press **Start a run**: choose the rig under **Where it runs**, **Agents** **On** or **Off: a try**, and press **Start the run**. The page is `/ui/campaigns/<name>`, such as `http://127.0.0.1:8800/ui/campaigns/sort-speed`. It opens once the **assign campaign** row on **Commands** is **pending** or **delivered**, even before the rig reports the run. Until the rig does, the **Campaigns** list doesn't show the campaign, and the page says `Assigned to a rig over the API, MCP or the CLI; no run of it reports now.` A campaign saved from the dashboard's **New campaign** page says `Saved on control, with no run yet.` instead.
+Or open the campaign's page on the dashboard and press **Start a run**: choose the rig under **Where it runs**, **Agents** **On** or **Off: a try**, and press **Start the run**. The page is `/ui/campaigns/<name>`, such as `http://127.0.0.1:8800/ui/campaigns/sort-speed`. It opens once the `assign_campaign` row among the **Audit log**'s commands is **pending** or **delivered**, even before the rig reports the run. Until the rig does, the **Campaigns** list doesn't show the campaign, and the page says `Assigned to a rig over the API, MCP or the CLI; no run of it reports now.` A campaign saved from the dashboard's **New campaign** page says `Saved on control, with no run yet.` instead.
 
-Control assigns the campaign again as it assigned its newest run, with the same contract, starting commit and imports, as a new run named `<campaign>-<n>`, or `<campaign>-try-<n>` without agents, with the first number not yet used on that rig, such as `sort-speed-2`. **Agents**, and **When a change is confirmed better** under **More options**, come from the panel, not from the old assignment. With **Agents** **On**, **Experiments to start with** can copy another run's untried experiments into the new run's queue: see [Choose what a run tries next](choose-what-runs-next.md#start-a-run-from-another-runs-untried-experiments). **From past research** can add experiments, and background for the agents' briefs, from the folders the campaign may read in Thermite's knowledge base: see [Use past research in a new run](use-past-research.md#start-a-run-from-past-research). `thermite assign` has no option for past research: use `thermite run start --past`, or send a payload with `thermite command`, as that page shows. A run on another rig needs that rig to get the project and the kit the same way: see [Run a campaign on several rigs](several-rigs.md).
+Control assigns the campaign again as it assigned its newest run, with the same contract, starting commit and imports, as a new run named `<campaign>-<n>`, or `<campaign>-try-<n>` without agents, with the first number not yet used on that rig, such as `sort-speed-2`. **Agents**, and **When a change is confirmed better** under **More options**, come from the panel, not from the old assignment. With **Agents** **On**, **Experiments to start with** can copy another run's untried experiments into the new run's queue: see [Choose what a run tries next](choose-what-runs-next.md#start-a-run-from-another-runs-untried-experiments). **From past research** can add experiments, and background for the agents' briefs, from the collections the campaign may read in Thermite's knowledge base: see [Use past research in a new run](use-past-research.md#start-a-run-from-past-research). `thermite assign` has no option for past research: use `thermite run start --past`, or send a payload with `thermite command`, as that page shows. A run on another rig needs that rig to get the project and the kit the same way: see [Run a campaign on several rigs](several-rigs.md).
 
 ## Send it from an agent over MCP
 
@@ -120,7 +120,7 @@ The agent sends it with the `issue_command` tool, kind `assign_campaign`, then p
 
 For the kit, give control the kit's repository instead, and start the run with `--kit control:NAME`: control keeps the kit, and the rig fetches it from control. See [Give control a kit you wrote elsewhere](write-a-kit.md#give-control-a-kit-you-wrote-elsewhere).
 
-Otherwise, put the project and the kit in the rig's inbox yourself, as git bundles that hold the commits. This works for a private repository too. The inbox is `/inbox` in the rig's containers, and `.dev/inbox` in your Thermite folder on the local stack:
+Otherwise, put the project and the kit in the rig's inbox yourself, as git bundles that hold the commits. This works for a private repository too. The inbox is `/inbox` in the rig's supervisor, and `.dev/inbox` in your Thermite folder on the local stack:
 
 ```sh
 mkdir -p .dev/inbox/repos
@@ -165,7 +165,7 @@ npx thermite command --control http://127.0.0.1:8800 --token-file .dev/secrets/c
 
 ## If it is refused
 
-The command line itself prints a refusal from its own checks or from control. A refusal from the rig shows on **Commands**, in the command's row.
+The command line itself prints a refusal from its own checks or from control. A refusal from the rig shows among the **Audit log**'s commands, in the command's row.
 
 | You see | Where | What to do |
 | --- | --- | --- |
@@ -178,10 +178,10 @@ The command line itself prints a refusal from its own checks or from control. A 
 | `bad assign_campaign payload: seed.repo: lowercase id` | The terminal | Make the contract's `project.repo` a lowercase name, such as `my-project` |
 | `-> 400 {"error":"The kit names the MCP server paper-search, and Settings has no server of that name. …"}` | The terminal | Add the server in **Settings › Providers**, or take it out of the kit |
 | `-> 400 {"error":"run sort-speed-1 was used already, on local-1: a run's name is used once on control, on every rig. Choose another, such as sort-speed-2"}` | The terminal | Use the name it suggests, or another new one |
-| **failed**, `run <id> already exists` | **Commands** | Choose a new run name |
-| **failed**, `contract <campaign> v<n> exists with other content` | **Commands** | You changed the contract: raise its `version` |
-| **pending**, then **expired** | **Commands** | The rig's supervisor is down, or a large fetch took longer than the command may wait: send it again with a longer `--ttl` |
-| **failed**, `staging: <address> has no commit <commit>`, or git's own error after `staging:` | **Commands** | The rig could not fetch the project or the kit. Check that the address works from the rig and that the commit is pushed there. For a private repository, see [If the repository is private](#if-the-repository-is-private). Then send the same command again: the run was never made |
-| **failed**, `the kit does not fit the contract: …` | **Commands** | The kit lacks a cell, metric or verifier the contract names, a case the contract runs has no `work` parameter above zero for one of the kit's rate metrics, or the kit measures on another target: each problem is named, such as `cells names cell large, which the kit does not have`. Correct the contract, or commit the kit again and put its new commit in `project.kit`. Then send it again, with a new `version` if this version already ran on the rig |
-| **failed**, `the kit names the MCP servers …, and the assignment names none: …` | **Commands** | Send the kit's list with `--mcp-servers`, as `kit.json` has it |
-| **failed**, `kit <repo> at <commit> has no valid kit.json: …` | **Commands** | Fix `kit.json` as the message says, commit it, and put the new commit in `project.kit`. See [Write a kit for your project](write-a-kit.md) |
+| **failed**, `run <id> already exists` | **Audit log**, **Commands** under **Type** | Choose a new run name |
+| **failed**, `contract <campaign> v<n> exists with other content` | **Audit log**, **Commands** under **Type** | You changed the contract: raise its `version` |
+| **pending**, then **expired** | **Audit log**, **Commands** under **Type** | The rig's supervisor is down, or a large fetch took longer than the command may wait: send it again with a longer `--ttl` |
+| **failed**, `staging: <address> has no commit <commit>`, or git's own error after `staging:` | **Audit log**, **Commands** under **Type** | The rig could not fetch the project or the kit. Check that the address works from the rig and that the commit is pushed there. For a private repository, see [If the repository is private](#if-the-repository-is-private). Then send the same command again: the run was never made |
+| **failed**, `the kit does not fit the contract: …` | **Audit log**, **Commands** under **Type** | The kit lacks a cell, metric or verifier the contract names, a case the contract runs has no `work` parameter above zero for one of the kit's rate metrics, or the kit measures on another target: each problem is named, such as `cells names cell large, which the kit does not have`. Correct the contract, or commit the kit again and put its new commit in `project.kit`. Then send it again, with a new `version` if this version already ran on the rig |
+| **failed**, `the kit names the MCP servers …, and the assignment names none: …` | **Audit log**, **Commands** under **Type** | Send the kit's list with `--mcp-servers`, as `kit.json` has it |
+| **failed**, `kit <repo> at <commit> has no valid kit.json: …` | **Audit log**, **Commands** under **Type** | Fix `kit.json` as the message says, commit it, and put the new commit in `project.kit`. See [Write a kit for your project](write-a-kit.md) |

@@ -6,6 +6,8 @@ import {
   CAMPAIGN_ADDITIONS,
   CAMPAIGN_CONTEXT,
   CAMPAIGN_COPY,
+  CAMPAIGN_FROM_CHAMPION,
+  CAMPAIGN_KB_WRITES,
   START_RUN,
 } from "../../core/api/control/owner.ts";
 import {
@@ -13,10 +15,12 @@ import {
   bodyRefusal,
   CampaignAdditionsBody,
   CampaignContextBody,
+  CampaignKbWritesBody,
   CopyCampaignBody,
   campaignAdditionsAnswer,
   campaignContextAnswer,
   campaignFoldersAnswer,
+  campaignKbWritesAnswer,
   copyACampaign,
   copyCampaignAnswer,
   createFolder,
@@ -26,10 +30,13 @@ import {
   moveCampaign,
   renameFolder,
   type ShelfOutcome,
+  StartCampaignBody,
   StartRunBody,
   setCampaignAdditions,
   setCampaignContext,
+  setCampaignKbWrites,
   startARun,
+  startFromChampion,
   startRunAnswer,
   startRunRequest,
   unarchiveCampaign,
@@ -57,7 +64,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
       // In the audit log, as the dashboard's and MCP's refusals are.
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/runs`,
         why: redact(out.error),
       });
@@ -67,7 +74,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
   });
 
   // Copy a campaign control keeps (goal 069): a new campaign with the same contract and kit
-  // under another name, with its own empty folder in the knowledge base and no runs. Its own
+  // under another name, with its own empty collection in the knowledge base and no runs. Its own
   // brief may come with it (goal 078): room for as much as one command carries to a rig.
   app.post(CAMPAIGN_COPY.path, admin, bodyLimit({ maxSize: 4 * 1024 * 1024 }), async (c) => {
     const from = c.req.param("campaign");
@@ -77,7 +84,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       ? copyACampaign(parts, { from, ...body.data }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${from}/copy`,
         why: redact(out.error),
       });
@@ -85,6 +92,30 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     }
     return c.json(copyCampaignAnswer(out), 201);
   });
+
+  // A new campaign from another run's champion in git (goal 185): MCP's start_campaign's twin.
+  // Its first run starts when a rig is named.
+  app.post(
+    CAMPAIGN_FROM_CHAMPION.path,
+    admin,
+    bodyLimit({ maxSize: 4 * 1024 * 1024 }),
+    async (c) => {
+      const raw: unknown = await c.req.json().catch(() => undefined);
+      const body = StartCampaignBody.safeParse(raw);
+      const out = body.success
+        ? await startFromChampion(parts, body.data, "owner:api", true)
+        : ({ ok: false, error: bodyRefusal(body.error), status: 400 } as const);
+      if (!out.ok) {
+        store.auditLog.refusal("owner:api", "refused", {
+          path: CAMPAIGN_FROM_CHAMPION.path,
+          why: redact(out.error),
+        });
+        return c.json({ error: out.error }, out.status);
+      }
+      const { ok: _ok, ...answer } = out;
+      return c.json(answer, 201);
+    },
+  );
 
   // A campaign's own context window and compaction point for all its runs' agents (goal 070):
   // the twin of MCP's set_campaign_context. A new version of its contract; an empty body removes
@@ -105,7 +136,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
         )
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/context`,
         why: redact(out.error),
       });
@@ -125,13 +156,33 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
       ? setCampaignAdditions(store, { campaign, additions: body.data.additions }, "owner:api")
       : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
     if (out.state === "refused") {
-      store.auditLog.add("owner:api", "refused", {
+      store.auditLog.refusal("owner:api", "refused", {
         path: `/v1/campaigns/${campaign}/additions`,
         why: redact(out.error),
       });
       return c.json({ error: out.error }, out.status);
     }
     return c.json(campaignAdditionsAnswer(out), out.state === "saved" ? 201 : 200);
+  });
+
+  // Which kinds each role may write in the campaign's collection of the knowledge base (goal 175):
+  // the twin of MCP's set_campaign_kb_writes. A new version of its contract; an empty body puts
+  // back the default. 201 with a new version, 200 when the newest version says it already.
+  app.post(CAMPAIGN_KB_WRITES.path, admin, bodyLimit({ maxSize: 64 * 1024 }), async (c) => {
+    const campaign = c.req.param("campaign");
+    const raw: unknown = await c.req.json().catch(() => undefined);
+    const body = CampaignKbWritesBody.safeParse(raw);
+    const out = body.success
+      ? setCampaignKbWrites(store, { campaign, kb_writes: body.data.kb_writes }, "owner:api")
+      : ({ state: "refused", error: bodyRefusal(body.error), status: 400 } as const);
+    if (out.state === "refused") {
+      store.auditLog.refusal("owner:api", "refused", {
+        path: `/v1/campaigns/${campaign}/kb-writes`,
+        why: redact(out.error),
+      });
+      return c.json({ error: out.error }, out.status);
+    }
+    return c.json(campaignKbWritesAnswer(out), out.state === "saved" ? 201 : 200);
   });
 
   // Archive a campaign, and the left navigation's folders (goal 077): the same functions as the
@@ -144,7 +195,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
   /** A shelf outcome as the answer, a refusal in the audit log as the other routes' are. */
   const shelf = <T>(c: Context, path: string, out: ShelfOutcome<T>, created = false) => {
     if (out.ok) return c.json(out.answer, created ? 201 : 200);
-    store.auditLog.add("owner:api", "refused", { path, why: redact(out.error) });
+    store.auditLog.refusal("owner:api", "refused", { path, why: redact(out.error) });
     return c.json({ error: out.error }, out.status);
   };
   const refusedBody = (e: z.ZodError) =>
@@ -166,7 +217,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     return shelf(
       c,
       `/v1/campaigns/${campaign}/unarchive`,
-      unarchiveCampaign(store, allViews(), campaign, "owner:api"),
+      unarchiveCampaign(store, campaign, "owner:api"),
     );
   });
   app.post("/v1/campaigns/:campaign/folder", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
@@ -174,7 +225,7 @@ export function campaignRoutes(app: Hono, api: ApiContext): void {
     const path = `/v1/campaigns/${campaign}/folder`;
     const body = await bodyOf(c, MoveBody);
     if (!body.success) return shelf(c, path, refusedBody(body.error));
-    return shelf(c, path, moveCampaign(store, allViews(), campaign, body.data.folder, "owner:api"));
+    return shelf(c, path, moveCampaign(store, campaign, body.data.folder, "owner:api"));
   });
   app.get("/v1/campaign-folders", admin, (c) => c.json(campaignFoldersAnswer(store)));
   app.post("/v1/campaign-folders", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {

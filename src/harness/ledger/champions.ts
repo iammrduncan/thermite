@@ -147,6 +147,29 @@ export class LedgerChampions extends LedgerPart {
     });
   }
 
+  /**
+   * The run's champion once the champions `seqs` are reopened: the newest of the others that
+   * stands. The seed (seq 1) is never reopened, so there always is one.
+   */
+  currentWithout(
+    run: string,
+    seqs: readonly number[],
+  ): { seq: number; commit_sha: string; attempt: string | null } {
+    const r = this.row<Row>(
+      `select seq, commit_sha, attempt from champion where run = ? and reopened = 0
+         ${seqs.length ? `and seq not in (${seqs.map(() => "?").join(", ")})` : ""}
+       order by seq desc limit 1`,
+      run,
+      ...seqs,
+    );
+    if (!r) throw new LedgerError("not_found", `no champion for ${run}`);
+    return {
+      seq: Number(r.seq),
+      commit_sha: String(r.commit_sha),
+      attempt: r.attempt === null ? null : String(r.attempt),
+    };
+  }
+
   /** The seqs of a run's champions that invalidation reopened. */
   reopened(run: string): number[] {
     return this.rows<Row>(

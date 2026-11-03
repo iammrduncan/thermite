@@ -1,23 +1,30 @@
 #!/usr/bin/env node
+// @ts-check
 // Claude Code itself, not a stand-in: the harness image built with CLAUDE_CODE_VERSION runs as a
 // rig runs it (the broker as root, which closes /tmp to the roles and puts each role's work under
 // the GPU fence; only the broker's capabilities; no new privileges), with no network at all. A
-// stand-in for Anthropic's Messages API in the container (containers/test-anthropic) plays the
+// stand-in for Anthropic's Messages API in the container (tests/stand-ins/anthropic) plays the
 // model, and a made-up token signs in to it, so no subscription, key or network is needed:
 //   - the model check: Claude Code runs its Bash call as the model check's user;
-//   - a planner call: Claude Code's Grep reads past research outside its folder;
-//   - a trial as lane-1: its Write tool edits the workspace, its command finds the token in no
-//     environment, and it submits with thermite-trial;
-//   - a trial that compacts (the stand-in reports a large conversation): Thermite's PreCompact
-//     hook copies the whole transcript, to the last tool result, which Claude Code writes only
-//     after the hook starts, and the summary names the kept file (goal 070);
+//   - a planner call, with none of Claude Code's own tools (past research is the knowledge base's,
+//     which the planner searches over MCP): it answers with no tool call;
+//   - a trial as lane-1, in Claude Code's own terminal (goal 169: the rig's default) through the
+//     terminal host, and again headless (`-p`, an advanced choice): its Write tool edits the
+//     workspace, its command finds the token in no environment, and it submits with
+//     thermite-trial; in its terminal, its tally comes from its transcript, which the host copies
+//     for the harness, and its screen is kept at the end;
+//   - a trial in its terminal that compacts (the stand-in reports a large conversation):
+//     Thermite's PreCompact hook copies the whole transcript, to the last tool result, which
+//     Claude Code writes only after the hook starts, and the summary names the kept file (goal
+//     070);
 //   - an advisor's call as the supervisor's user, with /tmp closed to it (the one-container rig):
 //     without CLAUDE_CODE_SUBPROCESS_ENV_SCRUB, with the token on file descriptor 3 and in no
 //     process's environment;
 //   - every call to the stand-in was signed in with the token;
 //   - the image has no bubblewrap: no call of Claude Code needs it.
-// It prints the peak memory the broker recorded for Claude Code's runs in its trial, the figure
-// Claude Code's limits note states.
+// It prints the peak memory the broker recorded for Claude Code's runs in its trials, headless and
+// in its terminal (the terminal host, Claude Code and its commands), the figure Claude Code's
+// limits note states.
 //
 // Usage: COMPOSE="podman compose" node scripts/acceptance/claude-real.mjs
 //   CLAUDE_CODE_VERSION  the version the image is built with (default 2.1.308)
@@ -26,15 +33,27 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { resolve } from "node:path";
-import { cleanEngine, engine } from "./lib/smoke-env.mjs";
+import { cleanEngine, engine, imageTarget } from "./lib/smoke-env.mjs";
 
 const version = process.env.CLAUDE_CODE_VERSION ?? "2.1.308";
 const image = process.env.IMAGE ?? "localhost/thermite-harness:claude-real-check";
 const name = "thermite-claude-real";
+/** A check as check.mjs prints it: a failed one may carry its own account of why, line by line. */
+/** @typedef {{ name: string, ok: boolean, detail?: unknown, log?: unknown }} InsideCheck */
+/** What one run of check.mjs prints: its checks, and the peak memory the broker recorded. */
+/** @typedef {{ checks: InsideCheck[], peakRssBytes?: number, peakTerminalRssBytes?: number }} InsideResult */
+/**
+ * Runs the engine and returns what it printed.
+ * @param {string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ * @returns {string}
+ */
 const sh = (args, opts = {}) =>
   execFileSync(engine, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+/** @type {(ms: number) => Promise<void>} */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
+/** @param {InsideCheck} c */
 const report = (c) => {
   console.log(
     `${c.ok ? "PASS" : "FAIL"} ${c.name}${c.detail === undefined ? "" : `: ${JSON.stringify(c.detail).slice(0, 600)}`}`,
@@ -47,7 +66,8 @@ const logs = () => {
   const r = spawnSync(engine, ["logs", name], { encoding: "utf8" });
   return `${r.stdout}${r.stderr}`;
 };
-const logLine = (msg) =>
+/** The harness's first log line with this message, parsed. */
+const logLine = (/** @type {string} */ msg) =>
   logs()
     .split("\n")
     .map((l) => {
@@ -58,7 +78,13 @@ const logLine = (msg) =>
       }
     })
     .find((l) => l?.msg === msg);
-/** One run of check.mjs in the container; its checks. */
+/**
+ * One run of check.mjs in the container; its checks.
+ * @param {string} user
+ * @param {string} mode
+ * @param {string[]} [env]
+ * @returns {InsideResult}
+ */
 const inside = (user, mode, env = []) => {
   const r = spawnSync(
     engine,
@@ -88,8 +114,7 @@ try {
         "-q",
         "-t",
         image,
-        "-f",
-        "containers/harness/Containerfile",
+        ...imageTarget("harness"),
         "--build-arg",
         `CLAUDE_CODE_VERSION=${version}`,
         ".",
@@ -112,6 +137,8 @@ try {
     name,
     "--network",
     "none",
+    "--memory",
+    "2g",
     "--cap-drop",
     "ALL",
     ...["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETGID", "SETUID"].flatMap((c) => [
@@ -135,7 +162,7 @@ try {
     "-e",
     `TEST_CONTROL_PUBKEY=${publicKey.export({ type: "spki", format: "pem" })}`,
     "-v",
-    `${resolve("containers/test-anthropic")}:/opt/test-anthropic:ro`,
+    `${resolve("tests/stand-ins/anthropic")}:/opt/test-anthropic:ro`,
     "--entrypoint",
     "/opt/test-anthropic/enter",
     image,
@@ -193,9 +220,13 @@ try {
   ]);
   results.push(inside("10001:10001", "advisor", ["-e", "TMPDIR=/var/lib/claude-real-sup"]));
   for (const r of results) for (const c of r.checks) report(c);
-  const peak = results[0]?.peakRssBytes;
+  const mib = (/** @type {number | undefined} */ b) =>
+    typeof b === "number"
+      ? `${Math.round(b / 2 ** 20)} MiB`
+      : "not recorded (the trial did not run)";
+  console.log(`Claude Code's peak memory in its trial, headless: ${mib(results[0]?.peakRssBytes)}`);
   console.log(
-    `Claude Code's peak memory in its trial: ${typeof peak === "number" ? `${Math.round(peak / 2 ** 20)} MiB` : "not recorded (the trial did not run)"}`,
+    `Claude Code's peak memory in its trial, in its terminal with the terminal host: ${mib(results[0]?.peakTerminalRssBytes)}`,
   );
 } catch (err) {
   report({

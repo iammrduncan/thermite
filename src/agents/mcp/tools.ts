@@ -3,13 +3,15 @@ import type { TSchema } from "@earendil-works/pi-ai";
 import { errorText } from "../../common/errors.ts";
 import { type McpCallResult, resultText } from "../../common/mcp-client.ts";
 import { agentToolName, type McpToolInfo } from "../../core/mcp.ts";
+import { KB_SERVER } from "../tools/index.ts";
 
 /**
  * The MCP servers a run's kit gives an agent (goal 068), in each worker harness: Pi gets one tool
  * for each MCP tool, called through the harness API; OpenCode, Claude Code and Codex get the
  * servers in their MCP configuration, each pointing at the harness's gateway, with the trial's own
  * token (or one the harness made for the planner's call): in the file for OpenCode and Claude
- * Code, in THERMITE_MCP_AUTH for Codex. The servers' sign-in never reaches them.
+ * Code, in THERMITE_MCP_AUTH for Codex. The servers' sign-in never reaches them. Thermite's own
+ * server (KB_SERVER, the knowledge base's tools: goal 175) is at the same gateway, beside them.
  */
 
 /** How an agent reaches its servers through the harness: the gateway's address and its credential. */
@@ -18,26 +20,40 @@ export interface McpAccess {
   apiUrl: string;
   /** The credential the gateway takes: `trial.<token>` or `mcp.<token>`. */
   auth: string;
-  /** The servers, by name. */
+  /** The kit's servers, by name. */
   servers: string[];
+  /** Thermite's own server too, KB_SERVER, with the knowledge base's tools (goal 175). */
+  kb?: boolean | undefined;
 }
+
+/** Every server an agent reaches at the gateway: the kit's, then Thermite's own when it has it. */
+export const servedNames = (a: Pick<McpAccess, "servers" | "kb"> | undefined): string[] =>
+  a ? [...a.servers, ...(a.kb ? [KB_SERVER] : [])] : [];
 
 /** One server's address at the gateway. */
 export const gatewayUrl = (apiUrl: string, server: string) =>
   `${apiUrl}/v1/mcp/${encodeURIComponent(server)}`;
 
-/** OpenCode's `mcp` configuration: each server a remote one at the gateway, OAuth off. */
+/**
+ * OpenCode's `mcp` configuration: each server a remote one at the gateway, OAuth off. OpenCode v2
+ * puts a server's tools in its Code Mode unless the server says `codemode: false`: the model then
+ * sees only OpenCode's `execute` tool, calls them from the JavaScript it gives it, and reads each
+ * tool's description cut to its first line. Thermite's own server says so, so its tools are on the
+ * model's own list, `thermite_kb_search` and so on, with their whole descriptions, as in every
+ * other program (goal 175); the kit's servers stay in Code Mode, as OpenCode keeps them.
+ */
 export function opencodeMcp(a: McpAccess | undefined): Record<string, unknown> | undefined {
-  if (!a?.servers.length) return undefined;
+  if (!a || !servedNames(a).length) return undefined;
   return {
     servers: Object.fromEntries(
-      a.servers.map((s) => [
+      servedNames(a).map((s) => [
         s,
         {
           type: "remote",
           url: gatewayUrl(a.apiUrl, s),
           headers: { Authorization: `Bearer ${a.auth}` },
           oauth: false,
+          ...(s === KB_SERVER ? { codemode: false } : {}),
         },
       ]),
     ),
@@ -46,10 +62,10 @@ export function opencodeMcp(a: McpAccess | undefined): Record<string, unknown> |
 
 /** Claude Code's --mcp-config file: each server an HTTP one at the gateway. */
 export function claudeMcpConfig(a: McpAccess | undefined): string | undefined {
-  if (!a?.servers.length) return undefined;
+  if (!a || !servedNames(a).length) return undefined;
   return JSON.stringify({
     mcpServers: Object.fromEntries(
-      a.servers.map((s) => [
+      servedNames(a).map((s) => [
         s,
         {
           type: "http",
@@ -68,6 +84,14 @@ export function mcpLine(servers: readonly string[] | undefined): string {
 }
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }], details: {} });
+
+/** An agent's MCP tools in Pi: what the gateway listed for it, and a call through the gateway. */
+export interface McpForAgent {
+  tools: McpToolInfo[];
+  /** The servers whose tools could not be listed, and why. */
+  unavailable?: { server: string; why: string }[] | undefined;
+  call(server: string, tool: string, args: Record<string, unknown>): Promise<McpCallResult>;
+}
 
 /**
  * Pi's tools for the MCP tools an agent was given: each named mcp__<server>__<tool>, with the

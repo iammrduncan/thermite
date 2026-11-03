@@ -5,12 +5,16 @@
 # commit and roll to lab"): the compose smoke test (control and one rig built from this commit, a
 # campaign assigned through control, a candidate judged), the one-container rig image's
 # acceptance, rigs on RunPod against the fake RunPod API, and the quick start as a tester follows
-# it. On a version tag, and when run by hand, every job runs. The heavy jobs wait only for the
-# short job that decides which of them run (heavy); the other jobs start once the run is approved.
+# it. On a version tag, and when run by hand, every job runs, and so does every other acceptance
+# check a runner can run (tag-acceptance). The heavy jobs wait only for the short job that decides
+# which of them run (heavy); the other jobs start once the run is approved.
 #
 # No run uses runners until a maintainer approves it (the owner, 2026-10-29: "prs require approval
 # before running them"): the first job, approval, deploys to the repository's environment ci,
 # whose required reviewers approve it, and every other job waits for it.
+#
+# Each action is pinned by its commit, with its version in a comment; Dependabot moves both
+# (tests/release/workflows.test.ts holds every workflow to it).
 name: ci
 
 on:
@@ -48,8 +52,8 @@ jobs:
       matrix:
         node: ["22", "24"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -62,6 +66,7 @@ jobs:
       - run: npm run check:public
       - run: npm run check:sizes
       - run: npm run check:imports
+      - run: npm run check:loose-ends
 
   # The judge's and the broker's tests time real processes, so they run one file at a time, on a
   # machine with nothing else on it.
@@ -75,8 +80,8 @@ jobs:
       matrix:
         node: ["22", "24"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -89,8 +94,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -116,7 +121,7 @@ jobs:
       # gitleaks_8.30.1_linux_x64.tar.gz, from gitleaks_8.30.1_checksums.txt in the release.
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Install gitleaks
@@ -137,8 +142,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -156,9 +161,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The images build Thermite themselves; the script runs control's side of pull mode itself.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -176,8 +181,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -200,7 +205,7 @@ jobs:
       runpod: ${{ steps.paths.outputs.runpod }}
       quick_start: ${{ steps.paths.outputs.quick_start }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: paths
@@ -209,46 +214,64 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           BASE: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
-          # The containers and compose files, the APIs and the relay, and the smoke test.
+          # Each path of code names a folder, or a module by its name: the file and the folder it
+          # becomes when it splits (`^src/core/paths(\.ts$|/)`), so a split or a move into a
+          # folder keeps the job running (tests/release/workflows.test.ts holds it).
+          #
+          # The containers and compose files, the APIs, the relay and the message bus it goes over,
+          # the advisors' runner, and the smoke test.
           COMPOSE: |
             ^containers/
             ^compose[^/]*\.yaml$
             ^package(-lock)?\.json$
             ^kits/smoke-cpu/
-            ^src/(control|harness)/api(\.ts|/)
-            ^src/(control|harness|supervisor)/main\.ts$
+            ^src/(control|harness)/api/
+            ^src/(control|harness|supervisor)/main(\.ts$|/)
             ^src/harness/controller/
-            ^src/supervisor/relay(\.ts|/)
-            ^scripts/acceptance/(compose-smoke|stage-smoke)\.mjs$
+            ^src/supervisor/relay/
+            ^src/(common|control)/bus/
+            ^src/core/link/
+            ^src/supervisor/advisor-runs/
+            ^src/common/run-as/
+            ^scripts/acceptance/compose-smoke(\.mjs$|/)
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
-          # The rig image and the harness image under it, the broker, the isolation selftest and
-          # pull mode's enrollment.
+          # The rig image and the harness image under it (their Containerfiles and the scripts they
+          # run), the broker, the isolation selftest, the advisors' runner, pull mode's enrollment,
+          # and the message bus with the pod's leaf node.
           RIG_IMAGE: |
-            ^containers/(rig|harness)/
+            ^containers/(Containerfile$|build/|harness/|rig/)
             ^package(-lock)?\.json$
-            ^src/harness/broker(\.ts|/)
+            ^src/harness/broker/
             ^tests/harness/broker/
-            ^src/harness/selftest(\.ts|/)
-            ^src/core/tunnel\.ts$
-            ^src/control/runpod/tunnel\.ts$
-            ^src/core/paths\.ts$
-            ^scripts/acceptance/rig-image\.mjs$
+            ^src/harness/selftest/
+            ^src/supervisor/advisor-runs/
+            ^src/common/run-as/
+            ^src/core/(tunnel|paths)(\.ts$|/)
+            ^src/control/runpod/tunnel(\.ts$|/)
+            ^src/(common|control)/bus/
+            ^src/core/link/
+            ^src/supervisor/leaf(\.ts$|/)
+            ^scripts/acceptance/rig-image(\.mjs$|/)
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
-          # Rigs on RunPod, pull mode, results sent to control, and the rig image.
+          # Rigs on RunPod, pull mode, results sent to control, the message bus with the pod's leaf
+          # node, and the rig image with the harness image under it.
           RUNPOD: |
-            ^src/control/runpod
+            ^src/control/runpod/
             ^tests/control/runpod/
-            ^tests/control/dashboard/runpod\.test\.ts$
-            ^src/control/exports\.ts$
-            ^src/control/store/(runpod|tunnels|exports)\.ts$
-            ^src/core/(tunnel|paths)\.ts$
-            ^src/supervisor/export-upload\.ts$
-            ^src/supervisor/relay(\.ts|/)
-            ^tests/helpers/fake-runpod\.ts$
-            ^containers/rig/
-            ^scripts/acceptance/runpod\.mjs$
+            ^tests/control/dashboard/runpod(\.test\.ts$|/)
+            ^src/control/exports(\.ts$|/)
+            ^src/control/store/(runpod|tunnels|exports)(\.ts$|/)
+            ^src/core/(tunnel|paths)(\.ts$|/)
+            ^src/supervisor/export-upload(\.ts$|/)
+            ^src/supervisor/relay/
+            ^src/(common|control)/bus/
+            ^src/core/link/
+            ^src/supervisor/leaf(\.ts$|/)
+            ^tests/helpers/fake-runpod(\.ts$|/)
+            ^containers/(Containerfile$|build/|harness/|rig/)
+            ^scripts/acceptance/runpod(\.mjs$|/)
             ^scripts/acceptance/lib/
             ^\.github/workflows/ci\.yml$
           # The images and compose files, the release bundle, the quick start's pages, the sample
@@ -256,7 +279,7 @@ jobs:
           QUICK_START: |
             ^containers/
             ^compose[^/]*\.yaml$
-            ^scripts/release/bundle\.ts$
+            ^scripts/release/bundle(\.ts$|/)
             ^src/release/
             ^tests/release/
             ^docs/_site/src/content/docs/tutorials/(first-run|agents-with-a-free-model)\.md$
@@ -266,8 +289,8 @@ jobs:
             ^kits/smoke-cpu/
             ^scripts/acceptance/quick-start(\.mjs$|/)
             ^scripts/acceptance/lib/
-            ^tests/helpers/quick-start\.ts$
-            ^tests/docs/quick-start\.test\.ts$
+            ^tests/helpers/quick-start(\.ts$|/)
+            ^tests/docs/quick-start(\.test\.ts$|/)
             ^\.github/workflows/ci\.yml$
         run: |
           all=
@@ -311,9 +334,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Node.js for the test itself, and for `npm ci` in the tester's thermite-source folder.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -321,10 +344,65 @@ jobs:
         env:
           COMPOSE: docker compose
       # What each check found, and how long each step took.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: quick-start-report
+          path: .dev/acceptance/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # On a version tag, and when run by hand, every other acceptance check a runner can run, each on
+  # a machine of its own (the owner's answer to the clean-up guide's question 20): the judge's
+  # adversarial set (judge: the smoke campaign's candidates with isolation, tamper, crash-recovery
+  # and A/A checks), control with two rigs, a new campaign, machines over SSH, four fake GPUs, the
+  # agents and each agent program's stand-in, the real Claude Code against a stand-in API, the
+  # terminal host, backup and restore, steering, and the message bus with its leaf nodes. Not
+  # here: the cluster and rig deploy checks, which need Podman itself (kind on Podman, rootless
+  # Podman in a systemd stand-in), and the paid RunPod check, which spends money.
+  tag-acceptance:
+    name: acceptance (${{ matrix.check }})
+    needs: approval
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - judge
+          - control
+          - campaign
+          - machine
+          - multigpu
+          - agents
+          - claude
+          - claude-real
+          - codex
+          - terminal
+          - backup
+          - steering
+          - bus
+          - leaf
+    env:
+      CHECK: ${{ matrix.check }}
+      COMPOSE: docker compose
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      # The bus and leaf checks pull nothing: the message bus's image, as compose.yaml pins it.
+      - if: matrix.check == 'bus' || matrix.check == 'leaf'
+        run: docker pull "$(grep -m1 -oE 'docker\.io/library/nats:[^ ]+' compose.yaml)"
+      - run: node "scripts/acceptance/$CHECK.mjs"
+      # What the checks that write a report found.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: acceptance-${{ matrix.check }}
           path: .dev/acceptance/
           if-no-files-found: ignore
           retention-days: 14

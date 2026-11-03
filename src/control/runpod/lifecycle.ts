@@ -52,6 +52,7 @@ export const RUNPOD_STEP_WORDS: Record<string, string> = {
   runpod_terminated: "Pod terminated: RunPod removed it and its volume, and the rig is retired",
   runpod_terminate_refused: "Not terminated: the pod keeps running, with its runs paused",
   runpod_gone: "RunPod no longer has the pod",
+  runpod_leaf_address: "Control's bus dials the pod's leaf node at the address RunPod gave it",
   reset_requested: "Full reset asked: runs paused and every result sent out before the wipe",
   reset_done: "Full reset done: the rig's state is wiped, and the pod and its GPU stay",
   reset_failed: "Full reset failed: nothing was wiped, and its runs stay paused",
@@ -224,7 +225,8 @@ export class RunpodLifecycle {
       by,
       why === "owner" ? "the owner stops the rig's pod" : `control stops the rig's pod: ${words}`,
     );
-    op.command = this.issue(r.rig, "export_now", { full: false }, by);
+    // Each run not closed is exported first, as the owner chose (goal 180); its volume stays.
+    op.command = this.issue(r.rig, "export_now", { open_runs: true }, by);
     s.op = op;
     this.history(
       r.rig,
@@ -380,11 +382,14 @@ export class RunpodLifecycle {
       case "exporting": {
         const c = op.command ? this.store.commands.get(op.command) : undefined;
         const done = c && c.status !== "pending" && harnessConfirmed(c.outcome);
-        const name = done
-          ? (c.outcome as { result?: { export?: string } } | null)?.result?.export
+        const result = done
+          ? (c.outcome as { result?: { export?: string | null; exports?: unknown } } | null)?.result
           : undefined;
-        if (done && c.status === "delivered" && name) {
-          op.export = name;
+        const name = result?.export ?? undefined;
+        // A stop's export of each open run makes none when every run is closed: nothing waits.
+        const none = Array.isArray(result?.exports) && result.exports.length === 0;
+        if (done && c.status === "delivered" && (name || none)) {
+          op.export = name ?? null;
           this.phase(op, "leaving");
           return this.leave(r, s, key, op);
         }
@@ -416,9 +421,10 @@ export class RunpodLifecycle {
 
   /** Waits until the op's export and every result with it have left the pod, then acts. */
   private async leave(r: StoredRunpodRig, s: RigState, key: string, op: RigOp): Promise<boolean> {
-    const name = op.export as string;
+    // A stop with every run closed asked for no export (goal 180): it waits only for what waits.
+    const name = op.export ?? undefined;
     const all = resultsLeft(this.store, r.rig, { export: name });
-    const never = exportLeft(this.store, r.rig, name).never;
+    const never = name !== undefined && exportLeft(this.store, r.rig, name).never;
     const nowMs = this.now();
     if (op.kind === "stop") {
       if (all.left) {

@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { KitGitSource } from "../../core/api/control/owner.ts";
+import { gitAccessFor } from "../git-access.ts";
 import {
   addKit,
+  addKitFromGit,
   kitAnswer,
   kitsAnswer,
   MCP_KIT_BASE64_MAX,
@@ -8,7 +11,10 @@ import {
 } from "../kits/index.ts";
 import type { ToolContext } from "./context.ts";
 
-/** The kits control keeps, and a kit written elsewhere given as a git bundle (goal 096). */
+/**
+ * The kits control keeps, and a kit written elsewhere given as a git bundle (goal 096) or as its
+ * repository's address, which control reads itself (goal 182).
+ */
 export function registerKits(tools: ToolContext): void {
   const { server, store, opts, actor, role, audited } = tools;
 
@@ -38,14 +44,17 @@ export function registerKits(tools: ToolContext): void {
       "kit_add",
       {
         title: "Give control a kit written elsewhere",
-        description: `Gives control a kit repository written elsewhere, as a git bundle (git bundle create kit.bundle main, or --all), base64 in bundle_base64. Control checks the bundle in a repository of its own (git bundle verify), keeps every commit with its id, and makes the kit's head the bundle's HEAD, its only branch, or ref (a branch, a tag or a commit in the bundle). That commit must have a valid kit.json at its top. A kit control keeps already moves only to a commit that descends from its head; force: true replaces it (the old head's commits stay, so a contract that names one still fetches). Rigs fetch the kit from control, by commit, with the source {"control": "kits/NAME"} in assign_campaign's kit_bundle import; name the kit as the contract's project.kit.repo. MCP takes requests of at most 4 MiB, so bundle_base64 is at most ${MCP_KIT_BASE64_MAX} characters: a bundle of at most ${MCP_KIT_BUNDLE_MAX} bytes. A larger one goes over REST (POST /v1/kits/NAME, the bundle's bytes as the body, up to 64 MiB) or thermite kit add. Returns {name, head, previous, commits, kit: {name, target}, forced, refs, size, said}. In the audit log as kit_added. Refused in words: a name that is not lowercase letters, digits, dots, dashes and underscores (at most 64), not base64, not a git bundle, a bundle that needs commits control lacks, several branches and no HEAD without ref, a ref the bundle lacks, no kit.json at the head, a kit.json the harness would refuse, and a head that does not descend from the kit's without force.`,
+        description: `Gives control a kit repository written elsewhere, as a git bundle (git bundle create kit.bundle main, or --all), base64 in bundle_base64. Control checks the bundle in a repository of its own (git bundle verify), keeps every commit with its id, and makes the kit's head the bundle's HEAD, its only branch, or ref (a branch, a tag or a commit in the bundle). That commit must have a valid kit.json at its top. A kit control keeps already moves only to a commit that descends from its head; force: true replaces it (the old head's commits stay, so a contract that names one still fetches). Rigs fetch the kit from control, by commit, with the source {"control": "kits/NAME"} in assign_campaign's kit_bundle import; name the kit as the contract's project.kit.repo. MCP takes requests of at most 4 MiB, so bundle_base64 is at most ${MCP_KIT_BASE64_MAX} characters: a bundle of at most ${MCP_KIT_BUNDLE_MAX} bytes. A larger one goes over REST (POST /v1/kits/NAME, the bundle's bytes as the body, up to 64 MiB) or thermite kit add. Or, in place of bundle_base64, git: {url, ref, access}: control reads the kit's repository itself, the whole history of ref (a branch, a tag or a commit; HEAD when left out), over https, or with access, the name of a Git access in Settings bound to the repository's host (a token over https, a deploy key over ssh://), and keeps it as a bundle with that commit as its head; at most 5 minutes and 64 MiB as a bundle. Returns {name, head, previous, commits, kit: {name, target}, forced, refs, size, said}. In the audit log as kit_added. Refused in words: a name that is not lowercase letters, digits, dots, dashes and underscores (at most 64), not base64, not a git bundle, a bundle that needs commits control lacks, several branches and no HEAD without ref, a ref the bundle lacks, no kit.json at the head, a kit.json the harness would refuse, and a head that does not descend from the kit's without force.`,
         inputSchema: {
           name: z
             .string()
             .min(1)
             .max(64)
             .describe("The kit's name in control: the contract's project.kit.repo"),
-          bundle_base64: z.string().min(1).describe("The git bundle, base64"),
+          bundle_base64: z.string().min(1).optional().describe("The git bundle, base64"),
+          git: KitGitSource.optional().describe(
+            "The kit's repository, which control reads, in place of bundle_base64: {url, ref, access}",
+          ),
           ref: z
             .string()
             .min(1)
@@ -60,8 +69,30 @@ export function registerKits(tools: ToolContext): void {
       },
       audited(
         "kit_add",
-        async (a: { name: string; bundle_base64: string; ref?: string; force?: boolean }) => {
-          const text = a.bundle_base64.replace(/\s+/g, "");
+        async (a: {
+          name: string;
+          bundle_base64?: string;
+          git?: { url: string; ref?: string; access?: string };
+          ref?: string;
+          force?: boolean;
+        }) => {
+          if ((a.bundle_base64 === undefined) === (a.git === undefined))
+            throw new Error("Give the kit as bundle_base64 or as git, one of the two");
+          if (a.git) {
+            if (a.ref) throw new Error("With git, name the branch, tag or commit as git.ref");
+            const g = a.git;
+            const access = gitAccessFor(store, opts.parts.secrets, kits.dir, g.access, g.url);
+            const out = await addKitFromGit(
+              store,
+              kits,
+              { name: a.name, url: g.url, ref: g.ref, force: a.force },
+              access,
+              actor,
+            );
+            if (!out.ok) throw new Error(out.error);
+            return out.answer;
+          }
+          const text = (a.bundle_base64 as string).replace(/\s+/g, "");
           if (text.length > MCP_KIT_BASE64_MAX)
             throw new Error(
               `bundle_base64 is ${text.length} characters, above the ${MCP_KIT_BASE64_MAX} MCP takes: send the bundle over REST (POST /v1/kits/${a.name}, up to 64 MiB) or with thermite kit add`,
@@ -82,7 +113,6 @@ export function registerKits(tools: ToolContext): void {
           if (!out.ok) throw new Error(out.error);
           return out.answer;
         },
-        ["bundle_base64"],
       ),
     );
   }

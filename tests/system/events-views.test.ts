@@ -242,10 +242,11 @@ describe("control's views and raw reads from the events stream", () => {
     assert.equal((await pages("rig-a", 5000)).flat().length, 8);
     const end = (events.at(-1) as Raw).seq;
     const after = await api("GET", `/v1/rigs/rig-a/events?after=${end}`);
-    assert.deepEqual(await after.json(), { events: [] });
+    // `removed`: what a retention policy purged of each ledger of the rig; nothing here.
+    assert.deepEqual(await after.json(), { events: [], removed: [] });
     for (const rig of ["rig-c", "Not_A_Rig"]) {
       const r = await api("GET", `/v1/rigs/${rig}/events`);
-      assert.deepEqual(await r.json(), { events: [] });
+      assert.deepEqual(await r.json(), { events: [], removed: [] });
     }
   });
 

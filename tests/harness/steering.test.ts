@@ -64,7 +64,7 @@ describe("directives", () => {
       () =>
         env.service.addDirectives(
           "js-1",
-          [{ kind: "mandate", family: "tiling", rationale: "no source" }],
+          [{ kind: "mandate", direction: "tiling", rationale: "no source" }],
           "supervisor",
         ),
       /citation/,
@@ -72,24 +72,32 @@ describe("directives", () => {
     assert.throws(() =>
       env.service.addDirectives(
         "js-1",
-        [{ kind: "try", family: "x1", rationale: "r", citations: ["c"], verdict: "win_confirmed" }],
+        [
+          {
+            kind: "try",
+            direction: "x1",
+            rationale: "r",
+            citations: ["c"],
+            verdict: "win_confirmed",
+          },
+        ],
         "supervisor",
       ),
     );
     const first = env.service.addDirectives(
       "js-1",
-      [{ kind: "avoid", family: "unrolling", rationale: "measured null", citations: ["a-1"] }],
+      [{ kind: "avoid", direction: "unrolling", rationale: "measured null", citations: ["a-1"] }],
       "supervisor",
     );
     const second = env.service.addDirectives(
       "js-1",
-      [{ kind: "mandate", family: "tiling", rationale: "paper X", citations: ["arxiv:1"] }],
+      [{ kind: "mandate", direction: "tiling", rationale: "paper X", citations: ["arxiv:1"] }],
       "supervisor",
     );
     const active = env.ledger.directives.active("js-1").map((d) => d.id);
     assert.deepEqual(active, second);
     assert.ok(!active.includes(first[0] as number));
-    // The fallback planner (no model reachable) must assign the mandated family, attributed.
+    // The fallback planner (no model reachable) must assign the mandated direction, attributed.
     const scheduler = new Scheduler({
       service: env.service,
       runner: new LocalRunner(env.paths.scratchDir),
@@ -113,7 +121,7 @@ describe("directives", () => {
     await scheduler.idle();
     const epoch = scheduler.registry.currentEpoch("js-1");
     assert.deepEqual(epoch?.directives, second);
-    const tiling = epoch?.assignments.find((a) => a.family === "tiling");
+    const tiling = epoch?.assignments.find((a) => a.direction === "tiling");
     assert.equal(tiling?.directive, second[0]);
     const ev = env.ledger.eventsAfter(0, 10_000).events.find((e) => e.kind === "epoch_started");
     assert.ok(ev);
@@ -569,10 +577,10 @@ describe("goal reviews and conclusions", () => {
       await env.drain();
       for (const k of [WRONG_KERNEL, `${WRONG_KERNEL}// b\n`, `${WRONG_KERNEL}// c\n`]) {
         const id = await submit(env, k);
-        env.ledger.db.prepare("update attempt set family = 'closed-form' where id = ?").run(id);
+        env.ledger.db.prepare("update attempt set direction = 'closed-form' where id = ?").run(id);
         env.ledger.db
           .prepare(
-            "insert or ignore into family (run, id, description, created_by, created_at) values ('js-1', 'closed-form', 'd', 't', ?)",
+            "insert or ignore into direction (run, id, description, created_by, created_at) values ('js-1', 'closed-form', 'd', 't', ?)",
           )
           .run(new Date().toISOString());
       }

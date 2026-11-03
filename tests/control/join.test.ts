@@ -14,6 +14,8 @@ import { SecretBox } from "../../src/control/secrets.ts";
 import { controlOnly, signIn } from "../helpers/control-stack.ts";
 
 const SECRETS = { controlToken: "rig-token-123", harnessSupervisorToken: "hs-token-456" };
+/** The bus as the rig reaches it, with control's authority: every rig control sets up gets it. */
+const BUS = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
 const IMAGES = {
   harness: "registry.example.com/harness:1",
   supervisor: "registry.example.com/supervisor:1",
@@ -26,6 +28,7 @@ const plan = (o: { gpus?: number[]; root?: boolean } = {}) => ({
   root: o.root ?? false,
   controlPublicKey: "PUBLIC KEY",
   controlFingerprint: "fp",
+  bus: BUS,
 });
 
 describe("join a rig yourself: what control renders", () => {
@@ -74,6 +77,7 @@ describe("join a rig yourself: what control renders", () => {
           gpuMode: "device-plugin",
           storageGi: 20,
           controlPublicKey: "PUBLIC KEY",
+          bus: BUS,
         },
         SECRETS,
       ),
@@ -124,7 +128,7 @@ async function control(o: { rigBus?: { url: string; ca: string } } = {}) {
     options: {
       secrets: SecretBox.ephemeral(),
       publicUrl: "https://control.example.com",
-      rigBus: o.rigBus,
+      rigBus: "rigBus" in o ? o.rigBus : BUS,
       rigImages: {
         harness: IMAGES.harness,
         harnessCuda: "registry.example.com/harness-cuda:1",
@@ -187,11 +191,24 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
       /There is a rig named box-a already/,
     );
 
-    assert.equal((await s.fetchJoin("/v1/join/box-a/script", "wrong")).status, 401);
-    assert.equal((await s.fetchJoin("/v1/join/box-a/manifest", token)).status, 404);
+    // A wrong token, the wrong form and a rig that waits for none all get one answer, and none
+    // of them uses the join command.
+    const refused = async (path: string, t: string) => {
+      const r = await s.fetchJoin(path, t);
+      return [r.status, await r.text(), r.headers.get("cache-control")];
+    };
+    const no = await refused("/v1/join/box-a/script", "wrong");
+    assert.deepEqual(no, [
+      401,
+      "thermite: this join command does not work: it was used, revoked or expired. Make a new one on the rig's page in Thermite.\n",
+      "no-store",
+    ]);
+    assert.deepEqual(await refused("/v1/join/box-a/manifest", token), no);
+    assert.deepEqual(await refused("/v1/join/box-z/script", token), no);
     const got = await s.fetchJoin("/v1/join/box-a/script?uid=1000", token);
     assert.equal(got.status, 200);
     assert.equal(got.headers.get("cache-control"), "no-store");
+    assert.equal(got.headers.get("x-content-type-options"), "nosniff");
     const script = await got.text();
     assert.match(script, /command -v podman/);
     assert.match(script, /AddDevice=nvidia.com\/gpu=0/);
@@ -298,12 +315,35 @@ describe("join a rig yourself: the dashboard and /v1/join", () => {
     assert.match(await s.page("/ui/rigs/box-b"), /kubectl scale deployment -n team-a/);
   });
 
-  test("with the message bus, what a join fetches gives the supervisor the bus and control's authority", async () => {
-    const bus = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
+  test("a client whose join requests keep failing waits a minute, and the audit log says so once", async () => {
+    const s = await control();
+    const html = await (
+      await s.post("/ui/rigs/add", { place: "join:machine", rig: "box-c", j_gpus: "1, 0" })
+    ).text();
+    const token = s.tokenOf(html);
+    assert.ok(token);
+    for (let i = 0; i < 20; i++)
+      assert.equal((await s.fetchJoin("/v1/join/box-c/script", `wrong-${i}`)).status, 401);
+    const held = await s.fetchJoin("/v1/join/box-c/script", token);
+    assert.equal(held.status, 429);
+    assert.equal(await held.text(), "thermite: too many join requests failed; wait a minute\n");
+    assert.equal(s.store.auditLog.list(5, { action: "join_throttled" }).length, 1);
+    // The command itself was not used: it waits for the rig.
+    assert.match(await s.page("/ui/rigs/box-c"), /A join command waits, until/);
+  });
+
+  test("what a join fetches gives the supervisor the message bus and control's authority; without the bus, no rig is set up", async () => {
+    const bus = BUS;
     const s = await control({ rigBus: bus });
     // Add a rig says where the rig will reach the bus.
     assert.match(await s.page("/ui/rigs/add"), /nats:\/\/control\.example\.com:4222/);
-    assert.match(await (await control()).page("/ui/rigs/add"), /off: the rig reports over HTTP/);
+    const off = await control({ rigBus: undefined });
+    assert.match(await off.page("/ui/rigs/add"), /none: control can't set a rig up/);
+    const refused = await off.post("/ui/rigs/add", { place: "join:machine", rig: "box-z" });
+    assert.match(
+      decodeURIComponent(refused.headers.get("location") ?? ""),
+      /Control has no address for rigs on its message bus/,
+    );
     const machine = s.tokenOf(
       await (await s.post("/ui/rigs/add", { place: "join:machine", rig: "box-a" })).text(),
     );

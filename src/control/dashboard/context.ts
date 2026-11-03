@@ -10,7 +10,7 @@ import { RigUpdates } from "../rigs/index.ts";
 import { SESSION_DAYS } from "../settings.ts";
 import type { ControlStore } from "../store/index.ts";
 import { infoLabel } from "../ui/campaigns/new/index.ts";
-import { esc, type Shell, shell } from "../ui/components/index.ts";
+import { esc, NAV_COOKIE, type Shell, shell } from "../ui/components/index.ts";
 import { type Forms, type Need, needs as operatorNeeds } from "../ui/operator/index.ts";
 import {
   OFFLINE_AFTER_MS,
@@ -186,8 +186,16 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
     archived.size
       ? xs.filter((x) => !x.run || !archived.has(campaignOfRun(vs, x.rig, x.run) ?? ""))
       : xs;
-  /** The page shell with the navigation's campaigns and their folders. */
-  const page = (c: Ctx, s: Omit<Shell, "rigs" | "needs" | "now">, body: string, vs = views()) => {
+  /**
+   * The page shell with the navigation's campaigns and their folders, collapsed to its icons when
+   * this browser keeps it so (NAV_COOKIE).
+   */
+  const page = (
+    c: Ctx,
+    s: Omit<Shell, "rigs" | "needs" | "now" | "rail">,
+    body: string,
+    vs = views(),
+  ) => {
     const now = Date.now();
     // A command just sent from this page (POST /ui/commands): say so at the top.
     const sent = c.req.query("sent");
@@ -214,6 +222,8 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
             archived,
           ).length,
           now,
+          rail: getCookie(c, NAV_COOKIE) === "rail",
+          build: control,
           nav: {
             folders: store.folders.list(),
             archived,
@@ -228,6 +238,13 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
   };
   /** Control's SSH to the machines it sets rigs up on. */
   const ssh = parts.machineSsh;
+  /**
+   * Words from another program's error (ssh, git, kubectl, a GPU cloud, an MCP server), kept on
+   * control for the page a form returns to: the address carries their ID (notes.ts).
+   */
+  const noted = (text: string) => parts.notes.put(text);
+  /** Why a form failed, from the page's address: the words a note's ID names, or those given. */
+  const said = (c: Ctx, key = "error") => parts.notes.read(c.req.query(key));
   return {
     store,
     opts,
@@ -254,6 +271,8 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
     notArchived,
     page,
     ssh,
+    noted,
+    said,
   };
 }
 

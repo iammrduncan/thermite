@@ -10,14 +10,14 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
     case "directive": {
       const d = (b.body ?? {}) as {
         kind?: string;
-        family?: string;
+        direction?: string;
         match?: string;
         converted_from?: unknown;
       };
       // A rule converted from an old rule in words: its directive_converted event tells it.
       if (d.converted_from) return null;
       // A direction as :name: (goal 066); an old rule's words in quotes.
-      const what = d.family ? asToken(d.family) : d.match ? `“${d.match}”` : undefined;
+      const what = d.direction ? asToken(d.direction) : d.match ? `“${d.match}”` : undefined;
       return s(
         `${who(e.actor)} set a rule for the plan${d.kind ? `: ${d.kind}${what ? ` ${what}` : ""}` : ""}.`,
         "",
@@ -26,10 +26,12 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
     }
     case "directives_left_out": {
       const rules = Array.isArray(b.rules)
-        ? (b.rules as { kind?: string; family?: string; match?: string }[])
+        ? (b.rules as { kind?: string; direction?: string; match?: string }[])
         : [];
       const named = rules
-        .map((r) => `${r.kind ?? ""} ${r.family ? asToken(r.family) : (r.match ?? "")}`.trim())
+        .map((r) =>
+          `${r.kind ?? ""} ${r.direction ? asToken(r.direction) : (r.match ?? "")}`.trim(),
+        )
         .join("; ");
       // A rule that freezes the queue's size or pins an experiment (goal 081): left out, with why.
       const refused =
@@ -55,8 +57,8 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
         "",
         { run: String(e.subject) },
       );
-    case "family_added": {
-      const name = asToken(String(b.family ?? ""));
+    case "direction_added": {
+      const name = asToken(String(b.direction ?? ""));
       const what =
         typeof b.description === "string" && b.description ? `: ${clip(b.description, 200)}` : "";
       const rules = Array.isArray(b.for_rules) ? b.for_rules.map(String) : [];
@@ -73,7 +75,7 @@ export function planSentence(w: SentenceContext, e: StoredEvent): Sentence | nul
     // The planner converted an old rule in words to a rule on a named direction (goal 066).
     case "directive_converted":
       return s(
-        `${who(e.actor)} converted rule ${String(b.id)}, an old rule in words (“${clip(String(b.words ?? ""), 160)}”), to rule ${String(b.to)}: ${String(b.kind ?? "")} ${asToken(String(b.family ?? ""))}.`,
+        `${who(e.actor)} converted rule ${String(b.id)}, an old rule in words (“${clip(String(b.words ?? ""), 160)}”), to rule ${String(b.to)}: ${String(b.kind ?? "")} ${asToken(String(b.direction ?? ""))}.`,
         "",
         { run: String(e.subject) },
       );

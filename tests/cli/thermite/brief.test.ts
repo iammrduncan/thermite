@@ -8,9 +8,9 @@ import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import { issueCommand } from "../../../src/control/issue/index.ts";
-import { parseContract } from "../../../src/core/contract.ts";
+import { parseContract, parseStoredContract } from "../../../src/core/contract.ts";
 import { controlOnly } from "../../helpers/control-stack.ts";
-import { ingestReport } from "../../helpers/control-store.ts";
+import { enrollRigs, ingestReport } from "../../helpers/control-store.ts";
 
 const run = promisify(execFile);
 const CLI = join(import.meta.dirname, "../../../src/cli/thermite/main.ts");
@@ -68,7 +68,8 @@ describe("a campaign's brief on the command line (goal 078)", () => {
       contract: Record<string, unknown>;
       contract_sha: string;
     };
-    assert.equal(payload.contract.notes, INFO);
+    assert.equal(payload.contract.additional_information, INFO);
+    assert.equal(payload.contract.notes, undefined, "a new contract uses the new key only");
     assert.deepEqual(payload.contract.ideas, ["Fuse the loops.", "Unroll by 4."]);
     assert.deepEqual(payload.contract.hypotheses, ["It is memory bound."]);
     assert.deepEqual(payload.contract.links, ["https://git.example.com/team/x/issues/1"]);
@@ -127,7 +128,9 @@ describe("a campaign's brief on the command line (goal 078)", () => {
       string,
       unknown
     >;
-    const contract = parseContract({
+    // A contract written before v0.1.1, with its additional information as `notes`: a copy is a
+    // new contract, under the new names.
+    const contract = parseStoredContract({
       ...goal,
       campaign: "sort-speed",
       notes: "The old brief.",
@@ -136,7 +139,7 @@ describe("a campaign's brief on the command line (goal 078)", () => {
     });
     assert.ok(contract.ok, contract.ok ? "" : contract.errors.join("; "));
     // The assignment that started sort-speed-1, before the rig reported it.
-    store.enrollments.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
       kind: "assign_campaign",
@@ -180,8 +183,8 @@ describe("a campaign's brief on the command line (goal 078)", () => {
       assert.equal(kept.code, 0, kept.stderr);
       const b = store.campaigns.versions("sort-speed-b")[0]?.contract as Record<string, unknown>;
       assert.deepEqual(
-        [b.notes, b.ideas, b.hypotheses],
-        ["The old brief.", ["An old idea."], ["An old hypothesis."]],
+        [b.additional_information, b.notes, b.ideas, b.hypotheses],
+        ["The old brief.", undefined, ["An old idea."], ["An old hypothesis."]],
       );
       const own = await cli(
         "campaign",
@@ -199,7 +202,7 @@ describe("a campaign's brief on the command line (goal 078)", () => {
       assert.equal(own.code, 0, own.stderr);
       const c = store.campaigns.versions("sort-speed-c")[0]?.contract as Record<string, unknown>;
       assert.deepEqual(
-        [c.notes, c.ideas, c.hypotheses],
+        [c.additional_information, c.ideas, c.hypotheses],
         [INFO, ["An old idea."], ["A new hypothesis.", "Another."]],
       );
     } finally {

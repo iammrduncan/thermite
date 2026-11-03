@@ -50,7 +50,7 @@ export function changeFacts(r: RunView, a: AttemptView | undefined, id: string):
     return `<dt>The change</dt><dd><code>${esc(id)}</code> <span class="muted">(no details reported)</span></dd>`;
   const who = [
     a.lane ? `made by ${esc(a.lane)}` : "",
-    a.family ? `direction <b>${esc(a.family)}</b>` : "",
+    a.direction ? `direction <b>${esc(a.direction)}</b>` : "",
     a.commit
       ? `commit <code>${esc(short(a.commit))}</code>${a.parent ? ` on <code>${esc(short(a.parent))}</code>` : ""}`
       : "",

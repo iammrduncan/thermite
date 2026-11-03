@@ -29,7 +29,7 @@ const core = new Function(
 )() as {
   briefDraft: (
     mode: string,
-    f: { notes: string; links: string; ideas: string[]; hypotheses: string[] },
+    f: { additional_information: string; links: string; ideas: string[]; hypotheses: string[] },
   ) => Record<string, unknown>;
   briefLinks: (text: string) => { links: string[]; bad: number[] };
   briefSay: (chars: number, bytes: number) => string;
@@ -95,7 +95,7 @@ We build **fastmat**: https://git.example.com/team/fastmat.
 
 ${"More background. ".repeat(3000)}`;
 const fields = {
-  notes: NOTES,
+  additional_information: NOTES,
   links:
     "  https://git.example.com/team/fastmat/issues/12\n\nhttps://docs.example.com/fastmat/design  ",
   ideas: ["  Fuse the dequantize step.  ", "", "Load 128-bit vectors.\nThen unroll by 4."],
@@ -170,7 +170,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       /<span class="k">1<\/span>Aim<\/li><li data-step="brief"><span class="k">2<\/span>The brief<\/li><li data-step="project" data-modes="hill_climb goal"><span class="k">3<\/span>Project<\/li><li data-step="measure" data-modes="hill_climb goal"><span class="k">4<\/span>How to measure<\/li><li data-step="research" data-modes="research"><span class="k">4<\/span>Time and tools<\/li><li data-step="where"><span class="k">5<\/span>Where it runs<\/li><li data-step="review"><span class="k">6<\/span>Review and start<\/li>/,
     );
     const aim = /<section class="pane" data-pane="aim"[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
-    assert.doesNotMatch(aim, /The brief|name="notes"|name="topic"/);
+    assert.doesNotMatch(aim, /The brief|name="additional_information"|name="topic"/);
     const brief =
       /<section class="pane" data-pane="brief"[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
     for (const label of [
@@ -194,7 +194,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     // Starting links directly under Additional information; its tip says what is fetched.
     assert.match(
       brief,
-      /<textarea name="notes" class="md-in"[\s\S]*?data-md-say>Markdown\. Empty is fine\.<\/div><\/div>\n<label class="fd"><span class="lb">Starting links<i class="ii" tabindex="0" data-tip="[^"]*Research: the harness fetches and archives them when the run starts\.[^"]*nothing fetches them first\.">i<\/i><\/span><textarea name="links"/,
+      /<textarea name="additional_information" class="md-in"[\s\S]*?data-md-say>Markdown\. Empty is fine\.<\/div><\/div>\n<label class="fd"><span class="lb">Starting links<i class="ii" tabindex="0" data-tip="[^"]*Research: the harness fetches and archives them when the run starts\.[^"]*nothing fetches them first\.">i<\/i><\/span><textarea name="links"/,
     );
     assert.match(brief, /data-bl="questions"[\s\S]*data-bl-add="questions">Add a question</);
     assert.match(
@@ -209,7 +209,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     assert.match(research, /Run for at least/);
     assert.equal(page.match(/name="links"/g)?.length, 1);
     // One field for the additional information: Notes for the agents is gone.
-    assert.equal(page.match(/name="notes"/g)?.length, 1);
+    assert.equal(page.match(/name="additional_information"/g)?.length, 1);
     assert.doesNotMatch(page, /Notes for the agents/);
     // The page's script has the brief's part: the preview, the boxes and the line under the text.
     for (const piece of [
@@ -225,7 +225,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     // A draft sent back with mistakes keeps the brief, each entry in its own box.
     const back = briefPane({
       mode: "research",
-      notes: "## Kept\nas typed",
+      additional_information: "## Kept\nas typed",
       ideas: ["one", "two"],
       hypotheses: ["h <b>"],
       research: { topic: "t", questions: ["q1\nline 2"], seeds: ["https://a.example.com/x"] },
@@ -234,7 +234,10 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       back,
       /<textarea name="links" class="nc-links"[^>]*>https:\/\/a\.example\.com\/x<\/textarea>/,
     );
-    assert.match(back, /<textarea name="notes" class="md-in"[^>]*>## Kept\nas typed<\/textarea>/);
+    assert.match(
+      back,
+      /<textarea name="additional_information" class="md-in"[^>]*>## Kept\nas typed<\/textarea>/,
+    );
     assert.match(
       back,
       /<div class="md-out md" data-md-out aria-live="polite"><h4>Kept<\/h4><p>as typed<\/p><\/div>/,
@@ -256,10 +259,10 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       links: ["https://a.example.com", "not a link", "ftp://b.example.com"],
       bad: [2, 4],
     });
-    assert.deepEqual(core.briefDraft("hill_climb", { ...fields, notes: "" }).links, [
-      "https://git.example.com/team/fastmat/issues/12",
-      "https://docs.example.com/fastmat/design",
-    ]);
+    assert.deepEqual(
+      core.briefDraft("hill_climb", { ...fields, additional_information: "" }).links,
+      ["https://git.example.com/team/fastmat/issues/12", "https://docs.example.com/fastmat/design"],
+    );
     assert.ok(
       !("links" in core.briefDraft("research", fields)),
       "research sends them as its seeds",
@@ -288,8 +291,8 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     assert.equal(hc.status, 303, await hc.text());
     const c = s.contract("fastmat-speed");
     // No length limit: the whole text, and only the entries with words, trimmed.
-    assert.equal(c?.notes, NOTES.trimEnd());
-    assert.ok(String(c?.notes).length > 50_000);
+    assert.equal(c?.additional_information, NOTES.trimEnd());
+    assert.ok(String(c?.additional_information).length > 50_000);
     assert.deepEqual(c?.ideas, [
       "Fuse the dequantize step.",
       "Load 128-bit vectors.\nThen unroll by 4.",
@@ -307,7 +310,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       JSON.parse(signed.signed) as { envelope: { payload: { contract: Record<string, unknown> } } }
     ).envelope.payload;
     assert.deepEqual(payload.contract.ideas, c?.ideas);
-    assert.equal(payload.contract.notes, c?.notes);
+    assert.equal(payload.contract.additional_information, c?.additional_information);
     const goal = await s.submit(codeDraft("goal"));
     assert.equal(goal.status, 303, await goal.text());
     assert.deepEqual(s.contract("fastmat-goals")?.ideas, c?.ideas);
@@ -315,7 +318,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     const bare = await s.submit(
       codeDraft("hill_climb", {
         campaign: "bare",
-        notes: undefined,
+        additional_information: undefined,
         ideas: undefined,
         hypotheses: undefined,
         links: undefined,
@@ -323,7 +326,12 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     );
     assert.equal(bare.status, 303);
     const b = s.contract("bare") ?? {};
-    assert.ok(!("notes" in b) && !("ideas" in b) && !("hypotheses" in b) && !("links" in b));
+    assert.ok(
+      !("additional_information" in b) &&
+        !("ideas" in b) &&
+        !("hypotheses" in b) &&
+        !("links" in b),
+    );
     // A starting link that is not a web address: refused in words.
     const badLink = await s.submit(
       codeDraft("hill_climb", { campaign: "bad-link", links: ["git.example.com/x"] }),
@@ -358,7 +366,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     const c = s.contract("agent-survey");
     assert.deepEqual(c?.questions, [question.trim(), "What fails, and why?"]);
     assert.deepEqual(c?.hypotheses, ["It is memory bound at batch size 1."]);
-    assert.equal(c?.notes, NOTES.trimEnd());
+    assert.equal(c?.additional_information, NOTES.trimEnd());
     assert.deepEqual(c?.seeds, [
       "https://git.example.com/team/fastmat/issues/12",
       "https://docs.example.com/fastmat/design",
@@ -404,7 +412,10 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       /<ol class="kb-list"><li>q1<br>line 2<\/li><\/ol>[\s\S]*Each run starts with these as its hypotheses\./,
     );
     assert.equal(campaignBriefBlock({ mode: "hill_climb" }), "");
-    assert.match(campaignBriefBlock({ notes: "short" }), /<details class="kb-info" open>/);
+    assert.match(
+      campaignBriefBlock({ additional_information: "short" }),
+      /<details class="kb-info" open>/,
+    );
   });
 
   test("Copy keeps the brief; a copy over REST or MCP may give its own, each part in place of the source's", async () => {
@@ -415,17 +426,21 @@ describe("a campaign's brief on the screens (goal 078)", () => {
     const kept = await s.rest("fastmat-speed", { name: "fastmat-speed-b" });
     assert.equal(kept.status, 201, await kept.text());
     const b = s.contract("fastmat-speed-b");
-    for (const k of ["notes", "links", "ideas", "hypotheses"])
+    for (const k of ["additional_information", "links", "ideas", "hypotheses"])
       assert.deepEqual(b?.[k], source?.[k], k);
+    // The key the additional information had before v0.1.1 is refused, with its new name.
+    const old = await s.rest("fastmat-speed", { name: "fastmat-speed-x", notes: "old key" });
+    assert.equal(old.status, 400);
+    assert.match(await old.text(), /`notes` is now `additional_information`/);
     // Its own: new additional information, no ideas, the hypotheses kept.
     const own = await s.rest("fastmat-speed", {
       name: "fastmat-speed-c",
-      notes: "## Only this\nA shorter brief.",
+      additional_information: "## Only this\nA shorter brief.",
       ideas: [],
     });
     assert.equal(own.status, 201, await own.text());
     const c = s.contract("fastmat-speed-c");
-    assert.equal(c?.notes, "## Only this\nA shorter brief.");
+    assert.equal(c?.additional_information, "## Only this\nA shorter brief.");
     assert.ok(!("ideas" in (c ?? {})));
     assert.deepEqual(c?.hypotheses, source?.hypotheses);
     // Control's audit log names the parts the copy has of its own; their text is in its contract.
@@ -438,7 +453,7 @@ describe("a campaign's brief on the screens (goal 078)", () => {
       audits.map((a) => [a.campaign, a.own_brief]),
       [
         ["fastmat-speed-b", undefined],
-        ["fastmat-speed-c", ["notes", "ideas"]],
+        ["fastmat-speed-c", ["additional_information", "ideas"]],
       ],
     );
     // Over MCP: other hypotheses; and a research campaign takes no ideas.

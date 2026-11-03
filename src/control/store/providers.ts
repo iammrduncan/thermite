@@ -1,4 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { ProviderType } from "../../core/agents.ts";
 import type { ModelPrice } from "../../core/usage.ts";
 import { type Row, StorePart } from "./part.ts";
@@ -6,43 +5,6 @@ import { type Row, StorePart } from "./part.ts";
 /**
  * Model providers (goal 125, T6): their keys only sealed, and the models they list.
  */
-
-/**
- * The settings page's first version stored one route per model (model_route, rig_model_route).
- * Each becomes a provider of type openai with that model, and its rigs keep their model: a step of
- * the store's first migration (schema.ts).
- */
-export function migrateModelRoutes(db: DatabaseSync): void {
-  const has = (t: string) =>
-    db.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(t);
-  if (!has("model_route")) return;
-  const now = new Date().toISOString();
-  const routes = db.prepare("select * from model_route").all() as Row[];
-  for (const r of routes)
-    db.prepare(
-      `insert or ignore into model_provider (name, type, base_url, key_sealed, key_hint, version, updated_at, models)
-       values (?, 'openai', ?, ?, ?, 1, ?, ?)`,
-    ).run(
-      String(r.name),
-      String(r.base_url),
-      String(r.key_sealed),
-      String(r.key_hint),
-      now,
-      JSON.stringify([{ id: String(r.model), added: true }]),
-    );
-  if (has("rig_model_route")) {
-    const given = db.prepare("select * from rig_model_route").all() as Row[];
-    for (const g of given) {
-      const route = routes.find((r) => r.name === g.route);
-      if (route)
-        db.prepare(
-          "insert or ignore into rig_model (rig, provider, model, assigned_at) values (?, ?, ?, ?)",
-        ).run(String(g.rig), String(route.name), String(route.model), now);
-    }
-    db.exec("drop table rig_model_route");
-  }
-  db.exec("drop table model_route");
-}
 
 /** A model in a provider's list: its id, and its context window when the provider says it. */
 export interface ProviderModel {

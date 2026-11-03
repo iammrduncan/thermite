@@ -1,11 +1,26 @@
+// @ts-check
 // Shared setup for the compose smoke and the judge acceptance test: the smoke project and kit
 // as git bundles in the inbox, the stack, signed commands through control, submissions from
 // inside the harness, and verdicts read back from control's event stream.
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync, execSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+/**
+ * An answer of control's API: its status and its JSON body. The body is read loosely (`any`): each
+ * script checks the fields it needs, and a field that is not there fails that check.
+ * @typedef {{ status: number, body: any }} ApiAnswer
+ */
+/**
+ * One event as control lists it, with its body read loosely, as the answer's.
+ * @typedef {{ seq: number, kind: string, subject: string | null, at: string, actor: string, body: any }} ControlEvent
+ */
+/** What prepare() made: the smoke project and kit in the inbox, and the contract's file. */
+/** @typedef {ReturnType<typeof prepare>} SmokeEnv */
+/** A compose command's environment, added to this process's. */
+/** @typedef {Record<string, string | undefined>} ComposeEnv */
 
 export const compose = (process.env.COMPOSE ?? "podman compose").split(" ");
 /**
@@ -14,21 +29,65 @@ export const compose = (process.env.COMPOSE ?? "podman compose").split(" ");
  * which may be a launcher, as in `uvx podman-compose`.
  */
 export const engine = compose.some((w) => /^docker(-compose)?$/.test(w)) ? "docker" : "podman";
+/** The Containerfile control, the harness and the supervisor are built from, each its target. */
+export const CONTAINERFILE = "containers/Containerfile";
+/** The one-container rig image's, built on a harness image (its build argument HARNESS_IMAGE). */
+export const RIG_CONTAINERFILE = "containers/rig/Containerfile";
+/** The arguments of an engine's build that build one image: control, harness or supervisor. */
+export const imageTarget = (/** @type {string} */ target) => [
+  "-f",
+  CONTAINERFILE,
+  "--target",
+  target,
+];
 // THERMITE_PROJECT and THERMITE_CONTROL_PORT let a second stack (a long run) run beside the usual
 // one, with THERMITE_NATS_PUBLISH for its message bus's port (such as 127.0.0.1:4223).
 export const control = `http://127.0.0.1:${process.env.THERMITE_CONTROL_PORT ?? "8800"}`;
 const project = process.env.THERMITE_PROJECT ? ["-p", process.env.THERMITE_PROJECT] : [];
+/** @type {(ms: number) => Promise<void>} */
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Runs a program and returns what it printed; its errors go to this process's.
+ * @param {string} cmd
+ * @param {readonly string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ * @returns {string}
+ */
 export const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], ...opts });
 
+/** Makes the stack's `.dev/` as a checkout does: `npm run dev:init`, `thermite local init .dev`. */
+export const devInit = () => sh("npm", ["run", "--silent", "dev:init"]);
+
+/**
+ * @param {ComposeEnv} env
+ * @param {...string} args
+ */
 export function dc(env, ...args) {
-  const out = sh(compose[0], [...compose.slice(1), ...project, ...args], {
+  const out = sh(/** @type {string} */ (compose[0]), [...compose.slice(1), ...project, ...args], {
     env: { ...process.env, ...env },
   });
   if (args.includes("down")) cleanEngine();
   return out;
+}
+
+/** A service's whole log, its output and its errors: larger than execFileSync's usual buffer. */
+/**
+ * @param {ComposeEnv} env
+ * @param {string} service
+ */
+export function dcLogs(env, service) {
+  const r = spawnSync(
+    /** @type {string} */ (compose[0]),
+    [...compose.slice(1), ...project, "logs", service],
+    {
+      encoding: "utf8",
+      env: { ...process.env, ...env },
+      maxBuffer: 256 * 1024 * 1024,
+    },
+  );
+  return `${r.stdout ?? ""}${r.stderr ?? ""}`;
 }
 
 /**
@@ -43,27 +102,73 @@ export function cleanEngine() {
   } catch {}
 }
 
-export const secret = (n) => readFileSync(join(".dev", "secrets", n), "utf8").trim();
+export const secret = (/** @type {string} */ n) =>
+  readFileSync(join(".dev", "secrets", n), "utf8").trim();
 
 /**
- * The message bus's server as compose.yaml runs it: its image and its command, for a stack that
- * starts the server beside a control of its own (the cluster acceptance), so that both run it
- * one way. Read from compose.yaml, where it is kept.
+ * The message bus's server as compose.yaml runs it: its image, its user and its command, for a
+ * stack that starts the server beside a control of its own (the cluster acceptance), so that both
+ * run it one way. Read from compose.yaml, where it is kept.
  */
 export function natsService() {
   const text = readFileSync("compose.yaml", "utf8");
   const service = text.slice(text.indexOf("\n  nats:\n"));
   const image = /\n {4}image: (\S+)/.exec(service)?.[1];
+  const user = /\n {4}user: "([0-9:]+)"/.exec(service)?.[1];
+  /** @type {string[]} */
   const lines = [];
   for (const line of service.slice(service.indexOf("      - |\n")).split("\n").slice(1)) {
     if (!line.startsWith("        ")) break;
     lines.push(line.slice(8));
   }
-  if (!image || !lines.length) throw new Error("compose.yaml has no nats service to read");
+  if (!image || !user || !lines.length) throw new Error("compose.yaml has no nats service to read");
   // Compose writes a literal $ as $$; run as it is, the shell would read $$ as its own pid.
-  return { image, command: ["sh", "-c", lines.join("\n").replaceAll("$$", "$")] };
+  return { image, user, command: ["sh", "-c", lines.join("\n").replaceAll("$$", "$")] };
 }
 
+/**
+ * The engine's `run` of the bus's one-shot service as compose.yaml runs it (nats-init): it gives
+ * the folders on these volumes (`source:/data` and `source:/etc/nats/thermite`) to their users
+ * before the server starts, and ends. Read from compose.yaml, where it is kept.
+ * @param {string[]} volumes
+ */
+export function natsInitRun(volumes) {
+  const text = readFileSync("compose.yaml", "utf8");
+  const service = text.slice(text.indexOf("\n  nats-init:\n"));
+  const image = /\n {4}image: (\S+)/.exec(service)?.[1];
+  const user = /\n {4}user: "([0-9:]+)"/.exec(service)?.[1];
+  const caps = /\n {4}cap_add: \[([A-Z_, ]+)\]/.exec(service)?.[1]?.split(", ");
+  const command = /\n {4}command: (\[.*\])\n/.exec(service)?.[1];
+  if (!image || !user || !caps || !command)
+    throw new Error("compose.yaml has no nats-init service to read");
+  return [
+    "run",
+    "--rm",
+    "--pull=never",
+    "--user",
+    user,
+    "--cap-drop",
+    "ALL",
+    ...caps.flatMap((c) => ["--cap-add", c]),
+    "--security-opt",
+    "no-new-privileges:true",
+    "--network",
+    "none",
+    ...volumes.flatMap((v) => ["-v", v]),
+    image,
+    ...JSON.parse(command),
+  ];
+}
+
+/**
+ * Asks `fn` every `everyMs` until it gives a truthy value, which it returns; a throw counts as no.
+ * @template T
+ * @param {string} what
+ * @param {() => T | Promise<T>} fn
+ * @param {number} [timeoutMs]
+ * @param {number} [everyMs]
+ * @returns {Promise<NonNullable<T>>}
+ */
 export async function until(what, fn, timeoutMs = 180_000, everyMs = 1000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -76,6 +181,30 @@ export async function until(what, fn, timeoutMs = 180_000, everyMs = 1000) {
   }
 }
 
+/**
+ * Where a dashboard form sent the owner back, as words: its address, or the page itself when the
+ * message is a note the page shows (control keeps other programs' errors out of addresses).
+ * `base`: the control the form went to, where it is not the compose stack's.
+ * @param {Response} r
+ * @param {string} cookie
+ * @param {string} [base]
+ */
+export async function formAnswer(r, cookie, base = control) {
+  const to = String(r.headers.get("location"));
+  return /=note-[0-9a-f]{24}\b/.test(to)
+    ? (await (await fetch(new URL(to, base), { headers: { cookie } })).text())
+        .replaceAll("&quot;", '"')
+        .replaceAll("&lt;", "<")
+        .replaceAll("&gt;", ">")
+        .replaceAll("&amp;", "&")
+    : decodeURIComponent(to);
+}
+
+/**
+ * @param {string} path
+ * @param {RequestInit} [init]
+ * @returns {Promise<ApiAnswer>}
+ */
 export async function api(path, init = {}) {
   const res = await fetch(`${control}${path}`, {
     ...init,
@@ -87,6 +216,10 @@ export async function api(path, init = {}) {
   return { status: res.status, body: await res.json() };
 }
 
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 function git(cwd, ...args) {
   return sh(
     "git",
@@ -103,7 +236,12 @@ function git(cwd, ...args) {
   ).trim();
 }
 
-/** Copies a directory into a fresh git repository and bundles it into the inbox. */
+/**
+ * Copies a directory into a fresh git repository and bundles it into the inbox.
+ * @param {string} from
+ * @param {string} name
+ * @param {string[]} [exclude]
+ */
 function bundle(from, name, exclude = []) {
   const repo = mkdtempSync(join(tmpdir(), `thermite-${name}-`));
   cpSync(from, repo, { recursive: true, filter: (src) => !exclude.some((e) => src.includes(e)) });
@@ -118,7 +256,7 @@ function bundle(from, name, exclude = []) {
 }
 
 export function prepare() {
-  sh("node", ["scripts/dev/init.mjs"]);
+  devInit();
   execSync("npm run -s build", { stdio: "inherit" });
   const project = bundle("examples/smoke-project", "smoke-project");
   const kit = bundle("kits/smoke-cpu", "smoke-cpu-kit", ["/candidates"]);
@@ -133,7 +271,30 @@ export function prepare() {
   return { project, kit, contractFile };
 }
 
-/** Issues a signed command through control and waits until the supervisor delivered it. */
+/**
+ * The planner's call while it runs in its own terminal (goal 169), as the rig's report lists it to
+ * control (`work.terminals`): its id (planner-RUN-ROUND) and its run.
+ * @param {string} [run]
+ * @param {{ rig?: string, ms?: number }} [options]
+ */
+export async function plannerInTerminal(run = "smoke-1", { rig = "local-1", ms = 300_000 } = {}) {
+  return await until(
+    "the planner's call in its own terminal",
+    async () =>
+      ((await api(`/v1/rigs/${rig}/view`)).body.summary?.work?.terminals ?? []).find(
+        (/** @type {{ role: string, run: string }} */ x) => x.role === "planner" && x.run === run,
+      ),
+    ms,
+    1000,
+  );
+}
+
+/**
+ * Issues a signed command through control and waits until the supervisor delivered it.
+ * @param {string} kind
+ * @param {unknown} payload
+ * @param {string} [rig]
+ */
 export async function command(kind, payload, rig = "local-1") {
   const issued = await api("/v1/commands", {
     method: "POST",
@@ -153,8 +314,11 @@ export async function command(kind, payload, rig = "local-1") {
 /**
  * Runs a rig check through control and returns its result from the rig's events. A busy rig
  * refuses the isolation and smoke checks ("not now"): it is asked again until it is idle.
+ * @param {string} check
+ * @param {{ rig?: string, timeoutMs?: number }} [options]
  */
 export async function rigCheck(check, { rig = "local-1", timeoutMs = 300_000 } = {}) {
+  /** @type {string | undefined} */
   let id;
   for (let i = 0; !id; i++) {
     const issued = await api("/v1/commands", {
@@ -183,6 +347,11 @@ export async function rigCheck(check, { rig = "local-1", timeoutMs = 300_000 } =
   return finished.body;
 }
 
+/**
+ * @param {SmokeEnv} env
+ * @param {string} run
+ * @param {string} [rig]
+ */
 export async function assign(env, run, rig = "local-1") {
   const payload = sh("node", [
     "dist/cli/thermite/main.js",
@@ -214,6 +383,9 @@ export async function assign(env, run, rig = "local-1") {
 /**
  * A patch that replaces files in the seed project with a candidate's files. With `base`, the
  * patch applies on top of the seed plus the base candidate's files (for example a champion).
+ * @param {SmokeEnv} env
+ * @param {string} dir
+ * @param {string} [base]
  */
 export function candidatePatch(env, dir, base) {
   const wt = mkdtempSync(join(tmpdir(), "thermite-cand-"));
@@ -230,7 +402,13 @@ export function candidatePatch(env, dir, base) {
   return patch;
 }
 
-/** Submits a patch as a proposer from inside the harness container (as workers will). */
+/**
+ * Submits a patch as a proposer from inside the harness container (as workers will).
+ * @param {ComposeEnv} composeEnv
+ * @param {string} run
+ * @param {string} patch
+ * @param {string} hypothesis
+ */
 export function submit(composeEnv, run, patch, hypothesis) {
   const b64 = Buffer.from(patch).toString("base64");
   const out = dc(
@@ -242,11 +420,15 @@ export function submit(composeEnv, run, patch, hypothesis) {
     "-c",
     `echo ${b64} | base64 -d > /tmp/p.patch && thermite submit --harness http://127.0.0.1:8700 --token-file /run/secrets/harness-proposer-token --run ${run} --patch-file /tmp/p.patch --hypothesis "${hypothesis.replace(/"/g, "'")}"`,
   );
-  return JSON.parse(out.trim().split("\n").pop());
+  return JSON.parse(/** @type {string} */ (out.trim().split("\n").pop()));
 }
 
-/** Every event control has for the rig, in arrival order. */
+/**
+ * Every event control has for the rig, in arrival order.
+ * @returns {Promise<ControlEvent[]>}
+ */
 export async function events() {
+  /** @type {ControlEvent[]} */
   const all = [];
   let after = 0;
   for (;;) {
@@ -257,17 +439,24 @@ export async function events() {
   }
 }
 
+/** @param {ControlEvent[]} evs */
 export function latestVerdicts(evs) {
+  /** @type {Record<string, string>} */
   const v = {};
-  for (const e of evs) if (e.kind === "verdict") v[e.subject] = e.body.verdict;
+  // A verdict's and an attempt's events name their attempt.
+  for (const e of evs)
+    if (e.kind === "verdict") v[/** @type {string} */ (e.subject)] = e.body.verdict;
   return v;
 }
 
+/** @param {ControlEvent[]} evs */
 export function lifecycles(evs) {
+  /** @type {Record<string, string>} */
   const l = {};
   for (const e of evs) {
-    if (e.kind === "attempt_recorded") l[e.subject] = e.body.lifecycle;
-    if (e.kind === "attempt_lifecycle") l[e.subject] = e.body.lifecycle;
+    const attempt = /** @type {string} */ (e.subject);
+    if (e.kind === "attempt_recorded") l[attempt] = e.body.lifecycle;
+    if (e.kind === "attempt_lifecycle") l[attempt] = e.body.lifecycle;
   }
   return l;
 }

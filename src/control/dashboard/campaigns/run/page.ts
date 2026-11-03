@@ -11,8 +11,10 @@ import {
   runState,
 } from "../../../ui/components/index.ts";
 import { exportMenu } from "../../../ui/exports.ts";
+import { waitEnd, waitsForLimit } from "../../../ui/operator/index.ts";
 import {
   campaignHref,
+  knowledgeHref,
   RUN_ROUTES,
   type RunTab,
   rigHref,
@@ -23,6 +25,7 @@ import {
 import { earlierWords } from "../../../ui/words/index.ts";
 import type { RunOnRig } from "../../../views/index.ts";
 import type { Ctx, Dashboard } from "../../context.ts";
+import { runGitParts, runGitRoutes } from "./git.ts";
 import { runHelpers } from "./section.ts";
 
 /**
@@ -33,6 +36,9 @@ import { runHelpers } from "./section.ts";
 export function runPageRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, moreMenu, page, pauseMenu, runOf, store, views } = dash;
   const { runSection } = runHelpers(dash);
+  const { fromDrawer } = runGitParts(dash);
+  // A new campaign from one of the run's champions in git (goal 185).
+  runGitRoutes(app, dash);
 
   /**
    * A run that is starting, until its rig reports it: how the start goes, in words, following its
@@ -51,7 +57,21 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
     return `<div class="card" style="margin-bottom:16px" data-part="starting"${follow}><b${failed ? ` class="bad"` : ""}>${failed ? "Not started:" : "Starting"} ${esc(run)} on ${esc(a.rig)}.</b> <span class="${p.tone}">${esc(p.said)}</span>${failed ? "" : ` <span class="muted">The rig fetches the project and the kit, and checks both. The run's page opens here when the rig reports the run, usually within a minute.</span>`}</div>`;
   };
 
-  /** The run's buttons: Live, Message, Pause or Resume, Export and ⋯; none for an earlier run. */
+  /**
+   * Resume now, while the run's agents wait for the provider's limit: what the wait is, and what
+   * ending it does (`end_wait`).
+   */
+  const resumeNow = (c: Ctx, x: RunOnRig, back: string) => {
+    const { rig: u, run: r } = x;
+    const wait = r.agents_wait;
+    if (!wait || !waitsForLimit(r, Date.now())) return "";
+    return `<details class="menu" data-part="resume-now"><summary class="btn">Resume now</summary><div class="menu-pop">${cmdForm(c, { rig: u.id, kind: "end_wait", fields: { run: r.id }, label: "End the wait now", cls: "sm primary", back })}<div class="muted small">The agents wait for the provider's limit until ${esc(waitEnd(wait.until))}${wait.reason ? ` (${esc(wait.reason.slice(0, 200))})` : ""}: no new trial or plan of this run starts before then. Ending the wait starts them now. If the limit still holds, the next trial meets it and the run waits again. A trial that waits in its own conversation goes on at its own time.</div></div></details>`;
+  };
+
+  /**
+   * The run's buttons: Live, Message, Resume now (while it waits for its provider), Pause or
+   * Resume, Export and ⋯; none for an earlier run.
+   */
   const actions = (c: Ctx, x: RunOnRig, back: string) => {
     const { rig: u, run: r } = x;
     if (x.earlier) return "";
@@ -69,7 +89,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
           : "";
     // A run without agents (a try, a rig check) has no one to message and no lanes to restart.
     const agents = r.has_agents !== false;
-    return `<a class="btn" href="${runLiveHref(r)}">${icon.terminal}Live</a>${agents ? `<a class="btn" href="${runLiveHref(r, { compose: true })}">Message</a>` : ""}${quick}${exportMenu({ csrf: csrf(c), rig: u.id, run: r.id, back })}${moreMenu(c, u.id, r, back, "", true)}`;
+    return `<a class="btn" href="${runLiveHref(r)}">${icon.terminal}Live</a>${agents ? `<a class="btn" href="${runLiveHref(r, { compose: true })}">Message</a>` : ""}${resumeNow(c, x, back)}${quick}${exportMenu({ csrf: csrf(c), rig: u.id, run: r.id, back })}${moreMenu(c, u.id, r, back, "", true)}`;
   };
 
   const runPage = async (c: Ctx, tab: RunTab) => {
@@ -124,6 +144,12 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
         : // Any other run started with its agents off (goal 099): say so plainly. A rig check's
           // smoke run is the rig page's to explain.
           `<div class="card hl" style="margin-bottom:12px"><b>Judge only:</b> ${esc(JUDGE_ONLY_WORDS)}</div>`;
+    // What its agents search in the knowledge base: set when it started (goal 175), with the grants
+    // given since (goal 182).
+    const scope = agents && !x.earlier ? store.kb().scope(campaign, r.id) : undefined;
+    const searches = scope
+      ? `<div class="muted small" style="margin-bottom:12px" data-part="kb-scope">Its agents search ${scope.fresh ? "only this run's own items" : "the campaign's whole collection"} in the <a href="${knowledgeHref(campaign)}">knowledge base</a>${scope.granted.length ? `, and ${esc(scope.granted.join(", "))}, read only` : ""}: set when the run started, with the grants given since.</div>`
+      : "";
     // The Prompts tab's list, read from the message bus.
     const prompts = tab === "prompts" ? await runPrompts(store, x) : [];
     return page(
@@ -135,7 +161,7 @@ export function runPageRoutes(app: Hono, dash: Dashboard): void {
         active: "campaigns",
         actions: actions(c, x, back),
       },
-      `${said}${earlierCard}${kind}${runSection(c, x, vs, now, tab, prompts)}`,
+      `${said}${earlierCard}${kind}${searches}${runSection(c, x, vs, now, tab, prompts)}${tab === "overview" ? fromDrawer(c, x, vs) : ""}`,
       vs,
     );
   };

@@ -1,4 +1,5 @@
 import { errorText, Refusal } from "../../common/errors.ts";
+import { setLogLevel } from "../../common/log.ts";
 import {
   CommandPayloads,
   type Envelope,
@@ -6,17 +7,22 @@ import {
   verifyCommand,
 } from "../../core/commands.ts";
 import { researchDirectionRefusal } from "../../core/directions.ts";
+import { RIG_LOG_LEVEL_LASTS } from "../../core/log-levels.ts";
+import { typesIntoTerminals } from "../../core/terminal-input.ts";
+import { endWait } from "../agents/index.ts";
 import { Conclusions } from "../conclusions.ts";
 import { LedgerError } from "../ledger/index.ts";
 import { receivePropagation } from "../propagation.ts";
 import type { Experiment } from "../queue.ts";
 import { RESEARCH_REVIEW, setHypothesisStatus } from "../research/index.ts";
+import { runRetention } from "../retention.ts";
 import { Reviews } from "../reviews.ts";
 import { assignCampaign } from "./assignment.ts";
 import { approvePromotion, declinePromotion } from "./champion.ts";
 import type { RigCheckRunner } from "./checks.ts";
 import { askStop, drainCommand } from "./drain.ts";
 import type { HarnessService } from "./index.ts";
+import { invalidateEvidence } from "./invalidation.ts";
 import { conflictCheck, unknownIn } from "./rules.ts";
 import { decidingRun, openRun, pauseOthers, requireRun } from "./runs.ts";
 import { requestWipe } from "./wipe.ts";
@@ -47,13 +53,26 @@ export class Commands {
     this.checks = checks;
   }
 
-  async applyCommand(input: unknown, actor: string): Promise<CommandOutcome> {
+  /** Whether control signed the command for this rig, now, with a payload that fits its kind. */
+  checkCommand(input: unknown): { ok: true } | { ok: false; reason: string } {
+    const verified = verifyCommand(input, this.controlPublicKeyPem, this.svc.rig, this.svc.clock());
+    return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
+  }
+
+  /**
+   * A command checked before it is applied or recorded: its outcome when it is refused or was
+   * recorded before, else its envelope and payload. A refusal is a `command_rejected` event.
+   */
+  private admit(
+    input: unknown,
+    actor: string,
+  ): { outcome: CommandOutcome } | { envelope: Envelope; payload: unknown } {
     const svc = this.svc;
     const verified = verifyCommand(input, this.controlPublicKeyPem, svc.rig, svc.clock());
     if (!verified.ok && verified.authenticId) {
       // Authentic but expired (or otherwise late): if it was applied before, report that.
       const prior = svc.ledger.commands.get(verified.authenticId);
-      if (prior) return { status: "replayed", ...prior };
+      if (prior) return { outcome: { status: "replayed", ...prior } };
     }
     if (!verified.ok) {
       // Its id when it has one, so control can match the refusal to the command it sent.
@@ -63,11 +82,11 @@ export class Commands {
         kind: typeof e?.kind === "string" ? e.kind : null,
         id: typeof e?.id === "string" ? e.id : null,
       });
-      return { status: "rejected", reason: verified.reason };
+      return { outcome: { status: "rejected", reason: verified.reason } };
     }
     const { envelope, payload } = verified;
     const prior = svc.ledger.commands.get(envelope.id);
-    if (prior) return { status: "replayed", ...prior };
+    if (prior) return { outcome: { status: "replayed", ...prior } };
     // After a wipe, commands signed for the old ledger are not applied to the new one.
     const notBefore = svc.ledger.notBefore();
     if (notBefore && Date.parse(envelope.issued_at) < Date.parse(notBefore)) {
@@ -76,8 +95,42 @@ export class Commands {
         kind: envelope.kind,
         id: envelope.id,
       });
-      return { status: "rejected", reason: "issued before this rig's state was wiped" };
+      return {
+        outcome: { status: "rejected", reason: "issued before this rig's state was wiped" },
+      };
     }
+    return { envelope, payload };
+  }
+
+  /**
+   * A command whose content its supervisor could not stage: checked as any command is, then
+   * recorded as not applied, with the supervisor's reason as its result, so that its `command`
+   * event tells control. One recorded before answers with its record; one being applied now
+   * waits.
+   */
+  recordUnstaged(input: unknown, reason: string, actor: string): CommandOutcome {
+    const admitted = this.admit(input, actor);
+    if ("outcome" in admitted) return admitted.outcome;
+    const { envelope } = admitted;
+    if (this.inFlight.has(envelope.id)) return { status: "in_progress" };
+    const result = { error: reason };
+    this.svc.ledger.commands.record({
+      id: envelope.id,
+      kind: envelope.kind,
+      envelope,
+      signature: (input as { signature: string }).signature,
+      accepted: false,
+      result,
+      actor: `control:${envelope.issued_by}`,
+    });
+    return { status: "applied", accepted: false, result };
+  }
+
+  async applyCommand(input: unknown, actor: string): Promise<CommandOutcome> {
+    const svc = this.svc;
+    const admitted = this.admit(input, actor);
+    if ("outcome" in admitted) return admitted.outcome;
+    const { envelope, payload } = admitted;
     if (this.inFlight.has(envelope.id)) return { status: "in_progress" };
 
     this.inFlight.add(envelope.id);
@@ -123,7 +176,29 @@ export class Commands {
       case "drain_rig":
         return drainCommand(svc, CommandPayloads.drain_rig.parse(payload), by, svc.clock());
       case "stop_trial":
-        return askStop(svc.ledger, CommandPayloads.stop_trial.parse(payload), by);
+        return askStop(svc, CommandPayloads.stop_trial.parse(payload), by);
+      // The owner ends a run's wait for its provider's limit: new trials and plans start at once.
+      case "end_wait": {
+        const p = CommandPayloads.end_wait.parse(payload);
+        if (requireRun(svc.ledger, p.run).status === "closed")
+          throw new Refusal(`run ${p.run} is closed`);
+        const r = endWait(svc.ledger, p.run, by, svc.clock().getTime());
+        if (r.ended)
+          svc.live.append({
+            source: "planner",
+            kind: "status",
+            text: `the wait for the provider's limit (until ${r.until}) was ended by hand: new trials and plans start again`,
+            run: p.run,
+          });
+        return r;
+      }
+      // The owner's input into a trial's terminal (goal 169): the owner's own, never an operator's.
+      case "terminal_input":
+        if (!typesIntoTerminals(envelope.issued_by))
+          throw new Refusal(
+            `terminal_input is the owner's own to issue, not ${envelope.issued_by}'s: an operator may message the agents instead`,
+          );
+        return svc.consoles.input(CommandPayloads.terminal_input.parse(payload), envelope.id, by);
       case "pause_run": {
         const p = CommandPayloads.pause_run.parse(payload);
         // A closed run stays closed: a pause would let a resume open it again.
@@ -191,7 +266,7 @@ export class Commands {
           {
             title: p.title,
             details: p.details,
-            family: p.family,
+            direction: p.direction,
             why: p.why,
             by: "owner",
             position: p.position,
@@ -249,19 +324,28 @@ export class Commands {
         return { run: p.run, ...r };
       }
       case "reset_workers": {
-        // The scheduler acts on the event: it kills the run's running trials, clears the
-        // lane bests and ends the epoch, so lanes start again from the champion.
+        // The scheduler, told at once, kills the run's running trials, then clears the lane
+        // bests and ends the epoch, so lanes start again from the champion.
         const p = CommandPayloads.reset_workers.parse(payload);
         requireRun(svc.ledger, p.run);
         if (p.reseed_commit)
           throw new Refusal("re-seeding lanes is not available in this version; reset without it");
-        svc.ledger.appendEvent(by, "workers_reset", p.run, {});
+        const event = svc.ledger.appendEvent(by, "workers_reset", p.run, {});
+        svc.agents?.onReset({ event, run: p.run });
         return { run: p.run, reset: true };
       }
       case "propagate":
         return receivePropagation(svc, CommandPayloads.propagate.parse(payload), by);
       case "export_now": {
         const p = CommandPayloads.export_now.parse(payload);
+        if (p.open_runs) {
+          const names = await svc.exportOpenRuns(by);
+          return {
+            export: names.at(-1) ?? null,
+            exports: names,
+            through_event: svc.ledger.exports.last()?.through_event ?? 0,
+          };
+        }
         const r = await svc.export(by, p);
         return {
           export: r.dir.split("/").pop(),
@@ -320,6 +404,30 @@ export class Commands {
         const p = CommandPayloads.conclude.parse(payload);
         decidingRun(svc.ledger, p.run, "conclude");
         return new Conclusions(svc.ledger).decide(p.run, p.proposal, p.accept, p.note, by);
+      }
+      // One of the owner's retention policies, run now: the judge's builds it covers go.
+      case "retention_run":
+        return runRetention(
+          { ledger: svc.ledger, stateDir: svc.paths.stateDir, clock: svc.clock },
+          CommandPayloads.retention_run.parse(payload),
+          by,
+        );
+      // The owner withdraws bad evidence (goal 174): a preview, or the withdrawal it previewed.
+      case "invalidate_evidence":
+        return invalidateEvidence(
+          svc,
+          CommandPayloads.invalidate_evidence.parse(payload),
+          envelope.issued_by,
+          by,
+        );
+      // A rig part's log level (the guide's question 16): the harness's from now on; the
+      // supervisor's is its supervisor's, which sets it once the harness took the command.
+      case "log_level": {
+        const p = CommandPayloads.log_level.parse(payload);
+        if (p.part === "supervisor")
+          return { part: p.part, level: p.level, left_to: "the supervisor" };
+        const { was, now } = setLogLevel("harness", p.level, { by, command: envelope.id });
+        return { part: p.part, level: now, was, lasts: RIG_LOG_LEVEL_LASTS };
       }
     }
   }

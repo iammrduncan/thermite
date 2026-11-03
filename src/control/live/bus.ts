@@ -1,4 +1,4 @@
-import type { Bus, BusMessage } from "../../common/bus.ts";
+import type { Bus, BusMessage } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import {
   LIVE_CONSUMER_CONFIG,
@@ -14,8 +14,8 @@ import { type HarnessRefusal, harnessRefusal, type LiveBatchRead } from "./take.
 
 /**
  * Control's live view from the message bus (goal 168, step 2): each message of the LIVE stream,
- * the lines of one run's source, checked as a batch posted to `POST /v1/rigs/<rig>/live` is and
- * folded into the same live view, which the dashboard's Live pages read. A message control
+ * the lines of one run's source, checked as the harness's own (take.ts) and folded into the live
+ * view, which the dashboard's Live pages read. A message control
  * refuses is counted and logged, and passed over: no answer goes back to the supervisor, and the
  * live view is a view, so nothing waits for it.
  */
@@ -84,8 +84,9 @@ export function foldLive(t: LiveIntake, m: BusMessage): LiveFolded {
   };
   if (!subject) return refuse("not a live subject");
   if (!rig) return refuse("no rig named");
-  if (!store.enrollments.knownRig(rig)) return refuse("no such rig: control has no token for it");
+  // A retired rig's token has ended too: it is told it is retired, before control knows it not.
   if (store.retired.get(rig)) return refuse("this rig is retired in control");
+  if (!store.enrollments.knownRig(rig)) return refuse("no such rig: control has no token for it");
   if ("run" in subject && !store.runRegistry.rigsOf(subject.run).includes(rig))
     return refuse("a run control does not give this rig");
   let read: { batch: LiveBatchRead; entries: LiveEntry[]; unknown: Record<string, number> };

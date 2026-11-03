@@ -9,12 +9,11 @@ import {
   unarchiveCampaign,
 } from "../../campaigns/index.ts";
 import { campaignHref } from "../../ui/urls.ts";
-import { campaignModes } from "../../views/index.ts";
 import { backTo, type Ctx, type Dashboard } from "../context.ts";
 
 /**
- * Archive, the navigation's folders (goal 077), and the knowledge base's folders a campaign
- * reads (grant and revoke).
+ * Archive and the navigation's folders (goal 077). A campaign's grants are given and ended on its
+ * collection in the Knowledge page (dashboard/knowledge.ts).
  */
 export function shelfRoutes(app: Hono, dash: Dashboard): void {
   const { store, views } = dash;
@@ -35,7 +34,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     if (c.req.header("accept")?.includes("application/json")) {
       if (out.ok) return c.json({ ...out.answer, said: done(out.answer) });
       // A redirect's refusal is audited from its address; this answer says it itself.
-      store.auditLog.add("owner:ui", "refused", {
+      store.auditLog.refusal("owner:ui", "refused", {
         path: new URL(c.req.url).pathname,
         why: out.error,
       });
@@ -74,7 +73,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return shelfAnswer(
       c,
       await c.req.parseBody(),
-      unarchiveCampaign(store, views(), name, "owner:ui"),
+      unarchiveCampaign(store, name, "owner:ui"),
       (a) =>
         a.changed
           ? `Unarchived ${name}. It is back in the navigation, ${a.folder ? `in ${a.folder}` : "in no folder"}.`
@@ -91,7 +90,7 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
     return shelfAnswer(
       c,
       f,
-      id && !to ? goneFolder : moveCampaign(store, views(), name, to?.name ?? null, "owner:ui"),
+      id && !to ? goneFolder : moveCampaign(store, name, to?.name ?? null, "owner:ui"),
       (a) =>
         !a.changed
           ? a.folder
@@ -138,51 +137,6 @@ export function shelfRoutes(app: Hono, dash: Dashboard): void {
       (a) => `Deleted the folder ${a.deleted}.`,
       "Not deleted.",
       "/ui/campaigns",
-    );
-  });
-
-  // The folders a campaign's agents may read besides its own (goal 065): the owner's, any time.
-  const grantBack = (c: Ctx, campaign: string, k: "ok" | "error", m: string) =>
-    c.redirect(
-      `${campaignHref(campaign)}?${k}=${encodeURIComponent(m)}${k === "error" ? "&on=kb" : ""}#knowledge`,
-      303,
-    );
-  app.post("/ui/campaigns/:campaign/kb/grant", async (c) => {
-    const campaign = c.req.param("campaign");
-    const reads = String((await c.req.parseBody()).reads ?? "").trim();
-    const known = campaignModes(store, views());
-    if (!known.has(campaign)) return c.text("No such campaign.", 404);
-    if (!reads) return grantBack(c, campaign, "error", "Choose a folder to add.");
-    if (reads === campaign)
-      return grantBack(
-        c,
-        campaign,
-        "error",
-        "A campaign always reads its own folder: choose another campaign's.",
-      );
-    if (!known.has(reads))
-      return grantBack(c, campaign, "error", `Control has no campaign named ${reads}.`);
-    if (!store.kb().grant(campaign, reads, "owner:ui"))
-      return grantBack(c, campaign, "ok", `${campaign} reads ${reads} already.`);
-    store.auditLog.add("owner:ui", "kb_grant", { campaign, reads });
-    return grantBack(
-      c,
-      campaign,
-      "ok",
-      `${campaign}'s agents may now read ${reads}'s folder. Runs at work get it at their next sync.`,
-    );
-  });
-  app.post("/ui/campaigns/:campaign/kb/revoke", async (c) => {
-    const campaign = c.req.param("campaign");
-    const reads = String((await c.req.parseBody()).reads ?? "").trim();
-    if (!store.kb().revoke(campaign, reads))
-      return grantBack(c, campaign, "error", `${campaign} does not read ${reads}.`);
-    store.auditLog.add("owner:ui", "kb_revoke", { campaign, reads });
-    return grantBack(
-      c,
-      campaign,
-      "ok",
-      `${campaign}'s agents no longer read ${reads}'s folder. Runs at work drop it at their next sync.`,
     );
   });
 }

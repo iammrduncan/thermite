@@ -6,9 +6,10 @@ import { laneLimits } from "../../src/core/contract.ts";
 import { ADMIN, controlStack, mcpClient, signIn } from "../helpers/control-stack.ts";
 
 const AGENT_TOKEN = "agent-token-abcdef";
+const READ_TOKEN = "read-token-abcdef";
 
 test("a prompt kept on a rig reaches control, and REST and MCP show it with its sources (goal 166)", async () => {
-  const stack = controlStack({ tokens: { agent: AGENT_TOKEN } });
+  const stack = controlStack({ tokens: { agent: AGENT_TOKEN, read: READ_TOKEN } });
   const { env, api } = stack;
   await env.start();
   const run = (env.assign.envelope.payload as { run: string }).run;
@@ -89,6 +90,32 @@ test("a prompt kept on a rig reaches control, and REST and MCP show it with its 
   const names = (await agent.listTools()).tools.map((t) => t.name);
   await agent.close();
   assert.ok(!names.includes("agent_prompts") && !names.includes("agent_roles"), names.join(", "));
+  // The prompt's event: its text for the owner; for the agent's and the reader's tokens, its
+  // sections' sources and sizes alone.
+  const promptEvents = async (token: string) => {
+    const recent = JSON.parse(
+      (await call(token, "recent_events", { rig: "rig-a", limit: 500 })).text,
+    );
+    const timeline = JSON.parse(
+      (await call(token, "get_run", { run, list: "timeline", limit: 500 })).text,
+    ).entries;
+    return [...recent, ...timeline].filter((e: { kind: string }) => e.kind === "agent_prompt") as {
+      body: { sections: { id: string; chars: number; text?: string }[] };
+    }[];
+  };
+  const owners = await promptEvents(ADMIN);
+  assert.equal(owners.length, 2);
+  for (const e of owners)
+    assert.match(String(e.body.sections.find((x) => x.id === "brief")?.text), /unroll the loop/);
+  for (const token of [AGENT_TOKEN, READ_TOKEN]) {
+    const seen = await promptEvents(token);
+    assert.equal(seen.length, 2, token);
+    for (const e of seen) {
+      assert.ok(!JSON.stringify(e).includes("unroll the loop"), token);
+      const brief = e.body.sections.find((x) => x.id === "brief");
+      assert.ok(brief && brief.chars > 0 && !("text" in brief), token);
+    }
+  }
 
   // The dashboard: the Agents page, a role's page, the run's Prompts tab and the prompt itself.
   const { page, get } = await signIn(stack.control);

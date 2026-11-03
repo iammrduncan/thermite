@@ -1,0 +1,2 @@
+# Vendored files are kept byte for byte, as their pinned SHA-256 values say: no whitespace checks.
+vendor/pdfjs/** -whitespace

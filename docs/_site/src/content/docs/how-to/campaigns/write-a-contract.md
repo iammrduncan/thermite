@@ -32,13 +32,13 @@ Optional, in every mode:
 
 - `lanes`: `count`, how many [lanes](../../reference/glossary.md) the planner plans (2 when `lanes` is left out), and `trials_per_epoch`, [trials](../../reference/glossary.md) per lane per round, at most (3). How many trials run at the same time is the rig's **Workers at a time**, not `count`: see [Start a campaign from the dashboard](start-from-dashboard.md#5-where-it-runs). If you write `lanes`, write `count` in it. `lanes.limits` raises a lane's memory, disk, time and process limits; `count` is 16 at most.
 - `budget`: `wall_hours`, `device_hours` and `llm_usd`. None is set unless you set it. See [Set a budget or a stop time](budget-and-stop-time.md).
-- `notes`: the campaign's additional information, in Markdown: background, links, what was tried, limits, and what good looks like. The workers and the advisors read it in every mode, and the planner in a hill climb or goal campaign.
+- `additional_information`: the campaign's additional information, in Markdown: background, links, what was tried, limits, and what good looks like. The workers and the advisors read it in every mode, and the planner in a hill climb or goal campaign.
 - `hypotheses`: what you think is true, one entry each, for the agents to test. A research run starts with them as its hypotheses.
 - `ideas`, in a hill climb or a goal campaign: ideas to try, one entry each. The planner turns those that fit into experiments.
 - `links`, in a hill climb or a goal campaign: starting links, pages the agents get with the brief. A research campaign's are its `seeds`.
 - `models`: [model files](../../reference/glossary.md) the project needs, each with its `name` and `sha256`: data files your project loads that are not in its repository, such as a model's weights.
 
-[The campaign's brief](../../reference/contract.md#the-campaigns-brief) says what each agent gets. `thermite assign --info-file brief.md` puts a Markdown file in `notes`, so you can keep it beside the contract.
+[The campaign's brief](../../reference/contract.md#the-campaigns-brief) says what each agent gets. `thermite assign --info-file brief.md` puts a Markdown file in `additional_information`, so you can keep it beside the contract.
 
 ## 2. Write a hill climb
 
@@ -62,14 +62,14 @@ Optional, in every mode:
   "cells": ["small", "large"],
   "held_out_cells": ["held"],
   "acceptance": { "runs_per_cell": 3 },
-  "notes": "The sort must stay stable. Do not change the public header."
+  "additional_information": "The sort must stay stable. Do not change the public header."
 }
 ```
 
 - `target` is required in a hill climb, and optional in the other modes. `type` is `cpu` or `cuda-gpu`. `class` is a free name for the kind of device, such as `generic-cpu`: it is required with `type`, but nothing checks it yet.
 - `editable_paths` are the files a change may touch: `**` matches any folders, `*` any part of a name. `forbidden_patterns` are regular expressions. A change outside the paths, or one that adds a matching line, is refused before it is built.
 - `objective.primary` names one of the kit's metrics, which way is better (`max` or `min`), and `min_effect`, the smallest gain that counts, as a fraction: `0.05` is 5%.
-- `cells` are measured for every change. `held_out_cells` run only when the judge confirms a change that already looked better, so a change can't win by helping only the cells agents see.
+- `cells` are measured for every change. `held_out_cells` run only when the judge confirms a change that already looked better. On each, the change's output must pass the kit's check, and its primary metric may be worse than the champion's by no more than twice `acceptance.equivalence_band`. In a goal campaign, a goal checked on a held-out cell must be met there too.
 - `acceptance.runs_per_cell` (1 to 9; 1 unless set) runs each cell several times per measurement and keeps the middle value. The **New campaign** page's **Runs per case** sets 3 unless changed, so write `3` to judge as a campaign made there does. `acceptance.equivalence_band` (0.005) is how close counts as "no change". On a noisy machine, such as a shared CPU, raise both: Thermite's own smoke check uses 3 and 0.05.
 - `acceptance.audit` sets when a confirmed win goes to the rig's auditor, if it has one: a gain above `absolute` (0.15, that is 15%), or above `ratio_to_median` (3) times the median of the run's earlier wins, once it has three. See [Decide what waits for you](decide-what-waits.md#audits).
 

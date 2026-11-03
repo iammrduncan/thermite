@@ -75,11 +75,11 @@ Every field this example leaves out takes its default. The repository has one ex
 | `budget` | object | `{"max_open_attempts": 4}` | Optional budgets and back-pressure. See [Budget](#budget) |
 | `min_duration` | duration | none | Research: required. The time the run has to collect sources and claims: a floor, never a stop. After it, at each digest, the review panel is asked about the questions and hypotheses with no decision that stands, and a review that gives every question an end ends the run, as the progress rule does ([Research](#research)). Other modes: accepted, not used yet |
 | `max_duration` | duration | none | Research: when the run ends at the latest, its questions answered or not. It may not be shorter than `min_duration`. Without it, a research run whose questions the review panel never finds answered runs until someone closes it. Other modes: accepted, not used yet |
-| `search_policy` | object | none | Rules for research search queries. See [Search policy](#search-policy) |
-| `notes` | text | none | The campaign's additional information, from its author, in Markdown, with no length limit. See [The campaign's brief](#the-campaigns-brief) |
+| `additional_information` | text | none | The campaign's additional information, from its author, in Markdown, with no length limit. See [The campaign's brief](#the-campaigns-brief). A contract written before v0.1.1 has it as `notes`: such a contract keeps its key as it was signed, so its hash holds, and is read with it as `additional_information`. A new contract that uses `notes` is refused: `notes: \`notes\` is now \`additional_information\`` |
 | `hypotheses` | list of text, each not empty | none | What the campaign's author thinks is true, one entry each. See [The campaign's brief](#the-campaigns-brief) |
 | `agents_context` | object | none: each agent keeps the rig's settings | The campaign's own context window and compaction point for all its runs' agents. See [Agents' context](#agents-context) |
 | `role_additions` | object: a role's id and its text | none: each role has its own text only | Your own words added to a role's instructions for this campaign's runs. See [Your additions to the agents' roles](#your-additions-to-the-agents-roles) |
+| `kb_writes` | object: a role and its kinds | none: [the default](knowledge-base.md#who-writes-what) | Which kinds of item each role may write in its own slot of the campaign's collection in Thermite's knowledge base: `planner`, `worker`, `teachers`, `merged_by`, `auditor`, `review_panel`, `synthesizer`, `final_writer`, each a list of `note`, `decision`, `surprise`, `journal`, `finding`, `review`, `doc`, `reference`, `report`, `paper`, each once. A role left out, or given `[]`, writes nothing. See [Who writes what](knowledge-base.md#who-writes-what) |
 
 ### Agents' context
 
@@ -113,7 +113,7 @@ Each text is from 1 to 20,000 characters. A role the mode never runs is refused:
 
 Every prompt of the role carries its addition as a section of its own, after the role's own text, labelled as yours with the contract's version: `# The campaign owner's addition (contract version 3)`, then a line that says it adds to the role's instructions and replaces none of them, which come first where the two differ. The prompt's record shows the section's source as `owner's addition` ([What a run's agents were sent](agent-roles.md#what-a-runs-agents-were-sent)). An addition never decides a measurement, a verdict or a promotion: code does.
 
-The field is optional and has no default, so a contract without it keeps its hash. It is part of the contract, so the [signed](signed-commands.md) `assign_campaign` command carries it, and a change is a new version: a run keeps the additions it started with, and a copy takes its source's. **New campaign**, the campaign's page (**Your additions to the agents' roles**), [`POST /v1/campaigns/<campaign>/additions`](rest-api.md#the-owners-additions-to-a-campaigns-roles), MCP's [`set_campaign_additions`](mcp-tools.md#set_campaign_additions) and [`thermite campaign additions`](command-line.md#campaign-additions) set them. A rig whose harness is older than this field refuses a contract that has it.
+The field is optional and has no default, so a contract without it keeps its hash. It is part of the contract, so the [signed](signed-commands.md) `assign_campaign` command carries it, and a change is a new version: a run keeps the additions it started with, and a copy takes its source's. **New campaign**, the campaign's page (**Your additions to the agents' roles**), [`POST /v1/campaigns/<campaign>/additions`](rest-api.md#the-owners-additions-to-a-campaigns-roles), MCP's [`set_campaign_additions`](mcp-tools.md#set_campaign_additions) and [`thermite campaign additions`](command-line.md#campaign-additions) set them. An assignment from the operator's or an agent's token carries the additions of the campaign's saved version, as the owner saved them, and no others ([`issue_command`](mcp-tools.md#command-kinds-for-each-role)). A rig whose harness is older than this field refuses a contract that has it.
 
 ### The campaign's brief
 
@@ -121,7 +121,7 @@ The brief is what the campaign's author tells the agents beyond the objective: s
 
 ```json title="contract.json (part)"
 {
-  "notes": "## Background\nThe kernel is `src/kernel/work.c`. It runs at batch size 1.\n\n## What was tried\n- Shared-memory tiling: no gain.",
+  "additional_information": "## Background\nThe kernel is `src/kernel/work.c`. It runs at batch size 1.\n\n## What was tried\n- Shared-memory tiling: no gain.",
   "links": ["https://git.example.com/team/project/issues/12"],
   "ideas": ["Fuse the dequantize step into the inner loop.", "Load 128-bit vectors."],
   "hypotheses": ["The kernel is memory bound at batch size 1."]
@@ -130,7 +130,7 @@ The brief is what the campaign's author tells the agents beyond the objective: s
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `notes` | text | none | The additional information, in Markdown: the project and its links, what was tried, limits, and what good looks like. No length limit of its own |
+| `additional_information` | text | none | The additional information, in Markdown: the project and its links, what was tried, limits, and what good looks like. No length limit of its own |
 | `links` | list of URLs | none | Hill climb and goal only: starting links, pages the agents get with the brief. Nothing fetches them up front; a worker fetches one when it needs it. A research campaign's starting links are its [`seeds`](#research) |
 | `ideas` | list of text, each not empty | none | Hill climb and goal only: ideas to try, one entry each. The planner turns those that fit into experiments. A research contract with it is refused: `Unrecognized key: "ideas"` |
 | `hypotheses` | list of text, each not empty | none | What the author thinks is true, one entry each, for the agents to test. A research run starts with them as its own hypotheses |
@@ -148,7 +148,7 @@ What each agent gets, and whether it gets the whole text:
 | A research run's final writer | `campaign_brief` at the end of its paper package, after the questions, verdicts, figures and rules | Whole, unless the package is cut to fit the writer's window or 200,000 characters: the cut is at the package's end, so it takes the brief first |
 | The run's folder | `BRIEF.md`, for every mode | Whole |
 
-A research run starts with the contract's `hypotheses` as its first hypotheses, the author's: each one is a `hypothesis_added` event with no lane, no supporting claim and the status `author`. They and promoted ones are the ones the review panel gives a verdict; the workers' own go to the run's pool ([Hypotheses](../explanation/campaign-modes.md#research)), and only the brief changes the author's. The run's folder lists them under `hypotheses/`, and the campaign's folder in [Thermite's knowledge base](knowledge-base.md) keeps them. **Copy** keeps the brief; a copy over REST, MCP or the command line may give its own ([Copy a campaign](rest-api.md#copy-a-campaign)). The campaign's page shows it under **The brief**.
+A research run starts with the contract's `hypotheses` as its first hypotheses, the author's: each one is a `hypothesis_added` event with no lane, no supporting claim and the status `author`. They and promoted ones are the ones the review panel gives a verdict; the workers' own go to the run's pool ([Hypotheses](../explanation/campaign-modes.md#research)), and only the brief changes the author's. The run's folder lists them under `hypotheses/`, and the campaign's collection in [Thermite's knowledge base](knowledge-base.md) keeps them. **Copy** keeps the brief; a copy over REST, MCP or the command line may give its own ([Copy a campaign](rest-api.md#copy-a-campaign)). The campaign's page shows it under **The brief**.
 
 ### Lanes
 
@@ -191,15 +191,8 @@ No budget is set unless you set one, and without one a run keeps going. A spent 
 | --- | --- | --- | --- | --- |
 | `budget.wall_hours` | number > 0 | none | Hours since the run was created, paused time included. It also shapes the search: every lane starts again from the champion at a third and two thirds of it (every 20 epochs without it) | `the wall-time budget is spent` |
 | `budget.device_hours` | number > 0 | none | Hours the judge's finished jobs for this run have taken | `the device-hours budget is spent` |
-| `budget.llm_usd` | number ≥ 0 | none | US dollars of model tokens the run's trials have used. Counted only when the rig sets both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` (prices per million tokens); without them, it has no effect | `the model budget is spent ($<amount>)` |
+| `budget.llm_usd` | number ≥ 0 | none | US dollars of model tokens the run's trials have used: for a trial in OpenCode or Codex, the tokens the provider's answers reported as the model proxy saw them. Counted only when the rig sets both `THERMITE_LLM_USD_PER_MTOK_IN` and `THERMITE_LLM_USD_PER_MTOK_OUT` (prices per million tokens); without them, it has no effect | `the model budget is spent ($<amount>)` |
 | `budget.max_open_attempts` | integer ≥ 1 | 4 | Back-pressure, not a budget: no new trial starts while this many of the run's attempts wait for the judge (queued, building, screening, confirming, verifying, waiting for an audit or for approval) | none: lanes wait |
-
-### Search policy
-
-| Field | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `search_policy.allowed_purposes` | list of text | `[]` | What public search may be used for. Accepted, not used yet |
-| `search_policy.blocked_patterns` | list of regular expressions | `[]` | A research search query that matches one, ignoring case, is refused and logged with `blocked by the search policy (<pattern>)`. Rigs have no web search, so every query returns no results |
 
 ## Hill climb and goal: what a candidate may change
 
@@ -281,7 +274,7 @@ A hill climb's first judge job, `baseline`, measures the run's starting point: c
 
 A change still waiting when another setup change became the starting point is screened against the champion, as any change is. Setup experiments left in the queue then are dropped. Pausing and resuming a run in setup has the judge measure its starting point once more, for when the cause was the rig's.
 
-**A guard against the baseline.** At confirmation, for each guard, the judge takes on each cell the median of the candidate's values in the confirmation's blocks and compares it with the baseline's median, as a log ratio in the guard's direction, and averages over the cells, as a block's effect does. The starting point's own spread on the same cells, the mean of log(1 + `mad` / median), is its noise, which never counts against a change. The allowance is spent when the candidate is worse than the starting point by more than `max_total_regression` and that noise together. These values are compared across time, so a rig whose own speed changes during a run reads that change as the candidate's; the step guard (`max_step_regression`) is measured against the champion in the same blocks, so it is not affected. Each guard in the verdict's record has `vs_start`: `{estimate, noise, spent}`.
+**A guard against the baseline.** At confirmation, for each guard, the judge takes on each cell the median of the candidate's values in the confirmation's blocks and compares it with the baseline's median, as a log ratio in the guard's direction, and averages over the cells, as a block's effect does. The starting point's own spread on the same cells, the mean of log(1 + `mad` / median), is its noise, which never counts against a change. The allowance is spent when the candidate is worse than the starting point by more than `max_total_regression` and that noise together. These values are compared across time, so a rig whose own speed changes during a run reads that change as the candidate's; the step guard (`max_step_regression`) is measured against the champion in the same blocks, so it is not affected. Each guard in the verdict's record has `vs_start`: `{estimate, noise, spent}`. The run's **Champions** block charts each guard against the starting point and this limit, and each champion's value under it ([guards on the run's page](verdicts.md#hill-climb)).
 
 ## Goal
 
@@ -296,7 +289,7 @@ A change still waiting when another setup change became the starting point is sc
 | `insufficient` | list of text | `[]` | Outcomes that must never count as success. The auditor and the review panel get the list; code does not check it |
 | `adversarial_checklist` | list of text | `[]` | Failure modes to audit for. When the list is not empty, every promotion waits for an audit, and the auditor gets the list |
 | `infeasibility.allowed` | boolean | `false` | Whether the harness may propose that the goals are not possible. The proposal closes the run, unless the run asks the owner (`ask_owner.not_possible`), who then accepts or rejects it |
-| `infeasibility.min_refuted_approaches` | integer ≥ 1 | none | Required when `allowed` is `true`. The proposal comes only after this many approach families each had 3 or more judged attempts and no progress |
+| `infeasibility.min_refuted_approaches` | integer ≥ 1 | none | Required when `allowed` is `true`. The proposal comes only after this many directions each had 3 or more judged attempts and no progress |
 | `independence_epochs` | integer ≥ 0 | 2 | Accepted, not used yet |
 | `min_live_families` | integer ≥ 1 | 2 | Accepted, not used yet |
 | `threshold_reps` | integer, 2–20 | 5 | Runs on each cell when a `metric_threshold` goal is checked |
@@ -356,7 +349,7 @@ These fields pass validation and become part of the contract and its hash, but n
 
 | Mode | Fields |
 | --- | --- |
-| Every mode | `target.class`; `search_policy.allowed_purposes` |
+| Every mode | `target.class` |
 | Hill climb and goal | `min_duration`, `max_duration` |
 | Hill climb | `objective.policy`; `objective.secondary` (checked against the kit only); `monitor_only`; hard constraints of kind `check` |
 | Goal | `independence_epochs`; `min_live_families`; each goal's `priority` and `parent` (stored only) |
@@ -370,7 +363,7 @@ These fields pass validation and become part of the contract and its hash, but n
 | `sha256 hex` | A model's `sha256` is not 64 lowercase hexadecimal characters |
 | `full git commit id (40 or 64 hex)` | A commit is short or not hexadecimal |
 | `duration like "30m" or "8h"` | `min_duration` or `max_duration` has no unit, or another unit |
-| `invalid regular expression` | A pattern in `forbidden_patterns` or `search_policy.blocked_patterns` does not compile |
+| `invalid regular expression` | A pattern in `forbidden_patterns` does not compile |
 | `Unrecognized key: "<name>"` | A field the contract does not have |
 | `duplicate goal id <id>` | Two goals have the same `id` |
 | `goal <id> has unknown parent <parent>` | A goal's `parent` names no goal in the list |

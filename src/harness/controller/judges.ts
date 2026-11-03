@@ -1,7 +1,7 @@
 import { log } from "../../common/log.ts";
 import type { DevRuns } from "../agents/index.ts";
 import type { GpuCard } from "../broker/index.ts";
-import { Judge, jobsAtStart, type PromotionPolicy } from "../judge/index.ts";
+import { Judge, jobsAtStart } from "../judge/index.ts";
 import type { Ledger } from "../ledger/index.ts";
 import type { HarnessService } from "../service/index.ts";
 import type { TargetDriver } from "../targets/index.ts";
@@ -28,14 +28,12 @@ export function createJudges(
   ctx: ControllerContext,
   {
     service,
-    promotion,
     devRuns,
     judging,
     judgeCards,
     executorIds,
   }: {
     service: HarnessService;
-    promotion: PromotionPolicy;
     devRuns: DevRuns;
     judging: TargetDriver[];
     judgeCards: GpuCard[];
@@ -50,7 +48,6 @@ export function createJudges(
         runner,
         driver: d,
         owner: executorIds[i] as string,
-        promotion,
         calibrationBlocks: numbers.calibrationBlocks,
         deviceGate: devRuns,
         ...(judging.length > 1
@@ -66,7 +63,7 @@ export function createJudges(
   );
   log("harness", "judge ready", {
     separated: runner.separated,
-    promotion,
+    promotion: service.promotion,
     judge_cards: executors.length,
   });
   return executors;

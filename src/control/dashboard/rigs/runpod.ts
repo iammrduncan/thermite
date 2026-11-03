@@ -21,7 +21,7 @@ import { settingsHelpers } from "../settings/shared.ts";
  * launch page and form.
  */
 export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
-  const { csrf, opts, page, store } = dash;
+  const { csrf, noted, opts, page, said, store } = dash;
   const { checkCloudNow } = settingsHelpers(dash);
 
   // ---------------------------------------------------------------- RunPod rigs (goals 022, 023)
@@ -110,7 +110,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
         await rigs.terminate(rig, "owner:ui", confirm);
       } else return back("error", "No such action.");
     } catch (err) {
-      return back("error", errorText(err));
+      return back("error", noted(errorText(err)));
     }
     return back("ok", podActions[action as keyof typeof podActions]);
   });
@@ -158,7 +158,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
     );
   };
   app.get("/ui/rigs/add/runpod", (c) =>
-    launchPage(c, { cloud: c.req.query("cloud") }, c.req.query("error") || undefined),
+    launchPage(c, { cloud: c.req.query("cloud") }, said(c) || undefined),
   );
   app.post("/ui/rigs/add/runpod", async (c) => {
     const f = await c.req.parseBody();
@@ -180,7 +180,7 @@ export function runpodRigRoutes(app: Hono, dash: Dashboard): void {
     if (one("read")) {
       const why = await checkCloudNow(form.cloud ?? "");
       return c.redirect(
-        `/ui/rigs/add/runpod?cloud=${encodeURIComponent(form.cloud ?? "")}${why ? `&error=${encodeURIComponent(why)}` : ""}`,
+        `/ui/rigs/add/runpod?cloud=${encodeURIComponent(form.cloud ?? "")}${why ? `&error=${noted(why)}` : ""}`,
         303,
       );
     }

@@ -1,4 +1,3 @@
-import { harnessConfirmed } from "./issue/index.ts";
 import { sameModel } from "./providers/index.ts";
 import type { CommandRow, ControlStore } from "./store/index.ts";
 import { type RigCheckView, type RigModelView, readModelInfo, rigChecks } from "./views/index.ts";
@@ -20,7 +19,7 @@ export interface Progress {
 }
 
 /** An export_now's payload in words (goal 103): what was asked for, and what the rig made. */
-export function exportWords(p: { full?: unknown; run?: unknown }) {
+export function exportWords(p: { full?: unknown; run?: unknown; open_runs?: unknown }) {
   const run = typeof p.run === "string" ? p.run : undefined;
   const full = p.full === true;
   return {
@@ -28,7 +27,9 @@ export function exportWords(p: { full?: unknown; run?: unknown }) {
       ? `An export of ${run} alone was asked for.`
       : full
         ? "A full export was asked for."
-        : "An export was asked for.",
+        : p.open_runs === true
+          ? "An export of each run not closed was asked for."
+          : "An export was asked for.",
     made: (name: string) =>
       `It made ${run ? `the export of ${run}` : full ? "the full export" : "export"} ${name}.`,
   };
@@ -100,13 +101,36 @@ const startedId = (cmd: CommandRow): string | null => {
 };
 
 /**
- * A command's progress: sent, taken (the rig did it; its report with the change is still to
- * come), done (that report reached control: the page shows the change), refused or expired. A
- * started run (assign_campaign) loads its page again when done: the run's page opens.
+ * A command's progress: sent, done (the rig's harness applied it, and its report with the change
+ * reached control: the page shows it), refused or expired. The outcome comes only from the
+ * harness's events, in the rig's report on the message bus. A started run (assign_campaign) loads
+ * its page again when done: the run's page opens.
  */
 export function commandProgress(cmd: CommandRow, now: number): Progress {
   const p = commandProgressOnly(cmd, now);
-  if (cmd.kind !== "export_now" || p.tone === "bad") return p;
+  if (p.tone === "bad") return p;
+  // Withdraw evidence (goal 174): a preview's answer shows on the attempt's page, to confirm.
+  if (cmd.kind === "invalidate_evidence" && p.state === "done")
+    return {
+      ...p,
+      said: `${p.said} ${cmd.payload.preview === true ? "What it would reach is on the attempt's page: confirm it there." : "The evidence is withdrawn."}`,
+    };
+  // Typed into a trial's terminal (goal 169): the rig's answer is the outcome; no report waits.
+  if (cmd.kind === "terminal_input" && p.state === "done") {
+    const r = (cmd.outcome as { result?: { outcome?: unknown; until?: unknown } } | null)?.result;
+    const until = typeof r?.until === "string" ? ` at ${clockUtc(r.until)}` : "";
+    return {
+      ...p,
+      state: "done",
+      final: true,
+      tone: "ok",
+      said:
+        r?.outcome === "queued"
+          ? `It waits for the program's usage window to reset${until}, then goes in.`
+          : "Typed into the agent's terminal.",
+    };
+  }
+  if (cmd.kind !== "export_now") return p;
   // An export the owner asked for (goal 103): which kind, and where it will show.
   const words = exportWords(cmd.payload as { full?: unknown; run?: unknown });
   const made = (cmd.outcome as { result?: { export?: unknown } } | null)?.result?.export;
@@ -139,13 +163,6 @@ function commandProgressOnly(cmd: CommandRow, now: number): Progress {
       said: `${rig} refused it: ${sentence(why)}`,
     };
   const took = clockUtc(cmd.acked_at ?? cmd.issued_at);
-  if (!harnessConfirmed(cmd.outcome))
-    return {
-      state: "taken",
-      final: false,
-      tone: "",
-      said: `${rig} took it at ${took}. This page shows the change when the rig next reports.`,
-    };
   return {
     state: "done",
     final: true,
@@ -175,6 +192,7 @@ export interface CheckRow {
  * - running: the rig took it (its answer names the check it started), or reported the start;
  * - passed or failed: the result of the newest run;
  * - refused or expired: the newest command did not run; the last result stays beside the reason.
+ *   A refusal answered by a run that ended after the command shows that run's result instead.
  * A run of the check that started after the command was sent, or that still runs, is newer than
  * the command (the rig ran it by itself, or will refuse the command for it), and shows.
  */
@@ -210,6 +228,10 @@ export function checkRow(
   if (last && (after(last.started_at) || last.finished_at === null)) return fromRig();
   if (commandExpired(cmd, now)) return row("expired", { at: cmd.expires_at });
   if (cmd.status === "pending") return row("sent", { at: cmd.issued_at });
+  // Refused while a run of the check was going, which ended after the command: that run's result
+  // answers it (a new model route starts the rig's check by itself, and a check asked meanwhile
+  // is refused as still running).
+  if (last?.finished_at && after(last.finished_at)) return fromRig();
   return row("refused", {
     at: cmd.acked_at ?? cmd.issued_at,
     why: sentence(capital(refusalOf(cmd) ?? "")),

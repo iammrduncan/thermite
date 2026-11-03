@@ -150,7 +150,10 @@ describe("machines in Providers", () => {
     assert.equal(first, `[192.0.2.10]:2222 ssh-ed25519 ${HOST}`);
     await s.post("/ui/settings/machines/box/trust", { seen: first });
     m.state.hostKey = OTHER;
-    assert.match(await s.post("/ui/settings/machines/box/check", {}), /different host key/);
+    assert.match(
+      await s.page(await s.post("/ui/settings/machines/box/check", {})),
+      /different host key/,
+    );
     const page = await s.page("/ui/settings");
     assert.match(page, /The machine now presents a different host key/);
     assert.match(page, /showing the last check/);

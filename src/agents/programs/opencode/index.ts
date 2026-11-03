@@ -13,7 +13,7 @@ import { agentPath } from "../path.ts";
 
 export { newTally, type OpencodeTally, readNew, readOpencodeEvents } from "./events.ts";
 export { NO_OPENCODE, opencodeBin, opencodeExe, opencodeExitWords } from "./run.ts";
-export { type OpencodeLogState, opencodeSession } from "./session-events.ts";
+export { type OpencodeLogState, opencodeSession } from "./session.ts";
 export {
   OPENCODE_TERMINAL,
   opencodeServerArgs,
@@ -23,8 +23,8 @@ export {
 
 /**
  * OpenCode as Thermite starts it, for the harness's agents and the supervisor's advisors: its
- * configuration, its compaction plugin and its environment. Its entry for the harness's CLI trial
- * loop is in src/harness/agents/cli/opencode.ts.
+ * configuration, its compaction plugin and its environment. Its entry, as every role runs it, is
+ * src/agents/cli/opencode.ts.
  */
 
 /** This module's own extension: `.js` when built, `.ts` when run from the source. */

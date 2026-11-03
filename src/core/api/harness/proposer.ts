@@ -3,8 +3,8 @@ import type { Route } from "../route.ts";
 
 /**
  * The harness's API for a proposer outside a trial: the command line's `thermite submit` and
- * `thermite status` with the proposer's token, as scripted proposers use in development (src/
- * harness/api.ts answers it). A worker in a trial posts its attempts with its trial's token.
+ * `thermite status` with the proposer's token, as scripted proposers use in development
+ * (src/harness/api/ answers it). A worker in a trial posts its attempts with its trial's token.
  */
 
 export const SubmitRequest = z.object({

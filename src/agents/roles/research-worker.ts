@@ -12,6 +12,7 @@ import {
 } from "../tools/index.ts";
 import {
   fitToWindow,
+  kbSections,
   limitsNote,
   ownerAdditionSection,
   ownerLineSections,
@@ -44,8 +45,8 @@ go on with what sources can give.
 ${HYPOTHESES_RULE} A claim's or a hypothesis's "question" is the index of the campaign question it
 is about, from 0: your brief names each question both ways, "Question 1 (index 0)".`;
 
-/** A research worker's field notes, told apart from its research notes. */
-export const RESEARCH_WORKER_NOTES = `${notesInstruction("with the note tool")} Field notes are not research notes (add_note), which record what sources say for the report.`;
+/** A research worker's field notes, told apart from its source notes. */
+export const RESEARCH_WORKER_NOTES = `${notesInstruction("with the note tool")} Field notes are not source notes (add_source_note), which record what sources say for the report.`;
 
 /** What one research trial's prompt takes: its program, the run's part and the trial's tools. */
 export interface ResearchWorkerInput {
@@ -53,6 +54,8 @@ export interface ResearchWorkerInput {
   /** The run's part, as the harness gathered it (a text is one section): the brief, then the owner's messages. */
   brief: string | readonly Section[];
   mcpServers: readonly string[];
+  /** The kinds it may write in the knowledge base (goal 175); undefined: no knowledge base tools. */
+  kbWrites?: readonly string[] | undefined;
   /** The run's research folder and the lane's working area in it. */
   folder?: ResearchFolderPaths | undefined;
   /** In Pi: whether it has the idea tool and the note tool. */
@@ -98,10 +101,11 @@ export function renderResearchWorker(i: ResearchWorkerInput): Prompt {
           "\n\n",
         ),
         mcp,
+        ...kbSections(i.kbWrites),
         ...ownerAdditionSection(i.addition),
       ],
       // With the note tool, the brief says how to keep field notes, and how they differ from
-      // research notes.
+      // source notes.
       message: fitToWindow(
         [...brief, section("field-notes", "role", i.note ? RESEARCH_WORKER_NOTES : "", "\n\n")],
         i.fit,
@@ -130,6 +134,7 @@ export function renderResearchWorker(i: ResearchWorkerInput): Prompt {
           "\n\n",
         ),
         mcp,
+        ...kbSections(i.kbWrites),
       ],
       i.fit,
       TRIAL_CUT_WHERE,
@@ -145,9 +150,9 @@ ${researchCommands()}
 
 Only pages fetched with "thermite-trial research fetch" are archived, and only archived sources can verify a claim: a page you read another way (your own web search, curl, a fetch from code) verifies nothing until you fetch it with that command.
 
-To propose another research task for the run's queue (the planner or the campaign's owner decides whether it is queued; your trial goes on): thermite-trial idea TITLE [--why TEXT] [--family TEXT] [--question N] (N: the index of the question it is about, from 0). A task that only a measurement could settle is refused: record it as a next experiment instead.
+To propose another research task for the run's queue (the planner or the campaign's owner decides whether it is queued; your trial goes on): thermite-trial idea TITLE [--why TEXT] [--direction TEXT] [--question N] (N: the index of the question it is about, from 0). A task that only a measurement could settle is refused: record it as a next experiment instead.
 
-${notesInstruction(`with "${NOTE_USAGE}" (KIND: observation, decision, surprise, question, lesson or note; TYPE: run, experiment, attempt, source, claim, finding, round, trial or message; no --about: the run)`)} Field notes are not research notes (add_note), which record what sources say for the report.`;
+${notesInstruction(`with "${NOTE_USAGE}" (KIND: observation, decision, surprise, question, lesson or other; TYPE: run, experiment, attempt, source, claim, finding, round, trial or message; no --about: the run)`)} Field notes are not source notes (add_source_note), which record what sources say for the report.`;
 }
 
 /** Told to a research worker in a program whose run ended while the owner's messages wait for it. */

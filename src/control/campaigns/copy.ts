@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { BRIEF_PARTS, briefChange } from "../../core/brief.ts";
 import { type AgentsContext, agentsContextRefusal } from "../../core/compaction.ts";
-import { IdSchema, parseContract } from "../../core/contract.ts";
+import { IdSchema, parseContract, parseStoredContract } from "../../core/contract.ts";
 import { isRigCheck, NAME_WORDS } from "../../core/ids.ts";
 import { type McpUse, McpUses, sameUses, usesWords } from "../../core/mcp.ts";
+import { oldContractKeyError } from "../../core/names.ts";
 import { researchMcpRefusal } from "../mcp-servers/index.ts";
 import type { ControlParts } from "../parts.ts";
 import type { CampaignSources, ControlStore, CopiedFrom } from "../store/index.ts";
@@ -14,9 +15,9 @@ import { campaignModes } from "../views/index.ts";
  * kit as the source's newest saved version or, for a campaign control knows only by an
  * assignment, as that assignment. Control saves the copy as its first version, with the new name
  * in its contract, so its contract hash is its own. The copy has no runs: Start a run starts one.
- * Its folder in Thermite's knowledge base is its own and empty, and no grant names it, so its
+ * Its collection in Thermite's knowledge base is its own and empty, and no grant names it, so its
  * runs read nothing that the source's runs recorded. That is what two runs of one campaign can't
- * do: they share the campaign's folder.
+ * do: they share the campaign's collection.
  *
  * A research campaign keeps its agents' MCP servers in its contract (it has no kit), so a copy may
  * name others (`mcp_servers`), with the New campaign page's checks: the copy's contract then
@@ -27,7 +28,7 @@ import { campaignModes } from "../views/index.ts";
  * place of its source's: its contract then holds them, and its hash changes with them.
  *
  * A copy keeps its source's brief (goal 078): the additional information, the starting links,
- * the ideas to try and the hypotheses, in its contract. It may give its own (`notes`, `links`,
+ * the ideas to try and the hypotheses, in its contract. It may give its own (`additional_information`, `links`,
  * `ideas`, `hypotheses`), each in place of its source's: its hash then changes with them.
  *
  * REST's POST /v1/campaigns/<name>/copy, MCP's copy_campaign and `thermite campaign copy` call it
@@ -50,7 +51,7 @@ export interface CopyCampaignRequest {
    */
   agents_context?: { context_window?: number | undefined; compact_at?: number | undefined } | null;
   /** The copy's own additional information (Markdown), in place of its source's; "" or null: none. */
-  notes?: string | null | undefined;
+  additional_information?: string | null | undefined;
   /** The copy's own starting links (a research campaign's seeds), in place of its source's; []: none. */
   links?: string[] | undefined;
   /** The copy's own ideas to try (hill climb and goal), in place of its source's; []: none. */
@@ -92,7 +93,7 @@ export const copyCampaignFields = {
     .describe(
       "The copy's own context settings for its runs' agents, in place of the source's, as set_campaign_context takes them: {context_window, compact_at}. Each agent's window is the lower of context_window and its own model's; compact_at replaces the rig's point. null or {}: none. Left out: the source's",
     ),
-  notes: z
+  additional_information: z
     .string()
     .nullable()
     .optional()
@@ -120,7 +121,7 @@ export const copyCampaignFields = {
 };
 
 /** The REST body: the copy's name, its MCP servers (research) and its context settings. */
-export const CopyCampaignBody = z.strictObject(copyCampaignFields);
+export const CopyCampaignBody = z.strictObject(copyCampaignFields, { error: oldContractKeyError });
 
 /**
  * The fields of an assignment that belong to one run, not to the campaign: a copy leaves them
@@ -139,7 +140,7 @@ export const RUN_FIELDS = new Set([
 
 /**
  * Copies a campaign, or says in words why not. `known`: every campaign name control knows (from
- * rigs' reports, saved versions, assignments and the knowledge base's folders), none of which a
+ * rigs' reports, saved versions, assignments and the knowledge base's collections), none of which a
  * copy may take.
  */
 export function copyCampaign(
@@ -213,7 +214,7 @@ export function copyCampaign(
   if (!parsed.ok)
     // The copy's own brief can be what is wrong, not the source: say whose it is.
     return refuse(
-      brief !== before && parseContract(before).ok
+      brief !== before && parseStoredContract(before).ok
         ? `The copy's own brief is not valid: ${parsed.errors.join("; ")}`
         : `The contract of ${from} is not valid, so control cannot copy it: ${parsed.errors.join("; ")}`,
     );

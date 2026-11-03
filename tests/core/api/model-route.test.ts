@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ADVISOR_ROUTES, MODEL_ROUTE } from "../../../src/core/api/control/rigs.ts";
 import { MODEL_ROUTE_PUT } from "../../../src/core/api/harness/supervisor.ts";
 import { ControlRoute } from "../../../src/core/api/model-route.ts";
+import { AdvisorRoutesValue, ModelRouteValue } from "../../../src/core/link/config.ts";
 import { stack } from "../../control/rigs/model/stack.ts";
 
 /**
@@ -26,9 +26,9 @@ test("every model route control builds is one its rig's harness takes (goal 125,
     assert.equal(r.status, 200, JSON.stringify(r.body));
   }
   const workers = await s.asRig("/v1/rigs/rig-a/model-route");
-  assert.ok(MODEL_ROUTE.answer.safeParse(workers).success, "what the supervisor reads of it");
+  assert.ok(ModelRouteValue.safeParse(workers).success, "what the supervisor reads of it");
   const advisors = await s.asRig("/v1/rigs/rig-a/advisor-routes");
-  assert.ok(ADVISOR_ROUTES.answer.safeParse(advisors).success, "what the supervisor runs");
+  assert.ok(AdvisorRoutesValue.safeParse(advisors).success, "what the supervisor runs");
   const routes = [
     workers.route,
     workers.planner,

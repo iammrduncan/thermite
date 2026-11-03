@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import type { CampaignDraft } from "../../../src/control/campaigns/builder.ts";
 import { startCampaign } from "../../../src/control/campaigns/new.ts";
-import { issueCommand } from "../../../src/control/issue/index.ts";
+import { prepareCommand } from "../../../src/control/issue/index.ts";
 import { KitRepos } from "../../../src/control/kits/repos.ts";
 import { McpServers } from "../../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
@@ -160,7 +160,8 @@ async function stack() {
       source: { git: "https://git.example.com/team/my-project.git" },
     },
   ];
-  issueCommand(store, keys.privateKeyPem, {
+  // Signed before control saved an assignment's campaign (goal 182): known by the assignment alone.
+  const gs3 = prepareCommand(store, keys.privateKeyPem, {
     rig: "rig-a",
     kind: "assign_campaign",
     payload: {
@@ -178,6 +179,7 @@ async function stack() {
     },
     issuedBy: "owner:api",
   });
+  store.commands.enqueue(gs3);
 
   const rest = (from: string, body: unknown, token?: string) =>
     api("POST", `/v1/campaigns/${from}/copy`, body, token);
@@ -235,7 +237,7 @@ describe("Copy a campaign over REST (goal 069)", () => {
     assert.equal(copy.created_by, "owner:api");
     // Its own folder, empty, reading nothing else; the source still reads survey-study.
     const kb = s.store.kb();
-    const folder = kb.folder("matmul-speed-b");
+    const folder = kb.collection("matmul-speed-b");
     assert.deepEqual([folder.items, folder.runs, folder.reads, folder.read_by], [0, 0, [], []]);
     assert.deepEqual(kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
     assert.deepEqual(kb.reads("matmul-speed"), ["survey-study"]);
@@ -253,7 +255,7 @@ describe("Copy a campaign over REST (goal 069)", () => {
       /Copied from<\/span> <a href="[^"]*matmul-speed">matmul-speed version 2<\/a>/,
     );
     // The dashboard is the owner's: their own copy, over any surface, is "you".
-    assert.match(html, /by you, just now\. Its folder in the knowledge base started empty\./);
+    assert.match(html, /by you, just now\. Its collection in the knowledge base started empty\./);
     assert.match(html, /Saved on control, with no run yet\./);
 
     // Start a run of the copy: its own contract, the source's project and kit imports.
@@ -269,20 +271,14 @@ describe("Copy a campaign over REST (goal 069)", () => {
     assert.equal(sent.payload.contract_sha, copy.sha);
     assert.deepEqual(sent.payload.imports, before.payload.imports);
     assert.deepEqual(sent.payload.seed, before.payload.seed);
-    // The rig reports the run: control files it in the copy's folder, and syncs it nothing else.
+    // The rig reports the run: control files it in the copy's collection; the source's run stays
+    // in its own.
     await s.ingest("rig-a", [
       ["harness", "run_created", "matmul-speed-b-1", { campaign: "matmul-speed-b" }],
     ]);
-    const sync = s.store.kb().sync("rig-a", "matmul-speed-b-1", 0);
-    assert.deepEqual(
-      [sync?.campaign, sync?.folders, sync?.items],
-      ["matmul-speed-b", ["matmul-speed-b"], []],
-    );
-    // The source's run still reads its own folder and survey-study's.
-    assert.deepEqual(s.store.kb().sync("rig-a", "matmul-speed-1", 0)?.folders, [
-      "matmul-speed",
-      "survey-study",
-    ]);
+    assert.equal(kb.runCampaign("rig-a", "matmul-speed-b-1"), "matmul-speed-b");
+    assert.equal(kb.runCampaign("rig-a", "matmul-speed-1"), "matmul-speed");
+    assert.deepEqual(kb.readable("matmul-speed-b"), ["matmul-speed-b"]);
   });
 
   test("refusals in words; nothing is saved", async () => {
@@ -535,7 +531,9 @@ describe("A research copy's MCP servers (goals 069 and 068)", () => {
     const sent = s.assigned().at(-1);
     assert.ok(sent);
     assert.deepEqual(sent.payload.mcp_servers, uses);
-    const given = s.store.commands.assignedMcpServers("rig-a").get(String(sent.payload.run));
+    const given = s.store.commands
+      .assignedMcpServers("rig-a", new Set())
+      .get(String(sent.payload.run));
     assert.deepEqual(usesFor(given, "workers"), [{ name: "paper-search", tools: ["find"] }]);
 
     // Over MCP, with an operator's token: [] names none.

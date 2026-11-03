@@ -71,6 +71,17 @@ export function eventRunColumn(db: DatabaseSync): void {
   db.exec("create index event_run on event (run, id)");
 }
 
+/** Where the meta table keeps the last event before the ledger exported runs at their end. */
+const RUN_END_EXPORTS_AFTER = "run_end_exports_after";
+
+/**
+ * Migration 27: each run's export at its end (goal 125) starts with this version. The runs a
+ * ledger closed before it went out in the hourly exports of the versions before, so only the
+ * runs closed after the ledger's last event export at their end: in a new ledger, every run.
+ */
+export const RUN_END_EXPORTS_FROM = `insert or ignore into meta (key, value)
+  select '${RUN_END_EXPORTS_AFTER}', coalesce(max(id), 0) from event;`;
+
 /** The `run` and `run_briefing` tables: the runs, their briefings and their statuses. */
 export class LedgerRuns extends LedgerPart {
   /**
@@ -86,7 +97,8 @@ export class LedgerRuns extends LedgerPart {
     seedCommit: string;
     /** A project in one folder of its repository: the folder, and the repository's commit. */
     seedFolder?: { folder: string; commit: string } | undefined;
-    direction?: string | undefined;
+    /** The owner's label for the run (`--note`). */
+    note?: string | undefined;
     /** False: a judge-only run (no worker agents). */
     agents?: boolean | undefined;
     /** The run's own promotion policy (unset: the rig's default). */
@@ -112,7 +124,7 @@ export class LedgerRuns extends LedgerPart {
       const at = this.now();
       this.execute(
         `insert into run (id, campaign, version, contract_sha, mode, seed_repo, seed_commit,
-           direction, status, agents, promotion, ask_owner, created_at, updated_at)
+           note, status, agents, promotion, ask_owner, created_at, updated_at)
            values (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)`,
         input.id,
         input.contract.campaign,
@@ -121,7 +133,7 @@ export class LedgerRuns extends LedgerPart {
         input.contract.mode,
         input.seedRepo,
         input.seedCommit,
-        input.direction ?? null,
+        input.note ?? null,
         input.agents === false ? 0 : 1,
         input.promotion ?? null,
         input.askOwner && Object.keys(input.askOwner).length ? canonicalJson(input.askOwner) : null,
@@ -160,7 +172,7 @@ export class LedgerRuns extends LedgerPart {
             ? { folder: input.seedFolder.folder, source_commit: input.seedFolder.commit }
             : {}),
         },
-        direction: input.direction ?? null,
+        note: input.note ?? null,
         agents: input.agents !== false,
         promotion: input.promotion ?? null,
         ...(input.askOwner && Object.keys(input.askOwner).length
@@ -214,6 +226,27 @@ export class LedgerRuns extends LedgerPart {
       this.ledger.appendEvent(actor, "run_status", id, { status, reason });
       if (status === "closed") this.ledger.jobs.endClosedRuns(actor, id);
     });
+  }
+
+  /**
+   * The closed runs whose end no export holds yet, the first closed first (service/reports.ts
+   * exports each one once): closed since the ledger exports runs at their end (migration 27), every
+   * trial of theirs ended and no judge's job of theirs under way, and with no `run_end_exported`.
+   */
+  endsToExport(): RunRow[] {
+    const after = this.row<Row>("select value from meta where key = ?", RUN_END_EXPORTS_AFTER);
+    return this.rows<Row>(
+      `select r.*, max(e.id) as closed_by from run r
+         join event e on e.kind = 'run_status' and e.subject = r.id
+           and json_extract(e.body, '$.status') = 'closed'
+       where r.status = 'closed'
+         and not exists (select 1 from event x where x.kind = 'run_end_exported' and x.subject = r.id)
+         and not exists (select 1 from trial t where t.run = r.id and t.ended_at is null)
+         and not exists (select 1 from job j left join attempt a on a.id = j.attempt
+           where j.state = 'leased' and coalesce(a.run, json_extract(j.spec, '$.run')) = r.id)
+       group by r.id having closed_by > ? order by closed_by`,
+      Number(after?.value ?? 0),
+    ).map(toRun);
   }
 
   /** The ids of the runs in this mode and status, in id order. */

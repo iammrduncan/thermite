@@ -4,7 +4,8 @@ import { createServer, type Server, type Socket } from "node:net";
 import { log } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { cardsOf, fenceArgs, type GpuLayout, identityFor } from "./devices.ts";
-import { killScope, runSupervised, sweepRole } from "./process.ts";
+import { runPairSupervised } from "./pair.ts";
+import { killScope, runSupervised, type SupervisedRun, sweepRole } from "./process.ts";
 import { BrokerRequest, type BrokerResponse, type BrokerRequest as Req } from "./protocol.ts";
 import { IDS, insideRoot, type Role, RunRequest, roleIds } from "./runner.ts";
 
@@ -39,9 +40,15 @@ const BUILDER_ROLES: Role[] = [
   "builder",
   ...Array.from({ length: 7 }, (_, i) => `builder-${i + 1}` as Role),
 ];
+/** The kit's own programs: its check, and its driver where it has one, for each judge card. */
+const KIT_ROLES: Role[] = ["checker", "driver"].flatMap((r) => [
+  r as Role,
+  ...Array.from({ length: 7 }, (_, i) => `${r}-${i + 1}` as Role),
+]);
 export const ALL_ROLES: Role[] = [
   ...BUILDER_ROLES,
   ...RUN_ROLES,
+  ...KIT_ROLES,
   "planner",
   "model-check",
   ...LANE_ROLES,
@@ -85,57 +92,66 @@ export function nprocFor(r: Pick<RunRequest, "role" | "nproc">): number {
   return r.nproc ?? NPROC[r.role] ?? 256;
 }
 
+/** A request checked, as the supervised run that does it: its user, groups, fence and limits. */
+function supervised(
+  r: ReturnType<typeof RunRequest.parse>,
+  opts: BrokerServerOptions,
+): SupervisedRun {
+  insideRoot(opts.scratchDir, r.cwd);
+  if (r.disk) insideRoot(opts.scratchDir, r.disk.path);
+  if (r.gpu && !/^lane-\d+$/.test(r.role))
+    throw new Error(`role ${r.role} may not ask for the gpu group`);
+  if (r.devCard !== undefined && !r.gpu) throw new Error("devCard comes only with gpu");
+  const identity = identityFor(r.role, r.gpu === true, opts.gpuLayout, r.devCard ?? 0);
+  const { uid, gid, groups, cuda } = identity;
+  const fence = opts.fence ? fenceArgs(identity) : undefined;
+  const lane = /^lane-\d+$/.test(r.role);
+  return {
+    argv: r.argv,
+    cwd: r.cwd,
+    // The role's own directory is its home and its TMPDIR (/tmp is closed to roles), unless
+    // the harness gives the run others in the role's own area (OpenCode's home and temp
+    // directory, outside the workspace). Only the harness's controller makes requests here.
+    // With a dedicated development card, CUDA is pointed at the role's own card (its groups
+    // are what keep it off the other).
+    env: {
+      ...opts.baseEnv,
+      ...r.env,
+      HOME: r.env.HOME ?? r.cwd,
+      TMPDIR: r.env.TMPDIR ?? r.cwd,
+      USER: r.role,
+      ...(cuda ? { CUDA_VISIBLE_DEVICES: cuda } : {}),
+    },
+    timeoutMs: r.timeoutMs,
+    uid,
+    gid,
+    groups,
+    cpus: opts.runCpus?.[r.role],
+    fence: fence && opts.fence ? [opts.fence, ...fence, "--"] : undefined,
+    rssLimitBytes: r.rssLimitBytes,
+    spareExe: r.spareExe,
+    spareRoot: r.spareRoot,
+    disk: r.disk,
+    nproc: nprocFor(r),
+    stdin: r.stdin,
+    captureBytes: r.captureBytes,
+    // A lane's user runs both its plain commands and its dev runs: each is supervised and
+    // cleaned up within its own group, and only plain commands may leave work running.
+    ...(lane ? { scopeGid: gid, leaveBackground: !r.gpu && r.keepBackground === true } : {}),
+  };
+}
+
 export async function handle(req: Req, opts: BrokerServerOptions): Promise<unknown> {
   switch (req.op) {
     case "run": {
       const r = RunRequest.parse(req.req);
-      insideRoot(opts.scratchDir, r.cwd);
-      if (r.disk) insideRoot(opts.scratchDir, r.disk.path);
-      if (r.gpu && !/^lane-\d+$/.test(r.role))
-        throw new Error(`role ${r.role} may not ask for the gpu group`);
-      if (r.devCard !== undefined && !r.gpu) throw new Error("devCard comes only with gpu");
-      const identity = identityFor(r.role, r.gpu === true, opts.gpuLayout, r.devCard ?? 0);
-      const { uid, gid, groups, cuda } = identity;
-      const fence = opts.fence ? fenceArgs(identity) : undefined;
-      const lane = /^lane-\d+$/.test(r.role);
+      const spec = supervised(r, opts);
       // A root process using CUDA (an operator's exec, say) can reset a node to 0666.
       opts.assertDevices?.();
       // The state snapshot waits while one runs (snapshot.ts), so its copying stays out of timing.
       const timed = RUN_ROLES.includes(r.role);
       if (timed) timedAtWork++;
-      const outcome = await runSupervised({
-        argv: r.argv,
-        cwd: r.cwd,
-        // The role's own directory is its home and its TMPDIR (/tmp is closed to roles), unless
-        // the harness gives the run others in the role's own area (OpenCode's home and temp
-        // directory, outside the workspace). Only the harness's controller makes requests here.
-        // With a dedicated development card, CUDA is pointed at the role's own card (its groups
-        // are what keep it off the other).
-        env: {
-          ...opts.baseEnv,
-          ...r.env,
-          HOME: r.env.HOME ?? r.cwd,
-          TMPDIR: r.env.TMPDIR ?? r.cwd,
-          USER: r.role,
-          ...(cuda ? { CUDA_VISIBLE_DEVICES: cuda } : {}),
-        },
-        timeoutMs: r.timeoutMs,
-        uid,
-        gid,
-        groups,
-        cpus: opts.runCpus?.[r.role],
-        fence: fence && opts.fence ? [opts.fence, ...fence, "--"] : undefined,
-        rssLimitBytes: r.rssLimitBytes,
-        spareExe: r.spareExe,
-        spareRoot: r.spareRoot,
-        disk: r.disk,
-        nproc: nprocFor(r),
-        stdin: r.stdin,
-        captureBytes: r.captureBytes,
-        // A lane's user runs both its plain commands and its dev runs: each is supervised and
-        // cleaned up within its own group, and only plain commands may leave work running.
-        ...(lane ? { scopeGid: gid, leaveBackground: !r.gpu && r.keepBackground === true } : {}),
-      }).finally(() => {
+      const outcome = await runSupervised(spec).finally(() => {
         if (timed) timedAtWork--;
       });
       // A lane's dev runs have the gpu group: a setgid file left behind would let its plain
@@ -143,6 +159,24 @@ export async function handle(req: Req, opts: BrokerServerOptions): Promise<unkno
       // run (no_new_privs also makes the kernel ignore them; this does not rely on it).
       if (/^lane-\d+(-dev)?$/.test(r.role)) clearSetIdBits(r.disk?.path ?? r.cwd);
       return outcome;
+    }
+    case "runPair": {
+      // A kit's driver and the candidate it measures, on one judge card: driver-i and run-i.
+      const driver = RunRequest.parse(req.driver);
+      const candidate = RunRequest.parse(req.candidate);
+      const card = (role: string, kind: string) =>
+        new RegExp(`^${kind}(?:-([1-7]))?$`).exec(role)?.[1] ?? (role === kind ? "0" : undefined);
+      const at = card(driver.role, "driver");
+      if (at === undefined || card(candidate.role, "run") !== at || candidate.gpu || driver.gpu)
+        throw new Error(
+          `a pair is a judge card's driver and timing user, not ${driver.role} and ${candidate.role}`,
+        );
+      const specs = [supervised(driver, opts), supervised(candidate, opts)] as const;
+      opts.assertDevices?.();
+      timedAtWork++;
+      return await runPairSupervised(...specs).finally(() => {
+        timedAtWork--;
+      });
     }
     case "handOver": {
       const { uid, gid } = roleIds(req.role);

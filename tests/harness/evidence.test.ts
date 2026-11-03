@@ -213,7 +213,7 @@ describe("the teachers' reads of a run's code and evidence (goal 081)", () => {
       assert.equal(r.status, 400, path);
       assert.equal(
         body.error,
-        "run r-1 is a research run: it has no code to read. Its work is the sources, claims and notes in its research folder",
+        "run r-1 is a research run: it has no code to read. Its work is the sources, claims and source notes in its research folder",
         path,
       );
     }

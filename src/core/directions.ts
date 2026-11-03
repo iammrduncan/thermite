@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * A run's directions (goal 066): the approach families its experiments belong to. A rule for the
+ * A run's directions (goal 066): the approaches its experiments take. A rule for the
  * plan names one, wherever a rule is made or named: a message to the planner (the Planner tab's
  * Tell the planner, with its picker of the run's directions), the owner's commands over REST, MCP
  * and the command line, and the planner's and the advisors' answers.
@@ -36,8 +36,8 @@ function slug(words: string): string {
  * already, else the words made into one ("Loop order" is loop-order, ":split k:" is split-k), cut
  * to a name's length. None for words that make no name.
  */
-export function directionOf(family: string): string | undefined {
-  const id = slug(family).slice(0, 41).replace(/-+$/, "");
+export function directionOf(direction: string): string | undefined {
+  const id = slug(direction).slice(0, 41).replace(/-+$/, "");
   return DIRECTION_NAME.test(id) ? id : undefined;
 }
 
@@ -141,8 +141,8 @@ export const DirectionRef = z
  * the planner's model reads it, and code never keeps it.
  */
 export function isLegacyRule(body: unknown): boolean {
-  const b = (body ?? {}) as { match?: unknown; family?: unknown };
-  return typeof b.match === "string" && !b.family;
+  const b = (body ?? {}) as { match?: unknown; direction?: unknown };
+  return typeof b.match === "string" && !b.direction;
 }
 
 /** How many old rules in words one planner's round converts; the rest wait for the next round. */
@@ -177,10 +177,10 @@ export function rulesToConvert(
 export function convertedRule(
   id: number,
   body: Record<string, unknown>,
-  family: string,
+  direction: string,
 ): Record<string, unknown> {
   const { match, ...rest } = body;
-  return { ...rest, family, converted_from: { rule: id, words: String(match) } };
+  return { ...rest, direction, converted_from: { rule: id, words: String(match) } };
 }
 
 /**
@@ -193,8 +193,8 @@ export function directionsToDesign(
 ): { name: string; rules: { id: number; kind: string; rationale: string }[] }[] {
   const out: { name: string; rules: { id: number; kind: string; rationale: string }[] }[] = [];
   for (const r of rules) {
-    const b = (r.body ?? {}) as { kind?: unknown; family?: unknown; rationale?: unknown };
-    const f = b.family;
+    const b = (r.body ?? {}) as { kind?: unknown; direction?: unknown; rationale?: unknown };
+    const f = b.direction;
     if (typeof f !== "string" || !f || known.includes(f)) continue;
     let d = out.find((x) => x.name === f);
     if (!d) {

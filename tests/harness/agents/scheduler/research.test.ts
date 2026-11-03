@@ -167,6 +167,7 @@ export async function researchScene(
     assert.equal(r.added.length, 20, JSON.stringify(r.refused));
   }
   const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     allowPrivate: true,
   });
   const prompts: string[] = [];
@@ -252,7 +253,7 @@ export async function researchScene(
         by: x?.added_by ?? "",
         title: x?.title ?? "",
         details: x?.details ?? "",
-        family: x?.family ?? "",
+        direction: x?.direction ?? "",
       };
     });
   return { env, contract, research, scheduler, round, given, prompts, briefs, q, db };
@@ -548,7 +549,7 @@ describe("the model plans a research run's rounds from its answer cards (goals 0
     );
     const g = s.given();
     assert.deepEqual(
-      g.map((x) => [x.by, x.question, x.family, x.title]),
+      g.map((x) => [x.by, x.question, x.direction, x.title]),
       [
         ["planner", 2, "explore", "Question 3 (index 2): Occupancy limits"],
         ["planner", 5, "primary", "Question 6 (index 5): Stall reasons in the profiler guide"],

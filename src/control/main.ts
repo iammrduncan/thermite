@@ -2,12 +2,13 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join } from "node:path";
 import { serve } from "@hono/node-server";
 import { buildInfo } from "../common/build-info.ts";
-import { busHost, natsBus, reloadBus } from "../common/bus.ts";
+import { busHost, natsBus } from "../common/bus/index.ts";
 import { log, optionalSecretFromFile, parseListen } from "../common/env.ts";
 import { writeAtomic } from "../common/fs.ts";
 import { every } from "../common/health.ts";
-import { startLogging } from "../common/log.ts";
+import { logWarn, startLogging } from "../common/log.ts";
 import { readNumber } from "../common/settings.ts";
+import { CONTROL_STATE } from "../core/backup.ts";
 import { generateSigningKeys } from "../core/commands.ts";
 import { EVENT_STREAM_CONFIG } from "../core/link/events.ts";
 import { createControlApi } from "./api/index.ts";
@@ -20,24 +21,41 @@ import {
   busConfigDir,
   busHealth,
   busPublicUrl,
+  busStoreUse,
   CONFIG_WRITE_MS,
   ConfigWriter,
   ConfigWritten,
   controlBusUrl,
+  RigConsumers,
+  reloadBus,
+  ServerLook,
+  serveRigAsks,
 } from "./bus/index.ts";
 import { Credential } from "./credential.ts";
 import { mountDashboard } from "./dashboard/index.ts";
+import { CONTROL_DISK_CHECK_MS, ControlDisk } from "./disk.ts";
 import { EventsApply, EventsMove, EventsWriter } from "./events/index.ts";
 import { followReports } from "./ingest.ts";
 import { sendCommandsOn } from "./issue/index.ts";
+import {
+  followKbFiles,
+  KB_ORPHANS_LOOK_MS,
+  KB_TEXT_LOOK_MS,
+  KbFiles,
+  KbText,
+  scrubKeptConversations,
+  serveKbAsks,
+} from "./kb/index.ts";
 import { KitRepos } from "./kits/index.ts";
 import { advanceResets, driverFromEnv } from "./lifecycle.ts";
 import { followLive, LiveTaken } from "./live/index.ts";
+import { applyControlLogLevel } from "./log-level.ts";
 import { controlParts } from "./parts.ts";
+import { RETENTION_LOOK_MS, retentionTick } from "./retention/index.ts";
 import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
 import { refreshGpuClouds } from "./runpod/index.ts";
-import { SecretBox } from "./secrets.ts";
-import { CONTROL_NUMBERS } from "./settings.ts";
+import { moveSecretsKey, SecretBox } from "./secrets.ts";
+import { CONTROL_NUMBERS, controlPublicUrl, notReadWords } from "./settings.ts";
 import { ControlStore } from "./store/index.ts";
 
 /** Control service entry point. Generates its signing key on first start. */
@@ -45,13 +63,16 @@ async function main(): Promise<void> {
   const env = process.env;
   startLogging("control", env);
   // The message bus (goal 168), which control needs: every rig's events are kept in its events
-  // stream, and what control derives from them is applied from there. Rigs report over the bus,
-  // or over HTTP; control publishes the events of both. Commands and live lines go over it too.
+  // stream, and what control derives from them is applied from there. Rigs report only over the
+  // bus, and control publishes their events; commands, config and live lines go over it too.
   const natsUrl = controlBusUrl(env);
+  // How rigs and the machines control sets rigs up on reach control: https, or plain http only to
+  // this computer, a compose service, or where the owner allows it (settings.ts).
+  const publicUrl = controlPublicUrl(env);
   const dir = env.THERMITE_CONTROL_DIR ?? "/var/lib/thermite-control";
   mkdirSync(dir, { recursive: true });
-  const keyPath = join(dir, "control-signing.key");
-  const pubPath = join(dir, "control-signing.pub");
+  const keyPath = join(dir, CONTROL_STATE.signingKey);
+  const pubPath = join(dir, CONTROL_STATE.signingPub);
   if (!existsSync(keyPath)) {
     const keys = generateSigningKeys();
     writeFileSync(keyPath, keys.privateKeyPem, { mode: 0o600 });
@@ -88,27 +109,28 @@ async function main(): Promise<void> {
     operator: credential("OPERATOR"),
     agent: credential("AGENT"),
     read: credential("READ"),
-    // Optional: rigs whose tokens are set in a file ({"<rig>": "<token>"}). Rigs enrolled through
-    // control (`thermite rig add`) need no entry and no restart.
-    rigs: env.THERMITE_CONTROL_RIG_TOKENS_FILE
-      ? (JSON.parse(readFileSync(env.THERMITE_CONTROL_RIG_TOKENS_FILE, "utf8")) as Record<
-          string,
-          string
-        >)
-      : {},
   };
-  const store = new ControlStore(join(dir, "control.db"));
+  // Rigs enroll through control, which keeps only their tokens' hashes. A rig tokens file still
+  // set is not read: said at start, in words, and control starts.
+  const notRead = notReadWords(env);
+  if (notRead) logWarn("control", notRead);
+  const store = new ControlStore(join(dir, CONTROL_STATE.db));
+  // The log level the owner set on control, over THERMITE_LOG_LEVEL's (control/log-level.ts).
+  applyControlLogLevel(store);
   const { host, port } = parseListen(env.THERMITE_CONTROL_LISTEN ?? "0.0.0.0:8800");
   // A rig is stale after 3 missed reports (the supervisor reports every 60 s by default).
   const staleAfterMs = readNumber(env, CONTROL_NUMBERS.staleSeconds) * 1000;
   // Offline after 15 minutes without a report (never before it is stale).
   const offlineAfterMs = readNumber(env, CONTROL_NUMBERS.offlineSeconds) * 1000;
+  // The free space control keeps on its state and in the bus's store (goal 173).
+  const diskFloorGib = readNumber(env, CONTROL_NUMBERS.diskFloorGib);
+  // How long a knowledge-base file no item names is kept, unless the owner sets it on control;
+  // 0, the default: for good.
+  const kbOrphanHours = readNumber(env, CONTROL_NUMBERS.kbOrphanHours);
   const driver = driverFromEnv(env);
   // Optional: the owner accepts each rig's first report key (no trust on first use).
   const requireKeyAcceptance = env.THERMITE_CONTROL_REQUIRE_KEY_ACCEPT === "1";
-  // How rigs and the machines control sets rigs up on reach control.
-  const publicUrl = env.THERMITE_CONTROL_PUBLIC_URL || undefined;
-  // The bus as the rigs control sets up reach it (none: they keep to HTTP), and its TLS: control's
+  // The bus as the rigs control sets up reach it (none: control sets no rig up), and its TLS: control's
   // own authority, kept beside its signing key, and the server's certificate for the names control
   // and those rigs reach it by, written to the folder the server reads (bus/tls.ts).
   const rigBusUrl = busPublicUrl(env, publicUrl);
@@ -122,11 +144,20 @@ async function main(): Promise<void> {
   const caExport = env[BUS_CA_EXPORT_SETTING];
   if (caExport) writeAtomic(caExport, busTls.caCert, 0o644);
   const trust = { ca: busTls.caCert };
-  // The key that seals model routes' API keys: its own file, made on first use. Mount it
-  // from a separate secret to keep it off the database's volume.
-  const secrets = SecretBox.fromFile(
-    env.THERMITE_CONTROL_SECRETS_KEY_FILE ?? join(dir, "secrets.key"),
-  );
+  // The key that seals what the owner gives control: its own file, made on first use. Compose
+  // keeps it on a volume of its own (THERMITE_CONTROL_SECRETS_KEY_FILE); one still in the state
+  // folder, from before, moves there first.
+  const secretsKey = env.THERMITE_CONTROL_SECRETS_KEY_FILE ?? join(dir, CONTROL_STATE.secretsKey);
+  const keyMoved = moveSecretsKey(join(dir, CONTROL_STATE.secretsKey), secretsKey);
+  if (keyMoved)
+    log(
+      "control",
+      keyMoved === "moved"
+        ? "moved control's secrets key out of its state folder"
+        : "removed the copy of control's secrets key in its state folder: the same key is kept apart",
+      { to: secretsKey },
+    );
+  const secrets = SecretBox.fromFile(secretsKey);
   // Who may use the bus: control's own users and each rig's that registered its key, written to
   // the server's users file, which the server reloads on control's request (bus/users.ts).
   const busUsers = new BusUsers({
@@ -135,6 +166,8 @@ async function main(): Promise<void> {
     file: join(busDir, BUS_USERS_FILE),
     tls: busTls,
     reload: (seed) => reloadBus(natsUrl, seed, trust),
+    // The backup's own user, which `thermite backup` and `thermite restore` sign in as (goal 173).
+    backupSeedFile: join(dir, CONTROL_STATE.busBackupSeed),
   });
   // Control's connection to the bus, signed in as its own user; the apply of the events stream,
   // which writes what control derives from the events; the writer of the stream, which publishes
@@ -159,7 +192,7 @@ async function main(): Promise<void> {
       runpodTestImage: env.THERMITE_RUNPOD_TEST_IMAGE || undefined,
       runpodRigImage: env.THERMITE_RUNPOD_RIG_IMAGE || undefined,
       // Kits written on the new-campaign page, kept as git repositories in control's state.
-      kits: new KitRepos(join(dir, "kits")),
+      kits: new KitRepos(join(dir, CONTROL_STATE.kits)),
       publicUrl,
       // The images rigs on machines run (none: control can't set rigs up there).
       rigImages:
@@ -171,6 +204,11 @@ async function main(): Promise<void> {
             }
           : undefined,
       rigBus: rigBusUrl ? { url: rigBusUrl, ca: busTls.caCert } : undefined,
+      // A rig on RunPod joins the bus through a leaf node in its pod, which trusts this authority.
+      busCa: busTls.caCert,
+      // The server's figures for Metrics, asked as control's system user on one kept connection.
+      serverLook: new ServerLook({ url: natsUrl, seed: busUsers.systemSeed, trust }),
+      busOwnKeys: () => busUsers.ownKeys(),
       bus: {
         server: new URL(natsUrl).host,
         bus,
@@ -190,6 +228,13 @@ async function main(): Promise<void> {
   // views are built (below): its health with 503 and the bus's state, so that a check waits, and
   // every other route with 503 and the reason.
   let ready = false;
+  // The knowledge base's files, each kept once by its SHA-256 in control's state (goal 175): the
+  // owner downloads them, and control takes them from the bus once its views are built (below),
+  // and reads their text, one file at a time in a child process.
+  const kbFiles = new KbFiles(join(dir, CONTROL_STATE.kbFiles), store, {
+    orphanHours: kbOrphanHours,
+  });
+  const kbText = new KbText(store, kbFiles);
   const api = createControlApi(store, tokens, privateKeyPem, {
     staleAfterMs,
     offlineAfterMs,
@@ -200,7 +245,8 @@ async function main(): Promise<void> {
     // The dashboard's pages.
     pages: mountDashboard,
     // Exports from rigs without a results repository, kept in control's state.
-    exportsDir: join(dir, "exports"),
+    exportsDir: join(dir, CONTROL_STATE.exports),
+    kbFiles,
     // Who may use the message bus: a rig's new key gets its user there, and a new seal key its
     // config.
     busUsers,
@@ -222,7 +268,6 @@ async function main(): Promise<void> {
     host,
     port,
     build: buildInfo(),
-    rigs: Object.keys(tokens.rigs),
     enrolled: store.enrollments
       .rigs()
       .filter((r) => !r.retired_at)
@@ -230,6 +275,7 @@ async function main(): Promise<void> {
     lifecycle: driver?.kind ?? null,
     bus: new URL(natsUrl).host,
     bus_for_rigs: rigBusUrl ? new URL(rigBusUrl).host : null,
+    kb_orphan_hours: kbOrphanHours,
   });
   // Before control serves a page or takes a report: the users file, so that the server can start,
   // kept up to date after; the events stream made, waiting for the bus; the store's place checked
@@ -239,8 +285,13 @@ async function main(): Promise<void> {
   // views' folds in one pass from its first message (control/events).
   // Control's loops, each ticked as its round ends, for its health route and /metrics (goal 173).
   const { loops } = parts;
+  // Each rig's consumers of its commands and its config, which control makes (bus/consumers.ts).
+  const rigConsumers = new RigConsumers({ store, bus });
   void busUsers.sync();
-  const usersSync = every(loops, "control", "bus_users", BUS_USERS_SYNC_MS, () => busUsers.sync());
+  const usersSync = every(loops, "control", "bus_users", BUS_USERS_SYNC_MS, async () => {
+    await busUsers.sync();
+    await rigConsumers.make();
+  });
   const started = performance.now();
   await bus.makeStream(EVENT_STREAM_CONFIG);
   await eventsApply.start();
@@ -270,9 +321,9 @@ async function main(): Promise<void> {
     rigs: eventsApply.folds.held().length,
     ms: Math.round(performance.now() - started),
   });
-  // Reports from the bus, folded through the ingest route's checks as they arrive, each report's
-  // events published to the events stream and applied before it is acked, as over HTTP; live
-  // lines, folded into the live view as they arrive; each command
+  // Reports from the bus, folded through control's checks as they arrive, each report's events
+  // published to the events stream and applied before it is acked; live lines, folded into the
+  // live view as they arrive; each command
   // control issues, published to its rig's subject as well as kept in the store; and each rig's
   // config, written when it changes.
   void busConfig.start().then(() => busConfig.write());
@@ -284,6 +335,31 @@ async function main(): Promise<void> {
   );
   followLive(bus, { store, taken: liveTaken }).catch((err) =>
     log("control", "live lines from the bus stopped", { error: String(err) }, "error"),
+  );
+  // The knowledge base's files from the bus; a file no item names is kept for good unless the
+  // owner set how many hours it stays: control looks at start and every hour, at the setting then.
+  followKbFiles(bus, kbFiles).catch((err) =>
+    log("control", "files for the knowledge base stopped", { error: String(err) }, "error"),
+  );
+  kbFiles.removeOrphans();
+  const orphans = every(loops, "control", "kb_orphans", KB_ORPHANS_LOOK_MS, () =>
+    kbFiles.removeOrphans(),
+  );
+  // The files' text, in the background: the first look reads the files kept before control
+  // extracted text, and each look after reads the files that came since.
+  void kbText.look();
+  const text = every(loops, "control", "kb_text", KB_TEXT_LOOK_MS, () => kbText.look());
+  // The kept conversations stored before the scrubbing, each given its scrubbed new version once,
+  // in the background as well.
+  void scrubKeptConversations(store);
+  // Searches and reads of the knowledge base for the rigs' agents, each answered from its run's scope.
+  serveKbAsks(bus, store).catch((err) =>
+    log("control", "knowledge base searches stopped", { error: String(err) }, "error"),
+  );
+  // What the rigs ask of control on the bus: figures, screens, daily reports and a command's
+  // newest form.
+  serveRigAsks(bus, { store, control: buildInfo(), privateKeyPem, screens: parts.screens }).catch(
+    (err) => log("control", "the rigs' asks stopped", { error: String(err) }, "error"),
   );
   sendCommandsOn(store, bus).catch((err) =>
     log("control", "commands stream not made", { error: String(err) }, "error"),
@@ -334,6 +410,21 @@ async function main(): Promise<void> {
       });
     return watching;
   });
+  // Control's disk floor (goal 173): its state folder, and the room left in the bus's store, as
+  // control's system user reads it. At the floor, new runs wait; nothing else does.
+  const disk = new ControlDisk({
+    store,
+    stateDir: dir,
+    floorGib: diskFloorGib,
+    busStore: () => busStoreUse(natsUrl, busUsers.systemSeed, trust),
+  });
+  void disk.check();
+  const diskWatch = every(loops, "control", "disk", CONTROL_DISK_CHECK_MS, () => disk.check());
+  // The owner's retention policies (retention/): each that is on runs once at each of its times.
+  // None exists until the owner makes one, so by default nothing is removed.
+  const retention = every(loops, "control", "retention", RETENTION_LOOK_MS, () => {
+    retentionTick({ store, privateKeyPem });
+  });
   // GPU clouds' prices, pods and spend, read again every 15 minutes.
   const clouds = every(loops, "control", "gpu_clouds", 15 * 60_000, () =>
     refreshGpuClouds(store, secrets).catch((err) =>
@@ -349,6 +440,10 @@ async function main(): Promise<void> {
     clearInterval(clouds);
     clearInterval(usersSync);
     clearInterval(configWrite);
+    clearInterval(diskWatch);
+    clearInterval(orphans);
+    clearInterval(text);
+    clearInterval(retention);
     server.close();
     process.exit(0);
   };

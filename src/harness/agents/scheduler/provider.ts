@@ -1,4 +1,9 @@
+import { TERMINAL_WAIT_MAX_MS } from "../../../agents/cli/index.ts";
+import type { Contract } from "../../../core/contract.ts";
+import type { Ledger } from "../../ledger/index.ts";
 import { statusEvents } from "../../run-status.ts";
+import { HARNESS_NUMBERS } from "../../settings.ts";
+import { limitsInForce } from "../coordinator.ts";
 import {
   classifyProviderError,
   FAILING_SAID,
@@ -16,6 +21,40 @@ import type { SchedulerContext } from "./context.ts";
  * subscription's usage window.
  */
 
+/** The longest a trial may be set to last: a contract's trial_minutes, THERMITE_TRIAL_MINUTES. */
+const LONGEST_TRIAL_MS = HARNESS_NUMBERS.trialMinutes.rule.max * 60_000;
+
+/**
+ * The end of a wait for the provider that a trial's words ask for (its worker's wait, or a reset
+ * time its program gave at its end), at most one of its run's trials long from now: the run's
+ * trial length (a trial_minutes rule, else its contract's), else the rig's (`rigMs`), else the
+ * longest a trial may be set to, 24 hours. A trial's words never hold its run longer than one
+ * trial could last; a limit still in force then shows again in the next trial, which asks again.
+ * Only a weekly window's reset, which its program gave, holds the run longer (afterTrial).
+ */
+export function holdUntil(
+  ledger: Ledger,
+  run: string,
+  contract: Contract,
+  rigMs: number | undefined,
+  until: string,
+  now = Date.now(),
+): string {
+  const minutes = limitsInForce(ledger, run, contract).trialMinutes;
+  const longest = minutes ? minutes * 60_000 : (rigMs ?? LONGEST_TRIAL_MS);
+  return new Date(Math.min(Date.parse(until), now + longest)).toISOString();
+}
+
+/**
+ * A usage limit whose reset its program gave (`retryAfter`) more than a day away, and at most a
+ * week and a day, is a weekly window (the owner's decision of 2026-10-27, as a program's own
+ * terminal tells one: usage-window.ts): the trial ended, its experiment back at the top, and the
+ * run waits for the reset itself, not one trial's length, marked `weekly` for control's Needs you.
+ * A reset further off is not believed, and holds the run one trial's length, as any other.
+ */
+const WEEKLY_AFTER_MS = TERMINAL_WAIT_MAX_MS;
+const WEEKLY_MAX_MS = 8 * 24 * 3_600_000;
+
 /** The first pause before the model is checked again after the run's agents stopped (goal 079). */
 const RECHECK_FIRST_MS = 60_000;
 /** The longest pause between those checks: they double up to it. */
@@ -31,19 +70,52 @@ export interface AgentsStopped {
 }
 
 /**
- * A subscription's usage window is full (a trial said until when): no new trials or plans on
- * this rig until it resets. The agents wait; nothing pays for more (the owner's rule).
+ * The run's wait for its provider's limit now: its newest, until its time, unless the owner ended
+ * it (`agents_wait_ended`). Undefined: the run does not wait.
+ */
+export function holdOf(
+  ledger: Ledger,
+  run: string,
+  now = Date.now(),
+): { until: string; reason: string } | undefined {
+  const e = ledger.events.newest(["agents_wait_for_limit", "agents_wait_ended"], { subject: run });
+  if (e?.kind !== "agents_wait_for_limit") return undefined;
+  const until = String(e.body.until);
+  return Date.parse(until) > now ? { until, reason: String(e.body.reason ?? "") } : undefined;
+}
+
+/**
+ * The owner (or an operator, for the owner) ends the run's wait for its provider now (`end_wait`):
+ * its new trials and plans start at once. A limit still in force shows again in the next trial,
+ * which waits again. Nothing is recorded for a run that does not wait.
+ */
+export function endWait(
+  ledger: Ledger,
+  run: string,
+  by: string,
+  now = Date.now(),
+): { run: string; ended: boolean; until?: string } {
+  const hold = holdOf(ledger, run, now);
+  if (!hold) return { run, ended: false };
+  ledger.appendEvent(by, "agents_wait_ended", run, { until: hold.until });
+  return { run, ended: true, until: hold.until };
+}
+
+/**
+ * The provider's limit holds the run (one of its trials said until when, at most one trial's
+ * length ahead: holdUntil): no new trials or plans for this run until then, or until the owner
+ * ends the wait. The agents wait; nothing pays for more (the owner's rule). A hold is its own
+ * run's: the rig's other runs go on.
  */
 export function waitingForLimit(sched: SchedulerContext, run: string): boolean {
-  const resetAt = sched.ledger.events.newest("agents_wait_for_limit")?.body.until;
-  const until = resetAt ? Date.parse(resetAt) : 0;
-  if (Date.now() >= until) return false;
-  if (sched.limitNoted !== resetAt) {
-    sched.limitNoted = resetAt;
+  const hold = holdOf(sched.ledger, run);
+  if (!hold) return false;
+  if (sched.limitNoted.get(run) !== hold.until) {
+    sched.limitNoted.set(run, hold.until);
     sched.o.service.live.append({
       source: "planner",
       kind: "status",
-      text: `agents wait for the subscription's usage window to reset at ${resetAt}`,
+      text: `agents wait for the subscription's usage window to reset at ${hold.until}`,
       run,
     });
   }
@@ -183,12 +255,26 @@ export function afterTrial(sched: SchedulerContext, id: string, run: string, r: 
   }
   const until =
     r.retryAfter ?? (kind === "rate_limit" ? classifyProviderError(r.error).retryAt : undefined);
-  if (until)
-    sched.ledger.appendEvent(sched.o.owner, "agents_wait_for_limit", run, {
-      until,
-      trial: id,
-      reason: r.error,
-    });
+  if (!until) return;
+  // A weekly window: the reset its program gave, a day away or more (WEEKLY_AFTER_MS).
+  const now = Date.now();
+  const reset = kind === "rate_limit" && r.retryAfter ? Date.parse(r.retryAfter) : Number.NaN;
+  const weekly = reset - now > WEEKLY_AFTER_MS && reset - now <= WEEKLY_MAX_MS;
+  sched.ledger.appendEvent(sched.o.owner, "agents_wait_for_limit", run, {
+    until: weekly
+      ? new Date(reset).toISOString()
+      : holdUntil(
+          sched.ledger,
+          run,
+          sched.o.service.contractFor(run),
+          sched.o.trialWallMs,
+          until,
+          now,
+        ),
+    trial: id,
+    reason: r.error,
+    ...(weekly ? { weekly: true as const } : {}),
+  });
 }
 
 /**

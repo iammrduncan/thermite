@@ -228,14 +228,14 @@ describe("ledger", () => {
       () =>
         ledger.db
           .prepare(
-            "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'note', 't', null, null, ?)",
+            "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'other', 't', null, null, ?)",
           )
           .run(at),
       /NOT NULL/,
     );
     const next = ledger.db
       .prepare(
-        "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'note', 't', 'run', 'old-1', ?)",
+        "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'other', 't', 'run', 'old-1', ?)",
       )
       .run(at);
     assert.equal(Number(next.lastInsertRowid), 3);
@@ -339,6 +339,44 @@ describe("ledger", () => {
       goals.map((r) => r.id),
       ["correctness", "decode-speed", "resident"],
     );
+  });
+
+  test("a champion judged before verdicts carried guards has them sent once, from the ledger's record (goal 184)", () => {
+    const { ledger } = setup();
+    attempt(ledger, "a1");
+    // As a harness before goal 184 kept it: the guards in the verdict's row (append-only, so
+    // written at once), and none in its event.
+    const guards = [
+      { metric: "mem_mib", status: "ok", estimate: Math.log(0.99), low: -0.02, high: 0.0 },
+    ];
+    const id = Number(
+      ledger.db
+        .prepare(
+          `insert into verdict (attempt, verdict, delta, ci_low, ci_high, guards, depends_on_jobs,
+             reasons, judged_by, supersedes, created_at)
+           values ('a1', 'win_confirmed', 0.1, null, null, ?, '[]', 't', 'judge', null, ?)`,
+        )
+        .run(JSON.stringify(guards), new Date().toISOString()).lastInsertRowid,
+    );
+    ledger.appendEvent("judge", "verdict", "a1", {
+      id,
+      verdict: "win_confirmed",
+      delta: 0.1,
+      ci_low: null,
+      ci_high: null,
+      reasons: "t",
+      supersedes: null,
+    });
+    assert.deepEqual(ledger.champions.promote(promoteArgs("a1")), { ok: true, seq: 2 });
+    assert.equal(ledger.verdicts.sendChampionGuards("judge"), 1);
+    const e = ledger.eventsAfter(0, 1000).events.find((x) => x.kind === "verdict_guards");
+    assert.ok(e);
+    assert.equal(e.subject, "a1");
+    const g = (e.body as { guards: { metric: string; change: number }[] }).guards[0];
+    assert.equal(g?.metric, "mem_mib");
+    assert.ok(Math.abs((g?.change ?? 0) + 0.01) < 1e-9);
+    // Sent once: a restart sends nothing more.
+    assert.equal(ledger.verdicts.sendChampionGuards("judge"), 0);
   });
 
   test("promotion is compare-and-swap: a stale expected seq loses", () => {
@@ -720,20 +758,5 @@ describe("ledger", () => {
     const all = ledger.eventsAfter(0, 100_000).events.map((e) => e.id);
     assert.deepEqual(seen, all);
     assert.equal(new Set(seen).size, seen.length);
-  });
-
-  test("an export's own event is not something new to export", () => {
-    const { ledger } = setup();
-    ledger.exports.record({
-      throughEvent: ledger.latestEventId(),
-      path: "x",
-      manifest: {},
-      actor: "t",
-    });
-    const through = ledger.exports.last()?.through_event ?? 0;
-    assert.equal(ledger.recordedAfter(through), true);
-    assert.equal(ledger.recordedAfter(through, ["export_written"]), false);
-    appendOther(ledger, "t", "tick", null, {});
-    assert.equal(ledger.recordedAfter(through, ["export_written"]), true);
   });
 });

@@ -3,7 +3,7 @@ import type { Handler, Handlers } from "./index.ts";
 
 /**
  * The owner's messages to the run's agents (goal 063), with who read them and the advisors'
- * answers, and the agents' notes (goal 065): field notes and research notes.
+ * answers, and the agents' notes (goal 065): field notes and source notes.
  */
 
 /** How many of the owner's messages a run's view keeps. */
@@ -43,7 +43,7 @@ export const MESSAGES: Handlers = {
       frozen({
         id,
         by: String(b.by ?? e.actor),
-        kind: typeof b.kind === "string" && b.kind ? b.kind : "note",
+        kind: typeof b.kind === "string" && b.kind ? b.kind : "other",
         text,
         // A note always says what it is about; one recorded before that rule is about its run.
         about:
@@ -56,9 +56,9 @@ export const MESSAGES: Handlers = {
       }),
     );
   },
-  // A research note (sources read, in any mode): in the journal's notes card, apart from the
+  // A source note (sources read, in any mode): in the journal's notes card, apart from the
   // field notes. Its id is negative so it never meets a field note's.
-  research_note(f, e, b) {
+  source_note(f, e, b) {
     const note = Number(b.note);
     const text = typeof b.text === "string" ? b.text : "";
     if (!Number.isFinite(note) || !text) return;
@@ -67,7 +67,7 @@ export const MESSAGES: Handlers = {
       frozen({
         id: -note,
         by: String(b.by ?? e.actor),
-        kind: "note",
+        kind: "source_note",
         text,
         about: sources[0] ? { type: "source", id: sources[0] } : null,
         lane: typeof b.by === "string" && /^lane-\d+$/.test(b.by) ? b.by : null,

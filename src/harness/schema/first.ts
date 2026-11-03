@@ -1,6 +1,8 @@
 /**
  * Migration 1: the ledger's first tables. Their statements name a run `instance`, as the ledger
- * did until migration 10.
+ * did until migration 10. The goal table's check names the status `blocked`, which nothing sets
+ * (a goal's status follows its checks, ledger/goals.ts): it stays as written, as every migration
+ * that has run does, and old ledgers keep it.
  */
 export const FIRST_TABLES = `
   create table meta (key text primary key, value text not null);

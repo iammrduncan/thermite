@@ -5,6 +5,27 @@
  * an event leaves out keeps the value an earlier one gave.
  */
 
+/**
+ * Whether the account's usage credits are on, from Claude Code's `overageStatus` (in its
+ * `rate_limit_event`, and in its transcript's record of a usage limit): `allowed` or
+ * `allowed_warning`, on; `rejected`, off; anything else says nothing. With credits on, a full
+ * window can spend paid usage instead of waiting (goal 169: Thermite marks the subscription).
+ */
+export function creditsOn(overageStatus: string | null | undefined): boolean | undefined {
+  if (overageStatus === "allowed" || overageStatus === "allowed_warning") return true;
+  if (overageStatus === "rejected") return false;
+  return undefined;
+}
+
+/**
+ * The account's usage credits as a rig last saw them: on or off, and since when they were so on
+ * the rig (when they changed from the other), or null when they were so from the first report.
+ */
+export interface Credits {
+  on: boolean;
+  since: string | null;
+}
+
 /** A subscription's usage window, as Claude Code reports it. */
 export interface UsageWindow {
   /** 0 to 1. */
@@ -16,6 +37,8 @@ export interface UsageWindow {
 export interface PlanWindows {
   five_hour?: UsageWindow | undefined;
   seven_day?: UsageWindow | undefined;
+  /** Its usage credits, when Claude Code said. */
+  credits?: Credits | undefined;
 }
 
 /** A `rate_limit_event`'s `rate_limit_info`. */
@@ -24,6 +47,7 @@ export interface RateLimitInfo {
   resetsAt?: number;
   rateLimitType?: string;
   utilization?: number;
+  overageStatus?: string;
   unifiedWindows?: Record<string, { utilization?: number; resetsAt?: number }>;
 }
 
@@ -43,7 +67,23 @@ export function windowsOf(info: RateLimitInfo, was: PlanWindows | undefined): Pl
     if (typeof w?.utilization === "number" && typeof w.resetsAt === "number")
       out[k] = { utilization: w.utilization, resets_at: new Date(w.resetsAt * 1000).toISOString() };
   }
+  const on = creditsOn(info.overageStatus);
+  if (on !== undefined) out.credits = { on, since: null };
   return out;
+}
+
+/**
+ * The credits just reported over those the rig kept: the same state keeps its `since`; a change
+ * starts it now; the first report has none.
+ */
+function mergeCredits(
+  was: Credits | undefined,
+  now: Credits | undefined,
+  at: string,
+): Credits | undefined {
+  if (!now) return was;
+  if (!was) return { on: now.on, since: null };
+  return was.on === now.on ? was : { on: now.on, since: at };
 }
 
 /** The windows just reported over those the rig kept, with when (for the rig's report). */
@@ -51,9 +91,36 @@ export function mergeUsage(
   was: PlanWindows | undefined,
   now: PlanWindows,
 ): PlanWindows & { at: string } {
+  const at = new Date().toISOString();
+  const credits = mergeCredits(was?.credits, now.credits, at);
   return {
     five_hour: now.five_hour ?? was?.five_hour,
     seven_day: now.seven_day ?? was?.seven_day,
-    at: new Date().toISOString(),
+    ...(credits ? { credits } : {}),
+    at,
   };
+}
+
+/**
+ * The windows Claude Code's status line gives in its own terminal (goal 183), from Thermite's
+ * `StatusLine` signal: `rate_limits` holds each window as `{used_percentage, resets_at}`, a
+ * percent and seconds. A window it leaves out keeps the value an earlier one gave.
+ */
+export function windowsOfStatus(payload: unknown, was: PlanWindows | undefined): PlanWindows {
+  const limits = ((payload as { rate_limits?: unknown } | null)?.rate_limits ?? {}) as Record<
+    string,
+    { used_percentage?: unknown; resets_at?: unknown } | undefined
+  >;
+  const out: PlanWindows = { ...was };
+  for (const k of WINDOWS) {
+    const w = limits[k];
+    if (typeof w?.used_percentage !== "number" || typeof w.resets_at !== "number") continue;
+    const at = new Date(w.resets_at * 1000);
+    if (Number.isNaN(at.getTime())) continue;
+    out[k] = {
+      utilization: Math.min(1, Math.max(0, w.used_percentage / 100)),
+      resets_at: at.toISOString(),
+    };
+  }
+  return out;
 }

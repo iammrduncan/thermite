@@ -8,8 +8,10 @@ import {
   forwardToProvider,
   logStall,
   modelStallMs,
+  type ProviderErrorAnswer,
 } from "../../agents/model/index.ts";
 import { sameSecret } from "../../common/secrets.ts";
+import type { Harness } from "../../core/agents.ts";
 
 /**
  * The model proxy for one call of an advisor in OpenCode or the Codex CLI (goal 073), as the
@@ -31,8 +33,17 @@ export interface AdvisorModelProxy {
 /** The path the proxy answers under, as the harness's proxy does. */
 export const ADVISOR_PROXY_PATH = "/v1/model-proxy";
 
-/** Starts the proxy on a free local port. Close it when the call ends. */
-export async function serveAdvisorModel(target: ForwardTarget): Promise<AdvisorModelProxy> {
+/**
+ * Starts the proxy on a free local port. Close it when the call ends. `onError` hears each error
+ * answer of the provider's: an advisor in its own terminal waits for a full usage window by it
+ * (goal 169). `program`: the advisor's program, the Codex CLI hearing a full ChatGPT plan as its
+ * own usage limit.
+ */
+export async function serveAdvisorModel(
+  target: ForwardTarget,
+  onError?: ((a: ProviderErrorAnswer) => void) | undefined,
+  program?: Harness | undefined,
+): Promise<AdvisorModelProxy> {
   const token = `proxy.${randomBytes(24).toString("hex")}`;
   const app = new Hono();
   app.all(`${ADVISOR_PROXY_PATH}/*`, bodyLimit({ maxSize: 64 * 1024 * 1024 }), async (c) => {
@@ -51,9 +62,10 @@ export async function serveAdvisorModel(target: ForwardTarget): Promise<AdvisorM
           c.req.method === "GET" || c.req.method === "HEAD"
             ? undefined
             : Buffer.from(await c.req.arrayBuffer()),
+        program,
       },
       target,
-      undefined,
+      onError,
       // A stream that goes silent is broken off (goal 079): the advisor's program sees a broken
       // connection or a 504, as from any gateway, and the supervisor's log says so.
       { ms: modelStallMs(), onStall: (ms) => logStall(ms, { advisor_proxy: true }) },

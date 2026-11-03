@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { errorText } from "../../../common/errors.ts";
+import { terminalSource } from "../../../core/terminal-input.ts";
 import { commandFollowUrl, commandProgress, notSent } from "../../command-progress.ts";
 import { issueCommand, nobodyReads, panelReviews } from "../../issue/index.ts";
 import { HARNESS_NAMES } from "../../rigs/index.ts";
@@ -42,17 +43,20 @@ import {
   type RunView,
   runCampaign,
   runMessages,
+  workOf,
 } from "../../views/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { type LiveFeed, type PushedLine, pushLive, pushStart, recheckIds } from "./push.ts";
+import { terminalGrid, terminalPanel, terminalRoutes } from "./terminal.ts";
 
 /**
  * Live, one run at a time (goal 063), under the run's address, with the owner's messages to its
- * agents; and one rig's sessions over every run. Each page's new lines are pushed to it as control
- * gets them (push.ts).
+ * agents; and one rig's sessions over every run, a trial's with its terminal and the owner's
+ * console (terminal.ts). Each page's new lines are pushed to it as control gets them (push.ts).
  */
 export function liveRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, moreMenu, opts, page, pauseMenu, runOf, store, views } = dash;
+  terminalRoutes(app, dash);
   /** The run a route names, under the campaign it names (goal 170). */
   const named = (c: Ctx) => runOf(c.req.param("campaign") ?? "", c.req.param("run") ?? "");
 
@@ -108,7 +112,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const w = c.req.query("w") || "all";
     // The filters: everyone, each lane (working or not), the planner, the judge, the advisors, you.
     const chip = (key: string, label: string, title = "", working = false) =>
-      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : ""}${esc(label)}</a>`;
+      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key, view: "lines" })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : ""}${esc(label)}</a>`;
     const chips = [
       chip("all", "Everyone"),
       ...lanes.map((l) => {
@@ -116,7 +120,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         return chip(
           l,
           l,
-          work ? `${work.family}: ${work.focus}` : "between trials",
+          work ? `${work.direction}: ${work.focus}` : "between trials",
           Boolean(work) && r.status === "running",
         );
       }),
@@ -125,6 +129,59 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
       chip("advisors", "Advisors"),
       chip("you", "You", "your messages, and who read them"),
     ].join("");
+    // Each lane's trial at work in its program's own terminal (goal 169), a worker in Pi in its Pi
+    // view: its page has the terminal.
+    const inTerminals =
+      r.status === "running" && u.settings?.program_mode === "terminal"
+        ? Object.entries(r.at_work).sort(([a], [b]) =>
+            a.localeCompare(b, undefined, { numeric: true }),
+          )
+        : [];
+    // The planner's call, while it plans this run in its own terminal, and the advisors' calls in
+    // theirs (goal 169).
+    const calls = (workOf(u.summary)?.terminals ?? []).filter((x) => x.run === r.id);
+    const advising = calls.filter((x) => terminalSource(x.id) === "supervisor");
+    // Live opens on the agents' terminals while some run in one (goal 181, from the owner's
+    // mockup): each lane's trial at work and the planner's call side by side, each with its own
+    // console; the lines and the advisors' terminals are tabs beside it.
+    const terminalMode = u.settings?.program_mode === "terminal" && !sel.earlier;
+    const lanePanes = inTerminals.map(([lane, work]) => ({
+      rig: u.id,
+      run: r.id,
+      trial: work.trial,
+      ended: false,
+      title: `${lane} · ${work.direction}`,
+    }));
+    const plannerCall = calls.find((x) => x.role === "planner");
+    const agentPanes = [
+      ...lanePanes,
+      ...(plannerCall
+        ? [{ rig: u.id, run: r.id, trial: plannerCall.id, ended: false, title: "planner" }]
+        : []),
+    ];
+    const advisorPanes = advising.map((x) => ({
+      rig: u.id,
+      run: r.id,
+      trial: x.id,
+      ended: false,
+      title: `${x.role} (advisor)`,
+    }));
+    const asked = c.req.query("view");
+    const view =
+      asked === "lines" || asked === "advisors" || asked === "terminals"
+        ? asked
+        : c.req.query("w") || !terminalMode || !agentPanes.length
+          ? "lines"
+          : "terminals";
+    const tab = (v: typeof view, label: string, n?: number) =>
+      `<a class="lchip ltab${view === v ? " on" : ""}" href="${runLiveHref(r, { view: v })}">${esc(label)}${n ? ` <span class="muted">${n}</span>` : ""}</a>`;
+    const tabs = terminalMode
+      ? `<nav class="ltabs" aria-label="Views">${tab("terminals", "Terminals", agentPanes.length)}${tab("lines", "Lines")}${tab("advisors", "Advisors", advisorPanes.length)}</nav>`
+      : "";
+    const grid = (panes: typeof agentPanes, none: string) =>
+      panes.length
+        ? terminalGrid(dash, c, panes)
+        : `<div class="empty" style="margin:auto">${none}</div>`;
     const kept = r.messages.filter((m) => m.keep && !m.unkept);
     const keptBox = kept.length
       ? `<details class="lkept"><summary class="lchip" title="Your messages kept in force">📌 ${kept.length} kept</summary><div class="menu-pop"><div class="muted small">Every new trial gets these, until you remove them.</div>${kept
@@ -150,7 +207,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
       to === "all"
         ? `Each agent reads it ${harness === undefined ? "when it can" : pi ? "at its next step" : "when its current run ends"}; the planner at its next plan`
         : to.startsWith("lane-")
-          ? `${to}${r.at_work[to] ? ` (on ${r.at_work[to]?.family})` : ""} reads it ${when}`
+          ? `${to}${r.at_work[to] ? ` (on ${r.at_work[to]?.direction})` : ""} reads it ${when}`
           : to === "planner"
             ? "The planner reads it when it plans the next round"
             : to === "teachers"
@@ -234,8 +291,22 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         active: "live",
         flush: true,
       },
-      `<div class="lwrap" id="lwrap">${nav}<section class="lcol">${head}<div data-fw-top></div><div class="lchips">${chips}<span class="grow"></span><span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
-<div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>
+      `<div class="lwrap" id="lwrap">${nav}<section class="lcol">${head}<div data-fw-top></div>${
+        view === "lines"
+          ? `<div class="lchips">${tabs}${chips}<span class="grow"></span><span data-part="lkept">${keptBox}</span><button class="lchip on lfollow" type="button" aria-pressed="true" title="Follow new lines">↓ Follow</button></div>
+<div class="transcript lstream" id="transcript" data-stream="${esc(runLiveStreamHref(r))}" data-run="${esc(r.id)}" data-w="${esc(w)}" data-after="${after}">${runLinesHtml(lines, now, runMessages(store, u.id, r.id)) || `<div class="empty">No live lines yet. They appear here as the run's agents and judge work.</div>`}</div>`
+          : `<div class="lchips">${tabs}<span class="grow"></span><span data-part="lkept">${keptBox}</span></div>${
+              view === "terminals"
+                ? grid(
+                    agentPanes,
+                    "No agent of this run is at work in its terminal now. A lane's trial and the planner's call show here as they start.",
+                  )
+                : grid(
+                    advisorPanes,
+                    "No advisor of this run is at work now. The teachers, the auditor and the review panel each show here, in their terminal, while they work.",
+                  )
+            }`
+      }
 <div data-part="lnotice">${notice}</div>${box}</section></div>`,
       vs,
     );
@@ -413,6 +484,33 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           .map((x) => `<a href="${runLiveHref(x)}">${esc(x.id)}</a>`)
           .join(", ")}.</div>`
       : `<div class="composer off">No run on this rig to message.</div>`;
+    // A trial's page has its terminal, and the owner's console into it (goal 169); the planner's
+    // page, its call's while it plans in its own terminal; the advisors' page, the advisor's call
+    // it names, else the first that runs in its terminal.
+    const open = workOf(u.summary)?.terminals ?? [];
+    const asked = c.req.query("call");
+    const advisors = open.filter((x) => terminalSource(x.id) === "supervisor");
+    const inCall =
+      source === "planner"
+        ? open.find((x) => x.role === "planner")
+        : source === "supervisor"
+          ? (advisors.find((x) => x.id === asked) ?? advisors[0])
+          : undefined;
+    const term = trial?.run
+      ? terminalPanel(dash, c, {
+          rig: u.id,
+          run: trial.run,
+          trial: source.slice(6),
+          ended: Boolean(ended.get(source)),
+        })
+      : inCall
+        ? terminalPanel(dash, c, {
+            rig: u.id,
+            run: inCall.run,
+            trial: inCall.id,
+            ended: false,
+          })
+        : "";
     const title = source ? sourceName(source, sel?.lane) : "Everything";
     return page(
       c,
@@ -443,7 +541,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
         flush: true,
       },
       `<aside class="sessions"><div class="section" style="margin-top:4px">Sessions</div>${list}</aside>
-<div class="transcript-wrap">${head}<div class="transcript" id="transcript" data-stream="${esc(rigLiveStreamHref(u.id))}" data-source="${esc(source)}" data-after="${after}">${out.join("") || `<div class="empty">No live lines yet. They appear here as the rig's agents and judge work.</div>`}</div>${composer}</div>`,
+<div class="transcript-wrap">${head}${term}<div class="transcript" id="transcript" data-stream="${esc(rigLiveStreamHref(u.id))}" data-source="${esc(source)}" data-after="${after}">${out.join("") || `<div class="empty">No live lines yet. They appear here as the rig's agents and judge work.</div>`}</div>${composer}</div>`,
       vs,
     );
   });
@@ -452,7 +550,7 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
   // it; a result also as the part it adds to its call's row.
   app.get("/ui/rigs/:rig/live/stream", (c) => {
     const rig = c.req.param("rig");
-    if (!views().some((u) => u.id === rig)) return c.json({ error: "no such rig" }, 404);
+    if (!store.reportedRigs.listed(rig)) return c.json({ error: "no such rig" }, 404);
     const source = c.req.query("source") || undefined;
     const draw = (lines: ReturnType<typeof store.liveLines.after>): PushedLine[] => {
       const now = Date.now();

@@ -5,17 +5,35 @@ import { checkClusterNow, inspectKubeconfig, KUBE_NAME, NS } from "../../cluster
 import { modelFollowUrl, modelProgress, notSent } from "../../command-progress.ts";
 import { makeDeployKey } from "../../git-keys.ts";
 import { ADDRESS, USER } from "../../machines/index.ts";
-import { CLAUDE_MODELS, listModels, providerBase } from "../../providers/index.ts";
+import {
+  CLAUDE_MODELS,
+  dismissCreditsNote,
+  listModels,
+  providerBase,
+} from "../../providers/index.ts";
 import { probeRepository } from "../../repo-probe.ts";
 import { clearRigModel, giveRigModel } from "../../rigs/index.ts";
 import { readRunpod } from "../../runpod/index.ts";
 import { keyHint } from "../../secrets.ts";
-import { harnessOf, type ModelProvider, type ProviderType } from "../../store/index.ts";
+import {
+  GIT_HOST,
+  GIT_HOST_WORDS,
+  harnessOf,
+  type ModelProvider,
+  type ProviderType,
+} from "../../store/index.ts";
 import { PRICE_NUMBER, PRICE_WORDS } from "../../ui/usage.ts";
-import { setModelPrice } from "../../usage.ts";
+import { setModelPrice } from "../../usage-report.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
 import { mountMcpUi } from "./mcp-servers.ts";
-import { machineUrl, newName, settingsHelpers, settingsUrl, TYPES } from "./shared.ts";
+import {
+  machineUrl,
+  newName,
+  settingsHelpers,
+  settingsUrl,
+  TYPES,
+  UNCHECKED_LABEL,
+} from "./shared.ts";
 
 /**
  * Settings › Providers' forms: the add form (a machine, a cluster, a GPU cloud, Git access or a
@@ -23,7 +41,7 @@ import { machineUrl, newName, settingsHelpers, settingsUrl, TYPES } from "./shar
  * the rigs' harness and model.
  */
 export function providerRoutes(app: Hono, dash: Dashboard): void {
-  const { chatgpt, mcpServers, opts, parts, ssh, store } = dash;
+  const { chatgpt, mcpServers, noted, opts, parts, ssh, store } = dash;
   const { accessFor } = settingsHelpers(dash);
 
   // ---------------------------------------------------------------- settings: model providers
@@ -79,10 +97,15 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     try {
       contexts = await parts.kube.contextsOf(kubeconfig);
     } catch (err) {
-      return fail(errorText(err));
+      return fail(noted(errorText(err)));
     }
     const seen = await inspectKubeconfig(parts.kube, kubeconfig);
     if (seen.problems.length) return fail(`Not added: ${seen.problems.join("; ")}.`);
+    // A connection control can't check is the owner's to accept, never taken by default.
+    if (seen.unchecked.length && f.unchecked !== "1")
+      return fail(
+        `Not added: ${seen.unchecked.join("; ")}, so control can't tell the real API server from another on the way. Give it a kubeconfig with its certificate-authority-data over https, or tick "${UNCHECKED_LABEL}" to add it anyway.`,
+      );
     if (context && !contexts.contexts.includes(context))
       return fail(
         `The kubeconfig has no context "${context}": it has ${contexts.contexts.join(", ") || "none"}.`,
@@ -98,9 +121,12 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       namespace_pattern: pattern,
       slots,
       by: "owner:ui",
+      unchecked: seen.unchecked,
     });
     const why = await checkClusterNow(parts, name);
-    const careful = seen.warnings.length ? ` Note: ${seen.warnings.join("; ")}.` : "";
+    const careful = seen.unchecked.length
+      ? ` You accepted that its connection isn't checked: ${seen.unchecked.join("; ")}.`
+      : "";
     return c.redirect(
       why
         ? settingsUrl("error", `"${name}" is added, but the check failed: ${why}${careful}`)
@@ -131,7 +157,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       });
       store.gpuClouds.setFacts(name, { facts });
     } catch (err) {
-      return fail(`Not added: ${errorText(err)}.`);
+      return fail(noted(`Not added: ${errorText(err)}.`));
     }
     return c.redirect(
       settingsUrl("ok", `"${name}" is added and read: see what control found below.`),
@@ -157,7 +183,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       try {
         pub = await ssh.publicKeyOf(privateKey);
       } catch (err) {
-        return fail(errorText(err));
+        return fail(noted(errorText(err)));
       }
     } else {
       const k = makeDeployKey(`thermite ${name}`);
@@ -198,6 +224,10 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!ACCESS_NAME.test(name))
       return fail("A Git access name is lowercase letters, digits, dots and dashes.");
     if (store.gitAccess.get(name)) return fail(`"${name}" exists already: delete it first.`);
+    const host = String(f.host ?? "")
+      .trim()
+      .toLowerCase();
+    if (!GIT_HOST.test(host)) return fail(GIT_HOST_WORDS);
     if (f.kind === "token") {
       const token = String(f.token ?? "").trim();
       if (!token || /\s/.test(token) || token.length > 4096)
@@ -211,6 +241,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         secret_sealed: opts.secrets.seal(token),
         hint: keyHint(token),
         username,
+        host,
         by: "owner:ui",
       });
       return c.redirect(
@@ -227,6 +258,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       secret_sealed: opts.secrets.seal(key.privateKey),
       hint: key.fingerprint.slice(-6),
       username: null,
+      host,
       by: "owner:ui",
     });
     return c.redirect(
@@ -238,6 +270,20 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     );
   };
   app.post("/ui/settings/git", async (c) => addGit(c, await c.req.parseBody()));
+  // The host a Git access is for, set by the owner: one that was made before accesses had one.
+  app.post("/ui/settings/git/:name/host", async (c) => {
+    const name = c.req.param("name");
+    const host = String((await c.req.parseBody()).host ?? "")
+      .trim()
+      .toLowerCase();
+    if (!GIT_HOST.test(host)) return c.redirect(settingsUrl("error", GIT_HOST_WORDS), 303);
+    return c.redirect(
+      store.gitAccess.setHost(name, host, "owner:ui")
+        ? settingsUrl("ok", `"${name}" is for ${host}: control uses it there, and nowhere else.`)
+        : settingsUrl("error", "No such Git access."),
+      303,
+    );
+  });
   // Reads a repository's branches with this access, as a rig would fetch it; nothing is kept.
   app.post("/ui/settings/git/:name/test", async (c) => {
     const name = c.req.param("name");
@@ -245,7 +291,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     if (!store.gitAccess.get(name))
       return c.redirect(settingsUrl("error", "No such Git access."), 303);
     try {
-      const found = await (opts.probeRepo ?? probeRepository)(url, "HEAD", accessFor(name));
+      const found = await (opts.probeRepo ?? probeRepository)(url, "HEAD", accessFor(name, url));
       return c.redirect(
         settingsUrl(
           "ok",
@@ -255,7 +301,10 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       );
     } catch (err) {
       const why = errorText(err);
-      return c.redirect(settingsUrl("error", `"${name}" could not read ${url}: ${why}`), 303);
+      return c.redirect(
+        settingsUrl("error", noted(`"${name}" could not read ${url}: ${why}`)),
+        303,
+      );
     }
   });
   app.post("/ui/settings/git/:name/token", async (c) => {
@@ -298,7 +347,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   });
   app.post("/ui/settings/providers", async (c) => saveProvider(c, await c.req.parseBody()));
   // MCP servers: their block on Providers, and its routes.
-  mountMcpUi(app, { store, servers: mcpServers, publicUrl: parts.publicUrl });
+  mountMcpUi(app, { store, servers: mcpServers, publicUrl: parts.publicUrl, noted });
   /**
    * A Claude subscription added or its token replaced: the token sealed, the fixed model list, and
    * no call to Anthropic (only Claude Code may use the token).
@@ -337,7 +386,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
     return c.redirect(
       settingsUrl(
         "ok",
-        `"${name}" is saved: its ${CLAUDE_MODELS.length} models run only in Claude Code. Choose one for a rig below.`,
+        `"${name}" is saved: its ${CLAUDE_MODELS.length} models run only in Claude Code. Choose one for a rig on Rigs' models.`,
       ),
       303,
     );
@@ -388,7 +437,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
         ? settingsUrl("error", `"${name}" is signed in, but ${listError}.`)
         : settingsUrl(
             "ok",
-            `"${name}" is signed in: its ${n} model${n === 1 ? "" : "s"} run in Pi, OpenCode v2 or Codex. Choose one for a rig below.`,
+            `"${name}" is signed in: its ${n} model${n === 1 ? "" : "s"} run in Pi, OpenCode v2 or Codex. Choose one for a rig on Rigs' models.`,
           ),
       303,
     );
@@ -452,7 +501,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
           )
         : settingsUrl(
             "ok",
-            `"${name}" is saved and lists ${listed} model${listed === 1 ? "" : "s"}. Choose one for a rig below.`,
+            `"${name}" is saved and lists ${listed} model${listed === 1 ? "" : "s"}. Choose one for a rig on Rigs' models.`,
           ),
       303,
     );
@@ -467,6 +516,27 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
       listError
         ? settingsUrl("error", `"${p.name}" ${listError}.`)
         : settingsUrl("ok", `"${p.name}" lists ${n} model${n === 1 ? "" : "s"}.`),
+      303,
+    );
+  });
+
+  // The note that a Claude subscription's usage credits are on, dismissed (goal 169): the chip
+  // stays, and the note comes back once Claude Code reports them on again after being off.
+  app.post("/ui/settings/providers/:name/credits-note/dismiss", async (c) => {
+    const p = store.modelProviders.get(c.req.param("name"));
+    if (!p) return c.redirect(settingsUrl("error", "No such provider."), 303);
+    const credits = p.type === "claude" ? (await parts.planUsage.of(p))?.credits : undefined;
+    if (!credits?.on)
+      return c.redirect(
+        settingsUrl("error", `Claude Code does not report usage credits on for "${p.name}".`),
+        303,
+      );
+    dismissCreditsNote(store, p.name, credits, "owner:ui");
+    return c.redirect(
+      settingsUrl(
+        "ok",
+        `The note for "${p.name}" is dismissed. The chip stays while its usage credits are on.`,
+      ),
       303,
     );
   });
@@ -493,7 +563,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
   app.post("/ui/settings/prices", async (c) => {
     const f = await c.req.parseBody();
     const back = (k: "ok" | "error", m: string) =>
-      c.redirect(`/ui/settings?at=prices&${k}=${encodeURIComponent(m)}#model-prices`, 303);
+      c.redirect(`/ui/settings/prices?${k}=${encodeURIComponent(m)}#model-prices`, 303);
     const owner = new Map(
       store.usage.prices().map((x) => [JSON.stringify([x.provider, x.model]), x.price]),
     );
@@ -589,7 +659,7 @@ export function providerRoutes(app: Hono, dash: Dashboard): void {
               follow: modelFollowUrl(rig),
             })
           : c.json(notSent(m), 400)
-        : c.redirect(settingsUrl(k, m), 303);
+        : c.redirect(settingsUrl(k, m, "routes"), 303);
     if (!store.reportedRigs.list().some((x) => x.id === rig))
       return answer("error", "No such rig.");
     if (!choice) {

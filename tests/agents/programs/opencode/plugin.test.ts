@@ -10,7 +10,7 @@ import {
   type OpencodePluginContext,
   thermitePlugin,
 } from "../../../../src/agents/programs/opencode/plugin.ts";
-import { opencodeSession } from "../../../../src/agents/programs/opencode/session-events.ts";
+import { opencodeSession } from "../../../../src/agents/programs/opencode/session.ts";
 
 /** The spike's recorded events of OpenCode 2.1.4, as a plugin got them (the README says how). */
 const EVENTS = join(

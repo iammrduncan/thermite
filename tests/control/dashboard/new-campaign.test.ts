@@ -99,17 +99,28 @@ describe("the new-campaign page", () => {
     assert.match(script, /j\.files \+ " file" \+ \(j\.files === 1 \? "" : "s"\)/);
 
     // The project is looked up by control; the page then shows what it found.
-    const probe = await s.get(
-      `/ui/campaigns/new/probe?${new URLSearchParams({ url: "https://git.example.com/team/fastmat.git", ref: "main" })}`,
+    // A POST with the form's token: a lookup may unseal a Git access, so no link can start one.
+    const asLink = `/ui/campaigns/new/probe?${new URLSearchParams({ url: "https://git.example.com/team/fastmat.git" })}`;
+    assert.equal((await s.get(asLink)).status, 404);
+    assert.equal(
+      (await s.post("/ui/campaigns/new/probe", { url: "https://git.example.com/team/fastmat.git" }))
+        .status,
+      403,
     );
+    const probe = await s.post("/ui/campaigns/new/probe", {
+      csrf: s.csrf,
+      url: "https://git.example.com/team/fastmat.git",
+      ref: "main",
+    });
     assert.deepEqual(await probe.json(), {
       commit: C,
       files: 1532,
       suggest: ["src/**", "src/kernels/**"],
     });
-    const refused = await s.get(
-      `/ui/campaigns/new/probe?${new URLSearchParams({ url: "https://git.example.com/private.git" })}`,
-    );
+    const refused = await s.post("/ui/campaigns/new/probe", {
+      csrf: s.csrf,
+      url: "https://git.example.com/private.git",
+    });
     assert.equal(refused.status, 400);
     assert.match(((await refused.json()) as { error: string }).error, /without a key/);
 
@@ -136,6 +147,35 @@ describe("the new-campaign page", () => {
         "campaign_version_created",
       ),
     );
+  });
+
+  test("every hidden-test field says what the judge checks on a hidden case", async () => {
+    const s = await stack();
+    const page = await (await s.get("/ui/campaigns/new")).text();
+    const tips = [
+      ...page.matchAll(
+        /<span class="lb">(Hidden tests?|The kit\S* cases)<i class="ii" tabindex="0" data-tip="([^"]+)">/g,
+      ),
+    ];
+    assert.deepEqual(
+      tips.map((m) => m[1]?.replace(/&#39;|&#x27;/, "'")),
+      ["Hidden test", "Hidden tests", "The kit's cases"],
+    );
+    for (const [, label, tip] of tips) {
+      assert.match(tip ?? "", /only to double-check a change that already looks better/, label);
+      assert.match(tip ?? "", /the change must still give correct output/, label);
+      assert.match(
+        tip ?? "",
+        /worse than the champion\S*s by no more than twice the margin the judge counts as no change/,
+        label,
+      );
+      assert.match(
+        tip ?? "",
+        /In a goal campaign, a goal checked on it must be met there too/,
+        label,
+      );
+      assert.doesNotMatch(tip ?? "", /win/, label);
+    }
   });
 
   test("Ideas kept ready (goal 081): a target, explained; in the contract; on the campaign's page", async () => {
@@ -254,7 +294,7 @@ describe("the new-campaign page", () => {
     const note = /<div class="nc-does" id="nc-past">([\s\S]*?)<\/div>/.exec(page)?.[1] ?? "";
     assert.match(note, /<a href="\/ui\/knowledge">Thermite's knowledge base<\/a>/);
     assert.match(note, /press <b>Save without starting<\/b>/);
-    assert.match(note, /add folders under <b>Can read from<\/b>/);
+    assert.match(note, /press <b>Open the collection<\/b> and add collections under <b>Reads<\/b>/);
     assert.match(note, /press <b>Start a run<\/b> and pick items under <b>From past research<\/b>/);
     // Saved without starting: the campaign's page has both, as the note says.
     const res = await s.post("/ui/campaigns/new", {
@@ -268,7 +308,10 @@ describe("the new-campaign page", () => {
     assert.equal(res.headers.get("location"), "/ui/campaigns/matmul-speed");
     const campaign = await (await s.get("/ui/campaigns/matmul-speed")).text();
     assert.match(campaign, /<div class="block" id="knowledge">/);
-    assert.match(campaign, /<h2>Can read from<\/h2>/);
+    assert.match(
+      campaign,
+      /<a class="btn sm" href="\/ui\/knowledge\/matmul-speed">Open the collection<\/a>/,
+    );
     assert.match(campaign, /From past research/);
     assert.equal(s.store.commands.list(10).filter((c) => c.kind === "assign_campaign").length, 0);
   });
@@ -291,6 +334,11 @@ describe("the new-campaign page", () => {
     assert.match(waiting, /Starting matmul-speed-try-1 on rig-a/);
     assert.ok(!waiting.includes("data-refresh"), "pages never reload by themselves");
     assert.match(waiting, /page from \d\d:\d\d:\d\d UTC<\/span><a href="" /);
+    // Every page's footer names the Thermite control runs, with its image's commit when it has one.
+    assert.match(
+      waiting,
+      /title="Control runs Thermite [^"]+"><span class="sub">control<\/span>v[0-9A-Za-z.+-]+/,
+    );
     assert.match(
       await (await s.get("/ui/campaigns/matmul-speed")).text(),
       /action="\/ui\/campaigns\/matmul-speed\/runs"/,
@@ -416,7 +464,7 @@ describe("the new-campaign page", () => {
     assert.match(script, /folder: folder\(\)/);
     const mono = "https://git.example.com/team/mono.git";
     const probe = (folder: string) =>
-      s.get(`/ui/campaigns/new/probe?${new URLSearchParams({ url: mono, ref: "main", folder })}`);
+      s.post("/ui/campaigns/new/probe", { csrf: s.csrf, url: mono, ref: "main", folder });
     // The lookup reads the folder: its files, and paths to suggest from its own top.
     assert.deepEqual(await (await probe("examples/matmul-cpu/project")).json(), {
       commit: C,

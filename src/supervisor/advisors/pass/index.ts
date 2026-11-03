@@ -6,7 +6,6 @@ import type { AdviseConfig, AdviseState } from "./state.ts";
 import { writeCards } from "./synthesizer.ts";
 import { teachRuns } from "./teachers.ts";
 
-export { kbSearchFor } from "./kb.ts";
 export { advisorKeeper } from "./keeper.ts";
 export { type AdviseConfig, type AdviseState, emptyAdviseState } from "./state.ts";
 export { overSpendLimit, teachersCalled } from "./teachers.ts";
@@ -24,10 +23,9 @@ export { overSpendLimit, teachersCalled } from "./teachers.ts";
  * advisor has run with them, the supervisor tells the harness which it was given and what it
  * answered, and the harness records the reads and the answers.
  *
- * The teachers, the auditor and the review panel may search the run's past research (the
- * folders its campaign may read in Thermite's knowledge base), read only, through the harness's
- * copy of the run's knowledge/: the same items the workers search. A teacher that may fetch any
- * web page gets no past research at all.
+ * The teachers, the auditor and the review panel search the run's past research in Thermite's
+ * knowledge base on control (kb_search and kb_read), within the run's scope: the same items the
+ * workers search. A teacher that may fetch any web page gets no past research at all.
  *
  * The teachers also read the run's code and evidence (goal 081, not in a research run) and its own
  * research (goal 098: its sources, claims, hypotheses, findings, notes and files), read only,
@@ -38,17 +36,24 @@ export { overSpendLimit, teachersCalled } from "./teachers.ts";
  * for the run's history. Advisors that may fetch any web page get no MCP server either.
  *
  * Each part of a pass is a module in pass/, which takes what it needs from the context the pass
- * makes at its start (pass/context.ts). They run in this order: the teachers, the auditor, the
- * synthesizer, the review panel, then the final writer.
+ * makes at its start (pass/context.ts). The teachers run beside the others, which run in this
+ * order: the auditor, the synthesizer, the review panel, then the final writer. So a long teacher
+ * round never holds an audit, and a confirmed win waits only for its own audit (goal 183).
  */
 export async function adviseOnce(cfg: AdviseConfig, state: AdviseState): Promise<AdviseState> {
   const ctx = adviseContext(cfg, state);
   const { next, now } = ctx;
-  await teachRuns(ctx);
-  await answerAudits(ctx);
-  await writeCards(ctx);
-  await answerReviews(ctx);
-  await writePapers(ctx);
+  const parts = await Promise.allSettled([
+    teachRuns(ctx),
+    (async () => {
+      await answerAudits(ctx);
+      await writeCards(ctx);
+      await answerReviews(ctx);
+      await writePapers(ctx);
+    })(),
+  ]);
+  // Both parts ended before the pass does: a failure of one is the pass's, as before.
+  for (const p of parts) if (p.status === "rejected") throw p.reason;
 
   // Old retry markers go after a week (an open audit's are renewed by each try or hand-off; a
   // closed audit's went above).

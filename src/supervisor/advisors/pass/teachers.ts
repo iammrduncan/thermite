@@ -56,11 +56,12 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
     now,
     domains,
     toolsFor,
-    pastSearchFor,
+    kbFor,
     codeFor,
     researchFor,
     configFor,
     keeperFor,
+    terminalFor,
     mcpFor,
     limit,
     overBudget,
@@ -128,14 +129,11 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
       try {
         const briefOf = () => harness.call(BRIEF, { query: { run: inst.id } });
         const brief = await briefOf();
-        // Teachers with an open web fetch get no records of other campaigns: past research and
-        // the briefing stay out of their brief (and its tool), as the knowledge-base search does.
+        // Teachers with an open web fetch get no records of other campaigns: the briefing stays
+        // out of their brief (and its tool), as the knowledge base's tools do.
         const openFetch = domains.includes("*");
-        const closed = <T extends { background?: unknown; past_research?: unknown }>(b: T): T => {
-          if (openFetch) {
-            delete b.background;
-            delete b.past_research;
-          }
+        const closed = <T extends { background?: unknown }>(b: T): T => {
+          if (openFetch) delete b.background;
           return b;
         };
         closed(brief);
@@ -180,6 +178,10 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
           research: inst.mode === "research",
           // The owner's additions to the teacher and the merged by model (goal 166).
           additions: inst.role_additions ?? undefined,
+          // Each teacher in its program's own terminal on a rig set so (goal 169).
+          terminal: terminalFor(inst.id, "teachers", given),
+          // The merged by model's own slot, under the same rule.
+          ...(openFetch ? {} : { mergedKb: await kbFor(inst.id, "merged_by") }),
           tools: {
             ...toolsFor(),
             // A research run has no code: its seed is a placeholder, with no repository on the
@@ -190,9 +192,9 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             ...(openFetch || !research ? {} : { research: researchFor(inst.id) }),
             // The run's MCP servers for its advisors (none with an open fetch: mcpFor says so).
             mcp: await mcpFor(inst.id),
-            // Teachers with an open fetch search no past research either.
-            // Only when the run has some: the brief says so in past_research.
-            ...(openFetch || !brief.past_research ? {} : { pastSearch: pastSearchFor(inst.id) }),
+            // Thermite's knowledge base (goal 175), from the run's scope; not for teachers with
+            // an open fetch, so private records and the open web never meet in one agent.
+            ...(openFetch ? {} : { kb: await kbFor(inst.id, "teachers") }),
             brief: async () => closed(await briefOf()),
           },
         });
@@ -206,13 +208,14 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             inst.id,
             r.review ? "text" : "status",
             r.review
-              ? `teacher ${r.teacher}: ${clip(r.review.summary, 400)}${recs.length ? ` Suggests: ${recs.map((x) => `${x.kind}${x.family ? ` ${x.family}` : ""}`).join(", ")}.` : ""}`
+              ? `teacher ${r.teacher}: ${clip(r.review.summary, 400)}${recs.length ? ` Suggests: ${recs.map((x) => `${x.kind}${x.direction ? ` ${x.direction}` : ""}`).join(", ")}.` : ""}`
               : `teacher ${r.teacher} gave no review: ${clip(r.error ?? "", 300)}`,
           );
         }
-        // The teachers that reviewed had the owner's messages in their brief: they read them.
+        // The teachers that reviewed had the owner's messages in their brief: they read them; and
+        // those their terminals took inside their turns (goal 169).
         if (run.reviews.some((r) => r.review))
-          await receipts(inst.id, "teachers", given, run.answers);
+          await receipts(inst.id, "teachers", [...new Set([...given, ...run.given])], run.answers);
         // Teachers' opportunities the merged by model left out, kept by code (goal 081).
         if (run.kept.length)
           say(inst.id, "status", `the teachers' portfolio: ${run.kept.join("; ")}`);
@@ -233,7 +236,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
             `directives for the planner: ${run.directives
               .map(
                 (d) =>
-                  `${d.kind}${d.family ? ` ${d.family}` : ""}${d.value !== undefined ? ` ${String(d.value)}` : ""} (why: ${clip(d.rationale, 200)})`,
+                  `${d.kind}${d.direction ? ` ${d.direction}` : ""}${d.value !== undefined ? ` ${String(d.value)}` : ""} (why: ${clip(d.rationale, 200)})`,
               )
               .join(
                 "; ",
@@ -252,7 +255,7 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
         // Then each teacher's (and the merged by model's) field notes, once the round's work is posted.
         const noted: unknown[] = [];
         for (const j of run.journal) noted.push(await notesOut(inst.id, "teachers", j.by, j.notes));
-        record(`teachers-${inst.id}`, { ...run, posted, queued, noted });
+        record(`teachers-${inst.id}`, { ...run, posted, queued, noted }, inst.id);
       } catch (err) {
         fail(`teachers for ${inst.id}`, err, inst.id);
       }

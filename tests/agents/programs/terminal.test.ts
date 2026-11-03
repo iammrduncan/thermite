@@ -69,6 +69,9 @@ describe("each program in its own terminal", () => {
     assert.ok(settings.hooks.Stop, "the trial's hooks stay");
     assert.equal(settings.skipDangerousModePermissionPrompt, true);
     assert.equal(settings.autoContinueAtUsageLimit, true);
+    // Its status line is Thermite's hook program, for a subscription's usage windows (goal 183).
+    assert.equal(settings.statusLine.type, "command");
+    assert.match(settings.statusLine.command, /main\.ts' 'claude-code-status'$/);
     const [seed] = claudeTerminalSeeds("/area/claude-home", "/area/repo", "2.1.308");
     assert.equal(seed?.path, "/area/claude-home/.claude.json");
     assert.equal(seed?.mode, 0o600);
@@ -137,6 +140,11 @@ describe("each program in its own terminal", () => {
   test("each program is interrupted and ended by named keys and text only, never Ctrl+C", () => {
     assert.ok(!(TERMINAL_KEYS as readonly string[]).includes("ctrl-c"));
     for (const [program, p] of Object.entries(TERMINAL_PROFILES)) {
+      // The Pi view takes its interrupt over the trial's routes and ends by SIGTERM: no steps.
+      if (program === "pi") {
+        assert.deepEqual(p, { interrupt: [], end: [] });
+        continue;
+      }
       assert.ok(p.interrupt.length && p.end.length, program);
       for (const step of [...p.interrupt, ...p.end])
         if ("keys" in step)

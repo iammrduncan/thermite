@@ -4,32 +4,43 @@ import { windowFit } from "../../../agents/roles/index.ts";
 import { LenientNotes, type NoteInput } from "../../../core/journal.ts";
 import type { OwnerAddition } from "../../../core/role-additions.ts";
 import type { CallUsage } from "../../../core/usage.ts";
+import { planJson } from "../cli/index.ts";
 import { causeOf, causeWords, PlannerCallError, type PlanTry } from "./causes.ts";
-import type { PlannerPast } from "./context.ts";
 import { callPlanner, type PlannerCompaction, type PlannerMcp } from "./pi.ts";
 import type { PlannerCallSpec } from "./submit.ts";
 
 /**
- * A planner call, in Pi (pi.ts) or through another harness (askPlanner): its tries, each answer
- * checked, and why each try gave no plan.
+ * A planner call, in Pi (pi.ts, or its own process: view.ts) or through another harness
+ * (askPlanner): its tries, each answer checked, and why each try gave no plan.
  */
 
 /**
  * A planner call through another harness (OpenCode, Claude Code, Codex): the prompt in, the model's
- * answer out. `read`: a folder the planner may read and search (its past research), read only.
+ * answer out.
  */
 export type Ask = ((
   prompt: string,
   signal?: AbortSignal,
   o?: {
-    read?: string | undefined;
     /** The MCP servers it may call (goal 068), by name, at the harness's gateway. */
     mcp?: string[] | undefined;
+    /** Thermite's own server too, with the knowledge base's tools (goal 175). */
+    kb?: boolean | undefined;
   },
 ) => Promise<string>) & {
   /** The program it asks through (its prompt names it); none: a program like OpenCode. */
   program?: string | undefined;
 };
+
+/**
+ * The planner in Pi in a process of its own, in its Pi view (goal 169; view.ts): its prompt and its
+ * call's spec in, submit_plan's arguments out, or a PlannerCallError that says why it gave none.
+ */
+export type PlannerView = (
+  sent: Prompt,
+  spec: PlannerCallSpec,
+  signal?: AbortSignal,
+) => Promise<unknown>;
 
 /** What the tries of a planner call gave: the checked plan, or why each try gave none. */
 export interface PlannerTries<T> {
@@ -58,7 +69,8 @@ export async function plannerTries<T>(o: {
   check: (raw: unknown) => { errors: string[]; plan?: T | undefined };
   signal?: AbortSignal | undefined;
   ask?: Ask | undefined;
-  past?: PlannerPast | undefined;
+  /** In Pi, in its own process and its Pi view, on a rig whose agents run in their terminal. */
+  view?: PlannerView | undefined;
   mcp?: PlannerMcp | undefined;
   compaction?: PlannerCompaction | undefined;
   usage?: ((u: CallUsage) => void) | undefined;
@@ -81,8 +93,8 @@ export async function plannerTries<T>(o: {
       program: o.ask ? (o.ask.program ?? o.model.harness ?? "opencode") : "pi",
       context: o.context,
       refused,
-      read: o.ask ? o.past?.dir : undefined,
       mcpServers: o.ask ? (o.mcp?.servers ?? []) : o.mcp?.tools.length ? o.mcp.servers : [],
+      kbWrites: o.mcp?.kb?.writes,
       // Cut to the model's window, when the route says it (decision 8).
       fit: windowFit(o.model.contextWindow, o.model.compactAt),
       addition: o.addition,
@@ -91,18 +103,17 @@ export async function plannerTries<T>(o: {
     let raw: unknown;
     try {
       raw = o.ask
-        ? await askPlanner(o.ask, sent, o.signal, o.past?.dir, o.mcp?.servers)
-        : await callPlanner(
-            o.model,
-            sent,
-            o.signal,
-            o.past?.search,
-            o.mcp,
-            o.compaction,
-            o.usage,
-            o.spec,
-            o.sent,
-          );
+        ? await askPlanner(o.ask, sent, o.signal, o.mcp?.servers, o.mcp?.kb !== undefined)
+        : o.view
+          ? await o.view(sent, o.spec, o.signal)
+          : await callPlanner(o.model, sent, {
+              signal: o.signal,
+              mcp: o.mcp,
+              compaction: o.compaction,
+              usage: o.usage,
+              spec: o.spec,
+              kept: o.sent,
+            });
     } catch (err) {
       const why = err instanceof PlannerCallError ? err : causeOf(err);
       causes.push({ try: tries, cause: why.planCause, detail: why.message.slice(0, 600) });
@@ -120,32 +131,24 @@ export async function plannerTries<T>(o: {
   return { tries: 2, causes, rawViolations, journal };
 }
 
-/**
- * The planner through another harness: its prompt, with the plan as JSON text. With past
- * research, it may read and search the run's knowledge/ folder first, read only.
- */
+/** The planner through another harness: its prompt, with the plan as JSON text. */
 async function askPlanner(
   ask: Ask,
   sent: Prompt,
   signal?: AbortSignal,
-  read?: string,
   mcp?: string[],
+  kb?: boolean,
 ): Promise<unknown> {
   const text = await ask(
     messageText(sent),
     signal,
-    read || mcp?.length
-      ? { ...(read ? { read } : {}), ...(mcp?.length ? { mcp } : {}) }
-      : undefined,
+    mcp?.length || kb ? { ...(mcp?.length ? { mcp } : {}), ...(kb ? { kb } : {}) } : undefined,
   );
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1];
-  const body = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
-  try {
-    return JSON.parse(body);
-  } catch {
+  const plan = planJson(text);
+  if (plan === undefined)
     throw new PlannerCallError(
       "text_only",
       `the planner's answer was not a JSON plan: ${text.slice(0, 200)}`,
     );
-  }
+  return plan;
 }

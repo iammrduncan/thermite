@@ -122,7 +122,8 @@ const text = (r: unknown) =>
   ((r as { content: { text: string }[] }).content[0] as { text: string }).text;
 const json = async <T>(r: Response) => (await r.json()) as T;
 /** The page's left navigation. */
-const sidebar = (html: string) => /<aside class="sidebar">[\s\S]*?<\/aside>/.exec(html)?.[0] ?? "";
+const sidebar = (html: string) =>
+  /<aside class="sidebar"[^>]*>[\s\S]*?<\/aside>/.exec(html)?.[0] ?? "";
 
 describe("Archive a campaign over REST (goal 077)", () => {
   test("refused in words while a run is at work or waits to start; a paused one is archived, starts no run, and is unarchived", async () => {

@@ -1,3 +1,4 @@
+import { redact } from "../../common/log.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
@@ -137,7 +138,7 @@ export class Machines extends StorePart {
     else
       this.db
         .prepare("update machine set checked_at = ?, check_error = ? where name = ?")
-        .run(new Date().toISOString(), r.error, name);
+        .run(new Date().toISOString(), redact(r.error), name);
   }
 
   /** The owner's yes to one install: one recipe's exact script on one machine, used once. */

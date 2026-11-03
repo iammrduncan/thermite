@@ -30,7 +30,7 @@ Answer these in order, and stop at the first yes:
 Some work fits two modes:
 
 - **A number with a line to reach:** a goal campaign whose goal is a measured threshold, such as a number of items per second, ends once the judge confirms that the line is crossed. A hill climb keeps going past it.
-- **Read first, then change the code:** run a research campaign, then let a hill climb or a goal campaign read its folder in Thermite's knowledge base. That campaign's agents can then search what the research found. See [Use past research in a new run](use-past-research.md).
+- **Read first, then change the code:** run a research campaign, then let a hill climb or a goal campaign read its collection in Thermite's knowledge base. That campaign's agents can then search what the research found. See [Use past research in a new run](use-past-research.md).
 
 ## 2. Set the mode
 
@@ -60,6 +60,6 @@ On **Campaigns**, the campaign's name is followed by its mode: `hill climb`, `go
 
 To see each mode at work first:
 
-- A hill climb: [Hand the work to agents](../../tutorials/agents-with-a-free-model.md), on the sample project, and [Your own project](../../tutorials/your-own-project.md), on a project of yours.
+- A hill climb: [Run your first campaign](../../tutorials/agents-with-a-free-model.md), on the sample project, and [Your own project](../../tutorials/your-own-project.md), on a project of yours.
 - A goal campaign: [Your first goal campaign](../../tutorials/first-goal-campaign.md), with no model.
 - A research campaign: [Write a research campaign](write-a-contract.md#4-write-a-research-campaign), then start it from the dashboard or the command line.

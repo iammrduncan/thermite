@@ -63,10 +63,10 @@ async function setup(
         {
           name: "submit_plan",
           args: {
-            new_families: [{ id: "speed", description: "make the sum faster" }],
+            new_directions: [{ id: "speed", description: "make the sum faster" }],
             assignments: o.refuse?.()
               ? []
-              : [{ lane: "lane-1", family: "speed", focus: "go faster", parent: "champion" }],
+              : [{ lane: "lane-1", direction: "speed", focus: "go faster", parent: "champion" }],
           },
         },
       ],
@@ -211,6 +211,7 @@ describe("a research run's rounds", () => {
       env.sign("message_agent", { run: "r-1", to: "all", text: "prefer primary sources" }),
     );
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const briefs: string[] = [];

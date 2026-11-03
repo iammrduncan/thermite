@@ -1,13 +1,11 @@
+import type { CliProgram, CliRun, CliTally, MessageInbox } from "../../../agents/cli/index.ts";
 import { tallyDifferences } from "../../../agents/programs/index.ts";
 import { errorText } from "../../../common/errors.ts";
 import { log, logDebug, logWarn } from "../../../common/log.ts";
 import type { LaneLimitValues } from "../../../core/contract.ts";
-import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, RunOutcome } from "../../broker/index.ts";
-import type { MessageInbox } from "../live-session.ts";
 import type { ProgramStep } from "../provider-errors.ts";
 import type { TrialResult } from "../worker/index.ts";
-import type { CliProgram, CliRun, CliTally } from "./program.ts";
 
 /**
  * What the trial loops of the agent programs that run as command-line programs (OpenCode,
@@ -99,14 +97,6 @@ export class CarriedMessages {
   }
 }
 
-/** Hands the usage the tally gathered to `usage`, once each (goal 075). */
-export function takeUsage(
-  t: { calls: CallUsage[] },
-  usage: ((u: CallUsage) => void) | undefined,
-): void {
-  for (const u of t.calls.splice(0)) usage?.(u);
-}
-
 /**
  * Compares a program's own session log with what its output said, once at a trial's end, where
  * its entry can read one (goal 169): a log line names each count that differs and each kind of
@@ -123,7 +113,7 @@ export function compareSessionLog<T extends CliTally>(
     const read = p.sessionLog(run, tally);
     if (!read) return;
     const differ = tallyDifferences(tally, read.tally);
-    const fields = { trial: run.trialId, program: p.id, session: tally.session };
+    const fields = { trial: run.id, program: p.id, session: tally.session };
     if (!Object.keys(differ).length && !read.unknown.size) {
       logDebug("harness", `${p.name}'s session log agrees with its output`, fields);
       return;
@@ -135,7 +125,7 @@ export function compareSessionLog<T extends CliTally>(
     });
   } catch (err) {
     logWarn("harness", `could not compare ${p.name}'s session log with its output`, {
-      trial: run.trialId,
+      trial: run.id,
       program: p.id,
       error: errorText(err),
     });

@@ -9,7 +9,9 @@ export {
   claudeMcpConfig,
   gatewayUrl,
   type McpAccess,
+  type McpForAgent,
   mcpAgentTools,
   mcpLine,
   opencodeMcp,
+  servedNames,
 } from "./tools.ts";

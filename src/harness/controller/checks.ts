@@ -1,11 +1,13 @@
-import { join } from "node:path";
 import { programOf } from "../agents/index.ts";
 import {
   busyReason,
+  clusterApi,
   isolationBusy,
   isolationSelftest,
   isolationSummary,
   oneContainerTargets,
+  readSupervisorIsolation,
+  rigSecretFiles,
 } from "../selftest/index.ts";
 import type { HarnessService } from "../service/index.ts";
 import { checksDir, smokeCheck } from "../smoke-check.ts";
@@ -21,7 +23,7 @@ import type { ControllerContext } from "./context.ts";
 
 /** The isolation selftest, under the broker only. */
 export function addIsolationCheck(ctx: ControllerContext, service: HarnessService): void {
-  const { env, paths, routeFile } = ctx;
+  const { env, paths } = ctx;
   if (env.THERMITE_BROKER_SOCKET) {
     const socketPath = env.THERMITE_BROKER_SOCKET;
     service.rigChecks.isolation = {
@@ -35,19 +37,15 @@ export function addIsolationCheck(ctx: ControllerContext, service: HarnessServic
           // paths.scratchDir, is a directory inside it).
           scratchDir: env.THERMITE_SCRATCH_DIR ?? "/scratch",
           outboxDir: paths.outboxDir,
-          secretFiles: [
-            routeFile,
-            env.THERMITE_SUPERVISOR_TOKEN_FILE,
-            env.THERMITE_PROPOSER_TOKEN_FILE,
-            env.THERMITE_MODEL_API_KEY_FILE,
-            // In one container with the supervisor (pull mode): the keys its tunnel signs with.
-            env.THERMITE_TUNNEL_DIR ? join(env.THERMITE_TUNNEL_DIR, "keys.json") : undefined,
-          ].filter((f): f is string => Boolean(f)),
+          inboxDir: paths.inboxDir,
+          secretFiles: rigSecretFiles(env, paths.stateDir),
           dedicated: env.THERMITE_DEV_GPU_INDEX !== undefined,
           force,
           controllerPid: process.pid,
           oneContainer: oneContainerTargets(env),
           snapshotDir: env.THERMITE_STATE_SNAPSHOT_DIR || undefined,
+          clusterApi: clusterApi(env),
+          supervisor: readSupervisorIsolation(paths.stateDir),
         });
         return { ok: report.ok, summary: isolationSummary(report), detail: { ...report } };
       },

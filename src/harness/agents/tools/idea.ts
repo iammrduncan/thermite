@@ -10,7 +10,7 @@ import { errorText } from "../../../common/errors.ts";
 export interface IdeaInput {
   title: string;
   why?: string | undefined;
-  family?: string | undefined;
+  direction?: string | undefined;
   details?: string | undefined;
   /** A research task's question, an index from 0 (goal 117). */
   question?: number | undefined;
@@ -24,7 +24,7 @@ export const IDEA_TOOL = {
   parameters: Type.Object({
     title: Type.String({ description: "What to try, in a few words" }),
     why: Type.Optional(Type.String({ description: "Why it is worth trying" })),
-    family: Type.Optional(Type.String({ description: "Its direction (approach family)" })),
+    direction: Type.Optional(Type.String({ description: "Its direction" })),
     details: Type.Optional(Type.String({ description: "How, if it needs saying" })),
     question: Type.Optional(
       Type.Number({
@@ -50,7 +50,7 @@ export async function proposeIdea(
     const out = await idea({
       title,
       why: str("why", 2000),
-      family: str("family", 80),
+      direction: str("direction", 80),
       details: str("details", 4000),
       ...(typeof p.question === "number" ? { question: p.question } : {}),
     });

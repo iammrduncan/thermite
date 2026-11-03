@@ -1,6 +1,9 @@
+import { currentContract } from "./names.ts";
+
 /**
  * A campaign's brief (goal 078): what its author tells the agents beyond the objective, kept in
- * its contract. The additional information (`notes`: Markdown, with no length limit), the
+ * its contract. The additional information (`additional_information`: Markdown, with no length
+ * limit; `notes` in a contract written before v0.1.1, core/names.ts), the
  * starting links (`links` in a hill climb or goal, a research contract's `seeds`), the ideas to
  * try (hill climb and goal) and the hypotheses. The agents weigh it; it is never a rule: the
  * objective, the judge and the owner's messages decide.
@@ -19,7 +22,7 @@
 
 export interface Brief {
   /** The additional information, in Markdown; "" when none. */
-  notes: string;
+  additional_information: string;
   /** The starting links: a hill climb's or goal's `links`, a research contract's `seeds`. */
   links: string[];
   ideas: string[];
@@ -47,8 +50,8 @@ const isResearch = (contract: unknown) =>
 
 /** The brief in a contract (or in anything with its fields), or undefined when it has none. */
 export function briefOf(contract: unknown): Brief | undefined {
-  const c = (contract ?? {}) as {
-    notes?: unknown;
+  const c = (currentContract(contract) ?? {}) as {
+    additional_information?: unknown;
     links?: unknown;
     seeds?: unknown;
     ideas?: unknown;
@@ -60,12 +63,17 @@ export function briefOf(contract: unknown): Brief | undefined {
       : [];
   const b: Brief = {
     // Blank lines at either end go; the text's own indentation stays.
-    notes: typeof c.notes === "string" ? c.notes.replace(/^(?:[ \t]*\n)+/, "").trimEnd() : "",
+    additional_information:
+      typeof c.additional_information === "string"
+        ? c.additional_information.replace(/^(?:[ \t]*\n)+/, "").trimEnd()
+        : "",
     links: list(isResearch(contract) ? c.seeds : c.links),
     ideas: list(c.ideas),
     hypotheses: list(c.hypotheses),
   };
-  return b.notes || b.links.length || b.ideas.length || b.hypotheses.length ? b : undefined;
+  return b.additional_information || b.links.length || b.ideas.length || b.hypotheses.length
+    ? b
+    : undefined;
 }
 
 /** A numbered entry; its further lines indented under it. */
@@ -74,7 +82,7 @@ const entry = (n: number, s: string) => `${n}. ${s.replace(/\n/g, "\n   ")}`;
 /** The brief as Markdown: BRIEF.md's body and a trial brief's section. */
 export function briefMarkdown(b: Brief, research = false): string {
   return [
-    b.notes ? `## Additional information\n\n${b.notes}` : "",
+    b.additional_information ? `## Additional information\n\n${b.additional_information}` : "",
     b.links.length
       ? `## Starting links\n\n${research ? "The harness fetches and archives these when the run starts: read them under sources/.\n\n" : "Nothing fetched these yet: fetch one when you need it, and the harness archives it.\n\n"}${b.links.map((x) => `- ${x}`).join("\n")}`
       : "",
@@ -110,12 +118,12 @@ export function briefSection(contract: unknown, file: string): string | undefine
 }
 
 /** The parts of a brief a copy or the command line may give, as the request names them. */
-export const BRIEF_PARTS = ["notes", "links", "ideas", "hypotheses"] as const;
+export const BRIEF_PARTS = ["additional_information", "links", "ideas", "hypotheses"] as const;
 
 /** Parts of a brief to put in a contract: each one given replaces the contract's. */
 export interface BriefChange {
   /** The additional information; "" or null: none. */
-  notes?: string | null | undefined;
+  additional_information?: string | null | undefined;
   /** The starting links: a research contract's seeds. []: none. */
   links?: string[] | undefined;
   /** []: none. */
@@ -127,20 +135,21 @@ export interface BriefChange {
 /**
  * A contract with the brief's parts given (a copy's, or the command line's over a contract file):
  * each replaces the contract's, entries trimmed and empty ones left out, and an empty part removes
- * it. The links are a research contract's seeds. Refused in words: ideas to try for a research
+ * it. The result is a new contract, under the new names (core/names.ts). The links are a research contract's seeds. Refused in words: ideas to try for a research
  * campaign. The contract check then refuses a link that is not an address.
  */
 export function briefChange(
   contract: object,
   change: BriefChange,
 ): Record<string, unknown> | string {
-  const out: Record<string, unknown> = { ...(contract as Record<string, unknown>) };
+  const out: Record<string, unknown> = { ...currentContract(contract as Record<string, unknown>) };
   const research = out.mode === "research";
   if (change.ideas !== undefined && research)
     return "Ideas to try are for hill-climb and goal campaigns. A research campaign has questions and hypotheses.";
-  if (change.notes !== undefined) {
-    delete out.notes;
-    if (change.notes?.trim()) out.notes = change.notes;
+  if (change.additional_information !== undefined) {
+    delete out.additional_information;
+    if (change.additional_information?.trim())
+      out.additional_information = change.additional_information;
   }
   for (const k of ["links", "ideas", "hypotheses"] as const) {
     const given = change[k];
@@ -167,7 +176,7 @@ export function briefData(contract: unknown): BriefData | undefined {
   if (!b) return undefined;
   return {
     note: BRIEF_IS,
-    ...(b.notes ? { additional_information: b.notes } : {}),
+    ...(b.additional_information ? { additional_information: b.additional_information } : {}),
     ...(b.links.length ? { starting_links: b.links } : {}),
     ...(b.ideas.length ? { ideas_to_try: b.ideas } : {}),
     ...(b.hypotheses.length ? { hypotheses: b.hypotheses } : {}),

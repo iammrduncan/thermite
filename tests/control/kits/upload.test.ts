@@ -93,4 +93,85 @@ describe("a kit uploaded on the new-campaign page", () => {
     assert.equal(z.kit.name, "smoke-cpu");
     assert.ok(!Object.keys(z.files).some((p) => p.startsWith("__MACOSX")));
   });
+  test("links, paths that leave the kit and archives that unpack too large are refused before anything is kept", async () => {
+    const kitJson = readFileSync(join(smoke, "kit.json"));
+    // A tar written entry by entry, as a hostile one may be.
+    const header = (name: string, type: string, size = 0, link = "") => {
+      const h = Buffer.alloc(512);
+      h.write(name, 0, 100);
+      h.write("0000644\0", 100);
+      h.write(`${size.toString(8).padStart(11, "0")}\0`, 124);
+      h.write(type, 156);
+      h.write(link, 157, 100);
+      h.write("ustar\u000000", 257);
+      h.write("        ", 148);
+      const sum = h.reduce((a, b) => a + b, 0);
+      h.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148);
+      return h;
+    };
+    const file = (name: string, body: Buffer) =>
+      Buffer.concat([
+        header(name, "0", body.length),
+        body,
+        Buffer.alloc((512 - (body.length % 512)) % 512),
+      ]);
+    const tar = (...parts: Buffer[]) => Buffer.concat([...parts, Buffer.alloc(1024)]);
+    const ok = tar(file("kit.json", kitJson));
+    assert.equal((await unpackKit("kit.tar", ok)).kit.name, "smoke-cpu");
+    // A link, then a file through it: refused at the link, so nothing is written anywhere.
+    await assert.rejects(
+      unpackKit(
+        "a.tar",
+        tar(
+          file("kit.json", kitJson),
+          header("out", "2", 0, "/etc"),
+          file("out/passwd", Buffer.from("x")),
+        ),
+      ),
+      /^Error: out is a link: a kit holds only files$/,
+    );
+    await assert.rejects(
+      unpackKit("b.tar", tar(file("kit.json", kitJson), header("hard", "1", 0, "kit.json"))),
+      /hard is a link/,
+    );
+    await assert.rejects(
+      unpackKit("c.tar", tar(file("kit.json", kitJson), file("../escape", Buffer.from("x")))),
+      /\.\.\/escape leads out of the kit/,
+    );
+    await assert.rejects(
+      unpackKit("d.tar", tar(file("kit.json", kitJson), file("/etc/cron.d/x", Buffer.from("x")))),
+      /\/etc\/cron\.d\/x leads out of the kit/,
+    );
+    await assert.rejects(
+      unpackKit("e.tar", tar(file("kit.json", kitJson), header("dev", "3"))),
+      /dev is not a file or a folder/,
+    );
+    await assert.rejects(
+      unpackKit("f.tar", ok.subarray(0, 600)),
+      /^Error: control could not unpack f\.tar: it ends inside an entry$/,
+    );
+    // A zip that says it unpacks to 300 MiB is refused before anything is inflated; one whose
+    // entry inflates to more than it says is damaged.
+    const dir = mkdtempSync(join(tmpdir(), "thermite-up-"));
+    writeFileSync(join(dir, "kit.json"), kitJson);
+    execFileSync("zip", ["-q", join(dir, "kit.zip"), "kit.json"], { cwd: dir });
+    const zip = readFileSync(join(dir, "kit.zip"));
+    const central = zip.readUInt32LE(zip.length - 22 + 16);
+    const bomb = Buffer.from(zip);
+    bomb.writeUInt32LE(300 * 1024 * 1024, central + 24);
+    await assert.rejects(
+      unpackKit("bomb.zip", bomb),
+      /^Error: control could not unpack bomb\.zip: it unpacks to more than 256 MiB$/,
+    );
+    const lies = Buffer.from(zip);
+    lies.writeUInt32LE(10, central + 24);
+    await assert.rejects(unpackKit("lies.zip", lies), /kit\.json is damaged/);
+    // A zip that keeps a link as a link.
+    symlinkSync("/etc/passwd", join(dir, "secret"));
+    execFileSync("zip", ["-qy", join(dir, "link.zip"), "kit.json", "secret"], { cwd: dir });
+    await assert.rejects(
+      unpackKit("link.zip", readFileSync(join(dir, "link.zip"))),
+      /secret is a link/,
+    );
+  });
 });

@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 import { errorText } from "../../common/errors.ts";
 import { thermiteAgents } from "./agents.ts";
+import { thermiteBackup, thermiteRestore } from "./backup.ts";
+import { thermiteBus } from "./bus.ts";
 import { thermiteCampaign, thermiteRun } from "./campaigns.ts";
+import { thermiteInvalidate } from "./evidence.ts";
+import { thermiteExports } from "./exports.ts";
+import { sourceInstead } from "./fresh.ts";
 import { thermiteAssign, thermiteAssignPayload, thermiteCommand } from "./issue.ts";
+import { thermiteKb } from "./kb.ts";
 import { thermiteKit } from "./kits.ts";
 import {
   thermiteContract,
@@ -12,8 +18,10 @@ import {
   thermiteSelftest,
   thermiteToken,
 } from "./local.ts";
+import { thermiteLogLevel } from "./log-level.ts";
 import { thermiteMcp } from "./mcp.ts";
 import { thermiteStatus, thermiteSubmit } from "./proposer.ts";
+import { thermiteRetention } from "./retention.ts";
 import { thermiteRig } from "./rigs.ts";
 import { thermiteRunpod } from "./runpod.ts";
 import { fail } from "./shared.ts";
@@ -21,17 +29,15 @@ import { USAGE } from "./usage.ts";
 
 /**
  * The thermite command line: the machine's checks, contract checks, key generation, issuing
- * commands through control, and the scripted proposer's submit/status calls against a harness.
+ * commands through control, the scripted proposer's submit/status calls against a harness, and
+ * control's backup and restore.
  * Each command is a function in a module of thermite/, and the usage text is thermite/usage.ts.
  */
 
 export { formatMcpServers } from "./mcp.ts";
 
 async function main(argv: string[]): Promise<void> {
-  // --instance and --unit are the flags' names before the 2026-10-15 rename: still read.
-  const [cmd, ...rest] = argv.map((a) =>
-    a.replace(/^--instance(?==|$)/, "--run").replace(/^--unit(?==|$)/, "--rig"),
-  );
+  const [cmd, ...rest] = argv;
   switch (cmd) {
     case "doctor":
       return thermiteDoctor(rest);
@@ -55,12 +61,24 @@ async function main(argv: string[]): Promise<void> {
       return thermiteCampaign(rest);
     case "kit":
       return thermiteKit(rest);
+    case "kb":
+      return thermiteKb(rest);
     case "agents":
       return thermiteAgents(rest);
     case "mcp":
       return thermiteMcp(rest);
+    case "exports":
+      return thermiteExports(rest);
+    case "retention":
+      return thermiteRetention(rest);
+    case "bus":
+      return thermiteBus(rest);
+    case "log-level":
+      return thermiteLogLevel(rest);
     case "command":
       return thermiteCommand(rest);
+    case "invalidate":
+      return thermiteInvalidate(rest);
     case "submit":
       return thermiteSubmit(rest);
     case "status":
@@ -69,10 +87,15 @@ async function main(argv: string[]): Promise<void> {
       return thermiteLocal(rest);
     case "selftest":
       return thermiteSelftest(rest);
+    case "backup":
+      return thermiteBackup(rest);
+    case "restore":
+      return thermiteRestore(rest);
     default:
       process.stdout.write(USAGE);
       if (cmd && cmd !== "help" && cmd !== "--help") process.exit(2);
   }
 }
 
-main(process.argv.slice(2)).catch((err) => fail(errorText(err)));
+// A checkout's build older than its source runs the source instead (fresh.ts).
+if (!(await sourceInstead())) main(process.argv.slice(2)).catch((err) => fail(errorText(err)));

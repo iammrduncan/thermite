@@ -183,7 +183,7 @@ describe("the advisors' context window and compaction (goal 070)", () => {
       // Two searches of past research, the second reply's usage past 80% of 16,384 (13,107).
       if (replies <= 2)
         return {
-          toolCalls: [{ name: "search_past_research", args: { query: `tiling ${replies}` } }],
+          toolCalls: [{ name: "kb_search", args: { query: `tiling ${replies}` } }],
           usage: { prompt: [3000, 14_000][replies - 1] as number, completion: 40 },
         };
       return { toolCalls: [{ name: "answer", args: { pass: true, reasons: "fine" } }] };
@@ -194,7 +194,12 @@ describe("the advisors' context window and compaction (goal 070)", () => {
         prompt: testPrompt("Grade it.", "The deliverable."),
         schema: z.strictObject({ pass: z.boolean(), reasons: z.string() }),
         answerSchema: Type.Object({ pass: Type.Boolean(), reasons: Type.String() }),
-        tools: { pastSearch: async (q) => ({ items: [{ text: `${q}: ${"w ".repeat(3000)}` }] }) },
+        tools: {
+          kb: {
+            writes: [],
+            call: async (_tool, a) => ({ text: `${String(a.query)}: ${"w ".repeat(3000)}` }),
+          },
+        },
         keeper,
       });
       assert.ok(r.output, r.error);
@@ -215,7 +220,7 @@ describe("the advisors' context window and compaction (goal 070)", () => {
     const md = readFileSync(join(dir, String(file)), "utf8");
     assert.match(md, /^# Advisor panel-1: the conversation before compaction 1/);
     assert.match(md, /The deliverable\./);
-    assert.match(md, /Tool result: search_past_research/);
+    assert.match(md, /Tool result: kb_search/);
     // The call after it: the package, the summary naming where it is kept, the newest turns.
     const after = agentCalls.at(-1) as Sent;
     const users = after.filter((m) => m.role === "user").map(textOf);

@@ -98,6 +98,7 @@ The design invariants and the [rules for every goal](docs/plan/README.md#rules-f
 ### Dead code and loose ends
 
 - Remove what nothing uses: functions, exports, files, scripts, settings and dependencies. Git keeps the history.
+- `npm run check` finds two loose ends: an export of `src/` that no other file names, and a path in a comment or a page that names no file. Today's are listed in `scripts/loose-ends.json`, and the list only shrinks.
 - Don't commit code that is commented out, or a placeholder that looks finished. An unfinished part says so, and its goal records it.
 - Each suppression, such as `biome-ignore`, `@ts-expect-error` or a skipped test, states its reason next to it. A test that is switched off also names the goal that brings it back.
 - A new module follows the patterns of the modules around it, unless the change replaces that pattern everywhere.
@@ -141,7 +142,7 @@ These rules give the code one shape, so a reader knows where a thing lives befor
 
 - **A wire contract has one home.** Each body that crosses a process boundary has one schema in `core`: a route's request and answer, a signed command, an event, a file that one container hands to another, an environment variable. Route paths and limits are named constants beside it.
 - **Event kinds are constants with schemas.** A new kind goes into `core/events/` with the schema of its body, and `appendEvent` takes it typed.
-- **One name map.** Where a public name differs from a stored or wire name, the mapping lives in `core/names.ts` or in the module that owns the word, never in a caller. v0.1.1 keeps no old names: it breaks compatibility with v0.1.0, and older ledgers and databases are kept, never deleted.
+- **One name map.** Where a public name differs from a stored or wire name, the mapping lives in `core/names.ts` or in the module that owns the word, never in a caller. v0.1.1 upgrades v0.1.0's data in place: rows that may change are migrated, and events, signed commands and contracts keep the words they were written with and are read under the public names through `core/names.ts`. The APIs take only the public names. Data from before v0.1.0 is not read, and a ledger or database that can't be read is kept, never deleted.
 - **A thing is addressed through what owns it.** Each thing has an ID that is unique where it is used, and every interface addresses it through its owner: an attempt through its run, a run through its campaign. Where a thing ran, such as its rig, is a fact about it, not its parent.
 
 ### Shared tools, errors, settings and timeouts
@@ -172,7 +173,7 @@ These rules give the code one shape, so a reader knows where a thing lives befor
 - Hierarchy goes in folders, not in file names. Files whose names share a word at the start or the end belong in a folder named for that word: `model.ts`, `model-check.ts`, `model-source.ts` and `model-stall.ts` become `model/index.ts`, `model/check.ts`, `model/source.ts` and `model/stall.ts`; the sixteen `scripts/*-acceptance.mjs` become `scripts/acceptance/`.
 - A folder that is a module has an `index.ts`: its interface. Code outside the folder imports from `index.ts`, not from the files inside it. Where a module holds another, code outside both imports the outer one's `index.ts`. Inside a folder, files import each other directly.
 - A folder whose files are each an entry or a contract of their own is a namespace, with no `index.ts`: its files are imported one by one. The namespaces are the APIs' routes and clients (`core/api/`, `common/api/`), the events' kinds and bodies (`core/events/`), the message bus's contracts (`core/link/`), control's pages and route sections (`control/ui/`, `control/dashboard/`, apart from their folders with an `index.ts`) and the command line's commands (`cli/thermite/`). `npm run check:imports` holds production code to this rule, with no exceptions, and lists the namespaces; tests may import any file.
-- New code follows this now. Add a module to a folder; never add another `<name>-<part>.ts` beside the rest. Goal [125](docs/plan/goals/125-code-to-the-conventions.goal) moves the existing files.
+- New code follows this now. Add a module to a folder; never add another `<name>-<part>.ts` beside the rest. Goal [125](docs/plan/goals/_completed/125-code-to-the-conventions.goal) moves the existing files.
 
 ## Limits and state
 

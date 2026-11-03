@@ -1,0 +1,74 @@
+#!/usr/bin/env node
+// Test only: a stand-in for nvidia-smi over the fake device files that tests/stand-ins/gpu/enter
+// makes. Like the real one, it lists only the cards whose device files the caller may open, and
+// answers the queries the harness makes (cards, minors, -L, the CUDA version).
+const fs = require("node:fs");
+const n = Number(process.env.FAKE_GPUS || "4");
+const cards = Array.from({ length: n }, (_, i) => ({
+  index: i,
+  uuid: `GPU-00000000-0000-0000-0000-${String(i).padStart(12, "0")}`,
+  bus: `00000000:0${i + 1}:00.0`,
+  node: `/dev/nvidia${i}`,
+}));
+// Opened for real, as the driver's library does: file modes and the GPU fence (Landlock) both act
+// on opening.
+const can = (p) => {
+  try {
+    fs.closeSync(fs.openSync(p, "r+"));
+    return true;
+  } catch {
+    return false;
+  }
+};
+const args = process.argv.slice(2);
+const visible = can("/dev/nvidiactl") ? cards.filter((c) => can(c.node)) : [];
+const at = args.indexOf("-i");
+const sel = at >= 0 ? args[at + 1] : undefined;
+const picked =
+  sel === undefined ? visible : visible.filter((c) => String(c.index) === sel || c.uuid === sel);
+const none = () => {
+  process.stderr.write("No devices were found\n");
+  process.exit(6);
+};
+if (!visible.length) none();
+if (args.includes("-L")) {
+  for (const c of visible) console.log(`GPU ${c.index}: Fake GPU (UUID: ${c.uuid})`);
+  process.exit(0);
+}
+if (args.includes("-q")) {
+  if (!picked.length) none();
+  console.log(`GPU ${picked[0].bus}\n    Minor Number                          : ${picked[0].index}`);
+  process.exit(0);
+}
+const query = args.find((a) => a.startsWith("--query-gpu="));
+if (query) {
+  if (!picked.length) none();
+  const values = (c) => ({
+    index: c.index,
+    uuid: c.uuid,
+    name: "Fake GPU",
+    "pci.bus_id": c.bus,
+    driver_version: "550.00.00",
+    "memory.total": 16384,
+    "memory.used": 0,
+    "memory.free": 16384,
+    "utilization.gpu": 0,
+    "temperature.gpu": 40,
+    "power.draw": 30,
+    "power.limit": 250,
+    "clocks.sm": 1000,
+    "clocks.mem": 700,
+    "clocks.max.sm": 1300,
+    "clocks.max.mem": 715,
+    "pcie.link.gen.max": 3,
+    "pcie.link.width.max": 16,
+    vbios_version: "00.00.00.00.00",
+    "clocks_event_reasons.active": "0x0000000000000000",
+    "clocks_throttle_reasons.active": "0x0000000000000000",
+  });
+  const fields = query.slice("--query-gpu=".length).split(",");
+  for (const c of picked) console.log(fields.map((f) => values(c)[f] ?? "[N/A]").join(", "));
+  process.exit(0);
+}
+if (args.some((a) => a.startsWith("--query-compute-apps"))) process.exit(0);
+console.log("| NVIDIA-SMI 550.00.00    Driver Version: 550.00.00    CUDA Version: 12.4 |");

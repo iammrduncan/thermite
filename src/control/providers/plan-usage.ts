@@ -32,10 +32,24 @@ export interface PlanWindow {
   resets_at: string | null;
 }
 
+/**
+ * A Claude subscription's usage credits as Claude Code on a rig last reported them (goal 169):
+ * on or off, since when on that rig (null: so since its first report of them), and when it said.
+ * With credits on, a full window can spend paid usage instead of waiting.
+ */
+export interface PlanCredits {
+  on: boolean;
+  since: string | null;
+  rig: string;
+  at: string;
+}
+
 export interface PlanUsage {
   /** Claude Code on a rig, or OpenAI's answer to control. */
   source: "claude-code" | "openai";
   windows: PlanWindow[];
+  /** A Claude subscription's usage credits, once Claude Code reported them. */
+  credits?: PlanCredits | undefined;
   /** The rig whose Claude Code reported them. */
   rig?: string | undefined;
   /** The plan's name, when OpenAI gives it. */
@@ -56,18 +70,36 @@ const label = (minutes: number | null) =>
         ? "Weekly"
         : `${Math.round(minutes / 60)}-hour`;
 
-/** A Claude subscription's windows, from the rigs' newest report of them; undefined: none yet. */
+/**
+ * A Claude subscription's windows, from the rigs' newest report of them: a harness's, for its
+ * agents, or a supervisor's, for its advisors (goal 183). Undefined: none yet.
+ */
 export function claudeUsage(
   name: string,
-  rigs: { id: string; summary: unknown }[],
+  rigs: { id: string; summary: unknown; supervisor?: unknown }[],
 ): PlanUsage | undefined {
   type W = { utilization?: unknown; resets_at?: unknown } | undefined;
-  type R = { provider?: string; at?: string; five_hour?: W; seven_day?: W };
+  type C = { on?: unknown; since?: unknown } | undefined;
+  type R = { provider?: string; at?: string; five_hour?: W; seven_day?: W; credits?: C };
   let best: { r: R; rig: string } | undefined;
+  // The credits from the newest report that gives them: a report may give windows alone.
+  let credits: PlanCredits | undefined;
   for (const u of rigs) {
-    const r = (u.summary as { subscription_usage?: R } | null)?.subscription_usage;
-    if (r?.provider === name && r.at && (!best || r.at > (best.r.at ?? "")))
-      best = { r, rig: u.id };
+    const agents = (u.summary as { subscription_usage?: R } | null)?.subscription_usage;
+    const advisors = (u.supervisor as { subscription_usage?: Record<string, R> } | null)
+      ?.subscription_usage?.[name];
+    for (const r of [agents?.provider === name ? agents : undefined, advisors]) {
+      if (!r?.at) continue;
+      if (!best || r.at > (best.r.at ?? "")) best = { r, rig: u.id };
+      const c = r.credits;
+      if (typeof c?.on === "boolean" && (!credits || r.at > credits.at))
+        credits = {
+          on: c.on,
+          since: typeof c.since === "string" ? c.since : null,
+          rig: u.id,
+          at: r.at,
+        };
+    }
   }
   if (!best?.r.at) return undefined;
   const windows: PlanWindow[] = [];
@@ -84,7 +116,13 @@ export function claudeUsage(
         resets_at: typeof w.resets_at === "string" ? w.resets_at : null,
       });
   }
-  return { source: "claude-code", windows, rig: best.rig, at: best.r.at };
+  return {
+    source: "claude-code",
+    windows,
+    rig: best.rig,
+    at: best.r.at,
+    ...(credits ? { credits } : {}),
+  };
 }
 
 /**
@@ -170,7 +208,11 @@ export class PlanUsageReader {
     if (p.type === "claude")
       return claudeUsage(
         p.name,
-        this.store.reportedRigs.list().map((r) => ({ id: r.id, summary: r.summary })),
+        this.store.reportedRigs.list().map((r) => ({
+          id: r.id,
+          summary: r.summary,
+          supervisor: this.store.reportedRigs.supervisor(r.id),
+        })),
       );
     if (p.type !== "chatgpt") return undefined;
     let k = this.kept.get(p.name);

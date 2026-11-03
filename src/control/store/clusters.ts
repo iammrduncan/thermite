@@ -1,3 +1,6 @@
+import type { DatabaseSync } from "node:sqlite";
+import { redact } from "../../common/log.ts";
+import type { ProgramMode } from "../../core/rig-settings.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
@@ -16,6 +19,21 @@ export interface Cluster {
   checked_at: string | null;
   check_error: string | null;
   created_at: string;
+  /**
+   * The owner accepted that control's connection to the cluster is not checked (its kubeconfig
+   * skips TLS checks or uses plain http): what is unchecked, by whom, when. Null: it is checked.
+   */
+  unchecked: { what: string[]; by: string; at: string } | null;
+}
+
+/**
+ * Store migration 21: a cluster keeps the owner's acceptance of a connection control can't
+ * check, when its kubeconfig has one.
+ */
+export function clusterUncheckedColumn(db: DatabaseSync): void {
+  const cols = db.prepare("pragma table_info(cluster)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "unchecked"))
+    db.exec("alter table cluster add column unchecked text");
 }
 
 /** A rig control set up on a cluster; spec holds what it was deployed with (no secrets). */
@@ -35,9 +53,25 @@ export interface ClusterRig {
     storageGi: number;
     /** The rig's CPUs and memory; none: the namespace's defaults. */
     resources?: { cpus: number; memoryGi: number } | undefined;
+    /**
+     * How its agent programs ran as control last wrote its deployments, which set its supervisor's
+     * share of those CPUs and memory (clusters/manifests.ts). None: written before the share
+     * followed it, with 2 GiB, the headless share.
+     */
+    programMode?: ProgramMode | undefined;
     images: { harness: string; supervisor: string };
     /** Control's address the rig's supervisor reports to, as last deployed (older rigs: unknown). */
     controlUrl?: string | undefined;
+    /**
+     * In a slot: each address of the list of addresses rigs may reach that the slot's rules
+     * opened when control added the rig, on its ports, with the rule's name.
+     */
+    openings?: { address: string; ports: number[]; rule: string }[] | undefined;
+    /**
+     * In a slot: whether its rules let only the rig's supervisor connect to its harness, and why
+     * not, as control last read them; a warning on the rig's page, never a refusal.
+     */
+    ingress?: { ok: boolean; why: string } | undefined;
   };
   status: string;
   created_at: string;
@@ -46,13 +80,17 @@ export interface ClusterRig {
   pending?: ClusterRigResize | undefined;
 }
 
-/** A cluster rig's GPUs, the judge's share of them and its CPUs and memory, as control deploys them. */
+/**
+ * A cluster rig's GPUs, the judge's share of them and its CPUs and memory, as control deploys them,
+ * with how its agent programs run, which sets its supervisor's share of the memory.
+ */
 export interface ClusterRigSize {
   gpus: number;
   /** With two or more GPUs, how many are the judge's. */
   judgeGpus?: number | undefined;
   /** None: the namespace's defaults. */
   resources?: { cpus: number; memoryGi: number } | undefined;
+  programMode: ProgramMode;
 }
 
 /** A new size that waits for the rig's drain, and who asked for it. */
@@ -70,6 +108,7 @@ const clusterOf = (r: Row): Cluster => ({
   checked_at: r.checked_at === null ? null : String(r.checked_at),
   check_error: r.check_error === null ? null : String(r.check_error),
   created_at: String(r.created_at),
+  unchecked: r.unchecked ? (JSON.parse(String(r.unchecked)) as Cluster["unchecked"]) : null,
 });
 
 const clusterRigOf = (r: Row): ClusterRig => ({
@@ -93,11 +132,15 @@ export class Clusters extends StorePart {
     namespace_pattern: string;
     slots: string[];
     by: string;
+    /** What of its connection control can't check, which the owner accepted; none: all checked. */
+    unchecked?: string[] | undefined;
   }): void {
+    const at = new Date().toISOString();
+    const unchecked = c.unchecked?.length ? { what: c.unchecked, by: c.by, at } : null;
     this.db
       .prepare(
-        `insert into cluster (name, kubeconfig_sealed, context, placement, namespace_pattern, slots, created_at, created_by)
-         values (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `insert into cluster (name, kubeconfig_sealed, context, placement, namespace_pattern, slots, created_at, created_by, unchecked)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         c.name,
@@ -106,14 +149,16 @@ export class Clusters extends StorePart {
         c.placement,
         c.namespace_pattern,
         JSON.stringify(c.slots),
-        new Date().toISOString(),
+        at,
         c.by,
+        unchecked ? JSON.stringify(unchecked) : null,
       );
     this.store.auditLog.add(c.by, "cluster_added", {
       name: c.name,
       context: c.context,
       placement: c.placement,
       slots: c.slots,
+      ...(unchecked ? { unchecked_accepted: unchecked.what } : {}),
     });
   }
 
@@ -140,7 +185,7 @@ export class Clusters extends StorePart {
     else
       this.db
         .prepare("update cluster set checked_at = ?, check_error = ? where name = ?")
-        .run(new Date().toISOString(), r.error, name);
+        .run(new Date().toISOString(), redact(r.error), name);
   }
 
   delete(name: string, by: string): boolean {
@@ -214,21 +259,43 @@ export class Clusters extends StorePart {
       gpus: size.gpus,
       judgeGpus: size.judgeGpus,
       resources: size.resources,
+      programMode: size.programMode,
       ...(controlUrl ? { controlUrl } : {}),
     };
     this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
   }
 
-  /** The images a rig on a cluster now runs, after an image update. */
+  /** What a slot rig's slot opens of the list of addresses rigs may reach, and lets in, read now. */
+  setRigSlotNetwork(rig: string, n: Pick<ClusterRig["spec"], "openings" | "ingress">): void {
+    const r = this.rig(rig);
+    if (!r) return;
+    // A field set to undefined is left out of the JSON.
+    const spec: ClusterRig["spec"] = {
+      ...r.spec,
+      openings: n.openings?.length ? n.openings : undefined,
+      ingress: n.ingress,
+    };
+    this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
+  }
+
+  /**
+   * The images a rig on a cluster now runs, after an image update, and how its agent programs ran
+   * as its deployments were written.
+   */
   setRigImages(
     rig: string,
     images: ClusterRig["spec"]["images"],
+    programMode: ProgramMode,
     controlUrl?: string | undefined,
   ): void {
     const r = this.rig(rig);
     if (!r) return;
-    this.db
-      .prepare("update cluster_rig set spec = ? where rig = ?")
-      .run(JSON.stringify({ ...r.spec, images, ...(controlUrl ? { controlUrl } : {}) }), rig);
+    const spec: ClusterRig["spec"] = {
+      ...r.spec,
+      images,
+      programMode,
+      ...(controlUrl ? { controlUrl } : {}),
+    };
+    this.db.prepare("update cluster_rig set spec = ? where rig = ?").run(JSON.stringify(spec), rig);
   }
 }

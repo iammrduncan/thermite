@@ -49,6 +49,17 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
     }
   });
 
+  test("no route takes past research to copy into a run's folder: the knowledge base is control's", async () => {
+    const api = createHarnessApi(makeHarnessEnv().service, tokens);
+    const res = await api.request("/v1/kb", {
+      method: "POST",
+      headers: { authorization: `Bearer ${tokens.supervisor}`, "content-type": "application/json" },
+      body: JSON.stringify({ run: "smoke-1", items: [] }),
+    });
+    assert.equal(res.status, 404);
+    assert.ok(!Object.values(supervisor).some((r) => (r as { path?: string }).path === "/v1/kb"));
+  });
+
   test("a body past its route's limit is answered 413, the code its sender acts on", async () => {
     const api = createHarnessApi(makeHarnessEnv().service, tokens);
     const res = await api.request(supervisor.ADVISORS.path, {
@@ -74,7 +85,6 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
     assert.ok(
       supervisor.SNAPSHOT.answer.safeParse(await get("/v1/snapshot?cursor=0&limit=500")).success,
     );
-    assert.ok(supervisor.LIVE.answer.safeParse(await get("/v1/live?after=0&limit=500")).success);
     env.service.live.append({ source: "judge", kind: "log", text: "idle" });
     const messages = await get("/v1/live/messages?after=0&limit=500");
     assert.ok(supervisor.LIVE_MESSAGES.answer.safeParse(messages).success);
@@ -87,7 +97,6 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
       [supervisor.ADVISORS, { auditor: true, review_panel: 0, writer: false }],
       [supervisor.EXPORTS_DONE, { names: ["20261020T120000Z-0123abcd"] }],
       [supervisor.MCP_EVENTS, { run: "smoke-1", server: "gbrain", ok: false, error: "it failed" }],
-      [supervisor.KB, { run: "smoke-1", items: [{ seq: 1 }], folders: ["smoke-matmul"] }],
       [
         advisors.AUDITS,
         {
@@ -104,7 +113,7 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
         {
           run: "smoke-1",
           role: "auditor",
-          add: [{ title: "Re-measure a-1", why: "a doubt", family: "check", position: "top" }],
+          add: [{ title: "Re-measure a-1", why: "a doubt", direction: "check", position: "top" }],
           move: [],
         },
       ],
@@ -125,5 +134,38 @@ describe("the harness's API has one contract (core/api/harness/)", () => {
     assert.ok(
       !advisors.QUEUE.body.safeParse({ run: "r", role: "teacher", add: [...add, add[0]] }).success,
     );
+  });
+
+  test("the runs and attempts the advisors' packages name are IDs, which the supervisor's record files are named by", () => {
+    const attempt = "a-0123456789abcdef";
+    const run = "smoke-1";
+    const answers = (
+      r: string,
+      a: string,
+    ): [Route & { answer: { safeParse(v: unknown): { success: boolean } } }, unknown][] => [
+      [advisors.RUNS, { runs: [{ id: r, campaign: "c", mode: "hill_climb", status: "running" }] }],
+      [advisors.AUDITS_PENDING, { audits: [{ id: 1, attempt: a, run: r }] }],
+      [advisors.REVIEWS_PENDING, { reviews: [{ id: 1, run: r }] }],
+      [advisors.CARDS_PENDING, { runs: [{ run: r }] }],
+      [advisors.PAPERS_PENDING, { papers: [{ run: r, review: 1 }] }],
+    ];
+    for (const [route, answer] of answers(run, attempt))
+      assert.ok(
+        route.answer.safeParse(answer).success,
+        `${route.path} takes ${run} and ${attempt}`,
+      );
+    // A name with a path in it, or one that is not an attempt's: refused, so the advisors' pass
+    // stops on that answer and writes no file.
+    for (const [r, a] of [
+      ["../../home/x", attempt],
+      ["smoke/1", attempt],
+      [run, "../../home/x"],
+      [run, "a-1/../x"],
+    ] as const)
+      for (const [route, answer] of answers(r, a)) {
+        const named = JSON.stringify(answer);
+        if (named.includes("..") || named.includes("/"))
+          assert.ok(!route.answer.safeParse(answer).success, `${route.path} refuses ${named}`);
+      }
   });
 });

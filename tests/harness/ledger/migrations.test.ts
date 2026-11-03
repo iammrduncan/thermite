@@ -75,3 +75,141 @@ describe("the ledger's migrations (goal 125, T6)", () => {
     ledger.close();
   });
 });
+
+/**
+ * The rows and events a v0.1.0 rig wrote under the old names (the guide's questions 11 and 23):
+ * an approach family, a run's note in `direction`, a field note of kind `note`, a rule of kind
+ * `note`, a research note.
+ */
+const OLD_NAMES = `
+update run set direction = 'memory first' where id = 'js-1';
+insert into family (run, id, description, status, created_by, created_at)
+  values ('js-1', 'tiling', 'tile the loops', 'live', 'planner', '2026-10-27T22:00:00.000Z');
+insert into lane (id, run, family, status, created_at)
+  values ('js-1:lane-1', 'js-1', 'tiling', 'active', '2026-10-27T22:00:00.000Z');
+update attempt set family = 'tiling' where id = '${WIN}';
+insert into trial (id, run, lane, epoch, family, parent_commit, started_at)
+  values ('0123456789abcdef', 'js-1', 'lane-1', 1, 'tiling', 'f34374b5a2b3fb71dd7da851d3273d1a0357a803', '2026-10-27T22:00:00.000Z');
+insert into experiment (id, run, title, family, added_by, state, created_at, updated_at)
+  values ('x-000000000001', 'js-1', 'tile it', 'tiling', 'planner', 'queued', '2026-10-27T22:00:00.000Z', '2026-10-27T22:00:00.000Z');
+insert into directive (run, author, body, created_at) values
+  ('js-1', 'control:owner', '{"citations":[],"family":"tiling","kind":"try","rationale":"won elsewhere"}', '2026-10-27T22:00:00.000Z'),
+  ('js-1', 'control:owner', '{"citations":[],"kind":"note","rationale":"r","value":"memory first"}', '2026-10-27T22:00:00.000Z');
+insert into epoch (run, n, source, planner_tries, planner_valid, assignments, started_at)
+  values ('js-1', 1, 'planner', 1, 1, '[{"family":"tiling","focus":"f","lane":"lane-1","parent":"champion"}]', '2026-10-27T22:00:00.000Z');
+insert into conclusion (run, kind, evidence, proposed_at)
+  values ('js-1', 'not_possible', '{"approaches":[{"attempts":3,"family":"tiling"}]}', '2026-10-27T22:00:00.000Z');
+insert into journal_note (run, by, kind, text, about_type, about_id, at)
+  values ('js-1', 'lane-1', 'note', 'an aside', 'run', 'js-1', '2026-10-27T22:00:00.000Z');
+insert into note (run, lane, text, sources, created_at)
+  values ('js-1', 'lane-1', 'the guide says so', '["s-1"]', '2026-10-27T22:00:00.000Z');
+insert into event (at, actor, kind, subject, body) values
+  ('2026-10-27T22:00:01.000Z', 'planner', 'family_added', 'js-1', '{"description":"tile the loops","family":"tiling"}'),
+  ('2026-10-27T22:00:02.000Z', 'harness', 'trial_started', 'js-1', '{"epoch":1,"family":"tiling","lane":"lane-1","trial":"0123456789abcdef"}'),
+  ('2026-10-27T22:00:03.000Z', 'control:owner', 'directive', 'js-1', '{"body":{"kind":"note","rationale":"r","value":"memory first"},"id":2}'),
+  ('2026-10-27T22:00:04.000Z', 'lane-1', 'journal_note', 'js-1', '{"about":{"id":"js-1","type":"run"},"by":"lane-1","id":1,"kind":"note","text":"an aside"}'),
+  ('2026-10-27T22:00:05.000Z', 'lane-1', 'research_note', 'js-1', '{"by":"lane-1","note":1,"sources":["s-1"],"text":"the guide says so"}');
+`;
+
+/** A v0.1.0 ledger with rows and events under the old names, opened by this code. */
+function migratedWithOldNames() {
+  const path = join(mkdtempSync(join(tmpdir(), "thermite-ledger-")), "ledger.db");
+  const old = new DatabaseSync(path);
+  old.exec(V010);
+  old.exec(OLD_NAMES);
+  old.close();
+  return Ledger.open(path);
+}
+
+describe("the public names in a ledger v0.1.0 wrote (goal 125, the guide's questions 11 and 23)", () => {
+  test("the rows a ledger may change are migrated: directions, a run's note, the kinds, source notes", () => {
+    const ledger = migratedWithOldNames();
+    const columns = (table: string) =>
+      (ledger.db.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map(
+        (c) => c.name,
+      );
+    const tables = (
+      ledger.db.prepare("select name from sqlite_master where type = 'table'").all() as {
+        name: string;
+      }[]
+    ).map((t) => t.name);
+    assert.ok(!tables.includes("family") && !tables.includes("note"), tables.join(", "));
+    assert.ok(tables.includes("direction") && tables.includes("source_note"));
+    for (const table of ["trial", "lane", "attempt", "experiment"]) {
+      assert.ok(columns(table).includes("direction"), table);
+      assert.ok(!columns(table).includes("family"), table);
+    }
+    assert.ok(columns("run").includes("note") && !columns("run").includes("direction"));
+    // Each reads the same, under the new names.
+    assert.equal(ledger.runs.get("js-1")?.note, "memory first");
+    assert.deepEqual(ledger.trials.directions("js-1"), [
+      { id: "tiling", description: "tile the loops", status: "live" },
+    ]);
+    assert.deepEqual(ledger.attempts.directions("js-1"), ["tiling"]);
+    assert.equal(ledger.experiments.get("x-000000000001")?.direction, "tiling");
+    assert.deepEqual(
+      ledger.directives.active("js-1").map((d) => d.body),
+      [
+        { citations: [], direction: "tiling", kind: "try", rationale: "won elsewhere" },
+        { citations: [], kind: "planner_note", rationale: "r", value: "memory first" },
+      ],
+    );
+    const epoch = ledger.db.prepare("select assignments from epoch where run = 'js-1'").get();
+    assert.deepEqual(JSON.parse(String(epoch?.assignments)), [
+      { direction: "tiling", focus: "f", lane: "lane-1", parent: "champion" },
+    ]);
+    const conclusion = ledger.db.prepare("select evidence from conclusion").get();
+    assert.deepEqual(JSON.parse(String(conclusion?.evidence)), {
+      approaches: [{ attempts: 3, direction: "tiling" }],
+    });
+    assert.deepEqual(
+      ledger.journal.newest("js-1", 5, {}).map((n) => [n.kind, n.text]),
+      [["other", "an aside"]],
+    );
+    assert.deepEqual(
+      ledger.claims.sourceNotes("js-1").map((n) => n.text),
+      ["the guide says so"],
+    );
+    // A field note's kind is still checked, and field notes stay append-only.
+    assert.throws(
+      () =>
+        ledger.db
+          .prepare(
+            "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('js-1', 'x', 'note', 't', 'run', 'js-1', 'now')",
+          )
+          .run(),
+      /CHECK constraint/,
+    );
+    assert.throws(
+      () => ledger.db.prepare("update journal_note set text = 'x'").run(),
+      /append-only/,
+    );
+    ledger.close();
+  });
+
+  test("events keep the words they were recorded with, and read under the new names", () => {
+    const ledger = migratedWithOldNames();
+    const raw = ledger.db
+      .prepare("select kind from event where kind in ('family_added', 'research_note')")
+      .all() as { kind: string }[];
+    assert.deepEqual(
+      raw.map((r) => r.kind),
+      ["family_added", "research_note"],
+      "an event is never rewritten",
+    );
+    assert.deepEqual(ledger.events.newest("direction_added")?.body, {
+      description: "tile the loops",
+      direction: "tiling",
+    });
+    assert.equal(ledger.events.newest("trial_started")?.body.direction, "tiling");
+    assert.equal(ledger.events.newest("run_created")?.body.note, null);
+    assert.deepEqual(ledger.events.newest("directive")?.body.body, {
+      kind: "planner_note",
+      rationale: "r",
+      value: "memory first",
+    });
+    assert.equal(ledger.events.newest("journal_note")?.body.kind, "other");
+    assert.equal(ledger.events.newest("source_note")?.body.text, "the guide says so");
+    ledger.close();
+  });
+});

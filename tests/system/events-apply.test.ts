@@ -11,6 +11,7 @@ import { assigned } from "../helpers/assignments.ts";
 import { controlStack } from "../helpers/control-stack.ts";
 import { applied, busOf, closeBus, controlStore, ingestReport } from "../helpers/control-store.ts";
 import { FakeBus } from "../helpers/fake-bus.ts";
+import { itemsBySeq } from "../helpers/kb-items.ts";
 import { appendOther } from "../helpers/kinds.ts";
 
 /**
@@ -282,7 +283,7 @@ describe("control's records, applied from the events stream", () => {
     assert.deepEqual([row?.ledger_id, row?.cursor], ["l-2", 2]);
   });
 
-  test("the knowledge base: each event indexed once, and a rig's cursor counts items", async () => {
+  test("the knowledge base: each event indexed once, its items in the order of their seqs", async () => {
     const store = controlStore();
     assigned(store, "rig-a", "gs-1", "gemv");
     const note = (id: number, text: string): Ev => ({
@@ -299,28 +300,13 @@ describe("control's records, applied from the events stream", () => {
     // The same page again, and the next: each event once.
     await page(store, "rig-a", "l-1", [note(2, "first lesson"), note(3, "second lesson")]);
     await page(store, "rig-a", "l-1", [note(4, "third lesson")]);
-    const kb = store.kb();
-    const items = () => kb.changedAfter(["gemv"], 0).map((x) => [x.seq, x.ref]);
+    const items = () => itemsBySeq(store, ["gemv"]).map((x) => [x.seq, x.ref]);
     assert.deepEqual(items(), [
       [1, "gs-1"],
       [2, "2"],
       [3, "3"],
       [4, "4"],
     ]);
-    // A run's sync from the cursor a rig holds: the items after it, by their seqs.
-    assigned(store, "rig-b", "gs-2", "gemv");
-    await page(store, "rig-b", "l-b", [
-      { id: 1, kind: "run_created", subject: "gs-2", run: "gs-2", body: { campaign: "gemv" } },
-    ]);
-    const sync = kb.sync("rig-b", "gs-2", 2);
-    assert.deepEqual(
-      sync?.items.map((x) => [x.seq, x.ref]),
-      [
-        [3, "3"],
-        [4, "4"],
-      ],
-    );
-    assert.equal(sync?.next, 4);
   });
 
   test("a page that creates a run puts every event of the run on the run's subject", async () => {

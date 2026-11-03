@@ -7,7 +7,7 @@ import { settingsHelpers, settingsUrl, usd } from "./shared.ts";
 
 /** A GPU cloud's forms on Providers: check it now, its key, its test pods, and delete it. */
 export function cloudRoutes(app: Hono, dash: Dashboard): void {
-  const { opts, store } = dash;
+  const { noted, opts, store } = dash;
   const { checkCloudNow } = settingsHelpers(dash);
 
   // ---------------------------------------------------------------- GPU clouds (Providers)
@@ -17,7 +17,9 @@ export function cloudRoutes(app: Hono, dash: Dashboard): void {
       return c.redirect(settingsUrl("error", "No such GPU cloud."), 303);
     const why = await checkCloudNow(name);
     return c.redirect(
-      why ? settingsUrl("error", `"${name}": ${why}`) : settingsUrl("ok", `Read "${name}" again.`),
+      why
+        ? settingsUrl("error", noted(`"${name}": ${why}`))
+        : settingsUrl("ok", `Read "${name}" again.`),
       303,
     );
   });
@@ -32,7 +34,7 @@ export function cloudRoutes(app: Hono, dash: Dashboard): void {
       store.gpuClouds.replaceKey(name, opts.secrets.seal(key), keyHint(key), "owner:ui");
       store.gpuClouds.setFacts(name, { facts });
     } catch (err) {
-      return c.redirect(settingsUrl("error", `Kept the old key: ${errorText(err)}.`), 303);
+      return c.redirect(settingsUrl("error", noted(`Kept the old key: ${errorText(err)}.`)), 303);
     }
     return c.redirect(settingsUrl("ok", `"${name}" has its new key, and is read again.`), 303);
   });
@@ -62,7 +64,7 @@ export function cloudRoutes(app: Hono, dash: Dashboard): void {
         303,
       );
     } catch (err) {
-      return c.redirect(settingsUrl("error", `No test pod: ${errorText(err)}.`), 303);
+      return c.redirect(settingsUrl("error", noted(`No test pod: ${errorText(err)}.`)), 303);
     }
   });
   app.post("/ui/settings/clouds/:name/tests/:id/end", async (c) => {
@@ -73,13 +75,13 @@ export function cloudRoutes(app: Hono, dash: Dashboard): void {
         settingsUrl(
           x.active ? "error" : "ok",
           x.active
-            ? `Test ${x.id}: ${x.error ?? "the pod is not removed yet"}`
+            ? noted(`Test ${x.id}: ${x.error ?? "the pod is not removed yet"}`)
             : `Test ${x.id} ended: the pod is removed.`,
         ),
         303,
       );
     } catch (err) {
-      return c.redirect(settingsUrl("error", errorText(err)), 303);
+      return c.redirect(settingsUrl("error", noted(errorText(err))), 303);
     }
   });
   app.get("/ui/settings/clouds/:name/tests/:id{.+\\.json}", (c) => {

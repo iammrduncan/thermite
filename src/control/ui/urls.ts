@@ -1,3 +1,4 @@
+import { terminalSource } from "../../core/terminal-input.ts";
 import { type RunView, runCampaign } from "../views/index.ts";
 
 /**
@@ -64,11 +65,17 @@ export const runHref = (r: RunRef, tab: RunTab = "overview") =>
 export const attemptHref = (r: RunRef, attempt: string) => `${runHref(r)}/attempts/${enc(attempt)}`;
 
 /**
- * Live for one run: its lanes, judge, planner and advisors, and the message box. `w` shows one of
- * them (a lane, planner, judge, advisors or you); `compose` puts the cursor in the message box.
+ * Live for one run: its lanes, judge, planner and advisors, and the message box. `view` opens its
+ * agents' terminals (the default while some run in one), its lines or its advisors' terminals; `w`
+ * shows one of them in the lines (a lane, planner, judge, advisors or you); `compose` puts the
+ * cursor in the message box.
  */
-export const runLiveHref = (r: RunRef, o: { w?: string; compose?: boolean } = {}) => {
+export const runLiveHref = (
+  r: RunRef,
+  o: { w?: string; compose?: boolean; view?: "terminals" | "lines" | "advisors" } = {},
+) => {
   const q = new URLSearchParams();
+  if (o.view) q.set("view", o.view);
   if (o.w && o.w !== "all") q.set("w", o.w);
   if (o.compose) q.set("compose", "1");
   const query = q.toString();
@@ -98,5 +105,42 @@ export const rigHref = (rig: string) => `/ui/rigs/${enc(rig)}`;
 export const liveHref = (rig: string, source?: string) =>
   `${rigHref(rig)}/live${source ? `?source=${enc(source)}` : ""}`;
 
+/**
+ * The Live page that shows a terminal (goal 169): a trial's own, the planner's, or the advisors'
+ * page with the advisor's call it names.
+ */
+export function terminalHref(rig: string, id: string): string {
+  const source = terminalSource(id);
+  return `${liveHref(rig, source)}${source === "supervisor" ? `&call=${enc(id)}` : ""}`;
+}
+
 /** A rig's new Live lines, pushed to its page as they come (server-sent events). */
 export const rigLiveStreamHref = (rig: string) => `${rigHref(rig)}/live/stream`;
+
+/** The knowledge explorer's root (goal 176). */
+export const KNOWLEDGE_ROOT = "/ui/knowledge";
+
+/**
+ * The knowledge explorer at a place (`<campaign>`, `<campaign>/<run>`, `<campaign>/<run>/<slot>`)
+ * or an item's own page, by its address (`<campaign>/<run>/<slot>/<kind>:<id>`). Each part is one
+ * segment of the path: an item's id may hold `/`, which its segment keeps encoded; its `:` stays.
+ */
+export function knowledgeHref(at = ""): string {
+  if (!at) return KNOWLEDGE_ROOT;
+  const parts = at.split("/");
+  const segments = parts.length > 4 ? [...parts.slice(0, 3), parts.slice(3).join("/")] : parts;
+  return `${KNOWLEDGE_ROOT}/${segments.map((s) => enc(s).replace(/%3A/g, ":")).join("/")}`;
+}
+
+/** The parts of an explorer's path, each decoded: a place's, or an item's (its fourth). */
+export function knowledgeParts(path: string): string[] | undefined {
+  if (path !== KNOWLEDGE_ROOT && !path.startsWith(`${KNOWLEDGE_ROOT}/`)) return undefined;
+  const raw = path.slice(KNOWLEDGE_ROOT.length).split("/").filter(Boolean);
+  try {
+    const parts = raw.map((s) => decodeURIComponent(s));
+    return parts.length > 4 ? [...parts.slice(0, 3), parts.slice(3).join("/")] : parts;
+  } catch {
+    // A broken escape, such as %zz, names no place.
+    return undefined;
+  }
+}

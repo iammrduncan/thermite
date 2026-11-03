@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { BusMessage } from "../../../src/common/bus.ts";
+import type { BusMessage } from "../../../src/common/bus/index.ts";
 import {
   CONFIG_STREAM,
   type ConfigKey,
-  configConsumerConfig,
+  configConsumerName,
+  configSubjects,
   newSealKey,
   sealConfig,
 } from "../../../src/core/link/config.ts";
@@ -139,17 +140,34 @@ function setup() {
 }
 
 describe("the rig's config from the message bus", () => {
-  test("watches its own keys in the config bucket, from the latest of each", async () => {
+  test("watches its own keys in the config bucket, from the latest of each, on the consumer control makes", async () => {
     const s = setup();
-    const asked: { stream: string; consumer: unknown }[] = [];
+    const asked: { stream: string; consumer: string; subjects: readonly string[] }[] = [];
     const bus = {
-      watch: async (stream: string, consumer: unknown, handle: (m: BusMessage) => unknown) => {
-        asked.push({ stream, consumer });
+      watch: async (
+        stream: string,
+        consumer: string,
+        subjects: readonly string[],
+        handle: (m: BusMessage) => unknown,
+      ) => {
+        asked.push({ stream, consumer, subjects });
         await handle(message("model-route", { route: route("r1"), planner: null }, "a".repeat(32)));
       },
     };
     await followConfig(bus, s.watch);
-    assert.deepEqual(asked, [{ stream: CONFIG_STREAM, consumer: configConsumerConfig("rig-a") }]);
+    assert.deepEqual(asked, [
+      {
+        stream: CONFIG_STREAM,
+        consumer: configConsumerName("rig-a"),
+        subjects: configSubjects("rig-a"),
+      },
+    ]);
+    assert.deepEqual(configSubjects("rig-a"), [
+      "thermite.rig.rig-a.config.model-route",
+      "thermite.rig.rig-a.config.advisor-routes",
+      "thermite.rig.rig-a.config.mcp-servers",
+      "thermite.rig.rig-a.config.git-access",
+    ]);
     assert.equal(s.h.route.revision, "r1");
   });
 

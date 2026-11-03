@@ -35,13 +35,13 @@ Each `--model NAME=URL` becomes one import in the `assign_campaign` payload ([si
 | `name` | text | The name the contract lists it under |
 | `sha256` | 64 hexadecimal characters | The file's SHA-256. The harness refuses the assignment when the contract lists no model with it: `model <name> is not listed in the contract` |
 | `path` | relative path | Where the file goes in the rig's inbox. `thermite assign` uses `models/<sha256>` |
-| `source.url` | `http` or `https` URL, up to 4,000 characters | Where the supervisor downloads it from. Without `source`, the file must already be in the inbox |
+| `source.url` | `http` or `https` URL on the internet, up to 4,000 characters | Where the supervisor downloads it from. Without `source`, the file must already be in the inbox |
 
 A model in several files, such as a model in shards, is one entry in the contract's `models` for each file, and one import each.
 
 ## Where the file goes
 
-1. The supervisor downloads to `<path>.part` in its inbox (`THERMITE_INBOX_DIR`, `/inbox` by default), hashing the bytes as they arrive.
+1. The supervisor downloads to `<path>.part` in its inbox (`THERMITE_INBOX_DIR`, `/supervisor/inbox` by default), hashing the bytes as they arrive. It keeps the rig's disk floor (`THERMITE_DISK_FLOOR_GIB`) before it starts and as it writes.
 2. When the last byte is in and its SHA-256 is the signed one, the file is renamed to `<path>`. Only then does the supervisor hand the assignment to the harness.
 3. The harness copies the file into its own state (`THERMITE_STATE_DIR`, under `models/`), hashing it again as it copies. The kit reads that copy as `{models:<sha256>}`, read-only. See [the kit manifest](kit-manifest.md).
 
@@ -55,6 +55,7 @@ On RunPod, the rig image keeps the inbox and the harness's state on the pod's ow
 - **Free space.** When the server says the file's size, the supervisor checks the free space where the file goes before it reads the first byte.
 - **A file already there** is hashed. If it matches, nothing is downloaded. If not, it is downloaded again.
 - **Redirects.** The supervisor follows at most 10 redirects itself. It refuses a redirect from HTTPS to plain HTTP, and one to any other kind of address.
+- **The internet only.** Before each request, the first and each redirect's, the supervisor looks the host up and refuses an address on a private, loopback, link-local or other special network, the list the research fetcher refuses: a model file never comes from the rig's own network or a cloud's metadata address.
 - **The harness checks again** when it imports the file, whatever the supervisor did.
 
 ## A broken download
@@ -83,7 +84,7 @@ The supervisor reports each download in four places. Its report is not signed: t
 
 ### The supervisor's report
 
-The newest 20 downloads, newest first, go to control with the supervisor's figures every round (`THERMITE_POLL_SECONDS`, 60 seconds by default). They are `supervisor.models` in `GET /v1/rigs/<rig>/view` ([REST API](rest-api.md#rigs-and-their-history)).
+The newest 20 downloads, newest first, go to control with the supervisor's figures, on the message bus, every round (`THERMITE_POLL_SECONDS`, 60 seconds by default). They are `supervisor.models` in `GET /v1/rigs/<rig>/view` ([REST API](rest-api.md#rigs-and-their-history)).
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -134,10 +135,12 @@ The assignment fails with `staging:` and one of these. Its command shows `failed
 | --- | --- |
 | `model <name> from <url> refused: its SHA-256 is <sha256>, not the signed <sha256>. The file was deleted` | The file is not the one the contract names |
 | `not enough free space for model <name>: it needs <size> more, and <size> is free where it goes (the inbox's models)` | Too little free space where the file goes |
+| `not enough free space for model <name>: the download stopped after <size>, with <size> free where it goes (the inbox's models), and the rig keeps <n> GiB free (THERMITE_DISK_FLOOR_GIB). What it had downloaded was deleted` | The download reached the rig's [disk floor](settings.md#places-and-advisors) as it wrote, which a server that gives no size can do. The supervisor looks at the free space after each MiB |
 | `<url>: HTTP <status>` | The server refused the file. For Hugging Face, with what to do, as above |
 | `<url>: the download broke after <size> (<why>). The next try continues from there` | The connection broke. The part is kept |
 | `<url>: the download ended after <size> of <size>. The next try continues from there` | The server sent less than it said |
 | `<url>: a redirect from HTTPS to plain HTTP is refused` | The server sent the download to an unencrypted address |
+| `<url>: <host> is on a private or local network (<address>): a model file comes from the internet` | The address, or one a redirect led to, is not on the internet. Serve the file from the internet, or put it in the inbox yourself |
 | `<url>: more than 10 redirects` | Too many redirects |
 
 A URL in a message is its scheme, host and path only, so a signed address's query never shows.

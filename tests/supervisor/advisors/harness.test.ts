@@ -10,7 +10,11 @@ test("the harness's refusals of the advisors' calls are logged once each, with t
     req.resume();
     if (status !== 200) return void res.writeHead(status).end("not now");
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(req.url === "/v1/settings" ? '{"teachers":false,"auditor":true,"review":true}' : "{}");
+    res.end(
+      req.url === "/v1/settings"
+        ? '{"teachers":false,"auditor":true,"review":true,"program_mode":"terminal"}'
+        : "{}",
+    );
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   t.after(() => server.close());
@@ -24,7 +28,12 @@ test("the harness's refusals of the advisors' calls are logged once each, with t
 
   // Refused: the defaults stand, and each call says so once, however often it fails.
   for (let i = 0; i < 3; i++) {
-    assert.deepEqual(await link.settings(), { teachers: true, auditor: true, review: true });
+    assert.deepEqual(await link.settings(), {
+      teachers: true,
+      auditor: true,
+      review: true,
+      terminal: false,
+    });
     await link.tell(told);
   }
   assert.deepEqual(lines, [
@@ -40,7 +49,13 @@ test("the harness's refusals of the advisors' calls are logged once each, with t
 
   // Through again: the harness's settings apply, and the next failure is said again.
   status = 200;
-  assert.equal((await link.settings()).teachers, false);
+  // The rig's agents run in their own terminals: so do the advisors' calls (goal 169).
+  assert.deepEqual(await link.settings(), {
+    teachers: false,
+    auditor: true,
+    review: true,
+    terminal: true,
+  });
   await link.tell(told);
   status = 404;
   assert.equal((await link.settings()).teachers, false);
@@ -52,4 +67,30 @@ test("the harness's refusals of the advisors' calls are logged once each, with t
   server.closeAllConnections();
   await link.tell(told);
   assert.match(JSON.stringify(lines[3]), /"error":".*(fetch failed|ECONNREFUSED)/);
+});
+
+test("no advisor is said to the harness only once the bus gave the advisors' routes: before, its audits stay held (goal 183)", async (t) => {
+  const told: unknown[] = [];
+  const server = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      if (req.url === "/v1/advisors") told.push(JSON.parse(body));
+      res.writeHead(200, { "content-type": "application/json" }).end("{}");
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => server.close());
+  const link = harnessAdvisors(
+    `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    "tok",
+    () => undefined,
+  );
+  // Just after a start: the routes have not come, so nothing is said, and nothing to say again.
+  await link.none(false);
+  await link.retell();
+  assert.deepEqual(told, []);
+  // The routes came and name no advisor: the harness hears it.
+  await link.none(true);
+  assert.deepEqual(told, [{ auditor: false, review_panel: 0, writer: false }]);
 });

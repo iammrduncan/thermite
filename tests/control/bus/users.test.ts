@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -8,21 +8,26 @@ import {
   BUS_CONFIG_DIR_SETTING,
   BUS_USERS_FILE,
   BUS_USERS_SYNC_MS,
+  BUS_USERS_TROUBLE_MS,
   BusUsers,
   busConfigDir,
+  busUsersOf,
   takeRigBusKey,
 } from "../../../src/control/bus/users.ts";
-import { STEP_WORDS } from "../../../src/control/rigs/setup.ts";
+import { STEP_WORDS } from "../../../src/control/rigs/setup/index.ts";
 import { SecretBox } from "../../../src/control/secrets.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
+import { newSealKey, sealKeyFingerprint } from "../../../src/core/link/config.ts";
 import {
   BUS_ACCOUNT,
+  backupPermissions,
   controlPermissions,
   rigPermissions,
   SYSTEM_ACCOUNT,
   userKeyFingerprint,
 } from "../../../src/core/link/users.ts";
 import { controlOnly, RIG_TOKEN } from "../../helpers/control-stack.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 
 const RIG_B_TOKEN = "rig-b-token-abcdef";
 const user = () => createUser().getPublicKey();
@@ -60,19 +65,37 @@ function setup(o: { secrets?: SecretBox; store?: ControlStore } = {}) {
     },
   });
   if (!users) throw new Error("no bus users");
-  /** The supervisor's regular call, its figures with this key. */
-  const figures = (rig: string, busKey: unknown) =>
-    s.control.request(`/v1/rigs/${rig}/supervisor`, {
+  /** Each rig's seal key, made the first time it registers without one given. */
+  const seals = new Map<string, string>();
+  const sealOf = (rig: string) => {
+    if (!seals.has(rig)) seals.set(rig, newSealKey().publicKey);
+    return seals.get(rig);
+  };
+  /** The registration of a rig's keys, with its figures: this key, and this seal key. */
+  const given = new Set<string>();
+  const figures = (rig: string, busKey: unknown, sealKey?: string) => {
+    if (sealKey) given.add(rig);
+    return s.control.request(`/v1/rigs/${rig}/supervisor`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${rig === "rig-a" ? RIG_TOKEN : RIG_B_TOKEN}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ at: new Date().toISOString(), bus_key: busKey }),
+      body: JSON.stringify({
+        at: new Date().toISOString(),
+        bus_key: busKey,
+        bus_seal_key: sealKey ?? sealOf(rig),
+      }),
     });
+  };
   const audits = (action: string) => s.store.auditLog.list(50, { action }).map((e) => e.body);
   const steps = (rig: string) =>
-    s.store.rigHistory.list(rig).filter((e) => e.step.startsWith("bus"));
+    s.store.rigHistory
+      .list(rig)
+      .filter((e) => e.step.startsWith("bus") || e.step.startsWith("seal"))
+      // The registration's step, and the seal key each registration names but a test gave.
+      .filter((e) => e.step !== "bus_registered" && !(e.step === "seal_key" && !given.has(rig)))
+      .filter((e) => e.step !== "seal_key_changed" || given.has(rig));
   return { ...s, file, server, users, secrets, figures, audits, steps };
 }
 
@@ -152,9 +175,103 @@ describe("each rig's key on the message bus", () => {
       "the figures with it are refused whole",
     );
     assert.equal(s.server.calls.length, calls);
-    // Figures without a key are taken as before.
+    // A call with no key is a rig off the bus: refused in words, and nothing recorded either.
     const r = await s.figures("rig-a", undefined);
-    assert.equal(r.status, 200);
+    assert.equal(r.status, 409);
+    assert.match(((await r.json()) as { error: string }).error, /no keys on the message bus/);
+    assert.equal(s.store.reportedRigs.supervisor("rig-a"), null);
+  });
+
+  test("a key another rig or control holds is refused in words, and noted once in the rig's history", async () => {
+    const s = setup();
+    await s.users.sync();
+    const [a, b] = [user(), user()];
+    const [sealA, sealB] = [newSealKey().publicKey, newSealKey().publicKey];
+    assert.equal((await s.figures("rig-a", a, sealA)).status, 200);
+    const calls = s.server.calls.length;
+    const words = (field: string) =>
+      `${field} is refused: another rig or control holds that key on the message bus. Each rig's supervisor makes its own keys in its home; a supervisor whose home was copied from another rig's needs a home of its own`;
+    // rig-a's user key, then its seal key, sent as rig-b's: refused whole, with no name of rig-a.
+    for (const [key, seal, field] of [
+      [a, sealB, "bus_key"],
+      [b, sealA, "bus_seal_key"],
+    ] as const) {
+      const r = await s.figures("rig-b", key, seal);
+      assert.equal(r.status, 409);
+      assert.deepEqual(await r.json(), { error: words(field) });
+    }
+    assert.equal(s.store.busKeys.rigKey("rig-b"), undefined, "nothing of rig-b's is recorded");
+    assert.equal(s.store.reportedRigs.supervisor("rig-b"), null);
+    assert.equal(s.server.calls.length, calls, "no reload");
+    // Control's own keys too: its user, its system user.
+    const [control, system] = s.users.ownKeys();
+    for (const key of [control, system]) assert.equal((await s.figures("rig-b", key)).status, 409);
+    // The rig's page and Needs you read it from its history: each refusal once, with who holds it.
+    for (let i = 0; i < 3; i++) await s.figures("rig-b", a);
+    assert.deepEqual(
+      s.steps("rig-b").map((e) => [e.step, e.ok, e.detail]),
+      [
+        ["bus_key_refused", false, `fingerprint ${userKeyFingerprint(a)}, which rig rig-a holds`],
+        [
+          "seal_key_refused",
+          false,
+          `fingerprint ${sealKeyFingerprint(sealA)}, which rig rig-a holds`,
+        ],
+        [
+          "bus_key_refused",
+          false,
+          `fingerprint ${userKeyFingerprint(control as string)}, which control holds`,
+        ],
+        [
+          "bus_key_refused",
+          false,
+          `fingerprint ${userKeyFingerprint(system as string)}, which control holds`,
+        ],
+        ["bus_key_refused", false, `fingerprint ${userKeyFingerprint(a)}, which rig rig-a holds`],
+      ],
+    );
+    assert.equal(
+      STEP_WORDS.bus_key_refused,
+      "Its new key on the message bus refused: another rig or control holds it",
+    );
+    // A retired rig keeps its key: no other rig may take it. A key of rig-b's own is taken.
+    s.store.retired.add("rig-a", "owner:test");
+    assert.equal((await s.figures("rig-b", a)).status, 409);
+    assert.equal((await s.figures("rig-b", b, sealB)).status, 200);
+    assert.equal(s.store.busKeys.rigKey("rig-b"), b);
+    // The same key again from its own rig is no refusal.
+    assert.equal((await s.figures("rig-b", b, sealB)).status, 200);
+  });
+
+  test("a reload that keeps failing for a minute shows, with its reason, until one works", async () => {
+    let now = Date.parse("2026-10-30T04:00:00.000Z");
+    const server = new FakeServer();
+    const store = new ControlStore(":memory:");
+    const users = new BusUsers({
+      store,
+      secrets: SecretBox.ephemeral(),
+      file: usersPath(),
+      reload: server.reload,
+      clock: () => now,
+    });
+    assert.equal(busUsersOf(store), users, "Needs you finds them by the store");
+    server.failing = true;
+    await users.sync();
+    assert.equal(users.keepsFailing(), undefined, "one failure is not yet a card");
+    now += BUS_USERS_TROUBLE_MS - 1;
+    await users.sync();
+    assert.equal(users.keepsFailing(), undefined);
+    now += 1;
+    await users.sync();
+    assert.deepEqual(users.keepsFailing(), {
+      since: "2026-10-30T04:00:00.000Z",
+      error: "connection refused: nats:4222",
+      step: "reload",
+    });
+    assert.equal(BUS_USERS_TROUBLE_MS, 60_000);
+    server.failing = false;
+    await users.sync();
+    assert.equal(users.keepsFailing(), undefined, "gone as soon as the server takes the file");
   });
 
   test("the users file names control, its system user and each rig with its own permissions", async () => {
@@ -168,7 +285,7 @@ describe("each rig's key on the message bus", () => {
     assert.deepEqual(
       control?.permissions,
       controlPermissions(),
-      "control may do everything but delete or purge a stream kept for good",
+      "control may do everything but delete a stream of record",
     );
     assert.deepEqual(accounts[BUS_ACCOUNT]?.users.slice(1), [
       { nkey: keys.a, permissions: rigPermissions("rig-a") },
@@ -282,8 +399,10 @@ describe("each rig's key on the message bus", () => {
     assert.equal(s.server.calls.length, calls + 1);
     assert.ok(!readFileSync(s.file, "utf8").includes(key));
     assert.equal(accountsIn(s.file)[BUS_ACCOUNT]?.users.length, 1, "control's own alone");
-    // Its key stays recorded: brought back, it has its user again.
+    // Its key stays recorded: brought back and enrolled again (a token control made stays
+    // ended), it has its user again.
     s.store.retired.bringBack("rig-a", "owner:test");
+    enrollRigs(s.store, ["rig-a"]);
     await s.users.sync();
     assert.ok(readFileSync(s.file, "utf8").includes(key));
   });
@@ -321,6 +440,47 @@ describe("each rig's key on the message bus", () => {
           reload: async () => {},
         }),
       /^Error: control's control key on the message bus does not open with its secrets key \(was THERMITE_CONTROL_SECRETS_KEY_FILE replaced\?\)$/,
+    );
+    store.db.close();
+  });
+
+  test("the backup's key: made once in its file, 0600, a user that may back up and restore", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "thermite-bus-backup-"));
+    const seedFile = join(dir, "bus-backup.seed");
+    const store = new ControlStore(":memory:");
+    const secrets = SecretBox.ephemeral();
+    const make = (file = usersPath()) =>
+      new BusUsers({
+        store,
+        secrets,
+        file,
+        reload: async () => {},
+        backupSeedFile: seedFile,
+      });
+    const file = usersPath();
+    await make(file).sync();
+    assert.equal(statSync(seedFile).mode & 0o777, 0o600);
+    const seed = readFileSync(seedFile, "utf8");
+    assert.match(seed, /^SU[A-Z2-7]{56}$/);
+    const backup = fromSeed(new TextEncoder().encode(seed)).getPublicKey();
+    const users = accountsIn(file)[BUS_ACCOUNT]?.users ?? [];
+    assert.deepEqual(users[1], { nkey: backup, permissions: backupPermissions() });
+    // Control started again keeps it.
+    await make().sync();
+    assert.equal(readFileSync(seedFile, "utf8"), seed);
+    // A file that holds no seed stops control, saying what to do.
+    const bad = join(dir, "bad.seed");
+    writeFileSync(bad, "not a seed\n");
+    assert.throws(
+      () =>
+        new BusUsers({
+          store,
+          secrets,
+          file: usersPath(),
+          reload: async () => {},
+          backupSeedFile: bad,
+        }),
+      /does not hold the seed of a NATS user key: remove it, and control makes the backup's key anew as it starts$/,
     );
     store.db.close();
   });

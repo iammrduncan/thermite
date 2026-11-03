@@ -51,16 +51,21 @@ export const KEEP_PROMPT = {
   maxBytes: 16 * 1024 * 1024,
 } as const satisfies Route;
 
+/** The roles whose later turns a trial's worker in Pi keeps, and a planner's own process. */
+export const TRIAL_PROMPT_ROLES = ["worker", "research-worker"] as const;
+export const CALL_PROMPT_ROLES = ["planner", "research-planner"] as const;
+
 /**
  * A later turn a worker in Pi sent inside its trial (a nudge, a warning, a continuation), as its
  * own code rendered it, for the harness to keep as it keeps the trial's first prompt: the trial's
- * token decides the run, the lane and the trial.
+ * token decides the run, the lane and the trial. A planner in Pi in its own process (goal 169)
+ * keeps its later turns the same way, its call's credential deciding the run and the call.
  */
 export const KEEP_TRIAL_PROMPT = {
   method: "POST",
   path: "/v1/trial/prompt",
   body: z.strictObject({
-    role: z.enum(["worker", "research-worker"]),
+    role: z.enum([...TRIAL_PROMPT_ROLES, ...CALL_PROMPT_ROLES]),
     program: z.literal("pi"),
     turn: z.number().int().min(1).max(PROMPT_TURN_MAX),
     sections: KeptSections,

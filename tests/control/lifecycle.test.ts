@@ -16,8 +16,9 @@ import {
 } from "../../src/control/lifecycle.ts";
 import { leaderboard } from "../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
+import { KB_OUTBOX_FILES } from "../../src/core/kb/index.ts";
 import { WIPE_MARKER, wipeIfRequested } from "../../src/harness/service/index.ts";
-import { controlStack } from "../helpers/control-stack.ts";
+import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";
 import { FAST_KERNEL, makeJudgeEnv } from "../helpers/judge-env.ts";
 
@@ -92,6 +93,20 @@ describe("deployment drivers", () => {
     assert.deepEqual(await own.restart("rig-1", ["harness"]), ["ar-rig-1/harness-abc"]);
     assert.ok(seen.includes("DELETE /api/v1/namespaces/thermite-rig-1/pods/harness-abc"));
     assert.ok(seen.includes("DELETE /api/v1/namespaces/ar-rig-1/pods/harness-abc"));
+    // {unit}, the placeholder's name before v0.1.0, is refused in words, before any call.
+    assert.throws(
+      () => KubernetesDriver.inCluster({ ...env, THERMITE_K8S_NAMESPACE: "ar-{unit}" }),
+      /^Error: THERMITE_K8S_NAMESPACE names \{unit\}, the placeholder's name before v0\.1\.0: write \{rig\}$/,
+    );
+    // The token is a secret file, read as every secret file is: an empty one is refused in words
+    // that name the setting, and nothing is sent without it.
+    writeFileSync(join(dir, "token"), "\n");
+    const before = seen.length;
+    await assert.rejects(
+      KubernetesDriver.inCluster(env).restart("rig-1", ["harness"]),
+      /secret file for THERMITE_K8S_TOKEN_FILE is empty/,
+    );
+    assert.equal(seen.length, before);
     server.close();
   });
 
@@ -147,18 +162,17 @@ describe("full reset", () => {
     const id = store.fullResets.create("rig-a", "owner:test");
     await step();
     assert.equal(state(), "quiescing");
-    await relay(); // the pause reaches the harness; the rig reports idle
-    assert.equal(env.ledger.runs.get("js-1")?.status, "paused");
+    // Before the rig takes the pause: its queued job counts until control sees the run paused.
     await step();
     assert.equal(state(), "quiescing", "its queued job counts until control sees the run paused");
-    await relay(); // the harness's report of the pause
+    await relay(); // the pause reaches the harness, and its report of it reaches control
+    assert.equal(env.ledger.runs.get("js-1")?.status, "paused");
     await step();
     assert.equal(state(), "exporting");
     assert.equal(env.ledger.jobs.get(queued)?.state, "queued");
-    await relay(); // the full export (the supervisor's acknowledgement)
     await step();
     assert.equal(state(), "exporting", "waits for the harness's own record of the export");
-    await relay(); // the harness's signed report carries it
+    await relay(); // the full export, and the harness's signed report that carries it
     await step();
     assert.equal(state(), "verifying");
     const name = String(store.fullResets.open("rig-a")?.export_name);
@@ -173,9 +187,8 @@ describe("full reset", () => {
     confirmReset(store, id, "owner:test");
     await step();
     assert.equal(state(), "wiping");
-    await relay();
+    await relay(); // the wipe, and the harness's record of it
     assert.ok(existsSync(join(env.paths.stateDir, WIPE_MARKER)));
-    await relay(); // the harness's record of the wipe
     await step();
     assert.equal(state(), "done");
     assert.deepEqual(restarts, ["rig-a:harness,supervisor"]);
@@ -188,7 +201,14 @@ describe("full reset", () => {
     mkdirSync(locked, { recursive: true });
     chmodSync(locked, 0o555);
     chmodSync(join(env.paths.stateDir, "builds", "locked"), 0o555);
+    // A file of the knowledge base the supervisor has yet to put on the bus stays (goal 175).
+    const kbFile = join(env.paths.outboxDir, KB_OUTBOX_FILES, "a".repeat(64));
+    mkdirSync(join(env.paths.outboxDir, KB_OUTBOX_FILES), { recursive: true });
+    writeFileSync(kbFile, "waiting");
+    mkdirSync(join(env.paths.outboxDir, "an-export"), { recursive: true });
     assert.ok(wipeIfRequested(env.paths, ["rig-signing.key", "rig-signing.key.pub"]));
+    assert.ok(existsSync(kbFile));
+    assert.ok(!existsSync(join(env.paths.outboxDir, "an-export")));
     assert.ok(!existsSync(join(env.paths.stateDir, "builds")));
     assert.ok(!existsSync(join(env.paths.stateDir, "ledger", "ledger.db")));
     const { Ledger } = await import("../../src/harness/ledger/index.ts");
@@ -330,6 +350,22 @@ describe("leaderboard and propagation", () => {
       }),
       /no champion beyond its seed/,
     );
+    // During the owner's full reset of the receiving rig, an agent's token does not propagate to
+    // it; the owner's does.
+    store.fullResets.create("rig-b", "owner:api");
+    const { control } = controlOnly({ store, keys, tokens: { agent: "agent-token-abcdef" } });
+    const call = async (token: string) =>
+      (await mcpClient(control, token)).callTool({
+        name: "propagate_champion",
+        arguments: { run: "c-1", to_run: "c-1b" },
+      });
+    const refused = (await call("agent-token-abcdef")) as {
+      isError?: boolean;
+      content: { text: string }[];
+    };
+    assert.equal(refused.isError, true);
+    assert.match(refused.content[0]?.text ?? "", /rig-b is being reset by the owner/);
+    assert.ok(!(await call(ADMIN)).isError);
   });
 });
 

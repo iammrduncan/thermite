@@ -31,11 +31,11 @@ describe("the owner's queue commands", () => {
       "explore",
       "primary",
     ]);
-    const rule = (family: string) =>
+    const rule = (direction: string) =>
       env.service.applyCommand(
         env.sign("redirect", {
           run: "r-1",
-          directives: [{ kind: "avoid", family, rationale: "r", citations: [] }],
+          directives: [{ kind: "avoid", direction, rationale: "r", citations: [] }],
           replace: false,
         }),
       );
@@ -50,8 +50,8 @@ describe("the owner's queue commands", () => {
     const r = env.service.setAdvisorRules(
       "r-1",
       [
-        { kind: "try", family: "primary", rationale: "r", citations: ["a"] },
-        { kind: "avoid", family: "blogs", rationale: "r", citations: ["a"] },
+        { kind: "try", direction: "primary", rationale: "r", citations: ["a"] },
+        { kind: "avoid", direction: "blogs", rationale: "r", citations: ["a"] },
       ],
       "supervisor",
     );
@@ -64,10 +64,10 @@ describe("the owner's queue commands", () => {
 
   test("the run's directions: its experiments', its registry's and its attempts', the same in control's view", async () => {
     const s = await setup();
-    s.q.add(RUN, { title: "a", family: "Shared memory tiling", by: "owner" }, "x");
-    s.q.add(RUN, { title: "b", family: ":split k:", by: "owner" }, "x");
+    s.q.add(RUN, { title: "a", direction: "Shared memory tiling", by: "owner" }, "x");
+    s.q.add(RUN, { title: "b", direction: ":split k:", by: "owner" }, "x");
     s.q.add(RUN, { title: "c", by: "owner" }, "x");
-    new Registry(s.env.service.ledger).addFamily(
+    new Registry(s.env.service.ledger).addDirection(
       RUN,
       "dequant-fusion",
       "fuse it",
@@ -75,12 +75,12 @@ describe("the owner's queue commands", () => {
     );
     assert.deepEqual(s.q.directions(RUN), ["dequant-fusion", "shared-memory-tiling", "split-k"]);
     // A :name: in an experiment's direction is kept without its colons.
-    assert.equal(s.q.queued(RUN)[1]?.family, "split k");
+    assert.equal(s.q.queued(RUN)[1]?.direction, "split k");
     await s.command("redirect", {
       run: RUN,
       directives: [
-        { kind: "mandate", family: "split-k", rationale: "x", citations: [] },
-        { kind: "avoid", family: "brand new", rationale: "y", citations: [] },
+        { kind: "mandate", direction: "split-k", rationale: "x", citations: [] },
+        { kind: "avoid", direction: "brand new", rationale: "y", citations: [] },
       ],
     });
     const r = await controlQueue(s.events());

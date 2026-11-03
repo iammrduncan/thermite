@@ -9,22 +9,20 @@ import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { claudeProgram } from "../../../../src/agents/cli/claude-code.ts";
+import { codexProgram } from "../../../../src/agents/cli/codex.ts";
+import { opencodeProgram } from "../../../../src/agents/cli/opencode.ts";
+import type { CliProgram, CliTally } from "../../../../src/agents/cli/program.ts";
 import { mcpLine } from "../../../../src/agents/mcp/tools.ts";
 import type { ModelConfig } from "../../../../src/agents/model/index.ts";
 import type { PlanWindows } from "../../../../src/agents/programs/claude-code/windows.ts";
 import { RESEARCH_WORKER_SYSTEM } from "../../../../src/agents/roles/research-worker.ts";
+import { throughProxy } from "../../../../src/core/agents.ts";
 import { laneLimits } from "../../../../src/core/contract.ts";
 import type { CallUsage } from "../../../../src/core/usage.ts";
-import { claudeProgram } from "../../../../src/harness/agents/cli/claude-code.ts";
-import { codexProgram } from "../../../../src/harness/agents/cli/codex.ts";
 import { runCliTrial } from "../../../../src/harness/agents/cli/loop.ts";
 import { cliAsk, cliModelCheck, cliOnce } from "../../../../src/harness/agents/cli/once.ts";
-import { opencodeProgram } from "../../../../src/harness/agents/cli/opencode.ts";
-import type {
-  CliProgram,
-  CliTally,
-  CliTrialDeps,
-} from "../../../../src/harness/agents/cli/program.ts";
+import type { CliTrialDeps } from "../../../../src/harness/agents/cli/program.ts";
 import type { ResearchTrialSpec } from "../../../../src/harness/agents/research/worker.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import type { RunRequest } from "../../../../src/harness/broker/runner.ts";
@@ -292,6 +290,21 @@ describe("the CLI trial loop, in each program's entry", () => {
     }
   });
 
+  test("its session log is kept when it ends: the program's output, by its name in the area", async () => {
+    for (const p of PROGRAMS) {
+      const a = area();
+      const f = fakeProgramRunner(p.program, lines(p.turns(1)), { submit: true });
+      const kept: { name: string; path: string }[][] = [];
+      await trial(p, spec(a), f, { keepSession: (files) => kept.push(files) });
+      assert.equal(kept.length, 1, p.entry.name);
+      const events = `${p.entry.prefix}-events.jsonl`;
+      assert.ok(
+        kept[0]?.some((x) => x.name === events && x.path === join(a, events)),
+        `${p.entry.name}: its output, where its runs wrote it`,
+      );
+    }
+  });
+
   test("the turn cap stops the program and ends the trial in words", async () => {
     for (const p of PROGRAMS) {
       const f = fakeProgramRunner(p.program, lines(p.turns(3)), { hang: true });
@@ -349,10 +362,24 @@ describe("the CLI trial loop, in each program's entry", () => {
 
   test("a provider's failure: no credits ends the trial with its kind; a passing fault waits and goes on in the same session", async () => {
     for (const p of PROGRAMS) {
+      // The model proxy saw the provider's 402 (OpenCode, Codex); Claude Code's words are its own.
       const broke = fakeProgramRunner(p.program, lines(p.failed("402 insufficient credits")));
-      const r = await trial(p, spec(area()), broke, { pauseMs: () => 5 });
+      const r = await trial(p, spec(area()), broke, {
+        pauseMs: () => 5,
+        providerAnswer: () => ({ status: 402, body: '{"error":"insufficient credits"}' }),
+      });
       assert.deepEqual([r.stopped, r.errorKind], ["error", "credits"], p.entry.name);
       assert.equal(broke.programRuns().length, 1, p.entry.name);
+      // Through the proxy, the program's words alone stop nothing: the model's own error, tried
+      // again in the same session.
+      if (throughProxy(p.model.api)) {
+        const said = fakeProgramRunner(p.program, lines(p.failed("402 insufficient credits")));
+        const w = await trial(p, spec(area(), { limits: limits({ failuresInARow: 2 }) }), said, {
+          pauseMs: () => 5,
+        });
+        assert.deepEqual([w.stopped, w.errorKind], ["error", "model"], p.entry.name);
+        assert.equal(said.programRuns().length, 2, `${p.entry.name}: went on once`);
+      }
       const flaky = fakeProgramRunner(p.program, lines(p.failed("stream disconnected")));
       const waits: unknown[] = [];
       const e = await trial(p, spec(area(), { limits: limits({ failuresInARow: 2 }) }), flaky, {
@@ -484,7 +511,7 @@ describe("the CLI trial loop's research mode", () => {
     assert.equal(run.env?.THERMITE_EDITABLE_PATHS, undefined);
     const prompt = String(run.stdin);
     assert.ok(prompt.startsWith(RESEARCH_WORKER_SYSTEM));
-    assert.match(prompt, /OpenCode itself included \(it uses about 500 MiB\)/);
+    assert.match(prompt, /OpenCode itself included \(it uses about 650 MiB\)/);
     // The brief, then the trial's length; the MCP line last.
     assert.ok(
       prompt.endsWith(
@@ -559,7 +586,6 @@ describe("the one-prompt call, in each program's entry", () => {
       const usage: CallUsage[] = [];
       const windows: PlanWindows[] = [];
       const answer = await cliAsk(p.entry, p.model, "Plan the round.", d, {
-        read: "/knowledge/r-1",
         usage: (u) => usage.push(u),
         windows: (w) => windows.push(w),
       });
@@ -580,11 +606,11 @@ describe("the one-prompt call, in each program's entry", () => {
       assert.equal(f.programRuns().length, 1, name);
       const run = f.programRuns()[0] as RunRequest;
       // The prompt on its stdin; Claude Code's in a file the controller wrote, with the token
-      // on stdin, and the read-only file tools for past research.
+      // on stdin, and none of its own tools.
       if (p.program === "claude-code") {
         assert.equal(run.stdin, p.model.apiKey, name);
         assert.equal(readFileSync(join(dir, "claude-prompt.txt"), "utf8"), "Plan the round.");
-        assert.equal(run.argv[run.argv.indexOf("--tools") + 1], "Read,Grep,Glob", name);
+        assert.equal(run.argv[run.argv.indexOf("--tools") + 1], "", name);
       } else {
         assert.equal(run.stdin, "Plan the round.", name);
         assert.equal(run.argv[0], p.entry.exe() ?? p.entry.bin(), `${name}: by its path`);

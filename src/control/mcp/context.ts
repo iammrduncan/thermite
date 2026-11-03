@@ -9,6 +9,8 @@ import {
 } from "../../core/commands.ts";
 import type { BuildInfo } from "../../core/version.ts";
 import type { Credential } from "../credential.ts";
+import type { ExportFiles } from "../exports.ts";
+import type { KbFiles } from "../kb/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import type { DeploymentDriver, RunpodDriver } from "../lifecycle.ts";
 import type { McpServers } from "../mcp-servers/index.ts";
@@ -54,6 +56,10 @@ export interface McpOptions {
   requestUrl?: string | undefined;
   /** The kits control keeps (goal 096); without it the kit tools are not offered. */
   kits?: KitRepos | undefined;
+  /** The knowledge base's files: its settings' default for orphans comes with them (none: 0). */
+  kbFiles?: KbFiles | undefined;
+  /** Where control keeps rigs' exports (none: it keeps none), which delete_exports deletes from. */
+  exportFiles?: ExportFiles | undefined;
 }
 
 const json = (value: unknown) => ({
@@ -72,16 +78,38 @@ export interface ToolContext {
   canCommand: boolean;
   /** The kinds of command the caller's token may issue. */
   kinds: readonly CommandKind[];
-  /** A tool whose call is in the audit log; `hide`: arguments that are secrets, logged as their last four characters. */
+  /** A tool whose call is in the audit log, its arguments as auditedArgs keeps them. */
   audited: <A>(
     tool: string,
     fn: (args: A) => unknown,
-    hide?: string[],
   ) => (args: A) => Promise<{ content: { type: "text"; text: string }[]; isError?: boolean }>;
   /** A rig's view, or an error that names it. */
   view: (rig: string) => RigView;
   /** A run wherever it ran (goal 170), with its rig's view, or an error that names it. */
   run: (run: string) => Promise<RunOnRig>;
+}
+
+/**
+ * An argument the audit log hides, at any depth of a tool call's arguments: one whose name says it
+ * holds a secret, or a file given as base64 (a kit's bundle, which holds the kit's answers).
+ */
+const HIDDEN_NAME = /key|token|secret|password|base64/i;
+
+/**
+ * A tool call's arguments as the audit log keeps them, for every tool and every token: one whose
+ * name is like a key, token, secret or password, or base64, is hidden (`given`, with a string's
+ * last four characters); other text has the known forms of a credential masked (redact), at most
+ * 2,000 characters each. Numbers and true or false stay as they came.
+ */
+export function auditedArgs(value: unknown, name = ""): unknown {
+  if (typeof value === "number" || typeof value === "boolean" || value == null) return value;
+  if (HIDDEN_NAME.test(name))
+    return typeof value === "string" ? `given (${keyHint(value)})` : "given";
+  if (typeof value === "string") return redact(value);
+  if (Array.isArray(value)) return value.map((v) => auditedArgs(v));
+  if (typeof value === "object")
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, auditedArgs(v, k)]));
+  return String(value);
 }
 
 export function toolContext(
@@ -94,19 +122,17 @@ export function toolContext(
   const canCommand = role !== "reader";
   const kinds =
     role === "owner" ? MCP_OWNER_KINDS : role === "operator" ? MCP_OPERATOR_KINDS : MCP_AGENT_KINDS;
-  /** A tool whose call is in the audit log; `hide`: arguments that are secrets, logged as their last four characters. */
-  const audited = <A>(tool: string, fn: (args: A) => unknown, hide: string[] = []) => {
+  /** A tool whose call is in the audit log, with its arguments as auditedArgs keeps them. */
+  const audited = <A>(tool: string, fn: (args: A) => unknown) => {
     return async (args: A) => {
-      const logged: Record<string, unknown> = { ...((args ?? {}) as Record<string, unknown>) };
-      for (const k of hide)
-        if (typeof logged[k] === "string") logged[k] = `given (${keyHint(String(logged[k]))})`;
-      store.auditLog.add(actor, `mcp:${tool}`, logged);
+      store.auditLog.add(actor, `mcp:${tool}`, auditedArgs(args ?? {}));
       try {
         return json(await fn(args));
       } catch (err) {
-        const error = errorText(err);
+        // With any secret it names masked: what the caller reads and the audit log keeps.
+        const error = redact(errorText(err));
         // A refusal is in the audit log too, as the dashboard's are.
-        store.auditLog.add(actor, "refused", { tool: `mcp:${tool}`, why: redact(error) });
+        store.auditLog.refusal(actor, "refused", { tool: `mcp:${tool}`, why: error });
         return { ...json({ error }), isError: true };
       }
     };

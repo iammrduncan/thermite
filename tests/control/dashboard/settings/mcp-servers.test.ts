@@ -91,7 +91,7 @@ function everyLabelExplained(html: string) {
 describe("Settings › MCP servers", () => {
   test("added with a key: kept, read, shown with its tools and its last four characters only", async (t) => {
     const s = await stack(t);
-    const empty = await s.page("/ui/settings");
+    const empty = await s.page("/ui/settings/mcp");
     const block = between(
       empty,
       '<div class="block" id="mcp">',
@@ -127,7 +127,7 @@ describe("Settings › MCP servers", () => {
     // Read tools again; then a failing server says why, and the rows say which kits name it.
     s.fake.down = true;
     const again = await s.post("/ui/settings/mcp/gbrain/check", {});
-    assert.match(decodeURIComponent(again.headers.get("location") ?? ""), /can't read its tools/);
+    assert.match(await s.page(again.headers.get("location") ?? ""), /can't read its tools/);
     s.store.campaigns.put({
       campaign: "q4-gemv",
       version: 1,
@@ -140,7 +140,7 @@ describe("Settings › MCP servers", () => {
       sources: { mcp_servers: [{ name: "gbrain", agents: ["workers"] }] },
       by: "owner:test",
     });
-    const failing = await s.page("/ui/settings");
+    const failing = await s.page("/ui/settings/mcp");
     const bad = between(failing, 'data-mcp="gbrain"', "</details>");
     assert.match(failing, /<details class="dq dq-bad" data-mcp="gbrain"/);
     assert.match(bad, /named by q4-gemv-kit/);
@@ -175,23 +175,9 @@ describe("Settings › MCP servers", () => {
     const back = new URL(allowed.headers.get("location") ?? "");
     const done = await s.control.request(`/v1/mcp-oauth/callback${back.search}`);
     assert.match(decodeURIComponent(done.headers.get("location") ?? ""), /Signed in to notion/);
-    const row = between(await s.page("/ui/settings"), 'data-mcp="notion"', "</details>");
+    const row = between(await s.page("/ui/settings/mcp"), 'data-mcp="notion"', "</details>");
     assert.match(row, /signed in · the sign-in renews itself/);
     assert.match(row, /Sign in again with another account/);
-  });
-
-  test("an outside knowledge base kept at the update is told once, until Got it", async (t) => {
-    const s = await stack(t);
-    s.store.db
-      .prepare(
-        "insert into mcp_server (name, url, auth, header, status, migrated_from, created_at, created_by, updated_at) values ('gbrain', 'https://brain.example.com/mcp', 'key', 'Authorization', 'unchecked', 'outside_kb', 'x', 'control', 'x')",
-      )
-      .run();
-    const html = await s.page("/ui/settings");
-    assert.match(html, /The outside knowledge base is now an MCP server/);
-    assert.match(html, /Moved here from the outside knowledge base at the update to 0\.1\.0/);
-    await s.post("/ui/settings/mcp-moved", {});
-    assert.ok(!(await s.page("/ui/settings")).includes("is now an MCP server"));
   });
 
   test("the add form's script shows each kind's fields and says what is wrong before sending", () => {
@@ -294,7 +280,7 @@ describe("New campaign › MCP servers for the agents", () => {
     assert.equal(res.status, 200);
     assert.match(
       await res.text(),
-      /The kit names the MCP server paper-search, and Settings has no server of that name\. Add an MCP server named paper-search in Settings › Providers, or take it out of the kit\./,
+      /The kit names the MCP server paper-search, and Settings has no server of that name\. Add an MCP server named paper-search in Settings › MCP servers, or take it out of the kit\./,
     );
   });
 
@@ -302,16 +288,18 @@ describe("New campaign › MCP servers for the agents", () => {
     const s = await stack(t, {
       kitJson: { name: "q4-gemv-kit", mcp_servers: [{ name: "gbrain", agents: ["workers"] }] },
     });
-    const ok = await s.get(
-      `/ui/campaigns/new/kit-repo?${new URLSearchParams({ url: "https://git.example.com/kits/q4.git", commit: KIT_C })}`,
-    );
+    const ok = await s.post("/ui/campaigns/new/kit-repo", {
+      url: "https://git.example.com/kits/q4.git",
+      commit: KIT_C,
+    });
     assert.deepEqual(await ok.json(), {
       name: "q4-gemv-kit",
       mcp_servers: [{ name: "gbrain", agents: ["workers"] }],
     });
-    const broken = await s.get(
-      `/ui/campaigns/new/kit-repo?${new URLSearchParams({ url: "https://git.example.com/kits/broken.git", commit: KIT_C })}`,
-    );
+    const broken = await s.post("/ui/campaigns/new/kit-repo", {
+      url: "https://git.example.com/kits/broken.git",
+      commit: KIT_C,
+    });
     assert.equal(broken.status, 400);
     assert.match(((await broken.json()) as { error: string }).error, /no kit\.json/);
   });

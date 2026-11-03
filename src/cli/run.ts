@@ -14,6 +14,9 @@ export interface RunStartOptions {
   "judge-gpus"?: string | undefined;
   "queue-from"?: string | undefined;
   past?: string[] | undefined;
+  fresh?: boolean | undefined;
+  granted?: string[] | undefined;
+  "no-granted"?: boolean | undefined;
 }
 
 const whole = (flag: string, text: string): number => {
@@ -59,6 +62,8 @@ export function runStartBody(o: RunStartOptions): Record<string, unknown> {
   // A run by its name alone, wherever it ran (goal 170), as for thermite assign --queue-from.
   const queueFrom = o["queue-from"];
   if (queueFrom === "") throw new Error("--queue-from names a run");
+  if (o["no-granted"] && o.granted?.length)
+    throw new Error("--no-granted searches no granted collection: leave out --granted");
   return {
     rig: o.rig,
     ...(o.agents === "off" ? { agents: false } : {}),
@@ -70,6 +75,8 @@ export function runStartBody(o: RunStartOptions): Record<string, unknown> {
       : {}),
     ...(queueFrom ? { queue_from: queueFrom } : {}),
     ...(o.past?.length ? { past: o.past.map((x) => whole("--past", x)) } : {}),
+    ...(o.fresh ? { collection: "fresh" } : {}),
+    ...(o["no-granted"] ? { granted: [] } : o.granted?.length ? { granted: o.granted } : {}),
   };
 }
 

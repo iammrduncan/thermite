@@ -1,7 +1,9 @@
 import type { Hono } from "hono";
+import { busReach } from "../bus/index.ts";
 import { copiedFromRecords, untriedOf } from "../campaigns/index.ts";
+import { weeklyLimit } from "../rigs/index.ts";
 import { cursorOf } from "../store/index.ts";
-import { findRun, rigEventsPage, rigView } from "../views/index.ts";
+import { findRun, podStopped, rigEventsPage, rigView } from "../views/index.ts";
 import { agentRoutes } from "./agents.ts";
 import { type ApiContext, clampLimit } from "./context.ts";
 import { runRoutes } from "./runs.ts";
@@ -35,12 +37,21 @@ export function rigRecordRoutes(app: Hono, api: ApiContext): void {
       : c.json({ error: "no pending key" }, 404),
   );
 
-  // Read from the message bus's events stream: each event's seq is its place there.
+  // Read from the message bus's events stream: each event's seq is its place there. `removed`:
+  // each of the rig's ledgers a retention policy purged, its last event removed on purpose and the
+  // place before which it purged (the stream holds none of those events of it any more).
   app.get("/v1/rigs/:rig/events", admin, async (c) => {
     const after = Math.max(0, Math.trunc(Number(c.req.query("after") ?? "0")) || 0);
     const limit = clampLimit(c.req.query("limit"), 500);
+    const rig = c.req.param("rig");
     return c.json({
-      events: await rigEventsPage(store, { rig: c.req.param("rig"), after, limit }),
+      events: await rigEventsPage(store, { rig, after, limit }),
+      removed: store.retention.floors(rig).map((f) => ({
+        ledger: f.ledger,
+        through_event: f.through_event,
+        before_place: f.before_place,
+        at: f.at,
+      })),
     });
   });
 }
@@ -66,9 +77,17 @@ export function recordRoutes(app: Hono, api: ApiContext): void {
     return c.json({ audit: p.entries, older: p.older, newer: p.newer });
   });
 
+  // The rig as its page has it, with its connection to the message bus (goal 168).
   app.get("/v1/rigs/:rig/view", admin, (c) => {
     const v = rigView(store, c.req.param("rig"), viewOpts);
-    return v ? c.json(v) : c.json({ error: "not found" }, 404);
+    if (!v) return c.json({ error: "not found" }, 404);
+    const bus = busReach(store, v.id, {
+      lastSeen: v.last_seen,
+      now: Date.now(),
+      podStopped: podStopped(v),
+    });
+    // Its subscription's weekly limit, while one holds its runs (goal 169), as Needs you shows it.
+    return c.json({ ...v, bus, weekly_limit: weeklyLimit(store, v) ?? null });
   });
 
   // One run by its name, wherever it ran: the run itself, of a size an agent can read, one of

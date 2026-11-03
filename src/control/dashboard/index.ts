@@ -12,6 +12,7 @@ import { commandRoutes } from "./commands.ts";
 import { type DashboardOptions, dashboardContext } from "./context.ts";
 import { knowledgeRoutes } from "./knowledge.ts";
 import { liveRoutes } from "./live/index.ts";
+import { metricsRoutes } from "./metrics.ts";
 import { overviewRoutes } from "./overview.ts";
 import { recordRoutes } from "./records.ts";
 import { addRigRoutes } from "./rigs/add.ts";
@@ -21,12 +22,16 @@ import { rigListRoutes } from "./rigs/list.ts";
 import { rigPageRoutes } from "./rigs/page.ts";
 import { runpodRigRoutes } from "./rigs/runpod.ts";
 import { rigStateRoutes } from "./rigs/state.ts";
+import { rigWeeklyRoutes } from "./rigs/weekly.ts";
 import { sessionRoutes } from "./session.ts";
 import { cloudRoutes } from "./settings/clouds.ts";
 import { clusterRoutes } from "./settings/clusters.ts";
+import { kbSettingsRoutes } from "./settings/kb.ts";
 import { machineRoutes } from "./settings/machines.ts";
 import { settingsPageRoutes } from "./settings/page.ts";
 import { providerRoutes } from "./settings/providers.ts";
+import { reachRoutes } from "./settings/reach.ts";
+import { retentionRoutes } from "./settings/retention.ts";
 
 export type { DashboardOptions };
 
@@ -50,6 +55,7 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   const dash = dashboardContext(store, opts);
   sessionRoutes(app, dash);
   overviewRoutes(app, dash);
+  metricsRoutes(app, dash);
   newCampaignRoutes(app, dash);
   campaignPageRoutes(app, dash);
   runPageRoutes(app, dash);
@@ -64,10 +70,14 @@ export function createDashboard(store: ControlStore, opts: DashboardOptions): Ho
   actionRoutes(app, dash);
   settingsPageRoutes(app, dash);
   clusterRoutes(app, dash);
+  reachRoutes(app, dash);
+  kbSettingsRoutes(app, dash);
+  retentionRoutes(app, dash);
   cloudRoutes(app, dash);
   addRigRoutes(app, dash);
   joinedRigRoutes(app, dash);
   rigStateRoutes(app, dash);
+  rigWeeklyRoutes(app, dash);
   runpodRigRoutes(app, dash);
   machineRoutes(app, dash);
   providerRoutes(app, dash);

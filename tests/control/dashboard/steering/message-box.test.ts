@@ -139,6 +139,10 @@ describe("Live's message box", () => {
       live,
       /📌 1 kept<\/summary>[\s\S]*?<b>To everyone:<\/b> Keep the public API unchanged\./,
     );
+    // Its menu opens over the page: the chips' bar never clips what drops out of it (goal 183).
+    const bar = /\.lchips \{[^}]*\}/.exec(live)?.[0] ?? "";
+    assert.match(bar, /flex-wrap: wrap/);
+    assert.doesNotMatch(bar, /overflow/);
 
     // The readers, as the rig's harness gives them the text: each lane's Pi worker at its next
     // step, the planner at its next plan, and the advisors in their round or package (the
@@ -211,14 +215,16 @@ describe("Live's message box", () => {
     ]);
 
     // You: the messages, then a receipt for each read and the answers, in the order they came.
+    // On the bus each source's lines come as a message of their own: the planner's after the
+    // others of the same round.
     live = await s.get(LIVE);
     assert.deepEqual(yours(live), [
       "To everyone working: Keep the public API unchanged. 📌 kept in force",
       "To lane-2: Look at the cache misses first.",
-      "To the planner: Spread the lanes wider.",
       "To the teachers: Cite the paper.",
       "To the auditor: Check the timer first.",
       "To all the advisors: Be strict.",
+      "To the planner: Spread the lanes wider.",
       "✓ lane-1 read your message (in force): “Keep the public API unchanged.”",
       "✓ lane-2 read your message (in force): “Keep the public API unchanged.”",
       "✓ lane-2 read your message: “Look at the cache misses first.”",
@@ -323,6 +329,7 @@ describe("Live's message box", () => {
       },
       owner: "steering-ui-test",
       research: new Research(env.service.ledger, env.service.paths.stateDir, {
+        outboxDir: env.service.paths.outboxDir,
         allowPrivate: true,
       }),
       runTrial: async () => ({

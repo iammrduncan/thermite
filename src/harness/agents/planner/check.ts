@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { PLAN_LIMITS } from "../../../agents/roles/index.ts";
 import { canonicalJson } from "../../../core/canonical.ts";
-import { DIRECTIVE_KINDS, QueuePosition } from "../../../core/commands.ts";
+import { QueuePosition } from "../../../core/commands.ts";
 import { asToken, DirectionRef, directionName, notADirection } from "../../../core/directions.ts";
-import { directionOf, inFamily } from "../../queue.ts";
+import { DIRECTIVE_KINDS } from "../../../core/directives.ts";
+import { directionOf, inDirection } from "../../queue.ts";
 import { directiveSets, lanesOf, type PlannerInput, toConvert, toDesign } from "./context.ts";
 
 /**
@@ -11,7 +12,7 @@ import { directiveSets, lanesOf, type PlannerInput, toConvert, toDesign } from "
  * to before any of it is applied.
  */
 
-export interface NewFamily {
+export interface NewDirection {
   id: string;
   description: string;
 }
@@ -22,7 +23,7 @@ export interface NewFamily {
  */
 export interface PlannerRule {
   kind: "avoid" | "try" | "mandate";
-  family: string;
+  direction: string;
   rationale: string;
   /** The owner's message that asked for it. */
   from_message: number;
@@ -35,7 +36,7 @@ export interface QueuePlan {
     ref: string;
     title: string;
     details?: string | undefined;
-    family?: string | undefined;
+    direction?: string | undefined;
     why: string;
     position?: QueuePosition | undefined;
     /** A research task's question, an index from 0 (the research planner's, goal 117). */
@@ -49,7 +50,7 @@ export interface QueuePlan {
    * The old rules in words in force (legacy), each with the direction its words mean: one the run
    * has, or one designed in the same answer. Code replaces each with a rule on that direction.
    */
-  convert: { rule: number; family: string }[];
+  convert: { rule: number; direction: string }[];
   /** Each lane's experiment (a queued or proposed id, or an added one's ref) and why. */
   handout: { lane: string; experiment: string; parent: "champion" | "lane_best"; why: string }[];
 }
@@ -60,14 +61,14 @@ const PlanSchema = z.object({
    * New directions: the name (plain words or :name:, kept as its name) and what it means. Room
    * for one more for each old rule in words the round converts, so each can get a new one.
    */
-  new_families: z
+  new_directions: z
     .array(
       z.object({
         id: DirectionRef,
         description: z.string().trim().min(3).max(PLAN_LIMITS.description),
       }),
     )
-    .max(PLAN_LIMITS.newFamilies)
+    .max(PLAN_LIMITS.newDirections)
     .default([]),
   add: z
     .array(
@@ -75,7 +76,7 @@ const PlanSchema = z.object({
         ref: z.string().trim().min(1).max(PLAN_LIMITS.ref).optional(),
         title: z.string().trim().min(1).max(PLAN_LIMITS.title),
         details: z.string().max(PLAN_LIMITS.details).optional(),
-        family: z.string().trim().min(1).max(PLAN_LIMITS.family).optional(),
+        direction: z.string().trim().min(1).max(PLAN_LIMITS.direction).optional(),
         why: Why,
         position: QueuePosition.optional(),
       }),
@@ -106,7 +107,7 @@ const PlanSchema = z.object({
       z.object({
         kind: z.enum(["avoid", "try", "mandate"]),
         /** The direction, as its name or :name:; checked against the message and the run. */
-        family: z.string().trim().max(200).optional(),
+        direction: z.string().trim().max(200).optional(),
         /** Words: a rule no longer takes them, and one that gives them is refused with why. */
         match: z.unknown().optional(),
         rationale: z.string().trim().min(1).max(PLAN_LIMITS.why),
@@ -121,7 +122,7 @@ const PlanSchema = z.object({
       z.object({
         rule: z.coerce.number().int().positive(),
         /** The direction, as its name or :name:; checked against the run's and the answer's. */
-        family: z.string().trim().max(200),
+        direction: z.string().trim().max(200),
       }),
     )
     .max(PLAN_LIMITS.convert)
@@ -134,7 +135,7 @@ const PlanSchema = z.object({
       /** Or a new experiment inline: what to try (title or focus), its direction and details. */
       title: z.string().trim().min(1).max(PLAN_LIMITS.title).optional(),
       focus: z.string().trim().min(3).max(PLAN_LIMITS.focus).optional(),
-      family: z.string().trim().min(1).max(PLAN_LIMITS.family).optional(),
+      direction: z.string().trim().min(1).max(PLAN_LIMITS.direction).optional(),
       details: z.string().max(PLAN_LIMITS.details).optional(),
       parent: z.enum(["champion", "lane_best"]).default("champion"),
       why: z.string().max(PLAN_LIMITS.why).optional(),
@@ -148,8 +149,8 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
 /** A directive's kind as a direction's id (lane_count: lane-count): never a direction's name. */
 const DIRECTIVE_WORDS = new Set(DIRECTIVE_KINDS.map((k) => directionOf(k)));
 const NOT_A_DIRECTION = `is a kind of rule (${DIRECTIVE_KINDS.join(", ")}), not a direction: name the direction by what it changes`;
-const directiveWord = (family: string | undefined) =>
-  family !== undefined && DIRECTIVE_WORDS.has(directionOf(family));
+const directiveWord = (direction: string | undefined) =>
+  direction !== undefined && DIRECTIVE_WORDS.has(directionOf(direction));
 
 /** Checks a raw plan; returns the errors (empty when valid) and the checked plan. */
 export function validatePlan(
@@ -157,7 +158,7 @@ export function validatePlan(
   input: PlannerInput,
 ): {
   errors: string[];
-  plan?: QueuePlan & { newFamilies: NewFamily[]; notes?: string | undefined };
+  plan?: QueuePlan & { newDirections: NewDirection[]; notes?: string | undefined };
 } {
   const parsed = PlanSchema.safeParse(raw);
   if (!parsed.success)
@@ -212,13 +213,13 @@ export function validatePlan(
         ...(text.length > 200 || a.details
           ? { details: [text.length > 200 ? text : "", a.details ?? ""].filter(Boolean).join("\n") }
           : {}),
-        ...(a.family ? { family: a.family } : {}),
+        ...(a.direction ? { direction: a.direction } : {}),
         why: a.why?.trim() || text,
       });
     }
     if (!experiment) {
       errors.push(
-        `${a.lane}: name an experiment (an id from the queue or the ref of one you add), or give a new one with title and family`,
+        `${a.lane}: name an experiment (an id from the queue or the ref of one you add), or give a new one with title and direction`,
       );
       continue;
     }
@@ -238,12 +239,12 @@ export function validatePlan(
     });
   }
   // A direction is never named by a kind of rule: a lane "on try" reads as a directive.
-  for (const f of p.new_families)
-    if (directiveWord(f.id)) errors.push(`new_families: "${f.id}" ${NOT_A_DIRECTION}`);
+  for (const f of p.new_directions)
+    if (directiveWord(f.id)) errors.push(`new_directions: "${f.id}" ${NOT_A_DIRECTION}`);
   for (const a of add)
-    if (directiveWord(a.family))
+    if (directiveWord(a.direction))
       errors.push(
-        `${a.ref.startsWith("@") ? a.ref.slice(1) : `add ${a.ref}`}: the family "${a.family}" ${NOT_A_DIRECTION}`,
+        `${a.ref.startsWith("@") ? a.ref.slice(1) : `add ${a.ref}`}: the direction "${a.direction}" ${NOT_A_DIRECTION}`,
       );
   const twice = handout.filter(
     (h, i) => handout.findIndex((o) => o.experiment === h.experiment) !== i,
@@ -251,31 +252,31 @@ export function validatePlan(
   for (const h of twice)
     errors.push(`${h.lane}: experiment ${h.experiment} is given to another lane too`);
 
-  // The rules: AVOID families are never given out, every MANDATE family is.
-  const familyOf = (id: string) =>
-    (queued.get(id) ?? proposed.get(id) ?? add.find((x) => x.ref === id))?.family ?? "";
+  // The rules: AVOID directions are never given out, every MANDATE direction is.
+  const directionFor = (id: string) =>
+    (queued.get(id) ?? proposed.get(id) ?? add.find((x) => x.ref === id))?.direction ?? "";
   const { avoid, mandate } = directiveSets(input);
   for (const h of handout) {
-    const family = familyOf(h.experiment);
+    const direction = directionFor(h.experiment);
     for (const f of avoid)
-      if (inFamily({ family }, f))
+      if (inDirection({ direction }, f))
         errors.push(
-          `${h.lane}: experiment ${h.experiment} is in family ${f}, under an AVOID directive`,
+          `${h.lane}: experiment ${h.experiment} is in direction ${f}, under an AVOID directive`,
         );
   }
   for (const m of mandate) {
-    if (!handout.some((h) => inFamily({ family: familyOf(h.experiment) }, m)))
+    if (!handout.some((h) => inDirection({ direction: directionFor(h.experiment) }, m)))
       errors.push(
-        `MANDATE directive: give a lane an experiment of family ${m} (add one if the queue has none)`,
+        `MANDATE directive: give a lane an experiment of direction ${m} (add one if the queue has none)`,
       );
   }
-  // Directions (goal 066): the planner designs each new one it or a rule names, in new_families.
+  // Directions (goal 066): the planner designs each new one it or a rule names, in new_directions.
   const known = input.directions;
-  const designed = new Set(p.new_families.map((f) => f.id));
+  const designed = new Set(p.new_directions.map((f) => f.id));
   for (const d of toDesign(input))
     if (!designed.has(d.name))
       errors.push(
-        `rule ${d.rules.map((r) => r.id).join(", ")} names ${asToken(d.name)}, a direction this run doesn't have yet: design it in new_families, with its name and what it means, in your words`,
+        `rule ${d.rules.map((r) => r.id).join(", ")} names ${asToken(d.name)}, a direction this run doesn't have yet: design it in new_directions, with its name and what it means, in your words`,
       );
   // Rules only from the owner's messages in this prompt, each naming a direction: one the run
   // has, or a new one this answer designs. A message's :name: names one exactly; its plain words
@@ -289,23 +290,23 @@ export function validatePlan(
       );
       continue;
     }
-    const family = r.family ? directionName(r.family) : undefined;
-    if (!family) {
-      const why = r.family
-        ? notADirection(r.family)
+    const direction = r.direction ? directionName(r.direction) : undefined;
+    if (!direction) {
+      const why = r.direction
+        ? notADirection(r.direction)
         : r.match !== undefined
           ? "a rule no longer takes match"
           : "";
-      errors.push(`rules: a rule names its direction in family${why ? `: ${why}` : ""}`);
+      errors.push(`rules: a rule gives its direction in direction${why ? `: ${why}` : ""}`);
       continue;
     }
-    if (known && !known.includes(family) && !designed.has(family)) {
+    if (known && !known.includes(direction) && !designed.has(direction)) {
       errors.push(
-        `rules: ${asToken(family)} is not one of the run's directions: to make a rule for a new direction, design it in new_families too`,
+        `rules: ${asToken(direction)} is not one of the run's directions: to make a rule for a new direction, design it in new_directions too`,
       );
       continue;
     }
-    rules.push({ kind: r.kind, family, rationale: r.rationale, from_message: r.from_message });
+    rules.push({ kind: r.kind, direction, rationale: r.rationale, from_message: r.from_message });
   }
   // Old rules in words (goal 066): the answer gives each the direction its words mean, one the
   // run has or one it designs here; code then replaces the rule. One left out is refused.
@@ -322,27 +323,27 @@ export function validatePlan(
       continue;
     }
     seen.add(c.rule);
-    const family = directionName(c.family);
-    if (!family) {
-      errors.push(`convert: rule ${c.rule}: ${notADirection(c.family)}`);
+    const direction = directionName(c.direction);
+    if (!direction) {
+      errors.push(`convert: rule ${c.rule}: ${notADirection(c.direction)}`);
       continue;
     }
-    if (directiveWord(family)) {
-      errors.push(`convert: rule ${c.rule}: "${c.family}" ${NOT_A_DIRECTION}`);
+    if (directiveWord(direction)) {
+      errors.push(`convert: rule ${c.rule}: "${c.direction}" ${NOT_A_DIRECTION}`);
       continue;
     }
-    if (known && !known.includes(family) && !designed.has(family)) {
+    if (known && !known.includes(direction) && !designed.has(direction)) {
       errors.push(
-        `convert: rule ${c.rule}: ${asToken(family)} is not one of the run's directions: to convert it to a new direction, design it in new_families too`,
+        `convert: rule ${c.rule}: ${asToken(direction)} is not one of the run's directions: to convert it to a new direction, design it in new_directions too`,
       );
       continue;
     }
-    convert.push({ rule: c.rule, family });
+    convert.push({ rule: c.rule, direction });
   }
   for (const [id, r] of words)
     if (!p.convert.some((c) => c.rule === id))
       errors.push(
-        `rule ${id} is an old rule in words ("${clip(r.words, 120)}"): convert it, in convert, to the direction its words mean: one in directions, or a new one you design in new_families`,
+        `rule ${id} is an old rule in words ("${clip(r.words, 120)}"): convert it, in convert, to the direction its words mean: one in directions, or a new one you design in new_directions`,
       );
   return {
     errors,
@@ -354,7 +355,7 @@ export function validatePlan(
       rules,
       convert,
       handout,
-      newFamilies: p.new_families,
+      newDirections: p.new_directions,
       notes: p.notes,
     },
   };

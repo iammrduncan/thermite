@@ -14,6 +14,7 @@ import {
   eventMessage,
   eventMessageId,
   eventSubject,
+  purgeSubjectOf,
   QUEUE_OPS,
   readEventMessage,
 } from "../../../src/core/link/events.ts";
@@ -292,12 +293,28 @@ describe("the events stream's contract", () => {
       "no limit on count, bytes or age",
     );
     assert.equal(s.discard, "new", "a full store refuses new events, never drops old ones");
-    assert.equal(s.deny_delete, true);
-    assert.equal(s.deny_purge, true);
+    // A retention policy purges control's copy by subject (control/retention/): nothing refuses it.
+    assert.ok(!("deny_delete" in s) && !("deny_purge" in s));
     assert.equal(s.duplicate_window, 2 * 60 * 1e9);
     assert.equal(s.allow_atomic, true);
     assert.equal(s.allow_direct, true);
     assert.equal(s.compression, "s2");
     assert.equal(s.max_msg_size, EVENT_MAX_BYTES);
+  });
+
+  test("a purge names a run's subjects, or a rig's own, as a message's subject gives them", () => {
+    assert.deepEqual(purgeSubjectOf("thermite.run.r-1.ev.verdict"), {
+      filter: "thermite.run.r-1.>",
+      run: "r-1",
+    });
+    assert.deepEqual(purgeSubjectOf("thermite.run.r-1.queue.added"), {
+      filter: "thermite.run.r-1.>",
+      run: "r-1",
+    });
+    assert.deepEqual(purgeSubjectOf("thermite.rig.rig-a.ev.command"), {
+      filter: "thermite.rig.rig-a.ev.*",
+      run: null,
+    });
+    assert.equal(purgeSubjectOf("thermite.rig.rig-a.report"), null);
   });
 });

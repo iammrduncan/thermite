@@ -193,7 +193,7 @@ describe("the advisors' field notes", () => {
       "the teacher called its brief tool",
     );
     for (const x of seen) assert.doesNotMatch(x, /Vector loads need 16-byte aligned pointers/);
-    assert.doesNotMatch(brief, /\\"background\\"|\\"past_research\\"/);
+    assert.doesNotMatch(brief, /\\"background\\"/);
   });
 
   test("the auditor's notes come after its audit, as auditor:<name>; its package has the background", async () => {

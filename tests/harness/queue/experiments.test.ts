@@ -24,12 +24,12 @@ describe("the experiment queue", () => {
     const { q } = s;
     const a = q.add(
       RUN,
-      { title: "fuse the loads", family: "Memory layout", by: "owner", why: "it won on big" },
+      { title: "fuse the loads", direction: "Memory layout", by: "owner", why: "it won on big" },
       "control:owner:ui",
     );
     const b = q.add(
       RUN,
-      { title: "unroll by 4", family: "unroll", by: "planner", position: "top" },
+      { title: "unroll by 4", direction: "unroll", by: "planner", position: "top" },
       "planner",
     );
     const c = q.add(
@@ -90,7 +90,7 @@ describe("the experiment queue", () => {
     assert.deepEqual(ev[0]?.body, {
       id: a.id,
       title: "fuse the loads",
-      family: "Memory layout",
+      direction: "Memory layout",
       why: "it won on big",
       by: "owner",
       state: "queued",

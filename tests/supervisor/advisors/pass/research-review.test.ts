@@ -338,7 +338,7 @@ describe("the review panel answers a research run's package (goal 112)", () => {
       topic: "t",
       questions: [{ index: 0, text: "Q?", verified_claims: 1, claims: [] }],
       hypotheses,
-      past_research: "p".repeat(200_000),
+      background: "p".repeat(200_000),
       criteria: ["c"],
       decide: { questions: [0], hypotheses: hypotheses.map((h) => h.id) },
       campaign_brief: { notes: "b" },
@@ -349,7 +349,7 @@ describe("the review panel answers a research run's package (goal 112)", () => {
     const roomy = reviewText(pkg, 2_000_000);
     assert.doesNotMatch(roomy, /Cut to fit/);
     assert.match(roomy, /h-0179/);
-    // 200,000 characters: the items to decide come before past research, so that is cut.
+    // 200,000 characters: the items to decide come before the background, so that is cut.
     const tight = reviewText(pkg, undefined);
     assert.match(
       tight,
@@ -358,7 +358,7 @@ describe("the review panel answers a research run's package (goal 112)", () => {
     assert.match(tight, /h-0179/, "the last hypothesis is shown");
     assert.ok(tight.indexOf('"criteria"') < tight.indexOf('"decide"'));
     assert.ok(tight.indexOf('"decide"') < tight.indexOf('"questions"'));
-    assert.ok(tight.indexOf('"hypotheses"') < tight.indexOf('"past_research"'));
+    assert.ok(tight.indexOf('"hypotheses"') < tight.indexOf('"background"'));
   });
   test("a reviewer that leaves out a hypothesis is asked again for it alone; its verdict's word is read in any case", async (t) => {
     const s = await waiting(t);

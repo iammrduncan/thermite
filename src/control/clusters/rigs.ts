@@ -1,12 +1,22 @@
 import { errorText } from "../../common/errors.ts";
 import { RIG_ID_SENTENCE } from "../../core/ids.ts";
+import { PROGRAM_MODE_DEFAULT, type ProgramMode } from "../../core/rig-settings.ts";
 import { inBackground } from "../background.ts";
 import { newToken } from "../credential.ts";
 import { issueCommand } from "../issue/index.ts";
 import { MAX_RIG_GPUS } from "../machines/index.ts";
 import type { ControlParts } from "../parts.ts";
-import { awaitFirstReport, controlAddress, judgeShare, rigTaken, sleep } from "../rigs/index.ts";
+import {
+  awaitFirstReport,
+  controlAddress,
+  judgeShare,
+  NO_RIG_BUS,
+  rigBusOf,
+  rigTaken,
+  sleep,
+} from "../rigs/index.ts";
 import { type Cluster, type ClusterRig, RIG_ID } from "../store/index.ts";
+import { programModeOf } from "../views/index.ts";
 import {
   type ClusterFacts,
   type ClusterSlot,
@@ -16,6 +26,7 @@ import {
 } from "./facts.ts";
 import { kubeError } from "./kubectl.ts";
 import { asList, clusterNames, clusterRigObjects, rigResources } from "./manifests.ts";
+import type { SlotOpening } from "./netcheck.ts";
 import { quotaRefusal } from "./resources.ts";
 
 /**
@@ -43,9 +54,26 @@ export async function checkClusterNow(parts: ControlParts, name: string): Promis
   const c = store.clusters.get(name);
   if (!c) return "no such cluster";
   try {
-    store.clusters.setFacts(name, {
-      facts: await checkCluster(parts.kube, clusterTarget(parts, c), c.slots),
-    });
+    const facts = await checkCluster(
+      parts.kube,
+      clusterTarget(parts, c),
+      c.slots,
+      store.reachable.list(),
+    );
+    store.clusters.setFacts(name, { facts });
+    // Each slot's rig takes what its slot's rules open and let in now, for its page.
+    const inSlots = store.clusters.rigs(name).filter((r) => r.placement === "slot");
+    for (const slot of facts.slots)
+      for (const r of inSlots.filter(
+        (x) => x.namespace === slot.namespace && x.status !== "removed",
+      ))
+        store.clusters.setRigSlotNetwork(r.rig, {
+          openings: slot.openings ?? [],
+          ingress:
+            slot.ingress_ok === undefined
+              ? undefined
+              : { ok: slot.ingress_ok, why: slot.ingress_why ?? "" },
+        });
     return null;
   } catch (err) {
     const why = errorText(err);
@@ -112,6 +140,7 @@ export async function addClusterRig(
   const k = store.clusters.get(i.cluster);
   if (!parts.rigImages) return fail("Control has no rig images configured.");
   if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
+  if (!parts.rigBus) return fail(NO_RIG_BUS);
   if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
   if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
   if (!k) return fail("Choose a machine or a cluster.");
@@ -153,6 +182,8 @@ export async function addClusterRig(
     return fail("The volume size is a whole number of GB, from 1 to 10000.");
   let namespace: string;
   let slotQuota: ClusterSlot["quota"];
+  let openings: SlotOpening[] = [];
+  let ingress: { ok: boolean; why: string } | undefined;
   if (k.placement === "slot") {
     namespace = i.slot ?? "";
     const slot = facts.slots.find((s) => s.namespace === namespace && s.usable && !s.used_by);
@@ -162,20 +193,29 @@ export async function addClusterRig(
       store.clusters.rigs(k.name).some((r) => r.namespace === namespace && r.status !== "removed")
     )
       return fail(`The slot ${namespace} is in use.`);
-    // Refuse a slot whose rules don't keep this harness off the cluster.
-    const net = await slotNetwork(parts.kube, clusterTarget(parts, k), namespace, {
-      ...HARNESS_LABELS,
-      "app.kubernetes.io/instance": rig,
-    });
+    // Refuse a slot whose rules don't keep this harness off the cluster; keep what they open of
+    // the owner's list of addresses rigs may reach, for the rig's page.
+    const net = await slotNetwork(
+      parts.kube,
+      clusterTarget(parts, k),
+      namespace,
+      { ...HARNESS_LABELS, "app.kubernetes.io/instance": rig },
+      store.reachable.list(),
+    );
     if (!net.ok)
       return fail(
-        `Refused: in the slot ${namespace}, ${net.why}. A rig's harness may reach only DNS, the internet and its model: ask the cluster's operators for a network rule that keeps it off the cluster.`,
+        `Refused: in the slot ${namespace}, ${net.why}. A rig's harness may reach only DNS, the internet, its model and the addresses in Settings › Addresses rigs may reach: ask the cluster's operators for a network rule that keeps it off the cluster.`,
       );
+    openings = net.openings;
+    ingress = net.ingress;
   } else {
     namespace = k.namespace_pattern.replace("{rig}", rig);
     if (!NS.test(namespace)) return fail(`"${namespace}" is not a namespace name.`);
   }
   // CPUs and memory: as given, else what the slot's quota allows; none: the namespace's defaults.
+  // A new rig has not reported, so its agent programs run the default way until someone sets
+  // another, and its supervisor's share is that way's.
+  const programMode = PROGRAM_MODE_DEFAULT;
   const cpus = i.cpus ?? slotQuota?.cpus;
   const memoryGi = i.memoryGi ?? slotQuota?.memoryGi;
   let resources: { cpus: number; memoryGi: number } | undefined;
@@ -183,7 +223,7 @@ export async function addClusterRig(
     if (cpus === undefined || memoryGi === undefined)
       return fail("Give the rig both its CPUs and its memory, or neither.");
     try {
-      rigResources({ cpus, memoryGi });
+      rigResources({ cpus, memoryGi }, programMode);
     } catch (err) {
       return fail(errorText(err));
     }
@@ -216,11 +256,14 @@ export async function addClusterRig(
       storageClass,
       storageGi,
       resources,
+      programMode,
       images: {
         harness: gpus ? (parts.rigImages.harnessCuda as string) : parts.rigImages.harness,
         supervisor: parts.rigImages.supervisor,
       },
       controlUrl: controlAddress(parts),
+      ...(openings.length ? { openings } : {}),
+      ...(ingress ? { ingress } : {}),
     },
     created_by: by,
   });
@@ -230,8 +273,17 @@ export async function addClusterRig(
   return { rig };
 }
 
-/** What a rig control set up on a cluster is deployed with, with its images or others. */
-export const clusterPlan = (parts: ControlParts, r: ClusterRig, images = r.spec.images) => ({
+/**
+ * What a rig control set up on a cluster is deployed with, with its images or others. Its
+ * supervisor's share follows how its agent programs run: as its report says, unless a caller
+ * gives the mode (a new one, or the one its deployments have).
+ */
+export const clusterPlan = (
+  parts: ControlParts,
+  r: ClusterRig,
+  images = r.spec.images,
+  programMode: ProgramMode = programModeOf(parts.store, r.rig),
+) => ({
   rig: r.rig,
   placement: r.placement,
   namespace: r.namespace,
@@ -245,8 +297,10 @@ export const clusterPlan = (parts: ControlParts, r: ClusterRig, images = r.spec.
   storageClass: r.spec.storageClass,
   storageGi: r.spec.storageGi,
   resources: r.spec.resources,
+  programMode,
   controlPublicKey: parts.controlPublicKey,
-  bus: parts.rigBus,
+  bus: rigBusOf(parts),
+  reach: parts.store.reachable.list(),
 });
 
 /** Sets a rig up on a cluster, in the background: one apply, then the first report. */
@@ -258,7 +312,7 @@ async function deployClusterRig(
 ) {
   const { store } = parts;
   try {
-    const objects = clusterRigObjects(clusterPlan(parts, r), {
+    const objects = clusterRigObjects(clusterPlan(parts, r, r.spec.images, r.spec.programMode), {
       controlToken,
       harnessSupervisorToken: newToken().token,
     });

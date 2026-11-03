@@ -5,7 +5,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { createUser } from "@nats-io/nkeys";
-import { redact, waitForFile } from "../../src/common/env.ts";
+import { redact, requireEnv, waitForFile } from "../../src/common/env.ts";
+
+describe("a required setting", () => {
+  test("it is read by its own name only: THERMITE_UNIT_ID, the rig's name before v0.1.0, is not", () => {
+    assert.equal(requireEnv("THERMITE_RIG_ID", { THERMITE_RIG_ID: "rig-1" }), "rig-1");
+    assert.throws(
+      () => requireEnv("THERMITE_RIG_ID", { THERMITE_UNIT_ID: "rig-1" }),
+      /^Error: missing environment variable THERMITE_RIG_ID$/,
+    );
+  });
+});
 
 describe("waiting for a file", () => {
   test("it gives up after its timeout", async () => {
@@ -47,6 +57,30 @@ describe("what a log line never holds (redact)", () => {
       "set THERMITE_STATE_SNAPSHOT_KEY at launch",
       "THERMITE_STATE_SNAPSHOT_DIR=/workspace/thermite",
     ])
+      assert.equal(redact(kept), kept);
+  });
+
+  test("a query string's or a form's secret and a credential header are taken out", () => {
+    const secret = "s3cr3t-value-0123456789";
+    for (const [line, kept] of [
+      [`GET https://host.example/v1/x?token=${secret}&page=2`, "&page=2"],
+      [`https://host.example/cb?access_token=${secret}`, "access_token=***"],
+      [`https://host.example/cb?code=${secret}&state=abc`, "&state=abc"],
+      [`api_key=${secret} refused`, " refused"],
+      [`client_secret=${secret}`, "client_secret=***"],
+      [`https://host.example/x?key=${secret}`, "key=***"],
+      [`x-api-key: ${secret}`, "x-api-key: ***"],
+      [JSON.stringify({ "x-api-key": secret }), '"x-api-key":"***"'],
+      [`git -c http.extraHeader=Authorization: Basic ${secret} fetch`, "Authorization: ***"],
+      [`authorization: Bearer ${secret}`, "authorization: ***"],
+      [`private-token: ${secret}`, "private-token: ***"],
+    ] as const) {
+      const out = redact(line);
+      assert.ok(!out.includes(secret), out);
+      assert.ok(out.includes(kept), out);
+    }
+    // Words about a setting, and counts of tokens, stay as they are.
+    for (const kept of ["max_tokens=4096", "the token is missing", "exit code=1"])
       assert.equal(redact(kept), kept);
   });
 

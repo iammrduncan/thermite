@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { codexCompactPrompt, compactionTokens, type KeptAt } from "../../compaction/index.ts";
-import { gatewayUrl, type McpAccess } from "../../mcp/index.ts";
+import { gatewayUrl, type McpAccess, servedNames } from "../../mcp/index.ts";
 import type { ModelConfig } from "../../model/index.ts";
 import { hookArgv, hookShellLine } from "../hooks/index.ts";
 import { agentPath } from "../path.ts";
@@ -20,8 +20,8 @@ export { tomlString } from "./toml.ts";
 
 /**
  * The Codex CLI as Thermite starts it, for the harness's agents and the supervisor's advisors: its
- * binary, its configuration, its command line and its environment. Its entry for the harness's CLI
- * trial loop is in src/harness/agents/cli/codex.ts.
+ * binary, its configuration, its command line and its environment. Its entry, as every role runs
+ * it, is src/agents/cli/codex.ts.
  */
 
 /** The Codex CLI's binary: THERMITE_CODEX_BIN, else `codex` on the PATH (read when used). */
@@ -68,12 +68,12 @@ export function codexExe(): string | undefined {
 export function codexConfig(
   m: ModelConfig,
   proxyRoot: string,
-  mcp?: Pick<McpAccess, "apiUrl" | "servers"> | undefined,
+  mcp?: Pick<McpAccess, "apiUrl" | "servers" | "kb"> | undefined,
   keptAt?: KeptAt | undefined,
   notify?: readonly string[] | undefined,
 ): string {
   const effort = m.reasoning === "off" ? "none" : m.reasoning;
-  const servers = (mcp?.servers ?? []).flatMap((s) => [
+  const servers = servedNames(mcp).flatMap((s) => [
     `[mcp_servers.${s}]`,
     `url = ${tomlString(gatewayUrl(mcp?.apiUrl ?? "", s))}`,
     'bearer_token_env_var = "THERMITE_MCP_AUTH"',

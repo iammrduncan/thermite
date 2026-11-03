@@ -53,7 +53,7 @@ export const EDIT_RIG_JS = `
     if (field) field.hidden = n < 2;
     if (now) now.hidden = true;
     const j = Number(judgeEl.value);
-    if (n >= 2 && (!Number.isInteger(j) || j < 1 || j > top || n - j > 8)) judgeEl.value = String(Math.min(top, Math.max(n - 8, (${judgeGpusByDefault})(n))));
+    if (n >= 2 && (!Number.isInteger(j) || j < 1 || j > top || n - j > 8)) judgeEl.value = String(Math.min(top, Math.max(n - 8, (${judgeGpusByDefault.toString()})(n))));
   };
   if (gpusEl) { gpusEl.addEventListener("input", fitJudge, true); gpusEl.addEventListener("change", fitJudge, true); }
   const general = (later) => {
@@ -78,7 +78,7 @@ export const EDIT_RIG_JS = `
     if (moves) {
       const n = gpusEl ? Number(gpusEl.value) : 0;
       if (gpusMoved() && n >= 2) {
-        const j = judgeEl ? Number(judgeEl.value) : (${judgeGpusByDefault})(n);
+        const j = judgeEl ? Number(judgeEl.value) : (${judgeGpusByDefault.toString()})(n);
         out.push("The judge gets " + j + " of the " + n + " GPUs, the agents " + (n - j) + (judgeEl ? "." : ": half each, rounded up for the judge."));
       }
       const say = $("[data-moves-say]");
@@ -149,7 +149,7 @@ export const EDIT_RIG_JS = `
   };
   nameTeachers();
 
-  // Runs in: what each harness can run, in control's words (rigs/model.ts's harnessRefusal).
+  // Runs in: what each harness can run, in control's words (rigs/model/request.ts's harnessRefusal).
   const harnessErr = (opt, h, r) => {
     const kind = opt.dataset.kind, codex = !!opt.dataset.codex;
     if (kind === "claude" && h !== "claude-code") return "A Claude subscription runs only in Claude Code: choose Claude Code for " + r.who + ", or another model.";

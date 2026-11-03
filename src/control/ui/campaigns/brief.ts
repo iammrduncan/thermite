@@ -17,7 +17,7 @@ import { esc, infoLabel, MD_CORE_JS, mdHtml } from "../components/index.ts";
 /** The parts of a draft the brief fills (a draft sent back with mistakes fills them again). */
 export interface BriefDraft {
   mode?: string | undefined;
-  notes?: string | undefined;
+  additional_information?: string | undefined;
   /** Hill climb and goal: the starting links. A research draft has them as research.seeds. */
   links?: string[] | undefined;
   ideas?: string[] | undefined;
@@ -36,7 +36,7 @@ const TIP = {
     "What the agents research, in one sentence. The questions and the additional information say more.",
   questions:
     "What the research must answer, one question in each box. A question can be long and have several lines. Every finding answers one of them. At least one.",
-  notes:
+  additional_information:
     "What the agents should know, in Markdown: the project and its links, what was tried, limits, and what good looks like. No length limit. The planner, the workers and the advisors get it, and the run's folder keeps it as BRIEF.md. A worker's brief has the first 32,000 characters of the brief; the rest is in BRIEF.md.",
   links:
     "Pages for the agents, one address per line. Research: the harness fetches and archives them when the run starts. Hill climb and goal: the agents get them with the brief. Links in Additional information reach the agents too, but nothing fetches them first.",
@@ -50,7 +50,7 @@ const PLACEHOLDER = {
   topic: "Which methods keep long agent tasks stable?",
   questions:
     "Which papers since 2024 train agents on tasks of 100 steps or more? What do they report?",
-  notes:
+  additional_information:
     "## Background\nWhat the project is, with links.\n\n## What was tried\nWhat worked, and what did not.\n\n## Limits\nWhat must not change.\n\n## What good looks like",
   links: "https://git.example.com/team/project/issues/12\nhttps://docs.example.com/design",
   ideas: "Fuse the dequantize step into the inner loop",
@@ -77,12 +77,12 @@ const listField = (name: ListName, label: string, items: string[], modes = "") =
 
 /** New campaign's step 2, The brief: its pane, with Back and Next. */
 export function briefPane(d: BriefDraft): string {
-  const notes = d.notes ?? "";
+  const notes = d.additional_information ?? "";
   const links = (d.mode === "research" ? d.research?.seeds : d.links) ?? [];
   return `<section class="pane" data-pane="brief" hidden><div class="sec nc-brief" id="brief"><h2>The brief</h2><p class="lead">What the agents should know. They get it as starting points, not rules.</p>
 <div data-modes="research"><label class="fd">${infoLabel("Topic", TIP.topic)}<input name="topic" value="${esc(d.research?.topic ?? "")}" placeholder="${esc(PLACEHOLDER.topic)}"></label>
 ${listField("questions", "Questions", d.research?.questions ?? [])}</div>
-<div class="fd">${infoLabel("Additional information", TIP.notes)}<div class="md-two"><textarea name="notes" class="md-in" placeholder="${esc(PLACEHOLDER.notes)}">${esc(notes)}</textarea><div class="md-out md" data-md-out aria-live="polite">${notes.trim() ? mdHtml(notes) : `<span class="muted">The preview shows here.</span>`}</div></div><div class="small muted" data-md-say>Markdown. Empty is fine.</div></div>
+<div class="fd">${infoLabel("Additional information", TIP.additional_information)}<div class="md-two"><textarea name="additional_information" class="md-in" placeholder="${esc(PLACEHOLDER.additional_information)}">${esc(notes)}</textarea><div class="md-out md" data-md-out aria-live="polite">${notes.trim() ? mdHtml(notes) : `<span class="muted">The preview shows here.</span>`}</div></div><div class="small muted" data-md-say>Markdown. Empty is fine.</div></div>
 <label class="fd">${infoLabel("Starting links", TIP.links)}<textarea name="links" class="nc-links" placeholder="${esc(PLACEHOLDER.links)}">${esc(links.join("\n"))}</textarea><span class="small muted" data-links-say>One address per line. Empty is fine.</span></label>
 ${listField("ideas", "Ideas to try", d.ideas ?? [], "hill_climb goal")}
 ${listField("hypotheses", "Hypotheses", d.hypotheses ?? [])}
@@ -91,7 +91,7 @@ ${listField("hypotheses", "Hypotheses", d.hypotheses ?? [])}
 
 /**
  * The brief's page-free part, as the browser runs it (and the tests, as the browser does):
- * - `briefDraft(mode, f)`: the draft's brief from the fields' values, `f` = {notes, links, ideas,
+ * - `briefDraft(mode, f)`: the draft's brief from the fields' values, `f` = {additional_information, links, ideas,
  *   hypotheses} (links as typed, the lists as boxes): entries trimmed, empty ones left out, links
  *   and ideas only for hill climb and goal (a research draft has its links as research.seeds);
  * - `briefSay(chars, bytes)`: the line under Additional information, for the brief's size;
@@ -100,7 +100,7 @@ ${listField("hypotheses", "Hypotheses", d.hypotheses ?? [])}
  */
 export const BRIEF_CORE_JS = `
 ${MD_CORE_JS}
-const BRIEF_WHOLE = ${BRIEF_WHOLE_CHARS};
+const BRIEF_WHOLE = ${JSON.stringify(BRIEF_WHOLE_CHARS)};
 const BRIEF_SEND_MAX = 3000000;
 const briefList = (xs) => (xs || []).map((x) => String(x).trim()).filter(Boolean);
 const briefLinks = (text) => {
@@ -117,7 +117,7 @@ const briefLinks = (text) => {
 };
 const briefDraft = (mode, f) => {
   const d = {};
-  if (String(f.notes || "").trim()) d.notes = String(f.notes).replace(/\\s+$/, "");
+  if (String(f.additional_information || "").trim()) d.additional_information = String(f.additional_information).replace(/\\s+$/, "");
   if (mode !== "research" && briefLinks(f.links).links.length) d.links = briefLinks(f.links).links;
   if (mode !== "research" && briefList(f.ideas).length) d.ideas = briefList(f.ideas);
   if (briefList(f.hypotheses).length) d.hypotheses = briefList(f.hypotheses);
@@ -172,10 +172,10 @@ export const BRIEF_PAGE_JS = `
   });
   form.addEventListener("input", (e) => { if (e.target.matches && e.target.matches(".bl-row textarea")) blGrow(e.target); });
   /** The brief's fields as they are now: the draft takes them from here. */
-  const briefFieldsNow = () => ({ notes: form.elements.notes ? form.elements.notes.value : "", links: form.elements.links ? form.elements.links.value : "", ideas: blItems("ideas"), hypotheses: blItems("hypotheses") });
+  const briefFieldsNow = () => ({ additional_information: form.elements.additional_information ? form.elements.additional_information.value : "", links: form.elements.links ? form.elements.links.value : "", ideas: blItems("ideas"), hypotheses: blItems("hypotheses") });
   let mdLast = null;
   const briefUpdate = () => {
-    const f = briefFieldsNow(), text = f.notes;
+    const f = briefFieldsNow(), text = f.additional_information;
     if (text !== mdLast) {
       mdLast = text;
       const out = $("[data-md-out]");
@@ -235,7 +235,7 @@ export function campaignBriefBlock(contract: unknown): string {
   const links = b?.links.length
     ? `<div class="kb-part">${infoLabel("Starting links", "Pages for the agents. Research: the harness fetches and archives them when a run starts. Hill climb and goal: the agents get them with the brief.")}<ul class="kb-list">${b.links.map((x) => `<li>${linkHtml(x)}</li>`).join("")}</ul></div>`
     : "";
-  const notes = b?.notes ?? "";
+  const notes = b?.additional_information ?? "";
   // Open when short; a long text folds, with its size in its summary.
   const info = notes
     ? `<details class="kb-info"${notes.length <= 1500 ? " open" : ""}><summary><b>Additional information</b> <span class="muted small">${fmt(notes.length)} characters · Markdown · the run's folder keeps it as BRIEF.md</span></summary><div class="md">${mdHtml(notes)}</div></details>`

@@ -7,7 +7,7 @@ import { Registry } from "../agents/index.ts";
 import type { Runner } from "../broker/index.ts";
 import { LedgerError } from "../ledger/index.ts";
 import type { Research } from "../research/index.ts";
-import type { HarnessService } from "../service/index.ts";
+import type { CallCredential, HarnessService, OwnCall } from "../service/index.ts";
 
 /**
  * What the harness API's sections share: who may call (the bearer tokens and their scopes, and a
@@ -93,7 +93,23 @@ export interface ApiContext {
     token: string;
     trial: ReturnType<Registry["openTrial"]>;
   };
+  /**
+   * Who calls a running agent's own routes: its trial (its token), or a call's own process (a
+   * planner in Pi in its Pi view, goal 169), by the call's credential.
+   */
+  agentOf: (header: string | undefined) => AgentCaller;
+  /** The id of the trial or the call (any call's credential) the caller is bound to. */
+  agentId: (header: string | undefined) => string;
 }
+
+/** A running agent's own process, as its routes take it: a trial's, or a call's own. */
+export type AgentCaller =
+  | (ReturnType<ApiContext["trialOf"]> & { call?: undefined })
+  | { call: CallCredential & { own: OwnCall }; trial?: undefined };
+
+/** A call's credential in a bearer header: `Authorization: Bearer call.<token>`. */
+const callToken = (header: string | undefined): string | undefined =>
+  header?.startsWith("Bearer call.") ? header.slice("Bearer ".length) : undefined;
 
 export function apiContext(
   service: HarnessService,
@@ -114,5 +130,19 @@ export function apiContext(
       throw err;
     }
   };
-  return { service, tokens, extras, supervisor, registry, trialOf };
+  const agentOf = (header: string | undefined): AgentCaller => {
+    const given = callToken(header);
+    if (!given) return trialOf(header);
+    const call = service.callOf(given);
+    if (!call?.own) throw new Unauthorized("unauthorized");
+    return { call: { ...call, own: call.own } };
+  };
+  const agentId = (header: string | undefined): string => {
+    const given = callToken(header);
+    if (!given) return trialOf(header).trial.id;
+    const call = service.callOf(given);
+    if (!call) throw new Unauthorized("unauthorized");
+    return call.id;
+  };
+  return { service, tokens, extras, supervisor, registry, trialOf, agentOf, agentId };
 }

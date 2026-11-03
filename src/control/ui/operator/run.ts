@@ -6,7 +6,7 @@ import {
   type RunView,
   runCampaign,
 } from "../../views/index.ts";
-import { ago, esc, gainChip, icon, reportingTag, sparkline } from "../components/index.ts";
+import { ago, attemptGuards, esc, gainChip, reportingTag, sparkline } from "../components/index.ts";
 import { attemptHref, runHref } from "../urls.ts";
 import { attemptState, clip, jobText, runOfAttempt, signed } from "../words/index.ts";
 import { cap } from "./change.ts";
@@ -43,11 +43,21 @@ export function leftByClose(r: RunView, u?: RigView): AttemptView[] {
     : [];
 }
 
-/** A run's status for tables: running, paused or closed (with why), and what waits for you. */
-export function runStateHtml(r: RunView): string {
-  const n = waitingOn(r);
-  const tone = r.status === "running" ? "info" : "muted";
-  return `<span class="label ${tone}">${r.status === "running" ? icon.live : r.status === "paused" ? icon.pause : icon.check}${esc(r.status)}</span>${n ? ` <span class="label warn">${icon.warn}${n} need${n === 1 ? "s" : ""} you</span>` : ""}${r.status !== "running" && r.pause_reason ? `<div class="muted xs clip" title="${esc(r.pause_reason)}">${esc(r.pause_reason)}</div>` : ""}`;
+/**
+ * Whether a running run's agents wait for the provider's limit now: its newest wait, before its
+ * time. Resume now (`end_wait`) ends it.
+ */
+export function waitsForLimit(r: RunView, now: number): boolean {
+  return r.status === "running" && r.agents_wait !== null && Date.parse(r.agents_wait.until) > now;
+}
+
+/** A wait's end, in words: `2026-10-29 03:14 UTC`. */
+export const waitEnd = (until: string) => `${until.replace("T", " ").slice(0, 16)} UTC`;
+
+/** Why a running run starts no new trial or plan for now, in words; "" when it does not wait. */
+export function waitWords(r: RunView, now: number): string {
+  if (!waitsForLimit(r, now) || !r.agents_wait) return "";
+  return `Its agents wait for the provider's limit until ${waitEnd(r.agents_wait.until)}: no new trial or plan starts before then. Resume now ends the wait.`;
 }
 
 /**
@@ -165,7 +175,7 @@ export function attemptRows(u: RigView, r: RunView, xs: AttemptView[], now: numb
             ? `${a.gained?.length ? `<span class="chip ok">+${a.gained.length} goal${a.gained.length === 1 ? "" : "s"}</span>` : ""}${a.lost.length ? `<span class="chip bad">−${a.lost.length}</span>` : ""}`
             : ""
           : typeof a.delta === "number"
-            ? gainChip(r, a)
+            ? `${gainChip(r, a)}${attemptGuards(r, a)}`
             : "";
       const where =
         o.word === "Blocked" ? "the judge measured it; the auditor blocked it" : attemptState(a);

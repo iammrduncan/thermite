@@ -96,7 +96,7 @@ export async function queuePort(
     {
       title: `Port ${p.attempt} onto champion #${champion.seq}`,
       details: `${head}\n${body}`,
-      ...(a.family ? { family: String(a.family) } : {}),
+      ...(a.direction ? { direction: String(a.direction) } : {}),
       why: p.why,
       by: "judge",
       position: "top",

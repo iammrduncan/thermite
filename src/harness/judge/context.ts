@@ -4,9 +4,9 @@ import { errorText } from "../../common/errors.ts";
 import { logError } from "../../common/log.ts";
 import type { Contract, GoalContract, HillClimbContract } from "../../core/contract.ts";
 import type { EventToRecord } from "../../core/events/bodies.ts";
-import type { Kit } from "../../core/kit.ts";
+import { contractMetrics, type Kit } from "../../core/kit.ts";
 import { toFraction } from "../../core/stats.ts";
-import { builderRole, type Runner, runRole } from "../broker/index.ts";
+import { builderRole, checkerRole, driverRole, type Runner, runRole } from "../broker/index.ts";
 import type { JobRow, Ledger } from "../ledger/index.ts";
 import type { HarnessService } from "../service/index.ts";
 import type { TargetDriver } from "../targets/index.ts";
@@ -36,8 +36,6 @@ export interface JudgeOptions {
   runner: Runner;
   driver: TargetDriver;
   owner: string;
-  /** The rig's promotion policy: confirmed wins promote on their own, or wait for the owner. */
-  promotion: PromotionPolicy;
   leaseMs?: number | undefined;
   /** Readiness retries before a block is abandoned as an infrastructure failure. */
   readyRetries?: number | undefined;
@@ -236,9 +234,25 @@ export class JudgeContext {
   }
 
   /**
+   * The folder a baseline job's checks write the baseline's files to: `<scratch>/runs/job-<id>/
+   * baseline`, made empty and handed to the job's card's checker. The job keeps what it holds
+   * (keepBaselineDir), then removes it.
+   */
+  async baselineWork(job: JobRow): Promise<string> {
+    const runs = join(this.o.service.paths.scratchDir, "runs");
+    const dir = join(runs, `job-${job.id}`, "baseline");
+    // An earlier try of the same job left its folder: it starts empty again.
+    if (existsSync(dir)) await this.o.runner.remove(dir);
+    mkdirSync(dir, { recursive: true });
+    for (const d of [runs, join(runs, `job-${job.id}`)]) chmodSync(d, 0o711);
+    await this.o.runner.handOver(dir, checkerRole(this.o.card?.index ?? 0));
+    return dir;
+  }
+
+  /**
    * A job's measuring context. A hill climb's check gets the run's baseline folder (goal 115):
    * `baselineDir`, the folder a baseline job writes, or else the sealed folder of the run's
-   * baseline, read-only.
+   * baseline, read-only. The job's card gives the users its runs, drivers and checks run as.
    */
   context(
     k: { kit: Kit; dir: string },
@@ -271,7 +285,10 @@ export class JudgeContext {
       runsDir,
       modelsDir: join(this.o.service.paths.stateDir, "models"),
       ...(folder ? { baselineDir: folder } : {}),
+      ...(contract ? { uses: contractMetrics(contract) } : {}),
       runRole: runRole(this.o.card?.index ?? 0),
+      checkerRole: checkerRole(this.o.card?.index ?? 0),
+      driverRole: driverRole(this.o.card?.index ?? 0),
       note: (arm, cell, outcome) =>
         held.has(cell)
           ? this.note(`held-out run ${++heldRuns} done`, run)
@@ -312,6 +329,7 @@ export class JudgeContext {
           estimate: g.interval.estimate,
           low: g.interval.low,
           high: g.interval.high,
+          values: g.values,
           ...(s ? { vs_start: { estimate: s.estimate, noise: s.noise, spent: s.spent } } : {}),
         };
       }),

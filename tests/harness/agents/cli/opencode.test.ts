@@ -3,6 +3,8 @@ import { appendFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { opencodeProgram } from "../../../../src/agents/cli/index.ts";
+import { OPENCODE_MEMORY } from "../../../../src/agents/cli/opencode.ts";
 import { claudeEnv } from "../../../../src/agents/programs/claude-code/index.ts";
 import { codexEnv } from "../../../../src/agents/programs/codex/index.ts";
 import {
@@ -22,15 +24,12 @@ import {
   CHECK_ROLE,
   PLANNER_ROLE,
 } from "../../../../src/harness/agents/cli/common.ts";
-import {
-  OPENCODE_MEMORY,
-  opencodeModelCheck,
-  opencodeOnce,
-  runOpencodeResearchTrial,
-  runOpencodeTrial,
-} from "../../../../src/harness/agents/cli/opencode.ts";
+import { cliModelCheck, cliOnce } from "../../../../src/harness/agents/cli/once.ts";
 import type { TrialSpec } from "../../../../src/harness/agents/worker/index.ts";
 import type { Runner, RunOutcome, RunRequest } from "../../../../src/harness/broker/runner.ts";
+import { trialsIn } from "../../../helpers/cli-trials.ts";
+
+const opencode = trialsIn(opencodeProgram);
 
 // OpenCode v2's JSON output, as the spike recorded it (trimmed).
 /** An inbox of the owner's messages as the harness keeps it: a message waits until it is given. */
@@ -249,7 +248,7 @@ describe("the OpenCode harness", () => {
       scratchDir: mkdtempSync(join(tmpdir(), "thermite-oc-ask-")),
       mintProxyToken: () => "proxy",
     };
-    const check = await opencodeModelCheck(model, deps);
+    const check = await cliModelCheck(opencodeProgram, model, deps);
     assert.equal(check.ok, true, check.summary);
     assert.ok(runs.length >= 2 && runs.every((r) => r.role === "model-check"));
     assert.deepEqual(handed, ["model-check"]);
@@ -259,7 +258,7 @@ describe("the OpenCode harness", () => {
     // A planner call cancelled while OpenCode runs kills the planner's processes only.
     const ctrl = new AbortController();
     during = () => ctrl.abort();
-    await opencodeOnce(model, "plan", deps, {
+    await cliOnce(opencodeProgram, model, "plan", deps, {
       role: PLANNER_ROLE,
       timeoutMs: 1000,
       signal: ctrl.signal,
@@ -303,7 +302,7 @@ describe("the OpenCode harness", () => {
       brief: "Make it faster.",
       wallMs: 60_000,
     };
-    const r = await runOpencodeTrial(spec, {
+    const r = await opencode.code(spec, {
       runner,
       model,
       apiUrl: "http://127.0.0.1:8700",
@@ -379,7 +378,7 @@ describe("the OpenCode harness", () => {
         return 1;
       },
     } as unknown as Runner;
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-1",
         token: "tok",
@@ -417,7 +416,7 @@ describe("the OpenCode harness", () => {
       },
     });
     const note = limitsNote(limits, "OpenCode", OPENCODE_MEMORY);
-    assert.match(note, /Memory: 4096 MiB .*OpenCode itself included \(it uses about 500 MiB\)/);
+    assert.match(note, /Memory: 4096 MiB .*OpenCode itself included \(it uses about 650 MiB\)/);
     assert.match(note, /command that takes it over the limit is killed/);
     assert.doesNotMatch(limitsNote(limits, "Codex"), /it uses|OpenCode/);
     assert.equal(breachError({ killedFor: "timeout", peakRssBytes: 0 }, limits, "X"), undefined);
@@ -438,7 +437,7 @@ describe("the OpenCode harness", () => {
     } as unknown as Runner;
     const runs: string[] = [];
     const nprocs: (number | undefined)[] = [];
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-3",
         run: "r-1",
@@ -501,7 +500,7 @@ describe("the OpenCode harness", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     const calls: CallUsage[] = [];
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-2",
         run: "r-1",
@@ -563,7 +562,7 @@ describe("the OpenCode harness", () => {
       },
       killRole: async () => 0,
     } as unknown as Runner;
-    const r = await runOpencodeTrial(
+    const r = await opencode.code(
       {
         trialId: "t-3",
         run: "r-1",
@@ -608,7 +607,7 @@ describe("the OpenCode harness", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     const progress: number[] = [];
-    const r = await runOpencodeResearchTrial(
+    const r = await opencode.research(
       {
         trialId: "t-r1",
         token: "tok",
@@ -618,11 +617,11 @@ describe("the OpenCode harness", () => {
         wallMs: 60_000,
       },
       {
+        area,
+        folder: { root: join(area, "folder"), work: workdir },
         runner,
         model: { ...model, api: "opencode", model: "glm-5.3-flash-free" },
         apiUrl: "http://127.0.0.1:8700",
-        area,
-        folder: { root: join(area, "folder"), work: workdir },
         live: () => undefined,
         progress: (p) => progress.push(p.turns),
         pollMs: 5,
@@ -654,7 +653,7 @@ describe("the OpenCode harness", () => {
     assert.match(prompt, /This trial lasts 1 minutes/);
   });
 
-  test("a research trial: a failed call waits and continues it, as the owner's messages do; no credits, or the turn cap, ends it", async () => {
+  test("a research trial: a failed call waits and continues it, as the owner's messages do; no credits the proxy saw, or the turn cap, ends it", async () => {
     const failed = JSON.stringify({ type: "error", error: { message: "429 rate limited" } });
     const broke = JSON.stringify({ type: "error", error: { message: "402 out of credits" } });
     const tool = JSON.stringify({
@@ -675,6 +674,8 @@ describe("the OpenCode harness", () => {
         hang?: boolean;
         /** A message the owner sends while this run (from 1) is going on. */
         during?: { run: number; text: string };
+        /** The error answer the model proxy saw, if any. */
+        answer?: { status: number };
       } = {},
     ) => {
       const area = mkdtempSync(join(tmpdir(), "thermite-oc-"));
@@ -706,7 +707,7 @@ describe("the OpenCode harness", () => {
           return 1;
         },
       } as unknown as Runner;
-      const r = await runOpencodeResearchTrial(
+      const r = await opencode.research(
         {
           trialId: "t",
           run: "r",
@@ -716,17 +717,18 @@ describe("the OpenCode harness", () => {
           maxTurns: o.maxTurns,
         },
         {
+          area,
+          folder: { root: area, work: area },
           runner,
           model,
           apiUrl: "http://h",
-          area,
-          folder: { root: area, work: area },
           live: () => undefined,
           progress: () => undefined,
           messages: owner.inbox,
           pollMs: 5,
           // The waits after a failed call, shortened (goal 079).
           pauseMs: () => 5,
+          providerAnswer: () => o.answer,
         },
       );
       return {
@@ -751,8 +753,8 @@ describe("the OpenCode harness", () => {
     assert.equal(early.r.stopped, "finished");
     assert.equal(early.prompts.length, 2);
     assert.match(String(early.prompts[1]), /^The model call failed \(429 rate limited\)/);
-    // No credits ends it at once, with its kind.
-    const credits = await trial([[broke]]);
+    // No credits, as the model proxy saw the provider answer, ends it at once, with its kind.
+    const credits = await trial([[broke]], { answer: { status: 402 } });
     assert.deepEqual([credits.r.stopped, credits.r.errorKind], ["error", "credits"]);
     assert.equal(credits.r.error, "402 out of credits");
     assert.equal(credits.prompts.length, 1);
@@ -781,7 +783,10 @@ describe("the OpenCode harness", () => {
     assert.match(String(third.prompts[3]), /owner: three passes on/);
     assert.deepEqual(third.given, [1]);
     // No credits before any work ends the trial; a waiting message is not taken.
-    const noWork = await trial([[tool, step], [broke]], { messages: ["unread"] });
+    const noWork = await trial([[tool, step], [broke]], {
+      messages: ["unread"],
+      answer: { status: 402 },
+    });
     assert.equal(noWork.r.stopped, "error");
     assert.match(String(noWork.prompts[1]), /owner: unread/);
     assert.deepEqual(noWork.given, [], "the agent never started on it: it stays waiting");

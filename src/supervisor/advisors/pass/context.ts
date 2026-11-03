@@ -1,8 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { McpCaller } from "../../../agents/mcp/index.ts";
-import { type Prompt, promptRecord } from "../../../agents/prompt.ts";
-import { log } from "../../../common/env.ts";
+import { promptRecord } from "../../../agents/prompt.ts";
+import { kbCall } from "../../../agents/tools/index.ts";
+import { log, redact } from "../../../common/env.ts";
 import { errorText } from "../../../common/errors.ts";
 import type { AdvisorRole } from "../../../core/agents.ts";
 import {
@@ -12,7 +13,6 @@ import {
   CODE_FILES,
   EVIDENCE,
   JOURNAL,
-  KNOWLEDGE,
   MODEL_CALLS,
   MODEL_CALLS_MAX,
   QUEUE,
@@ -33,18 +33,21 @@ import { type ADVISOR_PROMPT_ROLES, KEEP_PROMPT } from "../../../core/api/harnes
 import {
   RESEARCH_KINDS,
   type ResearchKind,
-  SEARCH_MAX,
   SEARCH_QUERY_MAX,
 } from "../../../core/api/harness/research.ts";
+import { KB_WRITE, KB_WRITES, type KbAdvisorSlot } from "../../../core/api/harness/supervisor.ts";
 import type { NoteInput } from "../../../core/journal.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import type { RunAdditions } from "../../../core/role-additions.ts";
 import { type AdvisorAgent, AGENT_WORDS } from "../../../core/usage.ts";
-import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage } from "../call.ts";
+import { askControl } from "../../kb/index.ts";
+import { advisorRecordsDir } from "../../retention.ts";
+import type { AdvisorKeeper, AdvisorMcp, AdvisorTools, AdvisorUsage, SentPrompt } from "../call.ts";
 import { type RunningAdvisors, withRunContext } from "../config.ts";
 import { advisorFetcher } from "../fetcher.ts";
-import type { AdvisorCode, AdvisorResearch, PastSearch } from "../tools/index.ts";
-import { kbSearchFor } from "./kb.ts";
+import type { AdvisorLimit } from "../limit.ts";
+import type { AdvisorInTerminal } from "../terminal/index.ts";
+import type { AdvisorCode, AdvisorKb, AdvisorResearch } from "../tools/index.ts";
 import { advisorKeeper } from "./keeper.ts";
 import { clip, harnessOf } from "./shared.ts";
 import { type AdviseConfig, type AdviseState, MAX_TRIES } from "./state.ts";
@@ -75,28 +78,77 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     next.tried[key] = new Date().toISOString();
     next.tries[key] = (next.tries[key] ?? 0) + 1;
   };
-  // Web fetch only for listed domains; with an open fetch ("*"), no knowledge-base search in the
-  // same agent, so private notes and the open web never meet in one injectable context. An
-  // outside knowledge base's search goes only to the advisors of the campaigns granted it.
+  /**
+   * A try that met a full usage window (limit.ts) is not a failed try: it is not counted, and the
+   * key is tried again as soon as its advisors stop waiting, not retryMs later.
+   */
+  const uncount = (key: string) => {
+    next.tries[key] = Math.max(0, (next.tries[key] ?? 1) - 1);
+    delete next.tried[key];
+  };
+  /** When the advisor's full usage window resets, while it waits for it; its mark goes after. */
+  const waitsFor = (advisor: string): string | undefined => {
+    const limits = next.limits;
+    const until = limits?.[advisor];
+    if (!limits || !until) return undefined;
+    if (Date.parse(until) > Date.now()) return until;
+    delete limits[advisor];
+    return undefined;
+  };
+  /**
+   * The advisor met a full usage window in `what` (an audit, a review): it waits for the reset,
+   * the latest it was told, and the run's Live says so.
+   */
+  const waitOut = (advisor: string, what: string, l: AdvisorLimit, run?: string) => {
+    next.limits ??= {};
+    const limits = next.limits;
+    const was = limits[advisor];
+    if (!was || Date.parse(l.until) > Date.parse(was)) limits[advisor] = l.until;
+    log("supervisor", "an advisor waits for its provider's usage limit to reset", {
+      advisor,
+      until: limits[advisor],
+      what,
+      ...(run ? { run } : {}),
+    });
+    say(
+      run,
+      "status",
+      `${what}: ${advisor} waits for its provider's usage limit to reset, until ${limits[advisor]}, and goes on then; it is not counted as a failed try. ${clip(redact(l.words), 400)}`,
+    );
+  };
+  // Web fetch only for listed domains; with an open fetch ("*"), no knowledge base and no MCP
+  // server in the same agent, so private notes and the open web never meet in one injectable
+  // context.
   const domains = cfg.advisors.fetch_domains;
   const fetchUrl = domains.length ? advisorFetcher(cfg.home, domains) : undefined;
-  const toolsFor = (): AdvisorTools => ({
-    ...(fetchUrl ? { fetchUrl } : {}),
-    ...(domains.includes("*") ? {} : { kbSearch: kbSearchFor(cfg.advisors) }),
-  });
-  // The run's past research, read only: a search of the harness's copy of its knowledge/, for a
-  // run whose brief or package says it has some (past_research).
-  const pastSearchFor =
-    (run: string): PastSearch =>
-    (query, o = {}) =>
-      harness.call(KNOWLEDGE, {
-        query: {
-          run,
-          q: query.slice(0, SEARCH_QUERY_MAX),
-          kinds: o.kinds?.length ? o.kinds.join(",") : undefined,
-          limit: o.limit ? Math.max(1, Math.min(SEARCH_MAX, Math.floor(o.limit))) : undefined,
-        },
-      });
+  const toolsFor = (): AdvisorTools => (fetchUrl ? { fetchUrl } : {});
+  // Thermite's knowledge base for an advisor's call (goal 175): kb_search and kb_read asked of
+  // control for the run, from the run's scope, and kb_write recorded by the harness in the
+  // advisor's own slot, when the run's campaign lets that slot write. None without a control.
+  const kbFor = async (run: string, slot: KbAdvisorSlot): Promise<AdvisorKb | undefined> => {
+    const control = cfg.kb;
+    if (!control) return undefined;
+    let writes: string[] = [];
+    try {
+      writes = (await harness.call(KB_WRITES, { query: { run, slot } })).kinds;
+    } catch (err) {
+      // It reads, and writes nothing, until the harness answers.
+      log(
+        "supervisor",
+        "an advisor's kinds to write not read",
+        { run, slot, error: errorText(err) },
+        "warn",
+      );
+    }
+    return {
+      writes,
+      call: kbCall({
+        run,
+        ask: (kind, ask) => askControl(control, kind, ask),
+        write: (args) => harness.call(KB_WRITE, { body: { run, slot, args } }),
+      }),
+    };
+  };
   // The run's code and evidence for its teachers, read only, through the harness (goal 081): the
   // champion's tree, a file of it, an attempt's diff, and the judge's public findings.
   /** A read of the run's, by its route: the teacher gets the answer as it came. */
@@ -128,8 +180,10 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
       search: (query, o) =>
         get(RESEARCH_SEARCH, {
           q: query.slice(0, SEARCH_QUERY_MAX),
+          mode: o.mode,
           kinds: o.kinds?.length ? o.kinds.join(",") : undefined,
           limit: o.limit,
+          offset: o.offset,
         }),
     };
   };
@@ -162,6 +216,17 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
   const additionsFor = async (run: string | undefined): Promise<RunAdditions> =>
     run ? ((await runsNow()).find((r) => r.id === run)?.role_additions ?? undefined) : undefined;
   // Each call's conversation before a compaction, kept with the supervisor's records (goal 070).
+  /**
+   * A call of the teachers, the auditor or a reviewer in its program's own terminal (goal 169), on
+   * a rig set so, for a run: the owner's messages its prompt gives (`given`) are never offered again
+   * inside its turn. None: headless.
+   */
+  const terminalFor = (
+    run: string | undefined,
+    role: AdvisorRole,
+    given: readonly number[],
+  ): AdvisorInTerminal | undefined =>
+    cfg.terminals && run ? { terminals: cfg.terminals, run, role, given } : undefined;
   const keeperFor = (run: string | undefined): AdvisorKeeper =>
     advisorKeeper(cfg.home, run, (text) => say(run, "status", text));
   const mcpFor = async (run: string | undefined): Promise<AdvisorMcp | undefined> => {
@@ -189,6 +254,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
       tools,
       call: (s, t, a) => m.gateway.call(caller, s, t, a),
       serverFor: (s) => m.gateway.serverFor(caller, s),
+      relist: (fresh) => m.gateway.tools(caller, fresh),
     };
   };
   // A daily spending limit for all advisors of the rig, when the owner set one.
@@ -203,8 +269,10 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     s.usd += r.usd;
     spend.usd += r.usd;
   };
-  const record = (kind: string, data: unknown) => {
-    const dir = join(cfg.home, "advisors");
+  // A round's record, in its run's folder (advisors/runs/<run>/) when it has a run, so a
+  // retention policy knows its run (supervisor/retention.ts).
+  const record = (kind: string, data: unknown, run?: string | null) => {
+    const dir = advisorRecordsDir(cfg.home, run);
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${kind}.json`),
@@ -219,7 +287,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
    */
   const tryFailed = async (review: number, attempt: number, err: unknown) => {
     try {
-      const error = errorText(err).slice(0, TRY_ERROR_MAX) || "no answer";
+      const error = redact(errorText(err)).slice(0, TRY_ERROR_MAX) || "no answer";
       await harness.call(REVIEW_TRIES, {
         params: { id: review },
         body: { try: Math.max(1, attempt), error },
@@ -230,7 +298,7 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
   };
   const fail = (what: string, err: unknown, run?: string) => {
     s.errors++;
-    s.last_error = `${what}: ${errorText(err)}`.slice(0, 500);
+    s.last_error = redact(`${what}: ${errorText(err)}`).slice(0, 500);
     log("supervisor", "advisor error", { error: s.last_error }, "error");
     say(run, "status", `${clip(s.last_error, 400)}`);
   };
@@ -238,11 +306,16 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
    * The prompts an advisor's call sent (goal 166), handed to the harness to keep with its run,
    * whole. A failure is the advisor's error line; the advisor's work stands.
    */
-  const promptsOut = async (run: string | undefined, call: string, sent: Prompt[] | undefined) => {
+  const promptsOut = async (
+    run: string | undefined,
+    call: string,
+    sent: SentPrompt[] | undefined,
+  ) => {
     if (!run) return;
     for (const p of sent ?? []) {
       try {
-        const record = promptRecord(p, { call });
+        const record =
+          "sections" in p ? { ...p, lane: null, trial: null, call } : promptRecord(p, { call });
         await harness.call(KEEP_PROMPT, {
           body: { ...record, run, role: record.role as (typeof ADVISOR_PROMPT_ROLES)[number] },
         });
@@ -386,14 +459,18 @@ export function adviseContext(cfg: AdviseConfig, state: AdviseState) {
     retryMs,
     due,
     mark,
+    uncount,
+    waitsFor,
+    waitOut,
     domains,
     toolsFor,
-    pastSearchFor,
+    kbFor,
     codeFor,
     researchFor,
     configFor,
     additionsFor,
     keeperFor,
+    terminalFor,
     mcpFor,
     limit,
     overBudget,

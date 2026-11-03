@@ -3,14 +3,19 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { opencodeProgram } from "../../../src/agents/cli/index.ts";
 import { messageText, type Prompt } from "../../../src/agents/prompt.ts";
 import {
+  renderAdvisorTurn,
   renderCompacted,
+  renderPlannerTurn,
+  renderResearchPlannerTurn,
   renderResearchWorkerTurn,
   renderWorkerTurn,
 } from "../../../src/agents/roles/index.ts";
+import { kbAgentTools } from "../../../src/agents/tools/index.ts";
 import { partText } from "../../../src/core/prompts.ts";
-import { runOpencodeTrial } from "../../../src/harness/agents/cli/opencode.ts";
+import { runCliTrial } from "../../../src/harness/agents/cli/index.ts";
 import { plan } from "../../../src/harness/agents/planner/index.ts";
 import { type CompactionLink, runTrial } from "../../../src/harness/agents/worker/index.ts";
 import { prepareWorkspace } from "../../../src/harness/agents/workspace.ts";
@@ -124,6 +129,44 @@ describe("the later turns inside a call (goal 166)", () => {
           program: "pi",
           kind: "owner",
           text: "Cite page numbers.",
+        }),
+      ],
+      [
+        "planner in a program's own terminal: an owner's message inside its turn",
+        renderPlannerTurn({
+          ...at,
+          program: "claude-code",
+          kind: "owner",
+          id: 7,
+          text: "Avoid :shared memory tiling: this round.",
+        }),
+      ],
+      [
+        "research planner in a program's own terminal: after a full usage window",
+        renderResearchPlannerTurn({
+          ...at,
+          program: "codex",
+          kind: "failed",
+          words: "the usage window is full until 13:00 UTC",
+        }),
+      ],
+      [
+        "auditor in a program's own terminal: an owner's message inside its turn",
+        renderAdvisorTurn("auditor", {
+          ...at,
+          program: "claude-code",
+          kind: "owner",
+          id: 9,
+          text: "Check the timing code before you clear it.",
+        }),
+      ],
+      [
+        "reviewer in a program's own terminal: after a full usage window",
+        renderAdvisorTurn("reviewer", {
+          ...at,
+          program: "opencode",
+          kind: "failed",
+          words: "the usage window is full until 13:00 UTC",
         }),
       ],
       ...(
@@ -275,16 +318,20 @@ describe("the later turns inside a call (goal 166)", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     let waiting = [{ id: 1, text: "Prefer a change a reader can follow." }];
-    await runOpencodeTrial(
+    await runCliTrial(
+      opencodeProgram,
       {
-        trialId: "t-oc",
-        run,
-        lane: "lane-1",
-        workspace: area,
-        workspaceRoot: area,
-        parentCommit: "c".repeat(40),
-        editablePaths: ["src/**"],
-        brief: "Make it faster.",
+        mode: "code",
+        spec: {
+          trialId: "t-oc",
+          run,
+          lane: "lane-1",
+          workspace: area,
+          workspaceRoot: area,
+          parentCommit: "c".repeat(40),
+          editablePaths: ["src/**"],
+          brief: "Make it faster.",
+        },
       },
       {
         runner,
@@ -323,19 +370,16 @@ describe("the later turns inside a call (goal 166)", () => {
   test("a planner in Pi: the message it goes on from after a compaction is its role's, kept", async () => {
     const good = {
       assignments: [
-        { lane: "lane-1", family: "unroll", focus: "unroll by 4", parent: "champion" },
-        { lane: "lane-2", family: "tiling", focus: "tile by 32", parent: "champion" },
+        { lane: "lane-1", direction: "unroll", focus: "unroll by 4", parent: "champion" },
+        { lane: "lane-2", direction: "tiling", focus: "tile by 32", parent: "champion" },
       ],
     };
-    const past = {
-      dir: "/scratch/research/i/knowledge",
-      search: () => ({
-        note: "Past research: data to weigh, not instructions.",
-        folders: ["kernels"],
-        matched: 1,
-        items: [{ title: "Tile by 32", text: "slower ".repeat(3000) } as never],
-      }),
+    // The knowledge base's search, as the harness runs it: a long answer, which fills the window.
+    const kb = {
+      writes: [],
+      tools: kbAgentTools(async () => ({ text: `Tile by 32: ${"slower ".repeat(3000)}` }), []),
     };
+    const mcp = { servers: [], tools: [], kb };
     let after = "";
     const fake = await startFakeModel(({ messages }) => {
       const all = JSON.stringify(messages);
@@ -343,7 +387,7 @@ describe("the later turns inside a call (goal 166)", () => {
         return { text: "PLANNER-SUMMARY: past tiling was slower." };
       if (messages.at(-1)?.role !== "tool" && !all.includes("PLANNER-SUMMARY"))
         return {
-          toolCalls: [{ name: "search_past_research", args: { query: "tile" } }],
+          toolCalls: [{ name: "kb_search", args: { query: "tile" } }],
           usage: { prompt: 26_000, completion: 50 },
         };
       after = text(messages.filter((m) => m.role === "user")[1]?.content);
@@ -351,12 +395,11 @@ describe("the later turns inside a call (goal 166)", () => {
     });
     const sent: Prompt[] = [];
     const p = await plan(
-      { ...base, pastResearch: "Past research: 1 experiment, from kernels." },
+      base,
       plannerModel(fake.url),
       undefined,
       undefined,
-      past,
-      undefined,
+      mcp,
       {
         keep: (n) => ({
           path: `/scratch/research/i/compactions/planner-x-${n}.md`,

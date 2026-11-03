@@ -78,8 +78,8 @@ function auditDetail(store: ControlStore, rig: string, control: BuildInfo) {
 /**
  * Refuses the rig while its recorded builds and control's do not meet, or ends its refusal when
  * they do. Returns the reason, or null. `harness` stands in for the recorded harness build, and
- * `endRefusal: false` only adds a refusal: for a report, whose own harness build the ingest route
- * checks once the report verifies.
+ * `endRefusal: false` only adds a refusal: for a report, whose own harness build control checks
+ * once the report verifies (ingest.ts).
  */
 export function checkRig(
   store: ControlStore,

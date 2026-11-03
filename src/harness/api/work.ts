@@ -117,7 +117,7 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
     if (!r) return c.json({ error: "research is not available" }, 404);
     const body = (await c.req.json()) as Record<string, unknown>;
     // The trial decides where its work goes; run and lane in the body are ignored. A hill-climb
-    // or goal trial records sources, claims and notes too (goal 065); the rest is research's.
+    // or goal trial records sources, claims and source notes too (goal 065); the rest is research's.
     const { run, lane } = trial;
     r.requireRunning(run, c.req.param("op"));
     const s = (k: string) => String(body[k] ?? "");
@@ -128,14 +128,12 @@ export function workRoutes(app: Hono, { service, tokens, extras, trialOf }: ApiC
         return c.json(
           r.read(run, s("source"), Number(body.offset ?? 0), Number(body.length ?? 6000)),
         );
-      case "search":
-        return c.json(r.search(run, lane, s("query")));
       case "search-corpus":
         return c.json(r.searchCorpus(run, s("text"), Number(body.skip ?? 0)));
       case "claim":
         return c.json(r.addClaim(run, lane, body));
-      case "note":
-        return c.json(r.addNote(run, lane, s("text"), Strings.parse(body.sources), trial.id));
+      case "source_note":
+        return c.json(r.addSourceNote(run, lane, s("text"), Strings.parse(body.sources), trial.id));
       case "hypothesis":
         return c.json(r.proposeHypothesis(run, lane, body));
       case "revise-hypothesis":

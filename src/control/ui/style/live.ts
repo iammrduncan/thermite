@@ -21,7 +21,8 @@ export const LIVE = `/* Live, one run at a time: the stream gets the room */
 .lhead .t { font-weight: 650; font-size: 14px; white-space: nowrap; }
 .lhead form { display: inline; }
 .lmeta { flex: 1; min-width: 0; font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lchips { display: flex; gap: 5px; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+/* The chips wrap rather than scroll: a scrolling bar would clip its menus (the kept messages'). */
+.lchips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 6px 14px; border-bottom: 1px solid var(--border); position: relative; z-index: 5; }
 .lchip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--input); background: var(--card); color: var(--foreground); font-size: 12.5px; font-weight: 500; flex: none; cursor: pointer; }
 .lchip:hover { background: var(--accent); text-decoration: none; }
 .lchip.on { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
@@ -37,7 +38,7 @@ export const LIVE = `/* Live, one run at a time: the stream gets the room */
 .lv-answer .answer { display: inline-block; background: var(--card); border: 1px solid var(--border); border-left: 3px solid #0d9488; border-radius: 10px; padding: 6px 11px; }
 .lv-answer .answer p { display: inline; margin: 0; }
 .lkept { position: relative; flex: none; } .lkept > summary { list-style: none; } .lkept > summary::-webkit-details-marker { display: none; }
-.lkept .menu-pop { top: 30px; width: 340px; }
+.lkept .menu-pop { top: 30px; width: min(340px, 86vw); }
 .lkept .krow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; padding-top: 8px; border-top: 1px solid var(--border); }
 .lkept .krow form { display: inline; }
 .lcomposer { display: flex; gap: 6px; align-items: flex-end; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--card); }

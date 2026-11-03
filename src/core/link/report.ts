@@ -6,8 +6,8 @@ import { RIG_ID } from "../ids.ts";
 /**
  * The link's first contract (goal 168, step 0): a rig's reports on the message bus. A message is
  * one report exactly as the rig's harness made and signed it, a page of its ledger's events with
- * the rig's summary. The supervisor publishes it and cannot change it; control reads it with the
- * same checks as a report posted to `POST /v1/rigs/<rig>/ingest`.
+ * the rig's summary, the only way a rig reports. The supervisor publishes it and cannot change it;
+ * control reads it with its checks (control/ingest.ts).
  */
 
 /** The stream that holds each rig's reports until control has taken or refused them. */
@@ -64,13 +64,21 @@ export function reportMessageId(r: {
 const DUPLICATE_WINDOW_NS = 2 * 60 * 1e9;
 
 /**
+ * How many of one rig's reports the stream holds waiting for control, at most: 32, so at most
+ * 32 × REPORT_MAX_BYTES (256 MiB) of one rig's. While a rig has as many waiting, its next report
+ * is refused, and its supervisor sends it again at its next round; other rigs' reports go on.
+ */
+export const REPORTS_WAITING_PER_RIG = 32;
+
+/**
  * The stream's settings: an inbox, a work queue, so a report is gone once control acks it, taken
  * or refused for good. Control keeps the events in the `EVENTS` stream (events.ts), and the rig's
  * summary in its store; a supervisor reports every round, events or not, and those pages kept for
- * good would outgrow the events. No limit on the count, bytes or age of reports waiting: a full
- * disk refuses new ones and never drops one control has yet to take. A stream made before as one
- * kept for good (`limits`) can't become a work queue in place: control's follow empties it first,
- * through its consumer, then makes it again (common/work-queue.ts).
+ * good would outgrow the events. Each rig's subject holds at most REPORTS_WAITING_PER_RIG reports,
+ * each at most REPORT_MAX_BYTES: a full one refuses that rig's next report, and never drops one
+ * control has yet to take. No limit on their age. A stream made before as one kept for good
+ * (`limits`) can't become a work queue in place: control's follow empties it first, through its
+ * consumer, then makes it again (common/work-queue.ts).
  */
 export const REPORT_STREAM_CONFIG = {
   name: REPORT_STREAM,
@@ -81,9 +89,10 @@ export const REPORT_STREAM_CONFIG = {
   max_msgs: -1,
   max_bytes: -1,
   max_age: 0,
-  max_msgs_per_subject: -1,
+  max_msgs_per_subject: REPORTS_WAITING_PER_RIG,
   max_msg_size: REPORT_MAX_BYTES,
   discard: "new",
+  discard_new_per_subject: true,
   duplicate_window: DUPLICATE_WINDOW_NS,
   num_replicas: 1,
 } satisfies Partial<StreamConfig> & { name: string };
@@ -106,8 +115,8 @@ export const REPORT_CONSUMER_CONFIG = {
 } satisfies Partial<ConsumerConfig> & { durable_name: string };
 
 /**
- * Control's place in a rig's events, in its answer to the supervisor's figures
- * (`POST /v1/rigs/<rig>/supervisor`): the ledger it holds the rig's events of, null before the
+ * Control's place in a rig's events, in its answer to the supervisor's figures (asks.ts's
+ * `figures`) and to the registration of its keys: the ledger it holds the rig's events of, null before the
  * first report it took, and the cursor after the last event it holds. No answer to a report on the
  * bus comes back, so a supervisor ahead of this in the same ledger goes back to it.
  */

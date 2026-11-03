@@ -1,5 +1,9 @@
 import type { Harness } from "../../core/agents.ts";
-import type { RigSettings } from "../../core/rig-settings.ts";
+import {
+  PROGRAM_MODE_DEFAULT,
+  type ProgramMode,
+  type RigSettings,
+} from "../../core/rig-settings.ts";
 import type { ControlStore } from "../store/index.ts";
 import type { RigView } from "./types.ts";
 
@@ -53,6 +57,15 @@ export function rigSettingsOf(
   if (!u) return undefined;
   const summary = u.summary as { settings?: unknown; gpu_split?: unknown } | undefined;
   return { settings: readSettings(summary?.settings), gpu_split: readGpuSplit(summary?.gpu_split) };
+}
+
+/**
+ * How a rig's agent programs run, as control knows it: the mode its last report gives (headless
+ * from a harness too old to report one), or the default for a rig that has not reported yet.
+ */
+export function programModeOf(store: ControlStore, rig: string): ProgramMode {
+  const now = rigSettingsOf(store, rig);
+  return now ? (now.settings?.program_mode ?? "headless") : PROGRAM_MODE_DEFAULT;
 }
 
 /**

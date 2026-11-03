@@ -31,7 +31,7 @@ export function contextFromFlags(values: {
 
 /**
  * A campaign's brief from --info-file, --idea and --hypothesis (goal 078): the additional
- * information (the file's Markdown, the contract's notes), the ideas to try and the hypotheses,
+ * information (the file's Markdown, the contract's additional_information), the ideas to try and the hypotheses,
  * one per option. Only what is given: each part replaces the contract's (or the copied
  * campaign's).
  */
@@ -40,18 +40,18 @@ export function briefFromFlags(values: {
   link?: string[] | undefined;
   idea?: string[] | undefined;
   hypothesis?: string[] | undefined;
-}): { notes?: string; ideas?: string[]; hypotheses?: string[] } {
+}): { additional_information?: string; ideas?: string[]; hypotheses?: string[] } {
   const file = values["info-file"];
-  let notes: string | undefined;
+  let info: string | undefined;
   if (file !== undefined) {
     try {
-      notes = readFileSync(file, "utf8");
+      info = readFileSync(file, "utf8");
     } catch (err) {
       fail(`--info-file: ${errorText(err)}`);
     }
   }
   return {
-    ...(notes !== undefined ? { notes } : {}),
+    ...(info !== undefined ? { additional_information: info } : {}),
     ...(values.link ? { links: values.link } : {}),
     ...(values.idea ? { ideas: values.idea } : {}),
     ...(values.hypothesis ? { hypotheses: values.hypothesis } : {}),

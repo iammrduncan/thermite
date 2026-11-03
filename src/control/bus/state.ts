@@ -1,9 +1,10 @@
-import type { Bus, StreamState } from "../../common/bus.ts";
+import type { Bus, StreamState } from "../../common/bus/index.ts";
 import { errorText } from "../../common/errors.ts";
 import type { LiveFigures } from "../../core/api/control/rigs.ts";
 import { COMMAND_STREAM } from "../../core/link/commands.ts";
 import { CONFIG_STREAM } from "../../core/link/config.ts";
 import { EVENT_STREAM } from "../../core/link/events.ts";
+import { KB_FILES_STREAM } from "../../core/link/kb-files.ts";
 import {
   LIVE_KEPT_BYTES,
   LIVE_KEPT_PER_SUBJECT,
@@ -38,6 +39,7 @@ export const BUS_STREAMS = [
   COMMAND_STREAM,
   LIVE_STREAM,
   CONFIG_STREAM,
+  KB_FILES_STREAM,
 ] as const;
 
 /** How long a look at the server may take: then the state says the server did not answer. */
@@ -51,7 +53,9 @@ export const BUS_STATE_TIMEOUT_MS = 5_000;
 export interface BusView {
   /** The server's host and port. */
   server: string;
-  bus: Pick<Bus, "streams" | "connected" | "lastSeq">;
+  /** With its message lookups, for Metrics' stream inspector; a test's bus may leave them out. */
+  bus: Pick<Bus, "streams" | "connected" | "lastSeq" | "link"> &
+    Partial<Pick<Bus, "next" | "message">>;
   events: EventsWriter;
   move: Pick<EventsMove, "published">;
   apply: EventsApply;
@@ -127,16 +131,27 @@ export async function busState(store: ControlStore, view: BusView | undefined) {
     );
   });
   try {
-    const read = Promise.all([view.bus.streams(BUS_STREAMS), view.bus.lastSeq(EVENT_STREAM)]);
+    // The reports stream by subject too: one for each rig, so each rig's reports that wait.
+    const read = Promise.all([
+      view.bus.streams(BUS_STREAMS, { counts: [REPORT_STREAM] }),
+      view.bus.lastSeq(EVENT_STREAM),
+    ]);
     [streams, eventsPlace] = await Promise.race([read, late]);
   } catch (err) {
     error = errorText(err);
   } finally {
     clearTimeout(timer);
   }
+  const link = view.bus.link?.();
   return {
     on: true as const,
     server: view.server,
+    // Control's connection now: connected since when, with the server's version, or away.
+    connection: {
+      state: busHealth(view),
+      since: link?.since ?? null,
+      version: link?.version ?? null,
+    },
     reachable: error === null,
     error,
     streams,

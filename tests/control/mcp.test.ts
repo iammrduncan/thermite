@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Credential } from "../../src/control/credential.ts";
 import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
+import { figuresCall } from "../helpers/control-store.ts";
 
 const text = (r: unknown) =>
   JSON.parse(((r as { content: { text: string }[] }).content[0] as { text: string }).text);
@@ -100,6 +101,21 @@ describe("control over MCP", () => {
     );
     const audit = store.auditLog.list(100).map((a) => a.action);
     assert.ok(audit.includes("mcp:issue_command"));
+    // A tool the token lacks, and inputs that don't match a tool, are refusals in the log too.
+    for (const call of [
+      { name: "issue_command", arguments: { rig: "rig-a", kind: "pause_run", payload: {} } },
+      { name: "issue_command", arguments: { rig: "rig-a", kind: "pause_run", payload: {} } },
+      { name: "control_log", arguments: { limit: "all" } },
+    ])
+      assert.equal((await reader.callTool(call)).isError, true);
+    const refused = store.auditLog
+      .list(100, { action: "refused" })
+      .filter((a) => a.actor === "reader:mcp")
+      .map((a) => [(a.body as { tool: string }).tool, a.count]);
+    assert.deepEqual(refused, [
+      ["mcp:control_log", 1],
+      ["mcp:issue_command", 2],
+    ]);
     const denied = await control.request("/mcp", { method: "POST", body: "{}" });
     assert.equal(denied.status, 401);
     await agent.close();
@@ -142,17 +158,13 @@ describe("control over MCP", () => {
       "delivered",
     );
     // A message nothing would read, or with no words, is refused in plain words, as Live greys it.
-    await control.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-      body: JSON.stringify({
-        at: new Date().toISOString(),
-        advisors: {
-          ...{ teacher_runs: 0, directive_sets: 0, directives: 0, audits: 0, reviews: 0 },
-          ...{ errors: 0, tokens_in: 0, tokens_out: 0, usd: 0 },
-          roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0 },
-        },
-      }),
+    await figuresCall(store, "rig-a", {
+      at: new Date().toISOString(),
+      advisors: {
+        ...{ teacher_runs: 0, directive_sets: 0, directives: 0, audits: 0, reviews: 0 },
+        ...{ errors: 0, tokens_in: 0, tokens_out: 0, usd: 0 },
+        roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0 },
+      },
     });
     const refusal = async (payload: Record<string, unknown>) =>
       text(
@@ -217,7 +229,7 @@ describe("control over MCP", () => {
     assert.ok(
       await issue(agent, "redirect", {
         run: "js-1",
-        directives: [{ kind: "avoid", family: "loop-tiling", rationale: "slower twice" }],
+        directives: [{ kind: "avoid", direction: "loop-tiling", rationale: "slower twice" }],
         replace: false,
       }),
       "an agent may add a rule",
@@ -338,6 +350,42 @@ describe("control over MCP", () => {
     const agentTools = (await agent.listTools()).tools.map((t) => t.name);
     assert.ok(!["control_log", "providers", "trial_session"].some((t) => agentTools.includes(t)));
     await Promise.all([operator.close(), reader.close(), agent.close()]);
+  });
+
+  test("the log keeps an MCP call's inputs with each secret hidden and credentials in text masked, for every token", async () => {
+    const { control } = controlOnly({
+      tokens: { operator: "operator-token-abcdef", read: "read-token-abcdef", rigs: {} },
+    });
+    const operator = await mcpClient(control, "operator-token-abcdef");
+    // Refused (no such run), and written to the log first, as every call is.
+    await operator.callTool({
+      name: "issue_command",
+      arguments: {
+        kind: "pause_run",
+        payload: {
+          run: "nope",
+          reason: "see https://someone:hunter2hunter2@git.example/x and Bearer abcdefghijklmnop",
+          api_key: "xxxxxxxxxxxx9z9z",
+          nested: { access_token: "yyyyyyyyyyyy7y7y", count: 3, ok: true },
+        },
+      },
+    });
+    const reader = await mcpClient(control, "read-token-abcdef");
+    const page = text(
+      await reader.callTool({
+        name: "control_log",
+        arguments: { include_mcp: true, action: "mcp:issue_command" },
+      }),
+    ) as { entries: { body: { payload: Record<string, unknown> } }[] };
+    const payload = page.entries[0]?.body.payload;
+    assert.equal(payload?.api_key, "given (…9z9z)");
+    assert.deepEqual(payload?.nested, { access_token: "given (…7y7y)", count: 3, ok: true });
+    assert.equal(payload?.reason, "see https://***@git.example/x and Bearer ***");
+    assert.equal(payload?.run, "nope");
+    const seen = JSON.stringify(page);
+    for (const secret of ["hunter2", "abcdefghijklmnop", "xxxxxxxxxxxx", "yyyyyyyyyyyy"])
+      assert.ok(!seen.includes(secret), secret);
+    await Promise.all([operator.close(), reader.close()]);
   });
 
   test("an operator gives a rig's agents a model over MCP, as Edit rig does; a wrong model is refused", async () => {

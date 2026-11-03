@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+// @ts-check
 // Rigs with several GPUs, under Podman (or Docker) with fake devices: the harness image starts on
 // four fake GPUs (plain files in place of /dev/nvidia*, and a stand-in nvidia-smi; see
-// containers/test-gpu), two for the judge and two for the agents. The broker's per-card groups,
+// tests/stand-ins/gpu), two for the judge and two for the agents. The broker's per-card groups,
 // the timing user of the second judge card, the judge executors and the isolation selftest then
-// run for real. A second start with overlapping lists must be refused. The fakes refuse to start
-// where a real NVIDIA device is present.
+// run for real; every role, on every card, is refused the image's own kits and projects
+// (/opt/thermite/checks). A second start with overlapping lists must be refused. The fakes refuse
+// to start where a real NVIDIA device is present.
 //
 //   COMPOSE="podman compose" node scripts/acceptance/multigpu.mjs
 import { execFileSync, spawnSync } from "node:child_process";
@@ -13,9 +15,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { cleanEngine, engine } from "./lib/smoke-env.mjs";
+import { cleanEngine, engine, imageTarget } from "./lib/smoke-env.mjs";
 
 const image = "localhost/thermite-harness:multigpu-check";
+/** @type {[string, string, string, string]} */
 const names = [
   "thermite-multigpu-a",
   "thermite-multigpu-b",
@@ -24,8 +27,15 @@ const names = [
 ];
 /** Fake device nodes owned by the Podman VM's root, which a rootless container doesn't map. */
 const FOREIGN = "/var/tmp/thermite-multigpu-foreign-nodes";
+/**
+ * Runs the engine and returns what it printed.
+ * @param {string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ * @returns {string}
+ */
 const sh = (args, opts = {}) =>
   execFileSync(engine, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+/** @type {(ms: number) => Promise<void>} */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const { check, failed } = acceptanceChecks();
 
@@ -54,7 +64,12 @@ function foreignNodesPossible() {
   return spawnSync(engine, ["machine", "inspect"], { stdio: "ignore" }).status === 0;
 }
 
-/** Starts the harness on fake GPUs with these settings (the judge's and agents' lists, or a set). */
+/**
+ * Starts the harness on fake GPUs with these settings (the judge's and agents' lists, or a set).
+ * @param {string} name
+ * @param {Record<string, string>} gpuEnv
+ * @param {string[]} [extra]
+ */
 function start(name, gpuEnv, extra = []) {
   return sh([
     "run",
@@ -90,17 +105,22 @@ function start(name, gpuEnv, extra = []) {
     "-v",
     `${join(dir, "keys")}:/keys:ro`,
     "-v",
-    `${resolve("containers/test-gpu")}:/opt/fake-gpu:ro`,
+    `${resolve("tests/stand-ins/gpu")}:/opt/fake-gpu:ro`,
     "--entrypoint",
     "/opt/fake-gpu/enter",
     image,
   ]).trim();
 }
 
-const logs = (name) => {
+const logs = (/** @type {string} */ name) => {
   const r = spawnSync(engine, ["logs", name], { encoding: "utf8" });
   return `${r.stdout}${r.stderr}`;
 };
+/**
+ * The harness's log lines with this message, parsed.
+ * @param {string} name
+ * @param {string} msg
+ */
 const logLines = (name, msg) =>
   logs(name)
     .split("\n")
@@ -112,8 +132,14 @@ const logLines = (name, msg) =>
       }
     })
     .filter((l) => l?.msg === msg);
-const logLine = (name, msg) => logLines(name, msg)[0];
-/** The `nth` line (from 1) with this message, once it is there. */
+const logLine = (/** @type {string} */ name, /** @type {string} */ msg) => logLines(name, msg)[0];
+/**
+ * The `nth` line (from 1) with this message, once it is there.
+ * @param {string} name
+ * @param {string} msg
+ * @param {number} [ms]
+ * @param {number} [nth]
+ */
 async function waitFor(name, msg, ms = 180_000, nth = 1) {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
@@ -123,7 +149,7 @@ async function waitFor(name, msg, ms = 180_000, nth = 1) {
   }
   throw new Error(`${name}: no "${msg}" (${nth}) in ${ms / 1000} s\n${logs(name).slice(-3000)}`);
 }
-const groupsOf = (name) =>
+const groupsOf = (/** @type {string} */ name) =>
   sh([
     "exec",
     name,
@@ -146,13 +172,9 @@ try {
     publicKey.export({ type: "spki", format: "pem" }),
   );
   console.log("building the harness image ...");
-  execFileSync(
-    engine,
-    ["build", "-q", "-t", image, "-f", "containers/harness/Containerfile", "."],
-    {
-      stdio: ["ignore", "ignore", "inherit"],
-    },
-  );
+  execFileSync(engine, ["build", "-q", "-t", image, ...imageTarget("harness"), "."], {
+    stdio: ["ignore", "ignore", "inherit"],
+  });
 
   // Two judge cards and two agents' cards.
   const a = names[0];
@@ -205,7 +227,7 @@ try {
   const hw = logLine(a, "hardware");
   check(
     "the hardware report lists every card with its role",
-    JSON.stringify(hw?.devices?.map((d) => d.split(":")[0])) ===
+    JSON.stringify(hw?.devices?.map((/** @type {string} */ d) => d.split(":")[0])) ===
       JSON.stringify(["judge", "judge", "dev", "dev"]),
     JSON.stringify(hw?.devices),
   );
@@ -246,6 +268,18 @@ try {
     Object.values(roles["lane-1"] ?? {}).every((v) => !String(v).startsWith("ALLOWED")) &&
       roles["lane-1"]?.["device:nvidia1"]?.startsWith("EACCES"),
     JSON.stringify(roles["lane-1"]),
+  );
+  // The smoke check's own kits and projects (/opt/thermite/checks): the controller's alone. Every
+  // role, a lane's and an agent's users among them, must have probed them and been refused.
+  const imageKits = [...new Set(["lane-1", "agent-1", ...Object.keys(roles)])].flatMap((role) =>
+    ["image-checks-list", "image-kit-read"]
+      .filter((p) => !/^E[A-Z]+$/.test(roles[role]?.[p] ?? ""))
+      .map((p) => `${role} ${p}: ${roles[role]?.[p]}`),
+  );
+  check(
+    "no role lists the image's own kits or reads one, on any card: only the harness does",
+    imageKits.length === 0,
+    imageKits.slice(0, 6).join("; "),
   );
 
   // Overlapping lists: refused, and the rig neither times nor allows dev runs.

@@ -2,6 +2,7 @@ import { CODE_RESEARCH_TOOLS, researchTool } from "../../../agents/tools/index.t
 import { log } from "../../../common/env.ts";
 import { type Ledger, LedgerError } from "../../ledger/index.ts";
 import type { TaskYield } from "../../queue.ts";
+import type { RunSearch } from "../search/index.ts";
 import { addClaim } from "./claims.ts";
 import { clockOf } from "./clock.ts";
 import { type ResearchContext, researchContext } from "./context.ts";
@@ -12,9 +13,9 @@ import {
   reviseHypothesis,
   setHypothesisStatus,
 } from "./hypotheses.ts";
-import { addNote } from "./notes.ts";
+import { addSourceNote } from "./notes.ts";
 import { report, updateSection } from "./report.ts";
-import { fetchSource, frontier, readSource, searchCorpus, searchWeb } from "./sources.ts";
+import { fetchSource, frontier, readSource } from "./sources.ts";
 import { statsOf } from "./stats.ts";
 import { trialYield } from "./yield.ts";
 
@@ -38,8 +39,8 @@ const CODE_OPS = new Set(CODE_RESEARCH_TOOLS.map((n) => researchTool(n)?.op ?? n
  * - the harness owns the clock (running time only): workers cannot end a campaign.
  *
  * The class holds the service's state and is its interface. The bodies of its operations are in
- * research/, a module for each part: sources.ts (fetch, read and search the archive, and the
- * links to follow), claims.ts, notes.ts, findings.ts, hypotheses.ts (with the brief's list and
+ * research/, a module for each part: sources.ts (fetch and read the archive, and the links to
+ * follow; search_corpus reads the run's index, ../search/), claims.ts, notes.ts, findings.ts, hypotheses.ts (with the brief's list and
  * the free functions the harness's service calls), yield.ts (what a trial added), clock.ts,
  * stats.ts and report.ts. context.ts holds what they share.
  */
@@ -70,10 +71,14 @@ export class Research {
     ledger: Ledger,
     stateDir: string,
     opts: {
+      /** The rig's outbox: each source's archived text goes to the knowledge base from there. */
+      outboxDir: string;
+      /** The index search_corpus reads; one of its own when not given. */
+      search?: RunSearch | undefined;
       allowPrivate?: boolean;
       maxCorpusBytes?: number;
       onChange?: ((run: string) => void) | undefined;
-    } = {},
+    },
   ) {
     this.ctx = researchContext(ledger, stateDir, opts, (run) => this.changed(run));
     this.onChange = opts.onChange;
@@ -90,7 +95,7 @@ export class Research {
 
   /**
    * Workers may act only on a running run. A research run takes every operation; a hill-climb or
-   * goal run records sources, claims and notes (goal 065), and the rest belongs to research runs.
+   * goal run records sources, claims and source notes (goal 065), and the rest belongs to research runs.
    */
   requireRunning(run: string, op?: string | undefined): void {
     const inst = this.ctx.ledger.runs.get(run);
@@ -99,7 +104,7 @@ export class Research {
     if (inst.mode !== "research" && (op === undefined || !CODE_OPS.has(op)))
       throw new LedgerError(
         "invalid",
-        `a ${inst.mode.replace(/_/g, "-")} run records sources, claims and notes only (${CODE_RESEARCH_TOOLS.join(", ")}); the rest belongs to research runs`,
+        `a ${inst.mode.replace(/_/g, "-")} run records sources, claims and source notes only (${CODE_RESEARCH_TOOLS.join(", ")}); the rest belongs to research runs`,
       );
   }
 
@@ -113,14 +118,9 @@ export class Research {
     return readSource(this.ctx, run, source, offset, length);
   }
 
-  /** Plain-text search over the archived texts, a page at a time: research/sources.ts. */
+  /** An exact phrase in the archived texts, a page at a time: search/corpus.ts. */
   searchCorpus(run: string, text: string, skip?: number) {
-    return searchCorpus(this.ctx, run, text, skip);
-  }
-
-  /** Web search, checked against the contract's search policy and logged: research/sources.ts. */
-  search(run: string, lane: string | null, query: string) {
-    return searchWeb(this.ctx, run, lane, query);
+    return this.ctx.search.corpus(run, text, skip ?? 0);
   }
 
   /** A worker's claim, verified or kept as a draft: research/claims.ts. */
@@ -128,15 +128,15 @@ export class Research {
     return addClaim(this.ctx, run, lane, input);
   }
 
-  /** A research note, with the sources it relies on: research/notes.ts. */
-  addNote(
+  /** A source note, with the sources it relies on: research/notes.ts. */
+  addSourceNote(
     run: string,
     lane: string | null,
     text: string,
     sources?: string[],
     trial?: string | undefined,
   ) {
-    return addNote(this.ctx, run, lane, text, sources, trial);
+    return addSourceNote(this.ctx, run, lane, text, sources, trial);
   }
 
   /** A worker's hypothesis for the run's pool: research/hypotheses.ts. */

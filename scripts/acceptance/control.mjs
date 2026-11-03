@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // M3 control acceptance under compose, with two local rigs (the "two-rigs" profile). It checks
 // the plan's M3 verify list:
 //   - assign a campaign to each rig; pause, resume and reset workers from the dashboard and from
@@ -7,7 +8,9 @@
 //     control's audit;
 //   - with control stopped, rigs keep researching, and their reports catch up when it returns;
 //   - with a supervisor stopped, its harness keeps running, the rig shows stale, then recovers;
-//   - control's view of a rig is the same before and after a control restart.
+//   - control's view of a rig is the same before and after a control restart;
+//   - Metrics' system view (goal 179): the bus's figures through control's system user on the
+//     real server, each rig's parts' use in its reports, the Bus tab and the stream inspector.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/control.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -33,16 +36,41 @@ const composeEnv = {
   THERMITE_CALIBRATION_BLOCKS: "0",
 };
 const profile = ["--profile", "two-rigs"];
+/** @typedef {import("../../src/control/views/index.ts").RigView} RigView */
+/** @typedef {import("../../src/control/views/index.ts").JudgeJob} JudgeJob */
+/** @typedef {import("./lib/smoke-env.mjs").ControlEvent} ControlEvent */
+/**
+ * @type {{
+ *   started_at: string,
+ *   compose: string,
+ *   checks: import("./lib/checks.mjs").CheckRecord[],
+ *   finished_at?: string,
+ *   ok?: boolean,
+ * }}
+ */
 const report = {
   started_at: new Date().toISOString(),
   compose: process.env.COMPOSE ?? "podman compose",
   checks: [],
 };
 const { check } = acceptanceChecks({ max: 300, into: report.checks });
-const dcp = (...args) => dc(composeEnv, ...profile, ...args);
+const dcp = (/** @type {string[]} */ ...args) => dc(composeEnv, ...profile, ...args);
+/**
+ * The rig as control's API has it.
+ * @param {string} rig
+ * @returns {Promise<RigView>}
+ */
 const view = async (rig) => (await api(`/v1/rigs/${rig}/view`)).body;
-const runStatus = async (rig, id) => (await view(rig)).runs?.find((i) => i.id === id)?.status;
-const harnessEvents = (service, kind) =>
+const runStatus = async (/** @type {string} */ rig, /** @type {string} */ id) =>
+  (await view(rig)).runs?.find((i) => i.id === id)?.status;
+/**
+ * Rows of one query of a harness's ledger, read only, inside its container.
+ * @param {string} service
+ * @param {string} sql
+ * @param {...unknown} params
+ * @returns {Record<string, unknown>[]}
+ */
+const harnessRows = (service, sql, ...params) =>
   JSON.parse(
     dc(
       composeEnv,
@@ -52,9 +80,22 @@ const harnessEvents = (service, kind) =>
       service,
       "node",
       "-e",
-      `const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync("/var/lib/thermite/ledger/ledger.db",{readOnly:true});process.stdout.write(JSON.stringify(db.prepare("select id, kind, subject from event where kind = ?").all(${JSON.stringify(kind)})))`,
+      `const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync("/var/lib/thermite/ledger/ledger.db",{readOnly:true});process.stdout.write(JSON.stringify(db.prepare(${JSON.stringify(sql)}).all(...${JSON.stringify(params)})))`,
     ),
   );
+const harnessEvents = (/** @type {string} */ service, /** @type {string} */ kind) =>
+  harnessRows(service, "select id, kind, subject from event where kind = ?", kind);
+/** What a harness's judge had to do, and what held it: its jobs, and the events that say why. */
+const judgeState = (/** @type {string} */ service) => ({
+  jobs: harnessRows(
+    service,
+    "select id, kind, state, attempt, priority, expiries, json_extract(result, '$.error') as error, updated_at from job order by id",
+  ),
+  events: harnessRows(
+    service,
+    "select id, kind, subject, at from event where kind in ('baseline', 'baseline_failed', 'crash_infra', 'rig_disk', 'rig_drain', 'run_status') order by id",
+  ),
+});
 
 /** A dashboard session: log in with the admin token, keep the cookie, post forms with CSRF. */
 async function dashboard() {
@@ -63,8 +104,13 @@ async function dashboard() {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const page = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
+  const page = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  /**
+   * @param {string} route
+   * @param {Record<string, string>} form
+   */
   const send = async (route, form) => {
     const html = await page(`/ui/rigs/${form.rig}`);
     const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(html)?.[1] ?? "";
@@ -77,10 +123,11 @@ async function dashboard() {
     return r.status;
   };
   /** A command form, such as Pause. */
-  const post = (form) => send("/ui/commands", form);
+  const post = (/** @type {Record<string, string>} */ form) => send("/ui/commands", form);
   /**
    * A message from a message box, such as Tell the planner on a run's Planner tab: to the run's
    * own address, under its campaign (goal 170).
+   * @param {{ rig: string, run: string, [field: string]: string }} fields
    */
   const message = async ({ rig, run, ...form }) => {
     const campaign = (await view(rig)).runs?.find((i) => i.id === run)?.campaign ?? run;
@@ -97,8 +144,19 @@ async function mcp() {
       requestInit: { headers: { authorization: `Bearer ${secret("control-admin-token")}` } },
     }),
   );
+  /**
+   * A tool's answer: its one text block, read as JSON.
+   * @param {string} name
+   * @param {Record<string, unknown>} args
+   */
   const call = async (name, args) =>
-    JSON.parse((await client.callTool({ name, arguments: args })).content[0].text);
+    JSON.parse(
+      /** @type {{ text: string }} */ (
+        /** @type {{ content: { text: string }[] }} */ (
+          await client.callTool({ name, arguments: args })
+        ).content[0]
+      ).text,
+    );
   return { client, call };
 }
 
@@ -118,6 +176,40 @@ try {
 
   // Dashboard commands on rig 1.
   const ui = await dashboard();
+
+  // Metrics' system view on the real bus (goal 179): control asks its server for its figures as
+  // its system user, through the users file it writes, and each rig's parts report their use.
+  /** @type {{ bus: { streams: { name: string }[], connections: { user: string | null }[], errors: string[] }, control: { use: { memory_bytes: number } }, storage: { disk: { name: string }[] } }} */
+  const sys = (await api("/v1/system")).body;
+  check(
+    "Metrics' figures: the bus's streams and connections, control's use, its storage",
+    sys.bus.errors.length === 0 &&
+      sys.bus.streams.some((x) => x.name === "EVENTS") &&
+      sys.bus.connections.some((x) => x.user === "rig local-1") &&
+      sys.control.use.memory_bytes > 0 &&
+      sys.storage.disk.some((x) => x.name === "the bus's store"),
+    { errors: sys.bus.errors, users: sys.bus.connections.map((x) => x.user) },
+  );
+  await until(
+    "each rig's harness and supervisor report their use",
+    async () => {
+      /** @type {{ harness: unknown, supervisor: unknown }[]} */
+      const rigs = (await api("/v1/system?part=rigs")).body.rigs;
+      return rigs.length >= 2 && rigs.every((x) => x.harness && x.supervisor);
+    },
+    120_000,
+  );
+  check("each rig's harness and supervisor report their CPU and memory", true);
+  const busTab = await ui.page("/ui/metrics?tab=bus");
+  check(
+    "Metrics' Bus tab lists the streams and the rigs' supervisors",
+    busTab.includes('href="/ui/metrics/streams/EVENTS"') && busTab.includes("supervisor local-1"),
+  );
+  const listed = await ui.page("/ui/metrics/streams/EVENTS");
+  check(
+    "the stream inspector lists EVENTS's messages",
+    /href="\/ui\/metrics\/streams\/EVENTS\/\d+"/.test(listed),
+  );
   check(
     "dashboard pause accepted",
     (await ui.post({
@@ -156,6 +248,7 @@ try {
   await until(
     "reset and the message to the planner reached the harness",
     async () => {
+      /** @type {ControlEvent[]} */
       const events = (await api("/v1/rigs/local-1/events?after=0&limit=5000")).body.events;
       return (
         events.some((e) => e.kind === "workers_reset") &&
@@ -168,6 +261,7 @@ try {
 
   // MCP commands on rig 2.
   const agent = await mcp();
+  /** @type {{ rig: string }[]} */
   const rigs = await agent.call("list_rigs", {});
   check(
     "MCP lists both rigs",
@@ -202,7 +296,7 @@ try {
     kind: "redirect",
     payload: {
       run: "smoke-2",
-      directives: [{ kind: "try", family: "tiling", rationale: "acceptance", citations: [] }],
+      directives: [{ kind: "try", direction: "tiling", rationale: "acceptance", citations: [] }],
     },
   });
   await agent.call("issue_command", {
@@ -214,7 +308,7 @@ try {
     "MCP reset and redirect reached the harness",
     async () => {
       const kinds = (await api("/v1/rigs/local-2/events?after=0&limit=5000")).body.events.map(
-        (e) => e.kind,
+        (/** @type {ControlEvent} */ e) => e.kind,
       );
       return kinds.includes("workers_reset") && kinds.includes("directive");
     },
@@ -223,13 +317,16 @@ try {
   check("pause, resume, redirect and reset from MCP took effect", true);
   await agent.client.close();
 
-  const audit = (await api("/v1/audit?limit=500")).body.audit.map((a) => `${a.actor} ${a.action}`);
+  const audit = /** @type {import("../../src/control/store/audit.ts").AuditEntry[]} */ (
+    (await api("/v1/audit?limit=500")).body.audit
+  ).map((a) => `${a.actor} ${a.action}`);
   check(
     "dashboard and MCP actions are in the audit log",
     audit.some((a) => a.startsWith("owner:ui command_issued") || a.includes("owner:ui")) &&
       audit.some((a) => a.includes("mcp:issue_command")),
     audit.slice(0, 8),
   );
+  /** @type {import("../../src/control/store/index.ts").CommandRow[]} */
   const commands = (await api("/v1/commands?limit=100")).body.commands;
   check(
     "every command was delivered",
@@ -251,7 +348,9 @@ try {
     async () => harnessEvents("harness", "verdict").some((e) => e.subject === attempt),
     600_000,
     3000,
-  );
+  ).catch((err) => {
+    throw new Error(`${err.message}: ${JSON.stringify({ attempt, ...judgeState("harness") })}`);
+  });
   check("with control stopped, the rig kept researching", true);
   dcp("start", "control");
   await until("control back", async () => (await fetch(`${control}/v1/health`)).ok);
@@ -266,8 +365,8 @@ try {
   // A run's timeline is a log: everything it held before the restart must still be there, in
   // order; what arrived since (the new attempt's events) is compared through the attempts.
   const lastSeq = Math.max(0, ...before.runs.flatMap((i) => (i.timeline ?? []).map((e) => e.seq)));
-  const notNew = (j) => j.attempt !== attempt;
-  const strip = (v) =>
+  const notNew = (/** @type {JudgeJob} */ j) => j.attempt !== attempt;
+  const strip = (/** @type {RigView} */ v) =>
     JSON.stringify({
       ...v,
       last_seen: null,
@@ -293,22 +392,35 @@ try {
         },
         verdicts: Object.fromEntries(
           Object.entries(i.verdicts)
-            .map(([k, n]) => [
-              k,
-              n -
-                i.attempts.filter((a) => a.id === attempt && (a.verdict ?? a.lifecycle) === k)
-                  .length,
-            ])
+            .map(
+              ([k, n]) =>
+                /** @type {[string, number]} */ ([
+                  k,
+                  n -
+                    i.attempts.filter((a) => a.id === attempt && (a.verdict ?? a.lifecycle) === k)
+                      .length,
+                ]),
+            )
             .filter(([, n]) => n > 0),
         ),
       })),
     });
-  /** Paths where two JSON values differ (for the report when they do). */
+  /**
+   * Paths where two JSON values differ (for the report when they do).
+   * @param {unknown} a
+   * @param {unknown} b
+   * @param {string} [path]
+   * @returns {string[]}
+   */
   const diff = (a, b, path = "") => {
     if (JSON.stringify(a) === JSON.stringify(b)) return [];
     if (a && b && typeof a === "object" && typeof b === "object") {
       return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((k) =>
-        diff(a[k], b[k], `${path}.${k}`),
+        diff(
+          /** @type {Record<string, unknown>} */ (a)[k],
+          /** @type {Record<string, unknown>} */ (b)[k],
+          `${path}.${k}`,
+        ),
       );
     }
     return [`${path}: ${JSON.stringify(a)?.slice(0, 120)} -> ${JSON.stringify(b)?.slice(0, 120)}`];
@@ -342,7 +454,11 @@ try {
   check("the rig recovers when its supervisor returns", true);
 } catch (err) {
   failed = true;
-  check("acceptance run", false, String(err?.stack ?? err));
+  check(
+    "acceptance run",
+    false,
+    String(/** @type {{ stack?: unknown } | null | undefined} */ (err)?.stack ?? err),
+  );
 } finally {
   report.finished_at = new Date().toISOString();
   report.ok = !failed && report.checks.every((c) => c.ok);

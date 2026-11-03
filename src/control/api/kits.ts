@@ -1,15 +1,20 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { z } from "zod";
 import { redact } from "../../common/env.ts";
-import { KIT_ADD, KITS } from "../../core/api/control/owner.ts";
-import { addKit, KIT_BUNDLE_MAX, kitAnswer, kitsAnswer } from "../kits/index.ts";
+import { errorText } from "../../common/errors.ts";
+import { KIT_ADD, KITS, KitGitSource } from "../../core/api/control/owner.ts";
+import { gitAccessFor } from "../git-access.ts";
+import { addKit, addKitFromGit, KIT_BUNDLE_MAX, kitAnswer, kitsAnswer } from "../kits/index.ts";
 import type { ApiContext } from "./context.ts";
 
 /**
  * The kits control keeps, and a kit written elsewhere given as a git bundle of its repository:
  * kept with its commits, served to rigs as the kits the New campaign page writes are. The body
  * is the bundle's bytes; ?ref= names the head, ?force=true replaces a head it does not descend
- * from. The owner's token adds; the reader's reads too (MCP's kit_add takes an operator's).
+ * from. A JSON body, `{"git": {url, ref, access}}`, names the kit's repository instead, which
+ * control reads itself (goal 182). The owner's token adds; the reader's reads too (MCP's kit_add
+ * takes an operator's).
  */
 export function kitRoutes(app: Hono, api: ApiContext): void {
   const { store, admin, reader } = api;
@@ -30,7 +35,7 @@ export function kitRoutes(app: Hono, api: ApiContext): void {
       maxSize: KIT_ADD.maxBytes,
       onError: (c) => {
         const error = `the bundle is above the ${KIT_BUNDLE_MAX} bytes (64 MiB) control takes`;
-        store.auditLog.add("owner:api", "refused", { path: c.req.path, why: error });
+        store.auditLog.refusal("owner:api", "refused", { path: c.req.path, why: error });
         return c.json({ error }, 413);
       },
     }),
@@ -38,13 +43,45 @@ export function kitRoutes(app: Hono, api: ApiContext): void {
       const name = c.req.param("name");
       const path = `/v1/kits/${name}`;
       const refuse = (error: string, status: 400 | 404 | 409 | 413) => {
-        store.auditLog.add("owner:api", "refused", { path, why: redact(error) });
+        store.auditLog.refusal("owner:api", "refused", { path, why: redact(error) });
         return c.json({ error }, status);
       };
       if (!kits) return refuse("this control keeps no kits", 404);
       const force = c.req.query("force");
       if (force !== undefined && !["", "true", "false", "1", "0"].includes(force))
         return refuse("force is true or false", 400);
+      if ((c.req.header("content-type") ?? "").startsWith("application/json")) {
+        let body: unknown;
+        try {
+          body = await c.req.json();
+        } catch {
+          return refuse("the body is not JSON", 400);
+        }
+        const asked = z.strictObject({ git: KitGitSource }).safeParse(body);
+        if (!asked.success)
+          return refuse(
+            `bad request: ${asked.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}`,
+            400,
+          );
+        if (c.req.query("ref"))
+          return refuse("With git, name the branch, tag or commit as git.ref", 400);
+        const g = asked.data.git;
+        let access: ReturnType<typeof gitAccessFor>;
+        try {
+          access = gitAccessFor(store, api.parts.secrets, kits.dir, g.access, g.url);
+        } catch (err) {
+          return refuse(errorText(err), 400);
+        }
+        const out = await addKitFromGit(
+          store,
+          kits,
+          { name, url: g.url, ref: g.ref, force: force === "true" || force === "1" },
+          access,
+          "owner:api",
+        );
+        if (!out.ok) return refuse(out.error, out.status);
+        return c.json(out.answer, out.created ? 201 : 200);
+      }
       const out = await addKit(
         store,
         kits,

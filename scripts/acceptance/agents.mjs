@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 // M4 agents acceptance under compose, with a scripted OpenAI-compatible model on the host (a
 // real model route is not needed to check the machinery). One epoch on the smoke campaign:
 //   - the planner plans through the model and the plan is valid;
@@ -8,14 +9,38 @@
 //   - a lane's background work runs on across its commands and a dev run, as in a shell;
 //   - no lane process outlives its trial;
 //   - control's model check reaches the model through the rig's route with a correct tool call;
-//   - under OpenCode, a hill-climb trial submits with thermite-trial, and a research run's trial
-//     runs the research tools as `thermite-trial research` commands;
+//   - in Pi, the first epoch's planner plans in its Pi view, in a process of its own, takes an
+//     owner's message before its next model call and /status typed into its console;
+//   - under OpenCode, the planner plans in its own terminal and takes an owner's message in its turn;
+//   - under OpenCode, a hill-climb trial runs in OpenCode's own terminal (goal 169: the default,
+//     on a rig nobody set), its server first and its terminal attached, and submits with
+//     thermite-trial; then, the rig set to headless over REST, a research run's trial runs
+//     headless (headless stays an advanced choice, so both modes keep a trial here) and runs the
+//     research tools as `thermite-trial research` commands;
 //   - that trial reads and searches its run's research folder, is refused changing the harness's
-//     part of it, and the file it writes in its working area is saved when it ends.
+//     part of it, and the file it writes in its working area is saved when it ends;
+//   - the Pi view (goal 169): the workers of the first epoch, in Pi on a rig nobody set, run in
+//     their own terminal, where each draws its Pi view; while lane-2's trial holds in a command,
+//     the owner's console (terminal_input over REST) sends each of the view's calls in turn:
+//     words that steer, /status, /mcp, /mcp reconnect (refused: the kit has no MCP server),
+//     /skill:NAME (refused: the kit carries no skills), a command the view has not (refused),
+//     /compact, words as a follow-up, and Esc. Each is recorded word for word with its outcome;
+//     the model gets the steered words and the follow-up, the conversation is compacted once, the
+//     interrupt does not end the trial, which submits; and Live shows the view's screen;
+//   - the knowledge base (goal 175, lib/kb-agents.mjs): Pi's and OpenCode's agents write in their
+//     own slots, a write naming another slot is refused, and smoke-2's planner finds the items.
 // Usage: COMPOSE="podman compose" node scripts/acceptance/agents.mjs
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { acceptanceChecks } from "./lib/checks.mjs";
+import { kbAgentsScene } from "./lib/kb-agents.mjs";
+import { PI_INPUTS, piConsoleScene, piScene, piSteps } from "./lib/pi-worker-view.mjs";
+import {
+  opencodePlanner,
+  opencodePlannerScene,
+  piPlannerScene,
+  piPlannerTurn,
+} from "./lib/planner-terminal.mjs";
 import { hostName as containersHost, scriptedModel } from "./lib/scripted-model.mjs";
 import {
   api,
@@ -23,6 +48,7 @@ import {
   command,
   control,
   dc,
+  dcLogs,
   events,
   latestVerdicts,
   lifecycles,
@@ -34,18 +60,29 @@ import {
 } from "./lib/smoke-env.mjs";
 
 const GOOD = readFileSync("kits/smoke-cpu/candidates/good/src/kernel/matmul.c", "utf8");
-const NOOP = readFileSync("kits/smoke-cpu/candidates/noop/src/kernel/matmul.c", "utf8");
-const setid = {};
-const background = {};
-/** What the OpenCode research trial's commands answered, as its tool results show. */
+/** @typedef {import("./lib/scripted-model.mjs").ScriptedTurn} ScriptedTurn */
+/** @typedef {import("./lib/pi-worker-view.mjs").PiInput} PiInput */
+const setid = /** @type {Record<string, string>} */ ({});
+const background = /** @type {Record<string, string>} */ ({});
+/**
+ * What the OpenCode research trial's commands answered, as its tool results show.
+ * @type {{
+ *   prompt?: boolean, reachedPrivate?: string, refused?: boolean, note?: boolean,
+ *   section?: boolean, progress?: boolean, index?: boolean, searched?: boolean,
+ *   writes?: Record<string, string>,
+ * }}
+ */
 const researchSeen = {};
 /** A tool result's text: OpenCode sends it as a string or as text parts. */
-const textOf = (c) =>
+const textOf = (/** @type {unknown} */ c) =>
   typeof c === "string"
     ? c
     : Array.isArray(c)
       ? c.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
       : String(c ?? "");
+
+/** The knowledge base's scene (goal 175: lib/kb-agents.mjs). */
+const kbScene = kbAgentsScene();
 
 /**
  * The OpenCode research trial: each research tool as a shell command, in turn. Its fetch names
@@ -54,15 +91,18 @@ const textOf = (c) =>
  * folder, tries to change the harness's part of it, and writes a file of its own.
  */
 function researchSteps() {
-  const shell = (command) => ({ name: "shell", args: { command, timeout: 0 } });
+  const shell = (/** @type {string} */ command) => ({
+    name: "shell",
+    args: { command, timeout: 0 },
+  });
   return [
     shell(`thermite-trial research fetch http://${hostName}:${port}/paper`),
-    shell("thermite-trial research add_note 'opencode research note: the fetch was refused'"),
+    shell("thermite-trial research add_source_note 'opencode source note: the fetch was refused'"),
     shell(
       `thermite-trial research update_section - <<'EOF'\n{"name": "opencode", "body": "Written with thermite-trial in OpenCode."}\nEOF`,
     ),
     // The folder's index, and the note just recorded, found by searching all of the folder.
-    shell("head -n 1 ../../INDEX.md; grep -rl 'opencode research note' ../.. 2>/dev/null"),
+    shell("head -n 1 ../../INDEX.md; grep -rl 'opencode source note' ../.. 2>/dev/null"),
     // Two of the harness's files and two new ones in its folders: each must be refused. The
     // words of each answer are put together in the shell, so the command itself holds neither.
     shell(
@@ -80,8 +120,13 @@ async function dashboard() {
     body: new URLSearchParams({ token: secret("control-admin-token") }),
     redirect: "manual",
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
-  const page = async (path) => (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  const cookie = /** @type {string} */ ((login.headers.get("set-cookie") ?? "").split(";")[0]);
+  const page = async (/** @type {string} */ path) =>
+    (await fetch(`${control}${path}`, { headers: { cookie } })).text();
+  /**
+   * @param {string} path
+   * @param {Record<string, string>} form
+   */
   const post = async (path, form) =>
     (
       await fetch(`${control}${path}`, {
@@ -94,13 +139,25 @@ async function dashboard() {
   return { page, post };
 }
 
-/** The scripted model: plans with submit_plan; lane-1 improves the kernel, lane-2 restates it. */
+/**
+ * The scripted model: plans with submit_plan; lane-1 improves the kernel, lane-2 restates it.
+ * The messages and tools are the model calls' JSON, as scriptedModel() hands them.
+ * @param {any[]} messages
+ * @param {any[]} tools
+ * @returns {ScriptedTurn | Promise<ScriptedTurn>}
+ */
 function script(messages, tools) {
   const names = tools.map((t) => t.function.name);
   // OpenCode (its own tools, shell among them): its model check, then a trial that edits the
   // kernel and submits with thermite-trial. A request without tools names the session.
   if (names.includes("shell") && names.includes("execute")) {
     const asked = JSON.stringify(messages);
+    // The second run's planner (goal 175) searches the knowledge base once, then plans.
+    const searched = kbScene.plannerTurn(messages, names, "opencode");
+    if (searched) return searched;
+    // The planner in OpenCode's own terminal (lib/planner-terminal.mjs).
+    const planned = opencodePlanner(messages, asked);
+    if (planned) return planned;
     const word = /run exactly this command: echo (thermite-[a-z0-9]+)/.exec(asked)?.[1];
     const tools = messages.filter((m) => m.role === "tool").length;
     if (word) {
@@ -114,33 +171,28 @@ function script(messages, tools) {
       return step ? { toolCalls: [step] } : { text: "done for this trial" };
     }
     // A trial: first a command that takes the lane over its memory limit (the broker kills it
-    // and spares OpenCode), then the change and its submission, then done.
-    if (tools === 0)
-      return {
-        toolCalls: [
-          {
-            name: "shell",
-            args: {
-              command:
-                "python3 -c 'import time; b = bytearray(int(2.5 * 1024**3)); time.sleep(20)'",
-              timeout: 0,
-            },
-          },
-        ],
-      };
-    if (tools > 1) return { text: "done" };
-    return {
-      toolCalls: [
-        {
-          name: "shell",
-          args: {
-            command:
-              "printf '\\n/* tidied */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'opencode harness: a tidied kernel'",
-            timeout: 0,
-          },
+    // and spares OpenCode), then an item for the knowledge base in its own slot and one naming
+    // another slot (goal 175: Thermite's MCP server's kb_write), then the change and its
+    // submission, then done.
+    const steps = [
+      {
+        name: "shell",
+        args: {
+          command: "python3 -c 'import time; b = bytearray(int(2.5 * 1024**3)); time.sleep(20)'",
+          timeout: 0,
         },
-      ],
-    };
+      },
+      ...kbScene.ocSteps(messages, names),
+      {
+        name: "shell",
+        args: {
+          command:
+            "printf '\\n/* tidied */\\n' >> src/kernel/matmul.c && thermite-trial submit --hypothesis 'opencode harness: a tidied kernel'",
+          timeout: 0,
+        },
+      },
+    ];
+    return steps[tools] ? { toolCalls: [steps[tools]] } : { text: "done" };
   }
   if (!tools.length) return { text: "A Thermite trial" };
   // The rig's model check: echo back the word it was given.
@@ -150,22 +202,25 @@ function script(messages, tools) {
     return { toolCalls: [{ name: "echo", args: { word } }] };
   }
   if (tools.some((t) => t.function.name === "submit_plan")) {
+    // The second run's planner, in Pi (goal 175), searches the knowledge base once, then plans.
+    const held = kbScene.plannerTurn(messages, names, "pi") ?? piPlannerTurn(messages, tools);
+    if (held) return held;
     return {
       toolCalls: [
         {
           name: "submit_plan",
           args: {
-            new_families: [{ id: "loop-order", description: "change the loop order for locality" }],
+            new_directions: [{ id: "loop-order", description: "loop order for locality" }],
             assignments: [
               {
                 lane: "lane-1",
-                family: "loop-order",
+                direction: "loop-order",
                 focus: "make the inner loop contiguous",
                 parent: "champion",
               },
               {
                 lane: "lane-2",
-                family: "loop-order",
+                direction: "loop-order",
                 focus: "tidy the kernel",
                 parent: "champion",
               },
@@ -213,19 +268,21 @@ function script(messages, tools) {
               'if kill -0 "$(cat bg.pid)" 2>/dev/null; then echo "BG-ALIVE yes"; else echo "BG-ALIVE no"; fi',
           },
         },
+        // The knowledge base (goal 175): an item in the worker's own slot, then a write naming
+        // another slot, which is refused.
+        ...kbScene.piSteps(messages),
         {
           name: "submit",
           args: { hypothesis: "i-k-j loop order makes the inner loop contiguous" },
         },
       ]
-    : [
-        { name: "write_file", args: { path: "src/kernel/matmul.c", content: NOOP } },
-        { name: "submit", args: { hypothesis: "restate the kernel" } },
-      ];
+    : undefined;
+  if (!steps) return piSteps(messages, done);
   return steps[done] ? { toolCalls: [steps[done]] } : { text: "done" };
 }
 
 /** Whether the OpenCode trial's memory hog came back killed (the lane's memory limit). */
+/** @type {{ killed?: boolean }} */
 const hogSeen = {};
 const model = await scriptedModel(script, {
   // Anything else but a model call: the research fetch reached this machine, which the
@@ -246,15 +303,22 @@ const model = await scriptedModel(script, {
         if (/"questions":\s*\[/.test(out)) researchSeen.progress = true;
         // The research folder, as the trial's shell saw it.
         if (/# Research through OpenCode/.test(out)) researchSeen.index = true;
-        if (/notes\/note-\d{5}\.md/.test(out)) researchSeen.searched = true;
-        for (const hit of out.matchAll(/FOLDER-WRITE-(ALLOWED|REFUSED) (\S+)/g)) {
+        if (/source-notes\/source-note-\d{5}\.md/.test(out)) researchSeen.searched = true;
+        // Each match has its groups: they are not optional in the patterns.
+        for (const hit of /** @type {Iterable<[string, string, string]>} */ (
+          out.matchAll(/FOLDER-WRITE-(ALLOWED|REFUSED) (\S+)/g)
+        )) {
           researchSeen.writes ??= {};
           researchSeen.writes[hit[2]] = hit[1];
         }
       }
-      for (const hit of JSON.stringify(m.content ?? "").matchAll(/SETID-(BEFORE|AFTER) (\S+)/g))
+      for (const hit of /** @type {Iterable<[string, string, string]>} */ (
+        JSON.stringify(m.content ?? "").matchAll(/SETID-(BEFORE|AFTER) (\S+)/g)
+      ))
         setid[hit[1]] = hit[2];
-      for (const hit of JSON.stringify(m.content ?? "").matchAll(/BG-(STARTED|ALIVE) (yes|no)/g))
+      for (const hit of /** @type {Iterable<[string, string, string]>} */ (
+        JSON.stringify(m.content ?? "").matchAll(/BG-(STARTED|ALIVE) (yes|no)/g)
+      ))
         background[hit[1]] = hit[2];
     }
   },
@@ -273,6 +337,15 @@ const composeEnv = {
   THERMITE_MAX_TRIALS: "2",
   THERMITE_MODEL_ROUTE_POLL_SECONDS: "2",
 };
+/**
+ * @type {{
+ *   started_at: string,
+ *   compose: string,
+ *   checks: import("./lib/checks.mjs").CheckRecord[],
+ *   finished_at?: string,
+ *   ok?: boolean,
+ * }}
+ */
 const report = {
   started_at: new Date().toISOString(),
   compose: process.env.COMPOSE ?? "podman compose",
@@ -290,6 +363,11 @@ let failed = false;
 try {
   await until("control health", async () => (await fetch("http://127.0.0.1:8800/v1/health")).ok);
   await assign(env, "smoke-1");
+  // lane-2's Pi view, while the epoch runs (goal 169).
+  /** @type {Promise<Partial<Awaited<ReturnType<typeof piConsoleScene>>> & { error?: string }>} */
+  const piRun = piConsoleScene().catch((err) => ({ error: String(err?.stack ?? err) }));
+  // The first epoch's planner in its Pi view (lib/planner-terminal.mjs).
+  await piPlannerScene(check);
   const evs = await until(
     "both lanes judged",
     async () => {
@@ -299,6 +377,7 @@ try {
       );
       // Settled: judged to the end (a screened win also has to finish its confirmation).
       const life = lifecycles(all);
+      /** @type {(string | undefined)[]} */
       const settled = [
         "judged",
         "promoted",
@@ -339,6 +418,63 @@ try {
     evs.some((e) => e.kind === "dev_run"),
     evs.filter((e) => e.kind === "dev_run").map((e) => e.body),
   );
+  // The Pi view (goal 169): each input's outcome, its record, what the model was sent, the
+  // compaction, and the screen on Live.
+  const pi = await piRun;
+  /**
+   * A typed input's outcome, from its command.
+   * @param {{ status?: string, outcome?: { accepted?: boolean, result?: { outcome?: unknown } } }} c
+   */
+  const outcomeOf = (c) =>
+    c?.status !== "delivered" || c?.outcome?.accepted === false
+      ? `refused: ${JSON.stringify(c?.outcome ?? c)}`
+      : String(c?.outcome?.result?.outcome);
+  const outcomes = (pi.sent ?? []).map((x) => ({
+    input: x.input.text ?? x.input.keys,
+    want: String(x.want),
+    got: outcomeOf(x.command),
+  }));
+  check(
+    "the owner's console reaches lane-2's Pi view: each call typed, or refused in words",
+    outcomes.length === PI_INPUTS.length &&
+      (pi.sent ?? []).every((x, i) =>
+        typeof (/** @type {PiInput} */ (PI_INPUTS[i]).want) === "string"
+          ? outcomeOf(x.command) === /** @type {PiInput} */ (PI_INPUTS[i]).want
+          : /** @type {RegExp} */ (/** @type {PiInput} */ (PI_INPUTS[i]).want).test(
+              outcomeOf(x.command),
+            ),
+      ),
+    { error: pi.error, outcomes },
+  );
+  const piRecords = evs.filter((e) => e.kind === "terminal_input" && e.body.trial === pi.trial);
+  const piTrial = trials.find((t) => t.body.trial === pi.trial);
+  check(
+    "each input is recorded word for word with its outcome; the model got the steered words and the follow-up; the conversation was compacted; the interrupt did not end the trial, which submitted",
+    piRecords.length === PI_INPUTS.length &&
+      piRecords.some((e) => e.body.text === "PI-FOLLOW then restate it" && e.body.follow_up) &&
+      piRecords.some(
+        (e) => JSON.stringify(e.body.keys) === '["esc"]' && e.body.outcome === "typed",
+      ) &&
+      piScene.steered === true &&
+      piScene.followed === true &&
+      evs.some((e) => e.kind === "context_compacted" && e.body.trial === pi.trial) &&
+      piTrial?.body.stopped === "submitted",
+    {
+      records: piRecords.map((e) => [e.body.text ?? e.body.keys, e.body.outcome]),
+      steered: piScene.steered,
+      followed: piScene.followed,
+      stopped: piTrial?.body.stopped,
+    },
+  );
+  const frame = pi.frame;
+  check(
+    "Live shows lane-2's Pi view: Thermite's drawing of its Pi session, with the owner's words",
+    typeof frame?.data === "string" &&
+      frame.data.includes("Thermite's view of a worker in Pi") &&
+      frame.data.includes("PI-STEER") &&
+      (frame.pi_view === true || frame.state === "ended"),
+    { state: frame?.state, pi_view: frame?.pi_view, chars: frame?.data?.length },
+  );
   const view = (await api("/v1/rigs/local-1/view")).body;
   const agents = view.runs[0].agents;
   const modelCheck = await rigCheck("model");
@@ -375,7 +511,8 @@ try {
   });
   keysSeen.clear();
   const routeCheck = await rigCheck("model");
-  const pages = [await ui.page("/ui/settings"), await ui.page("/ui/rigs/local-1")].join("");
+  const shown = ["/ui/settings", "/ui/settings/routes", "/ui/rigs/local-1"];
+  const pages = (await Promise.all(shown.map((p) => ui.page(p)))).join("");
   check(
     "a provider from the settings page lists its models, reaches the rig and its model, and its key shows nowhere",
     /1 model/.test(listed) &&
@@ -385,8 +522,14 @@ try {
       !JSON.stringify(await events()).includes(providerKey),
     { taken, summary: routeCheck.summary, keys: keysSeen.size },
   );
-  // The OpenCode harness with the same provider: OpenCode runs as the lane, submits with
-  // thermite-trial, and reaches the provider only through the harness's proxy, which adds the key.
+  // The OpenCode harness with the same provider: OpenCode runs as the lane, in its own terminal
+  // on a rig nobody set, submits with thermite-trial, and reaches the provider only through the
+  // harness's proxy, which adds the key.
+  check(
+    "a rig nobody set runs its agent programs in their own terminal (the default)",
+    view.settings?.program_mode === "terminal",
+    view.settings,
+  );
   await ui.post("/ui/settings/rigs", {
     csrf,
     rig: "local-1",
@@ -397,7 +540,10 @@ try {
     const m = (await api("/v1/rigs/local-1/view")).body.model;
     return m?.source === "control" && m.harness === "opencode" ? m : undefined;
   });
+  // Cleared before the planner's scene: OpenCode's trial may run, and ask with its key, while the
+  // scene waits for the planner's next round.
   keysSeen.clear();
+  await opencodePlannerScene(check);
   const ocCheck = await until(
     "OpenCode's model check (run when the rig took the route)",
     async () =>
@@ -427,9 +573,18 @@ try {
     120_000,
     2000,
   );
+  // The harness says where it started each program in its terminal (cli/terminal.ts).
+  const terminalStarts = () =>
+    dcLogs(composeEnv, "harness")
+      .split("\n")
+      .filter((l) => l.includes('"msg":"OpenCode started in its terminal"'));
+  const ocInTerminal = terminalStarts().some((l) =>
+    l.includes(`"trial":"${String(ocTrial.body.trial)}"`),
+  );
   check(
-    "OpenCode runs the check and a trial as the lane, submits with thermite-trial, and reaches the provider only through the proxy",
-    ocCheck.body.ok === true &&
+    "OpenCode runs the check and a trial as the lane, the trial in its own terminal, submits with thermite-trial, and reaches the provider only through the proxy",
+    ocInTerminal &&
+      ocCheck.body.ok === true &&
       ocAttempt !== undefined &&
       Number(ocTrial.body.turns) >= 1 &&
       // Its first command passed the lane's memory limit: the broker killed it, not OpenCode.
@@ -437,6 +592,7 @@ try {
       keysSeen.has(`Bearer ${providerKey}`) &&
       ![...keysSeen].some((k) => /Bearer (trial|proxy)\./.test(k)),
     {
+      in_terminal: ocInTerminal,
       check: ocCheck.body.summary,
       attempt: ocAttempt?.subject,
       lane: ocAttempt?.body.lane,
@@ -449,7 +605,7 @@ try {
   // OpenCode's own tools and runs the research tools as `thermite-trial research` commands,
   // which reach the harness's research service with the trial's token. Assigning it pauses
   // smoke-1 (one running run per rig).
-  const { parseContract } = await import("../../dist/core/contract.js");
+  const { parseContract } = await import("../../src/core/contract.ts");
   const researchContract = parseContract({
     schema_version: 1,
     campaign: "opencode-research",
@@ -463,6 +619,20 @@ try {
     min_duration: "30m",
   });
   if (!researchContract.ok) throw new Error(researchContract.errors.join("; "));
+  // Headless from now on: the research trial runs OpenCode one command for each turn.
+  const headless = await api("/v1/rigs/local-1/settings", {
+    method: "POST",
+    body: JSON.stringify({ program_mode: "headless" }),
+  });
+  await until(
+    "the rig runs its agent programs headless",
+    async () => (await api("/v1/rigs/local-1/view")).body.settings?.program_mode === "headless",
+  );
+  check(
+    "the rig is set to run its agent programs headless over REST",
+    headless.status === 200 && headless.body.sent?.program_mode === "headless",
+    headless.body,
+  );
   keysSeen.clear();
   await command("assign_campaign", {
     run: "research-oc",
@@ -481,10 +651,14 @@ try {
   await command("pause_run", { run: "research-oc", reason: "acceptance: drain" });
   const researchEvents = (await events()).filter((e) => e.subject === "research-oc");
   const refusal = researchEvents.find((e) => e.kind === "fetch_refused");
-  const note = researchEvents.find((e) => e.kind === "research_note");
+  const note = researchEvents.find((e) => e.kind === "source_note");
+  const researchInTerminal = terminalStarts().some((l) =>
+    l.includes(`"trial":"${String(researchTrial.body.trial)}"`),
+  );
   check(
-    "a research trial under OpenCode runs the research tools as thermite-trial commands, through the harness",
-    researchSeen.prompt === true &&
+    "a research trial under OpenCode, headless, runs the research tools as thermite-trial commands, through the harness",
+    !researchInTerminal &&
+      researchSeen.prompt === true &&
       researchTrial.body.stopped === "finished" &&
       Number(researchTrial.body.turns) >= 1 &&
       // The fetch went through the harness's fetcher, which refused this machine's address.
@@ -493,12 +667,13 @@ try {
       /private or local address/.test(String(refusal?.body.reason)) &&
       // The note is the trial's, in the run's record; the section and progress answered.
       note?.body.trial === researchTrial.body.trial &&
-      /opencode research note/.test(String(note?.body.text)) &&
+      /opencode source note/.test(String(note?.body.text)) &&
       researchSeen.note === true &&
       researchSeen.section === true &&
       researchSeen.progress === true &&
       ![...keysSeen].some((k) => /Bearer (trial|proxy)\./.test(k)),
     {
+      in_terminal: researchInTerminal,
       trial: researchTrial.body,
       seen: researchSeen,
       refusal: refusal?.body.reason,
@@ -515,6 +690,29 @@ try {
     (e) => e.kind === "research_doc" && e.body.path === "synthesis.md",
   );
   const writes = researchSeen.writes ?? {};
+  // The document reaches the knowledge base whole, as its item's file (goal 175): its words are
+  // read there once control has its text.
+  const docText = doc?.body.file
+    ? await until(
+        "the research document whole in the knowledge base",
+        async () => {
+          const q = encodeURIComponent("synthesis");
+          const hit = (await api(`/v1/kb/search?q=${q}`)).body.hits?.find(
+            (/** @type {import("../../src/core/link/kb.ts").KbHit} */ h) =>
+              String(h.address).includes("synthesis"),
+          );
+          if (!hit) return undefined;
+          // A read's answer holds the item, its text among its fields.
+          const { item } = (await api(`/v1/kb/item?address=${encodeURIComponent(hit.address)}`))
+            .body;
+          return /Read next: the sources on quotes\./.test(String(item?.text))
+            ? String(item.text)
+            : undefined;
+        },
+        180_000,
+        3000,
+      ).catch(() => "")
+    : "";
   check(
     "a research trial under OpenCode reads and searches its run's research folder, cannot change the harness's part, and its own files are saved when it ends",
     researchSeen.index === true &&
@@ -524,13 +722,16 @@ try {
       Number(saved?.body.written) >= 1 &&
       doc?.body.trial === researchTrial.body.trial &&
       doc?.body.change === "written" &&
-      /Read next: the sources on quotes\./.test(String(doc?.body.text)),
+      Boolean(doc?.body.file) &&
+      /Read next: the sources on quotes\./.test(docText),
     {
       index: researchSeen.index ?? false,
       searched: researchSeen.searched ?? false,
       writes,
       saved: saved?.body,
       doc: doc && { trial: doc.body.trial, path: doc.body.path, bytes: doc.body.bytes },
+      doc_file: Boolean(doc?.body.file),
+      doc_in_kb: Boolean(docText),
     },
   );
   check(
@@ -538,6 +739,9 @@ try {
     agents.epochs >= 1 && agents.planner_valid >= 1 && agents.trials >= 2 && agents.tokens_in > 0,
     agents,
   );
+  // The knowledge base (goal 175): each program's agent's items in its own slot, the refused
+  // writes nowhere, and an agent of another run finds the items (lib/kb-agents.mjs).
+  await kbScene.run(check, env);
   // Later epochs keep starting trials: pause, then every lane and agent process must end with
   // its trial.
   await command("pause_run", { run: "smoke-1", reason: "acceptance: drain" });
@@ -576,7 +780,11 @@ try {
   check("the model was asked (planner and workers)", model.requests >= 11, model.requests);
 } catch (err) {
   failed = true;
-  check("acceptance run", false, String(err?.stack ?? err));
+  check(
+    "acceptance run",
+    false,
+    String(/** @type {{ stack?: unknown } | null | undefined} */ (err)?.stack ?? err),
+  );
 } finally {
   report.finished_at = new Date().toISOString();
   report.ok = !failed && report.checks.every((c) => c.ok);

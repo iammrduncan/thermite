@@ -5,4 +5,10 @@
  */
 
 export { checkModel, type RigCheckReport } from "./check.ts";
-export { type ControlRoute, type ModelInfo, ModelSource } from "./source.ts";
+export {
+  type ControlRoute,
+  type ModelInfo,
+  ModelSource,
+  plannerRouteFile,
+  ROUTE_FILE,
+} from "./source.ts";

@@ -1,4 +1,5 @@
 import { errorText } from "../../../common/errors.ts";
+import type { PLAN_CAUSES } from "../../../core/api/harness/planner.ts";
 
 /**
  * Why a try gave no usable plan (goal 079): it ran out of time (only with a time limit someone
@@ -6,13 +7,7 @@ import { errorText } from "../../../common/errors.ts";
  * limit, the provider failed (with its kind), it was cancelled (its run paused), or code refused
  * the plan (with which rules).
  */
-export type PlanCause =
-  | "timeout"
-  | "text_only"
-  | "cut_off"
-  | "provider_error"
-  | "cancelled"
-  | "invalid";
+export type PlanCause = (typeof PLAN_CAUSES)[number];
 
 export interface PlanTry {
   try: number;

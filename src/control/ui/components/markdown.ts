@@ -6,11 +6,13 @@
  * Everything is escaped first; only these come back as markup: headings (as h3 to h6, under the
  * page's own), paragraphs with their line breaks, lists (- * + and 1.), quotes (>), fenced code,
  * rules (---), `code`, **bold**, *italic* or _italic_, and links to http and https addresses,
- * written [text](address) or bare. No HTML passes through, and no other kind of link.
+ * written [text](address) or bare. No HTML passes through, and no other kind of link. With
+ * `links` false, as for words an agent wrote (the knowledge base's items), no link at all: an
+ * address is shown as the text it was written as.
  *
  * The function is whole in itself (no outer names), because the browser gets its source.
  */
-export function mdHtml(text: string): string {
+export function mdHtml(text: string, o: { links?: boolean } = {}): string {
   const esc = (s: string) =>
     s
       .replace(/&/g, "&amp;")
@@ -27,7 +29,9 @@ export function mdHtml(text: string): string {
       /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|https?:\/\/[^\s<>()]*[^\s<>().,;:!?'"]/g,
       (m: string, label?: string, url?: string) =>
         keep(
-          `<a href="${esc(url ?? m)}" rel="noopener noreferrer" target="_blank">${esc(label ?? m)}</a>`,
+          o.links === false
+            ? esc(m)
+            : `<a href="${esc(url ?? m)}" rel="noopener noreferrer" target="_blank">${esc(label ?? m)}</a>`,
         ),
     );
     s = esc(s)

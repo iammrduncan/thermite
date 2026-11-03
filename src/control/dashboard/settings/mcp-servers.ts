@@ -10,10 +10,10 @@ import {
 } from "../../mcp-servers/index.ts";
 import type { ControlStore } from "../../store/index.ts";
 import { infoLabel } from "../../ui/campaigns/new/index.ts";
-import { ago, esc, icon } from "../../ui/components/index.ts";
+import { ago, esc } from "../../ui/components/index.ts";
 
 /**
- * Settings › Providers › MCP servers (goal 068, as the owner approved it on 2026-10-20): a row
+ * Settings › MCP servers (goal 068, as the owner approved it on 2026-10-20): a row
  * for each server with its state, its sign-in (only a secret's last four characters), the kits
  * that name it and its tools; its fields, to change them; and the form to add one. The routes
  * behind them use the dashboard's session and form token. An OAuth sign-in is a link that opens
@@ -60,7 +60,7 @@ const TOOLS_SHOWN = 8;
 
 /** Back to Settings, with what happened said in the MCP servers block (at=mcp), not at the top. */
 export const settingsUrl = (k: "ok" | "error", m: string, more = "") =>
-  `/ui/settings?${k}=${encodeURIComponent(m)}&at=mcp${more}#mcp`;
+  `/ui/settings/mcp?${k}=${encodeURIComponent(m)}&at=mcp${more}#mcp`;
 
 /** The row's chip: what signs the server in, as its last four characters only. */
 function secretChip(s: McpServer): string {
@@ -148,10 +148,6 @@ function serverRow(
     st.bad && kits.length
       ? `<div class="card warn" style="margin:0 0 10px;padding:8px 12px"><span class="small"><b>${esc(kits.join(", "))} name${kits.length === 1 ? "s" : ""} it.</b> Runs that use ${kits.length === 1 ? "that kit" : "those kits"} go on without its tools until it works again, and their history says so.</span></div>`
       : "";
-  const moved =
-    s.migrated_from === "outside_kb"
-      ? `<div class="muted small" style="margin:0 0 8px">Moved here from the outside knowledge base at the update to 0.1.0, with its token.</div>`
-      : "";
   const del = kits.length
     ? `<button class="sm danger" disabled>Delete this server</button> <span class="muted small">${esc(kits.join(" and "))} name${kits.length === 1 ? "s" : ""} it. Take it out of ${kits.length === 1 ? "that kit" : "those kits"} first.</span>`
     : `${form("delete", "Delete this server", "sm danger")} <span class="muted small">Control forgets its secret. Nothing changes on the server.</span>`;
@@ -160,7 +156,7 @@ function serverRow(
 <span class="dq-main"><span class="dq-head">${esc(s.name)} <span class="muted" style="font-weight:400">· ${esc(AUTH_WORDS[s.auth])}</span></span><span class="dq-why${st.bad ? " bad" : ""}">${esc(st.text)}</span><span class="dq-sub"><span class="dq-where">${esc(s.url)}</span>${secretChip(s)}${s.url.startsWith("http://") ? `<span class="chip warn">not HTTPS</span>` : ""}<span class="dq-where">${kitsLine}</span></span></span>
 <span class="dq-side"><span class="dq-btns">${side}</span></span>
 </summary><div class="dq-body">
-${moved}${failingNote}<div class="lb" style="margin-bottom:6px">Its tools${s.status === "ok" || !s.tools_at ? "" : `, as last read ${esc(ago(s.tools_at, now))} ago`}</div>${toolTable(s.tools)}
+${failingNote}<div class="lb" style="margin-bottom:6px">Its tools${s.status === "ok" || !s.tools_at ? "" : `, as last read ${esc(ago(s.tools_at, now))} ago`}</div>${toolTable(s.tools)}
 <form method="post" action="/ui/settings/mcp/${n}" class="form-grid" autocomplete="off" style="margin-top:14px"><input type="hidden" name="csrf" value="${t}">
 <label>${infoLabel("Name", "How kits name this server. It can't change: add a new server for another name.")}<input value="${esc(s.name)}" readonly></label>
 <label style="grid-column:span 2">${infoLabel("MCP URL", `${URL_TIP} Another address needs the secret again.`)}<input name="url" maxlength="500" value="${esc(s.url)}"></label>
@@ -208,16 +204,10 @@ export function mcpSettingsBlocks(
     signIn && servers.get(signIn)?.auth === "oauth"
       ? `<div class="card" style="margin-bottom:10px"><b>Now sign in to ${esc(signIn)}.</b> <span class="small">The server's sign-in page opens in a new tab. Allow Thermite there, and the tab comes back here.</span><div class="act" style="margin-top:8px"><a class="btn sm primary" href="/ui/settings/mcp/${encodeURIComponent(signIn)}/sign-in" target="_blank" rel="noopener">Sign in to ${esc(signIn)} ↗</a></div></div>`
       : "";
-  const migrated = list.filter((s) => s.migrated_from === "outside_kb");
-  const movedRead = store.auditLog.last("owner:ui", "mcp_moved_note_read") !== undefined;
-  const moved =
-    migrated.length && !movedRead
-      ? `<div class="card" id="moved" style="margin-bottom:10px"><div class="card-head">${icon.book}<span class="title">The outside knowledge base is now an MCP server</span><span class="right"><form class="inline" method="post" action="/ui/settings/mcp-moved"><input type="hidden" name="csrf" value="${t}"><button class="sm ghost">Got it</button></form></span></div><p class="small" style="margin:6px 0 0">${esc(migrated.map((s) => s.name).join(", "))} ${migrated.length === 1 ? "was your outside knowledge base" : "were your outside knowledge bases"}. At the update to 0.1.0, control kept ${migrated.length === 1 ? "it" : "them"} here as ordinary MCP servers, with ${migrated.length === 1 ? "its token" : "their tokens"}. Control no longer copies campaign folders to ${migrated.length === 1 ? "it" : "them"}; the pages it wrote there stay. Advisors no longer search ${migrated.length === 1 ? "it" : "them"} through a grant on the campaign's page. A kit names ${migrated.length === 1 ? "it" : "them"} instead, and the agents that kit names get the tools. Thermite's own knowledge base is as before.</p></div>`
-      : "";
   const rows = list.length
     ? `<div class="dqs" id="mcp-list">${list.map((s, i) => serverRow(store, s, t, now, s.name === opened || (!opened && i === 0 && list.length === 1))).join("")}</div>`
     : `<div class="card"><div class="empty">No MCP server yet: add one below. A kit then names it, and the agents it names get its tools.</div></div>`;
-  return `<div class="block" id="mcp"><div class="head"><h2>MCP servers</h2><span class="n" id="mcp-n">${list.length}</span><span class="right">tools for the agents; a campaign's kit says which servers its agents use</span></div>${note}${signInCard}${moved}${rows}</div>
+  return `<div class="block" id="mcp"><div class="head"><h2>MCP servers</h2><span class="n" id="mcp-n">${list.length}</span><span class="right">tools for the agents; a campaign's kit says which servers its agents use</span></div>${note}${signInCard}${rows}</div>
 <div class="block" id="add-mcp"><div class="head"><h2>Add an MCP server</h2></div><div class="card">${addForm(t)}</div></div>`;
 }
 
@@ -247,16 +237,22 @@ function inputOf(
 /** The routes behind the blocks (the dashboard's session and form token apply). */
 export function mountMcpUi(
   app: Hono,
-  o: { store: ControlStore; servers: McpServers; publicUrl?: string | undefined },
+  o: {
+    store: ControlStore;
+    servers: McpServers;
+    publicUrl?: string | undefined;
+    /** Keeps a server's own error words for the page, and gives their ID (notes.ts). */
+    noted: (text: string) => string;
+  },
 ): void {
-  const { servers } = o;
+  const { noted, servers } = o;
   const back = (c: Ctx, k: "ok" | "error", m: string, name?: string) =>
     c.redirect(settingsUrl(k, m, name ? `&mcp=${encodeURIComponent(name)}` : ""), 303);
   /** Reads the server's tools and says how it went; `kept`: what was done before, if anything. */
   const checked = async (c: Ctx, name: string, said: string, kept?: string) => {
     const why = await servers.check(name);
     return why
-      ? back(c, "error", kept ? `${name} is ${kept}, but ${why}.` : `${name}: ${why}.`, name)
+      ? back(c, "error", noted(kept ? `${name} is ${kept}, but ${why}.` : `${name}: ${why}.`), name)
       : back(
           c,
           "ok",
@@ -343,7 +339,7 @@ export function mountMcpUi(
       );
       return c.redirect(url, 302);
     } catch (err) {
-      return back(c, "error", `${name}: ${errorText(err)}`, name);
+      return back(c, "error", noted(`${name}: ${errorText(err)}`), name);
     }
   });
 
@@ -363,10 +359,5 @@ export function mountMcpUi(
       "ok",
       `${name} is deleted. Control keeps nothing of its secrets. Nothing changed on the server.`,
     );
-  });
-
-  app.post("/ui/settings/mcp-moved", (c) => {
-    o.store.auditLog.add("owner:ui", "mcp_moved_note_read", {});
-    return c.redirect("/ui/settings#mcp", 303);
   });
 }

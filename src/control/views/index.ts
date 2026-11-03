@@ -11,9 +11,10 @@
  * directions.
  */
 
-export { agentEvent, agentRun } from "./agent.ts";
+export { agentEvent, agentRun, readerRun, withoutPromptText } from "./agent.ts";
 export {
   campaignRuns,
+  closedRuns,
   EARLIER_FOLDS,
   FoldCache,
   findRun,
@@ -22,13 +23,27 @@ export {
   rigChecks,
   rigEventsPage,
   rigView,
+  rigViews,
   runEvents,
   runMessages,
 } from "./cache.ts";
-export { type CampaignView, campaignModes, campaignViews, newestRun } from "./campaigns.ts";
+export {
+  type CampaignView,
+  campaignKnown,
+  campaignModes,
+  campaignViews,
+  newestRun,
+} from "./campaigns.ts";
 export { runDirections } from "./directions.ts";
 export { championsInForce, currentChampion, runCampaign } from "./facts.ts";
 export type { RigCheckView } from "./fold/index.ts";
+export {
+  type ChampionGuard,
+  championGuards,
+  type GuardView,
+  guardMeasured,
+  nearLimit,
+} from "./guards.ts";
 export { type LeaderEntry, leaderboard } from "./leaderboard.ts";
 export type { MetricValues } from "./metric-values.ts";
 export {
@@ -41,6 +56,7 @@ export {
 } from "./metric-values.ts";
 export {
   OFFLINE_AFTER_MS,
+  programModeOf,
   type ReportingState,
   type RigModelView,
   readModelInfo,
@@ -70,6 +86,7 @@ export type {
   Earlier,
   ExperimentView,
   HeldOutView,
+  InvalidationView,
   JournalNoteView,
   JudgeJob,
   MessageView,

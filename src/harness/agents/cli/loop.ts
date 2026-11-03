@@ -1,4 +1,17 @@
 import { dirname, join } from "node:path";
+import {
+  type CliProgram,
+  type CliRun,
+  type CliTally,
+  RoleTerminal,
+  type RunEnd,
+  setUp,
+  TrialConsole,
+  TrialSignals,
+  TurnMessages,
+  takeUsage,
+  waitOutWindow,
+} from "../../../agents/cli/index.ts";
 import { CliCompactions } from "../../../agents/compaction/index.ts";
 import { readNew, SIGNALS_VAR } from "../../../agents/programs/index.ts";
 import { messageText, type Prompt } from "../../../agents/prompt.ts";
@@ -9,8 +22,10 @@ import {
   renderWorkerTurn,
   windowFit,
 } from "../../../agents/roles/index.ts";
+import { throughProxy } from "../../../core/agents.ts";
 import { type LaneLimitValues, laneLimits } from "../../../core/contract.ts";
 import type { Role, Runner, RunOutcome } from "../../broker/index.ts";
+import { cliSessionFiles } from "../../sessions.ts";
 import { afterProgramFailure, type FailureCount, failingOf } from "../provider-errors.ts";
 import { stopNudging, type TrialResult } from "../worker/index.ts";
 import {
@@ -18,35 +33,10 @@ import {
   breachError,
   CarriedMessages,
   compareSessionLog,
-  takeUsage,
   trialEnd,
   turnsUp,
 } from "./common.ts";
-import { TrialSignals, TurnMessages } from "./in-turn.ts";
-import type { CliProgram, CliRun, CliSetup, CliTally, CliTrial, CliTrialDeps } from "./program.ts";
-import { type RunEnd, TerminalTrial } from "./terminal.ts";
-
-/**
- * Sets a program up in its run's area (or its call's folder), as the run's user: relative to that
- * folder, since the user may not walk the harness's directories by name. Undefined when it is set
- * up; else why not.
- */
-export async function setUp(
-  name: string,
-  s: CliSetup,
-  runner: Runner,
-  at: { role: Role; cwd: string },
-): Promise<string | undefined> {
-  const r = await runner.run({
-    role: at.role,
-    argv: ["sh", "-c", s.script, ...(s.args ?? [])],
-    cwd: at.cwd,
-    timeoutMs: 30_000,
-    ...(s.stdin !== undefined ? { stdin: s.stdin } : {}),
-    captureBytes: 4096,
-  });
-  return r.exitCode === 0 ? undefined : `could not set ${name} up: ${r.stderr.slice(-300)}`;
-}
+import type { CliTrial, CliTrialDeps } from "./program.ts";
 
 /**
  * One run of a program as its run's user, in `cwd`, under the lane's limits. Its output goes to
@@ -108,7 +98,8 @@ function startRun<T extends CliTally>(
  * end. In the terminal mode (`deps.terminal`, goal 169; terminal.ts) each run is one turn of the
  * program in its own terminal, which goes on running between turns: its session log, not its
  * output, fills the tally, and a later turn is typed into it. The decisions after each run are the
- * same in both.
+ * same in both, but for a full usage window, which a trial in its terminal waits out
+ * (usage-window.ts).
  */
 export async function runCliTrial<T extends CliTally>(
   p: CliProgram<T>,
@@ -138,7 +129,7 @@ export async function runCliTrial<T extends CliTally>(
   const auth = `trial.${spec.token ?? ""}`;
   const title = `Trial ${spec.trialId} (${spec.lane})`;
   const run: CliRun = {
-    trialId: spec.trialId,
+    id: spec.trialId,
     role: spec.lane as Role,
     title,
     model: deps.model,
@@ -147,9 +138,11 @@ export async function runCliTrial<T extends CliTally>(
     home: join(area, `${p.prefix}-home`),
     tmp: join(area, `${p.prefix}-tmp`),
     auth,
-    mcp: spec.mcpServers?.length
-      ? { apiUrl: deps.apiUrl, auth, servers: spec.mcpServers }
-      : undefined,
+    // The kit's MCP servers, and Thermite's own with the knowledge base's tools (goal 175).
+    mcp:
+      spec.mcpServers?.length || spec.kbWrites
+        ? { apiUrl: deps.apiUrl, auth, servers: spec.mcpServers ?? [], kb: Boolean(spec.kbWrites) }
+        : undefined,
     keptAt: deps.keptAt,
     wallMs: spec.wallMs,
     env: deps.env,
@@ -177,10 +170,13 @@ export async function runCliTrial<T extends CliTally>(
   if (setupError) return { ...result, stopped: "error", error: setupError };
   const cwd = code ? trial.spec.workspace : trial.folder.work;
   const term = deps.terminal
-    ? new TerminalTrial(p, run, { runner: deps.runner, cwd, env, limits, signalsFile, tally })
+    ? new RoleTerminal(p, run, { runner: deps.runner, cwd, env, limits, signalsFile, tally })
     : undefined;
   const unprepared = await term?.prepare();
   if (unprepared) return { ...result, stopped: "error", error: unprepared };
+  // The owner's console into its terminal (goal 169), or word that its program has none.
+  const ownerConsole = term ? new TrialConsole(term) : undefined;
+  deps.console?.(ownerConsole ?? "headless");
   const started = Date.now();
   // A trial's length only when the campaign or the rig sets one (goal 079).
   const deadline = spec.wallMs !== undefined ? started + spec.wallMs : Number.POSITIVE_INFINITY;
@@ -196,6 +192,7 @@ export async function runCliTrial<T extends CliTally>(
         program: p,
         brief: spec.brief,
         mcpServers,
+        kbWrites: spec.kbWrites,
         limits,
         editablePaths: trial.spec.editablePaths,
         minutes,
@@ -208,6 +205,7 @@ export async function runCliTrial<T extends CliTally>(
         program: p,
         brief: spec.brief,
         mcpServers,
+        kbWrites: spec.kbWrites,
         folder: trial.folder,
         limits,
         minutes,
@@ -215,22 +213,24 @@ export async function runCliTrial<T extends CliTally>(
         addition: spec.addition,
       });
   let message = sent;
+  // In its terminal, the next run follows a turn its program began by itself: nothing is typed.
+  let following = false;
   let offset = 0;
   const carried = new CarriedMessages(deps.messages);
   // The later turns of this trial (goal 166), numbered after its first message.
   let said = 0;
-  // The owner's messages its hooks or plugin take inside the agent's turn (goal 169), each as
-  // the role's later turn, numbered with the continuations.
+  // The owner's messages its hooks or plugin take inside the agent's turn (goal 169), as the role's
+  // later turns: none while its terminal shows a usage limit, so none sends it on before the reset.
   const inTurn = p.signals
     ? new TurnMessages({
         inbox: deps.messages,
-        render: (text, turn) =>
+        render: ({ text }, turn) =>
           code
             ? renderWorkerTurn({ program: p.id, turn, kind: "owner", text })
             : renderResearchWorkerTurn({ program: p.id, turn, kind: "owner", text }),
         next: () => ++said,
         held: () => carried.holding(),
-        taking: () => !submitted(),
+        taking: () => !submitted() && !term?.limitShown(),
         sent: deps.sent,
         live: deps.live,
         how: p.signals.how,
@@ -256,15 +256,20 @@ export async function runCliTrial<T extends CliTally>(
     if (term) return term.read();
     const r = readNew(events, offset);
     offset = r.next;
-    return { live: p.read(r.lines, tally), lines: r.lines.length };
+    return { live: p.read(r.lines, tally), lines: r.lines.length, more: r.more };
   };
   /** Ends the program: its own way in its terminal, else by ending the lane's processes. */
   const halt = async () => {
     if (term) await term.stop();
     else await deps.runner.killRole(spec.lane).catch(() => 0);
   };
-  const pump = () => {
+  /** The windows last reported, as JSON. */
+  let windowsSaid: string | undefined;
+  /** One read of the output into the tally; true when the output holds more than it read. */
+  const pump = (): boolean => {
     const r = readOutput();
+    // Input the owner queued for a usage window's reset goes in once the log shows work again.
+    ownerConsole?.flush();
     signals?.read();
     const live = r.live;
     if (live.length) deps.live(live);
@@ -278,9 +283,16 @@ export async function runCliTrial<T extends CliTally>(
         tokens_in: tally.tokensIn,
         tokens_out: tally.tokensOut,
       });
-      const windows = p.windows?.(tally);
-      if (windows) deps.usage?.(windows);
     }
+    // A subscription's windows when a read brought lines, or they changed (Claude Code's status
+    // line in its terminal comes apart from its log).
+    const windows = p.windows?.(tally);
+    const said = windows ? JSON.stringify(windows) : undefined;
+    if (windows && (r.lines || said !== windowsSaid)) {
+      windowsSaid = said;
+      deps.usage?.(windows);
+    }
+    return r.more;
   };
   for (let nudges = 0; ; nudges++) {
     const remaining = deadline - Date.now();
@@ -300,10 +312,12 @@ export async function runCliTrial<T extends CliTally>(
       break;
     }
     // Kept whole as it is sent, the first message and each later turn (goal 166).
-    deps.sent?.(message);
+    if (!following) deps.sent?.(message);
     inTurn?.open();
     const running: Promise<RunEnd> = term
-      ? term.turn(messageText(message), remaining)
+      ? following
+        ? term.follow()
+        : term.turn(messageText(message), remaining)
       : startRun(p, deps.runner, run, {
           cwd,
           env,
@@ -312,6 +326,7 @@ export async function runCliTrial<T extends CliTally>(
           remaining,
           limits,
         });
+    following = false;
     let done = false;
     void running.finally(() => {
       done = true;
@@ -340,7 +355,8 @@ export async function runCliTrial<T extends CliTally>(
     }
     const outcome = await running;
     inTurn?.close();
-    pump();
+    // The rest of the run's output, a read's size at a time.
+    while (pump()) {}
     // Headless only: in its terminal, its session log gave each call's usage as it came.
     if (p.closeRun && !term) {
       p.closeRun(tally);
@@ -380,6 +396,24 @@ export async function runCliTrial<T extends CliTally>(
       result.error = breach;
       break;
     }
+    // In its terminal, a full usage window is waited out, or the trial ends (usage-window.ts).
+    if (term?.limitShown()) {
+      const w = await waitOutWindow(term, p, deps, {
+        id: run.id,
+        since: runStarted,
+        deadline,
+        words: tally.errors.at(-1) ?? `${p.name} shows a usage limit`,
+        pump,
+      });
+      if ("end" in w) {
+        Object.assign(result, w.end);
+        break;
+      }
+      nudges--;
+      following = "followed" in w;
+      if ("goOn" in w) message = goOn(w.goOn);
+      continue;
+    }
     if (outcome.killedFor === "timeout" || Date.now() >= deadline) {
       result.stopped = "wall";
       break;
@@ -393,11 +427,16 @@ export async function runCliTrial<T extends CliTally>(
       const step = await afterProgramFailure({
         error: tally.errors.at(-1) as string,
         answer: deps.providerAnswer?.(runStarted),
+        proxied: throughProxy(deps.model.api),
         count,
         failuresInARow: limits.failuresInARow,
         deadline,
         signal: deps.signal,
-        waiting: deps.waiting,
+        // In its terminal, the owner's input waits with a rate limit's wait (console.ts).
+        waiting: (w) => {
+          if (w.kind === "rate_limit") term?.waitsUntil(w.until);
+          deps.waiting?.(w);
+        },
         pauseMs: deps.pauseMs,
       });
       if (!("goOn" in step)) {
@@ -428,8 +467,10 @@ export async function runCliTrial<T extends CliTally>(
     if (ends) break;
     message = goOn();
   }
-  // In its terminal, the program is ended now, its screen kept (terminal.ts).
-  await term?.close();
+  // In its terminal, the program is ended now, its screen kept (terminal.ts), and the owner's
+  // input still waiting for a usage window's reset is dropped.
+  await term?.stop();
+  ownerConsole?.close("the trial ended before the program's usage window reset");
   const sub = submitted();
   if (sub) {
     result.submitted = sub;
@@ -448,7 +489,9 @@ export async function runCliTrial<T extends CliTally>(
   if (compactions.count) result.compactions = compactions.count;
   // Headless: its session log against its output. In its terminal, the log is the tally's source.
   if (!term) compareSessionLog(p, run, tally);
-  signals?.report({ trial: run.trialId, program: p.id });
+  // Its session log kept, by run and trial, before its area goes (harness/sessions.ts).
+  deps.keepSession?.(cliSessionFiles(area, run.home, p.prefix));
+  signals?.report({ trial: run.id, program: p.id });
   if (inTurn) deps.inTurn?.(undefined);
   return result;
 }

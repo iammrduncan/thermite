@@ -5,18 +5,21 @@ import type { BusView } from "./bus/index.ts";
 import { type ClusterKubectl, realKubectl } from "./clusters/index.ts";
 import type { KitRepos } from "./kits/index.ts";
 import { RunpodDriver } from "./lifecycle.ts";
+import { Screens } from "./live/index.ts";
 import { type MachineSsh, openSsh, type RigBus } from "./machines/index.ts";
 import { McpServers } from "./mcp-servers/index.ts";
+import { PageNotes } from "./notes.ts";
 import { ChatGPTLogins, PlanUsageReader } from "./providers/index.ts";
 import type { RigImages } from "./rigs/index.ts";
 import { ControlTunnels, RunpodRigs, RunpodTests } from "./runpod/index.ts";
 import { SecretBox } from "./secrets.ts";
 import type { ControlStore } from "./store/index.ts";
+import { type FiguresAsker, SystemFigures } from "./system/index.ts";
 import { keepFolds, type RigView, type RunOnRig } from "./views/index.ts";
 
 /**
  * What control is made of, built once in createControlApi (goal 125, T5): the dashboard, REST
- * and MCP each call the same operations on it (rigs/agent-models.ts, campaigns/start-run.ts and the like), so
+ * and MCP each call the same operations on it (rigs/model/agents.ts, campaigns/start-run.ts and the like), so
  * each has one set of checks and one set of refusals in words.
  */
 export interface ControlParts {
@@ -31,7 +34,7 @@ export interface ControlParts {
   rigImages?: RigImages | undefined;
   /**
    * The message bus as the rigs control sets up reach it: its address, and control's authority
-   * they trust its server through. None: those rigs keep to HTTP.
+   * they trust its server through. None: control sets no rig up, since a rig works only on the bus.
    */
   rigBus?: RigBus | undefined;
   /** How control reaches machines over SSH. */
@@ -60,6 +63,12 @@ export interface ControlParts {
   bus?: BusView | undefined;
   /** Control's loops and when each last came around, for its health route (goal 173). */
   loops: Loops;
+  /** The whole system's figures, for Metrics, `GET /v1/system` and `system_state` (goal 179). */
+  system: SystemFigures;
+  /** Why a dashboard form failed, kept for the page it returns to (notes.ts). */
+  notes: PageNotes;
+  /** The screens of the trials the owner watches, in memory only (goal 169). */
+  screens: Screens;
   /** Every rig as control sees it now (views.ts), through the folds control keeps. */
   views(): RigView[];
   /**
@@ -79,6 +88,8 @@ export interface PartsOptions {
   publicUrl?: string | undefined;
   rigImages?: RigImages | undefined;
   rigBus?: RigBus | undefined;
+  /** Control's authority for the bus: with it, a launch on RunPod gives the pod its leaf node. */
+  busCa?: string | undefined;
   machineSsh?: MachineSsh | undefined;
   clusterKubectl?: ClusterKubectl | undefined;
   providerFetch?: typeof fetch | undefined;
@@ -92,6 +103,10 @@ export interface PartsOptions {
   bus?: BusView | undefined;
   /** Control's loops (tests give their own clock). */
   loops?: Loops | undefined;
+  /** How control asks the bus's server for its figures, as its system user (bus/system.ts). */
+  serverLook?: FiguresAsker | undefined;
+  /** Control's own keys on the bus (BusUsers.ownKeys), which name its connections on Metrics. */
+  busOwnKeys?: (() => readonly string[]) | undefined;
 }
 
 /** Control's parts, made from the store, its key and its options. */
@@ -110,7 +125,8 @@ export function controlParts(
   const mcpServers = opts.mcpServers ?? new McpServers(store, secrets);
   // A rig in pull mode makes the same calls as any rig; control's end of the tunnel brings them
   // in-process, bound to the rig whose signed answer carried them.
-  const tunnels = opts.tunnels ?? new ControlTunnels(store, secrets, privateKeyPem);
+  const tunnels =
+    opts.tunnels ?? new ControlTunnels(store, secrets, privateKeyPem, { busCa: opts.busCa });
   // The rigs' events folded once and kept up to date: every view of the store reads through them.
   const folds = keepFolds(store);
   const runpodRigs =
@@ -121,6 +137,7 @@ export function controlParts(
       staleAfterMs: opts.staleAfterMs,
       privateKeyPem,
     });
+  const loops = opts.loops ?? new Loops();
   return {
     store,
     privateKeyPem,
@@ -142,7 +159,17 @@ export function controlParts(
     runpodRigs,
     runpodDriver: new RunpodDriver(runpodRigs),
     bus: opts.bus,
-    loops: opts.loops ?? new Loops(),
+    loops,
+    system: new SystemFigures({
+      store,
+      bus: opts.bus,
+      look: opts.serverLook,
+      loops,
+      build: viewOpts.control,
+      ownKeys: opts.busOwnKeys,
+    }),
+    notes: new PageNotes(),
+    screens: new Screens(),
     views: () => folds.views(viewOpts),
     run: (id) => folds.run(id, viewOpts),
     campaignRuns: (campaign) => folds.campaignRuns(campaign, viewOpts),

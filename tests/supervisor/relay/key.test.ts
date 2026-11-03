@@ -68,14 +68,13 @@ describe("the rig's own key on the message bus", () => {
     }
   });
 
-  test("the figures carry the public parts alone; without the bus, nothing", () => {
+  test("the registration carries the public parts alone", () => {
     const key = busKey(home());
     const figure = busKeyFigure(key);
     assert.deepEqual(figure, { bus_key: key.publicKey, bus_seal_key: key.seal.publicKey });
     const sent = JSON.stringify(figure);
     assert.ok(!sent.includes(new TextDecoder().decode(key.seed)));
     assert.ok(!sent.includes("PRIVATE"));
-    assert.deepEqual(busKeyFigure(undefined), {});
   });
 
   test("its seal key is made beside it, at mode 0600, kept, and opens what is sealed to it", (t) => {

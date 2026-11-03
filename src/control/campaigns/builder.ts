@@ -13,6 +13,7 @@ import {
 import { CampaignId } from "../../core/ids.ts";
 import { KitSchema, kitProblems } from "../../core/kit.ts";
 import { type McpUse, McpUses } from "../../core/mcp.ts";
+import { oldContractKeyError } from "../../core/names.ts";
 import { requestedAdditions } from "../../core/role-additions.ts";
 
 /**
@@ -126,117 +127,120 @@ const Goal = z.strictObject({
   ]),
 });
 
-export const CampaignDraft = z.strictObject({
-  mode: z.enum(["hill_climb", "goal", "research"]),
-  campaign: IdSchema,
-  title: z.string().min(1).max(300),
-  /**
-   * The campaign's brief (goal 078), with no length limit: the additional information (Markdown,
-   * the contract's notes), the ideas to try (hill climb and goal) and the hypotheses. The agents
-   * get it as starting points, not rules (core/brief.ts).
-   */
-  notes: z.string().optional(),
-  ideas: z.array(z.string()).optional(),
-  hypotheses: z.array(z.string()).optional(),
-  /** Hill climb and goal: the starting links the agents get with the brief. Research: its seeds. */
-  links: z.array(z.string()).optional(),
-  /** The rig's measurement target, from the rig the campaign starts on. */
-  target: z.strictObject({ type: z.string().min(1), class: z.string().min(1) }),
-  project: z
-    .strictObject({
-      url: GitUrl,
-      access: AccessName.optional(),
-      ref: z.string().max(300).optional(),
-      commit: CommitSchema,
-      repo: IdSchema,
-      /** The project's folder in the repository, when it is not the whole repository. */
-      folder: FolderSchema.optional(),
-      editable_paths: z.array(Glob).min(1),
-      forbidden_patterns: z.array(z.string().min(1).max(500)).default([]),
-    })
-    .optional(),
-  kit: z.discriminatedUnion("source", [KitHere, KitRepo, KitUploaded]).optional(),
-  /**
-   * The score. "time": how long a run takes, from the judge's clock (a rate instead when every
-   * case, hidden ones too, says how much work it does). "check": a number the check works out from the
-   * run's output and prints in its JSON line, under `field`.
-   */
-  score: z
-    .strictObject({
-      kind: z.enum(["time", "check"]).default("time"),
-      name: IdSchema.optional(),
-      field: z
-        .string()
-        .regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/)
-        .optional(),
-      unit: z.string().max(40).optional(),
-      direction: z.enum(["max", "min"]).default("max"),
-      min_effect: z.number().positive().max(10).default(0.05),
-    })
-    .optional(),
-  goals: z.array(Goal).max(64).optional(),
-  research: z
-    .strictObject({
-      topic: z.string().min(1).max(2000),
-      // Each question may be long and have several lines (goal 078); at least one is needed.
-      questions: z.array(z.string()),
-      // The starting links (goal 078): the harness archives them when a run starts.
-      seeds: z.array(z.string()).default([]),
-      min_duration: DurationSchema,
-      /**
-       * The floor of verified claims before the review panel first checks whether every
-       * question is answered (goal 112): the contract's min_verified_claims. Left out: no floor.
-       */
-      min_verified_claims: z
-        .number()
-        .int("Verified claims before the check is a whole number")
-        .min(1, "Verified claims before the check is 1 or more")
-        .optional(),
-    })
-    .optional(),
-  lanes: z.number().int().min(1).max(MAX_LANES, MAX_LANES_REASON).default(2),
-  /**
-   * Ideas kept ready (goal 081): the contract's lanes.queue_target, the experiments the queue
-   * keeps ready for a hill climb's or a goal's lanes. A target, never a cap. Left out: two for
-   * each lane.
-   */
-  queue_target: z
-    .number()
-    .int("Ideas kept ready is a whole number")
-    .min(0, "Ideas kept ready is 0 or more")
-    .max(1000, "Ideas kept ready is at most 1000")
-    .optional(),
-  limits: z
-    .strictObject({
-      trial_minutes: z.number().int().min(1).max(1440).optional(),
-      run_rss_mib: z.number().int().min(256).max(16384).optional(),
-      workspace_mib: z.number().int().min(256).max(65536).optional(),
-    })
-    .default({}),
-  wall_hours: z.number().positive().optional(),
-  /**
-   * The campaign's own context window and compaction point for all its runs' agents (goal 070),
-   * in its contract. Left out: each agent keeps the rig's. Values out of range are refused in
-   * words (agentsContextRefusal).
-   */
-  agents_context: z
-    .strictObject({ context_window: z.number().optional(), compact_at: z.number().optional() })
-    .optional(),
-  /**
-   * The owner's additions to the roles of the campaign's agents (goal 166), by role id, in its
-   * contract as `role_additions`. An empty one is left out; the contract's own check refuses a
-   * role the mode never runs, in words.
-   */
-  role_additions: z.record(z.string(), z.string()).optional(),
-  /**
-   * The MCP servers the campaign's agents use (goal 068), by their names in Settings, with the
-   * agents that get each and, only when narrowed, their tools. A kit described here or uploaded
-   * gets them in its kit.json; a kit in a repository has its own (give what its kit.json names:
-   * the rig checks them); a research campaign keeps them in its contract. Left out: an uploaded
-   * kit keeps its own list.
-   */
-  mcp_servers: McpUses.optional(),
-});
+export const CampaignDraft = z.strictObject(
+  {
+    mode: z.enum(["hill_climb", "goal", "research"]),
+    campaign: IdSchema,
+    title: z.string().min(1).max(300),
+    /**
+     * The campaign's brief (goal 078), with no length limit: the additional information (Markdown,
+     * the contract's additional_information), the ideas to try (hill climb and goal) and the hypotheses. The agents
+     * get it as starting points, not rules (core/brief.ts).
+     */
+    additional_information: z.string().optional(),
+    ideas: z.array(z.string()).optional(),
+    hypotheses: z.array(z.string()).optional(),
+    /** Hill climb and goal: the starting links the agents get with the brief. Research: its seeds. */
+    links: z.array(z.string()).optional(),
+    /** The rig's measurement target, from the rig the campaign starts on. */
+    target: z.strictObject({ type: z.string().min(1), class: z.string().min(1) }),
+    project: z
+      .strictObject({
+        url: GitUrl,
+        access: AccessName.optional(),
+        ref: z.string().max(300).optional(),
+        commit: CommitSchema,
+        repo: IdSchema,
+        /** The project's folder in the repository, when it is not the whole repository. */
+        folder: FolderSchema.optional(),
+        editable_paths: z.array(Glob).min(1),
+        forbidden_patterns: z.array(z.string().min(1).max(500)).default([]),
+      })
+      .optional(),
+    kit: z.discriminatedUnion("source", [KitHere, KitRepo, KitUploaded]).optional(),
+    /**
+     * The score. "time": how long a run takes, from the judge's clock (a rate instead when every
+     * case, hidden ones too, says how much work it does). "check": a number the check works out from the
+     * run's output and prints in its JSON line, under `field`.
+     */
+    score: z
+      .strictObject({
+        kind: z.enum(["time", "check"]).default("time"),
+        name: IdSchema.optional(),
+        field: z
+          .string()
+          .regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/)
+          .optional(),
+        unit: z.string().max(40).optional(),
+        direction: z.enum(["max", "min"]).default("max"),
+        min_effect: z.number().positive().max(10).default(0.05),
+      })
+      .optional(),
+    goals: z.array(Goal).max(64).optional(),
+    research: z
+      .strictObject({
+        topic: z.string().min(1).max(2000),
+        // Each question may be long and have several lines (goal 078); at least one is needed.
+        questions: z.array(z.string()),
+        // The starting links (goal 078): the harness archives them when a run starts.
+        seeds: z.array(z.string()).default([]),
+        min_duration: DurationSchema,
+        /**
+         * The floor of verified claims before the review panel first checks whether every
+         * question is answered (goal 112): the contract's min_verified_claims. Left out: no floor.
+         */
+        min_verified_claims: z
+          .number()
+          .int("Verified claims before the check is a whole number")
+          .min(1, "Verified claims before the check is 1 or more")
+          .optional(),
+      })
+      .optional(),
+    lanes: z.number().int().min(1).max(MAX_LANES, MAX_LANES_REASON).default(2),
+    /**
+     * Ideas kept ready (goal 081): the contract's lanes.queue_target, the experiments the queue
+     * keeps ready for a hill climb's or a goal's lanes. A target, never a cap. Left out: two for
+     * each lane.
+     */
+    queue_target: z
+      .number()
+      .int("Ideas kept ready is a whole number")
+      .min(0, "Ideas kept ready is 0 or more")
+      .max(1000, "Ideas kept ready is at most 1000")
+      .optional(),
+    limits: z
+      .strictObject({
+        trial_minutes: z.number().int().min(1).max(1440).optional(),
+        run_rss_mib: z.number().int().min(256).max(16384).optional(),
+        workspace_mib: z.number().int().min(256).max(65536).optional(),
+      })
+      .default({}),
+    wall_hours: z.number().positive().optional(),
+    /**
+     * The campaign's own context window and compaction point for all its runs' agents (goal 070),
+     * in its contract. Left out: each agent keeps the rig's. Values out of range are refused in
+     * words (agentsContextRefusal).
+     */
+    agents_context: z
+      .strictObject({ context_window: z.number().optional(), compact_at: z.number().optional() })
+      .optional(),
+    /**
+     * The owner's additions to the roles of the campaign's agents (goal 166), by role id, in its
+     * contract as `role_additions`. An empty one is left out; the contract's own check refuses a
+     * role the mode never runs, in words.
+     */
+    role_additions: z.record(z.string(), z.string()).optional(),
+    /**
+     * The MCP servers the campaign's agents use (goal 068), by their names in Settings, with the
+     * agents that get each and, only when narrowed, their tools. A kit described here or uploaded
+     * gets them in its kit.json; a kit in a repository has its own (give what its kit.json names:
+     * the rig checks them); a research campaign keeps them in its contract. Left out: an uploaded
+     * kit keeps its own list.
+     */
+    mcp_servers: McpUses.optional(),
+  },
+  { error: oldContractKeyError },
+);
 export type CampaignDraft = z.input<typeof CampaignDraft>;
 
 export interface BuiltKit {
@@ -396,7 +400,9 @@ export function buildCampaign(
         ? { queue_target: d.queue_target }
         : {}),
     },
-    ...(d.notes?.trim() ? { notes: d.notes } : {}),
+    ...(d.additional_information?.trim()
+      ? { additional_information: d.additional_information }
+      : {}),
     ...(ideas.length ? { ideas } : {}),
     ...(hypotheses.length ? { hypotheses } : {}),
     ...(d.mode !== "research" && d.links?.length ? { links: d.links } : {}),

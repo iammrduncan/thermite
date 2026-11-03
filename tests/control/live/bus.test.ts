@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { BusMessage, ConsumerSettings, StreamSettings } from "../../../src/common/bus.ts";
+import type {
+  BusMessage,
+  ConsumerSettings,
+  StreamSettings,
+} from "../../../src/common/bus/index.ts";
 import { foldLive, followLive, LIVE_REFUSALS, LiveTaken } from "../../../src/control/live/index.ts";
 import { ControlStore } from "../../../src/control/store/index.ts";
 import { generateSigningKeys, signJson } from "../../../src/core/commands.ts";
@@ -10,6 +14,7 @@ import {
   LIVE_STREAM_CONFIG,
 } from "../../../src/core/link/live.ts";
 import { type LiveEntry, liveBody } from "../../../src/core/live.ts";
+import { enrollRigs } from "../../helpers/control-store.ts";
 
 /**
  * Control's live view from the message bus (goal 168, step 2): each message checked as a batch
@@ -23,7 +28,7 @@ const other = generateSigningKeys();
 /** Control's store with rig-a and rig-b known, rig-a's report key pinned, and rig-a's run r1. */
 function setup() {
   const store = new ControlStore(":memory:");
-  store.enrollments.setConfiguredRigs(["rig-a", "rig-b"]);
+  enrollRigs(store, ["rig-a", "rig-b"]);
   store.reportedRigs.pinKey("rig-a", keys.publicKeyPem);
   const at = new Date().toISOString();
   store.runRegistry.registerRunCreated("rig-a", "ledger-1", {
@@ -182,7 +187,7 @@ describe("control's live view from the message bus", () => {
 
   test("a rig whose report key control has not accepted yet has its lines refused", () => {
     const s = setup();
-    s.store.enrollments.setConfiguredRigs(["rig-a", "rig-b", "rig-c"]);
+    enrollRigs(s.store, ["rig-a", "rig-b", "rig-c"]);
     s.store.runRegistry.registerRunCreated("rig-c", "ledger-3", {
       kind: "run_created",
       subject: "r3",
@@ -201,7 +206,7 @@ describe("control's live view from the message bus", () => {
 
   test("control follows the live stream with its own consumer, folding each message", async () => {
     const s = setup();
-    let followed: [StreamSettings | string, ConsumerSettings] | undefined;
+    let followed: [StreamSettings | string, ConsumerSettings | string] | undefined;
     let folded: unknown;
     await followLive(
       {

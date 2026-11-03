@@ -117,7 +117,7 @@ export function oneAttempt(ledger: Ledger, run: string, attempt: string): Attemp
 export interface TriedCause {
   id: string;
   title: string;
-  family?: string;
+  direction?: string;
   by: string;
   lane?: string;
   /** done: how its trial ended; dropped: dropped. */
@@ -140,7 +140,7 @@ export function triedCauses(
     const base = {
       id: x.id,
       title: x.title,
-      ...(x.family ? { family: x.family } : {}),
+      ...(x.direction ? { direction: x.direction } : {}),
       by: x.added_by,
       ...(x.lane ? { lane: x.lane } : {}),
     };

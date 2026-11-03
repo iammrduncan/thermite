@@ -12,8 +12,8 @@ import { publicKeyLine } from "../../core/tunnel.ts";
  * The rig's own keys on the message bus (goal 168): a NATS user key the supervisor makes the first
  * time it starts with the bus, and keeps in its state folder, and beside it a seal key, which
  * control seals the rig's config to. It signs in with the first and opens its config with the
- * second; control learns both public parts from the supervisor's regular call, and gives the rig
- * a user that may do only what a rig may. Neither secret part leaves its file: it is not logged,
+ * second; control learns both public parts from the registration over HTTPS at the supervisor's
+ * start (register.ts), and gives the rig a user that may do only what a rig may. Neither secret part leaves its file: it is not logged,
  * and not sent anywhere.
  */
 
@@ -90,12 +90,9 @@ function sealKey(home: string): SealKey {
 }
 
 /**
- * The rig's keys as the supervisor's figures carry them to control, its regular call: the public
- * parts alone, never a secret one. Without the bus, nothing.
+ * The rig's keys as its registration carries them to control (register.ts): the public parts
+ * alone, never a secret one.
  */
-export function busKeyFigure(key: BusKey | undefined): {
-  bus_key?: string;
-  bus_seal_key?: string;
-} {
-  return key ? { bus_key: key.publicKey, bus_seal_key: key.seal.publicKey } : {};
+export function busKeyFigure(key: BusKey): { bus_key: string; bus_seal_key: string } {
+  return { bus_key: key.publicKey, bus_seal_key: key.seal.publicKey };
 }

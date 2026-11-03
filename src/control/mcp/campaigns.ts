@@ -14,19 +14,27 @@ import {
   campaignContextAnswer,
   campaignContextFields,
   campaignFoldersAnswer,
+  campaignKbWritesAnswer,
+  campaignKbWritesFields,
   copyACampaign,
   copyCampaignAnswer,
   copyCampaignFields,
   createFolder,
   deleteFolder,
   FOLDER_NAME_MAX,
+  kbWritesDefaultWords,
   moveCampaign,
+  type ProposeOutcome,
+  proposeSetting,
   renameFolder,
   type ShelfOutcome,
+  StartCampaignBody,
   type StartRunBody,
   setCampaignAdditions,
   setCampaignContext,
+  setCampaignKbWrites,
   startARun,
+  startFromChampion,
   startRunAnswer,
   startRunFields,
   startRunRequest,
@@ -77,7 +85,7 @@ export function registerRunStarts(tools: ToolContext): void {
       {
         title: "Copy a campaign",
         description:
-          "A new campaign with another name, from a campaign control keeps: the same contract and kit as its newest saved version (or, for a campaign only assigned before, as that assignment), with the new name in the contract, so its contract hash is its own. The copy has its own empty folder in Thermite's knowledge base; it reads no other folder, and no folder is granted to it. It has no runs: start one with start_run. Use it to compare two models on the same campaign, each from zero: two runs of one campaign share its folder, so each starts with what the other recorded. A research campaign's copy may name other MCP servers for its agents (mcp_servers), with the New campaign page's checks; a hill-climb or goal campaign's servers are in its kit, which a copy does not change. A copy may set its own context settings for its runs' agents (agents_context, as set_campaign_context takes them), in place of the source's. The copy keeps the source's brief (its additional information, starting links, ideas to try and hypotheses); notes, links, ideas and hypotheses each replace the source's part. Returns {campaign, version, contract_sha, from}, and agents_context when the copy has any. Refused in words: a name that is taken or not valid, a campaign with no saved version and no assignment, a rig check's campaign, mcp_servers for a campaign with a kit, a server Settings lacks, a tool its server does not list, the planner (a research run has none), a context window or compaction point out of range, ideas for a research campaign.",
+          "A new campaign with another name, from a campaign control keeps: the same contract and kit as its newest saved version (or, for a campaign only assigned before, as that assignment), with the new name in the contract, so its contract hash is its own. The copy has its own empty folder in Thermite's knowledge base; it reads no other folder, and no folder is granted to it. It has no runs: start one with start_run. Use it to compare two models on the same campaign, each from zero: two runs of one campaign share its collection in the knowledge base, so each starts with what the other recorded. A research campaign's copy may name other MCP servers for its agents (mcp_servers), with the New campaign page's checks; a hill-climb or goal campaign's servers are in its kit, which a copy does not change. A copy may set its own context settings for its runs' agents (agents_context, as set_campaign_context takes them), in place of the source's. The copy keeps the source's brief (its additional information, starting links, ideas to try and hypotheses); additional_information, links, ideas and hypotheses each replace the source's part. Returns {campaign, version, contract_sha, from}, and agents_context when the copy has any. Refused in words: a name that is taken or not valid, a campaign with no saved version and no assignment, a rig check's campaign, mcp_servers for a campaign with a kit, a server Settings lacks, a tool its server does not list, the planner (a research run has none), a context window or compaction point out of range, ideas for a research campaign.",
         inputSchema: {
           from: z.string().min(1).describe("The campaign to copy, as on its page"),
           ...copyCampaignFields,
@@ -92,7 +100,9 @@ export function registerRunStarts(tools: ToolContext): void {
             ...(a.mcp_servers !== undefined ? { mcp_servers: a.mcp_servers } : {}),
             ...(a.agents_context !== undefined ? { agents_context: a.agents_context } : {}),
             // The copy's own brief (goal 078), each part in place of the source's.
-            ...(a.notes !== undefined ? { notes: a.notes } : {}),
+            ...(a.additional_information !== undefined
+              ? { additional_information: a.additional_information }
+              : {}),
             ...(a.links !== undefined ? { links: a.links } : {}),
             ...(a.ideas !== undefined ? { ideas: a.ideas } : {}),
             ...(a.hypotheses !== undefined ? { hypotheses: a.hypotheses } : {}),
@@ -103,6 +113,22 @@ export function registerRunStarts(tools: ToolContext): void {
         return copyCampaignAnswer(out);
       }),
     );
+    // A new campaign from another run's champion in git (goal 185).
+    server.registerTool(
+      "start_campaign",
+      {
+        title: "Start a campaign from a champion",
+        description:
+          "A new campaign whose starting point is another run's champion: its commit on the run's branch in git (`thermite/<run>/champion`), which the run's rig pushes after each export when the run's work goes to git. The new campaign keeps the run's kit, MCP servers and where its work goes; its contract is the run's own, or `contract`, a whole changed contract (its campaign and version become the new campaign's). With `rig`, its first run starts there, with start_run's checks; without, it is saved only. With `grant`, its runs may also read the source campaign's collection in the knowledge base, read only. Returns {campaign, version, contract_sha, commit, run?, command?, said?}: `said` when it was saved and no run started, and why. Refused in words: a name that is taken or not valid, a run whose work does not go to git, a champion not pushed yet, a contract that is not valid.",
+        inputSchema: StartCampaignBody.shape,
+      },
+      audited("start_campaign", async (a: z.infer<typeof StartCampaignBody>) => {
+        const out = await startFromChampion(opts.parts, a, actor, role === "owner");
+        if (!out.ok) throw new Error(out.error);
+        const { ok: _ok, ...answer } = out;
+        return answer;
+      }),
+    );
   }
 }
 
@@ -111,7 +137,18 @@ export function registerRunStarts(tools: ToolContext): void {
  * navigation's folders. Every token but the agent's reads; the owner and an operator change them.
  */
 export function registerCampaignSettings(tools: ToolContext): void {
-  const { server, store, opts, actor, canCommand, audited } = tools;
+  const { server, store, opts, actor, role, canCommand, audited } = tools;
+  // The operator proposes the additions to a campaign's roles and which roles write in its
+  // collection; the owner approves on the campaign's page. The owner's own change is saved at once.
+  const proposing = role === "operator";
+  const PROPOSES =
+    " With the operator's token, the change is a proposal: control checks it as it would the owner's, keeps it, and saves nothing until the owner approves it on the campaign's page (Needs you lists it); it returns {campaign, proposal, state: \"proposed\", said}. A newer proposal of the same setting replaces one still waiting.";
+  const proposalAnswer = (out: ProposeOutcome) => {
+    if (out.state === "refused") throw new Error(out.error);
+    return out.state === "proposed"
+      ? { campaign: out.campaign, proposal: out.id, state: out.state, said: out.said }
+      : { campaign: out.campaign, state: out.state, said: out.said };
+  };
 
   // A campaign's own context settings for all its runs' agents (goal 070): the tokens that may
   // copy a campaign may set them. A new version of its contract.
@@ -143,12 +180,41 @@ export function registerCampaignSettings(tools: ToolContext): void {
         },
       ),
     );
+    // Which kinds each role may write in the campaign's collection (goal 175): a new version.
+    server.registerTool(
+      "set_campaign_kb_writes",
+      {
+        title: "Set which roles write in a campaign's collection",
+        description: `Sets which kinds of item each agent role may write, each in its own slot, in the campaign's collection of Thermite's knowledge base: kb_writes, by role (planner, worker, teachers, merged_by, auditor, review_panel, synthesizer, final_writer), each a list of kinds (note, decision, surprise, journal, finding, review, doc, reference, report, paper). A role with kinds gets the kb_write tool; every role gets kb_search and kb_read. A role left out, or given [], writes nothing. Left out: the default, ${kbWritesDefaultWords()}. Control saves a new version of the campaign's contract (its kb_writes), signed into each assignment; runs started from then take it, and a run keeps what it started with. Returns {campaign, version, contract_sha, kb_writes, said}. Refused in words: an unknown role or kind, a campaign with no saved version and no assignment, a rig check's campaign.${proposing ? PROPOSES : ""}`,
+        inputSchema: { campaign: z.string().min(1), ...campaignKbWritesFields },
+      },
+      audited(
+        "set_campaign_kb_writes",
+        (a: { campaign: string; kb_writes?: Record<string, string[]> }) => {
+          if (proposing)
+            return proposalAnswer(
+              proposeSetting(
+                store,
+                { campaign: a.campaign, field: "kb_writes", value: a.kb_writes as never },
+                actor,
+              ),
+            );
+          const out = setCampaignKbWrites(
+            store,
+            { campaign: a.campaign, kb_writes: a.kb_writes as never },
+            actor,
+          );
+          if (out.state === "refused") throw new Error(out.error);
+          return campaignKbWritesAnswer(out);
+        },
+      ),
+    );
     // The owner's additions to a campaign's roles (goal 166): a new version of its contract.
     server.registerTool(
       "set_campaign_additions",
       {
         title: "Add the owner's text to a campaign's roles",
-        description: `Sets the owner's additions to a campaign's agent roles: text added to a role's own instructions for this campaign's runs, without a change to Thermite's code. additions: each role's text, by the role's id (agent_roles lists the roles): worker, planner, teacher, merged-by, auditor or reviewer for a hill-climb or goal campaign; research-worker, research-planner, research-teacher, research-merged-by, research-reviewer, synthesizer or final-writer for a research campaign; each at most ${ROLE_ADDITION_MAX_CHARS} characters. Each prompt of the role carries its addition as a section of its own after the role's text, labelled as the owner's, with the contract's version; it adds to the role's text and replaces none of it, and the role's text comes first where the two differ. An addition never decides a measurement, a verdict or a promotion: code does. Each call sets them anew: a role left out, or an empty text, has none. Control saves a new version of the campaign's contract (its role_additions), signed into each assignment; runs started from then take it, and a run keeps what it started with. A rig's harness older than this change refuses a contract with role_additions. Returns {campaign, version, contract_sha, role_additions, said}. Refused in words: a role the campaign's mode never runs, an unknown role, a text too long, a campaign with no saved version and no assignment, a rig check's campaign.`,
+        description: `Sets the owner's additions to a campaign's agent roles: text added to a role's own instructions for this campaign's runs, without a change to Thermite's code. additions: each role's text, by the role's id (agent_roles lists the roles): worker, planner, teacher, merged-by, auditor or reviewer for a hill-climb or goal campaign; research-worker, research-planner, research-teacher, research-merged-by, research-reviewer, synthesizer or final-writer for a research campaign; each at most ${ROLE_ADDITION_MAX_CHARS} characters. Each prompt of the role carries its addition as a section of its own after the role's text, labelled as the owner's, with the contract's version; it adds to the role's text and replaces none of it, and the role's text comes first where the two differ. An addition never decides a measurement, a verdict or a promotion: code does. Each call sets them anew: a role left out, or an empty text, has none. Control saves a new version of the campaign's contract (its role_additions), signed into each assignment; runs started from then take it, and a run keeps what it started with. A rig's harness older than this change refuses a contract with role_additions. Returns {campaign, version, contract_sha, role_additions, said}. Refused in words: a role the campaign's mode never runs, an unknown role, a text too long, a campaign with no saved version and no assignment, a rig check's campaign.${proposing ? PROPOSES : ""}`,
         inputSchema: {
           campaign: z.string().min(1).describe("The campaign, as on its page"),
           ...campaignAdditionsFields,
@@ -157,6 +223,14 @@ export function registerCampaignSettings(tools: ToolContext): void {
       audited(
         "set_campaign_additions",
         (a: { campaign: string; additions?: Record<string, string> }) => {
+          if (proposing)
+            return proposalAnswer(
+              proposeSetting(
+                store,
+                { campaign: a.campaign, field: "role_additions", value: a.additions },
+                actor,
+              ),
+            );
           const out = setCampaignAdditions(
             store,
             { campaign: a.campaign, additions: a.additions },
@@ -190,7 +264,7 @@ export function registerCampaignSettings(tools: ToolContext): void {
     {
       title: "Campaign folders and archived campaigns",
       description:
-        "How the owner arranged the campaigns in the dashboard's left navigation: each folder, by name, with the campaigns in it ({name, campaigns, created_at, created_by}), archived ones too, and the archived campaigns ({campaign, at, by, folder}), which are out of the navigation, Needs you and the Overview. An archived campaign keeps its folder (folder: its name, or null), but the navigation neither shows nor counts it there until it is unarchived. A campaign in no folder and not archived shows on its own in the navigation. These folders only group campaigns there: they are not the campaigns' folders in the knowledge base (kb_folders).",
+        "How the owner arranged the campaigns in the dashboard's left navigation: each folder, by name, with the campaigns in it ({name, campaigns, created_at, created_by}), archived ones too, and the archived campaigns ({campaign, at, by, folder}), which are out of the navigation, Needs you and the Overview. An archived campaign keeps its folder (folder: its name, or null), but the navigation neither shows nor counts it there until it is unarchived. A campaign in no folder and not archived shows on its own in the navigation. These folders only group campaigns there: they are not the campaigns' collections in the knowledge base (kb_collections).",
       inputSchema: {},
     },
     audited("campaign_folders", () => campaignFoldersAnswer(store)),
@@ -204,7 +278,7 @@ export function registerCampaignSettings(tools: ToolContext): void {
       {
         title: "Archive a campaign",
         description:
-          "As Archive on a campaign's page: the campaign leaves the dashboard's left navigation, Needs you and the Overview's lists, and the Campaigns page lists it under Archived. Its runs, results, kits and folder in the knowledge base stay, and it keeps its folder in the navigation, where it comes back when unarchived. Control starts and resumes no run of an archived campaign until unarchive_campaign. Returns {campaign, archived: true, at, by, folder, changed} (changed: false when it was archived already). Refused in words while a run of it is at work or waits to start (a start or resume control sent that the rig has not taken yet): \"Pause or close its runs first.\", with each such run; and for a campaign control does not know.",
+          "As Archive on a campaign's page: the campaign leaves the dashboard's left navigation, Needs you and the Overview's lists, and the Campaigns page lists it under Archived. Its runs, results, kits and collection in the knowledge base stay, and it keeps its folder in the navigation, where it comes back when unarchived. Control starts and resumes no run of an archived campaign until unarchive_campaign. Returns {campaign, archived: true, at, by, folder, changed} (changed: false when it was archived already). Refused in words while a run of it is at work or waits to start (a start or resume control sent that the rig has not taken yet): \"Pause or close its runs first.\", with each such run; and for a campaign control does not know.",
         inputSchema: campaignInput,
       },
       audited("archive_campaign", (a: { campaign: string }) =>
@@ -220,7 +294,7 @@ export function registerCampaignSettings(tools: ToolContext): void {
         inputSchema: campaignInput,
       },
       audited("unarchive_campaign", (a: { campaign: string }) =>
-        shelved(unarchiveCampaign(store, allViews(), a.campaign, actor)),
+        shelved(unarchiveCampaign(store, a.campaign, actor)),
       ),
     );
     const folderName = z.string().max(200).describe(`At most ${FOLDER_NAME_MAX} characters`);
@@ -267,14 +341,14 @@ export function registerCampaignSettings(tools: ToolContext): void {
       {
         title: "Move a campaign to a folder",
         description:
-          "Puts a campaign in a folder of the dashboard's left navigation (folder: its name), or in none (folder: null). Only the navigation changes: not its runs, results or folder in the knowledge base. An archived campaign may move too: it comes back into its new folder when it is unarchived. Returns {campaign, folder, changed}. Refused in words: no such campaign or folder.",
+          "Puts a campaign in a folder of the dashboard's left navigation (folder: its name), or in none (folder: null). Only the navigation changes: not its runs, results or collection in the knowledge base. An archived campaign may move too: it comes back into its new folder when it is unarchived. Returns {campaign, folder, changed}. Refused in words: no such campaign or folder.",
         inputSchema: {
           ...campaignInput,
           folder: z.string().max(200).nullable().describe("The folder's name, or null for none"),
         },
       },
       audited("move_campaign", (a: { campaign: string; folder: string | null }) =>
-        shelved(moveCampaign(store, allViews(), a.campaign, a.folder, actor)),
+        shelved(moveCampaign(store, a.campaign, a.folder, actor)),
       ),
     );
   }

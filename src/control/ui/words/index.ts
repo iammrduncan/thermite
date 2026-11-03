@@ -36,6 +36,12 @@ export { attemptState, signed, verdictText } from "./verdicts.ts";
  * only: the other groups give null for it, so the first sentence found is its sentence.
  */
 export function sentence(u: RigView, e: StoredEvent): Sentence | null {
+  // An event control can't read: what it is, and why, with nothing taken from its body.
+  if (e.unreadable !== undefined)
+    return {
+      text: `Control can't read this ${e.kind} event: ${e.unreadable}. It is kept as the rig sent it; nothing in it is shown or counted here.`,
+      tone: "warn",
+    };
   const w = sentenceContext(u, e);
   return (
     runSentence(w, e) ??

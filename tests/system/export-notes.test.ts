@@ -13,6 +13,7 @@ import { exportOnce } from "../../src/supervisor/git-export.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";
 import { researchFixture } from "../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
+import { itemsBySeq } from "../helpers/kb-items.ts";
 
 const RUN = "smoke-1";
 const BRIEFING = [
@@ -39,12 +40,13 @@ async function setup() {
   const { stateDir, scratchDir } = env.service.paths;
   const folder = new ResearchFolder({
     ledger: env.service.ledger,
+    outboxDir: env.service.paths.outboxDir,
     scratchRoot: join(scratchDir, "research"),
     stateRoot: join(stateDir, "research-work"),
     runner: new LocalRunner(scratchDir),
-    knowledge: env.service.knowledge,
   });
   const research = new Research(env.service.ledger, stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     onChange: (run) => void folder.sync(run),
   });
   env.service.researchFolder = (run) => folder.exportFiles(run);
@@ -62,11 +64,11 @@ const manifestOf = (dir: string) =>
     files: Record<string, string>;
   };
 
-describe("a run's export holds its journal, its research notes and its briefing", () => {
+describe("a run's export holds its journal, its source notes and its briefing", () => {
   test("each export holds what was recorded since the last one", async () => {
     const { s, research } = await setup();
     const first = s.journal.write(RUN, { kind: "lesson", text: "Profile first." }, lane);
-    research.addNote(RUN, "lane-1", "The guide says loads should be aligned.", [], "t-1");
+    research.addSourceNote(RUN, "lane-1", "The guide says loads should be aligned.", [], "t-1");
     const one = await s.export("test");
     assert.deepEqual(lines(join(one.dir, "journal.jsonl")), [
       {
@@ -82,14 +84,14 @@ describe("a run's export holds its journal, its research notes and its briefing"
       },
     ]);
     assert.deepEqual(
-      lines(join(one.dir, "research-notes.jsonl")).map((n) => [n.run, n.lane, n.text, n.sources]),
+      lines(join(one.dir, "source-notes.jsonl")).map((n) => [n.run, n.lane, n.text, n.sources]),
       [[RUN, "lane-1", "The guide says loads should be aligned.", []]],
     );
     assert.deepEqual(lines(join(one.dir, "briefing.jsonl")), [
       { run: RUN, seq: 1, ...BRIEFING[0] },
     ]);
     const files = manifestOf(one.dir).files;
-    for (const f of ["journal.jsonl", "research-notes.jsonl", "briefing.jsonl"])
+    for (const f of ["journal.jsonl", "source-notes.jsonl", "briefing.jsonl"])
       assert.match(String(files[f]), /^[0-9a-f]{64}$/, f);
     // The next export: only the new note; the run's briefing went with its creation.
     const second = s.journal.write(RUN, { kind: "question", text: "Is it L2-bound?" }, lane);
@@ -99,33 +101,16 @@ describe("a run's export holds its journal, its research notes and its briefing"
       [second.id],
     );
     assert.ok(!existsSync(join(two.dir, "briefing.jsonl")));
-    assert.ok(!existsSync(join(two.dir, "research-notes.jsonl")));
+    assert.ok(!existsSync(join(two.dir, "source-notes.jsonl")));
     // An export with no new note still holds an (empty) journal.
     const three = await s.export("test");
     assert.equal(readFileSync(join(three.dir, "journal.jsonl"), "utf8"), "");
   });
 
-  test("a closed hill climb that recorded research exports its folder, without past research, and the supervisor pushes it", async () => {
+  test("a closed hill climb that recorded research exports its folder, and the supervisor pushes it", async () => {
     const { env, s, research } = await setup();
     s.journal.write(RUN, { kind: "observation", text: "The loop is memory bound." }, lane);
-    research.addNote(RUN, "lane-1", "Aligned loads matter.", [], "t-1");
-    s.writeKnowledge(RUN, [
-      {
-        seq: 1,
-        campaign: "kernels",
-        rig: "rig-b",
-        run: "kernels-7",
-        kind: "note",
-        ref: "12",
-        title: "aligned loads",
-        body: "Vector loads need 16-byte aligned pointers.",
-        by: "lane-2",
-        url: null,
-        sub: "lesson",
-        at: "2026-10-16T00:00:00.000Z",
-        updated_at: "2026-10-16T00:00:00.000Z",
-      },
-    ]);
+    research.addSourceNote(RUN, "lane-1", "Aligned loads matter.", [], "t-1");
     // A prompt a lane's worker was sent (goal 166): kept with the run, and pushed compressed.
     s.ledger.prompts.record("harness", RUN, {
       role: "worker",
@@ -139,8 +124,8 @@ describe("a run's export holds its journal, its research notes and its briefing"
     const exp = await s.export("test");
     const files = Object.keys(manifestOf(exp.dir).files);
     assert.ok(files.includes(`research/${RUN}/folder/INDEX.md`), files.join(", "));
-    assert.ok(files.includes(`research/${RUN}/folder/notes/note-00001.md`));
-    assert.ok(!files.some((f) => f.includes("/knowledge/")), "past research is other runs'");
+    assert.ok(files.includes(`research/${RUN}/folder/source-notes/source-note-00001.md`));
+    assert.ok(!files.some((f) => f.includes("/knowledge/")), "no copy of past research");
 
     const root = mkdtempSync(join(tmpdir(), "thermite-results-"));
     const remote = join(root, "remote.git");
@@ -166,7 +151,7 @@ describe("a run's export holds its journal, its research notes and its briefing"
     const name = exp.dir.split("/").pop();
     for (const f of [
       `journal/${name}.jsonl`,
-      `research-notes/${name}.jsonl`,
+      `source-notes/${name}.jsonl`,
       `briefing/${name}.jsonl`,
       `knowledge/${name}.jsonl`,
       `prompts/${name}.jsonl.gz`,
@@ -189,8 +174,8 @@ describe("a run's export holds its journal, its research notes and its briefing"
       }),
     );
     assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-    research.addNote("r-1", "lane-1", "The paper's table 3 has the numbers.", [], "t-9");
-    research.addNote(RUN, "lane-1", "Aligned loads matter.", [], "t-1");
+    research.addSourceNote("r-1", "lane-1", "The paper's table 3 has the numbers.", [], "t-9");
+    research.addSourceNote(RUN, "lane-1", "Aligned loads matter.", [], "t-1");
     assert.notEqual(s.ledger.runs.get("r-1")?.status, "closed");
     assert.notEqual(s.ledger.runs.get(RUN)?.status, "closed");
     const folderFiles = (dir: string, run: string) =>
@@ -214,12 +199,12 @@ describe("a run's export holds its journal, its research notes and its briefing"
       );
       assert.ok(files.includes(`${place}/INDEX.md`), `${run}: ${files.join(", ")}`);
       assert.ok(
-        files.some((f) => f.startsWith(`${place}/notes/`)),
-        `${run}'s notes: ${files.join(", ")}`,
+        files.some((f) => f.startsWith(`${place}/source-notes/`)),
+        `${run}'s source notes: ${files.join(", ")}`,
       );
       for (const f of files) assert.ok(existsSync(join(full.dir, f)), f);
     }
-    const notes = folderFiles(full.dir, "r-1").filter((f) => f.includes("/notes/"));
+    const notes = folderFiles(full.dir, "r-1").filter((f) => f.includes("/source-notes/"));
     assert.ok(
       notes.some((f) => readFileSync(join(full.dir, f), "utf8").includes("table 3")),
       notes.join(", "),
@@ -243,8 +228,8 @@ describe("a run's export holds its journal, its research notes and its briefing"
       }),
     );
     assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-    research.addNote("r-1", "lane-1", "The paper's table 3 has the numbers.", [], "t-9");
-    research.addNote(RUN, "lane-1", "Aligned loads matter.", [], "t-1");
+    research.addSourceNote("r-1", "lane-1", "The paper's table 3 has the numbers.", [], "t-9");
+    research.addSourceNote(RUN, "lane-1", "Aligned loads matter.", [], "t-1");
     // The chain: a normal export first.
     const before = await s.export("test");
     const chain = s.ledger.exports.last();
@@ -285,12 +270,12 @@ describe("a run's export holds its journal, its research notes and its briefing"
       "from its start",
     );
     assert.deepEqual(
-      lines(join(dir, "research-notes.jsonl")).map((n) => n.run),
+      lines(join(dir, "source-notes.jsonl")).map((n) => n.run),
       ["r-1"],
     );
     // The chain is as it was: the next export starts where the last of the chain ended.
     assert.deepEqual(s.ledger.exports.last(), chain);
-    research.addNote(RUN, "lane-1", "After the run's export.", [], "t-1");
+    research.addSourceNote(RUN, "lane-1", "After the run's export.", [], "t-1");
     const next = await s.export("test");
     const nm = manifestOf(next.dir) as { from_event?: number };
     assert.equal(
@@ -329,13 +314,13 @@ describe("a run's export holds its journal, its research notes and its briefing"
       run: RUN,
       lane: "lane-1",
       epoch: 1,
-      family: "loads",
+      direction: "loads",
       parent: "p",
       focus: "align the loads",
     });
     const x = s.queue.add(RUN, { title: "Align the loads", by: "owner", why: "the guide" }, "t");
     s.journal.write(RUN, { kind: "lesson", text: "Profile first." }, lane);
-    research.addNote(RUN, "lane-1", "The guide says loads should be aligned.", [], "t-1");
+    research.addSourceNote(RUN, "lane-1", "The guide says loads should be aligned.", [], "t-1");
     reg.finishTrial(
       "t-1",
       { stopped: "no_submission", turns: 4, toolCalls: 2, tokensIn: 1000, tokensOut: 100 },
@@ -373,10 +358,8 @@ describe("a run's export holds its journal, its research notes and its briefing"
       events,
       summary: {},
     });
-    const filed = store
-      .kb()
-      .changedAfter([String(s.ledger.runs.get(RUN)?.campaign)], 0)
-      .map(({ campaign, rig, run, kind, ref, title, body, by, url, sub, at, updated_at }) => ({
+    const filed = itemsBySeq(store, [String(s.ledger.runs.get(RUN)?.campaign)]).map(
+      ({ campaign, rig, run, kind, ref, title, body, by, url, sub, file, at, updated_at }) => ({
         campaign,
         rig,
         run,
@@ -387,9 +370,11 @@ describe("a run's export holds its journal, its research notes and its briefing"
         by,
         url,
         sub,
+        file,
         at,
         updated_at,
-      }));
+      }),
+    );
     const key = (i: Record<string, unknown>) => `${i.kind} ${i.ref}`;
     assert.deepEqual(
       [...part].sort((a, b) => key(a).localeCompare(key(b))),

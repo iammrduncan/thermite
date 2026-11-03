@@ -26,7 +26,7 @@ import {
 import { fixture, manifestOf, RIG, sealedOf, stagedBackup, typicalState, uid } from "./setup.ts";
 
 /**
- * Restoring the rig's sealed snapshot (broker/snapshot.ts): a tampered, missing or foreign
+ * Restoring the rig's sealed snapshot (broker/snapshot/): a tampered, missing or foreign
  * snapshot is refused whole, a link, pipe or other user's file is never taken, a restore is all or
  * nothing, and an unsealed snapshot is never restored.
  */
@@ -52,7 +52,7 @@ function refusedWhole(f: ReturnType<typeof fixture>, why: RegExp, o = {}): void 
   );
 }
 
-describe("the rig's sealed state snapshot (broker/snapshot.ts)", () => {
+describe("the rig's sealed state snapshot (broker/snapshot/)", () => {
   test("a changed sealed file, manifest or name, a missing file and another pod's snapshot are each refused whole", async () => {
     const f = fixture();
     typicalState(f);

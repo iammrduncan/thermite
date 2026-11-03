@@ -1,3 +1,4 @@
+import { redact } from "../../common/log.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
@@ -69,7 +70,7 @@ export class GpuClouds extends StorePart {
     else
       this.db
         .prepare("update gpu_cloud set checked_at = ?, check_error = ? where name = ?")
-        .run(new Date().toISOString(), r.error, name);
+        .run(new Date().toISOString(), redact(r.error), name);
   }
 
   replaceKey(name: string, key_sealed: string, key_hint: string, by: string): void {

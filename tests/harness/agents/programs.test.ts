@@ -45,7 +45,7 @@ function link(runner: Runner, m: ModelConfig | undefined, scratchDir: string) {
     progress: () => undefined,
     submitted: () => undefined,
     compacted: (harness, c) => compacted.push({ harness, c }),
-    handOverUsage: (harness) => {
+    handOver: (harness) => {
       usage.push(`open ${harness}`);
       return () => usage.push("close");
     },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -84,7 +84,7 @@ describe("thermite rig", () => {
     }
   });
 
-  test("add, with control's message bus on: the rig's files name the bus and hold control's authority", async () => {
+  test("add: the rig's files name the message bus and hold control's authority; without the bus, none", async () => {
     const bus = { url: "nats://control.example.com:4222", ca: "-----BEGIN CERTIFICATE-----\nca\n" };
     const { api } = controlOnly({ tokens: TOKENS, options: { rigBus: bus } });
     const r = await api("POST", "/v1/rigs", { rig: "gpu-2" });
@@ -100,15 +100,17 @@ describe("thermite rig", () => {
       "THERMITE_RIG_ID=gpu-2\nCONTROL_URL=https://control.example.com\nTHERMITE_NATS_URL=nats://control.example.com:4222\n",
     );
     assert.match(readFileSync(join(out, "README.txt"), "utf8"), /THERMITE_NATS_CA_FILE/);
-    // Without the bus: no bus in the answer or the files.
-    const off = controlOnly({ tokens: TOKENS });
+    // Without an address for rigs on control's bus: no bus in the answer, and no files at all, in
+    // words, since a rig works only on the bus.
+    const off = controlOnly({ tokens: TOKENS, options: { rigBus: undefined } });
     const plain = (await (await off.api("POST", "/v1/rigs", { rig: "gpu-3" })).json()) as Enrolled;
     assert.equal(plain.bus, null);
     const out2 = join(mkdtempSync(join(tmpdir(), "thermite-rig-bus-")), "rig");
-    assert.ok(
-      !writeRigFiles(out2, plain, "https://control.example.com").includes("keys/bus-ca.pem"),
+    assert.throws(
+      () => writeRigFiles(out2, plain, "https://control.example.com"),
+      /control enrolled gpu-3 but has no address for rigs on its message bus .*retire this rig \(thermite rig retire gpu-3\)/,
     );
-    assert.doesNotMatch(readFileSync(join(out2, "rig.env"), "utf8"), /NATS/);
+    assert.equal(existsSync(out2), false, "nothing written");
   });
 
   test("list shows each rig's state and versions against control's, with what to do", async () => {

@@ -32,6 +32,13 @@ export const MIN_VERIFIED_CLAIMS_TIP =
   "The fewest verified claims the run must have, in all, before the review panel first checks whether every question is answered. It only delays the check: it never ends the run. Empty: no floor, so the check needs only a verified claim for each question.";
 
 /**
+ * What the judge does with a hidden test case (the contract's held_out_cells), as confirm.ts and
+ * validate.ts judge it: the same words on each of the form's hidden-test fields.
+ */
+const HIDDEN_TEST_RULE =
+  "The judge doesn't use it when it first scores a change, only to double-check a change that already looks better. There, the change must still give correct output, and its score may be worse than the champion's by no more than twice the margin the judge counts as no change. In a goal campaign, a goal checked on it must be met there too: when a change meets that goal, and again before the run closes.";
+
+/**
  * The new-campaign page: a campaign from nothing
  * in six steps (aim, the brief, project, how to measure, where, review), with every setting
  * beyond the simple ones folded under Advanced and a description behind every label's info icon.
@@ -78,6 +85,20 @@ const choice = (
   dis = false,
 ) =>
   `<div class="ch${on ? " on" : ""}${dis ? " dis" : ""}" data-group="${esc(group)}" data-value="${esc(value)}" tabindex="0"><span class="dotx"></span><span><b>${esc(title)}</b><span class="muted">${body}</span></span></div>`;
+
+/**
+ * Where each run's work goes in git (goal 185): branches of the project's repository, of a
+ * separate results repository, or control only; the Git access that pushes; and a check that it
+ * can, which writes nothing.
+ */
+function resultsBlock(accessOptions: string): string {
+  return `<div class="sec" data-part="results" style="margin:18px 0 0;max-width:860px"><h2 style="font-size:14px">Where each run's work goes</h2><p class="lead">Control always keeps every champion as a patch you can download. Git gives you real commits besides, that you can check out, compare and start a new campaign from.</p>
+<div class="chs">${choice("results", "project", "Branches of this repository (recommended)", 'Thermite pushes only branches under <code>thermite/</code>, never your default branch: <span class="mono" data-results-names>thermite/&lt;run&gt;/champion, thermite/&lt;run&gt;/lane-1, …</span>. Needs a Git access that can push.')}${choice("results", "repository", "A separate results repository", "The same branches, in a repository of their own: your project's repository is left alone.")}${choice("results", "control", "Only on control", "No push. Each champion is a patch you download from its page, applied to the run's starting commit.", true)}</div>
+<div data-results-push style="margin-top:12px"><div data-results-git hidden style="max-width:560px">${field("Results repository", "An empty repository, or one Thermite pushed to before, as https://… or git@host:path. Thermite writes only branches under thermite/.", `<input name="results_git" placeholder="git@github.com:you/project-results.git">`)}</div>
+<div style="max-width:420px">${field("Push with", "A Git access that can push to the repository: a deploy key with write access, or an HTTPS token with write access, from Settings › Git access. Only the supervisors of rigs that run this campaign receive it; the harness and the agents never do.", `<select name="results_access"><option value="same">The repository access above</option>${accessOptions}</select>`)}</div>
+<div class="act"><button class="sm" id="push-check">Check it can push</button><span class="muted small" id="push-check-out">Control asks the repository whether this access may push, and pushes nothing.</span></div>
+<div class="card warn" data-results-public hidden style="margin-top:10px"><b>This repository is public.</b> Every attempt the agents make, and what each tried, will be public on its lane's branch.</div></div></div>`;
+}
 
 const step = (n: number, id: string, title: string, modes = "") =>
   `<li data-step="${id}"${modes ? ` data-modes="${modes}"` : ""}><span class="k">${n}</span>${esc(title)}</li>`;
@@ -182,6 +203,7 @@ ${field("Files the agents may change", "Patterns, one per line. A change to any 
 <details class="adv"><summary>Advanced</summary><div>
 ${field("Lines never allowed", "Regular expressions, one per line. A change that adds a matching line is refused before building, for example one that reads the benchmark's clock.", `<textarea name="forbidden_patterns" placeholder="clock_gettime"></textarea>`)}
 </div></details>
+${resultsBlock(accessOptions)}
 <div class="act" style="margin-top:12px"><button data-back>Back</button><button class="primary" data-next>Next</button></div></div></section>
 
 <section class="pane" data-pane="measure" hidden><div class="sec"><h2>How to measure</h2><p class="lead">The kit: how the judge builds your project, runs it on test cases and checks the output. Agents never see it. Thermite times every run with its own clock; nothing the program prints counts as a score.</p>
@@ -194,7 +216,7 @@ ${choice("kit", "upload", "Upload a kit", "A kit you already have, as a .zip or 
 ${field("Run", "How the judge runs your program for one case. {args} is the case's arguments, {input} its input file, {build} what the build made (a file keeps its path: {build}/build/app), {out} a folder for results, {kit} the files you add below. Use only what you need.", `<input class="mono" name="run" placeholder="{build}/build/app {args} --out {out}/result.txt">`)}
 <div class="ph"><button class="sm" data-ph="{args}" data-into="run">{args}</button><button class="sm" data-ph="{input}" data-into="run">{input}</button><button class="sm" data-ph="{build}" data-into="run">{build}</button><button class="sm" data-ph="{out}" data-into="run">{out}</button><button class="sm" data-ph="{kit}" data-into="run">{kit}</button></div>
 <div style="height:12px"></div>
-${field("Test cases", "What differs between runs. A case is a name plus its arguments, its input file, or nothing at all; one case is fine. For example: a web service's light and heavy loads, a compiler's source files, a model's validation data.", `<table class="tbl" id="cases"><thead><tr><th style="width:18%">${infoLabel("Name", "A short name shown in results: light, big-module, validation.")}</th><th>${infoLabel("Arguments", "Added to the run command as {args} for this case. Empty is fine.")}</th><th style="width:20%">${infoLabel("Input file", "One of the input files below, given to the run as {input}.")}</th><th data-score="time" style="width:14%">${infoLabel("Work done", "Only to see speed as a rate: how much one run of this case does (requests, frames, bytes). Leave it empty and the score is plain time.")}</th><th style="width:10%">${infoLabel("Hidden test", "Tick to keep this case as a hidden test. The judge doesn't use it when it first scores a change, only to double-check a change that already looks better. So a change can't win just by helping the cases the agents can see.")}</th><th></th></tr></thead><tbody>${cases.map(caseRow).join("")}</tbody></table><div class="act" style="margin-top:6px"><button class="sm" data-add="#cases">Add a case</button><button class="sm" id="paste-cases">Paste a list…</button><span class="muted small">One case per line: its name, then its arguments.</span></div>`)}
+${field("Test cases", "What differs between runs. A case is a name plus its arguments, its input file, or nothing at all; one case is fine. For example: a web service's light and heavy loads, a compiler's source files, a model's validation data.", `<table class="tbl" id="cases"><thead><tr><th style="width:18%">${infoLabel("Name", "A short name shown in results: light, big-module, validation.")}</th><th>${infoLabel("Arguments", "Added to the run command as {args} for this case. Empty is fine.")}</th><th style="width:20%">${infoLabel("Input file", "One of the input files below, given to the run as {input}.")}</th><th data-score="time" style="width:14%">${infoLabel("Work done", "Only to see speed as a rate: how much one run of this case does (requests, frames, bytes). Leave it empty and the score is plain time.")}</th><th style="width:10%">${infoLabel("Hidden test", `Tick to keep this case as a hidden test. ${HIDDEN_TEST_RULE}`)}</th><th></th></tr></thead><tbody>${cases.map(caseRow).join("")}</tbody></table><div class="act" style="margin-top:6px"><button class="sm" data-add="#cases">Add a case</button><button class="sm" id="paste-cases">Paste a list…</button><span class="muted small">One case per line: its name, then its arguments.</span></div>`)}
 ${field("Input files", "Files the cases run on: datasets, source files, request logs. The run reads the one its case names as {input}; the check can read them too.", `<span class="act"><input type="file" id="input-files" multiple><span class="muted small" id="input-files-list"></span></span><datalist id="nc-inputs"></datalist>`)}
 <div class="sec" style="margin:14px 0 0"><h2 style="font-size:14px">The score</h2>
 <div class="g2">
@@ -215,12 +237,12 @@ ${field("Files for the check", "Scripts and expected answers the check uses, in 
 <div class="g2">${field("Build", "The command that builds the project, run in a fresh copy of the code. A project with nothing to build, such as scripts, can use true.", `<input class="mono" name="build" placeholder="make">`)}${field("What the build makes", "The files or folders the run needs, relative to the project, separated by spaces. The judge keeps exactly these, so a run can't swap them.", `<input class="mono" name="outputs" placeholder="build/app">`)}</div>
 </div>
 <div data-kit="repo" style="margin-top:14px" hidden><div class="g3">${field("Kit repository", "The git repository holding kit.json and its scripts.", `<input name="kit_url" placeholder="https://… .git">`)}${field("Kit repository access", "Public needs nothing; a private kit repository needs Git access from Settings.", `<select name="kit_access"><option value="">Public: no key</option>${accessOptions}</select>`)}${field("Kit commit", "The full commit of the kit to use.", `<input class="mono" name="kit_commit" placeholder="40 hexadecimal characters">`)}${field("Cases to measure", "The kit's case names this campaign measures, separated by spaces.", `<input name="kit_cells" placeholder="small large">`)}</div>
-${field("Hidden tests", "Kit cases kept as hidden tests, separated by spaces. The judge doesn't use them when it first scores a change, only to double-check a change that already looks better.", `<input name="held_out_repo" placeholder="none">`)}
+${field("Hidden tests", `Kit cases kept as hidden tests, separated by spaces. For each one: ${HIDDEN_TEST_RULE}`, `<input name="held_out_repo" placeholder="none">`)}
 <div data-modes="hill_climb"><div class="g3">${field("The kit's metric", "The name of the metric in the kit's kit.json to improve.", `<input name="repo_metric" placeholder="flops_per_s">`)}</div></div></div>
 <div data-kit="upload" style="margin-top:14px" hidden><input type="hidden" name="kit_upload">
 ${field("Kit archive", "A .zip, .tar.gz, .tgz or .tar holding kit.json and the kit's scripts and files, at its top or inside one folder. Control unpacks it, checks kit.json and shows what it found. Nothing in it runs until a run starts.", `<span class="act"><input type="file" id="kit-archive" accept=".zip,.tar,.tgz,.gz"><span class="muted small" id="kit-archive-out">No kit uploaded yet.</span></span>`)}
 <div id="up-kit" hidden><p class="sum" id="up-summary"></p>
-${field("The kit's cases", "Choose how this campaign uses each case. Measured: every change is scored on it. Hidden test: only used to double-check a change that already looks better, so a change can't win just by helping the cases the agents can see. Not used: this campaign skips it.", `<table class="tbl" id="up-cases" style="max-width:560px"><thead><tr><th>Case</th><th style="width:45%">Use</th></tr></thead><tbody></tbody></table>`)}
+${field("The kit's cases", `Choose how this campaign uses each case. Measured: every change is scored on it. Hidden test: ${HIDDEN_TEST_RULE} Not used: this campaign skips it.`, `<table class="tbl" id="up-cases" style="max-width:560px"><thead><tr><th>Case</th><th style="width:45%">Use</th></tr></thead><tbody></tbody></table>`)}
 <div data-modes="hill_climb"><div class="g3">
 ${field("The score", "Which of the kit's metrics this campaign improves.", `<select name="up_metric"></select>`)}
 ${field("Better is", "Whether a higher or a lower number is better. A time is always better lower.", `<select name="up_direction"><option value="max">higher</option><option value="min">lower</option></select>`)}
@@ -272,7 +294,7 @@ ${field("GPUs for the judge", "For a rig with several GPUs: how many the judge m
 <div class="act"><button class="primary big" name="start" value="start">Start the campaign</button><button name="start" value="try" data-modes="hill_climb goal">Try the kit first</button><button name="start" value="save">Save without starting</button></div>
 <div class="nc-does" data-modes="hill_climb goal"><b>Try the kit first</b> starts a run with no agents: the judge builds your project and runs every case once on its own, and the run's page shows each step, or what failed and why. When it looks right, start the campaign from there.</div>
 <div class="nc-does"><b>What happens.</b> Control checks everything, writes the kit into a repository of its own if you described it here, saves the campaign as its next version approved in your name, and assigns the first run to the rig. The rig fetches the project and the kit, checks both, and the judge measures the starting point before any agent submits.</div>
-<div class="nc-does" id="nc-past"><b>Past research.</b> The campaign's agents read its own folder in <a href="/ui/knowledge">Thermite's knowledge base</a>. They can also read the folders of other campaigns, and a run can start from past research. You set both on the campaign's page, after it is saved. To use them for the first run, press <b>Save without starting</b>. On the campaign's page, add folders under <b>Can read from</b>. Then press <b>Start a run</b> and pick items under <b>From past research</b>.</div></div>
+<div class="nc-does" id="nc-past"><b>Past research.</b> The campaign's agents read its own collection in <a href="/ui/knowledge">Thermite's knowledge base</a>. They can also read the collections of other campaigns, and a run can start from past research. You set both after it is saved. To use them for the first run, press <b>Save without starting</b>. On the campaign's page, press <b>Open the collection</b> and add collections under <b>Reads</b>. Then press <b>Start a run</b> and pick items under <b>From past research</b>.</div></div>
 <details class="adv" style="margin-top:12px"><summary>What control will check (the draft)</summary><div><pre class="json" id="draft-preview"></pre></div></details></div>
 <div class="act"><button data-back>Back</button></div></section>
 </div></div>

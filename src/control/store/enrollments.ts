@@ -1,10 +1,7 @@
 import { Credential } from "../credential.ts";
 import { type Row, StorePart } from "./part.ts";
 
-/**
- * Rigs enrolled through control (goal 125, T6), their tokens only as hashes, and the rigs
- * control's settings name.
- */
+/** Rigs enrolled through control (goal 125, T6), their tokens only as hashes. */
 
 /** A rig enrolled through control. */
 export interface EnrolledRig {
@@ -27,15 +24,9 @@ function enrolledOf(r: Row): EnrolledRig {
 }
 
 export class Enrollments extends StorePart {
-  private configuredRigs = new Set<string>();
-
   /** Rigs that have a token but have not reported yet still accept commands. */
   knownRig(rig: string): boolean {
-    return (
-      this.configuredRigs.has(rig) ||
-      this.rig(rig) !== undefined ||
-      Boolean(this.store.tunnels.get(rig)?.enrolled_at)
-    );
+    return this.rig(rig) !== undefined || Boolean(this.store.tunnels.get(rig)?.enrolled_at);
   }
 
   /** An enrolled rig's record, if it is enrolled and not retired. */
@@ -93,9 +84,5 @@ export class Enrollments extends StorePart {
       .run(new Date().toISOString(), rig);
     if (Number(r.changes) === 0) throw new Error(`rig ${rig} is not enrolled`);
     this.store.auditLog.add(by, "rig_retired", { rig });
-  }
-
-  setConfiguredRigs(rigs: readonly string[]): void {
-    this.configuredRigs = new Set(rigs);
   }
 }

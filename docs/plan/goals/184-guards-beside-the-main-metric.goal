@@ -1,0 +1,46 @@
+---
+id: "184"
+title: "A hill climb's guards beside its main metric: in each verdict, under each champion, beside each attempt"
+status: IN_PROGRESS
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 184 · A hill climb's guards beside its main metric: in each verdict, under each champion, beside each attempt
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.1](../roadmap.md#v011)
+
+## What
+
+From the owner's testing notes of 2026-11-02 (item 20): "champion attempts etc only show the stat that is hill climbed. It doesn't show stats that are secondary stats like for [one run] prefill is main stat to track, but decode tok/s must not fall outside the boundary of worse than 1% of the baseline. So its hard to see how that trends."
+
+The judge measures each guard in every block and decides by it, but its `verdict` event carried only the main metric's values: a guard's values stayed in the rig's ledger, and control could not show them.
+
+1. **The verdict carries its guards.** The judge's `verdict` event has `guards`: each guard's status against the step's allowance, its change against the champion with its interval (fractions, positive is better), its measured values, and at confirmation its change against the starting point.
+2. **Control keeps them.** Each attempt in control's views has its latest verdict's guards; MCP's `get_run` gives them.
+3. **The run's page shows them**, as the owner approved the mockup ("Build it as drawn"):
+   - under the champions' gain chart, a chart for each guard: each champion's value, the starting point's (dotted) and the limit `max_total_regression` sets (dashed, red);
+   - under each champion, a line of its guard values against the start and the limit, amber within a quarter of the limit;
+   - beside each attempt's gain, each guard's change against the champion it was measured with, red when the judge found it beyond the step's allowance, amber while it is not sure.
+
+A champion judged by an older harness has no guard values: it gets no point and no line.
+
+## Done when
+
+- [ ] The three, with their tests and the pages that describe them (Verdicts, the contract's guards, `get_run`), and the judge and control acceptance checks pass.
+
+## Decisions
+
+- 2026-11-02, owner: the mockup's design, "Build it as drawn". Guards are drawn in their own unit, as the mockup's default.
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's note, with a mockup the owner approved.
+- 2026-11-02: Built. The judge's GuardResult carries the guard's values (decide.ts); verdictFields passes them; the ledger's verdict event gets `guards` as fractions (ledger/verdicts.ts), its row keeping the log ratios. Control reads them (views/guards.ts: guardsOf, championGuards, nearLimit) into each attempt's `guards`; the run page draws them (ui/components/guards.ts: guardCharts, championGuardLine, attemptGuards). A guard's value shows four significant figures: a 1% limit can't be told from the start with three. Tests in tests/control/views/guards.test.ts.
+- 2026-11-02: On the lab, the owner found the charts poor ("these look like shit") and the earlier champions without guard values. Redrawn: a guard with fewer than two values shows the start and the limit in words, not an empty chart; charts are shorter (at most 150 px high), two to a row where they fit, the last value's label stays inside, and the champions' numbers thin out when there are many. The earlier champions: at its start the harness sends each standing champion's guards once, as a `verdict_guards` event, from its ledger's record of the confirmed win (ledger/verdicts.ts sendChampionGuards), when the win's event did not carry them; control places such a champion from the judge's change against the start, or else against the champion before, hollow and dashed, with `≈` (views/guards.ts). Tests in tests/control/views/guards.test.ts and tests/harness/ledger.test.ts.
+
+---
+
+Run with `/goal Complete docs/plan/goals/184-guards-beside-the-main-metric.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

@@ -110,26 +110,26 @@ export class LedgerAttempts extends LedgerPart {
     return Object.fromEntries(rows.map((r) => [String(r.lifecycle), Number(r.n)]));
   }
 
-  /** The ids of a run's attempts in a family, oldest first. */
-  ofFamily(run: string, family: string): string[] {
+  /** The ids of a run's attempts in a direction, oldest first. */
+  ofDirection(run: string, direction: string): string[] {
     return this.rows<Row>(
-      "select id from attempt where run = ? and family = ? order by created_at",
+      "select id from attempt where run = ? and direction = ? order by created_at",
       run,
-      family,
+      direction,
     ).map((r) => String(r.id));
   }
 
-  /** The families a run's attempts were tagged with. */
-  families(run: string): string[] {
+  /** The directions a run's attempts were tagged with. */
+  directions(run: string): string[] {
     return this.rows<Row>(
-      "select distinct family from attempt where run = ? and family is not null",
+      "select distinct direction from attempt where run = ? and direction is not null",
       run,
-    ).map((r) => String(r.family));
+    ).map((r) => String(r.direction));
   }
 
-  /** Tags an attempt with the family it was judged in. */
-  setFamily(attempt: string, family: string): void {
-    this.execute("update attempt set family = ? where id = ?", family, attempt);
+  /** Tags an attempt with the direction it was judged in. */
+  setDirection(attempt: string, direction: string): void {
+    this.execute("update attempt set direction = ? where id = ?", direction, attempt);
   }
 
   /** A run's newest attempts (on one lane, when given), the newest first. */

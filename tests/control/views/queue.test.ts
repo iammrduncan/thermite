@@ -42,7 +42,7 @@ test("the queue view keeps the order the events give it, and where each experime
       {
         id: "x-1",
         title: "fuse the dequantize step",
-        family: "dequant-fusion",
+        direction: "dequant-fusion",
         why: "it won on long",
         by: "planner",
       },
@@ -50,7 +50,7 @@ test("the queue view keeps the order the events give it, and where each experime
     [
       "supervisor",
       "experiment_added",
-      { id: "x-2", title: "vector loads", family: "memory-layout", by: "teacher", position: 0 },
+      { id: "x-2", title: "vector loads", direction: "memory-layout", by: "teacher", position: 0 },
     ],
     [
       "control:owner:ui",
@@ -92,7 +92,10 @@ test("the queue view keeps the order the events give it, and where each experime
     [
       "control:owner:ui",
       "directive",
-      { id: 7, body: { kind: "avoid", family: "gemv-tiling", rationale: "measured slower twice" } },
+      {
+        id: 7,
+        body: { kind: "avoid", direction: "gemv-tiling", rationale: "measured slower twice" },
+      },
     ],
     [
       "control:owner:ui",
@@ -107,12 +110,12 @@ test("the queue view keeps the order the events give it, and where each experime
     [
       "control:owner:ui",
       "directive",
-      { id: 9, body: { kind: "mandate", family: "split-k", rationale: "won elsewhere" } },
+      { id: 9, body: { kind: "mandate", direction: "split-k", rationale: "won elsewhere" } },
     ],
     [
       "planner:planner",
-      "family_added",
-      { family: "split-k", description: "split the reduction over k", for_rules: [9] },
+      "direction_added",
+      { direction: "split-k", description: "split the reduction over k", for_rules: [9] },
     ],
   ]);
   const up = r.queue
@@ -176,7 +179,7 @@ test("the queue view keeps the order the events give it, and where each experime
     csrf: "x",
     back: "/b",
     cmd,
-    families: ["dequant-fusion"],
+    directions: ["dequant-fusion"],
   });
   assert.match(exp, /<span class="qn">1<\/span><div class="qmain"><div class="qt">warp shuffle/);
   assert.match(
@@ -266,7 +269,7 @@ test("a message to the planner waits for its round, then shows its answer: the r
     [
       "planner",
       "experiment_added",
-      { id: "x-1", title: "wider loads", family: "vector-loads", by: "planner" },
+      { id: "x-1", title: "wider loads", direction: "vector-loads", by: "planner" },
     ],
     ["control:owner:ui", "agent_message", { id: 1, to: "planner", text: "stop :vector loads:" }],
     ["control:owner:ui", "agent_message", { id: 2, to: "planner", text: "never touch the timer" }],
@@ -287,15 +290,15 @@ test("a message to the planner waits for its round, then shows its answer: the r
     ["planner", "agent_message_read", { message: 3, by: "lane-1", trial: "t-1" }],
     [
       "planner:planner",
-      "family_added",
-      { family: "timer-code", description: "any change to the timing code" },
+      "direction_added",
+      { direction: "timer-code", description: "any change to the timing code" },
     ],
     [
       "planner",
       "directive",
       {
         id: 5,
-        body: { kind: "avoid", family: "vector-loads", rationale: "you asked", from_message: 1 },
+        body: { kind: "avoid", direction: "vector-loads", rationale: "you asked", from_message: 1 },
       },
     ],
     [
@@ -303,7 +306,7 @@ test("a message to the planner waits for its round, then shows its answer: the r
       "directive",
       {
         id: 6,
-        body: { kind: "avoid", family: "timer-code", rationale: "you asked", from_message: 2 },
+        body: { kind: "avoid", direction: "timer-code", rationale: "you asked", from_message: 2 },
       },
     ],
     // A rule the planner made from message 3 that the owner had removed: left out.
@@ -311,7 +314,7 @@ test("a message to the planner waits for its round, then shows its answer: the r
       "planner",
       "directives_left_out",
       {
-        rules: [{ kind: "avoid", family: "gemv-tiling", rationale: "r", from_message: 3 }],
+        rules: [{ kind: "avoid", direction: "gemv-tiling", rationale: "r", from_message: 3 }],
         why: "the owner removed these rules",
       },
     ],
@@ -322,8 +325,8 @@ test("a message to the planner waits for its round, then shows its answer: the r
   assert.deepEqual(
     r.messages.map((m) => [
       m.id,
-      m.rules.map((x) => [x.id, x.kind, x.family, x.by]),
-      m.left_out.map((x) => [x.kind, x.family]),
+      m.rules.map((x) => [x.id, x.kind, x.direction, x.by]),
+      m.left_out.map((x) => [x.kind, x.direction]),
       m.reads.map((x) => [x.by, x.round]),
     ]),
     [
@@ -446,7 +449,7 @@ test("an old rule in words the planner converted shows as a normal rule, with th
     [
       "planner",
       "experiment_added",
-      { id: "x-1", title: "wider loads", family: "vector-loads", by: "planner" },
+      { id: "x-1", title: "wider loads", direction: "vector-loads", by: "planner" },
     ],
     ["control:owner:ui", "agent_message", { id: 1, to: "planner", text: "loads first" }],
     // Before rules named directions: the owner's rule in words, and the planner's from a message.
@@ -470,9 +473,9 @@ test("an old rule in words the planner converted shows as a normal rule, with th
     // Round 2 converts both: one to a direction it designs for it, one to a direction it has.
     [
       "planner:planner",
-      "family_added",
+      "direction_added",
       {
-        family: "shared-memory",
+        direction: "shared-memory",
         description: "kernels that stage data in shared memory",
         for_rules: [4],
       },
@@ -484,7 +487,7 @@ test("an old rule in words the planner converted shows as a normal rule, with th
         id: 10,
         body: {
           kind: "avoid",
-          family: "shared-memory",
+          direction: "shared-memory",
           rationale: "slow",
           converted_from: { rule: 4, words: "anything that uses shared memory" },
         },
@@ -497,7 +500,7 @@ test("an old rule in words the planner converted shows as a normal rule, with th
         id: 4,
         to: 10,
         kind: "avoid",
-        family: "shared-memory",
+        direction: "shared-memory",
         words: "anything that uses shared memory",
       },
     ],
@@ -508,7 +511,7 @@ test("an old rule in words the planner converted shows as a normal rule, with th
         id: 11,
         body: {
           kind: "try",
-          family: "vector-loads",
+          direction: "vector-loads",
           rationale: "you asked",
           from_message: 1,
           converted_from: { rule: 5, words: "vector loads" },
@@ -518,13 +521,13 @@ test("an old rule in words the planner converted shows as a normal rule, with th
     [
       "planner",
       "directive_converted",
-      { id: 5, to: 11, kind: "try", family: "vector-loads", words: "vector loads" },
+      { id: 5, to: 11, kind: "try", direction: "vector-loads", words: "vector loads" },
     ],
     ["planner", "planner_handout", { round: 2, assignments: [], notes: "the planner's plan" }],
   ]);
   // The new rules in place of the old ones, by their authors; no rule in words is left.
   assert.deepEqual(
-    r.rules.map((x) => [x.id, x.author, x.legacy, x.body.family]),
+    r.rules.map((x) => [x.id, x.author, x.legacy, x.body.direction]),
     [
       [10, "control:owner:ui", false, "shared-memory"],
       [11, "planner", false, "vector-loads"],
@@ -533,7 +536,7 @@ test("an old rule in words the planner converted shows as a normal rule, with th
   assert.equal(r.directives, 2);
   // The planner's answer to the message names the rule in force now, once.
   assert.deepEqual(
-    r.messages[0]?.rules.map((x) => [x.id, x.kind, x.family]),
+    r.messages[0]?.rules.map((x) => [x.id, x.kind, x.direction]),
     [[11, "try", "vector-loads"]],
   );
   const plan = plannerTab({

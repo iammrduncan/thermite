@@ -8,6 +8,7 @@ import {
   type CopyCampaignOutcome,
   type CopyCampaignRequest,
   campaignContract,
+  campaignKbWrites,
   contractAdditions,
   contractContext,
   copiedFromWords,
@@ -17,6 +18,7 @@ import {
   type StartRunRequest,
   setCampaignAdditions,
   setCampaignContext,
+  setCampaignKbWrites,
   startARun,
 } from "../../campaigns/index.ts";
 import { additionsBlock, postedAdditions } from "../../ui/campaigns/additions.ts";
@@ -28,6 +30,7 @@ import {
 } from "../../ui/campaigns/context/index.ts";
 import { postedUses } from "../../ui/campaigns/copy/index.ts";
 import { howChecked, howCheckedDetails } from "../../ui/campaigns/goal-checks.ts";
+import { kbWritesBlock, postedKbWrites } from "../../ui/campaigns/kb-writes.ts";
 import { earlierRuns, isRigCheck, lastActivity } from "../../ui/campaigns/list.ts";
 import { infoLabel, QUEUE_TARGET_TIP } from "../../ui/campaigns/new/index.ts";
 import { campaignReviewsTab } from "../../ui/campaigns/research.ts";
@@ -39,15 +42,14 @@ import {
   runCompleted,
   runState,
 } from "../../ui/components/index.ts";
-import { campaignKnowledge } from "../../ui/knowledge.ts";
+import { campaignKnowledge } from "../../ui/knowledge/index.ts";
 import { goalState } from "../../ui/operator/index.ts";
 import { campaignHref, runHref } from "../../ui/urls.ts";
 import { campaignUsageBlock, runStateWord } from "../../ui/usage.ts";
 import { listText } from "../../ui/words/index.ts";
-import { usageData } from "../../usage.ts";
+import { usageData } from "../../usage-report.ts";
 import {
   type CampaignView,
-  campaignModes,
   campaignViews,
   leaderboard,
   type RigView,
@@ -55,8 +57,9 @@ import {
 } from "../../views/index.ts";
 import type { Ctx, Dashboard } from "../context.ts";
 import { type CopyTry, campaignPanels } from "./panels.ts";
+import { proposalRoutes, proposalsBlock } from "./proposals.ts";
 import { runHelpers } from "./run/section.ts";
-import { campaignHelpers, headline, modeWords } from "./shared.ts";
+import { campaignHelpers, headline } from "./shared.ts";
 
 /**
  * A campaign's page: its runs from control's run registry, wherever they ran, with the earlier
@@ -65,6 +68,7 @@ import { campaignHelpers, headline, modeWords } from "./shared.ts";
  */
 export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, mcpServers, needs, opts, page, parts, store, views } = dash;
+  proposalRoutes(app, dash);
   const {
     archivedLine,
     campaignActions,
@@ -175,7 +179,11 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
       }
     }
     const copyFrom = String(f.copy_from ?? "");
-    const pastIds = [(await c.req.parseBody({ all: true })).past ?? []].flat().map(Number);
+    const all = await c.req.parseBody({ all: true });
+    const pastIds = [all.past ?? []].flat().map(Number);
+    // What its agents search (goal 175): with the granted collections shown, none ticked is none.
+    const granted =
+      String(f.granted_shown ?? "") === "1" ? [all.granted ?? []].flat().map(String) : undefined;
     const out = await startARun(
       parts,
       {
@@ -190,6 +198,8 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
         judgeGpus: String(f.judge_gpus ?? ""),
         queueFrom: agents && String(f.copy_queue ?? "") === "1" && copyFrom ? copyFrom : undefined,
         past: agents ? pastIds : undefined,
+        collection: String(f.collection ?? "") === "fresh" ? "fresh" : "continue",
+        granted,
       },
       "owner:ui",
       true,
@@ -213,26 +223,9 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
   });
 
   // ---------------------------------------------------------------- the knowledge base (goal 065)
-  /** A campaign's Knowledge section: its folder, the folders it reads, who reads it. */
-  const knowledgeSection = (c: Ctx, name: string, vs: RigView[], error?: string) => {
-    const kb = store.kb();
-    const folders = kb.folders();
-    const have = new Set(folders.map((f) => f.campaign));
-    const modes = campaignModes(store, vs);
-    return campaignKnowledge({
-      campaign: name,
-      folder: kb.folder(name, folders),
-      folders: [
-        ...folders,
-        // Campaigns with no folder yet can be granted too: their items come as their runs report.
-        ...[...modes.keys()].filter((x) => !have.has(x)).map((x) => kb.folder(x, folders)),
-      ],
-      mode: modeWords(modes),
-      csrf: csrf(c),
-      now: Date.now(),
-      error,
-    });
-  };
+  /** A campaign's Knowledge section: a summary of its collection, and its grants both ways. */
+  const knowledgeSection = (name: string) =>
+    campaignKnowledge({ campaign: name, collection: store.kb().collection(name), now: Date.now() });
 
   // ---------------------------------------------------------------- a campaign's agents' context
   // Goal 070: a campaign's own context window and compaction point for all its runs' agents, kept
@@ -308,6 +301,36 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
       ok: said ? c.req.query("ok") : undefined,
     });
   };
+  /** Which kinds each role writes in the campaign's collection (goal 175); none for a rig check. */
+  const kbWritesSection = (c: Ctx, name: string) => {
+    if (isRigCheck(name)) return "";
+    const contract = campaignContract(store, name) as { kb_writes?: unknown } | undefined;
+    if (!contract) return "";
+    const said = c.req.query("on") === "kb-writes";
+    return kbWritesBlock({
+      campaign: name,
+      csrf: csrf(c),
+      writes: campaignKbWrites(store, name),
+      byDefault: contract.kb_writes === undefined,
+      error: said ? c.req.query("error") : undefined,
+      ok: said ? c.req.query("ok") : undefined,
+    });
+  };
+  app.post("/ui/campaigns/:campaign/kb-writes", async (c) => {
+    const campaign = c.req.param("campaign");
+    const f = await c.req.parseBody();
+    const back = (k: "ok" | "error", m: string) =>
+      c.redirect(
+        `${campaignHref(campaign)}?on=kb-writes&${k}=${encodeURIComponent(m)}#kb-writes`,
+        303,
+      );
+    const out = setCampaignKbWrites(store, { campaign, kb_writes: postedKbWrites(f) }, "owner:ui");
+    if (out.state === "refused")
+      return out.status === 404 ? c.text(out.error, 404) : back("error", out.error);
+    if (out.state === "unchanged")
+      return back("ok", `Nothing changed: version ${out.version} says this already.`);
+    return back("ok", `Saved as version ${out.version}. New runs of ${campaign} take it.`);
+  });
   app.post("/ui/campaigns/:campaign/additions", async (c) => {
     const campaign = c.req.param("campaign");
     const f = await c.req.parseBody();
@@ -401,14 +424,11 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
     const k: CampaignView | undefined = runs.length
       ? { name, mode: runs[0]?.run.mode ?? null, runs }
       : undefined;
-    // A refused grant shows in the Knowledge section, not as a run that did not start.
-    const kbFailed = c.req.query("on") === "kb" ? c.req.query("error") : undefined;
-    // So does what the Agents' context's Save did, in its own block.
-    // So do the owner's additions' (goal 166).
-    const onContext = c.req.query("on") === "context" || c.req.query("on") === "additions";
+    // What the Agents' context's Save did shows in its own block, not as a run that did not start.
+    // So do the owner's additions' (goal 166), and a decision on a proposal.
+    const onContext = ["context", "additions", "proposals"].includes(c.req.query("on") ?? "");
     // Archive and Move to folder (on=shelf) say what they refused at the top of every page.
-    const failed =
-      kbFailed || onContext || c.req.query("on") === "shelf" ? undefined : c.req.query("error");
+    const failed = onContext || c.req.query("on") === "shelf" ? undefined : c.req.query("error");
     const okNote = onContext ? undefined : c.req.query("ok");
     const context = () => contextSection(c, name, vs, c.req.query("on") === "context");
     // The campaign's brief from its contract (goal 078): what its agents know.
@@ -456,7 +476,7 @@ export function campaignPageRoutes(app: Hono, dash: Dashboard): void {
           active: "campaigns",
           actions: buttons,
         },
-        `${note}${copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${brief()}${context()}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}${drawer}`,
+        `${note}${copiedLine(name)}<div class="card" style="margin-bottom:16px"><div class="empty">${saved.length ? "Saved on control, with no run yet." : "Assigned to a rig over the API, MCP or the CLI; no run of it reports now."}${canStart ? ` <a class="btn sm primary" href="${campaignHref(name)}?start=1" data-open="#start" style="margin-left:6px">${icon.play}Start a run of ${esc(name)}</a>` : ""}</div></div>${savedGoals}${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(name)}${kbWritesSection(c, name)}${drawer}`,
         vs,
       );
     }
@@ -575,7 +595,7 @@ ${waitingRuns.map((w) => `<div class="kneed">${icon.warn}<span class="grow"><b>$
                     now,
                   )}</div>`
                 : ""
-            }</div>${brief()}${context()}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(c, name, vs, kbFailed)}
+            }</div>${brief()}${context()}${proposalsBlock(dash, c, name)}${additionsSection(c, name)}${queueTargetSection(name)}${knowledgeSection(name)}${kbWritesSection(c, name)}
 </div><div class="side">${campaignUsage(k)}</div></div>`
       }${drawer}`,
       vs,

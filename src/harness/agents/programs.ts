@@ -1,21 +1,31 @@
+import {
+  type CliHarness,
+  type CliProgram,
+  type CliTally,
+  claudeProgram,
+  codexProgram,
+  opencodeProgram,
+  TrialConsole,
+} from "../../agents/cli/index.ts";
 import type { CliCompacted } from "../../agents/compaction/index.ts";
 import type { ModelConfig } from "../../agents/model/index.ts";
+import { PiConsole } from "../../agents/pi-view/index.ts";
 import { type TrialProgram, windowFit } from "../../agents/roles/index.ts";
 import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
-import { type Harness, type ProviderType, programForApi, reaches } from "../../core/agents.ts";
+import {
+  type Harness,
+  type ProviderType,
+  programForApi,
+  reaches,
+  throughProxy,
+} from "../../core/agents.ts";
 import type { Role } from "../broker/index.ts";
 import {
   type CliAskOptions,
-  type CliHarness,
   type CliOnceDeps,
-  type CliProgram,
-  type CliTally,
   type CliTrialDeps,
-  claudeProgram,
   cliAsk,
   cliModelCheck,
-  codexProgram,
-  opencodeProgram,
   runCliTrial,
 } from "./cli/index.ts";
 import { checkModel, type RigCheckReport } from "./model/index.ts";
@@ -47,10 +57,17 @@ export interface TrialLink extends Omit<CliTrialDeps, "model" | "compacted"> {
   scratchDir: string;
   port: number;
   /**
-   * Opens the trial's record of the model usage its program's own code hands over (Pi's worker,
-   * goal 075), for its route as `harness` runs it; the function it returns closes it.
+   * Opens what its program's own code hands over with the trial's token (Pi's worker): its model
+   * usage (goal 075), for its route as `harness` runs it, and its session's counters and waits for
+   * the provider. The function it returns closes it.
    */
-  handOverUsage(harness: Harness): () => void;
+  handOver(harness: Harness): () => void;
+  /**
+   * Told when the trial's program reaches its provider through the harness's model proxy: from
+   * then on, the run's budget counts the tokens the proxy sees in the provider's answers to the
+   * trial's calls, not those the program reports.
+   */
+  throughProxy?: (() => void) | undefined;
 }
 
 export interface AgentProgram {
@@ -79,19 +96,31 @@ export interface AgentProgram {
 
 /**
  * A trial in Pi: its prompt, from its role's definition, rendered and kept here in the harness
- * (goal 166), then the worker process, which sends it as it is. `spawn`: the worker process
- * (spawn.ts); tests run the worker in their own.
+ * (goal 166), then the worker process, which sends it as it is. On a rig whose agents run in
+ * their own terminal, the worker draws its Pi view there (goal 169), and the trial's console is
+ * its PiConsole; headless, it has none. `spawn`: the worker process (spawn.ts); tests run the
+ * worker in their own.
  */
 export async function runPiTrial(
   t: AgentTrial,
   link: Pick<
     TrialLink,
-    "handOverUsage" | "sent" | "runner" | "scratchDir" | "port" | "signal" | "model"
+    | "handOver"
+    | "sent"
+    | "runner"
+    | "scratchDir"
+    | "port"
+    | "signal"
+    | "model"
+    | "terminal"
+    | "console"
+    | "keepSession"
   >,
   spawn: typeof spawnTrial = spawnTrial,
 ): Promise<TrialResult> {
-  // Its worker hands its model usage over with the trial's token while the trial runs.
-  const close = link.handOverUsage("pi");
+  // Its worker hands its model usage, counters and waits over with the trial's token while the
+  // trial runs.
+  const close = link.handOver("pi");
   try {
     const mcpServers = t.spec.mcpServers ?? [];
     // Cut to the model's window, when the route says it (decision 8).
@@ -101,9 +130,11 @@ export async function runPiTrial(
         ? piTrialPrompt(t.spec, mcpServers, Date.now(), fit)
         : piResearchPrompt(
             { ...t.spec, folder: t.folder },
-            { mcpServers, idea: true, note: true, fit },
+            { mcpServers, kbWrites: t.spec.kbWrites, idea: true, note: true, fit },
           );
     link.sent?.(sent);
+    const view = link.terminal ? new PiConsole() : undefined;
+    link.console?.(view ? new TrialConsole(view) : "headless", view);
     return await spawn(
       t.mode === "code"
         ? { kind: "code", spec: { ...t.spec, sent } }
@@ -113,6 +144,8 @@ export async function runPiTrial(
       link.port,
       link.signal,
       link.model,
+      view,
+      link.keepSession,
     );
   } finally {
     close();
@@ -163,6 +196,7 @@ async function cliTrial<T extends CliTally>(
   const model = link.model;
   // Without a route the agents run in Pi (programOf): this is a programmer's error.
   if (!model) throw new Error(`${p.name} runs only on a model route`);
+  if (throughProxy(model.api)) link.throughProxy?.();
   const compacted = link.compacted;
   const deps: CliTrialDeps = {
     ...link,

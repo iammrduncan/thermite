@@ -3,13 +3,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { claudeProgram, codexProgram, opencodeProgram } from "../../../src/agents/cli/index.ts";
 import type { Prompt } from "../../../src/agents/prompt.ts";
-import { runClaudeTrial } from "../../../src/harness/agents/cli/claude-code.ts";
-import { runCodexTrial } from "../../../src/harness/agents/cli/codex.ts";
-import {
-  runOpencodeResearchTrial,
-  runOpencodeTrial,
-} from "../../../src/harness/agents/cli/opencode.ts";
+import { runCliTrial } from "../../../src/harness/agents/cli/index.ts";
 import { runPiTrial } from "../../../src/harness/agents/programs.ts";
 import {
   type ResearchTrialSpec,
@@ -31,6 +27,12 @@ import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 import { makeResearchRun } from "../../helpers/research-run.ts";
 import { golden, kept, keptInput, laneTool, PLAN, recorder, sections } from "./capture.ts";
 
+// The programs named at a path, as on a machine that has them: the commands below read the same on
+// one without them on PATH (they record what would run; nothing runs them).
+process.env.THERMITE_OPENCODE_BIN = "/opt/opencode/bin/opencode";
+process.env.THERMITE_CODEX_BIN = "/opt/codex/bin/codex";
+process.env.THERMITE_CLAUDE_BIN = "/opt/claude/bin/claude";
+
 /**
  * The work's roles' whole prompts: the planners, the workers and the research workers, in Pi and in
  * the other programs (goal 166).
@@ -40,7 +42,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.start();
@@ -57,7 +60,7 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     await command("queue_add", {
       run,
       title: "Unroll the loop by four",
-      family: "loops",
+      direction: "loops",
       why: "the loop does one add per step",
     });
     const { sent, script } = recorder(({ tools }) =>
@@ -83,7 +86,7 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
         runPiTrial(
           { mode: "code", spec },
           {
-            handOverUsage: () => () => undefined,
+            handOver: () => () => undefined,
             sent: (p) =>
               keepPrompt(env.service.ledger, spec.run, p, { lane: spec.lane, trial: spec.trialId }),
             runner,
@@ -120,7 +123,9 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
 
   test("a research run's planner and worker, in Pi", async () => {
     const r = await makeResearchRun("r-1", {
-      contract: { notes: "Weigh the sources that measured more than one campaign." },
+      contract: {
+        additional_information: "Weigh the sources that measured more than one campaign.",
+      },
     });
     await r.env.service.applyCommand(
       r.env.sign("message_agent", {
@@ -179,7 +184,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.start();
@@ -247,52 +253,64 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
       [
         "worker.opencode",
         (runner: Runner, s: TrialSpec) =>
-          runOpencodeTrial(s, {
-            ...common,
-            runner,
-            model: {
-              baseUrl: "http://127.0.0.1:9",
-              model: "m",
-              apiKey: "k",
-              contextWindow: 32000,
-              maxTokens: 2000,
+          runCliTrial(
+            opencodeProgram,
+            { mode: "code", spec: s },
+            {
+              ...common,
+              runner,
+              model: {
+                baseUrl: "http://127.0.0.1:9",
+                model: "m",
+                apiKey: "k",
+                contextWindow: 32000,
+                maxTokens: 2000,
+              },
             },
-          }),
+          ),
       ],
       [
         "worker.claude-code",
         (runner: Runner, s: TrialSpec) =>
-          runClaudeTrial(s, {
-            ...common,
-            runner,
-            model: {
-              api: "claude" as const,
-              harness: "claude-code" as const,
-              baseUrl: "https://api.anthropic.com",
-              model: "claude-test",
-              apiKey: "token",
-              contextWindow: 1_000_000,
-              maxTokens: 0,
+          runCliTrial(
+            claudeProgram,
+            { mode: "code", spec: s },
+            {
+              ...common,
+              runner,
+              model: {
+                api: "claude" as const,
+                harness: "claude-code" as const,
+                baseUrl: "https://api.anthropic.com",
+                model: "claude-test",
+                apiKey: "token",
+                contextWindow: 1_000_000,
+                maxTokens: 0,
+              },
             },
-          }),
+          ),
       ],
       [
         "worker.codex",
         (runner: Runner, s: TrialSpec) =>
-          runCodexTrial(s, {
-            ...common,
-            runner,
-            model: {
-              api: "chatgpt" as const,
-              harness: "codex" as const,
-              baseUrl: "https://api.openai.com/v1",
-              model: "gpt-test",
-              apiKey: "access",
-              contextWindow: 0,
-              maxTokens: 0,
-              reasoning: "off" as const,
+          runCliTrial(
+            codexProgram,
+            { mode: "code", spec: s },
+            {
+              ...common,
+              runner,
+              model: {
+                api: "chatgpt" as const,
+                harness: "codex" as const,
+                baseUrl: "https://api.openai.com/v1",
+                model: "gpt-test",
+                apiKey: "access",
+                contextWindow: 0,
+                maxTokens: 0,
+                reasoning: "off" as const,
+              },
             },
-          }),
+          ),
       ],
     ] as const;
     const paths = [env.paths.scratchDir, env.paths.stateDir, env.root, tmpdir()];
@@ -360,7 +378,8 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
     const env = makeJudgeEnv({
       lanes: { count: 1, trials_per_epoch: 1 },
       contract: {
-        notes: "The kernel sums an array of numbers. Keep its exported function's name.",
+        additional_information:
+          "The kernel sums an array of numbers. Keep its exported function's name.",
       },
     });
     await env.start();
@@ -370,7 +389,9 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
       [["standard input", await asked(env.service)]],
     );
     const r = await makeResearchRun("r-1", {
-      contract: { notes: "Weigh the sources that measured more than one campaign." },
+      contract: {
+        additional_information: "Weigh the sources that measured more than one campaign.",
+      },
     });
     const { stateDir, scratchDir } = r.env.service.paths;
     sections(
@@ -383,7 +404,9 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
 
   test("a research run's worker in OpenCode: what the program is given", async () => {
     const r = await makeResearchRun("r-1", {
-      contract: { notes: "Weigh the sources that measured more than one campaign." },
+      contract: {
+        additional_information: "Weigh the sources that measured more than one campaign.",
+      },
     });
     // The trial the scheduler starts for the sample run.
     let spec: ResearchTrialSpec | undefined;
@@ -420,22 +443,29 @@ describe("every role's whole prompt for a sample run (goal 166)", () => {
       killRole: async () => 0,
     } as unknown as Runner;
     const area = mkdtempSync(join(tmpdir(), "thermite-prompts-area-"));
-    await runOpencodeResearchTrial(spec, {
-      runner,
-      model: {
-        baseUrl: "http://127.0.0.1:9",
-        model: "m",
-        apiKey: "k",
-        contextWindow: 32000,
-        maxTokens: 2000,
+    await runCliTrial(
+      opencodeProgram,
+      {
+        mode: "research",
+        spec: spec,
+        area,
+        folder: await r.folder.prepareLane("r-1", spec.lane, spec.lane),
       },
-      apiUrl: "http://127.0.0.1:8700",
-      area,
-      folder: await r.folder.prepareLane("r-1", spec.lane, spec.lane),
-      live: () => undefined,
-      progress: () => undefined,
-      pollMs: 5,
-    });
+      {
+        runner,
+        model: {
+          baseUrl: "http://127.0.0.1:9",
+          model: "m",
+          apiKey: "k",
+          contextWindow: 32000,
+          maxTokens: 2000,
+        },
+        apiUrl: "http://127.0.0.1:8700",
+        live: () => undefined,
+        progress: () => undefined,
+        pollMs: 5,
+      },
+    );
     await r.close();
     const given = runs.find((x) => String(x.stdin ?? "").includes("# Research assignment"));
     assert.ok(given, "no run was given the brief");

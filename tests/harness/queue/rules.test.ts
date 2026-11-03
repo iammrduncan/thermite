@@ -10,25 +10,27 @@ import { controlQueue, RUN, setup } from "./setup.ts";
 describe("the owner's queue commands", () => {
   test("drop_directive removes a rule in force, whoever set it; a rule names a direction", async () => {
     const s = await setup();
-    s.q.add(RUN, { title: "tile it", family: "Tiling", by: "owner" }, "control:owner:ui");
+    s.q.add(RUN, { title: "tile it", direction: "Tiling", by: "owner" }, "control:owner:ui");
     const set = await s.command("redirect", {
       run: RUN,
       directives: [
         // Plain words with spaces, or :name:, name a direction; one the run doesn't have yet
         // is new, and the planner designs it.
-        { kind: "avoid", family: "Timer code", rationale: "it is the judge's", citations: [] },
-        { kind: "try", family: ":tiling:", rationale: "won elsewhere", citations: [] },
+        { kind: "avoid", direction: "Timer code", rationale: "it is the judge's", citations: [] },
+        { kind: "try", direction: ":tiling:", rationale: "won elsewhere", citations: [] },
       ],
     });
     assert.ok(set.accepted, JSON.stringify(set));
     assert.deepEqual(set.result.new_directions, ["timer-code"]);
     assert.deepEqual(
-      s.env.service.ledger.directives.active(RUN).map((d) => (d.body as { family: string }).family),
+      s.env.service.ledger.directives
+        .active(RUN)
+        .map((d) => (d.body as { direction: string }).direction),
       ["timer-code", "tiling"],
     );
     const supervisorIds = s.env.service.addDirectives(
       RUN,
-      [{ kind: "try", family: "unroll", rationale: "r", citations: ["a-1"] }],
+      [{ kind: "try", direction: "unroll", rationale: "r", citations: ["a-1"] }],
       "supervisor",
     );
     const active = () => s.env.service.ledger.directives.active(RUN).map((d) => d.id);
@@ -45,19 +47,19 @@ describe("the owner's queue commands", () => {
     const again = s.env.service.addDirectives(
       RUN,
       [
-        { kind: "try", family: "unroll", rationale: "r", citations: ["a-2"] },
-        { kind: "avoid", family: "gather", rationale: "r", citations: ["a-2"] },
+        { kind: "try", direction: "unroll", rationale: "r", citations: ["a-2"] },
+        { kind: "avoid", direction: "gather", rationale: "r", citations: ["a-2"] },
       ],
       "supervisor",
     );
     assert.equal(again.length, 1, "only the new rule");
     assert.deepEqual(s.events("directives_left_out").at(-1)?.body, {
-      rules: [{ kind: "try", family: "unroll", rationale: "r", citations: ["a-2"] }],
+      rules: [{ kind: "try", direction: "unroll", rationale: "r", citations: ["a-2"] }],
       why: "the owner removed these rules",
     });
     const owner = await s.command("redirect", {
       run: RUN,
-      directives: [{ kind: "try", family: "unroll", rationale: "back", citations: [] }],
+      directives: [{ kind: "try", direction: "unroll", rationale: "back", citations: [] }],
       replace: false,
     });
     assert.ok(owner.accepted, JSON.stringify(owner));
@@ -65,19 +67,19 @@ describe("the owner's queue commands", () => {
     // direction's name. The harness refuses them, in plain words, as control does before signing.
     for (const [bad, why] of [
       [
-        { kind: "avoid", family: "tiling", match: "tiles", rationale: "x" },
+        { kind: "avoid", direction: "tiling", match: "tiles", rationale: "x" },
         /no longer takes match/,
       ],
       [{ kind: "priority", match: "tiles", rationale: "x" }, /no longer takes match/],
-      [{ kind: "avoid", rationale: "names nothing" }, /names a direction \(family\)/],
+      [{ kind: "avoid", rationale: "names nothing" }, /rule names a direction/],
       [
-        { kind: "avoid", family: "anything with $hared memory!", rationale: "x" },
+        { kind: "avoid", direction: "anything with $hared memory!", rationale: "x" },
         /is not a direction's name: write it in letters, digits, spaces and dashes/,
       ],
       [
         {
           kind: "avoid",
-          family: "a direction whose name is far too long to be one",
+          direction: "a direction whose name is far too long to be one",
           rationale: "x",
         },
         /too long for a direction's name/,
@@ -93,8 +95,8 @@ describe("the owner's queue commands", () => {
     const both = await s.command("redirect", {
       run: RUN,
       directives: [
-        { kind: "avoid", family: "Vector loads", rationale: "x", citations: [] },
-        { kind: "try", family: ":vector-loads:", rationale: "y", citations: [] },
+        { kind: "avoid", direction: "Vector loads", rationale: "x", citations: [] },
+        { kind: "try", direction: ":vector-loads:", rationale: "y", citations: [] },
       ],
     });
     assert.match(String(both.result.error), /both avoids and asks for vector-loads/);
@@ -131,7 +133,7 @@ describe("the owner's queue commands", () => {
     // The advisors' next set doesn't drop it: only the owner removes it.
     s.env.service.addDirectives(
       RUN,
-      [{ kind: "note", value: "a note", rationale: "r", citations: ["a-1"] }],
+      [{ kind: "planner_note", value: "a note", rationale: "r", citations: ["a-1"] }],
       "supervisor",
     );
     assert.ok(s.env.service.ledger.directives.active(RUN).some((d) => d.id === old));
@@ -147,7 +149,7 @@ describe("the owner's queue commands", () => {
       RUN,
       "control:owner:ui",
       [
-        { kind: "try", family: "tiling", rationale: "won", citations: [] },
+        { kind: "try", direction: "tiling", rationale: "won", citations: [] },
         {
           kind: "mandate",
           match: "anything with vector loads",
@@ -171,7 +173,7 @@ describe("the owner's queue commands", () => {
       author: "control:owner:ui",
       body: {
         kind: "mandate",
-        family: "vector-loads",
+        direction: "vector-loads",
         rationale: "the guide says so",
         citations: ["guide p. 4"],
         from_message: 3,
@@ -191,7 +193,7 @@ describe("the owner's queue commands", () => {
       id: old,
       to,
       kind: "mandate",
-      family: "vector-loads",
+      direction: "vector-loads",
       words: "anything with vector loads",
     });
     assert.equal(s.events("directive").at(-1)?.actor, "control:owner:ui");

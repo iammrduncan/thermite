@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { MessageInbox } from "../../agents/cli/index.ts";
 import type { McpCaller } from "../../agents/mcp/index.ts";
 import {
   logStall,
@@ -6,11 +7,16 @@ import {
   type ProviderErrorAnswer,
   stallWords,
 } from "../../agents/model/index.ts";
-import type { LiveLog } from "../../core/live.ts";
+import { gaveSecret } from "../../common/scrub.ts";
+import type { PlannerAnswer } from "../../core/api/harness/planner.ts";
+import type { LiveKind, LiveLog } from "../../core/live.ts";
+import type { CallUsage } from "../../core/usage.ts";
+import type { CompactionOf } from "../compactions.ts";
 
 /**
  * What the model proxy and the MCP gateway take from the service besides trials' tokens: the
- * credentials the harness mints for a check, a plan or a planner's MCP calls, and what the model
+ * credentials the harness mints for a check, a plan or a planner's MCP calls (each remembered as
+ * given to an agent, so a kept conversation is scrubbed of it: common/scrub.ts), and what the model
  * proxy saw of a provider: its error answers, and calls broken off because their stream went
  * silent.
  */
@@ -31,6 +37,7 @@ export class ProxyCredentials {
     const now = Date.now();
     for (const [t, v] of this.proxyTokens) if (v.until < now) this.proxyTokens.delete(t);
     const token = `proxy.${randomBytes(24).toString("hex")}`;
+    gaveSecret(token);
     this.proxyTokens.set(token, { until: now + ms, ...(model ? { model } : {}) });
     return token;
   }
@@ -54,6 +61,7 @@ export class ProxyCredentials {
     const now = Date.now();
     for (const [t, v] of this.mcpTokens) if (v.until < now) this.mcpTokens.delete(t);
     const token = `mcp.${randomBytes(24).toString("hex")}`;
+    gaveSecret(token);
     this.mcpTokens.set(token, { caller, until: now + ms });
     return token;
   }
@@ -63,6 +71,65 @@ export class ProxyCredentials {
     const v = this.mcpTokens.get(token);
     return v && v.until >= Date.now() ? v.caller : undefined;
   }
+
+  /** The credentials of the calls that run in their own terminal now, until each ends. */
+  private callTokens = new Map<string, CallCredential>();
+
+  /**
+   * A credential bound to one call of a role in its program's own terminal (goal 169): the model
+   * proxy takes it for the call's route, the MCP gateway as the call's caller, and the turn routes
+   * for the owner's messages inside its turn. It lasts until the call ends (endCall).
+   */
+  mintCallToken(c: CallCredential): string {
+    const token = `call.${randomBytes(24).toString("hex")}`;
+    gaveSecret(token);
+    this.callTokens.set(token, c);
+    return token;
+  }
+
+  /** The call a credential is bound to, while the call runs. */
+  callOf(token: string): CallCredential | undefined {
+    return this.callTokens.get(token);
+  }
+
+  /** The call ended: its credential no longer works. */
+  endCall(token: string): void {
+    this.callTokens.delete(token);
+  }
+}
+
+/**
+ * A call of a role in its program's own terminal, as its credential binds it: its id (the console's
+ * and the screens', such as plannerCallId's), who it is to the MCP gateway (its run, its kind of
+ * agent), and the route its model calls reach, when it is not the workers'.
+ */
+export interface CallCredential {
+  id: string;
+  caller: McpCaller;
+  model?: ModelConfig | undefined;
+  /** What its own process hands over, when it runs apart from the harness (a planner in Pi). */
+  own?: OwnCall | undefined;
+}
+
+/**
+ * What a call's own process hands the harness over its credential (goal 169): a planner in Pi in
+ * its Pi view, which runs apart from the harness as a worker in Pi does, and reaches the same
+ * routes as a worker's trial (api/trials.ts), each bound to the call instead.
+ */
+export interface OwnCall {
+  run: string;
+  /** The call's name in the run's records: "epoch 3". */
+  call: string;
+  /** Its session's lines, for its live source. */
+  live(entries: { kind: LiveKind; text: string }[]): void;
+  /** The owner's messages for it, each read once its agent has it, before its next model call. */
+  messages: MessageInbox;
+  /** Each model call's usage, as its own code measured it (goal 075). */
+  usage?: ((u: CallUsage) => void) | undefined;
+  /** Where its compactions are kept and recorded (goal 070); none: it keeps none. */
+  compaction?: CompactionOf | undefined;
+  /** Its answer: the first one counts. */
+  answer(a: PlannerAnswer): void;
 }
 
 /** The newest error answer the model proxy saw for each trial (or "proxy"): goal 079. */

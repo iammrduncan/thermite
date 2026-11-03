@@ -7,7 +7,9 @@ import {
   judgeShareOf,
   planClusterResize,
   quotaRefusal,
+  shareMoveWords,
   sizeChangeWords,
+  sizeOf,
   sizeWords,
 } from "../../../src/control/clusters/resources.ts";
 import type { ClusterRig } from "../../../src/control/store/index.ts";
@@ -39,10 +41,12 @@ const facts = (o: Partial<ClusterFacts> = {}): ClusterFacts => ({
   slots: [],
   ...o,
 });
+/** The owner, on a rig whose report says its agent programs run headless. */
 const owner: Parameters<typeof planClusterResize>[2] = {
   owner: true,
   facts: facts(),
   quota: undefined,
+  mode: "headless",
 };
 
 describe("a cluster rig's new GPUs, CPUs and memory (goal 118)", () => {
@@ -79,11 +83,16 @@ describe("a cluster rig's new GPUs, CPUs and memory (goal 118)", () => {
       { ...owner, quota: { cpus: 16, memoryGi: 52, gpus: 4 } },
     );
     assert.deepEqual(plan, {
-      size: { gpus: 4, judgeGpus: 2, resources: { cpus: 16, memoryGi: 52 } },
+      size: {
+        gpus: 4,
+        judgeGpus: 2,
+        resources: { cpus: 16, memoryGi: 52 },
+        programMode: "headless" as const,
+      },
     });
     if (!("size" in plan)) return;
     assert.equal(
-      sizeChangeWords({ gpus: 3, judgeGpus: 2 }, plan.size),
+      sizeChangeWords({ gpus: 3, judgeGpus: 2, programMode: "headless" }, plan.size),
       "GPUs 3 → 4 (2 for the judge, 2 for the agents); CPUs and memory: namespace defaults → 16 CPUs, 52 GiB",
     );
     assert.equal(
@@ -199,12 +208,77 @@ describe("a cluster rig's new GPUs, CPUs and memory (goal 118)", () => {
       same: true,
     });
     assert.deepEqual(planClusterResize(sized, { cpus: null, memoryGi: null }, owner), {
-      size: { gpus: 3, judgeGpus: 2, resources: undefined },
+      size: { gpus: 3, judgeGpus: 2, resources: undefined, programMode: "headless" },
     });
     // One of the two, with the other kept.
     assert.deepEqual(planClusterResize(sized, { memoryGi: 48 }, owner), {
-      size: { gpus: 3, judgeGpus: 2, resources: { cpus: 16, memoryGi: 48 } },
+      size: {
+        gpus: 3,
+        judgeGpus: 2,
+        resources: { cpus: 16, memoryGi: 48 },
+        programMode: "headless",
+      },
     });
+  });
+
+  test("the supervisor's share follows how the agent programs run: the split, the least size, a new mode (goal 169)", () => {
+    const terminal = { ...owner, mode: "terminal" as const };
+    const err = (r: ClusterRig, want: Parameters<typeof planClusterResize>[1], o = owner) => {
+      const p = planClusterResize(r, want, o);
+      return "error" in p ? p.error : "";
+    };
+    const TOO_SMALL =
+      "a rig needs at least 1.5 CPUs and 8 GiB of memory while its agent programs run in their own terminals: its supervisor takes 4 GiB for the advisors' terminals, and its harness at least 4 GiB";
+    // In their own terminals, the rig needs 8 GiB: 4 for the supervisor, at least 4 for the harness.
+    assert.equal(err(rig(), { cpus: 2, memoryGi: 6 }, terminal), TOO_SMALL);
+    assert.ok("size" in planClusterResize(rig(), { cpus: 2, memoryGi: 6 }, owner));
+    assert.deepEqual(planClusterResize(rig(), { cpus: 2, memoryGi: 8 }, terminal), {
+      size: { gpus: 3, judgeGpus: 2, resources: { cpus: 2, memoryGi: 8 }, programMode: "terminal" },
+    });
+    // The size it keeps must hold the share too: a new number of GPUs alone is refused then.
+    const six = rig({ resources: { cpus: 2, memoryGi: 6 }, programMode: "headless" });
+    assert.equal(err(six, { gpus: 4 }, terminal), TOO_SMALL);
+    // A new mode from the rig's settings: refused in the same words when it does not fit.
+    assert.equal(err(six, { programMode: "terminal" }), TOO_SMALL);
+    assert.equal(err(six, { programMode: "terminal", cpus: 2, memoryGi: 7 }), TOO_SMALL);
+    // When it fits, a new mode alone is a new size: the supervisor's share moves.
+    const sized = rig({ resources: { cpus: 16, memoryGi: 52 }, programMode: "headless" });
+    const moved = planClusterResize(sized, { programMode: "terminal" }, owner);
+    assert.deepEqual(moved, {
+      size: {
+        gpus: 3,
+        judgeGpus: 2,
+        resources: { cpus: 16, memoryGi: 52 },
+        programMode: "terminal" as const,
+      },
+    });
+    if (!("size" in moved)) return;
+    assert.equal(
+      sizeChangeWords(sizeOf(sized), moved.size),
+      "its supervisor's memory: 2 → 4 GiB, as its agent programs run in their own terminals",
+    );
+    assert.equal(
+      shareMoveWords(sizeOf(sized), moved.size),
+      "Its supervisor gets 4 GiB, as its agent programs run in their own terminals: ",
+    );
+    // The same mode as its deployments have: nothing to do; so too on the namespace's defaults,
+    // where no share is set.
+    assert.deepEqual(planClusterResize(sized, { programMode: "headless" }, terminal), {
+      same: true,
+    });
+    assert.deepEqual(planClusterResize(rig(), { programMode: "terminal" }, owner), { same: true });
+    // Its report's mode, when no new one is asked, is the one its deployments get.
+    assert.deepEqual(planClusterResize(sized, { cpus: 16, memoryGi: 52 }, terminal), {
+      size: {
+        gpus: 3,
+        judgeGpus: 2,
+        resources: { cpus: 16, memoryGi: 52 },
+        programMode: "terminal",
+      },
+    });
+    // A rig deployed before the share followed the mode had the headless share.
+    assert.equal(sizeOf(rig({ resources: { cpus: 16, memoryGi: 52 } })).programMode, "headless");
+    assert.equal(shareMoveWords(sizeOf(rig()), { ...moved.size, resources: undefined }), "");
   });
 
   test("Add a rig's GPU quota check takes the same words", () => {

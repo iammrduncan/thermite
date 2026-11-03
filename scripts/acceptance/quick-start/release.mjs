@@ -1,3 +1,4 @@
+// @ts-check
 import { spawn } from "node:child_process";
 import {
   copyFileSync,
@@ -12,7 +13,7 @@ import {
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { hostName, scriptedModel } from "../lib/scripted-model.mjs";
-import { until } from "../lib/smoke-env.mjs";
+import { imageTarget, until } from "../lib/smoke-env.mjs";
 import { COMPOSE, check, control, engine, plan, repo, section, tag, version } from "./context.mjs";
 import { script } from "./model.mjs";
 import { freePort, portInUse, quiet, rewrites, sh, work } from "./processes.mjs";
@@ -23,11 +24,16 @@ const IMAGES = ["control", "harness", "supervisor"];
 let registry = "";
 export let registryBox = "";
 export let registryImageWasHere = true;
+/** The image tags this test built, for the clean-up to remove. */
+/** @type {string[]} */
 export const builtTags = [];
 export const REGISTRY_IMAGE =
   "docker.io/library/registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e";
 
-/** Builds the images from this checkout, and finds the digest each one is pinned by. */
+/**
+ * Builds the images from this checkout, and finds the digest each one is pinned by.
+ * @param {string} commit
+ */
 async function buildImages(commit) {
   if (engine === "podman") registry = "localhost/thermite-quick-start";
   else {
@@ -50,6 +56,7 @@ async function buildImages(commit) {
     ]);
     registry = `127.0.0.1:${port}/thermite-quick-start`;
   }
+  /** @type {Record<string, string | undefined>} */
   const digests = {};
   for (const key of IMAGES) {
     const name = `${registry}/thermite-${key}`;
@@ -58,7 +65,7 @@ async function buildImages(commit) {
     const args = ["--build-arg", `THERMITE_COMMIT=${commit}`];
     if (key === "harness")
       args.push("--build-arg", `THERMITE_IMAGE_ID=${version}+${commit.slice(0, 12)}`);
-    sh(engine, ["build", "-f", `containers/${key}/Containerfile`, ...args, "-t", ref, "."], {
+    sh(engine, ["build", ...imageTarget(key), ...args, "-t", ref, "."], {
       cwd: repo,
       stdio: "inherit",
     });
@@ -70,7 +77,9 @@ async function buildImages(commit) {
       const pinned = JSON.parse(
         sh("docker", ["image", "inspect", "--format", "{{json .RepoDigests}}", ref]),
       );
-      digests[key] = pinned.find((d) => d.startsWith(`${name}@`))?.split("@")[1];
+      digests[key] = pinned
+        .find((/** @type {string} */ d) => d.startsWith(`${name}@`))
+        ?.split("@")[1];
     }
     check(
       `the ${key} image has a digest to pin`,
@@ -86,7 +95,10 @@ async function buildImages(commit) {
   return digests;
 }
 
-/** The release bundle, written by the release's own script. */
+/**
+ * The release bundle, written by the release's own script.
+ * @param {Record<string, string | undefined>} digests
+ */
 function writeBundle(digests) {
   const dir = join(work, "digests");
   mkdirSync(dir);
@@ -131,6 +143,7 @@ function sourceRepository() {
     if (link) symlinkSync(readlinkSync(from), to);
     else copyFileSync(from, to);
   }
+  /** @param {...string} args */
   const git = (...args) =>
     quiet(
       "git",
@@ -162,25 +175,35 @@ function sourceRepository() {
 export function containersHost() {
   if (engine === "podman" || process.platform === "darwin") return hostName(COMPOSE);
   // Docker on Linux names this machine only where compose.yaml maps the name, and the supervisor
-  // has no such mapping: the gateway of the stack's egress network is this machine.
+  // has no such mapping: the gateway of its rig's egress network is this machine.
   return sh("docker", [
     "network",
     "inspect",
-    "thermite_egress",
+    "thermite_rig-egress",
     "--format",
     "{{(index .IPAM.Config 0).Gateway}}",
   ]).trim();
 }
 
+/**
+ * Where the later steps reach what the test serves: the source's address and folder, git daemon's
+ * port, and the scripted model's address as the containers reach it.
+ * @typedef {{ served: string, gitDir: string, gitPort: number, modelUrl: string }} Served
+ */
+
 // What the test serves, and the clean-up stops.
+/** @type {import("node:child_process").ChildProcess | undefined} */
 export let daemon;
+/** @type {import("node:http").Server | undefined} */
 export let releaseServer;
+/** @type {Awaited<ReturnType<typeof scriptedModel>> | undefined} */
 export let model;
 
 /**
  * Before the tester: the images and the release bundle, from this checkout; the release's files
  * and its source served on this machine, and the scripted model; and the changes the test makes
  * to the pages' commands. Returns where the later steps reach the source and the model.
+ * @returns {Promise<Served>}
  */
 export async function beforeTheTester() {
   section("before the tester: the images and the release bundle, from this checkout");
@@ -203,15 +226,19 @@ export async function beforeTheTester() {
     const m = /^\/releases\/(?:latest\/download|download\/v[^/]+)\/([A-Za-z0-9._-]+)$/.exec(
       req.url ?? "",
     );
-    const file = m ? join(releaseDir, m[1]) : "";
+    const file = m ? join(releaseDir, /** @type {string} */ (m[1])) : "";
     if (req.method !== "GET" || !file || !existsSync(file)) {
       res.writeHead(404).end("Not Found\n");
       return;
     }
     res.writeHead(200, { "content-type": "application/octet-stream" }).end(readFileSync(file));
   });
-  await new Promise((r) => releaseServer.listen(0, "127.0.0.1", r));
-  const httpPort = releaseServer.address().port;
+  await /** @type {Promise<void>} */ (
+    new Promise((r) =>
+      /** @type {import("node:http").Server} */ (releaseServer).listen(0, "127.0.0.1", r),
+    )
+  );
+  const httpPort = /** @type {import("node:net").AddressInfo} */ (releaseServer.address()).port;
   // The source, as the release's tag.
   const gitDir = sourceRepository();
   const gitPort = await freePort();

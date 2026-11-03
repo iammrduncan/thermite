@@ -169,25 +169,42 @@ export function readOpencodeEvents(
   return live;
 }
 
+/** The most bytes of a growing file one read takes; the rest waits for the next read. */
+export const READ_NEW_MAX = 4 * 1024 * 1024;
+
 /**
- * Reads what a growing file gained since `from`: whole lines only. The file is the lane's (its run
- * appends to it), so it is read as a plain file and never through a link.
+ * Reads what a growing file gained since `from`: whole lines only, at most `max` bytes. `more`:
+ * the read stopped at `max`, and the file holds more now. A line longer than `max` is passed over
+ * in steps of `max`; its last part then reads as a line of its own. The file is the lane's (a
+ * program's run appends to it), so it is read as a plain file and never through a link.
  */
-export function readNew(path: string, from: number): { lines: string[]; next: number } {
+export function readNew(
+  path: string,
+  from: number,
+  max = READ_NEW_MAX,
+): { lines: string[]; next: number; more: boolean } {
+  const nothing = { lines: [], next: from, more: false };
   let fd: number;
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch {
-    return { lines: [], next: from };
+    return nothing;
   }
   try {
     const st = fstatSync(fd);
-    if (!st.isFile() || st.size <= from) return { lines: [], next: from };
-    const buf = Buffer.alloc(st.size - from);
+    if (!st.isFile() || st.size <= from) return nothing;
+    const buf = Buffer.alloc(Math.min(st.size - from, max));
     const got = readSync(fd, buf, 0, buf.length, from);
+    const more = got === max && st.size - from > max;
     const end = buf.subarray(0, got).lastIndexOf(0x0a);
-    if (end < 0) return { lines: [], next: from };
-    return { lines: buf.subarray(0, end).toString("utf8").split("\n"), next: from + end + 1 };
+    if (end < 0) return more ? { lines: [], next: from + got, more } : nothing;
+    return {
+      lines: buf.subarray(0, end).toString("utf8").split("\n"),
+      next: from + end + 1,
+      more,
+    };
+  } catch {
+    return nothing;
   } finally {
     closeSync(fd);
   }

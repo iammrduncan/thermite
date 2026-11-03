@@ -36,8 +36,7 @@ export const USAGE = `usage: thermite <command> [options]
                                       too).
                                       --mcp-servers gives the MCP servers the kit's kit.json
                                       names, as in kit.json; the rig refuses a run whose list
-                                      differs. --note keeps a text with the run (--direction,
-                                      its old name, still works and says so). --context-window
+                                      differs. --note keeps a text with the run. --context-window
                                       and --compact-at set the campaign's own context settings
                                       in the contract sent (its agents_context, over the file's):
                                       every agent's window is the lower of it and its own, and
@@ -103,7 +102,8 @@ export const USAGE = `usage: thermite <command> [options]
                                       cancel the rig's full reset before its wipe (owner's token)
   run start CAMPAIGN --rig R [--agents off] [--provider P --model M] [--promotion auto|owner]
          [--ask gain:PERCENT|flaws|reviews|not-possible ...]
-         [--judge-gpus N] [--queue-from RUN] [--past ID ...] --control URL --token-file F
+         [--judge-gpus N] [--queue-from RUN] [--past ID ...] [--fresh]
+         [--granted C ... | --no-granted] --control URL --token-file F
                                       start a run of a campaign control keeps (owner's token), as
                                       Start a run on the campaign's page does, with its checks and
                                       refusals: a campaign saved on the New campaign page or
@@ -112,15 +112,19 @@ export const USAGE = `usage: thermite <command> [options]
                                       command exits 1; run it again once the rig has the model.
                                       --queue-from starts the queue with the untried experiments
                                       of a run of the campaign, by its name; --past adds
-                                      items of Thermite's knowledge base by id. It prints the new
+                                      items of Thermite's knowledge base by id. Its agents search
+                                      the campaign's whole collection, or with --fresh only the
+                                      run's own items, and every collection the campaign is
+                                      granted, or those --granted names, or none with
+                                      --no-granted; fixed as it starts. It prints the new
                                       run and its command id; a stopped RunPod pod starts first
   campaign copy FROM NAME [--mcp-servers-json FILE] [--context-window TOKENS]
          [--compact-at PERCENT] [--info-file F] [--link URL ...] [--idea TEXT ...]
          [--hypothesis TEXT ...] --control URL --token-file F
                                       copy a campaign control keeps (owner's token): a new
                                       campaign NAME with FROM's contract and kit, its own empty
-                                      folder in Thermite's knowledge base and no runs. Start a
-                                      run of it with run start. It prints the copy.
+                                      collection in Thermite's knowledge base and no runs. Start
+                                      a run of it with run start. It prints the copy.
                                       --mcp-servers-json: for a research campaign, the MCP
                                       servers the copy's agents use instead, as a JSON list
                                       ([] for none). --context-window and --compact-at give the
@@ -155,6 +159,63 @@ export const USAGE = `usage: thermite <command> [options]
   kit list --control URL --token-file F [--json]
                                       the kits control keeps (owner's or reader's token): each
                                       one's head, commits and kit.json's name and target
+  kb search [WORDS...] [--query Q ...] [--mode words|exact] [--like ADDRESS] [--seen ADDRESS ...]
+         [--collection C ...] [--kind K ...] [--outcome O ...] [--run R ...] [--slot S ...]
+         [--type T ...] [--as RUN] [--offset N] [--limit N] --control URL --token-file F
+                                      search Thermite's knowledge base (owner's token): items with
+                                      any of the words, best first, each with its id, address,
+                                      slot, outcome, an excerpt, why it matched, its passage in a
+                                      long text and, for an experiment, its result; with how many
+                                      matched, the next page, where the words land and how many
+                                      items hold each word; no words: the newest. --query adds a
+                                      search, fused with the words; --mode exact takes FTS5's
+                                      syntax; --like finds more like an item; --seen leaves items
+                                      out; --collection, --kind, --outcome, --run, --slot and
+                                      --type (record, blurb or file) keep only those. --as RUN
+                                      searches as that run's agents do: their kb_search's answer,
+                                      from the run's own scope, with that scope. It prints JSON
+  kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
+                                      one item of the knowledge base, by its address
+                                      (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
+                                      or version N, with its text from --offset, 10,000
+                                      characters at most, every version, its writer, withdrawn
+                                      evidence, its file's facts, its links both ways and which
+                                      running runs can read it. It prints JSON
+  kb list [PLACE] [--kind K ...] [--outcome O ...] [--type T ...] [--slot S ...]
+         [--sort S] [--order asc|desc] [--offset N] [--limit N] --control URL --token-file F
+                                      what one place of the knowledge base holds, as the
+                                      Knowledge page shows it: the whole knowledge base, or
+                                      PLACE (<campaign>, <campaign>/<run> or
+                                      <campaign>/<run>/<slot>): its folders (collections, runs or
+                                      slots) and a page of every item under it, with how many
+                                      and their counts by kind, outcome, type and slot. --type is
+                                      record, blurb or file; --sort is name, kind, outcome,
+                                      writer, modified (the default) or size; --limit 0 to 200
+                                      (default 50). It prints JSON
+  kb note ADDRESS WORDS... [--title T] --control URL --token-file F
+                                      write your note on an item (owner's token): it is kept in
+                                      the owner slot of the item's run, linked to the item, and
+                                      the run's agents find it. It prints JSON
+  kb stored [--offset N] --control URL --token-file F
+                                      what the knowledge base stores (owner's token), as the
+                                      Knowledge page's What's stored shows it: the totals, each
+                                      collection's figures, the indexes, the largest files and
+                                      the file types, what waits on the bus for control to store,
+                                      and the writes control refused, 50 a page from --offset.
+                                      It prints JSON
+  kb settings [--max-file-mib N] [--orphan-hours H|default] --control URL --token-file F
+                                      the knowledge base's settings on control (owner's token):
+                                      with no option, read them; --max-file-mib, the largest file
+                                      it takes (empty or 0: no limit); --orphan-hours, how long a
+                                      file no item names stays (0: kept for good; default: back to
+                                      THERMITE_CONTROL_KB_ORPHAN_HOURS). It prints JSON
+  kb grant CAMPAIGN READS --control URL --token-file F
+  kb revoke CAMPAIGN READS --control URL --token-file F
+                                      let CAMPAIGN's agents read READS's collection in the
+                                      knowledge base, read only (owner's token), or stop them:
+                                      a grant joins the search of its runs at work at once, and a
+                                      revoke leaves every run's search at once. It prints the
+                                      campaign's grants both ways, as JSON
   agents list --control URL --token-file F [--json]
                                       the agents' roles (owner's token): each
                                       one's name and what it does
@@ -189,24 +250,95 @@ export const USAGE = `usage: thermite <command> [options]
   mcp delete NAME --control URL --token-file F
                                       forget a server and its secrets; refused while a kit
                                       names it
+  retention list|removals [--policy ID] [--limit N] --control URL --token-file F [--json]
+                                      the owner's retention policies, each with what it would
+                                      remove now, or what the policies removed (owner's token)
+  retention show|delete|on|off|run ID --control URL --token-file F [--json]
+                                      one policy: its whole record, deleted, turned on (from
+                                      now) or off, or run now; run can't be undone: preview first
+  retention create|preview|update [ID] [--name N] [--kind K] [--where all|rigs|campaigns]
+                  [--rig R]... [--campaign C]... [--rule older|newest|size]
+                  [--older N] [--unit days|weeks|months] [--newest N] [--per rig|run|all]
+                  [--size GIB] [--keep KEEP]... [--no-keep KEEP]... [--when daily|weekly|hand]
+                  [--time HH:MM] [--day DAY] [--on] --control URL --token-file F [--json]
+                                      a new policy (off unless --on), what a design would remove
+                                      now, or a change to policy ID (only the options given;
+                                      --on turns it on too). K: events, builds, trial_logs,
+                                      advisor_records, kb_versions, store_copies or audit. KEEP:
+                                      open, champions or newest, each on unless --no-keep. UTC
+  bus --control URL --token-file F [--json]
+                                      the message bus as control sees it now (owner's or
+                                      reader's token): its server, each stream with its
+                                      messages, bytes and consumers, the events stream's writer
+                                      and apply, and the live and config figures
+  exports delete RIG NAME... --control URL --token-file F
+                                      delete exports control keeps from RIG (owner's token), as
+                                      Delete on the Exports page does: their files and records,
+                                      with export_deleted in the audit log. It can't be undone.
+                                      All or none: one still arriving is refused, and then
+                                      nothing is deleted. It prints what went
   command --control URL --token-file F [--rig U] --kind K --payload JSON|@file [--ttl MIN]
                                       issue a signed command through control (admin token). A
                                       kind about one run (its payload's run) goes to the rig the
                                       run is on, so --rig may be left out; every other kind
                                       needs it. assign_campaign and resume_run on a RunPod rig
                                       whose pod is stopped start the pod first, and say so
+  log-level [control|harness|supervisor] [debug|info|warn|error|default] [--rig R] [--ttl MIN]
+            --control URL --token-file F
+                                      a log level (owner's token). control: control's own, read
+                                      with no level, or set at once and kept across control's
+                                      restarts; harness or supervisor: that part of rig R, by a
+                                      signed log_level command, until another changes it or the
+                                      part restarts. default: the part's THERMITE_LOG_LEVEL. It
+                                      prints JSON
+  invalidate --run RUN (--attempt ID | --job N) --reason TEXT [--yes] --control URL --token-file F
+                                      withdraw bad evidence (owner's token): an attempt, for
+                                      good, with every attempt built on it, or a judge job's
+                                      measurements, whose attempts are judged again. It prints
+                                      what it would reach, from the rig, and changes nothing;
+                                      with --yes it then withdraws exactly that, or the rig
+                                      refuses when what it reaches changed. Nothing is deleted
   submit --harness URL --token-file F --run ID --patch-file P --hypothesis TEXT
          [--known-flaw TEXT ...]      submit a patch as a proposer
   status --harness URL --token-file F --attempt ID
                                       show an attempt's lifecycle and verdict
   local init DIR [--engine docker|podman]
                                       make DIR, the local compose stack's .dev folder: random
-                                      tokens in DIR/secrets, the inbox, the outbox and the
-                                      advisors' folder. Files that exist are kept. Run as root,
-                                      it gives what it makes to the owner of DIR's parent folder.
-                                      It says what the local rig gets (CPUs, memory, GPUs), and
-                                      with NVIDIA GPUs the rig can have, writes compose.gpu.yaml
-                                      next to DIR for the engine named, or the one it finds
+                                      tokens in DIR/secrets, the inbox, the outbox, and the
+                                      advisors' and backups' folders. Files that exist are
+                                      kept. Run as root, it gives what it makes to the owner of
+                                      DIR's parent folder. It says what the local rig gets
+                                      (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
+                                      have, writes compose.gpu.yaml next to DIR for the engine
+                                      named, or the one it finds. Each rig's token for control
+                                      starts empty: local enroll fills it
+  local enroll RIG --control URL --token-file F --out FILE
+                                      the compose stack's enroll step: wait for control (up to
+                                      5 minutes), enroll RIG with the owner's token in F unless
+                                      control has it enrolled and FILE holds a token, and write
+                                      its token into FILE. A retired rig is left as it is
   selftest isolation [--force]        inside the harness container, as root, with the rig idle: check that role
                                       users cannot reach the ledger, kits, builds or secrets
+  backup FOLDER [--state DIR] [--bus URL]
+                                      where control's state folder is mounted (compose: the
+                                      backup service): copy control's state (control.db, whole
+                                      while control runs, its keys, kits and exports) and a
+                                      snapshot of the bus's EVENTS stream into a new folder in
+                                      FOLDER, named for the time, with a manifest of each file's
+                                      SHA-256 and each stream's count and last place. --state:
+                                      control's state folder (THERMITE_CONTROL_DIR, or
+                                      /var/lib/thermite-control); --bus: the bus
+                                      (THERMITE_NATS_URL)
+  restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]
+                                      with control stopped: check the backup against its
+                                      manifest, restore each stream the bus does not have and
+                                      check it (its count, last place and last message), then
+                                      put control's state back, what it replaces moved aside
+                                      into a dated folder. A stream on the bus is kept when it
+                                      holds the backup's events unchanged, with or without
+                                      newer ones after them; any other is refused, and nothing
+                                      changes. --control: refused while control answers there.
+                                      --bus-store DIR, with the bus stopped: only move the
+                                      bus's store aside into a dated folder in DIR, so that
+                                      the bus starts empty
 `;

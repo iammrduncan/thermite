@@ -9,7 +9,7 @@
     "commit": "460b3b7cd3ce1bfc55fc885ac190f2bad8ce9e7b",
     "kit": {
       "repo": "smoke-cpu-kit",
-      "commit": "69c3d2f6db63a51e77b6a794a02a14c8b07eeb4e"
+      "commit": "1abb49d1556b017b34cf1a3a9950c2edb0e3318e"
     }
   },
   "target": {

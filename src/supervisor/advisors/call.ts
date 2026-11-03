@@ -5,14 +5,17 @@ import type { Prompt } from "../../agents/prompt.ts";
 import type { AdvisorFrame } from "../../agents/roles/index.ts";
 import type { McpCallResult } from "../../common/mcp-client.ts";
 import type { McpToolInfo } from "../../core/mcp.ts";
+import type { PromptSection } from "../../core/prompts.ts";
 import type { CallUsage, UsageRoute } from "../../core/usage.ts";
 import type { AdvisorRuntime } from "./config.ts";
+import type { AdvisorLimit } from "./limit.ts";
+import type { AdvisorInTerminal } from "./terminal/index.ts";
 import type {
   AdvisorCode,
+  AdvisorKb,
   AdvisorPaper,
   AdvisorResearch,
   AdvisorServers,
-  PastSearch,
 } from "./tools/index.ts";
 
 /**
@@ -28,14 +31,21 @@ export interface AdvisorCall<S extends z.ZodType> {
   prompt(f: AdvisorFrame): Prompt;
   /**
    * Keeps a later turn the call sent inside it (goal 166): in Pi, the message the advisor goes on
-   * from after a compaction. runAdvisor sets it.
+   * from after a compaction; from its own process in its Pi view, that turn's record. runAdvisor
+   * sets it.
    */
-  later?: ((p: Prompt) => void) | undefined;
+  later?: ((p: SentPrompt) => void) | undefined;
   schema: S;
   answerSchema: TSchema;
   tools?: AdvisorTools | undefined;
   /** Where the conversation is kept before each compaction (goal 070); none: not kept. */
   keeper?: AdvisorKeeper | undefined;
+  /**
+   * On a rig whose agents run in their own terminal (goal 169): the call's run and role, and what
+   * the supervisor gives a call there. A call in Claude Code, Codex or OpenCode then runs in its
+   * program's terminal; unset, or in another runtime, headless.
+   */
+  terminal?: AdvisorInTerminal | undefined;
   /**
    * In Pi, a check of an answer that fits the schema: its problems in words, and the advisor is
    * asked to answer again within the same call; undefined: the answer is taken (goal 112's final
@@ -58,8 +68,26 @@ export interface AdvisorResult<T> {
    * The prompts the call sent, as its role rendered them (goal 166), for the harness to keep: its
    * first message, then its later turns.
    */
-  sent?: Prompt[] | undefined;
+  sent?: SentPrompt[] | undefined;
+  /**
+   * The owner's messages it took inside its turn, in its program's own terminal (goal 169): given
+   * to it, as those of its prompt are, for its receipts.
+   */
+  given?: number[] | undefined;
+  /**
+   * A headless call with no answer that met a full usage window, with its reset (limit.ts): not a
+   * failed try; the advisor waits for the reset.
+   */
+  limit?: AdvisorLimit | undefined;
 }
+
+/**
+ * A prompt an advisor's call sent: as its role rendered it, or, for a later turn its own process
+ * rendered and sent in its Pi view (goal 169), as that turn's record.
+ */
+export type SentPrompt =
+  | Prompt
+  | { role: string; program: string; turn: number; sections: PromptSection[] };
 
 /** An advisor call's model usage (goal 075): where it ran, and each record. */
 export interface AdvisorUsage extends UsageRoute {
@@ -109,12 +137,12 @@ export interface AdvisorKeeper {
 export interface AdvisorTools {
   brief?: () => Promise<unknown>;
   fetchUrl?: (url: string) => Promise<unknown>;
-  kbSearch?: (query: string) => Promise<unknown>;
   /**
-   * The run's past research (Thermite's knowledge base: the folders its campaign may read), read
-   * only, through the harness. Claude Code gets it over MCP; a command-line agent, not at all.
+   * Thermite's knowledge base (goal 175): kb_search and kb_read, asked of control, and kb_write
+   * when the run's campaign lets the advisor's role write. Pi gets them as tools; Claude Code,
+   * OpenCode and Codex over MCP on localhost; a command-line agent, not at all.
    */
-  pastSearch?: PastSearch | undefined;
+  kb?: AdvisorKb | undefined;
   /**
    * The MCP servers the run's kit gives its advisors (goal 068), called by the supervisor, which
    * holds their sign-in: in Pi a tool for each MCP tool; in Claude Code each server on localhost
@@ -145,4 +173,9 @@ export interface AdvisorTools {
 export interface AdvisorMcp extends AdvisorServers {
   tools: McpToolInfo[];
   call(server: string, tool: string, args: Record<string, unknown>): Promise<McpCallResult>;
+  /** Its tools listed again from the servers, every one or one by name (a Pi view's /mcp reconnect). */
+  relist?(fresh: true | string): Promise<{
+    tools: McpToolInfo[];
+    unavailable: { server: string; why: string }[];
+  }>;
 }

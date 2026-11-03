@@ -11,6 +11,7 @@ export async function writeCards(ctx: AdviseContext): Promise<void> {
     harness,
     s,
     researchFor,
+    kbFor,
     configFor,
     additionsFor,
     keeperFor,
@@ -57,6 +58,8 @@ export async function writeCards(ctx: AdviseContext): Promise<void> {
           runtime,
           pkg: { ...pkg, questions: asked.map(({ through: _, ...q }) => q) },
           research: researchFor(run),
+          // Thermite's knowledge base, in the synthesizer's own slot (goal 175).
+          kb: await kbFor(run, "synthesizer"),
           keeper: keeperFor(run),
           additions: await additionsFor(run),
         });
@@ -115,12 +118,16 @@ export async function writeCards(ctx: AdviseContext): Promise<void> {
             .filter(Boolean)
             .join(". "),
         );
-        record(`cards-${run}`, {
-          synthesizer: runtime.name,
-          posted,
-          ...(none.length ? { no_card: none } : {}),
-          ...(r.compactions?.length ? { compactions: r.compactions } : {}),
-        });
+        record(
+          `cards-${run}`,
+          {
+            synthesizer: runtime.name,
+            posted,
+            ...(none.length ? { no_card: none } : {}),
+            ...(r.compactions?.length ? { compactions: r.compactions } : {}),
+          },
+          run,
+        );
       } catch (err) {
         fail(`the answer cards of ${run} (tried again at the next round)`, err, run);
       }

@@ -31,7 +31,7 @@ We build **fastmat**: https://git.example.com/team/fastmat.
 ## What was tried
 - Shared-memory tiling: no gain at batch size 1.`;
 const BRIEF = {
-  notes: NOTES,
+  additional_information: NOTES,
   ideas: ["Fuse the dequantize step into the inner loop.", "Load 128-bit vectors."],
   hypotheses: ["The kernel is memory bound at batch size 1."],
   links: ["https://git.example.com/team/fastmat/issues/12"],
@@ -53,10 +53,12 @@ async function hillClimb(t: TestContext, brief: Record<string, unknown> = BRIEF)
         {
           name: "submit_plan",
           args: {
-            add: [{ ref: "new-1", title: "fused dequantize", family: "fusion", why: "the brief" }],
+            add: [
+              { ref: "new-1", title: "fused dequantize", direction: "fusion", why: "the brief" },
+            ],
             assignments: [
               { lane: "lane-1", experiment: "new-1", why: "an idea in the brief" },
-              { lane: "lane-2", title: "vector loads", family: "loads" },
+              { lane: "lane-2", title: "vector loads", direction: "loads" },
             ],
           },
         },
@@ -86,13 +88,19 @@ async function hillClimb(t: TestContext, brief: Record<string, unknown> = BRIEF)
 
 describe("a campaign's brief (goal 078)", () => {
   test("the brief in a contract: whole for the planner and the advisors, whole or cut with a pointer for a worker", () => {
-    assert.equal(briefOf({ notes: "  \n", ideas: [" "], hypotheses: [] }), undefined);
-    assert.deepEqual(briefOf({ notes: "\n\n  indented\nnext\n\n", ideas: [" a "] }), {
-      notes: "  indented\nnext",
-      links: [],
-      ideas: ["a"],
-      hypotheses: [],
-    });
+    assert.equal(
+      briefOf({ additional_information: "  \n", ideas: [" "], hypotheses: [] }),
+      undefined,
+    );
+    assert.deepEqual(
+      briefOf({ additional_information: "\n\n  indented\nnext\n\n", ideas: [" a "] }),
+      {
+        additional_information: "  indented\nnext",
+        links: [],
+        ideas: ["a"],
+        hypotheses: [],
+      },
+    );
     // The starting links: a hill climb's links, a research contract's seeds.
     assert.deepEqual(briefOf({ links: ["https://a.example.com"] })?.links, [
       "https://a.example.com",
@@ -119,7 +127,7 @@ describe("a campaign's brief (goal 078)", () => {
     assert.match(whole, /## Hypotheses\n\n1\. The kernel is memory bound/);
     assert.doesNotMatch(whole, /Cut to/);
     // Longer than a worker's brief carries: its start, and where the whole text is.
-    const long = { notes: `${"x".repeat(BRIEF_WHOLE_CHARS)}THE END` };
+    const long = { additional_information: `${"x".repeat(BRIEF_WHOLE_CHARS)}THE END` };
     const cut = briefSection(long, "/scratch/research/r-1/BRIEF.md") ?? "";
     // "## Additional information\n\n" (27 characters), the text (32,000) and "THE END" (7).
     assert.ok(
@@ -137,10 +145,13 @@ describe("a campaign's brief (goal 078)", () => {
       /The run started with these as its hypotheses/,
     );
     // Parts given replace the contract's; an empty part removes it; ideas are not for research.
-    assert.deepEqual(briefChange({ mode: "goal", notes: "old", ideas: ["a"] }, { notes: "" }), {
-      mode: "goal",
-      ideas: ["a"],
-    });
+    assert.deepEqual(
+      briefChange({ mode: "goal", notes: "old", ideas: ["a"] }, { additional_information: "" }),
+      {
+        mode: "goal",
+        ideas: ["a"],
+      },
+    );
     assert.deepEqual(
       briefChange({ mode: "goal", ideas: ["a"] }, { ideas: [" b ", ""], hypotheses: [] }),
       { mode: "goal", ideas: ["b"] },
@@ -172,15 +183,15 @@ describe("a campaign's brief (goal 078)", () => {
       );
       assert.doesNotMatch(b, /Notes from the campaign's author/);
     }
-    const file = join(x.env.service.knowledge.folder("js-1"), BRIEF_FILE);
+    const file = join(x.env.service.researchRoot("js-1"), BRIEF_FILE);
     assert.ok(existsSync(file), "the run's folder has BRIEF.md");
     assert.ok(readFileSync(file, "utf8").includes(NOTES));
   });
 
   test("a brief longer than a worker's brief carries: cut there, with where the whole text is; the planner gets all of it", async (t) => {
-    const notes = `${"Background line.\n".repeat(2500)}The last line of the brief.`;
-    const x = await hillClimb(t, { notes });
-    const file = join(x.env.service.knowledge.folder("js-1"), BRIEF_FILE);
+    const additional_information = `${"Background line.\n".repeat(2500)}The last line of the brief.`;
+    const x = await hillClimb(t, { additional_information });
+    const file = join(x.env.service.researchRoot("js-1"), BRIEF_FILE);
     for (const b of x.briefs) {
       assert.ok(b.includes(`The whole brief is in ${file}: read the rest there.`), b.slice(0, 600));
       assert.doesNotMatch(b, /The last line of the brief\./);
@@ -194,7 +205,7 @@ describe("a campaign's brief (goal 078)", () => {
     assert.ok(x.briefs.length > 0);
     for (const b of x.briefs) assert.doesNotMatch(b, /# The campaign's brief/);
     assert.doesNotMatch(x.prompts[0] ?? "", /campaign_brief\\"/);
-    assert.ok(!existsSync(join(x.env.service.knowledge.folder("js-1"), BRIEF_FILE)));
+    assert.ok(!existsSync(join(x.env.service.researchRoot("js-1"), BRIEF_FILE)));
   });
 
   test("a research run: its hypotheses are the run's first, its starting links are archived when it starts, and each research trial's brief has the brief and the questions whole", async (t) => {
@@ -218,7 +229,7 @@ describe("a campaign's brief (goal 078)", () => {
       ...researchFixture,
       questions: [question, "What fails?"],
       seeds: [`${base}/start.html`, "http://127.0.0.1:1/gone.html"],
-      notes: NOTES,
+      additional_information: NOTES,
       hypotheses: [
         "Fresh workers lose nothing that matters.",
         "Long contexts hurt more than they help.",
@@ -256,6 +267,7 @@ describe("a campaign's brief (goal 078)", () => {
     const fake = await startFakeModel(() => ({ text: "done" }));
     t.after(() => fake.close());
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const briefs: string[] = [];
@@ -315,7 +327,7 @@ describe("a campaign's brief (goal 078)", () => {
       /## Starting links\n\nThe harness fetches and archives these when the run starts: read them under sources\/\.\n\n- http:\/\/127\.0\.0\.1:\d+\/start\.html\n- http:\/\/127\.0\.0\.1:1\/gone\.html/,
     );
     assert.doesNotMatch(b, /Starting URLs:/);
-    assert.ok(existsSync(join(env.service.knowledge.folder("r-1"), BRIEF_FILE)));
+    assert.ok(existsSync(join(env.service.researchRoot("r-1"), BRIEF_FILE)));
   });
 
   test("a question longer than an experiment's details: the research task is cut, and says where the whole question is", () => {

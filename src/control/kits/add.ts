@@ -1,12 +1,14 @@
 import { ID_PATTERN } from "../../core/contract.ts";
 import { KitSchema } from "../../core/kit.ts";
+import type { GitAccessUse } from "../git-access.ts";
 import type { ControlStore } from "../store/index.ts";
+import { kitBundleFromGit } from "./from-git.ts";
 import { type KitAdded, KitRefused, type KitRepos } from "./repos.ts";
 import { kitSummary } from "./upload.ts";
 
 /**
  * A kit written elsewhere, given to control as a git bundle of its repository (REST, MCP and the
- * command line): control keeps it with its commits, as it keeps a kit written on the New campaign
+ * command line), or as its repository's git address, which control reads itself (goal 182): control keeps it with its commits, as it keeps a kit written on the New campaign
  * page, and rigs fetch it from control by commit with `{"control": "kits/<name>"}` as its source.
  * Who may add one: the owner's token, and an operator's over MCP. A kit is an input, not a
  * secret: the reader may list the kits too.
@@ -50,7 +52,14 @@ function said(a: KitAdded): string {
 export async function addKit(
   store: ControlStore,
   kits: KitRepos,
-  input: { name: string; bundle: Buffer; ref?: string | undefined; force?: boolean | undefined },
+  input: {
+    name: string;
+    bundle: Buffer;
+    ref?: string | undefined;
+    force?: boolean | undefined;
+    /** The repository control read it from, for the audit log. */
+    from?: string | undefined;
+  },
   by: string,
 ): Promise<KitOutcome<KitAddAnswer>> {
   let added: KitAdded;
@@ -70,9 +79,32 @@ export async function addKit(
     commits: added.commits,
     forced: added.forced,
     size: added.size,
+    ...(input.from ? { from: input.from } : {}),
     by,
   });
   return { ok: true, created: added.previous === null, answer: { ...added, said: said(added) } };
+}
+
+/**
+ * A kit read from its repository's git address (from-git.ts): one branch, tag or commit's history,
+ * kept as a bundle given to addKit is, its head that commit. `access`: a Git access control keeps,
+ * for a private repository.
+ */
+export async function addKitFromGit(
+  store: ControlStore,
+  kits: KitRepos,
+  input: { name: string; url: string; ref?: string | undefined; force?: boolean | undefined },
+  access: GitAccessUse | undefined,
+  by: string,
+): Promise<KitOutcome<KitAddAnswer>> {
+  let bundle: Buffer;
+  try {
+    bundle = await kitBundleFromGit({ url: input.url, ref: input.ref }, access);
+  } catch (err) {
+    if (err instanceof KitRefused) return { ok: false, error: err.message, status: err.status };
+    throw err;
+  }
+  return addKit(store, kits, { name: input.name, bundle, force: input.force, from: input.url }, by);
 }
 
 /** A kept kit's kit.json at a commit, checked as the harness checks it. */

@@ -5,7 +5,10 @@ import type { AdviseContext } from "./context.ts";
 import { clip } from "./shared.ts";
 import { MAX_TRIES } from "./state.ts";
 
-/** The auditor's part of a pass: each open audit, tried again until its tries are spent. */
+/**
+ * The auditor's part of a pass: each open audit, tried again until its tries are spent. A try that
+ * met a full usage window is not counted: the auditor waits for the reset (limit.ts).
+ */
 export async function answerAudits(ctx: AdviseContext): Promise<void> {
   const {
     cfg,
@@ -16,11 +19,15 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
     retryMs,
     due,
     mark,
+    uncount,
+    waitsFor,
+    waitOut,
     toolsFor,
-    pastSearchFor,
+    kbFor,
     configFor,
     additionsFor,
     keeperFor,
+    terminalFor,
     mcpFor,
     overBudget,
     count,
@@ -103,6 +110,8 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
         if (!t || now - Date.parse(t) >= retryMs) await toOwner(pkg, key);
         continue;
       }
+      // The auditor waits for its provider's full usage window: its audits wait with it.
+      if (waitsFor(auditor.name)) continue;
       if (!due(key)) continue;
       mark(key);
       const owner = (pkg.owner_messages ?? []).filter((m) => !told.has(m.id));
@@ -113,16 +122,30 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
           pkg: { ...pkg, owner_messages: owner },
           keeper: keeperFor(pkg.run),
           additions: await additionsFor(pkg.run),
+          // In its program's own terminal on a rig set so (goal 169), where the owner's messages
+          // that come meanwhile go in inside its turn.
+          terminal: terminalFor(
+            pkg.run,
+            "auditor",
+            owner.map((m) => m.id),
+          ),
           tools: {
             ...toolsFor(),
             mcp: await mcpFor(pkg.run),
-            ...(pkg.run && pkg.past_research ? { pastSearch: pastSearchFor(pkg.run) } : {}),
+            // Thermite's knowledge base, from the run's scope (goal 175).
+            ...(pkg.run ? { kb: await kbFor(pkg.run, "auditor") } : {}),
           },
         });
         count(r);
         await usageOut(pkg.run, `audit ${pkg.attempt}`, "auditor", r.usage);
         await promptsOut(pkg.run, `audit ${pkg.attempt}`, r.sent);
         if (!r.output) {
+          // A full usage window, headless: not a failed try; tried again at the reset.
+          if (r.limit) {
+            uncount(key);
+            waitOut(auditor.name, `audit of ${pkg.attempt}`, r.limit, pkg.run);
+            continue;
+          }
           await failed(pkg, key, r.error);
           continue;
         }
@@ -136,15 +159,17 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
           },
         });
         s.audits++;
-        // Read only with the posted audit: an audit that fails to post gives them again.
+        // Read only with the posted audit: an audit that fails to post gives them again. Those
+        // its terminal took inside its turn (goal 169) were given too.
         if (pkg.run) {
+          const given = [...owner.map((m) => m.id), ...(r.given ?? [])];
           await receipts(
             pkg.run,
             "auditor",
-            owner.map((m) => m.id),
+            given,
             r.output.answers.map((a) => ({ ...a, advisor: auditor.name })),
           );
-          for (const m of owner) told.add(m.id);
+          for (const id of given) told.add(id);
         }
         say(
           pkg.run,
@@ -158,7 +183,7 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
             ? await toQueue(
                 pkg.run,
                 "auditor",
-                [{ ...check, family: "check", position: "top" }],
+                [{ ...check, direction: "check", position: "top" }],
                 [],
               )
             : undefined;
@@ -166,13 +191,17 @@ export async function answerAudits(ctx: AdviseContext): Promise<void> {
         const noted = pkg.run
           ? await notesOut(pkg.run, "auditor", auditor.name, r.output.journal)
           : undefined;
-        record(`audit-${pkg.attempt}`, {
-          decision: r.output,
-          posted,
-          queued,
-          noted,
-          ...(r.compactions?.length ? { compactions: r.compactions } : {}),
-        });
+        record(
+          `audit-${pkg.attempt}`,
+          {
+            decision: r.output,
+            posted,
+            queued,
+            noted,
+            ...(r.compactions?.length ? { compactions: r.compactions } : {}),
+          },
+          pkg.run,
+        );
       } catch (err) {
         await failed(pkg, key, err);
       }

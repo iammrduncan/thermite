@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { deviceModeText } from "../../../src/control/ui/components/index.ts";
+import { figuresCall } from "../../helpers/control-store.ts";
 import { stack } from "./stack.ts";
 
 /**
@@ -51,26 +52,22 @@ describe("control dashboard", () => {
     await s.env.service.applyCommand(s.env.assign);
     await s.relay();
     // The shape the supervisor sends (src/supervisor/main.ts): its stats and its configured roles.
-    const r = await s.control.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-      body: JSON.stringify({
-        at: new Date().toISOString(),
-        relay: { cursor: 3 },
-        export: { remote: false, exports: 1, pushed: [], last_push_at: null, last_error: null },
-        advisors: {
-          teacher_runs: 2,
-          directive_sets: 1,
-          directives: 3,
-          audits: 0,
-          reviews: 0,
-          errors: 0,
-          tokens_in: 100,
-          tokens_out: 20,
-          usd: 0,
-          roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0 },
-        },
-      }),
+    const r = await figuresCall(s.store, "rig-a", {
+      at: new Date().toISOString(),
+      relay: { cursor: 3 },
+      export: { remote: false, exports: 1, pushed: [], last_push_at: null, last_error: null },
+      advisors: {
+        teacher_runs: 2,
+        directive_sets: 1,
+        directives: 3,
+        audits: 0,
+        reviews: 0,
+        errors: 0,
+        tokens_in: 100,
+        tokens_out: 20,
+        usd: 0,
+        roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0 },
+      },
     });
     assert.equal(r.status, 200, await r.clone().text());
     const sup = s.store.reportedRigs.supervisor("rig-a") as {
@@ -83,12 +80,7 @@ describe("control dashboard", () => {
     const s = await stack();
     await s.env.service.applyCommand(s.env.assign);
     await s.relay();
-    const post = (body: unknown) =>
-      s.control.request("/v1/rigs/rig-a/supervisor", {
-        method: "POST",
-        headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+    const post = (body: unknown) => figuresCall(s.store, "rig-a", body);
     const evil = await post({
       at: "now",
       export: {

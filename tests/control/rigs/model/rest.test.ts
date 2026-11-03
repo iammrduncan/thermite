@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { rigModelShapeRefusal } from "../../../../src/control/rigs/model.ts";
+import { rigModelShapeRefusal } from "../../../../src/control/rigs/model/index.ts";
 import { stack, TOKENS } from "./stack.ts";
 
 /**

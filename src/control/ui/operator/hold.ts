@@ -1,5 +1,6 @@
 import { drainChoices } from "../../clusters/index.ts";
 import { clockUtc } from "../../command-progress.ts";
+import { controlDiskOf, controlPlacesWords } from "../../disk.ts";
 import type { ControlStore } from "../../store/index.ts";
 import { diskOf, type RigView, workOf } from "../../views/index.ts";
 import { card, esc, icon } from "../components/index.ts";
@@ -8,9 +9,50 @@ import { span } from "../words/index.ts";
 import type { Need, NeedsContext } from "./index.ts";
 
 /**
- * What holds a rig's new work and waits for the owner (goal 173): its disk at its floor, and a
- * drain past its deadline, with the owner's two choices. Each card says what each choice does.
+ * What holds new work and waits for the owner (goal 173): control's own disk at its floor, a rig's
+ * disk at its floor, and a drain past its deadline, with the owner's two choices. Each card says
+ * what each choice does.
  */
+
+/** Control's disk at its floor: no new run starts; nothing else waits or is dropped. */
+export function controlDiskNeeds(c: NeedsContext, store: ControlStore): Need[] {
+  const d = controlDiskOf(store)?.state();
+  if (!d?.low) return [];
+  const since = d.since ?? d.checked_at ?? new Date(c.now).toISOString();
+  const read = d.checked_at ? `, read ${esc(clockUtc(d.checked_at))}` : "";
+  return [
+    {
+      kind: "disk",
+      rig: "",
+      at: since,
+      ...card({
+        tone: "bad",
+        ic: icon.warn,
+        kind: "Disk full",
+        question: "Make room on control's disk",
+        headline: "Control holds new runs: its disk is at its floor",
+        why: "No new run starts until there is room; reports, commands and the runs under way go on",
+        key: "disk-control",
+        where: "control",
+        since,
+        now: c.now,
+        facts: `<dt>What</dt><dd>${esc(controlDiskOf(store)?.held ?? "")}</dd>
+<dt>Free now</dt><dd>${esc(controlPlacesWords(d) || "not read")}${read}</dd>
+<dt>Check</dt><dd>The state folder holds control.db, its kits and the exports of rigs without a results repository. The bus's store keeps every rig's events for good: give it a larger volume, or a larger THERMITE_NATS_STORE. Control lets go by itself once each place has 1 GiB more than its floor. THERMITE_DISK_FLOOR_GIB sets the floor.</dd>`,
+        choices: [
+          {
+            label: "Make room",
+            does: "Free space where control keeps its state, or give the bus's store more. New runs start again at control's next look, within a minute.",
+          },
+          {
+            label: "Leave it",
+            does: "The runs under way go on, and their reports and commands still go through. A new run is refused, with this reason.",
+          },
+        ],
+      }),
+    },
+  ];
+}
 
 /** A rig whose disk is at its floor: no new trial, judge's job or export starts. */
 export function diskNeeds(c: NeedsContext, u: RigView): Need[] {

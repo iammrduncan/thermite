@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { errorText, jsonBody } from "../../common/errors.ts";
 import {
@@ -38,7 +39,7 @@ export function gpuCloudRoutes(app: Hono, api: ApiContext): void {
   app.get("/v1/gpu-clouds/:name/tests", admin, (c) =>
     c.json(runpodTests.list(c.req.param("name"))),
   );
-  app.post("/v1/gpu-clouds/:name/tests", admin, async (c) => {
+  app.post("/v1/gpu-clouds/:name/tests", admin, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
     const body: TestRequest = TestBody.parse(await jsonBody(c.req));
     try {
       return c.json(await runpodTests.start(c.req.param("name"), body, "owner:api"), 201);
@@ -49,7 +50,7 @@ export function gpuCloudRoutes(app: Hono, api: ApiContext): void {
   // Rigs on a GPU cloud: launched by the owner alone (this token; MCP's owner tools; never an
   // operator's or an agent's), billed by the hour. Limits apply only when the owner sets them.
   app.get(CLOUD_RIGS.path, admin, (c) => c.json(runpodRigs.list(c.req.param("name"))));
-  app.post(CLOUD_LAUNCH.path, admin, async (c) => {
+  app.post(CLOUD_LAUNCH.path, admin, bodyLimit({ maxSize: CLOUD_LAUNCH.maxBytes }), async (c) => {
     const body: LaunchRequest = CLOUD_LAUNCH.body.parse(await jsonBody(c.req));
     try {
       return c.json(await runpodRigs.launch(c.req.param("name"), body, "owner:api"), 201);
@@ -99,19 +100,24 @@ export function gpuCloudRoutes(app: Hono, api: ApiContext): void {
       return c.json({ error: r.error }, r.status);
     }
   });
-  app.post(RUNPOD_TERMINATE.path, admin, async (c) => {
-    const body = RUNPOD_TERMINATE.body.parse(await jsonBody(c.req));
-    const rig = c.req.param("rig");
-    if (body.confirm !== `terminate ${rig}`)
-      return c.json({ error: `confirm with "terminate ${rig}"` }, 400);
-    try {
-      return c.json(await runpodDriver.terminate(rig, "owner:api", body.confirm));
-    } catch (err) {
-      const r = lifecycleRefused(err);
-      return c.json({ error: r.error }, r.status);
-    }
-  });
-  app.post(RUNPOD_LIMITS.path, admin, async (c) => {
+  app.post(
+    RUNPOD_TERMINATE.path,
+    admin,
+    bodyLimit({ maxSize: RUNPOD_TERMINATE.maxBytes }),
+    async (c) => {
+      const body = RUNPOD_TERMINATE.body.parse(await jsonBody(c.req));
+      const rig = c.req.param("rig");
+      if (body.confirm !== `terminate ${rig}`)
+        return c.json({ error: `confirm with "terminate ${rig}"` }, 400);
+      try {
+        return c.json(await runpodDriver.terminate(rig, "owner:api", body.confirm));
+      } catch (err) {
+        const r = lifecycleRefused(err);
+        return c.json({ error: r.error }, r.status);
+      }
+    },
+  );
+  app.post(RUNPOD_LIMITS.path, admin, bodyLimit({ maxSize: RUNPOD_LIMITS.maxBytes }), async (c) => {
     const body: LimitsChange = RUNPOD_LIMITS.body.parse(await jsonBody(c.req));
     try {
       return c.json(runpodRigs.limits(c.req.param("rig"), body, "owner:api"));

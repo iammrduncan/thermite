@@ -12,6 +12,7 @@ npm run docs:dev       # a live preview at http://localhost:4321/
 npm run docs:build     # the site, in .dev/site/
 npm run docs:check     # what the build cannot check; run it after docs:build
 npm run docs:credits   # writes the Credits page from CREDITS.md
+npm run docs:changelog # writes the Changelog page from CHANGELOG.md
 npm run docs:agents    # writes the Agent roles page from src/agents/roles/
 ```
 
@@ -30,6 +31,7 @@ The site's dependencies are pinned to exact versions and kept apart from Thermit
 - a page missing from `llms.txt` or `llms-full.txt`, or without its Markdown copy;
 - a page that is still a stub;
 - a Credits page that is not CREDITS.md as `npm run docs:credits` writes it;
+- a Changelog page that is not CHANGELOG.md as `npm run docs:changelog` writes it;
 - an Agent roles page that is not `src/agents/roles/` as `npm run docs:agents` writes it.
 
 ## Where the site is served
@@ -40,7 +42,7 @@ The site is at [usethermite.com](https://usethermite.com), on Cloudflare Pages. 
 - The site's icon is Thermite's flame, a small character with a face, in `docs/_site/public/favicon.svg`. The SVG holds two faces: drawn at 24 pixels or less, as in a browser tab, its own media query shows a plain face whose eyes and mouth sit on the 16-pixel grid; larger, it shows the full face. Beside it are `favicon.ico` (16, 32 and 48 pixels, for browsers that take no SVG, such as Safari) and `apple-touch-icon.png` (180 pixels, on a dark square, for a page saved on iOS). The header's logo (`src/assets/logo.svg`) and the home page's picture (`src/assets/hero.svg`, the flame waving) are the same character with a finer line.
 - After a change to the flame, keep all five alike. Draw the ICO and the PNG from the SVG in a browser: renderers such as sharp ignore the media query and draw the full face at 16 pixels, where it blurs. Then copy the three icons into `src/control/ui/components/icons.ts`. The dashboard serves the same ones, and its test compares them byte for byte.
 - The pages count visits to usethermite.com with [Fathom Analytics](https://usefathom.com), which sets no cookies. Its script and site code are in `astro.config.mjs`.
-- The header shows the version of Thermite the pages describe, beside the title, linked to the roadmap page. The build reads it from the root `package.json`, so a new version needs no change to the site (`src/components/SiteTitle.astro`).
+- The header shows the version of Thermite the pages describe, beside the title, linked to the Changelog page. The build reads it from the root `package.json`, so a new version needs no change to the site (`src/components/SiteTitle.astro`).
 
 ## Where pages go
 
@@ -107,13 +109,17 @@ The built site has `/llms.txt`, which lists every page with its description, and
 
 [CREDITS.md](../CREDITS.md), at the repository's root, lists every outside work Thermite draws on, runs or ships, with its licence. It is the one copy: the site's Credits page (`project/credits.md`) is written from it by `npm run docs:credits`, and `npm run docs:check` fails when they differ. So change CREDITS.md, never the page, and link only to full addresses in it, which work on GitHub and on the site alike. Add a work in the same commit as the research, the dependency or the program it informed.
 
+## The Changelog page
+
+[CHANGELOG.md](../CHANGELOG.md), at the repository's root, lists each release's changes, newest first. It is the one copy: the site's Changelog page (`project/changelog.md`) is written from it by `npm run docs:changelog`, which makes its links to site pages relative to the page, and `npm run docs:check` fails when they differ. So change CHANGELOG.md, never the page; link to a site page by its path from the repository's root, and to anything else by its full address. The old roadmap page's address, `/project/roadmap/`, leads to it; the roadmap itself is [docs/plan/roadmap.md](plan/roadmap.md).
+
 ## The Agent roles page
 
 Every agent role's fixed texts live in `src/agents/roles/`, one module for each role, and `src/agents/roles/index.ts` is the table of roles. The site's [Agent roles](_site/src/content/docs/reference/agent-roles.md) page is written from that table by `npm run docs:agents`, and `npm run docs:check` fails when they differ. So a change to a role's text is made in its module; then run `npm run docs:agents` and commit both. `tests/agents/roles/texts.test.ts` holds every text byte for byte against its file in `tests/agents/golden/`: rewrite the files with `UPDATE_GOLDEN=1 node scripts/test.mjs tests/agents/roles/texts.test.ts`, and read the diff. `tests/agents/prompts/` holds each role's whole prompt for a sample run, as it is sent (in Pi: the system text, the first message and the tools; in another program: its command and its standard input), against its file in `tests/agents/golden/prompts/`, with what differs between runs written as placeholders; a change to a role's text, a brief or what a run adds shows there too. Rewrite them the same way and read the diff. Each role's module also holds the one function that puts its prompt together for a run, and the functions that put together its later turns in a call (a nudge, a warning, a continuation), named in the table; `tests/agents/roles/one-home.test.ts` fails when a production file builds a prompt or a later turn elsewhere, and the tests in `tests/agents/prompts/` check that what each model was sent is, byte for byte, the prompt the harness kept (`turns.test.ts` for the later turns).
 
 ## Pages a test follows
 
-A test follows the quick start as a tester would: [Your first run](_site/src/content/docs/tutorials/first-run.md), [Hand the work to agents](_site/src/content/docs/tutorials/agents-with-a-free-model.md), and the command line and Check the machine sections of the install and troubleshooting pages. It runs their shell blocks as written, types the value each step gives a field (**Campaign name**: `matmul-agents`), presses the buttons they name in bold and checks the lines they quote. So in those pages:
+A test follows the quick start as a tester would: [Install on one machine](_site/src/content/docs/tutorials/first-run.md), [Run your first campaign](_site/src/content/docs/tutorials/agents-with-a-free-model.md), and the command line and Check the machine sections of the install and troubleshooting pages. It runs their shell blocks as written, types the value each step gives a field (**Campaign name**: `matmul-agents`), presses the buttons they name in bold and checks the lines they quote. So in those pages:
 
 - keep each step's commands in its own `sh` block, and mark a line for one container tool with `# Docker` or `# Podman`, or give the other tool's line after `# or:`;
 - keep the steps numbered (`## 4. Sign in`): the test finds them by number;

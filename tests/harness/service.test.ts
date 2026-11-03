@@ -18,7 +18,7 @@ import { ModelSource } from "../../src/harness/agents/model/source.ts";
 import { Registry } from "../../src/harness/agents/registry.ts";
 import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { resolveInbox } from "../../src/harness/imports.ts";
-import { knowledgePart } from "../../src/harness/kb-part.ts";
+import { knowledgePart } from "../../src/harness/kb/index.ts";
 import { NOISY_TIMING_NOTE, smokeReport } from "../../src/harness/smoke-check.ts";
 import { shownViolations, violationsText } from "../../src/harness/v0.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
@@ -168,6 +168,31 @@ describe("harness service and API", () => {
     assert.equal(again.status, "replayed");
   });
 
+  test("a command is checked for the supervisor without being applied: control's signature, its rig, its time", async () => {
+    const env = makeHarnessEnv();
+    const api = createHarnessApi(env.service, tokens);
+    const check = async (body: unknown, token = tokens.supervisor) =>
+      await api.request("/v1/commands/check", {
+        method: "POST",
+        headers: auth(token),
+        body: JSON.stringify(body),
+      });
+    const good = env.sign("assign_campaign", env.assignPayload());
+    assert.deepEqual(await (await check(good)).json(), { ok: true });
+    const forged = env.sign("assign_campaign", env.assignPayload());
+    forged.envelope.payload = { ...(forged.envelope.payload as object), run: "evil" };
+    assert.deepEqual(await (await check(forged)).json(), { ok: false, reason: "bad signature" });
+    const other = env.sign("export_now", {}, { rig: "rig-b" });
+    assert.deepEqual(await (await check(other)).json(), {
+      ok: false,
+      reason: "command is for rig rig-b",
+    });
+    // Only the supervisor asks; nothing is applied or recorded.
+    assert.equal((await check(good, tokens.proposer)).status, 401);
+    assert.equal(env.service.ledger.runs.list().length, 0);
+    assert.equal(env.service.ledger.eventsAfter(0, 1000).events.length, 0);
+  });
+
   test("submissions are preserved first, then checked by V0 and for duplicates", async () => {
     const env = makeHarnessEnv();
     await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));
@@ -243,7 +268,7 @@ describe("harness service and API", () => {
         run,
         lane,
         epoch: 1,
-        family: "f",
+        direction: "f",
         parent: env.seedCommit,
         token: `tok-${id}`,
       });
@@ -367,11 +392,9 @@ describe("harness service and API", () => {
     assert.equal(new Set(ids).size, ids.length);
     assert.equal(ids.length, env.service.ledger.latestEventId());
 
-    const exp = (await (
-      await api.request("/v1/export", { method: "POST", headers: auth(tokens.supervisor) })
-    ).json()) as { dir: string; attempts: number };
+    const exp = await env.service.export("supervisor");
     assert.equal(exp.attempts, 1);
-    const dir = join(env.service.paths.outboxDir, exp.dir);
+    const dir = exp.dir;
     const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as {
       files: Record<string, string>;
     };
@@ -385,10 +408,21 @@ describe("harness service and API", () => {
       );
     }
     assert.ok(readdirSync(join(dir, "attempts")).some((f) => f.endsWith(".patch")));
-    const second = (await (
-      await api.request("/v1/export", { method: "POST", headers: auth(tokens.supervisor) })
-    ).json()) as { attempts: number };
+    const second = await env.service.export("supervisor");
     assert.equal(second.attempts, 0);
+  });
+
+  test("pushed exports leave the outbox: the chain's, and a run's, which the ledger records none of", async () => {
+    const env = makeHarnessEnv("rig-a");
+    const chain = await env.service.export("supervisor");
+    const run = await env.service.export("supervisor", { run: "r-1" });
+    assert.equal(run.id, 0, "a run's export is outside the chain");
+    const stray = join(env.service.paths.outboxDir, "20261031T000000Z-0123abcd");
+    mkdirSync(stray);
+    const names = [chain.dir, run.dir, stray].map((d) => d.split("/").pop() ?? "");
+    assert.equal(env.service.removeExports([...names, "../ledger"]), 2);
+    assert.ok(!existsSync(chain.dir) && !existsSync(run.dir));
+    assert.ok(existsSync(stray), "a folder that is no export of this ledger stays");
   });
 
   test("an applied command re-sent after it expired is still reported as replayed", async () => {
@@ -411,7 +445,9 @@ describe("harness service and API", () => {
     await env.service.applyCommand(env.sign("assign_campaign", env.assignPayload()));
     const redirect = env.sign("redirect", {
       run: "smoke-1",
-      directives: [{ kind: "avoid", family: "loop-unrolling", rationale: "tried", citations: [] }],
+      directives: [
+        { kind: "avoid", direction: "loop-unrolling", rationale: "tried", citations: [] },
+      ],
     });
     const outcomes = await Promise.all([
       env.service.applyCommand(redirect),

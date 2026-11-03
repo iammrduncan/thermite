@@ -16,8 +16,8 @@ export const CHECK_NUMBERS_MAX = 24;
  * the kit's check refused: the numbers the check reported for the kit's metrics taken from the
  * check, so an unmet goal shows by how much. Then, for either, the other numbers the check
  * reported at its top level (a ratio, both sides of a comparison, a count), by their names, at
- * most CHECK_NUMBERS_MAX: a kit's metrics must be numbers in every cell's check, so a kit whose
- * cells check different things declares none, and its values are these. A crash or refused
+ * most CHECK_NUMBERS_MAX. Only the metrics a contract decides by must be numbers in every cell's
+ * check (goal 182); a kit's others are there where a cell's check reports them. A crash or refused
  * outputs: none.
  */
 export function runValues(kit: Pick<Kit, "metrics">, r: ArmRun): Record<string, number> {

@@ -1,6 +1,13 @@
-import { randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import {
+  type CliCall,
+  type CliProgram,
+  type CliTally,
+  callFolder,
+  setUp,
+  takeUsage,
+  terminalCall,
+} from "../../../agents/cli/index.ts";
 import { CliCompactions, type OnceKeeping, reclaim } from "../../../agents/compaction/index.ts";
 import type { McpAccess } from "../../../agents/mcp/index.ts";
 import type { ModelConfig } from "../../../agents/model/index.ts";
@@ -10,9 +17,8 @@ import { renderModelCheck } from "../../../agents/roles/index.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { Role, Runner } from "../../broker/index.ts";
 import type { RigCheckReport } from "../model/index.ts";
-import { CHECK_ROLE, PLANNER_ROLE, takeUsage } from "./common.ts";
-import { setUp } from "./loop.ts";
-import type { CliCall, CliProgram, CliTally } from "./program.ts";
+import { CHECK_ROLE, PLANNER_ROLE } from "./common.ts";
+import type { TerminalCallLink } from "./program.ts";
 
 /**
  * One prompt through a program outside a trial (goal 125, T7): a planner call or a model check,
@@ -54,13 +60,7 @@ export async function cliOnce<T extends CliTally>(
   deps: CliOnceDeps,
   o: CliOnceOptions,
 ): Promise<T> {
-  // The program finds its home by name, so the folder must be reachable by name: under the lanes'
-  // area, not the controller's own (which only its processes may walk).
-  const parent = join(deps.scratchDir, "lanes", `${p.prefix}-ask`);
-  mkdirSync(parent, { recursive: true, mode: 0o711 });
-  chmodSync(parent, 0o711);
-  const dir = join(parent, randomUUID());
-  mkdirSync(dir, { mode: 0o700 });
+  const dir = callFolder(deps.scratchDir, p.prefix);
   const keeping = o.compaction;
   const call: CliCall = {
     model,
@@ -72,7 +72,7 @@ export async function cliOnce<T extends CliTally>(
       if (!deps.mintProxyToken) throw new Error(`${p.name} needs a credential for the model proxy`);
       return deps.mintProxyToken(model);
     },
-    mcp: o.mcp?.servers.length ? { apiUrl: deps.apiUrl, ...o.mcp } : undefined,
+    mcp: o.mcp?.servers.length || o.mcp?.kb ? { apiUrl: deps.apiUrl, ...o.mcp } : undefined,
     keptAt: keeping?.keptAt,
     timeoutMs: o.timeoutMs,
     tools: o.tools,
@@ -140,23 +140,41 @@ export async function cliOnce<T extends CliTally>(
   return tally;
 }
 
+/**
+ * The JSON a planner's answer holds: in a fenced block, else from its first `{` to its last `}`;
+ * undefined when none parses.
+ */
+export function planJson(text: string): unknown {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)?.[1];
+  const body = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  try {
+    return JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+}
+
 /** A planner call through a program: what it may read, use and keep, and where its usage goes. */
 export interface CliAskOptions {
   signal?: AbortSignal | undefined;
-  /** A folder it may read and search (the run's past research), read only. */
-  read?: string | undefined;
   mcp?: Omit<McpAccess, "apiUrl"> | undefined;
   compaction?: OnceKeeping | undefined;
   /** Each model usage its output reports (goal 075). */
   usage?: ((u: CallUsage) => void) | undefined;
   /** Its subscription's usage windows, when it reports them (Claude Code). */
   windows?: ((w: PlanWindows) => void) | undefined;
+  /**
+   * On a rig whose agents run in their own terminal (goal 169): the call runs in its program's
+   * terminal (call.ts), with what the harness gives it there. Unset: headless.
+   */
+  terminal?: TerminalCallLink | undefined;
 }
 
 /**
- * The planner's call through a program, as the planner's own user: its answer. With past
- * research, the prompt names the run's knowledge/ folder, which every agent user may read and none
- * may change; a program that takes a list of tools gets the read-only file tools for it.
+ * The planner's call through a program, as the planner's own user: its answer. A program that
+ * takes a list of tools gets the planner's (plannerTools). On a rig whose agents run in their own
+ * terminal, it runs in its program's terminal, and its answer is the newest text that ends one of
+ * its turns and holds a plan there (else its last text).
  */
 export async function cliAsk<T extends CliTally>(
   p: CliProgram<T>,
@@ -165,10 +183,26 @@ export async function cliAsk<T extends CliTally>(
   deps: CliOnceDeps,
   o: CliAskOptions = {},
 ): Promise<string> {
+  const tools = p.plannerTools;
+  if (o.terminal) {
+    const t = await terminalCall(p, model, prompt, deps, {
+      role: PLANNER_ROLE,
+      link: o.terminal,
+      signal: o.signal,
+      mcp: o.mcp,
+      compaction: o.compaction,
+      tools,
+      usage: o.usage,
+      windows: o.windows,
+      answer: (text) => planJson(text) !== undefined,
+    });
+    if (!t.lastText) throw new Error(t.errors.at(-1) ?? `${p.name} gave no answer`);
+    return t.lastText;
+  }
   const t = await cliOnce(p, model, prompt, deps, {
     role: PLANNER_ROLE,
     signal: o.signal,
-    tools: p.plannerTools?.(Boolean(o.read)),
+    tools,
     // The MCP servers the run's kit gives the planner, at the gateway (goal 068).
     mcp: o.mcp,
     // Its conversation before each of the program's own compactions (goal 070).

@@ -36,7 +36,7 @@ export async function planResearchEpoch(
   n: number,
 ): Promise<void> {
   for (const t of RESEARCH_TASKS)
-    sched.registry.addFamily(run, t.id, t.description, "research-plan");
+    sched.registry.addDirection(run, t.id, t.description, "research-plan");
   const directives = directivesOf(sched, run);
   const lanes = lanesOf(laneCountOf(sched, run, contract));
   const state = researchState(sched.ledger, run, contract, { lanes: lanes.length, epoch: n });
@@ -74,18 +74,22 @@ export async function planResearchEpoch(
     sched.planning = { run, ctrl };
     watch(sched);
     try {
-      const r = await plannerRoute(sched, run, contract, n);
-      input.pastResearch = r.pastLine;
+      // An owner's message that goes in inside its turn in its terminal joins these (goal 169).
+      input.ownerMessages ??= [];
+      const r = await plannerRoute(sched, run, contract, n, {
+        role: "research-planner",
+        owner: input.ownerMessages,
+      });
       p = await planResearch(
         input,
         r.m,
         ctrl.signal,
         r.ask,
-        r.past,
         r.mcp,
         plannerCompaction(sched, run),
         r.usage,
         r.sent,
+        r.view,
       );
     } finally {
       sched.planning = undefined;
@@ -109,7 +113,7 @@ export async function planResearchEpoch(
     handout.push({ lane, experiment: x.id, why });
     assignments.push({
       lane,
-      family: x.family || "explore",
+      direction: x.direction || "explore",
       focus: focusOf(x),
       parent: "champion",
       experiment: x.id,
@@ -183,7 +187,7 @@ export async function planResearchEpoch(
       }`,
       ...assignments.map((a) => {
         const x = sched.o.service.queue.get(a.experiment ?? "");
-        return `${a.lane}: ${a.family}, ${x?.title ?? a.focus}`;
+        return `${a.lane}: ${a.direction}, ${x?.title ?? a.focus}`;
       }),
       ...(changed.length ? [`hypotheses: ${changed.join("; ")}`] : []),
       ...(why ? [`no usable plan: ${why}`] : []),

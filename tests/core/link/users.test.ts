@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { createAccount, createUser } from "@nats-io/nkeys";
-import { commandConsumerConfig } from "../../../src/core/link/commands.ts";
-import { configConsumerConfig } from "../../../src/core/link/config.ts";
+import { commandConsumerName } from "../../../src/core/link/commands.ts";
+import { configConsumerName, configSubjects } from "../../../src/core/link/config.ts";
 import { EVENT_STREAM, EVENT_SUBJECTS } from "../../../src/core/link/events.ts";
 import { REPORT_STREAM } from "../../../src/core/link/report.ts";
 import {
+  BACKUP_INBOX_PREFIX,
   BUS_ACCOUNT,
+  backupPermissions,
   controlPermissions,
   isUserKey,
+  jetStreamFiguresSubject,
+  RECORD_STREAMS,
   reloadSubject,
   rigInboxPrefix,
   rigPermissions,
@@ -61,32 +65,48 @@ describe("who may do what on the message bus", () => {
     assert.ok(!key.includes(fp));
   });
 
-  test("a rig may publish its own reports and live lines, take its own commands and read its own config, and nothing else", () => {
+  test("a rig may publish its own reports, live lines and files, ask control to search and read the knowledge base and what a rig asks, take its own commands and read its own config, and nothing else", () => {
     assert.deepEqual(rigPermissions("rig-a"), {
       publish: {
         allow: [
           "thermite.rig.rig-a.report",
           "thermite.rig.rig-a.live.*",
-          "$JS.API.CONSUMER.CREATE.COMMANDS.rig-rig-a-commands.thermite.rig.rig-a.cmd",
           "$JS.API.CONSUMER.INFO.COMMANDS.rig-rig-a-commands",
           "$JS.API.CONSUMER.MSG.NEXT.COMMANDS.rig-rig-a-commands",
           "$JS.ACK.COMMANDS.rig-rig-a-commands.>",
-          "$JS.API.CONSUMER.CREATE.CONFIG.rig-rig-a-config.thermite.rig.rig-a.config.*",
           "$JS.API.CONSUMER.INFO.CONFIG.rig-rig-a-config",
-          "$JS.API.CONSUMER.DELETE.CONFIG.rig-rig-a-config",
           "$JS.API.CONSUMER.MSG.NEXT.CONFIG.rig-rig-a-config",
           "$JS.ACK.CONFIG.rig-rig-a-config.>",
+          "$JS.API.DIRECT.GET.CONFIG.thermite.rig.rig-a.config.*",
+          "thermite.rig.rig-a.kbfile",
+          "thermite.kb.search.rig-a",
+          "thermite.kb.read.rig-a",
+          "thermite.rig.rig-a.ask.figures",
+          "thermite.rig.rig-a.ask.screens",
+          "thermite.rig.rig-a.ask.daily",
+          "thermite.rig.rig-a.ask.renew",
+          "thermite.rig.rig-a.ask.space",
+          "thermite.rig.rig-a.ask.kb-files",
         ],
       },
       subscribe: { allow: ["_INBOX.rig.rig-a.>"] },
     });
-    // The consumers it may make are the ones the supervisor follows its commands and watches its
-    // config with; it may publish nothing to a config subject, which only control writes.
+    // Past research is no longer copied to rigs: a rig may not ask for it.
+    assert.ok(!rigPermissions("rig-a").publish.allow.some((x) => x.endsWith(".ask.past")));
+    // It puts the knowledge base's files on its own subjects; it may not read or remove any.
+    const kbFiles = rigPermissions("rig-a").publish.allow.filter((x) => x.includes("KB_FILES"));
+    assert.deepEqual(kbFiles, [], "no call of the JetStream API on the KB_FILES stream");
+    // It makes no consumer and removes none: control makes the two it reads, with their settings.
+    // It reads its own keys' latest values by their subjects, and publishes to none of them,
+    // which only control writes.
     const allow = rigPermissions("rig-a").publish.allow;
-    const c = commandConsumerConfig("rig-a");
-    assert.ok(allow[2]?.endsWith(`.${c.durable_name}.${c.filter_subject}`));
-    const w = configConsumerConfig("rig-a");
-    assert.ok(allow[6]?.endsWith(`.${w.durable_name}.${w.filter_subject}`));
+    assert.ok(!allow.some((x) => /\.CONSUMER\.(CREATE|DURABLE\.CREATE|DELETE)\b/.test(x)));
+    assert.ok(allow[2]?.endsWith(`.${commandConsumerName("rig-a")}`));
+    assert.ok(allow[5]?.endsWith(`.${configConsumerName("rig-a")}`));
+    const direct = allow[8]?.replace(/\*$/, "");
+    assert.ok(
+      configSubjects("rig-a").every((s) => s.startsWith(direct?.split("CONFIG.")[1] ?? "-")),
+    );
     assert.ok(!allow.some((x) => x.startsWith("thermite.rig.rig-a.config")));
     assert.equal(rigInboxPrefix("rig-a"), "_INBOX.rig.rig-a");
     // Nothing of one rig's is in another's: no subject of rig-a's is open to rig-b.
@@ -113,7 +133,7 @@ describe("who may do what on the message bus", () => {
     assert.equal(runs[0], "thermite.run.run-0.live.*", "the newest first");
   });
 
-  test("the users file: control may do everything, each rig its own, and a system user reloads", () => {
+  test("the users file: control may do everything, each rig its own, and a system user reloads and reads figures", () => {
     const keys = { control: user(), system: user(), a: user(), b: user() };
     const text = usersFile({
       control: keys.control,
@@ -137,12 +157,22 @@ describe("who may do what on the message bus", () => {
       {
         nkey: keys.system,
         permissions: {
-          publish: { allow: ["$SYS.REQ.SERVER.*.RELOAD"] },
+          // A reload, and the server's figures for Metrics (goal 179): nothing else.
+          publish: {
+            allow: [
+              "$SYS.REQ.SERVER.*.RELOAD",
+              "$SYS.REQ.SERVER.*.VARZ",
+              "$SYS.REQ.SERVER.*.CONNZ",
+              "$SYS.REQ.SERVER.*.LEAFZ",
+              "$SYS.REQ.SERVER.*.JSZ",
+            ],
+          },
           subscribe: { allow: ["_INBOX.>"] },
         },
       },
     ]);
     assert.equal(reloadSubject("NABC"), "$SYS.REQ.SERVER.NABC.RELOAD");
+    assert.equal(jetStreamFiguresSubject("NABC"), "$SYS.REQ.SERVER.NABC.JSZ");
     // With no rig: control's users alone.
     const none = readUsers(usersFile({ control: keys.control, system: keys.system, rigs: [] }));
     assert.deepEqual(none.accounts[BUS_ACCOUNT]?.users, [
@@ -150,13 +180,46 @@ describe("who may do what on the message bus", () => {
     ]);
   });
 
-  test("control may do everything but delete or purge a stream kept for good", () => {
-    // A stream's deny_delete and deny_purge guard its messages; the stream itself is guarded here.
-    assert.deepEqual(controlPermissions(), {
+  test("the backup's user may snapshot and restore the streams of record, and nothing else", () => {
+    const keys = { control: user(), system: user(), backup: user() };
+    const { accounts } = readUsers(usersFile({ ...keys, rigs: [] }));
+    assert.deepEqual(accounts[BUS_ACCOUNT]?.users, [
+      { nkey: keys.control, permissions: controlPermissions() },
+      { nkey: keys.backup, permissions: backupPermissions() },
+    ]);
+    assert.deepEqual(backupPermissions(), {
       publish: {
-        deny: [`$JS.API.STREAM.DELETE.${EVENT_STREAM}`, `$JS.API.STREAM.PURGE.${EVENT_STREAM}`],
+        allow: [
+          `$JS.API.STREAM.INFO.${EVENT_STREAM}`,
+          `$JS.API.STREAM.MSG.GET.${EVENT_STREAM}`,
+          `$JS.API.STREAM.SNAPSHOT.${EVENT_STREAM}`,
+          `$JS.SNAPSHOT.ACK.${EVENT_STREAM}.>`,
+          `$JS.API.STREAM.RESTORE.${EVENT_STREAM}`,
+          `$JS.SNAPSHOT.RESTORE.${EVENT_STREAM}.>`,
+        ],
       },
+      subscribe: { allow: [`${BACKUP_INBOX_PREFIX}.>`] },
     });
+    assert.deepEqual(RECORD_STREAMS, [EVENT_STREAM]);
+    // No delete, no purge, no publish to a stream's subjects.
+    const text = JSON.stringify(backupPermissions());
+    for (const word of ["DELETE", "PURGE", "CREATE", "thermite."])
+      assert.ok(!text.includes(word), word);
+    assert.throws(
+      () => usersFile({ ...keys, backup: "UNOTAKEY", rigs: [] }),
+      /not a NATS user key/,
+    );
+  });
+
+  test("control may do everything but delete a stream of record; it purges events by subject", () => {
+    // A retention policy purges control's copy of the events by subject (control/retention/).
+    assert.deepEqual(controlPermissions(), {
+      publish: { deny: [`$JS.API.STREAM.DELETE.${EVENT_STREAM}`] },
+    });
+    // It may never delete it: the users file says so for control's user.
+    const keys = { control: user(), system: user() };
+    const { accounts } = readUsers(usersFile({ ...keys, rigs: [] }));
+    assert.deepEqual(accounts[BUS_ACCOUNT]?.users[0]?.permissions, controlPermissions());
     // The reports stream is an inbox: control may make it again, as it does once from one kept
     // for good.
     assert.ok(!JSON.stringify(controlPermissions()).includes(REPORT_STREAM));

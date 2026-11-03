@@ -14,7 +14,7 @@ Each run keeps an **experiment queue**: a list, in order, of what its [lanes](..
 
 ## Before you start
 
-- A run with agents that is running or paused. A finished run still shows the forms, but the rig refuses every change to its queue or its rules, and **Commands** shows why: `run sort-speed-1 is closed: its queue and rules no longer change`. On a run without agents, such as a try or a run started with `--agents off`, the forms work, but no lane ever takes an experiment, rules have nothing to steer, and control refuses a message to the planner: **Not sent.** `This run has no agents (the judge alone tries the kit), so nothing would read it.` While experiments wait in such a run's queue, the tab says so above **Up next**: `Judge only: no worker takes these experiments, so they wait for a run with workers.` Its **Start a run** link opens the campaign's **Start a run** panel with **Copy the untried experiments of** that run chosen, so a new run with agents starts from them ([Start a campaign from the dashboard](start-from-dashboard.md)).
+- A run with agents that is running or paused. A finished run still shows the forms, but the rig refuses every change to its queue or its rules, and the **Audit log**'s commands show why: `run sort-speed-1 is closed: its queue and rules no longer change`. On a run without agents, such as a try or a run started with `--agents off`, the forms work, but no lane ever takes an experiment, rules have nothing to steer, and control refuses a message to the planner: **Not sent.** `This run has no agents (the judge alone tries the kit), so nothing would read it.` While experiments wait in such a run's queue, the tab says so above **Up next**: `Judge only: no worker takes these experiments, so they wait for a run with workers.` Its **Start a run** link opens the campaign's **Start a run** panel with **Copy the untried experiments of** that run chosen, so a new run with agents starts from them ([Start a campaign from the dashboard](start-from-dashboard.md)).
 - The owner's sign-in on the dashboard. From the command line, the owner's token; over MCP, the owner's or an operator's token. See [Who may do what](steer-a-run.md#who-may-do-what).
 
 ## Open the Experiments tab
@@ -114,7 +114,7 @@ What each rule does:
 | **Try** | Its experiments go first when a lane is free | `Its experiments go first when a lane is free.`, then how many are up next |
 | **Always** | One lane works on it at every hand-out | `One lane works on it at every hand-out.`, then the lanes on it now |
 
-Rules come from elsewhere too: the teachers' advice, and `redirect` from the [command line](steer-a-run.md#steer-from-the-command-line), the REST API or MCP. They show in the same list, with who set them. The planner makes only **Avoid**, **Try** and **Always** rules. The other kinds, `priority`, `lane_count` and `note`, come from the teachers or from `redirect`.
+Rules come from elsewhere too: the teachers' advice, and `redirect` from the [command line](steer-a-run.md#steer-from-the-command-line), the REST API or MCP. They show in the same list, with who set them. The planner makes only **Avoid**, **Try** and **Always** rules. The other kinds, `priority`, `lane_count` and `planner_note`, come from the teachers or from `redirect`.
 
 ### Directions
 
@@ -219,7 +219,7 @@ The new run's **Up next** starts with that run's waiting experiments, in the sam
 
 From the command line, `thermite assign` copies the same experiments when you add `--queue-from sort-speed-1`, a run on the rig you name with `--rig`, or `--queue-from rig-2/sort-speed-1` for a run on another rig. Without the option, it copies none. See [Start further runs](start-from-command-line.md#start-further-runs). `thermite run start --queue-from`, the REST API's `POST /v1/campaigns/<campaign>/runs` and MCP's `start_run` copy them as the panel does: see [Start a run from a script or an agent](start-from-dashboard.md#start-a-run-from-a-script-or-an-agent).
 
-The same panel can also start the queue from **past research**: the experiments recorded in this campaign's folder in Thermite's knowledge base, or in another campaign's folder that you let it read. Tick them under **From past research**. They join **Up next** after the copied ones, at most 500 in all, each marked with its run, such as `from sort-speed-1`, and with its details ending with where it came from and what it gave, such as `In sort-speed-1 (sort-speed) it was tried: attempt a-0123456789abcdef (submitted), regress (-3.10%).` With **Off: a try**, **From past research** hides too, and a run without agents takes none. See [Use past research in a new run](use-past-research.md#start-a-run-from-past-research).
+The same panel can also start the queue from **past research**: the experiments recorded in this campaign's collection in Thermite's knowledge base, or in another campaign's collection that you let it read. Tick them under **From past research**. They join **Up next** after the copied ones, at most 500 in all, each marked with its run, such as `from sort-speed-1`, and with its details ending with where it came from and what it gave, such as `In sort-speed-1 (sort-speed) it was tried: attempt a-0123456789abcdef (submitted), regress (-3.10%).` With **Off: a try**, **From past research** hides too, and a run without agents takes none. See [Use past research in a new run](use-past-research.md#start-a-run-from-past-research).
 
 ## From the command line and over MCP
 
@@ -228,29 +228,29 @@ The same panel can also start the queue from **past research**: the experiments 
 ```sh
 npx thermite command --control http://127.0.0.1:8800 --token-file .dev/secrets/control-admin-token \
   --rig local-1 --kind queue_add \
-  --payload '{"run":"sort-speed-1","title":"unroll the inner loop by 4","family":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}'
+  --payload '{"run":"sort-speed-1","title":"unroll the inner loop by 4","direction":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}'
 ```
 
 It prints the command's id and `"status":"pending"`. The kinds, with an example payload each:
 
 | Kind | Example payload |
 | --- | --- |
-| `queue_add` | `{"run":"sort-speed-1","title":"unroll the inner loop by 4","details":"Keep the remainder loop.","family":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}` |
+| `queue_add` | `{"run":"sort-speed-1","title":"unroll the inner loop by 4","details":"Keep the remainder loop.","direction":"loop-unrolling","why":"the profile shows branch stalls","position":"top"}` |
 | `queue_move` | `{"run":"sort-speed-1","id":"x-0123456789ab","position":2}` |
 | `queue_edit` | `{"run":"sort-speed-1","id":"x-0123456789ab","details":"Unroll by 8 on the large cases."}` |
 | `queue_drop` | `{"run":"sort-speed-1","id":"x-0123456789ab","why":"measured slower twice"}` |
 | `queue_accept` | `{"run":"sort-speed-1","id":"x-0123456789ab","position":"top"}` |
 | `drop_directive` | `{"run":"sort-speed-1","id":7}` |
-| `redirect` | `{"run":"sort-speed-1","directives":[{"kind":"avoid","family":":shared memory tiling:","rationale":"slower on this GPU"}],"replace":false}` |
+| `redirect` | `{"run":"sort-speed-1","directives":[{"kind":"avoid","direction":":shared memory tiling:","rationale":"slower on this GPU"}],"replace":false}` |
 
-- An experiment's id is `x-` and 12 hexadecimal characters; a rule's id is a number. **Commands** shows a new experiment's id in its row's **Outcome**, such as `"experiment":"x-0123456789ab"`. To read every id, use the MCP tool `run_queue`, or the REST API with the owner's token: `curl -s -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" http://127.0.0.1:8800/v1/rigs/local-1/view`. In its answer, find the run in `runs`: its `queue` lists each experiment with its `id`, `title` and `state`, and its `rules` each rule with its `id`.
+- An experiment's id is `x-` and 12 hexadecimal characters; a rule's id is a number. The **Audit log**'s commands show a new experiment's id under its row's **Detail**, such as `"experiment":"x-0123456789ab"`. To read every id, use the MCP tool `run_queue`, or the REST API with the owner's token: `curl -s -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" http://127.0.0.1:8800/v1/rigs/local-1/view`. In its answer, find the run in `runs`: its `queue` lists each experiment with its `id`, `title` and `state`, and its `rules` each rule with its `id`.
 - A `position` is `"top"`, `"end"`, or a number: the place among the experiments up next, 0 first. Unlike the dashboard, `queue_add` and `queue_accept` put an experiment at the end unless you give one.
-- `queue_edit` changes the title, details, direction (`family`) or why of an experiment that waits, as **Edit** on the dashboard does. A field you leave out stays as it was; an empty `details` or `why` clears it.
-- In `redirect`, each rule names its direction in `family`, in plain words or as `:name:`; control sends the name, such as `shared-memory-tiling`. `"replace": false` adds to the rules in force. A direction the run doesn't have yet is taken, and the rig's answer lists it: `"new_directions":["shared-memory-tiling"]`. The planner designs it at its next round. `match`, a rule in words, is refused: `bad redirect payload: directives.0: a rule no longer takes match: name its direction in family, in plain words or as :name:`.
-- `queue_add` and `queue_edit` take an experiment's direction (`family`) as `:name:` too, and keep it without the colons.
+- `queue_edit` changes the title, details, direction or why of an experiment that waits, as **Edit** on the dashboard does. A field you leave out stays as it was; an empty `details` or `why` clears it.
+- In `redirect`, each rule names its direction in `direction`, in plain words or as `:name:`; control sends the name, such as `shared-memory-tiling`. `"replace": false` adds to the rules in force. A direction the run doesn't have yet is taken, and the rig's answer lists it: `"new_directions":["shared-memory-tiling"]`. The planner designs it at its next round. `match`, a rule in words, is refused: `bad redirect payload: directives.0: a rule no longer takes match: give its direction in direction, in plain words or as :name:`.
+- `queue_add` and `queue_edit` take an experiment's direction as `:name:` too, and keep it without the colons.
 - To read the run's directions, use `run_queue` over MCP, or `GET /v1/runs/sort-speed-1/directions` over REST. Each direction has its `name`, its `description` when the planner or the registry gave one, its experiments `tried`, its `wins` among them, those `queued`, the `lanes` on it now, the `rules` that name it, and `to_design`: true while only a rule names it and the planner has not designed it yet. A rule in `rules` has `legacy: true` when it is an [old rule in words](#old-rules-in-words).
 
-[Signed commands](../../reference/signed-commands.md) has every field, limit and refusal. Control refuses a payload that doesn't fit at once, such as `bad queue_edit payload: payload: change at least one of title, details, family and why`. The rig's own refusals show on **Commands**, where the row is **failed** with the reason under **Outcome**, such as:
+[Signed commands](../../reference/signed-commands.md) has every field, limit and refusal. Control refuses a payload that doesn't fit at once, such as `bad queue_edit payload: payload: change at least one of title, details, direction and why`. The rig's own refusals show among the **Audit log**'s commands, where the row is **failed** with the reason beside it, such as:
 
 - `no experiment x-0123456789ab in run sort-speed-1`;
 - `experiment x-0123456789ab is done: only proposed or queued experiments can be dropped`;
@@ -262,7 +262,7 @@ Over MCP, the owner's and an operator's tokens send the same kinds and payloads 
 
 ## How to tell it worked
 
-- On **Commands**, the row, such as **queue add**, is **delivered** within seconds. Its **Outcome** holds the rig's answer, such as `{"accepted":true,"result":{"experiment":"x-0123456789ab","position":0,"state":"queued"},"status":"applied"}`. After the rig's next report, the same answer shows with `"kind"` and `"source"` in place of `"status"`.
+- Among the **Audit log**'s commands, the row, such as `queue_add`, is **delivered** once the rig's next report reaches control, within a minute. Its **Detail** holds the rig's answer, such as `{"accepted":true,"kind":"queue_add","result":{"experiment":"x-0123456789ab","position":0,"state":"queued"},"source":"harness"}`.
 - After the rig's next report, within a minute, and a **refresh**, **Up next** shows the experiment at its place, and **Rules** shows the rules in force.
 - The run's **History** has a line for each change, such as `You added "unroll the inner loop by 4" to the queue.`, `You moved "unroll the inner loop by 4" to place 3.`, `You edited "unroll the inner loop by 4".` or `You dropped "unroll the inner loop by 4": measured slower twice.` The planner's, the advisors' and the lanes' changes show there too, such as `The teachers added "…" to the queue.` or `lane-2 proposed "…" as an idea for the queue.`
 - When a lane takes the experiment, it moves to **In progress**, and **What the planner did** on the **Planner** tab shows the hand-out and why. When the trial ends, **Tried** shows its result.

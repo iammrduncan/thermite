@@ -51,6 +51,27 @@ describe("broker refusals", () => {
     }
   });
 
+  test("a pair is one judge card's driver and timing user: any other is refused", async () => {
+    const client = new BrokerClient(socketPath);
+    const as = (role: string) => ({ role: role as never, argv: ["true"], cwd: dir });
+    try {
+      for (const [driver, candidate] of [
+        ["driver", "run-1"],
+        ["driver-2", "run"],
+        ["checker", "run"],
+        ["driver", "lane-1"],
+        ["run", "driver"],
+      ] as const)
+        await assert.rejects(
+          within(client.runPair(as(driver), as(candidate)), 5000),
+          (err: Error) => /a pair is a judge card's driver and timing user/.test(err.message),
+          `${driver} and ${candidate}`,
+        );
+    } finally {
+      client.close();
+    }
+  });
+
   test("the answer to a refused request carries the request's own id", async () => {
     const sock = connect(socketPath);
     sock.setEncoding("utf8");

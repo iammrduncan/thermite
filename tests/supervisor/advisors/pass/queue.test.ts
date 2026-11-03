@@ -94,7 +94,11 @@ describe("the advisors and the run's queue", () => {
               args: {
                 directives: [],
                 experiments: [
-                  { title: "wider loads", family: "memory", why: "both reviews: reads dominate" },
+                  {
+                    title: "wider loads",
+                    direction: "memory",
+                    why: "both reviews: reads dominate",
+                  },
                 ],
                 moves: [{ id: first.id, position: "end", why: "it needs the loads first" }],
               },
@@ -189,7 +193,7 @@ describe("the advisors and the run's queue", () => {
     const top = env.service.queue.queued("js-1")[0];
     assert.equal(top?.title, `re-measure ${id} on the big cell`);
     assert.equal(top?.added_by, "auditor");
-    assert.equal(top?.family, "check");
+    assert.equal(top?.direction, "check");
     assert.equal(events(env, "experiment_added").at(-1)?.actor, "supervisor:auditor");
     assert.match(lines.join("\n"), /the auditor added to the queue: re-measure/);
   });

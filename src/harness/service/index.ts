@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { TurnDelivery } from "../../agents/cli/index.ts";
 import { type McpCaller, McpGateway } from "../../agents/mcp/index.ts";
 import {
   type ModelConfig,
@@ -9,6 +10,7 @@ import type { Prompt } from "../../agents/prompt.ts";
 import { buildInfo } from "../../common/build-info.ts";
 import { Loops } from "../../common/health.ts";
 import type { McpConnect } from "../../common/mcp-client.ts";
+import { ResourceUse } from "../../common/usage.ts";
 import type { InTurn } from "../../core/agents.ts";
 import type { AdvisorQueueRequest } from "../../core/api/harness/advisors.ts";
 import type { SubmitRequest } from "../../core/api/harness/proposer.ts";
@@ -20,30 +22,32 @@ import { LiveLog } from "../../core/live.ts";
 import { type McpUse, McpUses } from "../../core/mcp.ts";
 import { PROGRAM_MODE_DEFAULT } from "../../core/rig-settings.ts";
 import type { BuildInfo } from "../../core/version.ts";
-import type { ControlRoute, ModelSource, TurnDelivery } from "../agents/index.ts";
+import type { ControlRoute, ModelSource } from "../agents/index.ts";
 import type { Compactions } from "../compactions.ts";
 import type { DiskWatch } from "../disk.ts";
 import { Journal } from "../journal.ts";
-import { Knowledge } from "../knowledge.ts";
+import { KbAsks, KbTools } from "../kb/index.ts";
 import { type Ledger, LedgerError } from "../ledger/index.ts";
 import { type AdvisorRole, OwnerMessages } from "../messages.ts";
+import { ModelUsage } from "../model-usage.ts";
 import type { PreviewAsk } from "../prompts.ts";
 import { ExperimentQueue } from "../queue.ts";
-import { Cards, folderRootOf, Papers, SAVED_LANES_DIR } from "../research/index.ts";
+import { Cards, folderRootOf, Papers, RunSearch, SAVED_LANES_DIR } from "../research/index.ts";
 import type { ReviewKind } from "../reviews.ts";
-import { RigSettingsStore } from "../rig-settings.ts";
+import { RigSettingsStore } from "../rig-settings-store.ts";
 import { RunResearch } from "../run-research.ts";
 import { HARNESS_NUMBERS } from "../settings.ts";
-import { ModelUsage } from "../usage.ts";
+import { AdvisorInputs } from "./advisor-inputs.ts";
 import * as assignment from "./assignment.ts";
 import * as attempts from "./attempts.ts";
 import * as champion from "./champion.ts";
 import * as checks from "./checks.ts";
 import { type CommandOutcome, Commands } from "./commands.ts";
+import { TerminalConsoles } from "./consoles.ts";
 import * as decisions from "./decisions.ts";
 import { type Draining, drainDeadline, endDrainAtStart, type Work, workNow } from "./drain.ts";
 import { gapAtStart } from "./gaps.ts";
-import { noteModelStall, ProviderAnswers, ProxyCredentials } from "./proxy.ts";
+import { type CallCredential, noteModelStall, ProviderAnswers, ProxyCredentials } from "./proxy.ts";
 import * as reports from "./reports.ts";
 import * as research from "./research.ts";
 import { requireRun } from "./runs.ts";
@@ -56,7 +60,8 @@ export type { SubmitResult } from "./attempts.ts";
 export type { RigCheck, RigCheckName } from "./checks.ts";
 export type { CommandOutcome } from "./commands.ts";
 export { drainSpans } from "./drain.ts";
-export { AWAKE_EVERY_MS, AwakeWatch, gapSpans } from "./gaps.ts";
+export { AWAKE_EVERY_MS, AwakeWatch, gapAtStart, gapSpans } from "./gaps.ts";
+export type { CallCredential, OwnCall } from "./proxy.ts";
 export { IdeaRequest } from "./trials.ts";
 export { NOT_BEFORE_FILE, notBeforeOf, WIPE_MARKER, wipeIfRequested } from "./wipe.ts";
 
@@ -65,6 +70,30 @@ export interface HarnessPaths {
   scratchDir: string;
   inboxDir: string;
   outboxDir: string;
+}
+
+/** The owner's ask to stop one trial, as the ledger recorded it (`trial_stop_asked`). */
+export interface StopAsked {
+  /** The `trial_stop_asked` event's id. */
+  event: number;
+  run: string;
+  trial: string;
+  lane: string;
+  reason?: string | undefined;
+  /** Who asked: the command's actor, `control:<issued_by>`. */
+  by: string;
+}
+
+/**
+ * What the service tells the agents' scheduler as soon as the ledger records it: a stop of one
+ * trial and a reset of a run's workers. The events stay the record: a scheduler that starts later
+ * finds the ones it never acted on in the ledger. The scheduler sets itself as the service's
+ * `agents` when it is made, so the service does not depend on it.
+ */
+export interface AgentSignals {
+  onStopAsked(ask: StopAsked): void;
+  /** The `workers_reset` event's id, and its run. */
+  onReset(reset: { event: number; run: string }): void;
 }
 
 /**
@@ -124,8 +153,6 @@ export class HarnessService {
   readonly journal: Journal;
   /** The model usage of each run's agents, one record for each call (goal 075). */
   readonly usage: ModelUsage;
-  /** Past research in each run's research folder (knowledge/), as the supervisor syncs it. */
-  readonly knowledge: Knowledge;
   /**
    * Each run's own research, read only, for its teachers (goal 098): sources, claims, hypotheses,
    * findings, notes and the files of its research folder, from the ledger and the lanes' saved
@@ -133,20 +160,33 @@ export class HarnessService {
    */
   readonly runResearch: RunResearch;
   /**
+   * The index of each run's own research (goal 175), which search_research and search_corpus
+   * read: kept on the rig, current with each search, answered with control away.
+   */
+  readonly runSearch: RunSearch;
+  /**
    * The MCP servers the runs' kits name (goal 068): workers and the planner call them through
    * here; their sign-in, from control by way of the supervisor, stays in this process's memory.
    */
   readonly mcp: McpGateway;
+  /**
+   * Thermite's knowledge base for every agent (goal 175): kb_search and kb_read, asked of control
+   * through the supervisor's channel (kbAsks), and kb_write, kept in the run's ledger.
+   */
+  readonly kbAsks = new KbAsks();
+  readonly kbTools: KbTools;
   /** A rig configured with its GPU set: how many cards, and how many the judge has now. */
   gpuSplit?: { set: number; judge: number } | undefined;
   /**
    * A subscription's usage windows as its runtime last reported them (Claude Code's 5-hour and
-   * weekly windows), for the rig's report: no tokens, only percent used and reset times.
+   * weekly windows), for the rig's report: no tokens, only percent used and reset times; and its
+   * account's usage credits, on or off and since when on this rig (goal 169).
    */
   subscriptionUsage?:
     | {
         five_hour?: { utilization: number; resets_at: string } | undefined;
         seven_day?: { utilization: number; resets_at: string } | undefined;
+        credits?: { on: boolean; since: string | null } | undefined;
         at: string;
       }
     | undefined;
@@ -178,6 +218,8 @@ export class HarnessService {
    * controller sets it, from its scheduler).
    */
   promptPreview?: ((run: string, ask: PreviewAsk) => Prompt) | undefined;
+  /** The agents' scheduler, told at once of each stop and reset (it sets itself here). */
+  agents?: AgentSignals | undefined;
   /**
    * Each compaction of an agent's conversation (goal 070): the conversation kept in the run's
    * research folder, and the record of it (main.ts sets it, with the research folder).
@@ -193,6 +235,8 @@ export class HarnessService {
    * judge's job or export starts. None: no floor (tests).
    */
   disk: DiskWatch | undefined;
+  /** The harness container's CPU and memory, which each report's summary carries (goal 179). */
+  readonly resourceUse = new ResourceUse();
   /** How long a drain waits before its deadline when its command gives none (main.ts sets it). */
   drainMinutes: number = HARNESS_NUMBERS.drainMinutes.fallback;
 
@@ -205,7 +249,10 @@ export class HarnessService {
 
   /** What still runs, for the rig's report, with each open trial and what it is doing (workNow). */
   work(): Work {
-    return workNow(this.ledger, this.clock(), this.draining, (t) => this.watch.facts(t));
+    const w = workNow(this.ledger, this.clock(), this.draining, (t) => this.watch.facts(t));
+    // A planner's call in its own terminal, for Live (goal 169).
+    const terminals = this.consoles.openCalls();
+    return terminals.length ? { ...w, terminals } : w;
   }
 
   /** The promotion policy: what happens to a confirmed win (and to one an audit cleared). */
@@ -270,15 +317,18 @@ export class HarnessService {
     this.queue = new ExperimentQueue(this.ledger);
     this.journal = new Journal({ ledger: this.ledger, live: this.live, clock: this.clock });
     this.usage = new ModelUsage(this.ledger);
-    // The same folders as the research folder's (main.ts): scratch/research/<run>/knowledge.
-    this.knowledge = new Knowledge({
-      stateRoot: join(this.paths.stateDir, "knowledge"),
-      folderRoot: (run) => folderRootOf(join(this.paths.scratchDir, "research"), run),
-    });
     // The lanes' files where the research folder saves them (main.ts): stateDir/research-work.
+    this.runSearch = new RunSearch({ ledger: this.ledger, stateDir: this.paths.stateDir });
     this.runResearch = new RunResearch({
       ledger: this.ledger,
       savedLanes: join(this.paths.stateDir, SAVED_LANES_DIR),
+      index: this.runSearch,
+    });
+    this.kbTools = new KbTools({
+      ledger: this.ledger,
+      outboxDir: this.paths.outboxDir,
+      contractFor: (run) => this.contractFor(run),
+      asks: this.kbAsks,
     });
     this.mcp = new McpGateway({
       uses: (run) => this.mcpUses(run),
@@ -340,7 +390,7 @@ export class HarnessService {
 
   /** Research runs' final papers (goal 112). */
   get papers(): Papers {
-    return new Papers(this.ledger, (run) => this.contractFor(run));
+    return new Papers(this.ledger, (run) => this.contractFor(run), this.paths.outboxDir);
   }
 
   paperPackages() {
@@ -377,6 +427,16 @@ export class HarnessService {
 
   applyCommand(input: unknown, actor = "supervisor"): Promise<CommandOutcome> {
     return this.commands.applyCommand(input, actor);
+  }
+
+  /** A signed command checked, not applied (commands.ts). */
+  checkCommand(input: unknown): { ok: true } | { ok: false; reason: string } {
+    return this.commands.checkCommand(input);
+  }
+
+  /** A command whose content the supervisor could not stage, recorded as not applied (commands.ts). */
+  recordUnstaged(input: unknown, reason: string, actor = "supervisor"): CommandOutcome {
+    return this.commands.recordUnstaged(input, reason, actor);
   }
 
   // ------------------------------------------------------------ assignment: service/assignment.ts
@@ -466,6 +526,19 @@ export class HarnessService {
     return this.credentials.mcpTokenCaller(token);
   }
 
+  /** A credential bound to one call in its own terminal, until endCall (goal 169). */
+  mintCallToken(c: CallCredential): string {
+    return this.credentials.mintCallToken(c);
+  }
+
+  callOf(token: string): CallCredential | undefined {
+    return this.credentials.callOf(token);
+  }
+
+  endCall(token: string): void {
+    this.credentials.endCall(token);
+  }
+
   // ------------------------------------------------------ audits and reviews: service/decisions.ts
 
   auditPackages() {
@@ -533,8 +606,9 @@ export class HarnessService {
     return steering.advisorNotes(this, input);
   }
 
-  writeKnowledge(run: string, items: unknown[], folders?: string[] | undefined) {
-    return steering.writeKnowledge(this, run, items, folders);
+  /** Where a run's research folder is, as main.ts lays it out: scratch/research/<run>. */
+  researchRoot(run: string): string {
+    return folderRootOf(join(this.paths.scratchDir, "research"), run);
   }
 
   advisorMessages(input: steering.AdvisorReceipts) {
@@ -591,6 +665,11 @@ export class HarnessService {
     this.inboxes.trialAtWork(id);
   }
 
+  /** The owner's consoles into the agents' terminals, and their screens (goal 169). */
+  readonly consoles = new TerminalConsoles(this);
+  /** The owner's inputs to the advisors' terminals, on their way to the supervisor (goal 169). */
+  readonly advisorInputs = new AdvisorInputs();
+
   /** A running trial's way to take the owner's messages inside its turn (goal 169). */
   inTurn(id: string, d: TurnDelivery | undefined): void {
     this.inboxes.inTurn(id, d);
@@ -608,6 +687,7 @@ export class HarnessService {
   trialEnded(id: string, atWork: boolean): void {
     if (atWork) this.trialAtWork(id);
     this.inboxes.forget(id);
+    this.consoles.ended(id);
     this.watch.forget(id);
   }
 
@@ -616,10 +696,24 @@ export class HarnessService {
   }
 
   trialWait(
-    trial: { id: string; run: string; lane: string },
+    trial: { id: string; run: string; lane: string; source?: string | undefined },
     w: { until: string; kind: string; words: string },
   ): void {
     trials.trialWait(this, trial, w);
+  }
+
+  /** Trials whose worker reports its own session's counters and waits (Pi's), while they run. */
+  private readonly ownSessions = new Set<string>();
+
+  /** The trial's worker reports its counters and waits itself; the function it returns ends that. */
+  reportsOwnSession(id: string): () => void {
+    this.ownSessions.add(id);
+    return () => this.ownSessions.delete(id);
+  }
+
+  /** Whether the trial's worker may send its counters and waits on the trial's route. */
+  ownSession(id: string): boolean {
+    return this.ownSessions.has(id);
   }
 
   takeMessages(trial: { id: string; run: string; lane: string }): string[] {
@@ -631,10 +725,6 @@ export class HarnessService {
   }
 
   // ------------------------------------------------------- reports and exports: service/reports.ts
-
-  liveBatch(after: number, limit: number): unknown {
-    return reports.liveBatch(this, this.rigKeys, after, limit);
-  }
 
   liveMessages(after: number, limit: number): unknown {
     return reports.liveMessages(this, this.rigKeys, after, limit);
@@ -648,7 +738,22 @@ export class HarnessService {
     return reports.removeExports(this, names);
   }
 
-  export(actor: string, o: { full?: boolean; run?: string | undefined } = {}) {
+  export(actor: string, o: { full?: boolean; run?: string | undefined; end?: boolean } = {}) {
     return reports.exportForSupervisor(this, actor, o);
+  }
+
+  /** Each run that is not closed, each as its own run's export: service/reports.ts. */
+  exportOpenRuns(actor: string) {
+    return reports.exportOpenRuns(this, actor);
+  }
+
+  /** Each run's export at its end, once its closing work is done: service/reports.ts. */
+  exportRunEnds(actor: string, closingFailed: (run: string) => boolean = () => false) {
+    return reports.exportRunEnds(this, actor, closingFailed);
+  }
+
+  /** At the start: a run's end export a crash left unrecorded is recorded (service/reports.ts). */
+  recordRunEndsInOutbox(): number {
+    return reports.recordRunEndsInOutbox(this);
   }
 }

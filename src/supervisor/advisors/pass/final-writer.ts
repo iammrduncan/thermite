@@ -76,6 +76,7 @@ export async function writePapers(ctx: AdviseContext): Promise<void> {
           pkg,
           keeper: keeperFor(run),
           research: researchFor(run),
+          kb: await ctx.kbFor(run, "final_writer"),
           additions: await additionsFor(run),
           guide: ste?.guide,
           paper: {
@@ -135,11 +136,15 @@ export async function writePapers(ctx: AdviseContext): Promise<void> {
             `the harness refused the research paper (${ps.length} ${ps.length === 1 ? "problem" : "problems"}): ${clip(ps.map((p) => `${p.line ? `line ${p.line}: ` : ""}${p.problem}`).join("; "), 400)}. The final writer writes it again at the next round`,
           );
         }
-        record(`paper-${run}`, {
-          writer: runtime.name,
-          posted,
-          ...(r.compactions?.length ? { compactions: r.compactions } : {}),
-        });
+        record(
+          `paper-${run}`,
+          {
+            writer: runtime.name,
+            posted,
+            ...(r.compactions?.length ? { compactions: r.compactions } : {}),
+          },
+          run,
+        );
       } catch (err) {
         failed(err);
       }

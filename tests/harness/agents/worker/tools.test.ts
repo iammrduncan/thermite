@@ -102,7 +102,7 @@ describe("worker trial", () => {
           toolCalls: [
             {
               name: "idea",
-              args: { title: "unroll the tail", why: "the profile", family: "unroll" },
+              args: { title: "unroll the tail", why: "the profile", direction: "unroll" },
             },
           ],
         };
@@ -151,7 +151,7 @@ describe("worker trial", () => {
     assert.equal(r.stopped, "submitted", "the idea did not end the trial");
     assert.equal(r.toolCalls, 4);
     assert.deepEqual(ideas, [
-      { title: "unroll the tail", why: "the profile", family: "unroll", details: undefined },
+      { title: "unroll the tail", why: "the profile", direction: "unroll", details: undefined },
     ]);
     assert.match(
       String(replies[0]),

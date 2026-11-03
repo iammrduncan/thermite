@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ADVISOR_ROLES } from "../../agents.ts";
 import { ExperimentText, QueuePosition } from "../../commands.ts";
 import { AgentsContext } from "../../compaction.ts";
-import { ExperimentId } from "../../ids.ts";
+import { AttemptId, ExperimentId, RunId } from "../../ids.ts";
 import { McpUse } from "../../mcp.ts";
 import { AdvisorAgent, CallUsage, UsageHarness } from "../../usage.ts";
 import type { Route } from "../route.ts";
@@ -17,6 +17,7 @@ import {
   type ResearchKind,
   ResearchVerdicts,
   SEARCH_MAX,
+  SEARCH_MODES,
   SEARCH_QUERY_MAX,
   SOURCE_CHARS_MAX,
 } from "./research.ts";
@@ -25,7 +26,8 @@ import {
  * The harness's API for its supervisor's advisors (src/harness/api/ answers it): the runs and
  * their briefs, the run's code, evidence and research to read, the audits, reviews, cards and
  * papers that wait for an advisor, and where the advisors' answers go. None of these can set a
- * verdict, a contract or a champion. Every route takes the supervisor's token.
+ * verdict, a contract or a champion. Every route takes the supervisor's token. A run or an attempt
+ * the harness names is a run's or an attempt's ID: the supervisor names its records' files by them.
  */
 
 /** An owner's message as an advisor's brief or package gives it. */
@@ -43,7 +45,7 @@ const OwnerMessages = z.array(OwnerMessage).optional();
  * roles, and whether the planner's round left its queue below its target (goal 081).
  */
 export const RunRow = z.looseObject({
-  id: z.string(),
+  id: RunId,
   campaign: z.string(),
   mode: z.string(),
   status: z.string(),
@@ -84,7 +86,7 @@ export const RUNS = {
  */
 export const RunBrief = z.looseObject({
   champion: z.looseObject({ seq: z.number() }),
-  families: z.array(
+  registry: z.array(
     z.looseObject({
       id: z.string(),
       status: z.string(),
@@ -102,7 +104,6 @@ export const RunBrief = z.looseObject({
   }),
   owner_messages: OwnerMessages,
   background: z.unknown().optional(),
-  past_research: z.unknown().optional(),
   /** What the run's own research holds (goal 098): its tools read the rest. */
   research: z.unknown().optional(),
 });
@@ -121,6 +122,8 @@ export const DIRECTIVES = {
   answer: z.looseObject({
     left_out: z.array(z.looseObject({ rule: z.string(), why: z.string() })).optional(),
   }),
+  /** Up to 20 rules, each with its rationale and citations. */
+  maxBytes: 1024 * 1024,
 } as const satisfies Route;
 
 /** The longest path of a file a teacher reads, and the most lines of one read. */
@@ -209,11 +212,16 @@ export const RESEARCH_FILE = {
   path: "/v1/research/file",
   answer: z.unknown(),
 } as const satisfies Route;
-/** A search: its words, the kinds it keeps (a list with commas), and how many hits. */
+/**
+ * A search: its words, how they are read (words, the default, or exact: FTS5's syntax), the kinds
+ * it keeps (a list with commas), how many hits, and where its page starts.
+ */
 export const SearchQuery = z.object({
   q: z.string().max(SEARCH_QUERY_MAX).default(""),
+  mode: z.enum(SEARCH_MODES).optional(),
   kinds: z.string().max(200).optional(),
   limit: from(1).max(SEARCH_MAX).optional(),
+  offset: from(0).optional(),
 });
 export const RESEARCH_SEARCH = {
   method: "GET",
@@ -221,26 +229,12 @@ export const RESEARCH_SEARCH = {
   answer: z.unknown(),
 } as const satisfies Route;
 
-/** A search of a run's past research (its knowledge/), read only; 404 for a run it has not. */
-export const KnowledgeQuery = z.object({
-  run: z.string().min(1).max(100),
-  q: z.string().max(SEARCH_QUERY_MAX).default(""),
-  kinds: z.string().max(200).optional(),
-  limit: z.coerce.number().int().min(1).max(SEARCH_MAX).optional(),
-});
-export const KNOWLEDGE = {
-  method: "GET",
-  path: "/v1/knowledge",
-  answer: z.unknown(),
-} as const satisfies Route;
-
 /** An audit that waits for the auditor: its own id, the attempt, and the owner's messages. */
 const AuditPackage = z.looseObject({
   id: z.number().optional(),
-  attempt: z.string(),
-  run: z.string().optional(),
+  attempt: AttemptId,
+  run: RunId.optional(),
   owner_messages: OwnerMessages,
-  past_research: z.string().optional(),
 });
 export const AUDITS_PENDING = {
   method: "GET",
@@ -273,11 +267,10 @@ export const AUDITS = {
 /** A review that waits for the review panel: a goal's, or a research run's (goal 112). */
 const ReviewPackage = z.looseObject({
   id: z.number(),
-  run: z.string().optional(),
+  run: RunId.optional(),
   goal: z.string().optional(),
   kind: z.string().optional(),
   owner_messages: OwnerMessages,
-  past_research: z.string().optional(),
 });
 /** The kinds of review a supervisor asks for (`?kinds=goal,research`); none named: goal only. */
 export const REVIEW_KINDS = ["goal", "research"] as const;
@@ -331,7 +324,7 @@ export const CARDS_PENDING = {
   answer: z.looseObject({
     runs: z.array(
       z.looseObject({
-        run: z.string(),
+        run: RunId,
         questions: z
           .array(z.looseObject({ index: z.number(), through: z.string().nullable().optional() }))
           .optional(),
@@ -365,7 +358,7 @@ export const PAPERS_PENDING = {
   method: "GET",
   path: "/v1/research/papers/pending",
   answer: z.looseObject({
-    papers: z.array(z.looseObject({ run: z.string(), review: z.number() })),
+    papers: z.array(z.looseObject({ run: RunId, review: z.number() })),
   }),
 } as const satisfies Route;
 
@@ -426,6 +419,18 @@ export const ADVISOR_MESSAGES = {
   maxBytes: 256 * 1024,
 } as const satisfies Route;
 
+/**
+ * The owner's messages that wait for an advisor role in a run (`run` and `role`), oldest first, as
+ * its package gives them: an advisor's call in its program's own terminal takes them inside its
+ * turn (goal 169).
+ */
+export const ADVISOR_MESSAGES_WAITING = {
+  method: "GET",
+  path: "/v1/advisor-messages/waiting",
+  what: "the owner's messages waiting for an advisor",
+  answer: z.object({ messages: z.array(z.object({ id: z.number(), text: z.string() })) }),
+} as const satisfies Route;
+
 /** The most experiments one request adds to a run's queue, and the most it moves. */
 export const QUEUE_PART_MAX = 20;
 
@@ -439,7 +444,7 @@ export const AdvisorQueueRequest = z.strictObject({
       z.strictObject({
         title: ExperimentText.title,
         details: ExperimentText.details.optional(),
-        family: ExperimentText.family.optional(),
+        direction: ExperimentText.direction.optional(),
         why: z.string().trim().min(1).max(2000),
         position: QueuePosition.optional(),
         /** A research run's task: the question it is about, an index from 0 (goal 117). */

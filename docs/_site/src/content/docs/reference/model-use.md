@@ -1,6 +1,6 @@
 ---
 title: "Model use and cost"
-description: "Every part of the dashboard's model use and cost: the top of a run's page and its Stats tab, a campaign page's sidebar, the Metrics page, and Model prices in Settings › Providers."
+description: "Every part of the dashboard's model use and cost: the top of a run's page and its Stats tab, a campaign page's sidebar, the Metrics page, and Settings › Model prices."
 type: reference
 sidebar:
   order: 22
@@ -10,8 +10,8 @@ The dashboard shows what the agents' model calls used and cost in four places:
 
 - **A run's page**: at the top, above its tabs, so on every tab, one line and two cards of the run's [model use](glossary.md), after a hill climb's champion card; its **Stats** tab has the calls and the table by agent and model.
 - **A campaign's page**, in its sidebar: its model use, summed over all its runs on every rig, with each run.
-- **Metrics**, in the main navigation after **Rigs** (address `/ui/metrics`): the whole system's, by model and by campaign, for today, the last 7 days or all.
-- **Settings › Providers**, under the providers: **Model prices**, each model's price, which the cost uses.
+- **Metrics**, in the main navigation after **Rigs** (address `/ui/metrics`): its first tab, **Model use**, the whole system's, by model and by campaign, for today, the last 7 days or all. Its other tabs, **Bus**, **Control**, **Storage** and **Rigs**, show the system itself ([Metrics: the system view](system-view.md)).
+- **Settings › Model prices**: each model's price, which the cost uses.
 
 Code counts every call where it is made, never an agent ([The model usage records](../explanation/how-it-fits-together.md#the-model-usage-records)). Control sums the records when a page is drawn. The REST route [`GET /v1/usage`](rest-api.md#model-usage) and the MCP tool [`model_usage`](mcp-tools.md#model_usage) give the same numbers. Every label and column with an **i** says what its number means when you hover it.
 
@@ -117,7 +117,7 @@ Under the six numbers:
 
 ## Model prices
 
-In **Settings › Providers**, under the providers, **Model prices** is one table of the models' prices, in US dollars for a million tokens. It has one row for each model of each provider, except subscriptions: a Claude or ChatGPT provider's calls are on its plan.
+**Settings › Model prices** is one table of the models' prices, in US dollars for a million tokens. It has one row for each model of each provider, except subscriptions: a Claude or ChatGPT provider's calls are on its plan.
 
 | Column | What it shows |
 | --- | --- |

@@ -79,13 +79,13 @@ describe("the run page's Experiments and Planner tabs", () => {
     // Add three, as the form is filled in: at the top (the default) or at the end.
     await s.submit(form(exp, "Add"), {
       title: "unroll the loop by 4",
-      family: "loop-unrolling",
+      direction: "loop-unrolling",
       why: "fewer branches",
     });
     await s.sync();
     await s.submit(form(exp, "Add"), {
       title: "vector loads",
-      family: "memory-layout",
+      direction: "memory-layout",
       position: "end",
     });
     await s.sync();
@@ -128,7 +128,7 @@ describe("the run page's Experiments and Planner tabs", () => {
     const vector = idOf(exp, "vector loads");
     const edit = form(exp, "Save", `data-id="${vector}"`);
     assert.deepEqual(
-      [edit.fields.kind, edit.fields.id, edit.fields.title, edit.fields.family, edit.fields.why],
+      [edit.fields.kind, edit.fields.id, edit.fields.title, edit.fields.direction, edit.fields.why],
       ["queue_edit", vector, "vector loads", "memory-layout", ""],
     );
     await s.submit(edit, { title: "vector loads (half2)", why: "twice the bandwidth" });
@@ -147,7 +147,7 @@ describe("the run page's Experiments and Planner tabs", () => {
     assert.equal(empty.status, 400);
     assert.match(
       String(((await empty.json()) as { error: string }).error),
-      /^bad queue_edit payload: payload: change at least one of title, details, family and why/,
+      /^bad queue_edit payload: payload: change at least one of title, details, direction and why/,
     );
     const viaApi = await s.api("POST", "/v1/commands", {
       rig: "rig-a",
@@ -188,8 +188,12 @@ describe("the run page's Experiments and Planner tabs", () => {
       payload: {
         run: "js-1",
         directives: [
-          { kind: "avoid", family: ":loop tiling:", rationale: "three trials regressed" },
-          { kind: "try", family: "Vector loads", rationale: "the guide says twice the bandwidth" },
+          { kind: "avoid", direction: ":loop tiling:", rationale: "three trials regressed" },
+          {
+            kind: "try",
+            direction: "Vector loads",
+            rationale: "the guide says twice the bandwidth",
+          },
         ],
         replace: false,
       },
@@ -309,7 +313,7 @@ describe("the run page's Experiments and Planner tabs", () => {
                   ],
                   // It designs the new directions the owner's rules name, one for the rule the
                   // owner's plain words ask for, and one the old rule in words converts to.
-                  new_families: [
+                  new_directions: [
                     { id: "loop-tiling", description: "tile the loops for the cache" },
                     { id: "vector loads", description: "wider loads, such as half2" },
                     { id: ":timer code:", description: "any change to the timing code" },
@@ -321,12 +325,12 @@ describe("the run page's Experiments and Planner tabs", () => {
                   rules: [
                     {
                       kind: "avoid",
-                      family: "timer code",
+                      direction: "timer code",
                       rationale: "the owner asked for it",
                       from_message: message,
                     },
                   ],
-                  convert: [{ rule: legacy, family: ":shared memory:" }],
+                  convert: [{ rule: legacy, direction: ":shared memory:" }],
                   notes: "loads first",
                 },
               },
@@ -372,7 +376,7 @@ describe("the run page's Experiments and Planner tabs", () => {
       /Avoid :timer-code: · set by planner \d+[smh] ago\s*the owner asked for it \(from your message: “Never touch the timer code\.”\)\s*Code keeps it at every hand-out\. No lane gets it\./,
     );
     // The directions it designed for your rules, in its words; they are the run's now.
-    const tiling = (await s.run("js-1")).rules.find((x) => x.body.family === "loop-tiling")?.id;
+    const tiling = (await s.run("js-1")).rules.find((x) => x.body.direction === "loop-tiling")?.id;
     assert.ok(tiling);
     assert.ok(
       plan.includes(
@@ -421,7 +425,7 @@ describe("the run page's Experiments and Planner tabs", () => {
     // The old rule in words, converted at the round: a normal rule on the direction the planner
     // designed for it, still yours, with the words it replaced; its log says so.
     assert.doesNotMatch(plan, /class="qrule legacy"/);
-    const shared = (await s.run("js-1")).rules.find((x) => x.body.family === "shared-memory");
+    const shared = (await s.run("js-1")).rules.find((x) => x.body.direction === "shared-memory");
     assert.ok(shared);
     assert.match(
       words(plan),

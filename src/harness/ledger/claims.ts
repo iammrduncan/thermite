@@ -29,8 +29,8 @@ export interface FindingRow {
   created_at: string;
 }
 
-/** A research note as its row holds it; the sources it cites are JSON, as stored. */
-export interface NoteRow {
+/** A source note as its row holds it; the sources it cites are JSON, as stored. */
+export interface SourceNoteRow {
   id: number;
   run: string;
   lane: string | null;
@@ -72,7 +72,7 @@ function toFinding(r: Row): FindingRow {
   };
 }
 
-function toNote(r: Row): NoteRow {
+function toSourceNote(r: Row): SourceNoteRow {
   return {
     id: Number(r.id),
     run: String(r.run),
@@ -307,14 +307,14 @@ export class LedgerClaims extends LedgerPart {
   }
 
   /**
-   * How many sources, claims and notes the run recorded; with `compactions`, also how many of its
+   * How many sources, claims and source notes the run recorded; with `compactions`, also how many of its
    * agents' conversations were kept before a compaction.
    */
   recorded(run: string, o: { compactions?: boolean } = {}): number {
     return (
       this.ledger.sources.count(run) +
       this.count(run) +
-      this.countNotes(run) +
+      this.countSourceNotes(run) +
       (o.compactions ? this.ledger.events.count("context_compacted", { subject: run }) : 0)
     );
   }
@@ -416,17 +416,17 @@ export class LedgerClaims extends LedgerPart {
     return Number(r?.n ?? 0);
   }
 
-  // The research notes.
+  // The source notes.
 
-  /** A research note, recorded now, with the sources it cites: its id. */
-  addNote(n: {
+  /** A source note, recorded now, with the sources it cites: its id. */
+  addSourceNote(n: {
     run: string;
     lane: string | null;
     text: string;
     sources: readonly string[];
   }): number {
     return this.execute(
-      "insert into note (run, lane, text, sources, created_at) values (?, ?, ?, ?, ?)",
+      "insert into source_note (run, lane, text, sources, created_at) values (?, ?, ?, ?, ?)",
       n.run,
       n.lane,
       n.text,
@@ -435,42 +435,44 @@ export class LedgerClaims extends LedgerPart {
     ).id;
   }
 
-  /** The run's notes, oldest first. */
-  notes(run: string): NoteRow[] {
-    return this.rows<Row>("select * from note where run = ? order by id", run).map(toNote);
+  /** The run's source notes, oldest first. */
+  sourceNotes(run: string): SourceNoteRow[] {
+    return this.rows<Row>("select * from source_note where run = ? order by id", run).map(
+      toSourceNote,
+    );
   }
 
-  /** The run's newest `limit` notes, the newest first. */
-  newestNotes(run: string, limit: number): NoteRow[] {
+  /** The run's newest `limit` source notes, the newest first. */
+  newestSourceNotes(run: string, limit: number): SourceNoteRow[] {
     return this.rows<Row>(
-      "select * from note where run = ? order by id desc limit ?",
+      "select * from source_note where run = ? order by id desc limit ?",
       run,
       limit,
-    ).map(toNote);
+    ).map(toSourceNote);
   }
 
-  /** One page of the run's notes, the newest first. */
-  notesPage(run: string, limit: number, offset: number): NoteRow[] {
+  /** One page of the run's source notes, the newest first. */
+  sourceNotesPage(run: string, limit: number, offset: number): SourceNoteRow[] {
     return this.rows<Row>(
-      "select * from note where run = ? order by id desc limit ? offset ?",
+      "select * from source_note where run = ? order by id desc limit ? offset ?",
       run,
       limit,
       offset,
-    ).map(toNote);
+    ).map(toSourceNote);
   }
 
-  /** The notes with these ids, of any run, oldest first. */
-  notesById(ids: readonly number[]): NoteRow[] {
+  /** The source notes with these ids, of any run, oldest first. */
+  sourceNotesById(ids: readonly number[]): SourceNoteRow[] {
     if (!ids.length) return [];
     return this.rows<Row>(
-      `select * from note where id in (${ids.map(() => "?").join(", ")}) order by id`,
+      `select * from source_note where id in (${ids.map(() => "?").join(", ")}) order by id`,
       ...ids,
-    ).map(toNote);
+    ).map(toSourceNote);
   }
 
-  /** How many notes the run has. */
-  countNotes(run: string): number {
-    const r = this.row<Row>("select count(*) as n from note where run = ?", run);
+  /** How many source notes the run has. */
+  countSourceNotes(run: string): number {
+    const r = this.row<Row>("select count(*) as n from source_note where run = ?", run);
     return Number(r?.n ?? 0);
   }
 }

@@ -1,10 +1,24 @@
+import type { DatabaseSync } from "node:sqlite";
 import { PodConfig } from "../../core/tunnel.ts";
 import { type Row, StorePart } from "./part.ts";
 
 /**
  * Rigs in pull mode (goal 125, T6): each rig minted for a pod, its pod, its enrollment and its
- * exchanges, its secrets only sealed.
+ * exchanges, its secrets only sealed; and its leaf node on the message bus (goal 168): its pod's
+ * authority, and the pod's address once RunPod gave it.
  */
+
+/**
+ * Store migration 22: a rig in pull mode keeps its pod's leaf node authority (public), and the
+ * pod's address for the bus, with when it last changed.
+ */
+export function tunnelLeafColumns(db: DatabaseSync): void {
+  const cols = (db.prepare("pragma table_info(tunnel_rig)").all() as { name: string }[]).map(
+    (c) => c.name,
+  );
+  for (const c of ["leaf_ca", "leaf_address", "leaf_address_at"])
+    if (!cols.includes(c)) db.exec(`alter table tunnel_rig add column ${c} text`);
+}
 
 /** A rig in pull mode, as listed: never its sealed secrets. */
 export interface TunnelRig {
@@ -27,6 +41,11 @@ export interface TunnelRig {
   error: string | null;
   created_at: string;
   created_by: string;
+  /** The pod's leaf node authority's certificate; null: launched without the leaf. */
+  leaf_ca: string | null;
+  /** The pod's public address and port for the bus, as RunPod gave it last; null: none yet. */
+  leaf_address: string | null;
+  leaf_address_at: string | null;
 }
 
 export interface TunnelSecrets {
@@ -56,6 +75,9 @@ const tunnelRigOf = (r: Row): TunnelRig & TunnelSecrets => {
     error: opt(r.error),
     created_at: String(r.created_at),
     created_by: String(r.created_by),
+    leaf_ca: opt(r.leaf_ca),
+    leaf_address: opt(r.leaf_address),
+    leaf_address_at: opt(r.leaf_address_at),
   };
 };
 
@@ -69,13 +91,14 @@ export class TunnelRigs extends StorePart {
       prefix_sealed: string;
       box_private_sealed: string;
       code_sealed: string;
+      leaf_ca?: string | null | undefined;
     },
   ): void {
     this.db
       .prepare(
         `insert into tunnel_rig (rig, port, prefix_sealed, box_private_sealed, box_public,
-           code_sealed, code_expires_at, config, created_at, created_by)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           code_sealed, code_expires_at, config, created_at, created_by, leaf_ca)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         t.rig,
@@ -88,6 +111,7 @@ export class TunnelRigs extends StorePart {
         JSON.stringify(t.config),
         new Date().toISOString(),
         t.created_by,
+        t.leaf_ca ?? null,
       );
     this.store.auditLog.add(t.created_by, "tunnel_rig_added", {
       rig: t.rig,
@@ -144,6 +168,23 @@ export class TunnelRigs extends StorePart {
       .run(sign, box, new Date().toISOString(), rig);
     if (Number(r.changes)) this.store.auditLog.add("control", "tunnel_rig_enrolled", { rig });
     return Number(r.changes) > 0;
+  }
+
+  /**
+   * The pod's address for the bus, as RunPod gives it while the pod runs (null: it has none now,
+   * as while stopped): kept when it changes, a new address with a step in the rig's history. False
+   * when it is the one kept, or the rig has no leaf.
+   */
+  setLeafAddress(rig: string, address: string | null): boolean {
+    const r = this.db
+      .prepare(
+        `update tunnel_rig set leaf_address = ?, leaf_address_at = ?
+         where rig = ? and leaf_ca is not null and leaf_address is not ?`,
+      )
+      .run(address, new Date().toISOString(), rig, address);
+    if (!Number(r.changes)) return false;
+    if (address) this.store.rigHistory.add(rig, "runpod_leaf_address", true, address);
+    return true;
   }
 
   /** After each exchange: when it was, what the pod refused since, and the last error. */

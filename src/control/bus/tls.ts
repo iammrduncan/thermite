@@ -2,9 +2,10 @@ import { createPrivateKey, createPublicKey, X509Certificate } from "node:crypto"
 import { existsSync, readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { join } from "node:path";
-import { BUS_URL_SETTING, busUrl } from "../../common/bus.ts";
+import { BUS_URL_SETTING, busUrl } from "../../common/bus/index.ts";
 import { log } from "../../common/env.ts";
 import { writeAtomic } from "../../common/fs.ts";
+import { CONTROL_STATE } from "../../core/backup.ts";
 import { type CertAndKey, certFingerprint, makeCa, makeServerCert } from "./cert.ts";
 
 /**
@@ -17,7 +18,7 @@ import { type CertAndKey, certFingerprint, makeCa, makeServerCert } from "./cert
  */
 
 /** The authority's files in control's state folder. */
-export const BUS_CA_FILES = { cert: "bus-ca.pem", key: "bus-ca.key" } as const;
+export const BUS_CA_FILES = { cert: CONTROL_STATE.busCaCert, key: CONTROL_STATE.busCaKey } as const;
 /** The server's files in the folder control writes for it, beside its users. */
 export const BUS_TLS_FILES = { cert: "server-cert.pem", key: "server-key.pem" } as const;
 
@@ -27,6 +28,9 @@ export const BUS_CA_DAYS = 3650;
 export const BUS_SERVER_DAYS = 397;
 /** A server certificate this close to its end is made anew. */
 export const BUS_RENEW_DAYS = 30;
+
+/** The extended key usage of a client's certificate (RFC 5280), which pods' servers ask for. */
+const CLIENT_AUTH = "1.3.6.1.5.5.7.3.2";
 
 /** The files' modes: the server reads its key through its group, control's (compose.yaml). */
 const MODES = { caCert: 0o644, caKey: 0o600, cert: 0o644, key: 0o640 };
@@ -40,15 +44,15 @@ export const BUS_CA_EXPORT_SETTING = "THERMITE_NATS_CA_EXPORT";
 
 /**
  * The bus's address as control reaches it, from its setting. Control needs its bus: it keeps every
- * rig's events in the bus's events stream, and derives its records from them there, whether a rig
- * reports over the bus or over HTTP. Not set stops control at start, with the setting's name; a
- * bad one too (busUrl).
+ * rig's events in the bus's events stream, and derives its records from them there, and the rigs
+ * reach it there alone. Not set stops control at start, with the setting's name; a bad one too
+ * (busUrl).
  */
 export function controlBusUrl(env: Record<string, string | undefined>): string {
   const url = busUrl(env);
   if (!url)
     throw new Error(
-      `control needs its message bus: set ${BUS_URL_SETTING} to its NATS server, such as nats://nats:4222. Control keeps every rig's events in the bus's EVENTS stream and derives its records from them there, whether a rig reports over the bus or over HTTP`,
+      `control needs its message bus: set ${BUS_URL_SETTING} to its NATS server, such as nats://nats:4222. Control keeps every rig's events in the bus's EVENTS stream and derives its records from them there, and its rigs reach it only on the bus`,
     );
   return url;
 }
@@ -103,8 +107,8 @@ export class BusTls {
 
   /**
    * Makes the server's certificate and key anew, and writes them, when there is none, its key does
-   * not match, another authority signed it, it lacks one of the names, or it ends within
-   * BUS_RENEW_DAYS. The key is written first: the server waits for its certificate. True when it
+   * not match, another authority signed it, it is not good for a client too, it lacks one of the
+   * names, or it ends within BUS_RENEW_DAYS. The key is written first: the server waits for its certificate. True when it
    * wrote them, so that the server reads them again.
    */
   write(): boolean {
@@ -112,7 +116,8 @@ export class BusTls {
     const key = join(this.o.configDir, BUS_TLS_FILES.key);
     const why = this.staleBecause(cert, key);
     if (!why) return false;
-    const made = makeServerCert(this.ca, this.names, this.now(), BUS_SERVER_DAYS);
+    // Also a client's: the server shows it when it dials a RunPod pod's server (leaf.ts).
+    const made = makeServerCert(this.ca, this.names, this.now(), BUS_SERVER_DAYS, { client: true });
     writeAtomic(key, made.key, MODES.key);
     writeAtomic(cert, made.cert, MODES.cert);
     const validTo = new Date(new X509Certificate(made.cert).validTo).toISOString();
@@ -139,6 +144,7 @@ export class BusTls {
     const authority = new X509Certificate(this.ca.cert);
     if (!cert.checkIssued(authority) || !cert.verify(authority.publicKey))
       return "another authority signed it";
+    if (!cert.keyUsage?.includes(CLIENT_AUTH)) return "it can't sign in to a pod's server";
     const missing = this.names.find((n) => (isIP(n) ? !cert.checkIP(n) : !cert.checkHost(n)));
     if (missing !== undefined) return `it does not name ${missing}`;
     const left = Date.parse(cert.validTo) - this.now().getTime();

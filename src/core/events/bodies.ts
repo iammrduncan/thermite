@@ -2,8 +2,11 @@ import type { AdvisorRole, Harness, MessageHow } from "../agents.ts";
 import type { Mode } from "../contract.ts";
 import type { GoalCellValues, GoalCheck } from "../goal/index.ts";
 import type { HeldOutCell } from "../held-out.ts";
+import type { KbItemBody, KbItemFile } from "../kb/index.ts";
 import type { AgentPromptBody } from "../prompts.ts";
+import type { RetentionRemoved } from "../retention/index.ts";
 import type { RigSettings } from "../rig-settings.ts";
+import type { TerminalOutcome } from "../terminal-input.ts";
 import type { EventKind } from "./kinds.ts";
 
 /**
@@ -20,7 +23,7 @@ export interface EventBodies {
     version: number;
     mode: Mode;
     seed: { repo: string; commit: string; folder?: string | undefined; source_commit?: string };
-    direction: string | null;
+    note: string | null;
     agents: boolean;
     promotion: "auto" | "owner_approval" | null;
     ask_owner?:
@@ -37,7 +40,11 @@ export interface EventBodies {
   run_status: { status: "closed" | "paused" | "running"; reason: string | null };
   import_verified: { name: string | null; sha256: string | null; commit: string | null };
   export_written: { through_event: number; path: string };
+  /** A run's export at its end (service/reports.ts): the export's name and its last event. */
+  run_end_exported: { export: string; through_event: number };
   wipe_requested: { export: string };
+  /** What a retention policy removed on the rig (core/retention/): its builds or records. */
+  retention_removed: RetentionRemoved;
 
   // ---------------------------------------------------------------- commands
   command: { kind: string; accepted: boolean; result: unknown };
@@ -75,8 +82,33 @@ export interface EventBodies {
     reasons: string;
     supersedes: number | null;
     values?: unknown;
+    /** Each guard's status, changes (fractions, positive is better) and values (goal 184). */
+    guards?: VerdictGuard[] | undefined;
   };
-  invalidation: { kind: "attempt" | "job"; reason: string; attempts: string[] };
+  /** A confirmed win's guards from its verdict's record, sent once when its event lacked them. */
+  verdict_guards: { id: number; guards: VerdictGuard[] };
+  /**
+   * The owner withdrew evidence (goal 174): the invalidation's id, its subject, the attempts it
+   * reached, the `invalidated` verdicts it recorded and the champions it reopened.
+   */
+  invalidation: {
+    id?: number | undefined;
+    run?: string | null | undefined;
+    kind: "attempt" | "job";
+    reason: string;
+    attempts: string[];
+    verdicts?: number[] | undefined;
+    champions?: number[] | undefined;
+  };
+  /** A job cancelled before it ran or while it ran: its attempt's evidence was withdrawn. */
+  job_cancelled: {
+    run: string | null;
+    attempt: string | null;
+    kind: string;
+    was: string;
+    reason: string;
+    invalidation?: number | undefined;
+  };
   baseline: {
     run: string;
     job: number;
@@ -163,6 +195,15 @@ export interface EventBodies {
   };
   champion_ref_failed: { seq: number; error: string };
   champion_reopened: { seq: number; attempt: string; reason: string };
+  /** The run's champion moved back to the newest that stands, after an invalidation (goal 174). */
+  champion_moved_back: {
+    from: number;
+    to: number;
+    attempt: string | null;
+    commit: string;
+    invalidation: number;
+    reason: string;
+  };
   promotion_pending: { run: string; expected_seq: number; commit: unknown; reason: string };
   promotion_blocked: { reason: string };
   promotion_declined: { run: string; was: string; note?: string | undefined };
@@ -174,7 +215,7 @@ export interface EventBodies {
     tree: string;
     attempt: string | null;
     result?: string | undefined;
-    lifecycle?: "duplicate" | "queued" | "rejected_v0" | undefined;
+    lifecycle?: "duplicate" | "queued" | "rejected_v0" | "judged" | undefined;
   };
   propagation_accepted: PropagationJudged;
   propagation_rejected: PropagationJudged;
@@ -191,14 +232,14 @@ export interface EventBodies {
     advisor?: string | undefined;
   };
   directive: { id: number; body: unknown };
-  directive_converted: { id: number; to: number; kind: unknown; family: string; words: unknown };
+  directive_converted: { id: number; to: number; kind: unknown; direction: string; words: unknown };
   directive_dropped: { id: number };
   directives_superseded: { ids: number[] };
   directives_left_out: { rules: unknown[]; why: string; reason?: string | undefined };
   conclusion_proposed: {
     proposal: number;
     kind: string;
-    approaches: { family: string; attempts: number }[];
+    approaches: { direction: string; attempts: number }[];
   };
   conclusion_accepted: ConclusionDecided;
   conclusion_rejected: ConclusionDecided;
@@ -248,7 +289,7 @@ export interface EventBodies {
     directives: number[];
     assignments: {
       lane: string;
-      family: string;
+      direction: string;
       focus: string;
       parent: "champion" | "lane_best";
       directive?: number | undefined;
@@ -269,13 +310,13 @@ export interface EventBodies {
     lanes: number;
     source: "fallback" | "planner";
   };
-  family_added: { family: string; description: string; for_rules?: number[] | undefined };
-  family_status: { family: string; status: string; reason: string };
+  direction_added: { direction: string; description: string; for_rules?: number[] | undefined };
+  direction_status: { direction: string; status: string; reason: string };
   experiment_added: {
     id: string;
     title: string;
     details?: string | undefined;
-    family?: string | undefined;
+    direction?: string | undefined;
     why?: string | undefined;
     question?: number | undefined;
     by: string;
@@ -300,7 +341,7 @@ export interface EventBodies {
     by: string;
     title?: string | undefined;
     details?: string | undefined;
-    family?: string | undefined;
+    direction?: string | undefined;
     why?: string | undefined;
   };
   experiment_dropped: { id: string; by: string; why: string };
@@ -327,14 +368,14 @@ export interface EventBodies {
     trial: string;
     lane: string;
     epoch: number;
-    family: string;
+    direction: string;
     focus?: string | undefined;
   };
   trial_finished: {
     trial: string;
     lane: unknown;
     epoch: unknown;
-    family: unknown;
+    direction: unknown;
     attempt: unknown;
     stopped: string;
     turns: number;
@@ -370,6 +411,9 @@ export interface EventBodies {
     how: "summary" | "trimmed" | "harness";
     snapshot: string | null;
     bytes?: number | undefined;
+    /** The conversation whole, scrubbed, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
+    /** Its start, cut to an item's length: the events of a rig from before its file. */
     text?: string | undefined;
     clipped?: boolean | undefined;
     summary: string | null;
@@ -383,7 +427,14 @@ export interface EventBodies {
     trial: string;
     reason: string;
     in_trial?: boolean | undefined;
+    /**
+     * A weekly window (goal 169): the trial ended at a usage limit whose reset is more than a day
+     * away, and the run waits for the reset itself; control's Needs you shows it.
+     */
+    weekly?: true | undefined;
   };
+  /** The owner ended the run's wait for its provider before its time (`end_wait`). */
+  agents_wait_ended: { until: string };
   journal_note: {
     id: number;
     by: string;
@@ -403,6 +454,24 @@ export interface EventBodies {
     how?: MessageHow | undefined;
   };
   agent_message_unkept: { message: number };
+  /**
+   * The owner's input to a trial's terminal (goal 169), word for word, and what became of it: one
+   * when the command is applied, and one more when an input queued for a usage window's reset is
+   * typed or dropped.
+   */
+  terminal_input: {
+    command: string;
+    trial: string;
+    lane: string;
+    text?: string | undefined;
+    keys?: string[] | undefined;
+    wait: "queue" | "now";
+    /** A worker in Pi: the text waited until the agent would stop (its Pi view). */
+    follow_up?: true | undefined;
+    outcome: TerminalOutcome;
+    why?: string | undefined;
+    until?: string | undefined;
+  };
   /** A prompt a run's agent was sent (goal 166): its sections and sources (core/prompts.ts). */
   agent_prompt: AgentPromptBody;
 
@@ -471,13 +540,21 @@ export interface EventBodies {
     deadline?: string | undefined;
     deadline_reached?: boolean | undefined;
   };
-  rig_settings_changed: { change: Record<string, unknown>; settings: RigSettings };
-  /**
-   * The harness did not run from `since` to `until`: the host slept, its container was paused or
-   * stopped, or it crashed. `restarted` when it found the gap as it started again. A research
-   * run's clock leaves the gap out.
-   */
+  /** What Edit rig changed (the `rig_settings` command's fields), and the settings now. */
+  rig_settings_changed: {
+    change: Record<string, string | number | boolean | null | undefined>;
+    settings: RigSettings;
+  };
+  /** The harness did not run, `restarted`: found at its start (service/gaps.ts). Not research time. */
   harness_gap: { since: string; until: string; restarted: boolean };
+  /**
+   * Control's own, never a ledger's: an event of v0.1.0 that the message bus can't carry as the
+   * rig recorded it (a kind a subject can't hold, or more than a message holds), which control
+   * moved at its upgrade on the rig's own subject (control/events/move.ts). Its own kind, and its
+   * body; for one too large even so, its kind cut and its size in bytes, with no body: the copy
+   * of control's store kept at the upgrade holds it whole.
+   */
+  legacy: { kind: string; body?: unknown; bytes?: number };
 
   // ---------------------------------------------------------------- research
   source_fetched: {
@@ -487,7 +564,10 @@ export interface EventBodies {
     bytes: number;
     url: string;
     title: string | null;
-    text: string;
+    /** Its archived text, whole, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
+    /** Its text's start, cut to an item's length: the events of a rig from before its file. */
+    text?: string | undefined;
   };
   fetch_refused: { url: string; reason: string; asked?: number | undefined };
   claim_added: {
@@ -508,7 +588,7 @@ export interface EventBodies {
     summary: string;
     why: string;
   };
-  research_note: {
+  source_note: {
     note: number;
     by: string;
     text: string;
@@ -523,6 +603,9 @@ export interface EventBodies {
     change: string;
     bytes?: number | undefined;
     sha256?: string | undefined;
+    /** The file whole, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
+    /** Its text cut to an item's length: the events of a rig from before its file. */
     text?: string | undefined;
     clipped?: boolean | undefined;
   };
@@ -593,6 +676,8 @@ export interface EventBodies {
     open: { questions: number[]; hypotheses: string[] };
   };
   research_paper_requested: { review: number; figures: unknown; end: string };
+  /** One version of one item in its writer's slot of the knowledge base (core/kb/items.ts). */
+  kb_item: KbItemBody;
   research_paper_refused: {
     review: number;
     writer: string;
@@ -610,6 +695,8 @@ export interface EventBodies {
     experiments: unknown[];
     chars: number;
     paper: string;
+    /** The paper whole, as the knowledge base keeps its item's file (goal 175). */
+    file?: KbItemFile | undefined;
   };
 }
 
@@ -618,6 +705,17 @@ interface JobRequeued {
   fence: number;
   expiries: number;
   state: string;
+}
+
+/** A guard in a verdict's event (goal 184). */
+interface VerdictGuard {
+  metric: string;
+  status: string;
+  change: number | null;
+  low: number | null;
+  high: number | null;
+  values?: unknown;
+  vs_start?: { change: number | null; spent: boolean } | undefined;
 }
 
 /** A champion from another rig, judged here. */
@@ -669,7 +767,10 @@ interface ResearchReport {
   paper?: boolean | undefined;
   no_paper?: string | undefined;
   unsupported_numbers: number;
+  /** The report cut to 60,000 characters (cutSaid); the knowledge base gets it whole as `file`. */
   report: string;
+  /** The report whole, as the knowledge base keeps its item's file (goal 175). */
+  file?: KbItemFile | undefined;
 }
 
 /** A kind's body. */

@@ -12,7 +12,11 @@ import type { AdviseContext } from "./context.ts";
 import { clip } from "./shared.ts";
 import { MAX_TRIES } from "./state.ts";
 
-/** The review panel's part of a pass: each open review, by every reviewer of the panel. */
+/**
+ * The review panel's part of a pass: each open review, by every reviewer of the panel. A try in
+ * which a reviewer met a full usage window is not counted: the review waits for the reset
+ * (limit.ts).
+ */
 export async function answerReviews(ctx: AdviseContext): Promise<void> {
   const {
     cfg,
@@ -22,11 +26,15 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
     now,
     retryMs,
     mark,
-    pastSearchFor,
+    uncount,
+    waitsFor,
+    waitOut,
+    kbFor,
     researchFor,
     configFor,
     additionsFor,
     keeperFor,
+    terminalFor,
     mcpFor,
     overBudget,
     count,
@@ -51,6 +59,8 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
       // never left waiting on a review that no one posts.
       const t = next.tried[key];
       if (t && now - Date.parse(t) < retryMs) continue;
+      // A reviewer waits for its provider's full usage window: the review waits with it.
+      if (cfg.advisors.review_panel.some((r) => waitsFor(r.name))) continue;
       mark(key);
       const last = (next.tries[key] ?? 0) >= MAX_TRIES;
       const owner = (pkg.owner_messages ?? []).filter((m) => !told.has(m.id));
@@ -70,21 +80,31 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         // With the campaign's own context settings, when it sets any (goal 070).
         const panel = (await configFor(pkg.run)).review_panel;
         const compactions: AdvisorCompaction[] = [];
+        // The owner's messages a reviewer's terminal took inside its turn (goal 169).
+        const takenInTurn = new Set<number>();
         // Each reviewer that gave no answer, and why.
         const unanswered: { reviewer: string; why: string }[] = [];
         // The reviewers review at once, in parallel (goal 117), each blind to the others. Each
         // one's call is then recorded in the panel's order: its usage, its line in Live and its
         // answer. A reviewer whose call throws gave no answer, with the error as why.
+        // Thermite's knowledge base for the reviewers (goal 175), in the review panel's slot.
+        const kb = pkg.run ? await kbFor(pkg.run, "review_panel") : undefined;
         const calls = await Promise.all(
           panel.map((runtime) =>
             reviewOne({
               runtime,
               pkg: { ...pkg, owner_messages: owner },
-              ...(pkg.run && pkg.past_research ? { pastSearch: pastSearchFor(pkg.run) } : {}),
+              ...(kb ? { kb } : {}),
               ...(mcp ? { mcp } : {}),
               ...(research && pkg.run ? { research: researchFor(pkg.run) } : {}),
               keeper: keeperFor(pkg.run),
               additions,
+              // In its program's own terminal on a rig set so (goal 169).
+              terminal: terminalFor(
+                pkg.run,
+                "review_panel",
+                owner.map((m) => m.id),
+              ),
             }).then(
               (r) => ({ runtime, r }),
               (err: unknown) => ({
@@ -105,6 +125,7 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
           await usageOut(pkg.run, `review ${pkg.id}`, "review_panel", r.usage);
           await promptsOut(pkg.run, `review ${pkg.id}`, r.sent);
           compactions.push(...(r.compactions ?? []));
+          for (const id of r.given ?? []) takenInTurn.add(id);
           if (!r.output) {
             unanswered.push({ reviewer: runtime.name, why: clip(r.error ?? "no answer", 300) });
             continue;
@@ -126,6 +147,17 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
             "text",
             `review ${pkg.id}${research ? " of the research questions" : pkg.goal ? ` of goal ${pkg.goal}` : ""}, ${runtime.name}: ${r.output.pass ? "pass" : "fail"}.${answered} ${clip(r.output.reasons, 300)}`,
           );
+        }
+        // A reviewer that met a full usage window, headless: not a failed try. The review is not
+        // posted, its try not counted, and it is tried again once each such reviewer's window
+        // resets.
+        const full = calls.flatMap(({ runtime, r }) =>
+          !r.output && r.limit ? [{ name: runtime.name, limit: r.limit }] : [],
+        );
+        if (full.length) {
+          uncount(key);
+          for (const f of full) waitOut(f.name, `review ${pkg.id}`, f.limit, pkg.run);
+          continue;
         }
         // Every reviewer must answer: a crashed dissenter must not lose its veto. The owner's
         // messages count as read only with the posted review, so a retry gives them again. From
@@ -153,9 +185,9 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         const posted = await harness.call(REVIEW, { params: { id: pkg.id }, body: { results } });
         s.reviews++;
         if (pkg.run) {
-          const ids = owner.map((m) => m.id);
+          const ids = [...new Set([...owner.map((m) => m.id), ...takenInTurn])];
           await receipts(pkg.run, "review_panel", ids, answers);
-          for (const m of owner) told.add(m.id);
+          for (const id of ids) told.add(id);
         }
         say(
           pkg.run,
@@ -167,12 +199,11 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         if (pkg.run)
           for (const j of journal)
             noted.push(await notesOut(pkg.run, "review_panel", j.by, j.notes));
-        record(`review-${pkg.id}`, {
-          results,
-          posted,
-          noted,
-          ...(compactions.length ? { compactions } : {}),
-        });
+        record(
+          `review-${pkg.id}`,
+          { results, posted, noted, ...(compactions.length ? { compactions } : {}) },
+          pkg.run,
+        );
       } catch (err) {
         fail(`review ${pkg.id}`, err, pkg.run);
         await tryFailed(pkg.id, next.tries[key] ?? 0, err);

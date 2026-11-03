@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { briefingFromKb } from "../../src/control/briefing.ts";
-import { briefingSeedOf } from "../../src/control/kb.ts";
+import { briefingSeedOf } from "../../src/control/kb/index.ts";
 import type { ControlStore } from "../../src/control/store/index.ts";
 import { controlStore, ingestReport } from "../helpers/control-store.ts";
 
@@ -27,7 +27,7 @@ async function ran(store: ControlStore, rig: string, run: string, words: string)
         id: 2,
         at: at(1),
         actor: "lane-1",
-        kind: "research_note",
+        kind: "source_note",
         subject: run,
         body: { id: 7, by: "lane-1", text: words },
       },

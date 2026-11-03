@@ -1,5 +1,6 @@
 import { HELD_OUT_EVENT_CELLS } from "../../../core/held-out.ts";
-import { clip } from "../../../core/kb-index.ts";
+import { clip } from "../../../core/kb/index.ts";
+import { guardsOf } from "../guards.ts";
 import { metricValuesOf } from "../metric-values.ts";
 import { frozen } from "../sharing.ts";
 import type { AttemptView, HeldOutView } from "../types.ts";
@@ -50,13 +51,14 @@ export const ATTEMPTS: Handlers = {
       verdict: null,
       delta: null,
       values: null,
+      guards: [],
       hypothesis: (b.hypothesis as string | null) ?? null,
       recorded_at: e.at,
       updated_at: e.at,
       commit: typeof b.commit === "string" ? b.commit : null,
       parent: typeof b.parent === "string" ? b.parent : null,
       known_flaws: frozen(Array.isArray(b.known_flaws) ? b.known_flaws.map((x) => String(x)) : []),
-      family: null,
+      direction: null,
       trial: null,
       gained: null,
       lost: [],
@@ -110,6 +112,7 @@ export const ATTEMPTS: Handlers = {
     a.verdict = String(b.verdict);
     a.delta = typeof b.delta === "number" ? b.delta : null;
     a.values = metricValuesOf(b.values);
+    a.guards = frozen(guardsOf(b.guards));
     a.ci =
       typeof b.ci_low === "number" && typeof b.ci_high === "number" ? [b.ci_low, b.ci_high] : null;
     a.reasons = typeof b.reasons === "string" ? b.reasons : null;
@@ -118,6 +121,12 @@ export const ATTEMPTS: Handlers = {
     if (b.verdict === "win_confirmed" && typeof b.delta === "number") {
       f.confirmDelta.set(a.id, b.delta);
     }
+  },
+  // A champion's guards from a harness that judged it before verdicts carried them (goal 184):
+  // only when its verdict gave none.
+  verdict_guards(f, e, b) {
+    const a = f.attempts.get(String(e.subject));
+    if (a && !a.guards.length) a.guards = frozen(guardsOf(b.guards));
   },
   held_out_checked(f, e, b) {
     // A goal run's champion's check names its champion (goal 086); else it is an attempt's.

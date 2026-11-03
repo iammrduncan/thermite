@@ -1,9 +1,10 @@
 import type { AskOwner, BriefingSeed } from "../../core/commands.ts";
 import { parseContract } from "../../core/contract.ts";
+import { currentCommand } from "../../core/names.ts";
 import { issueWaking, type PodWaker } from "../issue/index.ts";
 import type { KitRepos } from "../kits/index.ts";
 import { nextRunName } from "../run-names.ts";
-import type { CampaignSources, ControlStore } from "../store/index.ts";
+import type { CampaignResults, CampaignSources, ControlStore } from "../store/index.ts";
 import { buildCampaign } from "./builder.ts";
 
 /**
@@ -87,7 +88,10 @@ export async function startCampaign(deps: Deps, input: StartInput): Promise<Star
   const draft = input.draft as {
     project?: { url: string; commit: string; repo: string; access?: string };
     kit?: { source: string; url?: string; access?: string };
+    results?: unknown;
   };
+  const results = resultsOf(draft.results);
+  if (typeof results === "string") return { ok: false, errors: [results] };
   const sources: CampaignSources =
     contract.mode === "research" || !draft.project || !contract.project.kit
       ? {}
@@ -106,6 +110,7 @@ export async function startCampaign(deps: Deps, input: StartInput): Promise<Star
               },
           // The kit's MCP servers (goal 068): what its runs' assignments name.
           ...(built.mcp_servers?.length ? { mcp_servers: built.mcp_servers } : {}),
+          ...(results ? { results } : {}),
         };
   deps.store.campaigns.put({
     campaign: contract.campaign,
@@ -130,6 +135,26 @@ export async function startCampaign(deps: Deps, input: StartInput): Promise<Star
 }
 
 /** Whether any "ask me" switch is on (goal 079): none is the default, and is not sent. */
+/**
+ * Where a campaign's runs' work goes, as the page's draft says (goal 185): `{to: "project",
+ * access}`, `{to: "repository", git, access}`, or `{to: "control"}` and none for control only.
+ * A destination without a Git access to push with is refused in words.
+ */
+export function resultsOf(raw: unknown): CampaignResults | undefined | string {
+  const r = (raw ?? {}) as { to?: unknown; git?: unknown; access?: unknown };
+  if (!raw || r.to === "control" || r.to === undefined) return undefined;
+  const access = typeof r.access === "string" ? r.access.trim() : "";
+  if (r.to !== "project" && r.to !== "repository")
+    return `Where each run's work goes: ${String(r.to)} is not a choice.`;
+  if (!access)
+    return "Where each run's work goes: choose a Git access that can push there, or Only on control.";
+  if (r.to === "project") return { to: "project", access };
+  const git = typeof r.git === "string" ? r.git.trim() : "";
+  if (!/^(?:https:\/\/|ssh:\/\/|[\w.-]+@[\w.-]+:)/.test(git))
+    return "Where each run's work goes: the results repository is an https://, ssh:// or git@host:path address.";
+  return { to: "repository", git, access };
+}
+
 export function askOwnerSet(a: AskOwner | undefined): a is AskOwner {
   return Boolean(a && Object.values(a).some((v) => v !== undefined && v !== false));
 }
@@ -183,7 +208,7 @@ export interface RunInput {
 export interface QueueSeed {
   title: string;
   details?: string | undefined;
-  family?: string | undefined;
+  direction?: string | undefined;
   why?: string | undefined;
   by: string;
   state: "queued" | "proposed";
@@ -269,7 +294,8 @@ export async function startRun(deps: Deps, input: RunInput): Promise<RunStarted>
       rig: input.rig,
       kind: "assign_campaign",
       payload: {
-        ...kept,
+        // Kept from an assignment signed before v0.1.1: under the public names (core/names.ts).
+        ...currentCommand("assign_campaign", kept),
         run,
         contract: v.contract,
         contract_sha: v.sha,
@@ -305,6 +331,15 @@ export async function startRun(deps: Deps, input: RunInput): Promise<RunStarted>
       source: v.sources.kit,
     });
   }
+  // Where its work goes in git (goal 185): the project's repository, at its folder, or another.
+  const r = v.sources.results;
+  const folder = (contract.project as { folder?: string }).folder;
+  const results =
+    r && p && seed
+      ? r.to === "project"
+        ? { git: p.url, access: r.access, ...(folder ? { folder } : {}) }
+        : { git: r.git, access: r.access, ...(folder ? { folder } : {}) }
+      : undefined;
   const issued = await issueWaking(deps.store, deps.privateKeyPem, deps.runpodRigs, {
     rig: input.rig,
     kind: "assign_campaign",
@@ -313,6 +348,7 @@ export async function startRun(deps: Deps, input: RunInput): Promise<RunStarted>
       contract: v.contract,
       contract_sha: v.sha,
       ...(seed ? { seed } : {}),
+      ...(results ? { results } : {}),
       ...(input.agents ? {} : { agents: false }),
       ...(input.promotion ? { promotion: input.promotion } : {}),
       ...(askOwnerSet(input.askOwner) ? { ask_owner: input.askOwner } : {}),

@@ -186,23 +186,4 @@ export class LedgerSources extends LedgerPart {
       until,
     ).map((r) => String(r.domain));
   }
-
-  /** A web search a worker asked for: whether it was allowed, and why not. */
-  recordQuery(q: {
-    run: string;
-    lane: string | null;
-    query: string;
-    allowed: boolean;
-    reason: string | null;
-  }): void {
-    this.execute(
-      "insert into research_query (run, lane, query, allowed, reason, created_at) values (?, ?, ?, ?, ?, ?)",
-      q.run,
-      q.lane,
-      q.query,
-      q.allowed ? 1 : 0,
-      q.reason,
-      this.now(),
-    );
-  }
 }

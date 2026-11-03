@@ -4,11 +4,13 @@ import { type Ledger, LedgerError } from "../../ledger/index.ts";
 export type Row = Record<string, unknown>;
 
 /**
- * What the parts of a run's papers share, built once by Papers (paper.ts): the ledger, and a
- * run's research contract. Each part is a module of this folder whose functions take it as `ctx`.
+ * What the parts of a run's papers share, built once by Papers (paper.ts): the ledger, the
+ * outbox, and a run's research contract. Each part is a module of this folder whose functions take it as `ctx`.
  */
 export interface PapersContext {
   ledger: Ledger;
+  /** The rig's outbox: an accepted paper goes to the knowledge base whole from there (goal 175). */
+  outboxDir: string;
   contract(run: string): ResearchContract;
 }
 
@@ -16,9 +18,11 @@ export interface PapersContext {
 export function papersContext(
   ledger: Ledger,
   contractFor: (run: string) => unknown,
+  outboxDir: string,
 ): PapersContext {
   return {
     ledger,
+    outboxDir,
     contract(run: string): ResearchContract {
       const c = contractFor(run) as ResearchContract | undefined;
       if (c?.mode !== "research") throw new LedgerError("invalid", `${run} is not a research run`);

@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { COMMAND_KINDS, type CommandKind } from "../../commands.ts";
+import { COMMAND_KINDS, COMMAND_MAX_BYTES, type CommandKind } from "../../commands.ts";
 import { RIG_ID, RIG_ID_WORDS } from "../../ids.ts";
+import { ReachBody } from "../../reach.ts";
 import { POD_CONFIG_ENV } from "../../tunnel.ts";
 import type { Route } from "../route.ts";
+import { BusReach } from "./bus.ts";
+import { EXPORT_NAME } from "./rigs.ts";
 
 /**
  * Control's API as the command line calls it, with the owner's token (src/control/api/ and the
@@ -16,6 +19,8 @@ import type { Route } from "../route.ts";
 const SharedFields = z.record(z.string(), z.unknown());
 /** A body that says nothing: the route's path says it all. */
 const Nothing = z.object({});
+/** The largest body of a route that takes a few short fields (a rig's name, a confirmation). */
+const FEW_FIELDS_MAX_BYTES = 4 * 1024;
 
 /** A build as control's rig list gives it. */
 const ListedBuild = z.looseObject({
@@ -46,11 +51,15 @@ export const RigList = z.looseObject({
           supervisor: ListedBuild.nullable(),
         })
         .optional(),
+      /** Its connection to the message bus: on it, or off it and broken (bus.ts). */
+      bus: BusReach.optional(),
     }),
   ),
   enrolled: z
     .array(z.looseObject({ rig: z.string(), retired_at: z.string().nullable() }))
     .optional(),
+  /** The rigs the owner retired and has not brought back, by name. */
+  retired: z.array(z.string()).optional(),
   runpod: z.array(z.unknown()).optional(),
 });
 export type RigList = z.input<typeof RigList>;
@@ -64,6 +73,7 @@ export const ENROLL = {
   method: "POST",
   path: "/v1/rigs",
   body: RigName,
+  maxBytes: FEW_FIELDS_MAX_BYTES,
   answer: z.looseObject({
     rig: z.string(),
     token: z.string(),
@@ -71,7 +81,8 @@ export const ENROLL = {
     control_fingerprint: z.string(),
     /**
      * The message bus as the rig reaches it, with the certificate of control's authority it trusts
-     * the bus's server through; null: control runs without one for rigs, and the rig keeps to HTTP.
+     * the bus's server through; null: control has no address for rigs on its bus, and `thermite rig
+     * add` writes no files, since a rig works only on the bus.
      */
     bus: z.object({ url: z.string(), ca: z.string() }).nullable().optional(),
   }),
@@ -103,6 +114,7 @@ export const RESTART = {
       .default(["harness", "supervisor"]),
   }),
   answer: z.unknown(),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A request that names its rig to confirm: "reset <rig>", "terminate <rig>". */
@@ -114,6 +126,7 @@ export const RESET = {
   path: "/v1/rigs/:rig/reset",
   body: Confirm,
   answer: z.looseObject({ reset: z.number() }),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 export const RESETS = {
@@ -163,6 +176,7 @@ export const RUNPOD_TERMINATE = {
   path: "/v1/rigs/:rig/runpod/terminate",
   body: z.strictObject({ confirm: z.string() }),
   answer: z.unknown(),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A RunPod rig's spending limit and idle stop: null takes one off. */
@@ -175,6 +189,7 @@ export const RUNPOD_LIMITS = {
   path: "/v1/rigs/:rig/runpod/limits",
   body: LimitsBody,
   answer: z.unknown(),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
 /** A GPU cloud's rigs. */
@@ -207,6 +222,8 @@ export const CLOUD_LAUNCH = {
   path: "/v1/gpu-clouds/:name/rigs",
   body: LaunchBody,
   answer: z.unknown(),
+  /** A pod's settings included. */
+  maxBytes: 64 * 1024,
 } as const satisfies Route;
 
 /** The longest life of a command control issues, in minutes: a week. */
@@ -228,6 +245,18 @@ export const ISSUE = {
   path: "/v1/commands",
   body: IssueBody,
   answer: z.looseObject({ woke: z.string().optional() }),
+  /** No larger body makes a command a rig can take. */
+  maxBytes: COMMAND_MAX_BYTES,
+} as const satisfies Route;
+
+/**
+ * One command: its delivery status and its outcome, with the rig's answer in `outcome.result`
+ * (`outcome.source` is `harness` once the harness's signed report confirmed it).
+ */
+export const COMMAND = {
+  method: "GET",
+  path: "/v1/commands/:id",
+  answer: z.looseObject({ status: z.string(), outcome: z.unknown() }),
 } as const satisfies Route;
 
 /**
@@ -278,9 +307,10 @@ export const PROPAGATE = {
   path: "/v1/propagate",
   body: z.strictObject({ run: z.string().min(1), to_run: z.string().min(1) }),
   answer: z.looseObject({ id: z.string(), seq: z.number() }),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
 } as const satisfies Route;
 
-/** Start a run of a campaign control keeps (control/start-run.ts checks the request). */
+/** Start a run of a campaign control keeps (control/campaigns/start-run.ts checks the request). */
 export const START_RUN = {
   method: "POST",
   path: "/v1/campaigns/:campaign/runs",
@@ -293,7 +323,7 @@ export const START_RUN = {
   }),
 } as const satisfies Route;
 
-/** A campaign's own context settings (control/campaign-context.ts checks them). */
+/** A campaign's own context settings (control/campaigns/context.ts checks them). */
 export const CAMPAIGN_CONTEXT = {
   method: "POST",
   path: "/v1/campaigns/:campaign/context",
@@ -309,10 +339,162 @@ export const CAMPAIGN_ADDITIONS = {
   answer: z.looseObject({ said: z.string().optional() }),
 } as const satisfies Route;
 
-/** A copy of a campaign control keeps (control/copy-campaign.ts checks the request). */
+/** Which kinds each role may write in the campaign's knowledge base (goal 175): a new version. */
+export const CAMPAIGN_KB_WRITES = {
+  method: "POST",
+  path: "/v1/campaigns/:campaign/kb-writes",
+  body: SharedFields,
+  answer: z.looseObject({ said: z.string().optional() }),
+} as const satisfies Route;
+
+/**
+ * The owner's search of the knowledge base (goal 175): `q`, `collection` and `kind` (lists, with
+ * commas), `limit`; and one item read whole by its `address`, at a `version`.
+ */
+export const KB_SEARCH = {
+  method: "GET",
+  path: "/v1/kb/search",
+  what: "knowledge base search",
+  answer: z.looseObject({ matched: z.number(), hits: z.array(z.looseObject({})) }),
+} as const satisfies Route;
+export const KB_ITEM = {
+  method: "GET",
+  path: "/v1/kb/item",
+  what: "knowledge base item",
+  answer: z.looseObject({ item: z.looseObject({ text: z.string() }) }),
+} as const satisfies Route;
+/**
+ * A grant of another campaign's collection to a campaign's agents, read only (goal 176), and its
+ * end: each answers the campaign's grants both ways after it, and what changed, in words.
+ */
+const GrantAnswer = z.looseObject({
+  campaign: z.string(),
+  changed: z.boolean(),
+  reads: z.array(z.string()),
+  read_by: z.array(z.string()),
+  said: z.string(),
+});
+export const CAMPAIGN_KB_GRANT = {
+  method: "POST",
+  path: "/v1/campaigns/:campaign/kb-grants",
+  what: "knowledge base grant",
+  body: z.strictObject({ reads: z.string().max(200) }),
+  answer: GrantAnswer,
+  maxBytes: 4096,
+} as const satisfies Route;
+export const CAMPAIGN_KB_REVOKE = {
+  method: "DELETE",
+  path: "/v1/campaigns/:campaign/kb-grants/:reads",
+  what: "knowledge base grant",
+  answer: GrantAnswer,
+} as const satisfies Route;
+/**
+ * One version's file of an item of the knowledge base (goal 176), by its `address` and `version`:
+ * its bytes, as an attachment that no browser shows or runs.
+ */
+export const KB_FILE = {
+  method: "GET",
+  path: "/v1/kb/file",
+  what: "knowledge base file",
+  answer: z.unknown(),
+} as const satisfies Route;
+/**
+ * The owner's list of one place of the knowledge base (goal 176): `at`, the filters `kind`,
+ * `outcome`, `type` and `slot` (lists, with commas), `sort`, `order`, `offset` and `limit`.
+ */
+/** The owner's note on an item (goal 176): kept in the item's run's owner slot, following it. */
+export const KB_NOTE = {
+  method: "POST",
+  path: "/v1/kb/notes",
+  what: "knowledge base note",
+  body: z.looseObject({ address: z.string(), text: z.string() }),
+  answer: z.looseObject({ address: z.string(), follows: z.string(), said: z.string() }),
+  maxBytes: 16_384,
+} as const satisfies Route;
+/** What the knowledge base stores (goal 176): its totals, collections, indexes, files and waits. */
+export const KB_STORED = {
+  method: "GET",
+  path: "/v1/kb/stored",
+  what: "knowledge base storage",
+  answer: z.looseObject({
+    totals: z.looseObject({ stored_bytes: z.number() }),
+    collections: z.array(z.looseObject({})),
+  }),
+} as const satisfies Route;
+/** The knowledge base's settings on control (goal 175): the largest file, and orphans' hours. */
+const KbSettingsAnswer = z.looseObject({
+  max_file_mib: z.number(),
+  orphan_hours: z.number(),
+  orphan_hours_from: z.string(),
+});
+export const KB_SETTINGS = {
+  method: "GET",
+  path: "/v1/kb/settings",
+  what: "knowledge base settings",
+  answer: KbSettingsAnswer,
+} as const satisfies Route;
+/** A change of them: control checks the body (control/kb/settings.ts); null: back to its default. */
+export const SET_KB_SETTINGS = {
+  method: "PUT",
+  path: "/v1/kb/settings",
+  what: "knowledge base settings",
+  body: SharedFields,
+  answer: KbSettingsAnswer.extend({ said: z.string() }),
+  maxBytes: 4096,
+} as const satisfies Route;
+/**
+ * Control's own log level, a setting control keeps (the guide's question 16): the level, where it
+ * comes from (the setting, or THERMITE_LOG_LEVEL), the environment's, the level now and who set it.
+ */
+const ControlLogLevelAnswer = z.looseObject({
+  level: z.string(),
+  from: z.string(),
+  environment: z.string(),
+  now: z.string(),
+  set_by: z.string().nullable(),
+  set_at: z.string().nullable(),
+});
+export const CONTROL_LOG_LEVEL = {
+  method: "GET",
+  path: "/v1/control/log-level",
+  what: "control's log level",
+  answer: ControlLogLevelAnswer,
+} as const satisfies Route;
+/** A change of it, applied at once (control/log-level.ts checks the body); null: THERMITE_LOG_LEVEL's. */
+export const SET_CONTROL_LOG_LEVEL = {
+  method: "PUT",
+  path: "/v1/control/log-level",
+  what: "control's log level",
+  body: SharedFields,
+  answer: ControlLogLevelAnswer.extend({ said: z.string() }),
+  maxBytes: FEW_FIELDS_MAX_BYTES,
+} as const satisfies Route;
+export const KB_LIST = {
+  method: "GET",
+  path: "/v1/kb/list",
+  what: "knowledge base list",
+  answer: z.looseObject({
+    folders: z.array(z.looseObject({})),
+    matched: z.number(),
+    items: z.array(z.looseObject({})),
+  }),
+} as const satisfies Route;
+
+/** A copy of a campaign control keeps (control/campaigns/copy.ts checks the request). */
 export const CAMPAIGN_COPY = {
   method: "POST",
   path: "/v1/campaigns/:campaign/copy",
+  body: SharedFields,
+  answer: z.unknown(),
+} as const satisfies Route;
+
+/**
+ * A new campaign from another run's champion in git (goal 185), and its first run when a rig is
+ * named (control/campaigns/from-champion.ts checks the request).
+ */
+export const CAMPAIGN_FROM_CHAMPION = {
+  method: "POST",
+  path: "/v1/campaigns/from-champion",
   body: SharedFields,
   answer: z.unknown(),
 } as const satisfies Route;
@@ -334,7 +516,20 @@ export const KITS = {
 /** The largest kit bundle control takes, over REST (MCP's requests are smaller). */
 export const KIT_BUNDLE_MAX = 64 * 1024 * 1024;
 
-/** A kit repository as a git bundle, in the body's bytes (`?ref=`, `?force=`). */
+/**
+ * A kit's repository as control reads it itself (goal 182): its git address, a branch, tag or
+ * commit (HEAD when none), and a Git access's name for a private one.
+ */
+export const KitGitSource = z.strictObject({
+  url: z.string().min(1).max(2048),
+  ref: z.string().min(1).max(256).optional(),
+  access: z.string().min(1).max(64).optional(),
+});
+
+/**
+ * A kit repository as a git bundle, in the body's bytes (`?ref=`, `?force=`); or, with a JSON
+ * body, `{git: KitGitSource}`, which control reads.
+ */
 export const KIT_ADD = {
   method: "POST",
   path: "/v1/kits/:name",
@@ -368,7 +563,7 @@ export const MCP_SERVERS = {
   answer: z.looseObject({ servers: z.array(McpServerLine) }),
 } as const satisfies Route;
 
-/** An MCP server's settings (control/mcp-server-routes.ts checks them); secrets from files. */
+/** An MCP server's settings (control/mcp-servers/routes.ts checks them); secrets from files. */
 export const MCP_SERVER_ADD = {
   method: "POST",
   path: "/v1/mcp-servers",
@@ -397,4 +592,58 @@ export const MCP_SERVER_DELETE = {
   method: "DELETE",
   path: "/v1/mcp-servers/:name",
   answer: z.unknown(),
+} as const satisfies Route;
+
+/** The most exports one delete names: the Exports page lists the newest 1,000. */
+export const EXPORTS_DELETE_MAX = 1000;
+
+/** An export control keeps, by its rig and its name. */
+const ExportOnControl = z.strictObject({
+  rig: z.string().min(1).max(80),
+  name: z.string().regex(EXPORT_NAME, "an export's name is a time and 8 hexadecimal characters"),
+});
+
+/**
+ * Exports control keeps, deleted by hand (control/exports.ts): every one named, or none when one
+ * is still arriving (409, in words). One control does not have is in `gone`. `said` says what
+ * went, as the Exports page does.
+ */
+export const EXPORTS_DELETE = {
+  method: "POST",
+  path: "/v1/exports/delete",
+  what: "the delete of exports",
+  body: z.strictObject({ exports: z.array(ExportOnControl).min(1).max(EXPORTS_DELETE_MAX) }),
+  answer: z.looseObject({
+    deleted: z.array(
+      z.looseObject({ rig: z.string(), name: z.string(), bytes: z.number(), files: z.number() }),
+    ),
+    gone: z.array(z.looseObject({ rig: z.string(), name: z.string() })),
+    said: z.string(),
+  }),
+  maxBytes: 256 * 1024,
+} as const satisfies Route;
+
+/** An entry of the list of addresses cluster rigs may reach, as control keeps it. */
+const ReachableAddress = z.looseObject({
+  address: z.string(),
+  ports: z.array(z.number()),
+  note: z.string(),
+  set_at: z.string(),
+  set_by: z.string(),
+});
+
+/** The addresses cluster rigs' harnesses may reach beside the internet (core/reach.ts). */
+export const REACHABLE_ADDRESSES = {
+  method: "GET",
+  path: "/v1/reachable-addresses",
+  answer: z.looseObject({ addresses: z.array(ReachableAddress) }),
+} as const satisfies Route;
+
+/** The list as it is to be from now on, whole: control checks it with core/reach.ts's rules. */
+export const SET_REACHABLE_ADDRESSES = {
+  method: "PUT",
+  path: "/v1/reachable-addresses",
+  body: ReachBody,
+  answer: z.looseObject({ addresses: z.array(ReachableAddress), said: z.string() }),
+  maxBytes: 64 * 1024,
 } as const satisfies Route;

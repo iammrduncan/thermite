@@ -52,6 +52,8 @@ export async function prepareWorkspace(input: {
   const cache = laneCacheDir(input.scratchDir, input.lane);
   if (!existsSync(cache)) {
     mkdirSync(cache, { recursive: true });
+    // Handed over without the controller's read: the broker leaves it 0700, its lane's alone (the
+    // isolation selftest's lane-cache probe).
     await input.runner.handOver(cache, input.lane);
   }
   await exportTree(input.mirror, input.commit, repo);

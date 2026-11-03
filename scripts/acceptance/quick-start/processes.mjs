@@ -1,3 +1,4 @@
+// @ts-check
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
@@ -8,6 +9,13 @@ import { COMPOSE } from "./context.mjs";
 
 // ---------------------------------------------------------------- processes
 
+/**
+ * Runs a program and returns what it printed; its errors go to this process's.
+ * @param {string} cmd
+ * @param {readonly string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ * @returns {string}
+ */
 export const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, {
     encoding: "utf8",
@@ -15,18 +23,29 @@ export const sh = (cmd, args, opts = {}) =>
     maxBuffer: 64 * 1024 * 1024,
     ...opts,
   });
+/**
+ * As sh, with the program's errors not shown.
+ * @param {string} cmd
+ * @param {readonly string[]} args
+ * @param {Omit<import("node:child_process").ExecFileSyncOptions, "encoding">} [opts]
+ */
 export const quiet = (cmd, args, opts = {}) =>
   sh(cmd, args, { stdio: ["ignore", "pipe", "ignore"], ...opts });
-const sq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+const sq = (/** @type {unknown} */ s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+/** @returns {Promise<number>} */
 export const freePort = () =>
   new Promise((resolve, reject) => {
     const s = createNetServer();
     s.on("error", reject);
     s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
+      const { port } = /** @type {import("node:net").AddressInfo} */ (s.address());
       s.close(() => resolve(port));
     });
   });
+/**
+ * @param {number} port
+ * @returns {Promise<boolean>}
+ */
 export const portInUse = (port) =>
   new Promise((resolve) => {
     const s = createNetServer();
@@ -42,16 +61,24 @@ export const work = mkdtempSync(join(tmpdir(), "thermite-quick-start-"));
 export const home = join(work, "home");
 mkdirSync(home);
 export let cwd = home;
-/** Takes the tester back to a folder, as `cd` does. */
+/**
+ * Takes the tester back to a folder, as `cd` does.
+ * @param {string} dir
+ */
 export function cd(dir) {
   cwd = dir;
 }
+/** @type {import("../../../tests/helpers/quick-start.ts").Rewrite[]} */
 export const rewrites = [];
+/** @type {Map<string, number>} */
 export const hits = new Map();
 
 /**
  * Runs a page's commands as the tester types them, in the tester's folder, and follows its `cd`.
  * Returns what they print. Output that holds a token is not shown.
+ * @param {string[]} lines
+ * @param {string} what
+ * @param {{ secret?: boolean }} [options]
  */
 export async function typed(lines, what, { secret = false } = {}) {
   const cmds = commandsFor(lines, COMPOSE).map((l) => rewrite(l, rewrites, hits));

@@ -91,13 +91,6 @@ export interface ResearchState {
   allDecided: boolean;
 }
 
-/** A research task's question and gap, as the plan gives them, with why in words. */
-export interface PlannedTask {
-  question: number;
-  gap: string;
-  why: string;
-}
-
 /** The weight of a question's card, before decisions and saturation. */
 function cardWeight(card: QuestionState["card"]): number {
   return card ? OPENNESS[card.certainty] + card.evidence_gaps.length : 0;
@@ -300,31 +293,6 @@ export function nextGap(q: QuestionState, taken: readonly string[]): string {
 export function gapOf(details: string): string | undefined {
   const line = details.split("\n").find((l) => l.startsWith(GAP_LINE));
   return line ? line.slice(GAP_LINE.length).trim() : undefined;
-}
-
-/**
- * The gap-driven plan's next `count` tasks: each a question (by nextQuestion) and the gap it
- * closes (by nextGap), with why. `taken(question)`: the gaps the tasks waiting for a question
- * name. The state is updated as tasks are planned.
- */
-export function gapPlan(
-  state: ResearchState,
-  count: number,
-  o: { taken: (question: number) => string[]; first?: number[] | undefined },
-): PlannedTask[] {
-  const out: PlannedTask[] = [];
-  for (let k = 0; k < count; k++) {
-    const next = nextQuestion(state, o.first);
-    if (!next) break;
-    const q = next.question;
-    const gap = nextGap(q, [
-      ...o.taken(q.index),
-      ...out.filter((t) => t.question === q.index).map((t) => t.gap),
-    ]);
-    out.push({ question: q.index, gap, why: `the gap-driven plan: ${next.why}` });
-    took(state, q.index);
-  }
-  return out;
 }
 
 /**

@@ -2,10 +2,11 @@ import { z } from "zod";
 import { errorText } from "../../common/errors.ts";
 import { DRAIN_MINUTES_MAX } from "../../core/commands.ts";
 import { judgeGpusByDefault } from "../../core/hardware.ts";
+import type { ProgramMode } from "../../core/rig-settings.ts";
 import { MAX_RIG_GPUS } from "../machines/index.ts";
 import type { ClusterRig, ClusterRigSize } from "../store/index.ts";
 import type { ClusterFacts, SlotQuota } from "./facts.ts";
-import { rigResources } from "./manifests.ts";
+import { leastRigSize, rigResources, SUPERVISOR_SHARE } from "./manifests.ts";
 
 /**
  * A new size for a rig control set up on a cluster (goal 118): its GPUs, the judge's share of them,
@@ -20,6 +21,10 @@ import { rigResources } from "./manifests.ts";
  * without it gives the judge half of them, rounded up, as when a rig is added. A rig moves between
  * none and some GPUs only as a new rig: its harness image and its target would change (CPU and
  * CUDA), and the timings of its runs would no longer compare.
+ *
+ * The supervisor's share of the CPUs and memory follows how the rig's agent programs run (goal
+ * 169): 4 GiB while they run in their own terminals, 2 GiB headless (manifests.ts). So a new mode
+ * from the rig's settings is a change of size too, made here as any other.
  */
 
 /** What a caller asks for; a field left out stays. null CPUs and memory: the namespace's defaults. */
@@ -28,6 +33,8 @@ export interface ClusterResourcesRequest {
   judgeGpus?: number | undefined;
   cpus?: number | null | undefined;
   memoryGi?: number | null | undefined;
+  /** A new mode for its agent programs, which a change of the rig's settings sends with it. */
+  programMode?: ProgramMode | undefined;
 }
 
 /** A plan's refusal, with the HTTP status REST answers it with. */
@@ -63,7 +70,29 @@ export function sizeWords(s: ClusterRigSize): string {
   return `${gpus}${res}`;
 }
 
-/** What changed, for the rig's setup step: "GPUs 3 → 4 (…); CPUs and memory: namespace defaults → 16 CPUs, 52 GiB". */
+/** How a rig's agent programs run, in words: "in their own terminals" or "headless". */
+export const MODE_WORDS: Record<ProgramMode, string> = {
+  terminal: "in their own terminals",
+  headless: "headless",
+};
+
+/** The supervisor's share of a rig's memory in a sentence: "4 GiB, as its agent programs run in their own terminals". */
+const supervisorShareWords = (mode: ProgramMode) =>
+  `${SUPERVISOR_SHARE[mode].memoryGi} GiB, as its agent programs run ${MODE_WORDS[mode]}`;
+
+/**
+ * The words that lead a new size's answer when it moves the supervisor's share of set CPUs and
+ * memory: "Its supervisor gets 4 GiB, as its agent programs run in their own terminals: ", or "".
+ */
+export const shareMoveWords = (from: ClusterRigSize, to: ClusterRigSize) =>
+  from.resources && to.resources && from.programMode !== to.programMode
+    ? `Its supervisor gets ${supervisorShareWords(to.programMode)}: `
+    : "";
+
+/**
+ * What changed, for the rig's setup step: "GPUs 3 → 4 (…); CPUs and memory: namespace defaults →
+ * 16 CPUs, 52 GiB", and "its supervisor's memory: 2 → 4 GiB, as …" when a new mode moves its share.
+ */
 export function sizeChangeWords(from: ClusterRigSize, to: ClusterRigSize): string {
   const parts: string[] = [];
   if (from.gpus !== to.gpus)
@@ -74,6 +103,10 @@ export function sizeChangeWords(from: ClusterRigSize, to: ClusterRigSize): strin
     parts.push(
       `CPUs and memory: ${resourcesWords(from.resources)} → ${resourcesWords(to.resources)}`,
     );
+  if (from.resources && to.resources && from.programMode !== to.programMode)
+    parts.push(
+      `its supervisor's memory: ${SUPERVISOR_SHARE[from.programMode].memoryGi} → ${supervisorShareWords(to.programMode)}`,
+    );
   return parts.join("; ");
 }
 
@@ -82,11 +115,15 @@ const sameResources = (a: ClusterRigSize["resources"], b: ClusterRigSize["resour
     ? a === b
     : Math.abs(a.cpus - b.cpus) < 1e-9 && Math.abs(a.memoryGi - b.memoryGi) < 1e-9;
 
-/** A rig's size now, from its spec. */
+/**
+ * A rig's size now, from its spec, as its deployments were last written; one written before the
+ * supervisor's share followed the mode got the headless share.
+ */
 export const sizeOf = (r: ClusterRig): ClusterRigSize => ({
   gpus: r.spec.gpus,
   judgeGpus: r.spec.judgeGpus,
   resources: r.spec.resources,
+  programMode: r.spec.programMode ?? "headless",
 });
 
 /** Whether a request names nothing to change. */
@@ -94,7 +131,8 @@ export const asksNothing = (w: ClusterResourcesRequest) =>
   w.gpus === undefined &&
   w.judgeGpus === undefined &&
   w.cpus === undefined &&
-  w.memoryGi === undefined;
+  w.memoryGi === undefined &&
+  w.programMode === undefined;
 
 /**
  * Why a slot's quota refuses a rig this size, in Add a rig's words; undefined when it fits or the
@@ -128,20 +166,30 @@ export function quotaRefusal(
 /**
  * Checks a new size for a rig control set up on a cluster, as Add a rig checks one: the number of
  * GPUs (none to 16, never between none and some), the judge's share (the owner's only), the device
- * plugin's nodes or the DRA device class as control last read the cluster, CPUs and memory (at
- * least 1.5 CPUs and 6 GiB, both or neither), and the slot's quota (`quota`, as control read it
- * just now). Returns the new size, `same` when nothing differs, or a refusal in words.
+ * plugin's nodes or the DRA device class as control last read the cluster, CPUs and memory (both
+ * or neither, and at least the supervisor's share for how its agent programs run with the
+ * harness's least: 1.5 CPUs and 8 GiB in their own terminals, 6 GiB headless), and the slot's
+ * quota (`quota`, as control read it just now). `mode` is how the rig's agent programs run now, as
+ * its report says; a request's `programMode` replaces it. Returns the new size, `same` when
+ * nothing differs, or a refusal in words.
  */
 export function planClusterResize(
   r: ClusterRig,
   want: ClusterResourcesRequest,
-  o: { owner: boolean; facts: ClusterFacts | null; quota: SlotQuota | undefined },
+  o: {
+    owner: boolean;
+    facts: ClusterFacts | null;
+    quota: SlotQuota | undefined;
+    mode: ProgramMode;
+  },
 ): { size: ClusterRigSize } | { same: true } | ResizeRefusal {
   const refuse = (error: string, status: ResizeRefusal["status"] = 400): ResizeRefusal => ({
     error,
     status,
   });
   const s = r.spec;
+  // The supervisor's share of the CPUs and memory follows how the agent programs will run.
+  const programMode = want.programMode ?? o.mode;
   // The split is the owner's, as Edit rig's GPUs for the judge is: a new split restarts the
   // harness and changes how fast the judge checks.
   if (want.judgeGpus !== undefined && !o.owner)
@@ -206,7 +254,7 @@ export function planClusterResize(
       if (!Number.isFinite(cpus) || !Number.isFinite(memoryGi))
         return refuse("CPUs and memory are numbers, such as 16 and 52, or 1.5 and 6.");
       try {
-        rigResources({ cpus, memoryGi });
+        rigResources({ cpus, memoryGi }, programMode);
       } catch (err) {
         return refuse(errorText(err));
       }
@@ -216,12 +264,22 @@ export function planClusterResize(
         if (why) return refuse(why);
       }
     }
+  } else if (resources) {
+    // The CPUs and memory it keeps hold the supervisor's share as the deployments will have it.
+    try {
+      rigResources(resources, programMode);
+    } catch (err) {
+      return refuse(errorText(err));
+    }
   }
-  const size: ClusterRigSize = { gpus: n, judgeGpus: judge, resources };
+  const size: ClusterRigSize = { gpus: n, judgeGpus: judge, resources, programMode };
+  // With the namespace's defaults, no share is set, so a new mode moves nothing.
+  const sameShare = !resources || programMode === sizeOf(r).programMode;
   if (
     n === s.gpus &&
     (judge ?? null) === (s.judgeGpus ?? null) &&
-    sameResources(resources, s.resources)
+    sameResources(resources, s.resources) &&
+    sameShare
   )
     return { same: true };
   return { size };
@@ -248,14 +306,14 @@ export const clusterResourcesFields = {
     .nullable()
     .optional()
     .describe(
-      "The rig's CPUs, at least 1.5: the supervisor gets half a CPU, the harness the rest. null, with memory_gib null: the namespace's defaults",
+      `The rig's CPUs, at least ${leastRigSize("terminal").cpus}: the supervisor gets half a CPU, the harness the rest. null, with memory_gib null: the namespace's defaults`,
     ),
   memory_gib: z
     .number()
     .nullable()
     .optional()
     .describe(
-      "The rig's memory in GiB, at least 6: the supervisor gets 2 GiB, the harness the rest. null, with cpus null: the namespace's defaults",
+      `The rig's memory in GiB: the supervisor gets ${SUPERVISOR_SHARE.terminal.memoryGi} GiB while the rig's agent programs run in their own terminals (program_mode terminal, the default) and ${SUPERVISOR_SHARE.headless.memoryGi} GiB headless, the harness the rest, so at least ${leastRigSize("terminal").memoryGi} or ${leastRigSize("headless").memoryGi}. null, with cpus null: the namespace's defaults`,
     ),
   wait: z
     .boolean()

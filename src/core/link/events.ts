@@ -6,8 +6,9 @@ import { REPORT_MAX_BYTES, type ReportEvent, readReportEvent } from "./report.ts
 
 /**
  * The link's fifth contract (goal 168, step 4): every rig's events on the message bus, the
- * `EVENTS` stream, kept for good. A message is one event of a rig's ledger, as the rig recorded
- * it, in canonical JSON. A run's event goes on the run's subject by its kind, with the attempt's
+ * `EVENTS` stream, kept until one of the owner's retention policies removes some of control's copy
+ * (control/retention/; each rig's ledger keeps every event). A message is one event of a rig's
+ * ledger, as the rig recorded it, in canonical JSON. A run's event goes on the run's subject by its kind, with the attempt's
  * and the trial's ids in the event, not in the subject (the owner's decision of 2026-10-29: a
  * subject costs the server memory for as long as the stream lives); a change to a run's queue of
  * experiments goes on the run's queue subject, by what it did; a rig's own event, on the rig's
@@ -47,6 +48,17 @@ function queueOp(kind: string): QueueOp | undefined {
   if (!kind.startsWith(QUEUE_KIND_PREFIX)) return undefined;
   const op = kind.slice(QUEUE_KIND_PREFIX.length);
   return (QUEUE_OPS as readonly string[]).includes(op) ? (op as QueueOp) : undefined;
+}
+
+/**
+ * The kind of the event a message on this subject carries, as eventSubject put it there: its last
+ * token, or `experiment_<op>` for a run's queue change. Undefined for a subject of no event.
+ */
+export function eventKindOfSubject(subject: string): string | undefined {
+  const t = subject.split(".");
+  if (t.length !== 5 || t[0] !== "thermite") return undefined;
+  if (t[1] === "run" && t[3] === "queue") return `${QUEUE_KIND_PREFIX}${t[4]}`;
+  return (t[1] === "run" || t[1] === "rig") && t[3] === "ev" ? t[4] : undefined;
 }
 
 /** An event's kind as a subject's last token: a word of a-z, 0-9 and _. */
@@ -252,16 +264,17 @@ export function readEventMessage(m: {
 const DUPLICATE_WINDOW_NS = 2 * 60 * 1e9;
 
 /**
- * The stream's settings. Events are kept for good, as the ledgers they come from are: no limit on
- * their count, bytes or age, and no message may be deleted or purged. A full disk refuses new
- * messages and never drops old ones. A page of a report goes in as one atomic batch, stored whole
+ * The stream's settings. Events are kept until a retention policy of the owner's removes some, by
+ * subject, with the server's purge (control/retention/): no limit on their count, bytes or age.
+ * A full disk refuses new messages and never drops old ones. A page of a report goes in as one atomic batch, stored whole
  * or not at all; any message may be read by its place directly. Compressed (s2): about six times
  * smaller on disk, for a little more time to read (the owner's decision of 2026-10-29).
  */
 export const EVENT_STREAM_CONFIG = {
   name: EVENT_STREAM,
   subjects: EVENT_SUBJECTS,
-  description: "Every rig's events, by run and kind, kept for good",
+  description:
+    "Every rig's events, by run and kind, kept until a retention policy purges them by subject; never deleted",
   retention: "limits",
   storage: "file",
   max_msgs: -1,
@@ -270,11 +283,22 @@ export const EVENT_STREAM_CONFIG = {
   max_msgs_per_subject: -1,
   max_msg_size: EVENT_MAX_BYTES,
   discard: "new",
-  deny_delete: true,
-  deny_purge: true,
   duplicate_window: DUPLICATE_WINDOW_NS,
   num_replicas: 1,
   allow_atomic: true,
   allow_direct: true,
   compression: "s2",
 } satisfies Partial<StreamConfig> & { name: string };
+
+/**
+ * The subjects of a rig's events a purge names (control/retention/): a run's (its events and its
+ * queue's changes), or the rig's own. The subject a message is on names which, and the run.
+ */
+export function purgeSubjectOf(subject: string): { filter: string; run: string | null } | null {
+  const [a, b, c, d] = subject.split(".");
+  if (a !== "thermite" || !c) return null;
+  if (b === "run" && (d === "ev" || d === "queue"))
+    return { filter: `thermite.run.${c}.>`, run: c };
+  if (b === "rig" && d === "ev") return { filter: `thermite.rig.${c}.ev.*`, run: null };
+  return null;
+}

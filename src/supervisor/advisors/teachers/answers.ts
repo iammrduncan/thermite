@@ -13,12 +13,12 @@ const DIRECTION_FIELD =
 
 /**
  * A teacher's recommendation, read leniently so that one bad recommendation never costs the
- * review: its direction (`family`, a name or :name:) is checked when the set is made, and words
+ * review: its direction (`direction`, a name or :name:) is checked when the set is made, and words
  * (`match`) are no longer a rule (goal 066), so a recommendation that gives them is dropped then.
  */
 const Recommendation = z.strictObject({
-  kind: z.enum(["avoid", "try", "mandate", "priority", "lane_count", "note"]),
-  family: z.string().trim().max(200).optional(),
+  kind: z.enum(["avoid", "try", "mandate", "priority", "lane_count", "planner_note"]),
+  direction: z.string().trim().max(200).optional(),
   match: z.string().max(2000).optional(),
   value: z.union([z.string().max(1000), z.number()]).optional(),
   rationale: z.string().min(1).max(2000),
@@ -29,7 +29,7 @@ const Recommendation = z.strictObject({
 const ProposedExperiment = z.strictObject({
   title: z.string().trim().min(1).max(200),
   details: z.string().max(4000).optional(),
-  family: z.string().trim().min(1).max(80).optional(),
+  direction: z.string().trim().min(1).max(80).optional(),
   why: z.string().trim().min(1).max(2000),
   /** A research run's task: the question it serves, an index from 0 (goal 117). */
   question: z.number().int().min(0).optional(),
@@ -79,7 +79,7 @@ const part = (max: number) =>
 
 export const Opportunity = z.object({
   title: part(200),
-  family: part(80).optional(),
+  direction: part(80).optional(),
   mechanism: part(2000),
   gain_bound: part(300),
   experiment: part(2000),
@@ -106,7 +106,7 @@ export function opportunityExperiment(o: Opportunity): ProposedExperiment {
   ].join("\n");
   return {
     title: o.title,
-    ...(o.family ? { family: o.family } : {}),
+    ...(o.direction ? { direction: o.direction } : {}),
     details: details.length > 4000 ? `${details.slice(0, 3999)}…` : details,
     why: `New since the teachers' last round: ${o.new_because}`.slice(0, 2000),
   };
@@ -152,7 +152,7 @@ export function researchOpportunityExperiment(o: ResearchOpportunity): ProposedE
   ].join("\n");
   return {
     title: title.length > 200 ? `${title.slice(0, 199)}…` : title,
-    ...(o.kind ? { family: o.kind } : {}),
+    ...(o.kind ? { direction: o.kind } : {}),
     details: details.length > 4000 ? `${details.slice(0, 3999)}…` : details,
     why: o.why.slice(0, 2000),
     question: o.question,
@@ -199,7 +199,7 @@ const MovesField = Type.Optional(
 );
 const OpportunityFields = {
   title: Type.String({ description: "What to try, in a few words" }),
-  family: Type.Optional(Type.String({ description: "Its direction (approach family)" })),
+  direction: Type.Optional(Type.String({ description: "Its direction" })),
   mechanism: Type.String({
     description: "Why it would help here: the mechanism, from what you read",
   }),
@@ -279,8 +279,10 @@ export const TeacherAnswer = Type.Object({
   recommendations: Type.Optional(
     Type.Array(
       Type.Object({
-        kind: Type.String({ description: "avoid | try | mandate | priority | lane_count | note" }),
-        family: Type.Optional(Type.String({ description: DIRECTION_FIELD })),
+        kind: Type.String({
+          description: "avoid | try | mandate | priority | lane_count | planner_note",
+        }),
+        direction: Type.Optional(Type.String({ description: DIRECTION_FIELD })),
         value: Type.Optional(Type.Union([Type.String(), Type.Number()])),
         rationale: Type.String(),
         citations: Type.Array(Type.String()),
@@ -330,7 +332,7 @@ export const DirectiveAnswer = Type.Object({
     Type.Array(
       Type.Object({
         kind: Type.String(),
-        family: Type.Optional(Type.String({ description: DIRECTION_FIELD })),
+        direction: Type.Optional(Type.String({ description: DIRECTION_FIELD })),
         value: Type.Optional(Type.Union([Type.String(), Type.Number()])),
         rationale: Type.String(),
         citations: Type.Array(Type.String()),

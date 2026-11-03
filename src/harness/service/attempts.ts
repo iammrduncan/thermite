@@ -17,7 +17,8 @@ import { requireRun } from "./runs.ts";
 
 export interface SubmitResult {
   attempt: string;
-  lifecycle: "queued" | "rejected_v0" | "duplicate";
+  /** `judged`: built on an attempt the owner withdrew for good, it is withdrawn with it (goal 174). */
+  lifecycle: "queued" | "rejected_v0" | "duplicate" | "judged";
   commit: string;
   violations: string[];
   duplicate_of?: string;
@@ -110,26 +111,39 @@ export async function submitAttempt(
     },
     actor,
   );
-  if (lifecycle === "queued") {
-    // A hill climb in setup (goal 115): its starting point can't be measured yet, so a change
-    // is judged by the baseline job, which makes the first one it can measure the starting
-    // point. Otherwise the change is screened against the champion.
-    const setup = baselineState(svc.ledger, req.run)?.state === "setup";
-    svc.ledger.jobs.enqueue({
-      attempt: id,
-      kind: setup ? "baseline" : "evaluate",
-      ...(setup ? { priority: BASELINE_PRIORITY } : {}),
-      spec: { run: req.run, ...(setup ? { setup: true } : {}) },
-      actor,
+  // Built on an attempt the owner withdrew for good (goal 174): withdrawn with it, never judged.
+  const withdrawn =
+    lifecycle === "queued" &&
+    parentAttempt !== undefined &&
+    svc.ledger.tx(() => {
+      if (!svc.ledger.verdicts.inherit(id, parentAttempt, actor)) return false;
+      svc.ledger.attempts.setLifecycle(id, "judged", actor);
+      return true;
     });
-  }
+  if (lifecycle === "queued" && !withdrawn) queueJudging(svc, req.run, id, actor);
   return {
     attempt: id,
-    lifecycle,
+    lifecycle: withdrawn ? "judged" : lifecycle,
     commit: made.commit,
     violations: v0.violations,
     ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
   };
+}
+
+/**
+ * Queues the judge's job for a change. A hill climb in setup (goal 115): its starting point can't
+ * be measured yet, so a change is judged by the baseline job, which makes the first one it can
+ * measure the starting point. Otherwise the change is screened against the champion.
+ */
+export function queueJudging(svc: HarnessService, run: string, attempt: string, actor: string) {
+  const setup = baselineState(svc.ledger, run)?.state === "setup";
+  return svc.ledger.jobs.enqueue({
+    attempt,
+    kind: setup ? "baseline" : "evaluate",
+    ...(setup ? { priority: BASELINE_PRIORITY } : {}),
+    spec: { run, ...(setup ? { setup: true } : {}) },
+    actor,
+  });
 }
 
 /**

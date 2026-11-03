@@ -2,8 +2,8 @@ import { frozen } from "../sharing.ts";
 import type { Handlers } from "./index.ts";
 
 /**
- * The run's agents: stopped and resumed, the planner's rounds and hand-outs, and each lane's
- * trials, started and finished.
+ * The run's agents: stopped and resumed, their waits for the provider's limit, the planner's
+ * rounds and hand-outs, and each lane's trials, started and finished.
  */
 
 /** How many finished trials a run's view keeps, and how many of the planner's hand-outs. */
@@ -24,6 +24,18 @@ export const AGENTS: Handlers = {
   agents_resumed(f, e) {
     f.run(String(e.subject)).agents_stopped = null;
   },
+  agents_wait_for_limit(f, e, b) {
+    f.run(String(e.subject)).agents_wait = {
+      until: String(b.until ?? ""),
+      reason: String(b.reason ?? ""),
+      since: e.at,
+      trial: typeof b.trial === "string" ? b.trial : null,
+      weekly: b.weekly === true,
+    };
+  },
+  agents_wait_ended(f, e) {
+    f.run(String(e.subject)).agents_wait = null;
+  },
   epoch_started(f, e, b) {
     const v = f.run(String(e.subject));
     v.epoch = {
@@ -35,7 +47,7 @@ export const AGENTS: Handlers = {
         const y = (x ?? {}) as Record<string, unknown>;
         return {
           lane: String(y.lane),
-          family: String(y.family),
+          direction: String(y.direction),
           parent: String(y.parent),
           focus: typeof y.focus === "string" ? y.focus : null,
         };
@@ -55,7 +67,7 @@ export const AGENTS: Handlers = {
     const v = f.run(String(e.subject));
     v.at_work[String(b.lane)] = {
       trial: String(b.trial ?? ""),
-      family: typeof b.family === "string" ? b.family : null,
+      direction: typeof b.direction === "string" ? b.direction : null,
       focus: typeof b.focus === "string" ? b.focus : null,
       since: e.at,
     };
@@ -68,7 +80,7 @@ export const AGENTS: Handlers = {
       frozen({
         trial: String(b.trial ?? ""),
         lane: (b.lane as string | null) ?? null,
-        family: (b.family as string | null) ?? null,
+        direction: (b.direction as string | null) ?? null,
         attempt: (b.attempt as string | null) ?? null,
         stopped: String(b.stopped ?? ""),
         error: (b.error as string | null) ?? null,
@@ -78,7 +90,7 @@ export const AGENTS: Handlers = {
     if (v.trials.length > KEPT_TRIALS) v.trials.shift();
     const made = b.attempt ? f.attempts.get(String(b.attempt)) : undefined;
     if (made) {
-      made.family = (b.family as string | null) ?? null;
+      made.direction = (b.direction as string | null) ?? null;
       made.trial = String(b.trial ?? "") || null;
     }
     const a = v.agents;

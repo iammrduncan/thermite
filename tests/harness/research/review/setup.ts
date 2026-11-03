@@ -15,7 +15,7 @@ import { Reviews } from "../../../../src/harness/reviews.ts";
 import { fillResearch, makeResearchRun, writeCards } from "../../../helpers/research-run.ts";
 
 /**
- * What the research review's tests (research/review.ts) share: a research run with its questions,
+ * What the research review's tests (research/review/) share: a research run with its questions,
  * cards and hypotheses, a reviewer's answers, and a scheduler for the run.
  *
  * Goals 112 and 117: a research run's items are its questions, each with its answer card, and its

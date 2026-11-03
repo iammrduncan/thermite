@@ -3,6 +3,7 @@ import { errorText } from "../../../common/errors.ts";
 import { log } from "../../../common/log.ts";
 import type { Contract } from "../../../core/contract.ts";
 import { newTrialId } from "../../../core/ids.ts";
+import { workerSlot } from "../../../core/kb/index.ts";
 import type { LiveKind } from "../../../core/live.ts";
 import { additionOf } from "../../../core/role-additions.ts";
 import type { Role } from "../../broker/index.ts";
@@ -58,7 +59,7 @@ export function experimentFor(
     x = sched.coordinator.fill(
       run,
       a,
-      `the queue had nothing for ${a.lane}: it goes on in its round's direction (${a.family})`,
+      `the queue had nothing for ${a.lane}: it goes on in its round's direction (${a.direction})`,
     );
     why = "the queue had nothing for this lane, so it goes on in its round's direction";
   }
@@ -87,7 +88,7 @@ export function startTrial(
   // The trial works on its experiment: its direction and its text are the trial's.
   const a: Assignment = {
     ...round,
-    family: sched.coordinator.direction(run, got.x),
+    direction: sched.coordinator.direction(run, got.x),
     focus: focusOf(got.x),
     experiment: got.x.id,
     why: got.why,
@@ -113,7 +114,7 @@ export function startTrial(
       run,
       lane: a.lane,
       epoch,
-      family: a.family,
+      direction: a.direction,
       parent,
       token,
       focus: a.focus,
@@ -131,7 +132,7 @@ export function startTrial(
       run,
       a.lane,
       "status",
-      `trial on ${a.lane}: ${a.family}, ${got.x.title} (from ${parent === champion.commit_sha ? `the champion, seq ${champion.seq}` : `the lane's best, ${best}`})`,
+      `trial on ${a.lane}: ${a.direction}, ${got.x.title} (from ${parent === champion.commit_sha ? `the champion, seq ${champion.seq}` : `the lane's best, ${best}`})`,
     );
     const limits = limitsInForce(sched.ledger, run, contract);
     let ws: { dir: string; repo: string } | undefined;
@@ -182,6 +183,8 @@ export function startTrial(
           limits,
           // The MCP servers the run's kit gives its workers (goal 068).
           mcpServers: sched.o.service.mcp.given(run, "workers").map((g) => g.name),
+          // What the lane's worker may write in the knowledge base (goal 175).
+          kbWrites: sched.o.service.kbTools.writes(run, workerSlot(a.lane)),
           // The owner's addition to the worker, from the run's contract (goal 166).
           addition: additionOf(contract, "worker"),
         },
@@ -193,14 +196,15 @@ export function startTrial(
       if (abort.signal.aborted && r.stopped !== "submitted") r = { ...r, stopped: "interrupted" };
       r = withProgress(sched, id, r);
       sched.o.service.trialEnded(id, r.turns > 0 || r.tokensIn > 0);
-      if (r.submitted) sched.registry.tagAttempt(r.submitted.attempt, a.family);
+      // Its attempt is the one the harness linked to the trial as it submitted, never the one its
+      // worker names: the worker runs as the lane's agent user. Also when its worker was stopped
+      // before it could say so (goal 079): an interrupted Pi trial that submitted has its attempt
+      // with the judge, and its experiment is done, not back in the queue.
+      const attempt = sched.registry.attemptOf(id);
+      if (attempt) sched.registry.tagAttempt(attempt, a.direction);
       // The trial ends first (its token stops working), then its processes and dev runs.
       sched.o.service.trialWorkspaces.delete(id);
-      sched.registry.finishTrial(id, { ...r, attempt: r.submitted?.attempt }, sched.o.owner);
-      // Its attempt is the one linked to the trial as it submitted, also when its worker was
-      // stopped before it could say so (goal 079): an interrupted Pi trial that submitted has
-      // its attempt with the judge, and its experiment is done, not back in the queue.
-      const attempt = r.submitted?.attempt ?? sched.registry.attemptOf(id);
+      sched.registry.finishTrial(id, r, sched.o.owner);
       finishExperiment(sched, id, r, attempt);
       afterTrial(sched, id, run, r);
       trialLine(

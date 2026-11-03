@@ -1,7 +1,6 @@
 import type { z } from "zod";
-import type { Prompt } from "../../../agents/prompt.ts";
 import { renderMergedBy, renderTeacher } from "../../../agents/roles/index.ts";
-import { StructuredDirective } from "../../../core/commands.ts";
+import { StructuredDirective } from "../../../core/directives.ts";
 import type { NoteInput } from "../../../core/journal.ts";
 import { ideaWords, ruleRefusal } from "../../../core/queue-target.ts";
 import { additionIn, type RunAdditions } from "../../../core/role-additions.ts";
@@ -12,9 +11,12 @@ import type {
   AdvisorResult,
   AdvisorTools,
   AdvisorUsage,
+  SentPrompt,
 } from "../call.ts";
 import { type AdvisorsConfig, packageFit } from "../config.ts";
 import { runAdvisor } from "../run.ts";
+import type { AdvisorInTerminal } from "../terminal/index.ts";
+import type { AdvisorKb } from "../tools/index.ts";
 import {
   checkPortfolio,
   DirectiveAnswer,
@@ -60,7 +62,9 @@ export interface TeacherRun {
   /** Each call's model usage in this round, by whose it was (goal 075). */
   usage: ({ agent: AdvisorAgent } & AdvisorUsage)[];
   /** The prompts the round's calls sent (goal 166), for the harness to keep. */
-  sent: Prompt[];
+  sent: SentPrompt[];
+  /** The owner's messages the teachers' terminals took inside their turns (goal 169). */
+  given: number[];
 }
 
 /** Experiments without repeats: the first of each idea's words. */
@@ -89,6 +93,8 @@ export async function teacherRound(input: {
   run: string;
   brief: unknown;
   tools: AdvisorTools;
+  /** The merged by model's knowledge base tools, in its own slot (goal 175). */
+  mergedKb?: AdvisorKb | undefined;
   /** Why the round runs now, when not on the clock: said on the brief's first line. */
   why?: string | undefined;
   /** Where each call's conversation is kept before a compaction (goal 070). */
@@ -101,6 +107,11 @@ export async function teacherRound(input: {
   research?: boolean | undefined;
   /** The owner's additions to the run's roles (goal 166): each teacher's and the merged by's. */
   additions?: RunAdditions;
+  /**
+   * On a rig whose agents run in their own terminal (goal 169): each teacher's call runs in its
+   * program's; the merged by model, which takes no message, stays headless.
+   */
+  terminal?: AdvisorInTerminal | undefined;
 }): Promise<TeacherRun> {
   const research = input.research === true;
   type Item = Opportunity | ResearchOpportunity;
@@ -126,6 +137,7 @@ export async function teacherRound(input: {
     usd: 0,
     usage: [],
     sent: [],
+    given: [],
   };
   const count = (r: AdvisorResult<unknown>, agent: AdvisorAgent) => {
     run.tokens.in += r.tokensIn;
@@ -153,6 +165,7 @@ export async function teacherRound(input: {
         answerSchema: research ? ResearchTeacherAnswer : TeacherAnswer,
         tools: input.tools,
         keeper: input.keeper,
+        terminal: input.terminal,
       }),
     ),
   );
@@ -164,6 +177,7 @@ export async function teacherRound(input: {
       ...(r.output ? { review: r.output } : { error: r.error ?? "no review" }),
     });
     for (const a of r.output?.answers ?? []) run.answers.push({ ...a, advisor: teacher });
+    for (const id of r.given ?? []) if (!run.given.includes(id)) run.given.push(id);
     if (r.output?.journal.length) run.journal.push({ by: teacher, notes: r.output.journal });
   });
   const good = run.reviews.filter(
@@ -187,9 +201,9 @@ export async function teacherRound(input: {
     xs.flatMap((x) => {
       const d = StructuredDirective.safeParse(x);
       if (d.success) return [d.data];
-      const r = (x ?? {}) as { kind?: unknown; family?: unknown; match?: unknown };
+      const r = (x ?? {}) as { kind?: unknown; direction?: unknown; match?: unknown };
       run.dropped.push(
-        `${String(r.kind ?? "?")} ${String(r.family ?? r.match ?? "")}: ${d.error.issues[0]?.message ?? "invalid"}`,
+        `${String(r.kind ?? "?")} ${String(r.direction ?? r.match ?? "")}: ${d.error.issues[0]?.message ?? "invalid"}`,
       );
       return [];
     });
@@ -222,6 +236,7 @@ export async function teacherRound(input: {
       schema: DirectiveSet,
       answerSchema: research ? ResearchDirectiveAnswer : DirectiveAnswer,
       keeper: input.keeper,
+      ...(input.mergedKb ? { tools: { kb: input.mergedKb } } : {}),
     });
     count(r, "merged_by");
     if (!r.output) {
@@ -259,22 +274,22 @@ export async function teacherRound(input: {
   run.experiments = distinct([...run.portfolio.map(toExperiment), ...plain]);
   run.directives = directives.filter((d) => {
     if (!d.citations.length) {
-      run.dropped.push(`${d.kind} ${d.family ?? ""}: no citation`);
+      run.dropped.push(`${d.kind} ${d.direction ?? ""}: no citation`);
       return false;
     }
     // A rule that freezes the queue's size or pins an experiment (goal 081).
     const refused = ruleRefusal(d);
     if (refused) {
-      run.dropped.push(`${d.kind}${d.family ? ` ${d.family}` : ""}: ${refused.why}`);
+      run.dropped.push(`${d.kind}${d.direction ? ` ${d.direction}` : ""}: ${refused.why}`);
       return false;
     }
     return true;
   });
-  const notes = run.directives.filter((d) => d.kind === "note");
+  const notes = run.directives.filter((d) => d.kind === "planner_note");
   if (notes.length > 3) {
-    run.dropped.push(`${notes.length - 3} extra notes`);
+    run.dropped.push(`${notes.length - 3} extra planner_note rules`);
     const keep = new Set(notes.slice(0, 3));
-    run.directives = run.directives.filter((d) => d.kind !== "note" || keep.has(d));
+    run.directives = run.directives.filter((d) => d.kind !== "planner_note" || keep.has(d));
   }
   return run;
 }

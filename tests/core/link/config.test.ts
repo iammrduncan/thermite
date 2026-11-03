@@ -60,7 +60,7 @@ function message(rig: string, key: string, value: unknown, sealKey: string, o: o
 
 describe("a rig's config on the message bus", () => {
   test("one subject for each key of each rig, in a stream that keeps the latest of each", () => {
-    assert.deepEqual(CONFIG_KEYS, ["model-route", "advisor-routes", "mcp-servers"]);
+    assert.deepEqual(CONFIG_KEYS, ["model-route", "advisor-routes", "mcp-servers", "git-access"]);
     assert.equal(configSubject("rig-a", "model-route"), "thermite.rig.rig-a.config.model-route");
     assert.deepEqual(readConfigSubject("thermite.rig.rig-a.config.mcp-servers"), {
       rig: "rig-a",

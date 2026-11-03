@@ -63,7 +63,7 @@ const events = (env: Env, kind: string) =>
 /** An opportunity with every part, and its citations. */
 const opp = (title: string, more: Record<string, unknown> = {}) => ({
   title,
-  family: "memory",
+  direction: "memory",
   mechanism: `${title}: reads dominate the profile`,
   gain_bound: "up to 10% on the big cell",
   experiment: `${title} on the inner loop only`,
@@ -151,7 +151,7 @@ describe("the teachers put ideas first (goal 081)", () => {
         summary: "the loads",
         portfolio: [
           opp("Wider loads"),
-          opp("Prefetch the next block", { family: "prefetch" }),
+          opp("Prefetch the next block", { direction: "prefetch" }),
           opp("Unproven idea", { citations: [] }),
         ],
       }),
@@ -163,7 +163,7 @@ describe("the teachers put ideas first (goal 081)", () => {
     await adviseOnce(cfg, emptyAdviseState());
     const queued = env.service.queue.queued("js-1");
     assert.deepEqual(
-      queued.map((x) => [x.title, x.added_by, x.family]),
+      queued.map((x) => [x.title, x.added_by, x.direction]),
       [
         ["Wider loads", "teacher", "memory"],
         ["Prefetch the next block", "teacher", "prefetch"],
@@ -189,9 +189,9 @@ describe("the teachers put ideas first (goal 081)", () => {
       lines.join("\n"),
       /js-1 text: the teachers added to the queue: Wider loads; Prefetch the next block/,
     );
-    // The supervisor's record of the round says why the third was left out.
+    // The supervisor's record of the round, in its run's folder, says why the third was left out.
     const { readdirSync, readFileSync } = await import("node:fs");
-    const dir = join(cfg.home, "advisors");
+    const dir = join(cfg.home, "advisors", "runs", "js-1");
     const rec = readFileSync(
       join(dir, readdirSync(dir).find((f) => f.includes("teachers-js-1")) as string),
       "utf8",
@@ -225,7 +225,7 @@ describe("the teachers put ideas first (goal 081)", () => {
     );
     assert.ok((x.details ?? "").length <= 4000);
     assert.match(x.details ?? "", /^Mechanism: m+/);
-    assert.equal(x.family, "memory");
+    assert.equal(x.direction, "memory");
   });
 
   test("a part longer than its limit is cut, not refused: the opportunity is kept", () => {
@@ -306,7 +306,7 @@ describe("the teachers put ideas first (goal 081)", () => {
         summary: "s",
         recommendations: [
           {
-            kind: "note",
+            kind: "planner_note",
             value: "Do not add queue entries",
             rationale: "steady",
             citations: ["a-1"],
@@ -317,7 +317,7 @@ describe("the teachers put ideas first (goal 081)", () => {
             rationale: "keep the retried one first",
             citations: ["a-2"],
           },
-          { kind: "avoid", family: "loop tiling", rationale: "null twice", citations: ["a-3"] },
+          { kind: "avoid", direction: "loop tiling", rationale: "null twice", citations: ["a-3"] },
         ],
       }),
     );
@@ -336,7 +336,7 @@ describe("the teachers put ideas first (goal 081)", () => {
     const said = lines.join("\n");
     assert.match(
       said,
-      /Dropped: note: a rule may not freeze the queue's size \("Do not add queue entries"\)/,
+      /Dropped: planner_note: a rule may not freeze the queue's size \("Do not add queue entries"\)/,
     );
     assert.match(said, /priority: a rule may not pin an experiment \(x-0123456789ab\)/);
     // The rig refuses them too, on its own: left out, each with why, and recorded.
@@ -350,15 +350,20 @@ describe("the teachers put ideas first (goal 081)", () => {
       body: JSON.stringify({
         run: "js-1",
         directives: [
-          { kind: "note", value: "keep the queue unchanged", rationale: "r", citations: ["a-1"] },
-          { kind: "try", family: "memory", rationale: "r", citations: ["a-1"] },
+          {
+            kind: "planner_note",
+            value: "keep the queue unchanged",
+            rationale: "r",
+            citations: ["a-1"],
+          },
+          { kind: "try", direction: "memory", rationale: "r", citations: ["a-1"] },
         ],
       }),
     });
     assert.equal(r.status, 200);
     const out = (await r.json()) as { ids: number[]; left_out: { rule: string; why: string }[] };
     assert.equal(out.ids.length, 1);
-    assert.equal(out.left_out[0]?.rule, 'note "keep the queue unchanged"');
+    assert.equal(out.left_out[0]?.rule, 'planner_note "keep the queue unchanged"');
     assert.match(out.left_out[0]?.why ?? "", /a rule may not freeze the queue's size/);
     const left = events(env, "directives_left_out").at(-1);
     assert.equal((left?.body as { reason?: string } | undefined)?.reason, "freezes_queue");
@@ -597,8 +602,8 @@ describe("the teachers put ideas first (goal 081)", () => {
     const run = "js-1";
     const { target } = env.service.queueState(run);
     assert.ok(target >= 2, String(target));
-    const add = (title: string, family?: string) =>
-      env.service.queue.add(run, { title, ...(family ? { family } : {}), by: "owner" }, "o");
+    const add = (title: string, direction?: string) =>
+      env.service.queue.add(run, { title, ...(direction ? { direction } : {}), by: "owner" }, "o");
     // Enough queued to meet the target, but two are in a direction an AVOID rule names, and one
     // was handed out to a lane in the newest round: neither is a ready idea.
     const plain = Array.from({ length: target }, (_, i) => add(`plain ${i}`));
@@ -607,7 +612,7 @@ describe("the teachers put ideas first (goal 081)", () => {
     env.ledger.directives.addSet(
       run,
       "supervisor",
-      [{ kind: "avoid", family: "tiling", rationale: "null twice", citations: ["a-1"] }],
+      [{ kind: "avoid", direction: "tiling", rationale: "null twice", citations: ["a-1"] }],
       true,
     );
     env.ledger.appendEvent("planner", "planner_handout", run, {

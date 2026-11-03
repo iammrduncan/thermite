@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { errorText, jsonBody } from "../../common/errors.ts";
 import {
   RESET,
@@ -19,7 +20,7 @@ export function lifecycleRoutes(app: Hono, api: ApiContext): void {
   const { store, privateKeyPem, opts, parts, admin } = api;
   const { runpodDriver } = parts;
 
-  app.post(RESTART.path, admin, async (c) => {
+  app.post(RESTART.path, admin, bodyLimit({ maxSize: RESTART.maxBytes }), async (c) => {
     const rig = c.req.param("rig");
     const onRunpod = runpodDriver.serves(rig);
     const driver = onRunpod ? runpodDriver : opts.driver;
@@ -34,7 +35,7 @@ export function lifecycleRoutes(app: Hono, api: ApiContext): void {
     }
   });
 
-  app.post(RESET.path, admin, async (c) => {
+  app.post(RESET.path, admin, bodyLimit({ maxSize: RESET.maxBytes }), async (c) => {
     const rig = c.req.param("rig");
     const body = RESET.body.parse(await jsonBody(c.req));
     if (body.confirm !== `reset ${rig}`)

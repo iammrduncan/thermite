@@ -5,11 +5,13 @@ import {
   ceilingOf,
   floorOf,
   gapOf,
-  gapPlan,
   NO_CARD_GAP,
   NO_GAP_NAMED,
   nextGap,
+  nextQuestion,
+  type ResearchState,
   researchState,
+  took,
 } from "../../../src/harness/research/shares.ts";
 import { makeResearchRun } from "../../helpers/research-run.ts";
 
@@ -18,6 +20,30 @@ import { makeResearchRun } from "../../helpers/research-run.ts";
  * claims, cards at every certainty, a decided question and a saturated one, and long rounds of
  * tasks. The scheduler's side (the hand-out, the queue) is in scheduler-research.test.ts.
  */
+
+/**
+ * The next `count` tasks as the scheduler hands them out (src/harness/agents/scheduler/research/tasks.ts): each a
+ * question by nextQuestion and the gap it closes by nextGap, the state updated by took.
+ */
+function plan(
+  state: ResearchState,
+  count: number,
+  o: { taken: (question: number) => string[]; first?: number[] },
+): { question: number; gap: string; why: string }[] {
+  const out: { question: number; gap: string; why: string }[] = [];
+  for (let k = 0; k < count; k++) {
+    const next = nextQuestion(state, o.first);
+    if (!next) break;
+    const q = next.question;
+    const gap = nextGap(q, [
+      ...o.taken(q.index),
+      ...out.filter((t) => t.question === q.index).map((t) => t.gap),
+    ]);
+    out.push({ question: q.index, gap, why: next.why });
+    took(state, q.index);
+  }
+  return out;
+}
 
 const RUN = "r-1";
 const QUESTIONS = [
@@ -192,17 +218,17 @@ describe("the gap-driven plan (goal 117)", () => {
   test("a long round: the floor first, then by weight, never over the ceiling while another has gaps; gaps in turn", async (t) => {
     const s = await scene(t);
     const state = researchState(s.ledger, RUN, { questions: QUESTIONS }, { lanes: 2 });
-    const plan = gapPlan(state, 120, { taken: () => [] });
-    assert.equal(plan.length, 120);
-    const order = plan.map((p) => p.question);
+    const tasks = plan(state, 120, { taken: () => [] });
+    assert.equal(tasks.length, 120);
+    const order = tasks.map((p) => p.question);
     // The floor: each question with open gaps (or no card) gets the round's first tasks.
     assert.deepEqual(order.slice(0, 3), [2, 5, 0]);
     assert.match(
-      String(plan[0]?.why),
-      /^the gap-driven plan: Question 3 \(index 2\) has no answer card yet, and no task in this round$/,
+      String(tasks[0]?.why),
+      /^Question 3 \(index 2\) has no answer card yet, and no task in this round$/,
     );
     assert.match(
-      String(plan[2]?.why),
+      String(tasks[2]?.why),
       /Question 1 \(index 0\) has 3 open evidence gaps at certainty low, and no task in this round/,
     );
     // Never a decided or a saturated question.
@@ -223,7 +249,7 @@ describe("the gap-driven plan (goal 117)", () => {
     ] as const)
       assert.ok(Math.abs(count(q) - (120 * w) / 25) <= 1, `question ${q}: ${count(q)} tasks`);
     // Each task names a gap: a card's evidence gaps in turn, no card's own words, a card with none.
-    const gaps = (q: number) => plan.filter((p) => p.question === q).map((p) => p.gap);
+    const gaps = (q: number) => tasks.filter((p) => p.question === q).map((p) => p.gap);
     assert.deepEqual(gaps(0).slice(0, 3).sort(), [
       "Q0 gap 1: a vendor document",
       "Q0 gap 2: a vendor document",
@@ -244,12 +270,9 @@ describe("the gap-driven plan (goal 117)", () => {
       nextGap(q0, ["Q0 gap 1: a vendor document", "Q0 gap 2: a vendor document"]),
       "Q0 gap 3: a vendor document",
     );
-    const plan = gapPlan(state, 1, {
-      taken: (q) => (q === 2 ? [] : []),
-      first: [0],
-    });
+    const tasks = plan(state, 1, { taken: () => [], first: [0] });
     assert.deepEqual(
-      plan.map((p) => [p.question, p.gap]),
+      tasks.map((p) => [p.question, p.gap]),
       [[0, "Q0 gap 1: a vendor document"]],
     );
     assert.equal(

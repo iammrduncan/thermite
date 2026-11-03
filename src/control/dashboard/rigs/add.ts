@@ -2,7 +2,14 @@ import type { Hono } from "hono";
 import { errorText } from "../../../common/errors.ts";
 import { RIG_ID_SENTENCE } from "../../../core/ids.ts";
 import { inBackground } from "../../background.ts";
-import { addClusterRig, type ClusterFacts, clusterLine, NS } from "../../clusters/index.ts";
+import {
+  addClusterRig,
+  type ClusterFacts,
+  clusterLine,
+  leastRigSize,
+  NS,
+  SUPERVISOR_SHARE,
+} from "../../clusters/index.ts";
 import { newToken } from "../../credential.ts";
 import type { JoinedSpec, JoinForm } from "../../join.ts";
 import {
@@ -12,7 +19,7 @@ import {
   type MachineFacts,
   tail,
 } from "../../machines/index.ts";
-import { awaitFirstReport, judgeShare, rigTaken } from "../../rigs/index.ts";
+import { awaitFirstReport, judgeShare, NO_RIG_BUS, rigBusOf, rigTaken } from "../../rigs/index.ts";
 import {
   type Cluster,
   fingerprint,
@@ -83,7 +90,7 @@ export function addRigRoutes(app: Hono, dash: Dashboard): void {
             root: r.root,
             controlPublicKey: parts.controlPublicKey,
             controlFingerprint: fingerprint(parts.controlPublicKey),
-            bus: parts.rigBus,
+            bus: rigBusOf(parts),
           },
           { controlToken, harnessSupervisorToken: newToken().token },
         ),
@@ -198,7 +205,7 @@ ${restricted ? `<label class="fd">${infoLabel("DRA device class", "Only for DRA 
 <label class="fd">${infoLabel("Storage class", "The class for the rig's volume (its state, builds, inbox and outbox).")}<select name="k_storage__${kn}">${def ? "" : opt("", "the cluster's default")}${f.storage_classes.map((s) => opt(s.name, `${s.name}${s.default ? " (default)" : ""}`, s.name === def)).join("")}</select></label>
 <label class="fd">${infoLabel("Volume size (GB)", "The rig's volume: builds and model files can be large.")}<input name="k_size__${kn}" value="${freeQuota?.storageGi !== undefined ? Math.floor(freeQuota.storageGi) : 100}"></label>
 <label class="fd">${infoLabel("CPUs", "The rig's CPUs: the supervisor gets half a CPU, the harness the rest. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.")}<input name="k_cpus__${kn}" inputmode="decimal" value="${freeQuota?.cpus ?? ""}" placeholder="the namespace's defaults"></label>
-<label class="fd">${infoLabel("Memory (GiB)", "The rig's memory: the supervisor gets 2 GiB, the harness the rest. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.")}<input name="k_mem__${kn}" inputmode="decimal" value="${freeQuota?.memoryGi !== undefined ? Math.floor(freeQuota.memoryGi) : ""}" placeholder="the namespace's defaults"></label>
+<label class="fd">${infoLabel("Memory (GiB)", `The rig's memory: the supervisor gets ${SUPERVISOR_SHARE.terminal.memoryGi} GiB, since a new rig's agent programs run in their own terminals (${SUPERVISOR_SHARE.headless.memoryGi} GiB once set to Headless on Edit rig), the harness the rest, so at least ${leastRigSize("terminal").memoryGi} GiB. Filled in from the slot's quota when control can read it; empty: the namespace's defaults apply.`)}<input name="k_mem__${kn}" inputmode="decimal" value="${freeQuota?.memoryGi !== undefined ? Math.floor(freeQuota.memoryGi) : ""}" placeholder="the namespace's defaults"></label>
 ${
   k.placement === "slot"
     ? `<label class="fd">${infoLabel("Slot", "One of the free slots the cluster's operators made for Thermite.")}<select name="k_slot__${kn}">${f.slots
@@ -231,7 +238,9 @@ ${
       ? "Control has no rig images configured (THERMITE_RIG_HARNESS_IMAGE, THERMITE_RIG_SUPERVISOR_IMAGE), so it can't set rigs up yet."
       : !parts.publicUrl
         ? "Control's address for rigs is not set (THERMITE_CONTROL_PUBLIC_URL), so a rig would not know where to report."
-        : "";
+        : !parts.rigBus
+          ? NO_RIG_BUS
+          : "";
     return page(
       c,
       {
@@ -259,7 +268,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
 <div class="sec"><h2>3 · Name and start</h2><div class="g3">
 <label class="fd">${infoLabel("Rig name", "The rig's name in Thermite: 2 to 40 lowercase letters, digits and dashes, starting and ending with a letter or digit. It names the rig's runs, history and files, so it can't change later.")}<input name="rig" required maxlength="40" placeholder="gpu-box-1-a"></label>
 <label class="fd" style="grid-column:span 2">${infoLabel("Images", "The Thermite images control deploys, as set where control is deployed. A GPU rig uses the CUDA harness image.")}<span class="mono small">${images ? `${esc(images.harness)}${images.harnessCuda ? `<br>${esc(images.harnessCuda)} (GPU rigs)` : ""}<br>${esc(images.supervisor)}` : "none configured"}</span></label>
-<label class="fd" style="grid-column:span 3">${infoLabel("Message bus", "Where the rig's supervisor reaches control's message bus, over TLS, for its reports, commands, live lines and config (THERMITE_NATS_PUBLIC_URL). The machine or cluster must reach this port, or the rig never reports. Off: the rig reports over HTTP.")}<span class="mono small">${parts.rigBus ? esc(parts.rigBus.url) : "off: the rig reports over HTTP"}</span></label>
+<label class="fd" style="grid-column:span 3">${infoLabel("Message bus", "Where the rig's supervisor reaches control's message bus, over TLS, for its reports, commands, live lines and config (THERMITE_NATS_PUBLIC_URL). The machine or cluster must reach this port, or the rig never reports, and is shown broken.")}<span class="mono small">${parts.rigBus ? esc(parts.rigBus.url) : "none: control can't set a rig up"}</span></label>
 </div>
 <div class="card hl"><p class="sum" id="add-sum">Control will enroll the rig, write its files and services on the machine, start it, and wait for its first report.</p><div class="act"><button class="primary big"${blocked ? " disabled" : ""}>Create the rig</button></div></div></div>
 </form>
@@ -280,6 +289,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
       .sort((a, b) => a - b);
     if (!parts.rigImages) return fail("Control has no rig images configured.");
     if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
+    if (!parts.rigBus) return fail(NO_RIG_BUS);
     if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
     if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
     if (!m) return fail("Choose a machine.");
@@ -370,6 +380,7 @@ ${error ? `<div class="card warn" style="margin-bottom:16px"><b class="bad">Not 
     };
     if (!parts.rigImages) return fail("Control has no rig images configured.");
     if (!parts.publicUrl) return fail("Control's address for rigs is not set.");
+    if (!parts.rigBus) return fail(NO_RIG_BUS);
     if (!RIG_ID.test(rig)) return fail(RIG_ID_SENTENCE);
     if (rigTaken(parts, rig)) return fail(`There is a rig named ${rig} already.`);
     if (form !== "machine" && form !== "namespace") return fail("Choose where the rig runs.");

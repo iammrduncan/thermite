@@ -38,8 +38,10 @@ const keyed = (o: Partial<ModelConfig> = {}): ModelConfig => ({
 });
 
 const PLAN = JSON.stringify({
-  new_families: [{ id: "tidy", description: "Small tidy-ups." }],
-  assignments: [{ lane: "lane-1", family: "tidy", focus: "tidy the kernel", parent: "champion" }],
+  new_directions: [{ id: "tidy", description: "Small tidy-ups." }],
+  assignments: [
+    { lane: "lane-1", direction: "tidy", focus: "tidy the kernel", parent: "champion" },
+  ],
   notes: "planned",
 });
 
@@ -133,6 +135,7 @@ describe("the planner's own harness", () => {
     await env.start();
     const folder = new ResearchFolder({
       ledger: env.service.ledger,
+      outboxDir: env.service.paths.outboxDir,
       scratchRoot: join(env.paths.scratchDir, "research"),
       stateRoot: join(env.paths.stateDir, "research-work"),
       runner: new LocalRunner(env.paths.scratchDir),

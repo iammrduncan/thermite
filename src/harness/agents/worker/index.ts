@@ -1,6 +1,9 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import { Compactor, summarizer } from "../../../agents/compaction/index.ts";
+import { lastAssistant, linkSession, steerTurn } from "../../../agents/live-session.ts";
+import type { McpForAgent } from "../../../agents/mcp/index.ts";
 import { buildModel, PiMeter } from "../../../agents/model/index.ts";
+import { swappableTools } from "../../../agents/pi-view/index.ts";
 import { messageText, type Prompt, systemText } from "../../../agents/prompt.ts";
 import {
   renderCompacted,
@@ -10,10 +13,10 @@ import {
   type WorkerTurn,
   windowFit,
 } from "../../../agents/roles/index.ts";
+import { writeSessionLog } from "../../../agents/session-log.ts";
 import { NoteLimit } from "../../../agents/tools/index.ts";
 import { errorText } from "../../../common/errors.ts";
 import { laneLimits } from "../../../core/contract.ts";
-import { linkSession, steerTurn } from "../live-session.ts";
 import {
   classifyProviderError,
   type FailureCount,
@@ -22,11 +25,12 @@ import {
 } from "../provider-errors.ts";
 import { guardRepeats } from "../repeats.ts";
 import { TrialClock } from "../trial-clock.ts";
-import { keepGoing, lastAssistant } from "./keep-going.ts";
+import { keepGoing } from "./keep-going.ts";
 import type { TrialDeps, TrialResult, TrialSpec } from "./spec.ts";
 import { watchedStream, withoutPastThinking } from "./stream.ts";
 import { trialTools } from "./tools.ts";
 
+export type { McpForAgent } from "../../../agents/mcp/index.ts";
 export {
   type KeepGoingOptions,
   keepGoing,
@@ -35,13 +39,12 @@ export {
 } from "./keep-going.ts";
 export type {
   CompactionLink,
-  McpForAgent,
   ProviderWait,
   SubmitOutcome,
   TrialDeps,
-  TrialResult,
   TrialSpec,
 } from "./spec.ts";
+export { TrialResult } from "./spec.ts";
 export { watchedStream, withoutPastThinking } from "./stream.ts";
 
 /**
@@ -72,6 +75,7 @@ export function piTrialPrompt(
     program: PI_TRIAL,
     brief: spec.brief,
     mcpServers,
+    kbWrites: spec.kbWrites,
     limits: spec.limits ?? laneLimits({ lanes: { count: 1, trials_per_epoch: 1 } }),
     editablePaths: spec.editablePaths,
     minutes: spec.wallMs !== undefined ? Math.round(spec.wallMs / 60_000) : undefined,
@@ -105,7 +109,16 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
       windowFit(deps.model.contextWindow, deps.model.compactAt),
     );
   const notes = new NoteLimit(limits.notesPerTurn); // the notes of one reply (goal 147)
-  const tools = trialTools(spec, deps, result, { limits, clock, notes });
+  // Its tools, with the MCP tools the gateway listed; the owner may have them listed again in the
+  // trial's Pi view (goal 169).
+  let mcp = deps.mcp;
+  const toolsWith = (m: McpForAgent | undefined) =>
+    clock.wrap(
+      guardRepeats(
+        trialTools(spec, { ...deps, mcp: m }, result, { limits, clock, notes }),
+        () => compactor.count,
+      ),
+    );
 
   // The later turns of this trial (goal 166), numbered after its first message.
   let said = 0;
@@ -125,7 +138,7 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     initialState: {
       systemPrompt: systemText(sent),
       model,
-      tools: clock.wrap(guardRepeats(tools, () => compactor.count)),
+      tools: toolsWith(mcp),
       thinkingLevel,
     },
     streamFn: watchedStream(models, watch, meter),
@@ -133,7 +146,12 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     // One tool call at a time: lane processes are killed by user when a tool finishes, so parallel
     // calls would kill each other, and a submission must end the trial before anything else runs.
     toolExecution: "sequential",
+    // Every later turn that waits goes in before its next model call: the owner's words typed into
+    // its view and the owner's messages alike. Pi's default takes one a call, and a submission on
+    // that call would end the trial with the rest never sent and never read.
+    steeringMode: "all",
   });
+  if (deps.sessionLog) writeSessionLog(agent, deps.sessionLog);
   meter?.watch(agent);
   // Near the model's window the conversation is compacted and the trial goes on (goal 070): a
   // conversation that grows never ends a trial nor asks for an early submission.
@@ -204,9 +222,39 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
     linkSession(agent, {
       ...link,
       messages: waiting ? async () => (result.submitted ? [] : waiting()) : undefined,
-      ownerTurn: (text) => renderWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+      ownerTurn: (m) =>
+        renderWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text: m.text }),
       sent: deps.sent,
     });
+  // Its Pi view's console (goal 169): each of the owner's calls is one of these levers.
+  const swapTools = deps.view ? swappableTools(agent) : undefined;
+  deps.view?.attach({
+    agent,
+    compact: () => compactor.force("asked"),
+    ownerTurn: (text) => renderWorkerTurn({ program: "pi", turn: ++said, kind: "owner", text }),
+    sent: deps.sent,
+    mcp: () => mcp,
+    setMcp: (m) => {
+      mcp = m;
+      swapTools?.(toolsWith(m));
+    },
+    status: () => ({
+      turns: result.turns,
+      toolCalls: result.toolCalls,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      compactions: compactor.count,
+      msLeft: clock.leftMs(),
+      maxTurns,
+      model: deps.model.model,
+    }),
+    closed: () =>
+      result.submitted
+        ? "the trial has submitted its change: nothing more goes to its agent"
+        : result.stopped !== "no_submission"
+          ? `the trial is ending (${result.stopped})`
+          : undefined,
+  });
   const wall =
     wallMs !== undefined
       ? setTimeout(() => {
@@ -247,6 +295,14 @@ export async function runTrial(spec: TrialSpec, deps: TrialDeps): Promise<TrialR
         break;
       }
       if (result.submitted || result.stopped !== "no_submission") break;
+      // The owner interrupted the reply in the trial's Pi view (goal 169): not the agent's own
+      // stop, so no nudge is counted. The trial goes on at once with the owner's words that wait,
+      // or with its nudge.
+      if (deps.view?.interrupted()) {
+        if (agent.hasQueuedMessages()) await agent.continue();
+        else await agent.prompt(messageText(later({ kind: "nudge" })));
+        continue;
+      }
       if (nudges > 0 && result.toolCalls === callsAtNudge) break;
       if (spec.limits?.nudges !== undefined && nudges >= spec.limits.nudges) break;
       nudges++;

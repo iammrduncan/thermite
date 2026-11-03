@@ -6,8 +6,8 @@ import { LiveBatchWire, LiveEntry, readLiveEntries } from "../live.ts";
  * The link's third contract (goal 168, step 2): the live view on the message bus. A message is
  * the lines of one source of one run: the planner's, the judge's, one trial's or the supervisor's.
  * It goes on the run's subject; a line that names no run (the judge's or the advisors' own) goes
- * on the rig's. The harness signs the lines of each message, as it signs a batch sent over HTTP,
- * so the supervisor that publishes them can't change them; the supervisor's own lines go
+ * on the rig's. The harness signs the lines of each message as a batch (core/live.ts), so the
+ * supervisor that publishes them can't change them; the supervisor's own lines go
  * unsigned, as they always have. The live view is a view, never a record: the stream keeps the
  * newest messages by count and age, and control keeps what it folds in its own live view.
  */
@@ -128,7 +128,7 @@ export function liveMessageId(b: { log_id: string; entries: readonly { seq: numb
 
 /**
  * A live message as control reads it (owner's decision 6): its batch, the lines it knows, and a
- * count of the rest by the kind or source it does not know, as a batch over HTTP is read. Throws
+ * count of the rest by the kind or source it does not know. Throws
  * a ZodError when it is not a batch of live lines at all.
  */
 export function readLiveMessage(raw: unknown): {

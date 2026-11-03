@@ -161,6 +161,8 @@ export async function sshScript(
         if (code === 255) return reject(new Error(sshError(stderr)));
         resolve({ code: code ?? 1, stdout: Buffer.concat(out).toString(), stderr });
       });
+      // ssh may exit before it reads the script, as when it can't connect: its words say why.
+      child.stdin.on("error", () => undefined);
       child.stdin.end(script);
     });
   });

@@ -1,13 +1,16 @@
-import { BUS_READ_MAX, BUS_RETRY_MS, type Bus, type BusMessage } from "../../common/bus.ts";
+import { BUS_READ_MAX, BUS_RETRY_MS, type Bus, type BusMessage } from "../../common/bus/index.ts";
 import { log, redact } from "../../common/env.ts";
 import { errorText } from "../../common/errors.ts";
 import { canonicalJson } from "../../core/canonical.ts";
 import { EVENT_STREAM, type EventRead, readEventMessage } from "../../core/link/events.ts";
 import { currentEvent } from "../../core/names.ts";
 import { MODEL_CALL_EVENT, ModelCallBody } from "../../core/usage.ts";
+import { takeRigRemoval } from "../retention/index.ts";
 import type { ControlStore } from "../store/index.ts";
 import { type FoldCache, keepFolds, streamEvent } from "../views/index.ts";
-import { readKnowledgeAgain } from "./knowledge.ts";
+import { EventDays, keepEventDays } from "./days.ts";
+import { readKnowledgeAgain, takeKbItem } from "./knowledge.ts";
+import { EventSizes } from "./sizes.ts";
 
 /**
  * What control derives from its rigs' events, written from the `EVENTS` stream (goal 168, step 4).
@@ -29,7 +32,8 @@ export const APPLY_PAGE = BUS_READ_MAX;
 
 export interface EventsApplyOptions {
   store: ControlStore;
-  bus: Pick<Bus, "read" | "lastSeq">;
+  /** The bus it reads; with purge and message, the one a retention policy purges on (days.ts). */
+  bus: Pick<Bus, "read" | "lastSeq"> & Partial<Pick<Bus, "purge" | "message">>;
   /** How long it waits after a failure: BUS_RETRY_MS unless a test gives a shorter one. */
   retryMs?: number | undefined;
 }
@@ -49,6 +53,10 @@ export class EventsApply {
   private readonly o: EventsApplyOptions;
   /** Control's kept folds, which its views read: handed every event of the stream, in order. */
   readonly folds: FoldCache;
+  /** What the stream holds by subject, rig and day, for a retention policy of it (days.ts). */
+  readonly days = new EventDays();
+  /** The sizes of the events the stream stored in the last hour, by kind, for Metrics (sizes.ts). */
+  readonly sizes = new EventSizes();
   readonly since = new Date().toISOString();
   /** Messages it applied since control started. */
   applied = 0;
@@ -70,6 +78,10 @@ export class EventsApply {
   constructor(o: EventsApplyOptions) {
     this.o = o;
     this.folds = keepFolds(o.store, o.bus);
+    const { purge, message } = o.bus;
+    const bus =
+      purge && message ? { purge: purge.bind(o.bus), message: message.bind(o.bus) } : undefined;
+    keepEventDays(o.store, this.days, bus);
     this.checkedOnce = new Promise((r) => {
       this.markChecked = r;
     });
@@ -180,7 +192,8 @@ export class EventsApply {
       this.readAgain = true;
     }
     while (!this.closed) {
-      const from = Math.min(store.busPositions.of(EVENT_STREAM), this.folds.through) + 1;
+      const from =
+        Math.min(store.busPositions.of(EVENT_STREAM), this.folds.through, this.days.through) + 1;
       const read = await bus.read(EVENT_STREAM, { from, limit: APPLY_PAGE });
       if (read.next <= from) return;
       this.applyPage(read.messages, read.next - 1);
@@ -200,6 +213,8 @@ export class EventsApply {
     const folds = this.folds.through;
     const events = messages.flatMap((m) => (m.seq > folds ? (streamEvent(m) ?? []) : []));
     this.folds.take(events, through);
+    this.days.take(messages);
+    this.sizes.take(messages);
   }
 
   /** The messages after the store's place, applied, and the place it ends at, in one transaction. */
@@ -269,9 +284,10 @@ function readOrSay(m: BusMessage): EventRead | undefined {
  * What control keeps of one event, under the current names (core/names.ts): the run registry's
  * entry for a run the rig created (ingest wrote it before it published the event, whose subject
  * the registry chose; this writes the same again), a command's outcome
- * as the harness gave it, a model call's usage (goal 075; a body that does not read as one stays
- * an event only), and, with `toKb`, its items in the knowledge base. An event the knowledge base
- * can't index is left out of it, in control's log and the audit log.
+ * as the harness gave it (applied, or refused), a model call's usage (goal 075; a body that does not read as one stays
+ * an event only), and, with `toKb`, its items in the knowledge base: Thermite's reading of it into
+ * its run's records slot, or a writer's `kb_item` into the writer's slot (knowledge.ts). An event
+ * the knowledge base can't index is left out of it, in control's log and the audit log.
  */
 function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boolean): void {
   const { rig, ledger } = read;
@@ -283,12 +299,24 @@ function applyEvent(store: ControlStore, read: EventRead, now: string, toKb: boo
     const outcome = canonicalJson({ source: "harness", ...(e.body as object) });
     store.commands.confirmApplied(rig, e.subject, status, outcome, now);
   }
+  // A command the harness refused names itself in the event's body.
+  const refused = e.kind === "command_rejected" ? (e.body as { id?: unknown } | null)?.id : null;
+  if (typeof refused === "string") {
+    const outcome = canonicalJson({ source: "harness", ...(e.body as object) });
+    store.commands.confirmRejected(rig, refused, outcome, now);
+  }
   const call = e.kind === MODEL_CALL_EVENT && e.subject ? ModelCallBody.safeParse(e.body) : null;
   if (call?.success) store.usage.recordCall(rig, ledger, e.id, String(e.subject), call.data);
+  // What a retention policy removed on the rig: in the history and the audit log.
+  if (e.kind === "retention_removed") takeRigRemoval(store, rig, e);
   if (!toKb) return;
   try {
     // A savepoint: an event indexed in part is not kept.
-    store.tx(() => store.kb().index({ rig, ledger }, e));
+    store.tx(() =>
+      e.kind === "kb_item"
+        ? takeKbItem(store, { rig, ledger }, e)
+        : store.kb().index({ rig, ledger }, e),
+    );
   } catch (err) {
     const error = redact(errorText(err));
     const what = { rig, ledger, event: e.id, kind: e.kind, error };

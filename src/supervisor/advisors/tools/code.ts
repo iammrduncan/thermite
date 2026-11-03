@@ -6,7 +6,7 @@ import { errorText } from "../../../common/errors.ts";
  * The teachers' read-only tools for a run's code and evidence (goal 081): the champion's tree,
  * one of its files, an attempt's diff, and the judge's public findings. Each call goes to the
  * harness API with the supervisor's token, which reads; nothing here writes. In Pi they are
- * tools of the call (runtimes/pi.ts); in Claude Code, OpenCode and the Codex CLI the supervisor
+ * tools of the call (pi/tools.ts); in Claude Code, OpenCode and the Codex CLI the supervisor
  * serves them on localhost for the call (mcp.ts), as the past-research search is.
  *
  * Held-out content stays out: the harness reads only the champion's commit of the project

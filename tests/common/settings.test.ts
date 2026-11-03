@@ -28,22 +28,22 @@ describe("numeric settings stop the part at start with words (goal 164)", () => 
       );
   });
 
-  test("minutes: the export interval that once stopped exports, or exported every few seconds", () => {
-    const env = (v: string) => ({ THERMITE_EXPORT_MINUTES: v });
-    assert.equal(harnessNumbers(env("90")).exportEveryMs, 90 * 60_000);
+  test("minutes: a typo such as 6O stops the part at start, never passing as a value", () => {
+    const env = (v: string) => ({ THERMITE_DRAIN_MINUTES: v });
+    assert.equal(harnessNumbers(env("90")).drainMinutes, 90);
     assert.throws(
       () => harnessNumbers(env("6O")),
-      /THERMITE_EXPORT_MINUTES takes a number of minutes above 0, not "6O"/,
+      /THERMITE_DRAIN_MINUTES takes a whole number of minutes from 1 to \d+, not "6O"/,
     );
-    assert.throws(() => harnessNumbers(env("0")), /above 0/);
+    assert.throws(() => harnessNumbers(env("0")), /from 1/);
   });
 
   test("an interval whose 0 turns its loop off takes 0, and nothing below", () => {
-    const kb = SUPERVISOR_NUMBERS.kbSyncSeconds;
-    assert.equal(supervisorMs({ THERMITE_KB_SYNC_SECONDS: "0" }, kb), 0);
+    const route = SUPERVISOR_NUMBERS.modelRoutePollSeconds;
+    assert.equal(supervisorMs({ THERMITE_MODEL_ROUTE_POLL_SECONDS: "0" }, route), 0);
     assert.throws(
-      () => supervisorMs({ THERMITE_KB_SYNC_SECONDS: "-1" }, kb),
-      /^Error: THERMITE_KB_SYNC_SECONDS takes a number of seconds from 0 \(0: off\), not "-1"$/,
+      () => supervisorMs({ THERMITE_MODEL_ROUTE_POLL_SECONDS: "-1" }, route),
+      /^Error: THERMITE_MODEL_ROUTE_POLL_SECONDS takes a number of seconds from 0 \(0: off\), not "-1"$/,
     );
     const live = SUPERVISOR_NUMBERS.liveIntervalMs;
     assert.equal(supervisorMs({ THERMITE_LIVE_INTERVAL_MS: "250" }, live), 250);
@@ -87,7 +87,7 @@ describe("numeric settings stop the part at start with words (goal 164)", () => 
   });
 
   test("the harness's and the broker's settings are read at their start", () => {
-    assert.equal(harnessNumbers({}).exportEveryMs, 60 * 60_000);
+    assert.equal(harnessNumbers({}).drainMinutes, 60);
     assert.equal(
       harnessNumbers({ THERMITE_RESEARCH_MAX_MB: "2" }).researchMaxBytes,
       2 * 1024 * 1024,
@@ -97,8 +97,8 @@ describe("numeric settings stop the part at start with words (goal 164)", () => 
       /THERMITE_MAX_TURNS takes a whole number from 1/,
     );
     assert.throws(
-      () => harnessNumbers({ THERMITE_EXPORT_MINUTES: "6O" }),
-      /THERMITE_EXPORT_MINUTES/,
+      () => harnessNumbers({ THERMITE_CALIBRATION_BLOCKS: "6O" }),
+      /THERMITE_CALIBRATION_BLOCKS/,
     );
     assert.deepEqual(brokerNumbers({}), { outboxGid: 10001, fatalHoldMs: 0 });
     assert.equal(brokerNumbers({ THERMITE_FATAL_HOLD_SECONDS: "900" }).fatalHoldMs, 600_000);

@@ -1,8 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, chownSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { secretFromFile } from "../../common/env.ts";
 import { log, logError, logWarn } from "../../common/log.ts";
+import { restartAfter } from "../../common/restart.ts";
+import { RunAsServer } from "../../common/run-as/index.ts";
+import { ADVISOR_RUNS_SOCKET } from "../../core/advisor-runs.ts";
 import { podTunnelDirs } from "../../core/tunnel.ts";
 import { type Broker, FENCE, fatalExit, SECRET_VARS, SG, SU, TG } from "./context.ts";
 import { finishIfStopped } from "./controller.ts";
@@ -11,7 +15,6 @@ import {
   makeSupervisorFiles,
   pullMode,
   readEnrollment,
-  restartAfter,
   SUPERVISOR_RECORD,
   type SupervisorPaths,
   type SupervisorRecord,
@@ -22,6 +25,7 @@ import {
   writeControlKey,
 } from "./one-container.ts";
 import { killScope, SETPRIV } from "./process.ts";
+import { WATCHED, watchHealth } from "./watch.ts";
 
 /**
  * The supervisor in the one-container rig image (one-container.ts holds the rules): its folders and
@@ -76,7 +80,7 @@ export function prepareOneContainer(broker: Broker): SupervisorPaths {
 
 /** The supervisor's files, with its copy of root's harness token (one-container image only). */
 function supervisorFiles(broker: Broker, paths: SupervisorPaths): void {
-  const token = readFileSync(broker.env.THERMITE_SUPERVISOR_TOKEN_FILE as string, "utf8").trim();
+  const token = secretFromFile("THERMITE_SUPERVISOR_TOKEN_FILE", broker.env);
   makeSupervisorFiles(paths, { uid: SU, gid: SG, inboxGid: TG }, token);
 }
 
@@ -140,6 +144,43 @@ export async function awaitEnrollment(broker: Broker, paths: SupervisorPaths): P
   return false;
 }
 
+/**
+ * The advisors' runner (src/common/run-as/) for the supervisor in one container: each advisor's
+ * program runs as an advisor user of its own, under no_new_privs and in the GPU fence with no card
+ * as the supervisor does, in a folder of the runs' root (beside the supervisor's state, which root
+ * made at this start: the advisor users pass through it, listing nothing). Its socket is in a
+ * folder only root and the supervisor's group may enter. Resolves once it serves.
+ */
+export async function startAdvisorRuns(broker: Broker, paths: SupervisorPaths): Promise<void> {
+  rmSync(paths.advisorRuns, { recursive: true, force: true });
+  mkdirSync(paths.advisorRuns, { recursive: true });
+  chownSync(paths.advisorRuns, SU, SG);
+  chmodSync(paths.advisorRuns, 0o711);
+  const socketDir = dirname(ADVISOR_RUNS_SOCKET);
+  mkdirSync(socketDir, { recursive: true });
+  chownSync(socketDir, 0, SG);
+  chmodSync(socketDir, 0o750);
+  rmSync(ADVISOR_RUNS_SOCKET, { force: true });
+  const server = new RunAsServer({
+    socketPath: ADVISOR_RUNS_SOCKET,
+    root: paths.advisorRuns,
+    callerGid: SG,
+    wrap: supervisorCommand(broker, []),
+  }).listen();
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.once("listening", () => {
+      chownSync(ADVISOR_RUNS_SOCKET, 0, SG);
+      chmodSync(ADVISOR_RUNS_SOCKET, 0o660);
+      log("broker", "serving the advisors' runner", {
+        socket: ADVISOR_RUNS_SOCKET,
+        runs: paths.advisorRuns,
+      });
+      resolve();
+    });
+  });
+}
+
 /** The supervisor's command, once it runs as its user (one-container.ts: supervisorArgv). */
 const supervisorCommand = (broker: Broker, command: string[]): string[] =>
   supervisorArgv(command, { setpriv: SETPRIV, fence: broker.fenceAbi ? FENCE : undefined });
@@ -178,7 +219,8 @@ export function recordSupervisor(broker: Broker, paths: SupervisorPaths): void {
 
 /**
  * The supervisor, as its own user (one-container image only), in its own process group. When it
- * exits, whatever it started (an advisor's program) ends too, and it starts again.
+ * exits, whatever it started (an advisor's program) ends too, and it starts again. The broker
+ * watches its health route too, and ends it when that fails (watch.ts).
  */
 export function startSupervisor(broker: Broker, paths: SupervisorPaths): void {
   if (broker.stopping) {
@@ -205,6 +247,7 @@ export function startSupervisor(broker: Broker, paths: SupervisorPaths): void {
     detached: true,
   });
   broker.supervisor = proc;
+  watchHealth(proc, { part: "supervisor", ...WATCHED.supervisor, stopping: () => broker.stopping });
   let ended = false;
   const end = (code: number | null, signal: string | null, error?: string) => {
     if (ended) return;

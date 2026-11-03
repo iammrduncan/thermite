@@ -235,7 +235,7 @@ describe("Copy on a campaign's page (goal 069)", () => {
     assert.match(form.html, /<h3>Copy matmul-speed<\/h3>/);
     assert.match(
       form.html,
-      /Copy it to start from zero: the copy gets its own empty folder in the knowledge base, so its runs read nothing that the runs of <b>matmul-speed<\/b> recorded\./,
+      /Copy it to start from zero: the copy gets its own empty collection in the knowledge base, so its runs read nothing that the runs of <b>matmul-speed<\/b> recorded\./,
     );
     // A free name to start with, and what its runs are called.
     assert.equal(form.fields.find((x) => x.name === "name")?.value, "matmul-speed-b");
@@ -287,13 +287,13 @@ describe("Copy on a campaign's page (goal 069)", () => {
     assert.match(page, /<b class="ok">Copied matmul-speed version 2 as matmul-speed-b\.<\/b>/);
     assert.match(
       page,
-      /Copied from<\/span> <a href="\/ui\/campaigns\/matmul-speed">matmul-speed version 2<\/a> <span class="muted">by you, just now\. Its folder in the knowledge base started empty\.<\/span>/,
+      /Copied from<\/span> <a href="\/ui\/campaigns\/matmul-speed">matmul-speed version 2<\/a> <span class="muted">by you, just now\. Its collection in the knowledge base started empty\.<\/span>/,
     );
     assert.match(
       page,
       /Saved on control, with no run yet\. <a class="btn sm primary" href="\/ui\/campaigns\/matmul-speed-b\?start=1" data-open="#start"[^>]*><svg[^>]*>[\s\S]*?<\/svg>Start a run of matmul-speed-b<\/a>/,
     );
-    assert.match(page, /None: its agents read only this campaign's folder\./);
+    assert.match(page, /None: its agents read only this campaign's collection\./);
     // A copy can be copied too: its panel offers the next free name.
     assert.equal(copyForm(page).fields.find((x) => x.name === "name")?.value, "matmul-speed-c");
 
