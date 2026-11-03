@@ -1,0 +1,44 @@
+---
+id: "189"
+title: "OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 189 · OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+From [issue 26](https://github.com/iammrduncan/thermite/issues/26). A user added **OpenCode (its own models)** in **Settings › Providers** with a funded key, and gave a rig the paid model `claude-haiku-5-5` under OpenCode. The model check failed with `model unavailable: opencode/claude-haiku-5-5`. The free models (`-free`) work, with or without a key. A later comment says Pi fails the same way for paid models.
+
+The issue names a likely cause: control treats OpenCode's own provider as one that needs no key, for its free models, and so sends none to the rig, even when one is saved.
+
+1. **The key goes with the route.** When the provider has a key, the rig's route carries it, for OpenCode and for Pi; with none, the free models still work.
+2. **The check's words.** A model that needs a key and gets none says so: "this model needs the provider's key, and none is saved", not "model unavailable".
+
+## Why
+
+A user paid for a model, saved the key, and Thermite dropped it. The error then pointed at the model, not at the key.
+
+## Done when
+
+- [ ] Items 1 and 2, with tests: a route of OpenCode's own provider with a saved key carries it for OpenCode and for Pi; one without a key still runs a free model.
+- [ ] Pages: Connect a provider (OpenCode's own models), Troubleshoot, and the changelog.
+- [ ] Issue 26 closed with its commit.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/189-opencode-provider-key.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

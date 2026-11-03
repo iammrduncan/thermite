@@ -1,0 +1,44 @@
+---
+id: "193"
+title: "The usage table lists every agent with a model, with no calls yet when it has none"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 193 · The usage table lists every agent with a model, with no calls yet when it has none
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+From [issue 52](https://github.com/iammrduncan/thermite/issues/52), the owner's, 2026-11-03. A run's usage table (**By agent and model**) has a row only for an agent that made a model call. On the test rig, the Codex teacher never sent anything to its model (fixed in v0.1.2), so it had no row: a teacher that never works looked the same as one never set up.
+
+1. **A row for each agent the rig gives a model to:** the workers, the planner, each teacher, the merged by model, the auditor, the review panel and the research writers, with its model and program.
+2. **No calls yet.** An agent with no records shows **no calls yet** in place of its figures, with why where Thermite knows it: the advisor's newest `has no answer` line on Live, or its last error.
+3. **Over MCP:** `model_usage` lists each such agent with zero records and `configured: true`.
+
+## Why
+
+An agent that is set up but never works should stand out at a glance.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests.
+- [ ] A mockup the owner agrees to, before the table changes.
+- [ ] Pages: the run page's reference, the MCP tools, and the changelog.
+- [ ] Issue 52 closed with its commit.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/193-usage-lists-configured-agents.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

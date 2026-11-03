@@ -1,0 +1,45 @@
+---
+id: "194"
+title: "Start a teachers' round now: an MCP tool, a dashboard action and a signed command"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 194 · Start a teachers' round now: an MCP tool, a dashboard action and a signed command
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+From [issue 53](https://github.com/iammrduncan/thermite/issues/53), the owner's, 2026-11-03. A teachers' round starts on its own: every `teacher_minutes`, when a planner's round leaves the queue below its target, and when the owner writes to the teachers. There is no way to ask for one now. Writing to the teachers works, but it puts a message in the run's record that was only a trigger.
+
+1. **The command:** a signed command, `start_teachers_round` for a run, that the supervisor takes: the round starts within a few seconds, the next timed round counts from it, and Live says `the teachers review <run> now: the owner asked for a round`.
+2. **Its refusals, with why:** no teachers on the rig, the day's spending limit, a round already under way, the run not running.
+3. **On the dashboard:** **Start a teachers' round** in the run's ⋯ menu, beside **Restart the lanes**, saying what it does before it does it.
+4. **Over MCP:** `start_teachers_round` with `rig` and `run`, answering whether the round started, or why not.
+5. **Later, maybe:** the same for the auditor and the review panel.
+
+## Why
+
+Checking a fix to the teachers, or what they make of a run's state, meant waiting for the timer: on 2026-11-03 a fix waited most of an hour for its round.
+
+## Done when
+
+- [ ] Items 1 to 4, with tests of each refusal.
+- [ ] Pages: the run's page and Live, the MCP tools, the signed commands, Steer a run, and the changelog.
+- [ ] Issue 53 closed with its commit.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/194-start-a-teachers-round.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

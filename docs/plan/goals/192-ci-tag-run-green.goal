@@ -1,0 +1,42 @@
+---
+id: "192"
+title: "CI's run on a version tag passes every check a runner can run"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 192 · CI's run on a version tag passes every check a runner can run
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+v0.1.2's tag was the first version tag whose CI run was approved. It ran checks that had never run on a runner, and eleven failed. Most were the checks' own faults or Docker's, fixed after the tag (the supervisor had no `host.docker.internal`, the secret scan's made-up values, the machine and RunPod checks, a race in the control check, a flaky test). One is left:
+
+1. **Leaf acceptance under Docker** ([issue 54](https://github.com/iammrduncan/thermite/issues/54)): control's bus server never reaches the pod's server on the check's own network.
+2. **The next tag's run** passes every job it runs: the fast checks, the heavy jobs and every acceptance check a runner can run.
+
+## Why
+
+A version's tag gates its release. A check that fails for its own reasons hides one that fails for Thermite's.
+
+## Done when
+
+- [ ] Item 1, with the check passing under Docker in CI and under Podman.
+- [ ] Item 2: v0.1.3's tag run green.
+- [ ] Issue 54 closed with its commit.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/192-ci-tag-run-green.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

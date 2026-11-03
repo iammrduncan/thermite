@@ -1,0 +1,41 @@
+---
+id: "198"
+title: "A run's time budget counts the time it worked, and a run that spent it can go on"
+status: PROPOSED
+version: "0.1.3"
+depends_on: ["123"]
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 198 · A run's time budget counts the time it worked, and a run that spent it can go on
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+From [issue 50](https://github.com/iammrduncan/thermite/issues/50), the field report's first request. A hill climb's `wall_hours` counts from the run's creation, paused time included, and a run that spent it can't be resumed. In the report, every pause for tests or a nightly backup cost a fresh run. v0.1.2 leaves out a research run's downtime from its clock (`harness_gap`); a paused hill climb is not covered. Goal [061](061-gaps-found-by-the-docs.goal) lists the same gaps under "Budgets and run time", and goal [123](123-budgets-made-simple.goal) asks whether the stop time should count paused time.
+
+1. **Paused time doesn't count,** for every mode: the budget counts the time the run was running.
+2. **A spent run can go on:** raising its budget (over REST, MCP, the command line and **Budget and stop time**) lets a paused run resume.
+
+## Why
+
+Pausing a run to use the machine should not cost the run.
+
+## Done when
+
+- [ ] Items 1 and 2, with tests.
+- [ ] Pages: Budget and stop time, the contract's reference, the MCP tools, the command line, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/198-budget-counts-working-time.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

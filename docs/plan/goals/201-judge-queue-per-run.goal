@@ -1,0 +1,42 @@
+---
+id: "201"
+title: "A paused or closed run's judge jobs stop, and stop holding up the rest"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 201 · A paused or closed run's judge jobs stop, and stop holding up the rest
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+From [issue 50](https://github.com/iammrduncan/thermite/issues/50), the field report's fifth request.
+
+1. **Close and pause stop the run's judge job** at its next block, and control clears its lease; a cancelled job gets an event, so control and the rig agree.
+2. **A paused or closed run's queued jobs don't hold up dev runs** on a shared device; nor does calibration, when the owner allows it.
+3. **Resuming a run on a busy rig** says which run it will pause, and asks first.
+
+## Why
+
+In the report, one old queued job stalled a new campaign on an idle GPU, and a resume paused a live campaign without a word.
+
+## Done when
+
+- [ ] Items 1 to 3, with tests.
+- [ ] Pages: Pause and resume, the judge's queue, Troubleshoot, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/201-judge-queue-per-run.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

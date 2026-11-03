@@ -1,0 +1,42 @@
+---
+id: "200"
+title: "A plateau stop: a run ends after a time without a new champion, when the owner sets it"
+status: PROPOSED
+version: "0.1.3"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 200 · A plateau stop: a run ends after a time without a new champion, when the owner sets it
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+From [issue 50](https://github.com/iammrduncan/thermite/issues/50), the field report's fourth request. Nothing ends a run that has stopped improving: in the report, one run spent about 5 hours of GPU time after its last gain. A contract or run setting, such as `stop_after_minutes_without_champion`, closes or pauses the run (the owner chooses which) once that long has passed without a new champion. Off unless set.
+
+## Why
+
+A stuck run holds a GPU that the next target could use.
+
+## Constraints
+
+- **No default caps.** Off unless the owner sets it.
+
+## Done when
+
+- [ ] The setting, with tests: a run with it set stops after the time without a champion; one without it never stops for this.
+- [ ] Pages: the contract's reference, Budget and stop time, and the changelog.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/200-plateau-stop.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

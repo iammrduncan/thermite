@@ -163,7 +163,40 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.1.3
 
-**Follow-ups to the first release, GPUs on demand, and work within a budget.** GPUs rented only while they work, a secondary judge, one budget in dollars that holds on every rig, measurements that cost less, and what Thermite spent on RunPod; and the first release's follow-ups. Proposed.
+**Follow-ups from use: the open issues of its milestone first, then the first release's follow-ups, GPUs on demand and work within a budget.** In the order below. Goal [185](goals/185-a-runs-work-in-git.goal), built in v0.1.1, closes issue 39 once it is verified. Proposed.
+
+**First, what users hit.** Bugs with a clear fix, and CI's tag run.
+
+- [189](goals/189-opencode-provider-key.goal) OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi (issue 26) · `PROPOSED`
+- [190](goals/190-research-on-a-subscription.goal) Research on a Claude subscription: refused before the run starts, with what to do (issue 25) · `PROPOSED`
+- [191](goals/191-check-while-taking-model.goal) Check waits while the rig takes its new model (issue 44) · `PROPOSED`
+- [150](goals/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `PROPOSED`
+- [192](goals/192-ci-tag-run-green.goal) CI's run on a version tag passes every check a runner can run (issue 54) · `PROPOSED`
+
+**The owner's asks of 2026-11-03.**
+
+- [194](goals/194-start-a-teachers-round.goal) Start a teachers' round now: an MCP tool, a dashboard action and a signed command (issue 53) · `PROPOSED`
+- [193](goals/193-usage-lists-configured-agents.goal) The usage table lists every agent with a model, with no calls yet when it has none (issue 52) · `PROPOSED`
+
+**Runs that don't waste the machine.** The field report's ranked requests, and a waiting win.
+
+- [198](goals/198-budget-counts-working-time.goal) A run's time budget counts the time it worked, and a run that spent it can go on (issue 50) · `PROPOSED`
+- [201](goals/201-judge-queue-per-run.goal) A paused or closed run's judge jobs stop, and stop holding up the rest (issue 50) · `PROPOSED`
+- [199](goals/199-judge-files-once-disk-ready.goal) The judge copies a job's files once, and checks the disk before it times (issue 50) · `PROPOSED`
+- [200](goals/200-plateau-stop.goal) A plateau stop: a run ends after a time without a new champion, when the owner sets it (issue 50) · `PROPOSED`
+- [141](goals/141-waiting-win-after-champion-moved.goal) A waiting win the champion moved past: closed when a champion has it, an approval when none does (issue 23) · `PROPOSED`
+- [202](goals/202-field-report-3080.goal) The 3080 field report: each of its items in a goal (issue 50) · `PROPOSED`
+
+**Costs, and what a hill climb keeps.**
+
+- [195](goals/195-model-prices-cache-and-tiers.goal) Model prices: a price for cache writes, and prices by request size (issue 41) · `PROPOSED`
+- [123](goals/123-budgets-made-simple.goal) Budgets made simple: one amount in dollars, easy to set, that holds on every rig · `PROPOSED`
+- [196](goals/196-hill-climbs-keep-what-they-learn.goal) Hill climbs keep what they learn: broken attempts tried again, small gains kept, a run's bar and reference carried on (issues 29, 36, 37, 38) · `PROPOSED`
+- [197](goals/197-experiment-queue-cap-and-split.goal) The experiment queue: a cap that keeps the best, and the worker's measurements beside the judge's (issues 30, 20) · `PROPOSED`
+- [114](goals/114-hill-climb-contract-gaps.goal) Hill-climb contracts: a check once per candidate, cheaper held-out cells, and goal mode's fields · `PROPOSED`
+- [122](goals/122-repeat-measurements-setting.goal) Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not · `PROPOSED`
+
+**Planned before the issues.** The rest of the first release's follow-ups, then GPUs on demand and a secondary judge.
 
 - [097](goals/097-add-a-kit-bundle-from-the-dashboard.goal) Give control a kit bundle from the dashboard · `PROPOSED`
 - [108](goals/108-gated-models-on-cloud-rigs.goal) Gated models on cloud rigs · `PROPOSED`
@@ -171,19 +204,14 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [130](goals/130-mcp-tools-after-update.goal) An MCP client sees control's new tools after control is updated · `PROPOSED`
 - [145](goals/145-drain-race.goal) A drain doesn't wait two hours for a trial that started seconds before it · `PROPOSED`
 - [146](goals/146-supervisor-alone.goal) Restart or update a rig's supervisor alone, while its harness goes on · `PROPOSED`
-- [141](goals/141-waiting-win-after-champion-moved.goal) A waiting win the champion moved past: closed when a champion has it, an approval when none does · `PROPOSED`
 - [149](goals/149-output-cut-notice.goal) A command's result says its output was cut only when it was · `PROPOSED`
-- [150](goals/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `PROPOSED`
 - [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
+- [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
+- [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
+- [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
+- [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `PROPOSED`
 - [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
 - [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
-- [123](goals/123-budgets-made-simple.goal) Budgets made simple: one amount in dollars, easy to set, that holds on every rig · `PROPOSED`
-- [122](goals/122-repeat-measurements-setting.goal) Repeat measurements: a setting to turn off the judge's repeats, with why to keep them or not · `PROPOSED`
-- [114](goals/114-hill-climb-contract-gaps.goal) Hill-climb contracts: a check once per candidate, cheaper held-out cells, and goal mode's fields · `PROPOSED`
-- [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `PROPOSED`
-- [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
-- [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
-- [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
 - [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
 
 ## v0.1.4

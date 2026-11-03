@@ -1,0 +1,42 @@
+---
+id: "191"
+title: "Check waits while the rig takes its new model"
+status: PROPOSED
+version: "0.1.3"
+depends_on: ["150"]
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 191 · Check waits while the rig takes its new model
+
+**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+
+## What
+
+From [issue 44](https://github.com/iammrduncan/thermite/issues/44). On **Settings › Harness and model for each rig**, an owner gave a rig a model with **Use** and pressed **Check** soon after. The check failed: `no model route: set one on control's settings page (or in the rig's settings)`. The rig had not taken the model yet: its supervisor fetches the route on its own timer, and took it 18 s later. The rig then checked the model by itself, and that check passed.
+
+1. **Check is off while the rig takes the model,** on the settings row and on the rig's page, with why on hover: the rig checks the model itself once it has it.
+2. **The harness's words.** A check while the rig has no route, but control has given it one, says "the rig has not taken the model control gave it yet", not "set one".
+
+## Why
+
+The failure was only timing, but on a first try it reads as "the model you picked doesn't work", and its advice sends the owner back to the page where they just set it.
+
+## Done when
+
+- [ ] Items 1 and 2, with tests.
+- [ ] Pages: the Settings reference, the rig's page, Troubleshoot, and the changelog.
+- [ ] Issue 44 closed with its commit.
+
+## Decisions
+
+- None yet.
+
+## Progress
+
+- 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+
+---
+
+Run with `/goal Complete docs/plan/goals/191-check-while-taking-model.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).
