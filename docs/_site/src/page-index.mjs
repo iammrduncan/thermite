@@ -9,6 +9,8 @@ const docsRoot = fileURLToPath(new URL("./content/docs/", import.meta.url));
 
 const sections = [
   { dir: "", label: "Start" },
+  { dir: "use-cases", label: "Use cases: who Thermite is for" },
+  { dir: "studies", label: "Studies: what Thermite has done" },
   { dir: "tutorials", label: "Tutorials: learn by doing" },
   { dir: "how-to/install", label: "How-to guides: install and rigs" },
   { dir: "how-to/models", label: "How-to guides: models" },
@@ -50,7 +52,8 @@ export function pageIndex({ site, base }) {
       .readdirSync(folder, { withFileTypes: true })
       .filter((entry) => entry.isFile() && /\.mdx?$/.test(entry.name) && entry.name !== "404.md")
       .map((entry) => {
-        const slug = path.posix.join(dir, entry.name.replace(/\.mdx?$/, ""));
+        // A folder's index page lives at the folder's address, as Starlight serves it.
+        const slug = path.posix.join(dir, entry.name.replace(/\.mdx?$/, "")).replace(/\/index$/, "");
         return { slug, ...frontMatter(fs.readFileSync(path.join(folder, entry.name), "utf8")) };
       })
       .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));

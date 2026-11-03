@@ -1,0 +1,46 @@
+---
+title: "Use cases"
+description: "Who Thermite is for: local AI builders tuning models for their own hardware, solo builders with one computer, and enterprises running research on infrastructure they control."
+type: use-case
+sidebar:
+  order: 0
+  label: "Overview"
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Thermite fits wherever a change can be measured. If a program can build your project, run it and say whether the result is right and how good it is, agents can try ideas on it for days, and Thermite's **judge** keeps only what it confirms. The same harness serves very different people. Pick the page that sounds like you.
+
+<CardGrid>
+  <LinkCard
+    title="Local AI"
+    description="Tune an inference engine, a quantization or a kernel for the exact GPU you own, with the judge measuring on that GPU."
+    href="/use-cases/local-ai/"
+  />
+  <LinkCard
+    title="Solo builders"
+    description="One computer and the model you already have: agents work on your project overnight, and you wake up to measured results."
+    href="/use-cases/solo-builders/"
+  />
+  <LinkCard
+    title="Enterprises"
+    description="Autoresearch on your own clusters, models and repositories, with signed commands, approvals and a record of every attempt."
+    href="/use-cases/enterprises/"
+  />
+</CardGrid>
+
+## What you can point it at
+
+Every campaign is one of three **modes**. Each use case below uses all three.
+
+| You want to | Mode | For example |
+| --- | --- | --- |
+| Push one number as far as it goes, without breaking anything else | Hill climb | Tokens a second on your GPU, a build's time, a query's latency, a model's accuracy |
+| Make something work, checked by a list of goals | Goal | Support a new model format, pass a test suite after an upgrade, meet a quality bar |
+| Find out what is known, with sources you can check | Research | Which papers improve 2-bit decoding; which library fits a design |
+
+[Choose a campaign mode](../how-to/campaigns/choose-a-mode.md) helps you pick one.
+
+## The proof
+
+[Qwen3.8-27B on a $100 GPU](../studies/qwen3-8-27b-on-a-p100.mdx) is a study of four campaigns on one Tesla P100: two goal campaigns, then two hill climbs. Decode went from 7.74 to 30.06 tokens a second with the model's outputs held, and the result ships in one command through [tensorless](https://tensorless.dev).

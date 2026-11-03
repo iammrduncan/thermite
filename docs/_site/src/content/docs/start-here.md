@@ -8,6 +8,8 @@ sidebar:
 
 Thermite lets AI agents work on a project for as long as it takes, while a judge they cannot touch decides which of their changes really count. This page helps you find where to begin.
 
+Still deciding whether it fits? [Use cases](use-cases/index.mdx) shows what local AI builders, solo builders and enterprises point it at, and [the first study](studies/qwen3-8-27b-on-a-p100.mdx) shows four real campaigns from start to finish.
+
 ## Three kinds of campaign
 
 A **campaign** is one piece of research. Each one runs in one of three **modes**, which say what the agents make, what decides whether it counts, and when the campaign ends:

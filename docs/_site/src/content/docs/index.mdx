@@ -29,6 +29,7 @@ hero:
 
 import { Card, CardGrid, LinkButton, LinkCard, Steps } from "@astrojs/starlight/components";
 import HowItWorks from "../../components/HowItWorks.astro";
+import Stats from "../../components/Stats.astro";
 
 Ask your agent to set it up for you:
 
@@ -49,6 +50,21 @@ Set up Thermite on this computer for me: follow https://usethermite.com/llm-setu
 A lot of engineering is a loop. Change something, measure it, keep it if it is better, undo it if it isn't, and try the next idea. **Autoresearch** hands that loop to AI agents, so it runs through the night, on many ideas at once, without you.
 
 The hard part is trusting the results. An agent asked to make a number go up will sometimes make it only look higher: it skips the slow case, moves the timer, or just reports a win. So in Thermite, agents only propose. A separate program, the **judge**, builds each change, runs it against the best version so far on the same hardware, checks that its output is still right, and decides. The agents can neither read the judge nor change it.
+
+## Proof: a 27B model, 3.9× faster on a $100 GPU
+
+With [tensorless](https://tensorless.dev), four Thermite campaigns tuned an inference engine for Qwen3.8-27B on one Tesla P100, a 2016 data-centre card that sells used for about $100. Agents proposed changes to the engine's GPU code; the judge timed each one on the card and checked that the model's answers held.
+
+<Stats
+  items={[
+    { value: "3.89×", label: "decode speed, start to finish", note: "7.74 → 30.06 tokens a second" },
+    { value: "1.14×", label: "the speed of a standard 3-bit file", note: "on the same card" },
+    { value: "131", label: "changes judged in five days", note: "28 confirmed wins" },
+    { value: "+16%", label: "prompt speed so far, decode held", note: "a fourth campaign, still running" },
+  ]}
+/>
+
+<LinkButton href="/studies/qwen3-8-27b-on-a-p100/" icon="right-arrow">Read the study</LinkButton>
 
 ## What you can point it at
 
@@ -75,6 +91,26 @@ Each campaign is one of three kinds, called **modes**:
     Research first, then change the code: a hill climb or a goal campaign can read what a research
     campaign found. [Choose a campaign mode](how-to/campaigns/choose-a-mode.md) helps you pick.
   </Card>
+</CardGrid>
+
+## Who it's for
+
+<CardGrid>
+  <LinkCard
+    title="Local AI"
+    description="Tune an engine, a quantization or a kernel for the GPU you own, measured on that GPU."
+    href="/use-cases/local-ai/"
+  />
+  <LinkCard
+    title="Solo builders"
+    description="One computer and the model you have: agents work overnight, and you wake up to measured results."
+    href="/use-cases/solo-builders/"
+  />
+  <LinkCard
+    title="Enterprises"
+    description="Autoresearch on your own clusters and models, with signed commands, approvals and a full record."
+    href="/use-cases/enterprises/"
+  />
 </CardGrid>
 
 ## How a campaign runs
@@ -157,9 +193,19 @@ Thermite's community meets on the **Hackers in the Loop** Discord. Ask a questio
 
 ## Find your way
 
-There are four kinds of pages, and each one does one job:
+Each kind of page does one job:
 
 <CardGrid>
+  <LinkCard
+    title="Use cases"
+    description="Who Thermite is for, and what to point it at: local AI, solo builders, enterprises."
+    href="use-cases/"
+  />
+  <LinkCard
+    title="Studies"
+    description="Real campaigns, with the judge's own numbers and what was not measured."
+    href="studies/"
+  />
   <LinkCard
     title="Tutorials"
     description="Learn by doing. Start with your first run on your own computer."

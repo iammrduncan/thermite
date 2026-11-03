@@ -1,0 +1,378 @@
+---
+// The Qwen3.8-27B study's chart: the decode hill climb's champion, step by step, over its five
+// days. Each step is a confirmed win; its gain is the judge's, measured head to head against the
+// champion before it, and the line multiplies those gains from the starting point's speed. The
+// numbers are the judge's records of the run, as the study lists them.
+
+// [promoted at (UTC), gain over the previous champion, in %]. The first row is the starting point.
+const steps: [string, number][] = [
+  ["2026-10-24T02:50Z", 0],
+  ["2026-10-24T22:28Z", 48.97],
+  ["2026-10-25T11:43Z", 15.65],
+  ["2026-10-25T13:35Z", 9.11],
+  ["2026-10-25T16:03Z", 10.26],
+  ["2026-10-25T18:50Z", 2.46],
+  ["2026-10-25T20:09Z", 6.16],
+  ["2026-10-26T00:01Z", 3.32],
+  ["2026-10-26T04:42Z", 1.8],
+  ["2026-10-26T06:26Z", 4.15],
+  ["2026-10-26T08:25Z", 8.94],
+  ["2026-10-26T11:45Z", 2.14],
+  ["2026-10-26T13:49Z", 5.41],
+  ["2026-10-26T16:10Z", 1.45],
+  ["2026-10-26T18:07Z", 6.02],
+  ["2026-10-26T20:49Z", 1.54],
+  ["2026-10-26T23:12Z", 1.32],
+  ["2026-10-27T01:27Z", 1.06],
+  ["2026-10-27T03:27Z", 2.48],
+  ["2026-10-27T07:17Z", 2.73],
+  ["2026-10-27T10:45Z", 1.29],
+  ["2026-10-27T20:14Z", 1.05],
+  ["2026-10-27T21:37Z", 1.58],
+  ["2026-10-28T00:27Z", 4.02],
+  ["2026-10-28T03:03Z", 1.34],
+  ["2026-10-28T05:49Z", 1.27],
+  ["2026-10-28T10:44Z", 1.46],
+  ["2026-10-29T02:36Z", 1.21],
+];
+const start = 7.7344; // tok/s: the starting point's code and prose cells, geometric mean
+const reference = 26.3; // tok/s: Q3Floor in the same cells, on the same card
+const end = "2026-10-29T04:49Z"; // the owner paused the run: the target was reached
+
+let factor = 1;
+const champions = steps.map(([at, gain], i) => {
+  factor *= 1 + gain / 100;
+  return { n: i + 1, at: Date.parse(at), gain, factor, tps: start * factor };
+});
+
+const W = 640;
+const H = 300;
+const m = { l: 40, r: 88, t: 18, b: 34 };
+const t0 = Date.parse("2026-10-24T00:00Z");
+const t1 = Date.parse("2026-10-29T06:00Z");
+const yMax = 32;
+const x = (t: number) => m.l + ((t - t0) / (t1 - t0)) * (W - m.l - m.r);
+const y = (v: number) => H - m.b - (v / yMax) * (H - m.t - m.b);
+const f1 = (v: number) => v.toFixed(1);
+
+let line = `M${x(champions[0].at)},${y(champions[0].tps)}`;
+for (const c of champions.slice(1)) line += `H${x(c.at)}V${y(c.tps)}`;
+line += `H${x(Date.parse(end))}`;
+const area = `${line}V${y(0)}H${x(champions[0].at)}Z`;
+
+const days = [24, 25, 26, 27, 28, 29].map((d) => ({
+  d,
+  at: x(Date.parse(`2026-10-${d}T00:00Z`)),
+}));
+const yTicks = [0, 10, 20, 30];
+const last = champions[champions.length - 1];
+const when = (t: number) =>
+  new Date(t).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+const hits = champions.map((c, i) => {
+  const next = i + 1 < champions.length ? champions[i + 1].at : Date.parse(end);
+  return { ...c, x0: x(c.at), x1: x(next) };
+});
+---
+
+<figure class="climb not-content" data-climb>
+  <svg
+    viewBox={`0 0 ${W} ${H}`}
+    role="img"
+    aria-labelledby="climb-title climb-desc"
+  >
+    <title id="climb-title">Qwen3.8-27B-PN3 decode speed on one Tesla P100, champion by champion</title>
+    <desc id="climb-desc">
+      {`A step line rising from ${f1(start)} tokens a second on 24 October to ${f1(last.tps)} on 29 October, through 27 confirmed wins. It passes Q3Floor's ${f1(reference)} tokens a second on 27 October.`}
+    </desc>
+
+    {
+      yTicks.map((v) => (
+        <g class={`ytick${v === 0 ? " zero" : ""}`}>
+          <line x1={m.l} x2={W - m.r} y1={y(v)} y2={y(v)} />
+          <text x={m.l - 8} y={y(v)} dy="0.32em">
+            {v}
+          </text>
+        </g>
+      ))
+    }
+    {
+      days.map(({ d, at }, i) => (
+        <text class={`xtick${i % 2 ? " odd" : ""}`} x={at} y={H - m.b + 20}>
+          {`${d} Oct`}
+        </text>
+      ))
+    }
+    <text class="unit" x={m.l - 8} y={m.t - 6}>tok/s</text>
+
+    <line class="ref" x1={m.l} x2={W - m.r} y1={y(reference)} y2={y(reference)} />
+    <text class="ref-label long" x={m.l + 6} y={y(reference) + 16}>
+      {`Q3Floor, a standard 3-bit file: ${f1(reference)}`}
+    </text>
+    <text class="ref-label short" x={m.l + 6} y={y(reference) + 20}>
+      {`Q3Floor: ${f1(reference)}`}
+    </text>
+
+    <path class="area" d={area} />
+    <path class="line" d={line} />
+
+    <text class="end-label" x={x(Date.parse(end)) + 8} y={y(last.tps)} dy="0.32em">
+      {`${f1(last.tps)} tok/s`}
+    </text>
+    <text class="start-label" x={x(champions[0].at) + 4} y={y(start) + 18}>
+      {`${f1(start)} tok/s at the start`}
+    </text>
+    <circle class="dot" cx={x(last.at)} cy={y(last.tps)} r="4" />
+    <circle class="hover-dot" r="4.5" cx="0" cy="0" />
+
+    {
+      hits.map((h) => (
+        <rect
+          class="hit"
+          x={h.x0}
+          y={m.t}
+          width={Math.max(h.x1 - h.x0, 4)}
+          height={H - m.t - m.b}
+          tabindex="0"
+          data-x={x(h.at)}
+          data-y={y(h.tps)}
+          data-title={h.n === 1 ? "The starting point" : `Champion ${h.n}`}
+          data-when={`${when(h.at)} UTC`}
+          data-gain={h.n === 1 ? "" : `+${h.gain.toFixed(2)}% over the champion before`}
+          data-tps={`${f1(h.tps)} tok/s, ${h.factor.toFixed(2)}× the start`}
+          aria-label={`${h.n === 1 ? "The starting point" : `Champion ${h.n}`}, ${when(h.at)} UTC: ${f1(h.tps)} tokens a second${h.n === 1 ? "" : `, +${h.gain.toFixed(2)}% over the champion before`}`}
+        />
+      ))
+    }
+  </svg>
+  <div class="tip" role="status" aria-live="polite" hidden>
+    <b></b><span class="when"></span><span class="tps"></span><span class="gain"></span>
+  </div>
+  <figcaption>
+    Each step is a change the judge confirmed: faster than the champion before it, on fresh runs
+    and a hidden prompt, with the guards held. The line multiplies those confirmed gains from the
+    starting point. The run was paused for most of its first day, while its rig got two lanes and
+    more memory. Cells: 256 greedy tokens after a cold prompt of about 600 tokens, on one Tesla
+    P100.
+  </figcaption>
+  <details>
+    <summary>Show the numbers</summary>
+    <table>
+      <thead>
+        <tr><th>Champion</th><th>Promoted (UTC)</th><th>Gain over the one before</th><th>× the start</th><th>Decode, tok/s</th></tr>
+      </thead>
+      <tbody>
+        {
+          champions.map((c) => (
+            <tr>
+              <td>{c.n === 1 ? "Start" : c.n}</td>
+              <td>{when(c.at)}</td>
+              <td>{c.n === 1 ? "" : `+${c.gain.toFixed(2)}%`}</td>
+              <td>{c.factor.toFixed(3)}</td>
+              <td>{f1(c.tps)}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </details>
+</figure>
+
+<style>
+  .climb {
+    --climb-line: #e8682a;
+    position: relative;
+    margin: 1.5rem 0;
+  }
+  :global(:root[data-theme="light"]) .climb {
+    --climb-line: #b9450f;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    font-family: var(--sl-font);
+  }
+  .ytick line {
+    stroke: var(--sl-color-gray-5);
+    stroke-width: 1;
+  }
+  text {
+    fill: var(--sl-color-gray-3);
+    font-size: 12px;
+  }
+  .ytick text,
+  .unit {
+    text-anchor: end;
+    font-variant-numeric: tabular-nums;
+  }
+  .xtick {
+    text-anchor: middle;
+  }
+  .ref {
+    stroke: var(--sl-color-gray-3);
+    stroke-width: 1;
+  }
+  .ref-label {
+    fill: var(--sl-color-gray-2);
+  }
+  .ref-label.short {
+    display: none;
+  }
+  .area {
+    fill: var(--climb-line);
+    opacity: 0.1;
+  }
+  .line {
+    fill: none;
+    stroke: var(--climb-line);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .dot,
+  .hover-dot {
+    fill: var(--climb-line);
+    stroke: var(--sl-color-black);
+    stroke-width: 2;
+  }
+  .hover-dot {
+    visibility: hidden;
+  }
+  .end-label {
+    fill: var(--sl-color-white);
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .start-label {
+    fill: var(--sl-color-gray-2);
+  }
+  .hit {
+    fill: transparent;
+    cursor: crosshair;
+    outline: none;
+  }
+  .hit:focus-visible {
+    fill: var(--sl-color-gray-6);
+    fill-opacity: 0.5;
+  }
+  .tip {
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 11rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.4rem;
+    background: var(--sl-color-black);
+    box-shadow: var(--sl-shadow-md);
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-2);
+    line-height: 1.4;
+  }
+  .tip[hidden] {
+    display: none;
+  }
+  .tip b {
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-sm);
+  }
+  .tip .tps {
+    color: var(--sl-color-white);
+  }
+  figcaption {
+    margin-top: 0.5rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  details {
+    margin-top: 0.75rem;
+    font-size: var(--sl-text-sm);
+  }
+  summary {
+    cursor: pointer;
+    color: var(--sl-color-text-accent);
+  }
+  table {
+    margin-top: 0.5rem;
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  th,
+  td {
+    padding: 0.25rem 0.5rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    text-align: right;
+  }
+  th:first-child,
+  td:first-child,
+  th:nth-child(2),
+  td:nth-child(2) {
+    text-align: left;
+  }
+  @media (max-width: 36rem) {
+    text {
+      font-size: 17px;
+    }
+    .xtick.odd,
+    .start-label,
+    .ref-label.long,
+    .ytick.zero text {
+      display: none;
+    }
+    .ref-label.short {
+      display: inline;
+    }
+    .end-label {
+      font-size: 17px;
+    }
+  }
+</style>
+
+<script>
+  for (const figure of document.querySelectorAll<HTMLElement>("[data-climb]")) {
+    const svg = figure.querySelector("svg");
+    const tip = figure.querySelector<HTMLElement>(".tip");
+    const dot = figure.querySelector<SVGCircleElement>(".hover-dot");
+    if (!svg || !tip || !dot) continue;
+    const show = (hit: SVGRectElement) => {
+      const d = hit.dataset;
+      dot.setAttribute("cx", d.x ?? "0");
+      dot.setAttribute("cy", d.y ?? "0");
+      dot.style.visibility = "visible";
+      tip.querySelector("b")!.textContent = d.title ?? "";
+      tip.querySelector(".when")!.textContent = d.when ?? "";
+      tip.querySelector(".tps")!.textContent = d.tps ?? "";
+      tip.querySelector(".gain")!.textContent = d.gain ?? "";
+      tip.hidden = false;
+      const box = svg.getBoundingClientRect();
+      const scale = box.width / svg.viewBox.baseVal.width;
+      const px = Number(d.x) * scale;
+      const py = Number(d.y) * scale;
+      const left = Math.min(Math.max(px - tip.offsetWidth / 2, 0), box.width - tip.offsetWidth);
+      const top = py - tip.offsetHeight - 12 < 0 ? py + 14 : py - tip.offsetHeight - 12;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+    };
+    const hide = () => {
+      tip.hidden = true;
+      dot.style.visibility = "hidden";
+    };
+    for (const hit of figure.querySelectorAll<SVGRectElement>(".hit")) {
+      hit.addEventListener("pointerenter", () => show(hit));
+      hit.addEventListener("focus", () => show(hit));
+      hit.addEventListener("blur", hide);
+    }
+    svg.addEventListener("pointerleave", hide);
+  }
+</script>

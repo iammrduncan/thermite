@@ -266,8 +266,16 @@ Every package Thermite runs, with those packages' own dependencies, is under a p
 
 [Podman](https://github.com/containers/podman), [Docker](https://www.docker.com/) and their compose tools; [Kubernetes](https://github.com/kubernetes/kubernetes) and [kind](https://github.com/kubernetes-sigs/kind) (Apache-2.0 each), with systemd's Quadlet units for rigs on machines; [NVIDIA's device plugin](https://github.com/NVIDIA/k8s-device-plugin) and [DRA driver](https://github.com/kubernetes-sigs/dra-driver-nvidia-gpu) (Apache-2.0); [NVIDIA's container toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) (Apache-2.0), which gives containers the GPUs, through its runtime for Docker and its CDI spec for Podman, and which `thermite doctor` and `thermite local init` check for; Fedora's and Debian's images as stand-in machines; [uv](https://github.com/astral-sh/uv) (Apache-2.0 OR MIT) to run the statistics reference script; and Chrome, which takes the documentation's screenshots. A manual long-run test starts its research from two Wikipedia articles (CC BY-SA 4.0), which it fetches when it runs.
 
+## What the studies report on
+
+The site's [studies](https://usethermite.com/studies/) tell campaigns that Thermite ran. They report on these works; Thermite uses none of their code, weights or data.
+
+- [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) (the Qwen team, Alibaba, Apache-2.0): the model of the first study, Qwen3.8-27B on a $100 GPU.
+- [unsloth/Qwen3.8-27B-GGUF](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF) (Unsloth, Apache-2.0): its UD-IQ3_XXS file is most of Q3Floor, the standard 3-bit model that the first study compares against.
+
 ## The maintainers' own public projects
 
+- [tensorless](https://github.com/iammrduncan/tensorless) (Apache-2.0), at [tensorless.dev](https://tensorless.dev): the partner of the first study. It made the PN weight format and Qwen3.8-27B-PN3, and ships the engine that the study's campaigns tuned; the study cites its published receipts and pages, and shows its logo.
 - [Magnesium](https://github.com/iammrduncan/magnesium) (MIT): the dashboard's design, above, and its notes on Claude and Codex sign-in, read for subscriptions.
 - [skills](https://github.com/iammrduncan/skills) (MIT): the maintainers' skills for coding agents, among them the ones for Simplified Technical English and for writing documentation.
 
@@ -277,6 +285,7 @@ Thermite's repository holds no code, text or data copied from another project, e
 
 - the licence texts it ships with programs in its images: `containers/control/kubectl/LICENSE` (Apache-2.0, from Kubernetes), `containers/harness/opencode/LICENSE` (MIT, © 2025 opencode), and `containers/harness/codex/LICENSE` and `NOTICE` (Apache-2.0, © 2025 OpenAI, with the Ratatui notice above);
 - the dashboard's colour tokens, from T3 Code through Magnesium, above;
+- tensorless's logo, Bitsy, on the first study's page: `docs/_site/src/assets/partners/tensorless.svg` (Apache-2.0, from the maintainers' own tensorless, above);
 - the statistics tests' reference values, numbers computed with SciPy (`tests/helpers/data/stats-reference.json`).
 
 The maintainers' own tooling in `.agents/` carries its own notices, such as [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT).

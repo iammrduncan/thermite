@@ -49,6 +49,8 @@ const typeOfSection = {
   "how-to": "how-to",
   reference: "reference",
   explanation: "explanation",
+  "use-cases": "use-case",
+  studies: "study",
   project: "project",
 };
 
@@ -75,7 +77,7 @@ function frontMatter(text) {
 
 // A placeholder such as <campaign> outside code is read as an HTML tag, and the site hides it.
 const htmlTags =
-  /^<\/?(a|b|br|code|details|div|em|i|img|kbd|li|ol|p|span|strong|sub|summary|sup|table|td|th|tr|ul|Aside|Card|CardGrid|HowItWorks|LinkButton|LinkCard|Steps|TabItem|Tabs)\b/;
+  /^<\/?(a|b|br|code|details|div|em|i|img|kbd|li|ol|p|span|strong|sub|summary|sup|table|td|th|tr|ul|Aside|Card|CardGrid|HowItWorks|LinkButton|LinkCard|Steps|TabItem|Tabs|Stats|Partners|ClimbChart)\b/;
 function placeholders(body) {
   const prose = body.replace(/```[\s\S]*?```/g, "").replace(/``[^`]*``|`[^`\n]*`/g, "");
   return [...prose.matchAll(/<\/?[A-Za-z][\w-]*(?:\s[^>\n]*)?>/g)]
@@ -88,7 +90,9 @@ const pages = walk(docsRoot, /\.mdx?$/)
     const slug = relative(docsRoot, file)
       .split(sep)
       .join("/")
-      .replace(/\.mdx?$/, "");
+      .replace(/\.mdx?$/, "")
+      // A folder's index page lives at the folder's address, as Starlight serves it.
+      .replace(/\/index$/, "");
     // The Changelog page is history: it names what is gone, by the names it had.
     return { file, slug, text: readFileSync(file, "utf8"), history: file === changelogPageFile };
   })

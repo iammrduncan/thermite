@@ -81,6 +81,9 @@ export default defineConfig({
           ],
         },
         { label: "Start here", link: "/start-here/" },
+        // Who Thermite is for, and what it has done: pages for readers deciding whether to try it.
+        { label: "Use cases", items: [{ autogenerate: { directory: "use-cases" } }] },
+        { label: "Studies", items: [{ autogenerate: { directory: "studies" } }] },
         {
           label: "Tutorials",
           items: ["tutorials/first-goal-campaign", "tutorials/your-own-project"],
@@ -124,6 +127,16 @@ export default defineConfig({
             "Thermite is an autoresearch harness. AI agents propose changes to a project; a judge the agents cannot touch measures each change and keeps the best. Many campaigns run at once on a fleet of rigs, and one control service shows and steers all of them.",
           details: pageIndex({ site, base }),
           customSets: [
+            {
+              label: "Use cases",
+              paths: ["use-cases/**"],
+              description: "who Thermite is for: local AI, solo builders and enterprises",
+            },
+            {
+              label: "Studies",
+              paths: ["studies/**"],
+              description: "campaigns Thermite has run, with their measured results",
+            },
             {
               label: "Tutorials",
               paths: ["tutorials/**"],

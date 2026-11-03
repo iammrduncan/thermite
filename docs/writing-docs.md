@@ -46,7 +46,7 @@ The site is at [usethermite.com](https://usethermite.com), on Cloudflare Pages. 
 
 ## Where pages go
 
-Every page is one Markdown file in `docs/_site/src/content/docs/`, and has one [Diátaxis](https://diataxis.fr/) type. Its folder says which:
+Every page is one Markdown file in `docs/_site/src/content/docs/`, and has one type: a [Diátaxis](https://diataxis.fr/) type, or one of the two types for readers still deciding whether Thermite fits them. Its folder says which:
 
 | Folder | Type | A page here… |
 | --- | --- | --- |
@@ -54,6 +54,8 @@ Every page is one Markdown file in `docs/_site/src/content/docs/`, and has one [
 | `how-to/<group>/` | `how-to` | helps someone who knows what they want to do it. |
 | `reference/` | `reference` | describes one part completely: every field, setting, command or route. |
 | `explanation/` | `explanation` | says how something works and why. |
+| `use-cases/` | `use-case` | shows one kind of user what to point Thermite at, why it fits them, a path through the docs and what to know first. |
+| `studies/` | `study` | tells one real campaign, or a series of them, from question to result, with measured numbers. |
 | `project/` | `project` | is about the project: the roadmap, getting help, contributing. |
 | the top | `hub` | is the home page or Start here. |
 
@@ -92,6 +94,8 @@ sidebar:
 - **How-to guide:** the title is the task. Say what you need first, then number the steps. Assume the reader knows the basics; link to tutorials and explanation, don't repeat them. End with how to tell that it worked.
 - **Reference:** complete and consistent. Use tables: name, type, default, meaning. Describe; don't instruct or persuade. Keep each page in the same order as the thing it describes.
 - **Explanation:** the reasons and the trade-offs. Use diagrams. No steps.
+- **Use case:** who it is for, in their words, then examples of what to point Thermite at (each an example, named as one), the features that fit, with links, a short path through the tutorials and how-to guides, and what to know first, limits included. Link to a study for proof. Claim only what exists, as everywhere.
+- **Study:** what was asked, which campaigns answered it and in which modes, and what came out. Every number is the judge's or a named measurement with its scope and date; say who measured it. Give the guards, the losses and the misses as well as the wins, and end with what has not been measured. Name models and programs by their public names; never a rig, host, run or private repository. A partner's own pages are linked, not copied. A number that is still changing (a running campaign) carries the time it was read.
 
 ## Markdown
 
