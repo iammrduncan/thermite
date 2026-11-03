@@ -18,6 +18,10 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 - `llm-setup.txt`, at the site's root: instructions for an AI agent to set Thermite up from the latest release and to find the page for what comes next. The home page and Install on one machine give a prompt to copy for it.
 - The site's roadmap page is now its Changelog, written from this file; its old address leads there.
 
+### Live
+
+- Each advisor has its own lines on Live, and its own filter on a run's Live: `teacher-1`, `teacher-2`, **merger** (the merged by model), `auditor`, each reviewer of the review panel, `synthesizer` and **final writer**, beside **Advisors**, which shows them all. Each kind of agent has its colour, on its filter and its lines. The supervisor sends an advisor's lines under `advisor:<name>`, where they all went under `supervisor` with the advisor's name in front.
+
 ### Fixes
 
 - A research run's clock leaves out the time the harness did not run: the host asleep, its container paused or stopped, or a crash, for 2 minutes or more. The harness records each such gap as a `harness_gap` event, found by a new `awake` loop on a 10-second timer while it runs, and at its start from the time since the ledger's newest event. Before, a run waiting out a provider's limit on a laptop could reach its `max_duration` while the host slept (issue #45; from Mahdi3Bani's pull request #46).

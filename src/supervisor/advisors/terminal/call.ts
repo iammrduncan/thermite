@@ -11,7 +11,7 @@ import type { RoleRunner } from "../../../agents/runner.ts";
 import { errorText } from "../../../common/errors.ts";
 import { log } from "../../../common/log.ts";
 import type { AdvisorRole } from "../../../core/agents.ts";
-import type { LiveKind } from "../../../core/live.ts";
+import { advisorLiveSource, type LiveKind } from "../../../core/live.ts";
 import { advisorCallId } from "../../../core/terminal-input.ts";
 import type { CallUsage } from "../../../core/usage.ts";
 import type { AdvisorCall, AdvisorCompaction, AdvisorResult } from "../call.ts";
@@ -45,8 +45,8 @@ export interface AdvisorTerminals {
   consoles: AdvisorConsoles;
   /** The owner's messages that wait for an advisor role in a run, from the harness. */
   waiting(run: string, role: AdvisorRole): Promise<{ id: number; text: string }[]>;
-  /** A line in the run's live view, the supervisor's own. */
-  live(line: { kind: LiveKind; text: string; run: string }): void;
+  /** A line in the run's live view: the supervisor's own, or an advisor's under its own source. */
+  live(line: { kind: LiveKind; text: string; run: string; source?: string }): void;
   /** Whether the rig drains: a call that waits for its usage window ends. */
   draining?: (() => boolean) | undefined;
   /** How often its session log and the owner's messages are read (tests make it short). */
@@ -259,7 +259,7 @@ export async function runInTerminal<S extends z.ZodType>(
       sent: input.later,
       live: (entries) => {
         for (const e of entries)
-          t.live({ kind: e.kind, text: `${rt.name}: ${e.text}`, run: at.run });
+          t.live({ source: advisorLiveSource(rt.name), kind: e.kind, text: e.text, run: at.run });
       },
       console: (c) =>
         c
@@ -271,6 +271,7 @@ export async function runInTerminal<S extends z.ZodType>(
       // decision of 2026-10-27), and Live says so.
       waiting: (w) =>
         t.live({
+          source: advisorLiveSource(rt.name),
           kind: "status",
           text: `${rt.name} waits for its usage window to reset, until ${w.until}: ${w.words}`,
           run: at.run,

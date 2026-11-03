@@ -1,0 +1,41 @@
+---
+id: "188"
+title: "Every agent on Live: each advisor's own lines and chip, what headless advisors do as they work, and Everything"
+status: IN_PROGRESS
+version: "0.1.2"
+depends_on: []
+created: 2026-11-03
+updated: 2026-11-03
+---
+
+# 188 · Every agent on Live: each advisor's own lines and chip, what headless advisors do as they work, and Everything
+
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.2](../roadmap.md#v012)
+
+## What
+
+From the owner, 2026-11-03: "Why don't I have a live view of the teachers lines? Like I never know waht the teachers do, waht research they do, etc... Its invisible to me... I only ever see auditor in the advisors lane... can you set teachers lane teacher-1, teacher-2, etc? also same for merger. Essentially I should be able to see all live outputs of all agents ran everywhere".
+
+Every advisor's line went on Live under one source, `supervisor`, so a run's Live had one **Advisors** chip for all of them. An advisor in its program's own terminal sent its text there with its name in front; a headless one, as the merged by model always is, sent only a line for each step of a round, so what a teacher read, searched and ran never showed.
+
+1. **Each advisor's own source.** The supervisor sends an advisor's lines under `advisor:<name>`: `teacher-1`, `teacher-2`, `merged-by`, `auditor`, each reviewer of the review panel, `synthesizer`, `final-writer`. Control takes such unsigned lines from the supervisor, as it takes its own.
+2. **A chip for each.** A run's Live has a chip for each advisor that has lines (the merged by model shows as **merger**), beside **Advisors**, which shows them all; each kind of agent has its colour, on its chip and on its lines.
+3. **What headless advisors do.** An advisor that runs headless sends its tool calls (what it reads, searches and runs) and its text to Live as it works, where its program reports them as it goes: Claude Code, Codex, OpenCode and Pi. A `cli` advisor's command shows only its answer.
+4. **Everything.** The top of Live's list of runs: every agent's lines from every run and rig as they come, each with its run, with **Rig** and **Run** to narrow it and the same chips.
+
+## Done when
+
+- [ ] The four, with their tests and the pages that describe them (the Live view, how the parts talk), and the steering and control acceptance checks pass.
+
+## Decisions
+
+- 2026-11-03, owner, on the mockup (https://claude.ai/artifact/4cSfguU1uvFXQGmBxNpgTU): "Build it as drawn"; "love the color coding".
+
+## Progress
+
+- 2026-11-03: Goal written from the owner's request, with the mockup the owner approved.
+- 2026-11-03: Steps 1 and 2 built (no tests run on the Mac). The live source `advisor:<name>` (core/live.ts, advisorLiveSource), on the subject `…live.advisor-<name>` (core/link/live.ts); control folds an advisor's unsigned lines as the supervisor's (control/live/bus.ts). An advisor's lines in its terminal and in its Pi view go under its source, without its name in front (supervisor/advisors/terminal/). Live tags them with the advisor, its group and `advisors`, names the merged by model merger, and colours each kind of agent (ui/live.ts agentKind, advisorLabel; style/live.ts); a run's Live has a filter for each advisor with lines, which addresses the message box to it (dashboard/live/index.ts). Tests in tests/core/link/live.test.ts, tests/supervisor/live/bus.test.ts and tests/control/ui/live.test.ts. A round's step lines (the teachers review, the portfolio) stay the supervisor's.
+
+---
+
+Run with `/goal Complete docs/plan/goals/188-every-agent-on-live.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

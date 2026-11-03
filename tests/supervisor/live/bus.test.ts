@@ -57,6 +57,41 @@ async function rig() {
 const start: LiveRelayState = { cursor: 0, ownCursor: 0 };
 
 describe("the supervisor's live lines on the message bus", () => {
+  test("each advisor's lines go on a subject of their own, unsigned, and control folds them as the supervisor's (goal 188)", async () => {
+    const s = await rig();
+    s.own.append({
+      source: "advisor:teacher-1",
+      kind: "tool",
+      text: "rg -n tile src",
+      run: "smoke-1",
+    });
+    s.own.append({
+      source: "advisor:merged-by",
+      kind: "status",
+      text: "merges 4 ideas",
+      run: "smoke-1",
+    });
+    await publishLiveOnce(s.cfg, start);
+    assert.deepEqual(
+      s.bus.kept.map((m) => m.subject),
+      [
+        "thermite.run.smoke-1.live.advisor-teacher-1",
+        "thermite.run.smoke-1.live.advisor-merged-by",
+      ],
+    );
+    assert.deepEqual(
+      s.fold().map((f) => ("refused" in f ? f.refused : f.added)),
+      [1, 1],
+      "control takes an advisor's unsigned lines",
+    );
+    // An unsigned line under any other source is still refused.
+    const forged = { ...s.bus.kept[0], subject: "thermite.run.smoke-1.live.planner" };
+    s.bus.kept.push(forged as (typeof s.bus.kept)[number]);
+    assert.ok(
+      JSON.stringify(s.fold().at(-1)).includes("unsigned lines must be the supervisor's own"),
+    );
+  });
+
   test("the live view waits for control to hold a report of the rig, telling the health route meanwhile, then publishes (issue #27)", async () => {
     const s = await rig();
     s.live.append({ source: "judge", kind: "log", text: "the judge is idle" });

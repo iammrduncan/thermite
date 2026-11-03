@@ -101,8 +101,29 @@ export function resultSummary(text: string): { hint: string; detail: string } {
 }
 
 /** Who a line is from, in the interleaved view. */
+/**
+ * The kind of agent a line's source is, for its colour on Live (goal 188): a lane's trial, the
+ * planner, the judge, a teacher, the merged by model, the auditor, a reviewer of the review panel,
+ * a research writer, or an advisor of another kind and the supervisor's own lines.
+ */
+export function agentKind(source: string): string {
+  if (source.startsWith("trial:")) return "lane";
+  if (source === "planner" || source === "judge") return source;
+  const name = source.startsWith("advisor:") ? source.slice(8) : "";
+  if (/^teacher/.test(name)) return "teacher";
+  if (name === "merged-by") return "merger";
+  if (name === "auditor") return "auditor";
+  if (/^(review|reviewer)/.test(name)) return "reviewer";
+  if (name === "synthesizer" || name === "final-writer") return "writer";
+  return "advisor";
+}
+
+/** An advisor's name as Live shows it: the merged by model is the merger. */
+export const advisorLabel = (name: string): string =>
+  name === "merged-by" ? "merger" : name === "final-writer" ? "final writer" : name;
+
 const whoOf = (e: LiveEntry, name: (source: string, lane?: string | null) => string) =>
-  `<span class="lv-who">${esc(name(e.source, e.lane))}${e.source.startsWith("trial:") ? ` <span class="muted">${esc(e.source.slice(6, 16))}</span>` : ""}</span>`;
+  `<span class="lv-who k-${agentKind(e.source)}">${esc(name(e.source, e.lane))}${e.source.startsWith("trial:") ? ` <span class="muted">${esc(e.source.slice(6, 16))}</span>` : ""}</span>`;
 
 /**
  * One line as HTML. A tool call opens a row its result joins (data-open); a result that finds
@@ -121,7 +142,9 @@ export function liveEntryHtml(
   const t = liveTime(e.at, o.now);
   const who = o.showWho ? whoOf(e, o.name) : "";
   const unsigned =
-    !e.signed && e.source !== "supervisor" ? `<span class="lv-unsigned">unsigned</span>` : "";
+    !e.signed && e.source !== "supervisor" && !e.source.startsWith("advisor:")
+      ? `<span class="lv-unsigned">unsigned</span>`
+      : "";
   const row = (cls: string, body: string) =>
     `<div class="lv-row ${cls}" data-id="${e.id}">${t}<div class="lv-body">${who}${body}${unsigned}</div></div>`;
   switch (e.kind) {
@@ -243,6 +266,14 @@ export function whoTags(e: LiveEntry, to?: string): string {
   else if (e.source === "planner") tags.add("planner");
   else if (e.source === "judge") tags.add("judge");
   else if (e.source === "supervisor") tags.add("advisors");
+  else if (e.source.startsWith("advisor:")) {
+    // An advisor's own lines (goal 188): its chip, its group's, and all the advisors'.
+    const name = e.source.slice(8);
+    tags.add("advisors").add(name);
+    const kind = agentKind(e.source);
+    if (kind === "teacher" || kind === "merger") tags.add("teachers");
+    if (kind === "reviewer") tags.add("review_panel");
+  }
   return [...tags].join(" ");
 }
 
@@ -253,7 +284,9 @@ export const runSourceName = (source: string, lane?: string | null) =>
       ? "judge"
       : source === "supervisor"
         ? "advisors"
-        : (lane ?? "worker");
+        : source.startsWith("advisor:")
+          ? advisorLabel(source.slice(8))
+          : (lane ?? "worker");
 
 const RECIPIENT: Record<string, string> = {
   all: "everyone working",

@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  advisorLabel,
+  agentKind,
   type LiveEntry,
   liveEntryHtml,
   liveLinesHtml,
   resultSummary,
+  runSourceName,
   toolSummary,
+  whoTags,
 } from "../../../src/control/ui/live.ts";
 
 const name = (s: string, lane?: string | null) => (s.startsWith("trial:") ? `Worker · ${lane}` : s);
@@ -86,5 +90,34 @@ describe("the live view's lines", () => {
       liveEntryHtml(e(5, "text", "<script>x</script>"), { showWho: false, name }),
       /&lt;script&gt;/,
     );
+  });
+
+  test("each advisor's lines carry its chip, its group's and every advisor's, its name and its colour (goal 188)", () => {
+    const line = (source: string): LiveEntry => ({ id: 1, at, source, kind: "text", text: "x" });
+    assert.equal(whoTags(line("advisor:teacher-1")), "advisors teacher-1 teachers");
+    assert.equal(whoTags(line("advisor:merged-by")), "advisors merged-by teachers");
+    assert.equal(whoTags(line("advisor:reviewer-2")), "advisors reviewer-2 review_panel");
+    assert.equal(whoTags(line("advisor:auditor")), "advisors auditor");
+    assert.equal(whoTags(line("supervisor")), "advisors");
+    assert.equal(runSourceName("advisor:merged-by"), "merger");
+    assert.equal(runSourceName("advisor:final-writer"), "final writer");
+    assert.equal(advisorLabel("teacher-2"), "teacher-2");
+    assert.deepEqual(
+      [
+        "trial:t-1",
+        "planner",
+        "judge",
+        "advisor:teacher-1",
+        "advisor:merged-by",
+        "advisor:auditor",
+        "advisor:reviewer-1",
+        "advisor:synthesizer",
+        "supervisor",
+      ].map(agentKind),
+      ["lane", "planner", "judge", "teacher", "merger", "auditor", "reviewer", "writer", "advisor"],
+    );
+    const html = liveEntryHtml(line("advisor:teacher-1"), { showWho: true, name: runSourceName });
+    assert.match(html, /<span class="lv-who k-teacher">teacher-1<\/span>/);
+    assert.doesNotMatch(html, /unsigned/, "the supervisor's advisors are not marked unsigned");
   });
 });

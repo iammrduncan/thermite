@@ -44,10 +44,28 @@ export function liveText(text: string): string {
   return masked.length > LIVE_TEXT_MAX ? `${masked.slice(0, LIVE_TEXT_MAX - 10)} [cut]` : masked;
 }
 
+/**
+ * An advisor's own source on Live (goal 188), from its name: `teacher-1` is `advisor:teacher-1`.
+ * A name the source can't hold is made to fit: lowercase letters, digits and dashes, 40 at most.
+ */
+export const advisorLiveSource = (name: string): string =>
+  `advisor:${
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+/, "")
+      .slice(0, 40) || "advisor"
+  }`;
+
 export const LiveEntry = z.object({
   seq: z.number().int().positive(),
   at: z.string().min(1).max(40),
-  source: z.string().regex(/^(planner|judge|supervisor|trial:[A-Za-z0-9_-]{1,64})$/),
+  // An advisor's own lines (goal 188): `advisor:` and its name, such as `advisor:teacher-1`.
+  source: z
+    .string()
+    .regex(
+      /^(planner|judge|supervisor|trial:[A-Za-z0-9_-]{1,64}|advisor:[a-z0-9][a-z0-9-]{0,39})$/,
+    ),
   kind: z.enum(LIVE_KINDS),
   text: z.string().max(LIVE_TEXT_MAX),
   lane: z.string().max(32).optional(),

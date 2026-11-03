@@ -17,6 +17,8 @@ import {
   runState,
 } from "../../ui/components/index.ts";
 import {
+  advisorLabel,
+  agentKind,
   liveEntryHtml,
   liveLinesHtml,
   resultJoin,
@@ -110,9 +112,20 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const lines = store.liveLines.runTail(u.id, r.id, 600);
     const after = lines.at(-1)?.id ?? 0;
     const w = c.req.query("w") || "all";
-    // The filters: everyone, each lane (working or not), the planner, the judge, the advisors, you.
-    const chip = (key: string, label: string, title = "", working = false) =>
-      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key, view: "lines" })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : ""}${esc(label)}</a>`;
+    // The filters: everyone, each lane (working or not), the planner, the judge, the advisors and
+    // each advisor with lines (goal 188), you. Each kind of agent has its colour.
+    const chip = (key: string, label: string, title = "", working = false, kind = "") =>
+      `<a class="lchip${w === key ? " on" : ""}" data-w="${esc(key)}" href="${runLiveHref(r, { w: key, view: "lines" })}"${title ? ` title="${esc(title)}"` : ""}>${working ? `<span class="dot ok"></span>` : kind ? `<span class="kdot k-${esc(kind)}"></span>` : ""}${esc(label)}</a>`;
+    const ADVISOR_ORDER = ["teacher", "merger", "auditor", "reviewer", "writer", "advisor"];
+    const advisorChips = [
+      ...new Set(lines.filter((e) => e.source.startsWith("advisor:")).map((e) => e.source)),
+    ]
+      .sort(
+        (a, b) =>
+          ADVISOR_ORDER.indexOf(agentKind(a)) - ADVISOR_ORDER.indexOf(agentKind(b)) ||
+          a.localeCompare(b, undefined, { numeric: true }),
+      )
+      .map((s) => chip(s.slice(8), advisorLabel(s.slice(8)), "", false, agentKind(s)));
     const chips = [
       chip("all", "Everyone"),
       ...lanes.map((l) => {
@@ -122,11 +135,19 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
           l,
           work ? `${work.direction}: ${work.focus}` : "between trials",
           Boolean(work) && r.status === "running",
+          "lane",
         );
       }),
-      chip("planner", "Planner"),
-      ...(research ? [] : [chip("judge", "Judge")]),
-      chip("advisors", "Advisors"),
+      chip("planner", "Planner", "", false, "planner"),
+      ...(research ? [] : [chip("judge", "Judge", "", false, "judge")]),
+      chip(
+        "advisors",
+        "Advisors",
+        "every advisor's lines, and the supervisor's own",
+        false,
+        "advisor",
+      ),
+      ...advisorChips,
       chip("you", "You", "your messages, and who read them"),
     ].join("");
     // Each lane's trial at work in its program's own terminal (goal 169), a worker in Pi in its Pi
@@ -221,9 +242,15 @@ ${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? "
     const to =
       lanes.includes(w) || w === "planner"
         ? w
-        : w === "advisors" || r.has_agents === false
-          ? "advisors"
-          : "all";
+        : /^(teacher-\d+|merged-by)$/.test(w)
+          ? "teachers"
+          : w === "auditor"
+            ? "auditor"
+            : /^reviewer-\d+$/.test(w)
+              ? "review_panel"
+              : w === "advisors" || r.has_agents === false || /^(synthesizer|final-writer)$/.test(w)
+                ? "advisors"
+                : "all";
     // The review panel reads only for a goal it reviews (a goal checked by review) or a research
     // run's questions (goal 112).
     const reviewed = panelReviews(store, runCampaign(r));
