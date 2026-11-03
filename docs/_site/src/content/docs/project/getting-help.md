@@ -22,7 +22,7 @@ Before you report a problem, try [Troubleshoot](../how-to/operate/troubleshoot.m
 ## What to put in a report
 
 1. **What you did, what you expected, and what happened.** Copy messages exactly, such as the text of a card that starts with **Not done.** or **Not started.** on the dashboard, a line that starts with **Not sent.** in a run's **Live** view, or a failed command's **Detail** among the **Audit log**'s commands.
-2. **Which Thermite you run.** Thermite has no version command yet. If you installed a release, give its version: the release's readme names it (`Thermite 0.1.0`), and so does the **Version** column on **Rigs** ([Version](../reference/rigs-list.md#version)). If you built Thermite from its source, give the commit you built from:
+2. **Which Thermite you run.** Thermite has no version command yet. If you installed a release, give its version: the release's readme names it (`Thermite 0.1.1`), and so does the **Version** column on **Rigs** ([Version](../reference/rigs-list.md#version)). If you built Thermite from its source, give the commit you built from:
 
    ```sh
    git log -1 --oneline

@@ -65,12 +65,12 @@ The dashboard takes a kit as one file. In a terminal in your `thermite` folder, 
 
 ```sh
 cd ..
-git clone --branch v0.1.0 https://github.com/iammrduncan/thermite.git thermite-source
+git clone --branch v0.1.1 https://github.com/iammrduncan/thermite.git thermite-source
 cd thermite-source
 tar -czf matmul-cpu-kit.tar.gz -C examples/matmul-cpu kit
 ```
 
-`v0.1.0` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.0`. If yours names another one, put a `v` before it and use it in place of `v0.1.0`, here and in step 6.
+`v0.1.1` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.1`. If yours names another one, put a `v` before it and use it in place of `v0.1.1`, here and in step 6.
 
 The last command prints nothing. Your `thermite-source` folder now holds the file `matmul-cpu-kit.tar.gz`.
 
@@ -94,10 +94,10 @@ The sample is one folder of Thermite's repository. Your rig fetches the whole re
 On **3 Project**:
 
 1. **Repository**: `https://github.com/iammrduncan/thermite.git`
-2. **Start from**: `v0.1.0`, the release of step 4. The sample then matches your images.
+2. **Start from**: `v0.1.1`, the release of step 4. The sample then matches your images.
 3. **Folder in the repository**: `examples/matmul-cpu/project`
 4. **Repository access**: keep **Public: no key**.
-5. Press **Look it up**. Control reads the folder's file names and says `Found: v0.1.0 is at`, a short commit id, then `· 4 files in examples/matmul-cpu/project. Rigs fetch it from there.` Every run starts from exactly that commit.
+5. Press **Look it up**. Control reads the folder's file names and says `Found: v0.1.1 is at`, a short commit id, then `· 4 files in examples/matmul-cpu/project. Rigs fetch it from there.` Every run starts from exactly that commit.
 6. **Files the agents may change**: `src/kernel/**`. The path is inside the folder, and `**` matches every file below `src/kernel`. A change to any other file is refused before it is built.
 7. Open **Advanced**, below that field. In **Lines never allowed**, type these three lines:
 

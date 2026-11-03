@@ -70,14 +70,26 @@ These ship as built, and each one's last check runs on a deployment after the re
 
 The [roadmap file](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md) lists every v0.1.0 goal with its status, and the [release plan](https://github.com/iammrduncan/thermite/blob/main/docs/plan/release-v0.1.0.md) gives the release's scope and the steps to ship it.
 
+## v0.1.1, the message bus and agents in their own terminal
+
+**v0.1.1** breaks from v0.1.0: install it fresh. With it:
+
+- control and its rigs talk on a message bus, over TLS, with commands that arrive at once and Live's lines pushed to the page;
+- the agents work in their program's own terminal, which you watch, scroll back through and type into on a run's Live;
+- every agent searches and writes Thermite's knowledge base, a collection for each campaign, which the **Knowledge** page explores;
+- a run's champions go to a branch of your project's repository, a hill climb's guards show beside its main metric, and **Reports** shows what each finished run produced;
+- `thermite backup` and `thermite restore`, retention policies you design, and **Metrics** for the whole system;
+- the licence is Apache-2.0.
+
+The [changelog](https://github.com/iammrduncan/thermite/blob/main/CHANGELOG.md) lists every change, and what an update of a v0.1.0 stack would take. The code clean-up planned for this version was done in part; what it left is a goal of v0.1.2.
+
 ## Later versions
 
 Later versions are proposed: their order and contents can change. Each one ships when its goals are verified, not on a date.
 
 | Version | Focus |
 | --- | --- |
-| **v0.1.1** | Code clean-up, in two steps: a read-only look at the whole code that writes a guide to the changes, then the clean-up itself, area by area. Then the code follows Thermite's conventions, with files of a size you can review, in folders, no duplicated knowledge or dead code, and the engineering rules for design, errors, limits, logging, security and tests, so that later changes are easier. |
-| **v0.1.2** | GPUs on demand, and work within a budget: GPUs rented only while they work, for the judge and for the workers' checks; a secondary judge that asks an outside service, such as a contest's own judge, on a schedule and only when the champion gained; one budget in dollars for a run, easy to set, that holds on every rig; a setting that turns off the judge's repeated measurements, for measurements that are slow or cost money; hill-climb contracts that run a check once for each change, run held-out cases for less, and say what does not count, as goal contracts do; in **Settings › Providers**, all that Thermite spent on a GPU cloud, not only its test pods; a run's use of its rig's CPUs, memory and GPUs; and rig images for each GPU generation, each rig set up from the one that fits its GPUs. |
+| **v0.1.2** | The code clean-up v0.1.1 left; GPUs on demand, and work within a budget: GPUs rented only while they work, for the judge and for the workers' checks; a secondary judge that asks an outside service, such as a contest's own judge, on a schedule and only when the champion gained; one budget in dollars for a run, easy to set, that holds on every rig; a setting that turns off the judge's repeated measurements, for measurements that are slow or cost money; hill-climb contracts that run a check once for each change, run held-out cases for less, and say what does not count, as goal contracts do; in **Settings › Providers**, all that Thermite spent on a GPU cloud, not only its test pods; a run's use of its rig's CPUs, memory and GPUs; and rig images for each GPU generation, each rig set up from the one that fits its GPUs. |
 | **v0.1.3** | Follow-ups to the first release: a kit bundle given to control from the dashboard, gated models on cloud rigs, a research campaign's copy that takes its own rubrics, MCP clients that see control's new tools after an update, a drain that doesn't wait for a trial that started seconds before it, a rig's supervisor restarted or updated alone, a waiting win the champion moved past, a command's result that says its output was cut only when it was, and a model check that waits as long as the rig says on a busy model. |
 | **v0.1.4** | UI clean-up and UX improvements: every screen checked against the rules for screens; small faults found in use fixed, such as a campaign's **Agents' context** that lists rigs its runs never used; **New campaign**'s buttons show they were pressed; an **Info** tab with everything a campaign and a run were started with; a stuck rig in **Needs you**; the model's reasoning and words on **Live**, not only its tool calls; a **Copy** button by each ID; an **Exports** page that shows each rig's full exports first, with the smaller ones folded; a judge-only run whose goals fill in as the judge checks them; a run that says why nothing is at work; **New campaign** and a run's page that set whether its lanes keep working while the judge works; and faster dashboard pages. |
 | **v0.2.0** | Run Thermite without the dashboard: every dashboard action has an API and MCP twin, all logs are in one place you can search, and you sign in with your identity provider. Also planned: a deep-research teacher that runs when the queue needs ideas, research tasks with web search inside goal and hill-climb runs, a run that starts from a champion on another rig, a hill climb that improves several metrics one after the other, a **Knowledge** page to explore the knowledge base, with copies of it in outside stores, kits that define how a campaign runs, with their own images, on rigs that are only the slots it runs in, several runs at once on one rig when they fit, and AMD GPUs and Apple silicon in rigs. |
