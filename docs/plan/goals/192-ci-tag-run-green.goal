@@ -1,7 +1,7 @@
 ---
 id: "192"
 title: "CI's run on a version tag passes every check a runner can run"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: []
 created: 2026-11-03
@@ -10,7 +10,7 @@ updated: 2026-11-03
 
 # 192 · CI's run on a version tag passes every check a runner can run
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## What
 
@@ -36,6 +36,7 @@ A version's tag gates its release. A check that fails for its own reasons hides 
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Item 1's cause, from CI's log of the v0.1.2 tag run: `nats-server: open /pod/server.conf: permission denied`. The check copied the pod's files into its container as written, and Docker gives copied files to root, so the pod's server, running as another user, could not read its config; it never started, so control's server could not dial it and the supervisor's connection was refused. Control's own files were made readable first (copyBusFiles); the pod's were not. Under rootless Podman the copied files read as the container's own, so it passed there. Fixed: the pod's files are made readable before the copy (scripts/acceptance/leaf.mjs readableTree). Not run here: the check (CI's tag run, or Docker on a test machine).
 
 ---
 

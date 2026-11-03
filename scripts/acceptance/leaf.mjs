@@ -99,6 +99,20 @@ const copyBusFiles = () => {
   sh(engine, ["cp", `${files}/.`, `${box.control}:/etc/nats/thermite`]);
 };
 
+/**
+ * Every file under `dir` readable by all, and every folder open to all: the pod's files are a
+ * check's, copied into a container whose server runs as another user than their owner.
+ * @param {string} dir
+ */
+const readableTree = (dir) => {
+  chmodSync(dir, 0o755);
+  for (const f of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, f.name);
+    if (f.isDirectory()) readableTree(path);
+    else if (f.isFile()) chmodSync(path, 0o644);
+  }
+};
+
 const cleanup = () => {
   for (const c of containers) {
     try {
@@ -197,6 +211,9 @@ function podServer(name, ip, port, values, supervisorKey, leafPort) {
     "-c",
     "/pod/server.conf",
   ]);
+  // Readable by the server's user whichever engine copies them, as control's are (copyBusFiles):
+  // Docker gives copied files to root, and the server could not open its config (issue 54).
+  readableTree(dir);
   sh(engine, ["cp", `${dir}/.`, `${name}:/pod`]);
   sh(engine, ["start", name]);
   return `${ip}:${leafLink.LEAF_PORT}`;
