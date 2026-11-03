@@ -242,7 +242,7 @@ Every package Thermite runs, with those packages' own dependencies, is under a p
 ## Design
 
 - **The dashboard's look** follows [Magnesium](https://github.com/iammrduncan/magnesium) (MIT), the maintainers' agent dashboard, which is a fork of [T3 Code](https://github.com/pingdotgg/t3code) (MIT, © 2026 T3 Tools Inc.): its design tokens, its status words, its tiles and its session board. The colour values are those of [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss)'s palette (MIT).
-- **The site's own pages** (the home page and the overviews of the use cases and studies) follow the home pages of the maintainers' [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh): a frame of their own beside the docs, a small label over a large heading, a command to copy, numbered steps, and a picture drawn from real data. The replay of a real climb and the ledger are Thermite's own.
+- **The site's own pages** (the home page and the overviews of the use cases and studies) follow the home pages of the maintainers' [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh): a frame of their own beside the docs, a command to copy, numbered steps, and a picture drawn from real data. The replay of a real climb and the ledger are Thermite's own.
 - **The icons and the flame** are Thermite's own.
 
 ## Standards and guides

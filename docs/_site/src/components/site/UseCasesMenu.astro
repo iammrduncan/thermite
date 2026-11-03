@@ -56,11 +56,11 @@ const withCases = fields.filter((f) => count(f.key) > 0);
           <span class="label">Case study</span>
           <span class="big mono">3.89×</span>
           <span class="what">Qwen3.8-27B on a $100 GPU, with tensorless: 131 changes judged, 28 kept.</span>
-          <span class="go">Read the study <span aria-hidden="true">→</span></span>
+          <span class="go">Read the study</span>
         </a>
       </div>
     </div>
-    <a class="all" href="/use-cases/">All {cases.length} use cases <span aria-hidden="true">→</span></a>
+    <a class="all" href="/use-cases/">All {cases.length} use cases</a>
   </div>
 </div>
 
@@ -178,11 +178,9 @@ const withCases = fields.filter((f) => count(f.key) > 0);
   }
   .label {
     margin: 0 0 0.5rem 0.4rem;
-    font-family: var(--mono);
-    font-size: 0.68rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--dim);
+    font-size: 0.8rem;
+    font-weight: 560;
+    color: var(--muted);
   }
   ul {
     list-style: none;
@@ -247,7 +245,7 @@ const withCases = fields.filter((f) => count(f.key) > 0);
   .big {
     font-size: 2rem;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--ink);
     letter-spacing: -0.03em;
     line-height: 1.1;
   }
@@ -262,7 +260,7 @@ const withCases = fields.filter((f) => count(f.key) > 0);
     padding-top: 0.8rem;
     font-size: 0.85rem;
     font-weight: 560;
-    color: var(--accent);
+    color: var(--ink-2);
   }
   .all {
     display: block;
@@ -275,7 +273,8 @@ const withCases = fields.filter((f) => count(f.key) > 0);
     text-decoration: none;
   }
   .all:hover {
-    color: var(--accent);
+    color: var(--ink);
+    text-decoration: underline;
   }
   @media (max-width: 52rem) {
     .panel {

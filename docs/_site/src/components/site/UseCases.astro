@@ -16,7 +16,7 @@ const picks = (key: string) => {
 };
 ---
 
-<nav class="fields" aria-label="Use cases by field" data-reveal>
+<nav class="fields" aria-label="Use cases by field">
   {
     withCases.map((f) => (
       <a href={`/use-cases/${f.key}/`}>
@@ -30,7 +30,7 @@ const picks = (key: string) => {
 <div class="grid four">
   {
     personas.map((p) => (
-      <div class="card persona" data-reveal>
+      <div class="card persona">
         <AudienceIcon name={p.key} />
         <h3 class="h3">{p.name}</h3>
         <p>{p.pitch}</p>
@@ -43,7 +43,7 @@ const picks = (key: string) => {
           ))}
         </ul>
         <a class="go" href={personaHref(p.key)}>
-          Read the guide <span aria-hidden="true">→</span>
+          Read the guide
         </a>
       </div>
     ))

@@ -15,7 +15,7 @@ import UseCases from "./UseCases.astro";
 
 // What Thermite is, in plain words, with real metrics and its three modes, under one sharp claim.
 const lede =
-  "Point AI agents at a number to push (tokens a second, accuracy, latency, memory, cost, a benchmark score), goals to meet, or a question to answer. They run experiments for hours or days on your own machines, and a judge they can't touch measures every attempt and keeps only confirmed wins.";
+  "Thermite is open-source autoresearch that runs on your own machines. Point AI agents at a number to push (tokens a second, accuracy, latency, memory, cost, a benchmark score), goals to meet, or a question to answer. They run experiments for hours or days, and a judge they can't touch measures every attempt and keeps only confirmed wins.";
 
 declare const __THERMITE_VERSION__: string;
 const version = __THERMITE_VERSION__;
@@ -36,9 +36,7 @@ const smoke = [
   description="Thermite is open-source autoresearch on your own machines: AI agents push a metric, meet a list of goals or research a question for hours or days, and a judge they cannot touch keeps only confirmed wins."
 >
   <section class="hero">
-    <div class="glow" aria-hidden="true"></div>
     <div class="wrap hero-head">
-      <p class="eyebrow">Open-source autoresearch · on your own machines</p>
       <h1 class="h1">Give AI agents a metric.<br /><span class="hot">Keep only the wins that hold up.</span></h1>
     </div>
     <div class="wrap hero-grid">
@@ -47,15 +45,11 @@ const smoke = [
         <a class="proof" href={study}>
           <span class="delta mono">7.74 → 30.06 <small>tok/s</small></span>
           <span class="what">LLM decoding on a $100 GPU · 131 changes judged, 28 kept</span>
-          <span class="go" aria-hidden="true">Read the study →</span>
+          <span class="go" aria-hidden="true">Read the study</span>
         </a>
         <div class="btns">
           <a class="btn primary" href="/tutorials/first-run/"
-            >Install on one machine <svg viewBox="0 0 24 24" aria-hidden="true"
-              ><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-              ></path></svg
-            ></a
-          >
+>Install on one machine</a>
           <a class="btn" href="#how">See how it works</a>
         </div>
         <p class="ask">Or ask your AI agent to set it up:</p>
@@ -84,15 +78,14 @@ const smoke = [
   <section class="section" id="how">
     <div class="wrap split">
       <div>
-        <div class="head" data-reveal>
-          <p class="eyebrow">How a campaign runs</p>
-          <h2 class="h2">A lot of engineering is a loop. Hand it to agents.</h2>
+        <div class="head">
+          <h2 class="h2">How a campaign runs</h2>
           <p class="lede">
-            Change something, measure it, keep it if it is better, try the next idea. Thermite runs that loop
-            through the night, on many ideas at once, and keeps the grading for itself.
+            Much of engineering is a loop: change something, measure it, keep it if it is better, try the next idea.
+            Thermite runs that loop continuously, on many ideas at once, and keeps the grading for itself.
           </p>
         </div>
-        <ol class="flow" data-reveal>
+        <ol class="flow">
           <li><b>You set the goal.</b> What to improve, what must not get worse, which files the agents may change, and a kit that builds and measures your project.</li>
           <li><b>Agents try ideas side by side.</b> Each works in its own lane, on its own copy. A planner hands each lane a different experiment, so the search stays wide.</li>
           <li><b>The judge decides.</b> It times each change against the best so far, on the same hardware, in alternating blocks. A win must hold up again before it counts.</li>
@@ -100,9 +93,8 @@ const smoke = [
           <li><b>You watch, steer and take the result.</b> Follow every agent live, message them, pause the run, and download the champion as a patch.</li>
         </ol>
       </div>
-      <figure class="shot" data-reveal>
+      <figure class="shot">
         <div class="window">
-          <div class="chrome"><i></i><i></i><i></i><span>http://127.0.0.1:8800</span></div>
           <Image src={run} alt="The dashboard's page for one run: its champion's value, its cost and tokens, the champion's gains over time, and what each lane works on now" widths={[640, 960, 1280]} sizes="(min-width: 64rem) 40rem, 100vw" />
         </div>
         <figcaption class="small">One run on the dashboard: what it has cost, how far the champion has come, and what each agent works on now.</figcaption>
@@ -113,31 +105,30 @@ const smoke = [
   <section class="section" id="trust">
     <div class="wrap split rev">
       <div>
-        <div class="head" data-reveal>
-          <p class="eyebrow">Why you can trust it</p>
-          <h2 class="h2">Agents never grade their own work.</h2>
+        <div class="head">
+          <h2 class="h2">Agents never grade their own work</h2>
           <p class="lede">
             An agent asked to push a number up will sometimes only make it look higher: it skips the slow case,
             moves the timer, or just reports a win. So in Thermite, agents only propose. Code they can't read or
             change measures and decides.
           </p>
         </div>
-        <ul class="points" data-reveal>
+        <ul class="points">
           <li><b>The judge holds the clock.</b> It times every change from outside, against the champion, on the same device.</li>
           <li><b>It knows its own noise.</b> Once a day it times the champion against itself, and decides with statistics.</li>
           <li><b>A win gets a second look.</b> Fresh runs, test cases the agents never saw and, on a rig with an auditor, a review of a surprisingly large gain.</li>
           <li><b>You decide what waits.</b> Ask to approve every new champion yourself, or let confirmed wins through.</li>
         </ul>
       </div>
-      <div class="board" data-reveal>
+      <div class="board">
         <div class="board-head">
           <span class="eyebrow">The judge's smoke check</span>
           <p class="small">Thirteen changes whose right verdicts are known. Run it on your own computer in twenty minutes.</p>
         </div>
         <ul>
           {
-            smoke.map((s, i) => (
-              <li style={`--i:${i}`}>
+            smoke.map((s) => (
+              <li>
                 <code>{s.change}</code>
                 <span class={`v ${s.kind}`}>{s.verdict}</span>
                 <span class="why">{s.why}</span>
@@ -145,14 +136,14 @@ const smoke = [
             ))
           }
         </ul>
-        <a class="board-foot" href="/tutorials/first-run/#6-run-the-judges-smoke-check">See all thirteen in the first tutorial →</a>
+        <a class="board-foot" href="/tutorials/first-run/#6-run-the-judges-smoke-check">See all thirteen in the first tutorial</a>
       </div>
     </div>
   </section>
 
   <section class="section proof" id="proof">
     <div class="wrap split">
-      <div data-reveal>
+      <div>
         <Partners />
         <h2 class="h2">A 27B model, 3.9× faster on a $100 GPU.</h2>
         <p class="lede">
@@ -162,9 +153,9 @@ const smoke = [
           they started. The result ships in one command.
         </p>
         <div class="stats">
-          <div class="stat"><span class="n"><span data-count="3.89">3.89</span>×</span><span class="l">decode speed</span><span class="s">7.74 → 30.06 tok/s</span></div>
-          <div class="stat"><span class="n"><span data-count="1.14">1.14</span>×</span><span class="l">a standard 3-bit file</span><span class="s">same card, same runs</span></div>
-          <div class="stat"><span class="n" data-count="131">131</span><span class="l">changes judged</span><span class="s">in five days</span></div>
+          <div class="stat"><span class="n"><span>3.89</span>×</span><span class="l">decode speed</span><span class="s">7.74 → 30.06 tok/s</span></div>
+          <div class="stat"><span class="n"><span>1.14</span>×</span><span class="l">a standard 3-bit file</span><span class="s">same card, same runs</span></div>
+          <div class="stat"><span class="n">131</span><span class="l">changes judged</span><span class="s">in five days</span></div>
         </div>
         <div class="btns">
           <a class="btn primary" href={study}>Read the study</a>
@@ -177,9 +168,8 @@ const smoke = [
 
   <section class="section" id="modes">
     <div class="wrap">
-      <div class="head" data-reveal>
-        <p class="eyebrow">Three modes</p>
-        <h2 class="h2">Make it faster. Make it work. Find out.</h2>
+      <div class="head">
+        <h2 class="h2">Three campaign modes</h2>
         <p class="lede">
           Each campaign is one of three modes, and code decides when each one is done, never an agent. Chain them:
           research first, then a goal campaign to make it work, then a hill climb to make it fast.
@@ -191,8 +181,7 @@ const smoke = [
 
   <section class="section" id="who">
     <div class="wrap">
-      <div class="head" data-reveal>
-        <p class="eyebrow">Use cases</p>
+      <div class="head">
         <h2 class="h2">Use cases across nine fields</h2>
         <p class="lede">
           Thermite applies wherever a program can build, run and measure a result: code and models, simulations and
@@ -206,16 +195,15 @@ const smoke = [
 
   <section class="section" id="where">
     <div class="wrap split">
-      <div class="head" data-reveal>
-        <p class="eyebrow">Your machines, your models</p>
-        <h2 class="h2">It runs where you do.</h2>
+      <div class="head">
+        <h2 class="h2">Your machines, your models</h2>
         <p class="lede">
           There is no hosted service and no account. <b>Control</b>, one small service, shows and steers every
           campaign. <b>Rigs</b> do the research, each on a computer, a cluster node or a cloud GPU, and each dials
           out to control. Nothing stops a campaign by default: set a budget or a stop time when you want one.
         </p>
       </div>
-      <div class="card facts-card" data-reveal>
+      <div class="card facts-card">
         <table class="facts">
           <tbody>
             <tr><th>Rigs</th><td>Your computer; machines over SSH; a Kubernetes cluster; a RunPod GPU by the hour</td></tr>
@@ -232,12 +220,11 @@ const smoke = [
 
   <section class="section" id="start">
     <div class="wrap">
-      <div class="head" data-reveal>
-        <p class="eyebrow">Get started</p>
-        <h2 class="h2">From a fresh machine to a first verdict.</h2>
+      <div class="head">
+        <h2 class="h2">Get started</h2>
         <p class="lede">About twenty minutes on Linux or macOS, with Docker or Podman. Podman users swap <code>docker</code> for <code>podman</code>.</p>
       </div>
-      <div class="steps" data-reveal>
+      <div class="steps">
         <div class="step">
           <h3 class="h3">Get Thermite</h3>
           <p>Download the latest release's compose file into a folder of its own.</p>
@@ -267,11 +254,10 @@ const smoke = [
 
   <section class="section last">
     <div class="wrap">
-      <div class="cta" data-reveal>
+      <div class="cta">
         <Image class="wave" src={hero} alt="" width={180} height={180} />
-        <p class="eyebrow">Hackers in the Loop</p>
-        <h2 class="h2">Bring your campaigns to the community.</h2>
-        <p class="lede">Ask a question, share what your agents found, and see what is being built next.</p>
+        <h2 class="h2">Join the Hackers in the Loop community</h2>
+        <p class="lede">Ask questions, share what your agents found, and see what is being built next.</p>
         <div class="btns">
           <a class="btn primary" href="https://discord.gg/3Qs2uejUf9">Join the Discord</a>
           <a class="btn" href="https://github.com/iammrduncan/thermite">Star it on GitHub</a>
@@ -286,14 +272,6 @@ const smoke = [
     position: relative;
     padding-block: clamp(3rem, 7vw, 5.5rem) 2.5rem;
     overflow: hidden;
-  }
-  .glow {
-    position: absolute;
-    inset: -20% -10% auto auto;
-    width: 70%;
-    height: 120%;
-    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 18%, transparent), transparent);
-    pointer-events: none;
   }
   .hero-head {
     position: relative;
@@ -325,9 +303,9 @@ const smoke = [
     gap: 0.25rem 0.75rem;
     margin-top: 1.3rem;
     padding: 0.7rem 0.95rem;
-    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--rule));
+    border: 1px solid var(--rule-2);
     border-radius: 12px;
-    background: var(--accent-soft);
+    background: var(--panel);
     color: var(--ink-2);
     font-size: 0.86rem;
     text-decoration: none;
@@ -350,7 +328,7 @@ const smoke = [
   }
   .proof .go {
     margin-left: auto;
-    color: var(--accent);
+    color: var(--ink-2);
     font-weight: 560;
   }
   @media (max-width: 62rem) {
@@ -458,8 +436,8 @@ const smoke = [
     width: 1.8rem;
     height: 1.8rem;
     border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--panel-2);
+    color: var(--ink-2);
     font: 600 0.8rem var(--mono);
   }
   .flow li:not(:last-child)::after {
@@ -501,7 +479,6 @@ const smoke = [
     border: 1px solid var(--rule-2);
     border-radius: 18px;
     background: var(--panel);
-    box-shadow: var(--shadow);
   }
   .board-head p {
     margin: 0.5rem 0 1rem;
@@ -553,34 +530,18 @@ const smoke = [
     background: color-mix(in srgb, var(--teal) 14%, transparent);
     color: var(--teal);
   }
-  @media (prefers-reduced-motion: no-preference) {
-    :global(.js) .board li {
-      opacity: 0;
-      transform: translateX(-8px);
-      transition:
-        opacity 0.5s ease,
-        transform 0.5s ease;
-      transition-delay: calc(var(--i) * 110ms + 200ms);
-    }
-    :global(.js) .board:global(.is-in) li {
-      opacity: 1;
-      transform: none;
-    }
-  }
   .board-foot {
     display: block;
     margin-top: 0.75rem;
     padding-top: 0.9rem;
     border-top: 1px solid var(--rule);
-    color: var(--accent);
+    color: var(--ink-2);
     font-size: 0.88rem;
     text-decoration: none;
   }
 
   .proof {
-    background:
-      radial-gradient(50% 60% at 0% 50%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
-      var(--bg-2);
+    background: var(--bg-2);
   }
   .proof .h2 {
     margin-top: 1.2rem;

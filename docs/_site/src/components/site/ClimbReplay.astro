@@ -15,7 +15,6 @@ const { compact = false } = Astro.props;
   <div class="console">
     <div class="top">
       <div class="title">
-        <span class="live" aria-hidden="true"></span>
         <span>Replay · decode hill climb</span>
         <span class="sub">Qwen3.8-27B-PN3 · one Tesla P100 · 24–29 Oct 2026</span>
       </div>
@@ -98,19 +97,6 @@ const { compact = false } = Astro.props;
   }
   .sub {
     color: var(--c-dim);
-  }
-  .live {
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 999px;
-    background: #ff7a2f;
-    box-shadow: 0 0 10px #ff7a2f;
-    animation: blink 1.6s ease-in-out infinite;
-  }
-  @keyframes blink {
-    50% {
-      opacity: 0.35;
-    }
   }
   .ctl {
     display: flex;
@@ -241,8 +227,7 @@ const { compact = false } = Astro.props;
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .ctl,
-    .live {
+    .ctl {
       display: none;
     }
   }

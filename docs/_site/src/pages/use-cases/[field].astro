@@ -81,7 +81,6 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
                 </div>
               ))}
             </dl>
-            <span class="go" aria-hidden="true">→</span>
           </a>
         ))
       }
@@ -91,7 +90,6 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
   <section class="section">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">Who it's for</p>
         <h2 class="h2">Guides by audience</h2>
       </div>
       <div class="people">
@@ -113,7 +111,6 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
   <section class="section last">
     <div class="wrap">
       <div class="cta">
-        <p class="eyebrow">Try it</p>
         <h2 class="h2">Twenty minutes to a first verdict.</h2>
         <p class="lede">Install it on one computer, or ask your own AI agent to:</p>
         <Cmd prompt="›" text="Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt" />
@@ -126,10 +123,17 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
   </section>
 </Site>
 
+<script>
+  // On a narrow screen the switcher scrolls sideways: bring the current field into view.
+  const current = document.querySelector<HTMLElement>(".switch [aria-current]");
+  const strip = current?.parentElement;
+  if (current && strip && strip.scrollWidth > strip.clientWidth)
+    strip.scrollLeft = current.offsetLeft - (strip.clientWidth - current.offsetWidth) / 2;
+</script>
+
 <style>
   .hero {
     padding-block: clamp(2rem, 5vw, 3.5rem) clamp(1.5rem, 3vw, 2.25rem);
-    background: radial-gradient(60% 90% at 90% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
   }
   .crumbs {
     display: flex;
@@ -260,15 +264,6 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
     margin: 0;
     color: var(--ink-2);
   }
-  .go {
-    align-self: center;
-    font-size: 1.3rem;
-    color: var(--accent);
-    transition: transform 0.2s;
-  }
-  .row:hover .go {
-    transform: translateX(3px);
-  }
   .people {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
@@ -311,9 +306,6 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
       padding: 1rem 0 0;
       border-left: 0;
       border-top: 1px solid var(--rule);
-    }
-    .go {
-      display: none;
     }
   }
 </style>

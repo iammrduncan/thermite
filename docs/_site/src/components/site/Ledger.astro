@@ -19,7 +19,7 @@ const tally = { w: 0, d: 0, r: 0, n: 0, i: 0, u: 0 } as Record<string, number>;
 for (const a of data.attempts as [number, number, string][]) tally[a[2]]++;
 ---
 
-<figure class="ledger" data-reveal>
+<figure class="ledger">
   <header>
     <span>Thermite judge · ledger</span>
     <span>One Tesla P100-PCIE-16GB</span>
@@ -68,7 +68,6 @@ for (const a of data.attempts as [number, number, string][]) tally[a[2]]++;
     border: 1px solid var(--rule-2);
     border-radius: 16px;
     background: var(--panel);
-    box-shadow: var(--shadow);
     font-family: var(--mono);
     font-size: 0.78rem;
     color: var(--ink-2);

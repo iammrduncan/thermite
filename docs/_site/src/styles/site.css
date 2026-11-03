@@ -136,25 +136,12 @@ kbd {
 .section + .section {
   border-top: 1px solid var(--rule);
 }
+/* A short label for what follows, where the heading alone doesn't say it. */
 .eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
   margin: 0;
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 0.92rem;
+  font-weight: 560;
   color: var(--muted);
-}
-.eyebrow::before {
-  content: "";
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
 }
 .h1 {
   margin: 1.1rem 0 0;
@@ -234,7 +221,6 @@ kbd {
   border-color: transparent;
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: 0 8px 30px -10px var(--accent);
 }
 .btn.primary:hover {
   filter: brightness(1.08);
@@ -351,7 +337,7 @@ a.card:hover {
   align-items: center;
   gap: 0.35rem;
   margin-top: 1rem;
-  color: var(--accent);
+  color: var(--ink-2);
   font-size: 0.9rem;
   font-weight: 560;
 }
@@ -367,18 +353,6 @@ a.card:hover {
   letter-spacing: 0.04em;
   color: var(--muted);
   white-space: nowrap;
-}
-.tag.climb {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-}
-.tag.goal {
-  color: var(--teal);
-  border-color: color-mix(in srgb, var(--teal) 40%, transparent);
-}
-.tag.research {
-  color: var(--gold);
-  border-color: color-mix(in srgb, var(--gold) 40%, transparent);
 }
 
 /* Numbered steps. */
@@ -476,36 +450,12 @@ a.card:hover {
   color: var(--dim);
 }
 
-/* A product screen in a window. */
+/* A product screenshot, framed. */
 .window {
   overflow: hidden;
   border: 1px solid var(--rule-2);
   border-radius: 14px;
   background: var(--panel);
-  box-shadow: var(--shadow);
-}
-.window .chrome {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.6rem 0.8rem;
-  border-bottom: 1px solid var(--rule);
-  background: var(--panel-2);
-}
-.window .chrome i {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 999px;
-  background: var(--rule-2);
-}
-.window .chrome span {
-  margin-inline: auto;
-  padding: 0.12rem 0.8rem;
-  border-radius: 6px;
-  background: var(--bg-2);
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  color: var(--muted);
 }
 .window img {
   width: 100%;
@@ -567,21 +517,6 @@ a.card:hover {
   color: var(--ink-2);
 }
 
-/* Reveal on scroll, only when scripts run and motion is allowed. */
-@media (prefers-reduced-motion: no-preference) {
-  .js [data-reveal] {
-    opacity: 0;
-    transform: translateY(14px);
-    transition:
-      opacity 0.7s ease,
-      transform 0.7s ease;
-  }
-  .js [data-reveal].is-in {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 /* The closing call to action. */
 .cta {
   position: relative;
@@ -589,9 +524,7 @@ a.card:hover {
   padding: clamp(2.5rem, 6vw, 4rem);
   border: 1px solid var(--rule-2);
   border-radius: 24px;
-  background:
-    radial-gradient(60% 120% at 100% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%),
-    var(--panel);
+  background: var(--panel);
 }
 .cta .h2 {
   margin-top: 0;

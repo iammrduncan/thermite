@@ -27,20 +27,17 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
 >
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow">Case studies</p>
-      <h1 class="h1">Real campaigns. The judge's own numbers.</h1>
-      <p class="lede">
-        Campaigns Thermite has run, from the first question to the last verdict.
-      </p>
+      <h1 class="h1">Case studies</h1>
+      <p class="lede">Campaigns Thermite has run, from the first question to the last verdict, with the judge's own numbers.</p>
     </div>
   </section>
 
   <section class="feature-wrap">
     <div class="wrap">
-      <article class="feature" data-reveal>
+      <article class="feature">
         <div class="feature-text">
           <Partners />
-          <p class="kicker mono">AI and machine learning · Inference engine · 4 campaigns</p>
+          <p class="kicker">AI and machine learning · Inference engine · 4 campaigns</p>
           <h2 class="h2"><a href={study}>Qwen3.8-27B on a $100 GPU, 3.9× faster</a></h2>
           <p class="lede">
             Four campaigns tuned an inference engine for Qwen3.8-27B on one Tesla P100: two goal campaigns made the new
@@ -71,14 +68,13 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
 
   <section class="section" id="all">
     <div class="wrap">
-      <div class="head" data-reveal>
-        <p class="eyebrow">All case studies</p>
-        <h2 class="h2">{studies.length === 1 ? "One study so far." : `${studies.length} studies.`}</h2>
+      <div class="head">
+        <h2 class="h2">All case studies</h2>
       </div>
       <div class="grid cards">
         {
           studies.map((st) => (
-            <a class="card st" href={st.href} data-reveal>
+            <a class="card st" href={st.href}>
               <div class="top">
                 <FieldIcon name={st.field} />
                 <span class="small">{fieldLabel[st.field]}</span>
@@ -97,7 +93,7 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
                 {st.partner && ` · with ${st.partner}`}
               </p>
               <span class="go">
-                Read the study <span aria-hidden="true">→</span>
+                Read the study
               </span>
             </a>
           ))
@@ -108,10 +104,9 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
 
   <section class="section last">
     <div class="wrap">
-      <div class="cta" data-reveal>
-        <p class="eyebrow">Share yours</p>
-        <h2 class="h2">Ran a campaign worth a study?</h2>
-        <p class="lede">Bring its numbers to the Hackers in the Loop Discord. The next study could be yours.</p>
+      <div class="cta">
+        <h2 class="h2">Share a campaign</h2>
+        <p class="lede">Ran a campaign worth a case study? Bring its results to the Hackers in the Loop Discord.</p>
         <div class="btns">
           <a class="btn primary" href="https://discord.gg/3Qs2uejUf9">Join the Discord</a>
           <a class="btn" href="/use-cases/">See the use cases</a>
@@ -124,7 +119,6 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
 <style>
   .hero {
     padding-block: clamp(3rem, 7vw, 5.5rem) clamp(2rem, 4vw, 3rem);
-    background: radial-gradient(60% 90% at 90% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
   }
   .hero .h1 {
     max-width: 50rem;
@@ -141,7 +135,6 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
     border: 1px solid var(--rule-2);
     border-radius: 24px;
     background: var(--panel);
-    box-shadow: var(--shadow);
   }
   @media (max-width: 62rem) {
     .feature {
@@ -150,9 +143,8 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
   }
   .kicker {
     margin: 1.25rem 0 0;
-    font-size: 0.74rem;
-    color: var(--dim);
-    letter-spacing: 0.04em;
+    font-size: 0.85rem;
+    color: var(--muted);
   }
   .feature .h2 {
     margin-top: 0.5rem;
@@ -175,7 +167,7 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
   .stats dt {
     font-size: clamp(1.5rem, 2.6vw, 2rem);
     font-weight: 600;
-    color: var(--accent);
+    color: var(--ink);
     letter-spacing: -0.02em;
   }
   .stats dd {
@@ -201,7 +193,7 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
     font-size: 2.4rem;
     font-weight: 600;
     line-height: 1;
-    color: var(--accent);
+    color: var(--ink);
     letter-spacing: -0.03em;
   }
   .st .metric-label {

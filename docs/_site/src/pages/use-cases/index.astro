@@ -26,7 +26,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
 >
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow">Use cases</p>
       <h1 class="h1">Autoresearch for any measurable problem.</h1>
       <p class="lede">
         Thermite applies wherever a program can build a result, run it and measure its quality. Explore use cases by
@@ -42,7 +41,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   <section class="section" id="fields">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">By field</p>
         <h2 class="h2">Use cases by field</h2>
       </div>
       <div class="tiles">
@@ -52,7 +50,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
               <a class="tile-head" href={`/use-cases/${f.key}/`}>
                 <FieldIcon name={f.key} />
                 <span class="tile-name">{f.label}</span>
-                <span class="tile-go" aria-hidden="true">→</span>
               </a>
               <p class="small">{f.blurb}</p>
               <ul>
@@ -70,7 +67,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
         <span>
           <b>Don't see your field?</b> Thermite works with any project that a program can build, run and measure.
         </span>
-        <span class="own-go">Start on your own project <span aria-hidden="true">→</span></span>
+        <span class="own-go">Start on your own project</span>
       </a>
     </div>
   </section>
@@ -78,7 +75,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   <section class="section" id="who">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">By audience</p>
         <h2 class="h2">Who Thermite is for</h2>
       </div>
       <div class="grid four">
@@ -90,7 +86,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
               <p>{p.pitch}</p>
               <div class="links">
                 <a href={personaHref(p.key)}>
-                  Read the guide <span aria-hidden="true">→</span>
+                  Read the guide
                 </a>
                 <a href={`?for=${p.key}#all`} data-show={p.key}>
                   View {count(p.key)} use cases
@@ -106,7 +102,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   <section class="section" id="all">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">All use cases</p>
         <h2 class="h2">Search all use cases</h2>
       </div>
       <div class="finder" data-finder hidden>
@@ -158,7 +153,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
           <b>Qwen3.8-27B on a $100 GPU.</b> Four campaigns, 131 changes judged in the decode climb, 28 kept, the model's
           answers held.
         </span>
-        <span class="study-go">Read the study <span aria-hidden="true">→</span></span>
+        <span class="study-go">Read the study</span>
       </a>
     </div>
   </section>
@@ -166,7 +161,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   <section class="section last">
     <div class="wrap">
       <div class="cta">
-        <p class="eyebrow">Try it</p>
         <h2 class="h2">Twenty minutes to a first verdict.</h2>
         <p class="lede">Install it on one computer, or ask your own AI agent to:</p>
         <Cmd prompt="›" text="Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt" />
@@ -245,7 +239,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
 <style>
   .hero {
     padding-block: clamp(3rem, 7vw, 5rem) clamp(2rem, 4vw, 3rem);
-    background: radial-gradient(60% 90% at 90% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
   }
   .hero .h1 {
     max-width: 52rem;
@@ -290,13 +283,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     letter-spacing: -0.01em;
     color: var(--ink);
   }
-  .tile-go {
-    color: var(--accent);
-    transition: transform 0.2s;
-  }
-  .tile-head:hover .tile-go {
-    transform: translateX(3px);
-  }
   .tile-head:hover .tile-name {
     color: var(--accent);
   }
@@ -318,10 +304,6 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     text-decoration: none;
     font-size: 0.88rem;
     line-height: 1.4;
-  }
-  .tile li a::before {
-    content: "→ ";
-    color: var(--dim);
   }
   .tile li a:hover {
     color: var(--ink);
@@ -345,7 +327,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     font-weight: 600;
   }
   .own-go {
-    color: var(--accent);
+    color: var(--ink-2);
     font-weight: 560;
     white-space: nowrap;
   }
@@ -365,7 +347,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     font-size: 0.9rem;
   }
   .links a {
-    color: var(--accent);
+    color: var(--ink);
     text-decoration: none;
     font-weight: 560;
   }
@@ -492,9 +474,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     padding: 1.4rem 1.6rem;
     border: 1px solid var(--rule-2);
     border-radius: 16px;
-    background:
-      radial-gradient(80% 140% at 0% 50%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
-      var(--panel);
+    background: var(--panel);
     text-decoration: none;
   }
   .study .eyebrow {
@@ -503,7 +483,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   .study-num {
     font-size: 2.2rem;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--ink);
     letter-spacing: -0.03em;
   }
   .study-text {
@@ -514,7 +494,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     font-weight: 600;
   }
   .study-go {
-    color: var(--accent);
+    color: var(--ink-2);
     font-weight: 560;
     white-space: nowrap;
   }
