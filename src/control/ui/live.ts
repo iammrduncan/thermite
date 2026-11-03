@@ -1,10 +1,11 @@
-import { ago, esc } from "./components.ts";
+import { ago, esc } from "./components/index.ts";
 
 /**
- * The live view's lines, formatted once here for the page and for its updates (live.json), so a
- * line reads the same whichever brought it. Each line has its time. A tool call reads as what it
- * did (the command, the file), not as its JSON arguments, and its result as exit code, duration
- * and the first line of output; everything else is one click away.
+ * The live view's lines, formatted once here for the page and for the lines its server-sent
+ * events bring (`<page>/live/stream`), so a line reads the same whichever brought it. Each line
+ * has its time. A tool call reads as what it did (the command, the file), not as its JSON
+ * arguments, and its result as exit code, duration and the first line of output; everything else
+ * is one click away.
  */
 
 export interface LiveEntry {
@@ -228,7 +229,7 @@ export function whoTags(e: LiveEntry, to?: string): string {
     tags.add("you");
     if (/^lane-\d+$/.test(to)) tags.add(to);
     else if (to === "planner") tags.add("planner");
-    else if (["advisors", "teachers", "auditor", "panel"].includes(to)) tags.add("advisors");
+    else if (["advisors", "teachers", "auditor", "review_panel"].includes(to)) tags.add("advisors");
     else if (to === "all") tags.add("all");
     else if (e.source.startsWith("trial:")) tags.add(e.lane ?? "lanes");
     return [...tags].join(" ");

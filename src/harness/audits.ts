@@ -1,7 +1,6 @@
-import { canonicalJson } from "../core/canonical.ts";
 import type { Contract } from "../core/contract.ts";
 import { toFraction } from "../core/stats.ts";
-import { type Ledger, LedgerError } from "./ledger.ts";
+import { type Ledger, LedgerError } from "./ledger/index.ts";
 
 /**
  * Audits. The judge flags a promotable result for audit (open known flaws, a gain above the
@@ -150,15 +149,7 @@ export class Audits {
 
   /** Confirmed gains of earlier wins in the run (for the ratio-to-median trigger). */
   priorDeltas(run: string, except: string): number[] {
-    return (
-      this.ledger.db
-        .prepare(
-          `select v.delta as delta from verdict v join attempt a on a.id = v.attempt
-           where a.run = ? and a.id != ? and v.verdict = 'win_confirmed' and v.delta is not null
-             and not exists (select 1 from verdict s where s.supersedes = v.id)`,
-        )
-        .all(run, except) as { delta: number }[]
-    ).map((r) => r.delta);
+    return this.ledger.verdicts.confirmedDeltas(run, except);
   }
 
   /** Records an audit request; the caller holds the attempt in awaiting_audit (same transaction). */
@@ -173,29 +164,15 @@ export class Audits {
     by: string;
   }): number {
     return this.ledger.tx(() => {
-      const r = this.ledger.db
-        .prepare(
-          `insert into audit (attempt, confirm_job, run, trigger, reason, expected_seq, requested_at)
-           values (?, ?, ?, ?, ?, ?, ?) on conflict (attempt, confirm_job) do nothing`,
-        )
-        .run(
-          input.attempt,
-          input.job,
-          input.run,
-          input.trigger,
-          input.reason,
-          input.expectedSeq,
-          new Date().toISOString(),
-        );
-      const id = Number(r.changes)
-        ? Number(r.lastInsertRowid)
-        : Number(
-            (
-              this.ledger.db
-                .prepare("select id from audit where attempt = ? and confirm_job = ?")
-                .get(input.attempt, input.job) as Row
-            ).id,
-          );
+      const id = this.ledger.audits.add({
+        attempt: input.attempt,
+        job: input.job,
+        run: input.run,
+        trigger: input.trigger,
+        reason: input.reason,
+        expectedSeq: input.expectedSeq,
+        at: new Date().toISOString(),
+      });
       this.ledger.appendEvent(input.by, "audit_requested", input.attempt, {
         audit: id,
         run: input.run,
@@ -208,23 +185,12 @@ export class Audits {
 
   /** The attempt's current audit: the one for its latest confirmation. */
   get(attempt: string): Row | undefined {
-    return this.ledger.db
-      .prepare("select * from audit where attempt = ? order by id desc limit 1")
-      .get(attempt) as Row | undefined;
+    return this.ledger.audits.current(attempt);
   }
 
   /** Open audits (the current one of each attempt still held for one). */
   pending(): number[] {
-    return (
-      this.ledger.db
-        .prepare(
-          `select au.id as id from audit au join attempt a on a.id = au.attempt
-           where au.decision is null and a.lifecycle = 'awaiting_audit'
-             and au.id = (select max(id) from audit x where x.attempt = au.attempt)
-           order by au.id`,
-        )
-        .all() as { id: number }[]
-    ).map((r) => r.id);
+    return this.ledger.audits.pending();
   }
 
   /**
@@ -233,15 +199,11 @@ export class Audits {
    * stay with promotion code.
    */
   package(id: number, contract: Contract): AuditPackage {
-    const au = this.ledger.db.prepare("select * from audit where id = ?").get(id) as
-      | Row
-      | undefined;
+    const au = this.ledger.audits.get(id);
     if (!au) throw new LedgerError("not_found", `no audit ${id}`);
-    const a = this.ledger.getAttempt(String(au.attempt)) as Row;
-    const current = this.ledger.currentVerdict(String(au.attempt));
-    const v = this.ledger.db
-      .prepare("select verdict, delta, ci_low, ci_high, guards from verdict where id = ?")
-      .get(current?.id ?? -1) as Row | undefined;
+    const a = this.ledger.attempts.get(String(au.attempt)) as Row;
+    const current = this.ledger.verdicts.current(String(au.attempt));
+    const v = current ? this.ledger.verdicts.get(current.id) : undefined;
     const num = (x: unknown) => (typeof x === "number" ? x : null);
     return {
       id,
@@ -289,18 +251,16 @@ export class Audits {
       if (au.decision !== null) {
         throw new LedgerError("conflict", `the audit of ${input.attempt} is already decided`);
       }
-      this.ledger.db
-        .prepare(
-          "update audit set decision = ?, reasons = ?, citations = ?, auditor = ?, decided_at = ? where id = ?",
-        )
-        .run(
-          input.decision,
-          input.reasons.slice(0, 8000),
-          canonicalJson(input.citations.slice(0, 20)),
-          input.auditor,
-          new Date().toISOString(),
-          Number(au.id),
-        );
+      this.ledger.audits.decide(
+        Number(au.id),
+        {
+          decision: input.decision,
+          reasons: input.reasons.slice(0, 8000),
+          citations: input.citations.slice(0, 20),
+          auditor: input.auditor,
+        },
+        new Date().toISOString(),
+      );
       this.ledger.appendEvent(input.auditor, "audit_decided", input.attempt, {
         audit: Number(au.id),
         decision: input.decision,

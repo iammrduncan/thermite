@@ -7,7 +7,7 @@ import {
   limitsBody,
   openResetOf,
 } from "../../src/cli/runpod.ts";
-import type { RunpodRigView } from "../../src/control/runpod-rig-view.ts";
+import type { RunpodRigView } from "../../src/control/runpod/rig-view.ts";
 
 describe("thermite runpod", () => {
   test("launch: the options become the API's body, and nothing is set that was not given", () => {

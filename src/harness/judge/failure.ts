@@ -1,5 +1,5 @@
 import { log } from "../../common/env.ts";
-import { type JobRow, type Ledger, LedgerError } from "../ledger.ts";
+import { type JobRow, type Ledger, LedgerError } from "../ledger/index.ts";
 import { clipReason } from "./reasons.ts";
 
 /** Whether an error is the ledger saying the job's lease was lost: another holder has the job. */
@@ -20,10 +20,10 @@ export function recordInfraFailure(
 ): void {
   try {
     ledger.tx(() => {
-      ledger.completeJob(job.id, job.fence, "failed", { error: clipReason(reason) });
+      ledger.jobs.complete(job.id, job.fence, "failed", { error: clipReason(reason) });
       if (!job.attempt || job.kind === "parent_screen") return;
       const retries = Number(o.spec.retries ?? 0);
-      ledger.recordVerdict({
+      ledger.verdicts.record({
         attempt: job.attempt,
         verdict: "crash_infra",
         dependsOnJobs: [job.id],
@@ -31,7 +31,7 @@ export function recordInfraFailure(
         judgedBy: o.owner,
       });
       if (retries < 1) {
-        ledger.enqueueJob({
+        ledger.jobs.enqueue({
           attempt: job.attempt,
           kind: job.kind,
           // A setup change's baseline job keeps its place ahead of the run's other jobs.
@@ -39,14 +39,25 @@ export function recordInfraFailure(
           spec: { ...o.spec, retries: retries + 1 },
           actor: o.owner,
         });
-        ledger.setAttemptLifecycle(job.attempt, "queued", o.owner);
+        ledger.attempts.setLifecycle(job.attempt, "queued", o.owner);
       } else {
-        ledger.setAttemptLifecycle(job.attempt, "errored", o.owner);
+        ledger.attempts.setLifecycle(job.attempt, "errored", o.owner);
       }
     });
   } catch (err) {
     if (leaseLost(err))
-      log("judge", "a failed job's lease was lost: its new holder records it", { job: job.id });
-    else log("judge", "could not record a failed job", { job: job.id, error: String(err), reason });
+      log(
+        "judge",
+        "a failed job's lease was lost: its new holder records it",
+        { job: job.id },
+        "warn",
+      );
+    else
+      log(
+        "judge",
+        "could not record a failed job",
+        { job: job.id, error: String(err), reason },
+        "warn",
+      );
   }
 }

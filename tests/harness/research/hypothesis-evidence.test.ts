@@ -1,20 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Ledger } from "../../../src/harness/ledger.ts";
+import { SATURATION_TASKS } from "../../../src/core/research-check.ts";
+import type { Ledger } from "../../../src/harness/ledger/index.ts";
 import {
   hypothesisEvidence,
   hypothesisTask,
   hypothesisTasksDone,
   unevidencedHypotheses,
 } from "../../../src/harness/research/hypothesis-evidence.ts";
-import { SATURATION_TASKS, standingDecisions } from "../../../src/harness/research/progress.ts";
+import { standingDecisions } from "../../../src/harness/research/progress.ts";
 import {
   itemsState,
   type ResearchPackage,
   type ResearchVerdicts,
   researchPackage,
   researchReviewDue,
-} from "../../../src/harness/research/review.ts";
+} from "../../../src/harness/research/review/index.ts";
 import { gapOf } from "../../../src/harness/research/shares.ts";
 import { Reviews } from "../../../src/harness/reviews.ts";
 import { makeResearchRun } from "../../helpers/research-run.ts";
@@ -144,7 +145,7 @@ test("an undecided with no claim for or against a hypothesis is no end: the plan
   const x = hypothesisTask(ledger, queue, RUN, QUESTIONS, "planner");
   assert.ok(x);
   assert.equal(x.question, null);
-  assert.equal(x.family, "primary");
+  assert.equal(x.direction, "primary");
   assert.match(gapOf(x.details) ?? "", new RegExp(`^Hypothesis ${table} needs a verdict`));
   assert.match(x.details, /Each table of a database is kept in a file of its own/);
   assert.equal(

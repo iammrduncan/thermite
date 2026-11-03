@@ -16,7 +16,7 @@ import {
   partOf,
   resolve,
   scan,
-} from "../../scripts/lib/imports.ts";
+} from "../../scripts/checks/lib/imports.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 
@@ -49,8 +49,9 @@ describe("reading imports", () => {
     assert.equal(resolve("src/control/x.ts", "./ui/y.ts"), "src/control/ui/y.ts");
     assert.equal(partOf("src/harness/judge/judge.ts"), "harness");
     assert.equal(partOf("tests/harness/x.test.ts"), null);
-    assert.equal(isPage("src/control/ui/components.ts"), true);
-    assert.equal(isPage("src/control/dashboard.ts"), true);
+    assert.equal(isPage("src/control/ui/components/index.ts"), true);
+    assert.equal(isPage("src/control/dashboard/index.ts"), true);
+    assert.equal(isPage("src/control/dashboard/rigs/page.ts"), true);
     assert.equal(isPage("src/control/store.ts"), false);
   });
 });
@@ -81,8 +82,12 @@ describe("the import rule", () => {
   test("domain modules never import page code; pages may", () => {
     assert.equal(rule("src/control/store.ts", "./ui/components.ts"), "page");
     assert.equal(rule("src/control/ui/runs.ts", "./components.ts"), null);
-    assert.equal(rule("src/control/dashboard.ts", "./ui/components.ts"), null);
+    assert.equal(rule("src/control/dashboard/index.ts", "../ui/components.ts"), null);
+    assert.equal(rule("src/control/dashboard/rigs/page.ts", "../../ui/components.ts"), null);
     assert.equal(rule("src/control/ui/runs.ts", "../store.ts"), null);
+    // Control's main makes control, its pages among the rest.
+    assert.equal(rule("src/control/main.ts", "./dashboard/index.ts"), null);
+    assert.equal(rule("src/control/api/index.ts", "../dashboard/index.ts"), "page");
   });
   test("production code never imports tests or scripts; tests may import anything", () => {
     assert.equal(rule("src/control/x.ts", "../../tests/helpers/fixtures.ts"), "tests");
@@ -92,6 +97,90 @@ describe("the import rule", () => {
     const b = broken("src/cli/thermite.ts", "../control/store.ts");
     assert.ok(b);
     assert.match(brokenText(b), /a part imports another part\. Move the shared code/);
+  });
+});
+
+describe("a folder that is a module is imported through its index.ts", () => {
+  // The judge and the agents are modules, and the scheduler is one inside the agents.
+  const indexed = new Set([
+    "src/harness/judge",
+    "src/harness/agents",
+    "src/harness/agents/scheduler",
+  ]);
+  const rule = (file: string, spec: string) => broken(file, spec, indexed)?.rule ?? null;
+
+  test("code outside a module imports its index.ts, never a file inside it", () => {
+    assert.equal(rule("src/harness/main.ts", "./judge/index.ts"), null);
+    assert.equal(rule("src/harness/main.ts", "./judge/judge.ts"), "folder");
+    assert.equal(rule("src/harness/agents/registry.ts", "../judge/held-out.ts"), "folder");
+    const b = broken("src/harness/main.ts", "./judge/judge.ts", indexed);
+    assert.ok(b);
+    assert.equal(b.index, "src/harness/judge/index.ts");
+    assert.match(
+      brokenText(b),
+      /imports a file inside it\. Import the folder's interface, src\/harness\/judge\/index\.ts, instead/,
+    );
+  });
+  test("inside a module, files import each other directly", () => {
+    assert.equal(rule("src/harness/judge/judge.ts", "./baseline.ts"), null);
+    assert.equal(rule("src/harness/judge/jobs/confirm.ts", "../decide.ts"), null);
+    assert.equal(rule("src/harness/agents/scheduler/lanes.ts", "./rounds.ts"), null);
+  });
+  test("a namespace's files are imported one by one; a module inside one is held all the same", () => {
+    assert.equal(rule("src/control/api/runs.ts", "../../core/api/control/runs.ts"), null);
+    assert.equal(rule("src/harness/main.ts", "../core/events/kinds.ts"), null);
+    assert.equal(rule("src/control/api/index.ts", "../../common/api/control.ts"), null);
+    assert.equal(rule("src/control/dashboard/rigs/page.ts", "../../ui/rigs/list.ts"), null);
+    const components = new Set(["src/control/ui/components"]);
+    const into = (spec: string) => broken("src/control/dashboard/session.ts", spec, components);
+    assert.equal(into("../ui/components/icons.ts")?.rule, "folder");
+    assert.equal(into("../ui/components/index.ts"), null);
+  });
+  test("a nested module is reached through the outermost index.ts that does not hold the importer", () => {
+    const via = (file: string, spec: string) => broken(file, spec, indexed)?.index ?? null;
+    // From outside the agents: the agents' index.ts, for a file of the scheduler too.
+    assert.equal(
+      via("src/harness/controller/loops.ts", "../agents/scheduler/index.ts"),
+      "src/harness/agents/index.ts",
+    );
+    assert.equal(
+      via("src/harness/controller/loops.ts", "../agents/scheduler/rounds.ts"),
+      "src/harness/agents/index.ts",
+    );
+    assert.equal(rule("src/harness/controller/loops.ts", "../agents/index.ts"), null);
+    // From inside the agents, outside the scheduler: the scheduler's index.ts.
+    assert.equal(rule("src/harness/agents/registry.ts", "./scheduler/index.ts"), null);
+    assert.equal(
+      via("src/harness/agents/index.ts", "./scheduler/rounds.ts"),
+      "src/harness/agents/scheduler/index.ts",
+    );
+  });
+  test("a folder that is no namespace is a module, with or without its index.ts", () => {
+    const b = broken("src/control/api/kits.ts", "../kits/repos.ts");
+    assert.ok(b);
+    assert.equal(b.rule, "folder");
+    assert.match(brokenText(b), /If src\/control\/kits\/ has no index\.ts, give it one\./);
+  });
+  test("an import across the parts is held to the part rule first, so its exception stands", () => {
+    assert.equal(rule("src/cli/thermite/local.ts", "../../harness/broker/devices.ts"), "part");
+  });
+  test("no exception excuses it, and none is listed for it", () => {
+    const files: Record<string, string> = {
+      "src/harness/judge/index.ts": 'export { Judge } from "./judge.ts";',
+      "src/harness/judge/judge.ts": 'import { baselineState } from "./baseline.ts";',
+      "src/harness/main.ts": 'import { Judge } from "./judge/judge.ts";',
+    };
+    const found = scan(Object.keys(files), (f) => files[f] ?? "");
+    assert.deepEqual(
+      found.map((b) => [b.file, b.target, b.rule]),
+      [["src/harness/main.ts", "src/harness/judge/judge.ts", "folder"]],
+    );
+    assert.deepEqual(listOf(found), {});
+    const listed: Exceptions = { "src/harness/main.ts": ["src/harness/judge/judge.ts"] };
+    assert.deepEqual(
+      compare(found, listed).added.map((b) => b.target),
+      ["src/harness/judge/judge.ts"],
+    );
   });
 });
 

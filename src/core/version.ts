@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 /**
  * Which Thermite a process runs, and which version of the contract between control and a rig it
  * speaks. Control, the harness and the supervisor each report theirs: the harness in its signed
@@ -60,31 +58,23 @@ const readProtocol = (v: unknown): number | null => {
   return typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 999_999 ? n : null;
 };
 
-let own: BuildInfo | undefined;
-
 /**
- * This process's build: the version in package.json (next to dist/ in the images, at the top of
- * the repository in development) and the commit in THERMITE_COMMIT, which the images take from
- * their build argument of the same name.
+ * A build from the version in package.json and the commit in THERMITE_COMMIT, as given (this
+ * process's own is read in common/build-info.ts). A version Thermite cannot report is refused.
  */
-export function buildInfo(): BuildInfo {
-  if (own) return own;
-  const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
-    version?: unknown;
-  };
-  const version = readVersion(pkg.version);
-  if (!version) throw new Error("package.json has no version Thermite can report");
-  own = {
-    version,
-    commit: readCommit(process.env.THERMITE_COMMIT),
+export function buildOf(version: unknown, commit: unknown): BuildInfo {
+  const v = readVersion(version);
+  if (!v) throw new Error("package.json has no version Thermite can report");
+  return {
+    version: v,
+    commit: readCommit(commit),
     protocol: PROTOCOL,
     oldest_protocol: OLDEST_PROTOCOL,
   };
-  return own;
 }
 
 /** A build as headers, for the supervisor's calls to control. */
-export function buildHeaders(b: BuildInfo = buildInfo()): Record<string, string> {
+export function buildHeaders(b: BuildInfo): Record<string, string> {
   return {
     [BUILD_HEADERS.version]: b.version,
     ...(b.commit ? { [BUILD_HEADERS.commit]: b.commit } : {}),

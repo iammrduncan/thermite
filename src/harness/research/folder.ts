@@ -1,25 +1,24 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   constants,
   existsSync,
-  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
-  writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
-import type { ResearchFolderPaths } from "../../agents/tools/research.ts";
+import { basename, join } from "node:path";
+import type { ResearchFolderPaths } from "../../agents/tools/index.ts";
 // The folder's files are written whole (readers never see half of one), with the modes of the
 // controller's umask (022): every role reads them, and only the controller's user changes them.
 import { writeAtomic } from "../../common/fs.ts";
 import { BRIEF_FILE, briefFile } from "../../core/brief.ts";
 import { COMPACTIONS_DIR } from "../../core/compaction.ts";
-import { KB_BODY_MAX } from "../../core/kb-index.ts";
+import { readClaim, readFinding, readHypothesis, readSourceNote } from "../../core/corpus.ts";
+import type { KbItemFile } from "../../core/kb/index.ts";
 import {
   HYPOTHESES_RULE,
   hypothesisStatusWords,
@@ -27,10 +26,12 @@ import {
   questionLabel,
   REQUIRED_HYPOTHESES,
 } from "../../core/research-check.ts";
-import type { Role, Runner } from "../broker/runner.ts";
-import { countsText, type Knowledge } from "../knowledge.ts";
-import type { Ledger } from "../ledger.ts";
+import type { Role, Runner } from "../broker/index.ts";
+import { kbFileFacts, keepKbFile } from "../kb/index.ts";
+import type { LaneFileChange, Ledger } from "../ledger/index.ts";
 import { cardFile, cardHistory } from "./cards.ts";
+import { copyTree, LaneCopyRefused, regularFiles } from "./copy.ts";
+import { scrubKeptFiles } from "./kept.ts";
 
 /** The order hypotheses are listed in: those that need a verdict first (goal 117). */
 const HYPOTHESIS_ORDER = ["author", "promoted", "pool", "merged", "retired"];
@@ -45,6 +46,8 @@ const clipWords = (s: string, n: number) => {
 export const PAPER_FILE = "paper.md";
 /** The paper's next experiments with their kinds (goal 119), beside paper.md. */
 export const NEXT_EXPERIMENTS_FILE = "next-experiments.json";
+/** The folder of the run's source notes: what sources say, each with the sources it cites. */
+const SOURCE_NOTES = "source-notes";
 
 /**
  * A research run's folder: everything the run has learned, as files a worker can search with
@@ -54,7 +57,7 @@ export const NEXT_EXPERIMENTS_FILE = "next-experiments.json";
  *   paper.md                            the research paper, once code accepted it (goal 112)
  *   cards/q<index>.md                   each question's answer card, with its versions (goal 117)
  *   sources/ claims/ findings/          from the harness's records, kept current as they change
- *   hypotheses/ notes/ report/
+ *   hypotheses/ source-notes/ report/
  *   lanes/LANE/                         each lane's files, as they were when its last trial ended
  *   work/LANE/                          the lane's working area: its own while its trial runs
  *   compactions/                        each agent conversation, as kept before a compaction
@@ -64,8 +67,6 @@ export const NEXT_EXPERIMENTS_FILE = "next-experiments.json";
  * lane's files are saved in the harness's state when each trial ends (they survive a restart),
  * recorded in the ledger (who wrote what, and when), and shown to the other lanes under lanes/.
  */
-
-type Row = Record<string, unknown>;
 
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
@@ -89,41 +90,6 @@ export function readNoFollow(path: string): Buffer {
   } finally {
     closeSync(fd);
   }
-}
-
-/** Regular files under a directory, relative paths; symlinks and special files are left out. */
-function regularFiles(dir: string, skip: (rel: string) => boolean = () => false): string[] {
-  const out: string[] = [];
-  const visit = (rel: string): void => {
-    const p = rel ? join(dir, rel) : dir;
-    const st = lstatSync(p);
-    if (st.isDirectory()) {
-      for (const n of readdirSync(p).sort()) {
-        const r = rel ? join(rel, n) : n;
-        if (!skip(r)) visit(r);
-      }
-    } else if (st.isFile() && rel) out.push(rel);
-  };
-  if (existsSync(dir)) visit("");
-  return out;
-}
-
-/** Copies a tree's regular files (modes from the umask: readable by every role). */
-function copyTree(from: string, to: string): Map<string, { sha256: string; bytes: number }> {
-  const seen = new Map<string, { sha256: string; bytes: number }>();
-  mkdirSync(to, { recursive: true });
-  for (const rel of regularFiles(from)) {
-    let data: Buffer;
-    try {
-      data = readNoFollow(join(from, rel));
-    } catch {
-      continue; // changed under us into something else: left out
-    }
-    mkdirSync(dirname(join(to, rel)), { recursive: true });
-    writeFileSync(join(to, rel), data);
-    seen.set(rel, { sha256: createHash("sha256").update(data).digest("hex"), bytes: data.length });
-  }
-  return seen;
 }
 
 /** A file of a lane's saved area, in its manifest; `doc`: recorded as a document of the run. */
@@ -155,8 +121,6 @@ export const cardPath = (index: number) => `cards/q${index}.md`;
 /** A report section's file in the folder, from its top: report/<name>.md. */
 export const sectionPath = (name: string) => `report/${fileName(name)}.md`;
 
-const list = (json: unknown) => JSON.parse(String(json ?? "[]")) as string[];
-
 export class ResearchFolder {
   private readonly ledger: Ledger;
   /** Under scratch: what workers see. */
@@ -164,34 +128,29 @@ export class ResearchFolder {
   /** Under the harness's state: each lane's saved files, which outlive scratch. */
   private readonly stateRoot: string;
   private readonly runner: Runner;
+  /** The rig's outbox: each lane's document goes to the knowledge base from there (goal 175). */
+  private readonly outboxDir: string;
   /** Files already written for records that never change, per run. */
   private readonly written = new Map<string, Set<string>>();
   /** Contents last written for files that do change. */
   private readonly last = new Map<string, string>();
-
-  /** Past research shown under knowledge/ (the harness keeps its own copy, knowledge.ts). */
-  private readonly knowledge: Pick<Knowledge, "show" | "summary"> | undefined;
 
   constructor(o: {
     ledger: Ledger;
     scratchRoot: string;
     stateRoot: string;
     runner: Runner;
-    knowledge?: Pick<Knowledge, "show" | "summary"> | undefined;
+    outboxDir: string;
   }) {
     this.ledger = o.ledger;
     this.scratchRoot = o.scratchRoot;
     this.stateRoot = o.stateRoot;
     this.runner = o.runner;
-    this.knowledge = o.knowledge;
+    this.outboxDir = o.outboxDir;
   }
 
   root(run: string): string {
     return folderRootOf(this.scratchRoot, run);
-  }
-
-  private all(sql: string, ...p: string[]): Row[] {
-    return this.ledger.db.prepare(sql).all(...p) as Row[];
   }
 
   private once(run: string, path: string, make: () => string | Buffer): void {
@@ -210,15 +169,15 @@ export class ResearchFolder {
 
   /**
    * Brings the folder's harness-written part up to date with the records. A hill-climb or goal
-   * run's folder holds what its trials recorded (sources, claims, notes) and past research; a
-   * research run's holds everything above.
+   * run's folder holds what its trials recorded (sources, claims, notes); a research run's holds
+   * everything above.
    */
   sync(run: string): string {
     const root = this.root(run);
-    const inst = this.ledger.getRun(run);
+    const inst = this.ledger.runs.get(run);
     if (!inst) throw new Error(`no run ${run}`);
     const research = inst.mode === "research";
-    const contract = this.ledger.getContract(inst.campaign, inst.version) as {
+    const contract = this.ledger.contracts.get(inst.campaign, inst.version) as {
       title?: string;
       topic?: string;
       questions?: string[];
@@ -226,29 +185,32 @@ export class ResearchFolder {
       quality?: { min_independent_sources?: number };
     };
     for (const d of research
-      ? ["sources", "claims", "findings", "hypotheses", "notes", "report", "cards", "lanes", "work"]
-      : ["sources", "claims", "notes"])
+      ? [
+          "sources",
+          "claims",
+          "findings",
+          "hypotheses",
+          SOURCE_NOTES,
+          "report",
+          "cards",
+          "lanes",
+          "work",
+        ]
+      : ["sources", "claims", SOURCE_NOTES])
       mkdirSync(join(root, d), { recursive: true });
     this.showCompactions(run);
     // The campaign's brief from its author, whole (goal 078).
     const brief = briefFile(contract);
     if (brief) this.changed(join(root, BRIEF_FILE), brief);
     const briefLine = brief ? [`- ${BRIEF_FILE}: the campaign's brief from its author, whole`] : [];
-    this.knowledge?.show(run);
-    const knowledge = this.knowledge?.summary(run);
-    const knowledgeLine = knowledge
-      ? [
-          `- knowledge/: past research from the folders this campaign may read (${countsText(knowledge.counts)}, from ${knowledge.folders.join(", ")}); README.md there says what is where`,
-        ]
-      : [];
 
-    const sources = this.all("select * from source where run = ? order by fetched_at", run);
-    const urlOf = new Map(sources.map((s) => [String(s.id), String(s.url)]));
+    const sources = this.ledger.sources.list(run);
+    const urlOf = new Map(sources.map((s) => [s.id, s.url]));
     for (const s of sources)
       this.once(run, join(root, "sources", `${s.id}.txt`), () => {
         let text = "";
         try {
-          text = readFileSync(String(s.text_path), "utf8");
+          text = readFileSync(s.text_path, "utf8");
         } catch {
           text = "(the archived text is missing)";
         }
@@ -265,20 +227,15 @@ export class ResearchFolder {
       });
 
     const questions = contract.questions ?? [];
-    const claims = this.all("select * from claim where run = ? order by created_at", run);
+    const claims = this.ledger.claims.list(run).map(readClaim);
     for (const c of claims)
       this.once(run, join(root, "claims", `${c.id}.md`), () => {
-        const quotes = JSON.parse(String(c.quotes)) as {
-          source: string;
-          quote: string;
-          resolved_from?: string;
-        }[];
-        const problems = list(c.problems);
-        const q = c.question === null ? undefined : Number(c.question);
+        const { quotes, problems } = c;
+        const q = c.question === null ? undefined : c.question;
         return [
-          `# Claim ${c.id}: ${Number(c.verified) === 1 ? "verified" : "draft"}`,
+          `# Claim ${c.id}: ${c.verified ? "verified" : "draft"}`,
           "",
-          String(c.text),
+          c.text,
           "",
           ...(q !== undefined
             ? [`${questionLabel(q)}: ${questions[q] ?? "(no such question)"}`]
@@ -300,27 +257,27 @@ export class ResearchFolder {
         ].join("\n");
       });
 
-    const findings = this.all("select * from finding where run = ? order by created_at", run);
+    const findings = this.ledger.claims.findings(run).map(readFinding);
     for (const f of findings)
       this.once(run, join(root, "findings", `${f.id}.md`), () =>
         [
-          `# Finding ${f.id}: ${Number(f.supported) === 1 ? "supported" : "draft"}`,
+          `# Finding ${f.id}: ${f.supported ? "supported" : "draft"}`,
           "",
-          String(f.text),
+          f.text,
           "",
           "## Summary",
           "",
-          String(f.summary),
+          f.summary,
           "",
           "## Why it matters",
           "",
-          String(f.why_it_matters),
+          f.why_it_matters,
           "",
           "## Supporting claims",
           "",
-          ...list(f.supporting).map((id) => `- ${id} (claims/${id}.md)`),
-          ...(list(f.problems).length
-            ? ["", "## Why it is a draft", "", ...list(f.problems).map((p) => `- ${p}`)]
+          ...f.supporting.map((id) => `- ${id} (claims/${id}.md)`),
+          ...(f.problems.length
+            ? ["", "## Why it is a draft", "", ...f.problems.map((p) => `- ${p}`)]
             : []),
           "",
           `Recorded: ${f.created_at} by ${f.lane ?? "research"}`,
@@ -330,28 +287,28 @@ export class ResearchFolder {
 
     // The author's first, then promoted ones, the pool, merged and retired (goal 117); each file
     // follows its hypothesis's revisions.
-    const rank = (s: unknown) => {
-      const i = HYPOTHESIS_ORDER.indexOf(String(s));
+    const rank = (s: string) => {
+      const i = HYPOTHESIS_ORDER.indexOf(s);
       return i < 0 ? HYPOTHESIS_ORDER.length : i;
     };
-    const hypotheses = this.all(
-      "select * from hypothesis where run = ? order by created_at, rowid",
-      run,
-    ).sort((a, b) => rank(a.status) - rank(b.status));
-    const questionOf = (h: Row) =>
-      h.question === null || h.question === undefined
+    const hypotheses = this.ledger.hypotheses
+      .list(run)
+      .map(readHypothesis)
+      .sort((a, b) => rank(a.status) - rank(b.status));
+    const questionOf = (h: { question: number | null }) =>
+      h.question === null
         ? "the whole run"
-        : `${questionLabel(Number(h.question))}: ${clipWords(questions[Number(h.question)] ?? "(no such question)", 300)}`;
+        : `${questionLabel(h.question)}: ${clipWords(questions[h.question] ?? "(no such question)", 300)}`;
     for (const h of hypotheses)
       this.changed(
         join(root, "hypotheses", `${h.id}.md`),
         [
-          `# Hypothesis ${h.id}: ${hypothesisStatusWords(String(h.status), h.merged_into === null ? null : String(h.merged_into))}`,
+          `# Hypothesis ${h.id}: ${hypothesisStatusWords(h.status, h.merged_into)}`,
           "",
-          String(h.text),
+          h.text,
           "",
           `About: ${questionOf(h)}`,
-          `Supporting verified claims: ${list(h.supporting).join(", ") || "none"}`,
+          `Supporting verified claims: ${h.supporting.join(", ") || "none"}`,
           `Recorded: ${h.created_at} by ${h.lane ?? "the campaign's author"}`,
           ...(h.updated_at && h.updated_at !== h.created_at ? [`Changed: ${h.updated_at}`] : []),
           "",
@@ -360,37 +317,39 @@ export class ResearchFolder {
         ].join("\n"),
       );
 
-    const notes = this.all("select * from note where run = ? order by id", run);
+    const notes = this.ledger.claims.sourceNotes(run).map(readSourceNote);
     for (const n of notes)
-      this.once(run, join(root, "notes", `note-${String(n.id).padStart(5, "0")}.md`), () =>
-        [
-          `# Note ${n.id}`,
-          "",
-          String(n.text),
-          "",
-          `Sources: ${list(n.sources).join(", ") || "none"}`,
-          `Recorded: ${n.created_at} by ${n.lane ?? "research"}`,
-          "",
-        ].join("\n"),
+      this.once(
+        run,
+        join(root, SOURCE_NOTES, `source-note-${String(n.id).padStart(5, "0")}.md`),
+        () =>
+          [
+            `# Source note ${n.id}`,
+            "",
+            n.text,
+            "",
+            `Sources: ${n.sources.join(", ") || "none"}`,
+            `Recorded: ${n.created_at} by ${n.lane ?? "research"}`,
+            "",
+          ].join("\n"),
       );
 
-    const verified = claims.filter((c) => Number(c.verified) === 1).length;
+    const verified = claims.filter((c) => c.verified).length;
     if (!research) {
-      // A hill-climb or goal run: what its trials recorded, and past research.
+      // A hill-climb or goal run: what its trials recorded.
       this.changed(
         join(root, "INDEX.md"),
         [
           `# ${contract.title ?? run}`,
           "",
-          "This folder holds the sources, claims and notes this run's workers recorded, and past research from the folders its campaign may read. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
+          "This folder holds the sources, claims and source notes this run's workers recorded. The harness writes it from its records and keeps it current. Every worker can read and search all of it, and change none of it.",
           "",
           "## What is here",
           "",
           `- sources/: ${sources.length} archived pages as text, one file each (claims quote these words)`,
           `- claims/: ${claims.length} claims, ${verified} verified and ${claims.length - verified} drafts (the first line says which)`,
-          `- notes/: ${notes.length}`,
+          `- ${SOURCE_NOTES}/: ${notes.length}`,
           ...briefLine,
-          ...knowledgeLine,
           "",
         ].join("\n"),
       );
@@ -398,12 +357,10 @@ export class ResearchFolder {
     }
 
     // Each question's answer card (goal 117), whole, with its earlier versions: cards/q<index>.md.
-    const claimText = new Map(claims.map((c) => [String(c.id), String(c.text)]));
+    const claimText = new Map(claims.map((c) => [c.id, c.text]));
     const cardRows = questions.map((_, i) => cardHistory(this.ledger, run, i));
     const verifiedOf = (i: number) =>
-      claims.filter(
-        (c) => Number(c.verified) === 1 && c.question !== null && Number(c.question) === i,
-      ).length;
+      claims.filter((c) => c.verified && c.question !== null && c.question === i).length;
     for (const [i, history] of cardRows.entries())
       this.changed(
         join(root, cardPath(i)),
@@ -412,17 +369,14 @@ export class ResearchFolder {
         ),
       );
 
-    const sections = this.all("select * from report_section where run = ? order by name", run);
+    const sections = this.ledger.reports.sections(run);
     for (const s of sections)
       this.changed(
-        join(root, sectionPath(String(s.name))),
+        join(root, sectionPath(s.name)),
         `# ${s.name}\n\n${s.body}\n\nUpdated: ${s.updated_at} by ${s.updated_by}\n`,
       );
 
-    const report = this.all(
-      "select kind, body, created_at from report_version where run = ? order by id desc limit 1",
-      run,
-    )[0];
+    const report = this.ledger.reports.newest(run);
     this.changed(
       join(root, "REPORT.md"),
       report
@@ -450,13 +404,7 @@ export class ResearchFolder {
         : [];
 
     // The newest state of each file each lane wrote.
-    const files = this.all(
-      `select f.lane, f.path, f.bytes, f.recorded_at from research_file f
-        where f.run = ? and f.change = 'written' and f.id = (
-          select max(g.id) from research_file g where g.run = f.run and g.lane = f.lane and g.path = f.path)
-        order by f.lane, f.path`,
-      run,
-    );
+    const files = this.ledger.laneFiles.current(run, "path");
     this.changed(
       join(root, "INDEX.md"),
       [
@@ -471,7 +419,7 @@ export class ResearchFolder {
         "",
         ...questions.map(
           (q, i) =>
-            `- ${questionLabel(i)}: ${q.replace(/\n/g, "\n  ")} (${claims.filter((c) => Number(c.verified) === 1 && Number(c.question) === i).length} verified claims)`,
+            `- ${questionLabel(i)}: ${q.replace(/\n/g, "\n  ")} (${claims.filter((c) => c.verified && Number(c.question) === i).length} verified claims)`,
         ),
         "",
         "## What is here",
@@ -481,13 +429,12 @@ export class ResearchFolder {
         ...briefLine,
         `- sources/: ${sources.length} archived pages as text, one file each (claims quote these words)`,
         `- claims/: ${claims.length} claims, ${verified} verified and ${claims.length - verified} drafts (the first line says which)`,
-        `- findings/: ${findings.length} findings (${findings.filter((f) => Number(f.supported) === 1).length} supported)`,
+        `- findings/: ${findings.length} findings (${findings.filter((f) => f.supported).length} supported)`,
         `- hypotheses/: ${hypotheses.length} (${hypotheses.filter((h) => REQUIRED_HYPOTHESES.some((s) => s === h.status)).length} that need a verdict, ${hypotheses.filter((h) => h.status === "pool").length} in the pool)`,
-        `- notes/: ${notes.length}`,
+        `- ${SOURCE_NOTES}/: ${notes.length}`,
         `- report/: ${sections.length} report sections`,
         `- cards/: one answer card for each question, whole with its earlier versions (cards/q0.md for question 1 (index 0), and so on); workers never edit them`,
         `- lanes/: the files each lane wrote, as they were when its last trial ended (${files.length} files)`,
-        ...knowledgeLine,
         "",
         "## Answer cards",
         "",
@@ -505,7 +452,7 @@ export class ResearchFolder {
         ...(findings.length
           ? findings.map(
               (f) =>
-                `- ${f.id} (${Number(f.supported) === 1 ? "supported" : "draft"}): ${String(f.text).replace(/\s+/g, " ").slice(0, 300)}`,
+                `- ${f.id} (${f.supported ? "supported" : "draft"}): ${f.text.replace(/\s+/g, " ").slice(0, 300)}`,
             )
           : ["None yet."]),
         "",
@@ -516,7 +463,7 @@ export class ResearchFolder {
         ...(hypotheses.length
           ? hypotheses.map(
               (h) =>
-                `- ${h.id} (${hypothesisStatusWords(String(h.status), h.merged_into === null ? null : String(h.merged_into))}; ${h.question === null ? "the whole run" : questionLabel(Number(h.question))}): ${clipWords(String(h.text), 300)}`,
+                `- ${h.id} (${hypothesisStatusWords(h.status, h.merged_into)}; ${h.question === null ? "the whole run" : questionLabel(h.question)}): ${clipWords(h.text, 300)}`,
             )
           : ["None yet."]),
         "",
@@ -548,6 +495,13 @@ export class ResearchFolder {
     return shown;
   }
 
+  /** A file of the run's records kept in the outbox for the knowledge base, by its SHA-256. */
+  kbFile(bytes: Uint8Array, name: string, type: string): KbItemFile {
+    const file = kbFileFacts(bytes, { name, type });
+    keepKbFile(this.outboxDir, bytes, file);
+    return file;
+  }
+
   /** The folder the kept conversations are shown in, as the agents see it (made when one is kept). */
   compactionsDir(run: string): string {
     return join(this.root(run), COMPACTIONS_DIR);
@@ -559,8 +513,25 @@ export class ResearchFolder {
     return readFileSync(join(this.stateRoot, run, COMPACTIONS_DIR, name), "utf8");
   }
 
-  /** The kept conversations under compactions/, where scratch lost them (after a restart). */
+  /**
+   * The conversations an earlier harness kept before it scrubbed them, scrubbed by shape once
+   * (kept.ts): the run's, or every run's as the harness starts. How many the scrub changed.
+   */
+  scrubKept(run?: string): number {
+    const runs = run ? [run] : existsSync(this.stateRoot) ? readdirSync(this.stateRoot) : [];
+    let changed = 0;
+    for (const r of runs.filter((x) => SAFE.test(x)))
+      changed += scrubKeptFiles(
+        r,
+        join(this.stateRoot, r, COMPACTIONS_DIR),
+        join(this.root(r), COMPACTIONS_DIR),
+      );
+    return changed;
+  }
+
+  /** The kept conversations under compactions/, scrubbed, where scratch lost them (after a restart). */
   private showCompactions(run: string): void {
+    this.scrubKept(run);
     const kept = join(this.stateRoot, run, COMPACTIONS_DIR);
     if (!existsSync(kept)) return;
     for (const name of readdirSync(kept)) {
@@ -602,8 +573,8 @@ export class ResearchFolder {
    * A lane's trial has ended (its processes are gone): its working area is taken back, its files
    * saved and recorded (what changed since the last save), and shown to the other lanes. Each
    * text file it wrote (UTF-8, up to DOC_MAX_BYTES) is also a document of the run: one
-   * `research_doc` event with its text, cut to an item's length, which the campaign's folder in
-   * the knowledge base keeps; a document taken out of the area is said removed the same way.
+   * `research_doc` event that names the file, kept whole in the outbox for the campaign's
+   * collection in the knowledge base; a document taken out of the area is said removed the same way.
    */
   async captureLane(
     run: string,
@@ -621,35 +592,42 @@ export class ResearchFolder {
       ? (JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, SavedFile>)
       : {};
     const tmp = `${saved}.tmp-${randomUUID().slice(0, 8)}`;
-    const now: Map<string, SavedFile> = copyTree(work, tmp);
-    // The documents: text files, read from the saved copy (the lane can no longer change it).
-    const docs = new Map<string, { text: string; clipped: boolean }>();
+    let now: Map<string, SavedFile>;
+    try {
+      now = copyTree(work, tmp);
+    } catch (err) {
+      rmSync(tmp, { recursive: true, force: true });
+      if (!(err instanceof LaneCopyRefused)) throw err;
+      throw new Error(
+        `${lane}'s files are not saved: its working area holds ${err.message}. They stay in its working area for its next trials, until the rig restarts`,
+      );
+    }
+    // The documents: text files, read from the saved copy (the lane can no longer change it),
+    // each kept whole in the outbox for the knowledge base, by its SHA-256.
+    const docs = new Map<string, KbItemFile>();
     for (const [rel, f] of now) {
       if (before[rel]?.sha256 === f.sha256) {
         if (before[rel]?.doc) f.doc = true;
         continue;
       }
-      const text = f.bytes <= DOC_MAX_BYTES ? textOf(readNoFollow(join(tmp, rel))) : undefined;
-      if (text === undefined) continue;
+      const data = f.bytes <= DOC_MAX_BYTES ? readNoFollow(join(tmp, rel)) : undefined;
+      if (!data || textOf(data) === undefined) continue;
       f.doc = true;
-      docs.set(rel, {
-        text: text.length > KB_BODY_MAX ? `${text.slice(0, KB_BODY_MAX - 1)}…` : text,
-        clipped: text.length > KB_BODY_MAX,
-      });
+      const type = /\.(md|markdown)$/i.test(rel) ? "text/markdown" : "text/plain";
+      const file = kbFileFacts(data, { name: basename(rel), type });
+      keepKbFile(this.outboxDir, data, file);
+      docs.set(rel, file);
     }
-    const at = new Date().toISOString();
+    const changes: LaneFileChange[] = [];
     let written = 0;
     let removed = 0;
     this.ledger.tx(() => {
-      const add = this.ledger.db.prepare(
-        "insert into research_file (run, lane, trial, path, change, bytes, sha256, recorded_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
-      );
       for (const [rel, f] of now) {
         if (before[rel]?.sha256 === f.sha256) continue;
-        add.run(run, lane, trial, rel, "written", f.bytes, f.sha256, at);
+        changes.push({ path: rel, change: "written", bytes: f.bytes, sha256: f.sha256 });
         written++;
-        const doc = docs.get(rel);
-        if (doc)
+        const file = docs.get(rel);
+        if (file)
           this.ledger.appendEvent(lane, "research_doc", run, {
             lane,
             trial,
@@ -657,13 +635,12 @@ export class ResearchFolder {
             change: "written",
             bytes: f.bytes,
             sha256: f.sha256,
-            text: doc.text,
-            ...(doc.clipped ? { clipped: true } : {}),
+            file,
           });
       }
       for (const [rel, f] of Object.entries(before)) {
         if (now.has(rel)) continue;
-        add.run(run, lane, trial, rel, "removed", null, null, at);
+        changes.push({ path: rel, change: "removed", bytes: null, sha256: null });
         removed++;
         if (f.doc)
           this.ledger.appendEvent(lane, "research_doc", run, {
@@ -673,6 +650,7 @@ export class ResearchFolder {
             change: "removed",
           });
       }
+      this.ledger.laneFiles.record(run, lane, trial, changes);
       if (written || removed)
         this.ledger.appendEvent(lane, "research_files_saved", run, {
           trial,
@@ -695,9 +673,10 @@ export class ResearchFolder {
   }
 
   /**
-   * The folder for an export, without the working areas and without past research (knowledge/
-   * holds other runs' records, which their own exports carry): rebuilt from the records and the
-   * saved files when scratch was cleared. Relative paths of its regular files.
+   * The folder for an export, without the working areas and without knowledge/, where an older
+   * harness copied past research (other runs' records, which their own exports carry): rebuilt
+   * from the records and the saved files when scratch was cleared. Relative paths of its regular
+   * files.
    */
   exportFiles(run: string): { root: string; files: string[] } {
     const root = this.sync(run);

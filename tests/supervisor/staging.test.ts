@@ -1,20 +1,25 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { serve } from "@hono/node-server";
-import { createControlApi } from "../../src/control/api.ts";
-import { KitRepos } from "../../src/control/kit-repos.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { generateSigningKeys, type SignedCommand } from "../../src/core/commands.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
-import { relayOnce } from "../../src/supervisor/relay.ts";
-import { type StageResult, stageCommand } from "../../src/supervisor/staging.ts";
+import { KitRepos } from "../../src/control/kits/repos.ts";
+import type { SignedCommand } from "../../src/core/commands.ts";
+import { type StageResult, stageCommand, stageSigned } from "../../src/supervisor/staging.ts";
+import { controlOnly, controlStack } from "../helpers/control-stack.ts";
 import { makeJudgeEnv } from "../helpers/judge-env.ts";
 
 const git = (cwd: string, ...args: string[]) =>
@@ -53,11 +58,13 @@ function setup() {
   const root = mkdtempSync(join(tmpdir(), "thermite-stage-"));
   const inboxDir = join(root, "inbox");
   mkdirSync(inboxDir);
+  // The tests' repositories are on this disk, and their files are served on this machine.
   const cfg = {
     rig: "rig-a",
     inboxDir,
     resultsRepo: join(root, "home", "results.git"),
     sourcesDir: join(root, "home", "sources"),
+    localSources: true,
   };
   return { root, inboxDir, cfg };
 }
@@ -71,12 +78,10 @@ describe("staging sources by reference", () => {
       { "kit.json": Buffer.from("{}\n"), "run/run.sh": Buffer.from("echo run\n") },
       "written on the page",
     );
-    const control = createControlApi(
-      new ControlStore(":memory:"),
-      { admin: "owner-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } },
-      generateSigningKeys().privateKeyPem,
-      { staleAfterMs: 180_000, kits },
-    );
+    const { control } = controlOnly({
+      tokens: { admin: "owner-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } },
+      options: { kits },
+    });
     const server = serve({ fetch: control.fetch, hostname: "127.0.0.1", port: 0 });
     await new Promise((r) => server.once("listening", r));
     const controlUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -114,6 +119,7 @@ describe("staging sources by reference", () => {
 
   test("a project's commit is fetched from its repository and lands in the inbox as a bundle", async () => {
     const { root, inboxDir, cfg } = setup();
+    chmodSync(inboxDir, 0o755);
     const repo = join(root, "project");
     mkdirSync(repo);
     git(repo, "init", "--quiet", "-b", "main");
@@ -140,6 +146,34 @@ describe("staging sources by reference", () => {
     assert.match(heads, new RegExp(`^${first} refs/thermite/stage/${first}$`));
     // Already there: the next command naming it relays at once, without fetching.
     assert.equal(await stageCommand(cfg, assign("c-2", imports)), "ready");
+    // Under compose and on a machine the inbox lets other users in (the harness's controller is
+    // one of them): the bundle does too.
+    assert.equal(statSync(bundle).mode & 0o777, 0o644);
+  });
+
+  test("a bundle in an inbox closed to other users is read by the inbox's group only", async () => {
+    const { root, inboxDir, cfg } = setup();
+    // As the one-container image and a cluster's volume have it: the supervisor's, with the
+    // controller's group, closed to everyone else.
+    chmodSync(inboxDir, 0o2750);
+    const repo = join(root, "kit");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "-b", "main");
+    writeFileSync(join(repo, "kit.json"), "{}\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "--quiet", "-m", "kit");
+    const commit = git(repo, "rev-parse", "HEAD");
+    const imports = [
+      {
+        kind: "kit_bundle",
+        path: "repos/kit.bundle",
+        repo: "kit",
+        commit,
+        source: { git: `file://${repo}` },
+      },
+    ];
+    assert.equal(await staged(cfg, assign("k-closed", imports)), "ready");
+    assert.equal(statSync(join(inboxDir, "repos", "kit.bundle")).mode & 0o777, 0o640);
   });
 
   test("a model is downloaded and kept only with the signed hash; a missing commit fails", async () => {
@@ -186,6 +220,118 @@ describe("staging sources by reference", () => {
     }
   });
 
+  test("a command's sources are fetched only once the harness says control signed it", async () => {
+    const { root, inboxDir, cfg } = setup();
+    const repo = join(root, "project");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "one\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "--quiet", "-m", "one");
+    const commit = git(repo, "rev-parse", "HEAD");
+    const imports = [
+      {
+        kind: "repo_bundle",
+        path: "repos/p.bundle",
+        repo: "p",
+        commit,
+        source: { git: `file://${repo}` },
+      },
+    ];
+    const asked: string[] = [];
+    const refuse = async (c: SignedCommand) => {
+      asked.push(c.envelope.id);
+      return "bad signature";
+    };
+    // Refused: nothing is fetched, and the command goes on to the harness, which refuses it again.
+    assert.equal(await stageSigned(cfg, assign("forged-1", imports), refuse), "ready");
+    assert.deepEqual(asked, ["forged-1"]);
+    assert.ok(!existsSync(join(inboxDir, "repos", "p.bundle")));
+    assert.ok(!existsSync(cfg.sourcesDir), "no source was fetched");
+    // Signed: staged, and the harness is asked once however often staging is asked again.
+    const sign = async (c: SignedCommand) => {
+      asked.push(c.envelope.id);
+      return undefined;
+    };
+    let r: StageResult = "wait";
+    for (let i = 0; i < 200 && r === "wait"; i++) {
+      r = await stageSigned(cfg, assign("signed-1", imports), sign);
+      if (r === "wait") await new Promise((res) => setTimeout(res, 50));
+    }
+    assert.equal(r, "ready");
+    assert.deepEqual(asked, ["forged-1", "signed-1"]);
+    assert.ok(existsSync(join(inboxDir, "repos", "p.bundle")));
+    // A kind with no content to stage is not asked about.
+    const pause = {
+      ...assign("p-1", []),
+      envelope: { ...assign("p-1", []).envelope, kind: "pause_run" },
+    };
+    assert.equal(await stageSigned(cfg, pause as SignedCommand, refuse), "ready");
+    assert.deepEqual(asked, ["forged-1", "signed-1"]);
+  });
+
+  test("a source on the rig's own disk is refused, and a source with no Git access is offered no key", async () => {
+    const { root, inboxDir } = setup();
+    const repo = join(root, "project");
+    mkdirSync(repo);
+    git(repo, "init", "--quiet", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "one\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "--quiet", "-m", "one");
+    const commit = git(repo, "rev-parse", "HEAD");
+    const results = join(root, "results-key");
+    writeFileSync(results, "not a real key\n", { mode: 0o600 });
+    // As a rig runs it: no tests' switch, and the results repository's deploy key at hand.
+    const cfg = {
+      rig: "rig-a",
+      inboxDir,
+      resultsRepo: join(root, "home", "results.git"),
+      sourcesDir: join(root, "home", "sources"),
+      sshKeyFile: results,
+    };
+    const local = await staged(
+      cfg,
+      assign("f-1", [
+        {
+          kind: "repo_bundle",
+          path: "repos/f.bundle",
+          repo: "f",
+          commit,
+          source: { git: `file://${repo}` },
+        },
+      ]),
+    );
+    assert.match(JSON.stringify(local), /a file:\/\/ source is refused/);
+    assert.ok(!existsSync(join(inboxDir, "repos", "f.bundle")));
+    // An SSH source that names no access: the ssh git runs (a stand-in on PATH) gets no key.
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    const said = join(root, "ssh-args");
+    writeFileSync(join(bin, "ssh"), `#!/bin/sh\necho "$@" >> '${said}'\nexit 1\n`, { mode: 0o755 });
+    const path = process.env.PATH;
+    process.env.PATH = `${bin}:${path}`;
+    try {
+      const ssh = await staged(
+        cfg,
+        assign("s-1", [
+          {
+            kind: "repo_bundle",
+            path: "repos/s.bundle",
+            repo: "s",
+            commit,
+            source: { git: "ssh://git@source.example/s.git" },
+          },
+        ]),
+      );
+      assert.match(JSON.stringify(ssh), /staging:/);
+    } finally {
+      process.env.PATH = path;
+    }
+    const args = readFileSync(said, "utf8");
+    assert.match(args, /PubkeyAuthentication=no/);
+    assert.ok(!args.includes(results), args);
+  });
+
   test("a command transport is never run, whatever the URL says", async () => {
     const { root, cfg } = setup();
     const marker = join(root, "ran");
@@ -206,21 +352,8 @@ describe("staging sources by reference", () => {
   });
 
   test("a project in a folder of its repository: the rig fetches the repository and starts from the folder", async () => {
-    const env = makeJudgeEnv({ folder: "examples/sum" });
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      { admin: "admin-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } },
-      env.keys.privateKeyPem,
-    );
-    const harness = createHarnessApi(env.service, { supervisor: "s-token-abcdef" });
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = new URL(String(input));
-      return (url.host === "harness" ? harness : control).request(
-        `${url.pathname}${url.search}`,
-        init as RequestInit,
-      );
-    };
+    const s = controlStack({ env: makeJudgeEnv({ folder: "examples/sum" }) });
+    const { env, store } = s;
     const payload = (env.assign as unknown as SignedCommand).envelope.payload as Record<
       string,
       unknown
@@ -229,32 +362,28 @@ describe("staging sources by reference", () => {
       (payload.contract as { project: { folder?: string } }).project.folder,
       "examples/sum",
     );
-    const r = await control.request("/v1/commands", {
-      method: "POST",
-      headers: { authorization: "Bearer admin-token-abcdef", "content-type": "application/json" },
-      body: JSON.stringify({
-        rig: "rig-a",
-        kind: "assign_campaign",
-        payload: {
-          ...payload,
-          imports: [
-            {
-              kind: "repo_bundle",
-              path: "repos/folder-project.bundle",
-              repo: "proj",
-              commit: env.seed,
-              source: { git: `file://${join(env.root, "project")}` },
-            },
-            {
-              kind: "kit_bundle",
-              path: "repos/folder-kit.bundle",
-              repo: "js-kit",
-              commit: env.kitCommit,
-              source: { git: `file://${join(env.root, "kit")}` },
-            },
-          ],
-        },
-      }),
+    const r = await s.api("POST", "/v1/commands", {
+      rig: "rig-a",
+      kind: "assign_campaign",
+      payload: {
+        ...payload,
+        imports: [
+          {
+            kind: "repo_bundle",
+            path: "repos/folder-project.bundle",
+            repo: "proj",
+            commit: env.seed,
+            source: { git: `file://${join(env.root, "project")}` },
+          },
+          {
+            kind: "kit_bundle",
+            path: "repos/folder-kit.bundle",
+            repo: "js-kit",
+            commit: env.kitCommit,
+            source: { git: `file://${join(env.root, "kit")}` },
+          },
+        ],
+      },
     });
     assert.equal(r.status, 201, await r.clone().text());
     const id = ((await r.json()) as { id: string }).id;
@@ -263,27 +392,23 @@ describe("staging sources by reference", () => {
       inboxDir: env.paths.inboxDir,
       resultsRepo: join(env.root, "supervisor", "results.git"),
       sourcesDir: join(env.root, "supervisor", "sources"),
+      localSources: true,
     };
-    const cfg = {
-      rig: "rig-a",
-      harnessUrl: "http://harness",
-      harnessToken: "s-token-abcdef",
-      controlUrl: "http://control",
-      controlToken: "rig-token-abcdef",
-      fetchImpl,
-      stage: (cmd: SignedCommand) => stageCommand(stagingCfg, cmd),
-    };
-    let state = { cursor: 0 };
-    for (let i = 0; i < 200 && store.command(id)?.status === "pending"; i++) {
-      state = await relayOnce(cfg, state);
+    s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
+    for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
+      await s.relay();
       await new Promise((res) => setTimeout(res, 25));
     }
-    assert.equal(store.command(id)?.status, "delivered", JSON.stringify(store.command(id)));
+    assert.equal(
+      store.commands.get(id)?.status,
+      "delivered",
+      JSON.stringify(store.commands.get(id)),
+    );
     // The supervisor fetched the whole repository's commit, which the harness checked.
     const bundle = join(env.paths.inboxDir, "repos", "folder-project.bundle");
     assert.match(git(env.root, "bundle", "list-heads", bundle), new RegExp(`^${env.seed} `));
     // The run starts from the folder: its tree, and none of the repository's other files.
-    const start = env.ledger.getRun("js-1")?.seed_commit ?? "";
+    const start = env.ledger.runs.get("js-1")?.seed_commit ?? "";
     const mirror = env.service.mirrorFor("proj");
     assert.equal(
       git(mirror, "rev-parse", `${start}^{tree}`),
@@ -294,35 +419,22 @@ describe("staging sources by reference", () => {
       "src",
     ]);
     // The rig's answer names where the run starts.
-    const outcome = store.command(id)?.outcome as { result?: { start?: unknown } };
+    const outcome = store.commands.get(id)?.outcome as { result?: { start?: unknown } };
     assert.deepEqual(outcome.result?.start, { folder: "examples/sum", commit: start });
   });
 
   test("an assignment that names its project and kit by URL starts a run, with nothing put in the inbox by hand", async () => {
-    const env = makeJudgeEnv();
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      { admin: "admin-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } },
-      env.keys.privateKeyPem,
-    );
-    const harness = createHarnessApi(env.service, { supervisor: "s-token-abcdef" });
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = new URL(String(input));
-      return (url.host === "harness" ? harness : control).request(
-        `${url.pathname}${url.search}`,
-        init as RequestInit,
-      );
-    };
+    const s = controlStack();
+    const { env, store } = s;
     const payload = (env.assign as unknown as SignedCommand).envelope.payload as Record<
       string,
       unknown
     >;
     const issue = async (body: Record<string, unknown>) => {
-      const r = await control.request("/v1/commands", {
-        method: "POST",
-        headers: { authorization: "Bearer admin-token-abcdef", "content-type": "application/json" },
-        body: JSON.stringify({ rig: "rig-a", kind: "assign_campaign", payload: body }),
+      const r = await s.api("POST", "/v1/commands", {
+        rig: "rig-a",
+        kind: "assign_campaign",
+        payload: body,
       });
       assert.equal(r.status, 201, await r.clone().text());
       return ((await r.json()) as { id: string }).id;
@@ -352,23 +464,19 @@ describe("staging sources by reference", () => {
       inboxDir: env.paths.inboxDir,
       resultsRepo: join(env.root, "supervisor", "results.git"),
       sourcesDir: join(env.root, "supervisor", "sources"),
+      localSources: true,
     };
-    const cfg = {
-      rig: "rig-a",
-      harnessUrl: "http://harness",
-      harnessToken: "s-token-abcdef",
-      controlUrl: "http://control",
-      controlToken: "rig-token-abcdef",
-      fetchImpl,
-      stage: (cmd: SignedCommand) => stageCommand(stagingCfg, cmd),
-    };
-    let state = { cursor: 0 };
-    for (let i = 0; i < 200 && store.command(id)?.status === "pending"; i++) {
-      state = await relayOnce(cfg, state);
-      await new Promise((r) => setTimeout(r, 25));
+    s.cfg.stage = (cmd: SignedCommand) => stageCommand(stagingCfg, cmd);
+    for (let i = 0; i < 200 && store.commands.get(id)?.status === "pending"; i++) {
+      await s.relay();
+      await new Promise((res) => setTimeout(res, 25));
     }
-    assert.equal(store.command(id)?.status, "delivered", JSON.stringify(store.command(id)));
-    assert.equal(env.ledger.getRun("js-1")?.status, "running");
+    assert.equal(
+      store.commands.get(id)?.status,
+      "delivered",
+      JSON.stringify(store.commands.get(id)),
+    );
+    assert.equal(env.ledger.runs.get("js-1")?.status, "running");
     assert.ok(existsSync(join(env.paths.inboxDir, "repos", "fetched-project.bundle")));
     assert.ok(existsSync(join(env.paths.inboxDir, "repos", "fetched-kit.bundle")));
   });

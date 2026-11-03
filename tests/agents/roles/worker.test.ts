@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, type TestContext, test } from "node:test";
 import { type CommandKind, signEnvelope } from "../../../src/core/commands.ts";
-import { Scheduler } from "../../../src/harness/agents/scheduler.ts";
+import { Scheduler } from "../../../src/harness/agents/scheduler/index.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
+import { briefText } from "../../helpers/brief-text.ts";
 import { startFakeModel } from "../../helpers/fake-model.ts";
 import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 
@@ -51,7 +52,8 @@ async function briefOfOneTrial(t: TestContext): Promise<string> {
   const env = makeJudgeEnv({
     lanes: { count: 1, trials_per_epoch: 1 },
     contract: {
-      notes: "The kernel sums a list. Earlier work found the loop bound by memory reads.",
+      additional_information:
+        "The kernel sums a list. Earlier work found the loop bound by memory reads.",
       ideas: ["unroll the loop"],
       links: ["https://example.com/sum"],
     },
@@ -85,12 +87,12 @@ async function briefOfOneTrial(t: TestContext): Promise<string> {
         {
           name: "submit_plan",
           args: {
-            new_families: [{ id: "speed", description: "make the sum faster" }],
+            new_directions: [{ id: "speed", description: "make the sum faster" }],
             assignments: [
               {
                 lane: "lane-1",
                 experiment,
-                family: "speed",
+                direction: "speed",
                 parent: "champion",
                 why: "the teacher's idea fits the loop's cost",
               },
@@ -111,7 +113,7 @@ async function briefOfOneTrial(t: TestContext): Promise<string> {
     backoffBaseMs: 0,
     backoffMaxMs: 0,
     runTrial: async (spec) => {
-      briefs.push(spec.brief);
+      briefs.push(briefText(spec.brief));
       return { stopped: "no_submission", turns: 1, toolCalls: 0, tokensIn: 0, tokensOut: 0 };
     },
   });

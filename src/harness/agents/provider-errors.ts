@@ -1,4 +1,8 @@
-import { CHATGPT_LIMIT_CODE, CHATGPT_LIMIT_WAIT_MS } from "./model.ts";
+import { z } from "zod";
+import { CHATGPT_LIMIT_CODE, type ProviderAnswer, retryAtFrom } from "../../agents/model/index.ts";
+
+/** When a provider said to try again, read alike by the advisors (agents/model/retry.ts). */
+export { durationMs, type ProviderAnswer, retryAtFrom } from "../../agents/model/index.ts";
 
 /**
  * A model provider's errors, by kind (goal 079). Each kind has its own answer:
@@ -10,8 +14,8 @@ import { CHATGPT_LIMIT_CODE, CHATGPT_LIMIT_WAIT_MS } from "./model.ts";
  *   serve on this key. Nothing gets better by trying again: the run's agents stop and the run shows
  *   in Needs you with the provider's own words, until a model check passes again.
  * - `server`: the provider (or the way to it) failed for now, a 5xx, a broken connection, or a
- *   stream that sent no data for THERMITE_MODEL_STALL_SECONDS (model-stall.ts). The agent waits a
- *   growing pause and goes on in the same conversation.
+ *   stream that sent no data for THERMITE_MODEL_STALL_SECONDS (agents/model/stall.ts). The agent
+ *   waits a growing pause and goes on in the same conversation.
  * - `context`: the request was longer than the model's window: the conversation is compacted.
  * - `model`: anything else, such as a request the provider refused as malformed. The agent is told
  *   the call failed and goes on.
@@ -24,14 +28,16 @@ import { CHATGPT_LIMIT_CODE, CHATGPT_LIMIT_WAIT_MS } from "./model.ts";
  * Only an error that came from a call to the provider is sorted here: the words of a local failure
  * (a workspace that could not be set up, a program that exited) are not the provider's.
  */
-export type ProviderErrorKind =
-  | "rate_limit"
-  | "credits"
-  | "auth"
-  | "route"
-  | "server"
-  | "context"
-  | "model";
+export const PROVIDER_ERROR_KINDS = [
+  "rate_limit",
+  "credits",
+  "auth",
+  "route",
+  "server",
+  "context",
+  "model",
+] as const;
+export type ProviderErrorKind = (typeof PROVIDER_ERROR_KINDS)[number];
 
 export interface ProviderError {
   kind: ProviderErrorKind;
@@ -41,12 +47,6 @@ export interface ProviderError {
   words: string;
   /** When the provider said to try again (ISO), for a rate limit that gave one. */
   retryAt?: string | undefined;
-}
-
-/** What a provider's answer showed besides its text: its status and its headers. */
-export interface ProviderAnswer {
-  status?: number | undefined;
-  headers?: Record<string, string | undefined> | undefined;
 }
 
 /** The kinds after which the run's agents stop until a model check passes. */
@@ -70,11 +70,12 @@ export const FAILING_SAID = `no model call worked for ${FAILING_STOP_MS / 60_000
  * A trial's failing model calls when it ended (goal 079): since when they failed with no call that
  * worked between them (ISO), and the newest one's kind and the provider's words.
  */
-export interface TrialFailing {
-  since: string;
-  kind: ProviderErrorKind;
-  words: string;
-}
+export const TrialFailing = z.object({
+  since: z.string(),
+  kind: z.enum(PROVIDER_ERROR_KINDS),
+  words: z.string(),
+});
+export type TrialFailing = z.infer<typeof TrialFailing>;
 
 /** A trial's failed model calls in a row, and since when they have failed (goal 079). */
 export interface FailureCount {
@@ -135,7 +136,10 @@ const RATE =
   /rate[_ ]?limit|too many requests|resource[_ ]exhausted|slow down|usage limit|requests per (minute|day)|tokens per (minute|day)/i;
 const CONTEXT =
   /context[_ ]?(length|window)|too long|maximum (context )?length|prompt is too long|exceeds? (the )?(model'?s? )?(context|maximum)|too many tokens/i;
-/** A server error: also a model call broken off because its stream went silent (model-stall.ts). */
+/**
+ * A server error: also a model call broken off because its stream went silent
+ * (agents/model/stall.ts).
+ */
 const SERVER =
   /stream went silent|overloaded|bad gateway|service unavailable|gateway time-?out|internal server error|server error|upstream|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|EPIPE|socket hang up|fetch failed|network|could not be reached|connection (error|reset|refused|closed)|timed? ?out|deadline exceeded|terminated|broke off|temporarily unavailable/i;
 
@@ -147,106 +151,6 @@ export function statusIn(text: string): number | undefined {
     /\b(\d{3}) status code\b/i.exec(text);
   const n = m ? Number(m[1]) : Number.NaN;
   return n >= 400 && n < 600 ? n : undefined;
-}
-
-/** A duration such as "20s", "1m30s", "6m0s", "250ms" or "1.5h", in milliseconds. */
-export function durationMs(raw: string): number | undefined {
-  const s = raw.trim();
-  if (/^\d+(\.\d+)?$/.test(s)) return Number(s) * 1000;
-  const units: Record<string, number> = {
-    ms: 1,
-    s: 1000,
-    sec: 1000,
-    secs: 1000,
-    second: 1000,
-    seconds: 1000,
-    m: 60_000,
-    min: 60_000,
-    mins: 60_000,
-    minute: 60_000,
-    minutes: 60_000,
-    h: 3_600_000,
-    hr: 3_600_000,
-    hour: 3_600_000,
-    hours: 3_600_000,
-  };
-  let total = 0;
-  let any = false;
-  const re = /(\d+(?:\.\d+)?)\s*(ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hr|h)(?![a-z])/gi;
-  for (const m of s.matchAll(re)) {
-    const unit = units[(m[2] as string).toLowerCase()];
-    if (unit === undefined) continue;
-    total += Number(m[1]) * unit;
-    any = true;
-  }
-  return any ? Math.round(total) : undefined;
-}
-
-function header(h: ProviderAnswer["headers"], name: string): string | undefined {
-  if (!h) return undefined;
-  const v = h[name] ?? h[name.toLowerCase()];
-  return v === undefined || v === "" ? undefined : v;
-}
-
-/**
- * When the provider said to try again, from its answer's headers (Retry-After in seconds or as a
- * date, retry-after-ms, OpenAI's x-ratelimit-reset-*, Anthropic's anthropic-ratelimit-*-reset, an
- * epoch in x-ratelimit-reset) or its words ("try again in 20s", "retry after 30 seconds", "resets
- * at 2026-10-22T03:00:00Z"). The latest time any of them names: the limit that was hit is not said.
- */
-export function retryAtFrom(
-  text: string,
-  headers?: ProviderAnswer["headers"],
-  now = Date.now(),
-): string | undefined {
-  const times: number[] = [];
-  const ra = header(headers, "retry-after");
-  if (ra) {
-    if (/^\d+(\.\d+)?$/.test(ra.trim())) times.push(now + Number(ra) * 1000);
-    else if (!Number.isNaN(Date.parse(ra))) times.push(Date.parse(ra));
-  }
-  const ms = header(headers, "retry-after-ms");
-  if (ms && /^\d+(\.\d+)?$/.test(ms.trim())) times.push(now + Number(ms));
-  if (!times.length) {
-    for (const k of ["x-ratelimit-reset-requests", "x-ratelimit-reset-tokens"]) {
-      const v = header(headers, k);
-      const d = v ? durationMs(v) : undefined;
-      if (d !== undefined) times.push(now + d);
-    }
-    for (const k of [
-      "anthropic-ratelimit-requests-reset",
-      "anthropic-ratelimit-tokens-reset",
-      "anthropic-ratelimit-input-tokens-reset",
-      "anthropic-ratelimit-output-tokens-reset",
-    ]) {
-      const v = header(headers, k);
-      const t = v ? Date.parse(v) : Number.NaN;
-      if (!Number.isNaN(t) && t > now) times.push(t);
-    }
-    const epoch = header(headers, "x-ratelimit-reset");
-    if (epoch && /^\d{10,13}$/.test(epoch.trim())) {
-      const n = Number(epoch);
-      const t = n < 1e12 ? n * 1000 : n;
-      if (t > now) times.push(t);
-    }
-  }
-  if (!times.length) {
-    const said =
-      /(?:try again|retry|retrying|wait)\s*(?:in|after|for)\s*((?:\d+(?:\.\d+)?\s*(?:ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hr|h)(?![a-z])\s*)+)/i.exec(
-        text,
-      );
-    const d = said ? durationMs(said[1] as string) : undefined;
-    if (d !== undefined) times.push(now + d);
-    const at =
-      /\breset(?:s)?\s*(?:at|on)?\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2}))/i.exec(
-        text,
-      );
-    const t = at ? Date.parse(at[1] as string) : Number.NaN;
-    if (!Number.isNaN(t) && t > now) times.push(t);
-  }
-  if (text.includes(CHATGPT_LIMIT_CODE) && !times.length) times.push(now + CHATGPT_LIMIT_WAIT_MS);
-  if (!times.length) return undefined;
-  return new Date(Math.max(...times)).toISOString();
 }
 
 /**
@@ -351,16 +255,47 @@ export function nextStep(
 }
 
 /**
+ * What a trial in a program of its own does after a provider's error (afterProgramFailure); to go
+ * on, with the provider's words, which its role's later turn gives the agent (goal 166).
+ */
+export type ProgramStep =
+  | { end: { error: string; kind: ProviderErrorKind } }
+  | { goOn: string }
+  | { interrupted: true }
+  | { wall: true };
+
+/**
+ * The kind of a program's error: from its words and the error answer the harness's model proxy
+ * saw. For a program whose calls go through the proxy (`proxied`: OpenCode, Codex), a stop kind
+ * comes only from that answer: the program's words alone, which its agent's commands can write,
+ * never stop the run's agents, and are the model's own error instead.
+ */
+export function programErrorKind(
+  error: string,
+  answer: (ProviderAnswer & { body?: string | undefined }) | undefined,
+  proxied: boolean,
+): ProviderError {
+  const text = answer?.body ? `${error} (${answer.body})` : error;
+  const e = classifyProviderError(text, answer);
+  if (!proxied || !stopsAgents(e.kind)) return e;
+  const seen = answer ? classifyProviderError(answer.body ?? "", answer) : undefined;
+  if (stopsAgents(seen?.kind)) return e;
+  return seen ? { ...seen, words: e.words } : { ...e, kind: "model" };
+}
+
+/**
  * A trial in a program of its own (OpenCode, Codex, Claude Code) ended a run with an error (goal
- * 079): its kind, from the program's words and the error answer the harness's model proxy saw.
- * A stop kind or the campaign's limit ends the trial. Otherwise the trial waits (the provider's
- * time, or a growing pause, never past its own end) and goes on in the program's same session:
- * `goOn` holds the words to tell the agent.
+ * 079): its kind, from the program's words and the error answer the harness's model proxy saw
+ * (programErrorKind). A stop kind or the campaign's limit ends the trial. Otherwise the trial waits
+ * (the provider's time, or a growing pause, never past its own end) and goes on in the program's
+ * same session: `goOn` holds the provider's words, for the agent's turn that goes on.
  */
 export async function afterProgramFailure(input: {
   error: string;
   /** The error answer the model proxy saw during the run, if any. */
   answer?: (ProviderAnswer & { body?: string | undefined }) | undefined;
+  /** Whether the program's calls go through the model proxy (OpenCode, Codex on a provider's key). */
+  proxied?: boolean | undefined;
   count: FailureCount;
   failuresInARow?: number | undefined;
   /** The trial's end (ms), or Infinity. */
@@ -369,14 +304,8 @@ export async function afterProgramFailure(input: {
   waiting?: ((w: { until: string; kind: ProviderErrorKind; words: string }) => void) | undefined;
   /** How long a wait really lasts (tests shorten it). */
   pauseMs?: ((ms: number) => number) | undefined;
-}): Promise<
-  | { end: { error: string; kind: ProviderErrorKind } }
-  | { goOn: string }
-  | { interrupted: true }
-  | { wall: true }
-> {
-  const text = input.answer?.body ? `${input.error} (${input.answer.body})` : input.error;
-  const e = classifyProviderError(text, input.answer);
+}): Promise<ProgramStep> {
+  const e = programErrorKind(input.error, input.answer, input.proxied === true);
   // A program compacts its own conversation: a context error here is the model's refusal.
   const step = nextStep(
     e.kind === "context" ? { ...e, kind: "model" } : e,
@@ -390,9 +319,7 @@ export async function afterProgramFailure(input: {
     await new Promise((r) => setTimeout(r, Math.min(500, Math.max(1, until - Date.now()))));
   if (input.signal?.aborted) return { interrupted: true };
   if (Date.now() >= input.deadline) return { wall: true };
-  return {
-    goOn: `The model call failed (${e.words.slice(0, 200)}). Continue where you left off.`,
-  };
+  return { goOn: e.words };
 }
 
 /** What a trial in a program of its own learns of its provider through the harness (goal 079). */

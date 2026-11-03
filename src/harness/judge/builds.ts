@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
@@ -8,17 +8,18 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileSha256, sweepTemp } from "../../common/fs.ts";
+import { log } from "../../common/log.ts";
 import { canonicalJson, sha256Hex } from "../../core/canonical.ts";
-import type { Role, Runner } from "../broker/runner.ts";
+import type { Kit } from "../../core/kit.ts";
+import type { Role, Runner } from "../broker/index.ts";
 import { exportTree } from "../git.ts";
-import type { Kit } from "../kit.ts";
-import type { Ledger } from "../ledger.ts";
+import type { Ledger } from "../ledger/index.ts";
 
 /**
  * The build store. The builder user builds each (commit, kit) pair once in a fresh scratch
@@ -38,10 +39,6 @@ export interface BuildManifest {
 export type BuildResult =
   | { ok: true; dir: string; manifest: BuildManifest; cached: boolean }
   | { ok: false; key: string; reason: string; log: string; transient: boolean };
-
-export function sha256File(path: string): string {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
-}
 
 /**
  * What compiles a build (goal 135): the image's installed packages, the compilers and, for tools
@@ -98,6 +95,10 @@ export class BuildStore {
     this.workDir = join(scratchDir, "builds");
     mkdirSync(this.storeDir, { recursive: true });
     mkdirSync(this.workDir, { recursive: true });
+    // A build a crash stopped before it was stored, swept before the judge builds again.
+    const left = sweepTemp(this.storeDir);
+    if (left.length)
+      log("judge", "removed the builds a crash left half stored", { left: left.length });
     // Others may reach a build by its exact path, but not list the store or the work area.
     chmodSync(this.storeDir, 0o711);
     chmodSync(this.workDir, 0o711);
@@ -118,7 +119,7 @@ export class BuildStore {
     const bad: string[] = [];
     for (const [rel, sha] of Object.entries(manifest.files)) {
       const p = join(dir, rel);
-      if (!existsSync(p) || sha256File(p) !== sha) bad.push(rel);
+      if (!existsSync(p) || fileSha256(p) !== sha) bad.push(rel);
     }
     return bad;
   }
@@ -140,7 +141,7 @@ export class BuildStore {
 
   private async make(input: BuildInput, key: string): Promise<BuildResult> {
     const dir = join(this.storeDir, key);
-    const known = this.ledger.getBuild(key);
+    const known = this.ledger.builds.get(key);
     if (known?.ok && existsSync(dir)) {
       const manifest = known.manifest as BuildManifest;
       const bad = this.verify(dir, manifest);
@@ -185,7 +186,7 @@ export class BuildStore {
           : r.exitCode !== 0
             ? `build failed (exit ${r.exitCode ?? r.signal})`
             : `build outputs missing: ${missing.join(", ")}`;
-        this.ledger.recordBuild({
+        this.ledger.builds.record({
           key,
           repo: input.repo,
           commit: input.commit,
@@ -207,7 +208,7 @@ export class BuildStore {
       if (refused.length) {
         rmSync(staging, { recursive: true, force: true });
         const reason = `build outputs refused: ${refused.slice(0, 5).join("; ")}`;
-        this.ledger.recordBuild({
+        this.ledger.builds.record({
           key,
           repo: input.repo,
           commit: input.commit,
@@ -234,7 +235,7 @@ export class BuildStore {
       }
       renameSync(staging, dir);
       lockDown(dir);
-      this.ledger.recordBuild({
+      this.ledger.builds.record({
         key,
         repo: input.repo,
         commit: input.commit,
@@ -248,6 +249,24 @@ export class BuildStore {
       await this.runner.remove(work).catch(() => rmSync(work, { recursive: true, force: true }));
     }
   }
+}
+
+/** A stored build's folder name: its key. */
+export const BUILD_KEY = /^[0-9a-f]{64}$/;
+
+/**
+ * Removes a stored build (a retention policy's, harness/retention.ts): its folders made writable
+ * again, then the whole of it. Its record in the ledger stays, so the judge makes it again from
+ * its commit and kit when it is ever needed (BuildStore.make finds no folder). A key that is not a
+ * build's, or a build already gone, removes nothing. Returns whether it removed one.
+ */
+export function removeBuild(storeDir: string, key: string): boolean {
+  if (!BUILD_KEY.test(key)) return false;
+  const dir = join(storeDir, key);
+  if (!existsSync(dir)) return false;
+  unlock(dir);
+  rmSync(dir, { recursive: true, force: true });
+  return true;
 }
 
 /**
@@ -285,7 +304,7 @@ function copyOutput(
   if (st.nlink > 1) return [`${rel}: hard link`];
   mkdirSync(dirname(to), { recursive: true });
   copyFileSync(from, to);
-  files[rel] = sha256File(to);
+  files[rel] = fileSha256(to);
   chmodSync(to, st.mode & 0o111 ? 0o555 : 0o444);
   return [];
 }

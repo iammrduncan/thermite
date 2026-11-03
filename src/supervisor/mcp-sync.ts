@@ -1,57 +1,54 @@
-import { z } from "zod";
+import { ApiError } from "../common/api/call.ts";
+import { harnessClient } from "../common/api/harness.ts";
 import { log } from "../common/env.ts";
-import { McpConnection, McpUnavailable } from "../core/mcp.ts";
-import { buildHeaders } from "../core/version.ts";
+import { MCP_SERVERS_GET, MCP_SERVERS_PUT } from "../core/api/harness/supervisor.ts";
+import type { McpServersValue } from "../core/link/config.ts";
 
 /**
  * The MCP servers control gives the rig (goal 068): those the kits of the runs it assigned the
- * rig name, each with its sign-in as headers. The supervisor reads them with its own token as it
- * reads the model route, hands the harness the servers its workers and planner use (the harness
- * makes their calls), and keeps the advisors' in memory for the calls it makes for them. Nothing
- * here writes a secret to disk or a log. An older control, with no such route, gives none.
+ * rig name, each with its sign-in as headers, in the rig's config on the message bus (config/).
+ * The supervisor hands the harness the servers its workers and planner use (the harness makes
+ * their calls), and keeps the advisors' in memory for the calls it makes for them. Nothing here
+ * writes a secret to disk or a log.
  */
 
-export interface McpSync {
-  rig: string;
-  controlUrl: string;
-  controlToken: string;
+export interface McpHand {
   harnessUrl: string;
   harnessToken: string;
   fetchImpl?: typeof fetch | undefined;
 }
 
-const FromControl = z.object({
-  servers: z.array(McpConnection).max(50),
-  unavailable: z.array(McpUnavailable).max(50).default([]),
-});
-export type McpFromControl = z.infer<typeof FromControl>;
+export type McpFromControl = McpServersValue;
+
+/** A call's answer, or undefined when the route answers 404: a harness with no agents. */
+async function unlessMissing<T>(call: Promise<T>): Promise<T | undefined> {
+  try {
+    return await call;
+  } catch (err) {
+    if (err instanceof ApiError && err.code === "not_found") return undefined;
+    throw err;
+  }
+}
 
 /**
- * One round: read control's servers; hand the harness its share when it changed. Returns what
- * control gave (all of it: the advisors' share stays with the supervisor).
+ * Hands the harness its share of the servers control gave when it differs from what the harness
+ * holds. Returns what control gave, all of it: the advisors' share stays with the supervisor.
  */
-export async function syncMcpServers(
-  s: McpSync,
+export async function handMcpServers(
+  s: McpHand,
+  given: McpFromControl,
 ): Promise<McpFromControl & { handed: "unchanged" | "set" | "no_agents" }> {
-  const fetch = s.fetchImpl ?? globalThis.fetch;
-  const res = await fetch(`${s.controlUrl}/v1/rigs/${encodeURIComponent(s.rig)}/mcp-servers`, {
-    headers: { authorization: `Bearer ${s.controlToken}`, ...buildHeaders() },
+  const harness = harnessClient({
+    url: s.harnessUrl,
+    token: s.harnessToken,
+    fetchImpl: s.fetchImpl,
   });
-  if (res.status === 404) return { servers: [], unavailable: [], handed: "unchanged" };
-  if (!res.ok) throw new Error(`control's MCP servers: HTTP ${res.status}`);
-  const given = FromControl.parse(await res.json());
   // The harness gets only the servers its agents use: workers and the planner.
   const share = given.servers.filter((c) =>
     c.agents.some((a) => a === "workers" || a === "planner"),
   );
-  const harness = { authorization: `Bearer ${s.harnessToken}` };
-  const cur = await fetch(`${s.harnessUrl}/v1/mcp-servers`, { headers: harness });
-  if (cur.status === 404) return { ...given, handed: "no_agents" };
-  if (!cur.ok) throw new Error(`the harness's MCP servers: HTTP ${cur.status}`);
-  const had = (await cur.json()) as {
-    servers: { name: string; revision: string }[];
-    unavailable: { name: string; why: string }[];
-  };
+  const had = await unlessMissing(harness.call(MCP_SERVERS_GET));
+  if (!had) return { ...given, handed: "no_agents" };
   const key = (x: {
     servers: { name: string; revision: string }[];
     unavailable: { name: string; why: string }[];
@@ -62,12 +59,7 @@ export async function syncMcpServers(
     ]);
   if (key(had) === key({ servers: share, unavailable: given.unavailable }))
     return { ...given, handed: "unchanged" };
-  const put = await fetch(`${s.harnessUrl}/v1/mcp-servers`, {
-    method: "PUT",
-    headers: { ...harness, "content-type": "application/json" },
-    body: JSON.stringify({ servers: share, unavailable: given.unavailable }),
-  });
-  if (!put.ok) throw new Error(`handing the MCP servers to the harness: HTTP ${put.status}`);
+  await harness.call(MCP_SERVERS_PUT, { body: { servers: share, unavailable: given.unavailable } });
   log("supervisor", "MCP servers handed to the harness", {
     servers: share.map((c) => c.name),
     unavailable: given.unavailable.map((u) => u.name),

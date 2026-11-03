@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { Decision } from "../../../src/control/store.ts";
-import { moreText } from "../../../src/control/ui/components.ts";
-import { decidedState, outcome, waitingOn } from "../../../src/control/ui/operator.ts";
-import type { AttemptView, RigView, RunView } from "../../../src/control/views.ts";
+import type { Decision } from "../../../src/control/store/index.ts";
+import { moreText } from "../../../src/control/ui/components/index.ts";
+import { decidedState, outcome, waitingOn } from "../../../src/control/ui/operator/index.ts";
+import type { AttemptView, RigView, RunView } from "../../../src/control/views/index.ts";
 
 const NOW = Date.parse("2026-10-21T21:00:00Z");
 const item = { rig: "rig-a", run: "run-1", attempt: "a-1" };

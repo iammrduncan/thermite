@@ -1,8 +1,8 @@
 import { join, resolve, sep } from "node:path";
 import { z } from "zod";
 import { SHARED_DEV_RUN_S } from "../../core/contract.ts";
-import { type Role, RoleSchema, type Runner } from "../broker/runner.ts";
-import type { Ledger } from "../ledger.ts";
+import { type Role, RoleSchema, type Runner } from "../broker/index.ts";
+import type { Ledger } from "../ledger/index.ts";
 import { laneCacheEnv } from "./workspace.ts";
 
 /**
@@ -89,12 +89,7 @@ export class DevRuns {
   }
 
   private judgeBusy(): boolean {
-    const r = this.ledger.db
-      .prepare(
-        "select count(*) as n from job where state in ('queued', 'leased') and kind in ('evaluate', 'confirm', 'calibrate', 'validate')",
-      )
-      .get() as { n: number };
-    return Number(r.n) > 0;
+    return this.ledger.jobs.open(["evaluate", "confirm", "calibrate", "validate"]) > 0;
   }
 
   /** Each lane's dev run still waiting for a device: how to give it up (its trial ended). */
@@ -110,10 +105,8 @@ export class DevRuns {
   }
 
   private trialOpen(trial: string): boolean {
-    const r = this.ledger.db.prepare("select ended_at from trial where id = ?").get(trial) as
-      | { ended_at: string | null }
-      | undefined;
-    return r !== undefined && r.ended_at === null;
+    const t = this.ledger.trials.get(trial);
+    return t !== undefined && t.ended_at === null;
   }
 
   /** A dev run for an open trial; one that waited past its trial's end never runs. */

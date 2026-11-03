@@ -70,7 +70,7 @@ OpenCode runs a service with some free models. They need no key and no account. 
 - On **Settings › Providers**, add a provider of the type **OpenCode (its own models)** and leave **Base URL** and **API key** empty.
 - Give the rig one of its models whose name ends in `-free`, with the worker harness **OpenCode v2**. Those are the ones OpenCode serves without a key.
 
-OpenCode decides which of its models are free, and the list can change. Its list also names models it does not serve, and it limits free use: a check that fails with `Rate limit exceeded` may pass a few minutes later. If the model check fails, try again later or try another model ([what the failures mean](connect-a-provider.md#give-a-rig-one-of-its-models)). The tutorial [Hand the work to agents](../../tutorials/agents-with-a-free-model.md) walks through this path from start to end.
+OpenCode decides which of its models are free, and the list can change. Its list also names models it does not serve, and it limits free use: a check that fails with `Rate limit exceeded` may pass a few minutes later. If the model check fails, try again later or try another model ([what the failures mean](connect-a-provider.md#give-a-rig-one-of-its-models)). The tutorial [Run your first campaign](../../tutorials/agents-with-a-free-model.md) walks through this path from start to end.
 
 ## 2. A model server on your own computer
 
@@ -81,7 +81,7 @@ A model server that you run yourself, such as Ollama, vLLM or LiteLLM, costs not
 
 Control reads the server's model list from where control runs, and each rig calls the model from where the rig runs, so both must reach the address. On the local stack, control and the harness container both reach `host.docker.internal`.
 
-A rig on a cluster can't use a server on a private address. In a namespace that control creates, or that you join, the rig's harness container reaches only DNS and addresses outside the private ranges ([Add a rig on a cluster](../install/rig-on-a-cluster.md)). Give such a rig a hosted provider instead.
+A rig on a cluster reaches a server on a private or Tailscale address only when you list the address. The rig's harness container reaches only DNS and addresses outside the private, shared and link-local ranges, and Tailscale's addresses are in the shared range. Add the server's one address and its port in **Settings › Addresses rigs may reach**, and control opens it in the network rules of the rigs it set up in namespaces it created ([Reach a model server on a private or Tailscale address](../install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address)); or give such a rig a hosted provider instead.
 
 ## 3. An API key from a provider
 

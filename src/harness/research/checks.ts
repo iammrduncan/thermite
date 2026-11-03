@@ -1,21 +1,69 @@
-import type { Ledger } from "../ledger.ts";
+import type { ClaimRow, Ledger } from "../ledger/index.ts";
 
 /**
  * The checks research text shares (goal 112): a finding a worker records and an answer the review
  * panel gives are both held to them. Code runs them; the agents cannot.
  */
 
-type Row = Record<string, unknown>;
+/** The typographic marks a quote is compared without: each class, and the plain mark for it. */
+const PLAIN_MARKS: readonly (readonly [RegExp, string])[] = [
+  [/[‘’‛′]/g, "'"],
+  [/[“”‟″]/g, '"'],
+  [/[‐-―−]/g, "-"],
+  [/ /g, " "],
+];
 
 /** Whitespace folded, typographic quotes and dashes made plain: "verbatim" up to layout. */
 export function normalizeQuote(s: string): string {
-  return s
-    .replace(/[‘’‛′]/g, "'")
-    .replace(/[“”‟″]/g, '"')
-    .replace(/[‐-―−]/g, "-")
-    .replace(/ /g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  let out = s;
+  for (const [marks, plain] of PLAIN_MARKS) out = out.replace(marks, plain);
+  return out.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A text as normalizeQuote makes it, with where each of its characters is in the text: the same
+ * rules, one character at a time.
+ */
+export function normalizedWithPlaces(text: string): { text: string; at: number[] } {
+  const one = PLAIN_MARKS.map(([marks, plain]) => [new RegExp(marks.source), plain] as const);
+  const out: string[] = [];
+  const at: number[] = [];
+  let space = -1;
+  for (let i = 0; i < text.length; i++) {
+    let c = text[i] as string;
+    for (const [marks, plain] of one) if (marks.test(c)) c = plain;
+    if (/\s/.test(c)) {
+      if (space < 0) space = i;
+      continue;
+    }
+    // A run of whitespace is one space, none at the start or the end.
+    if (space >= 0 && out.length) {
+      out.push(" ");
+      at.push(space);
+    }
+    space = -1;
+    out.push(c);
+    at.push(i);
+  }
+  return { text: out.join(""), at };
+}
+
+/**
+ * Where a quote is in a text as add_claim checks it (normalizeQuote on both): each place, in the
+ * text's own characters, from `start` to `end`, the first `max`. None when the quote is not there.
+ */
+export function quotePlaces(
+  text: string,
+  quote: string,
+  max: number,
+): { start: number; end: number }[] {
+  const q = normalizeQuote(quote);
+  if (!q) return [];
+  const n = normalizedWithPlaces(text);
+  const out: { start: number; end: number }[] = [];
+  for (let i = n.text.indexOf(q); i >= 0 && out.length < max; i = n.text.indexOf(q, i + 1))
+    out.push({ start: n.at[i] as number, end: (n.at[i + q.length - 1] as number) + 1 });
+  return out;
 }
 
 /**
@@ -61,11 +109,11 @@ export function statedNumbers(text: string): string[] {
 }
 
 /** Every number a verified claim states: in its text or in its quotes. */
-export function claimNumbers(claims: Row[]): Set<string> {
+export function claimNumbers(claims: Pick<ClaimRow, "text" | "quotes">[]): Set<string> {
   return new Set(
     claims.flatMap((cl) => [
-      ...numbersIn(String(cl.text)),
-      ...(JSON.parse(String(cl.quotes)) as { quote: string }[]).flatMap((q) => numbersIn(q.quote)),
+      ...numbersIn(cl.text),
+      ...(JSON.parse(cl.quotes) as { quote: string }[]).flatMap((q) => numbersIn(q.quote)),
     ]),
   );
 }
@@ -82,15 +130,13 @@ export function checkCited(
   cited: string[],
   texts: string[],
   also: Iterable<string> = [],
-): { claims: Row[]; problems: string[] } {
+): { claims: ClaimRow[]; problems: string[] } {
   const problems: string[] = [];
-  const claims: Row[] = [];
+  const claims: ClaimRow[] = [];
   for (const id of [...new Set(cited)]) {
-    const cl = ledger.db.prepare("select * from claim where run = ? and id = ?").get(run, id) as
-      | Row
-      | undefined;
+    const cl = ledger.claims.get(run, id);
     if (!cl) problems.push(`no claim ${id}`);
-    else if (Number(cl.verified) !== 1) problems.push(`claim ${id} is a draft, not verified`);
+    else if (!cl.verified) problems.push(`claim ${id} is a draft, not verified`);
     else claims.push(cl);
   }
   const known = claimNumbers(claims);

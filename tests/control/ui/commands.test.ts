@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { ControlStore } from "../../../src/control/store.ts";
-import { commandRow, commandStatus } from "../../../src/control/ui/commands.ts";
+import { ControlStore } from "../../../src/control/store/index.ts";
+import { commandRow, commandStatus } from "../../../src/control/ui/commands/index.ts";
 import type { SignedCommand } from "../../../src/core/commands.ts";
 
 const NOW = Date.parse("2026-10-27T06:00:00Z");
@@ -18,9 +18,9 @@ describe("a command's status on the Commands page (goal 161)", () => {
         issued_at: "2026-10-27T05:59:00Z",
       },
     } as unknown as SignedCommand;
-    store.enqueueCommand(signed);
-    assert.equal(store.cancelCommand("c-1", "owner:ui"), true);
-    const [listed] = store.listCommands(10);
+    store.commands.enqueue(signed);
+    assert.equal(store.commands.cancel("c-1", "owner:ui"), true);
+    const [listed] = store.commands.list(10);
     assert.ok(listed);
     assert.deepEqual(commandStatus(listed), { word: "cancelled", tone: "" });
     const row = commandRow(listed, NOW);

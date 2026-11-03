@@ -10,7 +10,7 @@ updated: 2026-10-24
 
 # 124 · Files of a size you can review: a check that stops large files growing, and the large files split
 
-**Status:** `DROPPED`, merged into [125](125-code-to-the-conventions.goal) · **Version:** [v0.1.1](../roadmap.md#v011)
+**Status:** `DROPPED`, merged into [125](_completed/125-code-to-the-conventions.goal) · **Version:** [v0.1.1](../roadmap.md#v011)
 
 ## What
 
@@ -54,7 +54,7 @@ The owner, 2026-10-24, on the file-size rule: "we need to get a better handle on
 - 2026-10-24, owner: the file-size rule goes in CONVENTIONS.md, and its large files need a better handle.
 - 2026-10-24: placed in v0.2.0. The owner did not name a version.
 - 2026-10-24, owner: in v0.1.1, the code clean-up.
-- 2026-10-24, owner: merged into goal [125](125-code-to-the-conventions.goal), one goal for the whole clean-up.
+- 2026-10-24, owner: merged into goal [125](_completed/125-code-to-the-conventions.goal), one goal for the whole clean-up.
 
 ## Open questions
 
@@ -65,7 +65,7 @@ The owner, 2026-10-24, on the file-size rule: "we need to get a better handle on
 ## Progress
 
 - 2026-10-24: Goal written from the owner's words, with the sizes counted that day.
-- 2026-10-24: Dropped: merged into goal [125](125-code-to-the-conventions.goal), which keeps its size check, its sizes and its open questions.
+- 2026-10-24: Dropped: merged into goal [125](_completed/125-code-to-the-conventions.goal), which keeps its size check, its sizes and its open questions.
 
 ---
 

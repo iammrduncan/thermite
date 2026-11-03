@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { portReplaced } from "../../../src/harness/judge/ports.ts";
-import { FAST_KERNEL, makeJudgeEnv } from "../../helpers/judge-env.ts";
+import { FAST_KERNEL, FAST_KERNEL_RESTATED, makeJudgeEnv } from "../../helpers/judge-env.ts";
 
+/**
+ * The stand-in runner times the kernels: a change screened against a champion with the same
+ * effect is an A/A comparison, which real runs on a loaded machine can show as a win.
+ */
 async function setup() {
-  const env = makeJudgeEnv({ realRuns: true });
+  const env = makeJudgeEnv();
   await env.start();
   const submit = async (kernel: string, hypothesis: string) =>
     (
@@ -15,9 +19,9 @@ async function setup() {
     ).attempt;
   /** Makes an attempt the champion by another path than the judge's. */
   const crown = (attempt: string, expectedSeq: number) => {
-    env.ledger.recordVerdict({ attempt, verdict: "win_confirmed", reasons: "t", judgedBy: "t" });
-    const commitSha = String(env.ledger.getAttempt(attempt)?.commit_sha);
-    return env.ledger.promote({ run: "js-1", expectedSeq, attempt, commitSha, by: "t" });
+    env.ledger.verdicts.record({ attempt, verdict: "win_confirmed", reasons: "t", judgedBy: "t" });
+    const commitSha = String(env.ledger.attempts.get(attempt)?.commit_sha);
+    return env.ledger.champions.promote({ run: "js-1", expectedSeq, attempt, commitSha, by: "t" });
   };
   const ports = () =>
     env.service.queue
@@ -31,7 +35,7 @@ describe("changes carried to a new champion (goal 135)", () => {
   test("a change written on an older champion that loses to the new one, but helped on its own, is ported", async () => {
     const env = await setup();
     const a = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
-    const b = await env.submit(`${FAST_KERNEL}// same idea, restated\n`, "the same, restated");
+    const b = await env.submit(FAST_KERNEL_RESTATED, "the same, restated");
     // b becomes champion #2; a was written on #1.
     assert.deepEqual(env.crown(b, 1), { ok: true, seq: 2 });
     // The judge screens a against #2: no win, the same speed. Then against #1, the champion it
@@ -40,8 +44,8 @@ describe("changes carried to a new champion (goal 135)", () => {
     const screened = env.ledger.latestEventBody("parent_screened", a) as { verdict: string };
     assert.equal(screened.verdict, "win_screened", env.explain(a));
     // Its verdict and lifecycle are the ones against the current champion.
-    assert.notEqual(env.ledger.currentVerdict(a)?.verdict, "win_screened");
-    assert.equal(String(env.ledger.getAttempt(a)?.lifecycle), "judged");
+    assert.notEqual(env.ledger.verdicts.current(a)?.verdict, "win_screened");
+    assert.equal(String(env.ledger.attempts.get(a)?.lifecycle), "judged");
     assert.deepEqual(env.ports(), [
       { title: `Port ${a} onto champion #2`, by: "judge", state: "queued" },
     ]);
@@ -63,7 +67,7 @@ describe("changes carried to a new champion (goal 135)", () => {
   test("a new champion written on an older one gets the champion it replaced ported onto it", async () => {
     const env = await setup();
     const a = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
-    const b = await env.submit(`${FAST_KERNEL}// same idea, restated\n`, "the same, restated");
+    const b = await env.submit(FAST_KERNEL_RESTATED, "the same, restated");
     assert.deepEqual(env.crown(a, 1), { ok: true, seq: 2 });
     // a's own promotion, on #1, needs no port.
     await portReplaced(env.service, "js-1");

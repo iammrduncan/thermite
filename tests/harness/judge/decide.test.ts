@@ -13,24 +13,12 @@ import {
   goalDelta,
 } from "../../../src/harness/judge/decide.ts";
 import { goalFixture, hillClimbFixture } from "../../helpers/fixtures.ts";
+import { forCases, normals } from "../../helpers/property.ts";
 
 function hillClimb(overrides: Record<string, unknown> = {}): HillClimbContract {
   const r = parseContract({ ...hillClimbFixture, ...overrides });
   if (!r.ok || r.contract.mode !== "hill_climb") throw new Error("fixture");
   return r.contract;
-}
-
-/** Deterministic normal noise (mulberry32 + Box-Muller). */
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  const uniform = () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  return () => Math.sqrt(-2 * Math.log(uniform() || 1e-12)) * Math.cos(2 * Math.PI * uniform());
 }
 
 /** Blocks where the candidate's metric is `gain` times the reference's, with relative noise. */
@@ -41,7 +29,7 @@ function blocks(
   noise = 0.002,
   seed = 1,
 ): Block[] {
-  const z = rng(seed);
+  const z = normals(seed);
   return Array.from({ length: n }, () => {
     const b: Block = { candidate: {}, reference: {} };
     for (const [metric, gain] of Object.entries(effects)) {
@@ -279,5 +267,72 @@ describe("goal candidates against the champion", () => {
       goals: goalFixture.goals.map((g) => ({ ...g, required: false })),
     });
     assert.equal(r.ok, false);
+  });
+});
+
+describe("screening's properties, on seeded random cases", () => {
+  // No guards: the verdict turns on the primary metric alone.
+  const policy = hillClimb({ guards: [] });
+  const cells = policy.cells;
+  const metric = policy.objective.primary.metric;
+  /** The same blocks with candidate and champion swapped. */
+  const mirrored = (bs: Block[]): Block[] =>
+    bs.map((b) => ({ candidate: b.reference, reference: b.candidate }));
+
+  test("swapping candidate and champion turns a win into a regression, and back", () => {
+    forCases(
+      200,
+      11,
+      (d) => ({
+        n: d.int(3, 12),
+        gain: Math.exp(d.normal() * 0.2),
+        noise: d.between(0.0005, 0.05),
+        seed: d.int(1, 1e6),
+      }),
+      ({ n, gain, noise, seed }) => {
+        const bs = blocks(n, cells, { [metric]: gain }, noise, seed);
+        const there = decideScreen(policy, bs).verdict;
+        const back = decideScreen(policy, mirrored(bs)).verdict;
+        if (there === "win_screened") assert.equal(back, "regress");
+        if (there === "regress" && back !== "win_screened")
+          // The way back may be smaller than min_effect: then it is neutral or undecided.
+          assert.notEqual(back, "regress");
+      },
+    );
+  });
+
+  test("a change that does nothing is never a win or a regression", () => {
+    forCases(
+      200,
+      12,
+      (d) => ({ n: d.int(3, 12), seed: d.int(1, 1e6) }),
+      ({ n, seed }) => {
+        const bs = blocks(n, cells, { [metric]: 1 }, 0, seed);
+        const v = decideScreen(policy, bs).verdict;
+        assert.ok(v !== "win_screened" && v !== "regress", String(v));
+      },
+    );
+  });
+
+  test("a higher noise floor never makes a win where a lower one made none", () => {
+    forCases(
+      200,
+      13,
+      (d) => ({
+        n: d.int(3, 12),
+        gain: Math.exp(d.normal() * 0.1),
+        noise: d.between(0.0005, 0.02),
+        seed: d.int(1, 1e6),
+        low: d.between(0, 0.05),
+        more: d.between(0, 0.1),
+      }),
+      ({ n, gain, noise, seed, low, more }) => {
+        const bs = blocks(n, cells, { [metric]: gain }, noise, seed);
+        const quiet = decideScreen(policy, bs, low).verdict;
+        const loud = decideScreen(policy, bs, low + more).verdict;
+        if (loud === "win_screened") assert.equal(quiet, "win_screened");
+        if (loud === "regress") assert.equal(quiet, "regress");
+      },
+    );
   });
 });

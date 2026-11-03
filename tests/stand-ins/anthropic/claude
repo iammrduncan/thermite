@@ -1,0 +1,7 @@
+#!/bin/sh
+# Test only (scripts/acceptance/claude-real.mjs): the real Claude Code, pointed at the stand-in for
+# Anthropic's API in this container (anthropic.mjs). The harness and the advisors start it in
+# place of Claude Code (THERMITE_CLAUDE_BIN), with all they give it: arguments, environment,
+# file descriptors.
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8739
+exec /usr/local/bin/claude "$@"

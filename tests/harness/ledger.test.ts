@@ -8,9 +8,10 @@ import { describe, test } from "node:test";
 import { copiesOf } from "../../src/common/db-copy.ts";
 import { sha256Hex } from "../../src/core/canonical.ts";
 import { type Contract, parseContract } from "../../src/core/contract.ts";
-import { Ledger, LedgerError, MAX_LEASE_EXPIRIES } from "../../src/harness/ledger.ts";
-import { MIGRATIONS } from "../../src/harness/schema.ts";
+import { Ledger, LedgerError, MAX_LEASE_EXPIRIES } from "../../src/harness/ledger/index.ts";
+import { LEDGER_MIGRATIONS as MIGRATIONS } from "../../src/harness/ledger/migrations.ts";
 import { goalFixture, hillClimbFixture } from "../helpers/fixtures.ts";
+import { appendOther } from "../helpers/kinds.ts";
 
 function contractOf(input: unknown): { contract: Contract; sha: string } {
   const r = parseContract(input);
@@ -22,8 +23,8 @@ function setup(clock?: () => Date): { ledger: Ledger; path: string } {
   const path = join(mkdtempSync(join(tmpdir(), "thermite-ledger-")), "ledger.db");
   const ledger = Ledger.open(path, clock);
   const { contract, sha } = contractOf(hillClimbFixture);
-  ledger.storeContract(contract, sha, "test");
-  ledger.createRun({
+  ledger.contracts.store(contract, sha, "test");
+  ledger.runs.create({
     id: "race-1",
     contract,
     contractSha: sha,
@@ -41,7 +42,7 @@ function attempt(
   id: string,
   opts: { parentAttempt?: string; knownFlaws?: string[] } = {},
 ): void {
-  ledger.recordAttempt(
+  ledger.attempts.record(
     {
       id,
       run: "race-1",
@@ -63,7 +64,12 @@ function attempt(
 /** A confirmed attempt, ready to promote. */
 function confirmed(ledger: Ledger, id: string, opts: { parentAttempt?: string } = {}): void {
   attempt(ledger, id, opts);
-  ledger.recordVerdict({ attempt: id, verdict: "win_confirmed", reasons: "t", judgedBy: "judge" });
+  ledger.verdicts.record({
+    attempt: id,
+    verdict: "win_confirmed",
+    reasons: "t",
+    judgedBy: "judge",
+  });
 }
 
 const promoteArgs = (id: string, expectedSeq = 1) => ({
@@ -137,7 +143,7 @@ describe("ledger", () => {
     const { ledger, path } = setup();
     ledger.close();
     const again = Ledger.open(path);
-    assert.equal(again.getRun("race-1")?.status, "running");
+    assert.equal(again.runs.get("race-1")?.status, "running");
     again.close();
   });
 
@@ -222,14 +228,14 @@ describe("ledger", () => {
       () =>
         ledger.db
           .prepare(
-            "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'note', 't', null, null, ?)",
+            "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'other', 't', null, null, ?)",
           )
           .run(at),
       /NOT NULL/,
     );
     const next = ledger.db
       .prepare(
-        "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'note', 't', 'run', 'old-1', ?)",
+        "insert into journal_note (run, by, kind, text, about_type, about_id, at) values ('old-1', 'x', 'other', 't', 'run', 'old-1', ?)",
       )
       .run(at);
     assert.equal(Number(next.lastInsertRowid), 3);
@@ -269,14 +275,14 @@ describe("ledger", () => {
         .all()
         .map((r) => ({ ...r }));
     assert.deepEqual(rows(), [{ id: 1, attempt: "a-1", run: null, champion_seq: null, pass: 0 }]);
-    assert.deepEqual(ledger.heldOutFailure("a-1"), ["crashed"]);
+    assert.deepEqual(ledger.heldOut.failure("a-1"), ["crashed"]);
     // A champion's record: its run and champion, no attempt; the attempt's own is unchanged.
-    ledger.recordChampionHeldOut(1, 1, "old-1", 2, false, {
+    ledger.heldOut.recordChampion(1, 1, "old-1", 2, false, {
       pass: false,
       cells: [{ cell: "h", ok: true }],
     });
     assert.deepEqual(rows()[1], { id: 2, attempt: null, run: "old-1", champion_seq: 2, pass: 0 });
-    assert.deepEqual(ledger.heldOutFailure("a-1"), ["crashed"]);
+    assert.deepEqual(ledger.heldOut.failure("a-1"), ["crashed"]);
     // Still append-only; a record names an attempt, or a run and its champion.
     assert.throws(
       () => ledger.db.prepare("update held_out set pass = 1 where id = 1").run(),
@@ -298,16 +304,16 @@ describe("ledger", () => {
   test("a contract edit must become a new version", () => {
     const { ledger } = setup();
     const v1 = contractOf(hillClimbFixture);
-    assert.equal(ledger.storeContract(v1.contract, v1.sha, "t"), "exists");
+    assert.equal(ledger.contracts.store(v1.contract, v1.sha, "t"), "exists");
     const edited = contractOf({ ...hillClimbFixture, cells: ["n1024"] });
     assert.throws(
-      () => ledger.storeContract(edited.contract, edited.sha, "t"),
+      () => ledger.contracts.store(edited.contract, edited.sha, "t"),
       (e: unknown) => e instanceof LedgerError && e.code === "conflict",
     );
     const v2 = contractOf({ ...hillClimbFixture, version: 2, cells: ["n1024"] });
-    assert.equal(ledger.storeContract(v2.contract, v2.sha, "t"), "created");
+    assert.equal(ledger.contracts.store(v2.contract, v2.sha, "t"), "created");
     assert.deepEqual(
-      ledger.contractVersions("smoke-matmul").map((v) => v.version),
+      ledger.contracts.versions("smoke-matmul").map((v) => v.version),
       [1, 2],
     );
     assert.throws(() => ledger.db.exec("update contract set mode = 'goal'"), /immutable/);
@@ -315,10 +321,10 @@ describe("ledger", () => {
 
   test("the seed is champion seq 1 and goal runs get their goal tree", () => {
     const { ledger } = setup();
-    assert.equal(ledger.currentChampion("race-1").seq, 1);
+    assert.equal(ledger.champions.current("race-1").seq, 1);
     const g = contractOf(goalFixture);
-    ledger.storeContract(g.contract, g.sha, "t");
-    ledger.createRun({
+    ledger.contracts.store(g.contract, g.sha, "t");
+    ledger.runs.create({
       id: "goal-1",
       contract: g.contract,
       contractSha: g.sha,
@@ -335,25 +341,63 @@ describe("ledger", () => {
     );
   });
 
+  test("a champion judged before verdicts carried guards has them sent once, from the ledger's record (goal 184)", () => {
+    const { ledger } = setup();
+    attempt(ledger, "a1");
+    // As a harness before goal 184 kept it: the guards in the verdict's row (append-only, so
+    // written at once), and none in its event.
+    const guards = [
+      { metric: "mem_mib", status: "ok", estimate: Math.log(0.99), low: -0.02, high: 0.0 },
+    ];
+    const id = Number(
+      ledger.db
+        .prepare(
+          `insert into verdict (attempt, verdict, delta, ci_low, ci_high, guards, depends_on_jobs,
+             reasons, judged_by, supersedes, created_at)
+           values ('a1', 'win_confirmed', 0.1, null, null, ?, '[]', 't', 'judge', null, ?)`,
+        )
+        .run(JSON.stringify(guards), new Date().toISOString()).lastInsertRowid,
+    );
+    ledger.appendEvent("judge", "verdict", "a1", {
+      id,
+      verdict: "win_confirmed",
+      delta: 0.1,
+      ci_low: null,
+      ci_high: null,
+      reasons: "t",
+      supersedes: null,
+    });
+    assert.deepEqual(ledger.champions.promote(promoteArgs("a1")), { ok: true, seq: 2 });
+    assert.equal(ledger.verdicts.sendChampionGuards("judge"), 1);
+    const e = ledger.eventsAfter(0, 1000).events.find((x) => x.kind === "verdict_guards");
+    assert.ok(e);
+    assert.equal(e.subject, "a1");
+    const g = (e.body as { guards: { metric: string; change: number }[] }).guards[0];
+    assert.equal(g?.metric, "mem_mib");
+    assert.ok(Math.abs((g?.change ?? 0) + 0.01) < 1e-9);
+    // Sent once: a restart sends nothing more.
+    assert.equal(ledger.verdicts.sendChampionGuards("judge"), 0);
+  });
+
   test("promotion is compare-and-swap: a stale expected seq loses", () => {
     const { ledger } = setup();
     confirmed(ledger, "a1");
     confirmed(ledger, "a2");
-    assert.deepEqual(ledger.promote(promoteArgs("a1")), { ok: true, seq: 2 });
-    assert.deepEqual(ledger.promote(promoteArgs("a2")), { ok: false, currentSeq: 2 });
+    assert.deepEqual(ledger.champions.promote(promoteArgs("a1")), { ok: true, seq: 2 });
+    assert.deepEqual(ledger.champions.promote(promoteArgs("a2")), { ok: false, currentSeq: 2 });
   });
 
   test("only a promotable, unflawed attempt of this run with its own commit is promoted", () => {
     const { ledger } = setup();
-    const refused = (args: Parameters<Ledger["promote"]>[0], why: RegExp) =>
+    const refused = (args: Parameters<Ledger["champions"]["promote"]>[0], why: RegExp) =>
       assert.throws(
-        () => ledger.promote(args),
+        () => ledger.champions.promote(args),
         (e: unknown) => e instanceof LedgerError && why.test(e.message),
       );
     attempt(ledger, "unjudged");
     refused(promoteArgs("unjudged"), /verdict none/);
     attempt(ledger, "screened");
-    ledger.recordVerdict({
+    ledger.verdicts.record({
       attempt: "screened",
       verdict: "win_screened",
       reasons: "t",
@@ -361,7 +405,7 @@ describe("ledger", () => {
     });
     refused(promoteArgs("screened"), /verdict win_screened/);
     attempt(ledger, "flawed", { knownFlaws: ["only measured at short context"] });
-    ledger.recordVerdict({
+    ledger.verdicts.record({
       attempt: "flawed",
       verdict: "win_confirmed",
       reasons: "t",
@@ -371,7 +415,7 @@ describe("ledger", () => {
     confirmed(ledger, "ok");
     refused({ ...promoteArgs("ok"), commitSha: "f".repeat(40) }, /is not attempt/);
     refused({ ...promoteArgs("ok"), run: "other" }, /is not in other/);
-    assert.equal(ledger.currentChampion("race-1").seq, 1);
+    assert.equal(ledger.champions.current("race-1").seq, 1);
   });
 
   test("two processes racing one promotion: exactly one wins", async () => {
@@ -411,69 +455,69 @@ describe("ledger", () => {
     const results = await Promise.all([run("p1"), run("p2")]);
     assert.equal(results.filter((r) => r.ok).length, 1, JSON.stringify(results));
     const check = Ledger.open(path);
-    assert.equal(check.currentChampion("race-1").seq, 2);
+    assert.equal(check.champions.current("race-1").seq, 2);
     check.close();
   });
 
   test("a paused run's jobs wait in the queue; the judge takes a running run's first", () => {
     const { ledger } = setup();
-    const old = ledger.enqueueJob({ kind: "validate", spec: { run: "race-1" }, actor: "t" });
-    ledger.setRunStatus("race-1", "paused", "replaced", "t");
-    const free = ledger.enqueueJob({ kind: "calibrate", actor: "t" });
-    assert.equal(ledger.leaseJob("exec", 60_000)?.id, free);
-    assert.equal(ledger.leaseJob("exec", 60_000), undefined);
-    ledger.setRunStatus("race-1", "running", null, "t");
-    assert.equal(ledger.leaseJob("exec", 60_000)?.id, old);
+    const old = ledger.jobs.enqueue({ kind: "validate", spec: { run: "race-1" }, actor: "t" });
+    ledger.runs.setStatus("race-1", "paused", "replaced", "t");
+    const free = ledger.jobs.enqueue({ kind: "calibrate", actor: "t" });
+    assert.equal(ledger.jobs.lease("exec", 60_000)?.id, free);
+    assert.equal(ledger.jobs.lease("exec", 60_000), undefined);
+    ledger.runs.setStatus("race-1", "running", null, "t");
+    assert.equal(ledger.jobs.lease("exec", 60_000)?.id, old);
   });
 
   test("with several judge cards, a pinned job waits for its card and a confirmation avoids its screen's", () => {
     const { ledger } = setup();
-    const calA = ledger.enqueueJob({
+    const calA = ledger.jobs.enqueue({
       kind: "calibrate",
       priority: 10,
       spec: { run: "race-1", card: "GPU-a" },
       actor: "t",
     });
-    const confirm = ledger.enqueueJob({
+    const confirm = ledger.jobs.enqueue({
       kind: "confirm",
       priority: 20,
       spec: { run: "race-1", avoid_card: "GPU-a" },
       actor: "t",
     });
-    const plain = ledger.enqueueJob({
+    const plain = ledger.jobs.enqueue({
       kind: "validate",
       priority: 30,
       spec: { run: "race-1" },
       actor: "t",
     });
     // Card B: not A's calibration, but the confirmation (it must not run on A).
-    assert.equal(ledger.leaseJob("executor-1", 60_000, undefined, "GPU-b")?.id, confirm);
+    assert.equal(ledger.jobs.lease("executor-1", 60_000, undefined, "GPU-b")?.id, confirm);
     // Card A: its own calibration, then the unpinned job; never the confirmation.
-    assert.equal(ledger.leaseJob("executor-0", 60_000, undefined, "GPU-a")?.id, calA);
-    assert.equal(ledger.leaseJob("executor-0", 60_000, undefined, "GPU-a")?.id, plain);
-    assert.equal(ledger.leaseJob("executor-0", 60_000, undefined, "GPU-a"), undefined);
+    assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a")?.id, calA);
+    assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a")?.id, plain);
+    assert.equal(ledger.jobs.lease("executor-0", 60_000, undefined, "GPU-a"), undefined);
     // A rig with one judge card passes no card and takes everything.
-    const again = ledger.enqueueJob({
+    const again = ledger.jobs.enqueue({
       kind: "confirm",
       spec: { run: "race-1", avoid_card: "GPU-a" },
       actor: "t",
     });
-    assert.equal(ledger.leaseJob("executor-0", 60_000)?.id, again);
+    assert.equal(ledger.jobs.lease("executor-0", 60_000)?.id, again);
   });
 
   test("leases are fenced: an expired holder cannot write, and repeated expiry blocks the job", () => {
     let now = new Date("2026-10-14T00:00:00Z");
     const { ledger } = setup(() => now);
-    const id = ledger.enqueueJob({ kind: "screen", actor: "t" });
-    const first = ledger.leaseJob("exec-a", 60_000);
+    const id = ledger.jobs.enqueue({ kind: "screen", actor: "t" });
+    const first = ledger.jobs.lease("exec-a", 60_000);
     assert.equal(first?.id, id);
     now = new Date(now.getTime() + 61_000);
-    assert.deepEqual(ledger.expireLeases(), [id]);
-    const second = ledger.leaseJob("exec-b", 60_000);
+    assert.deepEqual(ledger.jobs.expireLeases(), [id]);
+    const second = ledger.jobs.lease("exec-b", 60_000);
     assert.ok(second && second.fence > (first?.fence ?? 0));
     assert.throws(
       () =>
-        ledger.recordMeasurement(id, first?.fence ?? 0, {
+        ledger.measurements.record(id, first?.fence ?? 0, {
           metric: "gflops",
           cell: "n256",
           rep: 1,
@@ -482,36 +526,36 @@ describe("ledger", () => {
         }),
       (e: unknown) => e instanceof LedgerError && e.code === "stale",
     );
-    assert.throws(() => ledger.completeJob(id, first?.fence ?? 0, "done", {}), /lease lost/);
-    ledger.completeJob(id, second?.fence ?? 0, "done", { ok: true });
-    assert.equal(ledger.jobById(id)?.state, "done");
+    assert.throws(() => ledger.jobs.complete(id, first?.fence ?? 0, "done", {}), /lease lost/);
+    ledger.jobs.complete(id, second?.fence ?? 0, "done", { ok: true });
+    assert.equal(ledger.jobs.get(id)?.state, "done");
 
-    const poison = ledger.enqueueJob({ kind: "screen", actor: "t" });
+    const poison = ledger.jobs.enqueue({ kind: "screen", actor: "t" });
     for (let i = 0; i < MAX_LEASE_EXPIRIES; i++) {
-      assert.ok(ledger.leaseJob("exec", 1_000));
+      assert.ok(ledger.jobs.lease("exec", 1_000));
       now = new Date(now.getTime() + 2_000);
-      ledger.expireLeases();
+      ledger.jobs.expireLeases();
     }
-    assert.equal(ledger.jobById(poison)?.state, "blocked");
+    assert.equal(ledger.jobs.get(poison)?.state, "blocked");
   });
 
   test("only the completing lease's measurements count, and a dead holder is reclaimed once", () => {
     let now = new Date("2026-10-14T00:00:00Z");
     const { ledger } = setup(() => now);
-    const id = ledger.enqueueJob({ kind: "screen", actor: "t" });
-    const dead = ledger.leaseJob("executor-0", 600_000);
+    const id = ledger.jobs.enqueue({ kind: "screen", actor: "t" });
+    const dead = ledger.jobs.lease("executor-0", 600_000);
     const m = { metric: "gflops", cell: "n256", rep: 1, value: 1, unit: "GFLOP/s" };
-    ledger.recordMeasurement(id, dead?.fence ?? 0, { ...m, value: 999 });
+    ledger.measurements.record(id, dead?.fence ?? 0, { ...m, value: 999 });
     // The controller restarts: its old leases are reclaimed at once, recorded as crash_infra.
-    assert.deepEqual(ledger.reclaimLeases("executor-0"), [id]);
-    assert.deepEqual(ledger.reclaimLeases("executor-0"), []);
+    assert.deepEqual(ledger.jobs.reclaimLeases("executor-0"), [id]);
+    assert.deepEqual(ledger.jobs.reclaimLeases("executor-0"), []);
     const crashes = ledger.eventsAfter(0, 1000).events.filter((e) => e.kind === "crash_infra");
     assert.equal(crashes.length, 1);
-    const retry = ledger.leaseJob("executor-0", 600_000);
-    ledger.recordMeasurement(id, retry?.fence ?? 0, { ...m, value: 2 });
-    ledger.completeJob(id, retry?.fence ?? 0, "done", {});
+    const retry = ledger.jobs.lease("executor-0", 600_000);
+    ledger.measurements.record(id, retry?.fence ?? 0, { ...m, value: 2 });
+    ledger.jobs.complete(id, retry?.fence ?? 0, "done", {});
     assert.deepEqual(
-      ledger.measurementsFor(id).map((x) => x.value),
+      ledger.measurements.of(id).map((x) => x.value),
       [2],
     );
     now = new Date(now.getTime() + 1);
@@ -519,8 +563,8 @@ describe("ledger", () => {
 
   test("text values and deletes are refused where evidence lives", () => {
     const { ledger } = setup();
-    const id = ledger.enqueueJob({ kind: "screen", actor: "t" });
-    ledger.leaseJob("exec", 60_000);
+    const id = ledger.jobs.enqueue({ kind: "screen", actor: "t" });
+    ledger.jobs.lease("exec", 60_000);
     assert.throws(() =>
       ledger.db
         .prepare(
@@ -541,10 +585,10 @@ describe("ledger", () => {
   test("nested transactions roll back only their own part", () => {
     const { ledger } = setup();
     ledger.tx(() => {
-      ledger.appendEvent("t", "outer", null, {});
+      appendOther(ledger, "t", "outer", null, {});
       assert.throws(() =>
         ledger.tx(() => {
-          ledger.appendEvent("t", "inner", null, {});
+          appendOther(ledger, "t", "inner", null, {});
           throw new Error("inner fails");
         }),
       );
@@ -556,11 +600,11 @@ describe("ledger", () => {
 
   test("non-finite measurements are refused by code and by the database", () => {
     const { ledger } = setup();
-    const id = ledger.enqueueJob({ kind: "screen", actor: "t" });
-    const lease = ledger.leaseJob("exec", 60_000);
+    const id = ledger.jobs.enqueue({ kind: "screen", actor: "t" });
+    const lease = ledger.jobs.lease("exec", 60_000);
     assert.throws(
       () =>
-        ledger.recordMeasurement(id, lease?.fence ?? 0, {
+        ledger.measurements.record(id, lease?.fence ?? 0, {
           metric: "m",
           cell: "c",
           rep: 1,
@@ -581,7 +625,7 @@ describe("ledger", () => {
   test("verdicts, measurements and events are append-only", () => {
     const { ledger } = setup();
     attempt(ledger, "v1");
-    ledger.recordVerdict({
+    ledger.verdicts.record({
       attempt: "v1",
       verdict: "neutral",
       reasons: "within band",
@@ -600,38 +644,38 @@ describe("ledger", () => {
     attempt(ledger, "base");
     attempt(ledger, "child", { parentAttempt: "base" });
     attempt(ledger, "unrelated");
-    const job = ledger.enqueueJob({ attempt: "base", kind: "confirm", actor: "t" });
-    ledger.recordVerdict({
+    const job = ledger.jobs.enqueue({ attempt: "base", kind: "confirm", actor: "t" });
+    ledger.verdicts.record({
       attempt: "base",
       verdict: "win_confirmed",
       dependsOnJobs: [job],
       reasons: "confirmed",
       judgedBy: "judge",
     });
-    ledger.recordVerdict({
+    ledger.verdicts.record({
       attempt: "child",
       verdict: "win_screened",
       reasons: "screened",
       judgedBy: "judge",
     });
-    ledger.recordVerdict({
+    ledger.verdicts.record({
       attempt: "unrelated",
       verdict: "neutral",
       reasons: "flat",
       judgedBy: "judge",
     });
-    ledger.promote(promoteArgs("base"));
+    ledger.champions.promote(promoteArgs("base"));
 
-    const r = ledger.invalidate({
+    const r = ledger.verdicts.invalidate({
       subjectKind: "job",
       subjectId: String(job),
       reason: "evaluator bug found later",
       actor: "owner",
     });
     assert.deepEqual(r.attempts.sort(), ["base", "child"]);
-    assert.equal(ledger.currentVerdict("base")?.verdict, "invalidated");
-    assert.equal(ledger.currentVerdict("child")?.verdict, "invalidated");
-    assert.equal(ledger.currentVerdict("unrelated")?.verdict, "neutral");
+    assert.equal(ledger.verdicts.current("base")?.verdict, "invalidated");
+    assert.equal(ledger.verdicts.current("child")?.verdict, "invalidated");
+    assert.equal(ledger.verdicts.current("unrelated")?.verdict, "neutral");
     assert.deepEqual(r.championsReopened, [{ run: "race-1", seq: 2 }]);
     const history = ledger.db
       .prepare("select verdict from verdict where attempt = 'base' order by id")
@@ -641,11 +685,11 @@ describe("ledger", () => {
       ["win_confirmed", "invalidated"],
     );
     // The reopened champion no longer counts: the effective champion falls back to the seed.
-    assert.equal(ledger.currentChampion("race-1").seq, 1);
+    assert.equal(ledger.champions.current("race-1").seq, 1);
     const summary = ledger.summary() as { runs: { champion: { reopened: number[] } }[] };
     assert.deepEqual(summary.runs[0]?.champion.reopened, [2]);
     // Evidence invalidation allows re-measurement; a new verdict may follow.
-    ledger.recordVerdict({
+    ledger.verdicts.record({
       attempt: "base",
       verdict: "neutral",
       reasons: "re-run",
@@ -658,8 +702,8 @@ describe("ledger", () => {
     attempt(ledger, "x");
     attempt(ledger, "y", { parentAttempt: "x" }); // built on x's commit, x never champion
     attempt(ledger, "z", { parentAttempt: "y" });
-    ledger.recordVerdict({ attempt: "y", verdict: "win_screened", reasons: "t", judgedBy: "j" });
-    const r = ledger.invalidate({
+    ledger.verdicts.record({ attempt: "y", verdict: "win_screened", reasons: "t", judgedBy: "j" });
+    const r = ledger.verdicts.invalidate({
       subjectKind: "attempt",
       subjectId: "x",
       reason: "bad",
@@ -667,10 +711,10 @@ describe("ledger", () => {
     });
     assert.deepEqual(r.attempts, ["x", "y", "z"]);
     for (const id of ["x", "y", "z"])
-      assert.equal(ledger.currentVerdict(id)?.verdict, "invalidated");
+      assert.equal(ledger.verdicts.current(id)?.verdict, "invalidated");
     assert.throws(
       () =>
-        ledger.recordVerdict({
+        ledger.verdicts.record({
           attempt: "x",
           verdict: "win_confirmed",
           reasons: "t",
@@ -678,17 +722,20 @@ describe("ledger", () => {
         }),
       /invalidated/,
     );
-    assert.throws(() => ledger.promote(promoteArgs("x")), /invalidated/);
+    assert.throws(() => ledger.champions.promote(promoteArgs("x")), /invalidated/);
     // An invalidated change may be submitted again: it is not a duplicate.
-    assert.equal(ledger.findDuplicate("race-1", "x"), undefined);
+    assert.equal(ledger.attempts.findDuplicate("race-1", "x"), undefined);
   });
 
   test("a stale baseline champion seq is refused at promotion", () => {
     const { ledger } = setup();
     confirmed(ledger, "first");
     confirmed(ledger, "second"); // measured against seq 1
-    assert.deepEqual(ledger.promote(promoteArgs("first")), { ok: true, seq: 2 });
-    assert.deepEqual(ledger.promote(promoteArgs("second", 1)), { ok: false, currentSeq: 2 });
+    assert.deepEqual(ledger.champions.promote(promoteArgs("first")), { ok: true, seq: 2 });
+    assert.deepEqual(ledger.champions.promote(promoteArgs("second", 1)), {
+      ok: false,
+      currentSeq: 2,
+    });
   });
 
   test("the event cursor never loses or duplicates events under interleaved writes", () => {
@@ -696,7 +743,8 @@ describe("ledger", () => {
     let cursor = 0;
     const seen: number[] = [];
     for (let round = 0; round < 50; round++) {
-      for (let i = 0; i < (round % 7) + 1; i++) ledger.appendEvent("t", "tick", null, { round, i });
+      for (let i = 0; i < (round % 7) + 1; i++)
+        appendOther(ledger, "t", "tick", null, { round, i });
       const page = ledger.eventsAfter(cursor, 3);
       seen.push(...page.events.map((e) => e.id));
       cursor = page.next;
@@ -710,20 +758,5 @@ describe("ledger", () => {
     const all = ledger.eventsAfter(0, 100_000).events.map((e) => e.id);
     assert.deepEqual(seen, all);
     assert.equal(new Set(seen).size, seen.length);
-  });
-
-  test("an export's own event is not something new to export", () => {
-    const { ledger } = setup();
-    ledger.recordExport({
-      throughEvent: ledger.latestEventId(),
-      path: "x",
-      manifest: {},
-      actor: "t",
-    });
-    const through = ledger.lastExport()?.through_event ?? 0;
-    assert.equal(ledger.recordedAfter(through), true);
-    assert.equal(ledger.recordedAfter(through, ["export_written"]), false);
-    ledger.appendEvent("t", "tick", null, {});
-    assert.equal(ledger.recordedAfter(through, ["export_written"]), true);
   });
 });

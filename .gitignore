@@ -7,3 +7,4 @@ coverage/
 .DS_Store
 .dev/
 docs/_site/.astro/
+compose.gpu.yaml

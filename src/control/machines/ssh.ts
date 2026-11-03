@@ -161,6 +161,8 @@ export async function sshScript(
         if (code === 255) return reject(new Error(sshError(stderr)));
         resolve({ code: code ?? 1, stdout: Buffer.concat(out).toString(), stderr });
       });
+      // ssh may exit before it reads the script, as when it can't connect: its words say why.
+      child.stdin.on("error", () => undefined);
       child.stdin.end(script);
     });
   });
@@ -177,6 +179,9 @@ export function sshError(stderr: string): string {
     return `control could not reach the machine (${stderr.trim().split("\n").pop()})`;
   return `ssh failed: ${stderr.trim().split("\n").pop() ?? "no reason given"}`;
 }
+
+/** The last three lines of a script's output, as one line: why a step on a machine failed. */
+export const tail = (s: string) => s.trim().split("\n").slice(-3).join(" ").slice(0, 400);
 
 /** A fresh 0700 directory with the key (0600) and the pinned host keys, removed afterwards. */
 async function withKeyDir<T>(

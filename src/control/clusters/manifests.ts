@@ -1,4 +1,10 @@
-import { gpuSplit } from "../machines/deploy.ts";
+import { HEALTH } from "../../core/api/harness/supervisor.ts";
+import { HEALTH_URLS, healthProbe } from "../../core/health.ts";
+import { HARNESS_INBOX_DIR, SUPERVISOR_INBOX_DIR } from "../../core/paths.ts";
+import type { ReachEntry } from "../../core/reach.ts";
+import type { ProgramMode } from "../../core/rig-settings.ts";
+import { gpuSplit, type RigBus } from "../machines/index.ts";
+import { CLOSED_RANGES, reachEgress } from "./netcheck.ts";
 
 /**
  * A rig on a Kubernetes cluster, as the objects control applies with `kubectl apply -f -`: the
@@ -34,7 +40,17 @@ export interface ClusterRigPlan {
   storageGi: number;
   /** The rig's CPUs and memory (a slot's quota, say); none: the namespace's defaults apply. */
   resources?: { cpus: number; memoryGi: number } | undefined;
+  /** How the rig's agent programs run, which sets the supervisor's share of its resources. */
+  programMode: ProgramMode;
   controlPublicKey: string;
+  /**
+   * The message bus for its supervisor: the one way it reaches control but its registration.
+   * Control's authority goes in the supervisor's environment, so that every apply of the
+   * deployments (an update, a resize) carries the one control has now.
+   */
+  bus: RigBus;
+  /** The owner's list of addresses rigs may reach, which the harness's network rule opens. */
+  reach?: ReachEntry[] | undefined;
 }
 
 type Resources = { requests: Record<string, string>; limits: Record<string, string> };
@@ -43,27 +59,50 @@ const amount = (cpus: number, mi: number): Resources => {
   const memory = `${Math.round(mi)}Mi`;
   return { requests: { cpu, memory }, limits: { cpu, memory } };
 };
-/** The supervisor's fixed share of a rig: it relays, fetches and exports, and computes little. */
-export const SUPERVISOR_SHARE = { cpus: 0.5, memoryGi: 2 };
+/**
+ * The supervisor's share of a rig, by how the rig's agent programs run. It relays, fetches and
+ * exports, and computes little; but its advisors in their programs' own terminals take about
+ * 550 MiB each in Claude Code's, and two teachers and three reviewers can run at once, so there it
+ * has 4 GiB (the owner's choice, 2026-10-31).
+ */
+export const SUPERVISOR_SHARE: Record<ProgramMode, { cpus: number; memoryGi: number }> = {
+  terminal: { cpus: 0.5, memoryGi: 4 },
+  headless: { cpus: 0.5, memoryGi: 2 },
+};
+/** The least the harness keeps beside the supervisor's share: it takes the rest of the rig. */
+export const HARNESS_LEAST = { cpus: 1, memoryGi: 4 };
+
+/** The least CPUs and memory of a rig whose agent programs run so. */
+export const leastRigSize = (mode: ProgramMode) => ({
+  cpus: SUPERVISOR_SHARE[mode].cpus + HARNESS_LEAST.cpus,
+  memoryGi: SUPERVISOR_SHARE[mode].memoryGi + HARNESS_LEAST.memoryGi,
+});
 
 /**
- * A rig's CPUs and memory as its containers get them: the supervisor its small share, the
- * harness the rest, and each pod's preparing step a little (a quota counts it as well). Requests
- * equal limits, so the rig keeps what it was given.
+ * A rig's CPUs and memory as its containers get them: the supervisor its share for how the rig's
+ * agent programs run, the harness the rest, and each pod's preparing step a little (a quota counts
+ * it as well). Requests equal limits, so the rig keeps what it was given. Too little for the
+ * supervisor's share and the harness's least is refused in words.
  */
-export function rigResources(r: { cpus: number; memoryGi: number }): {
+export function rigResources(
+  r: { cpus: number; memoryGi: number },
+  mode: ProgramMode,
+): {
   harness: Resources;
   supervisor: Resources;
   prepare: Resources;
 } {
-  if (!(r.cpus >= 1.5) || !(r.memoryGi >= 6))
-    throw new Error("a rig needs at least 1.5 CPUs and 6 GiB of memory");
+  const share = SUPERVISOR_SHARE[mode];
+  const least = leastRigSize(mode);
+  if (!(r.cpus >= least.cpus) || !(r.memoryGi >= least.memoryGi))
+    throw new Error(
+      mode === "terminal"
+        ? `a rig needs at least ${least.cpus} CPUs and ${least.memoryGi} GiB of memory while its agent programs run in their own terminals: its supervisor takes ${share.memoryGi} GiB for the advisors' terminals, and its harness at least ${HARNESS_LEAST.memoryGi} GiB`
+        : `a rig needs at least ${least.cpus} CPUs and ${least.memoryGi} GiB of memory`,
+    );
   return {
-    harness: amount(
-      r.cpus - SUPERVISOR_SHARE.cpus,
-      (r.memoryGi - SUPERVISOR_SHARE.memoryGi) * 1024,
-    ),
-    supervisor: amount(SUPERVISOR_SHARE.cpus, SUPERVISOR_SHARE.memoryGi * 1024),
+    harness: amount(r.cpus - share.cpus, (r.memoryGi - share.memoryGi) * 1024),
+    supervisor: amount(share.cpus, share.memoryGi * 1024),
     prepare: amount(0.25, 256),
   };
 }
@@ -94,7 +133,9 @@ const labels = (rig: string, component?: "harness" | "supervisor") => ({
  * Prepares the shared volume's folders for both pods' users, as the compose images do. It changes
  * the owner of the folders it makes only, never their trees: everything below them is written by
  * their users, and root without DAC_OVERRIDE cannot read a folder a user made private (as the Codex
- * CLI makes its own), so a recursive chown would stop the rig at every start.
+ * CLI makes its own), so a recursive chown would stop the rig at every start. The inbox is the
+ * supervisor's, with the controller's group (setgid, so what the supervisor adds keeps it), and
+ * closed to everyone else, as the outbox is the controller's with the supervisor's group.
  */
 const prepare = (image: string, resources?: Resources): Obj => ({
   name: "prepare",
@@ -104,12 +145,18 @@ const prepare = (image: string, resources?: Resources): Obj => ({
   command: [
     "sh",
     "-c",
-    "mkdir -p /data/state /data/scratch /data/inbox/repos /data/inbox/models /data/outbox /data/supervisor && chown 10001:10001 /data/inbox /data/inbox/repos /data/inbox/models /data/supervisor && chown 10010:10001 /data/outbox && chmod 2750 /data/outbox",
+    "mkdir -p /data/state /data/scratch /data/inbox/repos /data/inbox/models /data/outbox /data/supervisor && chown 10001:10010 /data/inbox /data/inbox/repos /data/inbox/models && chmod 2750 /data/inbox /data/inbox/repos /data/inbox/models && chown 10001:10001 /data/supervisor && chown 10010:10001 /data/outbox && chmod 2750 /data/outbox",
   ],
   securityContext: {
+    // Root, with the controller's group as its own. Without DAC_READ_SEARCH, root enters the
+    // closed inbox only through that group: with root's group, it stopped at the inbox's folders
+    // once it had closed the inbox, and no pod of the rig started. Both pods run it at every
+    // start. FSETID keeps the setgid bit on the outbox, whose group (the supervisor's) is not
+    // root's: without it, chmod takes the bit off.
     runAsUser: 0,
+    runAsGroup: 10010,
     allowPrivilegeEscalation: false,
-    capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER"] },
+    capabilities: { drop: ["ALL"], add: ["CHOWN", "FOWNER", "FSETID"] },
   },
   volumeMounts: [{ name: "data", mountPath: "/data" }],
 });
@@ -117,7 +164,7 @@ const prepare = (image: string, resources?: Resources): Obj => ({
 /** The objects for one rig, in the order they are applied. */
 export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[] {
   const split = gpuSplit(p.gpus, p.judgeGpus);
-  const res = p.resources ? rigResources(p.resources) : undefined;
+  const res = p.resources ? rigResources(p.resources, p.programMode) : undefined;
   if (p.gpus > 0 && p.gpuMode === "dra" && !p.deviceClass)
     throw new Error("a DRA rig needs its device class");
   const n = clusterNames(p.rig);
@@ -142,6 +189,20 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
   const env = (pairs: Record<string, string>) =>
     Object.entries(pairs).map(([name, value]) => ({ name, value }));
   const gpu = p.gpus > 0;
+  // Each part's health (goal 173): its route answers 503 while one of its loops is late. A part
+  // may take minutes to start (the harness runs its isolation check before it listens), so the
+  // startup probe allows 10; then kubelet looks every 30 s, and restarts a part that fails three
+  // times running. The harness is asked over HTTP; the supervisor's route listens in its container
+  // only, so a program asks it there.
+  const probes = (how: Obj, startMinutes: number) => ({
+    startupProbe: { ...how, periodSeconds: 10, failureThreshold: startMinutes * 6 },
+    readinessProbe: { ...how, periodSeconds: 30, timeoutSeconds: 10, failureThreshold: 3 },
+    livenessProbe: { ...how, periodSeconds: 30, timeoutSeconds: 10, failureThreshold: 3 },
+  });
+  // At a stop the harness ends its trials as interrupted and waits at most 5 s for the judge's
+  // job, whose lease is taken back at its next start; the supervisor ends its calls. 30 s is room
+  // for both, stated here rather than left to the default.
+  const grace = { terminationGracePeriodSeconds: 30 };
   const deployment = (component: "harness" | "supervisor", pod: Obj): Obj => ({
     apiVersion: "apps/v1",
     kind: "Deployment",
@@ -156,10 +217,21 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
         },
       },
       // Neither part calls the Kubernetes API (control drives the rig's lifecycle), so neither
-      // pod gets the namespace's service-account token.
+      // pod gets the namespace's service-account token, nor the namespace's services as
+      // variables (KUBERNETES_SERVICE_HOST stays: the isolation selftest probes it). Both run
+      // under the container runtime's default seccomp profile, as compose and Quadlet run them,
+      // whatever the kubelet's default.
       template: {
         metadata: { labels: labels(p.rig, component) },
-        spec: { automountServiceAccountToken: false, ...pod },
+        spec: {
+          automountServiceAccountToken: false,
+          enableServiceLinks: false,
+          ...pod,
+          securityContext: {
+            ...((pod.securityContext as Obj | undefined) ?? {}),
+            seccompProfile: { type: "RuntimeDefault" },
+          },
+        },
       },
     },
   });
@@ -227,6 +299,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     deployment("harness", {
       affinity: together,
       ...placement,
+      ...grace,
       initContainers: [prepare(p.images.harness, res?.prepare)],
       containers: [
         {
@@ -241,6 +314,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
             THERMITE_SUPERVISOR_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
           }),
           ports: [{ containerPort: 8700, name: "api" }],
+          ...probes({ httpGet: { path: HEALTH.path, port: 8700 } }, 10),
           securityContext: {
             allowPrivilegeEscalation: false,
             capabilities: {
@@ -260,7 +334,7 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
           volumeMounts: [
             { name: "data", mountPath: "/var/lib/thermite", subPath: "state" },
             { name: "data", mountPath: "/scratch", subPath: "scratch" },
-            { name: "data", mountPath: "/inbox", subPath: "inbox", readOnly: true },
+            { name: "data", mountPath: HARNESS_INBOX_DIR, subPath: "inbox", readOnly: true },
             { name: "data", mountPath: "/outbox", subPath: "outbox" },
             secretFile("control-signing.pub", "/keys/control-signing.pub"),
             secretFile("harness-supervisor-token", "/run/secrets/harness-supervisor-token"),
@@ -278,8 +352,8 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     deployment("supervisor", {
       affinity: together,
       ...placement,
+      ...grace,
       initContainers: [prepare(p.images.harness, res?.prepare)],
-      securityContext: { runAsUser: 10001, runAsGroup: 10001 },
       containers: [
         {
           name: "supervisor",
@@ -291,12 +365,26 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
             CONTROL_URL: p.controlUrl.replace(/\/$/, ""),
             THERMITE_HARNESS_TOKEN_FILE: "/run/secrets/harness-supervisor-token",
             THERMITE_CONTROL_TOKEN_FILE: "/run/secrets/control-rig-token",
+            THERMITE_NATS_URL: p.bus.url,
+            THERMITE_NATS_CA: p.bus.ca,
           }),
-          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } },
+          // Its entry runs as root to close its folders to the advisor users and to start the
+          // supervisor and each advisor's program as users of their own; the supervisor keeps
+          // no capability.
+          securityContext: {
+            runAsUser: 0,
+            runAsGroup: 0,
+            allowPrivilegeEscalation: false,
+            capabilities: {
+              drop: ["ALL"],
+              add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETGID", "SETUID"],
+            },
+          },
+          ...probes({ exec: { command: ["node", "-e", healthProbe(HEALTH_URLS.supervisor)] } }, 5),
           ...(res ? { resources: res.supervisor } : {}),
           volumeMounts: [
             { name: "data", mountPath: "/var/lib/thermite-supervisor", subPath: "supervisor" },
-            { name: "data", mountPath: "/inbox", subPath: "inbox" },
+            { name: "data", mountPath: SUPERVISOR_INBOX_DIR, subPath: "inbox" },
             { name: "data", mountPath: "/outbox", subPath: "outbox", readOnly: true },
             secretFile("harness-supervisor-token", "/run/secrets/harness-supervisor-token"),
             secretFile("control-rig-token", "/run/secrets/control-rig-token"),
@@ -310,11 +398,10 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
     }),
   );
   if (p.placement === "created" || p.placement === "joined") {
-    const cluster = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]; // public-check: allow (the RFC 1918 private ranges, not addresses of any network)
     objects.push(
       {
-        // The harness reaches DNS and the internet, not the cluster or control; only its
-        // supervisor reaches it.
+        // The harness reaches DNS and the internet, not the cluster, control or the closed
+        // ranges; only its supervisor reaches it.
         apiVersion: "networking.k8s.io/v1",
         kind: "NetworkPolicy",
         metadata: meta(`${n.harness}-net`, "harness"),
@@ -348,7 +435,8 @@ export function clusterRigObjects(p: ClusterRigPlan, s: ClusterRigSecrets): Obj[
                 { port: 53, protocol: "TCP" },
               ],
             },
-            { to: [{ ipBlock: { cidr: "0.0.0.0/0", except: cluster } }] },
+            { to: [{ ipBlock: { cidr: "0.0.0.0/0", except: CLOSED_RANGES } }] },
+            ...reachEgress(p.reach ?? []),
           ],
         },
       },
@@ -388,6 +476,14 @@ export function clusterRigDeployments(p: ClusterRigPlan, stopped = false): Obj[]
  */
 export function clusterRigResized(p: ClusterRigPlan, stopped = false): Obj[] {
   return clusterRigParts(p, ["ResourceClaimTemplate", "Deployment"], stopped);
+}
+
+/**
+ * The rig's network rules alone, as a change of the list of addresses rigs may reach applies them.
+ * They don't depend on its CPUs and memory, which are left out so that no size check stops them.
+ */
+export function clusterRigNetwork(p: ClusterRigPlan): Obj[] {
+  return clusterRigParts({ ...p, resources: undefined }, ["NetworkPolicy"], false);
 }
 
 function clusterRigParts(p: ClusterRigPlan, kinds: string[], stopped: boolean): Obj[] {

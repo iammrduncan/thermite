@@ -1,0 +1,10 @@
+# turn 1
+The harness compacted this conversation (compaction 1) because it neared the model's context window. Your planning goes on: call submit_plan when your plan is ready.
+
+The whole conversation before this point is in the run's research folder, compactions/planner-x-1.md. You have no tool to read it here: rely on this summary.
+
+A summary of the trial so far:
+
+PLANNER-SUMMARY: past tiling was slower.
+
+Your most recent turns follow. Go on from where they leave off.

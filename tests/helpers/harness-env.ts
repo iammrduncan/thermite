@@ -11,8 +11,8 @@ import {
   signEnvelope,
 } from "../../src/core/commands.ts";
 import { parseContract } from "../../src/core/contract.ts";
-import { Ledger } from "../../src/harness/ledger.ts";
-import { HarnessService } from "../../src/harness/service.ts";
+import { Ledger } from "../../src/harness/ledger/index.ts";
+import { HarnessService } from "../../src/harness/service/index.ts";
 import { hillClimbFixture } from "./fixtures.ts";
 
 /** A throwaway harness with a real git source repo bundled into its inbox. */
@@ -71,7 +71,7 @@ export function makeHarnessEnv(rig = "rig-a", clock?: () => Date): HarnessEnv {
   git("bundle", "create", "--quiet", join(paths.inboxDir, "repos", "smoke.bundle"), "--all");
 
   const keys = generateSigningKeys();
-  const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"));
+  const ledger = Ledger.open(join(paths.stateDir, "ledger", "ledger.db"), clock);
   const service = new HarnessService({
     rig,
     ledger,

@@ -2,11 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
-import {
-  linkSession,
-  REPLY_REPORT_MS,
-  type ReplyNow,
-} from "../../../src/harness/agents/live-session.ts";
+import { linkSession, REPLY_REPORT_MS, type ReplyNow } from "../../../src/agents/live-session.ts";
 import {
   GUARD_MAX,
   guardRepeats,

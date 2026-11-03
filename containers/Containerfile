@@ -1,0 +1,399 @@
+# Thermite's images, from one file: control, the harness and the supervisor are its targets, and
+# the stages they share are written once, with each pinned version. Build from the repository's
+# root, with the image's target:
+#
+#   podman build --target harness -t thermite-harness -f containers/Containerfile .
+#
+# docker build takes the same arguments. The one-container rig image is built on a harness image
+# built first (containers/rig/Containerfile). The scripts in containers/build/ are mounted from the
+# build-scripts stage for the steps that run them, and stay out of every image.
+#
+# The harness's default base is the Node image (CPU rigs). GPU rigs build it with BASE_IMAGE set
+# to a CUDA devel image: CUDA 12 for Pascal to Hopper, CUDA 13 (which dropped Maxwell, Pascal and
+# Volta) for Turing to Blackwell (goal 132).
+ARG NODE_IMAGE=docker.io/library/node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+ARG BASE_IMAGE=${NODE_IMAGE}
+# The programs the images carry, each at one pinned release. OpenCode v2, in the harness and the
+# supervisor, with its release's MIT LICENSE (containers/harness/opencode/; update it with the
+# version). The Codex CLI, in both too, with its release's LICENSE and NOTICE
+# (containers/harness/codex/; update them with the version); empty: an image without it. Claude
+# Code, only when this names a version: it is not open source, so the published images do not
+# carry it. kubectl, in control, with the LICENSE of kubernetes/kubernetes at its tag
+# (containers/control/kubectl/; update it, and the sha256 sums of the kubectl stage, with the
+# version).
+ARG OPENCODE_VERSION=2.1.4
+ARG CODEX_VERSION=0.162.1
+ARG CLAUDE_CODE_VERSION=
+ARG KUBECTL_VERSION=v1.37.1
+
+# Thermite's code and its packages, built once for every image.
+FROM ${NODE_IMAGE} AS build
+WORKDIR /src
+COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
+# It patches Pi's streaming tool-call parse after the install (goal 140).
+COPY scripts/patch-pi-ai.mjs ./scripts/
+# No package's install script runs here: this stage has no compiler for node-pty's native part,
+# which the harness's final stage and the supervisor's pty stage build (below), and no other
+# package Thermite runs needs its own.
+RUN npm ci --no-fund --no-audit --ignore-scripts && node scripts/patch-pi-ai.mjs
+COPY src ./src
+# node-pty's prebuilt modules, for other systems, and its Windows parts stay out of what the images
+# copy: each image that runs the terminal host builds its own module. So do pi-tui's prebuilt
+# helpers for its clipboard and modifier keys, which nothing Thermite runs loads: no image holds a
+# native part of pi-tui (goal 169).
+RUN npm run build && npm prune --omit=dev --no-fund --no-audit \
+ && rm -rf node_modules/node-pty/prebuilds node_modules/node-pty/third_party node_modules/node-pty/deps \
+    node_modules/@earendil-works/pi-tui/native
+
+# Control's packages: without node-pty, the one optional dependency, and what it alone needs.
+# node-pty is the terminal host's (goal 169), which control does not run.
+FROM build AS control-modules
+RUN npm prune --omit=dev --omit=optional --no-fund --no-audit
+
+# The supervisor's packages: node-pty and node-addon-api's headers, which only its build reads, go
+# to the pty stage, apart from what the supervisor's final stage copies.
+FROM build AS supervisor-modules
+RUN mkdir /pty && mv node_modules/node-pty node_modules/node-addon-api /pty/
+
+# node-pty's native part, for the terminal host the advisors' programs run in (goal 169; the
+# owner's decision of 2026-10-31): built in this stage alone, with Debian's compiler and make, and
+# the Python node-gyp runs, downloaded for it, npm's node-gyp and the Node image's own headers.
+# Only the built module goes on to the supervisor's final stage: node-pty's sources, the build's
+# own files and node-addon-api stay here, and no compiler is in that image. The harness builds its
+# own module in its final stage, on its own base.
+FROM ${NODE_IMAGE} AS pty
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends g++ make python3 \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /src/node_modules
+COPY --from=supervisor-modules /pty/ ./
+RUN cd node-pty \
+ && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild \
+      --nodedir=/usr/local --devdir=/tmp/node-gyp \
+ && install -D -m 0755 build/Release/pty.node /tmp/pty.node \
+ && rm -rf build node-addon-api scripts src binding.gyp /tmp/node-gyp \
+ && install -D -m 0755 /tmp/pty.node build/Release/pty.node \
+ && rm -f /tmp/pty.node
+
+# The build scripts (containers/build/), which the steps that run them mount from this stage, so no
+# image keeps them. A stage, not the context: Podman's builder can't open a script bound from the
+# context.
+FROM scratch AS build-scripts
+COPY containers/build/ /
+
+# Node.js itself, and npm's node-gyp with the Node.js headers, for the harness on any base.
+FROM ${NODE_IMAGE} AS node
+
+# OpenCode v2, the worker harness a rig may choose instead of Pi, and a harness an advisor may run
+# in (goal 073): one pinned release's binary (npm checks the package against the registry's hash),
+# with the release's MIT LICENSE, which the npm package leaves out.
+FROM ${NODE_IMAGE} AS opencode
+ARG OPENCODE_VERSION
+ARG TARGETARCH
+COPY containers/harness/opencode/LICENSE /usr/local/share/doc/opencode/LICENSE
+RUN cd /tmp \
+ && npm pack --silent "@opencode/cli-linux-$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)@${OPENCODE_VERSION}" \
+ && tar -xzf opencode-cli-linux-*.tgz package/bin/opencode \
+ && install -m 0755 package/bin/opencode /usr/local/bin/opencode \
+ && rm -rf /tmp/*
+
+# The Codex CLI, OpenAI's open-source agent program (Apache-2.0), a worker harness for a ChatGPT
+# sign-in or an OpenAI-compatible key, and a harness an advisor may run in (goal 073): one pinned
+# release's Linux package (npm checks it against the registry's hash), kept whole in /opt/codex
+# (its binary finds its helpers beside it), with the release's LICENSE and NOTICE beside it and,
+# for the supervisor, in /usr/local/share/doc/codex. An empty CODEX_VERSION builds an image
+# without it.
+FROM ${NODE_IMAGE} AS codex
+ARG CODEX_VERSION
+ARG TARGETARCH
+COPY containers/harness/codex/ /tmp/codex-legal/
+RUN mkdir -p /out/opt /out/doc \
+ && if [ -n "$CODEX_VERSION" ]; then \
+      triple="$([ "$TARGETARCH" = arm64 ] && echo aarch64 || echo x86_64)-unknown-linux-musl" \
+      && cd /tmp \
+      && npm pack --silent "@openai/codex@${CODEX_VERSION}-linux-$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)" \
+      && tar -xzf openai-codex-*.tgz \
+      && test -x "package/vendor/${triple}/bin/codex" \
+      && cp -a "package/vendor/${triple}" /out/opt/codex \
+      && mkdir -p /out/doc/codex \
+      && install -m 0644 /tmp/codex-legal/LICENSE /tmp/codex-legal/NOTICE /out/opt/codex/ \
+      && install -m 0644 /tmp/codex-legal/LICENSE /tmp/codex-legal/NOTICE /out/doc/codex/ \
+      && /out/opt/codex/bin/codex --version \
+      && rm -rf /tmp/*; \
+    fi
+
+# Claude Code, for a Claude subscription (only Anthropic's own program may use one), for the
+# workers and for advisors: downloaded when the image is built, and only when CLAUDE_CODE_VERSION
+# names a version. One pinned release's Linux binary; npm checks the package against the
+# registry's hash.
+FROM ${NODE_IMAGE} AS claude
+ARG CLAUDE_CODE_VERSION
+ARG TARGETARCH
+RUN mkdir -p /out \
+ && if [ -n "$CLAUDE_CODE_VERSION" ]; then \
+      cd /tmp \
+      && npm pack --silent "@anthropic-ai/claude-code-linux-$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)@${CLAUDE_CODE_VERSION}" \
+      && tar -xzf anthropic-ai-claude-code-linux-*.tgz \
+      && bin="$(find package -maxdepth 2 -type f -name claude | head -n 1)" \
+      && test -n "$bin" \
+      && install -m 0755 "$bin" /out/claude \
+      && /out/claude --version \
+      && rm -rf /tmp/*; \
+    fi
+
+# kubectl, for rigs control sets up on Kubernetes clusters: a pinned release, checked by sha256.
+FROM ${NODE_IMAGE} AS kubectl
+ARG TARGETARCH
+ARG KUBECTL_VERSION
+RUN set -eu; arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$arch" in \
+      amd64) sum=65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8 ;; \
+      arm64) sum=ff749f4b78d9c4f1ec87307df9b50119ed819e2094aa9810cb9acffc3286c8c7 ;; \
+      *) echo "no pinned kubectl for $arch" >&2; exit 1 ;; \
+    esac; \
+    node -e 'fetch(process.argv[1]).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); }).then((b) => require("node:fs").writeFileSync("/kubectl", Buffer.from(b)))' \
+      "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl"; \
+    echo "$sum  /kubectl" | sha256sum -c -; chmod 0755 /kubectl
+
+# --- control: the control service's image: dashboard, API, MCP, command queues ---------------------
+FROM ${NODE_IMAGE} AS control
+# The base's system packages are upgraded first, so each build takes the distribution's fixes
+# (goal 125).
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends tini ca-certificates git openssh-client \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/thermite
+COPY --from=build /src/package.json ./
+COPY --from=control-modules /src/node_modules ./node_modules
+COPY --from=build /src/dist ./dist
+# Thermite's license and notice, which every copy of it carries (Apache License 2.0, section 4).
+COPY LICENSE NOTICE /usr/local/share/doc/thermite/
+# xterm.js, which draws a trial's terminal on Live (goal 169): the copy kept in the repository, with
+# its MIT licence. Control serves it only when its SHA-256 is the pinned one.
+COPY vendor/xterm ./vendor/xterm
+# PDF.js's legacy build, which reads the text of the knowledge base's PDF files (goal 175): the two
+# JavaScript files kept in the repository, with its Apache-2.0 licence. Control loads them only
+# when their SHA-256 values are the pinned ones, in a child process with no native module.
+COPY vendor/pdfjs ./vendor/pdfjs
+COPY containers/thermite /usr/local/bin/thermite
+COPY --from=kubectl /kubectl /usr/local/bin/kubectl
+COPY containers/control/kubectl/LICENSE /usr/local/share/doc/kubectl/LICENSE
+# The runtime user, with a passwd entry: OpenSSH (machines, git over SSH) refuses a uid without one.
+# Podman adds the entry by itself; Kubernetes doesn't. Its home is on the state volume.
+RUN groupadd -g 10001 thermite \
+ && useradd -u 10001 -g 10001 -d /var/lib/thermite-control -M -s /usr/sbin/nologin thermite
+# Mount points owned by the runtime user, so new named volumes inherit the ownership: its state,
+# its secrets key (closed to others), its public key and the message bus's authority for the rigs,
+# and the files it writes for the message bus's server (its users, its certificate and key).
+RUN mkdir -p /var/lib/thermite-control /var/lib/thermite-control-secrets /keys /nats-config \
+ && chown 10001:10001 /var/lib/thermite-control /var/lib/thermite-control-secrets /keys /nats-config \
+ && chmod 0700 /var/lib/thermite-control-secrets
+# No set-id file anywhere (containers/build/no-set-id.sh). Last, after every package; the build
+# fails if one is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh \
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
+ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning HOME=/var/lib/thermite-control
+# The source commit the image is built from (empty: not given). Control reports it with
+# Thermite's version from package.json, and compares rigs' builds with its own.
+ARG THERMITE_COMMIT=
+ENV THERMITE_COMMIT=${THERMITE_COMMIT}
+USER 10001:10001
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "/opt/thermite/dist/control/main.js"]
+
+# --- supervisor: reporting and command relay, git operations, the advisors' runtimes ---------------
+# (Pi in its own code, OpenCode v2, the Codex CLI and, when built with it, Claude Code).
+FROM ${NODE_IMAGE} AS supervisor
+# python3: for an operator's staging scripts, which put models and repo bundles into the inbox
+# before the supervisor starts (they run in this container). No bubblewrap: an advisor runs
+# Claude Code with its own sandbox off (src/agents/programs/claude-code/index.ts says why).
+# The base's system packages are upgraded first, so each build takes the distribution's fixes
+# (goal 125).
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends git openssh-client tini ca-certificates python3 \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/thermite
+COPY --from=build /src/package.json ./
+COPY --from=supervisor-modules /src/node_modules ./node_modules
+# node-pty, built in the pty stage: the terminal host's pseudo-terminals (goal 169).
+COPY --from=pty /src/node_modules/node-pty ./node_modules/node-pty
+COPY --from=build /src/dist ./dist
+# Thermite's license and notice, which every copy of it carries (Apache License 2.0, section 4).
+COPY LICENSE NOTICE /usr/local/share/doc/thermite/
+COPY containers/thermite /usr/local/bin/thermite
+# Claude Code, when the build asked for it (CLAUDE_CODE_VERSION); otherwise this copies nothing.
+COPY --from=claude /out/ /usr/local/bin/
+# OpenCode v2 and the Codex CLI for advisors (goal 073), with their licences. Codex is on the PATH
+# as a link; an image built with an empty CODEX_VERSION has neither its files nor the link.
+COPY --from=opencode /usr/local/bin/opencode /usr/local/bin/opencode
+COPY --from=opencode /usr/local/share/doc/opencode/ /usr/local/share/doc/opencode/
+COPY --from=codex /out/opt/ /opt/
+COPY --from=codex /out/doc/ /usr/local/share/doc/
+RUN if [ -x /opt/codex/bin/codex ]; then ln -s /opt/codex/bin/codex /usr/local/bin/codex; fi
+# The supervisor's user and the advisors' users (containers/build/supervisor-users.sh).
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/supervisor-users.sh
+# Mount points owned by the supervisor's user, so new named volumes inherit the ownership. The
+# inbox is mounted in /supervisor (src/core/paths.ts), root's folder that only the supervisor's
+# group may enter: no advisor's program reaches what the supervisor fetched (a kit's bundle among
+# it), whatever the modes in the mounted folder are.
+RUN mkdir -p /var/lib/thermite-supervisor/home /results /outbox /supervisor/inbox \
+ && chown 10001:10001 /var/lib/thermite-supervisor /var/lib/thermite-supervisor/home /results /supervisor/inbox \
+ && chown 0:10001 /supervisor && chmod 0750 /supervisor \
+ && chown 10010:10001 /outbox && chmod 2750 /outbox
+# No set-id file anywhere (containers/build/no-set-id.sh). Last, after every package; the build
+# fails if one is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
+# It fails too if node-pty's module does not load, if the terminal host's setsid is missing, or if
+# a compiler or make is in the image (goal 169: node-pty is built in a stage of its own).
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh \
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)" \
+ && node -e "if (typeof require('/opt/thermite/node_modules/node-pty').native.open !== 'function') process.exit(1)" \
+ && command -v setsid \
+ && ! command -v cc && ! command -v gcc && ! command -v g++ && ! command -v make
+ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
+# The source commit the image is built from (empty: not given). The supervisor sends it with
+# Thermite's version from package.json on its calls to control, which compares them with its own.
+ARG THERMITE_COMMIT=
+ENV THERMITE_COMMIT=${THERMITE_COMMIT}
+# The entry runs as root, as the harness's broker does: it closes the supervisor's secrets, state,
+# inbox and results to the advisor users, serves the runner that starts each advisor's program as
+# one of them, and starts the supervisor as its own user (src/supervisor/advisor-runs/main.ts).
+# It needs only CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID and SETUID (compose.yaml drops the rest);
+# the supervisor keeps none.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "/opt/thermite/dist/supervisor/advisor-runs/main.js"]
+
+# --- harness: a rig's judge, broker and agents -----------------------------------------------------
+FROM ${BASE_IMAGE} AS harness
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+# git for the mirror; a C/C++ toolchain, CMake, Ninja and ccache for kit and lane builds of real
+# projects (an inference engine, for example); Python 3 with numpy for kit run and check scripts.
+# The broker needs prlimit (process limits), setpriv (a dedicated development card's groups) and
+# taskset (timed runs on the judge card's local CPUs); the terminal host needs setsid (an agent's
+# program on its own terminal, goal 169). No bubblewrap: the agents and the advisors
+# run Claude Code with its own sandbox off (src/agents/programs/claude-code/index.ts says why).
+# The base's system packages are upgraded first, so each build takes the distribution's fixes
+# (goal 125).
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends git tini ca-certificates gcc g++ libc6-dev make \
+      cmake ninja-build ccache python3 python3-numpy \
+ && (command -v setpriv >/dev/null || apt-get install -y --no-install-recommends setpriv) \
+ && command -v setpriv && command -v prlimit && command -v taskset && command -v setsid \
+ && rm -rf /var/lib/apt/lists/*
+# The GPU fence: the broker starts every role's command in a Landlock rule set that leaves out
+# the GPU device nodes the role may not open (containers/harness/devfence.c).
+COPY containers/harness/devfence.c /tmp/devfence.c
+RUN gcc -O2 -Wall -Wextra -Werror -o /usr/local/bin/thermite-devfence /tmp/devfence.c \
+ && rm /tmp/devfence.c
+# One user per role (src/harness/broker/runner.ts has the same ids). The broker runs each kind of
+# work as its own user; `run` and the lanes' development runs get the `gpu` group, which owns
+# the device nodes. With a dedicated development card, `gpudev` owns that card and `gpuctl` the
+# nodes both sides need (src/harness/broker/devices.ts). The broker sets every role's groups by
+# number; the development users' entry here is `gpudev`, so a plain `runuser` never reaches the
+# judge's card. A rig with more cards uses gpu-j1..gpu-j7 for further judge cards (timed by run-1
+# to run-7) and gpu-d1..gpu-d7 for further development cards. Planner calls and model checks under
+# OpenCode, Claude Code or Codex run as `planner` and `model-check`, users no lane shares. Judge
+# card 0 builds as `builder`, cards 1 to 7 as builder-1..builder-7, so builds run apart at once.
+# Each card runs the kit's check as `checker` (checker-1..checker-7), which reads the kits and the
+# baselines through the `checkers` group, and a kit's driver as `driver` (driver-1..driver-7),
+# apart from the candidate's timing user.
+RUN groupadd -g 10500 gpu && groupadd -g 10501 gpudev && groupadd -g 10502 gpuctl \
+ && groupadd -g 10049 checkers \
+ && for i in $(seq 0 7); do \
+      s=$([ "$i" = 0 ] || echo "-$i") \
+      && groupadd -g $((10050 + i)) checker$s \
+      && useradd -u $((10050 + i)) -g checker$s -M -d /nonexistent -s /usr/sbin/nologin checker$s \
+      && groupadd -g $((10060 + i)) driver$s \
+      && useradd -u $((10060 + i)) -g driver$s -M -d /nonexistent -s /usr/sbin/nologin driver$s; \
+    done \
+ && groupadd -g 10010 thermite && useradd -u 10010 -g thermite -M -d /nonexistent -s /usr/sbin/nologin thermite \
+ && groupadd -g 10020 builder && useradd -u 10020 -g builder -M -d /nonexistent -s /usr/sbin/nologin builder \
+ && for i in $(seq 1 7); do \
+      groupadd -g $((10020 + i)) builder-$i \
+      && useradd -u $((10020 + i)) -g builder-$i -M -d /nonexistent -s /usr/sbin/nologin builder-$i; \
+    done \
+ && groupadd -g 10040 planner && useradd -u 10040 -g planner -M -d /nonexistent -s /usr/sbin/nologin planner \
+ && groupadd -g 10041 model-check && useradd -u 10041 -g model-check -M -d /nonexistent -s /usr/sbin/nologin model-check \
+ && useradd -u 10030 -g gpu -M -d /nonexistent -s /usr/sbin/nologin run \
+ && for i in $(seq 1 7); do \
+      groupadd -g $((10510 + i)) gpu-j$i \
+      && useradd -u $((10030 + i)) -g gpu-j$i -M -d /nonexistent -s /usr/sbin/nologin run-$i \
+      && groupadd -g $((10520 + i)) gpu-d$i; \
+    done \
+ && for n in $(seq 1 16); do \
+      groupadd -g $((10100 + n)) lane-$n \
+      && useradd -u $((10100 + n)) -g lane-$n -M -d /nonexistent -s /usr/sbin/nologin lane-$n \
+      && useradd -u $((10200 + n)) -g gpudev -M -d /nonexistent -s /usr/sbin/nologin lane-$n-dev \
+      && groupadd -g $((10300 + n)) agent-$n \
+      && useradd -u $((10300 + n)) -g agent-$n -M -d /nonexistent -s /usr/sbin/nologin agent-$n; \
+    done
+# The outbox mount point, as the broker keeps it: thermite writes, the supervisor's group (10001)
+# reads. A new named volume copies this ownership, whichever container mounts it first.
+RUN mkdir -p /outbox && chown 10010:10001 /outbox && chmod 2750 /outbox
+# The folder the inbox is mounted in (/controller/inbox, src/core/paths.ts): root's, with the
+# controller's group, closed to everyone else. No role reaches what the supervisor fetched (a kit's
+# bundle among it), whatever the modes in the mounted folder are.
+RUN mkdir -p /controller && chown 0:10010 /controller && chmod 0750 /controller
+WORKDIR /opt/thermite
+COPY --from=build /src/package.json ./
+COPY --from=build /src/node_modules ./node_modules
+# node-pty's native part, for the terminal host's pseudo-terminals (goal 169): built here, where
+# the compiler, make and Python are, with node-gyp and the Node.js headers of the Node stage
+# mounted for this step only, so nothing is downloaded and neither stays in the image. Only the
+# built module is kept: node-pty's sources and the build's own files, and node-addon-api's
+# headers, which only the build reads, are removed.
+RUN --mount=type=bind,from=node,source=/usr/local,target=/mnt/node \
+    cd node_modules/node-pty \
+ && node /mnt/node/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild \
+      --nodedir=/mnt/node --devdir=/tmp/node-gyp \
+ && install -D -m 0755 build/Release/pty.node /tmp/pty.node \
+ && rm -rf build node-addon-api scripts src binding.gyp /tmp/node-gyp \
+ && install -D -m 0755 /tmp/pty.node build/Release/pty.node \
+ && rm -f /tmp/pty.node \
+ && rm -rf ../node-addon-api \
+ && node -e "if (typeof require('/opt/thermite/node_modules/node-pty').native.open !== 'function') process.exit(1)"
+COPY --from=build /src/dist ./dist
+# Thermite's license and notice, which every copy of it carries (Apache License 2.0, section 4).
+COPY LICENSE NOTICE /usr/local/share/doc/thermite/
+COPY --chmod=0755 containers/thermite /usr/local/bin/thermite
+# The OpenCode harness: its binary, and Thermite's tools for an agent's own shell.
+COPY --from=opencode /usr/local/bin/opencode /usr/local/bin/opencode
+COPY --from=opencode /usr/local/share/doc/opencode/ /usr/local/share/doc/opencode/
+# Claude Code, when the build asked for it (CLAUDE_CODE_VERSION); otherwise this copies nothing.
+COPY --from=claude /out/ /usr/local/bin/
+# The Codex harness, unless the build left it out (CODEX_VERSION empty): on the PATH as a link, so
+# the broker knows Codex's own process (its real path) from its commands'.
+COPY --from=codex /out/opt/ /opt/
+RUN if [ -x /opt/codex/bin/codex ]; then ln -s /opt/codex/bin/codex /usr/local/bin/codex; fi
+COPY --chmod=0755 containers/thermite-trial /usr/local/bin/thermite-trial
+# The smoke check's kits and projects (the rig_check smoke command builds them into a campaign),
+# with the other examples: like every kit, the judge's alone. They are root's, with the
+# controller's group (thermite), which reads them, and closed to every other user, the lanes' and
+# the agents' among them. Folders and the scripts git keeps executable are 0750, other files 0640:
+# git records only the execute bit, so the smoke kit's commit stays the one
+# examples/contracts/smoke-cpu-goal.json names. The build fails if anything there is left open to
+# other users.
+COPY kits ./checks/kits
+COPY examples ./checks/examples
+RUN chown -R 0:10010 checks \
+ && chmod -R u=rwX,g=rX,o= checks \
+ && test -z "$(find checks -perm /o=rwx -print -quit)"
+# No set-id file anywhere (containers/build/no-set-id.sh). Last, after every package; the build
+# fails if one is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh \
+ && test -z "$(find / -xdev -type d -path '*/@earendil-works/pi-tui/native' -print -quit)"
+ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
+# The source commit the image is built from (empty: not given). The harness reports it with
+# Thermite's version from package.json; control compares them with its own.
+ARG THERMITE_COMMIT=
+ENV THERMITE_COMMIT=${THERMITE_COMMIT}
+# The image's identity (empty: not given), which the harness reports as its image and puts in
+# every build's key. The release workflow gives the tag and short commit: 0.1.0-cuda+1a2b3c4d5e6f.
+ARG THERMITE_IMAGE_ID=
+ENV THERMITE_IMAGE_ID=${THERMITE_IMAGE_ID}
+# The broker runs as root so it can start lane, builder and run processes as separate users. It
+# needs only CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETGID and SETUID (compose.yaml drops the rest).
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "/opt/thermite/dist/harness/broker/main.js"]

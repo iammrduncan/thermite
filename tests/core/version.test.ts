@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
+import { buildInfo } from "../../src/common/build-info.ts";
 import {
   buildFromHeaders,
   buildHeaders,
-  buildInfo,
   compareVersions,
   incompatibility,
   OLDEST_PROTOCOL,

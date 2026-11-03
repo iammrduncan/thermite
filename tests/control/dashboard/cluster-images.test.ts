@@ -25,17 +25,20 @@ async function rigOn(deploymentStdout?: string) {
     "k_slot__k8s-c": "thermite-slot-1",
   });
   await new Promise((r) => setTimeout(r, 20));
-  s.store.setClusterRigStatus("cpu-1", "running");
+  s.store.clusters.setRigStatus("cpu-1", "running");
   return s;
 }
 
 describe("Update to these images when kubectl's answer can't be read (goal 161)", () => {
   test("an answer that is not a deployment is reported as a failure, never as an unchanged rig", async () => {
     const s = await rigOn("Error from server: etcdserver: request timed out\n");
-    const said = await s.post("/ui/rigs/cpu-1/cluster/images", {});
+    // kubectl's words stay on control: the page's address names them by an ID.
+    const to = await s.post("/ui/rigs/cpu-1/cluster/images", {});
+    assert.match(to, /error=note-[0-9a-f]+$/);
+    const said = await s.page(to);
     assert.match(
       said,
-      /error=Control could not read cpu-1's deployment to compare control's address: kubectl's answer is not a deployment/,
+      /Control could not read cpu-1's deployment to compare control's address: kubectl's answer is not a deployment/,
     );
     assert.doesNotMatch(said, /already runs control's images/);
   });

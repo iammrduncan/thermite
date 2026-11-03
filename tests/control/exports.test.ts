@@ -13,11 +13,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
-import { createControlApi } from "../../src/control/api.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { tunnelRouteAllowed } from "../../src/control/tunnel.ts";
-import { generateSigningKeys } from "../../src/core/commands.ts";
+import { tunnelRouteAllowed } from "../../src/control/runpod/tunnel.ts";
 import { uploadExportsOnce } from "../../src/supervisor/export-upload.ts";
+import { controlOnly, signIn } from "../helpers/control-stack.ts";
+import { ingestReport } from "../helpers/control-store.ts";
 
 const OWNER = "owner-token-abcdef";
 const RIG_A = "rig-a-token-abcdef";
@@ -48,13 +47,10 @@ function setup() {
   const root = mkdtempSync(join(tmpdir(), "thermite-exports-"));
   const outbox = join(root, "outbox");
   mkdirSync(outbox);
-  const store = new ControlStore(":memory:");
-  const control = createControlApi(
-    store,
-    { admin: OWNER, rigs: { "rig-a": RIG_A, "rig-b": RIG_B } },
-    generateSigningKeys().privateKeyPem,
-    { staleAfterMs: 180_000, exportsDir: join(root, "control-exports") },
-  );
+  const { store, control } = controlOnly({
+    tokens: { admin: OWNER, rigs: { "rig-a": RIG_A, "rig-b": RIG_B } },
+    options: { exportsDir: join(root, "control-exports") },
+  });
   let pieces = 0;
   let pieceBytes = 0;
   let breakAfter = Number.POSITIVE_INFINITY;
@@ -110,7 +106,7 @@ describe("exports sent to control", () => {
     assert.deepEqual(after.queue, []);
     assert.deepEqual(after.uploaded, [NAME]);
     assert.equal(after.lastError, undefined);
-    assert.ok(after.lastLedgerAt, "the first export takes the ledger snapshot along");
+    assert.ok(after.lastLedgerAt, "the copy of the ledger in the export goes along");
     assert.ok(s.sent().pieces > 10, "in many pieces");
 
     const list = (await (
@@ -137,9 +133,11 @@ describe("exports sent to control", () => {
     assert.equal(kept.rig, "rig-a");
     assert.ok(kept.created_at);
 
-    // The next export within the day leaves its ledger snapshot out; control takes it so.
+    // An export of what changed holds no copy of the ledger (only a full export does,
+    // outbox.ts); control takes it so.
     const next = "20261020T130000Z-89abcdef";
-    writeExport(s.outbox, next, files());
+    const { "ledger.sqlite": _ledger, ...withoutLedger } = files();
+    writeExport(s.outbox, next, withoutLedger);
     const again = await uploadExportsOnce(s.cfg, { ...after, queue: [next] });
     assert.deepEqual(again.uploaded, [NAME, next]);
     assert.equal(again.lastLedgerAt, after.lastLedgerAt);
@@ -158,7 +156,7 @@ describe("exports sent to control", () => {
     writeExport(s.outbox, full, files(), true);
     const third = await uploadExportsOnce(s.cfg, { ...again, queue: [full] });
     assert.deepEqual(third.uploaded.at(-1), full);
-    assert.ok(s.store.rigExport("rig-a", full)?.files["ledger.sqlite"]);
+    assert.ok(s.store.exports.get("rig-a", full)?.files["ledger.sqlite"]);
   });
 
   test("a broken upload goes on next round where control stopped", async () => {
@@ -171,13 +169,13 @@ describe("exports sent to control", () => {
     assert.deepEqual(first.queue, [NAME], "it waits for the next round");
     assert.deepEqual(first.uploaded, []);
     assert.match(String(first.lastError), /^upload failed: connection reset/);
-    assert.equal(s.store.rigExport("rig-a", NAME)?.complete_at, null);
+    assert.equal(s.store.exports.get("rig-a", NAME)?.complete_at, null);
     s.breakAfter(Number.POSITIVE_INFINITY);
     const second = await uploadExportsOnce(s.cfg, first);
     assert.deepEqual(second.uploaded, [NAME]);
     assert.equal(second.lastError, undefined);
     assert.equal(s.sent().bytes, total - 6 * 64, "only what control did not have yet");
-    assert.ok(s.store.rigExport("rig-a", NAME)?.complete_at);
+    assert.ok(s.store.exports.get("rig-a", NAME)?.complete_at);
   });
 
   test("only the rig's own token sends its exports, and only the owner's reads them", async () => {
@@ -194,7 +192,7 @@ describe("exports sent to control", () => {
     assert.equal((await begin(undefined)).status, 401, "no token");
     assert.equal((await begin(RIG_B)).status, 401, "another rig's token");
     assert.equal((await begin(OWNER)).status, 401, "the owner's token is not a rig's");
-    assert.equal(s.store.rigExport("rig-a", NAME), undefined, "nothing was started");
+    assert.equal(s.store.exports.get("rig-a", NAME), undefined, "nothing was started");
     const piece = (token: string) =>
       s.control.request(`/v1/rigs/rig-a/exports/${NAME}/file?path=events.jsonl&offset=0`, {
         method: "POST",
@@ -214,10 +212,10 @@ describe("exports sent to control", () => {
       assert.equal((await s.control.request(path, { headers: s.as(RIG_A) })).status, 401, path);
       assert.equal((await s.control.request(path)).status, 401, path);
     }
-    // A retired rig sends nothing more.
-    s.store.retireAnyRig("rig-a", "owner:test");
-    assert.equal((await begin(RIG_A)).status, 403);
-    assert.equal((await piece(RIG_A)).status, 403);
+    // A retired rig sends nothing more: the token control made for it has ended.
+    s.store.retired.add("rig-a", "owner:test");
+    assert.equal((await begin(RIG_A)).status, 401);
+    assert.equal((await piece(RIG_A)).status, 401);
     // Through the tunnel to a rig behind a proxy: its sends only, never the owner's reads.
     assert.ok(tunnelRouteAllowed("rp-1", "POST", `/v1/rigs/rp-1/exports/${NAME}`));
     assert.ok(
@@ -288,7 +286,7 @@ describe("exports sent to control", () => {
       /the SHA-256 of attempts\/a-1\.patch is [0-9a-f]{64}, not the manifest's/,
     );
     assert.equal(why.received, 0, "it starts again from the first byte");
-    assert.equal(s.store.rigExport("rig-a", NAME)?.done.length, 0);
+    assert.equal(s.store.exports.get("rig-a", NAME)?.done.length, 0);
     const missing = await s.control.request(
       `/v1/rigs/rig-a/exports/${NAME}/file?path=attempts%2Fa-1.patch`,
       { headers: s.as(OWNER) },
@@ -301,7 +299,7 @@ describe("exports sent to control", () => {
     const ok = await send("attempts/a-1.patch", 0, patch);
     assert.equal(ok.status, 200);
     assert.deepEqual(await ok.json(), { received: patch.length, done: true, complete: false });
-    assert.deepEqual(s.store.rigExport("rig-a", NAME)?.done, ["attempts/a-1.patch"]);
+    assert.deepEqual(s.store.exports.get("rig-a", NAME)?.done, ["attempts/a-1.patch"]);
   });
 });
 
@@ -310,16 +308,6 @@ const filesUnder = (dir: string): string[] =>
   (readdirSync(dir, { recursive: true }) as string[]).filter((p) =>
     statSync(join(dir, p)).isFile(),
   );
-
-/** Signs in to the dashboard with the owner's token: the session's cookie. */
-async function signIn(control: ReturnType<typeof setup>["control"]): Promise<string> {
-  const login = await control.request("/ui/login", {
-    method: "POST",
-    body: new URLSearchParams({ token: OWNER }),
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-  });
-  return (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-}
 
 describe("Export and the Exports page (goal 103)", () => {
   // A path ustar can't hold (a name of 123 characters: a pax record) and one it holds split at a
@@ -338,7 +326,7 @@ describe("Export and the Exports page (goal 103)", () => {
     const f = fullFiles();
     writeExport(s.outbox, NAME, f, true);
     await uploadExportsOnce(s.cfg, { queue: [NAME], uploaded: [] });
-    assert.ok(s.store.rigExport("rig-a", NAME)?.complete_at);
+    assert.ok(s.store.exports.get("rig-a", NAME)?.complete_at);
 
     const res = await s.control.request(`/v1/rigs/rig-a/exports/${NAME}/archive`, {
       headers: s.as(OWNER),
@@ -368,7 +356,7 @@ describe("Export and the Exports page (goal 103)", () => {
       assert.equal(sha(got), manifest.files[rel], `${rel}: its SHA-256 is the manifest's`);
     }
     assert.ok(
-      s.store.listAudit(10).some((a) => a.action === "export_downloaded"),
+      s.store.auditLog.list(10).some((a) => a.action === "export_downloaded"),
       "the download is in the audit log",
     );
 
@@ -388,7 +376,7 @@ describe("Export and the Exports page (goal 103)", () => {
     writeExport(s.outbox, PART, files());
     s.breakAfter(3);
     await uploadExportsOnce(s.cfg, { queue: [PART], uploaded: [] });
-    assert.equal(s.store.rigExport("rig-a", PART)?.complete_at, null);
+    assert.equal(s.store.exports.get("rig-a", PART)?.complete_at, null);
     const part = await s.control.request(`/v1/rigs/rig-a/exports/${PART}/archive`, {
       headers: s.as(OWNER),
     });
@@ -404,8 +392,7 @@ describe("Export and the Exports page (goal 103)", () => {
     writeExport(s.outbox, PART, files());
     s.breakAfter(3);
     await uploadExportsOnce(s.cfg, { queue: [PART], uploaded: [] });
-    const cookie = await signIn(s.control);
-    const get = (path: string) => s.control.request(path, { headers: { cookie } });
+    const { get } = await signIn(s.control, OWNER);
 
     const html = await (await get("/ui/exports")).text();
     assert.match(html, /<a href="\/ui\/exports" class="on">.*<span>Exports<\/span><\/a>/);
@@ -415,20 +402,47 @@ describe("Export and the Exports page (goal 103)", () => {
     assert.deepEqual(rows.map((r) => r[1]).sort(), [NAME, PART].sort());
     const done = rows.find((r) => r[1] === NAME)?.[3] ?? "";
     const arriving = rows.find((r) => r[1] === PART)?.[3] ?? "";
-    assert.match(done, /<b>rig-a<\/b>/);
+    // Goal 181's columns: made (with its name), run, kind, rig, size, Download, events, files.
+    assert.match(done, /<a href="\/ui\/rigs\/rig-a">rig-a<\/a>/);
+    assert.match(done, /<span class="muted">every run<\/span>/, "a full export holds every run");
     assert.match(done, /<span class="chip ok">full<\/span>/);
-    assert.match(done, /<td class="num nowrap">1–7<\/td>/, "its event range");
-    assert.match(done, /<td class="num">7<\/td>/, "its files");
+    assert.match(done, /<td class="num nowrap muted small">1–7<\/td>/, "its event range");
+    assert.match(done, /<td class="num muted small">7<\/td>/, "its files");
     assert.match(done, /KiB<\/td>/, "its size");
     assert.match(done, new RegExp(`href="/ui/exports/rig-a/${NAME}/archive" download>Download`));
     assert.match(arriving, /what changed/);
     assert.match(arriving, /still arriving/);
     assert.doesNotMatch(arriving, /archive/, "no Download for an export still arriving");
 
-    // The rig's filter, as the rig's page links to it.
+    // The rig's filter, as the rig's page links to it: a drop-down of several choices, with
+    // each choice's count, and the choice in force as a chip.
     const other = await (await get("/ui/exports?rig=rig-b")).text();
     assert.doesNotMatch(other, /<tr data-export=/);
-    assert.match(other, /No export from rig-b on control/);
+    assert.match(other, /No export on control matches/);
+    assert.match(other, /<form class="flt" method="get" action="\/ui\/exports" data-filters>/);
+    assert.match(
+      other,
+      /<input type="checkbox" name="rig" value="rig-b" checked><span>rig-b<\/span><span class="n">0<\/span>/,
+    );
+    assert.match(
+      other,
+      /<input type="checkbox" name="rig" value="rig-a"><span>rig-a<\/span><span class="n">2<\/span>/,
+    );
+    assert.match(
+      other,
+      /<a class="flt-chip" href="\/ui\/exports" aria-label="Remove the filter Rig: rig-b">/,
+    );
+    // By kind: the full one alone, then what changed alone.
+    const full = await (await get("/ui/exports?kind=full")).text();
+    assert.deepEqual(
+      [...full.matchAll(/<tr data-export="([^"]+)"/g)].map((m) => m[1]),
+      [NAME],
+    );
+    const old = await (await get("/ui/exports?kind=old&rig=rig-a")).text();
+    assert.deepEqual(
+      [...old.matchAll(/<tr data-export="([^"]+)"/g)].map((m) => m[1]),
+      [PART],
+    );
 
     // The dashboard's Download: the same archive, for the owner's session only.
     const dl = await get(`/ui/exports/rig-a/${NAME}/archive`);
@@ -446,7 +460,7 @@ describe("Export and the Exports page (goal 103)", () => {
 
   test("Export on a rig's page sends export_now with full as the owner chose, and says where it will show", async () => {
     const s = setup();
-    s.store.ingest({
+    await ingestReport(s.store, {
       rig: "rig-a",
       ledger_id: "ledger-a",
       cursor: 0,
@@ -468,13 +482,9 @@ describe("Export and the Exports page (goal 103)", () => {
       ],
       summary: {},
     });
-    const cookie = await signIn(s.control);
+    const { cookie, page, post } = await signIn(s.control, OWNER);
     // A run's page has Export too: the run alone first, and chosen; then the rig's (goal 103).
-    const run = await (
-      await s.control.request(`/ui/campaigns/papers?run=${encodeURIComponent("rig-a/r-1")}`, {
-        headers: { cookie },
-      })
-    ).text();
+    const run = await page("/ui/campaigns/papers/runs/r-1");
     const runForm =
       /<form method="post" action="\/ui\/commands" class="stack export-now">([\s\S]*?)<\/form>/.exec(
         run,
@@ -485,9 +495,11 @@ describe("Export and the Exports page (goal 103)", () => {
       runForm,
       /<input type="radio" name="full" value="run" checked[^>]*><span><b>This run<\/b>/,
     );
+    // No export of what changed (goal 180): the run alone, or the rig's full export.
+    assert.doesNotMatch(runForm, /What changed|value="false"/);
     assert.match(
       runForm,
-      /<input type="radio" name="full" value="false"(?! checked)[^>]*><span><b>What changed \(all of rig-a\)<\/b>/,
+      /<input type="radio" name="full" value="true"(?! checked)[^>]*><span><b>Full export \(all of rig-a\)<\/b>/,
     );
     assert.match(runForm, /<input type="hidden" name="run" value="r-1">/);
     const runHidden = Object.fromEntries(
@@ -506,12 +518,12 @@ describe("Export and the Exports page (goal 103)", () => {
       },
     });
     const ranAnswer = (await ran.json()) as { said: string; follow: string };
-    const ranCmd = s.store.commandRow(
+    const ranCmd = s.store.commands.row(
       decodeURIComponent(ranAnswer.follow.replace(/^\/ui\/commands\//, "").replace(/\.json$/, "")),
     );
     assert.deepEqual([ranCmd?.kind, ranCmd?.payload], ["export_now", { full: false, run: "r-1" }]);
     assert.match(ranAnswer.said, /An export of r-1 alone was asked for\./);
-    const html = await (await s.control.request("/ui/rigs/rig-a", { headers: { cookie } })).text();
+    const html = await page("/ui/rigs/rig-a");
     const form =
       /<form method="post" action="\/ui\/commands" class="stack export-now">([\s\S]*?)<\/form>/.exec(
         html,
@@ -521,8 +533,8 @@ describe("Export and the Exports page (goal 103)", () => {
       form,
       /<span class="lb">What to export<i class="ii" tabindex="0" data-tip="[^"]+">i<\/i><\/span>/,
     );
-    assert.match(form, /<input type="radio" name="full" value="false" checked/);
-    assert.match(form, /<input type="radio" name="full" value="true"(?! checked)/);
+    assert.match(form, /<input type="radio" name="full" value="true" checked/);
+    assert.doesNotMatch(form, /value="false"|What changed/);
     assert.match(form, /<a href="\/ui\/exports\?rig=rig-a">Exports page<\/a>/);
     const hidden = Object.fromEntries(
       [...form.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)].map((m) => [
@@ -532,7 +544,7 @@ describe("Export and the Exports page (goal 103)", () => {
     );
     assert.equal(hidden.kind, "export_now");
     // As the page's script sends the form, with each choice.
-    for (const full of ["true", "false"]) {
+    for (const full of ["true"]) {
       const r = await s.control.request("/ui/commands", {
         method: "POST",
         body: new URLSearchParams({ ...hidden, full }),
@@ -547,21 +559,14 @@ describe("Export and the Exports page (goal 103)", () => {
       const id = decodeURIComponent(
         a.follow.replace(/^\/ui\/commands\//, "").replace(/\.json$/, ""),
       );
-      const cmd = s.store.commandRow(id);
+      const cmd = s.store.commands.row(id);
       assert.equal(cmd?.kind, "export_now");
       assert.deepEqual(cmd?.payload, { full: full === "true" });
-      assert.match(
-        a.said,
-        full === "true" ? /A full export was asked for\./ : /An export was asked for\./,
-      );
+      assert.match(a.said, /A full export was asked for\./);
       assert.match(a.said, /it shows on the Exports page/);
     }
     // Without the script: the page it lands on says so too.
-    const plain = await s.control.request("/ui/commands", {
-      method: "POST",
-      body: new URLSearchParams({ ...hidden, full: "true" }),
-      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-    });
+    const plain = await post("/ui/commands", { ...hidden, full: "true" });
     assert.equal(plain.status, 303);
     assert.match(
       decodeURIComponent(plain.headers.get("location") ?? ""),

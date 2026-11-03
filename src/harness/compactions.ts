@@ -1,17 +1,21 @@
+import type { CliCompacted, KeptAt } from "../agents/compaction/index.ts";
 import { errorText } from "../common/errors.ts";
+import { scrubSecrets } from "../common/scrub.ts";
+import type { Harness } from "../core/agents.ts";
 import { COMPACTIONS_DIR, compactionFile } from "../core/compaction.ts";
-import { KB_BODY_MAX } from "../core/kb-index.ts";
+import type { KbItemFile } from "../core/kb/index.ts";
 import type { LiveLog } from "../core/live.ts";
-import type { CliCompacted, KeptAt } from "./agents/cli-compaction.ts";
-import type { Ledger } from "./ledger.ts";
+import type { Ledger } from "./ledger/index.ts";
 
 /**
  * The harness's record of each compaction (goal 070), whichever harness the agent runs in. The
- * conversation before it is kept in the run's research folder (compactions/), where every agent
- * of the run may read it and none may change it, and where the run keeps it: the harness's state
- * holds it whole, it is exported with the run's folder, and its text, cut to an item's length, is
- * a document of the run's folder in the knowledge base. Each compaction is one
- * `context_compacted` event and lines in the live view, with the summary when there is one.
+ * conversation before it is scrubbed (common/scrub.ts: the values the harness gave agents, and
+ * anything shaped like a key, a token or a password), then kept in the run's research folder
+ * (compactions/), where every agent of the run may read it and none may change it, and where the
+ * run keeps it: the harness's state holds it whole, it is exported with the run's folder, and it
+ * is a document of the run's records in the knowledge base, whole, as its item's file (goal 175).
+ * Each compaction is one `context_compacted` event and lines in the live view, with the summary
+ * when there is one.
  */
 
 /** Whose conversation: a trial's (its lane's), or the planner's (no trial). */
@@ -34,8 +38,6 @@ export const compactionOf = (t: { id: string; run: string; lane: string }): Comp
   source: `trial:${t.id}`,
 });
 
-export type CompactionHarness = "pi" | "opencode" | "codex" | "claude-code";
-
 /** How the conversation was compacted: Pi's summary or its fallback, or the harness's own. */
 export type CompactionHow = "summary" | "trimmed" | "harness";
 
@@ -45,14 +47,14 @@ export interface CompactionRecord {
   tokensBefore: number | null;
   tokensAfter: number | null;
   how: CompactionHow;
-  harness: CompactionHarness;
+  harness: Harness;
   summary?: string | undefined;
   error?: string | undefined;
   /** Whether the conversation was kept (by `keep`, under the same number). */
   kept: boolean;
 }
 
-const HARNESS: Record<CompactionHarness, string> = {
+const HARNESS: Record<Harness, string> = {
   pi: "The harness",
   opencode: "OpenCode",
   codex: "Codex",
@@ -72,6 +74,8 @@ export class Compactions {
     readCompaction(run: string, name: string): string;
     /** The folder the kept conversations go in, as the agents see it. */
     compactionsDir(run: string): string;
+    /** A file kept in the outbox for the knowledge base, by its SHA-256. */
+    kbFile(bytes: Uint8Array, name: string, type: string): KbItemFile;
   };
 
   /** Told of each compaction recorded: the harness's watch of its trials (goal 143). */
@@ -104,16 +108,18 @@ export class Compactions {
   }
 
   /**
-   * Keeps the conversation before compaction `n`. Returns its path as the agents see it, and in
-   * the run's folder.
+   * Keeps the conversation before compaction `n`, scrubbed first: every copy of it, here, in the
+   * run's export and in the knowledge base, is the scrubbed one. Returns its path as the agents
+   * see it, and in the run's folder.
    */
   keep(of: CompactionOf, n: number, markdown: string): { path: string; rel: string } {
     if (!Number.isInteger(n) || n < 1)
       throw new Error("a compaction's number is a whole number from 1");
-    const text =
+    const kept =
       markdown.length > KEPT_MAX
         ? `${markdown.slice(0, KEPT_MAX)}\n\n[Cut here: the conversation had ${words(markdown.length)} characters.]\n`
         : markdown;
+    const text = scrubSecrets(kept);
     const path = this.folder.keepCompaction(of.run, compactionFile(of.who, n), text);
     return { path, rel: this.rel(of, n) };
   }
@@ -133,7 +139,17 @@ export class Compactions {
           .join("; ");
       }
     }
-    const summary = r.summary?.trim() ? r.summary.trim() : undefined;
+    const summary = r.summary?.trim() ? scrubSecrets(r.summary.trim()) : undefined;
+    // The conversation whole, for the run's records in the knowledge base: kept in the outbox by
+    // its SHA-256, which the supervisor puts on the message bus (goal 175).
+    const file =
+      text !== undefined
+        ? this.folder.kbFile(
+            new TextEncoder().encode(text),
+            compactionFile(of.who, r.number),
+            "text/markdown",
+          )
+        : undefined;
     this.ledger.appendEvent("harness", "context_compacted", of.run, {
       trial: of.trial,
       lane: of.lane,
@@ -143,13 +159,7 @@ export class Compactions {
       tokens_after: r.tokensAfter,
       how: r.how,
       snapshot: text !== undefined ? rel : null,
-      ...(text !== undefined
-        ? {
-            bytes: Buffer.byteLength(text),
-            text: text.length > KB_BODY_MAX ? `${text.slice(0, KB_BODY_MAX - 1)}…` : text,
-            ...(text.length > KB_BODY_MAX ? { clipped: true } : {}),
-          }
-        : {}),
+      ...(text !== undefined && file ? { bytes: file.bytes, file } : {}),
       summary: summary ? summary.slice(0, 4000) : null,
       error: error ? error.slice(0, 500) : null,
     });
@@ -181,7 +191,7 @@ export class Compactions {
    */
   fromHarness(
     of: CompactionOf,
-    harness: Exclude<CompactionHarness, "pi">,
+    harness: Exclude<Harness, "pi">,
     c: Pick<CliCompacted, "number" | "tokensBefore" | "tokensAfter" | "markdown" | "summary">,
   ): void {
     let kept = false;

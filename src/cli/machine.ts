@@ -1,5 +1,5 @@
-import { gpuSplit, MAX_RIG_GPUS } from "../control/machines/deploy.ts";
-import type { Probes, RunResult } from "./doctor.ts";
+import { gpuSplit, MAX_RIG_GPUS } from "../core/hardware.ts";
+import type { Probes, RunResult } from "./doctor/index.ts";
 
 /**
  * What the local rig can use on this machine: the CPUs and memory its container engine gives
@@ -467,7 +467,8 @@ export type HarnessImage =
 
 export function harnessImageFrom(compose: string | undefined): HarnessImage {
   if (compose === undefined) return { kind: "unset" };
-  if (/dockerfile: containers\/harness\/Containerfile/.test(compose)) return { kind: "build" };
+  if (/dockerfile: containers\/Containerfile\b[^}\n]*\btarget: harness\b/.test(compose))
+    return { kind: "build" };
   const m =
     /THERMITE_RIG_HARNESS_CUDA_IMAGE: "\$\{THERMITE_RIG_HARNESS_CUDA_IMAGE:-([^}"\s]+)\}"/.exec(
       compose,

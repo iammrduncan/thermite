@@ -1,66 +1,21 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, test } from "node:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createControlApi } from "../../src/control/api.ts";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Credential } from "../../src/control/credential.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
-import { relayOnce } from "../../src/supervisor/relay.ts";
-import { makeJudgeEnv } from "../helpers/judge-env.ts";
-
-/** An MCP client talking to control in-process (no network), as an agent would over HTTP. */
-async function connect(control: ReturnType<typeof createControlApi>, token: string) {
-  const client = new Client({ name: "test-agent", version: "1.0.0" });
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const url = new URL(String(input));
-    const headers = new Headers(init?.headers);
-    headers.set("authorization", `Bearer ${token}`);
-    return control.request(`${url.pathname}${url.search}`, { ...init, headers } as RequestInit);
-  };
-  await client.connect(
-    new StreamableHTTPClientTransport(new URL("http://control/mcp"), { fetch: fetchImpl }),
-  );
-  return client;
-}
+import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
+import { figuresCall } from "../helpers/control-store.ts";
 
 const text = (r: unknown) =>
   JSON.parse(((r as { content: { text: string }[] }).content[0] as { text: string }).text);
 
 describe("control over MCP", () => {
   test("an agent lists rigs and pauses a run; a reader can only read", async () => {
-    const env = makeJudgeEnv();
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      {
-        admin: "admin-token-abcdef",
-        read: "read-token-abcdef",
-        rigs: { "rig-a": "rig-token-abcdef" },
-      },
-      env.keys.privateKeyPem,
-    );
-    const harness = createHarnessApi(env.service, { supervisor: "s-token-abcdef" });
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = new URL(String(input));
-      return (url.host === "harness" ? harness : control).request(
-        `${url.pathname}${url.search}`,
-        init as RequestInit,
-      );
-    };
-    const cfg = {
-      rig: "rig-a",
-      harnessUrl: "http://harness",
-      harnessToken: "s-token-abcdef",
-      controlUrl: "http://control",
-      controlToken: "rig-token-abcdef",
-      fetchImpl,
-    };
+    const { env, store, control, relay } = controlStack({ tokens: { read: "read-token-abcdef" } });
     await env.service.applyCommand(env.assign);
-    let state = await relayOnce(cfg, { cursor: 0 });
+    await relay();
 
-    const agent = await connect(control, "admin-token-abcdef");
+    const agent = await mcpClient(control, ADMIN);
     const tools = (await agent.listTools()).tools.map((t) => t.name).sort();
     assert.ok(tools.includes("issue_command"));
     const rigs = text(await agent.callTool({ name: "list_rigs", arguments: {} }));
@@ -76,22 +31,20 @@ describe("control over MCP", () => {
         },
       }),
     );
-    state = await relayOnce(cfg, state);
-    assert.equal(env.ledger.getRun("js-1")?.status, "paused");
+    await relay();
+    assert.equal(env.ledger.runs.get("js-1")?.status, "paused");
     const status = text(
       await agent.callTool({ name: "command_status", arguments: { id: issued.id } }),
     );
     assert.equal(status.status, "delivered");
 
-    const reader = await connect(control, "read-token-abcdef");
+    const reader = await mcpClient(control, "read-token-abcdef");
     const readerTools = (await reader.listTools()).tools.map((t) => t.name);
     assert.ok(!readerTools.includes("issue_command"));
     assert.ok(readerTools.includes("list_rigs"));
     assert.ok(readerTools.includes("rig_setup") && readerTools.includes("trial_session"));
     // A reader sees a run's queue, its rules, hand-outs and messages (goal 064).
-    const queue = text(
-      await reader.callTool({ name: "run_queue", arguments: { rig: "rig-a", run: "js-1" } }),
-    );
+    const queue = text(await reader.callTool({ name: "run_queue", arguments: { run: "js-1" } }));
     assert.equal(queue.run, "js-1");
     assert.deepEqual(queue.up_next, []);
     assert.ok(Array.isArray(queue.rules));
@@ -106,8 +59,8 @@ describe("control over MCP", () => {
         },
       }),
     );
-    state = await relayOnce(cfg, state); // the command to the harness
-    state = await relayOnce(cfg, state); // its event back to control
+    await relay(); // the command to the harness
+    await relay(); // its event back to control
     const known = env.service.queue.all("js-1")[0];
     assert.ok(known);
     const from = (id: string) => ({
@@ -146,8 +99,23 @@ describe("control over MCP", () => {
         ["copied", "words of the caller's own"],
       ],
     );
-    const audit = store.listAudit(100).map((a) => a.action);
+    const audit = store.auditLog.list(100).map((a) => a.action);
     assert.ok(audit.includes("mcp:issue_command"));
+    // A tool the token lacks, and inputs that don't match a tool, are refusals in the log too.
+    for (const call of [
+      { name: "issue_command", arguments: { rig: "rig-a", kind: "pause_run", payload: {} } },
+      { name: "issue_command", arguments: { rig: "rig-a", kind: "pause_run", payload: {} } },
+      { name: "control_log", arguments: { limit: "all" } },
+    ])
+      assert.equal((await reader.callTool(call)).isError, true);
+    const refused = store.auditLog
+      .list(100, { action: "refused" })
+      .filter((a) => a.actor === "reader:mcp")
+      .map((a) => [(a.body as { tool: string }).tool, a.count]);
+    assert.deepEqual(refused, [
+      ["mcp:control_log", 1],
+      ["mcp:issue_command", 2],
+    ]);
     const denied = await control.request("/mcp", { method: "POST", body: "{}" });
     assert.equal(denied.status, 401);
     await agent.close();
@@ -155,37 +123,16 @@ describe("control over MCP", () => {
   });
 
   test("an operator messages a run's agents for the owner, never approves; an agent never messages", async () => {
-    const env = makeJudgeEnv();
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      {
+    const { env, store, control, relay } = controlStack({
+      tokens: {
         // Deployed as a hash: control holds nothing that signs in as the owner.
         admin: Credential.ofHash(createHash("sha256").update("admin-token-abcdef").digest("hex")),
         operator: "operator-token-abcdef",
         agent: "agent-token-abcdef",
-        rigs: { "rig-a": "rig-token-abcdef" },
       },
-      env.keys.privateKeyPem,
-    );
-    const harness = createHarnessApi(env.service, { supervisor: "s-token-abcdef" });
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = new URL(String(input));
-      return (url.host === "harness" ? harness : control).request(
-        `${url.pathname}${url.search}`,
-        init as RequestInit,
-      );
-    };
-    const cfg = {
-      rig: "rig-a",
-      harnessUrl: "http://harness",
-      harnessToken: "s-token-abcdef",
-      controlUrl: "http://control",
-      controlToken: "rig-token-abcdef",
-      fetchImpl,
-    };
+    });
     await env.service.applyCommand(env.assign);
-    let state = await relayOnce(cfg, { cursor: 0 });
+    await relay();
     const issue = async (client: Client, kind: string, payload: Record<string, unknown>) => {
       try {
         const r = (await client.callTool({
@@ -197,31 +144,27 @@ describe("control over MCP", () => {
         return undefined;
       }
     };
-    const operator = await connect(control, "operator-token-abcdef");
+    const operator = await mcpClient(control, "operator-token-abcdef");
     const sent = await issue(operator, "message_agent", {
       run: "js-1",
       to: "planner",
       text: "work on the unmet goals first",
     });
     assert.ok(sent?.id, "the operator may message agents");
-    state = await relayOnce(cfg, state);
+    await relay();
     assert.deepEqual(env.service.takePlannerMessages("js-1"), ["work on the unmet goals first"]);
     assert.equal(
       text(await operator.callTool({ name: "command_status", arguments: { id: sent.id } })).status,
       "delivered",
     );
     // A message nothing would read, or with no words, is refused in plain words, as Live greys it.
-    await control.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: { authorization: "Bearer rig-token-abcdef", "content-type": "application/json" },
-      body: JSON.stringify({
-        at: new Date().toISOString(),
-        advisors: {
-          ...{ teacher_runs: 0, directive_sets: 0, directives: 0, audits: 0, reviews: 0 },
-          ...{ errors: 0, tokens_in: 0, tokens_out: 0, usd: 0 },
-          roles: { teachers: 2, combiner: true, auditor: false, panel: 0 },
-        },
-      }),
+    await figuresCall(store, "rig-a", {
+      at: new Date().toISOString(),
+      advisors: {
+        ...{ teacher_runs: 0, directive_sets: 0, directives: 0, audits: 0, reviews: 0 },
+        ...{ errors: 0, tokens_in: 0, tokens_out: 0, usd: 0 },
+        roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0 },
+      },
     });
     const refusal = async (payload: Record<string, unknown>) =>
       text(
@@ -235,7 +178,7 @@ describe("control over MCP", () => {
       "This rig's supervisor has no auditor set up, so nothing would read it.",
     );
     // The review panel by its name (goal 074), and by panel, the name every rig takes.
-    for (const to of ["review_panel", "panel"])
+    for (const to of ["review_panel", "review_panel"])
       assert.equal(
         await refusal({ to, text: "be strict" }),
         "This rig's supervisor has no review panel set up, so nothing would read it.",
@@ -251,7 +194,7 @@ describe("control over MCP", () => {
       undefined,
       "approvals stay the owner's",
     );
-    const agent = await connect(control, "agent-token-abcdef");
+    const agent = await mcpClient(control, "agent-token-abcdef");
     // A campaign's agents don't read control itself: no log, providers or rig setup details.
     const agentTools = (await agent.listTools()).tools.map((t) => t.name);
     for (const t of ["rig_setup", "control_log", "providers"])
@@ -264,8 +207,8 @@ describe("control over MCP", () => {
     // The queue and the removal of rules are the owner's: an operator changes them for the
     // owner; an agent may add rules, but never changes the queue or removes a rule.
     const queued = () =>
-      store
-        .listCommands(100)
+      store.commands
+        .list(100)
         .filter((c) => c.kind.startsWith("queue_") || c.kind === "drop_directive").length;
     assert.ok(
       await issue(operator, "queue_add", { run: "js-1", title: "unroll the loop" }),
@@ -286,13 +229,13 @@ describe("control over MCP", () => {
     assert.ok(
       await issue(agent, "redirect", {
         run: "js-1",
-        directives: [{ kind: "avoid", family: "loop-tiling", rationale: "slower twice" }],
+        directives: [{ kind: "avoid", direction: "loop-tiling", rationale: "slower twice" }],
         replace: false,
       }),
       "an agent may add a rule",
     );
     // The owner signs in with the token whose hash control holds.
-    const owner = await connect(control, "admin-token-abcdef");
+    const owner = await mcpClient(control, "admin-token-abcdef");
     assert.ok((await owner.listTools()).tools.some((t) => t.name === "issue_command"));
     const wrong = await control.request("/v1/rigs", {
       headers: {
@@ -304,13 +247,7 @@ describe("control over MCP", () => {
   });
 
   test("metrics are bounded series with the admin token", async () => {
-    const env = makeJudgeEnv();
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      { admin: "admin-token-abcdef", rigs: {} },
-      env.keys.privateKeyPem,
-    );
+    const { control } = controlOnly({ tokens: { rigs: {} } });
     assert.equal((await control.request("/metrics")).status, 401);
     const r = await control.request("/metrics", {
       headers: { authorization: "Bearer admin-token-abcdef" },
@@ -320,32 +257,36 @@ describe("control over MCP", () => {
   });
 
   test("whoever runs control reads its log and its providers over MCP; no key in either; agents don't", async () => {
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      {
-        admin: "admin-token-abcdef",
+    const { store, control } = controlOnly({
+      tokens: {
         operator: "operator-token-abcdef",
         agent: "agent-token-abcdef",
         read: "read-token-abcdef",
         rigs: {},
       },
-      makeJudgeEnv().keys.privateKeyPem,
-    );
-    store.addGpuCloud({
+    });
+    store.gpuClouds.add({
       name: "runpod",
       kind: "runpod",
       key_sealed: "sealed-cloud-key-000",
       key_hint: "…9z9z",
       by: "owner:ui",
     });
-    store.setGpuCloudFacts("runpod", {
+    store.gpuClouds.setFacts("runpod", {
       facts: { gpus: [{ id: "a4000", name: "RTX A4000", price_secure: 0.25 }], pods: [] },
     });
-    store.audit("owner:ui", "refused", { path: "/ui/settings/add", why: "a name is lowercase" });
-    store.audit("control", "failed", { method: "GET", path: "/ui/x", status: 500, error: "boom" });
+    store.auditLog.add("owner:ui", "refused", {
+      path: "/ui/settings/add",
+      why: "a name is lowercase",
+    });
+    store.auditLog.add("control", "failed", {
+      method: "GET",
+      path: "/ui/x",
+      status: 500,
+      error: "boom",
+    });
 
-    const operator = await connect(control, "operator-token-abcdef");
+    const operator = await mcpClient(control, "operator-token-abcdef");
     const providers = text(await operator.callTool({ name: "providers", arguments: {} }));
     assert.equal(providers.gpu_clouds[0].name, "runpod");
     assert.equal(providers.gpu_clouds[0].facts.gpus[0].price_secure, 0.25);
@@ -370,7 +311,7 @@ describe("control over MCP", () => {
     );
     assert.ok(all.entries.some((e) => e.action === "mcp:providers"));
     // Paging (goal 015): a page at a time, older then newer, every entry once, filters kept.
-    for (let i = 0; i < 5; i++) store.audit("owner:ui", `step_${i}`, { i });
+    for (let i = 0; i < 5; i++) store.auditLog.add("owner:ui", `step_${i}`, { i });
     const call = async (args: Record<string, unknown>): Promise<Page> =>
       text(await operator.callTool({ name: "control_log", arguments: { limit: 3, ...args } }));
     const newest = await call({});
@@ -403,29 +344,66 @@ describe("control over MCP", () => {
     // Only a key's last characters (its hint, as the dashboard shows it), never the key.
     assert.ok(!seen.includes("sealed-cloud-key"), "never a key");
 
-    const reader = await connect(control, "read-token-abcdef");
+    const reader = await mcpClient(control, "read-token-abcdef");
     assert.ok((await reader.listTools()).tools.some((t) => t.name === "control_log"));
-    const agent = await connect(control, "agent-token-abcdef");
+    const agent = await mcpClient(control, "agent-token-abcdef");
     const agentTools = (await agent.listTools()).tools.map((t) => t.name);
     assert.ok(!["control_log", "providers", "trial_session"].some((t) => agentTools.includes(t)));
     await Promise.all([operator.close(), reader.close(), agent.close()]);
   });
 
+  test("the log keeps an MCP call's inputs with each secret hidden and credentials in text masked, for every token", async () => {
+    const { control } = controlOnly({
+      tokens: { operator: "operator-token-abcdef", read: "read-token-abcdef", rigs: {} },
+    });
+    const operator = await mcpClient(control, "operator-token-abcdef");
+    // Refused (no such run), and written to the log first, as every call is.
+    await operator.callTool({
+      name: "issue_command",
+      arguments: {
+        kind: "pause_run",
+        payload: {
+          run: "nope",
+          reason: "see https://someone:hunter2hunter2@git.example/x and Bearer abcdefghijklmnop",
+          api_key: "xxxxxxxxxxxx9z9z",
+          nested: { access_token: "yyyyyyyyyyyy7y7y", count: 3, ok: true },
+        },
+      },
+    });
+    const reader = await mcpClient(control, "read-token-abcdef");
+    const page = text(
+      await reader.callTool({
+        name: "control_log",
+        arguments: { include_mcp: true, action: "mcp:issue_command" },
+      }),
+    ) as { entries: { body: { payload: Record<string, unknown> } }[] };
+    const payload = page.entries[0]?.body.payload;
+    assert.equal(payload?.api_key, "given (…9z9z)");
+    assert.deepEqual(payload?.nested, { access_token: "given (…7y7y)", count: 3, ok: true });
+    assert.equal(payload?.reason, "see https://***@git.example/x and Bearer ***");
+    assert.equal(payload?.run, "nope");
+    const seen = JSON.stringify(page);
+    for (const secret of ["hunter2", "abcdefghijklmnop", "xxxxxxxxxxxx", "yyyyyyyyyyyy"])
+      assert.ok(!seen.includes(secret), secret);
+    await Promise.all([operator.close(), reader.close()]);
+  });
+
   test("an operator gives a rig's agents a model over MCP, as Edit rig does; a wrong model is refused", async () => {
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      { admin: "admin-token-abcdef", operator: "operator-token-abcdef", rigs: {} },
-      makeJudgeEnv().keys.privateKeyPem,
-    );
+    const { store, control } = controlOnly({
+      tokens: { operator: "operator-token-abcdef", rigs: {} },
+    });
     store.db
       .prepare(
-        "insert into rig (id, first_seen, last_seen, last_cursor, ledger_id, summary, report_at) values (?, ?, ?, 0, null, '{}', ?)",
+        "insert into rig (id, first_seen, last_seen, ledger_id, summary, report_at) values (?, ?, ?, null, '{}', ?)",
       )
       .run("cpu-1", new Date().toISOString(), new Date().toISOString(), new Date().toISOString());
-    store.putProvider({ name: "zen", type: "opencode", base_url: "https://opencode.ai/zen/v1" });
-    store.setProviderModels("zen", [{ id: "deepseek-v4.1-flash-free" }]);
-    const operator = await connect(control, "operator-token-abcdef");
+    store.modelProviders.put({
+      name: "zen",
+      type: "opencode",
+      base_url: "https://opencode.ai/zen/v1",
+    });
+    store.modelProviders.setModels("zen", [{ id: "deepseek-v4.1-flash-free" }]);
+    const operator = await mcpClient(control, "operator-token-abcdef");
     const r = text(
       await operator.callTool({
         name: "set_rig_model",
@@ -433,7 +411,7 @@ describe("control over MCP", () => {
       }),
     );
     assert.equal(r.model, "deepseek-v4.1-flash-free");
-    assert.deepEqual(store.rigModels()["cpu-1"], {
+    assert.deepEqual(store.agentModels.byRig()["cpu-1"], {
       provider: "zen",
       model: "deepseek-v4.1-flash-free",
       harness: "opencode",
@@ -444,13 +422,13 @@ describe("control over MCP", () => {
     })) as { isError?: boolean };
     assert.ok(wrong.isError);
     // The Codex CLI, for a provider OpenAI's Responses API reaches; never for OpenCode's own.
-    store.putProvider({
+    store.modelProviders.put({
       name: "openai",
       type: "openai",
       base_url: "https://api.openai.com/v1",
       key: { sealed: "s1:not-opened-here", hint: "…abcd" },
     });
-    store.setProviderModels("openai", [{ id: "gpt-test" }]);
+    store.modelProviders.setModels("openai", [{ id: "gpt-test" }]);
     const codex = text(
       await operator.callTool({
         name: "set_rig_model",
@@ -458,7 +436,7 @@ describe("control over MCP", () => {
       }),
     );
     assert.match(String(codex.said), /cpu-1 takes gpt-test from "openai" under Codex/);
-    assert.equal(store.rigModels()["cpu-1"]?.harness, "codex");
+    assert.equal(store.agentModels.byRig()["cpu-1"]?.harness, "codex");
     const notCodex = await operator.callTool({
       name: "set_rig_model",
       arguments: {
@@ -470,7 +448,11 @@ describe("control over MCP", () => {
     });
     assert.equal(notCodex.isError, true);
     assert.match(JSON.stringify(notCodex), /Codex runs only with a ChatGPT subscription/);
-    assert.equal(store.rigModels()["cpu-1"]?.harness, "codex", "the refused call changed nothing");
+    assert.equal(
+      store.agentModels.byRig()["cpu-1"]?.harness,
+      "codex",
+      "the refused call changed nothing",
+    );
     await operator.close();
   });
 });

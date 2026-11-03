@@ -1,6 +1,6 @@
 import { log } from "../common/env.ts";
-import { briefingSeedOf } from "./kb.ts";
-import type { ControlStore } from "./store.ts";
+import { briefingSeedOf } from "./kb/index.ts";
+import type { ControlStore } from "./store/index.ts";
 
 /**
  * A run's briefing from past research (assign_campaign.briefing, goal 065) carries the knowledge
@@ -28,12 +28,17 @@ export function briefingFromKb(store: ControlStore, payload: unknown): unknown {
     const seed = item && readable.has(item.campaign) ? briefingSeedOf(item) : undefined;
     // Never left out without a word: control's log says which item, and why.
     if (!seed)
-      log("control", "a briefing item was left out", {
-        ...from,
-        why: item
-          ? "a folder the run's campaign may not read"
-          : "not found, or found on two rigs: name its rig",
-      });
+      log(
+        "control",
+        "a briefing item was left out",
+        {
+          ...from,
+          why: item
+            ? "a folder the run's campaign may not read"
+            : "not found, or found on two rigs: name its rig",
+        },
+        "warn",
+      );
     return seed ? [seed] : [];
   });
   const { briefing: _caller, ...rest } = p;

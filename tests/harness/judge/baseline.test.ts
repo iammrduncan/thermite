@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -27,6 +28,7 @@ import { CpuDriver } from "../../../src/harness/targets/cpu.ts";
 import {
   CRASH_KERNEL,
   FAST_KERNEL,
+  FAST_KERNEL_RESTATED,
   makeJudgeEnv,
   SEED_KERNEL,
   WRONG_KERNEL,
@@ -90,13 +92,12 @@ describe("a hill climb's baseline (goal 115)", () => {
     // A change submitted before the judge's first tick: its job is queued first.
     const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
     // Of a run that waits for its baseline, no job but a baseline job is leased.
-    assert.equal(env.ledger.leaseJob("t", 60_000, undefined, undefined, ["js-1"]), undefined);
+    assert.equal(env.ledger.jobs.lease("t", 60_000, undefined, undefined, ["js-1"]), undefined);
     const judge = new Judge({
       service: env.service,
       runner: new LocalRunner(env.paths.scratchDir),
       driver: new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
       owner: "judge-test",
-      promotion: "auto",
       readyRetries: 0,
       calibrationBlocks: 2,
     });
@@ -106,7 +107,7 @@ describe("a hill climb's baseline (goal 115)", () => {
       env.jobs().map((j) => `${j.kind}:${j.state}`),
       ["evaluate:queued", "baseline:done"],
     );
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "queued");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "queued");
     const b = env.baseline();
     assert.ok(b, env.explain(id));
     assert.equal(b.champion_seq, 1);
@@ -142,7 +143,7 @@ describe("a hill climb's baseline (goal 115)", () => {
     assert.deepEqual(baselineState(env.ledger, "js-1")?.state, "measured");
     // Then the change, and only after the baseline, the calibration.
     assert.equal(await judge.tick(), true);
-    assert.ok(env.ledger.currentVerdict(id), env.explain(id));
+    assert.ok(env.ledger.verdicts.current(id), env.explain(id));
     const cal = env.jobs().find((j) => j.kind === "calibrate");
     const base = env.jobs().find((j) => j.kind === "baseline");
     assert.ok(cal && base && cal.id > base.id);
@@ -151,7 +152,7 @@ describe("a hill climb's baseline (goal 115)", () => {
   test("a baseline that failed in the judge itself is tried again at once; after a second failure, 10 minutes later", async () => {
     const env = await setup();
     const fail = () => {
-      const id = env.ledger.enqueueJob({
+      const id = env.ledger.jobs.enqueue({
         kind: "baseline",
         spec: { run: "js-1", champion_seq: 1, commit: env.seed },
         actor: "test",
@@ -170,19 +171,19 @@ describe("a hill climb's baseline (goal 115)", () => {
   test("a run from before, with no baseline, gets its baseline when it is resumed", async () => {
     const env = await setup();
     const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
-    env.ledger.setRunStatus("js-1", "paused", "t", "owner");
+    env.ledger.runs.setStatus("js-1", "paused", "t", "owner");
     // Paused: its jobs wait and no baseline is queued.
     assert.equal(await env.judge.tick(), false);
     assert.deepEqual(
       env.jobs().map((j) => j.kind),
       ["evaluate"],
     );
-    env.ledger.setRunStatus("js-1", "running", null, "owner");
+    env.ledger.runs.setStatus("js-1", "running", null, "owner");
     assert.equal(await env.judge.tick(), true);
     assert.equal(env.baseline()?.champion_seq, 1);
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "queued");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "queued");
     await env.drain();
-    assert.ok(env.ledger.currentVerdict(id), env.explain(id));
+    assert.ok(env.ledger.verdicts.current(id), env.explain(id));
   });
 
   test("a starting point that can't be measured puts the run in setup; a setup change the judge can measure becomes the starting point", async () => {
@@ -216,7 +217,7 @@ describe("a hill climb's baseline (goal 115)", () => {
       w[0]?.reasons ?? "",
       /^the judge could not measure this setup change, so the run is still in setup: cell small: wrong result/,
     );
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1);
+    assert.equal(env.ledger.champions.current("js-1").seq, 1);
     assert.equal(baselineState(env.ledger, "js-1")?.state, "setup");
 
     // A setup change that runs: the starting point, and its values the baseline.
@@ -227,10 +228,10 @@ describe("a hill climb's baseline (goal 115)", () => {
       ["starting_point"],
       env.explain(fix),
     );
-    const champ = env.ledger.currentChampion("js-1");
+    const champ = env.ledger.champions.current("js-1");
     assert.equal(champ.seq, 2);
     assert.equal(champ.attempt, fix);
-    assert.equal(String(env.ledger.getAttempt(fix)?.lifecycle), "promoted");
+    assert.equal(String(env.ledger.attempts.get(fix)?.lifecycle), "promoted");
     const row = env.ledger.db
       .prepare("select promoted_by from champion where run = 'js-1' and seq = 2")
       .get() as { promoted_by: string };
@@ -248,15 +249,15 @@ describe("a hill climb's baseline (goal 115)", () => {
     const next = await env.submit(`${FAST_KERNEL}// again\n`, "the same again");
     assert.equal(env.jobs().find((j) => j.attempt === next)?.kind, "evaluate");
     await env.drain();
-    assert.ok(env.ledger.currentVerdict(next), env.explain(next));
+    assert.ok(env.ledger.verdicts.current(next), env.explain(next));
   });
 
   test("in setup, a resume measures the starting point again", async () => {
     const env = await setup({ seedKernel: CRASH_KERNEL });
     await env.drain();
     assert.ok(env.failure());
-    env.ledger.setRunStatus("js-1", "paused", "t", "owner");
-    env.ledger.setRunStatus("js-1", "running", null, "owner");
+    env.ledger.runs.setStatus("js-1", "paused", "t", "owner");
+    env.ledger.runs.setStatus("js-1", "running", null, "owner");
     assert.equal(await env.judge.tick(), true);
     const failures = env.ledger.db
       .prepare("select count(*) as n from event where kind = 'baseline_failed'")
@@ -266,19 +267,22 @@ describe("a hill climb's baseline (goal 115)", () => {
   });
 
   test("a setup change measured after the run left setup is screened as any change is", async () => {
-    const env = await setup({ seedKernel: CRASH_KERNEL });
+    // The stand-in runner times the kernels: b screened against a, a change with the same effect,
+    // is an A/A comparison, which real runs on a loaded machine can show as a win, and then b is
+    // confirmed too. The test is about where b's measurement goes, not about the timing.
+    const env = await setup({ seedKernel: CRASH_KERNEL, realRuns: false });
     await env.drain();
     const a = await env.submit(FAST_KERNEL, "make it run");
-    const b = await env.submit(`${FAST_KERNEL}// restated\n`, "make it run, restated");
+    const b = await env.submit(FAST_KERNEL_RESTATED, "make it run, restated");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(a)?.verdict, "starting_point", env.explain(a));
+    assert.equal(env.ledger.verdicts.current(a)?.verdict, "starting_point", env.explain(a));
     // b was queued as a setup change; once a is the starting point, it is judged against it.
     const kinds = env
       .jobs()
       .filter((j) => j.attempt === b)
       .map((j) => j.kind);
     assert.deepEqual(kinds, ["baseline", "evaluate"], env.explain(b));
-    assert.notEqual(env.ledger.currentVerdict(b)?.verdict, "starting_point");
+    assert.notEqual(env.ledger.verdicts.current(b)?.verdict, "starting_point");
   });
 
   test("a guard's total allowance holds against the baseline: within each step's allowance, past the total from the start is a tradeoff", async () => {
@@ -323,18 +327,18 @@ process.stdout.write(JSON.stringify({ pass: reasons.length === 0, reasons, quali
     // A champion at quality 98 by another path: its step left no guard estimate to add up.
     const step = await env.submit(`${SEED_KERNEL}export const quality = 98;\n`, "a step");
     env.ledger.db.prepare("update job set state = 'cancelled' where attempt = ?").run(step);
-    env.ledger.recordVerdict({
+    env.ledger.verdicts.record({
       attempt: step,
       verdict: "win_confirmed",
       reasons: "t",
       judgedBy: "t",
     });
     assert.ok(
-      env.ledger.promote({
+      env.ledger.champions.promote({
         run: "js-1",
         expectedSeq: 1,
         attempt: step,
-        commitSha: String(env.ledger.getAttempt(step)?.commit_sha),
+        commitSha: String(env.ledger.attempts.get(step)?.commit_sha),
         by: "t",
       }).ok,
     );
@@ -364,7 +368,7 @@ process.stdout.write(JSON.stringify({ pass: reasons.length === 0, reasons, quali
       ),
     ) as { metric: string; vs_start?: { spent: boolean } }[];
     assert.equal(guards[0]?.vs_start?.spent, true);
-    assert.equal(env.ledger.currentChampion("js-1").attempt, step);
+    assert.equal(env.ledger.champions.current("js-1").attempt, step);
   });
 
   test("the kit's check keeps files in the baseline's folder: written during the baseline, read-only later, never the run command's", async () => {
@@ -407,11 +411,14 @@ process.stdout.write(JSON.stringify({ pass: true, reasons: [], has_dir: dir ? 1 
       },
     ]);
     assert.equal(b.bytes, content.length);
-    // The judge's alone, and sealed.
-    assert.equal(statSync(join(env.paths.stateDir, "baselines")).mode & 0o777, 0o700);
-    assert.equal(statSync(join(env.paths.stateDir, "baselines", "js-1")).mode & 0o777, 0o700);
-    assert.equal(statSync(dir).mode & 0o777, 0o500);
-    assert.equal(statSync(join(dir, "ref-20000000.json")).mode & 0o777, 0o400);
+    // The judge's, entered by the checkers' group alone (the broker gives it in the image), and
+    // sealed: read by the group, written by no one.
+    assert.equal(statSync(join(env.paths.stateDir, "baselines")).mode & 0o777, 0o710);
+    assert.equal(statSync(join(env.paths.stateDir, "baselines", "js-1")).mode & 0o777, 0o710);
+    assert.equal(statSync(dir).mode & 0o777, 0o550);
+    assert.equal(statSync(join(dir, "ref-20000000.json")).mode & 0o777, 0o440);
+    // The checks wrote to a folder of the job's in scratch, which is gone.
+    assert.ok(!existsSync(join(env.paths.scratchDir, "runs", `job-${b.job}`, "baseline")));
     // What each check saw, from the receipts: the baseline's could write, later ones could only
     // read the same reference; no run command got the folder.
     const seen = (kind: string) =>

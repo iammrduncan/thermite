@@ -1,20 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { createControlApi } from "../../../src/control/api.ts";
-import { ControlStore } from "../../../src/control/store.ts";
+import { type GoalCellValues, parseGoalValues } from "../../../src/core/goal/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
-import { Scheduler } from "../../../src/harness/agents/scheduler.ts";
-import { createHarnessApi } from "../../../src/harness/api.ts";
-import { LocalRunner } from "../../../src/harness/broker/runner.ts";
+import { goalReport } from "../../../src/harness/agents/scheduler/goal.ts";
 import {
   CHECK_NUMBERS_MAX,
-  type GoalCellValues,
-  parseGoalValues,
   runValues,
   valuesText,
 } from "../../../src/harness/judge/goal-values.ts";
 import type { ArmRun } from "../../../src/harness/judge/measure.ts";
-import { relayOnce } from "../../../src/supervisor/relay.ts";
+import { controlStack, signIn } from "../../helpers/control-stack.ts";
 import { FAST_KERNEL, makeJudgeEnv, WRONG_KERNEL } from "../../helpers/judge-env.ts";
 
 /**
@@ -72,46 +67,9 @@ async function setup(contract: Record<string, unknown> = {}) {
       )
     ).attempt;
   // Control, reached through the supervisor's relay as on a rig.
-  const store = new ControlStore(":memory:");
-  const ADMIN = "admin-token-abcdef";
-  const control = createControlApi(
-    store,
-    { admin: ADMIN, rigs: { "rig-a": "rig-token-abcdef" } },
-    env.keys.privateKeyPem,
-  );
-  const harness = createHarnessApi(env.service, { supervisor: "s-token-abcdef" });
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const url = new URL(String(input));
-    return (url.host === "harness" ? harness : control).request(
-      `${url.pathname}${url.search}`,
-      init as RequestInit,
-    );
-  };
-  let cursor = 0;
-  const relay = async () => {
-    const r = await relayOnce(
-      {
-        rig: "rig-a",
-        harnessUrl: "http://harness",
-        harnessToken: "s-token-abcdef",
-        controlUrl: "http://control",
-        controlToken: "rig-token-abcdef",
-        fetchImpl,
-      },
-      { cursor },
-    );
-    cursor = r.cursor;
-  };
-  const rest = async (path: string) =>
-    (await control.request(path, { headers: { authorization: `Bearer ${ADMIN}` } })).text();
-  const login = await control.request("/ui/login", {
-    method: "POST",
-    body: new URLSearchParams({ token: ADMIN }),
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-  });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-  const page = async (path: string) =>
-    (await control.request(path, { headers: { cookie } })).text();
+  const { control, relay, api } = controlStack({ env });
+  const rest = async (path: string) => (await api("GET", path)).text();
+  const { page } = await signIn(control);
   const events = (kind?: string) =>
     env.ledger.eventsAfter(0, 100_000).events.filter((e) => !kind || e.kind === kind);
   /** The goal reports of the run, oldest first. */
@@ -173,7 +131,7 @@ describe("a goal report keeps what it measured (goal 086)", () => {
     // A change the kit's check refuses: the numbers the check reported for its metrics.
     const wrong = await env.submit(WRONG_KERNEL, "return early");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(wrong)?.verdict, "regress", env.explain(wrong));
+    assert.equal(env.ledger.verdicts.current(wrong)?.verdict, "regress", env.explain(wrong));
     assert.match(
       String(env.checks(wrong).find((c) => c.goal === "correct")?.detail),
       /^small: invalid: wrong result 60000000, expected 59999997; measured: small: sum 6\.00000e\+7$/,
@@ -182,8 +140,8 @@ describe("a goal report keeps what it measured (goal 086)", () => {
     // A change that meets speedy: confirmed, with its held-out case, then promoted and validated.
     const fast = await env.submit(FAST_KERNEL, "drop the idle");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(fast)?.verdict, "goal_progress", env.explain(fast));
-    assert.equal(env.ledger.getRun("js-1")?.status, "closed");
+    assert.equal(env.ledger.verdicts.current(fast)?.verdict, "goal_progress", env.explain(fast));
+    assert.equal(env.ledger.runs.get("js-1")?.status, "closed");
     const held = env.events("held_out_checked").find((e) => e.subject === fast);
     assert.ok(held, env.explain(fast));
     assert.deepEqual((held.body as { cells: unknown[] }).cells, [
@@ -230,22 +188,8 @@ describe("a goal report keeps what it measured (goal 086)", () => {
       assert.doesNotMatch(c.detail, HIDDEN_SUM);
       assert.ok(!c.detail.includes(HIDDEN), `a goal check names the held-out case: ${c.detail}`);
     }
-    const scheduler = new Scheduler({
-      service: env.service,
-      runner: new LocalRunner(env.paths.scratchDir),
-      owner: "s0",
-      runTrial: async () => ({
-        stopped: "error",
-        turns: 0,
-        toolCalls: 0,
-        tokensIn: 0,
-        tokensOut: 0,
-      }),
-    });
     // What the planner and the workers get of the goal report: public values, never held-out.
-    const forAgents = (
-      scheduler as unknown as { goalReport(run: string, seq: number): unknown }
-    ).goalReport("js-1", env.ledger.currentChampion("js-1").seq);
+    const forAgents = goalReport(env.ledger, "js-1", env.ledger.champions.current("js-1").seq);
     const agentViews = {
       goal_report: JSON.stringify(forAgents),
       evidence: JSON.stringify(new Registry(env.ledger).evidence("js-1")),
@@ -278,7 +222,7 @@ describe("a goal report keeps what it measured (goal 086)", () => {
         ["speedy", ["small", "quick"]],
       ],
     );
-    const runPage = await env.page("/ui/campaigns/js-goal?run=rig-a%2Fjs-1");
+    const runPage = await env.page("/ui/campaigns/js-goal/runs/js-1");
     assert.doesNotMatch(runPage, HIDDEN_SUM);
     assert.match(
       runPage,
@@ -293,14 +237,14 @@ describe("a goal report keeps what it measured (goal 086)", () => {
   test("a confirmation queued for an earlier champion is a first validation of the champion now", async () => {
     const env = await setup({ goals: [GOALS[0]] });
     // As when a promotion came between a validation that met every goal and its confirmation.
-    env.ledger.enqueueJob({
+    env.ledger.jobs.enqueue({
       kind: "validate",
       priority: 40,
       spec: { run: "js-1", champion_seq: 7, confirm: true },
       actor: "t",
     });
     assert.ok(await env.judge.tick());
-    assert.equal(env.ledger.getRun("js-1")?.status, "running", "one validation never closes it");
+    assert.equal(env.ledger.runs.get("js-1")?.status, "running", "one validation never closes it");
     assert.equal(env.reports()[0]?.confirming, true);
     const confirm = env.ledger.db
       .prepare(
@@ -312,7 +256,7 @@ describe("a goal report keeps what it measured (goal 086)", () => {
       [1],
     );
     await env.drain();
-    assert.equal(env.ledger.getRun("js-1")?.status, "closed");
+    assert.equal(env.ledger.runs.get("js-1")?.status, "closed");
     assert.equal(env.events("goal_complete").length, 1);
     // The contract has a held-out case, but no goal met has it: nothing to check (goal 086).
     assert.equal(env.events("held_out_checked").length, 0);

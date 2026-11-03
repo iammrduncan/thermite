@@ -1,5 +1,4 @@
-import { eventKinds } from "../core/names.ts";
-import type { Ledger } from "./ledger.ts";
+import type { Ledger } from "./ledger/index.ts";
 
 /**
  * A run's status changes after an event id, oldest first, under every name the event was
@@ -11,12 +10,7 @@ export function statusEvents(
   run: string,
   afterId = 0,
 ): { id: number; at: string; status: string }[] {
-  const kinds = eventKinds("run_status");
-  const rows = ledger.db
-    .prepare(
-      `select id, at, json_extract(body, '$.status') as status from event
-       where kind in (${kinds.map(() => "?").join(", ")}) and subject = ? and id > ? order by id`,
-    )
-    .all(...kinds, run, afterId) as { id: number; at: string; status: unknown }[];
-  return rows.map((r) => ({ id: Number(r.id), at: String(r.at), status: String(r.status) }));
+  return ledger.events
+    .list("run_status", { subject: run, after: afterId })
+    .map((e) => ({ id: e.id, at: e.at, status: e.body.status }));
 }

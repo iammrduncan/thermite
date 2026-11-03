@@ -4,11 +4,11 @@
  */
 
 /** Why a hypothesis is refused as a repeat of a live one: which, and what to do instead. */
-export function repeatsWords(twin: Record<string, unknown>): string {
-  const id = String(twin.id);
-  return String(twin.status) === "author"
+export function repeatsWords(twin: { id: string; status: string; lane: string | null }): string {
+  const id = twin.id;
+  return twin.status === "author"
     ? `this hypothesis repeats ${id}, one of the author's: the review panel gives it a verdict already. Record claims for or against it instead of proposing it again`
-    : `this hypothesis repeats ${id}${twin.lane ? ` (proposed by ${String(twin.lane)})` : ""}: change that one with revise_hypothesis (id ${id}), its words, its question or its supporting claims, instead of proposing it again`;
+    : `this hypothesis repeats ${id}${twin.lane ? ` (proposed by ${twin.lane})` : ""}: change that one with revise_hypothesis (id ${id}), its words, its question or its supporting claims, instead of proposing it again`;
 }
 
 /** What a worker is told of a finding it sends again once it is recorded, supported. */

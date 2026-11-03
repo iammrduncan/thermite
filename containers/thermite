@@ -1,2 +1,2 @@
 #!/bin/sh
-exec node /opt/thermite/dist/cli/thermite.js "$@"
+exec node /opt/thermite/dist/cli/thermite/main.js "$@"

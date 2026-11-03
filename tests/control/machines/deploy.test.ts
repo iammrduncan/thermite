@@ -9,9 +9,17 @@ import {
   manageScript,
   type RigPlan,
   rigUnits,
+  updateScript,
 } from "../../../src/control/machines/deploy.ts";
 
+/** The bus as the rig reaches it, with control's authority: every rig control sets up gets it. */
+const BUS = {
+  url: "nats://control.example.com:4222",
+  ca: "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----\n",
+};
+
 const plan: RigPlan = {
+  bus: BUS,
   rig: "gpu-box-1-a",
   controlUrl: "https://control.example.com/",
   images: {
@@ -46,7 +54,15 @@ describe("a rig deployed on a machine", () => {
     assert.match(h, /^AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETGID SETUID$/m);
     assert.match(h, /^DropCapability=ALL$/m);
     assert.ok(!h.includes("control-rig-token"), "the harness never sees control's token");
+    // The harness reads the inbox in its image's closed folder; the supervisor fills it.
+    assert.match(h, /^Volume=thermite-gpu-box-1-a-inbox:\/controller\/inbox:ro$/m);
+    // The supervisor fills it in its image's closed folder, and its entry, as root, needs the
+    // harness's six capabilities to start the supervisor and the advisors as users of their own.
     const s = u["thermite-gpu-box-1-a-supervisor.container"] ?? "";
+    assert.match(s, /^Volume=thermite-gpu-box-1-a-inbox:\/supervisor\/inbox$/m);
+    assert.match(s, /^AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETGID SETUID$/m);
+    assert.match(s, /^DropCapability=ALL$/m);
+    assert.match(s, /^NoNewPrivileges=true$/m);
     assert.match(s, /^Environment=CONTROL_URL=https:\/\/control\.example\.com$/m);
     assert.match(s, /^Environment=HARNESS_URL=http:\/\/thermite-gpu-box-1-a-harness:8700$/m);
     assert.match(s, /^Requires=thermite-gpu-box-1-a-harness\.service$/m);
@@ -67,6 +83,30 @@ describe("a rig deployed on a machine", () => {
       () => rigUnits({ ...plan, gpus: Array.from({ length: 17 }, (_, i) => i) }),
       /at most 16 GPUs/,
     );
+  });
+
+  test("each unit names its log driver and limits, and checks its part's health (goal 173)", () => {
+    const u = rigUnits(plan);
+    for (const [name, port] of [
+      ["thermite-gpu-box-1-a-harness.container", 8700],
+      ["thermite-gpu-box-1-a-supervisor.container", 8701],
+    ] as const) {
+      const unit = u[name] ?? "";
+      assert.match(unit, /^LogDriver=journald$/m, name);
+      assert.match(unit, /^LogRateLimitIntervalSec=30s\nLogRateLimitBurst=10000$/m, name);
+      assert.match(
+        unit,
+        new RegExp(`^HealthCmd=node -e "fetch\\('http://127\\.0\\.0\\.1:${port}/v1/health'`, "m"),
+        name,
+      );
+      assert.match(unit, /^HealthOnFailure=kill$/m, name);
+      assert.match(unit, /^HealthStartPeriod=5m$/m, name);
+      // The keys sit in their sections: the container's in [Container], the journal's in [Service].
+      const container = unit.split("[Service]")[0] ?? "";
+      assert.match(container, /HealthCmd=/);
+      assert.ok(!container.includes("LogRateLimit"));
+      assert.ok(!unit.includes("$"), "nothing for systemd to expand");
+    }
   });
 
   test("the deploy script writes the tokens verbatim through stdin, refuses an existing rig, and starts the services", () => {
@@ -119,5 +159,40 @@ describe("a rig deployed on a machine", () => {
     execFileSync("sh", ["-s"], { input: manageScript(plan, "remove"), env });
     assert.deepEqual(readdirSync(join(home, ".config/containers/systemd")), []);
     assert.throws(() => statSync(dir));
+  });
+
+  test("its supervisor gets the message bus's address and control's authority, at setup and at each update", () => {
+    const withBus = plan;
+    const s = rigUnits(withBus)["thermite-gpu-box-1-a-supervisor.container"] ?? "";
+    assert.match(s, /^Environment=THERMITE_NATS_URL=nats:\/\/control\.example\.com:4222$/m);
+    assert.match(s, /^Environment=THERMITE_NATS_CA_FILE=\/keys\/bus-ca\.pem$/m);
+    // Its own folder, so that the harness's keys folder keeps its own label.
+    assert.match(s, /^Volume=%h\/\.local\/share\/thermite\/rigs\/gpu-box-1-a\/bus:\/keys:ro,Z$/m);
+    const h = rigUnits(withBus)["thermite-gpu-box-1-a-harness.container"] ?? "";
+    assert.ok(!/NATS|\/bus:/.test(h), "the harness never reaches the bus");
+
+    const home = mkdtempSync(join(tmpdir(), "thermite-deploy-bus-"));
+    const bin = join(home, "bin");
+    execFileSync("mkdir", ["-p", bin]);
+    for (const tool of ["systemctl", "podman"])
+      execFileSync("sh", [
+        "-c",
+        `printf '#!/bin/sh\\nexit 0\\n' > ${bin}/${tool} && chmod +x ${bin}/${tool}`,
+      ]);
+    const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` };
+    const dir = join(home, ".local/share/thermite/rigs/gpu-box-1-a");
+    const units = join(home, ".config/containers/systemd");
+    execFileSync("sh", ["-s"], { input: deployScript(withBus, secrets), env });
+    assert.equal(readFileSync(join(dir, "bus", "bus-ca.pem"), "utf8"), BUS.ca);
+    assert.equal(statSync(join(dir, "bus")).mode & 0o777, 0o755);
+    assert.equal(statSync(join(dir, "bus", "bus-ca.pem")).mode & 0o777, 0o644);
+    // An update writes control's authority and its address again, as control has them now.
+    const later = { url: "nats://bus.example.com:14222", ca: BUS.ca.replace("ca", "new-ca") };
+    execFileSync("sh", ["-s"], { input: updateScript({ ...withBus, bus: later }), env });
+    assert.equal(readFileSync(join(dir, "bus", "bus-ca.pem"), "utf8"), later.ca);
+    assert.match(
+      readFileSync(join(units, "thermite-gpu-box-1-a-supervisor.container"), "utf8"),
+      /^Environment=THERMITE_NATS_URL=nats:\/\/bus\.example\.com:14222$/m,
+    );
   });
 });

@@ -1,0 +1,1 @@
+Read it with the run tool when you need a detail, for example grep -n 'a word' PATH or sed -n '1,200p' PATH.

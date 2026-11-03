@@ -11,7 +11,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PI_AI_VERSION = "1.3.0";
+const PI_AI_VERSION = "1.4.0";
 const MARK = "Thermite (goal 140)";
 const ORIGINAL = `export function parseStreamingJson(partialJson) {
     if (!partialJson || partialJson.trim() === "") {

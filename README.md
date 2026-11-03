@@ -5,16 +5,16 @@
 Thermite is open-source **autoresearch**: AI agents that run experiments in a loop, for hours or days, on your own machines. You set the goal: a faster program, a list of checks to pass, or a question to answer. A judge that the agents can't see or change measures every attempt, and keeps only what it confirms. One dashboard, with a REST API and MCP, shows and steers every campaign on every machine.
 
 [![ci](https://github.com/iammrduncan/thermite/actions/workflows/ci.yml/badge.svg)](https://github.com/iammrduncan/thermite/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Node.js 22.19+](https://img.shields.io/badge/node-%E2%89%A522.19-339933)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/3Qs2uejUf9)
 
-[Quick start](https://usethermite.com/tutorials/first-run/) · [Documentation](https://usethermite.com) · [Architecture](https://usethermite.com/explanation/how-it-fits-together/) · [Roadmap](https://usethermite.com/project/roadmap/) · [Changelog](CHANGELOG.md) · [Discord](https://discord.gg/3Qs2uejUf9)
+[Quick start](https://usethermite.com/tutorials/first-run/) · [Documentation](https://usethermite.com) · [Architecture](https://usethermite.com/explanation/how-it-fits-together/) · [Changelog](https://usethermite.com/project/changelog/) · [Roadmap](docs/plan/roadmap.md) · [Changelog](CHANGELOG.md) · [Discord](https://discord.gg/3Qs2uejUf9)
 
 > [!WARNING]
 > **Thermite is under heavy development.** It changes every day, and some parts will break. If you don't want to take every update as it comes, pin a release: install from a tagged release's bundle, whose compose file pins every image by digest, and update when you choose. Most of Thermite can be driven from the dashboard, and its REST API and MCP server work well with coding agents, which can help you set it up, test it and run it.
 
-> **Status:** v0.1.0, the first public release, is out: install it from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.0). Work goes on toward v0.1.1: see the [roadmap](https://usethermite.com/project/roadmap/).
+> **Status:** v0.1.1 is out: install it from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.1). It breaks from v0.1.0, so install it fresh ([changelog](CHANGELOG.md)). Work goes on toward v0.1.2: see the [roadmap](docs/plan/roadmap.md).
 
 ![The dashboard's page for one run: its champion's value, its cost and its tokens at the top, where the run started, the champion's gains over time, what each lane works on now, and the run's champion and promotion rule](docs/_site/src/assets/screenshots/run.webp)
 
@@ -89,7 +89,7 @@ With Podman, write `podman compose` in place of `docker compose`. The first star
 
 The [tutorials](https://usethermite.com/tutorials/first-run/) walk through every step, up to taking the winning patch back to your project ([Your own project](https://usethermite.com/tutorials/your-own-project/)). To build Thermite from its source code instead, see [Contributing](https://usethermite.com/project/contributing/#set-up).
 
-**Just want to look around?** `npm ci && node --experimental-strip-types scripts/dashboard-demo.ts` serves the dashboard with synthetic campaigns and rigs at <http://127.0.0.1:8810/ui>, with no containers. It prints the token to sign in with.
+**Just want to look around?** `npm ci && node --experimental-strip-types scripts/dev/dashboard-demo/main.ts` serves the dashboard with synthetic campaigns and rigs at <http://127.0.0.1:8810/ui>, with no containers. It prints the token to sign in with.
 
 ## Architecture
 
@@ -144,4 +144,4 @@ Thermite builds on other people's research and software. [Credits](https://useth
 
 ## License
 
-[MIT](LICENSE)
+[Apache License 2.0](LICENSE). Version 0.1.0 was released under the MIT License.

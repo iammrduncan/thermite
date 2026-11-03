@@ -43,10 +43,10 @@ describe("judge pipeline (local runner, Node test kit)", () => {
       .all(id)
       .map((r) => r.verdict);
     assert.deepEqual(history, ["win_screened", "win_confirmed"], why(env, id));
-    const champ = env.ledger.currentChampion("js-1");
+    const champ = env.ledger.champions.current("js-1");
     assert.equal(champ.seq, 2);
     assert.equal(champ.attempt, id);
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "promoted");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "promoted");
     // Measurements name their arm (the starting point's baseline first), and receipts exist for
     // every block.
     const arms = env.ledger.db
@@ -68,7 +68,6 @@ describe("judge pipeline (local runner, Node test kit)", () => {
         runner: new LocalRunner(env.paths.scratchDir),
         driver: new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
         owner: `executor-${index}`,
-        promotion: "auto",
         readyRetries: 0,
         calibrationBlocks: 2,
         card: { index, uuid: `GPU-${"ab"[index]}`, count: 2 },
@@ -117,7 +116,7 @@ describe("judge pipeline (local runner, Node test kit)", () => {
       ["win_screened", "win_confirmed"],
       why(env, id),
     );
-    assert.equal(env.ledger.currentChampion("js-1").attempt, id);
+    assert.equal(env.ledger.champions.current("js-1").attempt, id);
   });
 
   test("a score from the judge's clock as plain time: a faster kernel wins on lower seconds", async () => {
@@ -165,8 +164,8 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     const env = await setup({ runCopy: true });
     const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
     await env.drain();
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "promoted", why(env, id));
-    assert.equal(env.ledger.currentChampion("js-1").attempt, id);
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "promoted", why(env, id));
+    assert.equal(env.ledger.champions.current("js-1").attempt, id);
   });
 
   test("a project in a folder of its repository: the run starts from that folder, and a win there promotes", async () => {
@@ -174,7 +173,7 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     const mirror = env.service.mirrorFor("proj");
     const git = (...args: string[]) =>
       execFileSync("git", ["-C", mirror, ...args], { encoding: "utf8" }).trim();
-    const start = env.ledger.getRun("js-1")?.seed_commit ?? "";
+    const start = env.ledger.runs.get("js-1")?.seed_commit ?? "";
     assert.notEqual(start, env.seed, "the run starts from the folder, not the whole repository");
     // Only the folder's files, at the folder's own tree, with no history of the repository.
     assert.deepEqual(git("ls-tree", "-r", "--name-only", start).split("\n"), [
@@ -183,7 +182,7 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     ]);
     assert.equal(git("rev-parse", `${start}^{tree}`), git("rev-parse", `${env.seed}:examples/sum`));
     assert.doesNotMatch(git("cat-file", "-p", start), /^parent /m);
-    assert.equal(env.ledger.currentChampion("js-1").commit_sha, start);
+    assert.equal(env.ledger.champions.current("js-1").commit_sha, start);
     const created = env.ledger.eventsAfter(0, 1000).events.find((e) => e.kind === "run_created");
     assert.deepEqual((created?.body as { seed?: unknown } | undefined)?.seed, {
       repo: "proj",
@@ -194,8 +193,8 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     // A change from the folder's root is judged there, and promoted.
     const id = await env.submit(FAST_KERNEL, "drop the wasted wait");
     await env.drain();
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "promoted", why(env, id));
-    const champion = env.ledger.currentChampion("js-1");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "promoted", why(env, id));
+    const champion = env.ledger.champions.current("js-1");
     assert.equal(git("rev-parse", `${champion.commit_sha}^`), start);
 
     // Another rig makes the same starting commit from the same signed commit and folder.
@@ -203,7 +202,7 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     const other = makeJudgeEnv({ realRuns: true, folder: "examples/sum", rig: "rig-b", share });
     const out = await other.service.applyCommand(other.assign);
     assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-    assert.equal(other.ledger.getRun("js-1")?.seed_commit, start);
+    assert.equal(other.ledger.runs.get("js-1")?.seed_commit, start);
     // A folder the commit does not have is refused, and no run is made.
     const none = makeJudgeEnv({ realRuns: true, folder: "examples/none", rig: "rig-c", share });
     const refused = await none.service.applyCommand(none.assign);
@@ -211,7 +210,7 @@ describe("judge pipeline (local runner, Node test kit)", () => {
       JSON.stringify(refused),
       new RegExp(`commit ${env.seed} has no folder examples/none`),
     );
-    assert.equal(none.ledger.getRun("js-1"), undefined);
+    assert.equal(none.ledger.runs.get("js-1"), undefined);
   });
 
   test("a wrong kernel is invalid and a crashing one is crash_candidate; the champion stays", async () => {
@@ -219,9 +218,9 @@ describe("judge pipeline (local runner, Node test kit)", () => {
     const wrong = await env.submit(WRONG_KERNEL, "return early");
     const crash = await env.submit(CRASH_KERNEL, "exit");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(wrong)?.verdict, "invalid");
-    assert.equal(env.ledger.currentVerdict(crash)?.verdict, "crash_candidate");
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1);
+    assert.equal(env.ledger.verdicts.current(wrong)?.verdict, "invalid");
+    assert.equal(env.ledger.verdicts.current(crash)?.verdict, "crash_candidate");
+    assert.equal(env.ledger.champions.current("js-1").seq, 1);
   });
 
   test("a crash's reason keeps the end of a long error output, within its bound", async () => {
@@ -235,7 +234,7 @@ export function work() {
 `;
     const id = await env.submit(noisy, "a crash with a long error output");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(id)?.verdict, "crash_candidate", why(env, id));
+    assert.equal(env.ledger.verdicts.current(id)?.verdict, "crash_candidate", why(env, id));
     const { reasons } = env.ledger.db
       .prepare("select reasons from verdict where attempt = ? order by id desc limit 1")
       .get(id) as { reasons: string };
@@ -270,12 +269,12 @@ export function work() {
 `;
     const id = await env.submit(slow, "idle before the work");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(id)?.verdict, "crash_candidate", why(env, id));
+    assert.equal(env.ledger.verdicts.current(id)?.verdict, "crash_candidate", why(env, id));
     const { reasons } = env.ledger.db
       .prepare("select reasons from verdict where attempt = ? order by id desc limit 1")
       .get(id) as { reasons: string };
     assert.match(reasons, /^killed: timeout/);
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1);
+    assert.equal(env.ledger.champions.current("js-1").seq, 1);
   });
 
   test("a change that does not build is invalid", async () => {
@@ -284,18 +283,18 @@ export function work() {
     await env.drain();
     // The build only copies files, so the syntax error surfaces when the run imports it.
     assert.ok(
-      ["invalid", "crash_candidate"].includes(String(env.ledger.currentVerdict(id)?.verdict)),
+      ["invalid", "crash_candidate"].includes(String(env.ledger.verdicts.current(id)?.verdict)),
     );
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1);
+    assert.equal(env.ledger.champions.current("js-1").seq, 1);
   });
 
   test("without an auto policy a confirmed win waits for approval", async () => {
     const env = await setup({ promotion: "owner_approval" });
     const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(id)?.verdict, "win_confirmed", why(env, id));
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1);
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_approval");
+    assert.equal(env.ledger.verdicts.current(id)?.verdict, "win_confirmed", why(env, id));
+    assert.equal(env.ledger.champions.current("js-1").seq, 1);
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_approval");
     const pending = env.ledger
       .eventsAfter(0, 10_000)
       .events.filter((e) => e.kind === "promotion_pending");
@@ -310,7 +309,6 @@ export function work() {
       runner: new LocalRunner(env.paths.scratchDir),
       driver: new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY }),
       owner: "judge-test",
-      promotion: "auto",
       readyRetries: 0,
       calibrationBlocks: 0,
     });
@@ -321,7 +319,7 @@ export function work() {
       .all(id)
       .map((r) => r.verdict);
     assert.deepEqual(history, ["crash_infra", "crash_infra"]);
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "errored");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "errored");
   });
 
   test("a target never ready for the baseline: the job fails in the judge, is tried again at once, then the run waits, and nothing is in setup", async () => {
@@ -336,8 +334,8 @@ export function work() {
     // waits for a baseline: the next try comes after BASELINE_RETRY_MS.
     assert.deepEqual(jobs, ["evaluate:queued", "baseline:failed", "baseline:failed"]);
     assert.equal(env.ledger.latestEventBody("baseline_failed", "js-1"), undefined);
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "queued");
-    assert.equal(env.ledger.currentVerdict(id), undefined);
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "queued");
+    assert.equal(env.ledger.verdicts.current(id), undefined);
   });
 
   test("a win screened against a champion that has since moved is screened again", async () => {
@@ -346,12 +344,17 @@ export function work() {
     const b = await env.submit(`${FAST_KERNEL}// same idea, restated\n`, "the same, restated");
     assert.ok(await env.judge.tick()); // the baseline of the starting point
     assert.ok(await env.judge.tick()); // screens a
-    assert.equal(env.ledger.currentVerdict(a)?.verdict, "win_screened");
+    assert.equal(env.ledger.verdicts.current(a)?.verdict, "win_screened");
     // Meanwhile b becomes the champion by another path.
-    env.ledger.recordVerdict({ attempt: b, verdict: "win_confirmed", reasons: "t", judgedBy: "t" });
-    const commit = String(env.ledger.getAttempt(b)?.commit_sha);
+    env.ledger.verdicts.record({
+      attempt: b,
+      verdict: "win_confirmed",
+      reasons: "t",
+      judgedBy: "t",
+    });
+    const commit = String(env.ledger.attempts.get(b)?.commit_sha);
     assert.deepEqual(
-      env.ledger.promote({
+      env.ledger.champions.promote({
         run: "js-1",
         expectedSeq: 1,
         attempt: b,
@@ -361,7 +364,7 @@ export function work() {
       { ok: true, seq: 2 },
     );
     assert.ok(await env.judge.tick()); // a's confirm job: the champion moved
-    assert.equal(String(env.ledger.getAttempt(a)?.lifecycle), "queued");
+    assert.equal(String(env.ledger.attempts.get(a)?.lifecycle), "queued");
     const queued = env.ledger.db
       .prepare(
         "select count(*) as n from job where attempt = ? and kind = 'evaluate' and state = 'queued'",
@@ -384,15 +387,15 @@ export function work() {
     const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
     await env.drain();
     assert.equal(
-      env.ledger.currentVerdict(id)?.verdict,
+      env.ledger.verdicts.current(id)?.verdict,
       "goal_progress",
       JSON.stringify(
         env.ledger.db.prepare("select goal, attempt, result, detail from goal_check").all(),
       ),
     );
-    assert.equal(env.ledger.currentChampion("js-1").seq, 2);
+    assert.equal(env.ledger.champions.current("js-1").seq, 2);
     assert.equal(status().fast, "verified");
-    assert.equal(env.ledger.getRun("js-1")?.status, "closed");
+    assert.equal(env.ledger.runs.get("js-1")?.status, "closed");
     const report = env.ledger
       .eventsAfter(0, 10_000)
       .events.filter((e) => e.kind === "goal_complete");
@@ -475,7 +478,7 @@ export function work() {
   test("goal mode: a failed validation is tried again, a few times, spaced out", async () => {
     const env = await setup({ goal: { opsPerSecond: 90e6 }, promotion: "auto" });
     // A validation that failed for an infrastructure reason.
-    const jobId = env.ledger.enqueueJob({
+    const jobId = env.ledger.jobs.enqueue({
       kind: "validate",
       spec: { run: "js-1", champion_seq: 1 },
       actor: "t",
@@ -502,7 +505,7 @@ export function work() {
     const env = await setup({ heldOut: true });
     const id = await env.submit(FAST_KERNEL, "drop the wasted inner loop");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(id)?.verdict, "win_confirmed", why(env, id));
+    assert.equal(env.ledger.verdicts.current(id)?.verdict, "win_confirmed", why(env, id));
     const rows = env.ledger.db.prepare("select count(*) as n from held_out").get();
     assert.equal(Number(rows?.n), 1);
     // The held-out case is named only in the owner's held_out_checked event (goal 082).

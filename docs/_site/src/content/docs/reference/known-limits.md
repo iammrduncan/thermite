@@ -15,6 +15,7 @@ Thermite is at version 0.x. This page lists what to know before you run it: the 
 | [There are no default caps](#there-are-no-default-caps) | No goal: it is a decision |
 | [Timing on RunPod is noisier](#timing-on-runpod-is-noisier) | No goal: it comes with shared machines |
 | [Research mode searches the web only through an MCP server](#research-mode-searches-the-web-only-through-an-mcp-server) | No goal: give the campaign a search server |
+| [The knowledge base takes text from agents, and reads each file once](#the-knowledge-base-takes-text-from-agents-and-reads-each-file-once) | No goal yet: [goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/_completed/175-knowledge-base.goal) records them |
 | [Runs of several days are not yet proven](#runs-of-several-days-are-not-yet-proven) | [Goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), v0.5.0 |
 | [The CUDA 13 harness is untested](#the-cuda-13-harness-is-untested) | [Goal 132](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/132-cuda-images-per-gpu.goal), v0.1.2 |
 | [A win the champion moved past still asks to be made the champion](#a-win-the-champion-moved-past-still-asks-to-be-made-the-champion) | [Goal 141](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/141-waiting-win-after-champion-moved.goal), v0.1.3 |
@@ -32,10 +33,10 @@ The agents' work is code: shell commands, builds and tests that a model chose, r
 
 ## Under compose, that code can reach your local network
 
-Compose joins the harness to a normal network, `egress`, for its way out ([Networks](ports-volumes-secrets.md#compose)). Through it, the lanes' commands, the builds and the timed runs can reach the internet, your computer (as `host.docker.internal`) and the other machines on your local network. A rig that control sets up on a machine, or that you join on one, has the same kind of way out ([Machines](ports-volumes-secrets.md#machines)).
+Compose joins each rig's harness to a normal network of its own, `rig-egress` or `rig2-egress`, for its way out ([Networks](ports-volumes-secrets.md#compose)). Through it, the lanes' commands, the builds and the timed runs can reach the internet, your computer (as `host.docker.internal`) and the other machines on your local network. A rig that control sets up on a machine, or that you join on one, has the same kind of way out ([Machines](ports-volumes-secrets.md#machines)).
 
 - A worker's research fetches are different: the harness fetches each page itself, and refuses private and local addresses.
-- On a Kubernetes cluster, in a namespace that control creates or that you join, network rules let the harness reach only DNS and addresses outside the private ranges of RFC 1918. Control refuses a slot unless its rules do the same ([Kubernetes](ports-volumes-secrets.md#kubernetes)).
+- On a Kubernetes cluster, in a namespace that control creates or that you join, network rules let the harness reach only DNS, addresses outside the private, shared and link-local ranges, and the addresses the owner lists in **Settings › Addresses rigs may reach**, each on its listed TCP ports. Control refuses a slot unless its rules do the same, and opens no more of the list than its entries, and the rig's isolation check fails when a lane reaches the cluster's API server ([Kubernetes](ports-volumes-secrets.md#kubernetes)).
 
 **Removed by:** [goal 038](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/038-lane-network-rules.goal), Keep lanes off the local network (v0.3.0), under compose. Until then, run a compose rig where nothing on your local network relies on being out of reach.
 
@@ -59,13 +60,24 @@ A RunPod GPU is in a machine that other customers' pods share. Their work can sl
 
 ## Research mode searches the web only through an MCP server
 
-Research workers have no search of their own: their `search` tool answers that the rig has no web search. They search the web with the tools of an MCP server that the campaign gives them, such as a search or browsing server you add in **Settings** ([Give agents MCP tools](../how-to/campaigns/give-agents-mcp-tools.md)). Without one, they start from the contract's starting pages (`seeds`) and follow the links of the pages already archived ([the research contract](contract.md#research)), so a research campaign finds only what its starting pages lead to.
+Research workers have no web search of their own. They search the web with the tools of an MCP server that the campaign gives them, such as a search or browsing server you add in **Settings** ([Give agents MCP tools](../how-to/campaigns/give-agents-mcp-tools.md)). Without one, they start from the contract's starting pages (`seeds`) and follow the links of the pages already archived ([the research contract](contract.md#research)), so a research campaign finds only what its starting pages lead to.
 
 **Removed by:** no goal. Give the campaign a search or browsing MCP server.
 
+## The knowledge base takes text from agents, and reads each file once
+
+[Thermite's knowledge base](knowledge-base.md) keeps files whole, but what an agent can give it, and what control reads from a file, have limits:
+
+- **`kb_write` takes text only.** An agent writes a short text, or a text that is kept whole as a file when it gives `file_name` (a name that ends in `.md`, `.txt`, `.html`, `.json` or `.csv`). It can't send a binary file, such as a PDF or an image, that it downloaded. The sources that the research tools archive, the lanes' documents, the research paper and the reports reach the knowledge base whole, as files, by their own path ([Sources and documents](knowledge-base.md#sources-and-documents)).
+- **Control reads a file's text within fixed limits.** It reads at most 2,000 pages, 5,000,000 characters and 256 MiB of a file, in at most 120 seconds and 1,024 MiB of memory ([Its text](knowledge-base.md#its-text)). These limits are constants in Thermite's code, not settings: a file past one of them is searched by the text read up to it, or kept whole.
+- **A scanned PDF gives no text.** Control reads no text from images, so a PDF of scanned pages is kept whole and not searched. A PDF whose fonts need character maps, as some with Chinese, Japanese or Korean text do, may give little or wrong text.
+- **A file is read once.** Control reads each file's text once, by its SHA-256. When a later version changes the limits, or reads more kinds of file, control does not read again a file it read before.
+
+**Removed by:** no goal yet. [Goal 175](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/_completed/175-knowledge-base.goal) records each of them.
+
 ## Runs of several days are not yet proven
 
-Thermite is built to run unattended for as long as a campaign takes, and to recover from crashes and restarts. Its own tests run campaigns for minutes to a few hours: the longest, `scripts/research-longrun.mjs`, runs a research campaign for about two hours by default and kills the harness's controller halfway. The test that proves runs of several days has not run yet: several campaigns in all three modes, for days, with crashes, restarts, a full disk and a lost model along the way.
+Thermite is built to run unattended for as long as a campaign takes, and to recover from crashes and restarts. Its own tests run campaigns for minutes to a few hours: the longest, `scripts/acceptance/research-longrun.mjs`, runs a research campaign for about two hours by default and kills the harness's controller halfway. The test that proves runs of several days has not run yet: several campaigns in all three modes, for days, with crashes, restarts, a full disk and a lost model along the way.
 
 **Removed by:** [goal 049](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/049-multi-day-test-fire.goal), The multi-day test fire (v0.5.0). If a long run goes wrong for you, [report it](../project/getting-help.md).
 
@@ -87,8 +99,10 @@ Until version 1.0, a new version may change settings, commands, routes, files an
 
 Before you move to a new version, make sure that what you want to keep is in your results repository, and download the champions that you want ([Take the result](../how-to/campaigns/take-the-result.md)).
 
-**Removed by:** no goal yet. The [roadmap](../project/roadmap.md#later-versions) says how versions count up.
+Since v0.1.1, a run is addressed by its name alone, which control uses once. Two runs that shared a name before v0.1.1, on two rigs or again after a full reset, show as one: the newest of them, on its campaign's page and at its address. The older one's events stay on control, in its rig's exports and in the knowledge base.
+
+**Removed by:** no goal yet. The [changelog](../project/changelog.md) says how versions count up.
 
 ## More that is not built yet
 
-Other pages say where a feature is not built yet, each with a link to its goal. The [roadmap](../project/roadmap.md) lists every goal. To report a security problem, follow the [security policy](https://github.com/iammrduncan/thermite/blob/main/SECURITY.md), not a public issue.
+Other pages say where a feature is not built yet, each with a link to its goal. The [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md) lists every goal. To report a security problem, follow the [security policy](https://github.com/iammrduncan/thermite/blob/main/SECURITY.md), not a public issue.

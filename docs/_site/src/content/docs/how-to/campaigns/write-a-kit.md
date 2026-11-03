@@ -88,6 +88,8 @@ The judge works out each metric itself, never from what the program prints:
 
 Every value must be above zero. A goal's `metric_threshold` must name one of these metrics: to use a number the check prints, declare it as a `from: "check"` metric.
 
+One kit can serve several campaigns, each deciding by some of its metrics. A run needs only the metrics its contract decides by, in every case it runs; the kit's others are kept where the check gives them. So a metric one campaign adds, such as a prefill speed only some cases measure, does not make another campaign's runs invalid ([Metrics](../../reference/kit-manifest.md#metrics)).
+
 ## 5. Write the run command
 
 The run command runs one stored build on one cell, as another user. It is timed as a whole, so start-up counts.
@@ -112,9 +114,11 @@ These are a `kit.json`'s placeholders. The **New campaign** page has a shorter s
 
 A run stopped at a limit, or that exits with an error, makes the change `crash_candidate`.
 
+When the measurement needs a program of the kit's beside the candidate, such as one that sends it requests and times each answer, put that program in `run.driver`. The judge starts it with `run.command`, as a user of its own that the candidate's code can't reach, and joins the two by their standard input and output: the driver writes to the candidate and reads its answers. The driver writes `{out}`; it gets no `{build}`, and the candidate's command gets no `{out}`. The run ends when the driver does ([A kit's driver](../../reference/kit-manifest.md#a-kits-driver)).
+
 ## 6. Write the check
 
-The check runs after every run that ended well, as the judge, in the kit's folder. There `{kit}` is the whole kit, `{params}` and `{params_json}` are the judge's own copies of the cell's parameters, and `{out}` holds the run's results. Its last line of output is one JSON object:
+The check runs after every run that ended well, as a checker user of its own, in a folder of its own. There `{kit}` is the whole kit, which it reads, `{params}` and `{params_json}` are the judge's own copies of the cell's parameters, and `{out}` holds the run's results. It can't write to the kit or to `/tmp`: reach the kit's files through `{kit}` or `{kit:<path>}`, not by a path relative to the working folder, and write temporary files to the check's own folder, its `TMPDIR`. Its last line of output is one JSON object:
 
 ```json
 {"pass": false, "reasons": ["max abs error 0.31 above 0.002"], "max_err": 0.31}
@@ -229,6 +233,6 @@ Control can keep the kit's repository itself, with its history: you give it the 
 
    The kit's import names `{"control": "kits/project-kit"}` as its source ([Imports](../../reference/signed-commands.md#imports)). Later runs, from the campaign's page or with `thermite run start`, use the same import.
 
-Over the REST API, send the bundle's bytes to `POST /v1/kits/<name>`, with `?ref=` and `?force=true` as needed. An agent with the owner's or the operator's token uses MCP's [`kit_add`](../../reference/mcp-tools.md#kit_add), with the bundle in base64: at most 3,000,000 bytes of bundle, as an MCP request is at most 4 MiB. The command line and REST take up to 64 MiB. `thermite kit list`, `GET /v1/kits` and MCP's `kits` show each kit control keeps, with its head.
+Over the REST API, send the bundle's bytes to `POST /v1/kits/<name>`, with `?ref=` and `?force=true` as needed. An agent with the owner's or the operator's token uses MCP's [`kit_add`](../../reference/mcp-tools.md#kit_add), with the bundle in base64: at most 3,000,000 bytes of bundle, as an MCP request is at most 4 MiB. For a larger kit, or to skip the bundle, give `kit_add` the kit repository's address instead, `{"git": {"url": "https://git.example.com/you/project-kit.git", "ref": "main"}}`, with `"access"` naming a [Git access](private-repository.md) for a private repository: control reads the repository itself. The command line and REST take up to 64 MiB. `thermite kit list`, `GET /v1/kits` and MCP's `kits` show each kit control keeps, with its head.
 
 For a later version of the kit, make a new bundle and add it again: the kit's head moves forward. Control refuses a head that does not descend from the head it keeps, unless you add `--force`. Even then, control keeps the old head's commits, so a contract that names one still runs.

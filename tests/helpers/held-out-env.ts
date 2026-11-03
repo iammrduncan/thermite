@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createControlApi } from "../../src/control/api.ts";
-import { ControlStore } from "../../src/control/store.ts";
 import { Registry } from "../../src/harness/agents/registry.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
-import { relayOnce } from "../../src/supervisor/relay.ts";
+import { ADMIN, controlStack, mcpClient, signIn } from "./control-stack.ts";
 import { makeJudgeEnv } from "./judge-env.ts";
 
 /**
@@ -61,60 +56,15 @@ export async function setup(opts: Parameters<typeof makeJudgeEnv>[0]) {
         "proposer",
       )
     ).attempt;
-  // Control, reached through the supervisor's relay as on a rig.
-  const store = new ControlStore(":memory:");
-  const ADMIN = "admin-token-abcdef";
-  const control = createControlApi(
-    store,
-    {
-      admin: ADMIN,
-      agent: AGENT_TOKEN,
-      read: READ_TOKEN,
-      rigs: { "rig-a": "rig-token-abcdef" },
-    },
-    env.keys.privateKeyPem,
-  );
-  const harness = createHarnessApi(env.service, { supervisor: "s-token-abcdef" });
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const url = new URL(String(input));
-    return (url.host === "harness" ? harness : control).request(
-      `${url.pathname}${url.search}`,
-      init as RequestInit,
-    );
-  };
-  const relay = () =>
-    relayOnce(
-      {
-        rig: "rig-a",
-        harnessUrl: "http://harness",
-        harnessToken: "s-token-abcdef",
-        controlUrl: "http://control",
-        controlToken: "rig-token-abcdef",
-        fetchImpl,
-      },
-      { cursor: 0 },
-    );
-  const rest = async (path: string) =>
-    (await control.request(path, { headers: { authorization: `Bearer ${ADMIN}` } })).text();
-  const login = await control.request("/ui/login", {
-    method: "POST",
-    body: new URLSearchParams({ token: ADMIN }),
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+  // Control, reached through the supervisor's relay on the bus, as on a rig.
+  const { control, api, relay } = controlStack({
+    env,
+    tokens: { agent: AGENT_TOKEN, read: READ_TOKEN },
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-  const page = async (path: string) =>
-    (await control.request(path, { headers: { cookie } })).text();
+  const rest = async (path: string) => (await api("GET", path)).text();
+  const { page } = await signIn(control);
   const mcp = async (tool: string, args: Record<string, unknown>, token = ADMIN) => {
-    const client = new Client({ name: "test", version: "1.0.0" });
-    const f: typeof fetch = async (input, init) => {
-      const url = new URL(String(input));
-      const headers = new Headers(init?.headers);
-      headers.set("authorization", `Bearer ${token}`);
-      return control.request(`${url.pathname}${url.search}`, { ...init, headers } as RequestInit);
-    };
-    await client.connect(
-      new StreamableHTTPClientTransport(new URL("http://control/mcp"), { fetch: f }),
-    );
+    const client = await mcpClient(control, token);
     const r = (await client.callTool({ name: tool, arguments: args })) as {
       content: { text: string }[];
     };

@@ -3,39 +3,20 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { parseContract, type ResearchContract } from "../../../src/core/contract.ts";
-import { indexEvent, type KbFields } from "../../../src/core/kb-index.ts";
+import type { ResearchContract } from "../../../src/core/contract.ts";
+import { indexEvent, type KbFields } from "../../../src/core/kb/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { ResearchFolder, SAVED_LANES_DIR } from "../../../src/harness/research/folder.ts";
-import { NOTE_REPEATS, Research } from "../../../src/harness/research/research.ts";
-import { researchPackage } from "../../../src/harness/research/review.ts";
-import { researchFixture } from "../../helpers/fixtures.ts";
+import { NOTE_REPEATS } from "../../../src/harness/research/research/index.ts";
+import { researchPackage } from "../../../src/harness/research/review/index.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
+import { researchEnv } from "../../helpers/research-run.ts";
 
 /**
  * Goal 117's bounds on what research workers write: a note that repeats one of the run's newest
  * notes is refused, and hypotheses are a pool with a question, without twins.
  */
-
-async function researchEnv(over: Record<string, unknown> = {}) {
-  const env = makeHarnessEnv("rig-r");
-  const parsed = parseContract({ ...researchFixture, ...over });
-  if (!parsed.ok) throw new Error(parsed.errors.join("; "));
-  const out = await env.service.applyCommand(
-    env.sign("assign_campaign", {
-      run: "r-1",
-      contract: parsed.contract,
-      contract_sha: parsed.sha,
-      imports: [],
-    }),
-  );
-  assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-  const research = new Research(env.service.ledger, env.service.paths.stateDir, {
-    allowPrivate: true,
-  });
-  return { env, research };
-}
 
 /** An open trial of a lane in run r-1, with its token. */
 function openTrial(env: ReturnType<typeof makeHarnessEnv>, lane: string, id: string): string {
@@ -45,7 +26,7 @@ function openTrial(env: ReturnType<typeof makeHarnessEnv>, lane: string, id: str
     run: "r-1",
     lane,
     epoch: 1,
-    family: "explore",
+    direction: "explore",
     parent: "research",
     token,
   });
@@ -53,21 +34,23 @@ function openTrial(env: ReturnType<typeof makeHarnessEnv>, lane: string, id: str
 }
 
 describe("a note that repeats one already written is refused (goal 117)", () => {
-  test("a research note: the same words once folded are refused, with the note they repeat", async () => {
+  test("a source note: the same words once folded are refused, with the note they repeat", async () => {
     const { env, research } = await researchEnv();
-    const first = research.addNote("r-1", "lane-2", "Closed.");
+    const first = research.addSourceNote("r-1", "lane-2", "Closed.");
     for (const again of ["Closed.", "closed", "  CLOSED!  ", "“Closed”"])
       assert.throws(
-        () => research.addNote("r-1", "lane-2", again),
+        () => research.addSourceNote("r-1", "lane-2", again),
         new RegExp(
           `this note repeats note ${first.note} \\(by lane-2, [^)]+\\) word for word: it is not recorded again`,
         ),
       );
     // Other words are another note.
-    research.addNote("r-1", "lane-2", "Closed the second question's gap on sources.");
+    research.addSourceNote("r-1", "lane-2", "Closed the second question's gap on sources.");
     const n = Number(
       (
-        env.service.ledger.db.prepare("select count(*) as n from note where run = 'r-1'").get() as {
+        env.service.ledger.db
+          .prepare("select count(*) as n from source_note where run = 'r-1'")
+          .get() as {
           n: number;
         }
       ).n,
@@ -77,18 +60,18 @@ describe("a note that repeats one already written is refused (goal 117)", () => 
 
   test("only the run's newest notes count: a note older than the last NOTE_REPEATS may be written again", async () => {
     const { research } = await researchEnv();
-    research.addNote("r-1", "lane-1", "Kernel launch overhead dominates small batches.");
+    research.addSourceNote("r-1", "lane-1", "Kernel launch overhead dominates small batches.");
     for (let i = 0; i < NOTE_REPEATS; i++)
-      research.addNote("r-1", "lane-1", `Read source number ${i} for the second question.`);
+      research.addSourceNote("r-1", "lane-1", `Read source number ${i} for the second question.`);
     assert.doesNotThrow(() =>
-      research.addNote("r-1", "lane-1", "Kernel launch overhead dominates small batches."),
+      research.addSourceNote("r-1", "lane-1", "Kernel launch overhead dominates small batches."),
     );
   });
 
   test("a research worker's field note: a repeat of the run's newest field notes is refused in words; other runs keep theirs", async () => {
     const { env } = await researchEnv();
     const token = openTrial(env, "lane-1", "t-1");
-    const first = env.service.writeTrialNote(token, { kind: "note", text: "Closed." });
+    const first = env.service.writeTrialNote(token, { kind: "other", text: "Closed." });
     assert.throws(
       () => env.service.writeTrialNote(token, { kind: "observation", text: "closed" }),
       new RegExp(
@@ -97,8 +80,10 @@ describe("a note that repeats one already written is refused (goal 117)", () => 
     );
     // Another lane's repeat is a repeat too: the run's notes, not the lane's.
     const other = openTrial(env, "lane-2", "t-2");
-    assert.throws(() => env.service.writeTrialNote(other, { kind: "note", text: "Closed!" }));
-    assert.ok(env.service.writeTrialNote(other, { kind: "note", text: "Closed question 2." }).note);
+    assert.throws(() => env.service.writeTrialNote(other, { kind: "other", text: "Closed!" }));
+    assert.ok(
+      env.service.writeTrialNote(other, { kind: "other", text: "Closed question 2." }).note,
+    );
     // A hill-climb run's workers are not held to it.
     const hc = makeHarnessEnv();
     await hc.service.applyCommand(hc.sign("assign_campaign", hc.assignPayload({})));
@@ -109,13 +94,13 @@ describe("a note that repeats one already written is refused (goal 117)", () => 
       run: runOf.id,
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: hc.seedCommit,
       token: t,
     });
-    hc.service.writeTrialNote(t, { kind: "note", text: "Baseline confirmed." });
+    hc.service.writeTrialNote(t, { kind: "other", text: "Baseline confirmed." });
     assert.doesNotThrow(() =>
-      hc.service.writeTrialNote(t, { kind: "note", text: "Baseline confirmed." }),
+      hc.service.writeTrialNote(t, { kind: "other", text: "Baseline confirmed." }),
     );
   });
 });
@@ -389,6 +374,7 @@ describe("the hypothesis pool (goal 117)", () => {
     const { env, research, claims, author, events } = await poolEnv();
     const folder = new ResearchFolder({
       ledger: env.service.ledger,
+      outboxDir: env.service.paths.outboxDir,
       scratchRoot: join(env.service.paths.scratchDir, "research"),
       stateRoot: join(env.service.paths.stateDir, SAVED_LANES_DIR),
       runner: new LocalRunner(env.service.paths.scratchDir),
@@ -648,7 +634,7 @@ describe("a research task's question and yield (goal 117)", () => {
       run: "r-1",
       lane: "lane-2",
       epoch: 2,
-      family: "primary",
+      direction: "primary",
       parent: "research",
     });
     await tick();
@@ -688,7 +674,7 @@ describe("a research task's question and yield (goal 117)", () => {
       supporting: [claims[0] as string],
     });
     // Another lane's work in the same time is not this trial's.
-    research.addNote("r-1", "lane-1", "A note of another lane.");
+    research.addSourceNote("r-1", "lane-1", "A note of another lane.");
     const y = research.trialYield("r-1", "t-y");
     assert.deepEqual(y, {
       verified_claims: 3,

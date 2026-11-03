@@ -1,31 +1,45 @@
 # Thermite's one-container rig image: a rig's harness and supervisor in one container, for hosts
 # that run one container per machine (a RunPod pod). It is the harness image with the supervisor
-# added. Build the harness image first from containers/harness/Containerfile (on a CUDA 12.x base
-# for GPU pods; the default CPU base works the same) and name it in HARNESS_IMAGE:
+# added. Build the harness image first, the harness target of containers/Containerfile (on a CUDA
+# 12.x base for GPU pods; the default CPU base works the same), and name it in HARNESS_IMAGE:
 #
-#   podman build -t thermite-harness -f containers/harness/Containerfile .
+#   podman build --target harness -t thermite-harness -f containers/Containerfile .
 #   podman build -t thermite-rig --build-arg HARNESS_IMAGE=localhost/thermite-harness \
 #     -f containers/rig/Containerfile .
 #
-# The harness image already holds the supervisor's code: both images build all of src/.
+# The harness image already holds the supervisor's code: both images build all of src/. The
+# scripts in containers/build/ are mounted for the steps that run them, as for the other images.
 ARG HARNESS_IMAGE
+# The build scripts (containers/build/), mounted from this stage by the steps that run them, as in
+# containers/Containerfile.
+FROM scratch AS build-scripts
+COPY containers/build/ /
+
 FROM ${HARNESS_IMAGE}
 # What the supervisor image adds to its base that the harness image lacks: openssh-client (Git
 # over SSH), and the supervisor's user. ssh refuses a uid without a passwd entry, and finds
-# ~/.ssh from the entry's home (containers/supervisor/Containerfile).
+# ~/.ssh from the entry's home (containers/build/supervisor-users.sh).
+# The base's system packages are upgraded first, so each build takes the distribution's fixes
+# (goal 125).
 RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
  && apt-get install -y --no-install-recommends openssh-client \
  && rm -rf /var/lib/apt/lists/*
-RUN groupadd -g 10001 supervisor \
- && useradd -u 10001 -g 10001 -M -d /var/lib/thermite-supervisor/home -s /usr/sbin/nologin supervisor \
+# Each advisor's program runs as one of the advisor users, advisor-1..advisor-8 (uid and gid
+# 10081..10088, src/core/advisor-runs.ts), through the runner the broker serves.
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/supervisor-users.sh \
  && mkdir -p /var/lib/thermite-supervisor/home \
  && chown 10001:10001 /var/lib/thermite-supervisor /var/lib/thermite-supervisor/home \
  && chmod 0700 /var/lib/thermite-supervisor /var/lib/thermite-supervisor/home
-# No set-id file anywhere: RunPod does not stop a process from gaining privileges (no_new_privs is
-# off there), so a role could otherwise run a setuid program as its owner. Last, after every
-# package; the build fails if one is left.
-RUN find / -xdev -type f -perm /6000 -exec chmod ug-s {} + \
- && test -z "$(find / -xdev -type f -perm /6000 -print -quit)"
+# The pod's own NATS server, which control's server dials as a leaf node (src/core/link/leaf.ts)
+# and its supervisor connects to on the loopback (src/supervisor/leaf.ts): the program alone, from
+# the bus's server image that compose.yaml pins, by the same digest, so nothing new is downloaded.
+COPY --from=docker.io/library/nats:2.15.1-alpine@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde \
+  /usr/local/bin/nats-server /usr/local/bin/nats-server
+# No set-id file anywhere (containers/build/no-set-id.sh): RunPod does not stop a process from
+# gaining privileges (no_new_privs is off there), so a role could otherwise run a setuid program as
+# its owner. Last, after every package; the build fails if one is left.
+RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh
 COPY --chmod=0755 containers/rig/thermite-rig-start /usr/local/bin/thermite-rig-start
 # The rig's live state, on the container's own disk, where each part and each role keeps its own
 # folders as in the harness image: RunPod's volume refuses even root a change of owner. Only the
@@ -35,12 +49,14 @@ RUN mkdir -p /var/lib/thermite-rig && chmod 0711 /var/lib/thermite-rig
 # /var/lib/thermite-rig; scratch stays on the container's disk too. RunPod empties that disk when
 # the pod stops, so root keeps a snapshot of the state on RunPod's volume (/workspace, kept when the
 # pod stops): every few minutes, after each export, after enrollment and at a stop, and restores it
-# at a start on an empty disk (src/harness/broker/snapshot.ts). RunPod's volume ignores file modes,
+# at a start on an empty disk (src/harness/broker/snapshot/). RunPod's volume ignores file modes,
 # so the snapshot is sealed: encrypted and authenticated with the key control mints for each pod at
 # its launch (THERMITE_STATE_SNAPSHOT_KEY), which only root holds (src/harness/broker/seal.ts).
 # The harness API answers on loopback only. Pull mode: control connects to the supervisor's port;
 # the supervisor's enrollment brings control's key, and root gives the harness its own copy of it
 # (THERMITE_CONTROL_PUBKEY_FILE, in a folder only root writes) once its SHA-256 is the launch's.
+# With the leaf's launch values (THERMITE_LEAF_*), the supervisor also starts the pod's NATS
+# server, and its reports, commands, live lines, config and knowledge base go over the bus.
 # A fatal error at start is held for a minute before the broker exits, so the pod's log keeps it
 # and RunPod does not restart the container every few seconds.
 ENV THERMITE_ONE_CONTAINER=1 \
@@ -57,7 +73,9 @@ ENV THERMITE_ONE_CONTAINER=1 \
     THERMITE_TUNNEL_PORT=8790 \
     THERMITE_TUNNEL_DIR=/var/lib/thermite-rig/supervisor/tunnel \
     THERMITE_TUNNEL_ENROLLED_DIR=/var/lib/thermite-rig/supervisor/enrolled
-# The port control connects to, through RunPod's proxy (the launch exposes it as HTTP).
-EXPOSE 8790
+# The port control connects to, through RunPod's proxy (the launch exposes it as HTTP); and the
+# pod's leaf node, which control's server dials at the public address and port RunPod maps it to
+# (the launch exposes it as TCP).
+EXPOSE 8790 7422
 ENTRYPOINT ["/usr/local/bin/thermite-rig-start", "/usr/bin/tini", "--"]
-CMD ["node", "/opt/thermite/dist/harness/broker.js"]
+CMD ["node", "/opt/thermite/dist/harness/broker/main.js"]

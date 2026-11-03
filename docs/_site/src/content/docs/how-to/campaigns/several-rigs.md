@@ -16,7 +16,7 @@ Rigs send each other champions through one [results repository](../operate/resul
 
 - Two or more rigs that report to control, with the target (CPU or GPU) of the campaign's kit.
 - To send champions between rigs, every rig involved pushes its results to **the same results repository**: the supervisor setting `THERMITE_RESULTS_REMOTE` is the same on each. See [Set up the results repository](../operate/results-repository.md). The local stack does this already. Start its second rig, `local-2`, with `docker compose --profile two-rigs up -d`, with the same `-f` options you start the stack with (`podman compose` with Podman).
-- Each rig's **Exports** switch, on **Edit rig**, is on. It is on unless you turned it off.
+- Each rig's **Exports** switch, on **Edit rig**, is on, so each run publishes its champion when it ends. It is on unless you turned it off.
 
 ## 1. Start a run on each rig
 
@@ -31,21 +31,21 @@ This works for a campaign made on the **New campaign** page, which runs its late
 
 Every run must start from the same commit, as **Start a run** does: a rig can take another rig's champion only when it has the commit that champion started from.
 
-The campaign's page then shows each running run as a card under **At work now**, and paused, completed and finished runs under **Earlier runs**. Each run has its own page: press its name.
+The campaign's page then shows each running run as a card under **At work now**, and paused, completed and finished runs under **Earlier runs**, with the runs of a retired rig and those from before a rig's full reset. Each run has its own page: press its name.
 
 ## 2. Publish a champion
 
-A champion beyond the starting point can be sent once its rig has published it, with its next export. Exports happen every hour when there is something new. To publish at once, open the rig's page, press **Export**, then **Export** under the choice.
+A champion beyond the starting point can be sent once its rig has published it. A run publishes its champion with its export at its end, with no one asking. To send the champion of a run that still runs, publish it now: open the rig's page, press **Export**, choose **Full export**, then press **Export** under the choice. Nothing is exported on a timer.
 
 ## 3. Send the champion to another rig
 
 1. Open the page of the run that has the champion, and its **Planner** tab. Its **Other rigs** card shows once the run has published a champion.
-2. Beside **Send champion #N**, choose the receiving run, shown as `<rig> / <run>`. The list holds other rigs' runs of the same campaign.
+2. Beside **Send champion #N**, choose the receiving run, shown as `<run> on <rig>`. The list holds other rigs' runs of the same campaign.
 3. Press **Send champion #N**.
 
-The dashboard opens the receiving run's page. The receiving run must be running when the champion arrives: if it is paused or finished, the command fails, and **Commands** in the sidebar shows the reason, such as `run sort-speed-1 is paused`. Resume the run, then send the champion again.
+The dashboard opens the receiving run's page. The receiving run must be running when the champion arrives: if it is paused or finished, the command fails, and the **Audit log**'s commands, in the sidebar, show the reason, such as `run sort-speed-1 is paused`. Resume the run, then send the champion again.
 
-You can also send it with the owner's token over the REST API, `POST /v1/propagate` with `{"from_rig": "local-1", "run": "sort-speed-1", "to_rig": "local-2", "to_run": "sort-speed-2"}`, or with the MCP tool `propagate_champion` and the same four fields. `run` and `to_run` are the two runs' names, as the list beside **Send champion #N** shows them. A run's name is used once on control, on every rig: **Start a run** numbers a campaign's runs across all its rigs, so the run on `local-2` is `sort-speed-2`.
+You can also send it with the owner's token over the REST API, `POST /v1/propagate` with `{"run": "sort-speed-1", "to_run": "sort-speed-2"}`, or with the MCP tool `propagate_champion` and the same two fields. `run` and `to_run` are the two runs' names, as the list beside **Send champion #N** shows them. A run's name is used once on control, on every rig: **Start a run** numbers a campaign's runs across all its rigs, so the run on `local-2` is `sort-speed-2`, and control knows the rig each run is on.
 
 ## 4. Check the result
 
@@ -71,8 +71,8 @@ After **Send champion #N**, the dashboard answers with a plain page that says `r
 | Reason | What it means |
 | --- | --- |
 | `the source run has no champion beyond its seed` | Nothing has won yet |
-| `champion seq N is not published yet (it is published with the rig's next export)` | Wait for the export, or press **Export** on the rig's page |
+| `champion seq N is not published yet: the run's export at its end publishes it, or a full export of <rig> does now (Export on its page)` | Press **Export** on the rig's page, with **Full export**, and send it again once the export is done |
 | `<run> runs <campaign>, not <campaign>` | The receiving run is another campaign's |
 | `the target works on <repo>, the champion is in <repo>` | The two runs work on different projects |
 
-If the receiving rig can't find the champion in the results repository, the command stays **pending** on the **Commands** page and expires after 24 hours. Check that both rigs push to the same results repository: each rig's page shows **Results** with `pushed … ago`, or `no results repository`.
+If the receiving rig can't find the champion in the results repository, the command stays **pending** among the **Audit log**'s commands and expires after 24 hours. Check that both rigs push to the same results repository: each rig's page shows **Results** with `pushed … ago`, or `no results repository`.

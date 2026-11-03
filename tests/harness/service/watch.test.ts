@@ -4,7 +4,7 @@ import { parseContract } from "../../../src/core/contract.ts";
 import { LiveLog } from "../../../src/core/live.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
 import { sameAnswer } from "../../../src/harness/agents/repeats.ts";
-import { createHarnessApi } from "../../../src/harness/api.ts";
+import { createHarnessApi } from "../../../src/harness/api/index.ts";
 import { REPEAT_STREAK, TrialWatch, tellStreak } from "../../../src/harness/service/watch.ts";
 import { researchFixture } from "../../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
@@ -187,7 +187,7 @@ describe("a trial's lines, through the harness, reach the report and the teacher
       run: "r-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: "p",
       token: "tok-1",
     });

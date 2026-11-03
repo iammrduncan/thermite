@@ -1,6 +1,6 @@
 # The code clean-up guide
 
-This guide is for the clean-up of v0.1.1, goal [125](goals/125-code-to-the-conventions.goal). It is the result of goal [127](goals/_completed/127-clean-up-pre-audit.goal), the pre-audit, which was done as part of the v0.1.1 audit, goal [160](goals/_completed/160-v010-audit.goal).
+This guide is for the clean-up of v0.1.1, goal [125](goals/_completed/125-code-to-the-conventions.goal). It is the result of goal [127](goals/_completed/127-clean-up-pre-audit.goal), the pre-audit, which was done as part of the v0.1.1 audit, goal [160](goals/_completed/160-v010-audit.goal).
 
 - **What it describes:** the code as v0.1.0 shipped it (tag `v0.1.0`), with the tests already moved to `tests/` by goal 160.
 - **Part 2:** on the same evening, five more reviewers looked at the agents' definitions, every channel between the parts, NATS JetStream as a message bus, agents in their own terminal, and the hierarchy of Thermite's things. [Section 8](#8-part-2-lanes-9-to-13-goals-166-to-171) says what they change here.
@@ -231,7 +231,7 @@ Each theme is a set of changes across the code. Sizes are in files. The checks a
 
 ### Operations
 
-The operations reviewer's findings that are bugs are in goals [164](goals/_completed/164-settings-that-fail-loudly.goal) and [165](goals/165-results-kept-through-remove-and-reset.goal). The ones that need the owner's choice first are questions [Q12–Q15](#7-the-owners-questions): backups and a copy of each database before a migration, retention, the remove guard, and health checks that test something. Today the health routes always answer `ok`, and no deployment has a healthcheck or a probe.
+The operations reviewer's findings that are bugs are in goals [164](goals/_completed/164-settings-that-fail-loudly.goal) and [165](goals/_completed/165-results-kept-through-remove-and-reset.goal). The ones that need the owner's choice first are questions [Q12–Q15](#7-the-owners-questions): backups and a copy of each database before a migration, retention, the remove guard, and health checks that test something. Today the health routes always answer `ok`, and no deployment has a healthcheck or a probe.
 
 ### Where the tests went
 
@@ -243,7 +243,7 @@ Apply these the same way in every step. The ones marked **new** are additions to
 
 1. **New: the parts and the way they import.** `core` holds contracts: schemas, words, limits, signing and protocols, and does no I/O beyond `node:crypto`. `common` holds runtime tools: settings, logs, errors, files, git, subprocesses, HTTP. The parts (`harness`, `supervisor`, `control`, `cli`, `release`) import `core` and `common`, never each other; code two parts need goes to `core`, to `common`, or to a shared folder named for what it is. Domain modules never import page code (`control/ui/`). Tests and scripts may import any part; production code never imports them. A check in `npm run check` enforces it, with today's exceptions named until they are gone.
 2. **New: a wire contract has one home.** Every body that crosses a process boundary (a route, a signed command, an event, a file one container hands to another, an environment variable) has one schema in `core`. Route paths and limits are named constants beside it.
-3. **New: event kinds are constants with schemas.** A new kind is added to `core/events/` with its body's schema, and `appendEvent` takes it typed. A rename that must keep older data readable maps the old name in `core/names.ts`; v0.1.1 keeps none for v0.1.0's data ([Q7](#7-the-owners-questions)).
+3. **New: event kinds are constants with schemas.** A new kind is added to `core/events/` with its body's schema, and `appendEvent` takes it typed. A rename that must keep older data readable maps the old name in `core/names.ts`, as v0.1.1 does for v0.1.0's data ([Q7](#7-the-owners-questions), as the owner changed it on 2026-10-31).
 4. **New: one name map.** Where a public name differs from a stored or wire name, the mapping lives in `core/names.ts` or in the module that owns the word, never in a caller.
 5. **New: shared tools live in `common`.** Use its helper for error text, atomic writes, git, subprocesses, HTTP, secret comparison and loops that repeat. A program that must import nothing of Thermite's says so in its header, and only it keeps its own copy.
 6. **New: errors.** A small set of typed errors in `common/errors.ts`. Each API maps errors to statuses in one function. A refused input is answered in the same words by REST, MCP and the command line.
@@ -273,7 +273,7 @@ A move or a split updates each of these in the same commit:
 Each line is a set of small steps, each one green on its own.
 
 1. **The size check and the rules of shape:** the size check, as goal 125's step 2 asks, so nothing gets worse while the rest goes on; and the accepted rules of shape added to CONVENTIONS.md, so every later step follows them.
-2. **The bugs, each with a regression test,** so the splits after them are pure moves: goals [161](goals/_completed/161-control-bugs-from-the-audit.goal), [162](goals/_completed/162-research-and-knowledge-bugs.goal), [163](goals/_completed/163-harness-bugs-from-the-audit.goal), [164](goals/_completed/164-settings-that-fail-loudly.goal) and [165](goals/165-results-kept-through-remove-and-reset.goal).
+2. **The bugs, each with a regression test,** so the splits after them are pure moves: goals [161](goals/_completed/161-control-bugs-from-the-audit.goal), [162](goals/_completed/162-research-and-knowledge-bugs.goal), [163](goals/_completed/163-harness-bugs-from-the-audit.goal), [164](goals/_completed/164-settings-that-fail-loudly.goal) and [165](goals/_completed/165-results-kept-through-remove-and-reset.goal).
 3. **The shared homes, small and with little churn:** T1's words, T3's toolkit, then T4's settings, errors and logger.
 4. **The test scaffolding** (T10), before control's splits.
 5. **The contracts and clients** (T2), the domain modules out of the dashboard (T5), the ledger's owners and one promotion (T6), and the table of agent programs (T7).
@@ -290,7 +290,7 @@ These look wrong, but have a reason. Keep them.
 - **Old ledgers and databases are kept, never deleted** (invariant 3), even when v0.1.1 can no longer read them ([Q7](#7-the-owners-questions)). The names that goal 074 kept on the wire for v0.1.0 (`combiner` and `panel`) change to the public ones in v0.1.1 ([Q11](#7-the-owners-questions)).
 - **Two checks of every signed command,** in control and in the harness. The harness must check commands itself. Share the table, keep both checks.
 - **Pull mode's allow-list of rig routes** (`control/tunnel.ts`). It repeats the routes on purpose: what it does not list, it refuses. Add a test that the two agree.
-- **Programs that import nothing of Thermite's:** `harness/agents/opencode-plugin.ts` and the compaction hook (they run inside another program, alone), the two smoke kits' `check.mjs` (a kit is a repository of its own), and the stand-ins in `containers/test-*` (they run inside images).
+- **Programs that import nothing of Thermite's:** `harness/agents/opencode-plugin.ts` and the compaction hook (they run inside another program, alone), the two smoke kits' `check.mjs` (a kit is a repository of its own), and the stand-ins in `tests/stand-ins/` (they run inside images; `containers/test-*` until goal 125 moved them).
 - **The dashboard's browser scripts as strings.** The browser gets them as text and they can't import modules. Inject server constants with `JSON.stringify`, as `ui/copy-campaign-client.ts` does, and add a lint and a parse test ([Q10](#7-the-owners-questions)).
 - **The REST and MCP twins** (`xxxFields`, `XxxBody`, `xxxRequest`, `xxxAnswer` in `start-run.ts`, `rig-model.ts`, `rig-settings.ts`, `copy-campaign.ts`, `cluster-resources.ts`) and `RUN_DETAIL_INPUT`, one schema shared by REST and MCP. They are the model; extend them to the dashboard's forms.
 - **`prepareCommand`** (`control/issue.ts`): one path that checks every command the same way. It is the template for T5.
@@ -367,6 +367,7 @@ The owner answered these on 2026-10-26. Every recommendation below is accepted, 
    - **Instead:** keep them until v0.2.0.
 7. **How long older data and older parts are supported.** This decides which of these can go: control's migrations of databases from before v0.1.0 (about 260 lines), the harness's 32 branches for older ledgers and supervisors, and the supervisor's paths for an older harness.
    - **Owner's answer:** break compatibility. v0.1.1 doesn't have to read data that v0.1.0 wrote, or work with v0.1.0's parts, so all of the code above can go, the reading of old names in `core/names.ts` included. A ledger or database that v0.1.1 can't read is kept, never deleted (invariant 3), and the changelog says what an upgrade needs.
+   - **Changed on 2026-10-31:** v0.1.1 upgrades v0.1.0's data in place, so a control or a rig on v0.1.0 moves up and keeps its data. Only the code for data from before v0.1.0 goes. Rows that may change are migrated, and the readers of older events, commands and contracts stay in `core/names.ts` ([decisions](decisions.md#releases-and-planning); goal 125's decisions of 2026-10-31 23:15 and 2026-11-01 18:19). v0.1.1 still need not work with v0.1.0's parts: control, the supervisor and the harness are updated together.
    - **Why:** v0.1.1 is a large refactor, and its breaking changes are expected. In the owner's words: "its ok to say v0.1.0 things don't work in v0.1.1".
    - **Recommended, not taken:** read data from v0.1.0 on, and work with parts of the release before.
 8. **`ControlActions`.** May REST, MCP and the dashboard all call domain modules directly?
@@ -464,11 +465,11 @@ After the owner answered section 7, they asked for four more things, and then fo
 
 | Goal | What | What it changes in this guide |
 | --- | --- | --- |
-| [166](goals/166-agent-definitions.goal) | One definition for each agent role in `src/agents/roles/`, with a pure `render` for a run's prompt, a table of tools, and every prompt sent recorded | T7 grows: the table of agent programs sits beside the roles and the tools. T1 gains the role names. |
+| [166](goals/_completed/166-agent-definitions.goal) | One definition for each agent role in `src/agents/roles/`, with a pure `render` for a run's prompt, a table of tools, and every prompt sent recorded | T7 grows: the table of agent programs sits beside the roles and the tools. T1 gains the role names. |
 | [167](goals/_completed/167-how-the-parts-talk.goal) | A review of every channel: 45 channels, 35 polling loops, the delay each adds | Its explanation page, [How the parts talk](../_site/src/content/docs/explanation/how-the-parts-talk.md), is written. Its findings feed T2 and goal 168. |
-| [168](goals/168-message-bus.goal) | The message bus: NATS JetStream as the event log, the delivery and the queues between control, the rigs' supervisors and the dashboard, chosen by the owner on 2026-10-26; the harness and the agents stay off it, bridged by the supervisor | T2 becomes the link's contract in `core/link/` (subjects, schemas, limits, signers). T12's views kept up to date are JetStream consumers. |
-| [169](goals/169-agents-in-their-terminal.goal) | Workers in their program's own terminal UI, session logs as events, steering inside a turn | Comes after goal 166 and T7's one trial loop; its terminal mode is a field of each program's entry. |
-| [170](goals/170-one-hierarchy.goal) | One hierarchy: run IDs unique across rigs, a run registry on control, views and addresses by run (`/ui/runs/<run>/attempts/<attempt>`), the run on every event | A new theme, T15. Its rule of shape: a thing is addressed through what owns it; where it ran is an attribute. |
+| [168](goals/_completed/168-message-bus.goal) | The message bus: NATS JetStream as the event log, the delivery and the queues between control, the rigs' supervisors and the dashboard, chosen by the owner on 2026-10-26; the harness and the agents stay off it, bridged by the supervisor | T2 becomes the link's contract in `core/link/` (subjects, schemas, limits, signers). T12's views kept up to date are JetStream consumers. |
+| [169](goals/_completed/169-agents-in-their-terminal.goal) | Workers in their program's own terminal UI, session logs as events, steering inside a turn | Comes after goal 166 and T7's one trial loop; its terminal mode is a field of each program's entry. |
+| [170](goals/_completed/170-one-hierarchy.goal) | One hierarchy: run IDs unique across rigs, a run registry on control, views and addresses by run (`/ui/runs/<run>/attempts/<attempt>`), the run on every event | A new theme, T15. Its rule of shape: a thing is addressed through what owns it; where it ran is an attribute. |
 | [171](goals/_completed/171-bugs-on-the-wire.goal) | Bugs on the wire: a lost long reply, a command sent again in full, a live view stopped by one line, a prompt too long for one argument | Joins goals 161 to 165 in step 2 of the order of work. |
 
 **The order of work, with part 2:**

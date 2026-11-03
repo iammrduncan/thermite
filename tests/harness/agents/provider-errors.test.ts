@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { CHATGPT_LIMIT_CODE } from "../../../src/harness/agents/model.ts";
+import { CHATGPT_LIMIT_CODE } from "../../../src/agents/model/index.ts";
 import {
   afterProgramFailure,
   classifyProviderError,
@@ -9,6 +9,7 @@ import {
   type FailureCount,
   failingOf,
   nextStep,
+  programErrorKind,
   retryAtFrom,
   statusIn,
   stopsAgents,
@@ -161,7 +162,8 @@ describe("provider errors by kind (goal 079)", () => {
       deadline: Number.POSITIVE_INFINITY,
       waiting: (w) => void told.push(w.kind),
     });
-    assert.ok("goOn" in on && /Continue where you left off/.test(on.goOn));
+    // It goes on with the provider's words, which the agent's role puts to it (goal 166).
+    assert.ok("goOn" in on && /rate limited/.test(on.goOn));
     assert.ok(Date.now() - started >= 900);
     assert.deepEqual(told, ["rate_limit"]);
     // A wait past the trial's own end stops at its end.
@@ -181,6 +183,32 @@ describe("provider errors by kind (goal 079)", () => {
       signal: ctrl.signal,
     });
     assert.deepEqual(stopped, { interrupted: true });
+  });
+
+  test("through the model proxy, a stop kind comes only from the provider's answer the proxy saw, never the program's words alone", async () => {
+    const proxied = (error: string, answer?: { status: number; body?: string }) =>
+      programErrorKind(error, answer, true).kind;
+    // Words that say no credits or a refused key, with no answer from the provider: not a stop.
+    assert.equal(proxied("402 insufficient credits"), "model");
+    assert.equal(proxied("401 invalid api key"), "model");
+    assert.equal(proxied("model_not_found"), "model");
+    // The provider's own answer stops them, whatever the program said.
+    assert.equal(proxied("Bad Request", { status: 402, body: "{}" }), "credits");
+    assert.equal(proxied("oops", { status: 401, body: '{"error":"invalid x-api-key"}' }), "auth");
+    // Words that say no credits beside a provider's rate limit: the provider's kind.
+    const rate = programErrorKind("insufficient credits", { status: 429, body: "slow down" }, true);
+    assert.equal(rate.kind, "rate_limit");
+    // A kind that stops nothing is the words' own, as before; without the proxy, the words count.
+    assert.equal(proxied("503 Service Unavailable"), "server");
+    assert.equal(programErrorKind("402 insufficient credits", undefined, false).kind, "credits");
+    // The trial loop's answer: no stop, so it waits and goes on in the same session.
+    const step = await afterProgramFailure({
+      error: "insufficient credits",
+      proxied: true,
+      count: { failures: 0, rateWaits: 0 },
+      deadline: Date.now() + 50,
+    });
+    assert.deepEqual(step, { wall: true });
   });
 
   test("a quota 429 the provider marks a rate limit is one; OpenAI's insufficient_quota and a 402 stay no credits", () => {

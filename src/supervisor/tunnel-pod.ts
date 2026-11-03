@@ -6,7 +6,7 @@ import { log } from "../common/env.ts";
 import { errorText } from "../common/errors.ts";
 import { writeAtomic } from "../common/fs.ts";
 import { sameSecret } from "../common/secrets.ts";
-import { numberSetting } from "../common/settings.ts";
+import { readNumber } from "../common/settings.ts";
 import {
   controlCodeProof,
   ENROLLED_FILES,
@@ -30,14 +30,17 @@ import {
   verifyRequest,
 } from "../core/tunnel.ts";
 import { BUILD_HEADERS } from "../core/version.ts";
+import { SUPERVISOR_NUMBERS } from "./settings.ts";
 
 /**
  * The rig's end of the tunnel, for a rig in pull mode: one control connects to, through a public
  * proxy (a RunPod pod: docs/plan/goals/_completed/019-rig-only-entry.goal). The rig never connects to
  * control. Instead:
  *
- * - The supervisor makes its usual calls to control at a local address (127.0.0.1) that takes
- *   only the supervisor's own token. Each call waits there as a request for control.
+ * - The supervisor makes its calls to control over HTTPS at a local address (127.0.0.1) that takes
+ *   only the supervisor's own token: the registration of its keys on the message bus, and its
+ *   results (champions' patches, exports) and kits by git. Everything else goes on the bus,
+ *   through the pod's leaf node (leaf.ts). Each call waits there as a request for control.
  * - Control connects to the public port, behind the proxy, and in each exchange collects the
  *   waiting requests and returns the answers to earlier ones. Control answers them as this rig.
  *
@@ -318,9 +321,14 @@ export class PodTunnel {
       });
       res.end(out);
     } catch (err) {
-      log("supervisor", "pull mode: a request from control failed", {
-        error: errorText(err),
-      });
+      log(
+        "supervisor",
+        "pull mode: a request from control failed",
+        {
+          error: errorText(err),
+        },
+        "error",
+      );
       this.nothing(res);
     }
   }
@@ -556,7 +564,7 @@ export function pullModeOptions(
     if (!v) throw new Error(`pull mode needs ${name}`);
     return v;
   };
-  const port = numberSetting(env, "THERMITE_TUNNEL_PORT", 0, { integer: true, min: 1, max: 65535 });
+  const port = readNumber(env, SUPERVISOR_NUMBERS.tunnelPort) ?? 0;
   const until = env.THERMITE_TUNNEL_ENROLL_UNTIL
     ? Date.parse(env.THERMITE_TUNNEL_ENROLL_UNTIL)
     : Number.NaN;

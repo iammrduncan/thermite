@@ -36,6 +36,7 @@ Rigs on machines, on clusters and on RunPod pull images. Building from source ta
 - 2026-10-18, owner: Claude Code is downloaded only when an image is built with that option. It is never in a published image.
 - 2026-10-20, owner: The image packages are public.
 - 2026-10-21, owner: Control's image keeps the label `MIT`. The image carries kubectl's licence (Apache License 2.0) as a file.
+- 2026-11-01, owner: Thermite moves to the Apache License 2.0 ([decisions](../decisions.md#the-product)). Control's label becomes `Apache-2.0`, the others stay `MIT AND Apache-2.0` (OpenCode is MIT), and every image carries Thermite's LICENSE and NOTICE in `/usr/local/share/doc/thermite/`.
 - 2026-10-20, lead: The release also publishes the one-container rig image that rigs on RunPod run, built on the CUDA harness of the same run, so a tester has an image to launch.
 - 2026-10-24, owner (relayed by the lab's infrastructure assistant, verbatim): "this seems like a job for thermite agent to build scripting around image management and deployment to GHCR. Its part of its release process." The lab stops building and pushing the RunPod rig image; Thermite's release publishes it, held to the rules the lab held it to (the checks above).
 - 2026-10-24, owner: "we will need it for v0.1.0 release we want all proper images published."

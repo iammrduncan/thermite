@@ -15,15 +15,16 @@ import { describe, test } from "node:test";
 import { Type } from "@earendil-works/pi-ai";
 import { z } from "zod";
 import { signEnvelope } from "../../src/core/commands.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
-import { adviseOnce, emptyAdviseState } from "../../src/supervisor/advise.ts";
+import { createHarnessApi } from "../../src/harness/api/index.ts";
 import {
   AdvisorsConfig,
   lastJsonObject,
   runAdvisor,
   teacherRound,
-} from "../../src/supervisor/advisors.ts";
+} from "../../src/supervisor/advisors/index.ts";
+import { adviseOnce, emptyAdviseState } from "../../src/supervisor/advisors/pass/index.ts";
 import { stageCommand } from "../../src/supervisor/staging.ts";
+import { testPrompt } from "../helpers/advisor-prompt.ts";
 import { startFakeModel } from "../helpers/fake-model.ts";
 import { FAST_KERNEL, makeJudgeEnv } from "../helpers/judge-env.ts";
 
@@ -62,15 +63,15 @@ describe("advisors", () => {
                 directives: [
                   {
                     kind: "mandate",
-                    family: "tiling",
+                    direction: "tiling",
                     rationale: "both reviews",
                     citations: ["arxiv:1"],
                   },
-                  { kind: "try", family: "guesswork", rationale: "no source", citations: [] },
+                  { kind: "try", direction: "guesswork", rationale: "no source", citations: [] },
                   // A direction written :name: with spaces (goal 066); words are no rule.
                   {
                     kind: "try",
-                    family: ":shared memory tiling:",
+                    direction: ":shared memory tiling:",
                     rationale: "the paper's kernel",
                     citations: ["arxiv:2"],
                   },
@@ -79,7 +80,7 @@ describe("advisors", () => {
                 experiments: [
                   {
                     title: "stage the tiles in shared memory",
-                    family: "shared memory tiling",
+                    direction: "shared memory tiling",
                     why: "arxiv:2 does it",
                   },
                 ],
@@ -97,7 +98,7 @@ describe("advisors", () => {
             args: {
               summary: "tiling looks promising",
               recommendations: [
-                { kind: "try", family: "tiling", rationale: "paper", citations: ["arxiv:1"] },
+                { kind: "try", direction: "tiling", rationale: "paper", citations: ["arxiv:1"] },
               ],
             },
           },
@@ -142,7 +143,7 @@ describe("advisors", () => {
       );
     assert.equal(usage.length, fake.requests);
     assert.deepEqual(usage.map((u) => [u.run, u.actor, u.agent, u.harness, u.model]).sort(), [
-      ["js-1", "supervisor", "combiner", "pi", "merged-by"],
+      ["js-1", "supervisor", "merged_by", "pi", "merged-by"],
       ["js-1", "supervisor", "teachers", "pi", "teacher-a"],
       ["js-1", "supervisor", "teachers", "pi", "teacher-a"],
       ["js-1", "supervisor", "teachers", "pi", "teacher-b"],
@@ -151,20 +152,22 @@ describe("advisors", () => {
     assert.equal(new Set(usage.map((u) => u.round)).size, 1);
     assert.match(String(usage[0]?.round), /^teachers \d{4}-/);
     assert.ok(usage.every((u) => u.provider === null && u.tokens_in === 100));
-    const active = env.ledger
-      .activeDirectives("js-1")
-      .map((d) => d.body as { kind: string; family: string });
+    const active = env.ledger.directives
+      .active("js-1")
+      .map((d) => d.body as { kind: string; direction: string });
     assert.deepEqual(active, [
-      { kind: "mandate", family: "tiling", rationale: "both reviews", citations: ["arxiv:1"] },
+      { kind: "mandate", direction: "tiling", rationale: "both reviews", citations: ["arxiv:1"] },
       {
         kind: "try",
-        family: "shared-memory-tiling",
+        direction: "shared-memory-tiling",
         rationale: "the paper's kernel",
         citations: ["arxiv:2"],
       },
     ]);
-    const record = readdirSync(join(home, "advisors")).find((f) => f.includes("teachers"));
-    const said = readFileSync(join(home, "advisors", String(record)), "utf8");
+    // A round's record is in its run's folder (supervisor/retention.ts), so a policy knows its run.
+    const records = join(home, "advisors", "runs", "js-1");
+    const record = readdirSync(records).find((f) => f.includes("teachers"));
+    const said = readFileSync(join(records, String(record)), "utf8");
     assert.match(said, /no citation/);
     assert.match(said, /a rule no longer takes match/);
     // The experiments went in first, so the rule names a direction the run already has.
@@ -188,7 +191,7 @@ describe("advisors", () => {
   });
 
   test("one teacher works with no merge; two are merged only by a merged by model, else the first review is the set", async () => {
-    // Each model on its own fake: each teacher recommends its own family, the merged by model a
+    // Each model on its own fake: each teacher recommends its own direction, the merged by model a
     // third, and each counts its calls.
     const called: Record<string, number> = { first: 0, second: 0, merger: 0 };
     const teacher = (name: string) =>
@@ -201,7 +204,7 @@ describe("advisors", () => {
               args: {
                 summary: `${name} reviewed`,
                 recommendations: [
-                  { kind: "try", family: name, rationale: "r", citations: ["arxiv:1"] },
+                  { kind: "try", direction: name, rationale: "r", citations: ["arxiv:1"] },
                 ],
               },
             },
@@ -220,7 +223,7 @@ describe("advisors", () => {
               name: "answer",
               args: {
                 directives: [
-                  { kind: "try", family: "merged", rationale: "both", citations: ["arxiv:3"] },
+                  { kind: "try", direction: "merged", rationale: "both", citations: ["arxiv:3"] },
                 ],
               },
             },
@@ -243,24 +246,26 @@ describe("advisors", () => {
         brief: { campaign: "c" },
         tools: {},
       });
-      return { families: r.directives?.map((d) => d.family), called: { ...called } };
+      return { directions: r.directives?.map((d) => d.direction), called: { ...called } };
     };
     // One teacher and a merged by model: the teacher's set; the merged by model is not called.
     assert.deepEqual(await round({ teachers: [runtime("first")], merged_by: runtime("merger") }), {
-      families: ["first"],
+      directions: ["first"],
       called: { first: 1, second: 0, merger: 0 },
     });
     // Two teachers without one: the first review's set, as before goal 074.
     assert.deepEqual(await round({ teachers: [runtime("first"), runtime("second")] }), {
-      families: ["first"],
+      directions: ["first"],
       called: { first: 1, second: 1, merger: 0 },
     });
-    // Two teachers and a merged by model (by its old name too): the merged set.
-    for (const merger of [{ merged_by: runtime("merger") }, { combiner: runtime("merger") }])
-      assert.deepEqual(
-        await round({ teachers: [runtime("first"), runtime("second")], ...merger }),
-        { families: ["merged"], called: { first: 1, second: 1, merger: 1 } },
-      );
+    // Two teachers and a merged by model: the merged set.
+    assert.deepEqual(
+      await round({
+        teachers: [runtime("first"), runtime("second")],
+        merged_by: runtime("merger"),
+      }),
+      { directions: ["merged"], called: { first: 1, second: 1, merger: 1 } },
+    );
     for (const f of Object.values(fakes)) await f.close();
   });
 
@@ -287,7 +292,7 @@ describe("advisors", () => {
       )
     ).attempt;
     await env.drain();
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_audit");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_audit");
     // A stand-in for a CLI agent: reads the prompt, prints logs, then its JSON answer.
     const dir = mkdtempSync(join(tmpdir(), "thermite-cli-"));
     const script = join(dir, "auditor.mjs");
@@ -314,7 +319,7 @@ describe("advisors", () => {
       emptyAdviseState(),
     );
     assert.equal(state.stats.audits, 1, JSON.stringify(state.stats));
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "audit_blocked");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "audit_blocked");
     // A command-line agent says nothing of its model calls: none is recorded, none made up.
     assert.equal(
       env.ledger.eventsAfter(0, 100_000).events.filter((e) => e.kind === "model_call").length,
@@ -340,7 +345,7 @@ describe("advisors", () => {
       )
     ).attempt;
     await env.drain();
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_audit");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_audit");
     const dir = mkdtempSync(join(tmpdir(), "thermite-cli-"));
     const script = join(dir, "auditor.mjs");
     writeFileSync(script, `console.log("no answer today"); process.exit(3);`);
@@ -358,7 +363,7 @@ describe("advisors", () => {
     for (let n = 1; n <= 5; n++) {
       state = await adviseOnce({ ...cfg, retryMs: 0, fetchImpl: harnessFetch(env) }, state);
       assert.equal(
-        String(env.ledger.getAttempt(id)?.lifecycle),
+        String(env.ledger.attempts.get(id)?.lifecycle),
         n < 5 ? "awaiting_audit" : "awaiting_approval",
         `after try ${n}`,
       );
@@ -388,7 +393,7 @@ describe("advisors", () => {
       )
     ).attempt;
     await env.drain();
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_audit");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_audit");
     const dir = mkdtempSync(join(tmpdir(), "thermite-cli-"));
     writeFileSync(join(dir, "auditor.mjs"), script);
     const advisors = AdvisorsConfig.parse({
@@ -422,7 +427,7 @@ describe("advisors", () => {
     state.tries[`audit:${id}`] = 5;
     const next = await adviseOnce({ ...cfg, fetchImpl: harnessFetch(env) }, state);
     assert.equal(next.stats.audits, 1, "the open audit is tried");
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "audit_blocked");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "audit_blocked");
     assert.equal(next.tries[`audit:${id}`], undefined, "the old marker is gone");
   });
 
@@ -442,11 +447,11 @@ describe("advisors", () => {
     let state = emptyAdviseState();
     for (let n = 1; n <= 5; n++) state = await adviseOnce({ ...cfg, fetchImpl }, state);
     assert.equal(refused, 1, "the fifth failure was handed to the owner, and refused");
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_audit");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_audit");
     assert.equal(state.tries[`audit:${audit}`], 5);
     // The next round hands it again: it reaches the owner, with the auditor's error.
     state = await adviseOnce({ ...cfg, fetchImpl }, state);
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_approval");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_approval");
     assert.match(
       String(env.ledger.latestEventBody("promotion_pending", id)?.reason),
       /the auditor could not answer after 5 tries: no valid answer: no answer/,
@@ -495,8 +500,8 @@ describe("advisors", () => {
     assert.deepEqual(
       usage.map((u) => [u.agent, u.model, u.round]),
       [
-        ["panel", "reviewer-1", "review 1"],
-        ["panel", "reviewer-2", "review 1"],
+        ["review_panel", "reviewer-1", "review 1"],
+        ["review_panel", "reviewer-2", "review 1"],
       ],
     );
   });
@@ -524,8 +529,7 @@ describe("advisors", () => {
             usd_per_mtok_in: 0,
             usd_per_mtok_out: 0,
           },
-          system: "Grade it.",
-          prompt: "The change.",
+          prompt: testPrompt("Grade it.", "The change."),
           schema: z.strictObject({ pass: z.boolean(), reasons: z.string() }),
           answerSchema: Type.Object({ pass: Type.Boolean(), reasons: Type.String() }),
         });
@@ -556,8 +560,7 @@ describe("advisors", () => {
     ) =>
       runAdvisor({
         runtime: { ...runtime, base_url: url },
-        system: "Grade it.",
-        prompt: "The change.",
+        prompt: testPrompt("Grade it.", "The change."),
         schema,
         answerSchema: Type.Object({ pass: Type.Boolean() }),
         accept,
@@ -632,8 +635,7 @@ process.stdin.on("end", () => console.log(JSON.stringify({ type: "result", resul
           timeout_s: 30,
           provider: "my-claude",
         },
-        system: "You audit.",
-        prompt: "Audit this.",
+        prompt: testPrompt("You audit.", "Audit this."),
         schema: z.object({ tmp: z.string(), home: z.string(), cwd: z.string() }),
         answerSchema: Type.Object({}),
       });

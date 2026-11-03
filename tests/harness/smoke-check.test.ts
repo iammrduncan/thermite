@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { IDS } from "../../src/harness/broker/index.ts";
 import {
   NOISY_TIMING_NOTE,
   type SmokeResult,
@@ -11,6 +13,7 @@ import {
   smokeCheck,
   smokeReport,
 } from "../../src/harness/smoke-check.ts";
+import { finalStage } from "../helpers/containerfile.ts";
 import { makeJudgeEnv } from "../helpers/judge-env.ts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -52,8 +55,8 @@ describe("the smoke rig check", () => {
     assert.equal(got["ref-edit"]?.got, "rejected_v0");
     if (only.includes("broken")) assert.equal(got.broken?.got, "invalid");
     const smokeRun = String(r.detail?.run);
-    assert.equal(env.ledger.getRun(smokeRun)?.status, "closed");
-    assert.equal(env.ledger.getRun("js-1")?.status, "running", "the rig's run is resumed");
+    assert.equal(env.ledger.runs.get(smokeRun)?.status, "closed");
+    assert.equal(env.ledger.runs.get("js-1")?.status, "running", "the rig's run is resumed");
     // A second smoke reuses the same deterministic repositories and contract.
     const again = await smokeCheck({
       service: env.service,
@@ -124,7 +127,7 @@ describe("the smoke check's report", () => {
     assert.equal(r.ok, true);
     assert.equal(
       r.summary,
-      "smoke on smoke-cpu: all 12 candidates were judged as expected (run check-smoke-1)",
+      "smoke on smoke-cpu: all 13 candidates were judged as expected (run check-smoke-1)",
     );
     assert.equal(r.note, undefined);
     assert.equal(r.detail?.noisy_timing, undefined);
@@ -136,7 +139,7 @@ describe("the smoke check's report", () => {
     assert.equal(r.note, NOISY_TIMING_NOTE);
     assert.equal(
       r.summary,
-      "smoke on smoke-cpu: 11 of 12 candidates were judged as expected; the no-op came out inconclusive, not neutral (run check-smoke-1). Note: The timing on this machine is noisy. Results here need more repeats.",
+      "smoke on smoke-cpu: 12 of 13 candidates were judged as expected; the no-op came out inconclusive, not neutral (run check-smoke-1). Note: The timing on this machine is noisy. Results here need more repeats.",
     );
     assert.equal(r.detail?.noisy_timing, true);
     assert.equal(r.detail?.note, NOISY_TIMING_NOTE);
@@ -167,7 +170,7 @@ describe("the smoke check's report", () => {
       assert.equal(r.ok, false, JSON.stringify(other));
       assert.equal(r.note, undefined);
       assert.equal(r.detail?.noisy_timing, undefined);
-      assert.match(r.summary, /^smoke on smoke-cpu: 2 of 12 candidates were judged otherwise: /);
+      assert.match(r.summary, /^smoke on smoke-cpu: 2 of 13 candidates were judged otherwise: /);
       assert.match(r.summary, /noop expected neutral, got inconclusive/);
     }
   });
@@ -184,9 +187,66 @@ describe("the smoke check's report", () => {
       const r = smokeReport("smoke-cpu", "check-smoke-1", results(got));
       assert.equal(r.ok, false, JSON.stringify(got));
       assert.equal(r.note, undefined);
-      assert.match(r.summary, /^smoke on smoke-cpu: 1 of 12 candidates were judged otherwise: /);
+      assert.match(r.summary, /^smoke on smoke-cpu: 1 of 13 candidates were judged otherwise: /);
     }
     const none = smokeReport("smoke-cpu", "check-smoke-1", results({ noop: "" }));
     assert.match(none.summary, /noop expected neutral, got nothing$/);
+  });
+});
+
+describe("the smoke check's kits and projects in the harness image", () => {
+  const final = finalStage("harness");
+  // The copies of kits/ and examples/, then one step that closes them and checks that it did.
+  const step =
+    /\nCOPY kits \.\/checks\/kits\nCOPY examples \.\/checks\/examples\nRUN chown -R 0:(\d+) checks \\\n && chmod -R (\S+) checks \\\n && test -z "\$\(find checks -perm \/o=rwx -print -quit\)"\n/.exec(
+      final,
+    );
+
+  test("only the harness reads them: root's, with the controller's group, closed to every other user, and the build fails on one left open", () => {
+    assert.ok(step, "the copies, then the step that gives them their owner and modes and checks");
+    // In /opt/thermite, where the smoke check looks for them in the image (checksDir).
+    assert.match(final.slice(0, step.index), /\nWORKDIR \/opt\/thermite\n/);
+    // The controller runs as `thermite`, with that group (broker/runner.ts); no role has it.
+    assert.equal(Number(step[1]), IDS.thermite.gid);
+    assert.match(final, new RegExp(`groupadd -g ${IDS.thermite.gid} thermite `));
+    assert.equal(step[2], "u=rwX,g=rX,o=");
+    // No later step names the folder, so none opens it again.
+    const later = final
+      .slice(step.index + step[0].length)
+      .split("\n")
+      .filter((line) => !line.startsWith("#"));
+    assert.doesNotMatch(later.join("\n"), /checks/);
+  });
+
+  test("the step's modes: folders and the executable scripts 0750, other files 0640, and the smoke kit's commits stay the goal contract's", async () => {
+    // The step's own modes, on a copy here: chmod takes the same symbolic modes on every system.
+    const checks = join(mkdtempSync(join(tmpdir(), "thermite-checks-")), "checks");
+    for (const d of ["kits", "examples"])
+      cpSync(join(repoRoot, d), join(checks, d), { recursive: true });
+    execFileSync("chmod", ["-R", String(step?.[2]), checks]);
+    const wrong: string[] = [];
+    const look = (rel: string) => {
+      const st = statSync(join(checks, rel));
+      const executable = (statSync(join(repoRoot, rel)).mode & 0o100) !== 0;
+      const want = st.isDirectory() || executable ? 0o750 : 0o640;
+      if ((st.mode & 0o7777) !== want) wrong.push(`${rel}: ${(st.mode & 0o7777).toString(8)}`);
+      if (st.isDirectory()) for (const n of readdirSync(join(checks, rel))) look(join(rel, n));
+    };
+    for (const d of ["kits", "examples"]) look(d);
+    assert.deepEqual(wrong, []);
+    // Git records the execute bit alone: the commits the smoke check makes from them are the ones
+    // the goal contract names.
+    const contract = JSON.parse(
+      readFileSync(join(repoRoot, "examples/contracts/smoke-cpu-goal.json"), "utf8"),
+    ) as { project: { commit: string; kit: { commit: string } } };
+    const s = await seedSmokeRepos(
+      checks,
+      "smoke-cpu",
+      mkdtempSync(join(tmpdir(), "thermite-smoke-")),
+    );
+    assert.deepEqual(
+      { project: s.project, kit: s.kit },
+      { project: contract.project.commit, kit: contract.project.kit.commit },
+    );
   });
 });

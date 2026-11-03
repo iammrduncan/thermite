@@ -26,6 +26,15 @@ import {
 } from "../../helpers/held-out-env.ts";
 import { FAST_KERNEL } from "../../helpers/judge-env.ts";
 
+/** The seed's kernel, idling 5 s on "big" (SEED_KERNEL idles 2 s): it can't meet a 25M goal there. */
+const SLOWER_SEED = `export function work(n) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n / 20000);
+  let s = 0;
+  for (let i = 0; i < n; i++) s += i % 7;
+  return s;
+}
+`;
+
 /**
  * Goal 082: a confirmation that fails on its held-out cells is named safely. The owner sees each
  * held-out case's name, kind and value against its threshold (the held_out record, its event,
@@ -41,7 +50,7 @@ describe("held-out failures, named safely (goal 082)", () => {
     });
     const crash = await env.submit(CRASHES_HIDDEN, "drop the waste, crash on one size");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(crash)?.verdict, "not_confirmed", env.explain(crash));
+    assert.equal(env.ledger.verdicts.current(crash)?.verdict, "not_confirmed", env.explain(crash));
     // The agents' words: that a held-out check crashed, and the measured cells' own figures.
     assert.match(
       env.reasons(crash),
@@ -49,9 +58,9 @@ describe("held-out failures, named safely (goal 082)", () => {
     );
     const slow = await env.submit(SLOW_ON_HIDDEN, "drop the waste, idle on one size");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(slow)?.verdict, "not_confirmed", env.explain(slow));
+    assert.equal(env.ledger.verdicts.current(slow)?.verdict, "not_confirmed", env.explain(slow));
     assert.match(env.reasons(slow), /^confirmation failed: a held-out check missed its threshold;/);
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1);
+    assert.equal(env.ledger.champions.current("js-1").seq, 1);
 
     // The record and the owner's event: the case, its kind, and the ratio against its threshold.
     const record = env.ledger.db
@@ -123,7 +132,7 @@ describe("held-out failures, named safely (goal 082)", () => {
       owner?.cells.map((c) => [c.cell, c.kind]),
       [[HIDDEN, "crashed"]],
     );
-    const viaMcp = await env.mcp("get_run", { rig: "rig-a", run: "js-1" });
+    const viaMcp = await env.mcp("get_run", { run: "js-1" });
     noContent(viaMcp, "MCP's get_run");
     const slowHeld = (
       JSON.parse(viaMcp) as {
@@ -136,7 +145,7 @@ describe("held-out failures, named safely (goal 082)", () => {
     // The agent token over MCP: each held-out check as its kinds, never a case, value or
     // threshold; its events too. The reader keeps the owner's view (goal 082).
     for (const [tool, args] of [
-      ["get_run", { rig: "rig-a", run: "js-1" }],
+      ["get_run", { run: "js-1" }],
       ["recent_events", { rig: "rig-a", limit: 500 }],
     ] as const) {
       const text = await env.mcp(tool, args, AGENT_TOKEN);
@@ -149,17 +158,13 @@ describe("held-out failures, named safely (goal 082)", () => {
         tool,
       );
     }
-    const agentRun = JSON.parse(
-      await env.mcp("get_run", { rig: "rig-a", run: "js-1" }, AGENT_TOKEN),
-    ) as { attempts: { id: string; held_out: unknown }[] };
+    const agentRun = JSON.parse(await env.mcp("get_run", { run: "js-1" }, AGENT_TOKEN)) as {
+      attempts: { id: string; held_out: unknown }[];
+    };
     // The whole timeline, one list (goal 128: get_run gives each list's newest entries).
     const timeline = (
       JSON.parse(
-        await env.mcp(
-          "get_run",
-          { rig: "rig-a", run: "js-1", list: "timeline", limit: 500 },
-          AGENT_TOKEN,
-        ),
+        await env.mcp("get_run", { run: "js-1", list: "timeline", limit: 500 }, AGENT_TOKEN),
       ) as { entries: { kind: string; body: unknown }[] }
     ).entries;
     assert.deepEqual(
@@ -183,10 +188,10 @@ describe("held-out failures, named safely (goal 082)", () => {
         },
       ],
     );
-    const viaReader = await env.mcp("get_run", { rig: "rig-a", run: "js-1" }, READ_TOKEN);
+    const viaReader = await env.mcp("get_run", { run: "js-1" }, READ_TOKEN);
     assert.ok(viaReader.includes(HIDDEN), "the reader keeps the owner's view");
     noContent(viaReader, "the reader's get_run");
-    const attemptPage = await env.page(`/ui/rigs/rig-a/attempts/${slow}`);
+    const attemptPage = await env.page(`/ui/campaigns/js-sum/runs/js-1/attempts/${slow}`);
     noContent(attemptPage, "the attempt's page");
     assert.match(attemptPage, /<h2>Held-out checks<\/h2><span class="n">1 failed<\/span>/);
     assert.match(
@@ -195,13 +200,18 @@ describe("held-out failures, named safely (goal 082)", () => {
         `<td><code>${HIDDEN}</code></td><td>no worse than the champion</td><td><span class="chip bad">missed its threshold</span></td><td>0\\.\\d+<div class="muted small">ops_per_s, the change's median over the champion's</div></td><td>&gt; 0\\.9901</td>`,
       ),
     );
-    const history = await env.page("/ui/campaigns/js-sum?run=rig-a%2Fjs-1&view=history");
+    const history = await env.page("/ui/campaigns/js-sum/runs/js-1/history");
     assert.match(history, new RegExp(`failed its held-out check: ${HIDDEN} crashed\\.`));
   });
 
   test("a goal's held-out threshold: the case, its value and threshold for the owner; the kind for the agents", async () => {
+    // 25 million a second, between what the starting point does on "big" (it idles 5 s there, so
+    // at most 20 million on any machine: the run stays open) and what the candidate does there
+    // (any machine that runs the tests does more), which idles 1.2 s on the hidden size (at most
+    // 12.5 million there).
     const env = await setup({
-      goal: { opsPerSecond: 70e6 },
+      seedKernel: SLOWER_SEED,
+      goal: { opsPerSecond: 25e6 },
       kitCells: CELLS,
       contract: {
         held_out_cells: [HIDDEN],
@@ -214,7 +224,7 @@ describe("held-out failures, named safely (goal 082)", () => {
               type: "metric_threshold",
               metric: "ops_per_s",
               op: ">=",
-              value: 70e6,
+              value: 25e6,
               cells: ["big", HIDDEN],
             },
           },
@@ -229,7 +239,7 @@ describe("held-out failures, named safely (goal 082)", () => {
     await env.drain(); // validates the seed
     const id = await env.submit(SLOW_ON_HIDDEN, "drop the waste, idle on one size");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(id)?.verdict, "not_confirmed", env.explain(id));
+    assert.equal(env.ledger.verdicts.current(id)?.verdict, "not_confirmed", env.explain(id));
     assert.equal(
       env.reasons(id),
       "confirmation failed: a held-out check missed its threshold; vs champion seq 1",
@@ -243,10 +253,10 @@ describe("held-out failures, named safely (goal 082)", () => {
     assert.equal(cell.goal, "fast");
     assert.equal(cell.kind, "threshold_missed");
     assert.equal(cell.op, ">=");
-    assert.equal(cell.threshold, 70e6);
+    assert.equal(cell.threshold, 25e6);
     assert.equal(cell.measure, "ops_per_s");
     assert.equal(cell.unit, "op/s");
-    assert.ok(Number(cell.value) > 0 && Number(cell.value) < 70e6, String(cell.value));
+    assert.ok(Number(cell.value) > 0 && Number(cell.value) < 25e6, String(cell.value));
     assert.ok(Number(cell.low) <= Number(cell.value) && Number(cell.value) <= Number(cell.high));
     // The hidden case never ran as a measurement, a goal check or a report.
     assert.equal(
@@ -261,16 +271,16 @@ describe("held-out failures, named safely (goal 082)", () => {
     assert.match(views.status, /"held_out":"a held-out check missed its threshold"/);
     noContent(env.events(), "the events");
     await env.relay();
-    const page = await env.page(`/ui/rigs/rig-a/attempts/${id}`);
+    const page = await env.page(`/ui/campaigns/js-goal/runs/js-1/attempts/${id}`);
     assert.match(
       page,
       new RegExp(
         `<td><code>${HIDDEN}</code></td><td>goal <b>fast</b></td><td><span class="chip bad">missed its threshold</span></td>`,
       ),
     );
-    assert.match(page, /&gt;= 7\.000e\+7 op\/s/);
+    assert.match(page, /&gt;= 2\.500e\+7 op\/s/);
     // The agent token: the goal's checks without the held-out case, which the owner sees.
-    const owner = JSON.parse(await env.mcp("get_run", { rig: "rig-a", run: "js-1" })) as {
+    const owner = JSON.parse(await env.mcp("get_run", { run: "js-1" })) as {
       goal_checks: { goals: { goal: string; cells: { name: string }[] }[] };
     };
     assert.deepEqual(
@@ -278,16 +288,16 @@ describe("held-out failures, named safely (goal 082)", () => {
       ["big", HIDDEN],
     );
     for (const [tool, args] of [
-      ["get_run", { rig: "rig-a", run: "js-1" }],
+      ["get_run", { run: "js-1" }],
       ["recent_events", { rig: "rig-a", limit: 500 }],
     ] as const) {
       const text = await env.mcp(tool, args, AGENT_TOKEN);
       noContent(text, `the agent's ${tool}`);
       assert.ok(!text.includes(HIDDEN), `the agent's ${tool} names the hidden case`);
     }
-    const agent = JSON.parse(
-      await env.mcp("get_run", { rig: "rig-a", run: "js-1" }, AGENT_TOKEN),
-    ) as { goal_checks: { goals: { goal: string; cells: { name: string }[] }[] } };
+    const agent = JSON.parse(await env.mcp("get_run", { run: "js-1" }, AGENT_TOKEN)) as {
+      goal_checks: { goals: { goal: string; cells: { name: string }[] }[] };
+    };
     assert.deepEqual(
       agent.goal_checks.goals.find((g) => g.goal === "fast")?.cells.map((c) => c.name),
       ["big"],

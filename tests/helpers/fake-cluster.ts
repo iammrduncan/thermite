@@ -1,16 +1,15 @@
-import { createControlApi } from "../../src/control/api.ts";
 import type { ClusterKubectl } from "../../src/control/clusters/kubectl.ts";
-import { PRIVATE_RANGES } from "../../src/control/clusters/netcheck.ts";
+import { CLOSED_RANGES } from "../../src/control/clusters/netcheck.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { generateSigningKeys } from "../../src/core/commands.ts";
+import type { ControlStore } from "../../src/control/store/index.ts";
+import { ADMIN, controlOnly, mcpClient, type Requester, signIn } from "./control-stack.ts";
 
 /**
  * Control over a fake Kubernetes cluster, for the tests of clusters in Providers, Add a rig and
- * a cluster rig's page. Moved out of tests/control/clusters-ui.test.ts.
+ * a cluster rig's page. Moved out of the clusters page's test (tests/control/dashboard/clusters.test.ts).
  */
 
-export const ADMIN = "admin-token-abcdef";
+export { ADMIN };
 export const OPERATOR = "operator-token-abcdef";
 export const KUBECONFIG =
   "apiVersion: v1\nkind: Config\nusers: [{ name: u, user: { token: secret-kube-token-789 } }]\n";
@@ -22,6 +21,10 @@ export function fakeCluster(
     slots?: Record<string, boolean>;
     /** Slots whose operators wrote the network rule (default: thermite-slot-1). */
     ruled?: string[];
+    /** More egress rules in that rule, such as one that opens a model server's address. */
+    moreEgress?: Record<string, unknown>[];
+    /** Ingress rules in that rule; none: the rule limits egress only. */
+    ingress?: Record<string, unknown>[];
     quota?: Record<string, Record<string, string>>;
     /** The node's GPUs through the device plugin (default 2). */
     nodeGpus?: number;
@@ -51,7 +54,20 @@ export function fakeCluster(
                   users: [{ name: "u", user: { exec: { command: "sh" } } }],
                 }
               : {
-                  clusters: [{ name: "c", cluster: { server: "https://k.example.com" } }],
+                  // A kubeconfig that says so skips TLS checks, or names a plain http server.
+                  clusters: [
+                    {
+                      name: "c",
+                      cluster: {
+                        server: _t.kubeconfig.includes("server: http://")
+                          ? "http://k.example.com"
+                          : "https://k.example.com",
+                        ...(_t.kubeconfig.includes("insecure-skip-tls-verify")
+                          ? { "insecure-skip-tls-verify": true }
+                          : {}),
+                      },
+                    },
+                  ],
                   users: [{ name: "u", user: { token: "x" } }],
                 },
           ),
@@ -140,7 +156,7 @@ export function fakeCluster(
         const hard = o.quota?.[rq[1] as string];
         return ok(JSON.stringify({ items: hard ? [{ status: { hard } }] : [] }));
       }
-      // The operators' network rule in slot 1: DNS and the internet without private ranges.
+      // The operators' network rule in slot 1: DNS and the internet without the closed ranges.
       const np = /^get networkpolicy -n (\S+) -o json$/.exec(a);
       if (np)
         return ok(
@@ -151,7 +167,8 @@ export function fakeCluster(
                     metadata: { name: "thermite-harness" },
                     spec: {
                       podSelector: { matchLabels: { "app.kubernetes.io/component": "harness" } },
-                      policyTypes: ["Egress"],
+                      policyTypes: o.ingress ? ["Egress", "Ingress"] : ["Egress"],
+                      ...(o.ingress ? { ingress: o.ingress } : {}),
                       egress: [
                         { ports: [{ port: 53, protocol: "UDP" }] },
                         {
@@ -159,11 +176,12 @@ export function fakeCluster(
                             {
                               ipBlock: {
                                 cidr: "0.0.0.0/0",
-                                except: PRIVATE_RANGES,
+                                except: CLOSED_RANGES,
                               },
                             },
                           ],
                         },
+                        ...(o.moreEgress ?? []),
                       ],
                     },
                   },
@@ -188,15 +206,12 @@ export async function control(
     drainWatchMs?: number;
   } = {},
 ) {
-  const store = o.store ?? new ControlStore(":memory:");
   const secrets = o.secrets ?? SecretBox.ephemeral();
   const tag = o.tag ?? "1";
-  const api = createControlApi(
-    store,
-    { admin: ADMIN, operator: OPERATOR, rigs: {} },
-    generateSigningKeys().privateKeyPem,
-    {
-      staleAfterMs: 180_000,
+  const { store, control: api } = controlOnly({
+    store: o.store,
+    tokens: { operator: OPERATOR, rigs: {} },
+    options: {
       secrets,
       clusterKubectl: k,
       ...(o.drainWatchMs ? { drainWatchMs: o.drainWatchMs } : {}),
@@ -207,47 +222,18 @@ export async function control(
         supervisor: `registry.example.com/supervisor:${tag}`,
       },
     },
-  );
-  const login = await api.request("/ui/login", {
-    method: "POST",
-    body: new URLSearchParams({ token: ADMIN }),
-    headers: { "content-type": "application/x-www-form-urlencoded" },
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-  const page = async (path: string) => (await api.request(path, { headers: { cookie } })).text();
-  const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page("/ui/settings"))?.[1] ?? "";
+  const ui = await signIn(api);
+  const { page } = ui;
+  const csrf = ui.csrfOf(await page("/ui/settings"));
   const post = async (path: string, form: Record<string, string>) =>
-    decodeURIComponent(
-      String(
-        (
-          await api.request(path, {
-            method: "POST",
-            body: new URLSearchParams({ csrf, ...form }),
-            headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-          })
-        ).headers.get("location"),
-      ),
-    );
+    decodeURIComponent(String((await ui.post(path, { csrf, ...form })).headers.get("location")));
   return { store, secrets, page, post, api };
 }
 
 /** An MCP client on control with a token: each call's error flag and its JSON answer. */
-export async function mcpWith(api: ReturnType<typeof createControlApi>, token: string) {
-  const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
-  const { StreamableHTTPClientTransport } = await import(
-    "@modelcontextprotocol/sdk/client/streamableHttp.js"
-  );
-  const client = new Client({ name: "t", version: "1.0.0" });
-  await client.connect(
-    new StreamableHTTPClientTransport(new URL("http://control/mcp"), {
-      fetch: async (input, init) => {
-        const url = new URL(String(input));
-        const headers = new Headers(init?.headers);
-        headers.set("authorization", `Bearer ${token}`);
-        return api.request(`${url.pathname}${url.search}`, { ...init, headers } as RequestInit);
-      },
-    }),
-  );
+export async function mcpWith(api: Requester, token: string) {
+  const client = await mcpClient(api, token);
   const call = async (name: string, args: Record<string, unknown>) => {
     const r = (await client.callTool({ name, arguments: args })) as {
       isError?: boolean;

@@ -5,10 +5,11 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { parseContract } from "../../../src/core/contract.ts";
-import { runResearchTrial } from "../../../src/harness/agents/research-worker.ts";
+import { KB_OUTBOX_FILES } from "../../../src/core/kb/index.ts";
+import { runResearchTrial } from "../../../src/harness/agents/research/worker.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { ResearchFolder } from "../../../src/harness/research/folder.ts";
-import { Research } from "../../../src/harness/research/research.ts";
+import { Research } from "../../../src/harness/research/research/index.ts";
 import { startFakeModel } from "../../helpers/fake-model.ts";
 import { researchFixture } from "../../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
@@ -57,12 +58,14 @@ async function setup() {
   const make = () =>
     new ResearchFolder({
       ledger: env.service.ledger,
+      outboxDir: env.service.paths.outboxDir,
       scratchRoot: join(scratchDir, "research"),
       stateRoot: join(stateDir, "research-work"),
       runner: new LocalRunner(scratchDir),
     });
   const folder = make();
   const research = new Research(env.service.ledger, stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     allowPrivate: true,
     onChange: (run) => void folder.sync(run),
   });
@@ -95,7 +98,7 @@ describe("the research folder", () => {
       ],
     });
     assert.equal(draft.verified, false);
-    research.addNote("r-1", "lane-1", "Look for a third site.", [a.source]);
+    research.addSourceNote("r-1", "lane-1", "Look for a third site.", [a.source]);
     research.proposeHypothesis("r-1", "lane-1", {
       text: "Archiving early helps.",
       supporting: [good.claim],
@@ -148,7 +151,7 @@ describe("the research folder", () => {
       /supported[\s\S]*## Why it matters\n\nIt shows/,
     );
     assert.match(read(root, "findings", `${weak.finding}.md`), /draft[\s\S]*the number 7/);
-    assert.match(read(root, "notes", "note-00001.md"), /Look for a third site\./);
+    assert.match(read(root, "source-notes", "source-note-00001.md"), /Look for a third site\./);
     assert.match(read(root, "report", "background.md"), /Second version\./);
     const index = read(root, "INDEX.md");
     assert.match(
@@ -230,7 +233,7 @@ describe("the research folder", () => {
     assert.ok(!exported.files.some((p) => p.startsWith("work")), "working areas are not exported");
   });
 
-  test("each text file a lane writes is a document of the run: its text in an event, its removal too", async () => {
+  test("each text file a lane writes is a document of the run: its file whole in the outbox, its removal too", async () => {
     const { env, folder } = await setup();
     const docs = () =>
       env.service.ledger
@@ -259,11 +262,12 @@ describe("the research folder", () => {
       change: "written",
       bytes: 21,
       sha256: syn?.sha256,
-      text: "What we know so far.\n",
+      file: { sha256: syn?.sha256, name: "synthesis.md", type: "text/markdown", bytes: 21 },
     });
-    const long = first.find((d) => d.path === "long.md");
-    assert.equal(String(long?.text).length, 20_000, "cut to an item's length");
-    assert.equal(long?.clipped, true);
+    // The file whole, past an item's 20,000 characters, in the outbox for the knowledge base.
+    const long = first.find((d) => d.path === "long.md") as { file: { sha256: string } };
+    const kept = readFileSync(join(env.service.paths.outboxDir, KB_OUTBOX_FILES, long.file.sha256));
+    assert.equal(kept.toString("utf8"), `${"x".repeat(25_000)}\n`);
     // The next trial: one document unchanged, one changed, one removed, the binary removed.
     await folder.prepareLane("r-1", "lane-1", "agent-1");
     writeFileSync(join(f.work, "synthesis.md"), "What we know now.\n");

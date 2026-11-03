@@ -12,6 +12,7 @@ import {
   ModelDownloadError,
   ModelDownloads,
   ModelRefused,
+  publicFetch,
 } from "../../src/supervisor/model-download.ts";
 import { stageCommand } from "../../src/supervisor/staging.ts";
 
@@ -112,6 +113,8 @@ describe("model files by URL", () => {
       name: "big",
       run: "run-1",
       downloads,
+      // Served on this machine.
+      allowPrivate: true,
     };
     try {
       await assert.rejects(downloadModel(input), /the download broke after .* The next try/);
@@ -287,6 +290,78 @@ describe("model files by URL", () => {
     assert.equal(downloads.list()[0]?.state, "failed");
   });
 
+  test("a download that would go below the rig's disk floor is refused in words (goal 173)", async () => {
+    const { inbox, downloads } = setup();
+    const fetchImpl: typeof fetch = async () =>
+      new Response(new Uint8Array(10), { headers: { "content-length": "2000000000" } });
+    const input = {
+      url: "https://models.example.com/mid.bin",
+      sha256: "3".repeat(64),
+      target: join(inbox, "models", "mid.bin"),
+      path: "models/mid.bin",
+      name: "mid",
+      downloads,
+      fetchImpl,
+      // 6 GiB free: room for the file, not for the file and a 5 GiB floor.
+      free: () => 6 * 2 ** 30,
+      floor: 5 * 2 ** 30,
+    };
+    await assert.rejects(
+      downloadModel(input),
+      /not enough free space for model mid: it needs 2\.0 GB more, and 6\.4 GB is free where it goes \(the inbox's models\), and the rig keeps 5 GiB free \(THERMITE_DISK_FLOOR_GIB\)/,
+    );
+    // Without a size from the server, the floor alone is checked.
+    const unsized: typeof fetch = async () => new Response(new Uint8Array(10));
+    await assert.rejects(
+      downloadModel({ ...input, fetchImpl: unsized, free: () => 4 * 2 ** 30 }),
+      /not enough free space for model mid: 4\.3 GB is free where it goes/,
+    );
+  });
+
+  test("a download with no size stops at the rig's disk floor as it writes, and deletes what it had", async () => {
+    const { inbox, downloads } = setup();
+    const target = join(inbox, "models", "endless.bin");
+    // A server that names no size and sends 1 MiB pieces for as long as it is read.
+    let sent = 0;
+    const fetchImpl: typeof fetch = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(c) {
+            sent++;
+            c.enqueue(new Uint8Array(1024 * 1024));
+          },
+        }),
+      );
+    // The disk fills as the file grows: 4 MiB free above the floor at the start.
+    const floor = 2 ** 30;
+    const free = () =>
+      floor +
+      4 * 1024 * 1024 -
+      (existsSync(`${target}.part`) ? statSync(`${target}.part`).size : 0);
+    await assert.rejects(
+      downloadModel({
+        url: "https://models.example.com/endless.bin",
+        sha256: "4".repeat(64),
+        target,
+        path: "models/endless.bin",
+        name: "endless",
+        downloads,
+        fetchImpl,
+        free,
+        floor,
+      }),
+      (err: Error) =>
+        err instanceof ModelDownloadError &&
+        /^not enough free space for model endless: the download stopped after [\d.]+ MB, with [\d.]+ GB free where it goes \(the inbox's models\), and the rig keeps 1 GiB free \(THERMITE_DISK_FLOOR_GIB\)\. What it had downloaded was deleted$/.test(
+          err.message,
+        ),
+    );
+    assert.ok(sent < 16, `it stopped at the floor, after ${sent} pieces`);
+    assert.ok(!existsSync(`${target}.part`));
+    assert.ok(!existsSync(target));
+    assert.equal(downloads.list()[0]?.state, "failed");
+  });
+
   test("a redirect from HTTPS to plain HTTP is refused, and never followed", async () => {
     const { inbox, downloads } = setup();
     const asked: string[] = [];
@@ -311,5 +386,59 @@ describe("model files by URL", () => {
       /a redirect from HTTPS to plain HTTP is refused/,
     );
     assert.deepEqual(asked, ["https://huggingface.co/org/m/resolve/main/model.bin"]);
+  });
+
+  test("a file is fetched only from the internet: a private, loopback or link-local address, or a redirect to one, is refused", async () => {
+    const { inbox, downloads } = setup();
+    const bytes = Buffer.from("weights");
+    const asked: string[] = [];
+    // The names as DNS gives them here; the server's answers as the stand-in gives them.
+    const names: Record<string, string[]> = {
+      "models.example.com": ["93.184.215.14"], // public-check: allow (an example public address, for the test)
+      "inside.example.com": ["10.20.30.40"], // public-check: allow (a private address, for the test)
+      "metadata.example.com": ["169.254.169.254"], // public-check: allow (a link-local address, for the test)
+      "both.example.com": ["93.184.215.14", "fd00::1"], // public-check: allow (example addresses, for the test)
+    };
+    const inner: typeof fetch = async (input) => {
+      asked.push(String(input));
+      const u = new URL(String(input));
+      if (u.pathname === "/hop")
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://inside.example.com/m.bin" },
+        });
+      return new Response(new Uint8Array(bytes), {
+        headers: { "content-length": String(bytes.length) },
+      });
+    };
+    const f = publicFetch(inner, async (host) => names[host] ?? [host]);
+    const get = (url: string, name: string) =>
+      downloadModel({
+        url,
+        sha256: sha(bytes),
+        target: join(inbox, `${name}.bin`),
+        path: `${name}.bin`,
+        name,
+        downloads,
+        fetchImpl: f,
+      });
+    await get("https://models.example.com/m.bin", "public");
+    assert.deepEqual(readFileSync(join(inbox, "public.bin")), bytes);
+    for (const [url, name] of [
+      ["https://inside.example.com/m.bin", "private"],
+      ["http://metadata.example.com/latest", "metadata"],
+      ["https://both.example.com/m.bin", "both"],
+      ["http://127.0.0.1:8080/m.bin", "loopback"],
+      ["https://models.example.com/hop", "redirected"],
+    ]) {
+      await assert.rejects(
+        get(url as string, name as string),
+        /is on a private or local network/,
+        name,
+      );
+      assert.ok(!existsSync(join(inbox, `${name}.bin`)), name);
+    }
+    // The stand-in was asked only for the public file and the hop: never a private address.
+    assert.deepEqual(asked, ["https://models.example.com/m.bin", "https://models.example.com/hop"]);
   });
 });

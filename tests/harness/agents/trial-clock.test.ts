@@ -3,8 +3,9 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
-import { TrialClock, trialBudget } from "../../../src/harness/agents/trial-clock.ts";
-import { runTrial } from "../../../src/harness/agents/worker.ts";
+import { trialBudget } from "../../../src/agents/roles/index.ts";
+import { TrialClock } from "../../../src/harness/agents/trial-clock.ts";
+import { runTrial } from "../../../src/harness/agents/worker/index.ts";
 import { prepareWorkspace } from "../../../src/harness/agents/workspace.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { startFakeModel } from "../../helpers/fake-model.ts";
@@ -131,7 +132,7 @@ describe("a trial's clock (goal 144)", () => {
     const env = makeJudgeEnv();
     await env.service.applyCommand(env.assign);
     const runner = new LocalRunner(env.paths.scratchDir);
-    const champion = env.ledger.currentChampion("js-1");
+    const champion = env.ledger.champions.current("js-1");
     const ws = await prepareWorkspace({
       runner,
       scratchDir: env.paths.scratchDir,

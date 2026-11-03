@@ -14,7 +14,7 @@ updated: 2026-10-27
 
 ## What
 
-The review of how the parts talk (goal [167](167-how-the-parts-talk.goal)) and the review of the agents' definitions (goal [166](../166-agent-definitions.goal)) found these bugs by reading the code. Each fix comes with a regression test that fails without it.
+The review of how the parts talk (goal [167](167-how-the-parts-talk.goal)) and the review of the agents' definitions (goal [166](166-agent-definitions.goal)) found these bugs by reading the code. Each fix comes with a regression test that fails without it.
 
 1. **A Pi worker's long reply is lost from Live.** `harness/agents/live-session.ts:121` sends a reply uncut; the trial API refuses any entry over 8,000 characters (`harness/api.ts:676`), and `live-session.ts:81` drops the refusal. The line is cut and marked, as `core/live.ts:86` already does for other lines, and a refusal is logged.
 2. **A waiting command is sent again in full every 5 seconds.** `pendingCommands` (`control/store.ts:2549-2570`) returns every pending command whole, with no limit, and the supervisor fetches them all on each poll while an assignment's sources are still being fetched (`supervisor/relay.ts:171-183`, `supervisor/staging.ts:155-206`). The largest command is about 3.5 MiB. The supervisor fetches a command's content once.

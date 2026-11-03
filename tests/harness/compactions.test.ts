@@ -3,12 +3,12 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { KB_BODY_MAX } from "../../src/core/kb-index.ts";
+import { KB_OUTBOX_FILES } from "../../src/core/kb/index.ts";
 import { Registry } from "../../src/harness/agents/registry.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
+import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { LocalRunner } from "../../src/harness/broker/runner.ts";
 import { Compactions, compactionOf } from "../../src/harness/compactions.ts";
-import { knowledgePart } from "../../src/harness/kb-part.ts";
+import { knowledgePart } from "../../src/harness/kb/index.ts";
 import { ResearchFolder } from "../../src/harness/research/folder.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 
@@ -21,6 +21,7 @@ async function setup() {
   assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
   const folder = new ResearchFolder({
     ledger: env.service.ledger,
+    outboxDir: env.service.paths.outboxDir,
     scratchRoot: join(env.service.paths.scratchDir, "research"),
     stateRoot: join(env.service.paths.stateDir, "research-work"),
     runner: new LocalRunner(env.service.paths.scratchDir),
@@ -37,7 +38,7 @@ async function setup() {
     run: RUN,
     lane: "lane-2",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: env.seedCommit,
     token,
   });
@@ -83,8 +84,19 @@ describe("compactions on the harness (goal 070)", () => {
     assert.equal(b.tokens_before, 26_100);
     assert.equal(b.tokens_after, 3_400);
     assert.equal(b.snapshot, rel);
-    assert.equal(b.clipped, true);
-    assert.equal(String(b.text).length, KB_BODY_MAX);
+    // The conversation whole, in the outbox for the knowledge base: the event names its file.
+    const file = b.file as { sha256: string; name: string; type: string; bytes: number };
+    assert.deepEqual(
+      { name: file.name, type: file.type, bytes: file.bytes },
+      {
+        name: "t-0123456789abcdef-1.md",
+        type: "text/markdown",
+        bytes: Buffer.byteLength(markdown),
+      },
+    );
+    const outbox = join(s.env.service.paths.outboxDir, KB_OUTBOX_FILES, file.sha256);
+    assert.equal(readFileSync(outbox, "utf8"), markdown);
+    assert.equal(b.text, undefined, "the event carries no text");
     assert.match(String(b.summary), /Atomics\.wait/);
     // The live view: the compaction in words, then the summary.
     const lines = s.env.service.live
@@ -108,7 +120,8 @@ describe("compactions on the harness (goal 070)", () => {
       String(doc?.title),
       /trial t-0123456789abcdef: the conversation before compaction 1/,
     );
-    assert.match(String(doc?.body), /Cut: the file has/);
+    assert.equal(doc?.body, "Kept before compaction 1, at about 26,100 tokens.");
+    assert.equal(doc?.file?.sha256, file.sha256);
     assert.equal(doc?.by, "lane-2");
   });
 

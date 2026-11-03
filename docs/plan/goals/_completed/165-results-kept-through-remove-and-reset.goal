@@ -1,0 +1,50 @@
+---
+id: "165"
+title: "Results kept through remove, reset and update: the remove guard on every placement, two reset bugs, an update that survives a restart"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["160"]
+created: 2026-10-26
+updated: 2026-10-27
+---
+
+# 165 · Results kept through remove, reset and update: the remove guard on every placement, two reset bugs, an update that survives a restart
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [160](160-v010-audit.goal)
+
+## What
+
+The operations reviewer of the v0.1.1 audit (goal [160](160-v010-audit.goal)) found these by reading the code; none was reproduced by a run. Each fix comes with a regression test.
+
+1. **Removing a machine or cluster rig doesn't check that its results left.** The machine path (`src/control/dashboard.ts:6955-7000`, then `src/control/machines/deploy.ts:323-330`) removes the rig's volumes and folder; the cluster path (`dashboard.ts:6832-6895`) deletes the namespace, or in a slot the rig's volume claim. Both check only the typed confirmation. A RunPod terminate (`src/control/runpod-lifecycle.ts:435-436`) and a full reset (`src/control/lifecycle.ts:393-413`) already refuse until `resultsLeft` says every export and champion left the rig. Remove does the same on every placement, with one check in one place, and says how to get the results out.
+2. **A full reset stalls on queued judge jobs.** The reset's `quiescing` step (`src/control/lifecycle.ts:363-373`) waits until no job is queued or leased. The reset pauses the runs first, and the judge never leases a paused run's queued jobs (`src/harness/ledger.ts:817-823`, since 73ec10c, three days after the reset's rule). So a reset of a rig with any queued job times out after an hour and leaves the runs paused. `quiescing` waits only for leased jobs and for queued jobs of runs that still run.
+3. **On RunPod, the supervisor crash-loops after a full reset.** In the one-container image, the broker writes the supervisor's copy of its harness token once, at start (`prepareOneContainer`, `src/harness/broker.ts:626-695`). The supervisor's wipe (`src/supervisor/main.ts:507-513`) deletes it, and the restart (`startSupervisor`) doesn't write it again, so the supervisor exits at each start. The supervisor's files are made again when they are missing. The RunPod acceptance check runs a reset.
+4. **An update's state lives only in control's memory.** "Update to control's version" (`src/control/rig-update.ts`) keeps its phase and the runs it paused in memory (`RigUpdates.phases`, the local `paused`). A control restart during an update, often made to update control itself, leaves those runs paused with nothing to resume them. The update's state goes in the store, and at start control resumes or ends any update left under way, and records why.
+5. **The RunPod spend limit and idle stop work only while control runs.** Both are checked in control's 30-second loop (`src/control/runpod-rigs.ts:415-424, 526-529`), and the pod can't stop itself. [Add a rig on RunPod](../../../_site/src/content/docs/how-to/install/runpod-rig.md) and [Known limits](../../../_site/src/content/docs/reference/known-limits.md) don't say so yet; they will. At start, control acts at once on a limit passed while it was away.
+
+## Why
+
+Design invariant 3, "Nothing is destroyed", and invariant 5, "Nothing stops silently", whose first rule is "Budgets are explicit". The rule for destroying a rig's record is enforced on two paths and missing on two others. CONVENTIONS.md: "Nothing stops silently", and recovery tests at each persistence boundary.
+
+## Done when
+
+- [x] Each of the five items is done, each with its test: a remove refused while exports wait; a reset with a queued job; a reset on the one-container image; a control restart in the middle of an update; a RunPod limit passed while control was away (against the fake RunPod API).
+- [x] The rig lifecycle page and the pages above say what holds.
+- [x] The fast checks pass, and the steering, rig deploy, cluster, machines and RunPod acceptance checks.
+
+## Decisions
+
+- 2026-10-26, owner (the [guide](../../code-clean-up-guide.md#7-the-owners-questions)'s question 14): a remove is refused until the rig's results have left. A typed `discard <rig>` goes on for a rig whose results can't leave, such as one with a broken supervisor, and the audit log records it.
+
+## Open questions
+
+## Progress
+
+- 2026-10-26: Goal written from the v0.1.1 audit's operations report.
+
+- 2026-10-27 07:56 UTC: All five items fixed. Item 1: one check, `removeCheck` in `src/control/results-left.ts`, refuses a remove on a machine or a cluster until `resultsLeft` says every result left, says to export first, and takes `discard <rig>` for a rig whose results can't leave, recorded in the audit log as `discarded` (`tests/control/machines.test.ts`, `tests/control/clusters-ui.test.ts`). The cluster's kubectl calls moved to `src/control/clusters/actions.ts`, so `dashboard.ts` shrinks. What the rig recorded after its last export is only in a new export: the page says to export first. Item 2: the reset's `quiescing` step waits only for jobs under way and queued jobs of runs that still run, once the rig reports its runs paused (`judgeBusy` in `src/control/lifecycle.ts`; `tests/control/lifecycle.test.ts` queues a job and fails without the fix). Item 3: root makes the supervisor's files again before each start of the supervisor (`makeSupervisorFiles` in `src/harness/broker/one-container.ts`; `tests/harness/broker/supervisor-files.test.ts`); the RunPod acceptance check now runs a full reset and passed. Item 4: an update's step and the runs it paused are kept in control's store (migration 2, `rig_update`); at start control ends any update left under way, resumes those runs and says why (`tests/control/rig-page.test.ts`, `tests/control/store/schema.test.ts`). Item 5: control looks at RunPod rigs at once when it starts, and a pod that passed a limit while control was away gets a note saying so (`tests/control/runpod-rigs.test.ts`); Run a rig on RunPod and Known limits say control checks the limits only while it runs. The pages follow. The fast checks and the steering, rig deploy, cluster and machines acceptance checks are left.
+- 2026-10-27 15:45 UTC: Verified: the full fast checks, and the steering, rig deploy, cluster and RunPod acceptance checks passed on 53c7e30e; the machines acceptance passed on 2f94621a, after the owner's yes to its download. Moved to `_completed/`.
+
+---
+
+Run with `/goal Complete docs/plan/goals/165-results-kept-through-remove-and-reset.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

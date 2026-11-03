@@ -1,8 +1,8 @@
 /**
  * Numeric settings from the environment (goal 164): one reading for every part, so a typo stops
  * the part at start with the setting's name and what it takes, never passing as a value. Before
- * this, `THERMITE_EXPORT_MINUTES=6O` gave NaN and the rig never exported again, and an empty value
- * gave 0 and an export every few seconds.
+ * this, a period of minutes given as `6O` gave NaN and what it timed never ran again, and an empty
+ * value gave 0 and ran it every few seconds.
  */
 
 type Env = Record<string, string | undefined>;
@@ -56,12 +56,22 @@ export function numberSetting(env: Env, name: string, fallback: number, rule?: N
   return optionalNumberSetting(env, name, rule) ?? fallback;
 }
 
-/** An interval in seconds, above 0 unless the rule says otherwise, in milliseconds. */
-export function secondsSetting(env: Env, name: string, fallback: number, rule?: NumberRule) {
-  return numberSetting(env, name, fallback, { unit: "seconds", aboveMin: true, ...rule }) * 1000;
+/**
+ * A number setting as a part's table states it (goal 125, T4): its name, what it takes, and its
+ * default, in the setting's own unit (none: unset means none). The docs check reads each part's
+ * table and holds the settings page to it.
+ */
+export interface NumberSpec {
+  name: string;
+  rule: NumberRule;
+  fallback?: number | undefined;
 }
 
-/** An interval in minutes, above 0 unless the rule says otherwise, in milliseconds. */
-export function minutesSetting(env: Env, name: string, fallback: number, rule?: NumberRule) {
-  return numberSetting(env, name, fallback, { unit: "minutes", aboveMin: true, ...rule }) * 60_000;
+/** A setting from its table: its value in its own unit; undefined when unset with no default. */
+export function readNumber(env: Env, spec: NumberSpec & { fallback: number }): number;
+export function readNumber(env: Env, spec: NumberSpec): number | undefined;
+export function readNumber(env: Env, spec: NumberSpec): number | undefined {
+  return spec.fallback === undefined
+    ? optionalNumberSetting(env, spec.name, spec.rule)
+    : numberSetting(env, spec.name, spec.fallback, spec.rule);
 }

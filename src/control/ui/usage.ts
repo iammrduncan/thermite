@@ -1,3 +1,4 @@
+import { PLAN_PROVIDER_TYPES } from "../../core/agents.ts";
 import {
   isFree,
   type ModelPrice,
@@ -8,16 +9,17 @@ import {
   type UsageRow,
   type UsageSums,
 } from "../../core/usage.ts";
-import { HARNESS_NAMES } from "../rig-model.ts";
-import type { Harness, ProviderModel } from "../store.ts";
-import { campaignHref, esc, icon, infoLabel, modeAvatar } from "./components.ts";
+import { HARNESS_NAMES } from "../rigs/index.ts";
+import type { Harness, ProviderModel } from "../store/index.ts";
+import { esc, icon, infoLabel, modeAvatar } from "./components/index.ts";
+import { campaignHref } from "./urls.ts";
 
 /**
  * Model use and cost on the dashboard (goal 075, as the owner approved the mockup `v010-usage`):
  * at the top of a run's page (one line and two cards) with the details on its Stats tab, in a
  * campaign page's sidebar, on the Metrics page, and one table of model prices in Settings ›
- * Providers. Every number comes from control's sums of the records that code made at each call
- * (control/usage.ts); a figure no record reports says "not reported", a cost with no price known
+ * Model prices. Every number comes from control's sums of the records that code made at each call
+ * (control/usage-report.ts); a figure no record reports says "not reported", a cost with no price known
  * says "no price", and a subscription's calls "on a plan": never 0.
  */
 
@@ -80,7 +82,7 @@ const TIP = {
     "Tokens out a second over each call's whole time, from the request to the last token. The big number is the median of the calls. p10–p90: 8 of 10 calls are in this range. Each model's own speed is on the Stats tab.",
 };
 const costTip = (gpu: string) =>
-  `Tokens times each model's price for a million tokens: in, cached in, out. Prices: Settings › Providers. “on a plan”: a subscription; its tokens are counted, not priced. “no price”: none is known, so it is never $0. GPU time on RunPod: ${gpu}.`;
+  `Tokens times each model's price for a million tokens: in, cached in, out. Prices: Settings › Model prices. “on a plan”: a subscription; its tokens are counted, not priced. “no price”: none is known, so it is never $0. GPU time on RunPod: ${gpu}.`;
 
 /**
  * Each agent in words (goal 074), and the line under it: the teachers' merged by model, and the
@@ -90,10 +92,11 @@ const AGENT: Record<string, [string, string]> = {
   workers: ["Workers", ""],
   planner: ["Planner", ""],
   teachers: ["Teachers", ""],
-  combiner: ["Teachers", "merged by"],
+  merged_by: ["Teachers", "merged by"],
   auditor: ["Auditor", ""],
-  panel: ["Review panel", ""],
+  review_panel: ["Review panel", ""],
   synthesizer: ["Synthesizer", "answer cards"],
+  final_writer: ["Final writer", "research paper"],
 };
 const WORK = new Set(["workers", "planner"]);
 export const harnessWord = (h: string) => HARNESS_NAMES[h as Harness] ?? h;
@@ -590,7 +593,7 @@ ${
 export const runStateWord = (status: string) =>
   status === "running" ? "at work" : status === "paused" ? "paused" : "finished";
 
-// ---------------------------------------------------------------- Model prices: Settings › Providers
+// ---------------------------------------------------------------- Settings › Model prices
 
 /** A price field's number: empty, or dollars for a million tokens (up to 1,000,000). */
 export const PRICE_NUMBER = /^(\d{1,7}(\.\d{0,6})?|\.\d{1,6})$/;
@@ -602,7 +605,7 @@ export const PRICE_WORDS = {
 } as const;
 
 /** Provider types whose calls are on a plan: their models have no price. */
-const PLAN_TYPES = new Set(["claude", "chatgpt"]);
+const PLAN_TYPES = new Set<string>(PLAN_PROVIDER_TYPES);
 
 const MP_TIP = {
   model:
@@ -623,7 +626,7 @@ const priceText = (n: number | null | undefined) => {
 };
 
 /**
- * Model prices, under the providers in Settings › Providers (the owner, 2026-10-21: one plain
+ * Model prices, its own page of Settings since goal 181 (the owner, 2026-10-21: one plain
  * table, nothing nested): one row for each model of each provider that is not a subscription, in
  * US dollars for a million tokens, and where its price comes from. A listed price is text; any
  * other has three fields. One Save prices posts every field to POST /ui/settings/prices; the

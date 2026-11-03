@@ -41,6 +41,17 @@ describe("a copy before a migration", () => {
     db.close();
   });
 
+  test("keeps every copy when told none goes (control, while a retention policy of them is on)", () => {
+    const { db, path } = database();
+    for (const minute of [1, 2, 3])
+      copyBeforeMigration(db, path, minute, minute + 1, at(minute), null);
+    assert.deepEqual(
+      copiesOf(path).map((c) => c.version),
+      [3, 2, 1],
+    );
+    db.close();
+  });
+
   test("the copy to restore is the newest one the older code can read", () => {
     const { db, path } = database();
     copyBeforeMigration(db, path, 4, 5, at(1));

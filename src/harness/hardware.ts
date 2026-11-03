@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, statfsSync } from "node:fs";
 import { arch, availableParallelism, cpus, release, totalmem } from "node:os";
 import type { Hardware, HardwareDevice } from "../core/hardware.ts";
-import type { TargetDriver } from "./targets/driver.ts";
+import type { TargetDriver } from "./targets/index.ts";
 
 /**
  * Collects what this rig runs on, for the dashboard. Device details come from nvidia-smi as the

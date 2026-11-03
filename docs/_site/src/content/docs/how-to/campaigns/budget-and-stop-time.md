@@ -20,7 +20,7 @@ A limit pauses only a run with agents that has a model. A run with no agents, su
 
 :::caution[The model spend limit is not your total spend]
 - It counts only the workers' trials. The planner's calls are not counted, and the advisors' calls are not counted either: they have a daily limit of their own (see [Configure advisors](../operate/advisors.md#spending)).
-- A trial's tokens count when that trial ends, at one pair of prices for every model the rig uses.
+- A trial's tokens count at one pair of prices for every model the rig uses. A trial in OpenCode or Codex counts the tokens the provider's answers reported, as the harness's model proxy saw each answer pass, whatever the program says; a trial in Pi or Claude Code counts the tokens it reports.
 - Rigs that control sets up on machines and clusters, and rigs you join yourself, can't be given the prices ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)). There, `llm_usd` never pauses anything.
 
 Where `llm_usd` can't count what you spend, set a stop time, and set a spending limit with your model provider, on the key the rig uses.
@@ -73,7 +73,7 @@ Resuming doesn't help: the run is still over its limit, so it is paused again at
 
 ## Limits that are not budgets
 
-- A Claude or ChatGPT subscription's usage window: when it is used up, that rig's agents wait for it to reset, then go on.
+- A Claude or ChatGPT subscription's usage window: when it is used up, the run's agents wait for it to reset, then go on.
 - **One try lasts (minutes)** on the **New campaign** page ends one trial, and the next starts fresh. A command over an agent's memory or disk limit is stopped.
 
 Neither ends a campaign. The [limits and pacing reference](../../reference/limits-and-pacing.md) lists them all.

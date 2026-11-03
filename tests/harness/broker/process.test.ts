@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -54,6 +54,35 @@ describe("supervised processes", () => {
     });
     assert.equal(r.killedFor, "memory");
     assert.ok(r.peakRssBytes > 200 << 20);
+  });
+
+  // Telling the processes apart needs /proc (Linux).
+  const procfs = existsSync("/proc/self/cmdline") ? false : "needs /proc (Linux)";
+
+  test("over its memory limit, a run that holds a program spares the program and itself", {
+    skip: procfs,
+  }, async () => {
+    // The run's root (node, as the terminal host is) starts the program (sh), which runs a
+    // command that grows, then waits.
+    const grow = "const keep = []; setInterval(() => keep.push(Buffer.alloc(32 << 20, 1)), 20)";
+    const root = `const p = require('child_process').spawn('/bin/sh', ['-c', '"$0" -e "$1"; sleep 2', process.execPath, ${JSON.stringify(grow)}], { stdio: 'inherit' }); p.on('exit', (c) => process.exit(c ?? 1))`;
+    const run = (spareRoot: boolean) =>
+      runSupervised({
+        argv: [node, "-e", root],
+        cwd: scratch(),
+        env: {},
+        timeoutMs: 20_000,
+        rssLimitBytes: 250 << 20,
+        spareExe: "/bin/sh",
+        spareRoot,
+      });
+    const spared = await run(true);
+    assert.equal(spared.killedFor, null);
+    assert.equal(spared.exitCode, 0, JSON.stringify(spared));
+    assert.ok((spared.memoryKills ?? 0) >= 1, JSON.stringify(spared));
+    // The root runs as node, as an agent's command may: without its pid, it is not spared.
+    const not = await run(false);
+    assert.equal(not.signal, "SIGKILL", JSON.stringify(not));
   });
 
   test("a run that fills its directory is killed for disk", async () => {

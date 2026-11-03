@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { createHarnessApi } from "../../src/harness/api.ts";
+import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { makeResearchRun } from "../helpers/research-run.ts";
 
 const tokens = { supervisor: "sup-token", proposer: "prop-token" };

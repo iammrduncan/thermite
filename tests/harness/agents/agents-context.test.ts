@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { claudeCompactionEnv } from "../../../src/harness/agents/claude-code.ts";
-import { type ModelConfig, withAgentsContext } from "../../../src/harness/agents/model.ts";
-import { Scheduler } from "../../../src/harness/agents/scheduler.ts";
-import { createHarnessApi } from "../../../src/harness/api.ts";
+import { type ModelConfig, withAgentsContext } from "../../../src/agents/model/index.ts";
+import { claudeCompactionEnv } from "../../../src/agents/programs/claude-code/index.ts";
+import { Scheduler } from "../../../src/harness/agents/scheduler/index.ts";
+import { createHarnessApi } from "../../../src/harness/api/index.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { makeJudgeEnv } from "../../helpers/judge-env.ts";
 
@@ -65,12 +65,12 @@ describe("a campaign's own context settings in a run (goal 070)", () => {
       // The planner's own model, with a larger window than the campaign's.
       plannerModel: () => ({ ...route, model: "gpt-planner", contextWindow: 400_000 }),
       owner: "context-test",
-      askCodex: async (m) => {
+      ask: async (_via, m) => {
         asked.push(m);
         return JSON.stringify({
-          new_families: [{ id: "cx-tidy", description: "Small tidy-ups." }],
+          new_directions: [{ id: "cx-tidy", description: "Small tidy-ups." }],
           assignments: [
-            { lane: "lane-1", family: "cx-tidy", focus: "tidy the kernel", parent: "champion" },
+            { lane: "lane-1", direction: "cx-tidy", focus: "tidy the kernel", parent: "champion" },
           ],
           notes: "planned",
         });

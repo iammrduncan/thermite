@@ -11,8 +11,8 @@ The documentation is a website at [usethermite.com](https://usethermite.com), bu
 | Section | Start with | For |
 | --- | --- | --- |
 | [Start here](_site/src/content/docs/start-here.md) | | Finding your path |
-| [Tutorials](_site/src/content/docs/tutorials/) | [Your first run](_site/src/content/docs/tutorials/first-run.md) | Learning by doing |
-| [How-to guides](_site/src/content/docs/how-to/) | [Install Thermite on one machine](_site/src/content/docs/how-to/install/one-machine.md) | Doing one task |
+| [Tutorials](_site/src/content/docs/tutorials/) | [Install on one machine](_site/src/content/docs/tutorials/first-run.md) | Learning by doing |
+| [How-to guides](_site/src/content/docs/how-to/) | [The one-machine stack](_site/src/content/docs/how-to/install/one-machine.md) | Doing one task |
 | [Reference](_site/src/content/docs/reference/) | [Settings](_site/src/content/docs/reference/settings.md) | Looking things up |
 | [Explanation](_site/src/content/docs/explanation/) | [What Thermite is](_site/src/content/docs/explanation/what-thermite-is.md) | Understanding how and why |
 

@@ -12,8 +12,8 @@ import {
 } from "../../src/harness/broker/process.ts";
 import { LocalRunner, type RunOutcome, type RunRequest } from "../../src/harness/broker/runner.ts";
 import { Judge, type PromotionPolicy } from "../../src/harness/judge/judge.ts";
-import { Ledger } from "../../src/harness/ledger.ts";
-import { HarnessService } from "../../src/harness/service.ts";
+import { Ledger } from "../../src/harness/ledger/index.ts";
+import { HarnessService } from "../../src/harness/service/index.ts";
 import { CpuDriver } from "../../src/harness/targets/cpu.ts";
 
 /**
@@ -39,6 +39,9 @@ export const FAST_KERNEL = `export function work(n) {
   return s;
 }
 `;
+
+/** FAST_KERNEL in other words: a second change with the same effect. */
+export const FAST_KERNEL_RESTATED = `${FAST_KERNEL}// same idea, restated\n`;
 
 export const WRONG_KERNEL = `export function work(n) {
   return n * 3;
@@ -156,6 +159,7 @@ const sum7 = (n: number) => Math.floor(n / 7) * 21 + ((n % 7) * ((n % 7) - 1)) /
 const KERNELS = new Map<string, (n: number) => { value: number | null; ms: number }>([
   [SEED_KERNEL, (n) => ({ value: sum7(n), ms: 30 + n / 1e6 + n / 50_000 })],
   [FAST_KERNEL, (n) => ({ value: sum7(n), ms: 30 + n / 1e6 })],
+  [FAST_KERNEL_RESTATED, (n) => ({ value: sum7(n), ms: 30 + n / 1e6 })],
   [WRONG_KERNEL, (n) => ({ value: n * 3, ms: 31 })],
   [CRASH_KERNEL, () => ({ value: null, ms: 30 })],
 ]);
@@ -443,7 +447,6 @@ export function makeJudgeEnv(
       ? new CpuDriver("test", { load: () => Number.POSITIVE_INFINITY })
       : new CpuDriver("test", { maxLoadFraction: Number.POSITIVE_INFINITY }),
     owner: "judge-test",
-    promotion: opts.promotion ?? "auto",
     readyRetries: 0,
     calibrationBlocks: 0,
   });
@@ -501,7 +504,7 @@ export function makeJudgeEnv(
   /** What became of an attempt, for assertion messages: lifecycle, verdicts, jobs, events. */
   const explain = (attempt: string) =>
     JSON.stringify({
-      lifecycle: ledger.getAttempt(attempt)?.lifecycle,
+      lifecycle: ledger.attempts.get(attempt)?.lifecycle,
       verdicts: ledger.db
         .prepare("select verdict, reasons from verdict where attempt = ? order by id")
         .all(attempt),

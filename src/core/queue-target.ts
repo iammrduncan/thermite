@@ -1,3 +1,5 @@
+import { EXPERIMENT_ID, inner } from "./ids.ts";
+
 /**
  * A run's target queue depth, the sameness of two ideas, and the rules that may never be set
  * (goal 081).
@@ -54,7 +56,7 @@ export function ideaWords(title: string): string {
 /** A rule as an advisor gives it, for the refusals below. */
 export interface RuleText {
   kind: string;
-  family?: string | undefined;
+  direction?: string | undefined;
   value?: string | number | undefined;
   rationale: string;
 }
@@ -155,7 +157,7 @@ const FREEZES: RegExp[] = [
 ];
 
 /** An experiment's id, as a rule might name one. */
-const ID = `x-[0-9a-f]{12}`;
+const ID = inner(EXPERIMENT_ID);
 const AN_ID = String.raw`(?:experiment\s+)?(${ID})\b`;
 
 /** Words that pin a named experiment: keep it first or in place, retry it, run it again. */
@@ -202,7 +204,7 @@ const SUBJECT = new RegExp(`^:?(${ID}):?$`, "i");
  * queue's, which moves change. Each of the rule's direction, value and reasons is read alone.
  */
 export function ruleRefusal(r: RuleText): RuleRefusal | undefined {
-  const parts = [r.family ?? "", typeof r.value === "string" ? r.value : "", r.rationale].filter(
+  const parts = [r.direction ?? "", typeof r.value === "string" ? r.value : "", r.rationale].filter(
     (p) => p.trim(),
   );
   const frozen = parts
@@ -215,7 +217,7 @@ export function ruleRefusal(r: RuleText): RuleRefusal | undefined {
     };
   const subject =
     ["try", "mandate", "priority"].includes(r.kind) &&
-    [r.family ?? "", typeof r.value === "string" ? r.value : ""]
+    [r.direction ?? "", typeof r.value === "string" ? r.value : ""]
       .map((s) => SUBJECT.exec(s.trim())?.[1])
       .find(Boolean);
   const pinned =

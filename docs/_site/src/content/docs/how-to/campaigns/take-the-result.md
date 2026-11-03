@@ -1,19 +1,19 @@
 ---
 title: "Take the result"
-description: "Download a run's best change as a patch and apply it to your project."
+description: "Download a run's best change as a patch and apply it to your project, or check out its commit from the run's branch in git."
 type: how-to
 sidebar:
   order: 13
 ---
 
-A run's result is its [champion](../../reference/glossary.md): the best version of your project that the judge has confirmed. Thermite never pushes to your project. You download the champion as a patch and apply it yourself, to the commit the run started from.
+A run's result is its [champion](../../reference/glossary.md): the best version of your project that the judge has confirmed. You download the champion as a patch and apply it yourself, to the commit the run started from. A run whose assignment says where its work goes in git also has each champion as a commit there ([below](#a-runs-work-in-git)).
 
-This is the result of a hill climb or a goal campaign. A research campaign changes no code: its result is its report, which **Latest report** on the run's **Overview** opens, and its research folder, which the rig's export after the final report carries, and any full export at any time ([Get a rig's results from control](../operate/exports-on-control.md)). A research run whose questions the review panel found answered also has its [research paper](../../explanation/campaign-modes.md#the-research-paper), which starts its final report: on the run's **Overview**, **Research paper** opens it, and the `paper.md` link in the **Research paper** line opens it as plain text, named `<run>-paper.md` when you save it. The research folder holds it as `paper.md`.
+This is the result of a hill climb or a goal campaign. A research campaign changes no code: its result is its report, which **Latest report** on the run's **Overview** opens, and its research folder, which the run's export at its end carries once the final report is written, and any full export at any time ([Get a rig's results from control](../operate/exports-on-control.md)). A research run whose questions the review panel found answered also has its [research paper](../../explanation/campaign-modes.md#the-research-paper), which starts its final report: on the run's **Overview**, **Research paper** opens it, and the `paper.md` link in the **Research paper** line opens it as plain text, named `<run>-paper.md` when you save it. The research folder holds it as `paper.md`.
 
 ## Before you start
 
 - The run has a champion beyond its starting point: on the run's **Overview** tab, **The run** block shows **Champion** as `#2` or higher. The starting point itself is champion #1. In a hill climb whose seed the judge could not measure, the first setup change it could measure became the run's starting point as a new champion ([Setup](../../reference/verdicts.md#setup)), and its patch holds the fix that made the project build and run.
-- The rig has published that champion with an export. Exports happen every hour when there is something new, while the rig's **Exports** switch on **Edit rig** is on. To publish at once, open the rig's page, press **Export**, then **Export** under the choice.
+- The rig has published that champion with an export. A run's export at its end publishes it, with no one asking, while the rig's **Exports** switch on **Edit rig** is on. For a run that still runs, publish it now: open the rig's page, press **Export**, choose **Full export**, then press **Export** under the choice.
 - A minute or two after the export, the rig's supervisor has uploaded the patch to control. Control keeps it only if it matches what the rig published. This works on every rig, with or without a results repository.
 
 ## 1. Download the patch
@@ -51,6 +51,15 @@ git apply --directory=examples/matmul-cpu/project ~/Downloads/sort-speed-1-champ
 
 If your branch has moved on since that commit, either commit the change on a branch made from that commit and merge it into yours, or apply it on your branch with `git apply -3`, which falls back on a three-way merge and marks any conflicts. `-3` needs that commit in your clone.
 
+## A run's work in git
+
+A run whose assignment has `results` ([`assign_campaign`](../../reference/signed-commands.md#assign_campaign)) has its rig's supervisor push its work to that repository after each export, beside every other export's work:
+
+- `thermite/<run>/champion`: the run's starting commit, then a commit for each champion, each on the one before. A champion's commit holds the whole project as the champion has it: for a project in a folder, the champion's folder in the starting commit's repository. Its message names the champion and the change, such as `Champion #3 of sort-speed-1: Tile the inner loop by 8`. Check it out, or start a new campaign from it.
+- `thermite/<run>/<lane>`: each lane's attempts in the order they came, a commit for each: `attempts/<nnn>-<attempt>.patch`, the change against its parent commit, and `attempts/<nnn>-<attempt>.json`, the attempt as the rig recorded it and its verdict, with a `README.md`.
+
+The supervisor pushes with the Git access `results` names, which needs write rights in that repository, and only fast-forwards of branches under `thermite/<run>/`: a branch the repository already has with other history is never overwritten, and the run's push fails in words, in the supervisor's report. The run's record (its events, notes, knowledge base and ledger) stays on control. The supervisor checks each champion's commit against the tree the rig published for it before it pushes.
+
 ## Download it from a script
 
 Control serves the same patch over the REST API, with the owner's token. The example uses the owner's token file of the local stack, `.dev/secrets/control-admin-token`. If you made an owner's token of your own, use its file instead.
@@ -58,7 +67,7 @@ Control serves the same patch over the REST API, with the owner's token. The exa
 ```sh
 curl -sS -D headers.txt -o champion.patch \
   -H "Authorization: Bearer $(cat .dev/secrets/control-admin-token)" \
-  http://127.0.0.1:8800/v1/rigs/local-1/champions/sort-speed-1/3/patch
+  http://127.0.0.1:8800/v1/runs/sort-speed-1/champions/3/patch
 ```
 
 The headers name the full starting commit in `x-thermite-base-commit` and the patch's SHA-256 in `x-thermite-sha256`. For a project in a folder, the starting commit is the run's own: the folder's files, with no parent, which only the rig has. Apply the patch to the repository's commit that the dashboard's note names, as above. Compare the SHA-256 with the file's own: `sha256sum champion.patch` on Linux, `shasum -a 256 champion.patch` on a Mac. Before the patch is there, control answers `404` with `{"error":"no patch for that champion"}`.

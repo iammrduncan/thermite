@@ -3,8 +3,8 @@ import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
 import { LenientNotes } from "../../src/core/journal.ts";
 import { Registry } from "../../src/harness/agents/registry.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
-import type { LedgerEvent } from "../../src/harness/ledger.ts";
+import { createHarnessApi } from "../../src/harness/api/index.ts";
+import type { LedgerEvent } from "../../src/harness/ledger/rows.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
 
 const RUN = "smoke-1";
@@ -29,7 +29,7 @@ function openTrial(s: Awaited<ReturnType<typeof setup>>, lane: string, id: strin
     run: RUN,
     lane,
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: s.env.seedCommit,
     token,
   });
@@ -87,14 +87,14 @@ describe("field notes", () => {
     const refuse = (input: unknown, re: RegExp) =>
       assert.throws(() => s.s.journal.write(RUN, input, writer), re);
     refuse({ kind: "rumour", text: "t" }, /kind/);
-    refuse({ kind: "note", text: "   " }, /text/);
-    refuse({ kind: "note", text: "y".repeat(2001) }, /text/);
-    refuse({ kind: "note", text: "t", by: "planner" }, /by/);
-    refuse({ kind: "note", text: "t", about: { type: "attempt", id: "a-none" } }, /no attempt/);
-    refuse({ kind: "note", text: "t", about: { type: "round", id: "one" } }, /its number/);
-    refuse({ kind: "note", text: "t", about: { type: "page", id: "p" } }, /about/);
+    refuse({ kind: "other", text: "   " }, /text/);
+    refuse({ kind: "other", text: "y".repeat(2001) }, /text/);
+    refuse({ kind: "other", text: "t", by: "planner" }, /by/);
+    refuse({ kind: "other", text: "t", about: { type: "attempt", id: "a-none" } }, /no attempt/);
+    refuse({ kind: "other", text: "t", about: { type: "round", id: "one" } }, /its number/);
+    refuse({ kind: "other", text: "t", about: { type: "page", id: "p" } }, /about/);
     refuse(
-      { kind: "note", text: "t", about: { type: "run", id: "smoke-9" } },
+      { kind: "other", text: "t", about: { type: "run", id: "smoke-9" } },
       /about its own run \(smoke-1\), not run smoke-9/,
     );
     // An experiment of another run is not this run's.
@@ -104,7 +104,7 @@ describe("field notes", () => {
     assert.ok(second.status === "applied" && second.accepted, JSON.stringify(second));
     const theirs = s.s.queue.add("smoke-2", { title: "theirs", by: "owner" }, "t");
     refuse(
-      { kind: "note", text: "t", about: { type: "experiment", id: theirs.id } },
+      { kind: "other", text: "t", about: { type: "experiment", id: theirs.id } },
       /no experiment .* in run smoke-1/,
     );
     const mine = s.s.queue.add(RUN, { title: "mine", by: "owner" }, "t");
@@ -121,12 +121,15 @@ describe("field notes", () => {
     );
     assert.deepEqual(run.about, { type: "run", id: RUN }, "a note may name its run itself");
     assert.equal(s.events("journal_note").length, 2, "only the accepted notes");
-    assert.throws(() => s.s.journal.write("no-run", { kind: "note", text: "t" }, writer), /no run/);
+    assert.throws(
+      () => s.s.journal.write("no-run", { kind: "other", text: "t" }, writer),
+      /no run/,
+    );
   });
 
   test("notes are append-only: no one edits or deletes one", async () => {
     const s = await setup();
-    const n = s.s.journal.write(RUN, { kind: "note", text: "keep me" }, writer);
+    const n = s.s.journal.write(RUN, { kind: "other", text: "keep me" }, writer);
     assert.throws(
       () =>
         s.s.ledger.db.prepare("update journal_note set text = 'changed' where id = ?").run(n.id),
@@ -163,7 +166,7 @@ describe("field notes", () => {
     assert.equal(n?.trial, "t-0123456789abcdef");
     assert.equal(n?.run, RUN);
     assert.equal(s.events("journal_note").at(-1)?.actor, "trial:t-0123456789abcdef");
-    const bad = await note({ kind: "note", text: "t", about: { type: "attempt", id: "a-x" } });
+    const bad = await note({ kind: "other", text: "t", about: { type: "attempt", id: "a-x" } });
     assert.equal(bad.status, 400);
     assert.match(await bad.text(), /no attempt a-x/);
     new Registry(s.s.ledger).finishTrial(
@@ -171,8 +174,8 @@ describe("field notes", () => {
       { stopped: "no_submission", turns: 1, toolCalls: 0, tokensIn: 0, tokensOut: 0 },
       "s",
     );
-    assert.equal((await note({ kind: "note", text: "after" })).status, 409, "a trial that ended");
-    assert.equal((await note({ kind: "note", text: "x" }, "unknown")).status, 401);
+    assert.equal((await note({ kind: "other", text: "after" })).status, 409, "a trial that ended");
+    assert.equal((await note({ kind: "other", text: "x" }, "unknown")).status, 401);
     assert.equal(s.s.journal.newest(RUN, 50).length, 1);
   });
 
@@ -220,10 +223,13 @@ describe("field notes", () => {
       "only an advisor role",
     );
     assert.equal(
-      (await post({ run: RUN, role: "panel", by: "p", notes: [] }, "trial.x")).status,
+      (await post({ run: RUN, role: "review_panel", by: "p", notes: [] }, "trial.x")).status,
       401,
     );
-    assert.equal((await post({ run: "none", role: "panel", by: "p", notes: [] })).status, 404);
+    assert.equal(
+      (await post({ run: "none", role: "review_panel", by: "p", notes: [] })).status,
+      404,
+    );
   });
 
   test("a worker's brief window: its lane's newest 10, and the newest 5 decisions and lessons of others", async () => {
@@ -255,13 +261,13 @@ describe("field notes", () => {
         { kind: "Decision", text: " keep lane-1 on fusion " },
         { kind: "rumour", text: "x" },
         { kind: "lesson", text: "" },
-        { kind: "note", text: "z".repeat(3000) },
+        { kind: "other", text: "z".repeat(3000) },
         { kind: "question", text: "q", about: { type: "nowhere", id: "1" } },
         null,
       ]),
       [
         { kind: "decision", text: "keep lane-1 on fusion" },
-        { kind: "note", text: "z".repeat(2000) },
+        { kind: "other", text: "z".repeat(2000) },
         { kind: "question", text: "q" },
       ],
     );
@@ -279,7 +285,7 @@ describe("field notes", () => {
       },
     ];
     const s = await setup({ briefing });
-    assert.deepEqual(s.s.ledger.briefing(RUN), briefing);
+    assert.deepEqual(s.s.ledger.runs.briefing(RUN), briefing);
     const created = s.events("run_created")[0]?.body as { briefing?: number } | undefined;
     assert.equal(created?.briefing, 2);
     assert.throws(
@@ -287,7 +293,7 @@ describe("field notes", () => {
       /fixed/,
     );
     const plain = await setup();
-    assert.deepEqual(plain.s.ledger.briefing(RUN), []);
+    assert.deepEqual(plain.s.ledger.runs.briefing(RUN), []);
     // A run without agents has no briefs: its background is refused, and no run is made.
     const tryEnv = makeHarnessEnv();
     const refused = await tryEnv.service.applyCommand(
@@ -298,6 +304,6 @@ describe("field notes", () => {
       String((refused.result as { error?: string }).error),
       /a run without agents has no briefs: leave out the background from past research/,
     );
-    assert.equal(tryEnv.service.ledger.getRun(RUN), undefined);
+    assert.equal(tryEnv.service.ledger.runs.get(RUN), undefined);
   });
 });

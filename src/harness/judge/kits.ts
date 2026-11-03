@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, renameSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { type Kit, KitSchema } from "../../core/kit.ts";
 import { exportTree } from "../git.ts";
 
 /**
@@ -22,4 +23,20 @@ export async function exportKit(stateDir: string, mirror: string, commit: string
   rmSync(dir, { recursive: true, force: true });
   renameSync(tmp, dir);
   return dir;
+}
+
+/** The kit in a kit's folder, checked against the kit's schema (core/kit.ts). */
+export function loadKit(dir: string): Kit {
+  return KitSchema.parse(JSON.parse(readFileSync(join(dir, "kit.json"), "utf8")));
+}
+
+/** A kit command's arguments with their placeholders filled from `vars` (core/kit.ts lists them). */
+export function expandArgv(argv: readonly string[], vars: Record<string, string>): string[] {
+  return argv.map((a) =>
+    a.replace(/\{([a-z_]+)(?::([^}]+))?\}/g, (whole, name: string, rest?: string) => {
+      const v = vars[name];
+      if (v === undefined) throw new Error(`unknown placeholder ${whole}`);
+      return rest ? join(v, rest) : v;
+    }),
+  );
 }

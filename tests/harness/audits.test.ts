@@ -35,7 +35,7 @@ describe("the auditor's package says what the judge checked (goal 137)", () => {
       )
     ).attempt;
     await env.drain();
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_audit");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_audit");
     const pkg = (await env.service.auditPackages())[0];
     assert.ok(pkg);
     const { checked } = pkg;
@@ -74,7 +74,7 @@ describe("the auditor's package says what the judge checked (goal 137)", () => {
       )
     ).attempt;
     await env.drain();
-    assert.equal(String(env.ledger.getAttempt(id)?.lifecycle), "awaiting_audit");
+    assert.equal(String(env.ledger.attempts.get(id)?.lifecycle), "awaiting_audit");
     const pkg = (await env.service.auditPackages())[0];
     assert.ok(pkg && "goals" in pkg.checked, "a goal campaign's checks");
     assert.equal(pkg.checked.said, GOAL_CHECKED);

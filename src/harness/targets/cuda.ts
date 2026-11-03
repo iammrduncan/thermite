@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { promisify } from "node:util";
-import type { Role, Runner } from "../broker/runner.ts";
+import type { Role, Runner } from "../broker/index.ts";
 import type { Readiness, TargetDriver, TargetIdentity } from "./driver.ts";
 
 /**

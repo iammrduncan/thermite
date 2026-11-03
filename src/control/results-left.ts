@@ -1,4 +1,4 @@
-import type { ControlStore } from "./store.ts";
+import type { ControlStore } from "./store/index.ts";
 
 /**
  * Whether a rig's results have left it: what a terminate (goal 023) or a full reset waits for.
@@ -47,7 +47,7 @@ interface SupervisorExport {
 }
 
 function exportFigures(store: ControlStore, rig: string) {
-  const sup = store.supervisor(rig);
+  const sup = store.reportedRigs.supervisor(rig);
   const ex = (sup?.export ?? null) as SupervisorExport | null;
   const to: ResultsDestination | null =
     ex?.remote === true ? "repository" : ex?.to === "control" ? "control" : null;
@@ -82,7 +82,7 @@ export function exportLeft(store: ControlStore, rig: string, name: string): Expo
   }
   if (to === "control") {
     // Control's own copy is the evidence, not the supervisor's word.
-    const e = store.rigExport(rig, name);
+    const e = store.exports.get(rig, name);
     if (!e?.complete_at)
       return {
         left: false,

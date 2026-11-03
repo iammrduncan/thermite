@@ -1,13 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import { copyBeforeMigration, newerSchemaWords } from "../../common/db-copy.ts";
-import { MIGRATIONS } from "../schema.ts";
+import { LEDGER_MIGRATIONS as MIGRATIONS } from "./migrations.ts";
 
 /**
- * Brings a ledger to this code's schema (`MIGRATIONS`, in `schema.ts`), each migration in a
- * transaction of `tx`. A ledger written by newer code is refused through `refuse`, never opened:
- * its new tables and columns would be ignored or broken, and a rollback must not damage the record.
- * A ledger with a record is copied before a migration changes it (goal 173), so an update can be
- * undone; the refusal names that copy.
+ * Brings a ledger to this code's schema (`LEDGER_MIGRATIONS`, in `migrations.ts`), each
+ * migration in a transaction of `tx`. A ledger written by newer code is refused through `refuse`,
+ * never opened: its new tables and columns would be ignored or broken, and a rollback must not
+ * damage the record. A ledger with a record is copied before a migration changes it (goal 173), so
+ * an update can be undone; the refusal names that copy.
  */
 export function migrateLedger(
   db: DatabaseSync,

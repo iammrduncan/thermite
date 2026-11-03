@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
-import { GitError, git as gitPatch, gitText } from "../common/git.ts";
+import { GitError, git as gitPatch, gitText } from "../common/git/index.ts";
 import { sha256Hex } from "../core/canonical.ts";
 
 const run = promisify(execFile);

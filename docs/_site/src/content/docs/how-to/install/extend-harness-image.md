@@ -37,7 +37,7 @@ Keep these as they are, or the rig won't start or won't be safe to judge on:
 | **`ENTRYPOINT` and `CMD`.** Don't set them | They start the harness |
 | **Thermite's users and groups.** Don't remove, renumber or reuse them | Their ids are fixed in Thermite's code. The [harness image reference](../../reference/harness-image.md) lists them |
 | **`/outbox`**, owned by user 10010 and group 10001, mode 2750 | The harness writes exports there and the supervisor reads them |
-| **`/opt/thermite`** | Thermite itself, and in `/opt/thermite/checks` the kits and projects of the smoke check |
+| **`/opt/thermite`** | Thermite itself, and in `/opt/thermite/checks` the kits and projects of the smoke check. Keep that folder root's, with group `thermite` (10010) and nothing in it open to other users: only the harness may read a kit, and the [isolation check](../../reference/rig-checks.md#isolation-check) fails when a role can |
 
 ## 2. Put tools where every user finds them
 
@@ -90,7 +90,7 @@ Then start the stack with it, and name it in every later `up`, with your other `
 docker compose -f compose.yaml -f compose.harness.yaml up -d   # or: podman compose -f … -f … up -d
 ```
 
-In a checkout of the source code, the stack builds its harness from your clone instead. Add the packages to the first `apt-get install` line in your clone's `containers/harness/Containerfile` (the one that lists `gcc`), then rebuild with `docker compose up -d --build harness`. The change stays in your clone, so a later `git pull` may ask you to merge it.
+In a checkout of the source code, the stack builds its harness from your clone instead. Add the packages to the first `apt-get install` line of the harness target in your clone's `containers/Containerfile` (the one that lists `gcc`), then rebuild with `docker compose up -d --build harness`. The change stays in your clone, so a later `git pull` may ask you to merge it.
 
 ## Check that it worked
 

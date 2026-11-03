@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * What a rig runs on, as its harness reports it (inside the signed report's summary) and the
  * dashboard shows it. Collected once when the harness starts: the device, its driver, the
@@ -45,6 +47,32 @@ export interface HardwareDevice {
   vbios: string | null;
 }
 
+/**
+ * What a part of Thermite uses now (goal 179): its container's CPU and memory as the control
+ * groups count them, or its process's where it runs in none. Control reads its own; each rig's
+ * harness puts its own in its report's summary (`usage`), and its supervisor in its figures.
+ */
+export const PartUse = z.object({
+  at: z.string().max(40),
+  /** What was counted: the part's container, or only its own process. */
+  of: z.enum(["container", "process"]),
+  /** CPUs busy on average since the reading before: 0.5 is half of one. Null on the first. */
+  cpu: z.number().nonnegative().nullable(),
+  /** CPUs it may use: its container's quota, or those it may run on. */
+  cpus: z.number().positive(),
+  /** Memory in use, without the page cache the kernel may take back. */
+  memory_bytes: z.number().int().nonnegative(),
+  /** Its container's memory limit; null where it has none. */
+  memory_limit_bytes: z.number().int().positive().nullable(),
+});
+export type PartUse = z.infer<typeof PartUse>;
+
+/** A part's use as a report gives it, read loosely: anything malformed is null, never trusted. */
+export function readPartUse(x: unknown): PartUse | null {
+  const r = PartUse.safeParse(x);
+  return r.success ? r.data : null;
+}
+
 /** Reads a reported hardware object loosely: anything malformed is dropped, never trusted. */
 export function readHardware(x: unknown): Hardware | null {
   if (!x || typeof x !== "object") return null;
@@ -53,4 +81,38 @@ export function readHardware(x: unknown): Hardware | null {
     return null;
   }
   return h as Hardware;
+}
+
+/**
+ * The judge's GPUs on a rig of `n` when no split is given: half, rounded up (the one GPU of a
+ * rig with one). Control's pages and the broker split the same way; a page's script takes this
+ * function's source.
+ */
+export const judgeGpusByDefault = (n: number): number => Math.ceil(n / 2);
+
+/** At most 8 judge GPUs and 8 for the agents (the harness image has users for that many). */
+export const MAX_RIG_GPUS = 16;
+
+/**
+ * The harness's GPU settings for a rig with `n` GPUs, as the container numbers them (0 to n-1,
+ * in the order given): none, one shared, or the GPU set with the judge's share to start with (the
+ * first `judge` for the judge, the rest for the agents' dev runs; default half, rounded up). A
+ * campaign deployed on the rig, or Edit rig, may change the share later (the rig's settings).
+ */
+export function gpuSplit(
+  n: number,
+  judge?: number | undefined,
+): { THERMITE_GPU_INDEX?: string; THERMITE_GPUS?: string; THERMITE_JUDGE_GPUS?: string } {
+  if (n > MAX_RIG_GPUS) throw new Error(`a rig takes at most ${MAX_RIG_GPUS} GPUs`);
+  if (n === 0) return {};
+  if (n === 1) return { THERMITE_GPU_INDEX: "0" };
+  const j = judge ?? judgeGpusByDefault(n);
+  if (!Number.isInteger(j) || j < 1 || j > n - 1 || j > 8 || n - j > 8)
+    throw new Error(
+      `with ${n} GPUs the judge takes 1 to ${Math.min(8, n - 1)} of them, and the agents at most 8`,
+    );
+  return {
+    THERMITE_GPUS: Array.from({ length: n }, (_, i) => i).join(","),
+    THERMITE_JUDGE_GPUS: String(j),
+  };
 }

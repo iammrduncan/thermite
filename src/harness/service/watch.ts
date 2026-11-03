@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
+import type { AppendEvent } from "../../core/events/bodies.ts";
 import type { LiveEntry } from "../../core/live.ts";
-import type { ReplyNow } from "../agents/live-session.ts";
-import { SAME_ANSWER } from "../agents/repeats.ts";
+import { type ReplyNow, SAME_ANSWER } from "../agents/index.ts";
 
 /**
  * What each open trial is doing, for the owner and the teachers (goal 143): when it last sent a
@@ -166,9 +166,7 @@ function streakCalls(calls: Map<string, number>): { call: string; times: number 
 export function tellStreak(
   news: StreakNews | undefined,
   e: Pick<LiveEntry, "source" | "lane" | "run">,
-  ledger: {
-    appendEvent(actor: string, kind: string, subject: string | null, body: object): unknown;
-  },
+  ledger: { appendEvent: AppendEvent },
   live: {
     append(line: {
       source: string;

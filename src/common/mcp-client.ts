@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { MCP_ERROR_MAX } from "../core/api/harness/supervisor.ts";
 import { redact } from "./env.ts";
 
 /**
@@ -99,14 +100,15 @@ export function mcpConnect(fetchImpl?: typeof fetch, name = "thermite"): McpConn
 
 /**
  * An error's words with each secret taken out (whatever a server or a library echoed), and any
- * bearer token or known key shape too, at most 500 characters.
+ * bearer token or known key shape too, at most MCP_ERROR_MAX characters (what a run's history
+ * keeps of a server's failure).
  */
 export function cleanMcpError(err: unknown, secrets: readonly string[] = []): string {
   const e = err as { message?: string; cause?: { code?: string } };
   let text = e?.message ?? String(err);
   if (e?.cause?.code) text = `${text} (${e.cause.code})`;
   for (const s of secrets) if (s && s.length >= 4) text = text.split(s).join("***");
-  return redact(text).replace(/\s+/g, " ").trim().slice(0, 500);
+  return redact(text).replace(/\s+/g, " ").trim().slice(0, MCP_ERROR_MAX);
 }
 
 /** The secret values among a server's headers: what an error's words must never carry. */

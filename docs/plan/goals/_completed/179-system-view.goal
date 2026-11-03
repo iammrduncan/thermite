@@ -1,0 +1,63 @@
+---
+id: "179"
+title: "The whole system on Metrics: the message bus, control, its storage and each rig, live"
+status: VERIFIED
+version: "0.1.1"
+depends_on: ["168"]
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 179 · The whole system on Metrics: the message bus, control, its storage and each rig, live
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011) · **Depends on:** [168](168-message-bus.goal)
+
+## What
+
+Whoever runs Thermite sees what goes on across the system, and finds why when something is wrong: a stream that holds too much, a reader that falls behind, a client the server queues for, a disk or a memory limit near its end. The Metrics page gets tabs:
+
+1. **Model use**, as it is.
+2. **Bus**: control's server (its version, memory, store in memory and on disk against their limits, CPU, traffic, connections) and each leaf node; each stream (messages, bytes on disk, subjects, average size, largest allowed, messages a second, its oldest message, how it keeps them, its consumers); each consumer (what waits for it, what it has not acked, what was sent again); the events' sizes by kind over the last hour; each connection (who, its user, round trip, messages and bytes in and out, what the server queues for it, its subscriptions and what its permissions let it publish). A warning says when a stream nears its limit or a reader falls behind.
+3. **The stream inspector**: a click on a stream opens its messages, newest first, filtered by subject and paged by place; a message opens to its headers and its data (JSON laid out, other text as text, anything else as bytes), and the owner may download a message's data.
+4. **Control**: its CPU and memory against its container's limits, its event loop's delay, its memory by part, and each of its loops with its last round.
+5. **Storage**: what is in memory and what is on disk, each place with its used and available space; control.db with its write-ahead log, each table's size from SQLite, its free pages; free disk against control's floor.
+6. **Rigs**: each rig's harness and supervisor with their CPU and memory against the limit, its free disk and its CPUs, and whether it is on the bus.
+
+The page draws itself again every 2 seconds while it is open, and Pause stops it. The same figures come from REST and MCP, for an agent that diagnoses.
+
+## Why
+
+The owner, 2026-11-01: "I want to add a live view of the bus. All streams, nodes, etc. Make sure I can see all clients/publishers/subscribers, event sizes, etc. ... controls storage and CPU/memory utilization etc... someone needs to see whats going on across the system and be able to diagnose issues cause streams are holding too much state etc. And it shoudl show what storage is in memory vs disk etc."
+
+## Constraints
+
+- The figures come from where they are true: the bus's server's own monitoring (asked as control's system user, which may ask for figures and nothing else), the streams' state, SQLite, the container's control groups, and what each rig's parts report. Nothing is estimated where it can be read.
+- Thermite keeps every stream on disk. The server says how much memory it uses in all, not for each stream, so the page shows the server's memory and each stream's count of subjects (the server's index in memory grows with them), never a figure per stream it can't read.
+- Reading a stream changes nothing: no consumer is made, nothing is acked or removed.
+- A message's data is shown to the owner only.
+
+## Done when
+
+- [x] Metrics has the five tabs from the owner's mockup, with the two changes the owner asked for (Decisions), each label with its info icon.
+- [x] The bus's figures come from the server's monitoring, the system user may ask for them and for nothing else, and the bus check proves both on the real server.
+- [x] A click on a stream opens its messages; paging, the subject filter and a message's headers and data work on every stream, work queues included, with no consumer made.
+- [x] Each rig's harness and supervisor report their CPU and memory use, and the Rigs tab shows them.
+- [x] REST (`GET /v1/system`, the stream's messages) and MCP (`system_state`, `bus_messages`) give the same figures; a message's data only to the owner.
+- [x] The pages that describe Metrics, the routes and the tools match the code; the tests, the fast checks, the docs checks and the bus, control and compose smoke checks pass.
+
+## Decisions
+
+- 2026-11-01, owner: the view is control's SQLite (Thermite has no Postgres), and it goes on Metrics, with tabs ("Control's SQLite", "Metrics, with tabs").
+- 2026-11-01, owner, on the mockup: "storage should show used and available"; "on bus I should be able to click a stream and start inspecting messages in the stream. Other than that it looks great. go build it".
+
+## Open questions
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's request and the approved mockup; the build started.
+- 2026-11-02: Built. Control's system user may now ask the server for VARZ, CONNZ and LEAFZ besides JSZ and a reload (core/link/users.ts), on one connection control keeps while Metrics asks (bus/system.ts's ServerLook). control/system/ shapes the figures: the bus (bus.ts, rates between looks, warnings), control's process and storage (local.ts; control.db's tables from SQLite's dbstat every 5 minutes, measured in store/size.ts), each rig (rigs.ts) and the stream inspector (messages.ts, the server's MSG.GET with next_by_subj, so no consumer is made). The harness's report summary and the supervisor's figures carry `usage` (common/usage.ts, the container's control groups). The events' sizes by kind come from the apply (events/sizes.ts). Pages in ui/metrics/, routes in dashboard/metrics.ts; the page draws its part again every 2 seconds with Pause (commands/client.ts). REST `GET /v1/system` and the stream's messages, MCP `system_state` and `bus_messages`. The bus check on the real server proves the figures, the rates, the inspector on REPORTS with no consumer made, and the system user refused ACCOUNTZ and KICK (all passed, 04:04Z). Tests: tests/control/system/, tests/control/dashboard/metrics.test.ts, tests/common/usage.test.ts, tests/control/events/sizes.test.ts. Docs: reference/system-view.md, with the REST, MCP, bus how-to and system user's pages.
+- 2026-11-02: Committed in 5e724e21, with the storage table and number cells laid out in f660c50e after a look at the rendered pages. On f660c50e the control check passed (04:26Z), its new step reading the figures through control's container on the real bus, with every connection named by its user and each rig's harness and supervisor reporting their use, and the compose smoke passed (04:28Z). The full test suite passed on the code of 5e724e21 but for the store's owners test, which found control.db's measure outside the store; it moved to store/size.ts, and the store's, the system's and Metrics' tests passed again. Verified.
+
+---
+
+Run with `/goal Complete docs/plan/goals/179-system-view.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

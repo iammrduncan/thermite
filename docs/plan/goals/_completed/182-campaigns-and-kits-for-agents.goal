@@ -1,0 +1,45 @@
+---
+id: "182"
+title: "Campaigns and kits for agents: a kit from git, grants that reach running runs, the metrics a contract uses"
+status: VERIFIED
+version: "0.1.1"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 182 · Campaigns and kits for agents: a kit from git, grants that reach running runs, the metrics a contract uses
+
+**Status:** `VERIFIED` · **Version:** [v0.1.1](../../roadmap.md#v011)
+
+## What
+
+What an agent working for the owner could not do through control, from the owner's testing notes of 2026-11-02:
+
+1. **A kit from git** (item 11): "MCP kit_add takes the bundle as inline base64, so a full kit bundle (584 KB) is impractical for an agent". Control takes a kit from a git repository's address too, as a campaign's sources already can.
+2. **A campaign from a champion** (item 12): moved to [goal 185](../185-a-runs-work-in-git.goal) on 2026-11-02, since a champion's commit must be in git first.
+3. **A campaign assigned by command is saved, and grants reach running runs** (item 13): "a campaign assigned over MCP only exists on control once its first run starts, and a run's knowledge-base scope is fixed at start". An `assign_campaign` saves its campaign on control, and a grant reaches the runs already going, at once, as a revoke does.
+4. **The metrics a contract uses** (item 15): "kit metrics are kit-wide: adding one metric for one campaign (prefill_tps) forces every decode cell to report it, or the judge marks the run invalid." The judge measures the metrics the contract names; the kit's others are kept when the check reports them, and never make a run invalid.
+
+Item 14 of the notes ("kb_grant over MCP gets blocked by Claude Code's auto-mode classifier") is not Thermite's: the caller's Claude Code needs a rule that allows the tool, which the owner's now has.
+
+## Done when
+
+- [x] Each of the three left, with its tests, its pages, and the acceptance checks it touches.
+
+## Decisions
+
+- 2026-11-02, owner: a grant reaches the runs already going ("Yes, at once"); the judge measures only the metrics the contract uses ("Yes").
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's notes, with what control does today.
+- 2026-11-02: The metrics a contract uses (item 15) built: core/kit.ts's contractMetrics lists the metrics a contract decides by (objective, secondary objectives, guards, `min`/`max` hard constraints, threshold goals; not `monitor_only`); the judge's measuring context carries them, and a run without one of the kit's others leaves it out instead of being invalid. The kit check asks a case for the `work` of a used rate only. Tests in measure.test.ts and kit.test.ts.
+- 2026-11-02: Item 13 built. A grant given since a run started joins its search at once (store/kb/scope.ts: a run's named grants and those given after its scope was set; a run with no scope reads every grant now); a collection a run left out as it started stays out. The grant's words, the proposal's approval and the run page's scope line say so. An `assign_campaign` issued any way saves its contract as that version of its campaign (campaigns/assigned.ts, from issueCommand and issueWaking), with the assignment's sources, unless control has that version; a contract changed under a saved version leaves control's, since the owner may assign one so. Tests in kb/asks.test.ts and campaigns/assigned.test.ts.
+- 2026-11-02: Item 11 built. MCP's `kit_add` and `POST /v1/kits/<name>` (with a JSON body) take `git: {url, ref, access}` in place of a bundle: control fetches the ref's whole history in a scratch repository (kits/from-git.ts), bundles it and adds it as a bundle (addKitFromGit), with `from` in `kit_added`. A Git access is unsealed for control's own fetches by git-access.ts, which the settings' lookups use too. Tests in kits/from-git.test.ts for what is refused before control reaches out; the campaign acceptance check reads a kit over ssh with its deploy key.
+
+- 2026-11-02: Item 2 moved to goal 185 (a run's work in git), from the owner's design of the branches: a new campaign starts from a champion's commit on its run's champion branch. The three left verified: their tests pass, the pages describe them, and the judge, campaign (a kit from git over ssh) and control acceptance checks passed on the commit that built them.
+
+---
+
+Run with `/goal Complete docs/plan/goals/182-campaigns-and-kits-for-agents.goal`. Follow the [rules for every goal](../../README.md#rules-for-every-goal).

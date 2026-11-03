@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { doingsOf, workOf } from "../../../src/control/views/work.ts";
+import { ingestReport } from "../../helpers/control-store.ts";
 import { ev, researchControl, researchRunEvents } from "../../helpers/research-reviews.ts";
 
 /**
@@ -50,11 +51,11 @@ describe("what each lane's trial is doing, in at_work (goal 143)", () => {
     const c = await researchControl();
     const events = [
       ...researchRunEvents(),
-      ev("trial_started", { trial: "t-1", lane: "lane-1", family: "contradict", focus: "f1" }),
-      ev("trial_started", { trial: "t-2", lane: "lane-2", family: "contradict", focus: "f2" }),
+      ev("trial_started", { trial: "t-1", lane: "lane-1", direction: "contradict", focus: "f1" }),
+      ev("trial_started", { trial: "t-2", lane: "lane-2", direction: "contradict", focus: "f2" }),
     ];
-    c.ingest(events);
-    c.store.ingest({
+    await c.ingest(events);
+    await ingestReport(c.store, {
       rig: "rig-a",
       ledger_id: "ledger-a",
       cursor: events.length,
@@ -69,19 +70,19 @@ describe("what each lane's trial is doing, in at_work (goal 143)", () => {
         },
       },
     });
-    const run = (await c.mcp("get_run", { rig: "rig-a", run: "s-1" })) as {
+    const run = (await c.mcp("get_run", { run: "s-1" })) as {
       at_work: Record<string, Record<string, unknown>>;
     };
     assert.deepEqual(run.at_work["lane-2"], {
       trial: "t-2",
-      family: "contradict",
+      direction: "contradict",
       focus: "f2",
       since: run.at_work["lane-2"]?.since,
       ...QUIET,
       refused_again: null,
     });
     assert.deepEqual(run.at_work["lane-1"]?.repeating, LOOP.repeating);
-    const queue = (await c.mcp("run_queue", { rig: "rig-a", run: "s-1" })) as {
+    const queue = (await c.mcp("run_queue", { run: "s-1" })) as {
       at_work: Record<string, Record<string, unknown>>;
     };
     assert.deepEqual(queue.at_work["lane-2"]?.reply, QUIET.reply);

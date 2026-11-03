@@ -22,7 +22,7 @@ A complete audit of Thermite as v0.1.0 shipped it: its code, its data and storag
 4. **Knowledge storage:** Thermite's knowledge base, research folders and journals, and how they are organized.
 5. **The infrastructure stack:** SQLite and the other parts Thermite runs on, and whether each still fits.
 6. **The folder structure.**
-7. **The tests move out of `src/` into `tests/`,** in folders that mirror `src/`, with their helpers, fakes and stand-ins, as CONVENTIONS.md asks. `npm test`, the typecheck, the lint, CI and the pages that name a test's path follow them. This goal makes the move; goal [125](../125-code-to-the-conventions.goal) no longer has to.
+7. **The tests move out of `src/` into `tests/`,** in folders that mirror `src/`, with their helpers, fakes and stand-ins, as CONVENTIONS.md asks. `npm test`, the typecheck, the lint, CI and the pages that name a test's path follow them. This goal makes the move; goal [125](125-code-to-the-conventions.goal) no longer has to.
 8. **Design decisions, code documentation and the style of functions.**
 9. **Goal [127](127-clean-up-pre-audit.goal), the pre-audit, is done as part of this one:** its guide, `docs/plan/code-clean-up-guide.md`, comes from the reviewers' findings.
 
@@ -65,7 +65,7 @@ The owner, 2026-10-26, who wrote this goal's brief:
 
 ## Decisions
 
-- 2026-10-26: the bugs the reviewers found become goals [161](161-control-bugs-from-the-audit.goal) to [165](../165-results-kept-through-remove-and-reset.goal), each fixed with a regression test before goal 125's splits. Findings that need the owner's choice first (backups, health checks, retention, Node 24) are questions in the guide, not goals yet. The security findings stay in `.internal/`.
+- 2026-10-26: the bugs the reviewers found become goals [161](161-control-bugs-from-the-audit.goal) to [165](165-results-kept-through-remove-and-reset.goal), each fixed with a regression test before goal 125's splits. Findings that need the owner's choice first (backups, health checks, retention, Node 24) are questions in the guide, not goals yet. The security findings stay in `.internal/`.
 - 2026-10-26, owner: the audit is done by specialized subagents, and all their output is kept in `.internal/reviews/v0.1.1-audit/`.
 
 ## Open questions

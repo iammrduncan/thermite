@@ -59,7 +59,9 @@ flowchart LR
 1. **Build.** The judge exports the change's commit into a fresh directory, copies in the kit files that the build needs, and runs the kit's build command as a separate builder user. It hashes what the build produced and moves it into a store that nothing else can write. The same commit, kit and compilers are built once and reused.
 2. **Run.** For each cell, a separate run user runs the stored build with the cell's parameters. Before every run, the judge checks the build's hashes again and gives the run a fresh, read-only copy of the kit's run files, such as a driver script.
 3. **Time.** The judge times the whole run from outside, with its own clock. Nothing the run prints is a score.
-4. **Check.** The judge runs the kit's check on the outputs, with its own copy of the parameters. If the check fails, the run is invalid, however fast it was.
+4. **Check.** The judge runs the kit's check on the outputs, with its own copy of the parameters, as a checker user of its own that reads the kit and writes only its own folder. If the check fails, the run is invalid, however fast it was.
+
+A kit can also have a **driver**: a program of its own that runs beside the candidate, as a user apart from the candidate's, sends it input and reads its answers through their standard input and output, and writes the outputs the check reads ([A kit's driver](../reference/kit-manifest.md#a-kits-driver)).
 
 A hill climb does this for the **champion**, the best confirmed version so far, and for the change, cell by cell, and compares them with statistics. A goal campaign runs each goal's cells and records which goals are met.
 
@@ -75,7 +77,9 @@ The kit directory, the check and the judge's copy of the parameters are out of t
 
 ## Hidden test cases
 
-The kit defines every cell. The contract chooses which cells count, and which of them are **hidden** (the contract calls them held-out cells). The judge runs hidden cells only to confirm a change that already looks better, and, in a goal campaign, to check the champion again before the run closes; never while it screens. Their results go to the code that decides promotion and, for the owner, to the dashboard: each hidden cell's name, how it failed and its value against its threshold. The agents see only that a hidden check failed, and its kind, such as "a held-out check timed out": never the cells' names, parameters or outputs, so a change tuned to the visible cells has to work on unseen ones too ([Held-out failures](../reference/verdicts.md#held-out-failures)).
+The kit defines every cell. The contract chooses which cells count, and which of them are **hidden** (the contract calls them held-out cells). The judge runs hidden cells only to confirm a change that already looks better, and, in a goal campaign, to check the champion again before the run closes; never while it screens. Their results go to the code that decides promotion and, for the owner, to the dashboard: each hidden cell's name, how it failed and its value against its threshold. The agents see only that a hidden check failed, and its kind, such as "a held-out check timed out": never the cells' names, parameters or outputs ([Held-out failures](../reference/verdicts.md#held-out-failures)).
+
+In a hill climb, a change passes its hidden check when, on every hidden cell, its output passes the kit's check and its primary metric, the median of three runs beside the champion's, is worse than the champion's by no more than twice the contract's `equivalence_band`: 1% at the default band.
 
 In a goal campaign, a goal's status comes from its visible cells, and its hidden cells are checked before a gain is promoted, and again for every goal the champion meets before the run closes. A goal that should have a hidden check needs at least one visible cell and one hidden cell in its verifier, or among its threshold's cells.
 
@@ -90,6 +94,8 @@ The contract names the kit by its repository and its commit. The kit can come fr
 When a run is assigned, control sends the rig a signed command that names the kit's commit. If the rig does not have that commit yet, the command also names a file in the rig's inbox for the kit and, unless you put the file there yourself, where to fetch it from. The supervisor then fetches the commit and writes it into the inbox as a git bundle. The harness accepts the bundle only if it holds that exact commit, and only if the file's hash matches when the command gives one. So neither the supervisor nor the network can swap the kit.
 
 Before any agent starts, the harness checks that the kit fits: that it measures on the rig's kind of hardware, and that every cell, metric and verifier the contract names is in it. A kit that does not fit is refused with the reasons. The kit then stays on the rig, in the harness's private store, so later runs can use it again.
+
+The harness image also carries kits of its own: the smoke check's, and the examples', such as the CPU matrix multiply's. Like every kit, they are the judge's alone. Their folder, `/opt/thermite/checks`, is closed to every user but root and the harness's controller, so no lane, agent or planner can list it or open a file in it, and the [isolation check](../reference/rig-checks.md#isolation-check) makes sure of that. The smoke check makes git repositories of its kit and project and hands them to the harness as bundles, as any kit arrives, so the judge works on its own copy in the harness's private store ([Smoke check](../reference/rig-checks.md#smoke-check)).
 
 ## Pinning and changing a kit
 

@@ -1,9 +1,9 @@
-import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { ExperimentText, type QueuePosition } from "../core/commands.ts";
 import { DIRECTION_NAME, directionOf, RESEARCH_TASK_KINDS } from "../core/directions.ts";
+import { newExperimentId } from "../core/ids.ts";
 import { labelledQuestion } from "../core/research-check.ts";
-import { type ExperimentRow, type Ledger, LedgerError } from "./ledger.ts";
+import { type ExperimentRow, type Ledger, LedgerError } from "./ledger/index.ts";
 
 /**
  * Each run's experiment queue (goal 064): the experiments still to try, in order, and the log
@@ -16,34 +16,30 @@ import { type ExperimentRow, type Ledger, LedgerError } from "./ledger.ts";
  * Writers: the owner (signed commands), the planner (it coordinates: it gives queued work to
  * lanes without overlap, and adds, moves, drops and accepts experiments), the advisors (add and
  * move) and the workers (propose ideas). Every change is one call of the ledger's
- * writeExperiments: its rows and one event, in one transaction. Control builds its view of the
+ * `experiments.write`: its rows and one event, in one transaction. Control builds its view of the
  * queue from those events, so the places here follow control's rule exactly: an experiment's
  * place is its index among the queued ones (0 first), and a position names an index among the
  * others ("top": 0, "end": after the last).
  */
 
 export type Experiment = ExperimentRow;
-export type ExperimentState = ExperimentRow["state"];
 
 /** An experiment's text, as every writer gives it (the same limits as the owner's commands). */
 export const ExperimentInput = z.object({
   title: ExperimentText.title,
   details: ExperimentText.details.optional(),
-  family: ExperimentText.family.optional(),
+  direction: ExperimentText.direction.optional(),
   why: ExperimentText.why.optional(),
 });
 export type ExperimentInput = z.infer<typeof ExperimentInput>;
 
-/** A new experiment's id: `x-` and 12 hex characters. */
-export function newExperimentId(): string {
-  return `x-${randomBytes(6).toString("hex")}`;
-}
-
 export { directionOf };
 
-/** Whether an experiment's direction is the family a rule names (exactly, or as its id). */
-export function inFamily(x: Pick<Experiment, "family">, family: string): boolean {
-  return x.family !== "" && (x.family === family || directionOf(x.family) === family);
+/** Whether an experiment's direction is the direction a rule names (exactly, or as its id). */
+export function inDirection(x: Pick<Experiment, "direction">, direction: string): boolean {
+  return (
+    x.direction !== "" && (x.direction === direction || directionOf(x.direction) === direction)
+  );
 }
 
 /** Where a position puts an experiment among `others` queued ones: an index, as control does. */
@@ -74,7 +70,7 @@ export interface BriefExperiment {
   id: string;
   title: string;
   details?: string;
-  family?: string;
+  direction?: string;
   why?: string;
   /** A research task's question, as an index from 0 (goal 117). */
   question?: number;
@@ -128,12 +124,12 @@ export class ExperimentQueue {
   // ------------------------------------------------------------------ reads
 
   get(id: string): Experiment | undefined {
-    return this.ledger.getExperiment(id);
+    return this.ledger.experiments.get(id);
   }
 
   /** Every experiment of the run, oldest first. */
   all(run: string): Experiment[] {
-    return this.ledger.experiments(run);
+    return this.ledger.experiments.list(run);
   }
 
   /** Up next, in order. */
@@ -150,13 +146,15 @@ export class ExperimentQueue {
    */
   ready(
     run: string,
-    rules: readonly { body: { kind: string; family?: string | undefined } }[],
+    rules: readonly { body: { kind: string; direction?: string | undefined } }[],
     given: ReadonlySet<string> = new Set(),
   ): Experiment[] {
     const avoid = rules.flatMap((r) =>
-      r.body.kind === "avoid" && r.body.family ? [r.body.family] : [],
+      r.body.kind === "avoid" && r.body.direction ? [r.body.direction] : [],
     );
-    return this.queued(run).filter((x) => !given.has(x.id) && !avoid.some((f) => inFamily(x, f)));
+    return this.queued(run).filter(
+      (x) => !given.has(x.id) && !avoid.some((f) => inDirection(x, f)),
+    );
   }
 
   /** The lanes' ideas waiting for the planner or the owner, oldest first. */
@@ -179,33 +177,26 @@ export class ExperimentQueue {
 
   /**
    * The run's directions (goal 066), by name: the direction of each of its experiments, in any
-   * state; each family in its direction registry; each family an attempt was tagged with; and, in
+   * state; each direction in its direction registry; each direction an attempt was tagged with; and, in
    * a research run, the task kinds. A rule may name only these. Sorted by name.
    */
   directions(run: string): string[] {
     const names = new Set<string>();
     for (const x of this.all(run)) {
-      const d = x.family ? directionOf(x.family) : undefined;
+      const d = x.direction ? directionOf(x.direction) : undefined;
       if (d) names.add(d);
     }
-    const rows = this.ledger.db
-      .prepare(
-        "select id as name from family where run = ? union select family as name from attempt where run = ? and family is not null",
-      )
-      .all(run, run) as { name: string }[];
-    for (const r of rows) if (DIRECTION_NAME.test(r.name)) names.add(r.name);
-    if (this.ledger.getRun(run)?.mode === "research")
+    const directions = this.ledger.trials.directions(run).map((f) => f.id);
+    for (const name of [...directions, ...this.ledger.attempts.directions(run)])
+      if (DIRECTION_NAME.test(name)) names.add(name);
+    if (this.ledger.runs.get(run)?.mode === "research")
       for (const k of RESEARCH_TASK_KINDS) names.add(k);
     return [...names].sort((a, b) => a.localeCompare(b));
   }
 
   /** The experiment a trial works (or worked) on, if it had one. */
   forTrial(trial: string): Experiment | undefined {
-    const id = (
-      this.ledger.db
-        .prepare("select id from experiment where trial = ? order by updated_at desc limit 1")
-        .get(trial) as { id: string } | undefined
-    )?.id;
+    const id = this.ledger.experiments.ofTrial(trial)?.id;
     return id ? this.get(id) : undefined;
   }
 
@@ -220,18 +211,16 @@ export class ExperimentQueue {
       id: x.id,
       title: x.title,
       ...(x.details ? { details: clip(x.details, 600) } : {}),
-      ...(x.family ? { family: x.family } : {}),
+      ...(x.direction ? { direction: x.direction } : {}),
       ...(x.why ? { why: clip(x.why, 400) } : {}),
       ...(typeof x.question === "number" ? { question: x.question } : {}),
       by: x.added_by,
     });
     const judged = (attempt: string) => {
-      const v = this.ledger.currentVerdict(attempt);
-      if (!v) return { lifecycle: String(this.ledger.getAttempt(attempt)?.lifecycle ?? "") };
-      const d = this.ledger.db.prepare("select delta from verdict where id = ?").get(v.id) as
-        | { delta: number | null }
-        | undefined;
-      return { verdict: v.verdict, ...(typeof d?.delta === "number" ? { delta: d.delta } : {}) };
+      const v = this.ledger.verdicts.current(attempt);
+      if (!v) return { lifecycle: String(this.ledger.attempts.get(attempt)?.lifecycle ?? "") };
+      const delta = this.ledger.verdicts.get(v.id)?.delta;
+      return { verdict: v.verdict, ...(typeof delta === "number" ? { delta } : {}) };
     };
     return {
       up_next: this.queued(run)
@@ -302,8 +291,8 @@ export class ExperimentQueue {
     title: string,
     copied: boolean,
   ): number | null {
-    const inst = this.ledger.getRun(run);
-    const contract = inst ? this.ledger.getContract(inst.campaign, inst.version) : undefined;
+    const inst = this.ledger.runs.get(run);
+    const contract = inst ? this.ledger.contracts.get(inst.campaign, inst.version) : undefined;
     if (contract?.mode !== "research") {
       if (given !== undefined && given !== null)
         throw new LedgerError("invalid", "only a research run's tasks name a question");
@@ -361,7 +350,7 @@ export class ExperimentQueue {
       run,
       title: text.title,
       details: text.details ?? "",
-      family: text.family ?? "",
+      direction: text.direction ?? "",
       why: text.why ?? "",
       added_by: input.by,
       state,
@@ -378,7 +367,7 @@ export class ExperimentQueue {
       yield: null,
     };
     const rows = state === "queued" ? this.reorder(run, x, { place: input.position }) : [x];
-    this.ledger.writeExperiments(rows, {
+    this.ledger.experiments.write(rows, {
       actor,
       kind: "experiment_added",
       run,
@@ -386,7 +375,7 @@ export class ExperimentQueue {
         id: x.id,
         title: x.title,
         ...(x.details ? { details: x.details } : {}),
-        ...(x.family ? { family: x.family } : {}),
+        ...(x.direction ? { direction: x.direction } : {}),
         ...(x.why ? { why: x.why } : {}),
         ...(question !== null ? { question } : {}),
         by: input.by,
@@ -411,7 +400,7 @@ export class ExperimentQueue {
     if (x.state !== "proposed")
       throw new LedgerError("invalid", `experiment ${id} is ${x.state}, not a proposed idea`);
     const row: Row = { ...strip(x), state: "queued" };
-    this.ledger.writeExperiments(this.reorder(run, row, { place: o.position }), {
+    this.ledger.experiments.write(this.reorder(run, row, { place: o.position }), {
       actor,
       kind: "experiment_accepted",
       run,
@@ -438,7 +427,7 @@ export class ExperimentQueue {
         "invalid",
         `experiment ${id} is ${x.state}: only queued experiments move`,
       );
-    this.ledger.writeExperiments(this.reorder(run, strip(x), { place: o.position }), {
+    this.ledger.experiments.write(this.reorder(run, strip(x), { place: o.position }), {
       actor,
       kind: "experiment_moved",
       run,
@@ -466,10 +455,10 @@ export class ExperimentQueue {
       ...strip(x),
       ...(c.title !== undefined ? { title: c.title } : {}),
       ...(c.details !== undefined ? { details: c.details } : {}),
-      ...(c.family !== undefined ? { family: c.family } : {}),
+      ...(c.direction !== undefined ? { direction: c.direction } : {}),
       ...(c.why !== undefined ? { why: c.why } : {}),
     };
-    this.ledger.writeExperiments([row], {
+    this.ledger.experiments.write([row], {
       actor,
       kind: "experiment_edited",
       run,
@@ -478,7 +467,7 @@ export class ExperimentQueue {
         by: o.by,
         ...(c.title !== undefined ? { title: c.title } : {}),
         ...(c.details !== undefined ? { details: c.details } : {}),
-        ...(c.family !== undefined ? { family: c.family } : {}),
+        ...(c.direction !== undefined ? { direction: c.direction } : {}),
         ...(c.why !== undefined ? { why: c.why } : {}),
       },
     });
@@ -496,7 +485,7 @@ export class ExperimentQueue {
     const why = o.why.trim().slice(0, 2000);
     if (!why) throw new LedgerError("invalid", "say why the experiment is dropped");
     const row: Row = { ...strip(x), state: "dropped", dropped_by: o.by, dropped_why: why };
-    this.ledger.writeExperiments(this.reorder(run, row, "leave"), {
+    this.ledger.experiments.write(this.reorder(run, row, "leave"), {
       actor,
       kind: "experiment_dropped",
       run,
@@ -519,7 +508,7 @@ export class ExperimentQueue {
     if (x.state !== "queued" && x.state !== "proposed")
       throw new LedgerError("conflict", `experiment ${id} is ${x.state}: it can't be given out`);
     const row: Row = { ...strip(x), state: "assigned", lane: o.lane, trial: o.trial };
-    this.ledger.writeExperiments(this.reorder(run, row, "leave"), {
+    this.ledger.experiments.write(this.reorder(run, row, "leave"), {
       actor,
       kind: "experiment_assigned",
       run,
@@ -561,7 +550,7 @@ export class ExperimentQueue {
       cause,
       ...(o.yield ? { yield: JSON.stringify(o.yield) } : {}),
     };
-    this.ledger.writeExperiments([row], {
+    this.ledger.experiments.write([row], {
       actor,
       kind: "experiment_finished",
       run: x.run,
@@ -604,7 +593,7 @@ export class ExperimentQueue {
       cause,
       returns,
     };
-    this.ledger.writeExperiments(this.reorder(x.run, row, { place: "top" }), {
+    this.ledger.experiments.write(this.reorder(x.run, row, { place: "top" }), {
       actor,
       kind: "experiment_returned",
       run: x.run,

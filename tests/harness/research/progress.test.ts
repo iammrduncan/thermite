@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, type TestContext, test } from "node:test";
-import type { Ledger } from "../../../src/harness/ledger.ts";
+import { SATURATION_TASKS } from "../../../src/core/research-check.ts";
+import type { Ledger } from "../../../src/harness/ledger/index.ts";
 import {
   lastImprovement,
   progressStopped,
   questionSaturated,
-  SATURATION_TASKS,
   standingDecisions,
 } from "../../../src/harness/research/progress.ts";
 import { makeResearchRun } from "../../helpers/research-run.ts";

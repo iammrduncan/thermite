@@ -1,6 +1,6 @@
 /**
  * The quick start's steps, read from its pages. The quick-start acceptance
- * (scripts/quick-start-acceptance.mjs) follows the tutorials as a tester would: it runs each
+ * (scripts/acceptance/quick-start.mjs) follows the tutorials as a tester would: it runs each
  * page's shell blocks as written, and takes the values it types and the words it expects to see
  * from the pages' own text. So a change to a page that breaks its steps fails the test, and the
  * unit test (quick-start.test.ts) fails at once when a page no longer has what the test reads.

@@ -6,7 +6,7 @@ sidebar:
   order: 8
 ---
 
-Control tells a [rig](glossary.md) what to do only through **signed commands**. Control signs each command with its own Ed25519 key. The rig's [supervisor](glossary.md) carries the command to the [harness](glossary.md), which checks the signature, the rig's name and the time before it does anything. The supervisor can carry a command, but it cannot make one or change one.
+Control tells a [rig](glossary.md) what to do only through **signed commands**. Control signs each command with its own Ed25519 key. The rig's [supervisor](glossary.md) takes the command from control's [message bus](../explanation/how-the-parts-talk.md#commands-over-the-message-bus) and carries it to the [harness](glossary.md), which checks the signature, the rig's name and the time before it does anything. The supervisor can carry a command, but it cannot make one or change one.
 
 ```json title="A signed command"
 {
@@ -32,7 +32,7 @@ Commands come from the dashboard, the [REST API](rest-api.md), the [command line
 | --- | --- | --- |
 | `envelope.v` | `1` | The format's version |
 | `envelope.id` | UUID | The command's id. Control makes it |
-| `envelope.rig` | text | The one rig that may apply it |
+| `envelope.rig` | text | The one rig that may apply it. For a kind about one run, control sets it to the rig the run is on: see [A command about one run](#a-command-about-one-run) |
 | `envelope.kind` | text | One of the [kinds](#every-kind) below |
 | `envelope.issued_by` | text | Who issued it, as control knows them: `owner:ui`, `owner:api`, `owner:mcp`, `owner:operator`, `agent:mcp`, or the owner's actor for a full reset's steps. See [Tokens and roles](tokens.md#in-the-audit-log). The caller cannot choose it |
 | `envelope.issued_at` | ISO 8601 time | When control signed it, by control's clock |
@@ -46,23 +46,36 @@ Control's key pair is `control-signing.key` and `control-signing.pub` in control
 
 | Step | Where | What happens |
 | --- | --- | --- |
-| 1. Issue | Control | Control checks that it knows the rig (it has reported and is not retired, is enrolled, or is in the rig tokens file), checks the payload against the kind's schema, signs the envelope and stores the command as `pending`. For a `message_agent`, it first trims the text and refuses a message that nothing on the rig would read (see [`message_agent`](#message_agent)). A signed command larger than 3.5 MiB is refused: `the <kind> command is too large to deliver` |
-| 2. Fetch | Supervisor | The supervisor asks control for its rig's pending commands, oldest first, every `THERMITE_COMMAND_POLL_SECONDS` seconds (default 5) |
-| 3. Stage | Supervisor | If the command names content to fetch (a project, a kit, a model or another rig's champion), the supervisor fetches it into the rig's inbox first. The command stays `pending` while it waits |
-| 4. Apply | Harness | The supervisor posts the command to the harness, which checks it and applies it once |
-| 5. Acknowledge | Supervisor | The supervisor tells control the status and the harness's answer, which become the command's status and outcome |
-| 6. Confirm | Control | The harness records each command it applied in its ledger. When the rig's next signed report brings that record, control takes the status and outcome from it, in place of the supervisor's |
+| 1. Issue | Control | For a kind about one run, control finds the rig the run is on ([below](#a-command-about-one-run)). Control checks that it knows the rig (it has reported and is not retired, or is enrolled), checks the payload against the kind's schema, signs the envelope and stores the command as `pending`. For a `message_agent`, it first trims the text and refuses a message that nothing on the rig would read (see [`message_agent`](#message_agent)). A signed command larger than 3.5 MiB is refused: `the <kind> command is too large to deliver` |
+| 2. Publish | Control | Control publishes the command to the rig's subject on the [message bus](../explanation/how-the-parts-talk.md#commands-over-the-message-bus), the only way a command reaches a rig. A command the bus did not take, because the rig's queue there holds 100 commands it has not taken, the bus is away, or 100 commands already wait their turn, stays `pending`, and control holds it: the rig's page and **Needs you** say it waits, and control publishes it again every 10 seconds, each rig's oldest first |
+| 3. Take | Supervisor | The rig's supervisor takes the command from its own consumer on the bus as soon as it is published, one command at a time, in order |
+| 4. Stage | Supervisor | If the command names content to fetch (a project, a kit, a model or another rig's champion), the supervisor fetches it into the rig's inbox first. The command stays `pending` while it waits, and the bus hands it again every 5 seconds, while the commands after it go on. Content that can't be had goes to the harness with the reason, on the harness's `POST /v1/commands/unstaged`: the harness checks the command as in step 5 and records it as not applied |
+| 5. Apply | Harness | The supervisor hands the command to the harness, which checks it, applies it once, and records it in its ledger: a `command` event with its outcome, or `command_rejected` for one it refuses. Only then does the supervisor ack it on the bus |
+| 6. Confirm | Control | When the rig's next signed report brings that record, control takes the command's status and outcome from it: the only way control learns them |
 
-`GET /v1/commands/<id>`, the MCP tool `command_status` and the dashboard's **Commands** page, which lists the newest 200 commands, show a command's status and outcome.
+`GET /v1/commands/<id>`, the MCP tool `command_status` and the **Audit log**'s commands on the dashboard (**Commands** under **Type**, 50 to a page) show a command's status and outcome.
+
+### A command about one run
+
+A kind whose payload names a `run` is about that run, except `assign_campaign`, which starts a new run on the rig it names: `pause_run`, `resume_run`, `close_run`, `redirect`, `reset_workers`, `message_agent`, `unkeep_message`, `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept`, `drop_directive`, `hypothesis_status`, `propagate`, `stop_trial`, `end_wait`, `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `invalidate_evidence` and `terminal_input`. A run's name is used once on control, so control knows the rig the run is on, and signs the command for that rig. `POST /v1/commands`, MCP's `issue_command` and `thermite command` may leave the rig out for these kinds; a rig given must be one the run's name is used on. Every other kind names its rig.
+
+Control refuses, before it signs:
+
+| Words | When |
+| --- | --- |
+| `Run <run> is on <rig>, not on <rig>.` | The rig given is not the run's |
+| `Control knows no run <run>: name a run a rig reported.` | No rig given, and no rig created the run or has its assignment on the way |
+| `Run <run> is an earlier run: <rig> is retired, so it takes no commands.` | The run's rig is retired |
+| `Run <run> is an earlier run: it ran on <rig> before the rig's full reset, so it takes no commands.` | The run is of a ledger the rig's full reset left behind |
+| `A <kind> command names its rig: give the rig.` | Any other kind, with no rig |
 
 ### On the dashboard
 
 A dashboard button that sends a command shows at once that the click took, then follows the command to its outcome. You do not need to refresh the page:
 
 1. The button turns into **Sending…**, which you cannot press again.
-2. When control has queued the command, the button says **Sent**, and a line says `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.`
-3. When the rig has applied it (step 5 above), the line says `rig-1 took it at 03:41 UTC. This page shows the change when the rig next reports.`
-4. When the rig's report with it reaches control (step 6), the line says `Done. rig-1 took it at 03:41 UTC.`, and the button comes back.
+2. When control has queued the command, the button says **Sent**, and a line says `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.` It stays so while the rig takes the command and applies it, until the rig's report with the outcome reaches control, within a minute by default.
+3. When the rig's report with it reaches control (step 6), the line says `Done. rig-1 took it at 03:41 UTC.`, and the button comes back.
 
 At each step the page draws again the parts that the command changes: the header with the run's state and its **Pause** or **Resume**, the blocks of the run, the rig or the overview, and the status bar. A part you are typing in, or that has a menu open, waits until you leave it. The line shows under a form, or at the top of the page for a button in the page's header or in a row. A rig's checks show their own state in their rows instead: see [Rig checks](rig-checks.md#where-results-show).
 
@@ -74,13 +87,13 @@ The page asks control how the command stands every 2 seconds, and every 5 second
 
 | Status | Meaning | Outcome |
 | --- | --- | --- |
-| `pending` | Waiting for the rig's supervisor to take it, or for the content it names to arrive | None |
-| `delivered` | The harness applied it | The harness's answer: `{"status": "applied", "accepted": true, "result": …}`, or `"replayed"` with the first answer |
-| `rejected` | The harness refused it before applying it (HTTP 403): signature, rig, time, payload, or issued before the rig's state was wiped | `{"status": "rejected", "reason": "…"}` |
-| `failed` | The harness applied it but it did not succeed, or the harness answered with another error, or its content could not be fetched, or the owner cancelled it | `{"status": "applied", "accepted": false, "result": {"error": "…"}}`; `{"http": <status>, "error": "…"}`; `{"error": "staging: …"}`; or `{"cancelled_by": "owner:api"}` |
+| `pending` | Waiting for the bus to take it, for the rig's supervisor to take it, for the content it names to arrive, or for the rig's report with its outcome | None |
+| `delivered` | The harness applied it | `{"source": "harness", "kind": …, "accepted": true, "result": …}` |
+| `rejected` | The harness refused it before applying it: signature, rig, time, payload, or issued before the rig's state was wiped | `{"source": "harness", "reason": "…", "kind": …, "id": …}`, from its `command_rejected` event |
+| `failed` | The harness applied it but it did not succeed, its content could not be fetched, or the owner cancelled it | `{"source": "harness", "kind": …, "accepted": false, "result": {"error": "…"}}`, with `"error": "staging: …"` for content the supervisor could not fetch; or `{"cancelled_by": "owner:api"}` |
 | `expired` | It was still `pending` after `expires_at` | None |
 
-Once control has the harness's own record of an applied command (step 6), the outcome is `{"source": "harness", "kind": …, "accepted": …, "result": …}`, and the status is `delivered` if `accepted` is true, else `failed`.
+Control takes a command's status and outcome only from the harness's events in the rig's signed report (step 6): `delivered` when the `command` event's `accepted` is true, else `failed`, and `rejected` for a `command_rejected` event that names the command's id.
 
 `delivered` means the harness carried the command out, not that what it started went well. A `rig_check`, for example, is `delivered` as soon as the check starts; its finding comes later, as a `rig_check_finished` event.
 
@@ -94,11 +107,10 @@ Once control has the harness's own record of an applied command (step 6), the ou
 | A full reset's steps (`pause_run`, `export_now`, `wipe_state`) | 30 minutes each |
 | Clock difference the harness allows between control and the rig | 5 minutes |
 
-- **Expiry at control.** When the supervisor next asks for commands, control marks each pending command past its `expires_at` as `expired` and does not hand it over.
-- **Kept alive while its content is fetched.** While the supervisor fetches a command's content (a repository bundle, a kit, a model download), it tells control so with each request. Within 10 minutes of the command's `expires_at`, control signs it again with an `expires_at` an hour later, and the audit log records `command_renewed`. It does so at most 24 hours after `issued_at`: a fetch that takes longer lets the command expire.
-- **Each command's content crosses once.** The supervisor names the commands it holds already, and control answers those with their ids alone. A command signed again is sent whole once more.
+- **Expiry at control.** Every 10 seconds, as it publishes held commands again, control looks at every rig's pending commands, marks each one past its `expires_at` as `expired`, and does not publish it again. It looks too as it starts, and when a rig's supervisor asks for a command's newest form.
+- **Kept alive while its content is fetched.** While the supervisor fetches a command's content (a repository bundle, a kit, a model download), it asks control for the command again on the bus within 10 minutes of its `expires_at` (the `renew` ask: [A rig's asks](../explanation/how-the-parts-talk.md#a-rigs-asks-on-the-message-bus)). Control signs it again with an `expires_at` an hour later, and the audit log records `command_renewed`. It does so at most 24 hours after `issued_at`: a fetch that takes longer lets the command expire. A supervisor that holds a form that expired, as after a restart, asks the same way, and delivers the newest form control holds; one control holds pending no more is not delivered.
 - **Expiry at the harness.** The harness refuses a command whose `expires_at` has passed by the rig's clock (`expired`), or whose `issued_at` is more than 5 minutes ahead of it (`issued in the future`).
-- **Cancelling.** The owner can cancel a command while it is `pending`, with `POST /v1/commands/<id>/cancel` and the owner's token. The command becomes `failed` with the outcome `{"cancelled_by": "owner:api"}`. A command that is not pending gives `404 {"error":"no such pending command"}`. The dashboard, the command line and MCP have no way to cancel. See [Cancel a pending command](../how-to/operate/cancel-a-command.md).
+- **Cancelling.** The owner can cancel a command while it is `pending`, with `POST /v1/commands/<id>/cancel` and the owner's token. The command becomes `failed` with the outcome `{"cancelled_by": "owner:api"}`. A command that is not pending gives `404 {"error":"no such pending command"}`. Control also takes the cancelled command off the rig's subject on the bus; one the supervisor took already may still be applied, and its status then becomes the harness's outcome. The dashboard, the command line and MCP have no way to cancel. See [Cancel a pending command](../how-to/operate/cancel-a-command.md).
 
 ## What the harness checks
 
@@ -115,25 +127,28 @@ The harness checks every command in this order. A command that fails a check mar
 | It has not expired | `expired` | `rejected` |
 | The payload fits the kind | `bad payload: <field>: <problem>` | `rejected` |
 | It was issued after the rig's state was last wiped | `issued before this rig's state was wiped` | `rejected` |
-| It is not being applied right now | None: the harness answers `in_progress`, and the supervisor asks again later | Stays `pending` |
+| It is not being applied right now | None: the harness answers `in_progress`, and the bus hands the command to the supervisor again 5 seconds later | Stays `pending` |
 | An owner-only kind was issued by the owner (`issued_by` is `owner` or starts with `owner:`) | `<kind> is the owner's to issue, not <issuer>'s` | `failed` |
 
-The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, and `stop_trial`, which stops one trial. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
+The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_review`, `conclude`, `close_run`, `wipe_state`, `message_agent`, `unkeep_message`, `rig_settings`, the six kinds that change a run's experiment queue and its rules: `queue_add`, `queue_move`, `queue_edit`, `queue_drop`, `queue_accept` and `drop_directive`, `hypothesis_status`, which changes a research run's hypothesis, `stop_trial`, which stops one trial, `end_wait`, which ends a run's wait for its provider, `invalidate_evidence`, which withdraws bad evidence, `terminal_input`, which types into a trial's, a planner's call's or an advisor's call's terminal, `retention_run`, which removes what one of the owner's retention policies covers, and `log_level`, which changes the level a rig part writes its log at. The owner-only check is the first step of applying a command, so a command it refuses is recorded like any applied command, as not accepted. Every applied command is recorded in the ledger with the actor `control:<issued_by>`.
+
+A command that passes these checks and that the harness then refuses is `failed`, with the reason, such as `run <run> is closed`, `not now: …`, `trial <trial> has ended already` or `invalid contract: …`. The harness records it as applied and not accepted, and answers the supervisor `{"status":"applied","accepted":false,"result":{"error":"<why>"}}`; its `command` event carries the same to control.
 
 ## Who may issue each kind
 
 | Kind | Dashboard (`owner:ui`) | REST and `thermite` (`owner:api`) | MCP owner (`owner:mcp`) | MCP operator (`owner:operator`) | MCP agent (`agent:mcp`) | Owner only |
 | --- | --- | --- | --- | --- | --- | --- |
 | `assign_campaign` | **New campaign**; **Start the run** in the **Start a run** panel of a campaign's page | Yes; `thermite assign` | Yes | Yes | Yes | |
-| `rig_check` | **Run it** in a rig's **Checks**; **Check** on **Settings** | Yes | Yes | Yes | Yes | |
+| `rig_check` | **Run it** in a rig's **Checks**; **Check** on **Settings › Rigs' models** | Yes | Yes | Yes | Yes | |
 | `pause_run` | **Pause**, then **Pause the run** in its menu, in a run's header, in the header of the run's **Live**, and on the run's card under **At work now** | Yes | Yes | Yes | Yes | |
 | `resume_run` | **Resume** in a run's header, in the header of the run's **Live**, and on a paused run's row under **Earlier runs** | Yes | Yes | Yes | Yes | |
 | `close_run` | **⋯**, then **Close the run**, in the header of a run's page, while the run is running or paused | Yes | Yes | No | No | Yes |
 | `redirect` | None: on the dashboard, rules come from **Tell the planner**, a `message_agent` to the planner, which makes them | Yes | Yes | Yes | Yes | |
 | `reset_workers` | **Restart the lanes**, under **⋯** in the header of a running run with agents, on its page and in Live | Yes | Yes | Yes | Yes | |
-| `export_now` | **Export** in the header of a rig's page or a run's page, with **What changed** (`full: false`) or **Full export** (`full: true`), or, on a run's page, **This run** (`run`) | Yes | Yes | Yes | Yes | |
+| `export_now` | **Export** in the header of a rig's page or a run's page, with **Full export** (`full: true`), or, on a run's page, **This run** (`run`) | Yes | Yes | Yes | Yes | |
 | `drain_rig` | **Update to these images**, **Try the update again** and **Give it control's new address** on the page of a rig at work set up on a cluster, and **Call the update off**; **Save changes** on **Edit rig** with a new number of GPUs, CPUs or memory for such a rig, and **Call the change off**; control issues it as the caller. **End the drain** in the [drain card](rig-page.md#the-drain-card) of a draining rig's page | Yes (`POST /v1/commands`): the rig drains, but its page shows no update waiting, and it stays drained until `drain: false` or a restart; `POST /v1/rigs/<rig>/cluster/resources` | `update_rig_images`, `set_cluster_rig_resources` | `update_rig_images`, `set_cluster_rig_resources` | No | |
 | `stop_trial` | **Stop this trial…**, then **Stop the trial**, in a stuck trial's card under **Needs you** ([Stuck trials](../how-to/campaigns/decide-what-waits.md#stuck-trials)), and under a trial a draining rig waits for, on the rig's page ([The trials it waits for](rig-page.md#the-trials-it-waits-for)) | Yes | Yes | Yes | No | Yes |
+| `end_wait` | **Resume now**, then **End the wait now**, in the header of a run's page while its agents wait for the provider's limit | Yes | Yes | Yes | No | Yes |
 | `message_agent` | **Send** in the message box of a run's **Live**; **Send to the planner** on a run's **Planner** tab, while the planner is on | Yes | Yes | Yes | No | Yes |
 | `unkeep_message` | **Remove** in the **📌 &lt;n&gt; kept** list of a run's **Live** | Yes | Yes | Yes | No | Yes |
 | `queue_add` | **Add** under **Up next** on a run's **Experiments** tab | Yes | Yes | Yes | No | Yes |
@@ -148,10 +163,14 @@ The owner-only kinds are `approve_promotion`, `decline_promotion`, `accept_revie
 | `accept_review` | **Needs you**: **Accept**, **Reject** | Yes | No | No | No | Yes |
 | `conclude` | **Needs you**: **End it: not possible**, **Keep going** | Yes | No | No | No | Yes |
 | `hypothesis_status` | **Promote**, **Return to pool** or **Retire**, then its button, on a hypothesis on a research run's **Hypotheses** tab | Yes | Yes | No | No | Yes |
+| `invalidate_evidence` | **Withdraw its evidence…**, then **See what it reaches**, then **Withdraw the evidence**, on an attempt's page | Yes; `thermite invalidate` | Yes | No | No | Yes |
+| `terminal_input` | **Send**, or a key's button, in the field under the planner's or an advisor's terminal, or a worker's Pi view, on its **Live** page ([Watch and steer an agent in its terminal](../how-to/campaigns/agent-terminal.md)); a worker's own terminal on Live takes keys straight instead, recorded at each Enter as a `terminal_input` event with `command: "live"` | Yes | Yes | No | No | Yes |
 | `rig_settings` | **Save changes** on **Edit rig**; **GPUs for the judge** on **New campaign** and in the **Start a run** panel | `POST /v1/rigs/<rig>/settings`, or `POST /v1/commands`; `POST /v1/rigs/<rig>/cluster/resources` with a new number of GPUs | `set_rig_settings`; `start_run` with `judge_gpus`; `set_cluster_rig_resources` with a new number of GPUs | `set_rig_settings`, but not `promotion` or `judge_gpus`; `set_cluster_rig_resources` with a new number of GPUs, which sends the new default share only | No | Yes |
+| `retention_run` | **Remove now**, after **Run now**, on a retention policy of a rig's kind on **Settings › Retention policies**; control issues it at the policy's time as `owner:retention` ([Remove what Thermite keeps](../how-to/operate/retention-policies.md)) | `POST /v1/retention/policies/<id>/run`; `thermite retention run` | `run_retention_policy` | No | No | Yes |
+| `log_level` | None | Yes (`POST /v1/commands`); `thermite log-level harness` or `supervisor` | Yes | Yes | No | Yes |
 | `wipe_state` | Only as a step of a full reset | No: `wipe_state is issued only by a full reset` | No | No | No | Yes |
 
-Control's own lists decide what each MCP role may issue; the harness's owner-only check is a second gate behind them. The operator acts for the owner, so its `owner:operator` passes that gate for `message_agent`, `unkeep_message`, the six queue kinds and the `rig_settings` that `set_rig_settings` sends. The operator's list has no `close_run`, `approve_promotion`, `decline_promotion` or `hypothesis_status`. During the owner's full reset of a rig, MCP's `issue_command` refuses an agent's token for that rig: `<rig> is being reset by the owner`. [Tokens and roles](tokens.md) describes each token.
+Control's own lists decide what each MCP role may issue; the harness's owner-only check is a second gate behind them. The operator acts for the owner, so its `owner:operator` passes that gate for `message_agent`, `unkeep_message`, the six queue kinds, `stop_trial`, `end_wait`, `log_level` and the `rig_settings` that `set_rig_settings` sends. The operator's list has no `close_run`, `approve_promotion`, `decline_promotion`, `hypothesis_status` or `invalidate_evidence`. For `invalidate_evidence` the harness refuses `owner:operator` itself too: `invalidate_evidence is the owner's own to issue, not owner:operator's`. So it does for `terminal_input`, which control also refuses before it signs, from any issuer but the owner: `Only the owner types into an agent's terminal: send the agents a message.` During the owner's full reset of a rig, MCP's `issue_command` and `propagate_champion` refuse an agent's token for that rig: `<rig> is being reset by the owner`. [Tokens and roles](tokens.md) describes each token.
 
 On the dashboard, only an experiment up next has **Edit**: a lane's idea's words change only over the REST API, the command line or MCP. [Choose what runs next](../how-to/campaigns/choose-what-runs-next.md) walks through the **Experiments** and **Planner** tabs.
 
@@ -171,13 +190,14 @@ Starts a run of a campaign on the rig. On a [rig launched on RunPod](rest-api.md
 | `contract` | object | required | The whole [contract](contract.md) |
 | `contract_sha` | 64 hexadecimal characters | required | The contract's SHA-256, as `thermite contract validate` prints it |
 | `seed` | `{repo, commit}` | none | The repository (a lowercase id) and the commit the run starts from. Required for hill climb and goal campaigns; research campaigns have none. When the contract names a `project.folder`, `commit` is the whole repository's commit, and the run starts from that folder of it |
-| `direction` | text | none | The run's note, recorded with the run (`thermite assign --note`). The field keeps its old name; it is not one of the run's directions |
+| `note` | text | none | The run's note, recorded with the run (`thermite assign --note`) and shown as **Note:** on the run's item; no agent sees it. Before v0.1.1 this field was `direction`: a command signed then is read with it as `note`, and control refuses `direction` in a new one |
 | `imports` | list of [imports](#imports) | `[]` | What the rig must take in first: the project, the kit, models |
 | `agents` | boolean | worker agents run | `false`: a judge-only run |
 | `promotion` | `auto` or `owner_approval` | the rig's own setting | The run's promotion rule |
 | `ask_owner` | `{above_gain?, declared_flaws?, reviews?, not_possible?}` | nothing: hands-off | What else the run asks the owner about. `above_gain`, a fraction above 0, at most 100: a confirmed gain above it waits for the owner (0.15 is 15%); `declared_flaws`, `true`: a win whose worker declared flaws waits; `reviews`, `true`: a review panel's pass waits for the owner's acceptance; `not_possible`, `true`: a "not possible" proposal waits. See [Decide what waits for you](../how-to/campaigns/decide-what-waits.md#choose-what-waits) |
 | `queue` | up to 500 experiments, each as below | none | Experiments to start the new run's [experiment queue](#queue_add) with, in order: usually another run's untried ones |
 | `briefing` | up to 200 items, each as below | none | Background from past research for every agent's brief, in order: findings, claims, notes and reports from [the knowledge base](knowledge-base.md#briefings) |
+| `results` | `{git, access?, folder?}` | none: the run's work stays on control | Where the run's work goes in git. `git`: the repository the rig's supervisor pushes the run's branches to, usually the project's own; `access`: the Git access (by name) that pushes, which needs write rights there, and which control gives only the rig's supervisor while the run is live; `folder`: the project's folder in the repository, when the contract names one. After each export the supervisor pushes `thermite/<run>/champion`, the run's starting commit and then a commit for each champion, and `thermite/<run>/<lane>`, each lane's attempts as patches ([A run's work in git](../how-to/campaigns/take-the-result.md#a-runs-work-in-git)). It pushes fast-forwards of branches under `thermite/<run>/` only, never another branch |
 | `mcp_servers` | the kit's [`mcp_servers`](kit-manifest.md#mcp-servers) list | none | The MCP servers the run's kit names (a research contract's, for a research run), with the agents that get each. Control fills it in from a kit it keeps, from the page's reading of a kit in a repository, or from a research contract, and refuses a server **Settings** lacks. The harness refuses the run when it differs from what the kit names. Control gives the rig only the servers its runs name. For a research run, leave it out: control takes the contract's list, and refuses another with `The assignment names the MCP servers <list>, and the contract names <list>. Leave mcp_servers out: control takes the contract's.` |
 
 Each experiment in `queue` has these fields:
@@ -186,22 +206,22 @@ Each experiment in `queue` has these fields:
 | --- | --- | --- |
 | `title` | text, 1 to 200 characters | What to try |
 | `details` | text up to 4000 characters | Optional. More about it |
-| `family` | text, 1 to 80 characters | Optional. Its direction, in words or as a direction family's name |
+| `direction` | text, 1 to 80 characters | Optional. Its direction, in words or as a direction's name |
 | `why` | text up to 2000 characters | Optional. Why it is worth trying |
 | `by` | text, 1 to 80 characters | Who added it in the first place, such as `owner`, `planner`, `teacher` or `lane-2`. The new run keeps it as the experiment's author. Over MCP, control replaces it, as below |
 | `state` | `queued` or `proposed` | `queued`: up next. `proposed`: a lane's idea, which stays an idea in the new run |
 | `from` | `{run, id}` | The run and the experiment it was copied from |
 
-Over MCP, control does not keep the caller's words for a copied experiment that it can take from its own record. It takes `title`, `details`, `family`, `why` and `by` from its record of the experiment that `from` names: the rigs' signed events, with every edit applied. A field that the record does not have is left out. It does this only when the run that `from` names is [filed](knowledge-base.md#campaign-folders) in the folder of the new run's campaign (`contract.campaign`), or of a campaign whose folder that campaign may read ([Grants](knowledge-base.md#grants)). Any other experiment keeps the caller's words, and its `by` is `copied`: one that control has no record of (no rig reported it, or more than one did), and one from a run in any other folder, or in none. To an experiment taken from its record, control adds the line `In <run> (<campaign>) it was <result>.` after the details when the experiment's item in the [knowledge base](knowledge-base.md#items) has a result, as **Start a run** does, and cuts `details` to 4,000 characters.
+Over MCP, control does not keep the caller's words for a copied experiment that it can take from its own record. It takes `title`, `details`, `direction`, `why` and `by` from its record of the experiment that `from` names: the rigs' signed events, with every edit applied. A field that the record does not have is left out. It does this only when the run that `from` names is [filed](knowledge-base.md#which-collection-a-run-goes-in) in the collection of the new run's campaign (`contract.campaign`), or of a campaign whose collection that campaign may read ([Grants](knowledge-base.md#grants)). Any other experiment keeps the caller's words, and its `by` is `copied`: one that control has no record of (no rig reported it, or more than one did), and one from a run in any other collection, or in none. To an experiment taken from its record, control adds the line `In <run> (<campaign>) it was <result>.` after the details when the experiment's item in the [knowledge base](knowledge-base.md#items) has a result, as **Start a run** does, and cuts `details` to 4,000 characters.
 
 Each item in `briefing` has these fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `text` | text, 1 to 4000 characters, trimmed | The item's words |
-| `from` | `{campaign, rig?, run, kind, ref}` | Where it came from: the campaign's folder (1 to 200 characters), the rig the run ran on (1 to 200 characters; control always gives it, since a run's name is unique on its rig only), the run (a lowercase id), the item's kind (1 to 40 characters, such as `finding`) and its `ref` in that run (1 to 200 characters) |
+| `from` | `{campaign, rig?, run, kind, ref}` | Where it came from: the campaign's collection (1 to 200 characters), the rig the run ran on (1 to 200 characters; control always gives it, since a run's name is unique on its rig only), the run (a lowercase id), the item's kind (1 to 40 characters, such as `finding`) and its `ref` in that run (1 to 200 characters) |
 
-Over MCP, control does not keep the caller's words for a briefing either. It looks up the knowledge base's item that `from` names and puts that item's words in `text`. It leaves out an item it cannot find, one it finds more than once (run names are unique on one rig only), and one from a folder the new run's campaign may not read. With none left, it sends no `briefing`. It does this before it looks up the copied experiments. The REST API (`POST /v1/commands`) and `thermite command` send `briefing` and `queue` as given: control looks nothing up. `thermite assign` has no option for a briefing. Its `--queue-from` fills `queue` with a past run's untried experiments, as **Start a run** does below, and takes them from control first (`GET /v1/rigs/<rig>/runs/<run>/untried`), with the words and authors control's records hold, as over MCP. See [the command line](command-line.md#copy-a-past-runs-untried-experiments).
+Over MCP, control does not keep the caller's words for a briefing either. It looks up the knowledge base's item that `from` names and puts that item's words in `text`. It leaves out an item it cannot find, one it finds more than once, and one from a collection the new run's campaign may not read. With none left, it sends no `briefing`. It does this before it looks up the copied experiments. The REST API (`POST /v1/commands`) and `thermite command` send `briefing` and `queue` as given: control looks nothing up. `thermite assign` has no option for a briefing. Its `--queue-from` fills `queue` with a past run's untried experiments, as **Start a run** does below, and takes them from control first (`GET /v1/runs/<run>/untried`), with the words and authors control's records hold, as over MCP. See [the command line](command-line.md#copy-a-past-runs-untried-experiments).
 
 **Start a run** on a campaign's page also works for a campaign that was assigned over the REST API, MCP or the command line, with no version saved on control. Control then signs again the campaign's newest `assign_campaign` whose status is `pending` or `delivered`, as a new run: the same `contract`, `seed`, `imports` and `direction` (the run's note), with a new `run`, and `agents`, `promotion` and `ask_owner` from the panel. With **Agents** on and **Copy the untried experiments of** ticked, the panel also sends `queue`: the chosen run's experiments still up next, in their order, then its lanes' ideas, at most 500 of them. Its help says "They join the new run's queue in the same order, up to 500." With **Agents** off, the panel hides that field, and control sends no `queue` even when the form has it: a run without agents has no queue. Its **From past research** sends the ticked past experiments in `queue`, after the copied ones (at most 500 in all), and the ticked findings, claims, notes and reports in `briefing`, each looked up again in control's knowledge base. With **Agents** off, the panel hides **From past research** too and sends none of it. If ticked items reach control all the same (the page shown without its script), control leaves them out, starts the try, and says "A try (agents off) takes no experiments and no background: what you ticked was left out." [Use past research in a new run](../how-to/campaigns/use-past-research.md) gives the steps. Start a run's twins, `POST /v1/campaigns/<campaign>/runs`, MCP's `start_run` and `thermite run start`, run the panel's code and send the same `assign_campaign`; they refuse a run to copy from, a model or past research for a try instead of leaving them out.
 
@@ -213,7 +233,7 @@ The harness creates the run only after every check passes. In order, it refuses:
 | `contract hash does not match contract_sha` | The hash differs |
 | `run <run> already exists` | The run id is taken on this rig |
 | `a run without agents has no queue: leave out the experiments to copy` | `"agents": false` with experiments in `queue` |
-| `queue experiment <n>: <the first problem>` | An experiment in `queue` whose `title` or `family` is only spaces. `<n>` counts from 1 |
+| `queue experiment <n>: <the first problem>` | An experiment in `queue` whose `title` or `direction` is only spaces. `<n>` counts from 1 |
 | `a run without agents has no briefs: leave out the background from past research` | `"agents": false` with items in `briefing` |
 | `contract <campaign> v<version> exists with other content` | The rig has this contract version with different content |
 | `model <name> is not listed in the contract` | A `model` import the contract does not list |
@@ -275,7 +295,7 @@ The run becomes `closed` with the reason, as a goal run that met its goals does,
 - it can't be resumed or paused again: [`resume_run`](#resume_run) and [`pause_run`](#pause_run) refuse it with `run <run> is closed`. Its queue and rules no longer change, and it takes no new message: `run <run> is closed: nothing will read this message`. A message kept in force can still be removed with [`unkeep_message`](#unkeep_message);
 - nothing in it waits for a decision any more. A change waiting for approval or held for an audit, a review the review panel passed and a "not possible" proposal stay as they were when it closed: control leaves them out of **Needs you**, the harness refuses [`approve_promotion`](#approve_promotion), [`decline_promotion`](#decline_promotion), [`accept_review`](#accept_review) and [`conclude`](#conclude) for the run, and the rig's auditor gets none of its audits. None of its changes becomes the champion by a decision.
 
-Its experiments, attempts, champion and journal stay, and the rig's next export carries the close, as after a run that met its goals. Refusals: `no run <run>`, and `run <run> is already closed (<its reason>): there is nothing to close`, without the reason in brackets when the run closed with none. Result: `{"run", "status": "closed", "was": "running"}`, with `"paused"` for a run that was paused.
+Its experiments, attempts, champion and journal stay, and the run's export at its end carries them and the close, as after a run that met its goals ([A run's export at its end](exports.md#a-runs-export-at-its-end)). Refusals: `no run <run>`, and `run <run> is already closed (<its reason>): there is nothing to close`, without the reason in brackets when the run closed with none. Result: `{"run", "status": "closed", "was": "running"}`, with `"paused"` for a run that was paused.
 
 On the dashboard, **Close run** is under **⋯** in the header of a running or paused run's page. It says `The run ends for good: nothing more starts, and it can't be resumed. Its results stay.`, takes the reason in **Why**, and sends only once you type `close <run>` in the box below it. Control refuses it before signing, in words, without them: `Not sent: Write why you close the run first.` or `Not sent: Type close <run> to confirm.`
 
@@ -293,9 +313,9 @@ Each directive has only these fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `kind` | `avoid`, `try`, `mandate`, `priority`, `lane_count`, `trial_minutes`, `keep_working` or `note` | `avoid`, `try` and `mandate` (**Always** on the dashboard) name a direction; `priority` ranks one; `lane_count` sets how many lanes work, up to the contract's count; `trial_minutes` sets how long one trial lasts, in minutes (`value`, a whole number from 1 to 1440), over the contract's and the rig's; `keep_working`, `on` or `off` (`value`), whether the run's lanes keep working while the judge works, over the contract's; `note` is text for the planner only |
-| `family` | letters, digits, spaces and dashes, plain or as `:name:`, that make a name of 2 to 41 characters | The direction it is about, when the kind needs one. Control signs it as the direction's name: its words in lowercase, joined by dashes, so `:Shared memory tiling:` becomes `shared-memory-tiling` |
-| `value` | text up to 1000 characters, or a number | The value, when the kind needs one. A research run's `try` or `mandate` may give a question's number here instead of a `family` |
+| `kind` | `avoid`, `try`, `mandate`, `priority`, `lane_count`, `trial_minutes`, `keep_working` or `planner_note` | `avoid`, `try` and `mandate` (**Always** on the dashboard) name a direction; `priority` ranks one; `lane_count` sets how many lanes work, up to the contract's count; `trial_minutes` sets how long one trial lasts, in minutes (`value`, a whole number from 1 to 1440), over the contract's and the rig's; `keep_working`, `on` or `off` (`value`), whether the run's lanes keep working while the judge works, over the contract's; `planner_note` is text for the planner only |
+| `direction` | letters, digits, spaces and dashes, plain or as `:name:`, that make a name of 2 to 41 characters | The direction it is about, when the kind needs one. Control signs it as the direction's name: its words in lowercase, joined by dashes, so `:Shared memory tiling:` becomes `shared-memory-tiling` |
+| `value` | text up to 1000 characters, or a number | The value, when the kind needs one. A research run's `try` or `mandate` may give a question's number here instead of a `direction` |
 | `rationale` | text, 1 to 2000 characters | Why. The planner sees it; workers never do |
 | `citations` | up to 20 texts of 1 to 500 characters | Sources. Default `[]` |
 
@@ -303,16 +323,16 @@ Control refuses a directive that breaks these rules before signing, with `bad re
 
 | Field and message | When |
 | --- | --- |
-| `a rule no longer takes match: name its direction in family, in plain words or as :name:` | The directive has `match`, a rule in words |
-| `family: "<text>" is not a direction's name: write it in letters, digits, spaces and dashes, such as shared memory tiling or :shared memory tiling:` | Other characters in `family` |
-| `family: "<text>" is too long for a direction's name: use at most 41 letters, digits, spaces and dashes` | A name over 41 characters |
-| `family: an avoid, try or mandate rule names a direction (family)` | An `avoid`, `try` or `mandate` with no `family` (and, for `try` and `mandate`, no `value`) |
+| `a rule no longer takes match: give its direction in direction, in plain words or as :name:` | The directive has `match`, a rule in words |
+| `direction: "<text>" is not a direction's name: write it in letters, digits, spaces and dashes, such as shared memory tiling or :shared memory tiling:` | Other characters in `direction` |
+| `direction: "<text>" is too long for a direction's name: use at most 41 letters, digits, spaces and dashes` | A name over 41 characters |
+| `direction: an avoid, try or mandate rule names a direction` | An `avoid`, `try` or `mandate` with no `direction` (and, for `try` and `mandate`, no `value`) |
 
-A `family` may name a direction the run doesn't have yet. The rig takes it, and the planner's model designs the direction at its next round: it says what the direction means, in its own words, and the run then has it ([Directions](../how-to/campaigns/choose-what-runs-next.md#directions)). A research run's planner designs no direction: control and the rig refuse there any direction but a task kind, `A research run's directions are its task kinds: :explore:, :primary:, :contradict:, :consolidate:. Its planner designs no new direction, so a rule for :<name>: would do nothing. Name a task kind.`
+A `direction` may name a direction the run doesn't have yet. The rig takes it, and the planner's model designs the direction at its next round: it says what the direction means, in its own words, and the run then has it ([Directions](../how-to/campaigns/choose-what-runs-next.md#directions)). A research run's planner designs no direction: control and the rig refuse there any direction but a task kind, `A research run's directions are its task kinds: :explore:, :primary:, :contradict:, :consolidate:. Its planner designs no new direction, so a rule for :<name>: would do nothing. Name a task kind.`
 
 A set that both avoids a direction and tries or mandates it is refused: `the set both avoids and asks for <directions>`. A closed run is refused: `run <run> is closed: its queue and rules no longer change`. Result: `{"run", "directives": [<ids>]}`, with `"new_directions": [<names>]` when the set names directions the run doesn't have yet.
 
-A rule in words (`match`) set before rules named directions stays in force, marked legacy, until the planner's next round with its model converts it. No command converts it: the rig does, at the planner's round, with new records, and no signed command or earlier record changes. The new directive has the old one's author, `kind`, `rationale`, `citations` and `from_message`, the `family` the planner named, and `"converted_from": {"rule": <id>, "words": "<the old words>"}`; its `directive` event is its author's. The old directive leaves force as converted, with the event `directive_converted` by the planner: `{"id": <old id>, "to": <new id>, "kind", "family", "words"}`. Until then, only the planner's model reads it. The fixed rules that give out work without the model (no model, a model answer that code refused, the planner switched off, and a research run's gap-driven plan) keep only the directives that name a `family`; a research run's planner converts no rule in words, so one there is never converted ([Old rules in words](../how-to/campaigns/choose-what-runs-next.md#old-rules-in-words)).
+A rule in words (`match`) set before rules named directions stays in force, marked legacy, until the planner's next round with its model converts it. No command converts it: the rig does, at the planner's round, with new records, and no signed command or earlier record changes. The new directive has the old one's author, `kind`, `rationale`, `citations` and `from_message`, the `direction` the planner named, and `"converted_from": {"rule": <id>, "words": "<the old words>"}`; its `directive` event is its author's. The old directive leaves force as converted, with the event `directive_converted` by the planner: `{"id": <old id>, "to": <new id>, "kind", "direction", "words"}`. Until then, only the planner's model reads it. The fixed rules that give out work without the model (no model, a model answer that code refused, the planner switched off, and a research run's gap-driven plan) keep only the directives that name a `direction`; a research run's planner converts no rule in words, so one there is never converted ([Old rules in words](../how-to/campaigns/choose-what-runs-next.md#old-rules-in-words)).
 
 `redirect` is not the only source of rules. The teachers' set (a teacher's recommendations, or the merged by model's directives: see [What each role must answer](advisors-file.md#what-each-role-must-answer)) and a rule that the planner adds because an owner's message asked for it name a direction the same way.
 
@@ -327,7 +347,7 @@ The dashboard calls directives **rules**. It sends no `redirect`: on a run's **P
 | `run` | lowercase id | The run |
 | `reseed_commit` | commit | Accepted by the schema, but the harness refuses it: `re-seeding lanes is not available in this version; reset without it` |
 
-The run's running trials end, along with the current [epoch](glossary.md) (a round, on the dashboard), and every lane starts again from the champion. The experiment each ended trial was on goes back to the top of the run's queue, the same experiment with its author and its why, and counts the return (`returns`) with its cause; its `experiment_returned` event has `{id, lane, trial, result: "interrupted", cause, returns, position: "top"}`. Result: `{"run", "reset": true}`.
+The harness records `workers_reset` and tells the scheduler: the run's running trials end at once, and then the current [epoch](glossary.md) (a round, on the dashboard), before the next one is planned, and every lane starts again from the champion. The ledger keeps which resets were finished, so a reset that a restart cut off is finished when the harness starts again. The experiment each ended trial was on goes back to the top of the run's queue, the same experiment with its author and its why, and counts the return (`returns`) with its cause; its `experiment_returned` event has `{id, lane, trial, result: "interrupted", cause, returns, position: "top"}`. Result: `{"run", "reset": true}`.
 
 The run page's **History** says "You restarted the lanes: their trials ended, and every lane starts again from the champion." (with the issuer's name in place of "You" for the agent's token), and, for each experiment, `"<title>" went back to the top of the queue: its trial on <lane> was interrupted (<cause>).` The dashboard offers **Restart the lanes** only on a running run with agents: a run without agents (a try, a rig check) has no lanes.
 
@@ -346,12 +366,12 @@ The owner's message to the run's agents. The judge is code and takes no messages
 | --- | --- |
 | `all` | Everyone working: each lane at work, and the planner while it is on, a research run's too. The lanes at work are the contract's `lanes.count`, or fewer when the newest `lane_count` rule in force says so, the owner's before an advisor's, as the scheduler counts them |
 | `lane-1` to `lane-16` | That [lane](glossary.md) |
-| `trial:t-` and 8 to 32 hexadecimal characters | That trial. If it ends before it reads the message, its lane's next trial reads it, with a note that it was sent to an earlier trial |
+| `trial:t-` and 16 hexadecimal characters, a trial's ID | That trial. If it ends before it reads the message, its lane's next trial reads it, with a note that it was sent to an earlier trial |
 | `planner` | The planner, at its next plan that is used, a research run's too |
 | `advisors` | The teachers, the auditor and the review panel, each once, except those that a refusal below names |
 | `teachers` | The teachers |
 | `auditor` | The auditor |
-| `review_panel` | The review panel. Its old name, `panel`, is still taken in v0.1.0: control signs the command with `panel`, the name every rig takes |
+| `review_panel` | The review panel |
 
 Each reader reads a message once: each lane, the planner and each advisor role. Only a message kept in force is given again, to each new trial. A read is recorded when the reader works with the message, not when the text is only fetched or put in a brief. When each one reads it:
 
@@ -382,7 +402,7 @@ Control checks every message before it signs it, wherever it comes from: a run's
 | `This rig's supervisor has no advisors set up, so nothing would read it.` | `advisors`, when the supervisor reports none of the three roles |
 | `No advisor would read it.`, followed by the reason for each role, in the order teachers, auditor, review panel | `advisors`, when each of the three roles has one of the reasons above |
 
-`panel`, the review panel's old name, is refused for the same reasons.
+`panel`, the review panel's name in v0.1.0, is refused.
 
 Over the REST API and `thermite command`, a refusal is `400 {"error":"<message>"}`, written as `refused`. Over MCP, `issue_command` answers `{"error":"<message>"}` with `isError: true`, written as `refused`. On the dashboard it shows under the message box as `Not sent:` and the message (below), written as `refused`. A run's **Live** also greys out each recipient that control would refuse, with the same words when you point at it (on a run without agents that includes everyone working and the lanes, and the box starts on the advisors), and its message box asks for words before it sends: "Write a message first."
 
@@ -396,17 +416,17 @@ Control refuses `keep` with any other `to` before signing: `bad message_agent pa
 | `the teachers are off on this rig (Edit rig), so nothing would read this message` | `teachers`, with the teachers switched off |
 | `the auditor is off on this rig (Edit rig), so nothing would read this message` | `auditor`, with the auditor switched off |
 | `a research run has no audits, so the auditor would never read this message` | `auditor`, in a research run |
-| `the review panel is off on this rig (Edit rig), so nothing would read this message` | `panel`, with the review panel switched off |
-| `this run has no goal the review panel reviews, so the review panel would never read this message` | `panel`, in a hill-climb run, or a goal run with no goal checked by review |
+| `the review panel is off on this rig (Edit rig), so nothing would read this message` | `review_panel`, with the review panel switched off |
+| `this run has no goal the review panel reviews, so the review panel would never read this message` | `review_panel`, in a hill-climb run, or a goal run with no goal checked by review |
 | `none of the advisors would read this message: <each reason, joined by "; ">` | `advisors`, when no role would read it |
 | `run <run> has <n> lanes`, or `… has 1 lane` | A lane beyond the contract's number of lanes. A lane within it, but above the number a `lane_count` rule leaves at work, is accepted |
 | `no trial t-… in run <run>` | A trial the run does not have |
 
 The run's **Live** shows the rig's refusal of the newest message to the run, from wherever it was sent, as **Not sent.** `The rig refused your last message: <reason>` above its message box. The run's **Planner** tab does the same for the newest message to the planner, above **Tell the planner**: **Not sent.** `The rig refused your last message to the planner: <reason>`. A message sent from the page is followed as any command is ([On the dashboard](#on-the-dashboard)): the line under the box says `Sent to rig-1 at 03:41 UTC. Waiting for the rig to take it.`, then `Done. rig-1 took it at 03:41 UTC.`, or `rig-1 refused it:` and the reason, with no refresh. On **Live**, the strip above the box then shows the rig's refusal too. A message that control refuses before it signs it shows under the box at once, as `Not sent:` and control's reason, and what you wrote stays in the box. Without the page's script, it shows above the box as **Not sent.** and control's reason. Control's audit log records that refusal as `refused`, with the page's path and the reason ([Audit log actions](rest-api.md#audit-log-actions)). While the planner is off on **Edit rig**, the **Planner** tab has no form under **Tell the planner**, only "The planner is off on this rig, so it reads no messages. The lanes take the queue in order and keep to the rules. Switch it on in Edit rig to tell it something.", with **Switch it on in Edit rig** as a link to the rig's **Edit rig** page.
 
-The harness writes the live line `Owner to <to> (#<id>): <text>`, with `, kept in force` after the id for a kept message. A run's **Live** shows a signed line as **To** the recipient and the text. A line for everyone working, a lane, the planner or the advisors shows so at once, in its own words. A line for a trial shows as a plain line until the run's `agent_message` event, below, reaches control with the rig's report; **Live** then draws it again in place, with the event's words. Result: `{"message": <id>, "to", "keep", "readers", "note"}`. `readers` lists who will read it: lanes, `planner`, `teachers`, `auditor` or `panel` (the review panel, by the name the rig takes). `note` is there only for a trial that has ended: `trial t-… has ended; lane-<n>'s next trial reads this`.
+The harness writes the live line `Owner to <to> (#<id>): <text>`, with `, kept in force` after the id for a kept message. A run's **Live** shows a signed line as **To** the recipient and the text. A line for everyone working, a lane, the planner or the advisors shows so at once, in its own words. A line for a trial shows as a plain line until the run's `agent_message` event, below, reaches control with the rig's report; **Live** then draws it again in place, with the event's words. Result: `{"message": <id>, "to", "keep", "readers", "note"}`. `readers` lists who will read it: lanes, `planner`, `teachers`, `auditor` or `review_panel`. `note` is there only for a trial that has ended: `trial t-… has ended; lane-<n>'s next trial reads this`.
 
-The run's ledger records the message with its text (`agent_message`), each reader's first read (`agent_message_read`, `{message, by}`, with `trial` for a lane's read and `round` for the planner's: the round whose plan read it) and each advisor's answer (`advisor_answer`). A rule the planner makes from the message is a `directive` whose body has `from_message`. The run's **Planner** tab shows a message to the planner, or to everyone working, under **Tell the planner**: waiting until the planner's round reads it, then with the planner's answer, made from these records: the rules it made from the message, the directions it designed for them, any rules it left out because the owner had removed them, and the round's notes. The run's **Live** shows the message, each read and each answer only from the harness's signed live lines; an unsigned line that looks like one shows as a plain line. A lane's read, like a message to a trial, shows plainly until the run's `agent_message` event reaches control.
+The run's ledger records the message with its text (`agent_message`), each reader's first read (`agent_message_read`, `{message, by}`, with `trial` for a lane's read, `how` for how that trial's agent was given it (`brief`; `next-call`, in Pi, before its next model call; `after-tool` or `turn-end`, inside its turn through its program's hook or Thermite's plugin; or `continuation`, when the harness continued its session), and `round` for the planner's: the round whose plan read it) and each advisor's answer (`advisor_answer`). A rule the planner makes from the message is a `directive` whose body has `from_message`. The run's **Planner** tab shows a message to the planner, or to everyone working, under **Tell the planner**: waiting until the planner's round reads it, then with the planner's answer, made from these records: the rules it made from the message, the directions it designed for them, any rules it left out because the owner had removed them, and the round's notes. The run's **Live** shows the message, each read and each answer only from the harness's signed live lines; an unsigned line that looks like one shows as a plain line. A lane's read, like a message to a trial, shows plainly until the run's `agent_message` event reaches control.
 
 ### `unkeep_message`
 
@@ -428,11 +448,11 @@ Adds an experiment to the run's **experiment queue**. Each run has its own queue
 | `run` | lowercase id | required | The run |
 | `title` | text, 1 to 200 characters, trimmed | required | What to try |
 | `details` | text up to 4000 characters | none | More about it |
-| `family` | text, 1 to 80 characters, trimmed | none | Its direction: in your own words, or a direction's name. Written as `:name:`, it is kept without the colons |
+| `direction` | text, 1 to 80 characters, trimmed | none | Its direction: in your own words, or a direction's name. Written as `:name:`, it is kept without the colons |
 | `why` | text up to 2000 characters | none | Why it is worth trying. The planner reads it, and so does the worker whose lane gets the experiment |
 | `position` | `"top"`, `"end"`, or a whole number from 0 to 100000 | `"end"` | Where it goes among the queued experiments |
 
-The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `family`, `why` and `details` when they are not empty. It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
+The dashboard's **Add** sends **Add an experiment** as `title`, and **Direction**, **Why** and **Details** as `direction`, `why` and `details` when they are not empty. It puts the experiment at the top, unless **Where** says **at the end**. Over the REST API, the command line and MCP it goes to the end unless `position` says otherwise.
 
 These rules hold for the five queue kinds:
 
@@ -441,7 +461,7 @@ These rules hold for the five queue kinds:
 - The harness refuses a run it doesn't have (`no run <run>`), a closed run (`run <run> is closed: its queue and rules no longer change`), and an experiment the run doesn't have (`no experiment <id> in run <run>`).
 - The harness writes the experiment and one event in one step. The event's actor is `control:<issued_by>`, such as `control:owner:ui`, and its `by` is `owner`, whoever issued the command.
 
-The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now. Event: `experiment_added`, `{id, title, details?, family?, why?, question?, by, state, position}`. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
+The new experiment is up next, with `owner` as its author. Result: `{"experiment": "x-…", "state": "queued", "position": <n>}`, `position` being its place now. Event: `experiment_added`, `{id, title, details?, direction?, why?, question?, by, state, position}`. In a research run, a title labelled `Question <n> (index <i>)` names that question, when the run has it, and the task keeps it as `question`.
 
 ### `queue_move`
 
@@ -463,13 +483,13 @@ Changes the words of an experiment that still waits: one up next, or a lane's id
 | --- | --- | --- |
 | `run` | lowercase id | The run |
 | `id` | experiment id | The experiment |
-| `title`, `details`, `family`, `why` | as for `queue_add` | The new words. Give at least one; the others stay as they are |
+| `title`, `details`, `direction`, `why` | as for `queue_add` | The new words. Give at least one; the others stay as they are |
 
-An empty `details` or `why` clears it; `title` and `family` cannot be empty.
+An empty `details` or `why` clears it; `title` and `direction` cannot be empty.
 
-**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`family`) and **Why**. **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `family` only when they are not empty, so an emptied one keeps its old words. A lane's idea has no **Edit** on the dashboard.
+**Edit** on an experiment under **Up next** opens a form with its words: **What to try** (`title`), **Details**, **Direction** (`direction`) and **Why**. **Save** always sends `details` and `why`, so a field you empty is cleared. It sends `title` and `direction` only when they are not empty, so an emptied one keeps its old words. A lane's idea has no **Edit** on the dashboard.
 
-Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, family and why`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
+Control refuses an edit with none before signing: `bad queue_edit payload: payload: change at least one of title, details, direction and why`. The harness refuses an experiment that no longer waits: `experiment <id> is <state>: only proposed or queued experiments can be edited`. Result as for `queue_add`; `position` is `null` for a lane's idea. Event: `experiment_edited`, `{id, by}` and the fields that changed.
 
 ### `queue_drop`
 
@@ -506,7 +526,7 @@ Removes one [directive](#redirect), a rule for the plan, whoever set it: the own
 
 The harness refuses: `no run <run>`, a closed run (`run <run> is closed: its queue and rules no longer change`), and `no rule <id> in force in run <run>`. The directive stays in the record with the status `dropped`, and the ledger records `directive_dropped`, `{id}`. Result: `{"run", "dropped": <id>}`.
 
-**A removed rule does not come back from the advisors, the planner or an agent's token.** The teachers' next set of directives replaces their earlier set, the planner adds rules when an owner's message asks for one, and an agent token may send a `redirect`. Before the harness records such a set, it leaves out each rule that matches a rule removed from the run with `drop_directive`: the same kind, and the same `family` or `match` words, ignoring case and spaces at the ends. A rule that names neither matches every removed rule of its kind that names neither. The harness records the left-out rules in one event, `directives_left_out`, `{rules, why: "the owner removed these rules"}`, whose actor is `supervisor`, `planner` or `control:agent:mcp`, and records the rest of the set. Only a `redirect` issued by the owner, or by an operator for the owner, sets a removed rule again: its author is `control:owner:…`, such as `control:owner:api` for the owner's REST API or `control:owner:operator`.
+**A removed rule does not come back from the advisors, the planner or an agent's token.** The teachers' next set of directives replaces their earlier set, the planner adds rules when an owner's message asks for one, and an agent token may send a `redirect`. Before the harness records such a set, it leaves out each rule that matches a rule removed from the run with `drop_directive`: the same kind, and the same `direction` or `match` words, ignoring case and spaces at the ends. A rule that names neither matches every removed rule of its kind that names neither. The harness records the left-out rules in one event, `directives_left_out`, `{rules, why: "the owner removed these rules"}`, whose actor is `supervisor`, `planner` or `control:agent:mcp`, and records the rest of the set. Only a `redirect` issued by the owner, or by an operator for the owner, sets a removed rule again: its author is `control:owner:…`, such as `control:owner:api` for the owner's REST API or `control:owner:operator`.
 
 ### `hypothesis_status`
 
@@ -527,7 +547,7 @@ Control refuses a run its rig reports as not a research run, before it signs any
 
 On the dashboard, control refuses a change with no reason before it signs it: `write why you change the hypothesis first`.
 
-Result: `{"run", "hypothesis", "status", "from", "changed"}`, where `from` is the status it had. The same status again changes nothing: `changed` is `false`, with a `note` such as `hypothesis <id> is in the pool already: nothing changed`, and no event. Each change is the event `hypothesis_status`, `{hypothesis, status, from, by, reason, question, text}`, with `by` the issuer, such as `control:owner:api`; the run's research folder, its next workers' briefs, its next review package and the campaign's folder in the [knowledge base](knowledge-base.md) follow it.
+Result: `{"run", "hypothesis", "status", "from", "changed"}`, where `from` is the status it had. The same status again changes nothing: `changed` is `false`, with a `note` such as `hypothesis <id> is in the pool already: nothing changed`, and no event. Each change is the event `hypothesis_status`, `{hypothesis, status, from, by, reason, question, text}`, with `by` the issuer, such as `control:owner:api`; the run's research folder, its next workers' briefs, its next review package and the campaign's collection in the [knowledge base](knowledge-base.md) follow it.
 
 ### `propagate`
 
@@ -541,7 +561,7 @@ Another rig's published champion, sent as a candidate for this rig's judge. Cont
 | `source_seq` | positive whole number | The champion's number in that run |
 | `import` | a `champion_patch` [import](#imports) | The champion as a patch, with its path `propagate/<rig>/<run>/<seq>.patch` |
 
-Control refuses to build one: `propagate between two different rigs`, `no run <run> on <rig>`, `the source run has no champion beyond its seed`, `champion seq <n> is not published yet (it is published with the rig's next export)`, `<run> runs <campaign>, not <campaign>`, `the target works on <repo>, the champion is in <repo>`.
+Control builds it from two runs, each named alone: the run whose champion goes and the run that tests it (`{run, to_run}` over REST and MCP); it knows the rig each ran on, and fills in `source_rig`. Control refuses to build one: `no run <run>`, `<run> and <to_run> are on one rig: propagate between two rigs`, `the source run has no champion beyond its seed`, `champion seq <n> is not published yet: the run's export at its end publishes it, or an export of what changed on <rig> does now (Export on its page)`, `<run> runs <campaign>, not <campaign>`, `the target works on <repo>, the champion is in <repo>`.
 
 The supervisor takes the patch from the [results repository](../how-to/operate/results-repository.md), and waits while it is not there yet. The harness then refuses: `research campaigns do not take propagations`, `propagate takes a champion_patch import (a published champion)`, `the champion is in <repo>; this run works on <repo>`, `base commit <commit> is not in this rig's repository`, `the champion patch does not apply to the base: …`, `tree mismatch: the signed tree is <tree>, the patch gives <tree>`. If this rig's champion already has the same files, the result is `{"identical": true, "note": "this rig's champion already has the same tree"}`. Otherwise the patch becomes an attempt that this rig's judge measures against its own champion. Result: `{"attempt", "lifecycle", "tree"}`.
 
@@ -549,10 +569,13 @@ The supervisor takes the patch from the [results repository](../how-to/operate/r
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `full` | boolean | `false` | `true` also writes the research archive, a snapshot of the ledger, and the research folder of every run that has one, finished or not ([Normal and full exports](exports.md#normal-and-full-exports)). A full reset and a RunPod pod's terminate ask for a full export, and so does **Full export** under **Export** on the dashboard |
-| `run` | run id, optional | | An export of that run alone, from its start ([A run's export](exports.md#a-runs-export)), as **This run** on a run's page asks for. It is outside the rig's chain of exports: the result's `export_id` is `0`, and the next export starts where the last of the chain ended |
+| `full` | boolean | `false` | `true`: a full export, with the research archive, a snapshot of the ledger, and the research folder of every run that has one, finished or not ([Full exports](exports.md#full-exports)). A full reset and a RunPod pod's terminate ask for one, and so does **Full export** under **Export** on the dashboard |
+| `run` | run id, optional | | An export of that run alone, from its start ([A run's export](exports.md#a-runs-export)), as **This run** on a run's page asks for. It is outside the rig's chain of full exports: the result's `export_id` is `0` |
+| `open_runs` | `true`, optional | | A run's export of each run on the rig that is not closed, each its own, as a RunPod pod's stop asks for. The rig's own checks export nothing. Result: `{"export", "exports", "through_event"}`, `exports` naming each export in order and `export` the last, or `null` when every run is closed |
 
-The harness writes an export to its outbox for the supervisor to push. Result: `{"export", "export_id", "through_event", "attempts", "events"}`.
+Exactly one of the three: a payload with none, or with two, is refused with `an export is of one run (run), of each run not closed (open_runs: true), or full (full: true)`. An export of what changed since the rig's last export, which `export_now` with `{}` asked for before v0.1.1, is no more.
+
+The harness writes an export to its outbox for the supervisor to push. It is the only way to ask for an export: the rig makes none on a timer, only each run's own when the run ends ([When a rig exports](exports.md#when-a-rig-exports)). Result: `{"export", "export_id", "through_event", "attempts", "events"}`. At the rig's [disk floor](settings.md#places-exports-and-the-broker) it is refused, since an export takes room in the outbox, and a full one copies the whole ledger: `an export waits: the rig's disk is at its floor of 5 GiB (its outbox has 3.1 GiB free): no new trial, judge's job or export starts until there is room again` (`a full export waits: …` for a full one).
 
 ### `drain_rig`
 
@@ -562,10 +585,11 @@ Control issues it before it moves a rig at work onto new images or a new address
 | --- | --- | --- |
 | `drain` | boolean | `true`: the rig drains; `false`: the drain ends |
 | `reason` | text, 1 to 500 characters, optional | Why, as the event records it |
+| `deadline_minutes` | whole minutes, 1 to 10,080, optional | How long the drain waits for the work under way before its deadline: an update's `drain_minutes`. Left out: the rig's [`THERMITE_DRAIN_MINUTES`](settings.md#places-exports-and-the-broker), 60 by default. A drain asked for again keeps the deadline it began with |
 
 **End the drain** on a draining rig's page sends `drain: false` with the reason `the owner ended the drain`; on a rig control set up on a cluster it is **Call the update off**, which calls the change off too.
 
-While a rig drains, its harness starts no new trial, plan or judge job, and those running end as they would; a plan that ends during the drain records its round and starts no trial. Its report's `work` says what still runs, `{trials, judge_jobs, draining, open}`, and control restarts its pods once nothing does. `draining` is `{since, reason, by}`, where `by` is who asked, such as `control:owner:api`, or `null` when the rig doesn't drain. While it drains, `open` lists each trial still running, oldest first, at most 16: `{trial, run, lane, started_at, task, question, turns, tool_calls, tokens_in, claims, refused_again}`, where `task` is its experiment's title, `question` a research task's question (from 0), the counters are what its worker last reported, `claims` counts the verified claims it recorded (`null` outside a research run), and `refused_again` is its newest ask for a page the run refused before for a reason that lasts, `{url, reason, asked, at, times}` (`times`: how many such asks this trial made), or `null`. The rig's page shows them ([The drain card](rig-page.md#the-drain-card)). `judge_jobs` counts only jobs under a lease still in force: a lease that ran out is taken back while the rig drains, queued again or `blocked` after its third lost lease, which starts nothing. A drain lasts until the harness restarts, which ends it. The event `rig_drain` records each change with the same figures, without `open`; a harness that starts again after a drain records its end, with `drain: false` and the reason `the harness started again`. A research run's clock leaves out the time the rig drained ([Limits and pacing](limits-and-pacing.md#caps)). Result: `{"trials", "judge_jobs", "draining"}`.
+While a rig drains, its harness starts no new trial, plan or judge job, and those running end as they would; a plan that ends during the drain records its round and starts no trial. Its report's `work` says what still runs, `{trials, judge_jobs, draining, open}`, and control restarts its pods once nothing does. `draining` is `{since, reason, by, deadline, deadline_reached}`, where `by` is who asked, such as `control:owner:api`, `deadline` when the drain stops waiting by itself, and `deadline_reached` when it did (left out before), or `null` when the rig doesn't drain. While it drains, `open` lists each trial still running, oldest first, at most 16: `{trial, run, lane, started_at, task, question, turns, tool_calls, tokens_in, claims, refused_again}`, where `task` is its experiment's title, `question` a research task's question (from 0), the counters are what its worker last reported, `claims` counts the verified claims it recorded (`null` outside a research run), and `refused_again` is its newest ask for a page the run refused before for a reason that lasts, `{url, reason, asked, at, times}` (`times`: how many such asks this trial made), or `null`. The rig's page shows them ([The drain card](rig-page.md#the-drain-card)). `judge_jobs` counts only jobs under a lease still in force: a lease that ran out is taken back while the rig drains, queued again or `blocked` after its third lost lease, which starts nothing. A drain lasts until the harness restarts, which ends it. At its deadline it stops waiting by itself (goal 173): the event `rig_drain` records the step with `deadline_reached: true` and what still runs, the rig goes on starting nothing new, and the owner chooses under **Needs you** or on the rig's page to go ahead now or to end the drain ([At its deadline](rig-page.md#at-its-deadline)); nothing is chosen for the owner. The event `rig_drain` records each change with the same figures and the drain's `deadline`, without `open`; a harness that starts again after a drain records its end, with `drain: false` and the reason `the harness started again`. A research run's clock leaves out the time the rig drained ([Limits and pacing](limits-and-pacing.md#caps)). Result: `{"trials", "judge_jobs", "draining"}`.
 
 ### `stop_trial`
 
@@ -577,7 +601,17 @@ The owner stops one running trial, such as one a drain waits for. An operator's 
 | `trial` | the trial's id: letters, digits, `-` and `_`, 1 to 64 | The trial, as a draining rig's report lists it under `open`, or as `run_queue` gives each lane's under `at_work` |
 | `reason` | text, 1 to 500 characters, optional | Why, as the event records it. Without one: `stopped by <issuer>` |
 
-The harness refuses a trial of another run (`run <run> has no trial <trial>`) and one that has ended (`trial <trial> has ended already`). Otherwise it records `trial_stop_asked` `{trial, lane, reason?}`, and the scheduler stops the trial within a second, as a restart would: the event `trial_stopped` `{lane, trial, reason}`, then the trial ends as `interrupted`, with the counters its worker last reported. Its sources and claims stay. Its experiment goes back to the top of the run's queue, as for [`reset_workers`](#reset_workers): during a drain, a lane takes it up again once the drain ends. Nothing else stops. A trial that ends before the scheduler gets to it is left as it ended. Result: `{"run", "trial", "lane", "stopping": true}`.
+The harness refuses a trial of another run (`run <run> has no trial <trial>`) and one that has ended (`trial <trial> has ended already`). Otherwise it records `trial_stop_asked` `{trial, lane, reason?}` and tells the scheduler, which stops the trial at once, as a restart would: the event `trial_stopped` `{lane, trial, reason}`, then the trial ends as `interrupted`, with the counters its worker last reported. Its sources and claims stay. Its experiment goes back to the top of the run's queue, as for [`reset_workers`](#reset_workers): during a drain, a lane takes it up again once the drain ends. Nothing else stops. A trial that ends before the scheduler gets to it is left as it ended. An ask the harness recorded just before it stopped is acted on when it starts again: the trial gets its `trial_stopped`, by the issuer and with their reason, and the restart ends it as `interrupted`. Result: `{"run", "trial", "lane", "stopping": true}`.
+
+### `end_wait`
+
+The owner ends a run's wait for its provider's limit before its time. An operator's token may send it too, for the owner; an agent's may not.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The run whose agents wait |
+
+While a run waits for its provider's limit (`agents_wait_for_limit`), no new trial or plan of the run starts until the time the provider gave, at most one trial's length from when it was asked ([The model provider](limits-and-pacing.md#the-model-provider)). `end_wait` ends that wait now: the harness records `agents_wait_ended` `{until}`, with the time the wait was to last until, and new trials and plans of the run start at once. If the limit still holds, the next trial meets it, and the run waits again. A trial that waits in its own conversation goes on at its own time. A research run's clock runs again from then. The run's **History** says `You ended the agents' wait for the provider's limit, which was to last until <time> UTC: new trials and plans start again.` A run that does not wait has nothing to end: nothing is recorded. The harness refuses a closed run (`run <run> is closed`). Result: `{"run", "ended": true, "until"}`, or `{"run", "ended": false}`.
 
 ### `wipe_state`
 
@@ -623,16 +657,17 @@ The rig's own settings, as on its **Edit rig** page. Only the fields that change
 | `auditor` | boolean | The auditor runs in the supervisor, where configured |
 | `teachers` | boolean | The teachers, and their merged by model, run in the supervisor, where configured |
 | `review` | boolean | The review panel runs in the supervisor, where configured |
-| `exports` | boolean | Hourly exports for the supervisor to push |
+| `exports` | boolean | Each run's export when it ends, for the supervisor to push or send ([A run's export at its end](exports.md#a-runs-export-at-its-end)). Off: a run that ends is not exported; it is once this is on again. Nothing is exported on a timer either way |
 | `trial_minutes` | 1 to 1440, or `null` | A trial's length when its contract sets none. `null`: none |
 | `max_turns` | 1 to 100000, or `null` | A limit on each trial's model turns. `null`: no limit |
 | `quiet_minutes` | 1 to 1440, or `null` | After how many minutes without a line a trial asks the owner under **Needs you**. `null`: never. Nothing ends the trial |
+| `program_mode` | `terminal` or `headless` | How a worker's trial runs Claude Code, Codex, OpenCode or Pi: `terminal` (the default), in the program's own terminal UI, which the harness's terminal host holds, and a worker in Pi in its Pi view there; `headless`, one headless run of the program for each turn, and a worker in Pi with no view. A trial keeps the mode it started with. A rig whose harness is older reports no mode and runs headless. See [Agents in their own terminal](../explanation/agents-lanes-planner.md#agents-in-their-own-terminal) |
 | `promotion` | `auto` or `owner_approval` | The rig's promotion rule, for runs that set none |
 | `judge_gpus` | 1 to 8, or `null` | On a rig given its set of GPUs, how many are the judge's. `null`: the rig's default. A change restarts the harness to regroup the cards |
 
 The harness keeps the settings, applies them at once and reports them, with a `rig_settings_changed` event that holds the change and the settings after it. Result: `{"settings": <all the rig's settings>}`.
 
-The **History** of the run at work at the time says what changed, such as "You changed the rig's settings: the planner off, 3 lanes, no turn limit." Each field reads as `the judge`, `the workers`, `the planner`, `the auditor`, `the teachers`, `the review panel` or `exports` with `on` or `off`; `<n> lanes` (`1 lane`); `trials of <n> min`; `at most <n> turns a trial` or `no turn limit`; `confirmed wins kept at once` or `confirmed wins wait for you`; and `<n> GPUs for the judge` (`1 GPU for the judge`) or `the judge's usual share of GPUs`.
+The **History** of the run at work at the time says what changed, such as "You changed the rig's settings: the planner off, 3 lanes, no turn limit." Each field reads as `the judge`, `the workers`, `the planner`, `the auditor`, `the teachers`, `the review panel` or `exports` with `on` or `off`; `<n> lanes` (`1 lane`); `trials of <n> min`; `at most <n> turns a trial` or `no turn limit`; `agent programs in their own terminal` or `agent programs headless`; `confirmed wins kept at once` or `confirmed wins wait for you`; and `<n> GPUs for the judge` (`1 GPU for the judge`) or `the judge's usual share of GPUs`.
 
 ### `accept_review`
 
@@ -660,6 +695,111 @@ The owner's answer to the harness's proposal that a goal campaign's goals cannot
 
 A closed run is refused, whichever the answer: `run <run> is closed: it can't end as not possible or go on`.
 
+### `invalidate_evidence`
+
+The owner withdraws bad evidence: an attempt, for good, with every attempt built on it, or the measurements of one of the judge's jobs, whose attempts are judged again. Nothing is deleted: each step is a new record. It goes in two steps. A **preview** (`preview: true`) answers with what it would reach and changes nothing: the rig records only the command, as it records every command. The **withdrawal** names the preview's `sha` in `reach`: the harness works out the reach again and does exactly that, or refuses when it differs. [Withdraw bad evidence](../how-to/campaigns/withdraw-bad-evidence.md) shows the steps.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The run |
+| `attempt` | text, 1 to 64 characters | One of the two. An attempt of the run: withdrawn for good, with every attempt built on it |
+| `job` | positive whole number | One of the two. A judge job of the run that finished: its measurements are withdrawn |
+| `reason` | text, 1 to 2000 characters, not spaces alone | Why. The record keeps it, and every page that shows the withdrawal says it |
+| `preview` | boolean | `true`: say what it would reach, and change nothing |
+| `reach` | sha256, 64 hexadecimal characters | Without `preview`, required: the `sha` the preview answered |
+
+Control refuses, before it signs: `name one attempt or one job` (both, or neither), and `send a preview first (preview: true), then the sha it gave as reach` (neither `preview` nor `reach`). The harness refuses: `invalidate_evidence is the owner's own to issue, not <issuer>'s` (an operator), `attempt <attempt> is not in <run>`, `attempt <attempt> was withdrawn already, for good: there is nothing more to withdraw`, `job <job> is not in <run>`, `job <job> is <state>: it has no measurements to withdraw yet` (a job still queued, leased or blocked), `no verdict rests on job <job>'s measurements now: there is nothing to withdraw`, and, for the withdrawal, `what it reaches changed since the preview: preview it again, and confirm what it reaches now`. A closed run's evidence can be withdrawn too: nothing in it is judged again.
+
+What it reaches, from the subject: the attempt itself, or each attempt whose current verdict rests on the job, then every attempt built on one reached (the attempt whose commit it was made on), in turn.
+
+- **Each attempt reached** gets an `invalidated` verdict that supersedes its current one (the verdict before stays in the record). An attempt withdrawn for good is marked so, never gets another verdict, and can't become the champion; a change submitted later on top of one is withdrawn as it arrives, with `lineage of invalidated evidence: built on <attempt>, which was withdrawn: <reason>`, and never judged. When a job's measurements are withdrawn, each attempt goes back to the judge's queue (`queued`, with a new job) to be measured again, unless its run is closed, it was never judged (`rejected_v0`, `duplicate`), or it was withdrawn for good before.
+- **The judge's open jobs** for the attempts reached, queued or under way, are cancelled (`job_cancelled`). A judge measuring one can no longer record its outcome, as after a lost lease. An attempt that is not judged again and waited for the judge, an audit or the owner settles as `judged`.
+- **Each champion** whose attempt is reached is reopened (`champion_reopened`). When the run's champion is among them, it moves back to the newest champion that stands, the starting point at least, with a `champion_moved_back` event; its git ref follows, new trials build on it, and a goal run's judge checks its goals again.
+- **A champion already published** keeps its patch in the results repository and on control: nothing there is deleted or rewritten, and the next export carries the events that withdrew it. Control no longer offers it to download or to propagate.
+
+The answer, to both steps: `{"sha", "reach", "words"}`, with `"preview": true` for a preview and `"invalidation": <id>` for the withdrawal. `words` says what it reaches in sentences, as the dashboard shows them. `reach` is `{run, subject: {kind, id}, for_good, attempts, attempts_total, superseded, jobs: {cancelled, cancelled_total, queued}, champions, champion}`: `attempts`, the first 200, each `{attempt, why: subject|evidence|lineage, parent, lifecycle, verdict, then: withdrawn|judged_again|stays_withdrawn}` as it is before; `superseded`, how many current verdicts an `invalidated` one supersedes; `champions`, each `{seq, attempt, published}`; `champion`, `{from, to, to_attempt, validate}` when the run's champion moves back, else `null`. The `sha` covers each attempt and what becomes of it, the verdicts superseded, the champions reopened and where the champion moves.
+
+The withdrawal records, in one transaction: the `invalidation` event (`{id, run, kind, reason, attempts, verdicts, champions}`, its subject the attempt or the job), each `verdict` and `champion_reopened`, each `job_cancelled`, `job_queued` and `attempt_lifecycle`, and `champion_moved_back` (`{from, to, attempt, commit, invalidation, reason}`). Each reaches control, the exports and the knowledge base like any event.
+
+### `terminal_input`
+
+The owner types into one running trial's terminal, where its agent program runs its own terminal UI ([Agents in their own terminal](../explanation/agents-lanes-planner.md#agents-in-their-own-terminal)), a planner's call's while it plans in one, or an advisor's call's while it works in one in the supervisor: words, a slash command or a skill, then Enter, or keys by their names, such as for a program's menu. A worker in Pi takes the same input in its Pi view, where nothing is typed: each input is one call in its trial's loop ([below](#in-a-worker-in-pis-view)); so does a planner in Pi in its Pi view, and an advisor in Pi in its own. Only the owner issues it: never an operator, an agent or a reader. [Watch and steer an agent in its terminal](../how-to/campaigns/agent-terminal.md) shows the console that sends it.
+
+```json title="terminal_input (part)"
+{"run": "run-1", "trial": "t-0123456789abcdef", "text": "/compact"}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `run` | lowercase id | The trial's run |
+| `trial` | letters, digits, `-` and `_`, 1 to 100 | A running trial of the run, as its **Live** page or `run_queue`'s `at_work` names it; or the planner's call, `planner-<run>-<round>`, while it plans that round in its own terminal, as the planner's **Live** page and the rig's report (`work.terminals`) name it; or an advisor's call, `advisor-<advisor>-<run>-<n>` (the advisor's name with other characters than these as `-`, cut to 20), while the teachers, the auditor or a reviewer works on the run in its own terminal, as the supervisor's **Live** page and the rig's report name it |
+| `text` | text, up to 4000 characters, not spaces alone | One of the two. Typed into the program, then Enter. Line breaks and tabs go in as a paste where the program takes one, so they submit nothing. No other control character: a key goes by its name. A form's CR LF is kept as LF |
+| `keys` | 1 to 16 of `enter`, `esc`, `tab`, `up`, `down`, `left`, `right`, `page-up`, `page-down`, `0` to `9` | One of the two. Sent one after the other. Ctrl+C is not one of them: the program's own steps interrupt a turn |
+| `wait` | `queue` (the default) or `now` | While the program waits for its usage window to reset: `queue` holds the input until the reset has come and the program is at work again; `now` types it at once, and the program may start its wait again |
+| `confirm` | `true` | Required for text that starts with `!`, which runs a shell command in Claude Code and Codex, or that runs `/login`, `/logout`, `/config` or `/permissions`, which change the program's sign-in or settings |
+| `follow_up` | `true` | With text only, for an agent in its Pi view (a worker, the planner or an advisor in Pi): the words wait until the agent would stop, at the end of a reply that calls no tool, and go in then, instead of before its next model call. Another program refuses it |
+
+Control refuses, before it signs: any issuer but the owner (`Only the owner types into an agent's terminal: send the agents a message.`), `give text or keys, one of the two`, `text may hold no control characters but line breaks and tabs: send a key by its name`, `type some text, or send keys by their names`, `follow_up goes with text, not keys`, and `confirm this input first (confirm: true)`. The harness refuses: `terminal_input is the owner's own to issue, not <issuer>'s`, `run <run> has no trial or call <trial>`, `<trial> has ended: nothing more goes into its terminal`, `trial <trial> has no terminal to type into: its program runs headless, with no terminal (…)`, `trial <trial> has no terminal to type into: its program has not started yet`, `<trial> took 30 inputs in the last minute, the most it takes: send this one again in a moment`, `20 inputs wait for the usage window's reset already: send this one now, or after the reset`, and `not typed into <trial>'s terminal: <why>`, such as when the program is being ended or exited and starts again at its next turn, or `follow_up is for an agent in its Pi view: <program> takes what is typed into it as it comes`. A planner's call takes the same inputs as a trial's program, and a planner in Pi the same as a worker in Pi; the round's plan in, its call has ended. An advisor's call takes the same inputs as a trial's program, and an advisor in Pi the same as a worker in Pi; another advisor's program refuses `follow_up` with the same words as a trial's. The supervisor runs it, so the harness, once it has checked and recorded the input, hands it to the supervisor, which types it and says what became of it; the harness also refuses `the rig's supervisor did not take it: it may be restarting. Send it again in a moment`, `the rig's supervisor did not say in 30 seconds whether it typed it`, `100 inputs wait for the advisors' terminals already: send this one again in a moment`, and, in `not typed into <call>'s terminal: <why>`, the supervisor's `<call> is not running in its terminal now: nothing more goes into it`. Its answer in, its call has ended.
+
+#### In a worker in Pi's view
+
+A worker in Pi takes each input over its trial's own routes, and the harness records what the worker says became of it. A planner in Pi in its Pi view takes each over its call's routes, as one call in its session, the same way: **Esc** there stops its reply and ends that try, and words that wait go in before its next model call until it has sent its plan (`the planner has sent its plan: nothing more goes in`). Its calls:
+
+| Input | The call in the trial's loop |
+| --- | --- |
+| text | Steers the agent: the words go into its conversation before its next model call, as the owner's message |
+| text with `follow_up` | The words wait until the agent would stop, and go in then |
+| `keys: ["esc"]` | Stops the agent's reply, once a tool call under way has finished; the trial goes on with the owner's words that wait, or with its nudge, which counts as none of the campaign's nudges |
+| `/compact` | Compacts the conversation before the agent's next model call |
+| `/mcp` | Shows the trial's MCP tools, and the servers that failed |
+| `/mcp reconnect`, or `/mcp reconnect` and a server's name | Lists the tools of every server, or of one, again from the servers; the agent has the new list from its next turn |
+| `/status` | Shows the trial's model, turns, tool calls, tokens, compactions and time left |
+
+`wait` does not apply: a worker in Pi waits for its provider in its own loop, and steered words go in at its next model call after the wait. The harness refuses, in `not typed into trial <trial>'s terminal: <why>`, with these words: `the Pi view takes one key, Esc, which interrupts the agent's reply: it has no menu for other keys`; `<command> is not a command of the Pi view: it takes /status, /compact, /mcp, /mcp reconnect [server] and /skill:NAME, and words that do not start with / steer the agent`; `this run's kit carries no skills, so /skill:<name> has nothing to load` (kits carry no agent skills yet); `/status takes nothing after it` and the same for `/compact`; `/mcp takes nothing after it, or reconnect and at most one server's name`; `an MCP server's name has at most 64 characters`; `follow_up goes with words for the agent, not with a command (<command>)`; `the agent has no reply under way to stop: it waits for its provider, or between its turns`; `this run's kit gives its workers no MCP servers`, or `no MCP server named <server>`; `the trial's agent has not started yet`; `the trial has submitted its change: nothing more goes to its agent`, or `the trial is ending (<how it stopped>)`; `the Pi worker did not take it within 15 s`, or `took it but did not say within 15 s what became of it`; and `the trial is ending: nothing more goes into its Pi view`, or `has ended`. Each is one input, recorded as refused.
+
+The harness records each input word for word with what became of it, as a `terminal_input` event, `{command, trial, lane, text or keys, wait, follow_up?, outcome, why?, until?}`, with `lane` `planner` for a planner's call and the advisor's name (such as `auditor`) for an advisor's: `typed`; `queued`, with `until`, when the program or the model proxy said when its window resets; `refused`, with `why`; and, for one that waited, a second event when it is `typed_after_reset` or `dropped`, with `why`, such as `the trial ended before the program's usage window reset`. Each is a line in the trial's live view too, without the words. The run's **History** says, for example, `You typed “/compact” into lane-1's terminal (trial t-0123456789abcdef).`, and for words with `follow_up`, `You typed “try the tiled loop next” into lane-2's terminal (trial t-0123456789abcdef) as a follow-up: the agent gets it when it would stop, at the end of a reply that calls no tool.`. Result: `{"run", "trial", "lane", "outcome": "typed" | "queued", "until"?}`.
+
+### `retention_run`
+
+One of the owner's [retention policies](../how-to/operate/retention-policies.md) of a kind kept on rigs (the judge's builds, the trials' session logs, the advisors' records), run on this rig now: control sends it to each rig the policy covers, at the policy's time or when the owner presses **Run now**. It lives a day (24 hours): a rig away longer gets the policy's next run instead. Only the owner's issuers send it; it is never in an MCP role's list for `issue_command`.
+
+```json title="retention_run (part)"
+{"policy": 3, "name": "Old builds", "rule": {"kind": "builds", "rule": "newest", "newest_n": 20, "newest_per": "rig", "older_n": 30, "older_unit": "days", "size_gib": 50, "keep": {"open": true, "champions": true, "newest": true}}, "by": "hand"}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `policy`, `name` | whole number; text, 1 to 80 characters | The policy, as control keeps it |
+| `rule` | the policy's kind, rule and what it always keeps | As [the REST API's design](rest-api.md#retention-policies) gives them, without its name, place and time |
+| `by` | `schedule` or `hand` | Whether its time came, or the owner pressed **Run now** |
+
+The rig works out what goes from what it holds when the command arrives, with the same rule as control's preview:
+
+- **The judge's builds** (`builds`): the harness removes each stored build the rule covers, after what the policy always keeps (each run's champion and each lane's best, builds of runs still open), and never a build whose commit a judge's job is queued for or measuring. A build's record stays in the ledger, so the judge makes it again from its commit and kit when it is needed. The result is the removal.
+- **The trials' session logs** (`trial_logs`): the harness removes each trial's log it keeps (`sessions/<run>/<trial>/` in its state) that the rule covers, keeping those of runs still open when the policy says so. The result is the removal.
+- **The advisors' records** (`advisor_records`): the harness takes the command, with the result `{"kind":"advisor_records","left_to":"the supervisor"}`, and the rig's supervisor then removes the records the rule covers in its home, keeping those of runs still open, and tells the harness what went.
+- A kind kept on control is refused: `<kind> is kept on control, which removes it: not on a rig`.
+
+Either way the rig's ledger records one `retention_removed` event, by the harness (`control:<issuer>`) or by `supervisor`, with `{policy, name, kind, by, count, bytes, oldest, newest, error?}`: what went, its bytes and the times of the oldest and the newest. It reaches control as any event does; control lists it under **What policies removed**, and writes `retention_removed` to its audit log.
+
+### `log_level`
+
+The level one part of the rig writes its log lines at, from now on: the harness's or the supervisor's, each on its own. Use it to look into a fault while the part runs: `debug` for every detail, then back. Control's own level is a setting control keeps instead ([Control's log level](rest-api.md#controls-log-level)).
+
+```json title="log_level (part)"
+{"part": "supervisor", "level": "debug"}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `part` | `harness` or `supervisor` | The part whose level changes |
+| `level` | `debug`, `info`, `warn`, `error` or `null` | Its level from now on; `null`: the part's [`THERMITE_LOG_LEVEL`](settings.md#every-service) again |
+
+- **The harness's.** The harness's service writes at the new level at once, and says so in a line, `log level now <level>`, with `was`, `by` and `command`. The result is `{"part": "harness", "level", "was", "lasts"}`, `lasts` in words: `until another log_level command changes it, or the part restarts: then it writes at its THERMITE_LOG_LEVEL again`.
+- **The supervisor's.** The harness takes the command, with the result `{"part": "supervisor", "level", "left_to": "the supervisor"}`, and the rig's supervisor, once the harness took it, writes at the new level and says so in a line the same way.
+- **How long.** The level is kept in memory only: it lasts until another `log_level` changes it, or the part restarts, which then writes at its `THERMITE_LOG_LEVEL` again. `SIGUSR2` still switches the part between `debug` and its level now. The rig's broker, its workers and its advisors' programs keep their own levels.
+- **Who.** The owner's issuers and the operator's token, never an agent's (the owner-only check, above). Control writes `log_level_sent` to its audit log, `{command, rig, part, level}`, beside the `command_issued` every command gets. A `part` other than these two is refused before signing.
+
 ## Imports
 
 `assign_campaign` lists its imports in `imports`, and `propagate` carries one in `import`. Every `path` is relative to the rig's inbox and may not contain `..`. The harness copies each file into its own store, hashing it as it copies.
@@ -675,15 +815,15 @@ A closed run is refused, whichever the answer: `run <run> is closed: it can't en
 
 | Source | For | Meaning |
 | --- | --- | --- |
-| `{"git": "<URL>"}` | `repo_bundle`, `kit_bundle` | A git repository that has the commit: an `https://`, `ssh://`, `git://` or `file://` address, or `user@host:path`, up to 2000 characters. The supervisor fetches the commit and writes it to `path` as a bundle |
-| `{"git": "<URL>", "access": "<name>"}` | `repo_bundle`, `kit_bundle` | The same, with Git access that control keeps for a private repository, by name. See [Use a private repository](../how-to/campaigns/private-repository.md) |
+| `{"git": "<URL>"}` | `repo_bundle`, `kit_bundle` | A git repository that has the commit: an `https://`, `ssh://` or `git://` address, or `user@host:path`, up to 2000 characters. The supervisor fetches the commit with no key and writes it to `path` as a bundle. A `file://` address passes the schema, and the supervisor refuses it: `<path>: a file:// source is refused: a source is a repository on a host` |
+| `{"git": "<URL>", "access": "<name>"}` | `repo_bundle`, `kit_bundle` | The same, with Git access that control keeps for a private repository, by name. The address must be on the access's host: control refuses the command otherwise, and the supervisor checks it again. See [Use a private repository](../how-to/campaigns/private-repository.md) |
 | `{"control": "kits/<name>"}` | `kit_bundle` | A kit that control keeps: one the **New campaign** page wrote, or a kit repository written elsewhere that the owner gave control as a git bundle ([`POST /v1/kits/<name>`](rest-api.md#kits-control-keeps), MCP's [`kit_add`](mcp-tools.md#kit_add) or [`thermite kit add`](command-line.md#kit-add)). The supervisor fetches the commit from control, as the rig, and writes it to `path` as a bundle. Any commit of the kit's history fetches, and so does an old head that a forced replacement left |
-| `{"url": "<URL>"}` | `model` | An `http://` or `https://` address, up to 4000 characters. The supervisor downloads the file and keeps it only with the import's `sha256`, reporting its progress. See [Model files on a rig](model-files.md) |
+| `{"url": "<URL>"}` | `model` | An `http://` or `https://` address on the internet, up to 4000 characters. The supervisor downloads the file and keeps it only with the import's `sha256`, reporting its progress. See [Model files on a rig](model-files.md) |
 
-A source that cannot be fetched makes the command `failed` with `{"error": "staging: <reason>"}`. Without a source, the file must already be in the inbox.
+Only the owner's and the operator's tokens may name a source to fetch, a Git access or MCP servers in an `assign_campaign`; an agent's token may assign a campaign whose imports are in the rig's inbox already, or are kits control keeps. The supervisor fetches a command's sources only once its harness has checked control's signature on the command; a command the harness refuses is never staged, and goes on to the harness, which refuses it with its reason. A source that cannot be fetched makes the command `failed` with `{"error": "staging: <reason>"}`. Without a source, the file must already be in the inbox.
 
 The harness refuses an import with: `path escapes inbox: <path>`, `not found in inbox: <path>`, `symlink escapes inbox: <path>`, `sha256 mismatch for <path>: expected <hash>, got <hash>`, or `bundle does not contain commit <commit>`.
 
 ## Older names
 
-Commands signed before runs and rigs were renamed still verify. Their envelope names `unit` instead of `rig`; their payloads may name `instance`, `source_instance` and `source_unit`, read as `run`, `source_run` and `source_rig`; and the kinds `pause_instance` and `resume_instance` are read as `pause_run` and `resume_run`.
+A command signed before runs and rigs were renamed, on 2026-10-15, is refused as `malformed command`: its envelope names `unit` instead of `rig`, and its payload and kind may name an `instance`. Control signs every command with today's names.

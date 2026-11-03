@@ -1,7 +1,8 @@
 /**
  * The names the harness and control share for the check that ends a research run (goal 112):
  * after its minimum running time, the review panel checks whether every question is answered, and
- * a final writer writes the run's research paper.
+ * a final writer writes the run's research paper. Also the progress rule's limits, which end a run
+ * whose research stopped adding (goal 117).
  */
 
 /**
@@ -72,6 +73,12 @@ export const ANSWERED = "every question is answered";
  */
 export const PROGRESS_STOPPED = "research stopped adding: its open questions are saturated";
 
+/** A question's last tasks that show it saturated: this many in a row that added nothing new. */
+export const SATURATION_TASKS = 4;
+
+/** The progress rule (the owner, 2026-10-24): no improvement for this share of the running time. */
+export const PROGRESS_SHARE = 0.25;
+
 /** The review panel's events of a research review (goal 117): each reviewer's checked answers per item, and each item's decision. */
 export const REVIEW_ITEMS = "review_items";
 export const ITEM_DECIDED = "item_decided";
@@ -106,6 +113,12 @@ export function labelledQuestion(text: string): number | undefined {
   const m = /\bquestion\s+\d+\s*\(\s*index\s+(\d+)\s*\)/i.exec(text);
   return m ? Number(m[1]) : undefined;
 }
+
+/**
+ * A gap's line in a research task's details: the plan and the planner name the gap there, and so
+ * do the research teachers' tasks.
+ */
+export const GAP_LINE = "Evidence gap to close: ";
 
 /**
  * A research run's hypotheses (goal 117): the author's (the brief's), the workers' pool, those the

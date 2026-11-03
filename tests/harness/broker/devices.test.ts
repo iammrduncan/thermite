@@ -25,7 +25,7 @@ import {
 } from "../../../src/harness/broker/devices.ts";
 import { launch } from "../../../src/harness/broker/process.ts";
 import { IDS } from "../../../src/harness/broker/runner.ts";
-import { deviceProbes } from "../../../src/harness/selftest.ts";
+import { deviceProbes } from "../../../src/harness/selftest/index.ts";
 
 // Shaped like two cards in one container (no real host data).
 const SMI = `0, GPU-aaaaaaaa-0000-0000-0000-000000000000, 00000000:3B:00.0

@@ -4,26 +4,30 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createControlApi } from "../../src/control/api.ts";
-import { ControlStore } from "../../src/control/store.ts";
+import { buildInfo } from "../../src/common/build-info.ts";
+import { ControlStore } from "../../src/control/store/index.ts";
 import type { RigVersions } from "../../src/control/versions.ts";
-import { reportingState, rigView } from "../../src/control/views.ts";
+import { reportingState, rigView } from "../../src/control/views/index.ts";
 import { generateSigningKeys, reportBody, signJson } from "../../src/core/commands.ts";
 import {
   BUILD_HEADERS,
   type BuildInfo,
-  buildHeaders,
-  buildInfo,
   OLDEST_PROTOCOL,
   PROTOCOL,
 } from "../../src/core/version.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
-import { RelayError, relayOnce } from "../../src/supervisor/relay.ts";
+import { AskRefused, ask } from "../../src/supervisor/ask.ts";
+import {
+  ADMIN,
+  controlOnly,
+  controlStack,
+  mcpClient,
+  RIG_TOKEN,
+} from "../helpers/control-stack.ts";
+import { foldOnBus, heldEvents } from "../helpers/control-store.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
+import { appendOther } from "../helpers/kinds.ts";
 
-const tokens = { admin: "admin-token-abcdef", rigs: { "rig-a": "rig-token-abcdef" } };
+const tokens = { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } };
 const owner = { authorization: `Bearer ${tokens.admin}`, "content-type": "application/json" };
 
 interface Listed {
@@ -32,54 +36,47 @@ interface Listed {
 }
 
 /**
- * Control and one rig (harness and supervisor) wired in-process. `supervisor` changes the build
- * headers the supervisor sends: null sends none, as a supervisor from before version checks.
+ * Control and one rig (harness and supervisor) wired in-process on the fake bus. `supervisor`
+ * changes the build headers the supervisor's reports carry: null sends none, as a supervisor
+ * from before version checks. `seen` keeps each report's headers.
  */
-function setup(control?: BuildInfo) {
-  const env = makeHarnessEnv("rig-a");
-  const harness = createHarnessApi(env.service, { supervisor: "sup-token-abcdef" });
-  const store = new ControlStore(":memory:");
-  const api = createControlApi(store, tokens, env.keys.privateKeyPem, {
-    staleAfterMs: 180_000,
-    ...(control ? { build: control } : {}),
-  });
+function setup(build?: BuildInfo) {
+  const s = controlStack({ env: makeHarnessEnv("rig-a"), options: build ? { build } : {} });
+  const { env, store, control, bus } = s;
   const rig: { supervisor: Record<string, string> | null | undefined; seen: Headers[] } = {
     supervisor: undefined,
     seen: [],
   };
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const url = new URL(String(input));
-    if (url.host === "harness")
-      return harness.request(`${url.pathname}${url.search}`, init as RequestInit);
-    const headers = new Headers(init?.headers);
-    if (rig.supervisor !== undefined)
-      for (const h of Object.values(BUILD_HEADERS)) {
-        const v = rig.supervisor?.[h];
-        if (v === undefined) headers.delete(h);
-        else headers.set(h, v);
-      }
-    rig.seen.push(headers);
-    return api.request(`${url.pathname}${url.search}`, { ...init, headers } as RequestInit);
-  };
-  const cfg = {
-    rig: "rig-a",
-    harnessUrl: "http://harness",
-    harnessToken: "sup-token-abcdef",
-    controlUrl: "http://control",
-    controlToken: tokens.rigs["rig-a"],
-    fetchImpl,
+  s.cfg.bus = {
+    publish: (subject, data, o) => {
+      const headers = { ...(o.headers ?? {}) };
+      if (rig.supervisor !== undefined)
+        for (const h of Object.values(BUILD_HEADERS)) {
+          const v = rig.supervisor?.[h];
+          if (v === undefined) delete headers[h];
+          else headers[h] = v;
+        }
+      rig.seen.push(new Headers(headers));
+      return bus.publish(subject, data, { ...o, headers });
+    },
+    request: (subject, data, timeoutMs) => bus.request(subject, data, timeoutMs),
   };
   const listed = async () =>
-    (await (await api.request("/v1/rigs", { headers: owner })).json()) as Listed;
+    (await (await control.request("/v1/rigs", { headers: owner })).json()) as Listed;
   const issue = () =>
-    api.request("/v1/commands", {
+    control.request("/v1/commands", {
       method: "POST",
       headers: owner,
       body: JSON.stringify({ rig: "rig-a", kind: "assign_campaign", payload: env.assignPayload() }),
     });
   const audits = (action: string) =>
-    store.listAudit(1000).filter((a) => a.action === action) as { body: unknown }[];
-  return { env, store, api, rig, cfg, listed, issue, audits };
+    store.auditLog.list(1000).filter((a) => a.action === action) as { body: unknown }[];
+  /** The supervisor's daily report on the bus: control's answer, or its refusal. */
+  const daily = async () => {
+    await s.relay(0);
+    return await ask({ rig: "rig-a", bus }, "daily", { kind: "daily", body: "# The day" });
+  };
+  return { env, store, api: control, rig, relay: s.relay, listed, issue, audits, daily, bus };
 }
 
 const hdrs = (b: Partial<BuildInfo>) => ({
@@ -100,10 +97,9 @@ describe("versions between control and its rigs", () => {
     const issued = await s.issue();
     assert.equal(issued.status, 201);
     const { id } = (await issued.json()) as { id: string };
-    let state = await relayOnce(s.cfg, { cursor: 0 });
-    state = await relayOnce(s.cfg, state);
-    assert.equal(s.store.command(id)?.status, "delivered");
-    assert.ok(s.store.events("rig-a", 0, 100).length > 0);
+    await s.relay(2);
+    assert.equal(s.store.commands.get(id)?.status, "delivered");
+    assert.ok((await heldEvents(s.store, "rig-a")).length > 0);
     const r = (await s.listed()).rigs.find((x) => x.id === "rig-a");
     assert.equal(r?.state, "reporting");
     assert.equal(r?.version.state, "unknown");
@@ -127,12 +123,11 @@ describe("versions between control and its rigs", () => {
       oldest_protocol: Math.max(OLDEST_PROTOCOL, PROTOCOL),
     };
     const s = setup(next);
-    // Every call the supervisor makes to control carries its build.
+    // Every report the supervisor publishes carries its build.
     const issued = await s.issue();
     const { id } = (await issued.json()) as { id: string };
-    let state = await relayOnce(s.cfg, { cursor: 0 });
-    state = await relayOnce(s.cfg, state);
-    assert.equal(s.store.command(id)?.status, "delivered");
+    await s.relay(2);
+    assert.equal(s.store.commands.get(id)?.status, "delivered");
     assert.ok(s.rig.seen.length >= 3);
     for (const h of s.rig.seen) {
       assert.equal(h.get(BUILD_HEADERS.version), own.version);
@@ -166,26 +161,18 @@ describe("versions between control and its rigs", () => {
   test("an incompatible rig is refused, with the reason, on its reports and commands, until it runs a build control works with", async () => {
     const control = { version: "0.9.0", commit: null, protocol: 3, oldest_protocol: 2 };
     const s = setup(control);
-    s.env.service.ledger.appendEvent("t", "one", null, {});
+    appendOther(s.env.service.ledger, "t", "one", null, {});
     s.rig.supervisor = hdrs({ version: "0.1.0", protocol: 1, oldest_protocol: 1 });
     const why =
       "Control cannot work with this rig: its supervisor speaks protocol 1, and control works with protocols 2 to 3. Update the rig's images.";
-    // Its report is refused, and so are its commands: none reach the harness.
-    await assert.rejects(
-      relayOnce({ ...s.cfg, skipCommands: true }, { cursor: 0 }),
-      (err: unknown) => {
-        assert.ok(err instanceof RelayError);
-        assert.match(err.message, /ingest -> 409/);
-        assert.ok(err.message.includes("speaks protocol 1"));
-        return true;
-      },
-    );
-    const pending = await s.api.request("/v1/rigs/rig-a/commands/pending", {
-      headers: { authorization: "Bearer rig-token-abcdef", ...s.rig.supervisor },
+    // Its report is refused, and so are its asks of control, with the reason.
+    await s.relay();
+    await assert.rejects(s.daily(), (err: unknown) => {
+      assert.ok(err instanceof AskRefused);
+      assert.ok(err.message.includes(why), err.message);
+      return true;
     });
-    assert.equal(pending.status, 409);
-    assert.deepEqual(await pending.json(), { error: why });
-    assert.equal(s.store.events("rig-a", 0, 100).length, 0);
+    assert.equal((await heldEvents(s.store, "rig-a")).length, 0);
     // Listed, though it never reported: offline, refused, and why.
     const r = (await s.listed()).rigs.find((x) => x.id === "rig-a");
     assert.equal(r?.state, "offline");
@@ -208,8 +195,10 @@ describe("versions between control and its rigs", () => {
     // Its images updated: it reports again, and the refusal ends (in the audit log too).
     s.rig.supervisor = hdrs({ version: "0.9.0", protocol: 3, oldest_protocol: 2 });
     s.env.service.build = { version: "0.9.0", commit: null, protocol: 3, oldest_protocol: 2 };
-    await relayOnce(s.cfg, { cursor: 0 });
-    assert.ok(s.store.events("rig-a", 0, 100).length > 0);
+    // The page control refused goes again from its place, once the bus's duplicate window passed.
+    s.bus.forgetIds();
+    await s.relay(3);
+    assert.ok((await heldEvents(s.store, "rig-a")).length > 0);
     const after = (await s.listed()).rigs.find((x) => x.id === "rig-a");
     assert.equal(after?.version.state, "current");
     assert.equal(after?.version.refused, null);
@@ -220,22 +209,20 @@ describe("versions between control and its rigs", () => {
 
   test("a harness control cannot work with is refused, though its supervisor is fine", async () => {
     const s = setup();
-    s.env.service.ledger.appendEvent("t", "one", null, {});
+    appendOther(s.env.service.ledger, "t", "one", null, {});
     const own = buildInfo();
     s.env.service.build = { version: "9.0.0", commit: null, protocol: 70, oldest_protocol: 70 };
     const why = `Control cannot work with this rig: its harness works with protocol 70 or later, and control speaks protocol ${own.protocol}. Update control.`;
-    await assert.rejects(relayOnce({ ...s.cfg, skipCommands: true }, { cursor: 0 }), RelayError);
-    assert.equal(s.store.rigRefusal("rig-a")?.reason, why);
-    assert.equal(s.store.rigBuild("rig-a", "harness")?.protocol, 70);
-    // Its commands wait on the harness too: the supervisor's own build is not enough.
-    const pending = await s.api.request("/v1/rigs/rig-a/commands/pending", {
-      headers: { authorization: "Bearer rig-token-abcdef", ...buildHeaders() },
-    });
-    assert.equal(pending.status, 409);
+    await s.relay();
+    assert.equal(s.store.refusals.get("rig-a")?.reason, why);
+    assert.equal(s.store.builds.ofRig("rig-a", "harness")?.protocol, 70);
+    // Its asks wait on the harness too: the supervisor's own build is not enough.
+    await assert.rejects(s.daily(), AskRefused);
     s.env.service.build = own;
-    await relayOnce(s.cfg, { cursor: 0 });
-    assert.equal(s.store.rigRefusal("rig-a"), undefined);
-    assert.ok(s.store.events("rig-a", 0, 100).length > 0);
+    s.bus.forgetIds();
+    await s.relay(3);
+    assert.equal(s.store.refusals.get("rig-a"), undefined);
+    assert.ok((await heldEvents(s.store, "rig-a")).length > 0);
   });
 
   test("a protocol control does not know is never a reason to refuse", async () => {
@@ -249,7 +236,7 @@ describe("versions between control and its rigs", () => {
       protocol: "nine" as unknown as number,
       oldest_protocol: 0,
     };
-    await relayOnce(s.cfg, { cursor: 0 });
+    await s.relay();
     const r = (await s.listed()).rigs.find((x) => x.id === "rig-a");
     assert.equal(r?.version.refused, null);
     assert.equal(r?.version.state, "ahead");
@@ -260,19 +247,24 @@ describe("versions between control and its rigs", () => {
   test("a new control checks refused rigs again: one it can work with is no longer refused", () => {
     const store = new ControlStore(":memory:");
     const env = makeHarnessEnv("rig-a");
-    store.setRigBuild("rig-a", "supervisor", {
+    store.builds.setRig("rig-a", "supervisor", {
       version: "0.1.0",
       commit: null,
       protocol: 1,
       oldest_protocol: 1,
     });
-    store.setRigRefusal("rig-a", "an older control's reason");
-    createControlApi(store, tokens, env.keys.privateKeyPem, {
-      staleAfterMs: 180_000,
-      build: { version: "0.2.0", commit: null, protocol: 2, oldest_protocol: 1 },
+    store.refusals.set("rig-a", "an older control's reason");
+    controlOnly({
+      store,
+      keys: env.keys,
+      tokens,
+      options: { build: { version: "0.2.0", commit: null, protocol: 2, oldest_protocol: 1 } },
     });
-    assert.equal(store.rigRefusal("rig-a"), undefined);
-    assert.equal(store.listAudit(100).filter((a) => a.action === "rig_refusal_ended").length, 1);
+    assert.equal(store.refusals.get("rig-a"), undefined);
+    assert.equal(
+      store.auditLog.list(100).filter((a) => a.action === "rig_refusal_ended").length,
+      1,
+    );
   });
 
   test("a rig that stops reporting is stale, then offline; one that never reported is offline", async () => {
@@ -293,8 +285,8 @@ describe("versions between control and its rigs", () => {
     assert.equal(reportingState(seen(901_000), { staleAfterMs: 180_000, now: at }), "offline");
     // The rig view says it, with stale kept for both.
     const s = setup();
-    await relayOnce(s.cfg, { cursor: 0 });
-    const last = Date.parse(String(s.store.rigs()[0]?.last_seen));
+    await s.relay();
+    const last = Date.parse(String(s.store.reportedRigs.list()[0]?.last_seen));
     const view = (now: number) => rigView(s.store, "rig-a", { ...opts, now });
     assert.deepEqual([view(last)?.state, view(last)?.stale], ["reporting", false]);
     assert.deepEqual([view(last + 200_000)?.state, view(last + 200_000)?.stale], ["stale", true]);
@@ -311,18 +303,8 @@ describe("versions between control and its rigs", () => {
       protocol: PROTOCOL,
       oldest_protocol: OLDEST_PROTOCOL,
     });
-    await relayOnce(s.cfg, { cursor: 0 });
-    const client = new Client({ name: "test", version: "1.0.0" });
-    await client.connect(
-      new StreamableHTTPClientTransport(new URL("http://control/mcp"), {
-        fetch: async (input, init) => {
-          const url = new URL(String(input));
-          const headers = new Headers(init?.headers);
-          headers.set("authorization", `Bearer ${tokens.admin}`);
-          return s.api.request(`${url.pathname}${url.search}`, { ...init, headers } as RequestInit);
-        },
-      }),
-    );
+    await s.relay();
+    const client = await mcpClient(s.api, tokens.admin);
     assert.equal(client.getServerVersion()?.version, "99.0.0");
     const r = await client.callTool({ name: "list_rigs", arguments: {} });
     const rigs = JSON.parse((r.content as { text: string }[])[0]?.text ?? "") as {
@@ -353,7 +335,7 @@ describe("a newer rig's fields that control does not know", () => {
   test("a newer supervisor's figures and daily report are taken; the fields control does not know are dropped", async () => {
     const s = setup();
     s.rig.supervisor = newer;
-    await relayOnce(s.cfg, { cursor: 0 });
+    await s.relay();
     const at = new Date().toISOString();
     const figures = (relay: unknown) => ({
       at,
@@ -395,40 +377,40 @@ describe("a newer rig's fields that control does not know", () => {
         tokens_out: 20,
         usd: 0,
         cache_hits: 7,
-        roles: { teachers: 2, combiner: true, auditor: false, panel: 0, scout: 1 },
+        roles: { teachers: 2, merged_by: true, auditor: false, review_panel: 0, scout: 1 },
       },
     });
-    const r = await s.api.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: asRig(),
-      body: JSON.stringify(figures({ cursor: 3, lag_ms: 20 })),
-    });
-    assert.equal(r.status, 200, await r.clone().text());
+    // Its regular call, on the bus.
+    const onBus = { rig: "rig-a", bus: s.bus };
+    await ask(onBus, "figures", figures({ cursor: 3, lag_ms: 20 }) as never);
     // Stored as this control knows them: nothing it does not know is kept or shown.
-    const sup = s.store.supervisor("rig-a") as Record<string, unknown>;
+    const sup = s.store.reportedRigs.supervisor("rig-a") as Record<string, unknown>;
     assert.deepEqual(sup.relay, { cursor: 3 });
     assert.equal("uptime_s" in sup, false);
     assert.equal("bandwidth" in (sup.export as object), false);
     assert.equal("mirror" in ((sup.models as object[])[0] as object), false);
     const advisors = sup.advisors as { cache_hits?: number; roles: Record<string, unknown> };
     assert.equal(advisors.cache_hits, undefined);
-    assert.deepEqual(advisors.roles, { teachers: 2, combiner: true, auditor: false, panel: 0 });
+    assert.deepEqual(advisors.roles, {
+      teachers: 2,
+      merged_by: true,
+      auditor: false,
+      review_panel: 0,
+    });
     // The rest is used: the download is a step in the rig's history.
-    assert.ok(s.store.rigSetupEvents("rig-a").some((e) => e.step === "model_started"));
+    assert.ok(s.store.rigHistory.list("rig-a").some((e) => e.step === "model_started"));
     // A field control knows keeps its check.
-    const bad = await s.api.request("/v1/rigs/rig-a/supervisor", {
-      method: "POST",
-      headers: asRig(),
-      body: JSON.stringify(figures({ cursor: "three" })),
-    });
-    assert.equal(bad.status, 400);
+    await assert.rejects(
+      ask(onBus, "figures", figures({ cursor: "three" }) as never),
+      /control refused the rig's figures: the figures is not one control takes: relay\.cursor/,
+    );
     // The daily report, with a field from a later build.
-    const daily = await s.api.request("/v1/rigs/rig-a/reports", {
-      method: "POST",
-      headers: asRig(),
-      body: JSON.stringify({ kind: "daily", body: "# The day", format: "markdown" }),
-    });
-    assert.equal(daily.status, 201, await daily.clone().text());
+    const daily = await ask(onBus, "daily", {
+      kind: "daily",
+      body: "# The day",
+      format: "markdown",
+    } as never);
+    assert.equal(s.store.rigReports.list(5, "rig-a")[0]?.id, daily.id);
     // The rig is ahead of control, not refused.
     const listed = (await s.listed()).rigs.find((x) => x.id === "rig-a");
     assert.equal(listed?.version.state, "ahead");
@@ -436,10 +418,9 @@ describe("a newer rig's fields that control does not know", () => {
   });
 
   test("a newer supervisor's export is taken with a field control does not know", async () => {
-    const store = new ControlStore(":memory:");
-    const api = createControlApi(store, tokens, makeHarnessEnv("rig-a").keys.privateKeyPem, {
-      staleAfterMs: 180_000,
-      exportsDir: join(mkdtempSync(join(tmpdir(), "thermite-versions-")), "exports"),
+    const { control: api } = controlOnly({
+      tokens,
+      options: { exportsDir: join(mkdtempSync(join(tmpdir(), "thermite-versions-")), "exports") },
     });
     const bytes = Buffer.from("one\n");
     const r = await api.request("/v1/rigs/rig-a/exports/20261020T120000Z-0123abcd", {
@@ -462,19 +443,14 @@ describe("a newer rig's fields that control does not know", () => {
 
   test("a signed report stays exact: a field a newer harness signed fails the signature; one the supervisor adds is dropped", async () => {
     const s = setup();
-    s.env.service.ledger.appendEvent("t", "one", null, {});
+    appendOther(s.env.service.ledger, "t", "one", null, {});
     const snap = s.env.service.snapshot(0, 100) as Omit<
       Parameters<typeof reportBody>[0],
       "events"
     > & {
       events: Record<string, unknown>[];
     };
-    const ingest = (body: unknown) =>
-      s.api.request("/v1/rigs/rig-a/ingest", {
-        method: "POST",
-        headers: asRig(),
-        body: JSON.stringify(body),
-      });
+    const ingest = (body: unknown) => foldOnBus(s.store, "rig-a", body);
     const withField = snap.events.map((e, i) => (i ? e : { ...e, trial: "t-1" }));
     // A newer harness that signs an event field this control does not know: refused, since
     // control checks the signature over the fields it reads.
@@ -485,13 +461,12 @@ describe("a newer rig's fields that control does not know", () => {
       rig_pubkey: keys.publicKeyPem,
       signature: signJson(reportBody(signed), keys.privateKeyPem),
     });
-    assert.equal(newer.status, 403);
-    assert.deepEqual(await newer.json(), { error: "bad report signature" });
+    assert.deepEqual(newer, { refused: "bad report signature" });
     // The harness's own report, with fields a supervisor added outside and inside it: taken,
     // and what control does not know is not kept.
     const taken = await ingest({ ...snap, events: withField, relayed_by: "a later supervisor" });
-    assert.equal(taken.status, 200, await taken.clone().text());
-    const stored = s.store.events("rig-a", 0, 100);
+    assert.ok("folded" in taken, JSON.stringify(taken));
+    const stored = await heldEvents(s.store, "rig-a");
     assert.ok(stored.length > 0);
     assert.doesNotMatch(JSON.stringify(stored), /t-1|relayed_by/);
   });

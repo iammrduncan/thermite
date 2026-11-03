@@ -3,11 +3,11 @@ import { describe, type TestContext, test } from "node:test";
 import { z } from "zod";
 import { CLAIM_LIMITS_WORDS, researchTool } from "../../../src/agents/tools/research.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
-import { researchAgentTools } from "../../../src/harness/agents/research-agent-tools.ts";
+import { researchAgentTools } from "../../../src/harness/agents/tools/research.ts";
 import { researchHelp, trialCli } from "../../../src/harness/agents/trial-cli.ts";
+import { createHarnessApi } from "../../../src/harness/api/index.ts";
 import { pathWords, REFUSAL_PROBLEMS, refusalWords } from "../../../src/harness/api/refusal.ts";
-import { createHarnessApi } from "../../../src/harness/api.ts";
-import { ClaimInput } from "../../../src/harness/research/research.ts";
+import { ClaimInput } from "../../../src/harness/research/research/index.ts";
 import { makeResearchRun } from "../../helpers/research-run.ts";
 
 /**
@@ -116,7 +116,7 @@ async function trialApi(t: TestContext) {
     run: r.run,
     lane: "lane-1",
     epoch: 1,
-    family: "f",
+    direction: "f",
     parent: "p",
     token: "tok-1",
   });
@@ -179,5 +179,18 @@ describe("an agent sees why its claim was refused (goal 143)", () => {
       ),
       new RegExp(SHORT),
     );
+  });
+});
+
+describe("a worker's bad input is a 400, never the harness's 500 (goal 125, T4)", () => {
+  test("a report section's name it can't take", async (t) => {
+    const s = await trialApi(t);
+    await assert.rejects(
+      s.call("POST", "/v1/research/section", { name: "../summary", body: "y" }),
+      /^Error: 400: \{"error":"section names are short words"\}$/,
+    );
+    assert.deepEqual(await s.call("POST", "/v1/research/section", { name: "summary", body: "y" }), {
+      section: "summary",
+    });
   });
 });

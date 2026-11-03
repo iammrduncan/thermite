@@ -4,6 +4,7 @@ import {
   createReadStream,
   existsSync,
   mkdirSync,
+  readdirSync,
   renameSync,
   rmSync,
   statSync,
@@ -14,9 +15,17 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { z } from "zod";
+import { jsonBody, Refusal } from "../common/errors.ts";
+import { EXPORTS_DELETE } from "../core/api/control/owner.ts";
+import {
+  EXPORT_BEGIN,
+  EXPORT_FILE,
+  EXPORT_NAME,
+  EXPORT_PIECE_MAX,
+} from "../core/api/control/rigs.ts";
 import { canonicalJson } from "../core/canonical.ts";
-import type { ControlStore, RigExport } from "./store.ts";
+import { listText, sizeWords } from "../core/words.ts";
+import type { ControlStore, RigExport } from "./store/index.ts";
 import { type TarEntry, tarGz } from "./tar-gz.ts";
 
 /**
@@ -28,40 +37,9 @@ import { type TarEntry, tarGz } from "./tar-gz.ts";
  *
  * On disk: `<dir>/<rig>/<export>/manifest.json` and `<dir>/<rig>/<export>/files/<path>`, a file
  * still arriving as `<path>.part`. A complete export downloads as one archive (goal 103): a
- * .tar.gz of its manifest and its files under `<rig>-<export>/`, built as it streams.
+ * .tar.gz of its manifest and its files under `<rig>-<export>/`, built as it streams. Control
+ * never deletes an export by itself: the owner deletes one by hand (deleteExports).
  */
-
-/** An export's name, as the harness makes them: a time and 8 hexadecimal characters. */
-export const EXPORT_NAME = /^[0-9TZ]{8,20}-[0-9a-f]{8}$/;
-
-const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
-/** A file's place in an export: plain names, no "." or ".." parts (as the exporter checks). */
-const RelPath = z
-  .string()
-  .max(500)
-  .regex(/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._()-]+)*$/)
-  .refine((p) => p.split("/").every((s) => s !== "." && s !== ".."), "a plain path");
-
-const Manifest = z.looseObject({
-  rig: z.string().max(200).optional(),
-  full: z.boolean().optional(),
-  from_event: z.number().int().min(0),
-  through_event: z.number().int().min(0),
-  files: z.record(RelPath, Sha256),
-});
-
-/**
- * The start of an export. A field this control does not know is dropped (a newer supervisor may
- * send more, goal 012): the manifest's SHA-256s, checked on every file, are what guard it.
- */
-const Begin = z.object({
-  manifest: Manifest,
-  /** The files the rig sends, each with its size in bytes. */
-  files: z.record(RelPath, z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)),
-});
-
-/** The pieces a rig sends: at most this many bytes each. */
-export const EXPORT_PIECE_LIMIT = 16 * 1024 * 1024;
 
 export class ExportFiles {
   readonly dir: string;
@@ -120,6 +98,26 @@ export class ExportFiles {
       });
     }
     return entries;
+  }
+
+  /** When control last wrote any of the export's files, its manifest included; 0: none. */
+  lastWrite(e: Pick<RigExport, "rig" | "name">): number {
+    let newest = 0;
+    const walk = (dir: string) => {
+      for (const d of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, d.name);
+        if (d.isDirectory()) walk(path);
+        else newest = Math.max(newest, statSync(path).mtimeMs);
+      }
+    };
+    const root = this.root(e.rig, e.name);
+    if (existsSync(root)) walk(root);
+    return newest;
+  }
+
+  /** Removes the export's folder: its manifest and every file, kept or still arriving. */
+  remove(e: Pick<RigExport, "rig" | "name">): void {
+    rmSync(this.root(e.rig, e.name), { recursive: true, force: true });
   }
 
   writeManifest(rig: string, name: string, manifest: unknown): void {
@@ -184,7 +182,7 @@ export class ExportFiles {
         };
       }
       renameSync(part, target);
-      const { complete } = store.rigExportFileDone(e.rig, e.name, path);
+      const { complete } = store.exports.fileDone(e.rig, e.name, path);
       return { ok: true, received: want.size, done: true, complete };
     } finally {
       this.busy.delete(key);
@@ -206,18 +204,113 @@ export function archiveResponse(
   rig: string,
   name: string,
 ): Response {
-  const e = EXPORT_NAME.test(name) ? o.store.rigExport(rig, name) : undefined;
+  const e = EXPORT_NAME.test(name) ? o.store.exports.get(rig, name) : undefined;
   if (!e) return c.json({ error: "no such export" }, 404);
   if (!o.files)
     return c.json({ error: "control keeps no exports: it has no folder for them" }, 404);
   const entries = o.files.archiveEntries(e);
   if (typeof entries === "string") return c.json({ error: entries }, 404);
-  o.store.audit(o.by, "export_downloaded", { rig, export: name, files: entries.length - 1 });
+  o.store.auditLog.add(o.by, "export_downloaded", { rig, export: name, files: entries.length - 1 });
   return c.body(Readable.toWeb(tarGz(entries)) as ReadableStream, 200, {
     "content-type": "application/gzip",
     "content-disposition": `attachment; filename="${archiveName(e)}"`,
     "cache-control": "no-store",
   });
+}
+
+/** An export on control, by its rig and its name. */
+export interface ExportRef {
+  rig: string;
+  name: string;
+}
+
+/**
+ * How long after control last took a piece of an export still arriving it counts as still being
+ * received: the supervisor sends again every round, a minute by default. Past it, the export can
+ * be deleted though it is not complete, such as one whose rig was removed while it was sent.
+ */
+export const EXPORT_RECEIVING_MS = 15 * 60_000;
+
+/** An export as people read it in a sentence: "rig-1 · 20261020T120000Z-0123abcd". */
+const refWords = (r: ExportRef) => `${r.rig} · ${r.name}`;
+
+/** What a delete did, in one sentence for people: the same on the page, REST, MCP and the CLI. */
+function deletedWords(deleted: RigExport[], gone: ExportRef[]): string {
+  const went = deleted.length
+    ? `Deleted ${deleted.length === 1 ? "1 export" : `${deleted.length} exports`} from control: ${listText(deleted.map((e) => `${refWords(e)} (${sizeWords(e.bytes)})`))}.`
+    : "Nothing was deleted.";
+  const notThere = gone.length
+    ? ` Control did not have ${listText(gone.map(refWords))}: ${gone.length === 1 ? "it was" : "they were"} deleted already, or never sent.`
+    : "";
+  return `${went}${notThere}`;
+}
+
+/** Whether control is still receiving an export: not complete, and written to lately. */
+export function stillReceiving(
+  files: ExportFiles | undefined,
+  e: RigExport,
+  now = Date.now(),
+): boolean {
+  return e.complete_at === null && (!files || now - files.lastWrite(e) < EXPORT_RECEIVING_MS);
+}
+
+/**
+ * The exports a delete names, as control has them, and those it does not (`gone`), or the
+ * refusal of the whole delete in words: one of them is still arriving.
+ */
+export function exportsToDelete(
+  o: { store: ControlStore; files: ExportFiles | undefined },
+  refs: readonly ExportRef[],
+  now = Date.now(),
+): { found: RigExport[]; gone: ExportRef[] } {
+  const unique = [...new Map(refs.map((r) => [`${r.rig}\0${r.name}`, r])).values()];
+  const found: RigExport[] = [];
+  const gone: ExportRef[] = [];
+  for (const r of unique) {
+    const e = EXPORT_NAME.test(r.name) ? o.store.exports.get(r.rig, r.name) : undefined;
+    if (e) found.push(e);
+    else gone.push({ rig: r.rig, name: r.name });
+  }
+  const receiving = found.filter((e) => stillReceiving(o.files, e, now));
+  if (receiving.length) {
+    const one = receiving.length === 1;
+    const what = receiving.map(
+      (e) => `${refWords(e)} (${e.done.length} of ${Object.keys(e.files).length} files)`,
+    );
+    throw new Refusal(
+      `${listText(what)} ${one ? "is" : "are"} still arriving: control is receiving ${one ? "its" : "their"} files. Delete ${one ? "it" : "them"} once complete. Nothing was deleted.`,
+    );
+  }
+  return { found, gone };
+}
+
+/**
+ * Deletes exports control keeps, by hand: the owner's, from the Exports page, REST, MCP and the
+ * command line. Control never deletes an export by itself. Each export's folder goes, then its
+ * record, with `export_deleted` in the audit log (`by`). All or none: an export still arriving,
+ * whose files control wrote within EXPORT_RECEIVING_MS, is refused in words, and then nothing is
+ * deleted. One control does not have is in `gone`. It can't be undone: a rig's outbox lets an
+ * export go once control holds it, so control's copy is the only one off the rig.
+ */
+export function deleteExports(
+  o: { store: ControlStore; files: ExportFiles | undefined },
+  refs: readonly ExportRef[],
+  by: string,
+  now = Date.now(),
+): { deleted: RigExport[]; gone: ExportRef[]; said: string } {
+  const { found, gone } = exportsToDelete(o, refs, now);
+  for (const e of found) {
+    o.files?.remove(e);
+    o.store.exports.remove(e.rig, e.name);
+    o.store.auditLog.add(by, "export_deleted", {
+      rig: e.rig,
+      export: e.name,
+      bytes: e.bytes,
+      files: Object.keys(e.files).length,
+      complete: e.complete_at !== null,
+    });
+  }
+  return { deleted: found, gone, said: deletedWords(found, gone) };
 }
 
 /** An export as the owner's list shows it. */
@@ -227,6 +320,8 @@ export function exportSummary(files: ExportFiles | undefined, e: RigExport) {
     full: e.full,
     /** A run's export (goal 103): the run it holds; null for the rig's exports. */
     run: typeof e.manifest.run === "string" ? e.manifest.run : null,
+    /** A run's export the rig made at the run's end, on its own. */
+    end: e.manifest.end === true,
     from_event: e.from_event,
     through_event: e.through_event,
     files: Object.keys(e.files).length,
@@ -257,15 +352,15 @@ export function mountExports(
   const noFolder = "control keeps no exports: it has no folder for them";
 
   app.post(
-    "/v1/rigs/:rig/exports/:name",
+    EXPORT_BEGIN.path,
     o.rigAuth,
-    bodyLimit({ maxSize: 8 * 1024 * 1024 }),
+    bodyLimit({ maxSize: EXPORT_BEGIN.maxBytes }),
     async (c) => {
       const rig = c.req.param("rig");
       const name = c.req.param("name");
       if (!EXPORT_NAME.test(name)) return c.json({ error: "not an export's name" }, 400);
       if (!files) return c.json({ error: noFolder }, 503);
-      const body = Begin.parse(await c.req.json());
+      const body = EXPORT_BEGIN.body.parse(await c.req.json());
       const m = body.manifest;
       if (m.rig !== undefined && m.rig !== rig)
         return c.json({ error: "the manifest names another rig" }, 400);
@@ -281,7 +376,7 @@ export function mountExports(
       const promised = Object.fromEntries(
         Object.entries(body.files).map(([p, size]) => [p, { size, sha256: m.files[p] as string }]),
       );
-      const r = store.beginRigExport(rig, name, {
+      const r = store.exports.begin(rig, name, {
         manifest: m,
         files: promised,
         full: m.full === true,
@@ -291,7 +386,7 @@ export function mountExports(
       if (r === "different")
         return c.json({ error: `control has another export named ${name} from this rig` }, 409);
       if (r === "created") files.writeManifest(rig, name, m);
-      const e = store.rigExport(rig, name) as RigExport;
+      const e = store.exports.get(rig, name) as RigExport;
       return c.json({
         received: Object.fromEntries(Object.keys(e.files).map((p) => [p, files.received(e, p)])),
         done: e.done,
@@ -300,37 +395,32 @@ export function mountExports(
     },
   );
 
-  app.post(
-    "/v1/rigs/:rig/exports/:name/file",
-    o.rigAuth,
-    bodyLimit({ maxSize: EXPORT_PIECE_LIMIT }),
-    async (c) => {
-      const rig = c.req.param("rig");
-      const name = c.req.param("name");
-      if (!files) return c.json({ error: noFolder }, 503);
-      const e = EXPORT_NAME.test(name) ? store.rigExport(rig, name) : undefined;
-      if (!e) return c.json({ error: `no export ${name}: start it first` }, 404);
-      const path = c.req.query("path") ?? "";
-      if (!(path in e.files))
-        return c.json({ error: `${path} is not a file this export sends` }, 400);
-      const offset = Number(c.req.query("offset"));
-      if (!Number.isSafeInteger(offset) || offset < 0)
-        return c.json({ error: "offset is a whole number from 0" }, 400);
-      const piece = Buffer.from(await c.req.arrayBuffer());
-      const r = await files.append(store, e, path, offset, piece);
-      if (!r.ok) return c.json({ error: r.error, received: r.received }, r.status);
-      return c.json({ received: r.received, done: r.done, complete: r.complete });
-    },
-  );
+  app.post(EXPORT_FILE.path, o.rigAuth, bodyLimit({ maxSize: EXPORT_PIECE_MAX }), async (c) => {
+    const rig = c.req.param("rig");
+    const name = c.req.param("name");
+    if (!files) return c.json({ error: noFolder }, 503);
+    const e = EXPORT_NAME.test(name) ? store.exports.get(rig, name) : undefined;
+    if (!e) return c.json({ error: `no export ${name}: start it first` }, 404);
+    const path = c.req.query("path") ?? "";
+    if (!(path in e.files))
+      return c.json({ error: `${path} is not a file this export sends` }, 400);
+    const offset = Number(c.req.query("offset"));
+    if (!Number.isSafeInteger(offset) || offset < 0)
+      return c.json({ error: "offset is a whole number from 0" }, 400);
+    const piece = Buffer.from(await c.req.arrayBuffer());
+    const r = await files.append(store, e, path, offset, piece);
+    if (!r.ok) return c.json({ error: r.error, received: r.received }, r.status);
+    return c.json({ received: r.received, done: r.done, complete: r.complete });
+  });
 
   app.get("/v1/rigs/:rig/exports", o.admin, (c) =>
     c.json({
-      exports: store.rigExports(c.req.param("rig"), 1000).map((e) => exportSummary(files, e)),
+      exports: store.exports.ofRig(c.req.param("rig"), 1000).map((e) => exportSummary(files, e)),
     }),
   );
 
   app.get("/v1/rigs/:rig/exports/:name", o.admin, (c) => {
-    const e = store.rigExport(c.req.param("rig"), c.req.param("name"));
+    const e = store.exports.get(c.req.param("rig"), c.req.param("name"));
     if (!e) return c.json({ error: "no such export" }, 404);
     return c.json({
       ...exportSummary(files, e),
@@ -344,13 +434,34 @@ export function mountExports(
     });
   });
 
+  // Exports deleted by hand, with the owner's token: all of them, or none when one still arrives.
+  app.post(
+    EXPORTS_DELETE.path,
+    o.admin,
+    bodyLimit({ maxSize: EXPORTS_DELETE.maxBytes }),
+    async (c) => {
+      const body = EXPORTS_DELETE.body.parse(await jsonBody(c.req));
+      const r = deleteExports({ store, files }, body.exports, "owner:api");
+      return c.json({
+        deleted: r.deleted.map((e) => ({
+          rig: e.rig,
+          name: e.name,
+          bytes: e.bytes,
+          files: Object.keys(e.files).length,
+        })),
+        gone: r.gone,
+        said: r.said,
+      });
+    },
+  );
+
   // The whole export as one .tar.gz: its manifest and every file (goal 103).
   app.get("/v1/rigs/:rig/exports/:name/archive", o.admin, (c) =>
     archiveResponse(c, { store, files, by: "owner:api" }, c.req.param("rig"), c.req.param("name")),
   );
 
   app.get("/v1/rigs/:rig/exports/:name/file", o.admin, (c) => {
-    const e = store.rigExport(c.req.param("rig"), c.req.param("name"));
+    const e = store.exports.get(c.req.param("rig"), c.req.param("name"));
     const path = c.req.query("path") ?? "";
     if (!e || !files || !e.done.includes(path) || !e.files[path])
       return c.json({ error: "no such file in that export" }, 404);

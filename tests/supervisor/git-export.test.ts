@@ -40,14 +40,17 @@ describe("supervisor git export", () => {
     assert.equal(s1.done.length, 1);
     const files = lsTree(remote, "thermite/rig-a/attempts");
     assert.ok(files.includes(`attempts/${a.attempt}.patch`), files.join(","));
-    assert.ok(lsTree(remote, "thermite/rig-a/ledger").includes("ledger.sqlite"));
+    // An export of what changed holds no copy of the ledger: no ledger branch yet.
+    assert.throws(() => lsTree(remote, "thermite/rig-a/ledger"));
 
-    // Nothing new: nothing committed. A later export adds a commit on top.
+    // Nothing new: nothing committed. A later export adds a commit on top; a full one also
+    // commits the copy of the ledger it holds to the ledger branch.
     const s2 = await exportOnce(cfg, s1);
     assert.deepEqual(s2.done, s1.done);
-    await env.service.export("test");
+    await env.service.export("test", { full: true });
     const s3 = await exportOnce(cfg, s2);
     assert.equal(s3.done.length, 2);
+    assert.ok(lsTree(remote, "thermite/rig-a/ledger").includes("ledger.sqlite"));
     const count = execFileSync(
       "git",
       ["-C", remote, "rev-list", "--count", "thermite/rig-a/attempts"],

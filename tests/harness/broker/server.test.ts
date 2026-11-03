@@ -4,8 +4,8 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
+import { MAX_RUN_MS } from "../../../src/core/kit.ts";
 import { BrokerClient } from "../../../src/harness/broker/client.ts";
-import { MAX_RUN_MS } from "../../../src/harness/broker/runner.ts";
 import { startBrokerServer } from "../../../src/harness/broker/server.ts";
 
 // Refused requests never reach the privileged handler, so this runs as any user.
@@ -46,6 +46,27 @@ describe("broker refusals", () => {
       await assert.rejects(within(client.killRole("nobody" as never), 5000), (err: Error) =>
         /^broker: /.test(err.message),
       );
+    } finally {
+      client.close();
+    }
+  });
+
+  test("a pair is one judge card's driver and timing user: any other is refused", async () => {
+    const client = new BrokerClient(socketPath);
+    const as = (role: string) => ({ role: role as never, argv: ["true"], cwd: dir });
+    try {
+      for (const [driver, candidate] of [
+        ["driver", "run-1"],
+        ["driver-2", "run"],
+        ["checker", "run"],
+        ["driver", "lane-1"],
+        ["run", "driver"],
+      ] as const)
+        await assert.rejects(
+          within(client.runPair(as(driver), as(candidate)), 5000),
+          (err: Error) => /a pair is a judge card's driver and timing user/.test(err.message),
+          `${driver} and ${candidate}`,
+        );
     } finally {
       client.close();
     }

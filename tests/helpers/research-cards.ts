@@ -1,5 +1,5 @@
-import type { Ledger } from "../../src/harness/ledger.ts";
-import type { HarnessService } from "../../src/harness/service.ts";
+import type { Ledger } from "../../src/harness/ledger/index.ts";
+import type { HarnessService } from "../../src/harness/service/index.ts";
 
 /**
  * Goal 117's tests of answer cards at the scale of a long run: six questions, as the 35-hour run

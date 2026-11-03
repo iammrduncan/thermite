@@ -1,12 +1,43 @@
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
-import { copyBeforeMigration, newerSchemaWords } from "../../common/db-copy.ts";
+import { DatabaseSync } from "node:sqlite";
+import {
+  COPIES_KEPT,
+  copyBeforeMigration,
+  keepCopyBefore,
+  newerSchemaWords,
+} from "../../common/db-copy.ts";
+import { transaction } from "../../common/sqlite.ts";
+import { auditRepeats } from "./audit.ts";
+import { busKeyTables, busSealKeyColumn } from "./bus.ts";
+import { clusterUncheckedColumn } from "./clusters.ts";
+import { commandRunAndCampaign } from "./commands.ts";
+import {
+  dropEventsTable,
+  type EventsMoved,
+  eventsInOrderIndex,
+  eventsTableHoldsRows,
+  eventsTableMayGo,
+} from "./events.ts";
+import { gitAccessHost } from "./git-access.ts";
+import {
+  knowledgeFiles,
+  knowledgeHierarchy,
+  knowledgePublicNames,
+  knowledgeSearch,
+  knowledgeSlotNames,
+} from "./kb/index.ts";
+import { synthesizerAndWriterSlots } from "./models.ts";
+import { ownSettingsTable } from "./own-settings.ts";
+import { appliedPlacesTables } from "./positions.ts";
+import { campaignProposalGrants, campaignProposalTable } from "./proposals.ts";
+import { reachableAddressTable } from "./reachable.ts";
+import { copiesPolicyOn, eventFloorTable, retentionTables } from "./retention.ts";
+import { runRegistryTable } from "./runs.ts";
+import { tunnelLeafColumns } from "./tunnels.ts";
 
 /**
  * Control's store's schema and its migrations, moved out of store.ts (goal 173). The store's
  * schema version is how many migrations have run; see migrateStore.
  */
-
-type Row = Record<string, SQLInputValue>;
 
 const SCHEMA = `
 create table if not exists rig (
@@ -15,7 +46,12 @@ create table if not exists rig (
   last_seen text not null,
   last_cursor integer not null default 0,
   ledger_id text,
-  summary text not null default '{}'
+  summary text not null default '{}',
+  pubkey text,
+  pending_pubkey text,
+  report_at text,
+  supervisor text,
+  supervisor_at text
 );
 -- Event ids are unique only within one harness ledger, and a wiped or lost ledger starts again
 -- at 1, so events are keyed by (rig, ledger_id, event_id). seq is control's own order.
@@ -137,7 +173,11 @@ create table if not exists rig_model (
   rig text primary key,
   provider text not null,
   model text not null,
-  assigned_at text not null
+  assigned_at text not null,
+  harness text not null default 'pi',
+  effort text,
+  context_cap integer,
+  compact_at integer
 );
 -- The model of each of a rig's other agents (the planner; the teachers' first and second model and
 -- their merged by model; the auditor; the review panel), when the owner gave one; a role with none
@@ -149,6 +189,9 @@ create table if not exists rig_role_model (
   model text not null,
   effort text,
   assigned_at text not null,
+  harness text,
+  context_cap integer,
+  compact_at integer,
   primary key (rig, role)
 );
 -- Rigs enrolled through control (thermite rig add, or the API): each token only as its SHA-256.
@@ -347,7 +390,8 @@ create table if not exists machine_rig (
   root integer not null default 0,
   status text not null,
   created_at text not null,
-  created_by text not null
+  created_by text not null,
+  judge_gpus integer
 );
 -- Each step of setting a rig up or managing it, for the rig's history: what, whether it worked.
 create table if not exists rig_setup_event (
@@ -481,155 +525,11 @@ create table if not exists trial_left (
 `;
 
 /**
- * A store written before the 2026-10-15 rename (unit -> rig): its tables and columns are
- * renamed in place, and the old indexes dropped (the schema creates them under the new names).
- */
-function renameUnitsToRigs(db: DatabaseSync): void {
-  const tables = () =>
-    (
-      db.prepare("select name from sqlite_master where type = 'table'").all() as { name: string }[]
-    ).map((t) => t.name);
-  if (!tables().includes("unit")) return;
-  db.exec("begin immediate");
-  try {
-    for (const name of ["unit", "unit_event", "unit_ledger", "unit_report", "unit_live"]) {
-      if (tables().includes(name))
-        db.exec(`alter table ${name} rename to ${name.replace(/^unit/, "rig")}`);
-    }
-    for (const name of tables()) {
-      const cols = db.prepare(`pragma table_info(${name})`).all() as { name: string }[];
-      if (cols.some((c) => c.name === "unit"))
-        db.exec(`alter table ${name} rename column unit to rig`);
-      if (cols.some((c) => c.name === "instance"))
-        db.exec(`alter table ${name} rename column instance to run`);
-    }
-    const indexes = db
-      .prepare("select name from sqlite_master where type = 'index' and name like 'unit%'")
-      .all() as { name: string }[];
-    for (const i of indexes) db.exec(`drop index if exists ${i.name}`);
-    db.exec("commit");
-  } catch (err) {
-    db.exec("rollback");
-    throw err;
-  }
-}
-
-/**
- * A store written before goal 074 (2026-10-21) named the agents' roles `combiner` and `panel`, and
- * gave the teachers one model, which ran as two teachers. Its table is made again with the new
- * names: `merged_by` and `review_panel`, and a `second_teacher` with the teachers' model, so a rig
- * keeps its two teachers.
- */
-function renameAgentRoles(db: DatabaseSync): void {
-  const table = db
-    .prepare("select sql from sqlite_master where type = 'table' and name = 'rig_role_model'")
-    .get() as { sql?: string } | undefined;
-  if (!table?.sql?.includes("'combiner'")) return;
-  const cols = "rig, role, provider, model, effort, assigned_at, harness, context_cap, compact_at";
-  db.exec("begin immediate");
-  try {
-    db.exec(`create table rig_role_model_074 (
-  rig text not null,
-  role text not null check (role in ('planner', 'teachers', 'second_teacher', 'merged_by', 'auditor', 'review_panel')),
-  provider text not null,
-  model text not null,
-  effort text,
-  assigned_at text not null,
-  harness text,
-  context_cap integer,
-  compact_at integer,
-  primary key (rig, role)
-)`);
-    db.exec(`insert into rig_role_model_074 (${cols})
-  select rig, case role when 'combiner' then 'merged_by' when 'panel' then 'review_panel' else role end,
-    provider, model, effort, assigned_at, harness, context_cap, compact_at from rig_role_model`);
-    db.exec(`insert into rig_role_model_074 (${cols})
-  select rig, 'second_teacher', provider, model, effort, assigned_at, harness, context_cap, compact_at
-    from rig_role_model where role = 'teachers'`);
-    db.exec("drop table rig_role_model");
-    db.exec("alter table rig_role_model_074 rename to rig_role_model");
-    db.exec("commit");
-  } catch (err) {
-    db.exec("rollback");
-    throw err;
-  }
-}
-
-/**
- * The schema as v0.1.0 left it: the tables, and the steps that brought older stores to them. Each
- * step checks before it changes anything, so it is safe on a store of any age before versions.
+ * The schema as v0.1.0 left it. v0.1.0 opened a store without versions, so a store it wrote is at
+ * version 0; it had brought every older store to these tables as it opened it.
  */
 function schemaOne(db: DatabaseSync): void {
-  renameUnitsToRigs(db);
-  // The first table of rigs in pull mode (2026-10-19) had no launch port and needed its pod
-  // up front; nothing launched one. An empty one makes way, a filled one is kept aside.
-  const tunnelCols = (db.prepare("pragma table_info(tunnel_rig)").all() as Row[]).map(
-    (r) => r.name,
-  );
-  if (tunnelCols.length && !tunnelCols.includes("port")) {
-    const n = db.prepare("select count(*) as n from tunnel_rig").get() as Row;
-    db.exec(
-      Number(n.n)
-        ? "alter table tunnel_rig rename to tunnel_rig_2026_10_19"
-        : "drop table tunnel_rig",
-    );
-  }
   db.exec(SCHEMA);
-  const cols = (db.prepare("pragma table_info(rig)").all() as Row[]).map((r) => r.name);
-  if (!cols.includes("pubkey")) db.exec("alter table rig add column pubkey text");
-  if (!cols.includes("pending_pubkey")) db.exec("alter table rig add column pending_pubkey text");
-  if (!cols.includes("report_at")) db.exec("alter table rig add column report_at text");
-  migrateModelRoutes(db);
-  const versionCols = (db.prepare("pragma table_info(campaign_version)").all() as Row[]).map(
-    (r) => r.name,
-  );
-  if (!versionCols.includes("sources"))
-    db.exec("alter table campaign_version add column sources text not null default '{}'");
-  if (!versionCols.includes("copied_from"))
-    db.exec("alter table campaign_version add column copied_from text");
-  const rigModelCols = (db.prepare("pragma table_info(rig_model)").all() as Row[]).map(
-    (r) => r.name,
-  );
-  if (!rigModelCols.includes("harness"))
-    db.exec("alter table rig_model add column harness text not null default 'pi'");
-  if (!rigModelCols.includes("effort")) db.exec("alter table rig_model add column effort text");
-  if (!rigModelCols.includes("context_cap"))
-    db.exec("alter table rig_model add column context_cap integer");
-  if (!rigModelCols.includes("compact_at"))
-    db.exec("alter table rig_model add column compact_at integer");
-  // Each agent's own harness (goal 073); null: what its model needs.
-  const roleModelCols = (db.prepare("pragma table_info(rig_role_model)").all() as Row[]).map(
-    (r) => r.name,
-  );
-  if (!roleModelCols.includes("harness"))
-    db.exec("alter table rig_role_model add column harness text");
-  // Every agent's own cap and compaction point (goal 070), as the workers' are kept above.
-  if (!roleModelCols.includes("context_cap"))
-    db.exec("alter table rig_role_model add column context_cap integer");
-  if (!roleModelCols.includes("compact_at"))
-    db.exec("alter table rig_role_model add column compact_at integer");
-  renameAgentRoles(db);
-  const machineRigCols = (db.prepare("pragma table_info(machine_rig)").all() as Row[]).map(
-    (r) => r.name,
-  );
-  if (!machineRigCols.includes("judge_gpus"))
-    db.exec("alter table machine_rig add column judge_gpus integer");
-  const clusterRigCols = (db.prepare("pragma table_info(cluster_rig)").all() as Row[]).map(
-    (r) => r.name,
-  );
-  if (!clusterRigCols.includes("pending"))
-    db.exec("alter table cluster_rig add column pending text");
-  const refusalCols = (db.prepare("pragma table_info(rig_refusal)").all() as Row[]).map(
-    (r) => r.name,
-  );
-  if (!refusalCols.includes("calls")) {
-    db.exec("alter table rig_refusal add column calls integer not null default 0");
-    db.exec("alter table rig_refusal add column last_at text");
-  }
-  if (!cols.includes("supervisor")) {
-    db.exec("alter table rig add column supervisor text");
-    db.exec("alter table rig add column supervisor_at text");
-  }
 }
 
 /**
@@ -677,6 +577,26 @@ function schemaThree(db: DatabaseSync): void {
 }
 
 /**
+ * The agents' public names in every row control keeps (goal 125, T1): the merged by model was
+ * `combiner` and the review panel `panel` in the model usage of v0.1.0. The rigs' events keep
+ * their words; core/names.ts reads them under these.
+ */
+function schemaFour(db: DatabaseSync): void {
+  db.exec(`update model_call set agent = case agent when 'combiner' then 'merged_by'
+  else 'review_panel' end where agent in ('combiner', 'panel')`);
+}
+
+/**
+ * Each event's run as the rig's ledger recorded it (goal 170), for the views by run. Events
+ * received before keep none: their readers work their run out as before.
+ */
+function schemaFive(db: DatabaseSync): void {
+  const columns = db.prepare("pragma table_info(rig_event)").all() as { name: string }[];
+  if (!columns.some((c) => c.name === "run")) db.exec("alter table rig_event add column run text");
+  db.exec("create index if not exists rig_event_run on rig_event (run, seq)");
+}
+
+/**
  * Control's migrations, in order: the store's schema version is how many have run. A change to
  * the schema is a new function at the end, never an edit of one that has run.
  */
@@ -684,70 +604,167 @@ const STORE_MIGRATIONS: readonly ((db: DatabaseSync) => void)[] = [
   schemaOne,
   schemaTwo,
   schemaThree,
+  schemaFour,
+  schemaFive,
+  // Control's run registry (goal 170), with its rows from what the store already holds.
+  runRegistryTable,
+  // The message bus's keys (goal 168): each rig's registered key, and control's own, sealed.
+  busKeyTables,
+  // A rig's events by ledger in control's order, for the views' pages (goal 168).
+  eventsInOrderIndex,
+  // The key control seals a rig's config to on the message bus, beside its user key (goal 168).
+  busSealKeyColumn,
+  // The synthesizer's and the final writer's own models (goal 166).
+  synthesizerAndWriterSlots,
+  // How far the store applied the events stream, and each rig ledger's held cursor (goal 168).
+  appliedPlacesTables,
+  // Control's events table goes, once the events stream holds it whole (EVENTS_TABLE_GOES).
+  dropEventsTable,
+  // The run and the campaign each command names, in columns of their own (goal 168).
+  commandRunAndCampaign,
+  // The knowledge base's hierarchy: a collection for each campaign, slots, versions (goal 175).
+  knowledgeHierarchy,
+  // Each Git access bound to the host it is for.
+  gitAccessHost,
+  // The changes the operator proposes to a campaign's settings, for the owner to approve.
+  campaignProposalTable,
+  // The knowledge base's words index anew: passages, each item's outcome and context (goal 175).
+  knowledgeSearch,
+  // The operator may propose a grant of another campaign's collection too.
+  campaignProposalGrants,
+  // A refusal that repeats is one audit entry, with its count and its first and last time.
+  auditRepeats,
+  // The addresses cluster rigs' harnesses may reach beside the internet, set by the owner.
+  reachableAddressTable,
+  // A cluster keeps the owner's acceptance of a connection control can't check.
+  clusterUncheckedColumn,
+  // A rig on RunPod keeps its pod's leaf node authority and address for the bus (goal 168).
+  tunnelLeafColumns,
+  // The knowledge base's files' text, extracted once, and its settings on control (goal 175).
+  knowledgeFiles,
+  // The owner's retention policies, what they removed, and each rig's space (goal 125, T12).
+  retentionTables,
+  // Each rig ledger's floor in control's copy of its events, which a policy purged (goal 125).
+  eventFloorTable,
+  // The knowledge base's slots take the agents' names, and a grant's unused copies go (goal 175).
+  knowledgeSlotNames,
+  // Control's own settings the owner sets on control: its log level (the guide's question 16).
+  ownSettingsTable,
+  // The public names in the knowledge base: field notes' kind other, source notes, directions.
+  knowledgePublicNames,
 ];
 
 /**
- * Brings the store to this code's schema. A store with tables in it is copied first (goal 173),
- * so an update that migrates can be undone; a store newer than this code is refused, with the copy
- * to restore.
+ * The migration that drops control's events table (goal 168). It waits until the move of the
+ * table's rows to the events stream has checked them there (control/events/move.ts), which needs
+ * the bus, and so runs after the store is open: control then migrates again, given what the move
+ * found (ControlStore.migrate). It alone waits: the migrations after it touch no events table,
+ * and control's start before the move reads their tables (its log level, the audit log, the bus's
+ * users, the events' floors). The copy before it is kept outside the copies' rotation, until the
+ * owner removes it: it is the last copy of the table.
  */
-export function migrateStore(db: DatabaseSync, path: string): void {
+const EVENTS_TABLE_GOES = 12;
+
+/** Tables of a store from before v0.1.0, which v0.1.0 renamed or moved as it opened the store. */
+const BEFORE_V010_TABLES = ["unit", "model_route", "outside_kb"];
+
+/**
+ * Why a store without versions is not one v0.1.0 wrote, if it is not: a table v0.1.0 renamed or
+ * moved, or one of the schema's tables without one of its columns. v0.1.0 brought every older
+ * store to its tables as it opened it, and this code no longer does.
+ */
+function beforeV010(db: DatabaseSync): string | undefined {
+  const tablesOf = (d: DatabaseSync) =>
+    (
+      d.prepare("select name from sqlite_master where type = 'table'").all() as { name: string }[]
+    ).map((t) => t.name);
+  const columnsOf = (d: DatabaseSync, table: string) =>
+    (d.prepare(`pragma table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+  const has = new Set(tablesOf(db));
+  const old = BEFORE_V010_TABLES.find((t) => has.has(t));
+  if (old) return `it has the table ${old}`;
+  const schema = new DatabaseSync(":memory:");
+  try {
+    schema.exec(SCHEMA);
+    for (const table of tablesOf(schema).filter((t) => has.has(t))) {
+      const kept = new Set(columnsOf(db, table));
+      const missing = columnsOf(schema, table).find((c) => !kept.has(c));
+      if (missing) return `its table ${table} has no column ${missing}`;
+    }
+  } finally {
+    schema.close();
+  }
+  return undefined;
+}
+
+/** What control gives a migration that waits for what it does outside the store. */
+export interface MigrateGiven {
+  /** The move's check of the events stream against control's events table. */
+  eventsMoved?: EventsMoved | undefined;
+}
+
+/**
+ * Brings the store to this code's schema, as far as it may go now (EVENTS_TABLE_GOES). A store
+ * with tables in it is copied first (goal 173), so an update that migrates can be undone; a store
+ * newer than this code is refused, with the copy to restore. Returns the path of a copy kept
+ * outside the rotation, made now.
+ */
+export function migrateStore(
+  db: DatabaseSync,
+  path: string,
+  given: MigrateGiven = {},
+): string | undefined {
   // Read before anything is created, so the copy below is the store exactly as it was.
   const versioned = db
     .prepare("select 1 from sqlite_master where type = 'table' and name = 'schema_migrations'")
     .get();
-  const row = versioned
-    ? (db.prepare("select max(version) as v from schema_migrations").get() as { v: number | null })
-    : undefined;
-  const current = row?.v ?? 0;
+  const applied = new Set(
+    versioned
+      ? (db.prepare("select version from schema_migrations").all() as { version: number }[]).map(
+          (r) => r.version,
+        )
+      : [],
+  );
+  const current = Math.max(0, ...applied);
   const known = STORE_MIGRATIONS.length;
   if (current > known) throw new Error(newerSchemaWords("control store", path, current, known));
-  if (current === known) return;
+  const waits = !applied.has(EVENTS_TABLE_GOES) && !eventsTableMayGo(db, given.eventsMoved);
+  // Each migration not applied yet, in order; the events table's drop waits for the move alone.
+  const due = STORE_MIGRATIONS.map((_, i) => i + 1).filter(
+    (v) => !applied.has(v) && !(waits && v === EVENTS_TABLE_GOES),
+  );
+  if (!due.length) return undefined;
+  const to = Math.max(...due);
   const tables = db
     .prepare(
       "select count(*) as n from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != 'schema_migrations'",
     )
     .get() as { n: number };
-  if (path !== ":memory:" && tables.n > 0) copyBeforeMigration(db, path, current, known);
-  db.exec("create table if not exists schema_migrations (version integer primary key)");
-  for (let version = current + 1; version <= known; version++) {
-    STORE_MIGRATIONS[version - 1]?.(db);
-    db.prepare("insert into schema_migrations (version) values (?)").run(version);
-  }
-}
-
-/**
- * The settings page's first version stored one route per model (model_route, rig_model_route).
- * Each becomes a provider of type openai with that model, and its rigs keep their model.
- */
-function migrateModelRoutes(db: DatabaseSync): void {
-  const has = (t: string) =>
-    db.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(t);
-  if (!has("model_route")) return;
-  const now = new Date().toISOString();
-  const routes = db.prepare("select * from model_route").all() as Row[];
-  for (const r of routes)
-    db.prepare(
-      `insert or ignore into model_provider (name, type, base_url, key_sealed, key_hint, version, updated_at, models)
-       values (?, 'openai', ?, ?, ?, 1, ?, ?)`,
-    ).run(
-      String(r.name),
-      String(r.base_url),
-      String(r.key_sealed),
-      String(r.key_hint),
-      now,
-      JSON.stringify([{ id: String(r.model), added: true }]),
+  const before = current === 0 && tables.n > 0 ? beforeV010(db) : undefined;
+  if (before)
+    throw new Error(
+      `this control store is from before v0.1.0 (${before}): start Thermite v0.1.0 on it once, which brings it to v0.1.0's tables, then this version. The store is kept as it is: ${path}`,
     );
-  if (has("rig_model_route")) {
-    const given = db.prepare("select * from rig_model_route").all() as Row[];
-    for (const g of given) {
-      const route = routes.find((r) => r.name === g.route);
-      if (route)
-        db.prepare(
-          "insert or ignore into rig_model (rig, provider, model, assigned_at) values (?, ?, ?, ?)",
-        ).run(String(g.rig), String(route.name), String(route.model), now);
-    }
-    db.exec("drop table rig_model_route");
+  let kept: string | undefined;
+  if (path !== ":memory:" && tables.n > 0) {
+    if (due.includes(EVENTS_TABLE_GOES) && eventsTableHoldsRows(db))
+      kept = keepCopyBefore(db, path, current, to, "the last copy of control's events table");
+    else
+      copyBeforeMigration(
+        db,
+        path,
+        current,
+        to,
+        new Date(),
+        copiesPolicyOn(db) ? null : COPIES_KEPT,
+      );
   }
-  db.exec("drop table model_route");
+  db.exec("create table if not exists schema_migrations (version integer primary key)");
+  // Each migration in a transaction of its own, as the ledger's: all of it, or none.
+  for (const version of due)
+    transaction(db, () => {
+      STORE_MIGRATIONS[version - 1]?.(db);
+      db.prepare("insert into schema_migrations (version) values (?)").run(version);
+    });
+  return kept;
 }

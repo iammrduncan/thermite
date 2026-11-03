@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { parseContract } from "../../../src/core/contract.ts";
+import { KB_OUTBOX_FILES } from "../../../src/core/kb/index.ts";
 import { Registry } from "../../../src/harness/agents/registry.ts";
-import { runTrial } from "../../../src/harness/agents/worker.ts";
-import { createHarnessApi } from "../../../src/harness/api.ts";
+import { runTrial } from "../../../src/harness/agents/worker/index.ts";
+import { createHarnessApi } from "../../../src/harness/api/index.ts";
 import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { ResearchFolder } from "../../../src/harness/research/folder.ts";
-import { Research } from "../../../src/harness/research/research.ts";
+import { Research } from "../../../src/harness/research/research/index.ts";
 import { startFakeModel } from "../../helpers/fake-model.ts";
 import { researchFixture } from "../../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
@@ -57,17 +58,27 @@ describe("research in every mode", () => {
     );
     assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const s = (await research.fetch("r-1", "lane-1", w.url)) as { source: string };
-    assert.deepEqual(bodies(env, "source_fetched").at(-1), {
+    const fetched = bodies(env, "source_fetched").at(-1) as {
+      bytes: number;
+      file: { sha256: string; bytes: number };
+    };
+    assert.deepEqual(fetched, {
       source: s.source,
       domain: "127.0.0.1",
       status: 200,
-      bytes: (bodies(env, "source_fetched").at(-1) as { bytes: number }).bytes,
+      bytes: fetched.bytes,
       url: w.url,
       title: "Kernel notes",
-      text: (bodies(env, "source_fetched").at(-1) as { text: string }).text,
+      file: {
+        sha256: fetched.file.sha256,
+        name: `${s.source}.txt`,
+        type: "text/plain",
+        bytes: fetched.file.bytes,
+      },
     });
     // A hypothesis is an event too, with the verified claims it rests on.
     research.proposeHypothesis("r-1", "lane-1", {
@@ -79,9 +90,14 @@ describe("research in every mode", () => {
     assert.equal(h.text, "Reads dominate.");
     assert.deepEqual(h.supporting, [], "only verified claims of the run");
     assert.match(String(h.hypothesis), /^h-[0-9a-f]{12}$/);
-    // The text that was read, as the archive keeps it: the folder holds the source itself.
-    const text = String((bodies(env, "source_fetched").at(-1) as { text: string }).text);
+    // The text that was read, whole, as the archive keeps it: in the outbox for the knowledge
+    // base, by its SHA-256, the archived text byte for byte.
+    const text = readFileSync(
+      join(env.service.paths.outboxDir, KB_OUTBOX_FILES, fetched.file.sha256),
+      "utf8",
+    );
     assert.ok(text.includes(QUOTE), "the page's text, with the words a claim quotes");
+    assert.equal(text, String(research.read("r-1", s.source, 0, 20_000).text));
     const long = `The weights stream from memory, ${"and so on ".repeat(80)}`;
     const c = research.addClaim("r-1", "lane-1", {
       text: long,
@@ -106,8 +122,8 @@ describe("research in every mode", () => {
     assert.equal(finding.statement?.length, 1000, "the statement, at most 1000 characters");
     assert.equal(finding.summary, "The weights do not fit in the cache.");
     assert.equal(finding.why, "It says where to look first.");
-    const n = research.addNote("r-1", "lane-1", "Look for a second site.", [s.source], "t-1");
-    assert.deepEqual(bodies(env, "research_note").at(-1), {
+    const n = research.addSourceNote("r-1", "lane-1", "Look for a second site.", [s.source], "t-1");
+    assert.deepEqual(bodies(env, "source_note").at(-1), {
       note: n.note,
       by: "lane-1",
       text: "Look for a second site.",
@@ -115,11 +131,11 @@ describe("research in every mode", () => {
       url: w.url,
       trial: "t-1",
     });
-    assert.throws(() => research.addNote("r-1", "lane-1", "   "), /needs its text/);
+    assert.throws(() => research.addSourceNote("r-1", "lane-1", "   "), /needs its text/);
     await w.close();
   });
 
-  test("a hill-climb trial records sources, claims and notes in its run's folder; the rest stays research's", async () => {
+  test("a hill-climb trial records sources, claims and source notes in its run's folder; the rest stays research's", async () => {
     const w = await web();
     const env = makeHarnessEnv();
     const assigned = await env.service.applyCommand(
@@ -129,12 +145,13 @@ describe("research in every mode", () => {
     const { stateDir, scratchDir } = env.service.paths;
     const folder = new ResearchFolder({
       ledger: env.service.ledger,
+      outboxDir: env.service.paths.outboxDir,
       scratchRoot: join(scratchDir, "research"),
       stateRoot: join(stateDir, "research-work"),
       runner: new LocalRunner(scratchDir),
-      knowledge: env.service.knowledge,
     });
     const research = new Research(env.service.ledger, stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
       onChange: (run) => void folder.sync(run),
     });
@@ -143,7 +160,7 @@ describe("research in every mode", () => {
       run: "smoke-1",
       lane: "lane-1",
       epoch: 1,
-      family: "f",
+      direction: "f",
       parent: env.seedCommit,
       token: "code-token",
     });
@@ -162,15 +179,18 @@ describe("research in every mode", () => {
       quotes: [{ source, quote: QUOTE }],
     });
     assert.equal(((await claim.json()) as { verified: boolean }).verified, true);
-    assert.equal((await call("note", { text: "Profile first.", sources: [source] })).status, 200);
+    assert.equal(
+      (await call("source_note", { text: "Profile first.", sources: [source] })).status,
+      200,
+    );
     assert.equal((await call("search-corpus", { text: "working set" })).status, 200);
     for (const op of ["finding", "section", "stats", "hypothesis"]) {
       const r = await call(op, { text: "t", name: "n", body: "b" });
       assert.equal(r.status, 400, op);
-      assert.match(await r.text(), /records sources, claims and notes only/);
+      assert.match(await r.text(), /records sources, claims and source notes only/);
     }
     const rows = env.service.ledger.db
-      .prepare("select run, lane from note union all select run, lane from claim")
+      .prepare("select run, lane from source_note union all select run, lane from claim")
       .all()
       .map((r) => ({ ...r }));
     assert.deepEqual(rows, [
@@ -180,35 +200,19 @@ describe("research in every mode", () => {
     const root = folder.root("smoke-1");
     assert.ok(existsSync(join(root, "sources", `${source}.txt`)));
     assert.equal(
-      readFileSync(join(root, "notes", "note-00001.md"), "utf8").split("\n")[2],
+      readFileSync(join(root, "source-notes", "source-note-00001.md"), "utf8").split("\n")[2],
       "Profile first.",
     );
     assert.ok(!existsSync(join(root, "REPORT.md")), "a hill climb has no research report");
     assert.ok(!existsSync(join(root, "work")), "nor working areas");
     assert.match(readFileSync(join(root, "INDEX.md"), "utf8"), /- claims\/: 1 claims, 1 verified/);
-    // Past research shows in the folder and its index, and stays out of the run's export.
-    env.service.writeKnowledge("smoke-1", [
-      {
-        seq: 4,
-        campaign: "kernels",
-        rig: "rig-b",
-        run: "kernels-7",
-        kind: "note",
-        ref: "12",
-        title: "Vector loads need aligned pointers",
-        body: "Vector loads need 16-byte aligned pointers.",
-        by: "lane-2",
-        url: null,
-        sub: "lesson",
-        at: "2026-10-16T00:00:00.000Z",
-        updated_at: "2026-10-16T00:00:00.000Z",
-      },
-    ]);
+    // Past research is the knowledge base's, on control: nothing writes it in the run's folder,
+    // its index names none, and what an older harness left in knowledge/ stays out of the export.
     folder.sync("smoke-1");
-    assert.match(
-      readFileSync(join(root, "INDEX.md"), "utf8"),
-      /- knowledge\/: past research .*1 note, from kernels/,
-    );
+    assert.ok(!existsSync(join(root, "knowledge")));
+    assert.doesNotMatch(readFileSync(join(root, "INDEX.md"), "utf8"), /knowledge/);
+    mkdirSync(join(root, "knowledge"));
+    writeFileSync(join(root, "knowledge", "README.md"), "# Past research\n");
     const exported = folder.exportFiles("smoke-1").files;
     assert.ok(exported.includes("INDEX.md"));
     assert.ok(exported.some((f) => f.startsWith("sources/")));
@@ -216,7 +220,7 @@ describe("research in every mode", () => {
     await w.close();
   });
 
-  test("a code trial's Pi worker has the research tools for sources, claims and notes", async () => {
+  test("a code trial's Pi worker has the research tools for sources, claims and source notes", async () => {
     const calls: { op: string; args: Record<string, unknown> }[] = [];
     let offered: string[] = [];
     const fake = await startFakeModel(({ messages, tools }) => {
@@ -225,7 +229,10 @@ describe("research in every mode", () => {
       if (done === 0)
         return {
           toolCalls: [
-            { name: "add_note", args: { text: "Profile first.", sources: ["s-1"], run: "other" } },
+            {
+              name: "add_source_note",
+              args: { text: "Profile first.", sources: ["s-1"], run: "other" },
+            },
           ],
         };
       return { text: "nothing to submit" };
@@ -265,13 +272,13 @@ describe("research in every mode", () => {
     );
     await fake.close();
     assert.equal(r.submitted, undefined);
-    for (const name of ["fetch", "read_source", "search_corpus", "add_claim", "add_note"])
+    for (const name of ["fetch", "read_source", "search_corpus", "add_claim", "add_source_note"])
       assert.ok(offered.includes(name), name);
     for (const name of ["add_finding", "update_section", "progress"])
       assert.ok(!offered.includes(name), `${name} is research's`);
     assert.deepEqual(calls, [
       {
-        op: "note",
+        op: "source_note",
         args: { text: "Profile first.", sources: ["s-1"], run: "smoke-1", lane: "lane-1" },
       },
     ]);

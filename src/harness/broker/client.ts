@@ -1,4 +1,5 @@
 import { connect, type Socket } from "node:net";
+import type { PairOutcome } from "./pair.ts";
 import type { BrokerResponse } from "./protocol.ts";
 import type { Role, Runner, RunOutcome, RunRequest } from "./runner.ts";
 
@@ -56,6 +57,10 @@ export class BrokerClient implements Runner {
 
   run(req: RunRequest): Promise<RunOutcome> {
     return this.call({ op: "run", req });
+  }
+
+  runPair(driver: RunRequest, candidate: RunRequest): Promise<PairOutcome> {
+    return this.call({ op: "runPair", driver, candidate });
   }
 
   handOver(path: string, role: Role, opts: { harnessReads?: boolean } = {}): Promise<void> {

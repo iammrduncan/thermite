@@ -1,14 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { createControlApi } from "../../src/control/api.ts";
+import type { ControlOptions } from "../../src/control/api/index.ts";
 import { makeDeployKey } from "../../src/control/git-keys.ts";
 import { CHECK_SCRIPT } from "../../src/control/machines/facts.ts";
 import { type MachineSsh, parseHostKeys, type SshTarget } from "../../src/control/machines/ssh.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { generateSigningKeys } from "../../src/core/commands.ts";
+import { controlOnly, signIn } from "../helpers/control-stack.ts";
 
-const ADMIN = "admin-token-abcdef";
 const HOST = makeDeployKey("host").publicKey.split(" ")[1] as string;
 const OTHER = makeDeployKey("other").publicKey.split(" ")[1] as string;
 const FACTS = [
@@ -56,44 +54,24 @@ function fakeMachine() {
   return { state, ssh };
 }
 
-async function control(
-  ssh: MachineSsh,
-  extra: Partial<Parameters<typeof createControlApi>[3]> = {},
-) {
-  const store = new ControlStore(":memory:");
+async function control(ssh: MachineSsh, extra: Partial<ControlOptions> = {}) {
   const secrets = SecretBox.ephemeral();
-  const api = createControlApi(
-    store,
-    { admin: ADMIN, rigs: {} },
-    generateSigningKeys().privateKeyPem,
-    {
-      staleAfterMs: 180_000,
+  const { store, control: api } = controlOnly({
+    tokens: { rigs: {} },
+    options: {
       secrets,
       machineSsh: ssh,
       publicUrl: "https://control.example.com",
       ...extra,
     },
-  );
-  const login = await api.request("/ui/login", {
-    method: "POST",
-    body: new URLSearchParams({ token: ADMIN }),
-    headers: { "content-type": "application/x-www-form-urlencoded" },
   });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-  const page = async (path: string) => (await api.request(path, { headers: { cookie } })).text();
-  const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page("/ui/settings"))?.[1] ?? "";
+  const { page, csrfOf, post: send } = await signIn(api);
+  const csrf = csrfOf(await page("/ui/settings"));
   const post = async (path: string, form: Record<string, string> | [string, string][]) =>
     decodeURIComponent(
       String(
         (
-          await api.request(path, {
-            method: "POST",
-            body: new URLSearchParams([
-              ["csrf", csrf],
-              ...(Array.isArray(form) ? form : Object.entries(form)),
-            ]),
-            headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-          })
+          await send(path, [["csrf", csrf], ...(Array.isArray(form) ? form : Object.entries(form))])
         ).headers.get("location"),
       ),
     );
@@ -114,7 +92,7 @@ describe("machines in Providers", () => {
     });
     assert.match(added, /"gpu-box-1" is added. Compare its host key below/);
     // Control made the key: its public half is shown, its private half sealed.
-    const machine = s.store.machine("gpu-box-1");
+    const machine = s.store.machines.get("gpu-box-1");
     assert.ok(machine);
     assert.match(s.secrets.open(machine.key_sealed), /OPENSSH PRIVATE KEY/);
     let page = await s.page("/ui/settings");
@@ -172,7 +150,10 @@ describe("machines in Providers", () => {
     assert.equal(first, `[192.0.2.10]:2222 ssh-ed25519 ${HOST}`);
     await s.post("/ui/settings/machines/box/trust", { seen: first });
     m.state.hostKey = OTHER;
-    assert.match(await s.post("/ui/settings/machines/box/check", {}), /different host key/);
+    assert.match(
+      await s.page(await s.post("/ui/settings/machines/box/check", {})),
+      /different host key/,
+    );
     const page = await s.page("/ui/settings");
     assert.match(page, /The machine now presents a different host key/);
     assert.match(page, /showing the last check/);
@@ -184,7 +165,7 @@ describe("machines in Providers", () => {
       /read the machine/,
     );
     assert.match(await s.post("/ui/settings/machines/box/delete", {}), /"box" is deleted/);
-    assert.equal(s.store.machine("box"), undefined);
+    assert.equal(s.store.machines.get("box"), undefined);
   });
 
   test("bad addresses, users and ports are refused before anything connects", async () => {
@@ -202,7 +183,7 @@ describe("machines in Providers", () => {
     assert.match(await add({ address: "-oProxyCommand=id" }), /host name or an IP address/);
     assert.match(await add({ user: "root;id" }), /Unix account name/);
     assert.match(await add({ port: "70000" }), /from 1 to 65535/);
-    assert.equal(s.store.machines().length, 0);
+    assert.equal(s.store.machines.list().length, 0);
   });
 
   test("an install runs only with the owner's yes, for the exact script shown, once", async () => {
@@ -271,12 +252,12 @@ describe("machines in Providers", () => {
       /already running/,
     );
     // The approval is recorded, and can't be used again.
-    const [inst] = s.store.machineInstalls("box");
+    const [inst] = s.store.machines.installs("box");
     assert.equal(inst?.approved_by, "owner:ui");
-    assert.equal(s.store.startInstall(inst?.id ?? 0, "box", "nvidia_toolkit", sha), false);
+    assert.equal(s.store.machines.startInstall(inst?.id ?? 0, "box", "nvidia_toolkit", sha), false);
     finish();
     await new Promise((r) => setTimeout(r, 20));
-    assert.equal(s.store.machineInstalls("box")[0]?.ok, true);
+    assert.equal(s.store.machines.installs("box")[0]?.ok, true);
     assert.match(
       await s.page("/ui/settings"),
       /Last install: NVIDIA(&#39;|')s container toolkit, allowed by owner:ui, <span class="chip ok">done/,
@@ -328,17 +309,17 @@ describe("machines in Providers", () => {
     assert.match(await s.post("/ui/rigs/add", twice), /Name each GPU once/);
     assert.match(
       await s.post("/ui/rigs/add", { machine: "box", rig: "Box A" }),
-      /lowercase letters/,
+      /A rig's name is 2 to 40 characters of a-z, 0-9 and -/,
     );
-    assert.equal(s.store.machineRigs().length, 0);
+    assert.equal(s.store.machines.rigs().length, 0);
     assert.equal(await s.post("/ui/rigs/add", { machine: "box", rig: "box-a" }), "/ui/rigs/box-a");
     await new Promise((r) => setTimeout(r, 20));
     // Enrolled with a token of its own; the deploy script carries it, and the units the CPU image.
-    assert.ok(s.store.enrolledRig("box-a"));
+    assert.ok(s.store.enrollments.rig("box-a"));
     assert.equal(scripts.length, 1);
     assert.match(scripts[0] ?? "", /Image=registry\.example\.com\/thermite\/harness:1/);
     assert.match(scripts[0] ?? "", /Environment=CONTROL_URL=https:\/\/control\.example\.com/);
-    assert.equal(s.store.machineRig("box-a")?.status, "starting");
+    assert.equal(s.store.machines.rig("box-a")?.status, "starting");
     let page = await s.page("/ui/rigs/box-a");
     assert.match(page, /Control is setting box-a up on box/);
     assert.match(page, /Enrolled with control: a token of its own/);
@@ -353,7 +334,7 @@ describe("machines in Providers", () => {
       scripts[1] ?? "",
       /systemctl --user stop thermite-box-a-supervisor\.service thermite-box-a-harness\.service/,
     );
-    assert.equal(s.store.machineRig("box-a")?.status, "stopped");
+    assert.equal(s.store.machines.rig("box-a")?.status, "stopped");
     assert.match(await s.post("/ui/rigs/box-a/machine/start", {}), /ok=Started/);
     assert.match(
       await s.post("/ui/rigs/box-a/machine/remove", { confirm: "remove" }),
@@ -361,20 +342,20 @@ describe("machines in Providers", () => {
     );
     // Refused while its results have not left it (goal 165), with how to get them out.
     const exports = (waiting: number) => ({ export: { remote: false, to: "control", waiting } });
-    s.store.setSupervisor("box-a", exports(2));
+    s.store.reportedRigs.setSupervisor("box-a", exports(2));
     assert.match(
       await s.post("/ui/rigs/box-a/machine/remove", { confirm: "remove box-a" }),
       /box-a still holds results: 2 exports wait on the rig to go to control\. Use Export/,
     );
-    assert.equal(s.store.machineRig("box-a")?.status, "running");
+    assert.equal(s.store.machines.rig("box-a")?.status, "running");
     assert.equal(scripts.length, 3);
-    s.store.setSupervisor("box-a", exports(0));
+    s.store.reportedRigs.setSupervisor("box-a", exports(0));
     assert.match(
       await s.post("/ui/rigs/box-a/machine/remove", { confirm: "remove box-a" }),
       /ok=Removed/,
     );
-    assert.equal(s.store.machineRig("box-a")?.status, "removed");
-    assert.equal(s.store.enrolledRig("box-a"), undefined);
+    assert.equal(s.store.machines.rig("box-a")?.status, "removed");
+    assert.equal(s.store.enrollments.rig("box-a"), undefined);
     page = await s.page("/ui/rigs/box-a");
     assert.match(page, /Removed from the machine/);
   });

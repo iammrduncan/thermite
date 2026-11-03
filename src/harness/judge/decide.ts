@@ -33,6 +33,8 @@ export interface GuardResult {
   interval: Interval;
   /** ok: confidently within the step margin; violated: confidently beyond it. */
   status: "ok" | "violated" | "unsure";
+  /** The guard's measured values, as for the main metric (goal 184). */
+  values: MetricValues;
 }
 
 export interface Decision<V> {
@@ -160,7 +162,12 @@ function guardResults(policy: Policy, blocks: readonly Block[], alpha: number): 
     const interval = meanInterval(blockEffects(blocks, g.metric, g.direction, policy.cells), alpha);
     const margin = -toLog(g.max_step_regression);
     const status = interval.low > margin ? "ok" : interval.high < margin ? "violated" : "unsure";
-    return { metric: g.metric, interval, status };
+    return {
+      metric: g.metric,
+      interval,
+      status,
+      values: metricValues(blocks, g.metric, policy.cells),
+    };
   });
 }
 

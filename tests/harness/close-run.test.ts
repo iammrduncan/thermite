@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { type CommandKind, signEnvelope } from "../../src/core/commands.ts";
 import { parseContract } from "../../src/core/contract.ts";
-import { Scheduler } from "../../src/harness/agents/scheduler.ts";
+import { Scheduler } from "../../src/harness/agents/scheduler/index.ts";
 import { Audits } from "../../src/harness/audits.ts";
 import { LocalRunner } from "../../src/harness/broker/runner.ts";
-import { Research } from "../../src/harness/research/research.ts";
+import type { Finish, JudgeContext } from "../../src/harness/judge/context.ts";
+import { promotion } from "../../src/harness/judge/jobs/confirm.ts";
+import { Research } from "../../src/harness/research/research/index.ts";
 import { startFakeModel } from "../helpers/fake-model.ts";
 import { researchFixture } from "../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
@@ -56,8 +58,8 @@ describe("close_run (goal 087)", () => {
         {
           name: "submit_plan",
           args: {
-            assignments: [{ lane: "lane-1", family: "loops", focus: "f", parent: "champion" }],
-            new_families: [{ id: "loops", description: "d" }],
+            assignments: [{ lane: "lane-1", direction: "loops", focus: "f", parent: "champion" }],
+            new_directions: [{ id: "loops", description: "d" }],
           },
         },
       ],
@@ -100,7 +102,7 @@ describe("close_run (goal 087)", () => {
       JSON.stringify(byAgent.result),
       /close_run is the owner's to issue, not agent:mcp's/,
     );
-    assert.equal(env.ledger.getRun("js-1")?.status, "running");
+    assert.equal(env.ledger.runs.get("js-1")?.status, "running");
     // A reason of spaces alone is no reason: the payload is refused before anything changes.
     const blank = await apply("close_run", { run: "js-1", reason: "   " });
     assert.equal(blank.status, "rejected");
@@ -109,7 +111,7 @@ describe("close_run (goal 087)", () => {
     const closed = await apply("close_run", { run: "js-1", reason: why }, "owner:ui");
     assert.equal(closed.accepted, true, JSON.stringify(closed));
     assert.deepEqual(closed.result, { run: "js-1", status: "closed", was: "running" });
-    const run = env.ledger.getRun("js-1");
+    const run = env.ledger.runs.get("js-1");
     assert.deepEqual([run?.status, run?.pause_reason], ["closed", why]);
     assert.deepEqual(env.ledger.latestEventBody("run_status", "js-1"), {
       status: "closed",
@@ -144,14 +146,14 @@ describe("close_run (goal 087)", () => {
       "cancelled",
     );
     assert.equal(count(env, "select count(*) as n from job where state = 'queued'"), 0);
-    assert.equal(env.ledger.getAttempt(sub.attempt)?.lifecycle, "not_judged");
+    assert.equal(env.ledger.attempts.get(sub.attempt)?.lifecycle, "not_judged");
     assert.equal(
       env.ledger.latestEventBody("attempt_lifecycle", sub.attempt)?.lifecycle,
       "not_judged",
     );
-    assert.equal(env.ledger.currentVerdict(sub.attempt), undefined);
-    assert.ok(env.ledger.getAttempt(sub.attempt), "the attempt stays");
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1, "the champion stays");
+    assert.equal(env.ledger.verdicts.current(sub.attempt), undefined);
+    assert.ok(env.ledger.attempts.get(sub.attempt), "the attempt stays");
+    assert.equal(env.ledger.champions.current("js-1").seq, 1, "the champion stays");
 
     // It stays closed: no resume, no pause, no second close.
     const resumed = await apply("resume_run", { run: "js-1" });
@@ -166,7 +168,7 @@ describe("close_run (goal 087)", () => {
       error: `run js-1 is already closed (${why}): there is nothing to close`,
     });
     assert.deepEqual(
-      [env.ledger.getRun("js-1")?.status, env.ledger.getRun("js-1")?.pause_reason],
+      [env.ledger.runs.get("js-1")?.status, env.ledger.runs.get("js-1")?.pause_reason],
       ["closed", why],
     );
     const unknown = await apply("close_run", { run: "js-9", reason: why });
@@ -195,8 +197,8 @@ describe("close_run (goal 087)", () => {
     const env = makeJudgeEnv({ goal: { opsPerSecond: 1 } });
     await env.service.applyCommand(env.assign);
     // A validation the judge took while the run was running, which would close it as complete.
-    env.ledger.enqueueJob({ kind: "validate", priority: 1, spec: { run: "js-1" }, actor: "t" });
-    const job = env.ledger.leaseJob("judge-test", 60_000, ["validate"]);
+    env.ledger.jobs.enqueue({ kind: "validate", priority: 1, spec: { run: "js-1" }, actor: "t" });
+    const job = env.ledger.jobs.lease("judge-test", 60_000, ["validate"]);
     assert.ok(job);
     await env.service.applyCommand(env.sign("pause_run", { run: "js-1", reason: "seen enough" }));
     const closed = (await env.service.applyCommand(
@@ -212,7 +214,7 @@ describe("close_run (goal 087)", () => {
       close: { run: "js-1", reason: "every required goal is met" },
     });
     assert.deepEqual(
-      [env.ledger.getRun("js-1")?.status, env.ledger.getRun("js-1")?.pause_reason],
+      [env.ledger.runs.get("js-1")?.status, env.ledger.runs.get("js-1")?.pause_reason],
       ["closed", "done elsewhere"],
     );
   });
@@ -224,8 +226,12 @@ describe("close_run (goal 087)", () => {
       { run: "js-1", patch_base64: env.patch(FAST_KERNEL), hypothesis: "h", known_flaws: [] },
       "proposer",
     )) as { attempt: string };
-    const validate = env.ledger.enqueueJob({ kind: "validate", spec: { run: "js-1" }, actor: "t" });
-    const taken = env.ledger.enqueueJob({ kind: "validate", spec: { run: "js-1" }, actor: "t" });
+    const validate = env.ledger.jobs.enqueue({
+      kind: "validate",
+      spec: { run: "js-1" },
+      actor: "t",
+    });
+    const taken = env.ledger.jobs.enqueue({ kind: "validate", spec: { run: "js-1" }, actor: "t" });
     env.ledger.db
       .prepare("update job set state = 'leased', lease_owner = 'executor-0' where id = ?")
       .run(taken);
@@ -239,21 +245,21 @@ describe("close_run (goal 087)", () => {
     assert.equal(state(attemptJob), "queued");
 
     assert.deepEqual(
-      env.ledger.endClosedRunJobs("controller-start").sort(),
+      env.ledger.jobs.endClosedRuns("controller-start").sort(),
       [attemptJob, validate].sort(),
     );
     assert.deepEqual(
       [state(attemptJob), state(validate), state(taken)],
       ["cancelled", "cancelled", "leased"],
     );
-    assert.equal(env.ledger.getAttempt(sub.attempt)?.lifecycle, "not_judged");
-    assert.deepEqual(env.ledger.endClosedRunJobs("controller-start"), [], "once is enough");
+    assert.equal(env.ledger.attempts.get(sub.attempt)?.lifecycle, "not_judged");
+    assert.deepEqual(env.ledger.jobs.endClosedRuns("controller-start"), [], "once is enough");
 
     // A paused or running run's jobs wait as before.
     for (const status of ["paused", "running"]) {
       env.ledger.db.prepare("update run set status = ? where id = 'js-1'").run(status);
-      const j = env.ledger.enqueueJob({ kind: "validate", spec: { run: "js-1" }, actor: "t" });
-      assert.deepEqual(env.ledger.endClosedRunJobs("controller-start"), []);
+      const j = env.ledger.jobs.enqueue({ kind: "validate", spec: { run: "js-1" }, actor: "t" });
+      assert.deepEqual(env.ledger.jobs.endClosedRuns("controller-start"), []);
       assert.equal(state(j), "queued", status);
     }
   });
@@ -274,26 +280,19 @@ describe("close_run (goal 087)", () => {
       env.sign("close_run", { run: "js-1", reason: "done elsewhere" }),
     );
     // The judge's job on it was under way when the run closed: its confirmation now ends.
-    const judge = env.judge as unknown as {
-      promotion(
-        fin: unknown,
-        attempt: string,
-        run: string,
-        seq: number,
-        row: Record<string, unknown>,
-      ): { promote?: unknown; lifecycle?: string; result: unknown };
-    };
-    const out = judge.promotion(
-      { result: {}, verdict: { verdict: "win_confirmed", delta: 0.5 } },
+    const judge = (env.judge as unknown as { judge: JudgeContext }).judge;
+    const out = promotion(
+      judge,
+      { result: {}, verdict: { verdict: "win_confirmed", delta: 0.5 } } as unknown as Finish,
       sub.attempt,
       "js-1",
       1,
-      env.ledger.getAttempt(sub.attempt) as Record<string, unknown>,
+      env.ledger.attempts.get(sub.attempt) as Record<string, unknown>,
     );
     assert.equal(out.promote, undefined);
     assert.equal(out.lifecycle, "awaiting_approval");
     assert.deepEqual(out.result, { promoted: false, waiting: "run_closed" });
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1);
+    assert.equal(env.ledger.champions.current("js-1").seq, 1);
   });
 
   test("a closed run's waiting decisions are refused in words, and its held audit is no one's to decide (the owner, 2026-10-22)", async () => {
@@ -308,11 +307,11 @@ describe("close_run (goal 087)", () => {
       ).attempt;
     // A confirmed win that waits for the owner, as the judge leaves one the run asks about.
     const waiting = await submit(FAST_KERNEL);
-    env.ledger.setAttemptLifecycle(waiting, "awaiting_approval", "judge");
+    env.ledger.attempts.setLifecycle(waiting, "awaiting_approval", "judge");
     env.ledger.appendEvent("judge", "promotion_pending", waiting, {
       run: "js-1",
       expected_seq: 1,
-      commit: env.ledger.getAttempt(waiting)?.commit_sha,
+      commit: env.ledger.attempts.get(waiting)?.commit_sha,
       reason: "you asked to decide every change (promotion: owner approval)",
     });
     // A win held for an audit, as the judge holds one with declared flaws.
@@ -326,7 +325,7 @@ describe("close_run (goal 087)", () => {
       expectedSeq: 1,
       by: "judge",
     });
-    env.ledger.setAttemptLifecycle(held, "awaiting_audit", "judge");
+    env.ledger.attempts.setLifecycle(held, "awaiting_audit", "judge");
     // A review the panel passed, and a "not possible" proposal, each waiting for the owner.
     const at = new Date().toISOString();
     const review = Number(
@@ -385,7 +384,7 @@ describe("close_run (goal 087)", () => {
       { run: "js-1", proposal, accept: false },
       "it can't end as not possible or go on",
     );
-    assert.equal(String(env.ledger.getAttempt(waiting)?.lifecycle), "awaiting_approval");
+    assert.equal(String(env.ledger.attempts.get(waiting)?.lifecycle), "awaiting_approval");
     assert.equal(
       env.ledger.db.prepare("select owner_decision from review where id = ?").get(review)
         ?.owner_decision,
@@ -410,9 +409,12 @@ describe("close_run (goal 087)", () => {
     );
     assert.equal(new Audits(env.ledger).get(held)?.decision, null);
     // A rig that says it has no auditor lets no held audit of it go on.
-    assert.deepEqual(await env.service.setAdvisors({ auditor: false, panel: 0 }, "supervisor"), []);
-    assert.equal(String(env.ledger.getAttempt(held)?.lifecycle), "awaiting_audit");
-    assert.equal(env.ledger.currentChampion("js-1").seq, 1, "the champion stays");
+    assert.deepEqual(
+      await env.service.setAdvisors({ auditor: false, review_panel: 0 }, "supervisor"),
+      [],
+    );
+    assert.equal(String(env.ledger.attempts.get(held)?.lifecycle), "awaiting_audit");
+    assert.equal(env.ledger.champions.current("js-1").seq, 1, "the champion stays");
   });
 
   test("a research run closed by the owner gets its final report once its trial ends", async () => {
@@ -428,6 +430,7 @@ describe("close_run (goal 087)", () => {
       }),
     );
     const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+      outboxDir: env.service.paths.outboxDir,
       allowPrivate: true,
     });
     const s = new Scheduler({
@@ -482,6 +485,6 @@ describe("close_run (goal 087)", () => {
     assert.match(report.body, /^# /);
     await s.tick();
     assert.equal(finals(), 1, "once");
-    assert.equal(env.service.ledger.getRun("r-1")?.status, "closed");
+    assert.equal(env.service.ledger.runs.get("r-1")?.status, "closed");
   });
 });

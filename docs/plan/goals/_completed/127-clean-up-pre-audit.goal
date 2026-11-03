@@ -14,7 +14,7 @@ updated: 2026-10-26
 
 ## What
 
-The first goal of v0.1.1, before the clean-up itself, goal [125](../125-code-to-the-conventions.goal). It looks at all of Thermite's code at once, against [CONVENTIONS.md](../../../../CONVENTIONS.md), and writes a guide that goal 125 works from.
+The first goal of v0.1.1, before the clean-up itself, goal [125](125-code-to-the-conventions.goal). It looks at all of Thermite's code at once, against [CONVENTIONS.md](../../../../CONVENTIONS.md), and writes a guide that goal 125 works from.
 
 The two goals make a double audit:
 

@@ -1,0 +1,28 @@
+#!/bin/sh
+# Test only (scripts/acceptance/multigpu.mjs): gives the harness container fake GPUs, then starts
+# the harness as usual. The "device nodes" are plain files, and nvidia-smi is the stand-in next to
+# this script, so the broker's per-card groups, the timing users and the isolation selftest run
+# for real without a GPU. It refuses to run where a real NVIDIA device is present.
+set -eu
+for node in /dev/nvidiactl /dev/nvidia[0-9]*; do
+  if [ -c "$node" ]; then
+    echo "test-gpu: a real NVIDIA device is present ($node); refusing to fake GPUs here" >&2
+    exit 1
+  fi
+done
+n=${FAKE_GPUS:-4}
+i=0
+while [ "$i" -lt "$n" ]; do
+  : > "/dev/nvidia$i"
+  i=$((i + 1))
+done
+: > /dev/nvidiactl
+: > /dev/nvidia-uvm
+# The supervisor token, written as compose's secrets are: root's, 0600. A file shared from the
+# host machine can keep looser permissions than the rig would have.
+if [ -n "${TEST_SUPERVISOR_TOKEN:-}" ]; then
+  mkdir -p /run/secrets
+  (umask 077 && printf '%s' "$TEST_SUPERVISOR_TOKEN" > /run/secrets/harness-supervisor-token)
+  unset TEST_SUPERVISOR_TOKEN
+fi
+exec /usr/bin/tini -- node /opt/thermite/dist/harness/broker/main.js

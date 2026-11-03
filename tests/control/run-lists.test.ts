@@ -7,7 +7,7 @@ import {
   runDetail,
   runQueue,
 } from "../../src/control/run-lists.ts";
-import type { RunView } from "../../src/control/views.ts";
+import type { RunView } from "../../src/control/views/index.ts";
 
 /** A run's view the size of a research run that worked for a day and a half. */
 function longRun() {

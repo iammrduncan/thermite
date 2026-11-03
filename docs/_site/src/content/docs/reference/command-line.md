@@ -20,8 +20,8 @@ The first prints `ok`, the contract's mode, name, version and SHA-256. The secon
 
 | Where | How to run it | Used there for |
 | --- | --- | --- |
-| Your computer, in a clone of the repository | `npx thermite <command>`, after `npm ci` and `npm run build`. It runs `dist/cli/thermite.js` and needs Node.js 22.19 or later. With a release's compose stack, link its `.dev/` folder into the clone, as [the command line](../how-to/install/one-machine.md#the-command-line) shows | Checking the machine, contracts, tokens, starting runs, commands, enrolling rigs |
-| Control's image | `thermite` (`/usr/local/bin/thermite`, which runs `node /opt/thermite/dist/cli/thermite.js`) | The same commands, from inside control's container, except `doctor`, which checks the machine it runs on. A release's `init` service runs `local init` from this image |
+| Your computer, in a clone of the repository | `npx thermite <command>`, after `npm ci` and `npm run build`. It runs `dist/cli/thermite/main.js` and needs Node.js 22.19 or later. With a release's compose stack, link its `.dev/` folder into the clone, as [the command line](../how-to/install/one-machine.md#the-command-line) shows | Checking the machine, contracts, tokens, starting runs, commands, enrolling rigs |
+| Control's image | `thermite` (`/usr/local/bin/thermite`, which runs `node /opt/thermite/dist/cli/thermite/main.js`) | The same commands, from inside control's container, except `doctor`, which checks the machine it runs on. A release's `init` service runs `local init` from this image, and the compose stack's `backup` service runs `backup` and `restore` |
 | The supervisor's image | `thermite`, the same wrapper | The same commands |
 | The harness image | `thermite`, the same wrapper, and `thermite-trial` | `submit` and `status` against the harness at `http://127.0.0.1:8700`; `selftest isolation`, which must run there, as root |
 
@@ -49,7 +49,7 @@ usage: thermite <command> [options]
          [--kit GIT_URL | --kit control:NAME]
          [--model NAME=URL ...] [--note TEXT] [--agents off] [--promotion auto|owner]
          [--ask gain:PERCENT|flaws|reviews|not-possible ...]
-         [--queue-from [RIG/]RUN] [--mcp-servers JSON|@file]
+         [--queue-from RUN] [--mcp-servers JSON|@file]
          [--context-window TOKENS] [--compact-at PERCENT]
          [--info-file F] [--link URL ...] [--idea TEXT ...] [--hypothesis TEXT ...]
          (--control URL --token-file F --rig R [--ttl MIN] | --print)
@@ -61,12 +61,12 @@ usage: thermite <command> [options]
                                       the kit NAME that control keeps (kit add, or one the New
                                       campaign page wrote). --queue-from starts the new
                                       run's queue with a past run's untried experiments, read
-                                      from control (on --rig unless RIG/ is given; it needs
-                                      --control and --token-file, with --print too).
+                                      from control, which knows the run by its name wherever it
+                                      ran (it needs --control and --token-file, with --print
+                                      too).
                                       --mcp-servers gives the MCP servers the kit's kit.json
                                       names, as in kit.json; the rig refuses a run whose list
-                                      differs. --note keeps a text with the run (--direction,
-                                      its old name, still works and says so). --context-window
+                                      differs. --note keeps a text with the run. --context-window
                                       and --compact-at set the campaign's own context settings
                                       in the contract sent (its agents_context, over the file's):
                                       every agent's window is the lower of it and its own, and
@@ -132,24 +132,29 @@ usage: thermite <command> [options]
                                       cancel the rig's full reset before its wipe (owner's token)
   run start CAMPAIGN --rig R [--agents off] [--provider P --model M] [--promotion auto|owner]
          [--ask gain:PERCENT|flaws|reviews|not-possible ...]
-         [--judge-gpus N] [--queue-from [RIG/]RUN] [--past ID ...] --control URL --token-file F
+         [--judge-gpus N] [--queue-from RUN] [--past ID ...] [--fresh]
+         [--granted C ... | --no-granted] --control URL --token-file F
                                       start a run of a campaign control keeps (owner's token), as
                                       Start a run on the campaign's page does, with its checks and
                                       refusals: a campaign saved on the New campaign page or
                                       assigned before. --provider and --model give the rig's
                                       agents that model first: the run does not start, and the
                                       command exits 1; run it again once the rig has the model.
-                                      --queue-from starts the queue with a run's untried
-                                      experiments (on --rig unless RIG/ is given); --past adds
-                                      items of Thermite's knowledge base by id. It prints the new
+                                      --queue-from starts the queue with the untried experiments
+                                      of a run of the campaign, by its name; --past adds
+                                      items of Thermite's knowledge base by id. Its agents search
+                                      the campaign's whole collection, or with --fresh only the
+                                      run's own items, and every collection the campaign is
+                                      granted, or those --granted names, or none with
+                                      --no-granted; fixed as it starts. It prints the new
                                       run and its command id; a stopped RunPod pod starts first
   campaign copy FROM NAME [--mcp-servers-json FILE] [--context-window TOKENS]
          [--compact-at PERCENT] [--info-file F] [--link URL ...] [--idea TEXT ...]
          [--hypothesis TEXT ...] --control URL --token-file F
                                       copy a campaign control keeps (owner's token): a new
                                       campaign NAME with FROM's contract and kit, its own empty
-                                      folder in Thermite's knowledge base and no runs. Start a
-                                      run of it with run start. It prints the copy.
+                                      collection in Thermite's knowledge base and no runs. Start
+                                      a run of it with run start. It prints the copy.
                                       --mcp-servers-json: for a research campaign, the MCP
                                       servers the copy's agents use instead, as a JSON list
                                       ([] for none). --context-window and --compact-at give the
@@ -165,6 +170,13 @@ usage: thermite <command> [options]
                                       rig's compaction point. Control saves a new version of the
                                       campaign; runs started from then take it. Without either
                                       option, the settings are removed. It prints the version
+  campaign additions CAMPAIGN [--add ROLE=FILE]... --control URL --token-file F
+                                      set the owner's additions to a campaign's roles (owner's
+                                      token): each --add gives ROLE's text, from FILE, added to
+                                      that role's own instructions in every prompt of the
+                                      campaign's runs. Control saves a new version of the
+                                      campaign; runs started from then take it. Without --add, the
+                                      additions are removed. It prints the version
   kit add NAME BUNDLE [--ref REF] [--force] --control URL --token-file F
                                       give control a kit repository written elsewhere, as a git
                                       bundle file (owner's token; at most 64 MiB): control keeps
@@ -177,6 +189,74 @@ usage: thermite <command> [options]
   kit list --control URL --token-file F [--json]
                                       the kits control keeps (owner's or reader's token): each
                                       one's head, commits and kit.json's name and target
+  kb search [WORDS...] [--query Q ...] [--mode words|exact] [--like ADDRESS] [--seen ADDRESS ...]
+         [--collection C ...] [--kind K ...] [--outcome O ...] [--run R ...] [--slot S ...]
+         [--type T ...] [--as RUN] [--offset N] [--limit N] --control URL --token-file F
+                                      search Thermite's knowledge base (owner's token): items with
+                                      any of the words, best first, each with its id, address,
+                                      slot, outcome, an excerpt, why it matched, its passage in a
+                                      long text and, for an experiment, its result; with how many
+                                      matched, the next page, where the words land and how many
+                                      items hold each word; no words: the newest. --query adds a
+                                      search, fused with the words; --mode exact takes FTS5's
+                                      syntax; --like finds more like an item; --seen leaves items
+                                      out; --collection, --kind, --outcome, --run, --slot and
+                                      --type (record, blurb or file) keep only those. --as RUN
+                                      searches as that run's agents do: their kb_search's answer,
+                                      from the run's own scope, with that scope. It prints JSON
+  kb read ADDRESS [--version N] [--offset N] --control URL --token-file F
+                                      one item of the knowledge base, by its address
+                                      (<campaign>/<run>/<slot>/<kind>:<id>): its newest version,
+                                      or version N, with its text from --offset, 10,000
+                                      characters at most, every version, its writer, withdrawn
+                                      evidence, its file's facts, its links both ways and which
+                                      running runs can read it. It prints JSON
+  kb list [PLACE] [--kind K ...] [--outcome O ...] [--type T ...] [--slot S ...]
+         [--sort S] [--order asc|desc] [--offset N] [--limit N] --control URL --token-file F
+                                      what one place of the knowledge base holds, as the
+                                      Knowledge page shows it: the whole knowledge base, or
+                                      PLACE (<campaign>, <campaign>/<run> or
+                                      <campaign>/<run>/<slot>): its folders (collections, runs or
+                                      slots) and a page of every item under it, with how many
+                                      and their counts by kind, outcome, type and slot. --type is
+                                      record, blurb or file; --sort is name, kind, outcome,
+                                      writer, modified (the default) or size; --limit 0 to 200
+                                      (default 50). It prints JSON
+  kb note ADDRESS WORDS... [--title T] --control URL --token-file F
+                                      write your note on an item (owner's token): it is kept in
+                                      the owner slot of the item's run, linked to the item, and
+                                      the run's agents find it. It prints JSON
+  kb stored [--offset N] --control URL --token-file F
+                                      what the knowledge base stores (owner's token), as the
+                                      Knowledge page's What's stored shows it: the totals, each
+                                      collection's figures, the indexes, the largest files and
+                                      the file types, what waits on the bus for control to store,
+                                      and the writes control refused, 50 a page from --offset.
+                                      It prints JSON
+  kb settings [--max-file-mib N] [--orphan-hours H|default] --control URL --token-file F
+                                      the knowledge base's settings on control (owner's token):
+                                      with no option, read them; --max-file-mib, the largest file
+                                      it takes (empty or 0: no limit); --orphan-hours, how long a
+                                      file no item names stays (0: kept for good; default: back to
+                                      THERMITE_CONTROL_KB_ORPHAN_HOURS). It prints JSON
+  kb grant CAMPAIGN READS --control URL --token-file F
+  kb revoke CAMPAIGN READS --control URL --token-file F
+                                      let CAMPAIGN's agents read READS's collection in the
+                                      knowledge base, read only (owner's token), or stop them:
+                                      a grant joins the search of its runs at work at once, and a
+                                      revoke leaves every run's search at once. It prints the
+                                      campaign's grants both ways, as JSON
+  agents list --control URL --token-file F [--json]
+                                      the agents' roles (owner's token): each
+                                      one's name and what it does
+  agents show ROLE [--run RUN [--prompt N] [--sections]] --control URL --token-file F [--json]
+                                      a role's definition: its model, programs, the function
+                                      that puts its prompt together and its fixed texts. With
+                                      --run, the prompt the run's agent in that role was sent
+                                      (the newest, or prompt N): each section with its source
+                                      and text; --sections lists the sources only. Control has
+                                      at most 8,000 characters of a prompt's own text; the
+                                      whole is on the rig and in the run's export
   mcp list --control URL --token-file F [--json]
                                       the MCP servers in Settings (owner's token): each one's
                                       sign-in, state, last error, tools and the kits that name
@@ -200,31 +280,104 @@ usage: thermite <command> [options]
   mcp delete NAME --control URL --token-file F
                                       forget a server and its secrets; refused while a kit
                                       names it
-  command --control URL --token-file F --rig U --kind K --payload JSON|@file [--ttl MIN]
-                                      issue a signed command through control (admin token).
-                                      assign_campaign and resume_run on a RunPod rig whose pod
-                                      is stopped start the pod first, and say so
+  retention list|removals [--policy ID] [--limit N] --control URL --token-file F [--json]
+                                      the owner's retention policies, each with what it would
+                                      remove now, or what the policies removed (owner's token)
+  retention show|delete|on|off|run ID --control URL --token-file F [--json]
+                                      one policy: its whole record, deleted, turned on (from
+                                      now) or off, or run now; run can't be undone: preview first
+  retention create|preview|update [ID] [--name N] [--kind K] [--where all|rigs|campaigns]
+                  [--rig R]... [--campaign C]... [--rule older|newest|size]
+                  [--older N] [--unit days|weeks|months] [--newest N] [--per rig|run|all]
+                  [--size GIB] [--keep KEEP]... [--no-keep KEEP]... [--when daily|weekly|hand]
+                  [--time HH:MM] [--day DAY] [--on] --control URL --token-file F [--json]
+                                      a new policy (off unless --on), what a design would remove
+                                      now, or a change to policy ID (only the options given;
+                                      --on turns it on too). K: events, builds, trial_logs,
+                                      advisor_records, kb_versions, store_copies or audit. KEEP:
+                                      open, champions or newest, each on unless --no-keep. UTC
+  bus --control URL --token-file F [--json]
+                                      the message bus as control sees it now (owner's or
+                                      reader's token): its server, each stream with its
+                                      messages, bytes and consumers, the events stream's writer
+                                      and apply, and the live and config figures
+  exports delete RIG NAME... --control URL --token-file F
+                                      delete exports control keeps from RIG (owner's token), as
+                                      Delete on the Exports page does: their files and records,
+                                      with export_deleted in the audit log. It can't be undone.
+                                      All or none: one still arriving is refused, and then
+                                      nothing is deleted. It prints what went
+  command --control URL --token-file F [--rig U] --kind K --payload JSON|@file [--ttl MIN]
+                                      issue a signed command through control (admin token). A
+                                      kind about one run (its payload's run) goes to the rig the
+                                      run is on, so --rig may be left out; every other kind
+                                      needs it. assign_campaign and resume_run on a RunPod rig
+                                      whose pod is stopped start the pod first, and say so
+  log-level [control|harness|supervisor] [debug|info|warn|error|default] [--rig R] [--ttl MIN]
+            --control URL --token-file F
+                                      a log level (owner's token). control: control's own, read
+                                      with no level, or set at once and kept across control's
+                                      restarts; harness or supervisor: that part of rig R, by a
+                                      signed log_level command, until another changes it or the
+                                      part restarts. default: the part's THERMITE_LOG_LEVEL. It
+                                      prints JSON
+  invalidate --run RUN (--attempt ID | --job N) --reason TEXT [--yes] --control URL --token-file F
+                                      withdraw bad evidence (owner's token): an attempt, for
+                                      good, with every attempt built on it, or a judge job's
+                                      measurements, whose attempts are judged again. It prints
+                                      what it would reach, from the rig, and changes nothing;
+                                      with --yes it then withdraws exactly that, or the rig
+                                      refuses when what it reaches changed. Nothing is deleted
   submit --harness URL --token-file F --run ID --patch-file P --hypothesis TEXT
          [--known-flaw TEXT ...]      submit a patch as a proposer
   status --harness URL --token-file F --attempt ID
                                       show an attempt's lifecycle and verdict
   local init DIR [--engine docker|podman]
                                       make DIR, the local compose stack's .dev folder: random
-                                      tokens in DIR/secrets, the inbox, the outbox and the
-                                      advisors' folder. Files that exist are kept. Run as root,
-                                      it gives what it makes to the owner of DIR's parent folder.
-                                      It says what the local rig gets (CPUs, memory, GPUs), and
-                                      with NVIDIA GPUs the rig can have, writes compose.gpu.yaml
-                                      next to DIR for the engine named, or the one it finds
+                                      tokens in DIR/secrets, the inbox, the outbox, and the
+                                      advisors' and backups' folders. Files that exist are
+                                      kept. Run as root, it gives what it makes to the owner of
+                                      DIR's parent folder. It says what the local rig gets
+                                      (CPUs, memory, GPUs), and with NVIDIA GPUs the rig can
+                                      have, writes compose.gpu.yaml next to DIR for the engine
+                                      named, or the one it finds. Each rig's token for control
+                                      starts empty: local enroll fills it
+  local enroll RIG --control URL --token-file F --out FILE
+                                      the compose stack's enroll step: wait for control (up to
+                                      5 minutes), enroll RIG with the owner's token in F unless
+                                      control has it enrolled and FILE holds a token, and write
+                                      its token into FILE. A retired rig is left as it is
   selftest isolation [--force]        inside the harness container, as root, with the rig idle: check that role
                                       users cannot reach the ledger, kits, builds or secrets
+  backup FOLDER [--state DIR] [--bus URL]
+                                      where control's state folder is mounted (compose: the
+                                      backup service): copy control's state (control.db, whole
+                                      while control runs, its keys, kits and exports) and a
+                                      snapshot of the bus's EVENTS stream into a new folder in
+                                      FOLDER, named for the time, with a manifest of each file's
+                                      SHA-256 and each stream's count and last place. --state:
+                                      control's state folder (THERMITE_CONTROL_DIR, or
+                                      /var/lib/thermite-control); --bus: the bus
+                                      (THERMITE_NATS_URL)
+  restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]
+                                      with control stopped: check the backup against its
+                                      manifest, restore each stream the bus does not have and
+                                      check it (its count, last place and last message), then
+                                      put control's state back, what it replaces moved aside
+                                      into a dated folder. A stream on the bus is kept when it
+                                      holds the backup's events unchanged, with or without
+                                      newer ones after them; any other is refused, and nothing
+                                      changes. --control: refused while control answers there.
+                                      --bus-store DIR, with the bus stopped: only move the
+                                      bus's store aside into a dated folder in DIR, so that
+                                      the bus starts empty
 ```
 
 ## Rules for every command
 
-- **Options.** Each option takes its value as the next word or after `=`. In `doctor`, `local init`, `token new`, `assign`, `assign-payload`, `rig`, `run start`, `campaign copy`, `campaign context`, `command`, `submit` and `status`, an option the command does not know, or a word it does not expect, ends the command with Node's own message and exit code 2. In `runpod` and `mcp`, an option it does not know does the same; a word after the name it takes is ignored.
-- **Older option names.** `--instance` is read as `--run`, and `--unit` as `--rig`. These are the names from before runs and rigs were renamed.
-- **Control's token.** The commands that talk to control (`assign`, `run start`, `campaign copy`, `campaign context`, `mcp`, `command`, `rig add`, `rig token`, `rig retire`, `rig list`, and every `runpod` command) send the contents of `--token-file`, trimmed, as `Authorization: Bearer <token>`. Only the owner's token works on these routes; any other token gets `401 {"error":"unauthorized"}`. See [Tokens and roles](tokens.md).
+- **Options.** Each option takes its value as the next word or after `=`. In `doctor`, `local init`, `backup`, `restore`, `token new`, `assign`, `assign-payload`, `rig`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `command`, `invalidate`, `submit` and `status`, an option the command does not know, or a word it does not expect, ends the command with Node's own message and exit code 2. In `runpod` and `mcp`, an option it does not know does the same; a word after the name it takes is ignored.
+- **Older option names.** `--instance`, `--unit` and `--direction`, the names from before runs, rigs and a run's note were renamed, are refused as unknown options: give `--run`, `--rig` and `--note`.
+- **Control's token.** The commands that talk to control (`assign`, `run start`, `campaign copy`, `campaign context`, `campaign additions`, `mcp`, `command`, `invalidate`, `rig add`, `rig token`, `rig retire`, `rig list`, and every `runpod` command) send the contents of `--token-file`, trimmed, as `Authorization: Bearer <token>`. Only the owner's token works on these routes; any other token gets `401 {"error":"unauthorized"}`. See [Tokens and roles](tokens.md).
 - **Control's address.** `--control` is control's base address, such as `https://control.example.com`. A trailing `/` is removed.
 - **Refusals.** When control or the harness refuses a request, the command prints `<url> -> <status> <body>` on standard error and exits 2. `status` is the exception: see [below](#status). A request body that does not match the route gives `400 {"error":"invalid request"}` from control. The harness says which field and why, such as `400 {"error":"invalid request: run is missing: it must be a string"}`. A command that control refuses before signing it gives `400` with the reason (for example a payload that does not fit its kind, or a message that nothing would read), or `404` for an unknown rig; another refusal from inside control gives `500` with the reason. The [REST API reference](rest-api.md) lists the routes.
 
@@ -233,7 +386,7 @@ usage: thermite <command> [options]
 | Code | When |
 | --- | --- |
 | `0` | The command did its work. Also `thermite`, `help` and `--help` |
-| `1` | `doctor` found a check that failed; `contract validate` found the contract invalid; `run start` gave the rig a model and did not start the run yet; `selftest isolation` found a probe that was not refused |
+| `1` | `doctor` found a check that failed; `contract validate` found the contract invalid; `restore` refused the backup, a stream on the bus or a running control; `run start` gave the rig a model and did not start the run yet; `invalidate`: the rig refused the preview or the withdrawal, or did not answer within 10 minutes; `selftest isolation` found a probe that was not refused |
 | `2` | Missing or wrong options (the usage text goes to standard error); an unknown command (the usage text goes to standard output); a refused request; any other error, with its message on standard error |
 
 ## Commands
@@ -265,7 +418,7 @@ The checks, in the order it runs them:
 | GPU driver (`gpu-driver`) | On Linux, with an NVIDIA GPU (`/dev/nvidia0`, `/proc/driver/nvidia/gpus`, or an NVIDIA display controller in `lspci`): `nvidia-smi` | `nvidia-smi` is missing or fails | | No NVIDIA GPU, or macOS. The line names AMD GPUs and a Mac's Apple GPU, which the rig does not use |
 | GPU container toolkit (`gpu-toolkit`) | `nvidia-ctk --version`, and what the engine the rig runs on needs from it: with Docker, NVIDIA's runtime in `docker info`; with Podman, a CDI spec at `/etc/cdi/nvidia.yaml` or `/var/run/cdi/nvidia.yaml`, or one that `nvidia-ctk cdi list` shows as `nvidia.com/gpu=all`. With no engine that answers, or GPUs that `nvidia-smi` doesn't list: the toolkit and a CDI spec | The toolkit, the runtime or the CDI spec is missing. The fix says how to install or make it | | No NVIDIA GPU, or macOS |
 | Local rig (`rig`) | What the local rig gets: the CPUs and memory of `docker info` or `podman info` (on a Mac, the virtual machine's, with how to give it more; when both engines answer, the other one's too), the NVIDIA GPUs `nvidia-smi` lists and whether the engine can give them to containers, AMD GPUs (`/sys/class/drm` cards with AMD's vendor id, or `/dev/kfd`), and a Mac's Apple GPU. With GPUs the rig can have, it says how `thermite local init` puts the rig on them | | The machine has NVIDIA GPUs that the rig can't have: the driver doesn't list them, or the engine can't give them to containers | No engine answers |
-| Control (`control`) | `GET /v1/health` at `--control` | No answer, or an answer that is not control's | | No `--control` |
+| Control (`control`) | `GET /v1/health` at `--control` | No answer, an answer that is not control's, or control's 503 while it starts or one of its loops is late (`Control answers at <address>, but one of its loops is late: /v1/health answered HTTP 503.`) | | No `--control` |
 | Model server (`model`) | `GET` at `--model-url`. Any HTTP answer counts, even `401` or `404`: the rig's [Model route check](rig-checks.md) tests the model itself | No answer | | No `--model-url` |
 
 A request waits at most 10 seconds. A failed request says why: nothing listens at the address, the name does not resolve, no answer in time, or a TLS certificate this machine does not trust.
@@ -333,16 +486,15 @@ The hash is what control's settings take; the token itself stays with you. See [
 | `--kit GIT_URL` | No | | The [kit](glossary.md)'s repository. The kit's commit comes from the contract's `project.kit`. Without `--kit`, the kit's commit must already be on the rig |
 | `--kit control:NAME` | No | | The kit `NAME` that control keeps: one given to it with [`thermite kit add`](#kit-add), or one the **New campaign** page wrote. The rig's supervisor fetches the contract's `project.kit.commit` from control. `NAME` is lowercase letters, digits, dots, dashes and underscores, at most 64, starting with a letter or digit |
 | `--model NAME=URL` | No, repeatable | | A [model file](glossary.md) the contract lists under `models` (a data file the project loads, such as a model's weights), and an `http` or `https` address to fetch it from |
-| `--note TEXT` | No | | The run's note: a text kept with the run, and shown as `Note: …` on the run's page in the [knowledge base](knowledge-base.md). Thermite does not act on it. It is sent as the command's `direction` field, a name from before a direction meant a named line of experiments |
-| `--direction D` | No | | The old name of `--note`. It still works in v0.1.0, and prints `--direction is now --note: a direction is now a named line of experiments` on standard error. With `--note` as well, the command stops: `--direction is the old name of --note: give only --note` (exit 2) |
+| `--note TEXT` | No | | The run's note: a text kept with the run, and shown as `Note: …` on the run's page in the [knowledge base](knowledge-base.md). Thermite does not act on it. It is sent as the command's `note` field (`direction` before v0.1.1) |
 | `--agents on\|off` | No | `on` | `off` starts a judge-only run: no worker agents, the judge still works |
 | `--promotion auto\|owner` | No | The rig's own setting | The run's promotion rule. `owner` is sent as `owner_approval`: every confirmed win waits for the owner |
 | `--ask WHAT` | No, repeatable | Nothing: the run is hands-off | What else the run asks the owner about, sent as the command's `ask_owner`: `gain:PERCENT`, a confirmed gain above it (`gain:15` is 15%); `flaws`, a win whose worker declared flaws; `reviews`, a review panel's pass of a goal or of a research run's answers; `not-possible`, a "not possible" ending of a goal campaign. See [Decide what waits for you](../how-to/campaigns/decide-what-waits.md) |
-| `--queue-from [RIG/]RUN` | No | Off: the new run's queue starts empty | A past run whose untried experiments start the new run's [experiment queue](../how-to/campaigns/choose-what-runs-next.md). `RUN` alone is a run on `--rig`; `RIG/RUN` names its rig. They are read from control, so it needs `--control` and `--token-file`, with `--print` too. See [below](#copy-a-past-runs-untried-experiments) |
+| `--queue-from RUN` | No | Off: the new run's queue starts empty | A past run, by its name, whose untried experiments start the new run's [experiment queue](../how-to/campaigns/choose-what-runs-next.md). Control knows the run by its name, wherever it ran. They are read from control, so it needs `--control` and `--token-file`, with `--print` too. See [below](#copy-a-past-runs-untried-experiments) |
 | `--mcp-servers JSON\|@file` | When the kit names MCP servers | None | The MCP servers the kit's `kit.json` names, as it names them ([`mcp_servers`](kit-manifest.md#mcp-servers)): the JSON list itself, or `@` and a file that holds it. Sent as the command's `mcp_servers`. Control refuses a server **Settings** lacks, and the rig refuses the run when the list differs from `kit.json`'s. A research contract's own `mcp_servers` are sent without it |
 | `--context-window TOKENS` | No | The contract's | The campaign's own context window for the run's agents: the contract's [`agents_context.context_window`](contract.md#agents-context), over the file's. 4,096 to 100,000,000. Each agent works with the lower of it and its own window. The contract sent, and its hash, change with it |
 | `--compact-at PERCENT` | No | The contract's | The campaign's own compaction point: the contract's `agents_context.compact_at`, over the file's. 50 to 95. It replaces the rig's point for every agent of the run |
-| `--info-file F` | No | The contract's | The campaign's additional information: the contract's [`notes`](contract.md#the-campaigns-brief), in Markdown, read from file `F`, over the file's. No length limit of its own. An empty file removes it. The contract sent, and its hash, change with it |
+| `--info-file F` | No | The contract's | The campaign's additional information: the contract's [`additional_information`](contract.md#the-campaigns-brief), in Markdown, read from file `F`, over the file's. No length limit of its own. An empty file removes it. The contract sent, and its hash, change with it |
 | `--link URL` | No, repeatable | The contract's | One starting link, a web address. Together they are the contract's `links` (hill climb and goal), or a research contract's `seeds`, in place of the file's. A research run's harness fetches and archives them when the run starts |
 | `--idea TEXT` | No, repeatable | The contract's | Hill climb and goal: one idea to try. Together they are the contract's `ideas`, in place of the file's. For a research contract the command stops: `--idea is for hill-climb and goal campaigns: a research campaign has questions` (exit 2) |
 | `--hypothesis TEXT` | No, repeatable | The contract's | One hypothesis. Together they are the contract's `hypotheses`, in place of the file's. A research run starts with them as its hypotheses |
@@ -360,7 +512,7 @@ A `--context-window` or `--compact-at` out of range ends the command before anyt
 
 #### Copy a past run's untried experiments
 
-`--queue-from` puts the same experiments in the payload's `queue` as **Copy the untried experiments of** in a campaign's **Start a run** panel: the past run's experiments up next, in their order, then its lanes' ideas, at most 500. The tried and dropped ones stay with their run. The command reads them from control (`GET /v1/rigs/<rig>/runs/<run>/untried`, see [the REST API](rest-api.md#rigs-and-their-history)) before it sends or prints anything. Control takes each one's title, details, direction, why and author from its own records of the past run, with every edit, as for a copied experiment over MCP. That holds for a run of the contract's campaign, or of a campaign whose folder it may read; any other run's experiments keep their words, with the author `copied`. Each one names where it came from, as `from: {run, id}`.
+`--queue-from` puts the same experiments in the payload's `queue` as **Copy the untried experiments of** in a campaign's **Start a run** panel: the past run's experiments up next, in their order, then its lanes' ideas, at most 500. The tried and dropped ones stay with their run. The command reads them from control (`GET /v1/runs/<run>/untried`, see [the REST API](rest-api.md#runs)) before it sends or prints anything. Control takes each one's title, details, direction, why and author from its own records of the past run, with every edit, as for a copied experiment over MCP. That holds for a run of the contract's campaign, or of a campaign whose folder it may read; any other run's experiments keep their words, with the author `copied`. Each one names where it came from, as `from: {run, id}`.
 
 ```sh
 npx thermite assign --contract contract.json --run sort-speed-3 --seed-commit 0123456789abcdef0123456789abcdef01234567 \
@@ -368,7 +520,7 @@ npx thermite assign --contract contract.json --run sort-speed-3 --seed-commit 01
   --control https://control.example.com --token-file ~/thermite-owner-token --rig rig-1
 ```
 
-A past run with nothing untried leaves the queue empty: the command says `<run> on <rig> has no untried experiments: the new run's queue starts empty` on standard error, sends no `queue`, and goes on.
+A past run with nothing untried leaves the queue empty: the command says `<run> has no untried experiments: the new run's queue starts empty` on standard error, sends no `queue`, and goes on.
 
 The imports it adds to the payload:
 
@@ -394,9 +546,8 @@ Sent, it prints control's answer on one line, such as `{"id":"<command id>","sta
 | `--ask is gain:PERCENT, flaws, reviews or not-possible` | Another value |
 | `a run without agents has no queue: leave out --queue-from` | `--queue-from` with `--agents off`. The harness refuses such a payload the same way |
 | `--queue-from reads the past run from control: give --control and --token-file` | `--queue-from` without either |
-| `--queue-from RUN is a run on --rig: give --rig, or RIG/RUN` | `--queue-from` with a run alone and no `--rig` |
-| `--queue-from names a run: RUN or RIG/RUN` | An empty run or rig name, such as `rig-1/` |
-| `<url> -> 404 {"error":"no run <run> on <rig>"}` | Control has no such run on that rig; `no rig <rig>` for a rig it does not know |
+| `--queue-from names a run` | An empty run name |
+| `<url> -> 404 {"error":"no run <run>"}` | Control has no run of that name |
 
 ### `assign-payload`
 
@@ -414,7 +565,6 @@ Sent, it prints control's answer on one line, such as `{"id":"<command id>","sta
 | `--kit-bundle-sha256 H` | No | The kit bundle's SHA-256 |
 | `--model NAME=SHA256:PATH` | No, repeatable | A model file in the inbox, with its SHA-256: `bad --model <arg>; expected NAME=SHA256:PATH` otherwise |
 | `--note TEXT` | No | As for `assign` |
-| `--direction D` | No | As for `assign`: the old name of `--note` |
 | `--agents on\|off` | No | As for `assign` |
 
 It has no `--promotion`; the run takes the rig's own promotion rule.
@@ -438,10 +588,11 @@ It prints `enrolled RIG; control's key fingerprint <fingerprint>`, then `wrote` 
 | `secrets/harness-supervisor-token` | 0600 | A new token the command makes itself. Control never sees it | The harness, as `THERMITE_SUPERVISOR_TOKEN_FILE`, and the supervisor, as `THERMITE_HARNESS_TOKEN_FILE` |
 | `keys/control-signing.pub` | 0644 | Control's public key | The harness, as `THERMITE_CONTROL_PUBKEY_FILE` |
 | `keys/control-signing.fingerprint` | 0644 | That key's fingerprint | You, to compare with the fingerprint control's dashboard shows |
-| `rig.env` | 0644 | `THERMITE_RIG_ID=<rig>` and `CONTROL_URL=<control's address>` | The rig's settings |
+| `keys/bus-ca.pem` | 0644 | The certificate of control's authority for the message bus | The supervisor, as `THERMITE_NATS_CA_FILE` |
+| `rig.env` | 0644 | `THERMITE_RIG_ID=<rig>`, `CONTROL_URL=<control's address>` and `THERMITE_NATS_URL=<the bus's address for rigs>` | The rig's settings |
 | `README.txt` | 0644 | What each file is for | You |
 
-Control refuses a name that is taken: `409 {"error":"rig <rig> is already enrolled"}`, or `rig <rig> has its token in control's rig tokens file; change it there` for a rig listed in that file.
+Control refuses a name that is taken: `409 {"error":"rig <rig> is already enrolled"}`. When control has no address for rigs on its message bus, the command writes no file, since a rig works only on the bus: `control enrolled <rig> but has no address for rigs on its message bus (THERMITE_NATS_PUBLIC_URL, or THERMITE_CONTROL_PUBLIC_URL), and a rig works only on the bus. Set it on control, retire this rig (thermite rig retire <rig>) and add it again`.
 
 No token is printed. Thermite has no ready-made deployment that starts a rig from this directory; the dashboard's **Add a rig** sets rigs up for you. See [Add a rig on a machine over SSH](../how-to/install/rig-on-a-machine.md) and [Join a rig yourself](../how-to/install/join-a-rig.md).
 
@@ -449,11 +600,11 @@ No token is printed. Thermite has no ready-made deployment that starts a rig fro
 
 `thermite rig token RIG --control URL --token-file F --out FILE` gives an enrolled rig a new token (`POST /v1/rigs/RIG/token`) and writes it to `FILE` with mode 0600. The old token stops working at once.
 
-It prints `RIG has a new token, in FILE; its old token no longer works`. An existing `FILE` is never overwritten: `FILE exists; a token is never overwritten`. Control refuses a rig it did not enroll: `404 {"error":"rig <rig> is not enrolled"}`, or `409` with `rig <rig> has its token in control's rig tokens file; change it there`.
+It prints `RIG has a new token, in FILE; its old token no longer works`. An existing `FILE` is never overwritten: `FILE exists; a token is never overwritten`. Control refuses a rig it did not enroll: `404 {"error":"rig <rig> is not enrolled"}`.
 
 ### `rig retire`
 
-`thermite rig retire RIG --control URL --token-file F` retires a rig (`POST /v1/rigs/RIG/retire`): its token stops working, and its history stays on control. It works on any rig control knows: enrolled, listed in the rig tokens file, or one that has reported. It prints `RIG is retired: its token no longer works`. A rig control does not know gives `404 {"error":"no rig <rig>"}`.
+`thermite rig retire RIG --control URL --token-file F` retires a rig (`POST /v1/rigs/RIG/retire`): its token stops working, and its history stays on control. It works on any rig control knows: enrolled, or one that has reported. It prints `RIG is retired: its token no longer works`. A rig control does not know gives `404 {"error":"no rig <rig>"}`.
 
 ### `rig list`
 
@@ -472,6 +623,7 @@ rig-3: enrolled, no report yet
 - **The first line** is control's build: its version, the first 12 characters of its commit when its image has one, and its protocol. `(works with 1 to 2)` follows when control works with older protocols too.
 - **`STATE`** is `reporting`, `stale` or `offline`. **`LAST REPORT`** is `never` for a rig that never sent one.
 - **`VERSION`** is `current`, `behind`, `ahead`, `unknown` or `refused`. Under a rig that is not `current`, an indented line says what to know and do.
+- **Off the message bus.** Under a rig that is off the bus, so broken, an indented line says since when, why and what to do, in the words of its page: `Off the message bus since <time>, so it does not work: …` ([A rig off the bus](../how-to/operate/message-bus.md#a-rig-off-the-bus)).
 - **`HARNESS`** and **`SUPERVISOR`** are the version each part reports, with its commit, or `no version` for a part from before version checks.
 - **Enrolled rigs** that never reported come last.
 
@@ -569,16 +721,19 @@ It prints control's answer on one line, such as `{"started":true,"campaign":"sor
 | `--promotion auto\|owner` | No | the rig's default | When a change is confirmed better: keep it at once, or wait for the owner |
 | `--ask WHAT` | No, repeatable | nothing | **Ask me first about**: `gain:PERCENT`, `flaws`, `reviews` or `not-possible`, as for `assign` |
 | `--judge-gpus N` | No | the rig's current split | For a rig with several GPUs: how many the judge measures on. The rig's harness restarts to apply a new split |
-| `--queue-from [RIG/]RUN` | No | | Another run of this campaign, on `--rig` unless `RIG/` is given: its untried experiments start the new run's queue |
-| `--past ID` | No | | An item of Thermite's knowledge base, by the id MCP's `kb_search` gives; give it again for more. Experiments join the queue; findings, claims, notes and reports go to every agent's brief |
+| `--queue-from RUN` | No | | Another run of this campaign, by its name (one of a retired rig or from before a full reset too): its untried experiments start the new run's queue |
+| `--past ID` | No | | An item of Thermite's knowledge base, by the id `thermite kb search` or MCP's `kb_search` gives; give it again for more. Experiments join the queue; findings, claims, notes and reports go to every agent's brief |
+| `--fresh` | No | continue | The run's agents search only the run's own items in the knowledge base, not the campaign's whole collection. Fixed when the run starts ([A run's scope](knowledge-base.md#a-runs-scope)) |
+| `--granted C` | No, repeatable | every collection the campaign is granted now | A granted collection the run's agents also search, read only |
+| `--no-granted` | No | | They search no granted collection |
 | `--control URL` | Yes | | Control's address |
 | `--token-file F` | Yes | | A file with the owner's token |
 
-Before it sends anything, it ends with exit code 2 and one of these: `--rig names the rig the run starts on`, `--agents is on or off`, `--promotion is auto or owner`, `--ask is gain:PERCENT, flaws, reviews or not-possible`, `--provider and --model go together: the agents' model is one of a provider's models`, `--queue-from names a run: RUN or RIG/RUN`, `--judge-gpus takes a whole number, not "…"` or `--past takes a whole number, not "…"`. Control's refusals come back as `<url> -> <status> <body>` with the words of **Start a run**, such as `-> 409 {"error":"rig-1 has no model for its agents, so they could not work: …"}`: [Campaigns](rest-api.md#campaigns) lists them. MCP's [`start_run`](mcp-tools.md#start_run) does the same with an operator's token too. With `--agents off`, control refuses `--provider`, `--queue-from` and `--past`: `-> 400 {"error":"A try (agents off) takes no model, no experiments and no background: leave them out, or start the run with agents."}`.
+Before it sends anything, it ends with exit code 2 and one of these: `--no-granted searches no granted collection: leave out --granted`, `--rig names the rig the run starts on`, `--agents is on or off`, `--promotion is auto or owner`, `--ask is gain:PERCENT, flaws, reviews or not-possible`, `--provider and --model go together: the agents' model is one of a provider's models`, `--queue-from names a run`, `--judge-gpus takes a whole number, not "…"` or `--past takes a whole number, not "…"`. Control's refusals come back as `<url> -> <status> <body>` with the words of **Start a run**, such as `-> 409 {"error":"rig-1 has no model for its agents, so they could not work: …"}`: [Campaigns](rest-api.md#campaigns) lists them. MCP's [`start_run`](mcp-tools.md#start_run) does the same with an operator's token too. With `--agents off`, control refuses `--provider`, `--queue-from` and `--past`: `-> 400 {"error":"A try (agents off) takes no model, no experiments and no background: leave them out, or start the run with agents."}`.
 
 ### `campaign copy`
 
-`thermite campaign copy` copies a campaign control keeps under a new name, as **Copy** on the campaign's page does (`POST /v1/campaigns/<campaign>/copy`). The copy has the campaign's contract and kit, as its newest saved version has them or as it was assigned before. It has its own folder in Thermite's knowledge base, which starts empty, and no runs.
+`thermite campaign copy` copies a campaign control keeps under a new name, as **Copy** on the campaign's page does (`POST /v1/campaigns/<campaign>/copy`). The copy has the campaign's contract and kit, as its newest saved version has them or as it was assigned before. It has its own collection in Thermite's knowledge base, which starts empty, and no runs.
 
 ```sh
 npx thermite campaign copy sort-speed sort-speed-b \
@@ -590,11 +745,11 @@ It prints control's answer on one line, such as `{"campaign":"sort-speed-b","ver
 | Option | Required | Default | Meaning |
 | --- | --- | --- | --- |
 | `FROM` | Yes | | The campaign to copy, as on its page |
-| `NAME` | Yes | | The copy's name: lowercase letters, digits, dots, dashes and underscores, at most 64, starting with a letter or a digit. No campaign may have it yet |
+| `NAME` | Yes | | The copy's name: lowercase letters, digits, dashes and underscores, at most 64, starting with a letter or a digit. No campaign may have it yet |
 | `--mcp-servers-json FILE` | No | the source's | A research campaign only: a file with the MCP servers the copy's agents use instead of the source's, as a JSON list, sent as the request's `mcp_servers` ([Copy a campaign](rest-api.md#copy-a-campaign)). `[]` names none |
 | `--context-window TOKENS` | No | the source's | The copy's own context window for its runs' agents, 4,096 to 100,000,000, sent in the request's `agents_context`. With it or `--compact-at`, the copy's context settings are these, in place of the source's |
 | `--compact-at PERCENT` | No | the source's | The copy's own compaction point, 50 to 95, sent in the request's `agents_context` |
-| `--info-file F` | No | the source's | The copy's own additional information, in Markdown, read from file `F` and sent as the request's `notes`. An empty file gives the copy none |
+| `--info-file F` | No | the source's | The copy's own additional information, in Markdown, read from file `F` and sent as the request's `additional_information`. An empty file gives the copy none |
 | `--link URL` | No, repeatable | the source's | The copy's own starting links, sent as the request's `links`: a research copy's seeds |
 | `--idea TEXT` | No, repeatable | the source's | The copy's own ideas to try, sent as the request's `ideas`. A hill-climb or goal campaign only |
 | `--hypothesis TEXT` | No, repeatable | the source's | The copy's own hypotheses, sent as the request's `hypotheses` |
@@ -634,6 +789,26 @@ It prints control's answer on one line, such as `{"campaign":"sort-speed","versi
 
 Each call sets the settings anew: without either option, they are removed. A value out of range ends the command before anything is sent, with exit code 2: `--context-window and --compact-at:` and why. Without `--control` and `--token-file`, it ends with `give --control and --token-file: control keeps the campaign` and exit code 2. Control's refusals come back as `<url> -> <status> <body>`: [A campaign's context settings](rest-api.md#a-campaigns-context-settings) lists them. MCP's [`set_campaign_context`](mcp-tools.md#set_campaign_context) does the same with an operator's token too.
 
+### `campaign additions`
+
+`thermite campaign additions` sets your additions to a campaign's agent roles (`POST /v1/campaigns/<campaign>/additions`): your own words, from a file for each role, added to that role's instructions in every prompt of the campaign's runs. Control saves a new version of the campaign, with them in its contract's [`role_additions`](contract.md#your-additions-to-the-agents-roles); runs started from then take it.
+
+```sh
+npx thermite campaign additions sort-speed --add worker=worker-notes.md --add planner=planner-notes.md \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+```
+
+It prints control's answer on one line, such as `{"campaign":"sort-speed","version":4,"contract_sha":"<sha256>","role_additions":{"worker":"…","planner":"…"},"said":"…"}`, and its `said` on standard error: `Version 4 of sort-speed is saved, with additions for worker, planner. Runs started from now take it.`
+
+| Option | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `CAMPAIGN` | Yes | | The campaign, as on its page |
+| `--add ROLE=FILE` | No, more than once | none | One role's addition: the role's id, such as `worker` or `research-planner`, and a file whose text is added to that role's instructions. [Your additions to the agents' roles](contract.md#your-additions-to-the-agents-roles) lists the roles of each mode |
+| `--control URL` | Yes | | Control's address |
+| `--token-file F` | Yes | | A file with the owner's token |
+
+Each call sets the additions anew: a role it gives no `--add` has none in the new version, and without `--add` they are all removed. A word without `=` ends the command before anything is sent, with exit code 2: `--add takes ROLE=FILE, such as worker=worker-notes.md: not …`; so does a file that can't be read: `--add worker: <file> can't be read:` and why. Without `--control` and `--token-file`, it ends with `give --control and --token-file: control keeps the campaign` and exit code 2. Control's refusals come back as `<url> -> <status> <body>`, such as a role the campaign's mode never runs: [The owner's additions to a campaign's roles](rest-api.md#the-owners-additions-to-a-campaigns-roles) lists them. MCP's [`set_campaign_additions`](mcp-tools.md#set_campaign_additions) does the same with an operator's token too.
+
 ### `kit add`
 
 `thermite kit add` gives control a kit repository written elsewhere, as a [git bundle](https://git-scm.com/docs/git-bundle) file, with the owner's token (`POST /v1/kits/<name>`). Control keeps every commit of the bundle with its id, and a rig fetches the kit from control with [`assign --kit control:NAME`](#assign). [Give control a kit you wrote elsewhere](../how-to/campaigns/write-a-kit.md#give-control-a-kit-you-wrote-elsewhere) shows the steps.
@@ -663,6 +838,67 @@ A refusal ends the command with `control refused the kit (<status>): ` and contr
 
 ```sh
 npx thermite kit list --control https://control.example.com --token-file ~/thermite-owner-token
+```
+
+### `kb`
+
+`thermite kb search` searches Thermite's [knowledge base](knowledge-base.md#search), as `GET /v1/kb/search` and MCP's `kb_search` do; `thermite kb read` reads one item, as `GET /v1/kb/item` and `kb_read` do; `thermite kb list` lists what one place holds, as `GET /v1/kb/list`, MCP's `kb_list` and the dashboard's **Knowledge** page do ([A place's list](knowledge-base.md#a-places-list)); `thermite kb note` writes your note on an item, as `POST /v1/kb/notes`, MCP's `kb_note` and the reader's **Add a note** do ([The owner's notes](knowledge-base.md#the-owners-notes)), and prints `{ok, address, follows, said}`; it takes an address, the note's words and `--title` (`kb note takes an item's address, the note's words, and --title`), and another command refuses `--title` (`kb search takes no --title: kb note does`); `thermite kb stored` says what the knowledge base stores, as `GET /v1/kb/stored`, MCP's `kb_stored` and the **What's stored** page do ([What's stored](knowledge-base.md#whats-stored)), and takes only `--offset` (`kb stored takes only --offset`); `thermite kb settings` reads the knowledge base's [settings](knowledge-base.md#the-knowledge-bases-settings), as `GET /v1/kb/settings` and MCP's `kb_settings` do, and with `--max-file-mib` or `--orphan-hours` sets them, as `PUT /v1/kb/settings`, MCP's `set_kb_settings` and **Settings › Knowledge base** do: an empty `--max-file-mib` or `0` is no limit, and `--orphan-hours default` puts the hours back to `THERMITE_CONTROL_KB_ORPHAN_HOURS`; a value that is not a number of 0 or more is refused (`--max-file-mib takes a number, 0 or more, not "big"`), and the other commands refuse these two options (`kb search takes no --max-file-mib or --orphan-hours: kb settings does`); `thermite kb grant` and `thermite kb revoke` give and end a [grant](knowledge-base.md#grants), as `POST` and `DELETE /v1/campaigns/<campaign>/kb-grants`, MCP's `kb_grant` and `kb_revoke` and a collection's pane on the Knowledge page do. Each prints control's answer as JSON on one line.
+
+```sh
+npx thermite kb search which approaches failed to improve speed --collection sort-speed \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+npx thermite kb search unroll --query "loop unrolling" --kind experiment --outcome regress \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+npx thermite kb read sort-speed/sort-speed-1/records/experiment:x-3 \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+npx thermite kb list sort-speed --outcome regress --sort name \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+npx thermite kb grant sort-speed merge-speed \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+```
+
+| Option | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `search [WORDS...]` | | | The words to find: an item matches with any of them, best first. None: the newest items |
+| `read ADDRESS` | | | The item's address, `<campaign>/<run>/<slot>/<kind>:<id>`, as a search gives it |
+| `list [PLACE]` | | the whole knowledge base | The place: `<campaign>`, `<campaign>/<run>` or `<campaign>/<run>/<slot>` |
+| `grant CAMPAIGN READS`, `revoke CAMPAIGN READS` | | | The campaign whose agents read, and the other campaign whose collection they read; they take no other option but `--control` and `--token-file` |
+| `--query Q` | No, repeatable; search only | | One more search, up to 5, fused with the words by reciprocal rank fusion |
+| `--mode M` | No; search only | `words` | `words`, or `exact`: FTS5's own syntax ([Search](knowledge-base.md#search)) |
+| `--like ADDRESS` | No; search only | | More like this item, by its own most telling words |
+| `--seen ADDRESS` | No, repeatable; search only | | An item to leave out, up to 100 |
+| `--collection C` | No, repeatable; search only | every collection | A collection to search, by its campaign |
+| `--kind K` | No, repeatable; search or list | every kind | Only items of this kind |
+| `--outcome O` | No, repeatable; search or list | every outcome | Only experiments and attempts that ended so: `won`, `screened`, `regress`, `neutral`, `broken`, `unclear`, `dropped` or `open` |
+| `--run R` | No, repeatable; search only | every run | Only this run's items |
+| `--slot S` | No, repeatable; search or list | every slot | Only this slot's items, such as `records` or `planner` |
+| `--type T` | No, repeatable; list only | every type | Only items of this type: `record`, `blurb` or `file` |
+| `--sort S` | No; list only | `modified` | `name`, `kind`, `outcome`, `writer`, `modified` or `size` |
+| `--order O` | No; list only | `desc` for `modified` and `size`, else `asc` | `asc` or `desc` |
+| `--offset N` | No | 0 | Search or list: where the page starts, a page's `next_offset`. Read: where the text starts, in characters |
+| `--limit N` | No; search or list | 10 for a search, 50 for a list | How many hits, 1 to 50; how many items, 0 to 200 |
+| `--version N` | No; read only | its newest | One of the item's versions |
+| `--control URL` | Yes | | Control's address |
+| `--token-file F` | Yes | | A file with the owner's token |
+
+A search prints `{note, collections, matched, next_offset, counts, words, did_you_mean, hits}` (and `like`, the words "more like this" searched with), each hit with its `id` (`run start --past` takes it), `address`, `slot`, `outcome`, `excerpt`, `why`, `passage` and, for an experiment, its `result`; with `--as RUN`, the run's agents' answer, `{note, scope, matched, next_offset, counts, words, did_you_mean, hits, as, rig}`, whose hits have no `id` or `result`; a read prints `{note, item}`, the item's text from the offset with `chars` and `next_offset`, and what the Knowledge page's reader shows beside it: `history`, `writer`, `withdrawn`, `file`, `links`, `linked_from` and `readers` ([An item's read](knowledge-base.md#an-items-read)). Control's refusal ends it with exit code 2 and control's words, such as `bad request: kinds.0: …`, `the exact search is not FTS5's query syntax: …` or `the knowledge base has no item <address>`. Before it sends anything, it ends with exit code 2 and `kb read takes one item's address: <campaign>/<run>/<slot>/<kind>:<id>`, `kb read takes only an address, --version and --offset: kb search takes the others`, `kb search takes no --version: kb read does`, `kb search takes no --sort or --order: kb list does` (`kb read` for a read), `kb list takes one place: <campaign>, <campaign>/<run> or <campaign>/<run>/<slot>` or `kb list takes a place, --kind, --outcome, --type, --slot, --sort, --order, --offset and --limit`. A list prints `{note, at, folders, total, matched, next_offset, counts, items, summary}`; a grant or a revoke prints `{campaign, changed, reads, read_by, said}`, or ends with exit code 2 and control's words, such as `A campaign always reads its own collection: choose another campaign's.`, and before it sends anything with `kb grant takes a campaign and the other campaign whose collection it reads` (`kb revoke` the same); a place the knowledge base has not ends it with exit code 2 and control's words, such as `the knowledge base has no collection <campaign>`.
+
+### `agents list`
+
+`thermite agents list` lists every agent role Thermite runs (`GET /v1/agents`), with the owner's token: one line for each, `<id>  <name>: <what it does>`. `--json` prints the route's answer. [Agent roles](agent-roles.md) lists the same roles with their texts.
+
+```sh
+npx thermite agents list --control https://control.example.com --token-file ~/thermite-owner-token
+```
+
+### `agents show`
+
+`thermite agents show ROLE` shows one role's definition (`GET /v1/agents/<role>`): what it does, its model and agent programs, the function that puts its prompt together for a run, and each of its fixed texts, under a `# <id>: <where it goes>` line.
+
+With `--run RUN`, it shows the newest prompt the run's agent in that role was sent, or the one `--prompt N` names (`GET /v1/runs/<run>/prompts/<id>`): a first line with its number, rig, role, agent program, lane, trial or call, its role's version and its size, then each section under `# <part> · <id> · from <source> · <n> characters`, with its text. A section from the role's definition says so; one control has only part of says `cut: the whole is on the rig and in the run's export`. `--sections` prints those lines alone, without the texts. `--json` prints the route's answer. A run that sent no prompt to that role ends with `<run> has sent no <role> a prompt yet` (exit 2). See [What a run's agents were sent](agent-roles.md#what-a-runs-agents-were-sent).
+
+```sh
+npx thermite agents show worker --run matmul-3 --sections --control https://control.example.com --token-file ~/thermite-owner-token
 ```
 
 ### `mcp`
@@ -697,6 +933,94 @@ The options of `add` and `change`:
 
 A refused request ends the command with the route's answer, such as `… -> 409 {"error":"q4-gemv-kit names it. Take it out of that kit first.","named_by":["q4-gemv-kit"]}` (exit 2).
 
+### `exports`
+
+Deletes exports that control keeps, with the owner's token, as **Delete** on the **Exports** page does ([Delete exports](exports.md#delete-exports)). It takes the rig and one or more export names, as the **Exports** page, MCP's `exports` and `GET /v1/rigs/<rig>/exports` list them. It can't be undone.
+
+```sh
+thermite exports delete rig-1 20261101T010000Z-0123abcd 20261101T020000Z-89abcdef \
+  --control https://control.example.com --token-file ~/.thermite/owner-token
+```
+
+| Command | Route | What it prints |
+| --- | --- | --- |
+| `thermite exports delete RIG NAME...` | `POST /v1/exports/delete` | What went, in control's words: `Deleted 2 exports from control: rig-1 · 20261101T010000Z-0123abcd (4.2 KiB) and rig-1 · 20261101T020000Z-89abcdef (1.0 KiB).`, and `Control did not have rig-1 · …` for a name control does not have |
+
+All or none: when one of them is still arriving, nothing is deleted, and the command ends with control's refusal, `… -> 409 {"error":"rig-1 · 20261101T030000Z-feedface (1 of 3 files) is still arriving: control is receiving its files. Delete it once complete. Nothing was deleted."}` (exit 2).
+
+### `retention`
+
+The owner's [retention policies](../how-to/operate/retention-policies.md), with the owner's token, as **Settings › Retention policies** has them. No policy exists until you make one: Thermite keeps everything, everywhere.
+
+```sh
+thermite retention create --name "Old builds" --kind builds --rule newest --newest 20 --per rig \
+  --control https://control.example.com --token-file ~/.thermite/owner-token
+```
+
+| Command | Route | What it prints |
+| --- | --- | --- |
+| `thermite retention list` | `GET /v1/retention` | One line for each policy: its id, `on` or `off`, name, kind, where, rule and time, and what it would remove now; or `no retention policy: Thermite keeps everything, everywhere` |
+| `thermite retention show ID` | `GET /v1/retention/policies/ID` | The policy as JSON, with its words, what it would remove now (`would_remove`), its last removal and its next time |
+| `thermite retention create` | `POST /v1/retention/policies` | `Saved “Old builds”, off.` and its line. Off unless `--on` |
+| `thermite retention preview` | `POST /v1/retention/preview` | What the design would remove now, such as `It would remove 412 builds on 2 rigs, 18.40 GiB, from 2026-08-03 to 2026-09-28. 41.20 GiB of judge's builds would stay.`, and the rigs that have not said what they keep. It saves nothing |
+| `thermite retention update ID` | `PUT /v1/retention/policies/ID` | The policy as control has it, with only the options given changed; `--on` turns it on too |
+| `thermite retention on ID`, `off ID` | `POST /v1/retention/policies/ID/on` | `“Old builds” is on: it runs every day at 03:00 UTC.`, or off: it removes nothing |
+| `thermite retention run ID` | `POST /v1/retention/policies/ID/run` | What went on control, such as `“Old audit” removed 1,204 entries, 3.1 MiB, from 2026-06-01 to 2026-09-30 from control.`, or the rigs it was sent to. It can't be undone: preview it first |
+| `thermite retention removals` | `GET /v1/retention/removals` | What the policies removed, newest first: when, the policy, where (`control` or the rig), how many and their size, and who started it. `--policy ID` keeps one policy's; `--limit N` (100 by default) |
+| `thermite retention delete ID` | `DELETE /v1/retention/policies/ID` | `Deleted “Old builds”. What it removed stays in the history.` |
+
+A design's options:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--name N` | | The policy's name, up to 80 characters. Required to create one |
+| `--kind K` | | `events` (control's copy of the rigs' events), `builds` (the judge's builds), `trial_logs` (the trials' session logs), `advisor_records` (the advisors' records), `kb_versions` (older versions of knowledge-base items), `store_copies` (copies of control's store) or `audit` (the audit log). Required to create one |
+| `--where W` | `all` | For a kind kept by rig (`events` and the rigs' kinds): `all` (every rig), `rigs` or `campaigns`. `--rig` or `--campaign` alone sets it |
+| `--rig R`, `--campaign C` | | The rigs, or the campaigns whose rigs, it acts on; each may come again |
+| `--rule R` | | `older`, `newest` or `size`. Required to create one |
+| `--older N`, `--unit U` | `30`, `days` | `older`: removes what is older than N days, weeks or months (30 days each) |
+| `--newest N`, `--per P` | `20`, `rig` | `newest`: keeps the newest N per rig, per run or in all (`all`), and removes the rest |
+| `--size GIB` | `50` | `size`: keeps under this many GiB in all; the oldest go first |
+| `--keep KEEP`, `--no-keep KEEP` | each on | What it always keeps, where its kind has it: `open` (runs still open: their events, builds, logs or records), `champions` (each lane's champion builds), `newest` (the newest copy of the store) |
+| `--when W` | `daily` | `daily`, `weekly` or `hand` (only by `run`) |
+| `--time HH:MM`, `--day DAY` | `03:00`, `sunday` | When it runs, in UTC; the day for `weekly` |
+| `--on` | off | `create` and `update`: turned on, from now |
+
+A refused design ends the command with control's words, such as `… -> 400 {"error":"not a retention policy: older_n: …"}` (exit 2), with what is wrong with each field.
+
+### `bus`
+
+`thermite bus` prints the [message bus](../how-to/operate/message-bus.md) as control sees it now (`GET /v1/bus`, as MCP's `bus_state` gives it), with the owner's or the reader's token. `--json` prints the route's answer as it came; [The message bus](rest-api.md#the-message-bus) says what each field means.
+
+```sh
+npx thermite bus --control https://control.example.com --token-file ~/thermite-reader-token
+```
+
+```text
+bus nats:4222: reached
+STREAM    MESSAGES  BYTES    SUBJECTS  NEWEST
+REPORTS   0         0 B      0         none
+EVENTS    120,431   9.8 MiB  212       2026-11-01T10:00:02.118Z
+COMMANDS  0         0 B      0         none
+  consumer rig-rig-1-commands: 0 not handed yet, 0 not acked, 0 handed again
+LIVE      2,310     1.2 MiB  37        2026-11-01T10:00:03.540Z
+  consumer control-live: 0 not handed yet, 0 not acked, 0 handed again
+CONFIG    4         3.1 KiB  4         2026-11-01T09:12:40.006Z
+  consumer rig-rig-1-config: 0 not handed yet, 0 not acked, 0 handed again
+KB_FILES  0         0 B      0         none
+events: 1,204 published since control started, 0 moved from an older store, 0 reports refused for now
+apply: through place 120,431 of 120,431, 0 behind; 1,204 applied, 0 passed over since control started
+live: 2,310 messages and 2,894 lines taken since control started; rig-1 2,894
+config: rig-1 4 values written
+```
+
+- **The first line** is the bus's server, `reached`, or `not reached:` and why, such as `no answer within 5 seconds`; the streams are then left out.
+- **Each stream** control makes and the server has: its messages, bytes and subjects, and when its newest message came (`none` while it holds none). Under it, each consumer: the messages it has not been handed yet, those it was handed and has not acked, and those handed more than once.
+- **`events`** is the writer of the `EVENTS` stream since control started, with why it refused the last report for now when it did; **`apply`** is control's place in the stream against its last place, then `it waits:` or `it stopped:` with why, when it does.
+- **`live`** is what control took from the `LIVE` stream, in all and by rig; **`config`** is what it wrote to each rig's config, or `no seal key, nothing written` for a rig that registered none.
+
+A wrong token ends it with control's `401` (exit 2). Each rig's own connection to the bus is in [`rig list`](#rig-list).
+
 ### `command`
 
 `thermite command` sends any [signed command](signed-commands.md) through control (`POST /v1/commands`) and prints control's answer on one line, such as `{"id":"<command id>","status":"pending"}`. For `assign_campaign` and `resume_run`: on a [rig launched on RunPod](rest-api.md#rigs-on-a-gpu-cloud) whose pod is stopped, control starts the pod first; the answer's `woke` says so, and the command also prints those words on standard error: `rp-1a2b3c4d's pod was stopped: control started it. The run starts once the pod runs.` When control can't start it, the command is not sent, and it ends with control's `409` and the reason, such as no GPU free at RunPod or the spend limit reached.
@@ -705,7 +1029,7 @@ A refused request ends the command with the route's answer, such as `… -> 409 
 | --- | --- | --- | --- |
 | `--control URL` | Yes | | Control's address |
 | `--token-file F` | Yes | | A file with the owner's token |
-| `--rig U` | Yes | | The rig |
+| `--rig U` | For a kind about the rig | The run's rig | The rig. A kind about one run (its payload's `run`, every kind but `assign_campaign`, `rig_check`, `export_now`, `drain_rig`, `rig_settings` and `wipe_state`) goes to the rig the run is on: leave it out, or give that rig. Control refuses another, and a run that is an earlier one, in words: [Signed commands](rest-api.md#signed-commands) lists them |
 | `--kind K` | Yes | | The command's kind, such as `pause_run`, `rig_check` or `queue_add` |
 | `--payload JSON\|@file` | Yes | | The payload as JSON, or `@` and a file that holds it |
 | `--ttl MIN` | No | `60` | Minutes before it expires: 1 to 10080 |
@@ -714,7 +1038,7 @@ It takes every kind but `wipe_state`, the owner's commands for a run's experimen
 
 ```sh
 npx thermite command --control https://control.example.com --token-file ~/thermite-owner-token \
-  --rig rig-1 --kind queue_add \
+  --kind queue_add \
   --payload '{"run":"run-1","title":"unroll the inner loop by 4","why":"the profile shows loop overhead","position":"top"}'
 ```
 
@@ -722,10 +1046,72 @@ A run you no longer want is closed for good with `close_run`, as **Close run** o
 
 ```sh
 npx thermite command --control https://control.example.com --token-file ~/thermite-owner-token \
-  --rig rig-1 --kind close_run --payload '{"run":"run-1","reason":"another run finished the work"}'
+  --kind close_run --payload '{"run":"run-1","reason":"another run finished the work"}'
 ```
 
-Control refuses `wipe_state` with `400 {"error":"wipe_state is issued only by a full reset"}`, and a payload that does not fit its kind with `400 {"error":"bad <kind> payload: …"}` (an unknown rig: `404`). `GET /v1/commands/<id>` and the dashboard's **Commands** page show the command's status. A command the rig refuses, such as a `queue_move` for an experiment that is no longer queued, shows there as `failed`, with the reason.
+A rig's own settings, as **Edit rig** has them, go with `rig_settings` and only the fields to change ([`rig_settings`](signed-commands.md#rig_settings) lists them). This runs the next trials' Claude Code, Codex or OpenCode headless on `rig-1`, not in its own terminal, the default:
+
+```sh
+npx thermite command --control https://control.example.com --token-file ~/thermite-owner-token \
+  --rig rig-1 --kind rig_settings --payload '{"program_mode":"headless"}'
+```
+
+Unlike [`POST /v1/rigs/<rig>/settings`](rest-api.md#a-rigs-settings), it sends the fields as given, without comparing them with what the rig reports.
+
+The owner's input to a running trial's terminal goes with [`terminal_input`](signed-commands.md#terminal_input). This gives a worker in Pi words to take when it would stop, as a follow-up, rather than before its next model call:
+
+```sh
+npx thermite command --control https://control.example.com --token-file ~/thermite-owner-token \
+  --kind terminal_input --payload '{"run":"run-1","trial":"t-0123456789abcdef","text":"then run the tests","follow_up":true}'
+```
+
+Control refuses `wipe_state` with `400 {"error":"wipe_state is issued only by a full reset"}`, and a payload that does not fit its kind with `400 {"error":"bad <kind> payload: …"}` (an unknown rig: `404`). `GET /v1/commands/<id>` and the **Audit log**'s commands on the dashboard show the command's status. A command the rig refuses, such as a `queue_move` for an experiment that is no longer queued, shows there as `failed`, with the reason.
+
+### `log-level`
+
+`thermite log-level` reads or changes a log level, with the owner's token, and prints control's answer on one line. The first word says whose: `control` (the default), or a rig's `harness` or `supervisor`.
+
+- **Control's own.** `thermite log-level` or `thermite log-level control` reads it, as `GET /v1/control/log-level` and MCP's `control_log_level` do; with a level, `debug`, `info`, `warn` or `error`, it sets it, as `PUT /v1/control/log-level` and `set_control_log_level` do: at once, and kept across control's restarts. `default` takes the setting out, and control writes at its `THERMITE_LOG_LEVEL` again ([Control's log level](rest-api.md#controls-log-level)).
+- **A rig part's.** `thermite log-level harness debug --rig rig-1` (or `supervisor`) sends the signed command [`log_level`](signed-commands.md#log_level) through `POST /v1/commands`, as `thermite command --kind log_level` would, and prints `{"id","status":"pending"}`; `--ttl MIN` is its time to live, 60 minutes by default. The part writes at the level until another `log_level` changes it or the part restarts; `default` puts it back to the part's `THERMITE_LOG_LEVEL`. `thermite command`'s `GET /v1/commands/<id>` gives its outcome.
+
+```sh
+npx thermite log-level supervisor debug --rig rig-1 \
+  --control https://control.example.com --token-file ~/thermite-owner-token
+```
+
+It refuses, with exit code 2, a part that is not one of the three (`log-level takes control, harness, supervisor, not "broker"`), a word that is not a level (`log-level takes a level, debug, info, warn, error, default, not "loud"`), a rig part with no level or no `--rig` (`log-level harness takes --rig: the rig whose harness it changes`), and `--rig` or `--ttl` for control's own (`log-level control takes no --rig or --ttl: they are a rig part's`).
+
+### `invalidate`
+
+`thermite invalidate` withdraws bad evidence ([`invalidate_evidence`](signed-commands.md#invalidate_evidence)), the owner's alone: an attempt, for good, with every attempt built on it, or the measurements of one of the judge's jobs, whose attempts are judged again. It always asks the rig first what it would reach, and prints it; nothing changes then. With `--yes` it sends the withdrawal next, naming what the preview reached, so the rig does exactly that or refuses. [Withdraw bad evidence](../how-to/campaigns/withdraw-bad-evidence.md) says what to check first.
+
+| Option | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `--control URL` | Yes | | Control's address |
+| `--token-file F` | Yes | | A file with the owner's token |
+| `--run RUN` | Yes | | The run. Control sends the command to the rig the run is on |
+| `--attempt ID` | One of the two | | An attempt of the run: withdrawn for good, with every attempt built on it |
+| `--job N` | One of the two | | A judge job of the run that finished: its measurements are withdrawn, and the attempts whose verdict rests on them, and those built on them, are judged again |
+| `--reason TEXT` | Yes | | Why, 1 to 2000 characters. The record keeps it, and every page that shows the withdrawal says it |
+| `--yes` | No | Off | Withdraw it once the preview is printed. Without it, nothing is withdrawn |
+
+```sh
+npx thermite invalidate --control https://control.example.com --token-file ~/thermite-owner-token \
+  --run sort-speed-1 --attempt a-0123abcd4567ef89 --reason "it reads the timer it is measured with"
+```
+
+```text
+What withdrawing it reaches:
+Attempt a-0123abcd4567ef89 and the 1 attempt built on it (a-89ab01cd23ef4567) are withdrawn for good: none is judged again, and none can become the champion.
+2 verdicts are superseded by an invalidated verdict. Nothing is deleted: the old verdicts stay in the record.
+Champions #2 (a-0123abcd4567ef89) and #3 (a-89ab01cd23ef4567) are reopened.
+The run's champion moves back from #3 to #1, the starting point: new trials build on it.
+
+  a-0123abcd4567ef89  win_confirmed, promoted  ->  withdrawn for good
+  a-89ab01cd23ef4567  win_confirmed, promoted  ->  withdrawn for good
+```
+
+On standard error it then says `Nothing was withdrawn. To withdraw it, run this again with --yes.` With `--yes`, the same lines come first, then `Withdrawn: invalidation <n> on the rig.` It waits for the rig's answer to each command, asking control every 2 seconds, until the rig's signed report confirms it (`GET /v1/commands/<id>`); a refusal, such as `the rig refused it (command <id>): what it reaches changed since the preview: preview it again, and confirm what it reaches now`, an expiry, or no answer within 10 minutes ends it with exit code 1.
 
 ### `submit`
 
@@ -754,11 +1140,12 @@ It prints the harness's answer whatever its HTTP status, and exits 0 even when t
 
 | What | Mode | Made |
 | --- | --- | --- |
-| `secrets/`, `outbox/`, `advisors/` | 0755 | When missing |
+| `DIR` itself | 0700, set again at every run | When missing. Only its owner may open it, so no other user of the computer reaches the tokens, the inbox or the advisors' keys. The containers mount the folders and files in it, which their own users reach as the modes below say |
+| `secrets/`, `outbox/`, `advisors/`, `backups/` | 0755 | When missing. The compose stack's `backup` service writes [backups](../how-to/operate/backup-and-restore.md) into `backups/` |
 | `inbox/`, `inbox/repos/`, `inbox/models/` | 0777, set again at every run | When missing. The supervisor writes into the inbox as its own user |
-| `secrets/control-admin-token`, `control-operator-token`, `control-rig-token`, `control-rig-token-2`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644 | When missing: 24 random bytes each, base64url-encoded |
+| `secrets/control-admin-token`, `control-operator-token`, `harness-supervisor-token`, `harness-proposer-token`, `harness2-supervisor-token`, `harness2-proposer-token` | 0644, so that control's and the supervisors' users in their containers can read them | When missing: 24 random bytes each, base64url-encoded |
+| `secrets/control-rig-token`, `control-rig-token-2` | 0644 | When missing: empty. [`local enroll`](#local-enroll) writes each rig's token, which control makes, at each `up` |
 | `secrets/model-api-key` | 0644 | When missing: `local-placeholder` |
-| `secrets/control-rig-tokens.json` | 0644 | At every run, from the two rig tokens: `{"local-1": …, "local-2": …}` |
 
 Run as root, when the folder that holds `DIR` belongs to another user, it gives what it makes to that user and group, and says so. It prints `made` and the path of each folder and file it made, never a token, then what the rig gets, then `local init: <name> ready (<n> made, <m> kept)`, where `<name>` is the last part of `DIR`. Without `DIR`, it prints the usage text on standard error and exits 2.
 
@@ -785,6 +1172,18 @@ Run as root, when the folder that holds `DIR` belongs to another user, it gives 
 
 A rig takes 16 GPUs at most. On a machine with more, the file names the first 16 by number in place of all of them.
 
+
+### `local enroll`
+
+`thermite local enroll RIG --control URL --token-file F --out FILE` is the local compose stack's enroll step: each `up` runs it in the `enroll` service for `local-1` (and in `enroll-2` for `local-2`, with the `two-rigs` profile), as `thermite local enroll local-1 --control http://control:8800 --token-file /run/secrets/control-admin-token --out /enroll/control-rig-token`, with `.dev/secrets/control-rig-token` mounted at `/enroll/control-rig-token`. The rig's supervisor starts only once it has finished.
+
+1. It asks control for its rigs (`GET /v1/rigs`) with the owner's token in `F`, again every 2 seconds while control does not answer or answers 503 as it starts, for 5 minutes at most. Then it stops with what the last try got, and exits 2 for an answer that refused.
+2. A rig the owner retired is left as it is: `local enroll: <rig> is retired in control: it is not enrolled again. Bring it back on its page to use it.`
+3. A rig control has enrolled, with a token in `FILE`: the token is kept. It prints `local enroll: <rig> is enrolled with control: its token is kept`.
+4. A rig control has enrolled, with `FILE` empty or missing: control gives it a new token (`POST /v1/rigs/<rig>/token`), and the old one stops working. It prints `local enroll: <rig> is enrolled with control and its token file was empty: control made it a new token`.
+5. A rig control does not have enrolled, such as on the first `up`, after control's volume was removed, or after the owner brought a retired rig back: control enrolls it (`POST /v1/rigs`). It prints `local enroll: <rig> enrolled with control`.
+
+In cases 4 and 5 it writes the token into `FILE`, in place, mode 0644 for a file it makes. It never prints a token. Control keeps only the token's SHA-256. A token you replaced with [`rig token`](#rig-token) goes into `FILE` by hand: the step keeps whatever token `FILE` holds while control has the rig enrolled.
 ### `selftest isolation`
 
 `thermite selftest isolation [--force]` runs the isolation check inside the harness container, as root: it checks that each role's user is refused the ledger, the kits, the builds, the secrets and anything else it must not reach. It prints the report as indented JSON (`ok`, `devices`, `roles`, `skipped`) and exits 1 if `ok` is false.
@@ -795,7 +1194,58 @@ A rig takes 16 GPUs at most. On a machine with more, the file names the first 16
 
 Without `--force`, a busy rig is refused, with exit 2: `the rig is busy: <n> open trial(s) and <m> judge job(s): pause the rig's runs and let the judge finish first (each probe kills its role's processes); rerun with --force to probe anyway`.
 
-It reads where the broker's socket and the rig's directories are from `THERMITE_BROKER_DIR` (default `/run/thermite`), `THERMITE_STATE_DIR` (`/var/lib/thermite`), `THERMITE_SCRATCH_DIR` (`/scratch`) and `THERMITE_OUTBOX_DIR` (`/outbox`), and probes the secret files named by `THERMITE_SUPERVISOR_TOKEN_FILE`, `THERMITE_PROPOSER_TOKEN_FILE` and `THERMITE_MODEL_API_KEY_FILE`, and, in the one-container rig image, the tunnel's `keys.json` in `THERMITE_TUNNEL_DIR`. The same check runs from the dashboard as a rig check; see [Rig checks](rig-checks.md) and [Check a rig](../how-to/operate/check-a-rig.md).
+It reads where the broker's socket and the rig's directories are from `THERMITE_BROKER_DIR` (default `/run/thermite`), `THERMITE_STATE_DIR` (`/var/lib/thermite`), `THERMITE_SCRATCH_DIR` (`/scratch`) and `THERMITE_OUTBOX_DIR` (`/outbox`), and probes the rig's secret files: the model routes control set for the agents and for the planner (`model-route.json` and `model-route-planner.json` in the state directory), the files named by `THERMITE_SUPERVISOR_TOKEN_FILE`, `THERMITE_PROPOSER_TOKEN_FILE` and `THERMITE_MODEL_API_KEY_FILE`, and, in the one-container rig image, the tunnel's `keys.json` in `THERMITE_TUNNEL_DIR`. The same check, with the same files, runs from the dashboard as a rig check; see [Rig checks](rig-checks.md) and [Check a rig](../how-to/operate/check-a-rig.md).
+
+### `backup`
+
+`thermite backup FOLDER [--state DIR] [--bus URL]` backs up control: its state folder and every rig's events on the message bus. It runs where control's state folder is mounted and the bus is reached as control reaches it; under compose, in the `backup` service, which mounts control's state and `.dev/backups` at `/backups`. Control may go on running. [Back up and restore control](../how-to/operate/backup-and-restore.md) gives the steps for each placement.
+
+```sh
+docker compose --profile backup run --rm backup thermite backup /backups
+```
+
+It makes a new folder in `FOLDER`, named for the time, such as `thermite-backup-2026-10-29T10-00-00-000Z`, written first as `<name>.partial` and renamed once its manifest is written. A folder that still ends in `.partial` is a backup that stopped part way: no restore reads it.
+
+| In the backup | What |
+| --- | --- |
+| `state/control.db` | Control's store, copied first, whole and consistent while control writes to it (`vacuum into`) |
+| `state/control-signing.key`, `control-signing.pub`, `bus-ca.pem`, `bus-ca.key`, `bus-backup.seed` | Control's keys, each as it is in the state folder, with its mode. The secrets key is never in it, wherever control keeps it: `thermite backup` says `left out secrets.key` when it is in the state folder ([Keep the secrets key](../how-to/operate/backup-and-restore.md#keep-the-secrets-key)) |
+| `state/kits/`, `state/exports/`, `state/kb-files/` | The kits control keeps, the exports of rigs without a results repository and the knowledge base's files, file by file |
+| `streams/EVENTS.snapshot` | The bus's `EVENTS` stream, every rig's events, as the server's snapshot API gives it, taken after the store |
+| `manifest.json` | Each file's path, size and SHA-256; the stream's message count, first and last place, bytes, last message's SHA-256 and settings; control's place in each stream (`bus_position`), which is at or before the stream's end; the store's schema version; the Thermite version and commit that made it; and the streams left out, with why |
+
+It leaves out the `REPORTS`, `COMMANDS`, `LIVE`, `CONFIG` and `KB_FILES` streams: a page waits in `REPORTS` only until control takes it, and a rig sends again what control lacks; control keeps every command in its store and publishes those still pending again as it starts; `LIVE` holds the newest live lines, which the rigs make again; control writes each rig's config again from its store; and a chunk waits in `KB_FILES` only until control keeps its file in its state, which the backup holds. It prints each step, then `backup: <folder> (<n> files, 1 streams)`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--state DIR` | `THERMITE_CONTROL_DIR`, else `/var/lib/thermite-control` | Control's state folder. One without `control.db`: `<dir> holds no control.db: give control's state folder with --state`, exit 2 |
+| `--bus URL` | `THERMITE_NATS_URL` | The bus, as control reaches it. It signs in as the backup's own user, with the seed in `bus-backup.seed`, and trusts the server through `bus-ca.pem`, both in the state folder. Control makes the seed as it starts; without it: `<file> is not there: control makes the backup's key on the bus as it starts. Start control once, then run this again`, exit 2 |
+
+A failure, such as the bus away or `FOLDER` missing, says why and exits 2, leaving the `.partial` folder.
+
+### `restore`
+
+`thermite restore BACKUP [--state DIR] [--bus URL] [--control URL] [--bus-store DIR]` puts a backup back, with control stopped. It runs where `backup` runs. [Restore a backup](../how-to/operate/backup-and-restore.md#restore-a-backup) gives the steps.
+
+```sh
+docker compose stop control
+docker compose --profile backup run --rm backup thermite restore --control http://control:8800 /backups/thermite-backup-2026-10-29T10-00-00-000Z
+```
+
+In order, it:
+
+1. With `--control`, asks control's health there, and refuses while control answers: `control answers at <url>: stop it first`.
+2. Checks every file of the backup against its manifest: there, its size and its SHA-256. A file that differs: `<path> is not the file the backup's manifest names: it changed`.
+3. For each stream in the backup: where the bus has none of that name, restores it through the server's restore API, printing the memory the server needs for it (about 1 KiB a message, over 128 MiB), then checks the stream it finds against the manifest. Where the bus has one already, it checks that one the same way, and leaves it as it is. The check keeps a stream that holds the backup's events unchanged, with or without newer ones after them: its first place is the backup's, its last place is the backup's or after, it holds one message more than the backup for each place more (the stream deletes none, so every place holds one), and its message at the backup's last place has the SHA-256 the manifest gives. For a stream with newer events, as on a bus that ran on since the backup, it prints `EVENTS on the bus holds the backup's events and <n> newer ones after them, to <last>: control applies them from its place, <place>, as it starts`; control, started on the restored store, applies them from its place in the backup. Any other stream is refused, naming what differs: `EVENTS on the bus is not the backup's: <what differs>. …`, such as `it holds <n> messages to <n>, and the backup holds <m> to <m>`, which a server stopped part way through a restore leaves, `its message at <m>, the backup's last place, is not the one the backup recorded`, `its first place is <f>, and the backup's is <g>`, or `…: a place holds no message, and this stream deletes none`.
+4. Puts control's state back: each of control's files and folders that is there now (`control.db` with its `-wal` and `-shm`, the keys, `kits/`, `exports/`, `kb-files/`) is moved into `replaced-<time>/` in the state folder, and the backup's are copied in, given to the state folder's owner when it runs as root. Nothing is deleted, and files that are not control's stay. A state folder that holds the backup's files already is left as it is.
+
+A refusal at any step changes no file of control's, prints `restore refused: <why>` on standard error, and exits 1. It ends with `restored: start control, and it applies the events from its place in the stream`.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--state DIR`, `--bus URL` | As for `backup` | Control's state folder, and the bus. It signs in with the backup's seed in the state folder before it puts anything back, which the bus's server knows |
+| `--control URL` | None: not asked | Control's address, such as `http://control:8800` in the compose stack: the restore refuses while control answers there |
+| `--bus-store DIR` | None | The bus's store, mounted (`/bus-store` in the `backup` service), with the bus stopped: it checks the backup, then only moves everything in `DIR` into `DIR/replaced-<time>/`, so that the bus starts with an empty store, and says to run the restore again without it. The bus answering at its address: `the bus answers at <host>: stop it first, then set its store aside`, exit 1 |
 
 ## `thermite-trial`
 
@@ -806,9 +1256,9 @@ usage:
   thermite-trial submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...
   thermite-trial dev-run [--timeout SECONDS] -- COMMAND...
   thermite-trial status ATTEMPT
-  thermite-trial idea TITLE [--why TEXT] [--family TEXT] [--details TEXT] [--question N]
+  thermite-trial idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]
   thermite-trial note --kind KIND [--about TYPE:ID] TEXT
-    KIND: observation, decision, surprise, question, lesson or note
+    KIND: observation, decision, surprise, question, lesson or other
     TYPE: run, experiment, attempt, source, claim, finding, round, trial or message
       (no --about: the note is about the run)
   thermite-trial research TOOL ... (thermite-trial research help lists them)
@@ -819,21 +1269,20 @@ usage:
 | `submit --hypothesis TEXT [--claim TEXT] [--flaw TEXT]...` | Stages and diffs only the trial's editable paths, then submits the change. The hypothesis and the claim are cut to 2000 characters, each flaw to 1000. Submitting ends the trial | `submitted <attempt>: <lifecycle>. The trial ends with this submission.`, with `; refused: <violations>` before the last sentence when the change broke a rule |
 | `dev-run [--timeout SECONDS] -- COMMAND...` | Runs the command on the measurement device, as a [development run](glossary.md), in the trial's workspace | The run's result as indented JSON |
 | `status ATTEMPT` | Shows an attempt of this campaign on the rig: this lane's, another lane's or an earlier run's, with `violations` for a change the static checks refused | The attempt as indented JSON |
-| `idea TITLE [--why TEXT] [--family TEXT] [--details TEXT] [--question N]` | Proposes another experiment for the run's queue, as the lane's idea: something worth trying that is not the trial's own work. The words after `idea` are its title, cut to 200 characters; `--why` is cut to 2000, `--family` (its direction) to 80 and `--details` to 4000. A repeated option keeps its last value. A title that is one word naming a command (`submit`, `dev-run`, `status`, `idea`, `note`, `research`, `list`, `ls`, `show`, `help`, `-h`, `--help`) is refused, so a slip does not become an idea; a longer title that starts with one is fine. The idea waits until the planner or the campaign's owner queues it or drops it, and the trial goes on. Without the planner's model (none set, its answer refused, the planner off, or a research run), it waits for the owner. No limit is set on how many. In a research run, `--question` names the question the task is about, by its index from 0 (a question the run does not have is refused, and so is `--question` in another run), and an idea whose words ask for a measurement is refused: `this asks for a measurement ("<words>"), and a research run measures nothing: record it as a next experiment in a report section or a note (what it would settle, and how), and propose only work that sources can answer` ([Research](../explanation/campaign-modes.md#research) says what the rule looks for) | `proposed <experiment id>: it waits until the planner or the campaign's owner queues it or drops it. Your trial goes on.` |
+| `idea TITLE [--why TEXT] [--direction TEXT] [--details TEXT] [--question N]` | Proposes another experiment for the run's queue, as the lane's idea: something worth trying that is not the trial's own work. The words after `idea` are its title, cut to 200 characters; `--why` is cut to 2000, `--direction` (its direction) to 80 and `--details` to 4000. A repeated option keeps its last value. A title that is one word naming a command (`submit`, `dev-run`, `status`, `idea`, `note`, `research`, `list`, `ls`, `show`, `help`, `-h`, `--help`) is refused, so a slip does not become an idea; a longer title that starts with one is fine. The idea waits until the planner or the campaign's owner queues it or drops it, and the trial goes on. Without the planner's model (none set, its answer refused, the planner off, or a research run), it waits for the owner. No limit is set on how many. In a research run, `--question` names the question the task is about, by its index from 0 (a question the run does not have is refused, and so is `--question` in another run), and an idea whose words ask for a measurement is refused: `this asks for a measurement ("<words>"), and a research run measures nothing: record it as a next experiment in a report section or a note (what it would settle, and how), and propose only work that sources can answer` ([Research](../explanation/campaign-modes.md#research) says what the rule looks for) | `proposed <experiment id>: it waits until the planner or the campaign's owner queues it or drops it. Your trial goes on.` |
 | `note --kind KIND [--about TYPE:ID] TEXT` | Writes a [field note](knowledge-base.md#field-notes) for the run's journal: an observation, a decision and why, a surprise, a question or a lesson. The words after the options are its text, 1 to 2000 characters. `--kind` is one of the kinds in the usage text, in any case. `--about` names one record of the run it is about, such as `attempt:a-11110003` or `round:12`, or the run itself, as `run:<run>`; a round or a message is named by its number. Without `--about`, the note is about the run. A repeated option keeps its last value. The note is recorded as the lane's, and the trial goes on. No limit is set on how many. In a research run, a note that repeats one of the run's last 200 field notes word for word (case, punctuation and spaces aside), whoever wrote it, is refused: `this note repeats field note #<id> (by <writer>, <time>) word for word: it is not recorded again. Note what is new, or go on with the work` | `noted (#<id>). Your trial goes on.` |
 | `research TOOL [WORDS...] [--FLAG VALUE]... [-]` | Runs one of a research trial's tools (below) through the harness's research service. The words fill the tool's main field and the flags its others; `-` reads a JSON object of fields from standard input | The tool's answer: text as it is, anything else as JSON, at most 14,000 characters. A cut is always said: a text read from an offset is cut with `next_offset` and where to read on, anything else ends `… [cut: this answer has <n> characters, and only its first 13800 are shown]` ([Limits and pacing](limits-and-pacing.md#checks-and-research)) |
 | `research help` | Lists the research tools | `research tools:` and each tool's use, then the limits of a claim: `add_claim: The text has 5 to 4,000 characters. A claim has 1 to 10 quotes, and each quote has 20 to 2,000 characters: give a short phrase with the words around it.` |
 
-The research tools are a Pi research worker's, without its file tools. In a hill-climb or goal trial only five of them work: `fetch`, `read_source`, `search_corpus`, `add_claim` and `add_note`. They archive the pages a worker reads and record what they say in the run's research folder. The harness refuses the others there: `a hill-climb run records sources, claims and notes only (fetch, read_source, search_corpus, add_claim, add_note); the rest belongs to research runs` (`a goal run` in a goal campaign). `research help` lists all eleven.
+The research tools are a Pi research worker's, without its file tools. In a hill-climb or goal trial only five of them work: `fetch`, `read_source`, `search_corpus`, `add_claim` and `add_source_note`. They archive the pages a worker reads and record what they say in the run's research folder. The harness refuses the others there: `a hill-climb run records sources, claims and notes only (fetch, read_source, search_corpus, add_claim, add_source_note); the rest belongs to research runs` (`a goal run` in a goal campaign). `research help` lists all eleven.
 
 | Tool | Words | Flags | What it does |
 | --- | --- | --- | --- |
 | `fetch` | `URL` | | Fetches a web page; the harness archives it and returns the first 6,000 characters of its text, with `next_offset` when there is more, and its links (as many of the first 60 as fit in 5,000 characters, with `links_not_shown` for the rest) |
 | `read_source` | `SOURCE` | `--offset N`, `--length N` | Reads more of an archived source's text, from an offset: 6,000 characters by default and at most 10,000. While more is left, the answer has `next_offset` and `more`, such as `4000 more characters: read_source s-3f2a9c41d0b7 with offset 16000` |
-| `search` | `QUERY` | | Searches the web. Rigs have no web search yet, so it returns the reason |
-| `search_corpus` | `TEXT` | `--skip N` | Searches the archived sources for a piece of text, ignoring case: a page of at most 30 matches, each with 500 characters around it, and fewer when they would not fit the answer. When more sources match, the answer has `next_skip`, which `--skip` takes for the next page |
+| `search_corpus` | `TEXT` | `--skip N` | Finds an exact phrase in the archived sources, as `add_claim` checks a quote: case, words and punctuation as written, with spaces, line breaks, typographic quotes and dashes folded. Each match is `{source, url, at, places, quote, excerpt}`: `at` is where it first is in the archived text, as `read_source --offset` takes it, `places` how many times the source holds it, and `quote` the source's own characters there, which `add_claim` verifies. A page holds at most 30 matches, fewer when they would not fit the answer; when more sources match, `next_skip`, which `--skip` takes, gives the next page. Sources that hold the same words in another case, punctuation or form are never matches: up to 5 are listed in `near`, each with its own characters (`quote`) and where (`at`), with `near_note`. A text with no words, only punctuation, answers with a `note`. See [A run's own searches](knowledge-base.md#a-runs-own-searches) |
 | `add_claim` | none | `--text`, `--question N`, `--confidence N`; the quotes only through `-` | Records a claim with exact quotes from archived sources. Unverified quotes leave it a draft. Its text has 5 to 4,000 characters, and it has 1 to 10 quotes of 20 to 2,000 characters each. A claim outside these is refused and not recorded, with each field and what is wrong: `error: 400: {"error":"invalid request: quotes[0].quote has 9 characters; it needs at least 20"}`. Each quote's `source` is the source's id, `s-…`, as `fetch` returned it; its address and its file name are taken too (below). `question` is the index of the campaign question it answers, from 0. In a research run with more than one question, a claim without it is refused and not recorded (`give "question": the index of the campaign question this claim answers, from 0 to <n-1>, …`), as is an index the campaign has no question for (`no question <n>: …`); with one question, a claim without it answers that one. In a hill-climb or goal run it is left out |
-| `add_note` | `TEXT` | `--source SOURCE`, repeated | Records a research note, with the sources it relies on: its text cut to 4000 characters, at most 20 sources. An empty text is refused: `a note needs its text`, and so is a note that repeats one of the run's last 200 research notes word for word, case, punctuation and spaces aside: `this note repeats note <id> (by <lane>, <time>) word for word: it is not recorded again. Record what is new, or go on with the work`. A research note is not a field note |
+| `add_source_note` | `TEXT` | `--source SOURCE`, repeated | Records a source note, with the sources it relies on: its text cut to 4000 characters, at most 20 sources. An empty text is refused: `a note needs its text`, and so is a note that repeats one of the run's last 200 source notes word for word, case, punctuation and spaces aside: `this note repeats note <id> (by <lane>, <time>) word for word: it is not recorded again. Record what is new, or go on with the work`. A source note is not a field note |
 | `propose_hypothesis` | `TEXT` | `--question N`, `--supporting CLAIM`, repeated | Proposes a new hypothesis for the run's pool: `question` is the index of the campaign question it is about, from 0 (none: the whole run), and the supporting claims are verified claims of the run (others are listed as `ignored`). Its text is cut to 2000 characters. Refused, with nothing recorded: an empty text (`a hypothesis needs its text`), a question the run does not have (`no question <n>: "question" is the index of one of the campaign's <n> questions, from 0 to <n-1>`), and words that repeat a live hypothesis of the run, case, punctuation and spaces aside: `this hypothesis repeats <id> (proposed by <lane>): change that one with revise_hypothesis (id <id>), its words, its question or its supporting claims, instead of proposing it again`, or, for the author's, `this hypothesis repeats <id>, one of the author's: the review panel gives it a verdict already. Record claims for or against it instead of proposing it again`. The answer is `{hypothesis, status, question, supporting, ignored, note}` |
 | `revise_hypothesis` | `HYPOTHESIS` | `--text TEXT`, `--question N`, `--supporting CLAIM`, repeated; or every field through `-` (`"question": null` makes it about the whole run) | Changes a hypothesis of the pool, or a promoted one: its words, its question or its supporting claims, whose list replaces the old one (verified claims of the run only; a list with none is refused). Refused: one of the author's (`hypothesis <id> is one of the author's: only the campaign's brief changes it. …`), a merged one (`hypothesis <id> was merged into <id>: revise <id> instead`), a retired one, an unknown one, and a revision that gives nothing to change. When the new words repeat another live hypothesis, this one is merged into it: the answer is `{hypothesis, status: "merged", merged_into, note}`, and the work goes on there |
 | `add_finding` | none | none: every field through `-` | Records a finding: `text`, `summary`, `why_it_matters` and the `supporting` claims. Draft claims, or numbers not in those claims, leave it a draft |
@@ -848,7 +1297,7 @@ thermite-trial research add_claim - <<'EOF'
 EOF
 ```
 
-In a claim's quote, `SOURCE` is the id `fetch` returned, such as `s-3f2a9c41d0b7`. There the harness also takes, as that source's id (`read_source` and `add_note --source` take the id only):
+In a claim's quote, `SOURCE` is the id `fetch` returned, such as `s-3f2a9c41d0b7`. There the harness also takes, as that source's id (`read_source` and `add_source_note --source` take the id only):
 
 - the address the page was archived from, as fetched or where its redirects ended, written as the archive keeps it (without a `#` part);
 - its file name in the research folder, `s-….txt` or `s-….md`, alone or at the end of a path, such as `sources/s-3f2a9c41d0b7.txt`.
@@ -887,7 +1336,7 @@ Everything it prints goes to standard output.
 | `error: idea needs a title: what to try, in a few words` and the usage text | `2` |
 | `error: "<title>" is a command word, not an idea. idea proposes an experiment: give what to try, in a few words. thermite-trial does not list the run's ideas or queue.` and the usage text, for a one-word title that names a command | `2` |
 | `error: idea has no --<option>` and the usage text | `2` |
-| `error: note needs --kind: observation, decision, surprise, question, lesson or note` and the usage text | `2` |
+| `error: note needs --kind: observation, decision, surprise, question, lesson or other` and the usage text | `2` |
 | `error: note needs its text: what you observed, decided or learned` and the usage text | `2` |
 | `error: --about takes TYPE:ID, for example experiment:x-0123456789ab` and the usage text | `2` |
 | `error: note has no --<option>` and the usage text | `2` |
@@ -904,7 +1353,7 @@ Each image starts one program under `tini`; none of them takes options.
 | Image | Starts | As |
 | --- | --- | --- |
 | Control | `node /opt/thermite/dist/control/main.js` | User `thermite` (10001) |
-| Supervisor | `node /opt/thermite/dist/supervisor/main.js` | User `supervisor` (10001) |
-| Harness | `node /opt/thermite/dist/harness/broker.js`. The broker runs as root and starts the harness's other processes, each as its own user | root |
+| Supervisor | `node /opt/thermite/dist/supervisor/advisor-runs/main.js`. Its entry runs as root, serves the advisors' runner and starts the supervisor, `node /opt/thermite/dist/supervisor/main.js`, as its own user | root; the supervisor as user `supervisor` (10001), each advisor's program as `advisor-1` to `advisor-8` |
+| Harness | `node /opt/thermite/dist/harness/broker/main.js`. The broker runs as root and starts the harness's other processes, each as its own user | root |
 
 Their settings are environment variables: see [Settings](settings.md). The [harness image reference](harness-image.md) lists what else the harness image holds.

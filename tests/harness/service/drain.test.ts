@@ -4,17 +4,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { parseContract } from "../../../src/core/contract.ts";
-import { Ledger } from "../../../src/harness/ledger.ts";
+import { Ledger } from "../../../src/harness/ledger/index.ts";
 import {
+  drainDeadline,
   drainSpans,
   endDrainAtStart,
   RESTARTED,
   workNow,
 } from "../../../src/harness/service/drain.ts";
-import { HarnessService } from "../../../src/harness/service.ts";
+import { HarnessService } from "../../../src/harness/service/index.ts";
 import { researchFixture } from "../../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
 import { makeJudgeEnv } from "../../helpers/judge-env.ts";
+import { appendOther } from "../../helpers/kinds.ts";
 
 const T0 = Date.parse("2026-10-25T00:00:00.000Z");
 const min = (m: number) => T0 + m * 60_000;
@@ -26,7 +28,7 @@ function ledgerAt() {
   const ledger = Ledger.open(path, () => new Date(now));
   const at = (m: number, kind: string, body: unknown = {}) => {
     now = min(m);
-    ledger.appendEvent("t", kind, kind === "trial_started" ? "r-1" : null, body);
+    appendOther(ledger, "t", kind, kind === "trial_started" ? "r-1" : null, body);
   };
   return { ledger, at };
 }
@@ -155,12 +157,14 @@ describe("what a drain waits for (goal 136, item 3)", () => {
       since: "2026-10-25T04:10:00.000Z",
       reason: "its images are about to change",
       by: "control:owner:api",
+      deadline: "2026-10-25T05:10:00.000Z",
     });
     assert.equal(w.trials, 1);
     assert.deepEqual(w.draining, {
       since: "2026-10-25T04:10:00.000Z",
       reason: "its images are about to change",
       by: "control:owner:api",
+      deadline: "2026-10-25T05:10:00.000Z",
     });
     assert.deepEqual(w.open, [
       {
@@ -203,5 +207,61 @@ describe("what a drain waits for (goal 136, item 3)", () => {
       .get() as { body: string };
     assert.equal("open" in JSON.parse(e.body), false);
     assert.ok(Array.isArray((env.service.work() as { open?: unknown }).open));
+  });
+});
+
+describe("a drain's deadline (goal 173)", () => {
+  const drains = (ledger: Ledger) =>
+    ledger.db
+      .prepare("select body from event where kind = 'rig_drain' order by id")
+      .all()
+      .map((r) => JSON.parse(String(r.body)) as Record<string, unknown>);
+
+  test("a drain that ends before its deadline records no deadline", async () => {
+    const env = makeJudgeEnv();
+    await env.service.applyCommand(env.assign);
+    await env.service.applyCommand(
+      env.sign("drain_rig", { drain: true, reason: "new images", deadline_minutes: 30 }),
+    );
+    const d = env.service.draining;
+    assert.ok(d);
+    // The command's own wait, not the rig's.
+    assert.equal(Date.parse(d.deadline) - Date.parse(d.since), 30 * 60_000);
+    assert.equal(drains(env.ledger)[0]?.deadline, d.deadline);
+    assert.equal(drainDeadline(env.service, new Date(Date.parse(d.deadline) - 1000)), false);
+    // The work ended and the drain with it, before the deadline.
+    await env.service.applyCommand(env.sign("drain_rig", { drain: false }));
+    assert.equal(drainDeadline(env.service, new Date(Date.parse(d.deadline) + 60_000)), false);
+    assert.ok(!drains(env.ledger).some((b) => b.deadline_reached));
+  });
+
+  test("at its deadline the step is recorded once, and the rig goes on draining for the owner's choice", async () => {
+    const env = makeJudgeEnv();
+    await env.service.applyCommand(env.assign);
+    env.service.drainMinutes = 45;
+    await env.service.applyCommand(env.sign("drain_rig", { drain: true, reason: "new images" }));
+    const d = env.service.draining;
+    assert.ok(d);
+    // No deadline in the command: the rig's THERMITE_DRAIN_MINUTES.
+    assert.equal(Date.parse(d.deadline) - Date.parse(d.since), 45 * 60_000);
+    const at = new Date(Date.parse(d.deadline) + 1000);
+    assert.equal(drainDeadline(env.service, at), true);
+    assert.equal(drainDeadline(env.service, new Date(at.getTime() + 60_000)), false, "once");
+    const step = drains(env.ledger).at(-1);
+    assert.equal(step?.drain, true);
+    assert.equal(step?.deadline_reached, true);
+    assert.equal(step?.deadline, d.deadline);
+    assert.equal(step?.reason, "new images");
+    assert.equal(typeof step?.trials, "number");
+    // Nothing is chosen for the owner: the rig still drains, and its report says the deadline passed.
+    assert.ok(env.service.draining);
+    assert.equal(env.service.work().draining?.deadline_reached, at.toISOString());
+    // Still one drain for a research run's clock.
+    assert.equal(drainSpans(env.ledger, Date.now() + 3_600_000).length, 1);
+    // The owner ends it.
+    await env.service.applyCommand(
+      env.sign("drain_rig", { drain: false, reason: "the owner ended the drain" }),
+    );
+    assert.equal(env.service.draining, undefined);
   });
 });

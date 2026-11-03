@@ -4,23 +4,18 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { OUTPUT_MAX, READ_MAX, researchOutput } from "../../../src/agents/tools/research.ts";
-import { parseContract } from "../../../src/core/contract.ts";
-import { Registry } from "../../../src/harness/agents/registry.ts";
-import { runResearchTrial } from "../../../src/harness/agents/research-worker.ts";
-import { Scheduler } from "../../../src/harness/agents/scheduler.ts";
-import { createHarnessApi } from "../../../src/harness/api.ts";
-import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import {
   blockedAddress,
   htmlToText,
   registrableDomain,
-} from "../../../src/harness/research/fetcher.ts";
-import { Research } from "../../../src/harness/research/research.ts";
-import { endDrainAtStart } from "../../../src/harness/service/drain.ts";
+} from "../../../src/agents/tools/fetcher.ts";
+import { OUTPUT_MAX, READ_MAX, researchOutput } from "../../../src/agents/tools/research.ts";
+import { runResearchTrial } from "../../../src/harness/agents/research/worker.ts";
+import { Scheduler } from "../../../src/harness/agents/scheduler/index.ts";
+import { LocalRunner } from "../../../src/harness/broker/runner.ts";
 import { startFakeModel } from "../../helpers/fake-model.ts";
-import { researchFixture } from "../../helpers/fixtures.ts";
-import { makeHarnessEnv } from "../../helpers/harness-env.ts";
+import type { makeHarnessEnv } from "../../helpers/harness-env.ts";
+import { researchEnv } from "../../helpers/research-run.ts";
 
 /** A tiny "web" for tests: two linked pages, a robots.txt and a disallowed path. */
 async function web() {
@@ -55,23 +50,6 @@ async function web() {
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return { base, asked, close: () => new Promise<void>((r) => server.close(() => r())) };
-}
-
-async function researchEnv(over: Record<string, unknown> = {}, allowPrivate = true) {
-  const env = makeHarnessEnv("rig-r");
-  const parsed = parseContract({ ...researchFixture, ...over });
-  if (!parsed.ok) throw new Error(parsed.errors.join("; "));
-  const out = await env.service.applyCommand(
-    env.sign("assign_campaign", {
-      run: "r-1",
-      contract: parsed.contract,
-      contract_sha: parsed.sha,
-      imports: [],
-    }),
-  );
-  assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-  const research = new Research(env.service.ledger, env.service.paths.stateDir, { allowPrivate });
-  return { env, research };
 }
 
 /** A source archived as the fetcher would keep it, with no web: its row and its text file. */
@@ -276,46 +254,6 @@ describe("fetcher safety", () => {
     };
     assert.match(r.refused, /private or local address/);
     await w.close();
-  });
-});
-
-describe("research API", () => {
-  test("a worker's calls go to its own trial's run and lane, whatever it asks", async () => {
-    const { env, research } = await researchEnv();
-    const registry = new Registry(env.service.ledger);
-    registry.startTrial({
-      id: "t-1",
-      run: "r-1",
-      lane: "lane-1",
-      epoch: 1,
-      family: "explore",
-      parent: "research",
-      token: "secret-token",
-    });
-    const api = createHarnessApi(env.service, { supervisor: "s", proposer: "p" }, { research });
-    const call = (token: string, body: unknown) =>
-      api.request("/v1/research/section", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    const ok = await call("trial.secret-token", {
-      run: "someone-else",
-      lane: "owner",
-      name: "summary",
-      body: "text",
-    });
-    assert.equal(ok.status, 200);
-    const row = env.service.ledger.db.prepare("select run, updated_by from report_section").get();
-    assert.deepEqual({ ...row }, { run: "r-1", updated_by: "lane-1" });
-    assert.equal((await call("trial.wrong", { name: "x", body: "y" })).status, 401);
-    assert.equal((await call("p", { name: "x", body: "y" })).status, 401);
-    registry.finishTrial(
-      "t-1",
-      { stopped: "finished", turns: 0, toolCalls: 0, tokensIn: 0, tokensOut: 0 },
-      "t",
-    );
-    assert.equal((await call("trial.secret-token", { name: "x", body: "y" })).status, 409);
   });
 });
 
@@ -723,81 +661,6 @@ describe("research integrity", () => {
     }
     assert.equal(new Set(seen.map((m) => m.source)).size, 40, "every match once, page by page");
   });
-
-  test("paused time does not count on the research clock", async () => {
-    const { env, research } = await researchEnv({ min_duration: "1h", max_duration: "2h" });
-    env.service.ledger.setRunStatus("r-1", "paused", "t", "t");
-    await new Promise((r) => setTimeout(r, 300));
-    const paused = research.clock("r-1").elapsed_ms;
-    await new Promise((r) => setTimeout(r, 300));
-    assert.equal(research.clock("r-1").elapsed_ms, paused);
-  });
-
-  test("time the agents could not run does not count, and the minimum is never a stop (goal 079)", async () => {
-    // No maximum: the minimum is a floor; the run never ends by its clock.
-    const { env, research } = await researchEnv({ min_duration: "1s", max_duration: undefined });
-    const ledger = env.service.ledger;
-    await new Promise((r) => setTimeout(r, 1100));
-    const c0 = research.clock("r-1");
-    assert.ok(c0.elapsed_ms >= 1000);
-    assert.equal(c0.max_ms, null);
-    assert.equal(c0.done, false, "past its minimum, a run with no maximum goes on");
-    // The agents stop (no credits): the clock stops with them, until they go on.
-    ledger.appendEvent("scheduler", "agents_stopped", "r-1", { kind: "credits", words: "402" });
-    await new Promise((r) => setTimeout(r, 300));
-    const stopped = research.clock("r-1");
-    assert.ok(stopped.elapsed_ms - c0.elapsed_ms < 150, "the clock stopped");
-    assert.ok(stopped.waited_ms >= 250);
-    ledger.appendEvent("scheduler", "agents_resumed", "r-1", { why: "a model check passed" });
-    await new Promise((r) => setTimeout(r, 200));
-    const going = research.clock("r-1");
-    assert.ok(going.elapsed_ms - stopped.elapsed_ms >= 150, "it runs again");
-    // A wait for the provider's rate limit does not count either, until the time it named.
-    ledger.appendEvent("scheduler", "agents_wait_for_limit", "r-1", {
-      until: new Date(Date.now() + 60_000).toISOString(),
-    });
-    await new Promise((r) => setTimeout(r, 300));
-    assert.ok(research.clock("r-1").elapsed_ms - going.elapsed_ms < 150, "waiting: stopped");
-    // A 1 s wait for the MCP servers (goal 068) doesn't count: long enough that no lag hides it.
-    const { env: e3, research: r3 } = await researchEnv({
-      min_duration: "1s",
-      max_duration: undefined,
-    });
-    await new Promise((r) => setTimeout(r, 1200));
-    const before = r3.clock("r-1");
-    e3.service.ledger.appendEvent("scheduler", "mcp_servers_wait", "r-1", {
-      since: new Date(Date.now() - 1000).toISOString(),
-      waited_s: 0,
-      missing: [],
-    });
-    const after = r3.clock("r-1");
-    assert.ok(before.elapsed_ms - after.elapsed_ms >= 600, "the wait is taken off the clock");
-    assert.ok(after.waited_ms >= 950, String(after.waited_ms));
-    // With a maximum, the clock (not the minimum) ends it.
-    const { research: r2 } = await researchEnv({ min_duration: "1s", max_duration: "2s" });
-    assert.equal(r2.clock("r-1").done, false);
-    assert.equal(r2.clock("r-1").max_ms, 2000);
-  });
-
-  test("time the rig drained does not count, nor in the progress rule's time since (goal 136)", async () => {
-    const { env, research } = await researchEnv({ min_duration: "1s", max_duration: undefined });
-    const ledger = env.service.ledger;
-    await new Promise((r) => setTimeout(r, 300));
-    const before = Date.now();
-    const c0 = research.clock("r-1");
-    // The rig drains for an image update: no trial or plan starts, so the clock stops.
-    ledger.appendEvent("owner", "rig_drain", null, { drain: true, reason: "new images" });
-    await new Promise((r) => setTimeout(r, 300));
-    const drained = research.clock("r-1");
-    assert.ok(drained.elapsed_ms - c0.elapsed_ms < 150, "the clock stopped while it drained");
-    assert.ok(drained.waited_ms >= 250, String(drained.waited_ms));
-    // The progress rule's time since a moment is the clock's difference: the drain is not in it.
-    assert.ok(drained.elapsed_ms - research.clock("r-1", before).elapsed_ms < 150);
-    // The harness starts again, which ends the drain: the clock runs again.
-    endDrainAtStart(ledger, "harness");
-    await new Promise((r) => setTimeout(r, 200));
-    assert.ok(research.clock("r-1").elapsed_ms - drained.elapsed_ms >= 150, "it runs again");
-  });
 });
 
 describe("research campaign", () => {
@@ -885,7 +748,7 @@ describe("research campaign", () => {
       runResearchTrial: (spec) => runResearchTrial(spec, { model, call }),
     });
     const deadline = Date.now() + 30_000;
-    while (env.service.ledger.getRun("r-1")?.status === "running" && Date.now() < deadline) {
+    while (env.service.ledger.runs.get("r-1")?.status === "running" && Date.now() < deadline) {
       await scheduler.tick();
       await new Promise((r) => setTimeout(r, 100));
     }
@@ -897,7 +760,7 @@ describe("research campaign", () => {
       trials.length >= 2,
       `the campaign kept assigning work after a worker finished (${trials.length} trials)`,
     );
-    assert.equal(env.service.ledger.getRun("r-1")?.status, "closed");
+    assert.equal(env.service.ledger.runs.get("r-1")?.status, "closed");
     const final = env.service.ledger.db
       .prepare("select body from report_version where kind = 'final'")
       .get();

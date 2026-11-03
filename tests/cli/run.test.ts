@@ -8,13 +8,15 @@ import { describe, test } from "node:test";
 import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import { runStartBody, runStartSaid } from "../../src/cli/run.ts";
-import { createControlApi } from "../../src/control/api.ts";
-import { issueCommand } from "../../src/control/issue.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { generateSigningKeys } from "../../src/core/commands.ts";
+import { issueCommand } from "../../src/control/issue/index.ts";
+import type { ControlStore } from "../../src/control/store/index.ts";
+import { controlOnly } from "../helpers/control-stack.ts";
+import { enrollRigs, ingestReport } from "../helpers/control-store.ts";
 
 const run = promisify(execFile);
-const CLI = join(import.meta.dirname, "../../src/cli/thermite.ts");
+const CLI = join(import.meta.dirname, "../../src/cli/thermite/main.ts");
+/** Control's tokens: the owner's, as the token files below hold it, and no rigs. */
+const TOKENS = { admin: "owner-token-abcdef", rigs: {} };
 
 /** Runs the command line; a refusal comes back with its exit code instead of throwing. */
 async function cli(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -33,13 +35,13 @@ async function cli(...args: string[]): Promise<{ code: number; stdout: string; s
 }
 
 /** A rig whose runs reported these events, in order (subject: the run). */
-function report(
+async function report(
   store: ControlStore,
   rig: string,
   events: [string, string, Record<string, unknown>][],
   summary: object = {},
 ) {
-  store.ingest({
+  await ingestReport(store, {
     rig,
     ledger_id: `ledger-${rig}`,
     cursor: 0,
@@ -59,14 +61,8 @@ function report(
 
 describe("thermite run start (goal 029)", () => {
   test("starts a run as the campaign page's Start a run does, and says its refusals", async () => {
-    const keys = generateSigningKeys();
-    const store = new ControlStore(":memory:");
-    const api = createControlApi(
-      store,
-      { admin: "owner-token-abcdef", rigs: {} },
-      keys.privateKeyPem,
-    );
-    store.setConfiguredRigs(["rig-a"]);
+    const { keys, store, control: api } = controlOnly({ tokens: TOKENS });
+    enrollRigs(store, ["rig-a"]);
     // sort-speed was assigned over the API before: Start a run assigns it again.
     issueCommand(store, keys.privateKeyPem, {
       rig: "rig-a",
@@ -79,7 +75,7 @@ describe("thermite run start (goal 029)", () => {
       },
       issuedBy: "owner:api",
     });
-    report(store, "rig-a", [
+    await report(store, "rig-a", [
       ["sort-speed-1", "run_created", { campaign: "sort-speed", mode: "hill_climb", agents: true }],
       ["sort-speed-1", "experiment_added", { id: "x-1", title: "radix sort", by: "planner" }],
       [
@@ -88,11 +84,20 @@ describe("thermite run start (goal 029)", () => {
         { id: "x-2", title: "insertion sort below 16", by: "lane-1", state: "proposed" },
       ],
     ]);
-    report(store, "rig-b", [["notes-1", "run_created", { campaign: "notes", mode: "research" }]], {
-      model: { source: "none", harness: "pi" },
+    await report(
+      store,
+      "rig-b",
+      [["notes-1", "run_created", { campaign: "notes", mode: "research" }]],
+      {
+        model: { source: "none", harness: "pi" },
+      },
+    );
+    store.modelProviders.put({
+      name: "zen",
+      type: "opencode",
+      base_url: "https://opencode.ai/zen/v1",
     });
-    store.putProvider({ name: "zen", type: "opencode", base_url: "https://opencode.ai/zen/v1" });
-    store.setProviderModels("zen", [{ id: "glm-5.3-flash-free" }]);
+    store.modelProviders.setModels("zen", [{ id: "glm-5.3-flash-free" }]);
     const server = serve({ fetch: api.fetch, hostname: "127.0.0.1", port: 0 });
     await new Promise((r) => server.once("listening", r));
     const control = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -196,7 +201,7 @@ describe("thermite run start (goal 029)", () => {
       assert.equal(usage.code, 2);
       assert.match(usage.stderr, /^usage: thermite/);
       // Nothing more was signed than the one run.
-      assert.equal(store.listCommands(50).filter((c) => c.kind === "assign_campaign").length, 2);
+      assert.equal(store.commands.list(50).filter((c) => c.kind === "assign_campaign").length, 2);
     } finally {
       server.close();
     }
@@ -212,7 +217,7 @@ describe("thermite run start (goal 029)", () => {
         promotion: "auto",
         ask: ["gain:15", "flaws", "reviews", "not-possible"],
         "judge-gpus": "2",
-        "queue-from": "rig-2/sort-speed-1",
+        "queue-from": "sort-speed-1",
         past: ["12", "40"],
       }),
       {
@@ -221,7 +226,7 @@ describe("thermite run start (goal 029)", () => {
         promotion: "auto",
         ask_owner: { above_gain: 0.15, declared_flaws: true, reviews: true, not_possible: true },
         judge_gpus: 2,
-        queue_from: { rig: "rig-2", run: "sort-speed-1" },
+        queue_from: "sort-speed-1",
         past: [12, 40],
       },
     );
@@ -229,7 +234,7 @@ describe("thermite run start (goal 029)", () => {
       rig: "rig-1",
       agents: false,
     });
-    assert.throws(() => runStartBody({ rig: "rig-1", "queue-from": "rig-2/" }), /names a run/);
+    assert.throws(() => runStartBody({ rig: "rig-1", "queue-from": "" }), /names a run/);
     assert.throws(
       () => runStartBody({ rig: "rig-1", ask: ["always"] }),
       /--ask is gain:PERCENT, flaws, reviews or not-possible/,

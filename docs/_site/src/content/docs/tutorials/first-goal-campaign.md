@@ -3,7 +3,7 @@ title: "Your first goal campaign"
 description: "Run a goal campaign on the smoke project, submit a change yourself, and watch its goal go from unmet to met until the campaign ends by itself."
 type: tutorial
 sidebar:
-  order: 3
+  order: 4
 ---
 
 In this tutorial you run a **goal campaign**. A hill climb improves a number for as long as you let it; a goal campaign works until a list of goals is met, then ends by itself. The third [campaign mode](../explanation/campaign-modes.md), research, studies a question and writes a report from sources that code has checked. You won't need an AI model: you propose the change yourself, and the judge decides whether it meets the goal.
@@ -14,27 +14,27 @@ It takes about fifteen minutes. New words are explained as they come, and the [g
 
 ## What you need
 
-- Everything from [Your first run](first-run.md): Thermite running on your computer, the dashboard signed in, and **Judge smoke** passed on `local-1`. This tutorial uses the smoke project and kit that the smoke check left on the rig.
+- Everything from [Install on one machine](first-run.md): Thermite running on your computer, the dashboard signed in, and **Judge smoke** passed on `local-1`. This tutorial uses the smoke project and kit that the smoke check left on the rig.
 - **Node.js** 22.19 or later, and **git**, for Thermite's command line.
 
-A rig works on one run at a time, so starting a run pauses any other run on `local-1`. If you did [Hand the work to agents](agents-with-a-free-model.md), its run stays paused; that is expected.
+A rig works on one run at a time, so starting a run pauses any other run on `local-1`. If you did [Run your first campaign](agents-with-a-free-model.md), its run stays paused; that is expected.
 
 ## 1. Install Thermite's command line
 
-You start the campaign from the command line. It comes with Thermite's source code, in a folder `thermite-source` beside your `thermite` folder. If you did [Hand the work to agents](agents-with-a-free-model.md), you made that folder in its step 4: open a terminal in it, and run only the last three commands below, from `ln -s` on.
+You start the campaign from the command line. It comes with Thermite's source code, in a folder `thermite-source` beside your `thermite` folder. If you did [Run your first campaign](agents-with-a-free-model.md), you made that folder in its step 4: open a terminal in it, and run only the last three commands below, from `ln -s` on.
 
 Otherwise, go to the folder that holds your `thermite` folder, and do it all now:
 
 ```sh
 cd ..
-git clone --branch v0.1.0 https://github.com/iammrduncan/thermite.git thermite-source
+git clone --branch v0.1.1 https://github.com/iammrduncan/thermite.git thermite-source
 cd thermite-source
 ln -s ../thermite/.dev .dev
 npm ci
 npm run build
 ```
 
-`v0.1.0` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.0`; use yours, with a `v` before it. The link lets the command line read your tokens from `.dev/`, as the commands on this page do. Run every command on this page in the `thermite-source` folder, except the one that opens a shell in step 6: it runs in your `thermite` folder.
+`v0.1.1` is the release your `compose.yaml` names in its first line, `# Thermite 0.1.1`; use yours, with a `v` before it. The link lets the command line read your tokens from `.dev/`, as the commands on this page do. Run every command on this page in the `thermite-source` folder, except the one that opens a shell in step 6: it runs in your `thermite` folder.
 
 ## 2. Read the example contract
 

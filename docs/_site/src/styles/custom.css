@@ -45,9 +45,10 @@
   overflow-wrap: break-word;
 }
 
-/* The home page's screenshot, under the hero: centred, as wide as the page allows. Its paragraph
-   is freed from the reading width above. */
+/* The home page's screenshot, under the hero and the agent's prompt: centred, as wide as the page
+   allows, with the room above it. Its paragraph is freed from the reading width above. */
 .sl-markdown-content .home-shot {
+  margin-top: 3.5rem;
   margin-bottom: 2.5rem;
 }
 .sl-markdown-content .home-shot p {
@@ -77,4 +78,11 @@
 }
 .hero .tagline {
   max-width: 40rem;
+}
+/* The agent's prompt follows the hero's buttons closely: on a wide screen Starlight leaves up to
+   10rem under the hero, which the screenshot gets instead. */
+@media (min-width: 50rem) {
+  .hero {
+    padding-bottom: 1.5rem;
+  }
 }

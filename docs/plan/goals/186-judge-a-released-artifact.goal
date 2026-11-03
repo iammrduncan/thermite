@@ -1,0 +1,45 @@
+---
+id: "186"
+title: "The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test"
+status: PROPOSED
+version: "0.1.2"
+depends_on: []
+created: 2026-11-02
+updated: 2026-11-02
+---
+
+# 186 · The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test
+
+**Status:** `PROPOSED` · **Version:** [v0.1.2](../roadmap.md#v012)
+
+## What
+
+From the owner's testing notes of 2026-11-02 (item 19): "the judge can only measure a project commit built by the kit's build script in the harness: it can't take a released artifact (a container image digest, a binary) as the thing under test, so a release can't get Thermite receipts for the bytes users run."
+
+Today the judge measures a commit: the harness builds it with the kit's build script and runs the build. A project that ships an image or a binary can show Thermite's numbers for the commit it was built from, not for what users download. A rebuild may differ from the release (another compiler, other flags, another base image), so the receipt is for different bytes.
+
+The judge should take a released artifact as an arm: an image by its digest, or a file by its SHA-256, measured with the kit's cases and checks, in the same blocks as a commit, so a release gets a receipt for its own bytes, and can be compared with the champion it was cut from.
+
+## To work out
+
+- **What the contract or command names:** a digest or a hash, never a tag; where the judge fetches it (a registry, a URL, control's store); and which arm it is (a candidate, a reference, or a judge-only run that measures it once).
+- **Running an image inside the harness:** the harness runs the candidate as `runner` with no network; an image needs a container engine inside the harness, or the judge runs the image's files as a root filesystem. Which one keeps the isolation the selftest checks.
+- **What the kit gives:** how a kit says to run an artifact (its `run` against the artifact's entry point), and what replaces the build.
+- **The receipt:** what Thermite records and publishes for it: the digest, the kit's commit, the rig's hardware, the values, the verdict, signed as a command is.
+- **Fetching:** the harness reaches only DNS, the internet and its model endpoint; whether the supervisor fetches the artifact and hands it over, as it does a bundle.
+
+## Done when
+
+- [ ] Planned with the owner: the questions above answered, and the design written here. Built after v0.1.1 (owner, 2026-11-02).
+
+## Decisions
+
+- 2026-11-02, owner: "Plan it now, build after v0.1.1".
+
+## Progress
+
+- 2026-11-02: Goal written from the owner's note, with the questions it raises.
+
+---
+
+Run with `/goal Complete docs/plan/goals/186-judge-a-released-artifact.goal`. Follow the [rules for every goal](../README.md#rules-for-every-goal).

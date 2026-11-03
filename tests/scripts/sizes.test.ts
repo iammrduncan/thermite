@@ -14,7 +14,7 @@ import {
   lower,
   SPLIT_LINES,
   start,
-} from "../../scripts/lib/sizes.ts";
+} from "../../scripts/checks/lib/sizes.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const big = SPLIT_LINES + 100;
@@ -31,7 +31,7 @@ describe("the size check's scope", () => {
       true,
     );
     assert.equal(
-      inScope("scripts/check-public.mjs", () => ""),
+      inScope("scripts/checks/public.mjs", () => ""),
       true,
     );
     assert.equal(
@@ -61,7 +61,7 @@ describe("the size check's scope", () => {
       true,
     );
     assert.equal(
-      inScope("containers/supervisor/Containerfile", () => "FR"),
+      inScope("containers/Containerfile", () => "FR"),
       false,
     );
   });

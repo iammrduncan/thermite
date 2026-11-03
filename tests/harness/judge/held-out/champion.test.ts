@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { type Prompt, promptText } from "../../../../src/agents/prompt.ts";
-import { Scheduler } from "../../../../src/harness/agents/scheduler.ts";
+import { type Section, sectionsText } from "../../../../src/agents/prompt.ts";
+import { brief as workerBrief } from "../../../../src/harness/agents/scheduler/briefs.ts";
+import type { SchedulerContext } from "../../../../src/harness/agents/scheduler/context.ts";
+import {
+  goalReport as agentsGoalReport,
+  waitingForConfirmation,
+} from "../../../../src/harness/agents/scheduler/goal.ts";
+import { Scheduler } from "../../../../src/harness/agents/scheduler/index.ts";
 import { LocalRunner } from "../../../../src/harness/broker/runner.ts";
 import { heldOutCellsOf } from "../../../../src/harness/judge/held-out.ts";
 import {
@@ -82,8 +88,8 @@ describe("the champion's held-out check (goal 086)", () => {
       );
     for (let i = 0; i < 30 && !confirming(); i++) await env.judge.tick();
     // Its own confirmation checked the goal it gained, speedy, which has no held-out case.
-    assert.equal(env.ledger.currentVerdict(first)?.verdict, "goal_progress", env.explain(first));
-    assert.equal(env.ledger.currentChampion("js-1").seq, 2);
+    assert.equal(env.ledger.verdicts.current(first)?.verdict, "goal_progress", env.explain(first));
+    assert.equal(env.ledger.champions.current("js-1").seq, 2);
     assert.equal(confirming(), 1, env.explain(first));
     // The lanes wait for the second validation.
     const scheduler = new Scheduler({
@@ -98,16 +104,18 @@ describe("the champion's held-out check (goal 086)", () => {
         tokensOut: 0,
       }),
     });
-    const inside = scheduler as unknown as {
-      waitingForConfirmation(run: string): boolean;
-      goalReport(run: string, seq: number): unknown;
-      brief(...args: unknown[]): Prompt;
+    const { sched } = scheduler as unknown as { sched: SchedulerContext };
+    const inside = {
+      waitingForConfirmation: (run: string) => waitingForConfirmation(sched, run),
+      goalReport: (run: string, seq: number) => agentsGoalReport(env.ledger, run, seq),
+      brief: (...args: unknown[]) =>
+        (workerBrief as (...a: unknown[]) => Section[])(sched, ...args),
     };
     assert.equal(inside.waitingForConfirmation("js-1"), true);
     await env.drain();
 
     // A held-out case of correct failed: the run does not close, and the lanes go on.
-    assert.equal(env.ledger.getRun("js-1")?.status, "running", env.explain(first));
+    assert.equal(env.ledger.runs.get("js-1")?.status, "running", env.explain(first));
     const all = () => env.ledger.eventsAfter(0, 100_000).events;
     assert.equal(all().filter((e) => e.kind === "goal_complete").length, 0);
     assert.equal(inside.waitingForConfirmation("js-1"), false);
@@ -173,12 +181,12 @@ describe("the champion's held-out check (goal 086)", () => {
     // check's words. The attempt's own held-out record passed, and still says so.
     const goalReport = JSON.stringify(inside.goalReport("js-1", 2));
     assert.match(goalReport, /"not_confirmed":"a held-out check failed the kit's check"/);
-    const brief = promptText(
+    const brief = sectionsText(
       inside.brief(
         "js-1",
         env.service.contractFor("js-1"),
         2,
-        { lane: "lane-1", family: "f" },
+        { lane: "lane-1", direction: "f" },
         { title: "fix it", added_by: "planner" },
         1,
         1,
@@ -231,16 +239,16 @@ describe("the champion's held-out check (goal 086)", () => {
       [[HIDDEN, "correctness", "check_failed"]],
     );
     for (const [tool, args] of [
-      ["get_run", { rig: "rig-a", run: "js-1" }],
+      ["get_run", { run: "js-1" }],
       ["recent_events", { rig: "rig-a", limit: 500 }],
     ] as const) {
       const text = await env.mcp(tool, args, AGENT_TOKEN);
       noContent(text, `the agent's ${tool}`);
       assert.ok(!text.includes(HIDDEN), `the agent's ${tool} names the hidden case`);
     }
-    const agentRun = JSON.parse(
-      await env.mcp("get_run", { rig: "rig-a", run: "js-1" }, AGENT_TOKEN),
-    ) as { champion_held_out: Record<string, unknown> };
+    const agentRun = JSON.parse(await env.mcp("get_run", { run: "js-1" }, AGENT_TOKEN)) as {
+      champion_held_out: Record<string, unknown>;
+    };
     assert.deepEqual(
       { ...agentRun.champion_held_out, at: "" },
       {
@@ -251,7 +259,7 @@ describe("the champion's held-out check (goal 086)", () => {
         champion_seq: 2,
       },
     );
-    const runPage = await env.page("/ui/campaigns/js-goal?run=rig-a%2Fjs-1");
+    const runPage = await env.page("/ui/campaigns/js-goal/runs/js-1");
     noContent(runPage, "the run's page");
     assert.match(
       runPage,
@@ -263,7 +271,7 @@ describe("the champion's held-out check (goal 086)", () => {
         `<td><code>${HIDDEN}</code></td><td>verifier <b>correctness</b></td><td><span class="chip bad">failed the kit's check</span></td>`,
       ),
     );
-    const history = await env.page("/ui/campaigns/js-goal?run=rig-a%2Fjs-1&view=history");
+    const history = await env.page("/ui/campaigns/js-goal/runs/js-1/history");
     assert.match(
       history,
       new RegExp(
@@ -290,9 +298,9 @@ describe("the champion's held-out check (goal 086)", () => {
       )
     ).attempt;
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(fixed)?.verdict, "goal_progress", env.explain(fixed));
+    assert.equal(env.ledger.verdicts.current(fixed)?.verdict, "goal_progress", env.explain(fixed));
     assert.equal(env.reasons(fixed), "confirmed: newly met correct; vs champion seq 2");
-    assert.equal(env.ledger.getRun("js-1")?.status, "closed");
+    assert.equal(env.ledger.runs.get("js-1")?.status, "closed");
     assert.equal(all().filter((e) => e.kind === "goal_complete").length, 1);
     assert.deepEqual(
       records()
@@ -318,8 +326,8 @@ describe("the champion's held-out check (goal 086)", () => {
     await env.drain();
     const id = await env.submit(FAST_KERNEL, "drop the idle");
     await env.drain();
-    assert.equal(env.ledger.currentVerdict(id)?.verdict, "goal_progress", env.explain(id));
-    assert.equal(env.ledger.getRun("js-1")?.status, "closed");
+    assert.equal(env.ledger.verdicts.current(id)?.verdict, "goal_progress", env.explain(id));
+    assert.equal(env.ledger.runs.get("js-1")?.status, "closed");
     const events = env.ledger.eventsAfter(0, 100_000).events;
     assert.equal(events.filter((e) => e.kind === "held_out_checked").length, 0);
     assert.equal(

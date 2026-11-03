@@ -2,19 +2,21 @@
  * The checks of each published image (goal 010): what the release workflow holds an image to
  * after it pushes it and before the image gets its version's tag. The owner moved the RunPod rig
  * image from the lab to Thermite's release on 2026-10-24, with the lab's rules for it. These
- * functions decide; scripts/check-images.ts pulls each image with no sign-in and runs PROBE in it.
+ * functions decide; scripts/release/check-images.ts pulls each image with no sign-in and runs PROBE in it.
  */
 import { IMAGES, type ImageKey } from "./bundle.ts";
 
 /**
  * What an image carries that a published image must not, as `name=value` lines (sh, run as
- * root so that every file is seen): Claude Code, socat, bubblewrap and set-id files.
+ * root so that every file is seen): Claude Code, socat, bubblewrap, set-id files, and pi-tui's
+ * prebuilt native helpers, which every image deletes (goal 169).
  */
 export const PROBE = [
   'printf "claude=%s\\n" "$(command -v claude; find / -xdev -type f -name claude 2>/dev/null | head -n 3 | tr "\\n" " ")"',
   'printf "socat=%s\\n" "$(command -v socat)"',
   'printf "bwrap=%s\\n" "$(command -v bwrap)"',
   'printf "setid=%s\\n" "$(find / -xdev -type f -perm /6000 2>/dev/null | head -n 5 | tr "\\n" " ")"',
+  'printf "pitui=%s\\n" "$(find / -xdev -type d -path "*/@earendil-works/pi-tui/native" 2>/dev/null | head -n 3 | tr "\\n" " ")"',
 ].join("; ");
 
 /** What is known of one pulled image. */
@@ -51,8 +53,9 @@ export function probeValues(probe: string): Record<string, string> {
 /**
  * What is wrong with a published image, one line each in words; empty when it holds. Every image:
  * it pulls with no sign-in, reports the release's commit, carries no Claude Code (decided
- * 2026-10-18), has no set-id file, and sets no key, token or password in its environment (a
- * setting that names a file, such as THERMITE_SUPERVISOR_TOKEN_FILE, is a path, not a secret).
+ * 2026-10-18), has no set-id file and no native part of pi-tui (goal 169), and sets no key, token
+ * or password in its environment (a setting that names a file, such as
+ * THERMITE_SUPERVISOR_TOKEN_FILE, is a path, not a secret).
  * The harnesses and the rig image also report their image ID and carry neither socat nor
  * bubblewrap. The supervisor and the rig image name no STE checker: a deployment adds its own.
  * Each image is published for its platforms (bundle.ts), arm64 too where it says so.
@@ -89,6 +92,10 @@ export function imageProblems(key: ImageKey, commit: string, facts: ImageFacts):
     if (said.bwrap) problems.push(`it carries bubblewrap (${said.bwrap})`);
   }
   if (said.setid) problems.push(`it has set-id files: ${said.setid}`);
+  if (said.pitui)
+    problems.push(
+      `it holds pi-tui's prebuilt native helpers (${said.pitui}): every image deletes them`,
+    );
   const missing = IMAGES[key].platforms.filter((p) => !facts.platforms.includes(p));
   if (missing.length) problems.push(`it is not published for ${missing.join(" or ")}`);
   if ((key === "supervisor" || key === "rig-cuda") && envValue(facts.env, "THERMITE_STE_CHECKER"))

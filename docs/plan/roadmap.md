@@ -127,30 +127,39 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 **Code clean-up.** The code follows the [conventions](../../CONVENTIONS.md): files of a size you can review, in folders, no duplicated knowledge or dead code, and the engineering rules for design, errors, limits, logging, security and tests, so that later changes are easier. Worked on after v0.1.0 ships: first a read-only look at the whole code that writes a guide, then the clean-up, area by area. Proposed. With it (owner, 2026-10-26): agent definitions in code, a review of how the parts talk, one message bus on NATS JetStream, and agents in their own terminal. v0.1.1 breaks compatibility with v0.1.0.
 
 - [172](goals/172-build-v011.goal) Build v0.1.1: every goal the audit planned, in one order, to verified · `IN_PROGRESS`
-- [173](goals/173-recovery-and-health.goal) Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks · `IN_PROGRESS`
-- [174](goals/174-invalidate-evidence.goal) Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows · `READY`
-- [175](goals/175-knowledge-base.goal) The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot · `READY`
-- [176](goals/176-knowledge-explorer.goal) The knowledge explorer: the owner reads, searches and sees what the knowledge base stores · `READY`
+- [179](goals/_completed/179-system-view.goal) The whole system on Metrics: the message bus, control, its storage and each rig, live · `VERIFIED`
+- [180](goals/180-testing-bugs-exports-checks-cli.goal) Testing's first bugs: exports of what changed, a check's stale refusal, a command line behind its code · `IN_PROGRESS`
+- [181](goals/_completed/181-testing-pages.goal) Testing's pages: one audit log, campaigns' reports, exports to find, settings with their own navigation, Live on the agents' terminals · `VERIFIED`
+- [182](goals/_completed/182-campaigns-and-kits-for-agents.goal) Campaigns and kits for agents: a kit from git, grants that reach running runs, the metrics a contract uses · `VERIFIED`
+- [183](goals/183-advisors-take-their-message.goal) A program in its terminal takes its message: typed in when ready, a message never taken ends the run, audits never wait behind the teachers · `IN_PROGRESS`
+- [184](goals/184-guards-beside-the-main-metric.goal) A hill climb's guards beside its main metric: in each verdict, under each champion, beside each attempt · `IN_PROGRESS`
+- [187](goals/187-type-into-the-terminal.goal) Type straight into an agent's terminal on Live: keys as you press them, one terminal filling the pane · `IN_PROGRESS`
+- [185](goals/185-a-runs-work-in-git.goal) A run's work in git: a branch for its champions, one for each lane, and new campaigns from a champion's commit · `IN_PROGRESS`
+- [173](goals/_completed/173-recovery-and-health.goal) Recovery and health: backups, a copy before every migration, a disk floor, drains that end, logs that are bounded, health that checks · `VERIFIED`
+- [174](goals/_completed/174-invalidate-evidence.goal) Invalidate evidence: the owner withdraws bad evidence, and what depended on it follows · `VERIFIED`
+- [175](goals/_completed/175-knowledge-base.goal) The knowledge base on control: one collection for each campaign, every agent on MCP, each writer in its own slot · `VERIFIED`
+- [176](goals/_completed/176-knowledge-explorer.goal) The knowledge explorer: the owner reads, searches and sees what the knowledge base stores · `VERIFIED`
 - [160](goals/_completed/160-v010-audit.goal) The v0.1.1 audit: code, data and operations, by specialized reviewers, with the tests moved to tests/ · `VERIFIED`
 - [127](goals/_completed/127-clean-up-pre-audit.goal) Pre-audit for the code clean-up: a read-only look at the whole code, and a guide that sets up goal 125 · `VERIFIED`
 - [161](goals/_completed/161-control-bugs-from-the-audit.goal) Control's bugs found by the v0.1.1 audit: wrong states on the pages, refusals answered as server errors, errors that vanish · `VERIFIED`
 - [162](goals/_completed/162-research-and-knowledge-bugs.goal) Research and knowledge bugs found by the v0.1.1 audit: error pages as sources, domain counts, cut text in the knowledge base · `VERIFIED`
 - [163](goals/_completed/163-harness-bugs-from-the-audit.goal) Harness bugs found by the v0.1.1 audit: promotion in one transaction, OpenCode's turn cap, the judge's quiet failures · `VERIFIED`
 - [164](goals/_completed/164-settings-that-fail-loudly.goal) Settings that fail loudly: a bad value stops the part at start, and no failure passes as success · `VERIFIED`
-- [165](goals/165-results-kept-through-remove-and-reset.goal) Results kept through remove, reset and update: the remove guard on every placement, two reset bugs, an update that survives a restart · `IN_PROGRESS`
+- [165](goals/_completed/165-results-kept-through-remove-and-reset.goal) Results kept through remove, reset and update: the remove guard on every placement, two reset bugs, an update that survives a restart · `VERIFIED`
 - [171](goals/_completed/171-bugs-on-the-wire.goal) Bugs on the wire: lost long replies, commands sent again in full, a live view stopped by one line, prompts too long for one argument · `VERIFIED`
 - [167](goals/_completed/167-how-the-parts-talk.goal) How the parts talk: a review of every interface between control, rigs, kits, campaigns, runs and agents · `VERIFIED`
-- [170](goals/170-one-hierarchy.goal) One hierarchy: each thing identified and addressed through what owns it, so a run's history stays whole wherever it runs · `IN_PROGRESS`
-- [166](goals/166-agent-definitions.goal) Agent definitions you can read and change: one definition for each role in code, and the prompt each run gives it · `IN_PROGRESS`
-- [168](goals/168-message-bus.goal) One message bus: NATS JetStream between control, rigs and agents, with fast storage and retrieval · `READY`
-- [169](goals/169-agents-in-their-terminal.goal) Agents in their own terminal: each agent program runs its TUI, the live view shows it, steering types into it, session logs become events · `READY`
-- [125](goals/125-code-to-the-conventions.goal) Code clean-up: all of Thermite's code to its conventions, from file sizes and structure to duplication · `IN_PROGRESS`
+- [170](goals/_completed/170-one-hierarchy.goal) One hierarchy: each thing identified and addressed through what owns it, so a run's history stays whole wherever it runs · `VERIFIED`
+- [166](goals/_completed/166-agent-definitions.goal) Agent definitions you can read and change: one definition for each role in code, and the prompt each run gives it · `VERIFIED`
+- [168](goals/_completed/168-message-bus.goal) One message bus: NATS JetStream between control, rigs and agents, with fast storage and retrieval · `VERIFIED`
+- [169](goals/_completed/169-agents-in-their-terminal.goal) Agents in their own terminal: each agent program runs its TUI, the live view shows it, steering types into it, session logs become events · `VERIFIED`
+- [125](goals/_completed/125-code-to-the-conventions.goal) Code clean-up: all of Thermite's code to its conventions, from file sizes and structure to duplication · `VERIFIED`
 - [124](goals/124-file-sizes.goal) Files of a size you can review · `DROPPED`, merged into 125
 
 ## v0.1.2
 
 **GPUs on demand, and work within a budget.** GPUs rented only while they work, a secondary judge, one budget in dollars that holds on every rig, measurements that cost less, and what Thermite spent on RunPod. Proposed.
 
+- [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
 - [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
 - [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
 - [123](goals/123-budgets-made-simple.goal) Budgets made simple: one amount in dollars, easy to set, that holds on every rig · `PROPOSED`
@@ -159,6 +168,8 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [095](goals/095-runpod-spend-on-providers.goal) Providers shows what Thermite spent on a GPU cloud, not only its test pods · `PROPOSED`
 - [134](goals/134-run-resource-use.goal) A run's resource use: the rig's CPUs, memory and GPUs over the run's time, and what held its lanes back · `PROPOSED`
 - [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
+- [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
+- [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
 
 ## v0.1.3
 

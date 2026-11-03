@@ -18,10 +18,10 @@ Control sets [rigs](../../reference/glossary.md) up from images it does not buil
 
 | Image | Built from | Who runs it |
 | --- | --- | --- |
-| Control | `containers/control/Containerfile` | You, on control's computer |
-| Harness | `containers/harness/Containerfile` | CPU rigs |
-| Harness, CUDA | The same file, with `BASE_IMAGE` set to a CUDA image | GPU rigs, and RunPod test pods |
-| Supervisor | `containers/supervisor/Containerfile` | Every rig |
+| Control | `containers/Containerfile`, target `control` | You, on control's computer |
+| Harness | `containers/Containerfile`, target `harness` | CPU rigs |
+| Harness, CUDA | The same target, with `BASE_IMAGE` set to a CUDA image | GPU rigs, and RunPod test pods |
+| Supervisor | `containers/Containerfile`, target `supervisor` | Every rig |
 | One-container rig | `containers/rig/Containerfile`, on the CUDA harness | Rigs on RunPod, and RunPod test pods. [Use a rig image of your own](runpod-rig.md#use-a-rig-image-of-your-own) builds it |
 
 Name them as you like; control takes any full image reference. The examples use `registry.example.com/thermite/` and the first 12 characters of the commit as the tag.
@@ -34,9 +34,9 @@ Build from the repository's top folder: the images need its `package.json`, `src
 tag=$(git rev-parse --short=12 HEAD)
 commit=$(git rev-parse HEAD)
 r=registry.example.com/thermite
-docker build -t $r/thermite-control:$tag    --build-arg THERMITE_COMMIT=$commit -f containers/control/Containerfile .
-docker build -t $r/thermite-harness:$tag    --build-arg THERMITE_COMMIT=$commit -f containers/harness/Containerfile .
-docker build -t $r/thermite-supervisor:$tag --build-arg THERMITE_COMMIT=$commit -f containers/supervisor/Containerfile .
+docker build --target control    -t $r/thermite-control:$tag    --build-arg THERMITE_COMMIT=$commit -f containers/Containerfile .
+docker build --target harness    -t $r/thermite-harness:$tag    --build-arg THERMITE_COMMIT=$commit -f containers/Containerfile .
+docker build --target supervisor -t $r/thermite-supervisor:$tag --build-arg THERMITE_COMMIT=$commit -f containers/Containerfile .
 ```
 
 With Podman, use `podman build` the same way. `THERMITE_COMMIT` puts the commit in each image: control and the rigs report it with Thermite's version, so the rig lists show which build each part runs ([Rig versions](../../reference/rest-api.md#rig-versions)). Without it they report the version alone.
@@ -47,7 +47,7 @@ For GPU rigs, build the harness again on a CUDA base:
 docker build -t $r/thermite-harness:$tag-cuda \
   --build-arg BASE_IMAGE=<a CUDA development image> \
   --build-arg THERMITE_COMMIT=$commit \
-  -f containers/harness/Containerfile .
+  --target harness -f containers/Containerfile .
 ```
 
 The release workflow builds two published CUDA harnesses, each on a base pinned by its digest in `.github/workflows/release.yml`: `docker.io/nvidia/cuda:12.6.3-devel-ubuntu22.04` for the `-cuda` image and `docker.io/nvidia/cuda:13.0.3-devel-ubuntu24.04` for the `-cuda13` image. Use the same bases, or others that have what the Containerfile needs:

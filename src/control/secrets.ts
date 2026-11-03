@@ -1,6 +1,16 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from "node:crypto";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
+import { dirname, resolve } from "node:path";
 
 /**
  * Seals the secrets the owner gives control (a model route's API key) for its store: AES-256-GCM
@@ -46,6 +56,16 @@ export class SecretBox {
     return `s1:${Buffer.concat([iv, c.getAuthTag(), ct]).toString("base64")}`;
   }
 
+  /**
+   * A digest of `text` that only this box's key makes (HMAC-SHA256 with a key drawn from it), in
+   * hex: it changes when the text does, and tells nothing of the text to anyone without the key.
+   * A rig's config value on the message bus carries one as its revision.
+   */
+  digest(text: string): string {
+    const key = Buffer.from(hkdfSync("sha256", this.key, Buffer.alloc(0), "thermite digest", 32));
+    return createHmac("sha256", key).update(text, "utf8").digest("hex").slice(0, 32);
+  }
+
   open(sealed: string): string {
     if (!sealed.startsWith("s1:")) throw new Error("not a sealed value");
     const raw = Buffer.from(sealed.slice(3), "base64");
@@ -54,6 +74,42 @@ export class SecretBox {
     d.setAuthTag(raw.subarray(12, 28));
     return Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString("utf8");
   }
+}
+
+/**
+ * Moves the secrets key out of control's state folder (`from`) to the file that
+ * THERMITE_CONTROL_SECRETS_KEY_FILE names (`to`), as compose names one on a volume of its own: a
+ * copy of the store's volume, or a backup, then holds no key that opens its sealed values. The key
+ * is written there and read back before the folder's copy is removed; when `to` holds the same
+ * key already, the folder's copy only goes. Two different keys are refused in words: one of them
+ * opens the store's sealed values, and control can't tell which. Undefined when there is nothing
+ * to move.
+ */
+export function moveSecretsKey(from: string, to: string): "moved" | "removed" | undefined {
+  if (resolve(from) === resolve(to) || !existsSync(from)) return undefined;
+  const key = readFileSync(from, "utf8").trim();
+  if (Buffer.from(key, "base64").length !== 32)
+    throw new Error(`${from} does not hold a 32-byte base64 key`);
+  if (existsSync(to)) {
+    if (readFileSync(to, "utf8").trim() !== key)
+      throw new Error(
+        `control has two secrets keys, ${from} in its state folder and ${to} (THERMITE_CONTROL_SECRETS_KEY_FILE), and they differ: keep the one that opens the store's sealed values at ${to}, and remove ${from}. A restore of a backup from before v0.1.1 puts that backup's key in the state folder`,
+      );
+    unlinkSync(from);
+    return "removed";
+  }
+  mkdirSync(dirname(to), { recursive: true });
+  const fd = openSync(to, "wx", 0o600);
+  try {
+    writeSync(fd, key);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  if (readFileSync(to, "utf8").trim() !== key)
+    throw new Error(`${to} does not read back as the key written to it: ${from} is kept`);
+  unlinkSync(from);
+  return "moved";
 }
 
 /** What the dashboard may show of a key: its last four characters, never more. */

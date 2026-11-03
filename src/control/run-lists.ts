@@ -1,9 +1,9 @@
 import { z } from "zod";
-import type { RunView } from "./views.ts";
+import { agentRun, type RunOnRig, type RunView } from "./views/index.ts";
 
 /**
  * A run's detail of a size an agent can read (goal 128), for MCP's get_run and REST's
- * GET /v1/rigs/<rig>/runs/<run>. A run's view holds lists that grow with the run, such as its
+ * GET /v1/runs/<run>, and one of its attempts (goal 170). A run's view holds lists that grow with the run, such as its
  * journal and timeline: a research run of a day gave 3.2 million characters. Each list is cut to
  * its newest entries (the views keep them oldest first), and the research report to its first
  * characters. Nothing is cut without a word: `cut` says what was left out and how to read it, and
@@ -24,7 +24,6 @@ const TEXT_STEPS = [2000, 1000, 500, 250, 120];
 
 /** The arguments, as MCP's schema; REST reads the same from its query. */
 export const RUN_DETAIL_INPUT = {
-  rig: z.string().min(1),
   run: z.string().min(1),
   attempts: z.number().int().min(1).max(500).default(50),
   limit: z.number().int().min(1).max(500).default(RUN_LIST_LIMIT),
@@ -32,6 +31,10 @@ export const RUN_DETAIL_INPUT = {
   offset: z.number().int().min(0).default(0),
   full_report: z.boolean().default(false),
 };
+
+/** What get_run gives of a research run (goals 112, 116 and 117), for both of its descriptions. */
+export const RESEARCH_DETAIL =
+  "for a research run its newest digest (research), its answer cards (cards: each question's newest card the harness kept, by index from 0, with version, certainty, answer, claims cited and gaps of kind evidence or measurement; card_refusals: the newest refused card of a question since its card, with the problems), its hypotheses (each with its question, an index from 0 or null for the whole run; its status: author, pool, promoted, merged with merged_into, or retired; the verified claims supporting it; and status_change: the newest change of its status by the owner or the plan, with why), the review panel's decisions (decisions: each item's decision in each review, oldest first, with its certainty and each dissenting reviewer; standing: each item's newest decision, with stands false when the question's card has a newer version than the one decided on, newer_card), its reviews (each with requested_at, posted_at, what it saw when asked, the owner's decision and note, reviewers: each reviewer's answer on each item with its verdict, certainty, reasons, the claims it cites and the problems code found; decided: the review panel's decision on each item in that review; counts; tries when the rig says), and the progress rule's state at the newest digest (progress: the open questions, those of them that are saturated, the last improvement, since_ms without one and needed_ms, a quarter of the running time)";
 
 /** The arguments' words, for the tool's description. */
 export const RUN_DETAIL_WORDS = `Each list that grows with the run (journal, timeline, queue, hypotheses, trials, reviews and the others) gives its newest ${RUN_LIST_LIMIT} entries by default (limit sets how many), and the research report its first ${REPORT_CHARS} characters (full_report: true gives it whole); cut says what was left out. list names one list and gives only it, its newest entries first skipped by offset, to page back through it`;
@@ -166,4 +169,29 @@ export function runQueue(r: RunView, tried: number): Record<string, unknown> {
     },
     'get_run with list "queue" gives the queue whole',
   );
+}
+
+/**
+ * One attempt of a run (goal 170), as REST's GET /v1/runs/<run>/attempts/<attempt> and MCP's
+ * get_attempt give it: the attempt as the run's view has it, the rig it ran on (whether the run
+ * is an earlier one, and why), and the champion it became, if any. `agent`: as the agent token
+ * reads it, a held-out check as its kinds alone (goal 082).
+ */
+export function attemptRead(
+  x: RunOnRig,
+  attempt: string,
+  agent = false,
+): Record<string, unknown> | { error: string } {
+  const r = agent ? agentRun(x.run) : x.run;
+  const a = r.attempts.find((y) => y.id === attempt);
+  if (!a) return { error: `run ${x.run.id} has no attempt ${attempt}` };
+  const champion = x.run.champion.find((c) => c.attempt === attempt && !c.reopened);
+  return {
+    run: x.run.id,
+    campaign: x.run.campaign,
+    rig: x.rig.id,
+    earlier: x.earlier,
+    champion_seq: champion?.seq ?? null,
+    attempt: a,
+  };
 }

@@ -1,0 +1,21 @@
+# A stand-in machine with systemd and rootless Podman, for testing a rig control deploys end to
+# end (scripts/acceptance/rig-deploy.mjs). Run privileged, with systemd as init, on a developer's
+# machine. Tests only; never deployed. The id-mapping tools get their setuid bit back (an image
+# layer drops their file capabilities), so the user's rootless Podman can map its containers.
+FROM quay.io/fedora/fedora:41
+RUN dnf install -y --setopt=install_weak_deps=False systemd openssh-server sudo podman \
+      fuse-overlayfs shadow-utils procps-ng passt aardvark-dns netavark \
+ && dnf clean all \
+ && useradd -m thermite \
+ && echo 'thermite ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/thermite \
+ && chmod 0440 /etc/sudoers.d/thermite \
+ && install -d -m 0700 -o thermite -g thermite /home/thermite/.ssh \
+ && install -m 0600 -o thermite -g thermite /dev/null /home/thermite/.ssh/authorized_keys \
+ && ssh-keygen -A \
+ && printf 'PasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/50-thermite.conf \
+ && systemctl enable sshd \
+ && (grep -q '^thermite:' /etc/subuid || echo 'thermite:200000:65536' >> /etc/subuid) \
+ && (grep -q '^thermite:' /etc/subgid || echo 'thermite:200000:65536' >> /etc/subgid) \
+ && chmod 4755 /usr/bin/newuidmap /usr/bin/newgidmap
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

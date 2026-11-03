@@ -21,4 +21,13 @@ describe("the supervisor's start", () => {
       false,
     );
   });
+
+  test("a harness that answers 503, a loop late, is up: the supervisor starts and reports it (goal 173)", async () => {
+    const late = (async () =>
+      Response.json({ ok: false, loops: {} }, { status: 503 })) as unknown as typeof fetch;
+    assert.equal(
+      await waitForHarness("http://h", () => false, { pollMs: 1, fetchImpl: late }),
+      true,
+    );
+  });
 });

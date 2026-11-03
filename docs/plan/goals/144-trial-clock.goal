@@ -17,7 +17,7 @@ updated: 2026-10-26
 
 On the lab, 2026-10-24 and 25, a hill climb's lane-2 ended five trials in a row with no submission: four at the trial's length, one with an error. A sixth ended with the same error later. The trials' sessions show four causes. Three of them are in Thermite.
 
-- **A command outlives its trial.** At the trial's end the worker aborts its agent (`src/harness/agents/worker.ts`), but the `run` and `dev_run` tools don't take that abort. The command goes on, the worker waits for it, and two minutes later the harness kills the worker (`spawn.ts`: the trial's length plus two minutes). The trial then ends as `error (worker process gave no result (timeout))`, and nothing it did is kept. Two cases:
+- **A command outlives its trial.** At the trial's end the worker aborts its agent (`src/harness/agents/worker/index.ts`), but the `run` and `dev_run` tools don't take that abort. The command goes on, the worker waits for it, and two minutes later the harness kills the worker (`spawn.ts`: the trial's length plus two minutes). The trial then ends as `error (worker process gave no result (timeout))`, and nothing it did is kept. Two cases:
   - 07:35 UTC: a build started with `timeout_s` 1800 and 8 minutes left.
   - 18:37 UTC: a `dev_run` with `timeout_s` 600, started 75 seconds before the end.
 - **The agent doesn't see the time left.** The worker warns once, at 85% of the trial's length, and only when a turn ends. During a long build or test no turn ends, so the warning comes late or never. Twice the agent had a win with 8 to 15 minutes left, started a check of 6 to 8 minutes, and the trial ended before it submitted. The brief gives the trial's length, but not when it ends.

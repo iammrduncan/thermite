@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { propagateChampion } from "../../src/control/issue.ts";
+import { propagateChampion } from "../../src/control/issue/index.ts";
 import {
   advanceResets,
   ComposeDriver,
@@ -14,12 +14,12 @@ import {
   inClusterApi,
   KubernetesDriver,
 } from "../../src/control/lifecycle.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { leaderboard } from "../../src/control/views.ts";
+import { leaderboard } from "../../src/control/views/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
-import { WIPE_MARKER, wipeIfRequested } from "../../src/harness/service.ts";
-import { relayOnce } from "../../src/supervisor/relay.ts";
+import { KB_OUTBOX_FILES } from "../../src/core/kb/index.ts";
+import { WIPE_MARKER, wipeIfRequested } from "../../src/harness/service/index.ts";
+import { ADMIN, controlOnly, controlStack, mcpClient } from "../helpers/control-stack.ts";
+import { controlStore, ingestReport } from "../helpers/control-store.ts";
 import { FAST_KERNEL, makeJudgeEnv } from "../helpers/judge-env.ts";
 
 function fakeServer(
@@ -93,6 +93,20 @@ describe("deployment drivers", () => {
     assert.deepEqual(await own.restart("rig-1", ["harness"]), ["ar-rig-1/harness-abc"]);
     assert.ok(seen.includes("DELETE /api/v1/namespaces/thermite-rig-1/pods/harness-abc"));
     assert.ok(seen.includes("DELETE /api/v1/namespaces/ar-rig-1/pods/harness-abc"));
+    // {unit}, the placeholder's name before v0.1.0, is refused in words, before any call.
+    assert.throws(
+      () => KubernetesDriver.inCluster({ ...env, THERMITE_K8S_NAMESPACE: "ar-{unit}" }),
+      /^Error: THERMITE_K8S_NAMESPACE names \{unit\}, the placeholder's name before v0\.1\.0: write \{rig\}$/,
+    );
+    // The token is a secret file, read as every secret file is: an empty one is refused in words
+    // that name the setting, and nothing is sent without it.
+    writeFileSync(join(dir, "token"), "\n");
+    const before = seen.length;
+    await assert.rejects(
+      KubernetesDriver.inCluster(env).restart("rig-1", ["harness"]),
+      /secret file for THERMITE_K8S_TOKEN_FILE is empty/,
+    );
+    assert.equal(seen.length, before);
     server.close();
   });
 
@@ -121,35 +135,13 @@ describe("full reset", () => {
     await env.service.applyCommand(env.assign);
     // A job the judge has not taken: once the run is paused it stays queued, and the reset must
     // not wait for it (goal 165).
-    const queued = env.ledger.enqueueJob({ kind: "validate", spec: { run: "js-1" }, actor: "t" });
+    const queued = env.ledger.jobs.enqueue({ kind: "validate", spec: { run: "js-1" }, actor: "t" });
     let wiped = false;
     env.service.onWipe = () => {
       wiped = true;
     };
-    const harnessTokens = { supervisor: "sup", proposer: "prop" };
-    const harness = createHarnessApi(env.service, harnessTokens);
-    const store = new ControlStore(":memory:");
-    store.setConfiguredRigs(["rig-a"]);
-    const { createControlApi } = await import("../../src/control/api.ts");
-    const control = createControlApi(
-      store,
-      { admin: "adm", rigs: { "rig-a": "rig-tok" } },
-      env.keys.privateKeyPem,
-    );
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = new URL(String(input));
-      const app = url.host === "harness" ? harness : control;
-      return app.request(`${url.pathname}${url.search}`, init as RequestInit);
-    };
-    const relay = {
-      rig: "rig-a",
-      harnessUrl: "http://harness",
-      harnessToken: "sup",
-      controlUrl: "http://control",
-      controlToken: "rig-tok",
-      fetchImpl,
-    };
-    let rs = await relayOnce(relay, { cursor: 0 });
+    const { store, relay } = controlStack({ env });
+    await relay();
     const restarts: string[] = [];
     const driver: DeploymentDriver = {
       kind: "fake",
@@ -165,39 +157,38 @@ describe("full reset", () => {
         driver,
         staleAfterMs: 180_000,
       });
-    const state = () => String(store.openReset("rig-a")?.state ?? store.resets(1)[0]?.state);
-    const id = store.createReset("rig-a", "owner:test");
+    const state = () =>
+      String(store.fullResets.open("rig-a")?.state ?? store.fullResets.list(1)[0]?.state);
+    const id = store.fullResets.create("rig-a", "owner:test");
     await step();
     assert.equal(state(), "quiescing");
-    rs = await relayOnce(relay, rs); // the pause reaches the harness; the rig reports idle
-    assert.equal(env.ledger.getRun("js-1")?.status, "paused");
+    // Before the rig takes the pause: its queued job counts until control sees the run paused.
     await step();
     assert.equal(state(), "quiescing", "its queued job counts until control sees the run paused");
-    rs = await relayOnce(relay, rs); // the harness's report of the pause
+    await relay(); // the pause reaches the harness, and its report of it reaches control
+    assert.equal(env.ledger.runs.get("js-1")?.status, "paused");
     await step();
     assert.equal(state(), "exporting");
-    assert.equal(env.ledger.jobById(queued)?.state, "queued");
-    rs = await relayOnce(relay, rs); // the full export (the supervisor's acknowledgement)
+    assert.equal(env.ledger.jobs.get(queued)?.state, "queued");
     await step();
     assert.equal(state(), "exporting", "waits for the harness's own record of the export");
-    rs = await relayOnce(relay, rs); // the harness's signed report carries it
+    await relay(); // the full export, and the harness's signed report that carries it
     await step();
     assert.equal(state(), "verifying");
-    const name = String(store.openReset("rig-a")?.export_name);
+    const name = String(store.fullResets.open("rig-a")?.export_name);
     await step();
     assert.equal(state(), "verifying", "waits until the supervisor reports the export pushed");
-    store.setSupervisor("rig-a", {
+    store.reportedRigs.setSupervisor("rig-a", {
       export: { remote: true, pushed: [name], pushed_commit: "c".repeat(40) },
     });
     await step();
     assert.equal(state(), "awaiting_owner", "the owner checks the pushed commit and confirms");
-    assert.match(String(store.openReset("rig-a")?.detail), /c{40}/);
+    assert.match(String(store.fullResets.open("rig-a")?.detail), /c{40}/);
     confirmReset(store, id, "owner:test");
     await step();
     assert.equal(state(), "wiping");
-    rs = await relayOnce(relay, rs);
+    await relay(); // the wipe, and the harness's record of it
     assert.ok(existsSync(join(env.paths.stateDir, WIPE_MARKER)));
-    rs = await relayOnce(relay, rs); // the harness's record of the wipe
     await step();
     assert.equal(state(), "done");
     assert.deepEqual(restarts, ["rig-a:harness,supervisor"]);
@@ -210,10 +201,17 @@ describe("full reset", () => {
     mkdirSync(locked, { recursive: true });
     chmodSync(locked, 0o555);
     chmodSync(join(env.paths.stateDir, "builds", "locked"), 0o555);
+    // A file of the knowledge base the supervisor has yet to put on the bus stays (goal 175).
+    const kbFile = join(env.paths.outboxDir, KB_OUTBOX_FILES, "a".repeat(64));
+    mkdirSync(join(env.paths.outboxDir, KB_OUTBOX_FILES), { recursive: true });
+    writeFileSync(kbFile, "waiting");
+    mkdirSync(join(env.paths.outboxDir, "an-export"), { recursive: true });
     assert.ok(wipeIfRequested(env.paths, ["rig-signing.key", "rig-signing.key.pub"]));
+    assert.ok(existsSync(kbFile));
+    assert.ok(!existsSync(join(env.paths.outboxDir, "an-export")));
     assert.ok(!existsSync(join(env.paths.stateDir, "builds")));
     assert.ok(!existsSync(join(env.paths.stateDir, "ledger", "ledger.db")));
-    const { Ledger } = await import("../../src/harness/ledger.ts");
+    const { Ledger } = await import("../../src/harness/ledger/index.ts");
     const fresh = Ledger.open(join(env.paths.stateDir, "ledger", "ledger.db"));
     assert.notEqual(fresh.ledgerId(), before);
     fresh.close();
@@ -256,8 +254,8 @@ describe("full reset", () => {
 });
 
 describe("leaderboard and propagation", () => {
-  test("a champion is cross-verified once another rig's judge accepted it", () => {
-    const store = new ControlStore(":memory:");
+  test("a champion is cross-verified once another rig's judge accepted it", async () => {
+    const store = controlStore();
     const ev = (id: number, kind: string, subject: string, body: unknown) => ({
       id,
       at: new Date(Date.now() + id).toISOString(),
@@ -266,7 +264,7 @@ describe("leaderboard and propagation", () => {
       subject,
       body,
     });
-    store.ingest({
+    await ingestReport(store, {
       rig: "rig-a",
       ledger_id: "la",
       cursor: 0,
@@ -291,26 +289,27 @@ describe("leaderboard and propagation", () => {
         }),
       ],
     });
-    store.ingest({
+    // Rig b's own run of the campaign: a run's name is used once on control (goal 170).
+    await ingestReport(store, {
       rig: "rig-b",
       ledger_id: "lb",
       cursor: 0,
       next: 3,
       summary: {},
       events: [
-        ev(1, "run_created", "c-1", {
+        ev(1, "run_created", "c-1b", {
           campaign: "camp",
           mode: "hill_climb",
           seed: { repo: "proj", commit: "s" },
         }),
-        ev(2, "propagation_received", "c-1", {
+        ev(2, "propagation_received", "c-1b", {
           tree: "b".repeat(40),
           attempt: "p-1",
           source_rig: "rig-a",
           source_run: "c-1",
           source_seq: 2,
         }),
-        ev(3, "propagation_accepted", "c-1", {
+        ev(3, "propagation_accepted", "c-1b", {
           attempt: "p-1",
           source_rig: "rig-a",
           source_run: "c-1",
@@ -325,16 +324,14 @@ describe("leaderboard and propagation", () => {
     assert.ok(Math.abs((a?.gain ?? 0) - 0.2) < 1e-9);
     // propagateChampion builds the content-addressed command from the published champion.
     const keys = generateSigningKeys();
-    const { id, seq } = propagateChampion(store, keys.privateKeyPem, {
-      fromRig: "rig-a",
+    const { id, seq } = await propagateChampion(store, keys.privateKeyPem, {
       run: "c-1",
-      toRig: "rig-b",
-      toRun: "c-1",
+      toRun: "c-1b",
       issuedBy: "owner",
       staleAfterMs: 180_000,
     });
     assert.equal(seq, 2);
-    const cmd = store.pendingCommands("rig-b").find((c) => c.envelope.id === id);
+    const cmd = store.commands.pending("rig-b").find((c) => c.envelope.id === id);
     assert.ok(cmd);
     assert.deepEqual((cmd.envelope.payload as { import: unknown }).import, {
       kind: "champion_patch",
@@ -344,18 +341,31 @@ describe("leaderboard and propagation", () => {
       tree: "b".repeat(40),
       sha256: "f".repeat(64),
     });
-    assert.throws(
-      () =>
-        propagateChampion(store, keys.privateKeyPem, {
-          fromRig: "rig-b",
-          run: "c-1",
-          toRig: "rig-a",
-          toRun: "c-1",
-          issuedBy: "owner",
-          staleAfterMs: 180_000,
-        }),
+    await assert.rejects(
+      propagateChampion(store, keys.privateKeyPem, {
+        run: "c-1b",
+        toRun: "c-1",
+        issuedBy: "owner",
+        staleAfterMs: 180_000,
+      }),
       /no champion beyond its seed/,
     );
+    // During the owner's full reset of the receiving rig, an agent's token does not propagate to
+    // it; the owner's does.
+    store.fullResets.create("rig-b", "owner:api");
+    const { control } = controlOnly({ store, keys, tokens: { agent: "agent-token-abcdef" } });
+    const call = async (token: string) =>
+      (await mcpClient(control, token)).callTool({
+        name: "propagate_champion",
+        arguments: { run: "c-1", to_run: "c-1b" },
+      });
+    const refused = (await call("agent-token-abcdef")) as {
+      isError?: boolean;
+      content: { text: string }[];
+    };
+    assert.equal(refused.isError, true);
+    assert.match(refused.content[0]?.text ?? "", /rig-b is being reset by the owner/);
+    assert.ok(!(await call(ADMIN)).isError);
   });
 });
 

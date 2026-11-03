@@ -1,20 +1,24 @@
 import assert from "node:assert/strict";
 import { describe, type TestContext, test } from "node:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createControlApi } from "../../src/control/api.ts";
-import { issueCommand } from "../../src/control/issue.ts";
-import { McpServers, mcpRefusal } from "../../src/control/mcp-servers.ts";
+import { issueCommand } from "../../src/control/issue/index.ts";
+import {
+  McpServers,
+  mcpRefusal,
+  SIGN_IN_ANSWER_MAX,
+  signInFetch,
+} from "../../src/control/mcp-servers/index.ts";
 import { SecretBox } from "../../src/control/secrets.ts";
-import { ControlStore } from "../../src/control/store.ts";
+import { ControlStore } from "../../src/control/store/index.ts";
 import { generateSigningKeys } from "../../src/core/commands.ts";
 import { assigned } from "../helpers/assignments.ts";
+import { ADMIN, controlOnly, mcpClient, signIn } from "../helpers/control-stack.ts";
+import { applied, controlStore, enrollRigs } from "../helpers/control-store.ts";
 import { type FakeAuth, type FakeMcp, startFakeMcp } from "../helpers/fake-mcp.ts";
+import { report } from "../helpers/view-events.ts";
 
 /** Made-up secrets: each must reach only the fake server's headers, never a page, log or audit. */
 const KEY = "Bearer brainkeyforthetestsonly";
 const CLIENT_SECRET = "clientsecretforthetestsonly";
-const ADMIN = "admin-token-abcdef";
 const RIG_TOKEN = "rig-token-aaaaaa";
 
 async function fakeOf(t: TestContext, auth: FakeAuth) {
@@ -228,7 +232,7 @@ describe("MCP servers in Settings", () => {
       { name: "spare", url: "https://spare.example.com/mcp", auth: "none" },
       "owner:test",
     );
-    store.putCampaign({
+    store.campaigns.put({
       campaign: "q4-gemv",
       version: 1,
       contract: {
@@ -269,14 +273,14 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
 
   test("refused with the server's name and what to do; started once Settings has it", () => {
     const { store, servers } = setup();
-    store.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     assert.throws(
       () =>
         assign(store, { contract, mcp_servers: [{ name: "paper-search", agents: ["advisors"] }] }),
       /names the MCP server paper-search, and Settings has no server of that name/,
     );
     assert.equal(
-      mcpRefusal(store.db, [{ name: "paper-search", agents: ["workers"] }]).length > 0,
+      mcpRefusal(store, [{ name: "paper-search", agents: ["workers"] }]).length > 0,
       true,
     );
     servers.put(
@@ -288,9 +292,37 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
     );
   });
 
+  test("an agent's token may not name MCP servers in an assignment; the owner's may", () => {
+    const { store, servers } = setup();
+    enrollRigs(store, ["rig-a"]);
+    servers.put(
+      { name: "paper-search", url: "https://papers.example.com/mcp", auth: "none" },
+      "owner:test",
+    );
+    const uses = [{ name: "paper-search", agents: ["advisors"] }];
+    for (const payload of [
+      { contract, mcp_servers: uses },
+      // A research contract names them itself.
+      { contract: { ...contract, mcp_servers: uses } },
+    ])
+      assert.throws(
+        () =>
+          issueCommand(store, keys.privateKeyPem, {
+            rig: "rig-a",
+            kind: "assign_campaign",
+            payload: { run: "survey-2", contract_sha: "b".repeat(64), imports: [], ...payload },
+            issuedBy: "agent:mcp",
+            agent: true,
+          }),
+        /An agent's token may not name MCP servers in an assignment/,
+      );
+    assert.equal(store.commands.pending("rig-a").length, 0);
+    assert.ok(assign(store, { contract, mcp_servers: uses }).id);
+  });
+
   test("a research contract's servers go into its assignment, and a different list is refused", () => {
     const { store, servers } = setup();
-    store.setConfiguredRigs(["rig-a"]);
+    enrollRigs(store, ["rig-a"]);
     servers.put(
       { name: "gbrain", url: "https://brain.example.com/mcp", auth: "none" },
       "owner:test",
@@ -317,20 +349,14 @@ describe("a campaign whose kit names a server Settings lacks can't start", () =>
 
 describe("what a rig gets", () => {
   async function api(t: TestContext, fake: FakeMcp) {
-    const keys = generateSigningKeys();
     const store = new ControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
     const servers = new McpServers(store, secrets);
-    const app = createControlApi(
+    const { control: app } = controlOnly({
       store,
-      { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN, "rig-b": "rig-token-bbbbbb" } },
-      keys.privateKeyPem,
-      {
-        staleAfterMs: 180_000,
-        secrets,
-        mcpServers: servers,
-      },
-    );
+      tokens: { rigs: { "rig-a": RIG_TOKEN, "rig-b": "rig-token-bbbbbb" } },
+      options: { secrets, mcpServers: servers },
+    });
     t.after(() => undefined);
     void fake;
     return { store, servers, app };
@@ -338,7 +364,7 @@ describe("what a rig gets", () => {
 
   test("only the servers its runs' kits name, with their sign-in; what it gets is audited without it", async (t) => {
     const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
-    const { store, servers, app } = await api(t, fake);
+    const { store, servers } = await api(t, fake);
     servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
     servers.put(
       { name: "github", url: "https://code.example.com/mcp", auth: "none" },
@@ -350,12 +376,13 @@ describe("what a rig gets", () => {
         { name: "gone", agents: ["planner"] },
       ],
     });
-    const ask = (rig: string, token: string) =>
-      app.request(`/v1/rigs/${rig}/mcp-servers`, { headers: { authorization: `Bearer ${token}` } });
-    const r = (await (await ask("rig-a", RIG_TOKEN)).json()) as {
-      servers: { name: string; headers: Record<string, string>; agents: string[] }[];
-      unavailable: { name: string; why: string }[];
+    // What control writes to the rig's config on the bus (bus/config.ts), audited as it writes.
+    const ask = async (rig: string) => {
+      const given = await servers.forRig(rig);
+      servers.handed(rig, given);
+      return given;
     };
+    const r = await ask("rig-a");
     assert.deepEqual(
       r.servers.map((s) => [s.name, s.headers.Authorization, s.agents]),
       [["gbrain", KEY, ["workers", "advisors"]]],
@@ -364,12 +391,11 @@ describe("what a rig gets", () => {
       r.unavailable.map((u) => u.name),
       ["gone"],
     );
-    // Another rig, whose runs name nothing, gets nothing; a wrong token, nothing at all.
-    const b = (await (await ask("rig-b", "rig-token-bbbbbb")).json()) as { servers: unknown[] };
+    // Another rig, whose runs name nothing, gets nothing.
+    const b = await ask("rig-b");
     assert.deepEqual(b.servers, []);
-    assert.equal((await ask("rig-a", "rig-token-bbbbbb")).status, 401);
     // Audited once for what changed, never with the key.
-    await ask("rig-a", RIG_TOKEN);
+    await ask("rig-a");
     const audits = store.db
       .prepare("select body from audit where action = 'mcp_servers_handed'")
       .all() as { body: string }[];
@@ -380,6 +406,29 @@ describe("what a rig gets", () => {
       unavailable: ["gone"],
     });
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
+  });
+
+  test("a rig keeps a server only while a live run names it: not once the run closed, nor for an assignment that failed", async (t) => {
+    const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
+    const store = controlStore();
+    const servers = new McpServers(store, SecretBox.ephemeral());
+    servers.put({ name: "gbrain", url: fake.url, auth: "key", secret: KEY }, "owner:test");
+    const uses = { mcp_servers: [{ name: "gbrain", agents: ["workers"] }] };
+    const given = async () => (await servers.forRig("rig-a")).servers.map((x) => x.name);
+    assigned(store, "rig-a", "pn-1", "pn", uses);
+    assert.deepEqual(await given(), ["gbrain"]);
+    // The run closes: its rig no longer gets the server.
+    await report(store, "rig-a", "ledger-a", [
+      { kind: "run_created", subject: "pn-1", body: { campaign: "pn", mode: "goal" } },
+      { kind: "run_status", subject: "pn-1", body: { status: "closed", reason: "done" } },
+    ]);
+    await applied(store);
+    assert.deepEqual(await given(), []);
+    // An assignment that failed gives nothing either.
+    assigned(store, "rig-a", "pn-2", "pn", uses);
+    assert.deepEqual(await given(), ["gbrain"]);
+    store.db.prepare("update command set status = 'failed' where id = ?").run("cmd-rig-a-pn-2");
+    assert.deepEqual(await given(), []);
   });
 
   test("the owner's REST routes and the settings page never show a secret", async (t) => {
@@ -410,13 +459,7 @@ describe("what a rig gets", () => {
     assert.equal(changed.status, 200);
     assert.ok(!(await changed.text()).includes("anotherkeyfortests"));
     // The settings page shows the row, its tools and its hint, never the key.
-    const login = await app.request("/ui/login", {
-      method: "POST",
-      body: new URLSearchParams({ token: ADMIN }),
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-    });
-    const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-    const page = await (await app.request("/ui/settings", { headers: { cookie } })).text();
+    const page = await (await signIn(app)).page("/ui/settings/mcp");
     assert.match(page, /<h2>MCP servers<\/h2>/);
     assert.match(page, /data-mcp="gbrain"/);
     assert.match(page, /put_page/);
@@ -433,18 +476,38 @@ describe("what a rig gets", () => {
     const fake = await fakeOf(t, { kind: "oauth" });
     const { servers, app } = await api(t, fake);
     const owner = { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" };
-    const added = (await (
+    // With no THERMITE_CONTROL_PUBLIC_URL, a request that names control by another address gets
+    // no sign-in: the server is kept, and the answer says which setting to set.
+    const named = (await (
       await app.request("http://control.example.com/v1/mcp-servers", {
         method: "POST",
         headers: owner,
         body: JSON.stringify({ name: "notion", url: fake.url, auth: "oauth" }),
       })
-    ).json()) as { sign_in_url: string };
-    assert.equal(
-      new URL(added.sign_in_url).searchParams.get("redirect_uri"),
-      "http://control.example.com/v1/mcp-oauth/callback",
+    ).json()) as { sign_in_url?: string; error?: string };
+    assert.equal(named.sign_in_url, undefined);
+    assert.match(
+      String(named.error),
+      /set THERMITE_CONTROL_PUBLIC_URL to the address you reach control at/,
     );
-    const { state, code } = await allow(added.sign_in_url);
+    const again = await app.request("http://control.example.com/v1/mcp-servers/notion/sign-in", {
+      method: "POST",
+      headers: owner,
+    });
+    assert.equal(again.status, 409);
+    // Reached on control's own machine, the browser comes back there.
+    const added = (await (
+      await app.request("http://127.0.0.1:8800/v1/mcp-servers/notion/sign-in", {
+        method: "POST",
+        headers: owner,
+      })
+    ).json()) as { url: string };
+    const signInUrl = added.url;
+    assert.equal(
+      new URL(signInUrl).searchParams.get("redirect_uri"),
+      "http://127.0.0.1:8800/v1/mcp-oauth/callback",
+    );
+    const { state, code } = await allow(signInUrl);
     const back = await app.request(`/v1/mcp-oauth/callback?state=${state}&code=${code}`);
     assert.equal(back.status, 303);
     assert.match(
@@ -454,82 +517,23 @@ describe("what a rig gets", () => {
     assert.equal(servers.get("notion")?.status, "ok");
     // A made-up state is refused.
     const forged = await app.request(`/v1/mcp-oauth/callback?state=made-up&code=${code}`);
-    assert.match(decodeURIComponent(forged.headers.get("location") ?? ""), /not known/);
-  });
-});
-
-describe("the update from goal 065's outside knowledge base", () => {
-  test("it becomes a server with a key, its token kept; copies and the advisors' grants end", () => {
-    const store = new ControlStore(":memory:");
-    const secrets = SecretBox.ephemeral();
-    store.kb();
-    store.db.exec(`create table outside_kb (name text primary key, mcp_url text not null, token_sealed text not null,
-      token_hint text not null, search_tool text not null, write_tool text, tools text, checked_at text,
-      check_error text, created_at text not null, created_by text not null, updated_at text not null);
-      create table outside_kb_copy (kb text not null, campaign text not null, enabled_by text not null,
-      enabled_at text not null, cursor integer not null default 0, written integer not null default 0,
-      primary key (kb, campaign));`);
-    const token = "outsidetokenkeptforthetests";
-    store.db
-      .prepare(
-        "insert into outside_kb values ('team.brain', 'https://brain.example.com/mcp', ?, '…ests', 'search', 'put_page', '[\"search\",\"put_page\"]', '2026-10-19T00:00:00Z', null, '2026-10-01T00:00:00Z', 'owner:ui', '2026-10-01T00:00:00Z')",
-      )
-      .run(secrets.seal(token));
-    store.db
-      .prepare(
-        "insert into outside_kb_copy (kb, campaign, enabled_by, enabled_at) values ('team.brain', 'pn', 'owner:ui', 'x')",
-      )
-      .run();
-    store.kb().grant("pn", "outside:team.brain", "owner:ui");
-    store.kb().grant("pn", "other", "owner:ui");
-    const servers = new McpServers(store, secrets);
-    const s = servers.get("team-brain");
-    assert.equal(s?.auth, "key");
-    assert.equal(s?.header, "Authorization");
-    assert.equal(s?.migrated_from, "outside_kb");
-    assert.deepEqual(
-      s?.tools?.map((x) => x.name),
-      ["search", "put_page"],
-    );
-    // The token is kept, as a bearer key.
-    return servers.headers("team-brain").then((h) => {
-      assert.ok("headers" in h);
-      assert.equal(h.headers.Authorization, `Bearer ${token}`);
-      // Copies stop, the advisors' grant goes, other grants stay; the audit says so.
-      const tables = store.db
-        .prepare("select name from sqlite_master where name like 'outside_kb%'")
-        .all();
-      assert.deepEqual(tables, []);
-      assert.deepEqual(store.kb().reads("pn"), ["other"]);
-      const audit = store.lastAudit("control", "outside_kb_migrated") as Record<string, unknown>;
-      assert.deepEqual(audit, {
-        outside_kb: "team.brain",
-        mcp_server: "team-brain",
-        token: "kept",
-        copies_stopped: ["pn"],
-        grants_removed: ["pn"],
-      });
-      assert.ok(!everything(store).includes(token));
-      // A second start finds nothing to move.
-      new McpServers(store, secrets);
-      assert.equal(servers.list().length, 1);
-    });
+    const to = forged.headers.get("location") ?? "";
+    assert.match(to, /error=note-[0-9a-f]+&at=mcp/);
+    assert.match(await (await signIn(app)).page(to), /not known/);
   });
 });
 
 describe("control's log lines", () => {
   test("a failing server, a refused page and a rig's share are logged and audited without a secret", async (t) => {
     const fake = await fakeOf(t, { kind: "bearer", token: "not-the-key-given" });
-    const keys = generateSigningKeys();
     const store = new ControlStore(":memory:");
     const secrets = SecretBox.ephemeral();
     const servers = new McpServers(store, secrets);
-    const app = createControlApi(
+    const { control: app } = controlOnly({
       store,
-      { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } },
-      keys.privateKeyPem,
-      { staleAfterMs: 180_000, secrets, mcpServers: servers },
-    );
+      tokens: { rigs: { "rig-a": RIG_TOKEN } },
+      options: { secrets, mcpServers: servers },
+    });
     {
       const owner = { authorization: `Bearer ${ADMIN}`, "content-type": "application/json" };
       await app.request("/v1/mcp-servers", {
@@ -539,29 +543,17 @@ describe("control's log lines", () => {
       });
       await app.request("/v1/mcp-servers/gbrain/check", { method: "POST", headers: owner });
       // The page's Read tools again is refused, and control logs why.
-      const login = await app.request("/ui/login", {
-        method: "POST",
-        body: new URLSearchParams({ token: ADMIN }),
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-      });
-      const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-      const page = await (await app.request("/ui/settings", { headers: { cookie } })).text();
-      const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(page)?.[1] ?? "";
-      await app.request("/ui/settings/mcp/gbrain/check", {
-        method: "POST",
-        body: new URLSearchParams({ csrf }),
-        headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-      });
+      const ui = await signIn(app);
+      const csrf = ui.csrfOf(await ui.page("/ui/settings"));
+      await ui.post("/ui/settings/mcp/gbrain/check", { csrf });
       assigned(store, "rig-a", "pn-1", "pn", {
         mcp_servers: [{ name: "gbrain", agents: ["workers"] }],
       });
-      await app.request("/v1/rigs/rig-a/mcp-servers", {
-        headers: { authorization: `Bearer ${RIG_TOKEN}` },
-      });
+      servers.handed("rig-a", await servers.forRig("rig-a"));
     }
     // Control logs a refused page with the same words it writes to its audit (api.ts): the
     // reason is there (the server answered 401), the key is not.
-    const refused = store.lastAudit("owner:ui", "refused") as { why?: string } | undefined;
+    const refused = store.auditLog.last("owner:ui", "refused") as { why?: string } | undefined;
     assert.match(refused?.why ?? "", /401/);
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
   });
@@ -570,28 +562,11 @@ describe("control's log lines", () => {
 describe("MCP servers over control's own MCP", () => {
   test("the owner adds, lists and deletes one; the audit holds the secret's last four characters only", async (t) => {
     const fake = await fakeOf(t, { kind: "header", header: "Authorization", value: KEY });
-    const keys = generateSigningKeys();
-    const store = new ControlStore(":memory:");
-    const control = createControlApi(
-      store,
-      { admin: ADMIN, operator: "operator-token-abcdef", rigs: {} },
-      keys.privateKeyPem,
-      { staleAfterMs: 180_000, secrets: SecretBox.ephemeral() },
-    );
-    const connect = async (token: string) => {
-      const client = new Client({ name: "test-owner", version: "1.0.0" });
-      const fetchImpl: typeof fetch = async (input, init) => {
-        const url = new URL(String(input));
-        const headers = new Headers(init?.headers);
-        headers.set("authorization", `Bearer ${token}`);
-        return control.request(`${url.pathname}${url.search}`, { ...init, headers } as RequestInit);
-      };
-      await client.connect(
-        new StreamableHTTPClientTransport(new URL("http://control/mcp"), { fetch: fetchImpl }),
-      );
-      return client;
-    };
-    const owner = await connect(ADMIN);
+    const { store, control } = controlOnly({
+      tokens: { operator: "operator-token-abcdef", rigs: {} },
+      options: { secrets: SecretBox.ephemeral() },
+    });
+    const owner = await mcpClient(control);
     const added = await owner.callTool({
       name: "mcp_server_add",
       arguments: { name: "gbrain", url: fake.url, auth: "key", secret: KEY },
@@ -602,12 +577,55 @@ describe("MCP servers over control's own MCP", () => {
     const listed = JSON.stringify(await owner.callTool({ name: "mcp_servers", arguments: {} }));
     assert.match(listed, /put_page/);
     // An operator may list them, never add one.
-    const operator = await connect("operator-token-abcdef");
+    const operator = await mcpClient(control, "operator-token-abcdef");
     const tools = (await operator.listTools()).tools.map((x) => x.name);
     assert.ok(tools.includes("mcp_servers") && !tools.includes("mcp_server_add"));
     const gone = await owner.callTool({ name: "mcp_server_delete", arguments: { name: "gbrain" } });
     assert.match(JSON.stringify(gone), /deleted/);
     assert.ok(!everything(store).includes("brainkeyforthetestsonly"));
     assert.match(everything(store), /given \(…only\)/);
+  });
+  test("a sign-in's calls go only to addresses an MCP server's may be, each answer within its limit", async () => {
+    const asked: string[] = [];
+    let signal: AbortSignal | undefined;
+    const answers: Record<string, () => Response> = {
+      "https://auth.example.com/token": () => Response.json({ access_token: "a" }),
+      "https://auth.example.com/huge": () =>
+        new Response("x".repeat(SIGN_IN_ANSWER_MAX + 1), {
+          headers: { "content-length": String(SIGN_IN_ANSWER_MAX + 1) },
+        }),
+      // Streamed, with no length given.
+      "https://auth.example.com/stream": () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              for (let i = 0; i < 3; i++) c.enqueue(new Uint8Array(SIGN_IN_ANSWER_MAX / 2));
+              c.close();
+            },
+          }),
+        ),
+    };
+    const call = signInFetch(async (input, init) => {
+      asked.push(String(input));
+      signal = init?.signal ?? undefined;
+      return (answers[String(input)] ?? (() => new Response("no", { status: 404 })))();
+    });
+    const ok = await call("https://auth.example.com/token", { method: "POST" });
+    assert.ok(ok instanceof Response);
+    assert.deepEqual(await ok.json(), { access_token: "a" });
+    assert.ok(signal && !signal.aborted, "each call has a time limit");
+    await assert.rejects(
+      call("http://auth.example.com/token"),
+      /^Error: the sign-in leads to http:\/\/auth\.example\.com, which control does not call: Use https\./,
+    );
+    await assert.rejects(call("https://auth.example.com/token?api_key=x"), /no secret in the URL/);
+    assert.equal(asked.length, 1, "a refused address is never called");
+    for (const path of ["huge", "stream"])
+      await assert.rejects(
+        call(`https://auth.example.com/${path}`),
+        new RegExp(
+          `https://auth\\.example\\.com answered with more than ${SIGN_IN_ANSWER_MAX} bytes`,
+        ),
+      );
   });
 });

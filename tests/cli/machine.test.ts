@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import type { Probes, RunResult } from "../../src/cli/doctor.ts";
+import type { Probes, RunResult } from "../../src/cli/doctor/index.ts";
 import {
   CDI_GENERATE,
   CUDA_BASE_IMAGE,

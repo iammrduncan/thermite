@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { researchPackage, researchReviewDue } from "../../src/harness/research/review.ts";
+import { researchPackage, researchReviewDue } from "../../src/harness/research/review/index.ts";
 import { Reviews } from "../../src/harness/reviews.ts";
 import { fillResearch, makeResearchRun, writeCards } from "./research-run.ts";
 

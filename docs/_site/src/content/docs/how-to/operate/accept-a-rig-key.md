@@ -19,30 +19,43 @@ While a key waits, you see it in three places:
 - **Needs you**, on **Overview**, the first page in the sidebar: a **New key** item asks "Accept a new rig's report key?" or "Accept this rig's new report key?".
 - **The rig's page**: a card titled "This rig's first report key waits for your acceptance" or "This rig now signs its reports with a different key", with the fingerprint and an **Accept this key** button.
 
-Meanwhile control takes none of the rig's reports, so it shows nothing new from the rig. A new rig says `none yet` under **Last report** on **Rigs**. A rig that reported before also shows in **Needs you** under **Not reporting**. The rig's supervisor logs `relay error` with `the rig's key waits for the owner's acceptance` or `rig key changed: the owner must accept the new key`.
+Meanwhile control takes none of the rig's reports, so it shows nothing new from the rig. A new rig says `none yet` under **Last report** on **Rigs**. A rig that reported before also shows in **Needs you** under **Not reporting**. Control's log says `report from the bus refused` with `the rig's key waits for the owner's acceptance` or `rig key changed: the owner must accept the new key`, and the rig's supervisor sends its reports again every round from where control is: its log says `control is behind this rig's reports on the bus; sending again from its cursor`.
 
 ## 1. Read the fingerprint that control shows
 
 Open the rig's page, or the **New key** item. The fingerprint is 16 hexadecimal characters, for example `1a2b3c4d5e6f7a8b`.
 
-## 2. Work out the rig's own fingerprint
+## 2. Read the rig's own fingerprint
 
-The card asks you to check the fingerprint "with the rig's deployment". No setup step prints a rig's fingerprint, so work it out on the rig itself. It is the first 16 hexadecimal characters of the SHA-256 of the rig's public key, which the rig's harness container keeps in `/var/lib/thermite/ledger/rig-signing.key.pub`. Run the command for your kind of rig:
+The card asks you to check the fingerprint "with the rig's deployment". The rig's harness logs its fingerprint each time it starts, in a line with the message `the rig's report key`, for example `{"at":"2026-10-30T05:10:00.000Z","level":"info","component":"harness","msg":"the rig's report key","rig":"rig-1","fingerprint":"1a2b3c4d5e6f7a8b"}`. Read it from the harness's log:
 
 ```sh
 # The local compose stack, from the repository folder (harness-2 for the second rig)
-docker compose exec harness sh -c 'printf %s "$(cat /var/lib/thermite/ledger/rig-signing.key.pub)" | sha256sum | cut -c1-16'
+docker compose logs harness | grep "the rig's report key" | tail -n 1
 
 # A rig on a machine: log in over SSH as the user the rig runs as (with sudo for a rig that runs as root)
+podman logs thermite-rig-1-harness 2>&1 | grep "the rig's report key" | tail -n 1
+
+# A rig on a Kubernetes cluster
+kubectl logs -n <namespace> deployment/thermite-rig-1-harness | grep "the rig's report key" | tail -n 1
+```
+
+A harness that has run a long time may have rotated its start's line out of its log. Then work the fingerprint out from the key itself. It is the first 16 hexadecimal characters of the SHA-256 of the rig's public key, which the rig's harness container keeps in `/var/lib/thermite/ledger/rig-signing.key.pub`:
+
+```sh
+# The local compose stack
+docker compose exec harness sh -c 'printf %s "$(cat /var/lib/thermite/ledger/rig-signing.key.pub)" | sha256sum | cut -c1-16'
+
+# A rig on a machine
 podman exec thermite-rig-1-harness sh -c 'printf %s "$(cat /var/lib/thermite/ledger/rig-signing.key.pub)" | sha256sum | cut -c1-16'
 
 # A rig on a Kubernetes cluster
 kubectl exec -n <namespace> deployment/thermite-rig-1-harness -- sh -c 'printf %s "$(cat /var/lib/thermite/ledger/rig-signing.key.pub)" | sha256sum | cut -c1-16'
 ```
 
-With Podman's compose, use `podman compose exec`. On a machine, log in as the rig's user itself, not with `sudo -u`: rootless Podman needs that user's own session. If `podman` then complains about its runtime directory, run `export XDG_RUNTIME_DIR=/run/user/$(id -u)` first. On a cluster, the rig's page shows its namespace: under **Namespace** in the **Set up by control** block, or under **Where** in the **You run it yourself** block.
+With Podman's compose, use `podman compose logs` and `podman compose exec`. On a machine, log in as the rig's user itself, not with `sudo -u`: rootless Podman needs that user's own session. If `podman` then complains about its runtime directory, run `export XDG_RUNTIME_DIR=/run/user/$(id -u)` first. On a cluster, the rig's page shows its namespace: under **Namespace** in the **Set up by control** block, or under **Where** in the **You run it yourself** block.
 
-The command prints 16 characters. They must be the same as the ones control shows.
+Either way you have 16 characters. They must be the same as the ones control shows.
 
 :::caution[If they differ]
 Don't accept the key. Its reports then stay refused, which is safe. Something other than your rig may be reporting under its name: find out what before you go on.

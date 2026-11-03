@@ -1,0 +1,314 @@
+{
+  "argv": [
+    "/usr/local/bin/opencode",
+    "--server",
+    "http://127.0.0.1:4096",
+    "--auto",
+    "--prompt",
+    "SPIKE-1: please read notes.txt, then run the slow command, then reply.",
+    "/scratch/thermite/lanes/lane-1/opencode-tui/repo"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "steps": [
+    {
+      "do": "mark",
+      "label": "startup"
+    },
+    {
+      "do": "wait",
+      "for": "signal",
+      "src": "opencode-plugin",
+      "event": "session.created",
+      "since": "start",
+      "timeoutMs": 20000
+    },
+    {
+      "do": "http",
+      "url": "${server}/api/session",
+      "headers": {
+        "authorization": "${auth}"
+      },
+      "extract": {
+        "session": "\"id\":\"(ses_[^\"]+)\""
+      },
+      "keep": 2000
+    },
+    {
+      "do": "sse",
+      "name": "opencode-session-log",
+      "url": "${server}/api/experimental/session/${session}/log?follow=true",
+      "headers": {
+        "authorization": "${auth}"
+      }
+    },
+    {
+      "do": "sse",
+      "name": "opencode-events",
+      "url": "${server}/api/event",
+      "headers": {
+        "authorization": "${auth}"
+      }
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-1",
+      "kind": "tool",
+      "step": 2,
+      "timeoutMs": 60000,
+      "label": "turn 1: slow command handed out"
+    },
+    {
+      "do": "mark",
+      "label": "turn1"
+    },
+    {
+      "do": "sleep",
+      "ms": 2000
+    },
+    {
+      "do": "type",
+      "text": "STEER-1: when you reply, also mention bananas."
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-1",
+      "kind": "text",
+      "timeoutMs": 60000,
+      "label": "turn 1 reply handed out"
+    },
+    {
+      "do": "wait",
+      "for": "signal",
+      "src": "opencode-plugin",
+      "event": "session.execution.succeeded",
+      "since": "mark",
+      "timeoutMs": 30000,
+      "label": "turn 1 ended"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after turn 1"
+    },
+    {
+      "do": "mark",
+      "label": "idle1"
+    },
+    {
+      "do": "sleep",
+      "ms": 12000
+    },
+    {
+      "do": "mark",
+      "label": "turn2 via server"
+    },
+    {
+      "do": "http",
+      "method": "POST",
+      "url": "${server}/api/session/${session}/prompt",
+      "headers": {
+        "authorization": "${auth}",
+        "content-type": "application/json"
+      },
+      "body": {
+        "text": "SPIKE-2: run pwd please (sent through the server, queued while idle).",
+        "delivery": "queue"
+      }
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-2",
+      "kind": "tool",
+      "step": 1,
+      "timeoutMs": 30000,
+      "label": "turn 2: sleep 6 handed out"
+    },
+    {
+      "do": "sleep",
+      "ms": 1500
+    },
+    {
+      "do": "http",
+      "method": "POST",
+      "url": "${server}/api/session/${session}/prompt",
+      "headers": {
+        "authorization": "${auth}",
+        "content-type": "application/json"
+      },
+      "body": {
+        "text": "STEER-2 through the server, mid-turn.",
+        "delivery": "steer"
+      }
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-2",
+      "kind": "text",
+      "timeoutMs": 60000,
+      "label": "turn 2 reply"
+    },
+    {
+      "do": "wait",
+      "for": "signal",
+      "src": "opencode-plugin",
+      "event": "session.execution.succeeded",
+      "since": "mark",
+      "timeoutMs": 30000,
+      "label": "turn 2 ended"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after turn 2"
+    },
+    {
+      "do": "mark",
+      "label": "turn3"
+    },
+    {
+      "do": "type",
+      "text": "SPIKE-3: run the very slow command."
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-3",
+      "kind": "tool",
+      "step": 1,
+      "timeoutMs": 60000,
+      "label": "turn 3: sleep 40 handed out"
+    },
+    {
+      "do": "sleep",
+      "ms": 3000
+    },
+    {
+      "do": "snap",
+      "label": "before interrupt"
+    },
+    {
+      "do": "key",
+      "key": "esc"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 2000,
+      "timeoutMs": 10000
+    },
+    {
+      "do": "snap",
+      "label": "after one esc"
+    },
+    {
+      "do": "key",
+      "key": "esc"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 15000
+    },
+    {
+      "do": "snap",
+      "label": "after two esc"
+    },
+    {
+      "do": "sleep",
+      "ms": 3000
+    },
+    {
+      "do": "mark",
+      "label": "turn4"
+    },
+    {
+      "do": "type",
+      "text": "SPIKE-4: this call hits the usage limit."
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-4",
+      "kind": "error429",
+      "timeoutMs": 60000,
+      "label": "429 handed out"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after 429"
+    },
+    {
+      "do": "wait",
+      "for": "standin",
+      "marker": "SPIKE-4",
+      "kind": "text",
+      "timeoutMs": 120000,
+      "label": "after the limit: reply"
+    },
+    {
+      "do": "wait",
+      "for": "quiet",
+      "ms": 3000,
+      "timeoutMs": 20000
+    },
+    {
+      "do": "snap",
+      "label": "after limit"
+    },
+    {
+      "do": "mark",
+      "label": "ending"
+    },
+    {
+      "do": "type",
+      "text": "/exit"
+    },
+    {
+      "do": "wait",
+      "for": "exit",
+      "timeoutMs": 15000
+    },
+    {
+      "do": "http",
+      "url": "${server}/api/experimental/session/${session}/log",
+      "headers": {
+        "authorization": "${auth}"
+      },
+      "saveAs": "session-log.sse",
+      "afterExit": true,
+      "keep": 300
+    },
+    {
+      "do": "http",
+      "url": "${server}/api/session/${session}/message",
+      "headers": {
+        "authorization": "${auth}"
+      },
+      "saveAs": "session-messages.json",
+      "afterExit": true,
+      "keep": 300
+    }
+  ]
+}

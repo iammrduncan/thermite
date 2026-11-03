@@ -1,9 +1,7 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createControlApi } from "../../src/control/api.ts";
-import { ControlStore } from "../../src/control/store.ts";
-import { generateSigningKeys } from "../../src/core/commands.ts";
+import type { ControlStore } from "../../src/control/store/index.ts";
 import { callUsage } from "../../src/core/usage.ts";
+import { ADMIN, controlOnly, mcpClient, signIn } from "./control-stack.ts";
+import { ingestReport } from "./control-store.ts";
 
 /**
  * A research run as control sees it from a rig's events (goals 116 and 117), for control's tests:
@@ -15,39 +13,19 @@ import { callUsage } from "../../src/core/usage.ts";
  * with: its pages, MCP and the dashboard's command form.
  */
 
-export const ADMIN = "admin-token-abcdef";
+export { ADMIN };
 export const RIG_TOKEN = "t-a-abcdef";
-export const RUN = "/ui/campaigns/survey?run=rig-a%2Fs-1";
+export const RUN = "/ui/campaigns/survey/runs/s-1";
 const t0 = Date.now() - 10 * 3_600_000;
 export const at = (h: number) => new Date(t0 + h * 3_600_000).toISOString();
 export type Ev = { kind: string; subject: string; body: Record<string, unknown>; at?: string };
 
 export async function researchControl() {
-  const store = new ControlStore(":memory:");
-  const api = createControlApi(
-    store,
-    { admin: ADMIN, rigs: { "rig-a": RIG_TOKEN } },
-    generateSigningKeys().privateKeyPem,
-    { staleAfterMs: 180_000 },
-  );
-  const login = await api.request("/ui/login", {
-    method: "POST",
-    body: new URLSearchParams({ token: ADMIN }),
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-  });
-  const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-  const page = async (path: string) => (await api.request(path, { headers: { cookie } })).text();
+  const { store, control: api } = controlOnly({ tokens: { rigs: { "rig-a": RIG_TOKEN } } });
+  const ui = await signIn(api);
+  const { page } = ui;
   const mcp = async (tool: string, args: Record<string, unknown>) => {
-    const client = new Client({ name: "test", version: "1.0.0" });
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = new URL(String(input));
-      const headers = new Headers(init?.headers);
-      headers.set("authorization", `Bearer ${ADMIN}`);
-      return api.request(`${url.pathname}${url.search}`, { ...init, headers } as RequestInit);
-    };
-    await client.connect(
-      new StreamableHTTPClientTransport(new URL("http://control/mcp"), { fetch: fetchImpl }),
-    );
+    const client = await mcpClient(api);
     const r = (await client.callTool({ name: tool, arguments: args })) as {
       content: { text: string }[];
     };
@@ -55,8 +33,9 @@ export async function researchControl() {
     return JSON.parse(r.content[0]?.text ?? "null");
   };
   let id = 0;
-  const ingest = (events: Ev[]) =>
-    store.ingest({
+  /** The rig's report of these events, once control applied them from the events stream. */
+  const ingest = async (events: Ev[]) => {
+    await ingestReport(store, {
       rig: "rig-a",
       ledger_id: "ledger-a",
       cursor: id,
@@ -71,28 +50,17 @@ export async function researchControl() {
       })),
       summary: {},
     });
+  };
   /** A form as the page's script sends it: with fetch, asking for JSON. */
   const send = async (form: Record<string, string>) => {
-    const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page(RUN))?.[1] ?? "";
-    const r = await api.request("/ui/commands", {
-      method: "POST",
-      body: new URLSearchParams({ csrf, ...form }),
-      headers: {
-        cookie,
-        accept: "application/json",
-        "content-type": "application/x-www-form-urlencoded",
-      },
-    });
+    const csrf = ui.csrfOf(await page(RUN));
+    const r = await ui.post("/ui/commands", { csrf, ...form }, { accept: "application/json" });
     return { status: r.status, answer: JSON.parse(await r.text()) as Record<string, unknown> };
   };
   /** A form posted as the browser posts it, without the page's script: the answer as it comes. */
   const post = async (path: string, form: Record<string, string>) => {
-    const csrf = /name="csrf" value="([0-9a-f]+)"/.exec(await page(RUN))?.[1] ?? "";
-    return api.request(path, {
-      method: "POST",
-      body: new URLSearchParams({ csrf, ...form }),
-      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-    });
+    const csrf = ui.csrfOf(await page(RUN));
+    return await ui.post(path, { csrf, ...form });
   };
   return { store, page, mcp, ingest, send, post };
 }
@@ -153,7 +121,7 @@ export function researchRunEvents(): Ev[] {
   ) => [
     ev(
       "experiment_added",
-      { id, title, family: "explore", question: q, by: "planner", state: "queued" },
+      { id, title, direction: "explore", question: q, by: "planner", state: "queued" },
       h,
     ),
     ...(yld === undefined
@@ -177,7 +145,7 @@ export function researchRunEvents(): Ev[] {
       {
         trial: null,
         round,
-        agent: "panel",
+        agent: "review_panel",
         harness: "pi",
         provider: "p",
         model: "m",
@@ -309,7 +277,7 @@ export function researchRunEvents(): Ev[] {
       {
         id: "x-4",
         title: "read the driver notes",
-        family: "primary",
+        direction: "primary",
         question: 2,
         by: "owner",
         state: "queued",
@@ -434,7 +402,7 @@ export function researchRunEvents(): Ev[] {
       "journal_note",
       {
         id: 1,
-        by: "panel:reviewer-1",
+        by: "review_panel:reviewer-1",
         kind: "observation",
         text: "Question 2 rests on one site.",
         about: { type: "run", id: "s-1" },
@@ -444,7 +412,7 @@ export function researchRunEvents(): Ev[] {
     // The owner's message to the review panel, read and answered with review 2.
     ev(
       "agent_message",
-      { id: 5, to: "panel", text: "Judge question 2 by what sources can say." },
+      { id: 5, to: "review_panel", text: "Judge question 2 by what sources can say." },
       4.5,
     ),
     // Review 2: passed after three tries; question 2 at the best available; the owner accepted it.
@@ -487,12 +455,12 @@ export function researchRunEvents(): Ev[] {
       },
       5.7,
     ),
-    ev("agent_message_read", { message: 5, by: "panel" }, 5.71),
+    ev("agent_message_read", { message: 5, by: "review_panel" }, 5.71),
     ev(
       "advisor_answer",
       {
         message: 5,
-        role: "panel",
+        role: "review_panel",
         advisor: "reviewer-1",
         text: "Question 2 is the best available.",
       },
@@ -566,7 +534,7 @@ export function researchRunEvents(): Ev[] {
 
 /** The supervisor's Live lines for review 3: a failed try, with a line that holds markup. */
 export function reviewLiveLines(store: ControlStore) {
-  store.addLive(
+  store.liveLines.add(
     "rig-a",
     "sup-log",
     [

@@ -6,7 +6,7 @@ sidebar:
   order: 3
 ---
 
-Every hour in which something new happened, a rig's harness (its container that holds the judge and the agents) writes an **export**: the new attempts, champions, events and agents' notes since the last one. The rig's supervisor (its other container, the link to the outside) commits each export to git and pushes it to the **results repository**. That repository is the lasting copy of a rig's work, and [sending a champion to another rig](../campaigns/several-rigs.md) needs it. A rig without one sends its exports to control instead: see [Get a rig's results from control](exports-on-control.md).
+When a run ends, a rig's harness (its container that holds the judge and the agents) writes an **export** of it: the run's attempts, events, agents' notes and research folder. **Export** on a rig's or a run's page writes one when you ask: of a run alone, of what changed since the last one (the new attempts, champions, events and agents' notes), or a full one. Nothing is exported on a timer. The rig's supervisor (its other container, the link to the outside) commits each export to git and pushes it to the **results repository**. That repository is the lasting copy of a rig's work, and [sending a champion to another rig](../campaigns/several-rigs.md) needs it. A rig without one sends its exports to control instead: see [Get a rig's results from control](exports-on-control.md).
 
 This page sets up a results repository on your own git host, reached over SSH.
 
@@ -76,20 +76,20 @@ docker compose -f compose.yaml -f compose.results.yaml up -d   # or: podman comp
 
 On a Mac with Podman, skip the `chmod`: the supervisor can read the key at mode 600 there, and ssh refuses a key that others may read. With mode 644, the pushes fail with `push failed: Command failed: git … push …` and `@@@@@@@@@`, the start of ssh's `UNPROTECTED PRIVATE KEY FILE` warning. To fix it, run `chmod 600 .dev/results-ssh/deploy-key`, then `podman compose -f compose.yaml -f compose.results.yaml up -d --force-recreate supervisor`.
 
-From now on, name every override file you use, each with its own `-f`, on every `up`, such as `-f compose.yaml -f compose.tokens.yaml -f compose.results.yaml`. A file left out drops its settings. [Install Thermite on one machine](../install/one-machine.md#settings-and-override-files) lists every override file and gives the full command. For the second rig of the `two-rigs` profile, add the same lines for `supervisor-2`. Rigs can share one repository: each rig pushes only its own branches.
+From now on, name every override file you use, each with its own `-f`, on every `up`, such as `-f compose.yaml -f compose.tokens.yaml -f compose.results.yaml`. A file left out drops its settings. [The one-machine stack](../install/one-machine.md#settings-and-override-files) lists every override file and gives the full command. For the second rig of the `two-rigs` profile, add the same lines for `supervisor-2`. Rigs can share one repository: each rig pushes only its own branches.
 
 :::note[Without the key file]
 `THERMITE_RESULTS_KNOWN_HOSTS` works only together with `THERMITE_RESULTS_KEY_FILE`. With the key file but no known hosts file, the supervisor trusts the first key the host shows and keeps it in its volume. With no key file, git uses plain SSH defaults, and a host it doesn't know fails. There is no setting for an HTTPS token.
 :::
 
-The deploy key has a second use: the supervisor also fetches a campaign's project or kit over SSH with it, and with the known hosts file, when their source names no [Git access](../campaigns/private-repository.md). If you add this key to a project's or kit's repository for that, give it read access only there. For private repositories, a Git access is the usual way.
+The deploy key is for the results repository alone: the supervisor fetches a campaign's project or kit whose source names no Git access with no key. For a private project or kit, add a [Git access](../campaigns/private-repository.md).
 
 ## 4. See that pushes work
 
-Open the rig's page (**Rigs** in the sidebar, then the rig) and press **Export**, then **Export** under the choice, to export at once rather than wait for the hour. **Full export** also sends the ledger, the research archive and every run's research folder. Then, after a minute or two, press **refresh** in the status bar, the line along the bottom of the page:
+Open the rig's page (**Rigs** in the sidebar, then the rig) and press **Export**, then **Export** under the choice, to export at once rather than wait for a run to end. **Full export** also sends the ledger, the research archive and every run's research folder. Then, after a minute or two, press **refresh** in the status bar, the line along the bottom of the page:
 
 - The **Results** row of the **The rig** block says `N exports · pushed … ago`.
-- On your git host, the repository has two branches for the rig. If you can reach the repository from your computer, list them:
+- On your git host, the repository has the rig's branches: its attempts branch, and, once it has taken a full export, its ledger branch. If you can reach the repository from your computer, list them:
 
   ```sh
   git ls-remote ssh://git@git.example.com/lab/thermite-results.git
@@ -113,18 +113,18 @@ Each rig has two branches. Commits are made by `thermite <thermite@localhost>`.
 | Branch | Path | What it holds |
 | --- | --- | --- |
 | `thermite/<rig>/attempts` | `attempts/<attempt>.patch` and `.json` | Each attempt's change, and its record with the verdict |
-| | `champions/<run>/<seq>.patch` and `.json` | Each published champion, as a patch from the run's starting commit |
+| | `champions/<run>/<seq>.patch` and `.json` | Each published champion, as a patch from the run's starting commit: each export publishes every champion of a run that no export published yet |
 | | `events/<export>.jsonl` | The export's events, one per line. They include the text of your messages to the run's agents and advisors, and the advisors' answers |
 | | `journal/<export>.jsonl` | The [field notes](../../explanation/journals-and-knowledge.md) the agents recorded since the last export, one per line: the short notes the workers, the planner and the advisors keep as they work. Every export has this file, empty when there are none |
-| | `research-notes/<export>.jsonl` | The research notes recorded since the last export, each with the sources it cites. Only when there are some |
+| | `source-notes/<export>.jsonl` | The source notes recorded since the last export, each with the sources it cites. Only when there are some. Exports before v0.1.1 put them in `research-notes/` |
 | | `briefing/<export>.jsonl` | For each run created since the last export, its briefing: the background from past research that you picked when you started it ([Use past research in a new run](../campaigns/use-past-research.md)). Only when there is one |
-| | `knowledge/<export>.jsonl` | The runs' part of their campaigns' folders in the [knowledge base](../../reference/knowledge-base.md#the-export): each item added or changed since the last export, with its run, its writer and its time. Only when there are some |
+| | `knowledge/<export>.jsonl` | The runs' part of their campaigns' collections in the [knowledge base](../../reference/knowledge-base.md#the-export): each item added or changed since the last export, with its run, its writer and its time. Only when there are some |
 | | `exports/<export>.json` | The export's manifest: each file with its SHA-256 |
-| | `research/<run>/folder/…` | The [research folder](../../explanation/campaign-modes.md#research) of each run that finished in that export: a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation. The past research in the folder's `knowledge/` is left out: those records are in their own runs' exports |
-| | `research/<run>/folder-<export>/…` | Only from a full export: the research folder of every other run that has one, finished or not, as it stood then ([Normal and full exports](../../reference/exports.md#normal-and-full-exports)) |
-| | `research/<run>/…`, other files | Only from a full export (a full reset takes one): each run's archive of the web pages it fetched |
-| `thermite/<rig>/ledger` | `ledger.sqlite`, `manifest.json` | A copy of the rig's ledger, at most once a day, and with every full export. Its table of held-out results is left out. Its events, like `events/<export>.jsonl`, hold the judge's `held_out_checked` events: each held-out case's name, kind and value, never its inputs or output |
+| | `research/<run>/folder/…` | The [research folder](../../explanation/campaign-modes.md#research) of each run that finished in that export: a research run whose final report it holds, with its research paper as `paper.md` when it has one, or a hill-climb or goal run that was closed and recorded sources, claims or notes, or compacted a conversation. A `knowledge/` folder an older build left in it is left out: other runs' records are in their own runs' exports |
+| | `research/<run>/folder-<export>/…` | From a full export: the research folder of every other run that has one, finished or not, as it stood then ([Full exports](../../reference/exports.md#full-exports)). From a run's export, each run's at its end among them: that run's folder as it stood then ([A run's export](../../reference/exports.md#a-runs-export)) |
+| | `research/<run>/…`, other files | From a full export (a full reset takes one): each run's archive of the web pages it fetched. From a run's export: that run's |
+| `thermite/<rig>/ledger` | `ledger.sqlite`, `manifest.json` | A copy of the rig's ledger, with every full export (a full reset takes one). Its table of held-out results is left out. Its events, like `events/<export>.jsonl`, hold the judge's `held_out_checked` events: each held-out case's name, kind and value, never its inputs or output |
 
 The attempts branch only grows: a file already published there is never replaced. The supervisor commits only files that the export's manifest lists, with the SHA-256 it lists. An export that fails that check is never pushed, and the **Results** row says `export … refused: …`.
 
-How often the harness exports is its setting `THERMITE_EXPORT_MINUTES` (60 by default), and the **Exports** switch on **Edit rig** turns hourly exports off. **Export** on a rig's page works either way.
+Nothing is exported on a timer. The **Exports** switch on **Edit rig** turns each run's export at its end off: a run that ends then stays on the rig only, until the switch is on again. **Export** on a rig's or a run's page works either way ([When a rig exports](../../reference/exports.md#when-a-rig-exports)).

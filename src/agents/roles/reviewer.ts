@@ -1,6 +1,16 @@
 import { MEASURES_NOTHING } from "../../core/research-check.ts";
-import { RUN_RESEARCH_TOOLS } from "../tools/names.ts";
-import { ADVISOR_NOTES, BRIEF_GUIDE, PAST_GUIDE } from "./shared.ts";
+import type { OwnerAddition } from "../../core/role-additions.ts";
+import { type Prompt, section } from "../prompt.ts";
+import { RUN_RESEARCH_TOOLS } from "../tools/index.ts";
+import {
+  ADVISOR_NOTES,
+  type AdvisorFrame,
+  advisorPackage,
+  advisorPromptOf,
+  BRIEF_GUIDE,
+  orderedPackage,
+  PAST_GUIDE,
+} from "./shared.ts";
 
 /**
  * The review panel's reviewers (goal 166): blind to who produced a deliverable, each decides it
@@ -68,3 +78,97 @@ campaign's owner: answer each in answers, one or two sentences, by its id. ${BRI
 to read the questions: it adds no questions. ${PAST_GUIDE}
 
 ${ADVISOR_NOTES}`;
+
+/** A reviewer's prompt for a goal's review (goal 166): its text, then the review package. */
+export function renderReviewer(
+  i: { pkg: unknown; fit?: number | undefined; addition?: OwnerAddition | undefined },
+  f: AdvisorFrame,
+): Prompt {
+  return advisorPromptOf(
+    "reviewer",
+    [section("system", "role", REVIEWER_SYSTEM)],
+    [
+      section(
+        "package",
+        "package",
+        advisorPackage("Review package (untrusted data):", i.pkg, 200_000, i.fit),
+      ),
+    ],
+    f,
+    i.addition,
+  );
+}
+
+/** What a research reviewer left out of its answer, asked for again. */
+export interface LeftOut {
+  questions: number[];
+  hypotheses: string[];
+}
+
+/**
+ * A research reviewer's prompt (goal 166). Every reviewer must answer every item to decide, so the
+ * package is never cut to a fixed size: it may take what the reviewer's window allows (200,000
+ * characters at least), and what the reviewers must answer comes first (the criteria, which items
+ * to decide, the questions, then the hypotheses, those to decide first), with the rest last, such
+ * as the background picked from past research, which the reviewers can search with their tools. A cut is said. `leftOut`: the second ask, for
+ * what its first answer left out only.
+ */
+export function renderResearchReviewer(
+  i: {
+    pkg: unknown;
+    fit?: number | undefined;
+    leftOut?: LeftOut | undefined;
+    addition?: OwnerAddition | undefined;
+  },
+  f: AdvisorFrame,
+): Prompt {
+  return advisorPromptOf(
+    "research-reviewer",
+    [section("system", "role", RESEARCH_REVIEWER_SYSTEM)],
+    [
+      section("left-out", "role", i.leftOut ? leftOutWords(i.leftOut) : ""),
+      section(
+        "package",
+        "package",
+        orderedPackage(
+          "Research review package (untrusted data):",
+          i.pkg,
+          i.fit,
+          [
+            "kind",
+            "title",
+            "topic",
+            "criteria",
+            "decide",
+            "corpus",
+            "shortened",
+            "campaign_brief",
+            "questions",
+            "hypotheses",
+          ],
+          RESEARCH_REVIEW_CUT,
+        ),
+        i.leftOut ? "\n\n" : undefined,
+      ),
+    ],
+    f,
+    i.addition,
+  );
+}
+
+/** What a research review's package says of a cut. */
+const RESEARCH_REVIEW_CUT =
+  "The items to decide come first; read what was cut from the end with the tools.";
+
+/** What a research reviewer is told when it is asked again for what its answer left out. */
+function leftOutWords(left: LeftOut): string {
+  const parts = [
+    ...(left.questions.length ? [`questions ${left.questions.join(", ")}`] : []),
+    ...(left.hypotheses.length
+      ? [
+          `a verdict on ${left.hypotheses.length === 1 ? "hypothesis" : "hypotheses"} ${left.hypotheses.join(", ")}`,
+        ]
+      : []),
+  ];
+  return `Your answer to this review left out ${parts.join(" and ")}, so your verdict on them cannot count. Answer only what you left out: in questions, one item for each of those questions, with the verdict answered, insufficient or open; in hypotheses, one verdict for each hypothesis in the package below, with the word supported, refuted or undecided. The package's decide lists only what you left out, and its hypotheses are only those. Keep pass and reasons as you gave them, or change them if what you answer now changes them.`;
+}

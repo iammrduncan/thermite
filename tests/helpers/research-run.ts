@@ -5,14 +5,14 @@ import { join } from "node:path";
 import { parseContract } from "../../src/core/contract.ts";
 import { LocalRunner } from "../../src/harness/broker/runner.ts";
 import { ResearchFolder, SAVED_LANES_DIR } from "../../src/harness/research/folder.ts";
-import { Research, startingHypotheses } from "../../src/harness/research/research.ts";
+import { Research, startingHypotheses } from "../../src/harness/research/research/index.ts";
 import { researchFixture } from "./fixtures.ts";
 import { makeHarnessEnv } from "./harness-env.ts";
 
 /**
  * A research run with some of everything its workers record (goal 098's tests): two sources from a
  * tiny local "web", claims verified and draft for two questions, the author's hypothesis, a supported and a
- * draft finding, a research note, a report section, a digest, and a lane's files saved as the
+ * draft finding, a source note, a report section, a digest, and a lane's files saved as the
  * research folder saves them when a trial ends.
  */
 
@@ -46,6 +46,35 @@ export async function servePages(): Promise<{ base: string; close: () => Promise
 }
 
 /**
+ * A research run "r-1" on a fresh harness, with no web and no folder: its contract is the
+ * fixture's with `over`. The fetcher may reach this machine's addresses unless `allowPrivate` is
+ * false. `clock` is the harness's and the ledger's time, for a test that moves it by hand.
+ */
+export async function researchEnv(
+  over: Record<string, unknown> = {},
+  allowPrivate = true,
+  clock?: () => Date,
+) {
+  const env = makeHarnessEnv("rig-r", clock);
+  const parsed = parseContract({ ...researchFixture, ...over });
+  if (!parsed.ok) throw new Error(parsed.errors.join("; "));
+  const out = await env.service.applyCommand(
+    env.sign("assign_campaign", {
+      run: "r-1",
+      contract: parsed.contract,
+      contract_sha: parsed.sha,
+      imports: [],
+    }),
+  );
+  if (!(out.status === "applied" && out.accepted)) throw new Error(JSON.stringify(out));
+  const research = new Research(env.service.ledger, env.service.paths.stateDir, {
+    outboxDir: env.service.paths.outboxDir,
+    allowPrivate,
+  });
+  return { env, research, contract: parsed.contract };
+}
+
+/**
  * A research run on a fresh harness, with the tiny local web served. `contract` adds to (or
  * replaces) the fixture's contract fields; `assign` to the assignment's (ask_owner, say).
  */
@@ -74,11 +103,13 @@ export async function makeResearchRun(
   const { stateDir, scratchDir } = env.service.paths;
   const folder = new ResearchFolder({
     ledger: env.service.ledger,
+    outboxDir: env.service.paths.outboxDir,
     scratchRoot: join(scratchDir, "research"),
     stateRoot: join(stateDir, SAVED_LANES_DIR),
     runner: new LocalRunner(scratchDir),
   });
   const research = new Research(env.service.ledger, stateDir, {
+    outboxDir: env.service.paths.outboxDir,
     allowPrivate: true,
     onChange: (r) => void folder.sync(r),
   });
@@ -128,7 +159,7 @@ export async function fillResearch(r: Awaited<ReturnType<typeof makeResearchRun>
     why_it_matters: "Size matters for the archive.",
     supporting: [draft.claim],
   });
-  const note = research.addNote(run, "lane-1", "Look for a second site that says the same.", [
+  const note = research.addSourceNote(run, "lane-1", "Look for a second site that says the same.", [
     a.source,
   ]);
   research.updateSection(run, "lane-1", "synthesis", "Two sites so far.\nBoth agree.");

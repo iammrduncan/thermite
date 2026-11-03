@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { CommandKind } from "../../../src/core/commands.ts";
-import { parseContract, type ResearchContract } from "../../../src/core/contract.ts";
-import { indexEvent, type KbFields } from "../../../src/core/kb-index.ts";
-import { HYPOTHESIS_STATUS, Research } from "../../../src/harness/research/research.ts";
-import { researchPackage } from "../../../src/harness/research/review.ts";
-import { hillClimbFixture, researchFixture } from "../../helpers/fixtures.ts";
+import type { ResearchContract } from "../../../src/core/contract.ts";
+import { indexEvent, type KbFields } from "../../../src/core/kb/index.ts";
+import { HYPOTHESIS_STATUS } from "../../../src/harness/research/research/index.ts";
+import { researchPackage } from "../../../src/harness/research/review/index.ts";
+import { hillClimbFixture } from "../../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../../helpers/harness-env.ts";
+import { researchEnv } from "../../helpers/research-run.ts";
 
 /**
  * Goal 117: a research run's hypotheses change status by command. The owner (or an operator for
@@ -15,25 +16,10 @@ import { makeHarnessEnv } from "../../helpers/harness-env.ts";
  * promotions and retirements go through the same function (research-planner.test.ts).
  */
 
-async function researchEnv() {
-  const env = makeHarnessEnv("rig-r");
-  const parsed = parseContract({
-    ...researchFixture,
+async function hypothesisEnv() {
+  const { env, research, contract } = await researchEnv({
     questions: ["First?", "Second?"],
     hypotheses: ["Stateless workers make long runs safe."],
-  });
-  if (!parsed.ok) throw new Error(parsed.errors.join("; "));
-  const out = await env.service.applyCommand(
-    env.sign("assign_campaign", {
-      run: "r-1",
-      contract: parsed.contract,
-      contract_sha: parsed.sha,
-      imports: [],
-    }),
-  );
-  assert.ok(out.status === "applied" && out.accepted, JSON.stringify(out));
-  const research = new Research(env.service.ledger, env.service.paths.stateDir, {
-    allowPrivate: true,
   });
   const author = String(
     (
@@ -66,13 +52,13 @@ async function researchEnv() {
     command,
     statusOf,
     events,
-    contract: parsed.contract as ResearchContract,
+    contract: contract as ResearchContract,
   };
 }
 
 describe("a hypothesis's status by command (goal 117)", () => {
   test("the owner promotes one of the pool: the review panel must judge it; then returns and retires it", async () => {
-    const s = await researchEnv();
+    const s = await hypothesisEnv();
     const pool = s.research.proposeHypothesis("r-1", "lane-1", {
       text: "Caches help long runs most.",
       question: 1,
@@ -205,7 +191,7 @@ describe("a hypothesis's status by command (goal 117)", () => {
   });
 
   test("refused in words: the author's, a merged one, an unknown one, another run's mode, and an agent's token", async () => {
-    const s = await researchEnv();
+    const s = await hypothesisEnv();
     const a = s.research.proposeHypothesis("r-1", "lane-1", { text: "Caches help." });
     const b = s.research.proposeHypothesis("r-1", "lane-1", { text: "Contexts hurt." });
     s.research.reviseHypothesis("r-1", "lane-2", { id: b.hypothesis, text: "caches help" });

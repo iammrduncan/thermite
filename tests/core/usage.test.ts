@@ -178,13 +178,13 @@ describe("model usage sums", () => {
   test("by agent and model: each agent's calls to each model, in the agents' order, then most tokens first", () => {
     const r = usageReport(
       [
-        row({ agent: "combiner", model: "m-3" }),
+        row({ agent: "merged_by", model: "m-3" }),
         row({ agent: "teachers", model: "m-2", tokens_in: 10 }),
         row({ agent: "teachers", model: "m-1", tokens_in: 5000 }),
         row({ agent: "workers", harness: "codex", model: "m-1" }),
         row({ agent: "workers", model: "m-1", tokens_in: 9000 }),
       ],
-      { kind: "run", run: "run-1", rig: null },
+      { kind: "run", run: "run-1" },
       "all",
       null,
     );
@@ -195,7 +195,7 @@ describe("model usage sums", () => {
         ["workers", "Workers", "codex", "m-1", 1],
         ["teachers", "Teachers", "pi", "m-1", 1],
         ["teachers", "Teachers", "pi", "m-2", 1],
-        ["combiner", "Teachers (merged by)", "pi", "m-3", 1],
+        ["merged_by", "Teachers (merged by)", "pi", "m-3", 1],
       ],
     );
     assert.equal(r.tz, "UTC");
@@ -203,7 +203,7 @@ describe("model usage sums", () => {
 
   test("a report: by agent in the agents' order, by model most tokens first, a campaign's runs with their shares", () => {
     const rows = [
-      row({ agent: "panel", tokens_in: 100, tokens_out: 0 }),
+      row({ agent: "review_panel", tokens_in: 100, tokens_out: 0 }),
       row({ agent: "workers", run: "run-2", rig: "rig-2", tokens_in: 2900, tokens_out: 100 }),
       row({ agent: "planner", model: "m-2", tokens_in: 900, tokens_out: 0 }),
     ];
@@ -213,7 +213,7 @@ describe("model usage sums", () => {
       [
         ["workers", "Workers"],
         ["planner", "Planner"],
-        ["panel", "Review panel"],
+        ["review_panel", "Review panel"],
       ],
     );
     assert.deepEqual(

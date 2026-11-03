@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { parseContract } from "../../src/core/contract.ts";
-import { createHarnessApi } from "../../src/harness/api.ts";
+import { createHarnessApi } from "../../src/harness/api/index.ts";
 import { GitError, patchBytes, readableDiff, treeFile, treeFiles } from "../../src/harness/git.ts";
 import { researchFixture } from "../helpers/fixtures.ts";
 import { makeHarnessEnv } from "../helpers/harness-env.ts";
@@ -38,7 +38,7 @@ describe("the teachers' reads of a run's code and evidence (goal 081)", () => {
     const { env, wrong, fast, get } = await judged();
     const files = await get("/v1/code/files?run=js-1");
     assert.equal(files.status, 200);
-    const champion = env.ledger.currentChampion("js-1");
+    const champion = env.ledger.champions.current("js-1");
     assert.equal(files.body.commit, champion.commit_sha);
     assert.deepEqual(
       (files.body.files as string[]).map((f) => f.replace(/ \(\d+ bytes\)$/, "")).sort(),
@@ -213,7 +213,7 @@ describe("the teachers' reads of a run's code and evidence (goal 081)", () => {
       assert.equal(r.status, 400, path);
       assert.equal(
         body.error,
-        "run r-1 is a research run: it has no code to read. Its work is the sources, claims and notes in its research folder",
+        "run r-1 is a research run: it has no code to read. Its work is the sources, claims and source notes in its research folder",
         path,
       );
     }
