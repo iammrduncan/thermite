@@ -20,6 +20,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Fixes
 
+- A research run's clock leaves out the time the harness did not run: the host asleep, its container paused or stopped, or a crash, for 2 minutes or more. The harness records each such gap as a `harness_gap` event, found by a new `awake` loop on a 10-second timer while it runs, and at its start from the time since the ledger's newest event. Before, a run waiting out a provider's limit on a laptop could reach its `max_duration` while the host slept (issue #45; from Mahdi3Bani's pull request #46).
 - A rig's first start loses no live line: the supervisor publishes them from the moment control holds the rig's first report, on which control accepts its key. Before, the lines published first were refused for a key not yet accepted, and lost (issue #27; from Mahdi3Bani's pull request #35).
 
 ### Dependencies
