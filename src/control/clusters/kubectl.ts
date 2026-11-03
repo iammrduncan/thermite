@@ -67,6 +67,8 @@ export async function kubectl(
           stderr: Buffer.concat(err).toString(),
         });
       });
+      // kubectl may exit before it reads its input: its own words say why.
+      child.stdin.on("error", () => undefined);
       child.stdin.end(stdin ?? "");
     });
   } finally {

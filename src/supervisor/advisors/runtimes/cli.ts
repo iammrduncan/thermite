@@ -188,7 +188,9 @@ function runHere(c: Command): Promise<Ran> {
     // A leftover grandchild holding the pipes cannot keep the call open: after the command
     // exits, what it printed within two seconds is its answer.
     child.on("exit", () => setTimeout(() => finish(), 2000).unref());
-    // A command-line agent has no answer tool: its prompt ends with the answer's shape.
+    // A command-line agent has no answer tool: its prompt ends with the answer's shape. One that
+    // exits before it reads it fails on its own words, which the answer shows.
+    child.stdin.on("error", () => undefined);
     child.stdin.end(c.stdin);
   });
 }

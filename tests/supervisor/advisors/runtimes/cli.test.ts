@@ -73,6 +73,25 @@ const Answer = z.object({
   }),
 });
 
+describe("an advisor's command run by the supervisor itself", () => {
+  test("a command that exits before it reads its prompt is no answer, and never stops the supervisor", async () => {
+    const kept = {
+      socket: process.env[ADVISOR_RUNS_ENV.socket],
+      root: process.env[ADVISOR_RUNS_ENV.root],
+    };
+    delete process.env[ADVISOR_RUNS_ENV.socket];
+    delete process.env[ADVISOR_RUNS_ENV.root];
+    try {
+      // A prompt past a pipe's buffer: the command is gone before the supervisor ends writing it.
+      const r = await runCli({ argv: ["sh", "-c", "exit 0"] }, "x".repeat(2_000_000), Answer);
+      assert.match(r.error ?? "", /no valid answer/);
+    } finally {
+      if (kept.socket !== undefined) process.env[ADVISOR_RUNS_ENV.socket] = kept.socket;
+      if (kept.root !== undefined) process.env[ADVISOR_RUNS_ENV.root] = kept.root;
+    }
+  });
+});
+
 describe("an advisor's command through the advisors' runner", () => {
   test("it runs in a fresh folder of the runner's root, with only its prompt, settings, token and files; the folder goes after", async () => {
     const { root } = await runner();

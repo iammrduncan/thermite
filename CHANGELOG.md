@@ -158,6 +158,7 @@ v0.1.1 changes how a rig and control talk, and some names that callers send. Rea
 
 ### Rigs
 
+- A program that exits before it reads its input no longer stops the part that started it: an advisor's command-line program in the supervisor, and ssh, kubectl and git in control and the supervisor. The call fails on the program's own words instead.
 - The harness holds its model routes' keys in memory only: `model-route.json` and `model-route-planner.json` in its state folder now name the route, its model and its revision, and a file an older harness wrote loses its key at the harness's first start. After a restart, the harness awaits its routes, and no plan or trial starts until the supervisor hands them again, within `THERMITE_MODEL_ROUTE_POLL_SECONDS` (30 by default); that hand-over records no new route and runs no model check.
 - A baseline job's kept files are written anew in the judge's state, so they take the checkers' group: a copy kept the judge's own group, and a later calibration's check could not read them (`Permission denied`).
 - A rig check's row shows a result that came after a refused request, not the refusal: a new model route starts the rig's model check by itself, and a check asked meanwhile is refused while it runs.

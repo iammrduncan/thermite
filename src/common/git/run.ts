@@ -77,7 +77,11 @@ function failure(args: readonly string[], o: GitOptions, err: unknown): GitError
 export async function git(args: string[], o: GitOptions = {}): Promise<Buffer> {
   try {
     const child = run("git", args, { ...settings(o), encoding: "buffer" });
-    if (o.input !== undefined) child.child.stdin?.end(o.input);
+    if (o.input !== undefined) {
+      // Git may exit before it reads its input: its own words say why.
+      child.child.stdin?.on("error", () => undefined);
+      child.child.stdin?.end(o.input);
+    }
     return (await child).stdout;
   } catch (err) {
     throw failure(args, o, err);
