@@ -168,6 +168,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      # The script pulls nothing: the message bus's image, as compose.yaml pins it.
+      - run: docker pull "$(grep -m1 -oE 'docker\.io/library/nats:[^ ]+' compose.yaml)"
       - run: node scripts/acceptance/rig-image.mjs
         env:
           COMPOSE: docker compose
@@ -187,6 +189,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      # The script pulls nothing: the message bus's image, as compose.yaml pins it.
+      - run: docker pull "$(grep -m1 -oE 'docker\.io/library/nats:[^ ]+' compose.yaml)"
       - run: node scripts/acceptance/runpod.mjs
         env:
           COMPOSE: docker compose

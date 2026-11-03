@@ -334,7 +334,18 @@ try {
     commands.map((c) => `${c.kind}:${c.status}`),
   );
 
-  // Control down: rigs keep researching; reports catch up afterwards.
+  // Control down: rigs keep researching; reports catch up afterwards. The view is taken once the
+  // run's baseline is measured and the judge is idle: a job it finishes while control is down
+  // changes the view, and only the attempt below may.
+  await until(
+    "the baseline measured and the judge idle",
+    async () => {
+      const v = await view("local-1");
+      return v.runs?.[0]?.baseline_waiting === false && !v.judge?.now && !v.judge?.queued?.length;
+    },
+    600_000,
+    3000,
+  );
   const before = await view("local-1");
   dcp("stop", "control");
   const attempt = submit(

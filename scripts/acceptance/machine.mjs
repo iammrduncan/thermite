@@ -26,7 +26,15 @@ devInit();
 const env = { THERMITE_CONTROL_PUBLIC_URL: "http://control:8800" };
 console.log("compose: build and start control; build the stand-in machine");
 dc(env, "up", "-d", "--build", "control", "nats");
-run("build", "-q", "-t", "thermite-test-machine", "tests/stand-ins/machine");
+run(
+  "build",
+  "-q",
+  "-f",
+  "tests/stand-ins/machine/Containerfile",
+  "-t",
+  "thermite-test-machine",
+  "tests/stand-ins/machine",
+);
 try {
   run("rm", "-f", box);
 } catch {}

@@ -148,12 +148,15 @@ function answerObjects(out: string): unknown[] {
   return [...whole.reverse(), ...lines.reverse()];
 }
 
-/** A schema's problems with a value, in a few words: the first three, each with its place. */
-const problemsOf = (e: z.ZodError) =>
-  e.issues
+/**
+ * A schema's problems with a value, in a few words: the first three, each with its place. A
+ * schema that names none (one with only safeParse) says only that it does not fit.
+ */
+const problemsOf = (e: z.ZodError | undefined) =>
+  (e?.issues ?? [])
     .slice(0, 3)
     .map((i) => `${i.path.join(".") || "the answer"}: ${i.message}`)
-    .join("; ");
+    .join("; ") || "it does not fit the role's answer";
 
 /**
  * An advisor's answer in a text: the first of its JSON objects (answerObjects) that the call's
