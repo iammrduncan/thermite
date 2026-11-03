@@ -108,6 +108,7 @@ export async function runCliHarness<S extends z.ZodType>(
         code: t.code,
         research: t.research,
         paper: t.paper,
+        said: t.said,
       });
     if (!native)
       proxy = await serveAdvisorModel(

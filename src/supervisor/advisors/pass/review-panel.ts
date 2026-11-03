@@ -92,6 +92,8 @@ export async function answerReviews(ctx: AdviseContext): Promise<void> {
         const calls = await Promise.all(
           panel.map((runtime) =>
             reviewOne({
+              // Its headless tool calls on Live (goal 188).
+              ...(cfg.live && pkg.run ? { live: { run: pkg.run, line: cfg.live } } : {}),
               runtime,
               pkg: { ...pkg, owner_messages: owner },
               ...(kb ? { kb } : {}),

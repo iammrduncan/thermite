@@ -11,7 +11,7 @@ import {
   GAP_KINDS,
 } from "../../core/api/harness/research.ts";
 import { additionIn, type RunAdditions } from "../../core/role-additions.ts";
-import type { AdvisorKeeper, AdvisorResult } from "./call.ts";
+import type { AdvisorKeeper, AdvisorLiveSink, AdvisorResult } from "./call.ts";
 import { type AdvisorRuntime, packageFit } from "./config.ts";
 import { leniently } from "./review-panel.ts";
 import { runAdvisor } from "./run.ts";
@@ -152,6 +152,8 @@ export function synthesisProblems(
  * the others: the harness refuses that card alone, and it is asked again at the next round.
  */
 export async function synthesizeCards(input: {
+  /** Where the call's headless tool calls go on Live, under its own source (goal 188). */
+  live?: { run: string; line: AdvisorLiveSink } | undefined;
   runtime: AdvisorRuntime;
   pkg: unknown;
   research?: AdvisorResearch | undefined;
@@ -165,6 +167,7 @@ export async function synthesizeCards(input: {
   let refusedOnce = false;
   return runAdvisor({
     runtime: input.runtime,
+    ...(input.live ? { live: input.live } : {}),
     prompt: (f) =>
       renderSynthesizer(
         {

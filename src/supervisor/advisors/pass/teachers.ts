@@ -171,6 +171,8 @@ export async function teachRuns(ctx: AdviseContext): Promise<void> {
           // With the campaign's own context settings, when it sets any (goal 070).
           config: await configFor(inst.id),
           run: inst.id,
+          // Each teacher's and the merged by model's headless tool calls on Live (goal 188).
+          ...(cfg.live ? { live: cfg.live } : {}),
           brief,
           why: ideasNow,
           keeper: keeperFor(inst.id),

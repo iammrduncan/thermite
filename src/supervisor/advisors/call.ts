@@ -37,6 +37,11 @@ export interface AdvisorCall<S extends z.ZodType> {
   later?: ((p: SentPrompt) => void) | undefined;
   schema: S;
   answerSchema: TSchema;
+  /**
+   * Where a headless call's work goes on Live (goal 188): its run, and the sink of the
+   * supervisor's lines. Each tool call goes there under the advisor's own source.
+   */
+  live?: { run: string; line: AdvisorLiveSink } | undefined;
   tools?: AdvisorTools | undefined;
   /** Where the conversation is kept before each compaction (goal 070); none: not kept. */
   keeper?: AdvisorKeeper | undefined;
@@ -134,7 +139,20 @@ export interface AdvisorKeeper {
 }
 
 /** Tools an advisor may use: read only, no shell, no files. */
+/** Where an advisor's lines go on Live, under its own source (goal 188). */
+export type AdvisorLiveSink = (l: {
+  source: string;
+  kind: "tool";
+  text: string;
+  run: string;
+}) => void;
+
 export interface AdvisorTools {
+  /**
+   * Told of each tool call Thermite's tools server answers for the call, with its arguments
+   * (goal 188): a headless call's work on Live, as a terminal's transcript shows it.
+   */
+  said?: ((tool: string, args: unknown) => void) | undefined;
   brief?: () => Promise<unknown>;
   fetchUrl?: (url: string) => Promise<unknown>;
   /**

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { renderFinalWriter } from "../../agents/roles/index.ts";
 import { PAPER_EXPERIMENT_FIELDS, PAPER_MAX } from "../../core/api/harness/research.ts";
 import { additionIn, type RunAdditions } from "../../core/role-additions.ts";
-import type { AdvisorKeeper, AdvisorResult } from "./call.ts";
+import type { AdvisorKeeper, AdvisorLiveSink, AdvisorResult } from "./call.ts";
 import { type AdvisorRuntime, packageFit } from "./config.ts";
 import { runAdvisor } from "./run.ts";
 import type { AdvisorKb, AdvisorPaper, AdvisorResearch } from "./tools/index.ts";
@@ -58,6 +58,8 @@ const WriterAnswerSchema = Type.Object({
  * revise within the call.
  */
 export async function writePaper(input: {
+  /** Where the call's headless tool calls go on Live, under its own source (goal 188). */
+  live?: { run: string; line: AdvisorLiveSink } | undefined;
   runtime: AdvisorRuntime;
   pkg: unknown;
   paper: AdvisorPaper;
@@ -73,6 +75,7 @@ export async function writePaper(input: {
 }): Promise<AdvisorResult<WriterAnswer>> {
   return runAdvisor({
     runtime: input.runtime,
+    ...(input.live ? { live: input.live } : {}),
     prompt: (f) =>
       renderFinalWriter(
         {
