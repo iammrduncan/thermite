@@ -9,6 +9,7 @@ import { after, test } from "node:test";
 import {
   type CallLink,
   claudeProgram,
+  stillTyped,
   type TrialConsole,
   type TurnDelivery,
   terminalCall,
@@ -359,4 +360,21 @@ test("a message the program never takes ends the call with why, never a wait for
     /Claude Code did not take its message: no turn began in its session log within 0\.4 s of it being typed in\. Its screen shows: Welcome to the stand-in \| >$/m,
   );
   assert.ok(Date.now() - began < 8_000, "it ended, not waited");
+});
+
+test("a message the screen still shows in the program's input gets one more Enter; any other screen gets none (goal 188)", () => {
+  const message = 'Review the run. Answer with JSON only: {"pass": true, "reasons": "why"}';
+  // Wrapped where the screen wraps it, with the input's frame around it.
+  assert.equal(
+    stillTyped(
+      ['│ Review the run. Answer with JSON only: {"pass": tr', '│ ue, "reasons": "why"}   │'],
+      message,
+    ),
+    true,
+  );
+  // Codex shows a long paste as a placeholder.
+  assert.equal(stillTyped(["› [Pasted Content 18342 chars]"], "x".repeat(18_342)), true);
+  // A menu, or a screen that moved on, gets no key.
+  assert.equal(stillTyped(["Allow this command?", "1. Yes  2. No"], message), false);
+  assert.equal(stillTyped(["Welcome to the stand-in", ">"], message), false);
 });

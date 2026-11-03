@@ -66,6 +66,12 @@ const READY_MAX_MS = 20_000;
  * the program never took it, and the run fails (goal 183).
  */
 const TAKE_MS = 60_000;
+/**
+ * After this long without a turn, a message whose end the screen still shows in the program's
+ * input is sent again with one Enter: Codex once kept a long message in its input box after its
+ * Enter (goal 188's roll). A screen that shows anything else, such as a menu, gets no key.
+ */
+const ENTER_AGAIN_MS = 15_000;
 /** The screen's last lines a message never taken shows in its reason. */
 const SCREEN_SHOWN = 6;
 /** The lines above the screen kept at the end, for the live view after the trial. */
@@ -172,6 +178,8 @@ export interface RoleTerminalDeps<T extends CliTally> {
   tally: T;
   /** How long a turn may take to begin once its message is typed in (tests make it short). */
   takeMs?: number | undefined;
+  /** How long before one more Enter for a message still in its input (tests make it short). */
+  enterAgainMs?: number | undefined;
 }
 
 /** One role's program in its own terminal: one host at a time, for as long as its run lasts. */
@@ -324,7 +332,7 @@ export class RoleTerminal<T extends CliTally> {
       if (!gone) throw err;
       return;
     }
-    await this.took(h);
+    await this.took(h, text);
   }
 
   /**
@@ -367,11 +375,21 @@ export class RoleTerminal<T extends CliTally> {
    * that never begins. No key is sent to try again: its screen may be a menu that takes any key
    * as an answer.
    */
-  private async took(h: Terminal): Promise<void> {
+  private async took(h: Terminal, text: string): Promise<void> {
     const waiting = () =>
       !this.began && !this.stopping && this.host === h && this.ends !== undefined && !this.limit;
     const takeMs = this.o.takeMs ?? TAKE_MS;
     const until = Date.now() + takeMs;
+    const again = Date.now() + Math.min(this.o.enterAgainMs ?? ENTER_AGAIN_MS, takeMs);
+    while (waiting() && Date.now() < again) await sleep(Math.min(250, takeMs));
+    // Still in its input box: one more Enter sends it.
+    if (waiting()) {
+      const screen = await h.screen().catch(() => undefined);
+      if (screen && stillTyped(screen.lines, text)) {
+        log("agents", `${this.p.name} kept its message in its input: Enter again`, {}, "warn");
+        await h.keys(["enter"]).catch(() => undefined);
+      }
+    }
     while (waiting() && Date.now() < until) await sleep(Math.min(250, takeMs));
     if (!waiting()) return;
     // What its screen shows then, in the words: what the program put in the message's way.
@@ -666,4 +684,18 @@ export class RoleTerminal<T extends CliTally> {
       });
     }
   }
+}
+
+/**
+ * Whether a screen still shows a message typed in, in the program's input: the message's end
+ * (its last 40 characters, spaces aside, wherever the screen wraps them), or the placeholder
+ * Codex shows in place of a long paste.
+ */
+export function stillTyped(lines: readonly string[], text: string): boolean {
+  const flat = (s: string) => s.replace(/\s+/g, "");
+  const shown = flat(lines.join(""));
+  const end = flat(text).slice(-40);
+  return (
+    (end.length > 0 && shown.includes(end)) || /\[Pasted Content \d+ chars\]/.test(lines.join("\n"))
+  );
 }
