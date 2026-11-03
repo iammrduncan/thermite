@@ -19,7 +19,7 @@ const picks = (key: string) => {
 <nav class="fields" aria-label="Use cases by field" data-reveal>
   {
     withCases.map((f) => (
-      <a href={`/use-cases/?field=${f.key}#cases`}>
+      <a href={`/use-cases/${f.key}/`}>
         <FieldIcon name={f.key} />
         <span>{f.short ?? f.label}</span>
       </a>
