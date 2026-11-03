@@ -21,10 +21,14 @@ describe("what the terminal host types", () => {
     assert.equal(typedText("plain words", true), "plain words");
   });
 
-  test("text with a line break or a tab is a bracketed paste, once the program asks for one", () => {
+  test("text with a line break or a tab, or a long text, is a bracketed paste, once the program asks for one", () => {
     assert.equal(typedText("one\ntwo", true), "\x1b[200~one\ntwo\x1b[201~");
     assert.equal(typedText("a\tb", true), "\x1b[200~a\tb\x1b[201~");
     assert.equal(typedText("one\ntwo", false), "one\ntwo");
+    // A long text with no line break is a paste too: a program reads it in at once (goal 188).
+    const line = `{"brief":"${"x".repeat(300)}"}`;
+    assert.equal(typedText(line, true), `\x1b[200~${line}\x1b[201~`);
+    assert.equal(typedText(line, false), line);
     // Text can't end the paste early: its Esc is gone.
     assert.equal(typedText("x\n\x1b[201~y", true), "\x1b[200~x\n[201~y\x1b[201~");
   });
