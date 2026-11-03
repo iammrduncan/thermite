@@ -25,7 +25,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Dependencies
 
-- Pi 1.4.0 (was 1.3.0) for the workers, the planner and the advisors in Pi, and pi-tui 1.4.0 for the Pi view; the MCP TypeScript SDK 1.32.2 and Hono 4.13.14. Thermite's patch of pi-ai's streaming tool-call parse (past 16 KiB, the arguments are parsed when the call ends) applies to 1.4.0 unchanged: its parser is 1.3.0's. The checks use Biome 2.6.4 (was 2.5.15). The docs site is built with Astro 7.4.4 and Starlight 0.42.7.
+- Pi 1.4.0 (was 1.3.0) for the workers, the planner and the advisors in Pi, and pi-tui 1.4.0 for the Pi view, which brings marked-cjk-friendly 0.1.2; the MCP TypeScript SDK 1.32.2 and Hono 4.13.14. Thermite's patch of pi-ai's streaming tool-call parse (past 16 KiB, the arguments are parsed when the call ends) applies to 1.4.0 unchanged: its parser is 1.3.0's. The checks use Biome 2.6.4 (was 2.5.15). The docs site is built with Astro 7.4.4 and Starlight 0.42.7.
 - The workflows use actions/checkout 7, actions/upload-artifact 7, docker/login-action 4 and docker/metadata-action 6, each pinned by its commit.
 
 ## [0.1.1] 2026-11-03: the message bus, agents in their own terminal, and the knowledge base
