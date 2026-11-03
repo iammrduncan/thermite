@@ -69,6 +69,28 @@ You see four lines, one each for `control`, `nats`, `harness` and `supervisor`, 
 Read that container's log, for example `docker compose logs harness` (or `podman compose logs harness`). If `up` stopped with `address already in use`, another program has port 8800: see [The port is already in use](../how-to/operate/troubleshoot.md#the-port-is-already-in-use). If it stopped with `'name' does not match any of the regexes`, the compose program is the old Compose v1: see [how to replace it](../how-to/operate/troubleshoot.md#compose-wont-start-name-does-not-match-any-of-the-regexes). [Troubleshoot](../how-to/operate/troubleshoot.md) has the other common problems. It starts with `thermite doctor`, which checks Docker or Podman, the port, disk and the clock, and says how to fix each problem it finds.
 :::
 
+## If you are using Tailscale
+
+If this computer is on your [Tailscale](https://tailscale.com) network, Tailscale can serve Thermite's dashboard over HTTPS at the computer's name there, to your other devices and machines, with no proxy of your own. Skip this section if you don't use Tailscale: the steps below work on this computer alone.
+
+1. In Tailscale's admin console, under **DNS**, turn on **MagicDNS** and **HTTPS Certificates**, if they are off.
+2. Serve control, which compose shows only to this computer, at port 8800 (on Linux, with `sudo`):
+
+   ```sh
+   tailscale serve --bg 8800
+   ```
+
+   It prints the address: `https://`, the computer's name on your tailnet, and your tailnet's domain. Any device on your tailnet now opens the dashboard there, and only your tailnet reaches it: `serve` is not `funnel`, which would put it on the internet.
+3. Give control that address, so its pages, the command line and the rigs you add later use it. In `.env`, next to `compose.yaml`:
+
+   ```sh title=".env (part)"
+   THERMITE_CONTROL_PUBLIC_URL=https://<the address tailscale serve printed>
+   ```
+
+   Then run `docker compose up -d` (or `podman compose up -d`) again.
+
+`tailscale serve status` shows what Tailscale serves, and `tailscale serve --https=443 off` stops it. [Add a second machine](second-machine.md) uses this address for the machines you add.
+
 ## 4. Sign in
 
 1. Show your **owner's token**, the token that lets you steer everything, and copy it. The sign-in page calls it the **Admin token**:

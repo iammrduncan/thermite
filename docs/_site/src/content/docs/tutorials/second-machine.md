@@ -15,11 +15,11 @@ It takes about thirty minutes, most of it the second machine downloading the ima
 - **Thermite on your first machine**, from [Install on one machine](first-run.md), and a campaign from [Run your first campaign](agents-with-a-free-model.md).
 - **A second machine:** Linux with systemd, which you reach over SSH. It must reach your first machine, and pull the release's images from `ghcr.io`.
 - **An account on it for control.** Make one with `sudo useradd -m thermite`. For control to install Podman there, give it sudo without a password: add the line `thermite ALL=(ALL) NOPASSWD: ALL` with `sudo visudo -f /etc/sudoers.d/thermite`. You can remove that file once the installs are done.
-- **A name for your first machine** that the second one reaches, and a reverse proxy on the first machine that serves HTTPS under it, such as Caddy or nginx. Compose shows control only to the first machine itself, at `127.0.0.1:8800`.
+- **A name for your first machine** that the second one reaches, and a reverse proxy on the first machine that serves HTTPS under it, such as Caddy or nginx. Compose shows control only to the first machine itself, at `127.0.0.1:8800`. With [Tailscale](https://tailscale.com) on both machines, Tailscale is the name and the proxy: see [If you are using Tailscale](first-run.md#if-you-are-using-tailscale).
 
 ## 1. Let the second machine reach control
 
-1. Point your reverse proxy at `127.0.0.1:8800`, under the name, such as `control.example.com`. Have it send `X-Forwarded-Proto: https` and take request bodies of up to 90 MB.
+1. Point your reverse proxy at `127.0.0.1:8800`, under the name, such as `control.example.com`. Have it send `X-Forwarded-Proto: https` and take request bodies of up to 90 MB. With Tailscale, `tailscale serve --bg 8800` does this, and the name is the machine's on your tailnet, the address it prints ([If you are using Tailscale](first-run.md#if-you-are-using-tailscale)).
 2. In `.env`, next to `compose.yaml` on your first machine, add the address and open the message bus's port to other machines:
 
    ```sh title=".env (part)"
@@ -40,7 +40,7 @@ It takes about thirty minutes, most of it the second machine downloading the ima
    nc -zv control.example.com 4222
    ```
 
-   `curl` answers `{"ok":true,"bus":"connected","degraded":false}`, and `nc` connects. If your firewall blocks port 4222, open it to the second machine: a rig talks to control on that port.
+   `curl` answers `{"ok":true,"bus":"connected","degraded":false}`, and `nc` connects. If your firewall blocks port 4222, open it to the second machine: a rig talks to control on that port. With Tailscale, publish the bus on the first machine's tailnet address only, so that nothing outside your tailnet reaches it: `THERMITE_NATS_PUBLISH=<address>:4222`, with the address `tailscale ip -4` prints.
 
 ## 2. Add the machine
 
