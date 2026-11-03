@@ -92,6 +92,7 @@ The owner, 2026-10-27: "write a single .goal that outlines how to complete the a
 - 2026-10-30 03:51 UTC, owner, in step 10: control keeps a list of addresses and ports that cluster rigs' harnesses may reach beside the internet ("Allow control to define a list of addresses/ports that rigs can access"); control writes it into each rig's network rules and accepts a pre-made slot whose rules open exactly listed ones. The other answers of step 10 are recorded privately, apart from those that shape the product: bus only (goal [168](_completed/168-message-bus.goal)) and the knowledge base's orphan files (goal [175](_completed/175-knowledge-base.goal)).
 - 2026-11-01 18:33 UTC, owner: v0.1.1 is handed for testing once goal 125's renames are done and their acceptance checks pass; goal 125's sweeps move to goal [178](178-clean-up-continued.goal) for v0.1.2.
 - 2026-11-01 23:01 UTC, owner: CI's full run on v0.1.1, with the first run of `tag-acceptance`, waits until the owner has tested v0.1.1 and worked with it ("lets just move on and do that after we have tested things"); the lab builds its images from the v0.1.1 branch for that testing, and the release workflow first runs at the v0.1.1 tag. The box for CI stays open until then.
+- 2026-11-03 00:51 UTC, owner: no acceptance check of an upgrade from v0.1.0 ("We don't need to focus on upgrade from v0.1.0 to v0.1.1 cause v0.1.1 is breaking change"). This drops the check owed since 2026-11-02 00:40 UTC; the unit test of a store v0.1.0 ran stays.
 
 ## Open questions
 
