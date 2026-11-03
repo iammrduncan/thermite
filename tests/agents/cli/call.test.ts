@@ -372,6 +372,20 @@ test("a message the screen still shows in the program's input gets one more Ente
     ),
     true,
   );
+  // A long message, of which the input shows a part from its middle, behind its prompt mark.
+  const long = `Review the run.\n${'{"id":"x-11d0a8d2276c","title":"Stack the staging change"},'.repeat(400)}\nAnswer.`;
+  assert.equal(
+    stillTyped(
+      [
+        '› {"id":"x-11d0a8d2276c","title":"Stack the staging cha',
+        'nge"},{"id":"x-11d0a8d2276c",',
+        "",
+        "  ⏎ send   ⌃J newline",
+      ],
+      long,
+    ),
+    true,
+  );
   // Codex shows a long paste as a placeholder.
   assert.equal(stillTyped(["› [Pasted Content 18342 chars]"], "x".repeat(18_342)), true);
   // A menu, or a screen that moved on, gets no key.

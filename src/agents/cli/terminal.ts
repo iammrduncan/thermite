@@ -686,16 +686,25 @@ export class RoleTerminal<T extends CliTally> {
   }
 }
 
+/** Box-drawing and block characters: an input's frame, never a message's words. */
+const FRAME = /[\u2500-\u259F]/g;
+/** A line's prompt mark, where a program's input starts one. */
+const PROMPT_MARK = /^\s*[›>❯]\s?/;
+
 /**
- * Whether a screen still shows a message typed in, in the program's input: the message's end
- * (its last 40 characters, spaces aside, wherever the screen wraps them), or the placeholder
- * Codex shows in place of a long paste.
+ * Whether a screen still shows a message typed in, in the program's input: lines of the screen
+ * that are parts of the message, spaces, the input's frame and its prompt mark aside, 40 of its
+ * characters in all (all of a shorter one), wherever the screen wraps it and whichever part of
+ * a long message the input shows; or the placeholder Codex shows in place of a long paste.
  */
 export function stillTyped(lines: readonly string[], text: string): boolean {
-  const flat = (s: string) => s.replace(/\s+/g, "");
-  const shown = flat(lines.join(""));
-  const end = flat(text).slice(-40);
-  return (
-    (end.length > 0 && shown.includes(end)) || /\[Pasted Content \d+ chars\]/.test(lines.join("\n"))
-  );
+  if (/\[Pasted Content \d+ chars\]/.test(lines.join("\n"))) return true;
+  const flat = (s: string) => s.replace(FRAME, "").replace(/\s+/g, "");
+  const message = flat(text);
+  if (!message) return false;
+  const least = Math.min(12, message.length);
+  const inIt = lines
+    .map((l) => flat(l.replace(FRAME, "").replace(PROMPT_MARK, "")))
+    .filter((l) => l.length >= least && message.includes(l));
+  return inIt.reduce((n, l) => n + l.length, 0) >= Math.min(40, message.length);
 }
