@@ -53,6 +53,9 @@ export function addIsolationCheck(ctx: ControllerContext, service: HarnessServic
   }
 }
 
+/** How long the model check waits for an answer unless the rig's settings say (goal 150). */
+const CHECK_SECONDS = 120;
+
 /** The model check in the program the route names (programs.ts). */
 export function addModelCheck(
   service: HarnessService,
@@ -61,8 +64,10 @@ export function addModelCheck(
   service.rigChecks.model = {
     run: async () => {
       const m = model();
+      // As long as the rig's setting says (goal 150): a busy model can answer after 120 s.
+      const seconds = service.settings.get().check_seconds ?? CHECK_SECONDS;
       return m
-        ? keyHint(m, await programOf(m).modelCheck(m, once))
+        ? keyHint(m, await programOf(m).modelCheck(m, once, seconds * 1000))
         : {
             ok: false,
             summary:

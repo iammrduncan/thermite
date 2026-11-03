@@ -294,6 +294,7 @@ export class HarnessService {
         trial_minutes: null,
         max_turns: null,
         quiet_minutes: null,
+        check_seconds: null,
         program_mode: PROGRAM_MODE_DEFAULT,
         // Hands-off by default (goal 079).
         promotion: input.promotion ?? "auto",

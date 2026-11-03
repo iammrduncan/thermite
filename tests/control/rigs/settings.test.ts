@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
+  checkField,
   programModeField,
   quietField,
   rigSettingsChange,
@@ -48,6 +49,7 @@ const DEFAULTS = {
   trial_minutes: 20,
   max_turns: null,
   quiet_minutes: null,
+  check_seconds: null,
   program_mode: "headless",
   promotion: "owner_approval",
   judge_gpus: null,
@@ -116,6 +118,7 @@ const FIELDS: [string, unknown][] = [
   ["trial_minutes", 45],
   ["max_turns", 120],
   ["quiet_minutes", 30],
+  ["check_seconds", 300],
   ["program_mode", "terminal"],
   ["promotion", "auto"],
   ["judge_gpus", 3],
@@ -546,6 +549,18 @@ test("Edit rig's quiet field is off on a rig whose harness can't take it (goal 1
   assert.match(newer, /value="" placeholder="never"/);
   assert.doesNotMatch(newer, /disabled/);
   assert.match(quietField({ summary: { settings: { quiet_minutes: 20 } } }, 20), /value="20"/);
+});
+
+test("Edit rig's model check time is off on a rig whose harness can't take it (goal 150)", () => {
+  const older = checkField({ summary: { settings: { lanes: 1, quiet_minutes: null } } }, null);
+  assert.match(older, /placeholder="update the rig first"[^>]* disabled>/);
+  const newer = checkField({ summary: { settings: { lanes: 1, check_seconds: null } } }, null);
+  assert.match(
+    newer,
+    /name="check_seconds" type="number" min="10" max="3600" value="" placeholder="120"/,
+  );
+  assert.doesNotMatch(newer, /disabled/);
+  assert.match(checkField({ summary: { settings: { check_seconds: 300 } } }, 300), /value="300"/);
 });
 
 test("Edit rig's choice of how agent programs run is off on a rig whose harness can't take it (goal 169)", () => {

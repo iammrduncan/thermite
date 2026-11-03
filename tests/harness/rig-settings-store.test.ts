@@ -20,6 +20,7 @@ const defaults: RigSettings = {
   trial_minutes: 20,
   max_turns: null,
   quiet_minutes: null,
+  check_seconds: null,
   program_mode: "headless",
   promotion: "owner_approval",
   judge_gpus: null,

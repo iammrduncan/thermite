@@ -69,8 +69,8 @@ A busy rig refuses a check with `not now:` and the reason. The command accepts `
 
 | You see | It means | What to do |
 | --- | --- | --- |
-| Model route **passed**: "*model* answered with a correct tool call in *n* s" | The model works for the agents | Nothing |
-| Model route **failed**: "*model* failed the tool-call check: no answer in 120 s (is the model up?)" | The model server did not answer | Check the server and the provider's base URL |
+| Model route **passed**: "*model* answered with a correct tool call in *n* s, its first token after *t* s" | The model works for the agents | Nothing. A long time to the first token is a slow or busy model |
+| Model route **failed**: "*model* failed the tool-call check: no answer in 120 s: the model is down, or busy …" | The model server did not answer in the check's time | Check the server and the provider's base URL. For a busy model, give the check longer: **The model check waits (seconds)** on **Edit rig** ([Troubleshoot](troubleshoot.md#the-model-check-fails-on-a-slow-or-busy-model)) |
 | Model route **failed**: "… no tool call" | The model answered but did not call the tool | Choose a model that supports tool calling |
 | Model route **failed**: "*model* failed the tool-call check in OpenCode:" (or "in Claude Code:" or "in Codex:") and an error, such as "Rate limit exceeded. Please try again later." | The error comes from the model's provider. OpenCode's free models are sometimes busy | Wait: while the check fails no trial starts, and the rig checks again by itself, at most every 30 minutes. Or choose another model |
 | Model route **failed**: "*model* failed the tool-call check in OpenCode: this rig's harness image has no OpenCode binary: …" | The rig's harness image has no OpenCode. Thermite's published images always have it. Its trials in OpenCode end with the same words | Use a published harness image, or one [built on it](../install/extend-harness-image.md), or give the rig another harness on **Edit rig** |

@@ -425,6 +425,8 @@ export const CommandPayloads = {
     max_turns: z.number().int().min(1).max(100_000).nullable().optional(),
     /** After how many minutes without a line a trial asks the owner (goal 143); null: never. */
     quiet_minutes: z.number().int().min(1).max(1440).nullable().optional(),
+    /** How long the model check waits for an answer, in seconds (goal 150); null: 120. */
+    check_seconds: z.number().int().min(10).max(3600).nullable().optional(),
     /** How a trial's agent program runs: in its own terminal, or headless (goal 169). */
     program_mode: z.enum(PROGRAM_MODES).optional(),
     promotion: z.enum(["auto", "owner_approval"]).optional(),

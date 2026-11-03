@@ -401,9 +401,15 @@ Two causes are common on a laptop:
 
 ### A rig can't reach a model server on your network
 
-- **You see:** **Model route** fails with `no answer in 120 s (is the model up?)`, or with `no tool call:` and a connection error, while the server answers on your computer.
+- **You see:** **Model route** fails with `no answer in 120 s: the model is down, or busy with other requests for longer than the check waits (the rig's check time on Edit rig sets how long)`, or with `no tool call:` and a connection error, while the server answers on your computer.
 - **Why:** the rig calls the model from its harness container. Inside a container, `localhost` is the container itself. A rig on a cluster reaches only DNS and addresses outside the private, shared and link-local ranges, so a server on a private or Tailscale address is out of its reach until the owner lists it in **Settings › Addresses rigs may reach**.
 - **Do:** on the local stack, use `host.docker.internal` in the provider's address (`host.containers.internal` with Podman). Give a rig on a cluster a hosted provider, or list the server's address and port in **Settings › Addresses rigs may reach** ([Reach a model server on a private or Tailscale address](../install/rig-on-a-cluster.md#reach-a-model-server-on-a-private-or-tailscale-address)). See [Choose a model](../models/choose-a-model.md#2-a-model-server-on-your-own-computer). To check that the server answers at all, run `npx thermite doctor --model-url` with the provider's address: it checks `host.docker.internal` at `127.0.0.1`.
+
+### The model check fails on a slow or busy model
+
+- **You see:** **Model route** fails with `no answer in 120 s: the model is down, or busy with other requests for longer than the check waits (the rig's check time on Edit rig sets how long)`, while the model answers your own requests, or other rigs' workers, slowly.
+- **Why:** the check waits 120 s for the model's answer unless the rig sets another time. A shared or self-hosted model with a queue of requests can take longer than that to answer and still work. A failed check stops the rig's agents until a later check passes.
+- **Do:** on the rig's **Edit rig**, under **Advanced** in **2 · The agents**, set **The model check waits (seconds)** to longer than the model takes, such as 300 (or `check_seconds` over REST or MCP), then press **Check**. A check that passes says how long the model took, and when its first token came.
 
 ## Starting a campaign
 

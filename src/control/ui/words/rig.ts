@@ -189,6 +189,8 @@ function settingsText(change: Record<string, unknown>): string {
         return v === null
           ? "a quiet trial asks you nothing"
           : `a trial quiet for ${n} min asks you`;
+      if (k === "check_seconds")
+        return v === null ? "a model check of 120 s" : `a model check of ${n} s`;
       if (k === "program_mode")
         return v === "terminal"
           ? "agent programs in their own terminal"

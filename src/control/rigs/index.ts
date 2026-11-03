@@ -41,6 +41,8 @@ export { bringBackRig } from "./retire.ts";
 export {
   PROGRAM_MODE_TIP,
   programModeField,
+  CHECK_TIP,
+  checkField,
   QUIET_TIP,
   quietField,
   type RigPart,

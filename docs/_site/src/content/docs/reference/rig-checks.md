@@ -72,8 +72,8 @@ While the workers' model check fails, no trial or plan of the rig's run starts, 
 
 | Summary | Meaning |
 | --- | --- |
-| `<model> answered with a correct tool call in <s> s` | Passed (Pi). OpenCode, Claude Code and Codex add ` (OpenCode)`, ` (Claude Code)` or ` (Codex)` |
-| `<model> failed the tool-call check: no answer in 120 s (is the model up?)` | No answer in time |
+| `<model> answered with a correct tool call in <s> s, its first token after <t> s` | Passed (Pi). OpenCode, Claude Code and Codex add ` (OpenCode)`, ` (Claude Code)` or ` (Codex)` and give no first token's time |
+| `<model> failed the tool-call check: no answer in <n> s: the model is down, or busy with other requests for longer than the check waits (the rig's check time on Edit rig sets how long)` | No answer in the check's time: 120 s, or the rig's `check_seconds`. In OpenCode, Claude Code and Codex the words follow `failed the tool-call check in <program>:` |
 | `<model> failed the tool-call check: it called the tool with "<x>", not "<word>"` | A tool call with the wrong word |
 | `<model> failed the tool-call check: no tool call: <error>` | The request failed with an error |
 | `<model> failed the tool-call check: no tool call (stop: <reason>); it wrote: <text>` | The model answered without calling the tool. `; it wrote: <text>` appears only when it wrote some text |

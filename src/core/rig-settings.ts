@@ -34,6 +34,11 @@ export interface RigSettings {
    */
   quiet_minutes: number | null;
   /**
+   * How long the model check waits for the model's answer, in seconds (goal 150); null: 120. It
+   * limits the check only, never a trial or a model call.
+   */
+  check_seconds: number | null;
+  /**
    * How a trial's agent program runs (goal 169): in its own terminal, held by the terminal host
    * (a worker in Pi draws its Pi view there), or headless.
    */

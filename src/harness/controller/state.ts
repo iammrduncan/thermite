@@ -103,6 +103,7 @@ export function rigSettings(ctx: ControllerContext, promotion: PromotionPolicy):
       trial_minutes: trialMinutesFromEnv(env.THERMITE_TRIAL_MINUTES),
       max_turns: numbers.maxTurns,
       quiet_minutes: null,
+      check_seconds: null,
       program_mode: PROGRAM_MODE_DEFAULT,
       promotion,
       judge_gpus: null,

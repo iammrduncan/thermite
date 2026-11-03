@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { checkModel } from "../../../../src/harness/agents/model/check.ts";
+import { checkModel, noAnswerWords } from "../../../../src/harness/agents/model/check.ts";
 import { startFakeModel } from "../../../helpers/fake-model.ts";
 
 const route = (url: string) => ({
@@ -47,6 +47,32 @@ describe("the model route check", () => {
       assert.match(r.summary, /no tool call: .*503/);
     } finally {
       await down.close();
+    }
+  });
+
+  test("a model busy for 3 s fails a check of 2 s and passes one of 5 s, its first token timed (goal 150)", async () => {
+    const fake = await startFakeModel(({ messages }) => {
+      if (messages.some((m) => m.role === "tool")) return { text: "done" };
+      const word = /the word (\S+)\./.exec(JSON.stringify(messages))?.[1] ?? "";
+      return { toolCalls: [{ name: "echo", args: { word } }], delayMs: 3_000 };
+    });
+    try {
+      const short = await checkModel(route(fake.url), 2_000);
+      assert.equal(short.ok, false);
+      assert.equal(short.summary, `m failed the tool-call check: ${noAnswerWords(2_000)}`);
+      assert.match(
+        short.summary,
+        /no answer in 2 s: the model is down, or busy with other requests/,
+      );
+      const long = await checkModel(route(fake.url), 5_000);
+      assert.equal(long.ok, true, long.summary);
+      assert.match(long.summary, /, its first token after \d+(\.\d)? s$/);
+      assert.ok(
+        Number(long.detail?.first_token_seconds) >= 2.9,
+        String(long.detail?.first_token_seconds),
+      );
+    } finally {
+      await fake.close();
     }
   });
 });

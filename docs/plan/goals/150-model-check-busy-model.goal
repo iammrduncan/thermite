@@ -1,16 +1,16 @@
 ---
 id: "150"
 title: "A model check on a busy model: it waits as long as the rig says, and doesn't call the model down"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: []
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-11-03
 ---
 
 # 150 · A model check on a busy model: it waits as long as the rig says, and doesn't call the model down
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## What
 
@@ -45,6 +45,8 @@ A shared or self-hosted model can be slow to answer and still work. A check that
 ## Progress
 
 - 2026-10-26 02:47 UTC: Goal written from the lab's model checks, read over MCP (`recent_events`), and the model server's own counts of running and waiting requests, which the infrastructure's operator read.
+- 2026-11-03: Researched and verified on v0.1.3 (bbe853c1): the check still waited a fixed 120 s, in Pi's check (harness/agents/model/check.ts checkModel) and in Claude Code's, Codex's and OpenCode's (harness/agents/cli/once.ts cliModelCheck), and said "no answer in 120 s (is the model up?)".
+- 2026-11-03: Built (no tests run on the Mac). Item 1: the rig setting `check_seconds` (10 to 3600, null: 120) in core/rig-settings.ts and the rig_settings command, applied by the harness's model check (controller/checks.ts) through each program's modelCheck; on Edit rig as **The model check waits (seconds)** under Advanced, with its ⓘ, off on an older harness (control/rigs/settings.ts checkField); over REST and MCP with the other settings. Item 2: noAnswerWords for a check with no answer in its time, in Pi's and the programs' checks; Pi's passed check gives its first token's time. Item 3 unchanged. Tests: tests/harness/agents/model/check.test.ts (a model busy for 3 s fails a 2 s check and passes a 5 s one), tests/control/rigs/settings.test.ts (the field over REST and MCP; Edit rig's field). Pages: the MCP tools, the REST API, the signed commands, rig checks, Check a rig, Troubleshoot; changelog.
 
 ---
 

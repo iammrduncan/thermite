@@ -661,6 +661,7 @@ The rig's own settings, as on its **Edit rig** page. Only the fields that change
 | `trial_minutes` | 1 to 1440, or `null` | A trial's length when its contract sets none. `null`: none |
 | `max_turns` | 1 to 100000, or `null` | A limit on each trial's model turns. `null`: no limit |
 | `quiet_minutes` | 1 to 1440, or `null` | After how many minutes without a line a trial asks the owner under **Needs you**. `null`: never. Nothing ends the trial |
+| `check_seconds` | 10 to 3600, or `null` | How long the model check waits for the model's answer. `null`: 120. It limits the check only. A rig whose harness is older reports none, and Edit rig's field is off there |
 | `program_mode` | `terminal` or `headless` | How a worker's trial runs Claude Code, Codex, OpenCode or Pi: `terminal` (the default), in the program's own terminal UI, which the harness's terminal host holds, and a worker in Pi in its Pi view there; `headless`, one headless run of the program for each turn, and a worker in Pi with no view. A trial keeps the mode it started with. A rig whose harness is older reports no mode and runs headless. See [Agents in their own terminal](../explanation/agents-lanes-planner.md#agents-in-their-own-terminal) |
 | `promotion` | `auto` or `owner_approval` | The rig's promotion rule, for runs that set none |
 | `judge_gpus` | 1 to 8, or `null` | On a rig given its set of GPUs, how many are the judge's. `null`: the rig's default. A change restarts the harness to regroup the cards |

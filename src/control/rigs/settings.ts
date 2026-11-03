@@ -58,6 +58,8 @@ export type RigSettingsWanted = { [P in RigPart]?: boolean | undefined } & {
   max_turns?: number | null | undefined;
   /** null: a quiet trial never asks the owner (goal 143). */
   quiet_minutes?: number | null | undefined;
+  /** null: the model check waits 120 s (goal 150). */
+  check_seconds?: number | null | undefined;
   /** In its own terminal, or headless (goal 169). */
   program_mode?: string | undefined;
   promotion?: string | undefined;
@@ -77,6 +79,20 @@ export function quietField(u: { summary: unknown }, value: number | null): strin
   const reported = (u.summary as { settings?: Record<string, unknown> } | null)?.settings;
   const takes = !!reported && Object.hasOwn(reported, "quiet_minutes");
   return `<input name="quiet_minutes" type="number" min="1" max="1440" value="${value ?? ""}" placeholder="${takes ? "never" : "update the rig first"}" data-empty="never" data-unit=" minutes"${takes ? "" : " disabled"}>`;
+}
+
+/** Edit rig's description of the model check's time (goal 150), beside its field. */
+export const CHECK_TIP =
+  "How long the rig's model check waits for the model's answer. A shared or self-hosted model can be busy with other requests for longer than 120 s and still work: give it longer. Empty: 120 seconds. It limits the check only, never a trial.";
+
+/**
+ * Edit rig's model check field. A rig whose harness is older than goal 150 reports no
+ * check_seconds and would refuse the whole change, so there the field is off and says why.
+ */
+export function checkField(u: { summary: unknown }, value: number | null): string {
+  const reported = (u.summary as { settings?: Record<string, unknown> } | null)?.settings;
+  const takes = !!reported && Object.hasOwn(reported, "check_seconds");
+  return `<input name="check_seconds" type="number" min="10" max="3600" value="${value ?? ""}" placeholder="${takes ? "120" : "update the rig first"}" data-empty="120" data-unit=" seconds"${takes ? "" : " disabled"}>`;
 }
 
 /** Edit rig's description of how the agent programs run (goal 169), beside its field. */
@@ -141,6 +157,8 @@ export function rigSettingsChange(
     change.max_turns = want.max_turns;
   if (want.quiet_minutes !== undefined && want.quiet_minutes !== now.quiet_minutes)
     change.quiet_minutes = want.quiet_minutes;
+  if (want.check_seconds !== undefined && want.check_seconds !== now.check_seconds)
+    change.check_seconds = want.check_seconds;
   if (want.program_mode !== undefined && want.program_mode !== now.program_mode)
     change.program_mode = want.program_mode;
   if (want.promotion !== undefined && want.promotion !== now.promotion)
@@ -332,6 +350,14 @@ export const rigSettingsFields = {
     .optional()
     .describe(
       "After how many minutes without a line a trial asks the owner under Needs you (1 to 1440); null: never. It only shows: nothing ends the trial",
+    ),
+  check_seconds: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe(
+      "How long the rig's model check waits for the model's answer, in seconds (10 to 3600); null: 120. For a shared or busy model; it limits the check only, never a trial",
     ),
   program_mode: z
     .enum(PROGRAM_MODES)
