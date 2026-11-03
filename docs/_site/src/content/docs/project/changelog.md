@@ -18,6 +18,10 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 - `llm-setup.txt`, at the site's root: instructions for an AI agent to set Thermite up from the latest release and to find the page for what comes next. The home page and Install on one machine give a prompt to copy for it.
 - The site's roadmap page is now its Changelog, written from this file; its old address leads there.
 
+### Fixes
+
+- A rig's first start loses no live line: the supervisor publishes them from the moment control holds the rig's first report, on which control accepts its key. Before, the lines published first were refused for a key not yet accepted, and lost (issue #27; from Mahdi3Bani's pull request #35).
+
 ### Dependencies
 
 - Pi 1.4.0 (was 1.3.0) for the workers, the planner and the advisors in Pi, and pi-tui 1.4.0 for the Pi view; the MCP TypeScript SDK 1.32.2 and Hono 4.13.14. Thermite's patch of pi-ai's streaming tool-call parse (past 16 KiB, the arguments are parsed when the call ends) applies to 1.4.0 unchanged: its parser is 1.3.0's. The checks use Biome 2.6.4 (was 2.5.15). The docs site is built with Astro 7.4.4 and Starlight 0.42.7.

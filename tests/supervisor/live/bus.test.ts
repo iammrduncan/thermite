@@ -6,6 +6,7 @@ import { verifyJson } from "../../../src/core/commands.ts";
 import { LIVE_FIGURE_SUBJECTS, LIVE_RIG_HEADER } from "../../../src/core/link/live.ts";
 import { LiveLog, liveBody } from "../../../src/core/live.ts";
 import {
+  followLive,
   LiveCounts,
   type LiveRelayState,
   publishLiveOnce,
@@ -56,6 +57,35 @@ async function rig() {
 const start: LiveRelayState = { cursor: 0, ownCursor: 0 };
 
 describe("the supervisor's live lines on the message bus", () => {
+  test("the live view waits for control to hold a report of the rig, telling the health route meanwhile, then publishes (issue #27)", async () => {
+    const s = await rig();
+    s.live.append({ source: "judge", kind: "log", text: "the judge is idle" });
+    let reported = false;
+    let stopped = false;
+    let ticks = 0;
+    const done = followLive(s.cfg, {
+      intervalMs: 20,
+      pollMs: 5,
+      stopped: () => stopped,
+      reported: () => reported,
+      tick: () => {
+        ticks++;
+      },
+    });
+    await new Promise((r) => setTimeout(r, 60));
+    assert.equal(s.bus.kept.length, 0, "nothing goes before control holds a report");
+    assert.ok(ticks > 2, "the health route hears from the loop while it waits");
+    reported = true;
+    for (let i = 0; i < 200 && s.bus.kept.length === 0; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    stopped = true;
+    await done;
+    assert.deepEqual(
+      s.bus.kept.map((m) => m.subject),
+      ["thermite.rig.rig-a.live.judge"],
+    );
+  });
+
   test("each run's source goes to its own subject, signed by the harness, and control folds it", async () => {
     const s = await rig();
     s.live.append({ source: "planner", kind: "status", text: "planning round 1", run: "smoke-1" });

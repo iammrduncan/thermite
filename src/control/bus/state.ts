@@ -73,7 +73,7 @@ export interface RigLive {
 }
 
 /** The live stream's limits, what control took from it, and each rig's counts. */
-export function liveState(store: ControlStore, taken: LiveTaken) {
+function liveState(store: ControlStore, taken: LiveTaken) {
   const rigs: RigLive[] = [];
   const seen = new Set(taken.rigs.keys());
   for (const r of store.reportedRigs.list()) {
