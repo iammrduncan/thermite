@@ -29,6 +29,11 @@ export const compose = (process.env.COMPOSE ?? "podman compose").split(" ");
  * which may be a launcher, as in `uvx podman-compose`.
  */
 export const engine = compose.some((w) => /^docker(-compose)?$/.test(w)) ? "docker" : "podman";
+/**
+ * A container's removal with a short stop first: Podman's `rm` takes the stop's time (`-t`),
+ * Docker's has no such option and kills at once.
+ */
+export const rmFast = ["rm", "-f", ...(engine === "podman" ? ["-t", "3"] : [])];
 /** The Containerfile control, the harness and the supervisor are built from, each its target. */
 export const CONTAINERFILE = "containers/Containerfile";
 /** The one-container rig image's, built on a harness image (its build argument HARNESS_IMAGE). */

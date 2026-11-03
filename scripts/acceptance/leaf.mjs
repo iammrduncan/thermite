@@ -44,7 +44,7 @@ import { jetstreamManager } from "@nats-io/jetstream";
 import { createUser } from "@nats-io/nkeys";
 import { connect, nkeyAuthenticator } from "@nats-io/transport-node";
 import { acceptanceChecks } from "./lib/checks.mjs";
-import { engine, natsInitRun, natsService, sh } from "./lib/smoke-env.mjs";
+import { engine, natsInitRun, natsService, rmFast, sh } from "./lib/smoke-env.mjs";
 
 // Control's and the supervisor's own code, as they run it (Node.js strips the types).
 const { natsBus } = await import("../../src/common/bus/index.ts");
@@ -116,7 +116,7 @@ const readableTree = (dir) => {
 const cleanup = () => {
   for (const c of containers) {
     try {
-      sh(engine, ["rm", "-f", "-v", "-t", "3", c]);
+      sh(engine, [...rmFast, "-v", c]);
     } catch {}
   }
   try {
@@ -581,7 +581,7 @@ try {
   );
 
   // A stop and a start on RunPod: the pod's server on a new address, with the same launch values.
-  sh(engine, ["rm", "-f", "-t", "3", box.pod]);
+  sh(engine, [...rmFast, box.pod]);
   const moved = podServer(
     "thermite-leaf-check-moved",
     `${subnet}.12`,

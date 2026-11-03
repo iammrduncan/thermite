@@ -39,10 +39,10 @@ export {
 export { checkRigPlace } from "./place.ts";
 export { bringBackRig } from "./retire.ts";
 export {
-  PROGRAM_MODE_TIP,
-  programModeField,
   CHECK_TIP,
   checkField,
+  PROGRAM_MODE_TIP,
+  programModeField,
   QUIET_TIP,
   quietField,
   type RigPart,
