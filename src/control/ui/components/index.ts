@@ -2,6 +2,7 @@ import type { Hardware } from "../../../core/hardware.ts";
 import { isRigCheck } from "../../../core/ids.ts";
 import { ANSWERED, RESEARCH_REVIEW } from "../../../core/research-check.ts";
 import { SCREENED_VERDICTS, WON_VERDICTS } from "../../../core/verdicts.ts";
+import type { BuildInfo } from "../../../core/version.ts";
 import {
   type CampaignView,
   campaignViews,
@@ -477,6 +478,8 @@ export interface Shell {
   rail?: boolean | undefined;
   /** In Settings, the area shown: the left navigation is Settings' own (goal 181). */
   area?: SettingsArea | undefined;
+  /** Control's own build, named at the bottom of every page. */
+  build?: BuildInfo | undefined;
 }
 
 /** Settings' areas, each a page of its own, in its navigation's groups and order (goal 181). */
@@ -656,9 +659,14 @@ export function shell(s: Shell, body: string): string {
   <span class="spacer"></span>
   <span class="item">${running} running <span class="sub">runs</span></span>
   <span class="item">${jobs.leased} judging · ${jobs.queued} queued <span class="sub">judge</span></span>
+  ${s.build ? buildItem(s.build) : ""}
   <span class="item" id="live-state"><span class="sub">page from ${esc(new Date(s.now).toISOString().slice(11, 19))} UTC</span><a href="" title="Load this page again with what control knows now">refresh</a></span>
 </footer></div></body></html>`;
 }
+
+/** Control's version and the commit it was built from, short, with the whole commit on hover. */
+const buildItem = (b: BuildInfo) =>
+  `<span class="item" title="${esc(b.commit ? `Control runs Thermite ${b.version}, built from commit ${b.commit}` : `Control runs Thermite ${b.version}; its image did not record the commit it was built from`)}"><span class="sub">control</span>v${esc(b.version)}${b.commit ? ` · <code>${esc(b.commit.slice(0, 8))}</code>` : ""}</span>`;
 
 const gib = (mib: number | null | undefined) =>
   typeof mib === "number"

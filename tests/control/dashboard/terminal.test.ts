@@ -133,6 +133,13 @@ describe("a trial's terminal on Live", () => {
     // only for a Pi view.
     assert.match(html, /data-keys="\/ui\/rigs\/rig-a\/live\/keys"/);
     assert.match(html, /data-term-console hidden/);
+    // What the page hides stays hidden, though the dashboard draws its buttons and the form as
+    // flex; the choice to confirm shows only for a line that needs it.
+    assert.match(html, /\.term \[hidden\], \.term-tabs \[hidden\] \{ display: none !important; \}/);
+    assert.match(html, /<label class="term-confirm" data-term-confirm hidden>/);
+    assert.match(TERMINAL_JS, /confirm\.hidden = !risky\.test\(text\.value\)/);
+    // The screen is scaled so all its columns and rows fit the pane.
+    assert.match(TERMINAL_JS, /Math\.min\(w \/ screen\.offsetWidth, h \/ screen\.offsetHeight\)/);
     // The run's Live opens on each lane's terminal when the rig runs its programs in them (goals
     // 181, 187): a tab each and Side by side, the chosen terminal filling the pane; the lines are
     // a tab of the run's own.

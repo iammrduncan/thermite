@@ -1,4 +1,9 @@
-import { TERMINAL_KEYS, TERMINAL_TEXT_MAX, type TerminalKey } from "../../core/terminal-input.ts";
+import {
+  CONFIRM_FIRST,
+  TERMINAL_KEYS,
+  TERMINAL_TEXT_MAX,
+  type TerminalKey,
+} from "../../core/terminal-input.ts";
 import { esc } from "./components/index.ts";
 
 /** The Pi view's commands, as every Pi view takes them (src/agents/pi-view/). */
@@ -39,29 +44,35 @@ const KEY_LABELS: Record<TerminalKey, string> = {
 
 /** The console's styles beside xterm.js's own; the page carries both, as CSP allows. */
 const TERM_STYLE = `
-.term-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--muted); overflow-x: auto; }
-.term-tab { border: 0; background: none; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--muted-foreground); border-bottom: 2px solid transparent; white-space: nowrap; }
+.term [hidden], .term-tabs [hidden] { display: none !important; }
+.term-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--muted); min-width: 0; }
+.term-tab { display: block; flex: 0 1 auto; min-width: 0; max-width: 320px; height: auto; border: 0; border-radius: 0; background: none; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--muted-foreground); border-bottom: 2px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term-tab[data-term-split] { flex: none; }
 .term-tab.on { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
 .term-tabs .grow, .term-bar .grow { flex: 1; }
-.term-area { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 70vh; flex: 1; }
-.term-area.split { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.term-area { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); flex: 1; min-height: 0; }
+.term-area.one { min-height: 70vh; }
+.term-area.split { grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 1px; background: var(--border); }
+@media (max-width: 900px) { .term-area.split { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(300px, 1fr); overflow-y: auto; } }
 .term-area:not(.split):not(.one) > .term:not(.on) { display: none; }
-.term { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--border); background: #0b0d10; }
-.term:last-child { border-right: 0; }
-.term-bar { display: flex; gap: 10px; align-items: center; padding: 6px 12px; font-size: 12.5px; color: #8b949e; background: #0b0d10; }
-.term-bar b { color: #e6e6e6; font-weight: 600; }
+.term-area:not(.split):not(.one) .term-bar > b { display: none; }
+.term { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #0b0d10; }
+.term-bar { display: flex; gap: 10px; align-items: center; padding: 4px 12px; font-size: 12px; color: #8b949e; background: #0b0d10; min-width: 0; }
+.term-bar b { color: #e6e6e6; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 .term-state { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.term-newest { border: 0; background: var(--primary); color: var(--primary-foreground); border-radius: 999px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.term-newest { flex: none; height: 22px; border: 0; background: var(--primary); color: var(--primary-foreground); border-radius: 999px; padding: 0 10px; font-size: 12px; cursor: pointer; }
+.term-menu { flex: none; }
 .term-menu > summary { list-style: none; cursor: pointer; color: #c9d1d9; } .term-menu > summary::-webkit-details-marker { display: none; }
-.term-menu .menu-pop { top: 24px; width: min(420px, 86vw); color: var(--foreground); }
+.term-menu .menu-pop { top: 24px; right: 0; left: auto; width: min(420px, 86vw); color: var(--foreground); }
 .term-held { padding: 6px 12px; font-size: 12.5px; background: var(--warning-surface); color: var(--warning-foreground); }
-.term-view { flex: 1; min-height: 0; padding: 4px 8px 8px; overflow: hidden; outline: none; }
+.term-view { flex: 1; min-height: 0; padding: 4px 8px 6px; overflow: hidden; outline: none; }
 .term-view:focus-within { box-shadow: inset 0 0 0 1px var(--primary); }
 .term-view:empty::before { content: "No screen yet."; color: #8b949e; font-size: 12px; }
-.term-console { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; background: var(--card); border-top: 1px solid var(--border); }
-.term-row { display: flex; gap: 6px; }
-.term-row input[name=text] { flex: 1; font-family: var(--mono, ui-monospace, monospace); }
-.term-keys { display: flex; flex-wrap: wrap; gap: 4px; } .term-keys button { min-width: 34px; }
+.term-console { display: flex; flex-direction: column; gap: 4px; padding: 6px 12px; background: var(--card); border-top: 1px solid var(--border); }
+.term-row { display: flex; gap: 6px; align-items: center; }
+.term-row input[name=text] { flex: 1; min-width: 0; font-family: var(--mono, ui-monospace, monospace); }
+.term-row .menu-pop { bottom: 36px; top: auto; right: 0; left: auto; }
+.term-keys { display: flex; flex-wrap: wrap; gap: 4px; width: 260px; } .term-keys button { min-width: 34px; }
 .term-confirm { font-size: 12.5px; }
 .term-inputs { font-size: 12.5px; }
 .term-inputs ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
@@ -116,26 +127,27 @@ const terminalAssets = (xtermCss: string) =>
 
 /**
  * One terminal (goal 187): a bar with its name, what it shows, the owner's inputs as a menu and a
- * way back to the newest lines, then the screen, which takes keys as they are pressed. A worker in
- * Pi's view takes typed lines: its console shows only for such a screen.
+ * way back to the newest lines, then the screen, which takes keys as they are pressed. A terminal
+ * that takes no keys from Live (a planner's or an advisor's call, a worker in Pi's view) has one
+ * line under it for typed lines, each a signed command: a field, Send and its keys as a menu; the
+ * choice to confirm shows only for a line that needs it.
  */
 function terminalPaneHtml(o: TerminalPane): string {
   const keys = TERMINAL_KEYS.map(
     (k) =>
       `<button class="sm ghost" name="key" value="${esc(k)}" title="Send ${esc(KEY_LABELS[k])}">${esc(KEY_LABELS[k])}</button>`,
   ).join("");
-  // A terminal that takes no keys from Live (a planner's or an advisor's call, a worker in Pi's
-  // view) takes typed lines, each a signed command; a trial's shows it only for a Pi view.
+  // A trial's terminal shows the line only for a Pi view.
   const typedLines = o.ended
     ? ""
     : `<form class="term-console" method="post" action="${esc(o.action)}" data-act data-term-console${o.keys ? " hidden" : ""}>
 <input type="hidden" name="csrf" value="${esc(o.csrf)}"><input type="hidden" name="run" value="${esc(o.run)}"><input type="hidden" name="trial" value="${esc(o.trial)}">
 ${o.error ? `<div class="small bad">Not sent: ${esc(o.error)}</div>` : ""}
-<div class="term-row"><input name="text" maxlength="${TERMINAL_TEXT_MAX}" autocomplete="off" spellcheck="false" aria-label="Type into the agent's terminal" placeholder="Type into the agent's terminal: words, a /command or a skill. Enter sends it, then presses Enter there"><button class="primary sm">Send</button></div>
+<div class="term-row"><input name="text" maxlength="${TERMINAL_TEXT_MAX}" autocomplete="off" spellcheck="false" aria-label="Type into the agent's terminal" placeholder="Type a line: words, a /command or a skill. Enter sends it, then presses Enter there"><button class="primary sm">Send</button><details class="menu"><summary class="btn sm ghost" title="Send one key: Enter, Esc, Tab, the arrows, the page keys or a digit">Keys ▾</summary><div class="menu-pop"><div class="term-keys" role="group" aria-label="Keys">${keys}</div></div></details></div>
 <label class="term-confirm" data-term-pi hidden><input type="checkbox" name="follow_up" value="1"> Follow-up: give my words when the agent would stop (a reply that calls no tool), not before its next model call</label>
 <div class="term-confirm muted" data-term-pi hidden>The Pi view: words steer the agent; <b>Esc</b> stops its reply; its commands are ${esc(PI_VIEW_COMMANDS)}.</div>
-<label class="term-confirm"><input type="checkbox" name="confirm" value="1"> Confirm an input that starts with <code>!</code> (a shell command) or runs <code>/login</code>, <code>/logout</code>, <code>/config</code> or <code>/permissions</code></label>
-<input type="hidden" name="wait" value="queue"><div class="term-keys" role="group" aria-label="Keys">${keys}</div>
+<label class="term-confirm" data-term-confirm hidden><input type="checkbox" name="confirm" value="1"> Send it: this line runs a shell command (<code>!</code>) or <code>/login</code>, <code>/logout</code>, <code>/config</code> or <code>/permissions</code></label>
+<input type="hidden" name="wait" value="queue">
 </form>`;
   const list = termInputsHtml(o.inputs, `term-inputs-${o.trial}`);
   const takesKeys = !o.ended && Boolean(o.keys);
@@ -167,38 +179,44 @@ export function terminalGridHtml(panes: readonly TerminalPane[], xtermCss: strin
 
 /**
  * The terminal's script, served from control (CSP script-src 'self'), after xterm.js. It draws
- * each frame control pushes into a read-only terminal of the frame's size, says what it shows, and
- * shows the console's choice while the program waits for its usage window. Nothing typed into the
- * screen reaches the program: only the console's form does, as a signed command.
+ * each frame control pushes into a terminal of the frame's size, scaled so the whole screen fits
+ * its pane, says what it shows, and sends the keys pressed into a terminal that takes them (goal
+ * 187). A terminal that takes none gets its typed lines from its form, each a signed command.
  */
 export const TERMINAL_JS = `
 (() => {
   "use strict";
-  // The run's terminals: a tab for each, one shown, or all side by side (goal 187).
+  // The run's terminals: a tab for each, one shown, or all side by side (goal 187), in a grid as
+  // near square as their number allows.
   const area = document.querySelector("[data-term-area]");
   if (area) {
     const panes = [...area.querySelectorAll("[data-term]")];
     const tabs = [...document.querySelectorAll("[data-term-tab]")];
     const split = document.querySelector("[data-term-split]");
+    area.style.setProperty("--cols", String(Math.ceil(Math.sqrt(panes.length))));
+    let shown = tabs[0] ? tabs[0].dataset.termTab : "";
     const show = (trial) => {
+      shown = trial;
       area.classList.remove("split");
       if (split) split.classList.remove("on");
       for (const p of panes) p.classList.toggle("on", p.dataset.trial === trial);
       for (const t of tabs) t.classList.toggle("on", t.dataset.termTab === trial);
-      window.dispatchEvent(new Event("resize"));
     };
-    for (const t of tabs) t.addEventListener("click", () => show(t.dataset.termTab));
+    for (const t of tabs) {
+      t.title = t.textContent;
+      t.addEventListener("click", () => show(t.dataset.termTab));
+    }
     if (split) split.addEventListener("click", () => {
       const on = !area.classList.contains("split");
       area.classList.toggle("split", on);
       split.classList.toggle("on", on);
-      for (const t of tabs) t.classList.toggle("on", !on && t === tabs.find((x) => panes.find((p) => p.classList.contains("on") && p.dataset.trial === x.dataset.termTab)));
-      window.dispatchEvent(new Event("resize"));
+      for (const t of tabs) t.classList.toggle("on", !on && t.dataset.termTab === shown);
     });
-    if (tabs[0]) show(tabs[0].dataset.termTab);
+    if (shown) show(shown);
   }
   const boxes = document.querySelectorAll("[data-term]");
   if (!boxes.length) return;
+  const risky = new RegExp(${JSON.stringify(CONFIRM_FIRST.source)});
   const setup = (box) => {
   const view = box.querySelector("[data-term-view]");
   const state = box.querySelector("[data-term-state]");
@@ -206,6 +224,10 @@ export const TERMINAL_JS = `
   const newest = box.querySelector("[data-term-newest]");
   const form = box.querySelector("[data-term-console]");
   const say = (t) => { if (state) state.textContent = t; };
+  // The choice to confirm shows only for a line that needs it.
+  const text = form && form.querySelector("input[name=text]");
+  const confirm = box.querySelector("[data-term-confirm]");
+  if (text && confirm) text.addEventListener("input", () => { confirm.hidden = !risky.test(text.value); });
   if (!window.Terminal || !window.EventSource) { say("This browser can't draw the terminal."); return; }
   // Keys pressed into it go to the agent's program, a few at a time (goal 187).
   const keysTo = box.dataset.keys;
@@ -221,14 +243,21 @@ export const TERMINAL_JS = `
   };
   const press = (d) => { if (!keysTo || piView) return; pending += d; if (!flushing) flushing = setTimeout(flush, 30); };
   let term = null, cols = 0, rows = 0, last = "";
-  // The screen at the size the agent's program has, scaled so its width fits the pane.
-  const fit = () => {
+  // The screen at the size the agent's program has, its font scaled so all its columns and rows
+  // fit the pane: measured from the drawn screen, a few passes until it settles.
+  const fit = (pass = 0) => {
     if (!term || !cols) return;
-    const w = view.clientWidth - 16;
-    const size = Math.max(8, Math.min(14, Math.floor(w / (cols * 0.602))));
-    if (term.options.fontSize !== size) term.options.fontSize = size;
+    const w = view.clientWidth - 16, h = view.clientHeight - 10;
+    const screen = view.querySelector(".xterm-screen");
+    if (w <= 0 || h <= 0 || !screen || !screen.offsetWidth || !screen.offsetHeight) return;
+    const now = term.options.fontSize;
+    const size = Math.max(5, Math.min(14, Math.floor(now * Math.min(w / screen.offsetWidth, h / screen.offsetHeight) * 4) / 4));
+    if (size === now) return;
+    term.options.fontSize = size;
+    if (pass < 3) requestAnimationFrame(() => fit(pass + 1));
   };
-  window.addEventListener("resize", fit);
+  if (window.ResizeObserver) new ResizeObserver(() => fit()).observe(view);
+  else window.addEventListener("resize", () => fit());
   const atBottom = () => !term || term.buffer.active.viewportY >= term.buffer.active.baseY;
   const draw = (f) => {
     if (typeof f.data !== "string") return;
@@ -269,7 +298,7 @@ export const TERMINAL_JS = `
       return;
     }
     view.hidden = false;
-    // A worker in Pi's view takes typed lines: its console; any other terminal takes keys.
+    // A worker in Pi's view takes typed lines: its form; any other terminal takes keys.
     piView = Boolean(f.pi_view);
     if (form) form.hidden = f.state === "ended" || (Boolean(keysTo) && !piView);
     for (const el of box.querySelectorAll("[data-term-pi]")) el.hidden = !piView;

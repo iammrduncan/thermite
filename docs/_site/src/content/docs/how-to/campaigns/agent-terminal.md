@@ -19,7 +19,7 @@ To tell the agents something without typing into a program, send a message inste
 
 1. Open **Live** in the sidebar, and choose the run in the list on the left.
 
-   The run's Live opens on **Terminals**: a tab for each lane's trial at work, named for its lane and its direction, such as `lane-1 · shared memory tiling`, and **Side by side**, which shows them all at once. The chosen terminal fills the pane, its screen scaled to fit the width. Typing into it, as in step 2, works as on the trial's own page.
+   The run's Live opens on **Terminals**: a tab for each lane's trial at work, named for its lane and its direction, such as `lane-1 · shared memory tiling`, and **Side by side**, which shows them all at once. The chosen terminal fills the pane, its screen scaled so the whole of it fits; **Side by side** puts them in a grid, each scaled to its part. Typing into it, as in step 2, works as on the trial's own page.
 
    For one trial alone, open the rig's page, press **Live**, and choose the trial under **Sessions**.
 
@@ -32,7 +32,7 @@ The trial's page opens, at `/ui/rigs/<rig>/live?source=trial:<trial>`. Its termi
 
 Each key goes to the program as you press it, by way of control and the rig's supervisor, and the program shows it in its own input box within a moment. The rig records each line you type at its Enter, word for word. A line that starts with `!` runs a shell command in Claude Code and Codex, and `/login`, `/logout`, `/config` and `/permissions` change the program's sign-in or settings: for these, the Enter is held, and the terminal's bar says `Enter held: “<the line>” runs a shell command or changes its sign-in or settings. Press Enter again to send it.` Press Enter again to send it. If a key can't go in, the bar says why, such as `Not sent: this terminal is not watched now, or too many keys wait. Load the page again.` To stop the agent, [stop its trial](decide-what-waits.md#stuck-trials) or [pause the run](steer-a-run.md).
 
-The planner's and an advisor's terminals, and a Pi view, take typed lines instead: a field under the screen, with **Send**, the keys as buttons, and **Confirm an input that starts with !…** to tick for those lines, each line a signed command.
+The planner's and an advisor's terminals, and a Pi view, take typed lines instead: one line under the screen with a field, **Send** and **Keys ▾**, each line a signed command. A line that starts with `!` or runs `/login`, `/logout`, `/config` or `/permissions` shows **Send it: this line runs a shell command…** under the field, to tick before it is sent.
 
 ## 3. See what became of each input
 

@@ -101,6 +101,6 @@ details.side-folder > summary .n { margin-left: auto; font-size: 11px; color: va
 .statusbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; padding: 0 16px; border-top: 1px solid var(--border); background: var(--background); font-size: 12px; white-space: nowrap; overflow: hidden; }
 .statusbar .item { display: inline-flex; align-items: center; gap: 6px; }
 .statusbar .item.warn { color: #c2410c; font-weight: 500; } .statusbar .item.bad { color: var(--error-foreground); font-weight: 500; }
-.statusbar .sub { color: var(--muted-foreground); }
+.statusbar .sub { color: var(--muted-foreground); } .statusbar code { font-size: 11px; }
 .statusbar .spacer { margin-left: auto; }
 @media (prefers-color-scheme: dark) { .statusbar .item.warn { color: #fb923c; } }`;

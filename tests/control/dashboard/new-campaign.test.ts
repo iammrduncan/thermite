@@ -334,6 +334,11 @@ describe("the new-campaign page", () => {
     assert.match(waiting, /Starting matmul-speed-try-1 on rig-a/);
     assert.ok(!waiting.includes("data-refresh"), "pages never reload by themselves");
     assert.match(waiting, /page from \d\d:\d\d:\d\d UTC<\/span><a href="" /);
+    // Every page's footer names the Thermite control runs, with its image's commit when it has one.
+    assert.match(
+      waiting,
+      /title="Control runs Thermite [^"]+"><span class="sub">control<\/span>v[0-9A-Za-z.+-]+/,
+    );
     assert.match(
       await (await s.get("/ui/campaigns/matmul-speed")).text(),
       /action="\/ui\/campaigns\/matmul-speed\/runs"/,

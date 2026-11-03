@@ -223,6 +223,7 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
           ).length,
           now,
           rail: getCookie(c, NAV_COOKIE) === "rail",
+          build: control,
           nav: {
             folders: store.folders.list(),
             archived,
