@@ -1,6 +1,6 @@
 {
   "name": "thermite",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Autoresearch harness: agents propose, code they cannot touch judges, one control service steers every campaign.",
   "license": "Apache-2.0",

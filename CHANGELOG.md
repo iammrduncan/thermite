@@ -2,7 +2,14 @@
 
 Each release of Thermite, newest first. Version numbers count up by the middle number, 0.2.0, 0.3.0 and so on, with fixes and quick follow-ups as 0.1.1, 0.1.2. Versions 0.x make no upgrade promise: read [Known limits](docs/_site/src/content/docs/reference/known-limits.md) before you upgrade. What comes next is in the [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md), with a goal for each item.
 
-## [Unreleased]: v0.1.2
+## [0.1.2] 2026-11-03: every agent on Live, and long messages in a terminal
+
+v0.1.2 is the first fix release after v0.1.1. A v0.1.1 stack updates to it in place, from its [release bundle](https://github.com/iammrduncan/thermite/releases/tag/v0.1.2), as [Stop, start and update](docs/_site/src/content/docs/how-to/install/one-machine.md#stop-start-and-update) says: control first, then each rig. It changes no store, setting or secret.
+
+- **Every agent on Live.** **Everything** shows every agent's lines from every run and rig. Each advisor has its own lines and filter, in its colour, with a line when its call starts and when it ends. A headless advisor's tool calls show as it makes them. A run's Live is **Terminals | Lines**, then whose, with each advisor's terminal beside the lanes'. Tool calls read as what they did.
+- **Long messages reach a program in its own terminal.** A teacher's message of 100 KB went in and was never sent: it now goes in as pastes, Enter goes again while the message waits in the input, and a long message has longer to start. An answer written over many lines is found whole.
+- **Two contributors' fixes:** a research run's clock leaves out the time the harness did not run, and a rig's first start loses no live line.
+- **Get started** opens the docs: install, a first campaign, a second machine and a private network, with `llm-setup.txt` for an AI agent to set Thermite up.
 
 ### Docs
 

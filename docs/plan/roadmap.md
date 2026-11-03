@@ -157,9 +157,23 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 
 ## v0.1.2
 
-**GPUs on demand, and work within a budget.** GPUs rented only while they work, a secondary judge, one budget in dollars that holds on every rig, measurements that cost less, and what Thermite spent on RunPod. Proposed.
+**Every agent on Live, and long messages in a terminal.** Released 2026-11-03. The fixes after v0.1.1, and every agent's work on Live; the goals planned for it moved to v0.1.3.
 
 - [188](goals/188-every-agent-on-live.goal) Every agent on Live: each advisor's own lines and chip, what headless advisors do as they work, and Everything · `IN_PROGRESS`
+
+## v0.1.3
+
+**Follow-ups to the first release, GPUs on demand, and work within a budget.** GPUs rented only while they work, a secondary judge, one budget in dollars that holds on every rig, measurements that cost less, and what Thermite spent on RunPod; and the first release's follow-ups. Proposed.
+
+- [097](goals/097-add-a-kit-bundle-from-the-dashboard.goal) Give control a kit bundle from the dashboard · `PROPOSED`
+- [108](goals/108-gated-models-on-cloud-rigs.goal) Gated models on cloud rigs · `PROPOSED`
+- [129](goals/129-copy-takes-rubrics.goal) A research campaign's copy can take its own rubrics · `PROPOSED`
+- [130](goals/130-mcp-tools-after-update.goal) An MCP client sees control's new tools after control is updated · `PROPOSED`
+- [145](goals/145-drain-race.goal) A drain doesn't wait two hours for a trial that started seconds before it · `PROPOSED`
+- [146](goals/146-supervisor-alone.goal) Restart or update a rig's supervisor alone, while its harness goes on · `PROPOSED`
+- [141](goals/141-waiting-win-after-champion-moved.goal) A waiting win the champion moved past: closed when a champion has it, an approval when none does · `PROPOSED`
+- [149](goals/149-output-cut-notice.goal) A command's result says its output was cut only when it was · `PROPOSED`
+- [150](goals/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `PROPOSED`
 - [178](goals/178-clean-up-continued.goal) Code clean-up, continued: what v0.1.1 left for later · `PROPOSED`
 - [100](goals/100-on-demand-gpus.goal) GPUs on demand for the judge and the workers · `PROPOSED`
 - [101](goals/101-secondary-judge.goal) A secondary judge: an outside service's checks on a schedule, and its submissions · `PROPOSED`
@@ -171,20 +185,6 @@ The plan: [release-v0.1.0.md](release-v0.1.0.md).
 - [132](goals/132-cuda-images-per-gpu.goal) Rig images for each GPU generation: CUDA 12 for Pascal and Volta, CUDA 13 on amd64 and arm64 for Blackwell and DGX Spark · `IN_PROGRESS`
 - [177](goals/177-dashboard-styles-in-its-stylesheet.goal) The dashboard's styles in its stylesheet, and a Content Security Policy with no inline style · `PROPOSED`
 - [186](goals/186-judge-a-released-artifact.goal) The judge measures a released artifact: a container image by digest, or a binary by its hash, as the thing under test · `PROPOSED`
-
-## v0.1.3
-
-**Follow-ups to the first release.** Proposed.
-
-- [097](goals/097-add-a-kit-bundle-from-the-dashboard.goal) Give control a kit bundle from the dashboard · `PROPOSED`
-- [108](goals/108-gated-models-on-cloud-rigs.goal) Gated models on cloud rigs · `PROPOSED`
-- [129](goals/129-copy-takes-rubrics.goal) A research campaign's copy can take its own rubrics · `PROPOSED`
-- [130](goals/130-mcp-tools-after-update.goal) An MCP client sees control's new tools after control is updated · `PROPOSED`
-- [145](goals/145-drain-race.goal) A drain doesn't wait two hours for a trial that started seconds before it · `PROPOSED`
-- [146](goals/146-supervisor-alone.goal) Restart or update a rig's supervisor alone, while its harness goes on · `PROPOSED`
-- [141](goals/141-waiting-win-after-champion-moved.goal) A waiting win the champion moved past: closed when a champion has it, an approval when none does · `PROPOSED`
-- [149](goals/149-output-cut-notice.goal) A command's result says its output was cut only when it was · `PROPOSED`
-- [150](goals/150-model-check-busy-model.goal) A model check on a busy model: it waits as long as the rig says, and doesn't call the model down · `PROPOSED`
 
 ## v0.1.4
 
