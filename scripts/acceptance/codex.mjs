@@ -346,6 +346,28 @@ try {
     headless.status === 200 && headless.body.sent?.program_mode === "headless",
     headless.body,
   );
+  // From here on, each trial that starts gets the owner's two messages within seconds, while the
+  // steps below wait for other things: a headless trial waits for them only so long (the
+  // stand-in's WAIT_MESSAGES_MS), and the audit below can take many minutes.
+  let messaging = true;
+  const messenger = (async () => {
+    while (messaging) {
+      try {
+        for (const e of (await events()).filter(
+          (x) => x.kind === "trial_started" && x.subject === "smoke-1",
+        )) {
+          const id = String(e.body.trial);
+          if (messaged.has(id)) continue;
+          messaged.add(id);
+          for (const text of ["Look at the inner loop first.", "Keep the change small."])
+            await command("message_agent", { run: "smoke-1", to: `trial:${id}`, text });
+        }
+      } catch (err) {
+        console.log("messaging the trials:", err instanceof Error ? err.message : String(err));
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  })();
   const attempt = await until(
     "a trial in Codex submitted",
     async () =>
@@ -490,26 +512,17 @@ try {
       /model=scripted\)/.test(why),
     audited,
   );
-  // The later trial, headless: the owner's two messages go to each trial that starts, until one
-  // submits headless.
+  // The later trial, headless: each trial that starts has had the owner's two messages since the
+  // rig went headless (above), until one submits headless.
   const later = await until(
     "a trial in Codex submitted headless",
-    async () => {
-      const all = await events();
-      for (const e of all.filter((x) => x.kind === "trial_started" && x.subject === "smoke-1")) {
-        const id = String(e.body.trial);
-        if (messaged.has(id)) continue;
-        messaged.add(id);
-        for (const text of ["Look at the inner loop first.", "Keep the change small."])
-          await command("message_agent", { run: "smoke-1", to: `trial:${id}`, text });
-      }
-      return all.find(
+    async () =>
+      (await events()).find(
         (e) =>
           e.kind === "attempt_recorded" &&
           /codex harness/.test(String(e.body.hypothesis ?? "")) &&
           String(e.body.hypothesis).includes(" mode=headless "),
-      );
-    },
+      ),
     900_000,
     3000,
   );
@@ -521,6 +534,8 @@ try {
     120_000,
     2000,
   );
+  messaging = false;
+  await messenger;
   const laterReads = (await events()).filter(
     (e) => e.kind === "agent_message_read" && e.body.trial === laterTrial.body.trial,
   );
