@@ -67,9 +67,17 @@ const READY_MAX_MS = 20_000;
  */
 const TAKE_MS = 60_000;
 /**
- * After this long without a turn, a message whose end the screen still shows in the program's
- * input is sent again with one Enter: Codex once kept a long message in its input box after its
- * Enter (goal 188's roll). A screen that shows anything else, such as a menu, gets no key.
+ * A long message has longer: this much more for each TAKE_PER_BYTES of it. A program takes a
+ * message of 100 KB in for tens of seconds (Codex still showed the middle of one in its input
+ * 60 s after it was typed in), and an Enter while it does is a new line in it.
+ */
+const TAKE_MORE_MS = 30_000;
+const TAKE_PER_BYTES = 32_768;
+/**
+ * Every this long without a turn, a message the screen still shows in the program's input is
+ * sent again with one Enter (goal 188's roll: Codex kept a long message in its input box after
+ * its Enter, and Claude Code its seven pastes). A screen that shows anything else, such as a
+ * menu, gets no key.
  */
 const ENTER_AGAIN_MS = 15_000;
 /** The screen's last lines a message never taken shows in its reason. */
@@ -378,19 +386,30 @@ export class RoleTerminal<T extends CliTally> {
   private async took(h: Terminal, text: string): Promise<void> {
     const waiting = () =>
       !this.began && !this.stopping && this.host === h && this.ends !== undefined && !this.limit;
-    const takeMs = this.o.takeMs ?? TAKE_MS;
+    const takeMs =
+      this.o.takeMs ??
+      TAKE_MS + Math.floor(Buffer.byteLength(text) / TAKE_PER_BYTES) * TAKE_MORE_MS;
     const until = Date.now() + takeMs;
-    const again = Date.now() + Math.min(this.o.enterAgainMs ?? ENTER_AGAIN_MS, takeMs);
-    while (waiting() && Date.now() < again) await sleep(Math.min(250, takeMs));
-    // Still in its input box: one more Enter sends it.
-    if (waiting()) {
+    const every = Math.min(this.o.enterAgainMs ?? ENTER_AGAIN_MS, takeMs);
+    let again = Date.now() + every;
+    let enters = 0;
+    while (waiting() && Date.now() < until) {
+      await sleep(Math.min(250, takeMs));
+      if (!waiting() || Date.now() < again) continue;
+      again = Date.now() + every;
+      // Still in its input box: one more Enter sends it, once the program has taken it all in.
       const screen = await h.screen().catch(() => undefined);
       if (screen && stillTyped(screen.lines, text)) {
-        log("agents", `${this.p.name} kept its message in its input: Enter again`, {}, "warn");
+        enters++;
+        log(
+          "agents",
+          `${this.p.name} kept its message in its input: Enter again`,
+          { enters },
+          "warn",
+        );
         await h.keys(["enter"]).catch(() => undefined);
       }
     }
-    while (waiting() && Date.now() < until) await sleep(Math.min(250, takeMs));
     if (!waiting()) return;
     // What its screen shows then, in the words: what the program put in the message's way.
     const screen = await h.screen().catch(() => undefined);
@@ -695,10 +714,11 @@ const PROMPT_MARK = /^\s*[›>❯]\s?/;
  * Whether a screen still shows a message typed in, in the program's input: lines of the screen
  * that are parts of the message, spaces, the input's frame and its prompt mark aside, 40 of its
  * characters in all (all of a shorter one), wherever the screen wraps it and whichever part of
- * a long message the input shows; or the placeholder Codex shows in place of a long paste.
+ * a long message the input shows; or the placeholder Codex shows in place of a long paste, or
+ * Claude Code in place of each paste (`[Pasted text #1 +54 lines]`).
  */
 export function stillTyped(lines: readonly string[], text: string): boolean {
-  if (/\[Pasted Content \d+ chars\]/.test(lines.join("\n"))) return true;
+  if (/\[Pasted (Content \d+ chars|text #\d+[^\]]*)\]/.test(lines.join("\n"))) return true;
   const flat = (s: string) => s.replace(FRAME, "").replace(/\s+/g, "");
   const message = flat(text);
   if (!message) return false;

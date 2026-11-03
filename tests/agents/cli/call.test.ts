@@ -386,6 +386,11 @@ test("a message the screen still shows in the program's input gets one more Ente
     ),
     true,
   );
+  // Claude Code shows each paste as a chip.
+  assert.equal(
+    stillTyped(["❯ [Pasted text #1 +54 lines][Pasted text #2][Pasted text #3]"], long),
+    true,
+  );
   // Codex shows a long paste as a placeholder.
   assert.equal(stillTyped(["› [Pasted Content 18342 chars]"], "x".repeat(18_342)), true);
   // A menu, or a screen that moved on, gets no key.
