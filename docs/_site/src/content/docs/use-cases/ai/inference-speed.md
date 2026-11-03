@@ -1,17 +1,17 @@
 ---
-title: "Run a model faster on the GPU you have"
-description: "Point agents at an inference engine, a kernel or a quantization, and let them tune it for your exact card while a judge on that card times every change and holds the model's answers where they started."
+title: "LLM inference optimization"
+description: "Use Thermite to optimize an inference engine, kernel or quantization for your GPU, with throughput measured on that GPU and output held to a reference."
 type: use-case
 useCase:
   mode: climb
   personas: [local-ai, startups]
-  summary: "Agents tune an engine, a kernel or a quantization for your exact card. The judge times each change on that card, and the model's answers must not change."
+  summary: "Agents tune engines, kernels and quantization for your GPU. The judge measures throughput on that GPU and requires the output to match a reference."
   measure: "Tokens a second · same answers as a reference · prompts the agents never see"
 sidebar:
   order: 1
 ---
 
-Inference engines are tuned for the newest GPUs first, so the card you can afford, a used data-centre GPU, a gaming card or a box of older GPUs, is often left slow. Thermite lets agents tune the engine for that card, for days. A judge on the same card times every change from outside the engine, and checks that the model still gives the same answers. This is the use case Thermite grew out of, and the one it has a study for.
+Inference engines are typically tuned for the newest GPUs, which leaves older and lower-cost hardware underused. Thermite's agents tune the engine for your specific GPU over days. A judge on the same GPU measures every change from outside the engine and verifies that the model's output is unchanged. This is the use case Thermite was built from, and the subject of its first case study.
 
 ## The campaign
 
@@ -30,20 +30,20 @@ Inference engines are tuned for the newest GPUs first, so the card you can affor
 3. **The judge times each change** beside the best version so far, on the same card, in alternating blocks, and times the best version against itself every day to learn the card's noise. A gain must hold a second time, and on the hidden prompts.
 4. **Other campaigns on the same engine.** A **goal campaign** can make a new weight format load and match a reference bit for bit. A **research campaign** can ask which published methods help low-bit decoding on older cards, with every quote checked word for word against the page it came from.
 
-## What the judge keeps out
+## What the judge guards against
 
-A faster kernel that answers differently is the classic way for this work to go wrong, and so is a benchmark that an agent can reach. The engine's speed is measured by the judge's clock, never by a number that the engine prints, and the check compares the answers with a reference that the agents never see.
+The most common failure in this work is a faster kernel that changes the model's output; another is a benchmark that the agents can modify. Throughput is measured on the judge's clock, never from a number the engine reports, and the check compares the output with a reference the agents cannot see.
 
 ## Who it's for
 
-- **[Local AI enthusiasts](../for/local-ai.mdx):** make the card you own run the model you want. The agents can run on a model server of your own, at no cost a request.
-- **[Startups](../for/startups.mdx):** more tokens a second on the same rented GPU is a lower cost for each request you serve.
+- **[Local AI enthusiasts](../for/local-ai.mdx):** get the most from the GPUs you own, with agents on your own model server at no per-request cost.
+- **[Startups](../for/startups.mdx):** higher throughput on the same rented GPU lowers the cost of every request you serve.
 
-## What others have shown
+## Related work
 
 Thermite's own study took Qwen3.8-27B from 7.74 to 30.06 tokens a second on one Tesla P100, a card that sells used for about $100: 131 changes judged, 28 kept ([the study](../../studies/qwen3-8-27b-on-a-p100.mdx)). Outside Thermite, METR found OpenAI's o3 overwriting the grader's timer or copying the grader's answer in 6 of 24 runs of a kernel task ([METR's post](https://metr.org/blog/2025-06-05-recent-reward-hacking/)): the reason the timer must be out of the agents' reach.
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md), then [add a rig on your GPU machine](../../how-to/install/rig-on-a-machine.md) and [split its GPUs](../../how-to/install/several-gpus.md) if it has several. No GPU of your own? [Rent one on RunPod](../../how-to/install/runpod-rig.md) by the hour.
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) that builds the engine and checks its output, then [test it](../../how-to/campaigns/test-a-kit.md).

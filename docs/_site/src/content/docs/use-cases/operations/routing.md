@@ -1,17 +1,17 @@
 ---
-title: "Plan delivery routes closer to the best known"
-description: "Let agents improve a vehicle routing solver's moves while the judge runs it for a fixed time on standard instances, recomputes every route's cost itself, and keeps a change only if it holds on instances it never saw."
+title: "Vehicle routing"
+description: "Use Thermite to improve a vehicle routing solver, with every route's cost recomputed by the judge and results validated on held-out instances."
 type: use-case
 useCase:
   mode: climb
   personas: [solo-builders, startups]
-  summary: "Agents improve a routing solver. The judge runs it for a fixed time, recomputes each route's cost itself, and a win must hold on larger instances they never see."
+  summary: "Agents improve a routing solver's operators. The judge runs it on a fixed time budget, recomputes every route's cost and tests on held-out instances."
   measure: "Gap to the best known cost · routes valid, recomputed by the judge · larger instances"
 sidebar:
   order: 2
 ---
 
-Vehicle routing is the daily puzzle of every delivery fleet: which van visits which customers, in what order, within its capacity. The best solvers are heuristics, tuned by years of research, and small changes to their moves still win fractions of a percent, which at a fleet's scale is real fuel and real hours. The score is easy to check, because a route's cost can be recomputed exactly. Thermite can put agents on the solver and that check in the judge's hands.
+Vehicle routing determines which vehicle serves which customers, in what order, within its capacity. State-of-the-art solvers are heuristics refined over years of research, and further gains are measured in fractions of a percent, which is significant at fleet scale. Route cost can be recomputed exactly, so results are straightforward to verify. Thermite's agents improve the solver, and the judge verifies every solution.
 
 ## The campaign
 
@@ -29,20 +29,20 @@ Vehicle routing is the daily puzzle of every delivery fleet: which van visits wh
 2. **Agents try changes** to the solver's moves, its order of search and the way it escapes a local optimum.
 3. **The judge scores each version** on the same budget as the best version, and keeps it only if it holds on the hidden instances too.
 
-## What the judge keeps out
+## What the judge guards against
 
-A solver that reports its own cost can report a wrong one, and a move tuned on a few instances can fail on the next. The check recomputes the cost from the routes, and the hidden instances test the solver on problems it wasn't tuned on. Every version gets the same time on the same machine, so no comparison is unequal.
+A solver that reports its own cost can misreport it, and operators tuned on a few instances can fail on others. The check recomputes every route's cost, withheld instances test every accepted change, and every version runs with the same time budget on the same machine.
 
 ## Who it's for
 
-- **[Solo builders](../for/solo-builders.mdx):** an operations researcher with one computer and an idea for a move.
+- **[Solo builders](../for/solo-builders.mdx):** operations researchers testing new solver operators on a single computer.
 - **[Startups](../for/startups.mdx):** logistics software companies, testing on their customers' kinds of instances.
 
-## What others have shown
+## Related work
 
 VRPAgent had a language model write new moves for a routing solver, and beat the leading solver, HGS, on instances with 2,000 customers; the model calls of one search run with Gemini 2.5 Flash cost about $19 ([Hottung and others, 2025](https://arxiv.org/abs/2510.07073)).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md).
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) with a check that validates routes, and [test it](../../how-to/campaigns/test-a-kit.md) with a solver that misreports its cost: the check must fail it.

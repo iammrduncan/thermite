@@ -1,17 +1,17 @@
 ---
-title: "Build a yield forecast that holds next season"
-description: "Let agents improve a crop yield forecast while the judge scores it only on seasons it never saw, with features limited to what is known on the forecast date."
+title: "Crop yield forecasting"
+description: "Use Thermite to improve a crop yield forecast, evaluated only on held-out seasons with the data available on the forecast date."
 type: use-case
 useCase:
   mode: climb
   personas: [enterprises, solo-builders]
-  summary: "Agents improve the forecast. The judge scores it only on whole seasons it never saw, with data known by the forecast date, against a simple baseline."
+  summary: "Agents improve the forecasting model. The judge evaluates it only on held-out seasons, with the data available on the forecast date."
   measure: "Error on unseen seasons · no data from after the forecast date · the latest seasons"
 sidebar:
   order: 3
 ---
 
-A yield forecast is useful only for a season that hasn't happened. Yet many forecasts are scored on a random split of past data, where the test rows share a season, and its weather, with the training rows. The error looks small on paper and large the next year. Thermite can put agents on a forecast with the honest test built in: every case is a whole season held back, and the check refuses data from after the forecast date.
+A yield forecast is useful only for seasons that have not happened yet. Many forecasts are nevertheless evaluated on random splits of historical data, where test records share seasons and weather with training records, which understates the real error. Thermite evaluates forecasts the way they are used: each test case is an entire held-out season, and the check rejects any data from after the forecast date.
 
 ## The campaign
 
@@ -29,20 +29,20 @@ A yield forecast is useful only for a season that hasn't happened. Yet many fore
 2. **Agents try changes:** better features from weather and satellite data, a different model, a better treatment of trend.
 3. **The judge scores each version** season by season. A win must hold on the hidden seasons too.
 
-## What the judge keeps out
+## What the judge guards against
 
-Leaks from the future: a random split, a feature computed from the whole season, a test season the model saw in training. Each case is a season the model has not seen, and the check refuses a feature from after the forecast date.
+Leakage from the future: random splits, features computed over the whole season, or test seasons seen in training. Each test case is a full season withheld from training, and the check rejects any feature dated after the forecast date.
 
 ## Who it's for
 
 - **[Enterprises](../for/enterprises.mdx):** seed companies, crop insurers and agencies that publish forecasts.
-- **[Solo builders](../for/solo-builders.mdx):** a researcher with a model and a public benchmark, such as CY-Bench, to start from.
+- **[Solo builders](../for/solo-builders.mdx):** researchers starting from a public benchmark such as CY-Bench.
 
-## What others have shown
+## Related work
 
 On the same data, Morales and Villalobos measured a forecast error of 6% with a random split and 37% when forecasting future years; the best models, at 35 to 38%, did little better than the farm average at 42% ([the paper](https://doi.org/10.3389/fpls.2023.1128388)). CY-Bench, a benchmark for maize in 38 countries and wheat in 29, scores models by leaving a whole year out for this reason ([CY-Bench](https://github.com/WUR-AI/AgML-CY-Bench)).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md).
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) with a case for each season, and [test it](../../how-to/campaigns/test-a-kit.md) with a model that cheats by reading the future: the check must fail it.

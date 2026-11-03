@@ -1,17 +1,17 @@
 ---
-title: "Find out what is known, with every quote checked"
-description: "Ask a research campaign a question about the literature, and get a report whose every claim rests on a quote that code found, word for word, in an archived copy of the page it came from."
+title: "Literature review"
+description: "Use a Thermite research campaign to review the literature on a question, with every quotation verified word for word against an archived copy of its source."
 type: use-case
 useCase:
   mode: research
   personas: [solo-builders, enterprises]
-  summary: "Ask questions. Agents read sources and record claims; code finds every quote, word for word, in an archived copy of its page, and a panel of models decides each answer."
+  summary: "Agents gather sources and record claims. Every quote is verified against an archived copy of its source, and a review panel decides each question."
   measure: "Verified claims · every quote found in its archived page · by a panel of models, by majority"
 sidebar:
   order: 3
 ---
 
-Before an experiment comes the question of what is already known. A literature review takes days, and a language model that does it for you can invent a paper, a number or a quote. A Thermite **research campaign** answers the questions you ask from sources it archives as it reads them, and code checks every quote in its report against those archived pages, word for word.
+A literature review takes days, and a language model that drafts one can invent papers, figures and quotations. A Thermite research campaign answers your questions from sources it archives as it reads them, and code verifies every quotation in the report against those archived pages, word for word.
 
 ## The campaign
 
@@ -30,20 +30,20 @@ Before an experiment comes the question of what is already known. A literature r
 3. **Code checks every quote** against the archived page, and the run's page shows each question's state: answered, the best available, or open, with the gaps in the evidence that the next tasks look for.
 4. **The run ends** when the review panel's decisions give every question an end, when the research stops adding, or when its maximum time is over.
 
-## What the judge keeps out
+## What the judge guards against
 
-An invented citation reads exactly like a real one. In a research campaign, a claim counts only when every quote is found word for word on its archived page and every number in the claim is in its quotes; otherwise it stays a draft, with its problems listed. The report flags every number that appears in no archived source and no verified claim.
+A fabricated citation looks exactly like a real one. In a research campaign, a claim counts only when every quotation is found word for word on its archived page and every number in the claim appears in its quotations; otherwise it remains a draft, with its problems listed. The report flags every number that appears in no archived source and no verified claim.
 
 ## Who it's for
 
-- **[Solo builders](../for/solo-builders.mdx):** an independent researcher's or a student's first pass over a field.
+- **[Solo builders](../for/solo-builders.mdx):** independent researchers and students surveying a new field.
 - **[Enterprises](../for/enterprises.mdx):** R&D teams that need to show where every statement came from.
 
-## What others have shown
+## Related work
 
 Walters and Wilder found that 55% of the citations GPT-3.5 gave, and 18% of those GPT-4 gave, were fabricated ([the paper](https://www.nature.com/articles/s41598-023-41032-5)). Kosmos, an AI scientist, had experts rate its statements: 79.4% of 102 were accurate, but only 57.9% of the interpretive ones ([the paper](https://arxiv.org/abs/2511.02824)).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md).
 2. [Choose a campaign mode](../../how-to/campaigns/choose-a-mode.md) shows what a research campaign needs.

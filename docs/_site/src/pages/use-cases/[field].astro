@@ -51,8 +51,9 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
       </nav>
       <div class="title">
         <FieldIcon name={field.key} />
-        <h1 class="h1">{field.label}</h1>
+        <p class="eyebrow">Thermite for {field.label}</p>
       </div>
+      <h1 class="h1">{field.headline}</h1>
       <p class="lede">{field.intro}</p>
       <div class="btns">
         <a class="btn primary" href="/tutorials/your-own-project/">Start on your own project</a>
@@ -91,7 +92,7 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
     <div class="wrap">
       <div class="head">
         <p class="eyebrow">Who it's for</p>
-        <h2 class="h2">The guide for you.</h2>
+        <h2 class="h2">Guides by audience</h2>
       </div>
       <div class="people">
         {
@@ -178,18 +179,16 @@ const suited = personas.filter((p) => cases.some((c) => c.personas.includes(p.ke
     align-items: center;
     gap: 1rem;
   }
-  .title :global(.fi) {
-    width: 3.4rem;
-    height: 3.4rem;
-    border-radius: 14px;
+  .title {
+    margin-bottom: 1rem;
   }
-  .title :global(.fi svg) {
-    width: 1.8rem;
-    height: 1.8rem;
-  }
-  .title .h1 {
+  .title .eyebrow {
     margin: 0;
-    font-size: clamp(2rem, 4.6vw, 3.4rem);
+  }
+  .hero .h1 {
+    max-width: 50rem;
+    margin: 0;
+    font-size: clamp(2rem, 4.4vw, 3.3rem);
   }
   .hero .lede {
     max-width: 46rem;

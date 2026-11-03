@@ -1,17 +1,17 @@
 ---
-title: "Improve a segmentation model on scans it never saw"
-description: "Let agents change a medical image segmentation model's architecture and training while the judge trains each version and scores it with Dice on a fold or a site that the agents never see."
+title: "Medical image segmentation"
+description: "Use Thermite to improve a medical image segmentation model, trained on a fixed budget and evaluated on a fold or site withheld from the agents."
 type: use-case
 useCase:
   mode: climb
   personas: [startups, enterprises]
-  summary: "Agents change the model and its training. The judge trains each version on the same budget and scores it on a fold, or a hospital's scans, that they never see."
+  summary: "Agents modify the architecture and training. The judge trains each version on a fixed budget and evaluates it on a held-out fold or site."
   measure: "Mean Dice · no structure worse, boundary error held · a fold, or a site's scans"
 sidebar:
   order: 2
 ---
 
-A segmentation model outlines organs or tumours in a scan. Most new architectures that claim to beat a strong baseline don't hold up when someone measures them fairly: with the same baseline, the same training budget and a test set the authors didn't tune on. Thermite can run that search fairly by design. The kit fixes the baseline, the budget and the scoring; agents change the model and its training; and the judge scores each version on scans the agents never see.
+Segmentation models delineate organs and lesions in medical images. Many new architectures that report gains over strong baselines do not hold up under a fair comparison: the same baseline, the same training budget, and a test set that was not used for tuning. Thermite enforces that comparison by design. The kit fixes the baseline, the budget and the scoring; agents change the model and its training; the judge evaluates each version on scans the agents never see.
 
 ## The campaign
 
@@ -29,20 +29,20 @@ A segmentation model outlines organs or tumours in a scan. Most new architecture
 2. **Agents try changes** to the architecture, the augmentation, the loss and the schedule.
 3. **The judge trains and scores each change** on the same budget as the best version. A gain must hold on fresh runs and on the hidden fold or site.
 
-## What the judge keeps out
+## What the judge guards against
 
-Weak baselines, unequal budgets and models that learn a shortcut, such as a scanner's marks rather than the anatomy. The kit sets the baseline and the budget, so every version is measured the same way, and a hidden site's scans catch a model that learned one hospital's habits. A shortcut that every site shares can still get through: look at what the model learned.
+Weak baselines, unequal training budgets, and models that learn shortcuts such as scanner artefacts instead of anatomy. The kit fixes the baseline and the budget, so every version is measured the same way, and a withheld site's scans detect a model that fits one hospital's data. A shortcut present at every site can still pass, so review what the model has learned.
 
 ## Who it's for
 
 - **[Startups](../for/startups.mdx):** imaging AI companies that need gains that hold on a new customer's scans.
 - **[Enterprises](../for/enterprises.mdx):** academic radiology departments. Scans hold health information, and here they stay with you, with a local model for the agents if you choose.
 
-## What others have shown
+## Related work
 
 "nnU-Net Revisited" found that "many of these recent claims fail to hold up" when new segmentation methods are compared with strong baselines under the same conditions ([Isensee and others, 2024](https://arxiv.org/abs/2404.09556)). Camyla, an agent system, wrote more than 2,700 model implementations in 28 days on eight GPUs, and beat the strongest of 14 baselines, nnU-Net among them, on 22 of 31 datasets ([the paper](https://arxiv.org/abs/2604.10696)).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md), then [add a rig on your GPU machine](../../how-to/install/rig-on-a-machine.md).
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) that trains for a fixed budget and scores Dice, and [test it](../../how-to/campaigns/test-a-kit.md): train the unchanged model twice to see the noise.

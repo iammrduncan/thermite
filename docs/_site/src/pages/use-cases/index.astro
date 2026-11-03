@@ -27,14 +27,14 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   <section class="hero">
     <div class="wrap">
       <p class="eyebrow">Use cases</p>
-      <h1 class="h1">Point it at anything a program can score.</h1>
+      <h1 class="h1">Autoresearch for any measurable problem.</h1>
       <p class="lede">
-        If a program can build your project, run it and say how good the result is, Thermite can put agents on it for
-        days, and its judge keeps only what it confirms.
+        Thermite applies wherever a program can build a result, run it and measure its quality. Explore use cases by
+        field or by audience.
       </p>
       <div class="btns">
         <a class="btn primary" href="#fields">Browse by field</a>
-        <a class="btn" href="#all">Search all {cases.length}</a>
+        <a class="btn" href="#all">Search use cases</a>
       </div>
     </div>
   </section>
@@ -43,7 +43,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
     <div class="wrap">
       <div class="head">
         <p class="eyebrow">By field</p>
-        <h2 class="h2">Nine fields, one judge.</h2>
+        <h2 class="h2">Use cases by field</h2>
       </div>
       <div class="tiles">
         {
@@ -68,7 +68,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
       </div>
       <a class="own" href="/tutorials/your-own-project/">
         <span>
-          <b>Your field isn't here?</b> If a program can build it, run it and score it, Thermite can work on it.
+          <b>Don't see your field?</b> Thermite works with any project that a program can build, run and measure.
         </span>
         <span class="own-go">Start on your own project <span aria-hidden="true">→</span></span>
       </a>
@@ -78,8 +78,8 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   <section class="section" id="who">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">By who you are</p>
-        <h2 class="h2">From one laptop to a fleet.</h2>
+        <p class="eyebrow">By audience</p>
+        <h2 class="h2">Who Thermite is for</h2>
       </div>
       <div class="grid four">
         {
@@ -93,7 +93,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
                   Read the guide <span aria-hidden="true">→</span>
                 </a>
                 <a href={`?for=${p.key}#all`} data-show={p.key}>
-                  Show its {count(p.key)} use cases
+                  View {count(p.key)} use cases
                 </a>
               </div>
             </div>
@@ -106,8 +106,8 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
   <section class="section" id="all">
     <div class="wrap">
       <div class="head">
-        <p class="eyebrow">Every use case</p>
-        <h2 class="h2">Find yours.</h2>
+        <p class="eyebrow">All use cases</p>
+        <h2 class="h2">Search all use cases</h2>
       </div>
       <div class="finder" data-finder hidden>
         <label class="search">
@@ -144,7 +144,7 @@ const count = (key: string) => cases.filter((c) => c.personas.includes(key)).len
         }
       </ul>
       <p class="empty small" data-empty hidden>
-        Nothing matches yet. <button type="button" data-reset>Clear the search</button>
+        No use cases match these filters. <button type="button" data-reset>Clear filters</button>
       </p>
     </div>
   </section>

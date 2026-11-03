@@ -1,17 +1,17 @@
 ---
-title: "Make your code faster without breaking it"
-description: "Point agents at a slow function, a parser, a query or a build, and let them try speed-ups for days while a judge on your machine times each one and runs your tests on inputs they never see."
+title: "Code performance optimization"
+description: "Use Thermite to optimize performance-critical code: agents propose changes, and a judge benchmarks each one on your hardware and accepts it only if your tests pass and the output is unchanged."
 type: use-case
 useCase:
   mode: climb
   personas: [solo-builders, startups, enterprises]
-  summary: "Agents try speed-ups for days. The judge times each one on your machine, and a win must pass your tests and match the old output byte for byte."
+  summary: "Agents propose performance changes. The judge benchmarks each on your hardware and accepts it only if your tests pass and the output is unchanged."
   measure: "Time per call · every test passes, same output · real inputs the agents never see"
 sidebar:
   order: 1
 ---
 
-Every project has a hot path that everyone means to speed up: a parser, a template renderer, a serializer, a query, a build step. The work is a loop of small experiments, and most of them fail. Thermite hands that loop to AI agents. They try one change after another, side by side, and a judge that they cannot touch times each change on your machine. Only a change that is faster and still gives exactly the same output becomes the new best version.
+Most projects have performance-critical code: a parser, a renderer, a serializer, a query or a build step. Improving it is a long series of small experiments, most of which fail. Thermite runs those experiments with AI agents working in parallel, while a judge the agents cannot access benchmarks each change on your hardware. A change is accepted only if it is faster and produces exactly the same output.
 
 ## The campaign
 
@@ -31,21 +31,21 @@ Every project has a hot path that everyone means to speed up: a parser, a templa
 4. **The judge decides.** It builds each change itself, runs it beside the best version so far in alternating blocks, checks the output, and works out whether the gain is larger than the machine's noise. A gain must hold a second time, and on the hidden inputs, before the change becomes the new best version.
 5. **You take the result.** The best version is a patch against the commit you started from, or a commit on the run's branch in your repository ([Take the result](../../how-to/campaigns/take-the-result.md)). Every attempt, with its code and the judge's reasons, stays in the run's record.
 
-## What the judge keeps out
+## What the judge guards against
 
-A fast change that is wrong is the usual failure of automatic optimization. In Thermite, the agents never run the official benchmark and never see the check, so they cannot change a timer, skip work, or make the reference easier to match. A number that an agent prints counts for nothing: only the judge's measurement counts. The hidden inputs catch a change that is tuned to the visible ones.
+The usual failure of automated optimization is a change that is fast but wrong. In Thermite, the agents never run the official benchmark and never see the check, so they cannot alter a timer, skip work or simplify the reference. Numbers reported by an agent are ignored; only the judge's measurements count, and withheld inputs detect changes tuned only to the visible ones.
 
 ## Who it's for
 
-- **[Solo builders](../for/solo-builders.mdx) and open-source maintainers:** start a campaign on Friday evening, and read on Saturday what was tried and what won.
+- **[Solo builders](../for/solo-builders.mdx) and open-source maintainers:** run a campaign unattended and review what was tried, what was accepted and why.
 - **[Startups](../for/startups.mdx):** a faster hot path is lower cost per request on the same servers.
 - **[Enterprises](../for/enterprises.mdx):** run it on your own machines, against your own private code, with a record of every change.
 
-## What others have shown
+## Related work
 
 In March 2026, an agent loop made Shopify's Liquid template engine, a library about twenty years old, spend 53% less time to parse and render its benchmark (7,469 µs to 3,534 µs), with about 120 automated experiments ([the pull request](https://github.com/Shopify/liquid/pull/2056), still open when this page was written). Codeflash, which builds a tool for this work, reported that 62% of the optimizations GPT-4o proposed were incorrect ([their post](https://hackernoon.com/90percent-failure-rate-why-gpt-4o-cant-optimize-code-and-what-we-built-instead)). Both show why the check matters as much as the speed.
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md): about twenty minutes.
 2. Start a campaign on [your own project](../../tutorials/your-own-project.md) from **New campaign**, and press **Try the kit first** to see the judge measure your project before any agent starts.

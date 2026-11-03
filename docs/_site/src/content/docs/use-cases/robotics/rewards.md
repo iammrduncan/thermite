@@ -1,17 +1,17 @@
 ---
-title: "Teach a robot the task, not a loophole"
-description: "Let agents write a robot's reward function or controller while the judge trains a policy from scratch in simulation and measures its success with its own test, on seeds and terrain the agents never see."
+title: "Robot reward design"
+description: "Use Thermite to design robot reward functions, with each policy trained from scratch in simulation and evaluated by the judge's own test of success."
 type: use-case
 useCase:
   mode: climb
   personas: [local-ai, startups]
-  summary: "Agents write the reward. The judge trains a policy from scratch in simulation and measures success with its own test, on seeds and terrain they never see."
+  summary: "Agents design reward functions. The judge trains each policy from scratch in simulation and measures task success with its own evaluation."
   measure: "Task success rate · the judge's own test of success · other seeds and terrain"
 sidebar:
   order: 1
 ---
 
-Training a robot in simulation starts with a reward function: the code that tells the learner how well it is doing. Writing a good one takes experts many tries, and a learner finds every gap in it. Thermite can put agents on the reward code, and a judge on the result. The judge trains a policy itself, from scratch, and measures whether the robot did the task with its own test, which is not the reward the agents wrote.
+Robot learning in simulation depends on the reward function, which tells the learner how well it is performing. Designing one takes experts many iterations, and learners exploit any gap in it. Thermite's agents design the reward, and the judge trains a policy from scratch and evaluates task success with its own test, independent of the reward the agents wrote.
 
 ## The campaign
 
@@ -29,20 +29,20 @@ Training a robot in simulation starts with a reward function: the code that tell
 2. **Agents write and improve the reward:** what to reward, what to punish, how to shape it over training.
 3. **The judge trains and tests each version.** Training is noisy, so a gain must hold on fresh runs before it counts, and on the hidden seeds and terrain.
 
-## What the judge keeps out
+## What the judge guards against
 
-A learner rewarded for the wrong thing learns the wrong thing: to flip a block over rather than stack it, or to slide along the ground rather than walk. The judge measures success with a test the agents can't read, so a reward that teaches a loophole loses.
+A learner optimizes the reward it is given, not the intended task: for example, flipping a block instead of stacking it, or sliding along the ground instead of walking. The judge measures success with a test the agents cannot read, so a reward that teaches the wrong behaviour does not win.
 
 ## Who it's for
 
-- **[Local AI enthusiasts](../for/local-ai.mdx):** robot learning on one GPU, with agents on a local model.
+- **[Local AI enthusiasts](../for/local-ai.mdx):** robot learning on a single GPU, with agents on a local model.
 - **[Startups](../for/startups.mdx):** robotics companies that design rewards for many tasks and robots.
 
-## What others have shown
+## Related work
 
 Eureka had a language model write reward functions, scored each by a separate measure of the task's success, and "outperforms human experts on 83% of the tasks" across 29 environments ([Ma and others, 2023](https://arxiv.org/abs/2310.12931)). DeepMind's list of specification gaming includes a robot that "flipped over the red block" instead of stacking it ([DeepMind's post](https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/)).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md), then [add a rig on your GPU machine](../../how-to/install/rig-on-a-machine.md).
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) that trains and tests, and [test it](../../how-to/campaigns/test-a-kit.md): train the starting reward a few times to see the noise.

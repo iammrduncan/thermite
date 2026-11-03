@@ -1,17 +1,17 @@
 ---
-title: "Pack work onto machines with less waste"
-description: "Let agents improve the rule that places jobs on machines, or orders jobs on a factory line, while the judge replays your own traces in a simulator and keeps the rule only if it holds on later weeks."
+title: "Cluster and job scheduling"
+description: "Use Thermite to improve job placement and scheduling heuristics, evaluated by replaying your own traces and validated on held-out weeks."
 type: use-case
 useCase:
   mode: climb
   personas: [enterprises, startups]
-  summary: "Agents improve the placement or scheduling rule. The judge replays your own traces, checks every job fits, and a win must hold on later weeks they never see."
+  summary: "Agents improve the placement or scheduling heuristic. The judge replays your traces, validates every placement and tests on held-out weeks."
   measure: "Stranded capacity or makespan · every job placed, no machine over · later weeks of traces"
 sidebar:
   order: 1
 ---
 
-A scheduler's rule, the code that decides which machine takes each job, is small, but it runs millions of times. A slightly better rule leaves less CPU and memory stranded on a cluster, or less idle time on a factory line, on the same hardware. The rule can be scored offline: replay a record of real jobs through a simulator of the cluster or the line, and measure what was wasted. Thermite can put agents on the rule and that replay in the judge's hands.
+Placement and scheduling heuristics decide which machine runs each job, and they run millions of times. Small improvements reduce stranded CPU and memory on a cluster, or idle time on a production line, without new hardware. The heuristic can be evaluated offline by replaying historical traces through a simulator. Thermite's agents improve the heuristic, and the replay is the judge's evaluation.
 
 ## The campaign
 
@@ -29,20 +29,20 @@ A scheduler's rule, the code that decides which machine takes each job, is small
 2. **Agents try changes** to the rule: a better score for each machine, a look-ahead, a different order for large jobs.
 3. **The judge scores each version** and keeps it only if it wastes less on every case, places every job, and holds on the hidden weeks.
 
-## What the judge keeps out
+## What the judge guards against
 
-A rule tuned on one month of jobs can learn that month. When the mix of work changes, a rule found by search can fall apart. The hidden weeks, and a cluster the agents never saw, test it on work it wasn't tuned on. Thermite only scores the rule: putting it into the live scheduler is your change to make.
+A heuristic tuned on one month of jobs can overfit to that workload, and heuristics found by search can degrade when the workload changes. Withheld weeks and clusters test every accepted heuristic. Thermite evaluates the heuristic offline; deploying it to the production scheduler remains your decision.
 
 ## Who it's for
 
 - **[Enterprises](../for/enterprises.mdx):** teams that run large fleets of servers or GPUs, or plan a factory's lines.
-- **[Startups](../for/startups.mdx):** GPU cloud and scheduling companies, for whom a share of a fleet is the margin.
+- **[Startups](../for/startups.mdx):** GPU cloud and scheduling providers, where fleet utilization drives margin.
 
-## What others have shown
+## Related work
 
 AlphaEvolve found a heuristic for Google's cluster scheduler that "continuously recovers, on average, 0.7% of Google's worldwide compute resources"; it was checked on recent workloads it had not been tuned on before it went into production ([DeepMind's post](https://deepmind.google/discover/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/)). Herrmann and Pallez found that bin-packing heuristics found by language models "are not robust to distribution changes" ([the paper](https://arxiv.org/abs/2510.27353)).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md).
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) around a simulator and your traces, and [test it](../../how-to/campaigns/test-a-kit.md) with your current rule and one that overfills a machine.

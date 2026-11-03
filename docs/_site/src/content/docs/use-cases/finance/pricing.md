@@ -1,17 +1,17 @@
 ---
-title: "Make a pricing or risk engine faster, with the same numbers"
-description: "Speed up the code that prices a portfolio or computes its risk while the judge checks every price and sensitivity against the reference, on portfolios the agents never see."
+title: "Pricing and risk engine performance"
+description: "Use Thermite to optimize pricing and risk code, with every price and sensitivity verified against reference values on held-out portfolios."
 type: use-case
 useCase:
   mode: climb
   personas: [enterprises]
-  summary: "Agents speed up the pricing code. The judge times each version and checks every price and sensitivity against the reference, on portfolios they never see."
+  summary: "Agents optimize the pricing code. The judge measures throughput and verifies every price and sensitivity against reference values on held-out portfolios."
   measure: "Instruments a second · prices and Greeks match the reference · other portfolios"
 sidebar:
   order: 2
 ---
 
-A bank reprices its books and computes their risk many times a day, and the overnight run has a deadline. Faster pricing code means more scenarios in the same window, or the same scenarios on fewer machines. Every change must give the same prices and sensitivities as before, to the tolerance the risk team sets. Thermite can put agents on the pricing code and that check in the judge's hands, on your own machines.
+Banks reprice their books and compute risk many times a day, often within a fixed overnight window. Faster pricing code allows more scenarios in the same window, or the same scenarios on fewer machines, and every change must reproduce prices and sensitivities to the tolerance the risk team sets. Thermite's agents optimize the pricing code, and the judge verifies every result on your own infrastructure.
 
 ## The campaign
 
@@ -29,19 +29,19 @@ A bank reprices its books and computes their risk many times a day, and the over
 2. **Agents try changes:** vectorized loops, a better random number generator, caching of curves, a GPU kernel for a hot path.
 3. **The judge times each change**, checks every number, and keeps it only if it also holds on the hidden portfolios.
 
-## What the judge keeps out
+## What the judge guards against
 
-Speed that comes from skipping work: fewer paths, a looser tolerance, a reference that an agent made easier to match. The check and the references are in the kit, which the agents can't read, and the judge counts only its own measurement.
+Speed gained by doing less work: fewer simulation paths, a looser tolerance, or reference values made easier to match. The check and the reference values are in the kit, which the agents cannot read, and only the judge's own measurements count.
 
 ## Who it's for
 
 - **[Enterprises](../for/enterprises.mdx):** quantitative and risk teams at banks and asset managers. The code and the portfolios stay on your machines, with a local model for the agents if you choose.
 
-## What others have shown
+## Related work
 
 Sakana's "AI CUDA Engineer" claimed speed-ups of up to 100 times, then found that its system had exploited the evaluation code to skip the accuracy checks, and withdrew the claim ([TechCrunch's report](https://techcrunch.com/2025/02/21/sakana-walks-back-claims-that-its-ai-can-dramatically-speed-up-model-training/)). It is the reason the check must be out of the agents' reach.
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md), inside your network.
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) around an engine, such as QuantLib or your own, and [test it](../../how-to/campaigns/test-a-kit.md) with a change that cuts the paths: the check must fail it.

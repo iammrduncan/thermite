@@ -1,6 +1,6 @@
 ---
-title: "Local AI enthusiasts: make models fly on the hardware you have"
-description: "Point Thermite at an inference engine, a quantization or a kernel, and let agents tune it for your exact GPU while a judge on that GPU keeps only what is faster and still correct."
+title: "Thermite for local AI enthusiasts"
+description: "Use Thermite to tune inference engines, quantizations and models for the GPUs you own, with agents on a local model and a judge that measures every change on your hardware."
 type: use-case
 sidebar:
   order: 1
@@ -10,7 +10,7 @@ sidebar:
 import { LinkCard } from "@astrojs/starlight/components";
 import Stats from "../../../../components/Stats.astro";
 
-Local AI runs on the cards you can get: a used data-centre GPU, a gaming card, a box of older GPUs. Engines and quantizations are tuned for the newest hardware first, so yours is often left slow. Thermite lets agents tune them for your card, for days, while a judge on that same card times every change and checks that the model still gives the same answers.
+Local AI runs on the hardware people can get: used data-centre GPUs, consumer cards, older multi-GPU machines. Inference engines and quantizations are tuned for the newest hardware first, so older cards are often underused. Thermite's agents tune them for your specific card, while a judge on the same card measures every change and verifies that the model's output is unchanged.
 
 <Stats
   items={[
@@ -25,11 +25,11 @@ Local AI runs on the cards you can get: a used data-centre GPU, a gaming card, a
 
 Each of these is a campaign you can run on your own GPU, with the agents on a model server of your own.
 
-- **AI and machine learning:** [Run a model faster on the GPU you have](../ai/inference-speed.md)
-- **AI and machine learning:** [Make your LLM feature score higher on your own tests](../ai/llm-quality.md)
-- **AI and machine learning:** [Train a better small model in the same time](../ai/training.md)
-- **Science:** [Search for better constructions in mathematics](../science/maths.md)
-- **Robotics:** [Teach a robot the task, not a loophole](../robotics/rewards.md)
+- **AI and machine learning:** [LLM inference optimization](../ai/inference-speed.md)
+- **AI and machine learning:** [LLM application quality](../ai/llm-quality.md)
+- **AI and machine learning:** [Model training efficiency](../ai/training.md)
+- **Science:** [Mathematical discovery](../science/maths.md)
+- **Robotics:** [Robot reward design](../robotics/rewards.md)
 
 ## Why it fits
 
@@ -50,9 +50,7 @@ Each of these is a campaign you can run on your own GPU, with the agents on a mo
 
 ## What to know first
 
-- GPU rigs run Thermite's CUDA harness image, for NVIDIA cards. A rig with no GPU measures on its CPUs.
-- The agents run code that a model wrote, on your machine. Read [Known limits](../../reference/known-limits.md) and [the security model](../../explanation/security-model.md) before you connect a model.
-- A hill climb finds changes that help the cases it measures. Measure the long-context case too, in its own run, before you call the result done.
+Local AI runs on the hardware people can get: used data-centre GPUs, consumer cards, older multi-GPU machines. Inference engines and quantizations are tuned for the newest hardware first, so older cards are often underused. Thermite's agents tune them for your specific card, while a judge on the same card measures every change and verifies that the model's output is unchanged.
 
 <LinkCard
   title="Read the study: Qwen3.8-27B on a $100 GPU"

@@ -1,17 +1,17 @@
 ---
-title: "Review the evidence on a clinical question, every quote checked"
-description: "Run a research campaign on a question such as what trials compare two treatments, and get a report in which every quote was found word for word in an archived copy of its source."
+title: "Clinical evidence review"
+description: "Use a Thermite research campaign to review the clinical evidence on a question, with every quotation verified against an archived copy of its source."
 type: use-case
 useCase:
   mode: research
   personas: [enterprises, solo-builders]
-  summary: "Ask what the trials say. Agents read open-access papers and record claims; code finds every quote, word for word, in the archived page, and invented references can't count."
+  summary: "Agents search the open-access literature and record claims. Every quote is verified against its archived source; unsupported references do not count."
   measure: "Verified claims · every quote found in its archived source · by a panel of models, by majority"
 sidebar:
   order: 4
 ---
 
-A question such as "which randomised trials compare treatment X with treatment Y for outcome Z, and what did they find?" starts every systematic review, every guideline update and every medical-affairs brief. It takes days to answer well, and a language model can answer it in seconds with references that don't exist. A Thermite **research campaign** answers it from the open-access literature, archives every page it reads, and counts a claim only when code finds its quotes in that archive, word for word.
+Questions such as which randomised trials compare two treatments, and what they found, underpin systematic reviews, guideline updates and medical-affairs briefings. Answering them well takes days, and language models frequently cite references that do not exist. A Thermite research campaign answers from the open-access literature, archives every page it reads, and accepts a claim only when its quotations are found word for word in that archive.
 
 ## The campaign
 
@@ -29,20 +29,20 @@ A question such as "which randomised trials compare treatment X with treatment Y
 2. **Agents search and read** open-access journals and repositories through the rig's archiving fetcher, and record claims with their quotes.
 3. **Code verifies each claim**, and the review panel decides each question. The run's page shows where every question stands, and the gaps that the next tasks will look for.
 
-## What the judge keeps out
+## What the judge guards against
 
-Invented references, and numbers that no source states. A claim whose quote isn't on its archived page stays a draft, and the report can only cite verified claims as findings.
+Fabricated references and numbers that no source states. A claim whose quotation is not found on its archived page remains a draft, and findings can cite only verified claims.
 
 ## Who it's for
 
 - **[Enterprises](../for/enterprises.mdx):** pharmaceutical medical affairs and health-economics teams, who must show the source of every statement. The questions themselves can reveal a pipeline; here they stay on your machines.
-- **[Solo builders](../for/solo-builders.mdx):** a clinician-researcher starting a review.
+- **[Solo builders](../for/solo-builders.mdx):** clinician-researchers starting a systematic review.
 
-## What others have shown
+## Related work
 
 In a study of systematic reviews, Chelli and others found that 28.6% of the references GPT-4 gave and 39.6% of those GPT-3.5 gave were hallucinated ([JMIR, 2024](https://doi.org/10.2196/53164)). otto-SR, an AI system for systematic reviews, reproduced 12 Cochrane reviews in about two days ([its preprint](https://doi.org/10.1101/2025.06.13.25329541), not yet peer reviewed).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md).
 2. [Choose a campaign mode](../../how-to/campaigns/choose-a-mode.md) shows what a research campaign needs.

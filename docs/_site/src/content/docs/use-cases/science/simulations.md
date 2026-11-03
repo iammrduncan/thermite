@@ -1,17 +1,17 @@
 ---
-title: "Make a simulation faster or more accurate"
-description: "Speed up a molecular dynamics, fluid or PDE code, or make a solver more accurate, while the judge checks every change against a reference solution and the physics the code must keep."
+title: "Simulation speed and accuracy"
+description: "Use Thermite to make simulation code faster or more accurate, with every change verified against a reference solution and the physical invariants it must preserve."
 type: use-case
 useCase:
   mode: climb
   personas: [solo-builders, startups, enterprises]
-  summary: "Agents change a solver's code. The judge times each version, compares it with a reference solution, and checks that it still converges and keeps its energy."
+  summary: "Agents optimize solver code. The judge measures each version against a reference solution and checks convergence and conservation."
   measure: "Steps a second, or error against a reference · same physics · inputs the agents never see"
 sidebar:
   order: 2
 ---
 
-A thesis, a design study or a product can wait days on one simulation. Some of that time is the code: a kernel that could use the cache better, a solver that could take larger steps, a loop that could run in parallel. Thermite can put agents on the code, and a judge on its answers. Every change is timed, and every change is checked against a reference solution and against the physics that it must keep, so a faster code that is wrong never wins.
+Research and engineering schedules often depend on simulation run time, and part of that time is in the code: memory access patterns, step sizes, parallelism. Thermite's agents optimize the solver code, and the judge verifies every change against a reference solution and the physical invariants the code must preserve, so a faster but incorrect solver is never accepted.
 
 ## The campaign
 
@@ -30,21 +30,21 @@ A thesis, a design study or a product can wait days on one simulation. Some of t
 3. **The judge times each change** and runs its checks. A change that is faster but drifts in energy, or more accurate on one case but unstable on another, is not a win.
 4. **A goal campaign can port the code**: to a GPU, or to a new library version, with goals that the ported code matches the original on each test case.
 
-## What the judge keeps out
+## What the judge guards against
 
-A fast simulation that gives the wrong answer is worse than a slow one, because nobody notices. The checks belong to the kit, which the agents never see, and the judge runs them on every change. A claim of a better solver must beat a reference that you chose, not one that the agents chose.
+A fast simulation that produces wrong results is worse than a slow one, because the error may go unnoticed. The checks belong to the kit, which the agents never see, and the judge runs them on every change. A claimed improvement must beat a reference solution that you chose, not one the agents chose.
 
 ## Who it's for
 
-- **[Solo builders](../for/solo-builders.mdx):** a graduate student whose thesis waits on a simulation, with one workstation.
-- **[Startups](../for/startups.mdx):** simulation software that has to be fast and right.
+- **[Solo builders](../for/solo-builders.mdx):** graduate students and researchers whose work depends on simulation run time.
+- **[Startups](../for/startups.mdx):** simulation software companies that need both speed and accuracy.
 - **[Enterprises](../for/enterprises.mdx):** national laboratories and engineering teams with their own codes and machines.
 
-## What others have shown
+## Related work
 
 CodePDE had language models write solvers for partial differential equations: on Burgers' equation its best solver's error was 1.06e-4, against 3.55e-4 for the reference solver, but 60.5% of its solvers for compressible Navier–Stokes failed the convergence test ([the paper](https://arxiv.org/abs/2505.08783)). McGreivy and Hakim found that 79% of papers that claimed machine learning beats numerical methods for such equations compared with a weak baseline ([the paper](https://arxiv.org/abs/2407.07218)).
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md), then [add a rig](../../how-to/install/rig-on-a-machine.md) on the machine that runs your code.
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) with reference runs and a check with tolerances, and [test it](../../how-to/campaigns/test-a-kit.md): include a change that is faster but wrong, and make sure the check fails it.

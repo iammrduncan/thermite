@@ -1,17 +1,17 @@
 ---
-title: "Write building and battery controllers, scored in a simulator"
-description: "Let agents write the control code for a building's heating and cooling or a battery's charging, score it in a building simulator for energy, cost and comfort, and keep it only if it holds in buildings and weather it never saw."
+title: "Building energy control"
+description: "Use Thermite to develop building and battery control logic in simulation, with comfort held and results validated on withheld buildings and weather."
 type: use-case
 useCase:
   mode: climb
   personas: [startups, enterprises]
-  summary: "Agents write the controller's code. A building simulator scores its energy and comfort, and a win must hold in buildings and weather they never see. No model runs the building."
+  summary: "Agents develop control logic offline. A building simulator scores energy and comfort, and results must hold in withheld buildings and weather."
   measure: "Energy or cost · comfort held · buildings and weather the agents never see"
 sidebar:
   order: 1
 ---
 
-Heating and cooling are a large share of a building's energy, and most buildings run on simple rules set years ago. A better controller has to save energy without making the people inside too hot or too cold. Building simulators, such as the BOPTEST test cases, score a controller on exactly that, for a year of weather in minutes. Thermite can put agents on the controller's code and the simulator in the judge's hands. The agents write code offline; no language model controls the building.
+Heating and cooling account for a large share of building energy use, and many buildings still run on fixed rules. A better controller must reduce energy use without reducing occupant comfort. Building simulators such as the BOPTEST test cases evaluate a controller on both, over a year of weather, in minutes. Thermite's agents develop the controller offline; no language model operates the building.
 
 ## The campaign
 
@@ -29,20 +29,20 @@ Heating and cooling are a large share of a building's energy, and most buildings
 2. **Agents try changes:** pre-cooling before a price peak, a better setback schedule, charging a battery when power is cheap and clean.
 3. **The judge scores each version** beside the best one so far, on every case, and on the hidden ones before a win counts.
 
-## What the judge keeps out
+## What the judge guards against
 
-A controller can save energy by letting the building get uncomfortable, or learn the one building and the one year it was tuned on. Comfort is a guard, and the hidden buildings and weather catch a controller that only fits what it saw.
+A controller can save energy by reducing comfort, or overfit to the one building and year it was tuned on. Comfort is enforced as a guard, and withheld buildings and weather periods test every accepted controller.
 
 ## Who it's for
 
 - **[Startups](../for/startups.mdx):** energy software companies that need a controller to work in a customer's building, not only in the one it was tuned on.
 - **[Enterprises](../for/enterprises.mdx):** building controls makers and owners of large estates.
 
-## What others have shown
+## Related work
 
 The CityLearn Challenge 2022 was set up like a Thermite kit: teams saw five buildings, and were scored on seven private ones they never saw ([Nweye and others, 2023](https://proceedings.mlr.press/v220/nweye23a.html)). A review of 66 studies of language models for heating and cooling found that they fit better as "semantic and workflow layers rather than autonomous HVAC controllers" ([the review](https://arxiv.org/abs/2609.05314)): here the model writes the controller, and the controller runs the building.
 
-## Start
+## Get started
 
 1. [Install on one machine](../../tutorials/first-run.md).
 2. [Write a kit](../../how-to/campaigns/write-a-kit.md) around the simulator, and [test it](../../how-to/campaigns/test-a-kit.md) with your current controller and one that saves energy by being uncomfortable.
