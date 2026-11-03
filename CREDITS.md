@@ -227,12 +227,14 @@ Every package Thermite runs, with those packages' own dependencies, is under a p
 | [starlight-links-validator](https://github.com/HiDeoo/starlight-links-validator) and [starlight-llms-txt](https://github.com/delucis/starlight-llms-txt) | HiDeoo; Chris Swithinbank | MIT |
 | [sharp](https://github.com/lovell/sharp) (images) | Lovell Fuller | Apache-2.0; its libvips binaries are LGPL-3.0-or-later, used only to build the site |
 | [Lightning CSS](https://github.com/parcel-bundler/lightningcss), through Vite | The Parcel project | MPL-2.0, used only to build the site |
+| The site's own pages' fonts, served from the site: [Geist and Geist Mono](https://github.com/vercel/geist-font), packaged by [Fontsource](https://github.com/fontsource/fontsource) | Vercel; the Fontsource project | The fonts OFL-1.1; Fontsource's packaging MIT |
 
 `docs/_site/package-lock.json` lists every package, with its licence and version.
 
 ## Design
 
 - **The dashboard's look** follows [Magnesium](https://github.com/iammrduncan/magnesium) (MIT), the maintainers' agent dashboard, which is a fork of [T3 Code](https://github.com/pingdotgg/t3code) (MIT, © 2026 T3 Tools Inc.): its design tokens, its status words, its tiles and its session board. The colour values are those of [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss)'s palette (MIT).
+- **The site's own pages** (the home page and the overviews of the use cases and studies) follow the home pages of the maintainers' [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh): a frame of their own beside the docs, a small label over a large heading, a command to copy, numbered steps, and a picture drawn from real data. The replay of a real climb and the ledger are Thermite's own.
 - **The icons and the flame** are Thermite's own.
 
 ## Standards and guides
@@ -275,7 +277,8 @@ The site's [studies](https://usethermite.com/studies/) tell campaigns that Therm
 
 ## The maintainers' own public projects
 
-- [tensorless](https://github.com/iammrduncan/tensorless) (Apache-2.0), at [tensorless.dev](https://tensorless.dev): the partner of the first study. It made the PN weight format and Qwen3.8-27B-PN3, and ships the engine that the study's campaigns tuned; the study cites its published receipts and pages, and shows its logo.
+- [tensorless](https://github.com/iammrduncan/tensorless) (Apache-2.0), at [tensorless.dev](https://tensorless.dev): the partner of the first study. It made the PN weight format and Qwen3.8-27B-PN3, and ships the engine that the study's campaigns tuned; the study cites its published receipts and pages, and the study and the site's own pages show its logo. Its home page was also studied for the site's own pages, above.
+- [fxbot](https://github.com/iammrduncan/fxbot) (Apache-2.0, as fxbot.sh states), at [fxbot.sh](https://fxbot.sh): its home page, studied for the site's own pages, above.
 - [Magnesium](https://github.com/iammrduncan/magnesium) (MIT): the dashboard's design, above, and its notes on Claude and Codex sign-in, read for subscriptions.
 - [skills](https://github.com/iammrduncan/skills) (MIT): the maintainers' skills for coding agents, among them the ones for Simplified Technical English and for writing documentation.
 
@@ -285,7 +288,7 @@ Thermite's repository holds no code, text or data copied from another project, e
 
 - the licence texts it ships with programs in its images: `containers/control/kubectl/LICENSE` (Apache-2.0, from Kubernetes), `containers/harness/opencode/LICENSE` (MIT, © 2025 opencode), and `containers/harness/codex/LICENSE` and `NOTICE` (Apache-2.0, © 2025 OpenAI, with the Ratatui notice above);
 - the dashboard's colour tokens, from T3 Code through Magnesium, above;
-- tensorless's logo, Bitsy, on the first study's page: `docs/_site/src/assets/partners/tensorless.svg` (Apache-2.0, from the maintainers' own tensorless, above);
+- tensorless's logo, Bitsy, on the first study's page and on the site's own pages: `docs/_site/src/assets/partners/tensorless.svg` (Apache-2.0, from the maintainers' own tensorless, above);
 - the statistics tests' reference values, numbers computed with SciPy (`tests/helpers/data/stats-reference.json`).
 
 The maintainers' own tooling in `.agents/` carries its own notices, such as [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT).

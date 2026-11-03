@@ -6,7 +6,7 @@ sidebar:
   order: 14
 ---
 
-This page lists where each part of Thermite listens, which networks join them, where they keep their state, and which secret files they read. It covers each way of running Thermite: the local compose stack, rigs that control sets up on machines over SSH or with a join command, rigs on Kubernetes clusters, and rigs and test pods on RunPod. The [glossary](glossary.md) explains the terms; [How the parts fit together](../explanation/how-it-fits-together.md) and [Trust between control and rigs](../explanation/trust.md) explain the design.
+This page lists where each part of Thermite listens, which networks join them, where they keep their state, and which secret files they read. It covers each way of running Thermite: the local compose stack, rigs that control sets up on machines over SSH or with a join command, rigs on Kubernetes clusters, and rigs and test pods on RunPod. The [glossary](glossary.md) explains the terms; [How the parts fit together](../explanation/how-it-fits-together.mdx) and [Trust between control and rigs](../explanation/trust.md) explain the design.
 
 ## Ports
 

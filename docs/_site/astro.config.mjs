@@ -8,6 +8,7 @@ import { defineConfig } from "astro/config";
 import mermaid from "astro-mermaid";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { fathom } from "./src/analytics.mjs";
 import { pageIndex } from "./src/page-index.mjs";
 import { remarkRelativeLinks } from "./src/plugins/remark-relative-links.mjs";
 
@@ -16,14 +17,12 @@ const base = "/";
 const repo = "https://github.com/iammrduncan/thermite";
 // The version of Thermite the pages describe, shown beside the title: the root package.json's.
 const version = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
-// Fathom Analytics counts page views without cookies, only on the site's own domain (not on
-// pages.dev or a local preview).
-const fathom = { src: "https://cdn.usefathom.com/script.js", site: "RNENIVAD", domain: "usethermite.com" };
 
 export default defineConfig({
   site,
   base,
   outDir: "../../.dev/site",
+  devToolbar: { enabled: false },
   vite: {
     // Mermaid is one large script, loaded only on pages with a diagram.
     build: { chunkSizeWarningLimit: 4096 },
@@ -51,15 +50,8 @@ export default defineConfig({
         // the icon iOS shows for a saved page.
         { tag: "link", attrs: { rel: "icon", href: "/favicon.ico", sizes: "32x32" } },
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
-        {
-          tag: "script",
-          attrs: {
-            src: fathom.src,
-            "data-site": fathom.site,
-            "data-included-domains": fathom.domain,
-            defer: true,
-          },
-        },
+        // Fathom Analytics (src/analytics.mjs).
+        { tag: "script", attrs: fathom },
       ],
       social: [
         { icon: "github", label: "GitHub", href: repo },
@@ -81,9 +73,16 @@ export default defineConfig({
           ],
         },
         { label: "Start here", link: "/start-here/" },
-        // Who Thermite is for, and what it has done: pages for readers deciding whether to try it.
-        { label: "Use cases", items: [{ autogenerate: { directory: "use-cases" } }] },
-        { label: "Studies", items: [{ autogenerate: { directory: "studies" } }] },
+        // Who Thermite is for, and what it has done: each overview is one of the site's own pages
+        // (src/pages/), and the full pages are here.
+        {
+          label: "Use cases",
+          items: [{ label: "Overview", link: "/use-cases/" }, { autogenerate: { directory: "use-cases" } }],
+        },
+        {
+          label: "Studies",
+          items: [{ label: "Overview", link: "/studies/" }, { autogenerate: { directory: "studies" } }],
+        },
         {
           label: "Tutorials",
           items: ["tutorials/first-goal-campaign", "tutorials/your-own-project"],
@@ -119,6 +118,8 @@ export default defineConfig({
           errorOnRelativeLinks: false,
           // Tutorials link to the dashboard on the reader's own computer.
           errorOnLocalLinks: false,
+          // The site's own pages (src/pages/) are not Starlight's, so the validator can't see them.
+          exclude: ["/", "/use-cases/", "/studies/"],
         }),
         starlightLlmsTxt({
           projectName: "Thermite",

@@ -1,0 +1,274 @@
+---
+// The use cases' overview. Each audience's full page is in the documentation (use-cases/), where
+// llms.txt and the Markdown copies carry it too.
+import AudienceIcon from "../components/site/AudienceIcon.astro";
+import Cmd from "../components/site/Cmd.astro";
+import { audiences, modeName } from "../data/audiences";
+import Site from "../layouts/Site.astro";
+---
+
+<Site
+  title="Use cases: who Thermite is for"
+  description="Thermite for local AI builders tuning models for their own GPUs, solo builders with one computer, and enterprises running research on infrastructure they control."
+  section="use-cases"
+>
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Use cases</p>
+      <h1 class="h1">Point it at anything you can measure.</h1>
+      <p class="lede">
+        If a program can build your project, run it and say whether the result is right and how good it is,
+        agents can work on it for days, and Thermite's judge keeps only what it confirms. Here is how three kinds
+        of people use it.
+      </p>
+      <nav class="chips" aria-label="Use cases">
+        {
+          audiences.map((a) => (
+            <a href={`#${a.key}`}>
+              <AudienceIcon name={a.key} />
+              <span>{a.name}</span>
+            </a>
+          ))
+        }
+      </nav>
+    </div>
+  </section>
+
+  {
+    audiences.map((a, i) => (
+      <section class:list={["section", "aud", { alt: i % 2 === 1 }]} id={a.key}>
+        <div class="wrap aud-grid">
+          <div class="aud-text" data-reveal>
+            <p class="eyebrow">{a.name}</p>
+            <h2 class="h2">{a.headline}</h2>
+            <p class="lede">{a.pitch}</p>
+            <ul class="fits">
+              {a.fits.map((f) => (
+                <li>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 10.5l3.2 3.2L15 7" />
+                  </svg>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            <div class="btns">
+              <a class="btn primary" href={a.href}>
+                Read the full guide
+              </a>
+              {a.key === "local-ai" && (
+                <a class="btn" href="/studies/qwen3-8-27b-on-a-p100/">
+                  The P100 study
+                </a>
+              )}
+            </div>
+            <p class="proof mono">{a.proof}</p>
+          </div>
+          <div class="aud-cards" data-reveal>
+            <p class="small what">What to point it at</p>
+            {a.examples.map((e) => (
+              <div class="ex">
+                <span class={`tag ${e.mode}`}>{modeName[e.mode]}</span>
+                <h3 class="h3">{e.title}</h3>
+                <p>{e.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    ))
+  }
+
+  <section class="section">
+    <div class="wrap">
+      <div class="head" data-reveal>
+        <p class="eyebrow">Three modes</p>
+        <h2 class="h2">Every campaign is one of three kinds.</h2>
+        <p class="lede">
+          Each use case above mixes them. <a href="/how-to/campaigns/choose-a-mode/">Choose a campaign mode</a> helps
+          you pick one.
+        </p>
+      </div>
+      <div class="card table-card" data-reveal>
+        <table class="facts">
+          <thead>
+            <tr><th>Mode</th><th>You want to</th><th>It ends when</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag climb">hill climb</span></td>
+              <td>Push one number as far as it goes, without breaking anything else</td>
+              <td>You stop it, or a budget or stop time you set runs out</td>
+            </tr>
+            <tr>
+              <td><span class="tag goal">goal</span></td>
+              <td>Make something work, checked by a list of goals</td>
+              <td>Every required goal is met, or the evidence shows it can't be</td>
+            </tr>
+            <tr>
+              <td><span class="tag research">research</span></td>
+              <td>Find out what is known, with sources you can check</td>
+              <td>Every question is answered, or the research stops adding</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section last">
+    <div class="wrap">
+      <div class="cta" data-reveal>
+        <p class="eyebrow">Try it</p>
+        <h2 class="h2">Twenty minutes to a first verdict.</h2>
+        <p class="lede">Install it on one computer, or ask your own AI agent to:</p>
+        <Cmd prompt="›" text="Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt" />
+        <div class="btns">
+          <a class="btn primary" href="/tutorials/first-run/">Install on one machine</a>
+          <a class="btn" href="/start-here/">Start here</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Site>
+
+<style>
+  .hero {
+    padding-block: clamp(3rem, 7vw, 5.5rem) clamp(2.5rem, 5vw, 4rem);
+    background: radial-gradient(60% 90% at 90% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
+  }
+  .hero .h1 {
+    max-width: 52rem;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 2rem;
+  }
+  .chips a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 1rem 0.4rem 0.4rem;
+    border: 1px solid var(--rule-2);
+    border-radius: 14px;
+    background: var(--panel);
+    text-decoration: none;
+    font-weight: 560;
+  }
+  .chips a:hover {
+    border-color: var(--accent);
+  }
+  .chips :global(.ai) {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 9px;
+  }
+  .chips :global(.ai svg) {
+    width: 1.45rem;
+    height: 1.45rem;
+  }
+  .aud {
+    scroll-margin-top: 4rem;
+  }
+  .aud.alt {
+    background: var(--bg-2);
+  }
+  .aud-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: start;
+  }
+  .alt .aud-text {
+    order: 2;
+  }
+  @media (max-width: 62rem) {
+    .aud-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .alt .aud-text {
+      order: 0;
+    }
+  }
+  .fits {
+    list-style: none;
+    margin: 1.5rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.6rem;
+  }
+  .fits li {
+    display: flex;
+    gap: 0.6rem;
+    color: var(--ink-2);
+  }
+  .fits svg {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.15rem;
+    padding: 0.1rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .proof {
+    margin: 1.2rem 0 0;
+    font-size: 0.78rem;
+    color: var(--dim);
+  }
+  .aud-cards {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .what {
+    margin: 0 0 0.1rem;
+  }
+  .ex {
+    padding: 1.2rem 1.3rem;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    background: var(--panel);
+  }
+  .ex .h3 {
+    margin-top: 0.6rem;
+    font-size: 1.1rem;
+  }
+  .ex p {
+    margin: 0.35rem 0 0;
+    color: var(--muted);
+    font-size: 0.93rem;
+  }
+  .head .lede a {
+    color: var(--ink-2);
+  }
+  .table-card {
+    padding: 0.4rem;
+    overflow-x: auto;
+  }
+  .table-card th {
+    width: auto;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 0.82rem;
+  }
+  .table-card td:first-child {
+    width: 8rem;
+  }
+  .table-card td:nth-child(2) {
+    color: var(--ink-2);
+  }
+  .last {
+    padding-top: 0;
+    border-top: 0 !important;
+  }
+  .cta .cmd {
+    margin-top: 1.25rem;
+  }
+</style>

@@ -27,7 +27,7 @@ A campaign brings the two together. This page compares them and shows how they m
 | **Can agents see it?** | Never | They work inside it, each as its own user, with no way into the judge's files |
 | **Does it keep results?** | No. It holds no results at all | Yes. Its ledger keeps every run, attempt and verdict |
 
-[Why the benchmark lives in a kit](kits.md) explains the kit, and [How the parts fit together](how-it-fits-together.md) explains the rig.
+[Why the benchmark lives in a kit](kits.md) explains the kit, and [How the parts fit together](how-it-fits-together.mdx) explains the rig.
 
 ## How a campaign joins them
 

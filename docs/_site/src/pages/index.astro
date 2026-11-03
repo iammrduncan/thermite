@@ -1,0 +1,576 @@
+---
+// usethermite.com's home page. The documentation is Starlight's, from src/content/docs/; the use
+// cases and studies have their full pages there, and their overviews here (use-cases.astro,
+// studies.astro).
+import { Image } from "astro:assets";
+import hero from "../assets/hero.svg";
+import run from "../assets/screenshots/run.webp";
+import Audiences from "../components/site/Audiences.astro";
+import ClimbReplay from "../components/site/ClimbReplay.astro";
+import Cmd from "../components/site/Cmd.astro";
+import Ledger from "../components/site/Ledger.astro";
+import Modes from "../components/site/Modes.astro";
+import Partners from "../components/site/Partners.astro";
+import Site from "../layouts/Site.astro";
+
+declare const __THERMITE_VERSION__: string;
+const version = __THERMITE_VERSION__;
+const study = "/studies/qwen3-8-27b-on-a-p100/";
+const smoke = [
+  { change: "i-k-j loop order makes the inner loop contiguous", verdict: "win confirmed", kind: "w", why: "faster, and again on fresh runs" },
+  { change: "rename the accumulator", verdict: "neutral", kind: "n", why: "no real difference" },
+  { change: "skip half of the reduction", verdict: "invalid", kind: "i", why: "its answers were wrong" },
+  { change: "call the reference implementation", verdict: "invalid", kind: "i", why: "the judge saw the reference run" },
+  { change: "use a large scratch buffer", verdict: "crash", kind: "i", why: "stopped at the memory limit" },
+  { change: "time the kernel from inside", verdict: "rejected", kind: "x", why: "a timer call: against the rules" },
+  { change: "make the reference trivial", verdict: "rejected", kind: "x", why: "not the agents' file to change" },
+];
+---
+
+<Site
+  title="Thermite: AI agents try ideas on your code, and a judge keeps only what's proven"
+  description="Thermite is open-source autoresearch: AI agents run experiments on your code for hours or days, on your own machines, and a judge they cannot touch keeps only what it confirms."
+>
+  <section class="hero">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="wrap hero-grid">
+      <div class="hero-text">
+        <p class="eyebrow">Open-source autoresearch</p>
+        <h1 class="h1">Agents try.<br /><span class="hot">The judge decides.</span></h1>
+        <p class="lede">
+          Thermite puts AI agents to work on your code for hours or days, on your own machines. They propose
+          changes. A judge they can't see or change builds each one, measures it against the best so far, checks
+          its output, and <b>keeps only what it confirms</b>.
+        </p>
+        <p class="ask">Ask your AI agent to set it up:</p>
+        <Cmd prompt="›" text="Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt" />
+        <div class="btns">
+          <a class="btn primary" href="/tutorials/first-run/"
+            >Install on one machine <svg viewBox="0 0 24 24" aria-hidden="true"
+              ><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              ></path></svg
+            ></a
+          >
+          <a class="btn" href={study}>See a real climb</a>
+        </div>
+        <p class="meta mono">v{version} · Linux or macOS · Docker or Podman · Apache-2.0</p>
+      </div>
+      <div class="hero-art">
+        <ClimbReplay />
+      </div>
+    </div>
+    <div class="wrap">
+      <div class="legend">
+        <p class="small legend-title">What you're looking at · every spark is a real attempt</p>
+        <ul>
+          <li><i class="k spark"></i><span><b>A spark</b> is one change an agent submitted. It rises to the speed the judge measured: 131 in five days, from two lanes.</span></li>
+          <li><i class="k gold"></i><span><b>Gold:</b> 28 wins the judge confirmed on fresh runs and a hidden prompt.</span></li>
+          <li><i class="k slow"></i><span><b>Ember:</b> 48 changes slower than the champion. They sink as they cool.</span></li>
+          <li><i class="k flat"></i><span><b>Grey:</b> 39 with no real difference, and 4 inconclusive.</span></li>
+          <li><i class="k red"></i><span><b>Red:</b> 12 that broke a guard, such as changed outputs. Thrown out, however fast.</span></li>
+          <li><i class="k line"></i><span><b>The line</b> is the champion, the best confirmed version: Qwen3.8-27B-PN3 decode on one Tesla P100, 7.7 to 30.1 tokens a second.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="wrap split">
+      <div>
+        <div class="head" data-reveal>
+          <p class="eyebrow">How a campaign runs</p>
+          <h2 class="h2">A lot of engineering is a loop. Hand it to agents.</h2>
+          <p class="lede">
+            Change something, measure it, keep it if it is better, try the next idea. Thermite runs that loop
+            through the night, on many ideas at once, and keeps the grading for itself.
+          </p>
+        </div>
+        <ol class="flow" data-reveal>
+          <li><b>You set the goal.</b> What to improve, what must not get worse, which files the agents may change, and a kit that builds and measures your project.</li>
+          <li><b>Agents try ideas side by side.</b> Each works in its own lane, on its own copy. A planner hands each lane a different experiment, so the search stays wide.</li>
+          <li><b>The judge decides.</b> It times each change against the best so far, on the same hardware, in alternating blocks. A win must hold up again before it counts.</li>
+          <li><b>Wins become the starting point.</b> The best confirmed version is the champion. Losses are kept too, with the judge's reasons.</li>
+          <li><b>You watch, steer and take the result.</b> Follow every agent live, message them, pause the run, and download the champion as a patch.</li>
+        </ol>
+      </div>
+      <figure class="shot" data-reveal>
+        <div class="window">
+          <div class="chrome"><i></i><i></i><i></i><span>http://127.0.0.1:8800</span></div>
+          <Image src={run} alt="The dashboard's page for one run: its champion's value, its cost and tokens, the champion's gains over time, and what each lane works on now" widths={[640, 960, 1280]} sizes="(min-width: 64rem) 40rem, 100vw" />
+        </div>
+        <figcaption class="small">One run on the dashboard: what it has cost, how far the champion has come, and what each agent works on now.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" id="trust">
+    <div class="wrap split rev">
+      <div>
+        <div class="head" data-reveal>
+          <p class="eyebrow">Why you can trust it</p>
+          <h2 class="h2">Agents never grade their own work.</h2>
+          <p class="lede">
+            An agent asked to push a number up will sometimes only make it look higher: it skips the slow case,
+            moves the timer, or just reports a win. So in Thermite, agents only propose. Code they can't read or
+            change measures and decides.
+          </p>
+        </div>
+        <ul class="points" data-reveal>
+          <li><b>The judge holds the clock.</b> It times every change from outside, against the champion, on the same device.</li>
+          <li><b>It knows its own noise.</b> Once a day it times the champion against itself, and decides with statistics.</li>
+          <li><b>A win gets a second look.</b> Fresh runs, test cases the agents never saw and, on a rig with an auditor, a review of a surprisingly large gain.</li>
+          <li><b>You decide what waits.</b> Ask to approve every new champion yourself, or let confirmed wins through.</li>
+        </ul>
+      </div>
+      <div class="board" data-reveal>
+        <div class="board-head">
+          <span class="eyebrow">The judge's smoke check</span>
+          <p class="small">Thirteen changes whose right verdicts are known. Run it on your own computer in twenty minutes.</p>
+        </div>
+        <ul>
+          {
+            smoke.map((s, i) => (
+              <li style={`--i:${i}`}>
+                <code>{s.change}</code>
+                <span class={`v ${s.kind}`}>{s.verdict}</span>
+                <span class="why">{s.why}</span>
+              </li>
+            ))
+          }
+        </ul>
+        <a class="board-foot" href="/tutorials/first-run/#6-run-the-judges-smoke-check">See all thirteen in the first tutorial →</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section proof" id="proof">
+    <div class="wrap split">
+      <div data-reveal>
+        <Partners />
+        <h2 class="h2">A 27B model, 3.9× faster on a $100 GPU.</h2>
+        <p class="lede">
+          With <a href="https://tensorless.dev">tensorless</a>, four Thermite campaigns tuned an inference engine
+          for Qwen3.8-27B on one Tesla P100, a 2016 card that sells used for about $100. Two goal campaigns made
+          it work and gated its quality; two hill climbs made it fast. Every step held the model's answers where
+          they started. The result ships in one command.
+        </p>
+        <div class="stats">
+          <div class="stat"><span class="n"><span data-count="3.89">3.89</span>×</span><span class="l">decode speed</span><span class="s">7.74 → 30.06 tok/s</span></div>
+          <div class="stat"><span class="n"><span data-count="1.14">1.14</span>×</span><span class="l">a standard 3-bit file</span><span class="s">same card, same runs</span></div>
+          <div class="stat"><span class="n" data-count="131">131</span><span class="l">changes judged</span><span class="s">in five days</span></div>
+        </div>
+        <div class="btns">
+          <a class="btn primary" href={study}>Read the study</a>
+          <a class="btn" href="/studies/">All case studies</a>
+        </div>
+      </div>
+      <Ledger />
+    </div>
+  </section>
+
+  <section class="section" id="modes">
+    <div class="wrap">
+      <div class="head" data-reveal>
+        <p class="eyebrow">Three modes</p>
+        <h2 class="h2">Make it faster. Make it work. Find out.</h2>
+        <p class="lede">
+          Each campaign is one of three modes, and code decides when each one is done, never an agent. Chain them:
+          research first, then a goal campaign to make it work, then a hill climb to make it fast.
+        </p>
+      </div>
+      <Modes />
+    </div>
+  </section>
+
+  <section class="section" id="who">
+    <div class="wrap">
+      <div class="head" data-reveal>
+        <p class="eyebrow">Who it's for</p>
+        <h2 class="h2">People who run research on machines they control.</h2>
+        <p class="lede">
+          From one laptop and a free model to a fleet of rigs on your own clusters. <a href="/use-cases/">See every use case</a>.
+        </p>
+      </div>
+      <Audiences />
+    </div>
+  </section>
+
+  <section class="section" id="where">
+    <div class="wrap split">
+      <div class="head" data-reveal>
+        <p class="eyebrow">Your machines, your models</p>
+        <h2 class="h2">It runs where you do.</h2>
+        <p class="lede">
+          There is no hosted service and no account. <b>Control</b>, one small service, shows and steers every
+          campaign. <b>Rigs</b> do the research, each on a computer, a cluster node or a cloud GPU, and each dials
+          out to control. Nothing stops a campaign by default: set a budget or a stop time when you want one.
+        </p>
+      </div>
+      <div class="card facts-card" data-reveal>
+        <table class="facts">
+          <tbody>
+            <tr><th>Rigs</th><td>Your computer; machines over SSH; a Kubernetes cluster; a RunPod GPU by the hour</td></tr>
+            <tr><th>Devices</th><td>CPUs, or NVIDIA GPUs: one shared in turns, or several split between the judge and the agents</td></tr>
+            <tr><th>Models</th><td>A free model; your own server, such as Ollama or vLLM; an API key; a Claude or ChatGPT plan</td></tr>
+            <tr><th>Agents run in</th><td>Pi, OpenCode, Claude Code or Codex, each in its own terminal you can watch</td></tr>
+            <tr><th>Steer from</th><td>The dashboard, a REST API, MCP for your own AI assistant, or the <code>thermite</code> command line</td></tr>
+            <tr><th>Records</th><td>Every attempt and verdict, signed, and a knowledge base that later runs read</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="start">
+    <div class="wrap">
+      <div class="head" data-reveal>
+        <p class="eyebrow">Get started</p>
+        <h2 class="h2">From a fresh machine to a first verdict.</h2>
+        <p class="lede">About twenty minutes on Linux or macOS, with Docker or Podman. Podman users swap <code>docker</code> for <code>podman</code>.</p>
+      </div>
+      <div class="steps" data-reveal>
+        <div class="step">
+          <h3 class="h3">Get Thermite</h3>
+          <p>Download the latest release's compose file into a folder of its own.</p>
+          <Cmd text="curl -fsSLO https://github.com/iammrduncan/thermite/releases/latest/download/compose.yaml" />
+        </div>
+        <div class="step">
+          <h3 class="h3">Make your tokens</h3>
+          <p>Long random passwords, so that only you can steer it.</p>
+          <Cmd text="docker compose run --rm init" />
+        </div>
+        <div class="step">
+          <h3 class="h3">Start it</h3>
+          <p>Control, its dashboard and one rig, on this computer.</p>
+          <Cmd text="docker compose up -d" />
+        </div>
+        <div class="step">
+          <h3 class="h3">Watch the judge work</h3>
+          <p>Sign in, open your rig, and run the smoke check. Then give agents a free model and <a href="/tutorials/agents-with-a-free-model/">run your first campaign</a>.</p>
+        </div>
+      </div>
+      <div class="btns">
+        <a class="btn primary" href="/tutorials/first-run/">The tutorial: install on one machine</a>
+        <a class="btn" href="/start-here/">All the docs</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section last">
+    <div class="wrap">
+      <div class="cta" data-reveal>
+        <Image class="wave" src={hero} alt="" width={180} height={180} />
+        <p class="eyebrow">Hackers in the Loop</p>
+        <h2 class="h2">Bring your campaigns to the community.</h2>
+        <p class="lede">Ask a question, share what your agents found, and see what is being built next.</p>
+        <div class="btns">
+          <a class="btn primary" href="https://discord.gg/3Qs2uejUf9">Join the Discord</a>
+          <a class="btn" href="https://github.com/iammrduncan/thermite">Star it on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Site>
+
+<style>
+  .hero {
+    position: relative;
+    padding-block: clamp(3rem, 7vw, 5.5rem) 2.5rem;
+    overflow: hidden;
+  }
+  .glow {
+    position: absolute;
+    inset: -20% -10% auto auto;
+    width: 70%;
+    height: 120%;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 18%, transparent), transparent);
+    pointer-events: none;
+  }
+  .hero-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(2rem, 4vw, 3.5rem);
+    align-items: center;
+  }
+  .hero .h1 {
+    font-size: clamp(2.6rem, 4.7vw, 3.9rem);
+  }
+  .hero .lede {
+    font-size: clamp(1.05rem, 1.35vw, 1.15rem);
+  }
+  .ask {
+    margin: 1.75rem 0 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  @media (max-width: 62rem) {
+    .hero-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .legend {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+  }
+  .legend-title {
+    margin: 0 0 1rem;
+  }
+  .legend ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+    gap: 0.9rem 2rem;
+  }
+  .legend li {
+    display: flex;
+    gap: 0.7rem;
+    font-size: 0.88rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .legend b {
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  .k {
+    flex: none;
+    width: 0.8rem;
+    height: 0.8rem;
+    margin-top: 0.3rem;
+    border-radius: 999px;
+  }
+  .k.spark {
+    background: radial-gradient(circle, #fff1dc 30%, #ff7a2f 70%);
+    box-shadow: 0 0 8px #ff7a2f;
+  }
+  .k.gold {
+    background: var(--gold);
+  }
+  .k.slow {
+    background: color-mix(in srgb, var(--accent) 60%, var(--dim));
+  }
+  .k.flat {
+    background: var(--dim);
+  }
+  .k.red {
+    border-radius: 2px;
+    background:
+      linear-gradient(45deg, transparent 42%, var(--red) 42% 58%, transparent 58%),
+      linear-gradient(-45deg, transparent 42%, var(--red) 42% 58%, transparent 58%);
+  }
+  .k.line {
+    height: 3px;
+    margin-top: 0.62rem;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: center;
+  }
+  .split.rev {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  @media (max-width: 62rem) {
+    .split,
+    .split.rev {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .flow {
+    list-style: none;
+    counter-reset: f;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.25rem;
+  }
+  .flow li {
+    counter-increment: f;
+    position: relative;
+    padding: 0.7rem 0 0.7rem 2.9rem;
+    color: var(--muted);
+    font-size: 0.97rem;
+  }
+  .flow li::before {
+    content: counter(f);
+    position: absolute;
+    left: 0;
+    top: 0.7rem;
+    display: grid;
+    place-items: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font: 600 0.8rem var(--mono);
+  }
+  .flow li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 0.88rem;
+    top: 2.7rem;
+    bottom: -0.55rem;
+    width: 1px;
+    background: var(--rule-2);
+  }
+  .flow b,
+  .points b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .shot {
+    margin: 0;
+  }
+  .shot figcaption {
+    margin-top: 0.75rem;
+  }
+
+  .points {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.9rem;
+  }
+  .points li {
+    padding-left: 1.2rem;
+    border-left: 2px solid var(--rule-2);
+    color: var(--muted);
+    font-size: 0.97rem;
+  }
+  .board {
+    padding: 1.4rem;
+    border: 1px solid var(--rule-2);
+    border-radius: 18px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+  .board-head p {
+    margin: 0.5rem 0 1rem;
+  }
+  .board ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .board li {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.15rem 1rem;
+    padding: 0.7rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .board code {
+    font-size: 0.8rem;
+    color: var(--ink-2);
+  }
+  .board .why {
+    grid-column: 1;
+    font-size: 0.8rem;
+    color: var(--dim);
+  }
+  .v {
+    grid-row: span 2;
+    align-self: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font: 600 0.72rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .v.w {
+    background: color-mix(in srgb, var(--gold) 16%, transparent);
+    color: var(--gold);
+  }
+  .v.n {
+    background: var(--panel-2);
+    color: var(--muted);
+  }
+  .v.i {
+    background: color-mix(in srgb, var(--red) 14%, transparent);
+    color: var(--red);
+  }
+  .v.x {
+    background: color-mix(in srgb, var(--teal) 14%, transparent);
+    color: var(--teal);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.js) .board li {
+      opacity: 0;
+      transform: translateX(-8px);
+      transition:
+        opacity 0.5s ease,
+        transform 0.5s ease;
+      transition-delay: calc(var(--i) * 110ms + 200ms);
+    }
+    :global(.js) .board:global(.is-in) li {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .board-foot {
+    display: block;
+    margin-top: 0.75rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--rule);
+    color: var(--accent);
+    font-size: 0.88rem;
+    text-decoration: none;
+  }
+
+  .proof {
+    background:
+      radial-gradient(50% 60% at 0% 50%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+      var(--bg-2);
+  }
+  .proof .h2 {
+    margin-top: 1.2rem;
+  }
+  .proof .lede a {
+    color: var(--ink-2);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 1.75rem;
+  }
+  @media (max-width: 30rem) {
+    .stats {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .head .lede a {
+    color: var(--ink-2);
+  }
+  .facts-card {
+    padding: 0.4rem 0.4rem;
+  }
+  .last {
+    padding-top: 0;
+    border-top: 0 !important;
+  }
+  .cta :global(.wave) {
+    position: absolute;
+    right: clamp(1rem, 6vw, 5rem);
+    bottom: -0.5rem;
+    width: clamp(7rem, 16vw, 11rem);
+    height: auto;
+    opacity: 0.95;
+  }
+  @media (max-width: 40rem) {
+    .cta :global(.wave) {
+      display: none;
+    }
+  }
+</style>

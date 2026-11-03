@@ -8,7 +8,7 @@ sidebar:
 
 Control and its rigs often run on different machines, and everything between them passes through each rig's **supervisor**, which also talks to git hosts, model providers and web pages all day. Thermite is built so that the supervisor does not have to be trusted with what matters most: control signs every command, the harness signs every report, and each side checks the other's signature. This page explains those checks and how keys are first trusted.
 
-The words here are in the [glossary](../reference/glossary.md). A rig is two containers: the **harness**, which holds the judge, the agents and the record of the research, and the supervisor, which connects it to everything else ([How the parts fit together](how-it-fits-together.md)).
+The words here are in the [glossary](../reference/glossary.md). A rig is two containers: the **harness**, which holds the judge, the agents and the record of the research, and the supervisor, which connects it to everything else ([How the parts fit together](how-it-fits-together.mdx)).
 
 ```mermaid
 sequenceDiagram

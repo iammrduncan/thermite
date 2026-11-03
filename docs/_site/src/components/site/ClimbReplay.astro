@@ -1,0 +1,628 @@
+---
+// A replay of a real hill climb: Thermite's decode campaign on Qwen3.8-27B-PN3, one Tesla P100,
+// 24-29 October 2026 (src/data/decode-climb.json, from the judge's records). Each spark is one
+// change an agent submitted, rising when it was submitted and landing at the speed the judge
+// measured for it; the line is the champion, which steps up when a confirmed win is promoted.
+// The panel is dark in both themes, like an instrument.
+interface Props {
+  /** A shorter panel, for a card. */
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+---
+
+<figure class:list={["replay", { compact }]} data-replay>
+  <div class="console">
+    <div class="top">
+      <div class="title">
+        <span class="live" aria-hidden="true"></span>
+        <span>Replay · decode hill climb</span>
+        <span class="sub">Qwen3.8-27B-PN3 · one Tesla P100 · 24–29 Oct 2026</span>
+      </div>
+      <div class="ctl">
+        <button type="button" data-toggle aria-label="Pause the replay">Pause</button>
+        <button type="button" data-restart aria-label="Replay from the start">Replay</button>
+      </div>
+    </div>
+    <div class="stage">
+      <canvas aria-hidden="true"></canvas>
+    </div>
+    <div class="hud">
+      <div class="ticker" aria-hidden="true">
+        <span class="k">Attempt <b data-n>131</b> of 131 · lane <b data-lane>2</b></span>
+        <span class="dir" data-dir>pn-gemv-integer-xmad-decode</span>
+        <span class="verdict" data-verdict data-v="w">+1.21% · confirmed: champion 28</span>
+      </div>
+      <div class="readout" aria-hidden="true">
+        <span class="k">Champion decode</span>
+        <span class="v"><b data-tps>30.1</b><small>tok/s</small></span>
+        <span class="k" data-x>3.89× the start</span>
+      </div>
+    </div>
+  </div>
+  <figcaption class="sr-only">
+    A replay of Thermite's decode hill climb on Qwen3.8-27B-PN3, on one Tesla P100: 131 changes judged in
+    five days. 28 were confirmed wins, 48 were slower, 39 made no real difference, 12 broke a guard and 4
+    were inconclusive. The champion's decode speed rose from 7.7 to 30.1 tokens a second, past Q3Floor's
+    26.3.
+  </figcaption>
+</figure>
+
+<style>
+  .replay {
+    margin: 0;
+  }
+  .console {
+    --c-bg: #0b0806;
+    --c-ink: #f6ece4;
+    --c-muted: #a3958b;
+    --c-dim: #6b5f57;
+    --c-rule: rgba(255, 236, 220, 0.08);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: clamp(25rem, 46vw, 34rem);
+    overflow: hidden;
+    border: 1px solid #2c221b;
+    border-radius: 20px;
+    background:
+      radial-gradient(90% 70% at 85% 100%, rgba(240, 113, 42, 0.16), transparent 60%),
+      radial-gradient(60% 50% at 10% 0%, rgba(255, 195, 90, 0.06), transparent 60%),
+      var(--c-bg);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 30px 80px -30px rgba(240, 113, 42, 0.35),
+      0 20px 50px -20px rgba(0, 0, 0, 0.7);
+    color: var(--c-ink);
+  }
+  .compact .console {
+    height: 21rem;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.8rem 0.9rem 0.4rem 1.1rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c-muted);
+  }
+  .title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.6rem;
+    min-width: 0;
+  }
+  .sub {
+    color: var(--c-dim);
+  }
+  .live {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: #ff7a2f;
+    box-shadow: 0 0 10px #ff7a2f;
+    animation: blink 1.6s ease-in-out infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .ctl {
+    display: flex;
+    gap: 0.3rem;
+    margin-left: auto;
+  }
+  .ctl button {
+    padding: 0.28rem 0.6rem;
+    border: 1px solid #33281f;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--c-muted);
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .ctl button:hover {
+    color: var(--c-ink);
+    border-color: #4a3a2e;
+  }
+  .stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .hud {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 1.1rem 1rem;
+    font-family: var(--mono);
+  }
+  .k {
+    display: block;
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--c-dim);
+  }
+  .k b {
+    color: var(--c-muted);
+    font-weight: 500;
+  }
+  .ticker {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .dir {
+    overflow: hidden;
+    max-width: 22rem;
+    font-size: 0.8rem;
+    color: var(--c-ink);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .verdict {
+    font-size: 0.74rem;
+  }
+  .verdict[data-v="w"] {
+    color: #ffc35a;
+  }
+  .verdict[data-v="d"] {
+    color: #e0b878;
+  }
+  .verdict[data-v="r"] {
+    color: #d07a4f;
+  }
+  .verdict[data-v="n"],
+  .verdict[data-v="u"] {
+    color: var(--c-muted);
+  }
+  .verdict[data-v="i"] {
+    color: #ff6a5c;
+  }
+  .readout {
+    flex: none;
+    text-align: right;
+  }
+  .readout .v {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.35rem;
+  }
+  .readout b {
+    font-family: var(--display);
+    font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    color: #fff4ea;
+    text-shadow: 0 0 24px rgba(255, 140, 60, 0.45);
+    font-variant-numeric: tabular-nums;
+  }
+  .readout small {
+    font-size: 0.75rem;
+    color: var(--c-muted);
+  }
+  @media (max-width: 34rem) {
+    .console {
+      height: 27rem;
+    }
+    .top {
+      font-size: 0.62rem;
+    }
+    .sub {
+      display: none;
+    }
+    .k,
+    .dir,
+    .verdict {
+      max-width: 11.5rem;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .readout b {
+      font-size: 1.8rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ctl,
+    .live {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  import data from "../../data/decode-climb.json";
+
+  type Attempt = [number, number, string, number | null, number | null, number | null, string, number | null];
+  const attempts = data.attempts as Attempt[];
+  const champions = data.champions as [number, number, number, number][];
+  const TOTAL = data.minutes;
+  const FIRST = attempts[0][0] - 60; // the replay opens just before the first submission
+  const PLAY = 22; // seconds for the whole climb
+  const HOLD = 6; // seconds on the finished climb before it plays again
+  const FLIGHT = 0.95; // seconds a spark takes to reach the judge
+  const Y_MAX = 33;
+  const C = {
+    grid: "rgba(255,236,220,0.07)",
+    label: "rgba(255,236,220,0.34)",
+    ember: "#ff7a2f",
+    hot: "#ffd9b0",
+    gold: "#ffc35a",
+    red: "#ff5d4f",
+    slow: "#c4673c",
+    flat: "#9a8b80",
+  };
+  const verdictText = (a: Attempt) => {
+    const e = a[3] === null ? "" : `${a[3] > 0 ? "+" : ""}${a[3].toFixed(2)}% · `;
+    switch (a[2]) {
+      case "w":
+        return `${e}confirmed: champion ${a[7]}`;
+      case "d":
+        return `${e}confirmed, declined by the owner`;
+      case "r":
+        return `${e}slower than the champion`;
+      case "n":
+        return `${e}no real difference`;
+      case "i":
+        return "broke a guard: invalid";
+      default:
+        return `${e}inconclusive`;
+    }
+  };
+  const championAt = (m: number) => {
+    let c = champions[0];
+    for (const x of champions) if (x[0] <= m) c = x;
+    return c;
+  };
+
+  for (const fig of document.querySelectorAll<HTMLElement>("[data-replay]")) {
+    const canvas = fig.querySelector("canvas")!;
+    const ctx = canvas.getContext("2d")!;
+    const $ = (s: string) => fig.querySelector<HTMLElement>(s)!;
+    const ui = {
+      n: $("[data-n]"),
+      lane: $("[data-lane]"),
+      dir: $("[data-dir]"),
+      verdict: $("[data-verdict]"),
+      tps: $("[data-tps]"),
+      x: $("[data-x]"),
+      toggle: $("[data-toggle]"),
+      restart: $("[data-restart]"),
+    };
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let w = 0;
+    let h = 0;
+    let box = { x0: 0, x1: 0, y0: 0, y1: 0 };
+    const X = (m: number) => box.x0 + (m / TOTAL) * (box.x1 - box.x0);
+    const Y = (v: number) => box.y1 - (Math.max(0, Math.min(v, Y_MAX)) / Y_MAX) * (box.y1 - box.y0);
+    const resize = () => {
+      const r = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = r.width;
+      h = r.height;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const left = w < 480 ? 30 : 40;
+      box = { x0: left, x1: w - 16, y0: 14, y1: h - 22 };
+    };
+
+    // Heat: a few embers that drift up behind everything.
+    const motes = Array.from({ length: 34 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      s: 0.2 + Math.random() * 0.8,
+      r: 0.6 + Math.random() * 1.4,
+    }));
+    type Burst = { x: number; y: number; vx: number; vy: number; life: number; color: string };
+    let bursts: Burst[] = [];
+    const burst = (x: number, y: number, color: string, n: number, speed: number) => {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = speed * (0.4 + Math.random());
+        bursts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - speed * 0.3, life: 1, color });
+      }
+    };
+
+    let t = 0; // seconds into the replay
+    let last = performance.now();
+    let playing = !reduced;
+    let visible = true;
+    let landed = new Set<number>();
+    let stepped = new Set<number>();
+    const minuteAt = (sec: number) => Math.min(TOTAL, FIRST + (sec / PLAY) * (TOTAL - FIRST));
+    const secAt = (m: number) => ((m - FIRST) / (TOTAL - FIRST)) * PLAY;
+
+    const showAttempt = (i: number) => {
+      const a = attempts[i];
+      ui.n.textContent = String(i + 1);
+      ui.lane.textContent = String(a[1]);
+      ui.dir.textContent = a[6];
+      ui.verdict.textContent = verdictText(a);
+      ui.verdict.dataset.v = a[2];
+    };
+    const showChampion = (m: number) => {
+      const c = championAt(m);
+      ui.tps.textContent = c[3].toFixed(1);
+      ui.x.textContent = c[1] === 1 ? "the starting point" : `champion ${c[1]} · ${(c[3] / data.seed).toFixed(2)}× the start`;
+    };
+
+    const draw = (sec: number, dt: number) => {
+      const m = minuteAt(sec);
+      ctx.clearRect(0, 0, w, h);
+
+      for (const p of motes) {
+        p.y -= dt * 0.012 * p.s;
+        if (p.y < -0.02) {
+          p.y = 1.02;
+          p.x = Math.random();
+        }
+        ctx.fillStyle = `rgba(255,140,60,${0.05 + 0.1 * p.s})`;
+        ctx.beginPath();
+        ctx.arc(p.x * w, p.y * h, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Grid, days and the reference line.
+      ctx.font = `10px "Geist Mono Variable", ui-monospace, monospace`;
+      ctx.textBaseline = "middle";
+      for (const v of [10, 20, 30]) {
+        ctx.strokeStyle = C.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(box.x0, Math.round(Y(v)) + 0.5);
+        ctx.lineTo(box.x1, Math.round(Y(v)) + 0.5);
+        ctx.stroke();
+        ctx.fillStyle = C.label;
+        ctx.textAlign = "right";
+        ctx.fillText(String(v), box.x0 - 8, Y(v));
+      }
+      ctx.textAlign = "center";
+      for (let d = 25; d <= 29; d++) {
+        const dm = (Date.parse(`2026-10-${d}T00:00Z`) - Date.parse(data.start)) / 60000;
+        if (w < 480 && d % 2 === 0) continue;
+        ctx.fillStyle = C.label;
+        ctx.fillText(`${d} Oct`, X(dm), box.y1 + 12);
+      }
+      ctx.setLineDash([4, 5]);
+      ctx.strokeStyle = "rgba(255,236,220,0.26)";
+      ctx.beginPath();
+      ctx.moveTo(box.x0, Y(data.reference));
+      ctx.lineTo(box.x1, Y(data.reference));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(255,236,220,0.45)";
+      ctx.textAlign = "left";
+      ctx.fillText(`Q3Floor, standard 3-bit · ${data.reference}`, box.x0 + 6, Y(data.reference) - 9);
+
+      // Attempts that have landed stay as faint dots: the cloud of everything that was tried.
+      for (let i = 0; i < attempts.length; i++) {
+        const a = attempts[i];
+        const land = secAt(a[0]) + FLIGHT;
+        if (sec < land) continue;
+        const x = X(a[0]);
+        const age = sec - land;
+        if (!landed.has(i)) {
+          landed.add(i);
+          if (playing) showAttempt(i);
+          const yv = a[5] ?? championAt(a[0])[3] * 0.62;
+          if (a[2] === "i") burst(x, Y(yv), C.red, 10, 50);
+          if (a[2] === "w" || a[2] === "d") burst(x, Y(yv), C.gold, 8, 30);
+        }
+        if (a[2] === "i") {
+          const y = Y(championAt(a[0])[3] * 0.62);
+          ctx.strokeStyle = age < 0.6 ? C.red : "rgba(255,93,79,0.4)";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(x - 3, y - 3);
+          ctx.lineTo(x + 3, y + 3);
+          ctx.moveTo(x + 3, y - 3);
+          ctx.lineTo(x - 3, y + 3);
+          ctx.stroke();
+          continue;
+        }
+        const v = a[5] ?? championAt(a[0])[3];
+        let y = Y(v);
+        let alpha = 0.55;
+        let color = C.flat;
+        let r = 2.2;
+        if (a[2] === "w" || a[2] === "d") {
+          color = C.gold;
+          r = 3;
+          alpha = a[2] === "d" ? 0.55 : 0.9;
+        } else if (a[2] === "r") {
+          color = C.slow;
+          // A slower change sinks a little as it cools.
+          y = Y(v) + Math.min(age, 1.2) * 6;
+          alpha = Math.max(0.42, 0.95 - age * 0.6);
+        } else if (a[2] === "u") {
+          alpha = 0.4;
+        }
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // The champion line, up to now.
+      const pts: [number, number][] = [];
+      let prev = champions[0];
+      pts.push([X(0), Y(prev[3])]);
+      for (const c of champions.slice(1)) {
+        if (c[0] > m) break;
+        pts.push([X(c[0]), Y(prev[3])], [X(c[0]), Y(c[3])]);
+        prev = c;
+        if (!stepped.has(c[1])) {
+          stepped.add(c[1]);
+          burst(X(c[0]), Y(c[3]), C.gold, 14, 60);
+          if (playing) showChampion(m);
+        }
+      }
+      const head: [number, number] = [X(m), Y(prev[3])];
+      pts.push(head);
+      ctx.save();
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      const grad = ctx.createLinearGradient(box.x0, 0, box.x1, 0);
+      grad.addColorStop(0, C.ember);
+      grad.addColorStop(1, C.gold);
+      for (const [width, alpha, blur] of [
+        [7, 0.18, 18],
+        [2.2, 1, 8],
+      ] as const) {
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = width;
+        ctx.shadowColor = C.ember;
+        ctx.shadowBlur = blur;
+        ctx.beginPath();
+        pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.stroke();
+      }
+      ctx.restore();
+      // A soft area under the line.
+      ctx.save();
+      const area = ctx.createLinearGradient(0, box.y0, 0, box.y1);
+      area.addColorStop(0, "rgba(255,122,47,0.16)");
+      area.addColorStop(1, "rgba(255,122,47,0)");
+      ctx.fillStyle = area;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.lineTo(head[0], box.y1);
+      ctx.lineTo(pts[0][0], box.y1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      // The head of the line glows.
+      ctx.save();
+      ctx.shadowColor = C.gold;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = "#fff1dc";
+      ctx.beginPath();
+      ctx.arc(head[0], head[1], 3.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Sparks in flight: each rises from the bottom to the speed the judge will measure.
+      for (const a of attempts) {
+        const s0 = secAt(a[0]);
+        const p = (sec - s0) / FLIGHT;
+        if (p < 0 || p >= 1) continue;
+        const x = X(a[0]);
+        const target = a[2] === "i" ? championAt(a[0])[3] * 0.62 : (a[5] ?? championAt(a[0])[3]);
+        const e = 1 - (1 - p) ** 3;
+        const y = box.y1 + (Y(target) - box.y1) * e;
+        const tail = box.y1 + (Y(target) - box.y1) * Math.max(0, e - 0.28);
+        const g = ctx.createLinearGradient(x, tail, x, y);
+        g.addColorStop(0, "rgba(255,122,47,0)");
+        g.addColorStop(1, "rgba(255,190,120,0.9)");
+        ctx.strokeStyle = g;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(x, tail);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.save();
+        ctx.shadowColor = C.ember;
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = C.hot;
+        ctx.beginPath();
+        ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Bursts.
+      bursts = bursts.filter((b) => b.life > 0);
+      for (const b of bursts) {
+        b.life -= dt * 1.6;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.vy += 60 * dt;
+        ctx.globalAlpha = Math.max(0, b.life);
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x - 1, b.y - 1, 2, 2);
+      }
+      ctx.globalAlpha = 1;
+
+      // The time cursor.
+      if (m < TOTAL) {
+        ctx.strokeStyle = "rgba(255,236,220,0.12)";
+        ctx.beginPath();
+        ctx.moveTo(Math.round(X(m)) + 0.5, box.y0);
+        ctx.lineTo(Math.round(X(m)) + 0.5, box.y1);
+        ctx.stroke();
+      }
+    };
+
+    const restart = () => {
+      t = 0;
+      landed = new Set();
+      stepped = new Set();
+      bursts = [];
+      showChampion(FIRST);
+      ui.n.textContent = "0";
+      ui.dir.textContent = "waiting for the first change";
+      ui.verdict.textContent = "";
+    };
+    const frame = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (playing && visible) {
+        t += dt;
+        if (t > PLAY + HOLD) restart();
+        draw(Math.min(t, PLAY + FLIGHT), dt);
+      }
+      requestAnimationFrame(frame);
+    };
+
+    resize();
+    new ResizeObserver(() => {
+      resize();
+      draw(Math.min(t, PLAY + FLIGHT), 0);
+    }).observe(canvas);
+    new IntersectionObserver((e) => (visible = e.some((x) => x.isIntersecting))).observe(fig);
+    document.addEventListener("visibilitychange", () => (visible = !document.hidden));
+    ui.toggle.addEventListener("click", () => {
+      playing = !playing;
+      ui.toggle.textContent = playing ? "Pause" : "Play";
+      ui.toggle.setAttribute("aria-label", playing ? "Pause the replay" : "Play the replay");
+    });
+    ui.restart.addEventListener("click", () => {
+      restart();
+      playing = true;
+      ui.toggle.textContent = "Pause";
+    });
+
+    if (reduced) {
+      // The finished climb, still.
+      t = PLAY + FLIGHT;
+      landed = new Set(attempts.map((_, i) => i));
+      stepped = new Set(champions.map((c) => c[1]));
+      draw(t, 0);
+    } else {
+      restart();
+      requestAnimationFrame(frame);
+    }
+  }
+</script>

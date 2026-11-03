@@ -142,7 +142,7 @@ A name used by more than one run before v0.1.1 (on two rigs, or again after a fu
 | --- | --- | --- | --- | --- |
 | `GET /v1/usage` | Owner or reader | The agents' model usage, summed for one run, for a campaign (all its runs on every rig) or for the whole system, over a period | `run`: one run, by its name. `campaign`: one campaign. Neither `run` nor `campaign`: the whole system. `period`: `today` (since midnight UTC, or in `tz`), `7d` (the last 7 days) or `all`, default `all`. `tz`: the time zone whose midnight starts `today`, by its IANA name, such as `Europe/Paris`; default `UTC`. An empty field counts as not given | `{scope, period, tz, since, total, by_agent, by_model, by_agent_model}`, with `by_run` for a campaign and `by_campaign` for the system, below. 400 `{"error":"<why>"}`: `Give a run or a campaign, not both.`, `The period is today, 7d or all.`, `The time zone is a name such as Europe/Paris, America/Chicago or UTC.`, `A run is 1 to 100 characters.` (a campaign, 1 to 200), or `It takes run, campaign, period and tz, not <field>.` |
 
-It sums the [model usage records](../explanation/how-it-fits-together.md#the-model-usage-records) the rigs reported, by the time each call started. A run or a campaign with no records gives sums of 0 records. The MCP tool [`model_usage`](mcp-tools.md#model_usage) gives the same answer.
+It sums the [model usage records](../explanation/how-it-fits-together.mdx#the-model-usage-records) the rigs reported, by the time each call started. A run or a campaign with no records gives sums of 0 records. The MCP tool [`model_usage`](mcp-tools.md#model_usage) gives the same answer.
 
 | Field | Meaning |
 | --- | --- |

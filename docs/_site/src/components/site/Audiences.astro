@@ -1,0 +1,53 @@
+---
+// The three audiences as cards, each leading to its page in the documentation.
+import { audiences, modeName } from "../../data/audiences";
+import AudienceIcon from "./AudienceIcon.astro";
+---
+
+<div class="grid three">
+  {
+    audiences.map((a) => (
+      <a class="card aud" href={a.href} data-reveal>
+        <AudienceIcon name={a.key} />
+        <h3 class="h3">{a.name}</h3>
+        <p>{a.pitch}</p>
+        <ul>
+          {a.examples.map((e) => (
+            <li>
+              <span class={`tag ${e.mode}`}>{modeName[e.mode]}</span>
+              <span>{e.title}</span>
+            </li>
+          ))}
+        </ul>
+        <span class="go">
+          Read the guide <span aria-hidden="true">→</span>
+        </span>
+      </a>
+    ))
+  }
+</div>
+
+<style>
+  .aud .h3 {
+    margin-top: 1.1rem;
+  }
+  ul {
+    list-style: none;
+    margin: 1.1rem 0 0;
+    padding: 1rem 0 0;
+    border-top: 1px solid var(--rule);
+    display: grid;
+    gap: 0.55rem;
+  }
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.92rem;
+    color: var(--ink-2);
+  }
+  li .tag {
+    min-width: 5.6rem;
+    justify-content: center;
+  }
+</style>

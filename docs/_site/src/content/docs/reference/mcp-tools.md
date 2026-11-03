@@ -268,7 +268,7 @@ No inputs. Hill-climb runs only, each campaign's runs best gain first: goal and 
 | `period` | `today`, `7d` or `all` | `all` | Since midnight UTC (or in `tz`), the last 7 days, or all |
 | `tz` | string, optional | `UTC` | The time zone whose midnight starts `today`, by its IANA name, such as `Europe/Paris` |
 
-With neither `run` nor `campaign`, the whole system's usage. It returns the same report as [`GET /v1/usage`](rest-api.md#model-usage), which describes each field. Errors: `Give a run or a campaign, not both.` and `The time zone is a name such as Europe/Paris, America/Chicago or UTC.` [The model usage records](../explanation/how-it-fits-together.md#the-model-usage-records) says what each program reports.
+With neither `run` nor `campaign`, the whole system's usage. It returns the same report as [`GET /v1/usage`](rest-api.md#model-usage), which describes each field. Errors: `Give a run or a campaign, not both.` and `The time zone is a name such as Europe/Paris, America/Chicago or UTC.` [The model usage records](../explanation/how-it-fits-together.mdx#the-model-usage-records) says what each program reports.
 
 ### rig_reports
 

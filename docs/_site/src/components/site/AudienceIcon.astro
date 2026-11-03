@@ -1,0 +1,68 @@
+---
+// A small drawing for each audience: a GPU card, a night sky over a desk, a building with a shield.
+interface Props {
+  name: "local-ai" | "solo-builders" | "enterprises";
+}
+const { name } = Astro.props;
+---
+
+<span class="ai" aria-hidden="true">
+  {
+    name === "local-ai" && (
+      <svg viewBox="0 0 48 48">
+        <rect x="5" y="13" width="38" height="22" rx="4" />
+        <circle cx="17" cy="24" r="6" />
+        <path d="M17 18v12M11 24h12" />
+        <path d="M29 20h9M29 24h9M29 28h6" />
+        <path d="M10 35v4M16 35v4M22 35v4M28 35v4" />
+      </svg>
+    )
+  }
+  {
+    name === "solo-builders" && (
+      <svg viewBox="0 0 48 48">
+        <path d="M33 7a9 9 0 1 0 8 13 7 7 0 0 1-8-13Z" />
+        <rect x="7" y="25" width="26" height="15" rx="3" />
+        <path d="M4 40h32" />
+        <path d="M12 33l4-3-4-3M19 34h6" />
+        <circle class="fill" cx="12" cy="11" r="1" />
+        <circle class="fill" cx="20" cy="7" r="1" />
+      </svg>
+    )
+  }
+  {
+    name === "enterprises" && (
+      <svg viewBox="0 0 48 48">
+        <path d="M6 41V13l14-6v34" />
+        <path d="M20 41V17h12" />
+        <path d="M11 17h4M11 23h4M11 29h4" />
+        <path d="M34 22l9 3.5v6.5c0 5-4 8-9 9.5-5-1.5-9-4.5-9-9.5v-6.5l9-3.5Z" />
+        <path d="M30.5 31.5l2.5 2.5 5-5" />
+      </svg>
+    )
+  }
+</span>
+
+<style>
+  .ai {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  svg {
+    width: 2rem;
+    height: 2rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .fill {
+    fill: currentColor;
+  }
+</style>

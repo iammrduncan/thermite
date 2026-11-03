@@ -33,7 +33,7 @@ flowchart LR
   Ledger --> Planner
 ```
 
-The work happens on a **rig**: two containers on a computer, with the CPU or GPUs that the work is measured on. A central service called **control** shows every rig on one dashboard. [How the parts fit together](how-it-fits-together.md) explains both.
+The work happens on a **rig**: two containers on a computer, with the CPU or GPUs that the work is measured on. A central service called **control** shows every rig on one dashboard. [How the parts fit together](how-it-fits-together.mdx) explains both.
 
 ## Who it is for
 
@@ -54,7 +54,7 @@ You need Linux or macOS and Docker or Podman. A GPU is optional, and so is a pai
 - **Keep the best, and keep everything else.** Each campaign builds on its best confirmed result. Every attempt that loses is kept as well, with its code and the reason it lost, because an idea can lose on the main number and still be worth reading later.
 - **What agents learn is kept.** Agents write short field notes as they work: what they observed, decided and learned. Each campaign's records go into its own collection in Thermite's knowledge base, and later runs read it, with other campaigns' collections when you allow it. What they read is data to weigh; the judge still decides. → [Journals and the knowledge base](journals-and-knowledge.md)
 - **Three kinds of research.** Push a number up without breaking anything else; work until a list of goals is met, or until the evidence shows that they cannot be; or research questions until they are answered and get a paper whose answers rest on quotes that code has checked. → [Campaign modes](campaign-modes.md)
-- **One place to watch and steer.** One dashboard, with a REST API and MCP, shows every campaign on every rig. People and their agents can pause, redirect, message and reassign the work, and choose what each run tries next. → [How the parts fit together](how-it-fits-together.md)
+- **One place to watch and steer.** One dashboard, with a REST API and MCP, shows every campaign on every rig. People and their agents can pause, redirect, message and reassign the work, and choose what each run tries next. → [How the parts fit together](how-it-fits-together.mdx)
 
 ## What Thermite does not do
 

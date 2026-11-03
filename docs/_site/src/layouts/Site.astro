@@ -1,0 +1,303 @@
+---
+// The frame of the site's own pages (src/pages/): the home page, the use cases and the studies.
+// The documentation keeps Starlight's frame; both share the theme setting and the analytics.
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "../styles/site.css";
+import Logo from "../assets/logo.svg?raw";
+import { fathom } from "../analytics.mjs";
+
+interface Props {
+  title: string;
+  description: string;
+  /** The nav item to mark as the current section. */
+  section?: "use-cases" | "studies";
+}
+const { title, description, section } = Astro.props;
+declare const __THERMITE_VERSION__: string;
+const version = __THERMITE_VERSION__;
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const repo = "https://github.com/iammrduncan/thermite";
+const discord = "https://discord.gg/3Qs2uejUf9";
+const nav = [
+  { href: "/start-here/", label: "Docs" },
+  { href: "/use-cases/", label: "Use cases", key: "use-cases" },
+  { href: "/studies/", label: "Studies", key: "studies" },
+  { href: "/project/changelog/", label: "Changelog" },
+];
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Thermite" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <script is:inline>
+      // The docs' theme setting (Starlight's): "light", "dark", or nothing for the system's.
+      (() => {
+        let stored = "";
+        try {
+          stored = localStorage.getItem("starlight-theme") || "";
+        } catch {}
+        const light = stored ? stored === "light" : matchMedia("(prefers-color-scheme: light)").matches;
+        document.documentElement.dataset.theme = light ? "light" : "dark";
+        document.documentElement.classList.add("js");
+      })();
+    </script>
+    <script is:inline {...fathom}></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap bar">
+        <a class="brand" href="/" aria-label="Thermite home">
+          <span class="logo" set:html={Logo} />
+          <span class="word">Thermite</span>
+        </a>
+        <a class="version" href="/project/changelog/" title={`Thermite ${version}: what it holds`}>v{version}</a>
+        <nav class="nav" aria-label="Main">
+          {
+            nav.map((item) => (
+              <a href={item.href} aria-current={item.key && item.key === section ? "page" : undefined}>
+                {item.label}
+              </a>
+            ))
+          }
+        </nav>
+        <div class="actions">
+          <a class="icon" href={repo} aria-label="Thermite on GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36 .96 .1-.75 .4-1.26 .73-1.55-2.56-.29-5.25-1.28-5.25-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"></path></svg>
+          </a>
+          <a class="icon" href={discord} aria-label="Thermite's community on Discord">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.32 4.37A19.8 19.8 0 0 0 15.43 2.85a.07.07 0 0 0-.08.04c-.21.38-.44.87-.61 1.25a18.3 18.3 0 0 0-5.49 0 12.6 12.6 0 0 0-.62-1.25.08.08 0 0 0-.08-.04 19.7 19.7 0 0 0-4.89 1.52.07.07 0 0 0-.03.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 5.99 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.23-1.99a.08.08 0 0 0-.04-.11 13.1 13.1 0 0 1-1.87-.89.08.08 0 0 1-.01-.13l.37-.29a.07.07 0 0 1 .08-.01c3.93 1.79 8.18 1.79 12.06 0a.07.07 0 0 1 .08.01l.37.29a.08.08 0 0 1-.01.13c-.6.35-1.22.65-1.87.89a.08.08 0 0 0-.04.11c.36.7.77 1.36 1.23 1.99a.08.08 0 0 0 .08.03 19.8 19.8 0 0 0 6-3.03.08.08 0 0 0 .03-.06c.5-5.18-.84-9.67-3.55-13.66a.06.06 0 0 0-.03-.03ZM8.02 15.33c-1.18 0-2.16-1.09-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.33-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.16-1.09-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.33-.95 2.42-2.16 2.42Z"></path></svg>
+          </a>
+          <button class="icon" type="button" data-theme-toggle aria-label="Switch between dark and light">
+            <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"></circle><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"></path></svg>
+            <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"></path></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap foot">
+        <div class="foot-brand">
+          <a class="brand" href="/" aria-label="Thermite home">
+            <span class="logo" set:html={Logo} />
+            <span class="word">Thermite</span>
+          </a>
+          <p class="small">
+            Open-source autoresearch: agents propose, and code they cannot touch decides. Apache License 2.0.
+            Made with the <a href="https://discord.gg/3Qs2uejUf9">Hackers in the Loop</a> community.
+          </p>
+        </div>
+        <nav class="foot-cols small" aria-label="Footer">
+          <div>
+            <b>Start</b>
+            <a href="/tutorials/first-run/">Install on one machine</a>
+            <a href="/tutorials/agents-with-a-free-model/">Your first campaign</a>
+            <a href="/start-here/">All the docs</a>
+          </div>
+          <div>
+            <b>Learn</b>
+            <a href="/use-cases/">Use cases</a>
+            <a href="/studies/">Studies</a>
+            <a href="/explanation/why-agents-never-judge/">Why agents never judge</a>
+          </div>
+          <div>
+            <b>Project</b>
+            <a href={repo}>GitHub</a>
+            <a href={discord}>Discord</a>
+            <a href="/project/changelog/">Changelog</a>
+            <a href="/project/credits/">Credits</a>
+          </div>
+        </nav>
+      </div>
+    </footer>
+    <script>
+      import "../scripts/site";
+    </script>
+  </body>
+</html>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    height: 3.75rem;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+  }
+  .logo {
+    display: inline-flex;
+    flex: none;
+  }
+  .logo :global(svg) {
+    width: 34px;
+    height: 34px;
+  }
+  .brand:hover .logo :global(svg) {
+    animation: wiggle 0.6s ease;
+  }
+  @keyframes wiggle {
+    30% {
+      transform: rotate(-8deg);
+    }
+    60% {
+      transform: rotate(6deg);
+    }
+  }
+  .word {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.22rem;
+    letter-spacing: -0.03em;
+  }
+  .version {
+    padding: 0.08rem 0.5rem;
+    border: 1px solid var(--rule-2);
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .version:hover {
+    color: var(--ink);
+  }
+  .nav {
+    display: flex;
+    gap: 1.35rem;
+    margin-left: 1rem;
+  }
+  .nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.93rem;
+    white-space: nowrap;
+  }
+  .nav a:hover,
+  .nav a[aria-current="page"] {
+    color: var(--ink);
+  }
+  .actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.1rem;
+  }
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .icon:hover {
+    background: var(--panel-2);
+  }
+  .icon svg {
+    width: 19px;
+    height: 19px;
+  }
+  :global(:root[data-theme="light"]) .moon,
+  :global(:root[data-theme="dark"]) .sun {
+    display: none;
+  }
+  @media (max-width: 52rem) {
+    .version,
+    .nav a:nth-child(4) {
+      display: none;
+    }
+    .nav {
+      margin-left: 0.25rem;
+      gap: 1rem;
+    }
+  }
+  @media (max-width: 30rem) {
+    .word {
+      display: none;
+    }
+    .nav {
+      gap: 0.85rem;
+    }
+    .nav a {
+      font-size: 0.88rem;
+    }
+  }
+  .site-footer {
+    border-top: 1px solid var(--rule);
+    padding-block: 3rem 3.5rem;
+    background: var(--bg-2);
+  }
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2rem 3rem;
+  }
+  .foot-brand {
+    max-width: 24rem;
+  }
+  .foot-brand p {
+    margin: 0.75rem 0 0;
+  }
+  .foot a {
+    color: var(--ink-2);
+  }
+  .foot-cols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem 3.5rem;
+  }
+  .foot-cols div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+  .foot-cols b {
+    color: var(--ink);
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+  }
+  .foot-cols a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .foot-cols a:hover {
+    color: var(--ink);
+  }
+</style>

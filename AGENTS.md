@@ -6,7 +6,7 @@ Thermite is an autoresearch harness:
 - code the agents cannot write measures, judges and promotes them;
 - a central control service shows and steers every campaign.
 
-Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The public documentation is a site built from [docs/_site/](docs/_site/src/content/docs/index.mdx); [docs/](docs/README.md) indexes it, and [docs/writing-docs.md](docs/writing-docs.md) says how its pages are written and checked.
+Read [CONVENTIONS.md](CONVENTIONS.md) before changing this repository. The public documentation is a site built from [docs/_site/](docs/_site/src/content/docs/start-here.md); [docs/](docs/README.md) indexes it, and [docs/writing-docs.md](docs/writing-docs.md) says how its pages are written and checked.
 
 **Maintainers:** if `.internal/AGENTS.md` exists, read it before starting work. It holds the rules for the maintainers' own deployment and points to their private notes. Outside contributors don't have it and don't need it: every rule for a change to this repository is in this file, [CONVENTIONS.md](CONVENTIONS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 

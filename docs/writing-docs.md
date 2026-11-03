@@ -39,9 +39,9 @@ The site's dependencies are pinned to exact versions and kept apart from Thermit
 The site is at [usethermite.com](https://usethermite.com), on Cloudflare Pages. Cloudflare builds it from `main` on every push: in `docs/_site/`, with `npm run build -- --outDir dist` on Node.js 22.22 or later, and it serves `dist/`. Other branches and pull requests get no preview.
 
 - `docs/_site/public/_headers` sets the response headers, among them the Content Security Policy. A page that loads a script, style, image or font from another host needs that host added there, or the browser blocks it.
-- The site's icon is Thermite's flame, a small character with a face, in `docs/_site/public/favicon.svg`. The SVG holds two faces: drawn at 24 pixels or less, as in a browser tab, its own media query shows a plain face whose eyes and mouth sit on the 16-pixel grid; larger, it shows the full face. Beside it are `favicon.ico` (16, 32 and 48 pixels, for browsers that take no SVG, such as Safari) and `apple-touch-icon.png` (180 pixels, on a dark square, for a page saved on iOS). The header's logo (`src/assets/logo.svg`) and the home page's picture (`src/assets/hero.svg`, the flame waving) are the same character with a finer line.
+- The site's icon is Thermite's flame, a small character with a face, in `docs/_site/public/favicon.svg`. The SVG holds two faces: drawn at 24 pixels or less, as in a browser tab, its own media query shows a plain face whose eyes and mouth sit on the 16-pixel grid; larger, it shows the full face. Beside it are `favicon.ico` (16, 32 and 48 pixels, for browsers that take no SVG, such as Safari) and `apple-touch-icon.png` (180 pixels, on a dark square, for a page saved on iOS). The header's logo (`src/assets/logo.svg`) and the flame waving on the home page's community card (`src/assets/hero.svg`) are the same character with a finer line.
 - After a change to the flame, keep all five alike. Draw the ICO and the PNG from the SVG in a browser: renderers such as sharp ignore the media query and draw the full face at 16 pixels, where it blurs. Then copy the three icons into `src/control/ui/components/icons.ts`. The dashboard serves the same ones, and its test compares them byte for byte.
-- The pages count visits to usethermite.com with [Fathom Analytics](https://usefathom.com), which sets no cookies. Its script and site code are in `astro.config.mjs`.
+- The pages count visits to usethermite.com with [Fathom Analytics](https://usefathom.com), which sets no cookies. Its script and site code are in `src/analytics.mjs`, which the docs and the site's own pages share.
 - The header shows the version of Thermite the pages describe, beside the title, linked to the Changelog page. The build reads it from the root `package.json`, so a new version needs no change to the site (`src/components/SiteTitle.astro`).
 
 ## Where pages go
@@ -57,9 +57,20 @@ Every page is one Markdown file in `docs/_site/src/content/docs/`, and has one t
 | `use-cases/` | `use-case` | shows one kind of user what to point Thermite at, why it fits them, a path through the docs and what to know first. |
 | `studies/` | `study` | tells one real campaign, or a series of them, from question to result, with measured numbers. |
 | `project/` | `project` | is about the project: the roadmap, getting help, contributing. |
-| the top | `hub` | is the home page or Start here. |
+| the top | `hub` | is Start here. |
 
 The sidebar follows the folders. `sidebar.order` in the front matter sets a page's place in its group.
+
+## The site's own pages
+
+Three pages are not Starlight's: the home page (`src/pages/index.astro`), the use cases' overview (`src/pages/use-cases.astro`, at `/use-cases/`) and the studies' overview (`src/pages/studies.astro`, at `/studies/`). They are for readers deciding whether Thermite fits them, in the way of [tensorless.dev](https://tensorless.dev) and [fxbot.sh](https://fxbot.sh).
+
+- **Content lives in the docs; overviews live here.** Each use case and each study has its full page in `use-cases/` or `studies/`, with its Markdown copy and its place in `llms.txt`. An overview gives each a short card that links there. Write the docs page first, then its card: the audiences' cards are in `src/data/audiences.ts`, and a new study gets a card on `studies.astro`.
+- **The frame** is `src/layouts/Site.astro`: its own header and footer, Fathom (`src/analytics.mjs`), and the theme switch. The theme is the docs' own setting (Starlight's `starlight-theme`), so a reader's choice holds across the site. `src/scripts/site.ts` copies commands, counts numbers up and reveals sections on scroll; motion stops when the reader asks for less.
+- **The look** is `src/styles/site.css`: its tokens for dark and light, its type (Geist, and Geist Mono for numbers and code, as on tensorless.dev and fxbot.sh, served from the site because its Content Security Policy loads no fonts from elsewhere), its buttons, cards and steps. Sections, cards and drawings are in `src/components/site/`.
+- **Every picture is real data.** The replay on the home page and the studies' overview (`ClimbReplay.astro`) and the ledger (`Ledger.astro`) draw `src/data/decode-climb.json`: every attempt of the first study's decode climb, from the judge's records. It holds only minutes, lanes, verdicts, judged effects and the agents' direction names. The smoke check's board on the home page quotes [Install on one machine](_site/src/content/docs/tutorials/first-run.md#7-see-what-the-judge-decided).
+- **Only what exists**, as in the docs: every claim on these pages is one that a docs page makes, with a link to it.
+- **Links:** the docs link to these pages by address (`/use-cases/`), not by file. The links validator can't see them, so `astro.config.mjs` leaves those addresses out of its check, and the sidebar's **Overview** entries lead to them.
 
 ## Front matter
 
@@ -102,7 +113,7 @@ sidebar:
 - Link to other pages with relative paths to their files: `[the settings reference](../reference/settings.md#models)`. Those links work on GitHub, in the Markdown copies and on the site. Link to files outside the site (the repository's code, the plans) with their full GitHub address.
 - Code blocks name their language: `sh`, `json`, `yaml`, `text`. Give example files a title: ```` ```json title="contract.json" ````. Examples titled `contract.json`, `kit.json` or `advisors.json` are parsed with the real schema; add `(part)` to the title of a fragment, such as `title="kit.json (part)"`.
 - Notes, tips and warnings use Starlight's asides: `:::note`, `:::tip`, `:::caution`, `:::danger`.
-- Diagrams are Mermaid blocks (```` ```mermaid ````). They render on GitHub and on the site. One exception: the diagram under the home page's **Under the hood** is a component, `src/components/HowItWorks.astro`, so that its nested boxes wrap on a phone and follow the site's light and dark themes. Its numbers match the steps of a run listed under it on the page: change both together.
+- Diagrams are Mermaid blocks (```` ```mermaid ````). They render on GitHub and on the site. One exception: the diagram on [How the parts fit together](_site/src/content/docs/explanation/how-it-fits-together.mdx) is a component, `src/components/HowItWorks.astro`, so that its nested boxes wrap on a phone and follow the site's light and dark themes. Its numbers match the steps of a run listed under it on the page: change both together.
 - Images go in `docs/_site/src/assets/` and are linked with relative paths.
 
 ## For agents
