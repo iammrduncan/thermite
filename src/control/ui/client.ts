@@ -10,6 +10,9 @@ export const CLIENT_JS = `
 (() => {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
+  // A form of filters that applies each as it is chosen (Live's Everything, goal 188).
+  for (const f of document.querySelectorAll("form[data-autosubmit]"))
+    for (const s of f.querySelectorAll("select")) s.addEventListener("change", () => f.requestSubmit());
   // ------------------------------------------------ the live view
   const tr = $("#transcript");
   if (tr) {

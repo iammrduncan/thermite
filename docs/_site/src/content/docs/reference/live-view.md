@@ -10,7 +10,17 @@ sidebar:
 
 The rig masks its own credentials in each line before the line leaves it, wherever an agent printed them: a trial's token, a planner's call's in its own terminal, the model proxy's and the MCP gateway's show as `trial.***`, `call.***`, `proxy.***` and `mcp.***`, and the value of any `THERMITE_*_AUTH` setting as `***`. Each line is masked before it is cut to 8,000 characters ([Limits and pacing](limits-and-pacing.md#the-rig-and-control)).
 
-Live has three pages: one run at a time, a rig's sessions, and one session: a trial's, which has the trial's terminal; the planner's, which has its call's terminal while it plans in one; or the supervisor's, which has an advisor's call's terminal while one works in its own.
+Live has four pages: Everything, one run at a time, a rig's sessions, and one session: a trial's, which has the trial's terminal; the planner's, which has its call's terminal while it plans in one; or the supervisor's, which has an advisor's call's terminal while one works in its own.
+
+## Everything
+
+**Everything**, at the top of Live's list of runs, is at `/ui/live/everything`: every agent's lines from every run and rig, as they come. Each line names its run first, a link to the run's Live, or its rig for a line that names no run, such as an idle judge's.
+
+| Part | What it shows |
+| --- | --- |
+| **Rig** and **Run** | Narrow the lines to one rig or one run. **Every run** shows the runs at work and the rigs' own lines. Choosing one applies it at once |
+| The filters | **Everyone**, each lane with lines (`lane-1` shows lane-1 of every run), **Planner**, **Judge**, **Advisors**, and one for each advisor with lines, as a run's Live has them, each in its colour |
+| The lines | The newest 600 first, then each new line as control takes it from the message bus, narrowed as the page is. **↓ Follow** keeps the newest in view |
 
 ## One run at a time
 

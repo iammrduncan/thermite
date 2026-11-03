@@ -12,6 +12,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Live
 
+- **Everything**, at the top of Live's list of runs (`/ui/live/everything`): every agent's lines from every run and rig as they come, each with its run, with **Rig** and **Run** to narrow them and the same filters.
 - Each advisor has its own lines on Live, and its own filter on a run's Live: `teacher-1`, `teacher-2`, **merger** (the merged by model), `auditor`, each reviewer of the review panel, `synthesizer` and **final writer**, beside **Advisors**, which shows them all. Each kind of agent has its colour, on its filter and its lines. The supervisor sends an advisor's lines under `advisor:<name>`, where they all went under `supervisor` with the advisor's name in front.
 
 ### Fixes

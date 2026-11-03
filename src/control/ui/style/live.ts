@@ -67,4 +67,9 @@ export const LIVE = `/* Live, one run at a time: the stream gets the room */
 .lv-who.k-reviewer { color: var(--k-reviewer); } .kdot.k-reviewer { background: var(--k-reviewer); }
 .lv-who.k-writer { color: var(--k-writer); } .kdot.k-writer { background: var(--k-writer); }
 .lv-who.k-advisor { color: var(--k-advisor); }
-.lv-who[class*="k-"] { font-weight: 600; }`;
+.lv-who[class*="k-"] { font-weight: 600; }
+/* Everything (goal 188): the facets above the filters, and each line's run before its agent. */
+.lfacets { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 8px 14px 0; font-size: 12.5px; }
+.lfacets label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted-foreground); }
+.lfacets select { height: 28px; font-size: 12.5px; }
+.lv-runtag { display: inline-block; margin-right: 8px; font-size: 11px; color: var(--muted-foreground); max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }`;

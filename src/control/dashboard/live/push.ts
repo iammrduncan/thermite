@@ -28,9 +28,13 @@ const RECHECK_MAX = 50;
 /** One line as the page's script adds it: its id and HTML, and what else the script reads. */
 export type PushedLine = { id: number; html: string } & Record<string, unknown>;
 
-/** What a push reads: one view's lines of one rig, drawn as its page draws them. */
+/**
+ * What a push reads: one view's lines of one rig, or of every rig (Live's Everything, goal 188),
+ * drawn as its page draws them.
+ */
 export interface LiveFeed {
-  rig: string;
+  /** None: every rig's new lines wake it. */
+  rig?: string | undefined;
   /** The view's lines after `after`, oldest first, `limit` at most. */
   after(after: number, limit: number): PushedLine[];
   /** The view's newest `limit` lines, oldest first. */
@@ -114,7 +118,7 @@ export async function pushLive(
   let fresh = true;
   let wake: (() => void) | undefined;
   const stop = store.liveLines.watch((rig) => {
-    if (rig !== feed.rig) return;
+    if (feed.rig !== undefined && rig !== feed.rig) return;
     fresh = true;
     wake?.();
   });

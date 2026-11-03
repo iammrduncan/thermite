@@ -11,6 +11,76 @@ import { stack } from "./stack.ts";
  */
 
 describe("control dashboard", () => {
+  test("Everything shows every agent's lines from every rig, each with its run, a filter for each advisor, and narrows by rig (goal 188)", async () => {
+    const s = await stack();
+    await s.env.service.applyCommand(s.env.assign);
+    await s.relay();
+    const at = new Date().toISOString();
+    s.store.liveLines.add(
+      "rig-a",
+      "log-1",
+      [
+        {
+          seq: 1,
+          at,
+          source: "trial:t-0123456789abcdef",
+          kind: "text",
+          text: "tiling the loop",
+          lane: "lane-1",
+          run: "js-1",
+        },
+        {
+          seq: 2,
+          at,
+          source: "advisor:teacher-1",
+          kind: "tool",
+          text: "rg -n tile src",
+          run: "js-1",
+        },
+        {
+          seq: 3,
+          at,
+          source: "advisor:merged-by",
+          kind: "status",
+          text: "merges 4 ideas into 2",
+          run: "js-1",
+        },
+      ],
+      false,
+    );
+    s.store.liveLines.add(
+      "rig-b",
+      "log-2",
+      [{ seq: 1, at, source: "judge", kind: "log", text: "the judge on rig-b is idle" }],
+      true,
+    );
+    const html = await (await s.get("/ui/live/everything")).text();
+    for (const words of [
+      "tiling the loop",
+      "rg -n tile src",
+      "merges 4 ideas into 2",
+      "the judge on rig-b is idle",
+    ])
+      assert.ok(html.includes(words), words);
+    assert.match(
+      html,
+      /class="lv-runtag" href="[^"]*js-1\/live"[^>]*>js-1<\/a>/,
+      "a line names its run",
+    );
+    assert.match(html, /<span class="kdot k-teacher"><\/span>teacher-1<\/a>/);
+    assert.match(html, /<span class="kdot k-merger"><\/span>merger<\/a>/);
+    assert.match(
+      html,
+      /<a class="lr on" href="\/ui\/live\/everything"><span class="t">Everything<\/span>/,
+    );
+    assert.match(html, /data-stream="\/ui\/live\/everything\/stream"/);
+    // Narrowed to one rig: only its lines.
+    const one = await (await s.get("/ui/live/everything?rig=rig-b")).text();
+    assert.ok(one.includes("the judge on rig-b is idle"));
+    assert.ok(!one.includes("tiling the loop"));
+    assert.match(one, /data-stream="\/ui\/live\/everything\/stream\?rig=rig-b"/);
+  });
+
   test("the live view: lines are escaped, only control's own script runs, and the composer messages an agent", async () => {
     const s = await stack();
     await s.env.service.applyCommand(s.env.assign);

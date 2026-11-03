@@ -16,6 +16,19 @@ export const OPEN_TRIAL_LINES = 400;
 const TRIALS_LEFT_MAX = 1000;
 
 /** One run's lines on its rig: its own, and the judge's and the supervisor's that name no run. */
+/** A stored line as Live reads it. */
+const entryOf = (r: Row): LiveEntry & { id: number; signed: boolean } => ({
+  id: Number(r.id),
+  seq: Number(r.seq),
+  at: String(r.at),
+  source: String(r.source),
+  kind: String(r.kind) as LiveEntry["kind"],
+  text: String(r.text),
+  ...(r.lane ? { lane: String(r.lane) } : {}),
+  ...(r.run ? { run: String(r.run) } : {}),
+  signed: Number(r.signed) === 1,
+});
+
 const OF_RUN = "(run = ? or (run is null and source in ('judge', 'supervisor')))";
 
 export class LiveLines extends StorePart {
@@ -168,17 +181,37 @@ export class LiveLines extends StorePart {
             .prepare("select * from rig_live where rig = ? and id > ? order by id limit ?")
             .all(rig, after, limit)
     ) as Row[];
-    return rows.map((r) => ({
-      id: Number(r.id),
-      seq: Number(r.seq),
-      at: String(r.at),
-      source: String(r.source),
-      kind: String(r.kind) as LiveEntry["kind"],
-      text: String(r.text),
-      ...(r.lane ? { lane: String(r.lane) } : {}),
-      ...(r.run ? { run: String(r.run) } : {}),
-      signed: Number(r.signed) === 1,
-    }));
+    return rows.map(entryOf);
+  }
+
+  /**
+   * Every rig's live lines after `after` (control's own ids, one count for every rig), oldest
+   * first, each with its rig: Live's Everything (goal 188).
+   */
+  everywhere(
+    after: number,
+    limit: number,
+  ): (LiveEntry & { id: number; signed: boolean; rig: string })[] {
+    const rows = this.db
+      .prepare("select * from rig_live where id > ? order by id limit ?")
+      .all(after, limit) as Row[];
+    return rows.map((r) => ({ ...entryOf(r), rig: String(r.rig) }));
+  }
+
+  /** Every rig's newest live lines, newest last, each with its rig. */
+  everywhereTail(limit: number): (LiveEntry & { id: number; signed: boolean; rig: string })[] {
+    const top = this.db
+      .prepare("select id from rig_live order by id desc limit 1 offset ?")
+      .get(limit) as { id: number } | undefined;
+    return this.everywhere(top?.id ?? 0, limit);
+  }
+
+  /** How many lines of every rig there are after `after`. */
+  everywhereCount(after: number): number {
+    const row = this.db.prepare("select count(*) as n from rig_live where id > ?").get(after) as {
+      n: number;
+    };
+    return Number(row.n);
   }
 
   /**

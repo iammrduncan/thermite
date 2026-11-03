@@ -5,17 +5,7 @@ import { terminalSource } from "../../../core/terminal-input.ts";
 import { commandFollowUrl, commandProgress, notSent } from "../../command-progress.ts";
 import { issueCommand, nobodyReads, panelReviews } from "../../issue/index.ts";
 import { HARNESS_NAMES } from "../../rigs/index.ts";
-import { lastActivity } from "../../ui/campaigns/list.ts";
-import {
-  ago,
-  esc,
-  icon,
-  modeAvatar,
-  modeName,
-  num,
-  runCompleted,
-  runState,
-} from "../../ui/components/index.ts";
+import { ago, esc, icon, modeAvatar, num, runState } from "../../ui/components/index.ts";
 import {
   advisorLabel,
   agentKind,
@@ -39,16 +29,15 @@ import {
 import { clip, earlierWords, signed } from "../../ui/words/index.ts";
 import {
   currentChampion,
-  podStopped,
-  type RigView,
   type RunOnRig,
-  type RunView,
   runCampaign,
   runMessages,
   workOf,
 } from "../../views/index.ts";
 import { type Ctx, type Dashboard, wantsJson } from "../context.ts";
+import { everythingRoutes } from "./everything.ts";
 import { type LiveFeed, type PushedLine, pushLive, pushStart, recheckIds } from "./push.ts";
+import { liveRunsNav } from "./runs.ts";
 import { terminalGrid, terminalPanel, terminalRoutes } from "./terminal.ts";
 
 /**
@@ -59,6 +48,7 @@ import { terminalGrid, terminalPanel, terminalRoutes } from "./terminal.ts";
 export function liveRoutes(app: Hono, dash: Dashboard): void {
   const { cmdForm, csrf, moreMenu, opts, page, pauseMenu, runOf, store, views } = dash;
   terminalRoutes(app, dash);
+  everythingRoutes(app, dash);
   /** The run a route names, under the campaign it names (goal 170). */
   const named = (c: Ctx) => runOf(c.req.param("campaign") ?? "", c.req.param("run") ?? "");
 
@@ -80,18 +70,7 @@ export function liveRoutes(app: Hono, dash: Dashboard): void {
       : first
         ? { ...first, earlier: null }
         : undefined;
-    const day = now - 24 * 3600_000;
-    const ended = all
-      .filter((x) => x.r.status !== "running" && Date.parse(lastActivity(x.r)) > day)
-      .sort((a, b) => lastActivity(b.r).localeCompare(lastActivity(a.r)));
-    const idle = vs.filter((u) => !u.runs.some((r) => r.status === "running"));
-    const runLink = (x: { u: RigView; r: RunView }, sub: string, cls = "") =>
-      `<a class="lr${sel && x.u.id === sel.u.id && x.r.id === sel.r.id ? " on" : ""}${cls}" href="${runLiveHref(x.r)}"><span class="t">${x.r.status === "running" ? `<span class="dot ok pulse"></span>` : ""}${esc(x.r.id)}</span><span class="s">${sub}</span></a>`;
-    const nav = `<nav class="lruns" aria-label="Runs" data-part="lruns">
-<div class="hd">At work</div>${atWork.map((x) => runLink(x, `${esc(x.u.id)} · ${esc(modeName(x.r.mode))} · ${Object.keys(x.r.at_work).length} working${waitingOn(x.r, x.u) ? ` · <span class="warn">${waitingOn(x.r, x.u)} wait for you</span>` : ""}`)).join("") || `<div class="lempty">No run is at work.</div>`}
-${idle.length ? `<div class="hd">Idle rigs</div>${idle.map((u) => `<a class="lr idle" href="${rigHref(u.id)}"><span class="t">${esc(u.id)}</span><span class="s">no run at work${podStopped(u) ? " · its pod is stopped" : u.stale ? " · not reporting" : ""}</span></a>`).join("")}` : ""}
-${ended.length ? `<details class="lended"${sel && sel.r.status !== "running" ? " open" : ""}><summary class="hd">Ended in the last day (${ended.length})</summary>${ended.map((x) => runLink(x, `${esc(x.u.id)} · ${runCompleted(x.r) ? "completed" : x.r.status === "closed" ? "finished" : esc(x.r.status)}`, " idle")).join("")}</details>` : ""}
-</nav>`;
+    const { nav, ended } = liveRunsNav(vs, now, sel ?? undefined);
     if (!sel)
       return page(
         c,
