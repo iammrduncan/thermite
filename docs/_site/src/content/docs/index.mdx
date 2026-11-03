@@ -30,42 +30,11 @@ hero:
 import { Card, CardGrid, LinkButton, LinkCard, Steps } from "@astrojs/starlight/components";
 import HowItWorks from "../../components/HowItWorks.astro";
 
-## Get started
-
-Three steps, each a page you follow from start to end. You need Linux or macOS, Docker or Podman, and about twenty minutes for the first. No GPU, no paid model and no account: the first campaign uses a free model.
-
-<CardGrid>
-  <LinkCard
-    title="1. Install on one machine"
-    description="Install Thermite from its release, sign in to its dashboard, and watch its judge give a dozen known changes, cheats included, their right verdicts."
-    href="tutorials/first-run/"
-  />
-  <LinkCard
-    title="2. Run your first campaign"
-    description="Connect a free model and watch agents make a small program faster, while the judge measures every change."
-    href="tutorials/agents-with-a-free-model/"
-  />
-  <LinkCard
-    title="3. Add a second machine"
-    description="Let control set a rig up on another machine over SSH, and run your campaign there too."
-    href="tutorials/second-machine/"
-  />
-  <LinkCard
-    title="4. Tailscale / WireGuard"
-    description="Keep control and its message bus on a private network that only your machines reach."
-    href="how-to/install/private-network/"
-  />
-</CardGrid>
-
-Or let your AI agent do it. Copy this, and give it to Claude Code, Codex or another agent on the computer you install on:
+Ask your agent to set it up for you:
 
 ```text
 Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt
 ```
-
-[llm-setup.txt](https://usethermite.com/llm-setup.txt) tells the agent what Thermite needs, how to install it from the latest release, and which page to read next for what you want to do. It never asks the agent to read your tokens: you sign in yourself.
-
-Thermite is young and changes every day. Its agents run the code that a model writes on your computer, so read [Known limits](reference/known-limits.md) before you give it a model.
 
 <div class="home-shot">
 
