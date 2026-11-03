@@ -149,6 +149,11 @@ for (const page of pages) {
     .filter(Boolean))
     useCasePersonaLinks.get(key)?.add(`${folder}/${name}`);
 }
+// A study gives its card on the Case studies page under `study`.
+for (const page of pages)
+  if (page.slug.startsWith("studies/") && !/^study:\n/m.test(page.text))
+    problem(page.file, "a study needs study: its field, personas, modes, metric and summary");
+
 for (const [key, wanted] of useCasePersonaLinks) {
   const page = pages.find((p) => p.slug === `use-cases/for/${key}`);
   if (!page) {

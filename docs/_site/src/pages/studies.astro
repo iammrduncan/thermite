@@ -2,17 +2,22 @@
 // The case studies' listing. Each study's full page is in the documentation (studies/), where
 // llms.txt and the Markdown copies carry it too.
 import ClimbReplay from "../components/site/ClimbReplay.astro";
+import FieldIcon from "../components/site/FieldIcon.astro";
 import Partners from "../components/site/Partners.astro";
+import { studyPages } from "../data/study-pages";
+import { fields, modes, personas } from "../data/use-cases.mjs";
 import Site from "../layouts/Site.astro";
 
 const study = "/studies/qwen3-8-27b-on-a-p100/";
-const campaigns = [
-  { n: 1, mode: "goal", title: "Support the format", when: "15–22 Oct", result: "Every goal met · 7.74 tok/s" },
-  { n: 2, mode: "goal", title: "The quality gate", when: "22–23 Oct", result: "11 of 12 · the miss explained" },
-  { n: 3, mode: "climb", title: "Decode speed", when: "24–29 Oct", result: "3.89× · 30.06 tok/s" },
-  { n: 4, mode: "climb", title: "Prompt speed", when: "from 2 Nov", result: "+16% so far · running" },
+const stats = [
+  { value: "3.89×", label: "faster decode, 7.74 → 30.06 tokens a second" },
+  { value: "131", label: "changes judged in the decode climb, 28 kept" },
+  { value: "$100", label: "the GPU: one used Tesla P100" },
 ];
-const modeName: Record<string, string> = { climb: "hill climb", goal: "goal" };
+const studies = await studyPages();
+const fieldLabel = Object.fromEntries(fields.map((f) => [f.key, f.label]));
+const modeLabel = Object.fromEntries(modes.map((m) => [m.key, m.label]));
+const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
 ---
 
 <Site
@@ -35,26 +40,23 @@ const modeName: Record<string, string> = { climb: "hill climb", goal: "goal" };
       <article class="feature" data-reveal>
         <div class="feature-text">
           <Partners />
-          <p class="kicker mono">Local AI · Inference engine · 4 campaigns</p>
+          <p class="kicker mono">AI and machine learning · Inference engine · 4 campaigns</p>
           <h2 class="h2"><a href={study}>Qwen3.8-27B on a $100 GPU, 3.9× faster</a></h2>
           <p class="lede">
-            Four campaigns tuned an inference engine for Qwen3.8-27B on one Tesla P100. In the decode climb alone, agents
-            proposed 131 changes to the engine; the judge confirmed 28, and held the model's
-            answers where they started. tensorless ships the result in one command.
+            Four campaigns tuned an inference engine for Qwen3.8-27B on one Tesla P100: two goal campaigns made the new
+            weight format work and hold its quality, then two hill climbs made it fast, with the model's answers held
+            where they started. tensorless ships the result in one command.
           </p>
-          <ol class="timeline">
+          <dl class="stats">
             {
-              campaigns.map((c) => (
-                <li>
-                  <span class="num mono">{c.n}</span>
-                  <span class={`tag ${c.mode}`}>{modeName[c.mode]}</span>
-                  <b>{c.title}</b>
-                  <span class="when mono">{c.when}</span>
-                  <span class="res">{c.result}</span>
-                </li>
+              stats.map((st) => (
+                <div>
+                  <dt class="mono">{st.value}</dt>
+                  <dd>{st.label}</dd>
+                </div>
               ))
             }
-          </ol>
+          </dl>
           <div class="btns">
             <a class="btn primary" href={study}>Read the study</a>
             <a class="btn" href="https://tensorless.dev">Run it with tensorless</a>
@@ -64,6 +66,43 @@ const modeName: Record<string, string> = { climb: "hill climb", goal: "goal" };
           <ClimbReplay compact />
         </div>
       </article>
+    </div>
+  </section>
+
+  <section class="section" id="all">
+    <div class="wrap">
+      <div class="head" data-reveal>
+        <p class="eyebrow">All case studies</p>
+        <h2 class="h2">{studies.length === 1 ? "One study so far." : `${studies.length} studies.`}</h2>
+      </div>
+      <div class="grid cards">
+        {
+          studies.map((st) => (
+            <a class="card st" href={st.href} data-reveal>
+              <div class="top">
+                <FieldIcon name={st.field} />
+                <span class="small">{fieldLabel[st.field]}</span>
+              </div>
+              <p class="metric mono">{st.metric}</p>
+              <p class="metric-label">{st.metricLabel}</p>
+              <h3 class="h3">{st.title}</h3>
+              <p>{st.summary}</p>
+              <div class="tags">
+                {st.modes.map((m) => (
+                  <span class={`tag ${m}`}>{modeLabel[m]}</span>
+                ))}
+              </div>
+              <p class="for small">
+                {st.personas.map((p) => personaShort[p]).join(" · ")}
+                {st.partner && ` · with ${st.partner}`}
+              </p>
+              <span class="go">
+                Read the study <span aria-hidden="true">→</span>
+              </span>
+            </a>
+          ))
+        }
+      </div>
     </div>
   </section>
 
@@ -125,48 +164,71 @@ const modeName: Record<string, string> = { climb: "hill climb", goal: "goal" };
   .feature .h2 a:hover {
     color: var(--accent);
   }
-  .timeline {
-    list-style: none;
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
     margin: 1.5rem 0 0;
-    padding: 0;
-    display: grid;
-    gap: 0;
-    border-top: 1px solid var(--rule);
+    padding: 1.1rem 0;
+    border-block: 1px solid var(--rule);
   }
-  .timeline li {
-    display: grid;
-    grid-template-columns: 1.4rem 6rem 1fr auto;
-    gap: 0.15rem 0.75rem;
-    align-items: center;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid var(--rule);
-    font-size: 0.9rem;
+  .stats dt {
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: -0.02em;
   }
-  .num {
-    color: var(--dim);
-    font-size: 0.78rem;
-  }
-  .timeline .tag {
-    justify-content: center;
-  }
-  .when {
-    font-size: 0.74rem;
-    color: var(--dim);
-  }
-  .res {
-    grid-column: 3 / -1;
+  .stats dd {
+    margin: 0.25rem 0 0;
     color: var(--muted);
-    font-size: 0.84rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  }
+  .st {
+    display: flex;
+    flex-direction: column;
+  }
+  .st .top {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .st .metric {
+    margin: 1.2rem 0 0;
+    font-size: 2.4rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--accent);
+    letter-spacing: -0.03em;
+  }
+  .st .metric-label {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+  }
+  .st .h3 {
+    margin-top: 1.1rem;
+    font-size: 1.15rem;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 1rem;
+  }
+  .st .for {
+    margin: 0.8rem 0 0;
+    color: var(--dim);
+  }
+  .st .go {
+    margin-top: auto;
+    padding-top: 1rem;
   }
   @media (max-width: 30rem) {
-    .timeline li {
-      grid-template-columns: 1.2rem 1fr auto;
-    }
-    .timeline .tag {
-      display: none;
-    }
-    .res {
-      grid-column: 2 / -1;
+    .stats {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
   .last {

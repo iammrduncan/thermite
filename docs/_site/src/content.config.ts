@@ -2,7 +2,7 @@ import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
 import { defineCollection } from "astro:content";
 import { z } from "astro/zod";
-import { modes, personas } from "./data/use-cases.mjs";
+import { fields, modes, personas } from "./data/use-cases.mjs";
 
 // Every page has a title, a one-line description and one type: a Diátaxis type, or `use-case` and
 // `study` for the pages that show who Thermite is for and what it has done. The build fails
@@ -40,6 +40,19 @@ export const collections = {
               .string()
               .max(140)
               .refine((m) => m.split(" · ").length === 3, 'three parts, between " · "'),
+          })
+          .optional(),
+        // A study (studies/) also gives its card on the Case studies page: its field, personas,
+        // modes, headline number, a summary and its partner, if it had one.
+        study: z
+          .object({
+            field: z.enum(fields.map((f) => f.key) as [string, ...string[]]),
+            personas: z.array(z.enum(personas.map((p) => p.key) as [string, ...string[]])).min(1),
+            modes: z.array(z.enum(modes.map((m) => m.key) as [string, ...string[]])).min(1),
+            metric: z.string().max(12),
+            metricLabel: z.string().max(60),
+            summary: z.string().min(40).max(240),
+            partner: z.string().optional(),
           })
           .optional(),
       }),
