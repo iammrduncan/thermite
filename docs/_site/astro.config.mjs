@@ -77,6 +77,7 @@ export default defineConfig({
             { label: "1 · Install on one machine", link: "/tutorials/first-run/" },
             { label: "2 · Run your first campaign", link: "/tutorials/agents-with-a-free-model/" },
             { label: "3 · Add a second machine", link: "/tutorials/second-machine/" },
+            { label: "4 · Tailscale / WireGuard", link: "/how-to/install/private-network/" },
           ],
         },
         { label: "Start here", link: "/start-here/" },

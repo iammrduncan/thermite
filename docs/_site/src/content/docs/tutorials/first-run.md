@@ -12,6 +12,14 @@ At the end you'll have a running Thermite and you'll have seen its central idea 
 
 It takes about twenty minutes. You build nothing: Thermite comes as ready-made container images, which your computer downloads the first time.
 
+Or let your AI agent do it. Copy this, and give it to Claude Code, Codex or another agent on the computer you install on:
+
+```text
+Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt
+```
+
+[llm-setup.txt](https://usethermite.com/llm-setup.txt) tells the agent what Thermite needs, how to install it from the latest release, and which page to read next for what you want to do. It never asks the agent to read your tokens: you sign in yourself.
+
 ## What you need
 
 - A computer running Linux or macOS, with a few CPU cores, a few gigabytes of free memory and several gigabytes of free disk. Thermite's three images, with the message bus's small one, take about 2.5 GB. With Podman on a Mac, that space must be free in Podman's virtual machine.

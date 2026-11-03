@@ -81,6 +81,7 @@ You gave control a way in from other machines, let it set a rig up on a second o
 
 ## Next
 
+- Step 4, [Keep Thermite on a private network](../how-to/install/private-network.md): Tailscale or WireGuard between your machines, so that nothing off that network reaches control or its message bus.
 - [Run one campaign on several rigs](../how-to/campaigns/several-rigs.md): share experiments between the runs, and move a champion from one rig to another.
 - [Add a rig on a machine over SSH](../how-to/install/rig-on-a-machine.md): every option of this tutorial's steps, what control writes on the machine, and how to stop, update or remove the rig.
 - Other places for a rig: [a Kubernetes cluster](../how-to/install/rig-on-a-cluster.md), [a machine control can't reach, with a join command](../how-to/install/join-a-rig.md), or [a GPU on RunPod](../how-to/install/runpod-rig.md).

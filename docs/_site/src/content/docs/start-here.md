@@ -40,6 +40,9 @@ You want to see what Thermite does before you commit to anything. Start with the
 1. [Install on one machine](tutorials/first-run.md): install Thermite from its release, sign in to its dashboard and watch its judge check a rig. Needs only the computer above.
 2. [Run your first campaign](tutorials/agents-with-a-free-model.md): connect a free model, start a hill climb on the sample project in Thermite's repository, and watch agents propose changes. Needs step 1 and an internet connection; no account or key.
 3. [Add a second machine](tutorials/second-machine.md): let control set a rig up on another machine over SSH, and run the campaign there too. Needs steps 1 and 2, a second Linux machine and a name for the first that it reaches.
+4. [Tailscale / WireGuard](how-to/install/private-network.md): keep control and its message bus on a private network that only your machines reach.
+
+An AI agent can do step 1 for you: give it `Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt`.
 
 Then two more tutorials:
 
