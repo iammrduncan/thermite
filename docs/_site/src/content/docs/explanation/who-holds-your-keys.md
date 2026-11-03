@@ -38,7 +38,7 @@ The dashboard shows only a hint of each key: its last four characters, such as `
 
 ## Model provider keys
 
-A rig receives a provider's key only when you give one of its agents a model from that provider. Control writes the rig's **model route** (the provider's address, the model and its key) to the rig's config on the message bus, sealed to the rig's own seal key, and only that rig's supervisor opens it. It hands the route to the harness when it changes, and never logs or keeps the key. The harness keeps the route in its private state, where no agent's or lane's user can read it, and the isolation self-test checks that. The key is never in a command, an event, an export or a log.
+A rig receives a provider's key only when you give one of its agents a model from that provider. Control writes the rig's **model route** (the provider's address, the model and its key) to the rig's config on the message bus, sealed to the rig's own seal key, and only that rig's supervisor opens it. It hands the route to the harness when it changes, and never logs or keeps the key. The harness holds the route's key in memory only. Its private state records which route it is (`model-route.json`, without the key), where no agent's or lane's user can read it, and the isolation self-test checks that. After a restart the harness awaits the route: the supervisor hands it again within about half a minute, and no plan or trial starts until then. The key is never on the rig's disk, nor in a command, an event, an export or a log.
 
 Who then uses the key depends on the worker harness:
 

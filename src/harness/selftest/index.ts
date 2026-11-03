@@ -121,8 +121,8 @@ export function clusterApi(env: NodeJS.ProcessEnv): ClusterApi | undefined {
 }
 
 /**
- * The rig's secret files, which no role may read: the routes control set for the agents and for
- * the planner (each 0600 in the state folder, with its model's key), the tokens and the model key
+ * The rig's secret files, which no role may read: the records of the routes control set for the
+ * agents and for the planner (each 0600 in the state folder; the keys are in memory only), the tokens and the model key
  * from the harness's settings, and in one container with the supervisor (pull mode) the keys its
  * tunnel signs with. The rig check's selftest and `thermite selftest isolation` both probe these.
  */

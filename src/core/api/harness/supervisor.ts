@@ -45,8 +45,9 @@ export const SETTINGS = {
 } as const satisfies Route;
 
 /**
- * Which route the agents use now (never its key), with the planner's route's revision. A rig with
- * no agents answers 404.
+ * Which route the agents use now (never its key), with the planner's route's revision. `awaiting`:
+ * the harness holds the routes in memory only, and since it started awaits the ones it had, which
+ * the supervisor hands again. A rig with no agents answers 404.
  */
 export const MODEL_ROUTE_GET = {
   method: "GET",
@@ -56,6 +57,7 @@ export const MODEL_ROUTE_GET = {
     source: z.string(),
     revision: z.string().optional(),
     planner_revision: z.string().nullable().optional(),
+    awaiting: z.boolean().optional(),
   }),
 } as const satisfies Route;
 

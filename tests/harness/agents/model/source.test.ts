@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
@@ -54,8 +54,7 @@ describe("the agents' model source", () => {
       reasoning: "off",
     });
     assert.ok(!JSON.stringify(m.info()).includes("sk-secret"));
-    // It survives a restart, and a worker gets it as THERMITE_MODEL_*.
-    assert.equal(new ModelSource(file, env).current()?.apiKey, "sk-secret-0001");
+    // A worker gets it as THERMITE_MODEL_*.
     assert.equal(modelEnv(cur as NonNullable<typeof cur>).THERMITE_MODEL_REASONING_EFFORT, "none");
     m.clear();
     assert.equal(m.current()?.model, "local-model");
@@ -81,6 +80,44 @@ describe("the agents' model source", () => {
       () => modelConfigFromEnv({ ...vars, THERMITE_MODEL_COMPACT_AT: "40" }),
       /THERMITE_MODEL_COMPACT_AT takes a whole number of percent from 50 to 95, not "40"/,
     );
+  });
+
+  test("the key is held in memory only: after a restart the agents await the route, never the rig's own settings", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "thermite-ms-")), "model-route.json");
+    new ModelSource(file, env).set(route);
+    assert.ok(!readFileSync(file, "utf8").includes("sk-secret"), "the state folder holds no key");
+    const again = new ModelSource(file, env);
+    assert.equal(again.awaiting(), true);
+    assert.equal(again.current(), undefined, "no plan or trial starts meanwhile");
+    // It says which route it awaits, with no revision, so the supervisor hands it again.
+    assert.deepEqual(again.info(), {
+      source: "control",
+      name: "opencode",
+      version: 3,
+      harness: "pi",
+      model: "m-1",
+      base_url: "https://models.example/v1/",
+      key_hint: "…0001",
+    });
+    assert.equal(again.handedAgain(route, null), true);
+    assert.equal(again.handedAgain({ ...route, revision: "fedcba9876543210" }, null), false);
+    again.set(route);
+    assert.equal(again.awaiting(), false);
+    assert.equal(again.current()?.apiKey, "sk-secret-0001");
+    assert.equal(again.info().revision, "0123456789abcdef");
+    // Control's none, after a restart, ends the wait on the rig's own settings.
+    const cleared = new ModelSource(file, env);
+    cleared.clear();
+    assert.equal(cleared.current()?.model, "local-model");
+  });
+
+  test("a route file an older harness wrote, key and all, loses its key at start", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "thermite-ms-")), "model-route.json");
+    writeFileSync(file, JSON.stringify(route), { mode: 0o600 });
+    const m = new ModelSource(file, env);
+    assert.ok(!readFileSync(file, "utf8").includes("sk-secret"));
+    assert.equal(m.awaiting(), true);
+    assert.equal(m.info().name, "opencode");
   });
 
   test("a broken route file is dropped, not trusted", () => {
@@ -110,9 +147,12 @@ describe("the agents' model source", () => {
     assert.equal(p?.harness, "claude-code");
     assert.equal(p?.effort, "xhigh");
     assert.equal(src.plannerRevision(), "fedcba9876543210");
-    // Kept across a restart, in its own file.
+    // Recorded in its own file, without its key, and awaited after a restart.
     assert.ok(existsSync(join(dir, "model-route-planner.json")));
-    assert.equal(new ModelSource(file, env).planner()?.model, "claude-opus-5-5");
+    assert.ok(!readFileSync(join(dir, "model-route-planner.json"), "utf8").includes("sk-secret"));
+    const restarted = new ModelSource(file, env);
+    assert.equal(restarted.awaiting(), true);
+    assert.equal(restarted.planner(), undefined);
     src.setPlanner(null);
     assert.equal(src.planner(), undefined);
     assert.ok(!existsSync(join(dir, "model-route-planner.json")));

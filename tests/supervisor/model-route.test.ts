@@ -3,7 +3,12 @@ import { describe, test } from "node:test";
 import { handModelRoute } from "../../src/supervisor/model-route.ts";
 
 /** A fake harness, which records what it is handed. */
-function fakes(harness: { source: string; revision?: string; planner_revision?: string }) {
+function fakes(harness: {
+  source: string;
+  revision?: string;
+  planner_revision?: string;
+  awaiting?: boolean;
+}) {
   const handed: unknown[] = [];
   const fetchImpl: typeof fetch = async (_input, init) => {
     if (init?.method === "PUT") {
@@ -44,5 +49,17 @@ describe("the supervisor's model route, from the rig's config on the bus", () =>
     });
     assert.equal(await handModelRoute(dropped.cfg, { route, planner: null }), "set");
     assert.deepEqual(dropped.handed, [{ route, planner: null }]);
+  });
+
+  test("a harness that restarted awaits its routes, which it keeps in memory only: they go again", async () => {
+    const route = { name: "r", version: 2, revision: "bbbbbbbb" };
+    const planner = { name: "claude-max", version: 1, revision: "cccccccc" };
+    const restarted = fakes({ source: "control", awaiting: true });
+    assert.equal(await handModelRoute(restarted.cfg, { route, planner }), "set");
+    assert.deepEqual(restarted.handed, [{ route, planner }]);
+    // Even where what it reports matches the bus's: control's none goes again too.
+    const own = fakes({ source: "environment", planner_revision: "cccccccc", awaiting: true });
+    assert.equal(await handModelRoute(own.cfg, { route: null, planner }), "cleared");
+    assert.deepEqual(own.handed, [{ route: null, planner }]);
   });
 });

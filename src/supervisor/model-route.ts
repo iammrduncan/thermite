@@ -9,8 +9,9 @@ import type { ConfigValue } from "../core/link/config.ts";
 /**
  * The agents' model route comes from control: the owner sets it on the settings page, and control
  * keeps its key sealed. It comes in the rig's config on the message bus (config/), and the
- * supervisor hands it to its harness when it changed. It never logs or keeps the key. Only
- * control's explicit "no route" returns the agents to the rig's own settings.
+ * supervisor hands it to its harness when it changed, and again after the harness restarted: the
+ * harness keeps it in memory only. It never logs or keeps the key. Only control's explicit "no
+ * route" returns the agents to the rig's own settings.
  */
 export interface RouteHand {
   harnessUrl: string;
@@ -42,8 +43,10 @@ export async function handModelRoute(
     if (err instanceof ApiError && err.code === "not_found") return "no_agents";
     throw err;
   }
+  // A harness that restarted awaits its routes: they go again, though the bus's are the same.
   const plannerSame = (info.planner_revision ?? null) === (planner?.revision ?? null);
   if (
+    !info.awaiting &&
     plannerSame &&
     (route
       ? info.source === "control" && info.revision === route.revision

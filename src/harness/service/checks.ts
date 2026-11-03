@@ -120,10 +120,13 @@ export function setModelRoute(
   planner?: ControlRoute | null | undefined,
 ): ModelInfo {
   if (!svc.models) throw new Refusal("this harness runs no agents");
+  // The routes the harness had before it restarted, handed again: nothing new to record or check.
+  const again = svc.models.handedAgain(route, planner);
   if (planner !== undefined) svc.models.setPlanner(planner);
   if (route) svc.models.set(route);
   else svc.models.clear();
   const info = svc.models.info();
+  if (again) return info;
   svc.ledger.appendEvent(by, route ? "model_route_set" : "model_route_cleared", null, {
     ...info,
   });

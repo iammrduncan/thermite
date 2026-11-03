@@ -22,10 +22,15 @@ export function rigRoutes(app: Hono, { service, supervisor }: ApiContext): void 
   app.get(SETTINGS.path, supervisor, (c) => c.json(service.settings.get()));
 
   // The agents' model route, as control set it: the supervisor hands it over (key included) and
-  // reads back which route is in use (never the key).
+  // reads back which route is in use (never the key), and whether the harness awaits the routes
+  // it had before it started.
   app.get(MODEL_ROUTE_GET.path, supervisor, (c) =>
     service.models
-      ? c.json({ ...service.models.info(), planner_revision: service.models.plannerRevision() })
+      ? c.json({
+          ...service.models.info(),
+          planner_revision: service.models.plannerRevision(),
+          ...(service.models.awaiting() ? { awaiting: true } : {}),
+        })
       : c.json({ error: "no agents on this rig" }, 404),
   );
   app.put(MODEL_ROUTE_PUT.path, supervisor, limitOf(MODEL_ROUTE_PUT), async (c) => {
