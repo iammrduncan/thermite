@@ -25,8 +25,8 @@
 //   - Look it up reads only https:// addresses, so the test looks the tag up itself, and checks
 //     the number of files the page says it finds;
 //   - the doctor checks the scripted model's address in place of OpenCode's.
-// Then: Your first run (the bundle, init, up, sign in, the rig checks); the command line and
-// `thermite doctor` from Troubleshoot; Hand the work to agents, to the first verdict and a pause;
+// Then: Install on one machine (the bundle, init, up, sign in, the rig checks); the command line and
+// `thermite doctor` from Troubleshoot; Run your first campaign, to the first verdict and a pause;
 // and the first page's `down`. It removes its stack and volumes, its images, dangling images and
 // its folder afterwards. KEEP=1 leaves the stack and the folder.
 //
@@ -35,7 +35,7 @@
 //
 // Its parts are in quick-start-acceptance/: what the test runs with and its report (context),
 // processes and the tester's shell, the dashboard and the API, the scripted model, the release,
-// the steps of Your first run and of Hand the work to agents, and the clean-up.
+// the steps of Install on one machine and of Run your first campaign, and the clean-up.
 import { handToAgents } from "./quick-start/agents.mjs";
 import { cleanUp } from "./quick-start/clean-up.mjs";
 import { report } from "./quick-start/context.mjs";

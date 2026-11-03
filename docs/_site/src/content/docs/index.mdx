@@ -11,8 +11,8 @@ hero:
   image:
     file: ../../assets/hero.svg
   actions:
-    - text: Start here
-      link: start-here/
+    - text: Install on one machine
+      link: tutorials/first-run/
       icon: right-arrow
     - text: How it works
       link: "#how-a-campaign-runs"
@@ -28,6 +28,30 @@ hero:
 ---
 
 import { Card, CardGrid, LinkButton, LinkCard, Steps } from "@astrojs/starlight/components";
+
+## Get started
+
+Three steps, each a page you follow from start to end. You need Linux or macOS, Docker or Podman, and about twenty minutes for the first. No GPU, no paid model and no account: the first campaign uses a free model.
+
+<CardGrid>
+  <LinkCard
+    title="1. Install on one machine"
+    description="Install Thermite from its release, sign in to its dashboard, and watch its judge give a dozen known changes, cheats included, their right verdicts."
+    href="tutorials/first-run/"
+  />
+  <LinkCard
+    title="2. Run your first campaign"
+    description="Connect a free model and watch agents make a small program faster, while the judge measures every change."
+    href="tutorials/agents-with-a-free-model/"
+  />
+  <LinkCard
+    title="3. Add a second machine"
+    description="Let control set a rig up on another machine over SSH, and run your campaign there too."
+    href="tutorials/second-machine/"
+  />
+</CardGrid>
+
+Thermite is young and changes every day. Its agents run the code that a model writes on your computer, so read [Known limits](reference/known-limits.md) before you give it a model.
 import HowItWorks from "../../components/HowItWorks.astro";
 
 <div class="home-shot">
@@ -92,7 +116,7 @@ Each campaign is one of three kinds, called **modes**:
 - **Agents never grade their own work.** They submit a change and what they expect it to do. Only the judge's measurement counts.
 - **The judge holds the clock.** In a hill climb it first measures where the run starts, and holds every later change against it. It times each change and the champion in alternating blocks on the same device, decides with statistics, and times the champion against itself once a day to learn how noisy the machine is.
 - **A surprising win gets a second look.** On a rig with an auditor, an unusually large gain is audited before it is kept. You can also ask to approve every new champion yourself.
-- **You can watch it catch cheats.** Thermite's own smoke check submits a dozen changes whose right verdicts are known: a real speed-up, a no-op, a timer edit, a fallback to the reference code, NaN output, memory and disk exhaustion, and an attempt to overwrite the champion. Each must get its expected verdict. [Your first run](tutorials/first-run.md) shows it on your computer.
+- **You can watch it catch cheats.** Thermite's own smoke check submits a dozen changes whose right verdicts are known: a real speed-up, a no-op, a timer edit, a fallback to the reference code, NaN output, memory and disk exhaustion, and an attempt to overwrite the champion. Each must get its expected verdict. [Install on one machine](tutorials/first-run.md) shows it on your computer.
 
 [Why agents never judge](explanation/why-agents-never-judge.md) follows a change through every step.
 
@@ -142,25 +166,6 @@ Thermite has two kinds of part. **Control** is the one place you watch and steer
 The third mode, **research**, has no project to change and no kit. Its workers read sources through the rig's archiving fetcher and record claims with exact quotes. Code finds every quote, word for word, in the archived page before a claim counts. Once the review panel finds every question answered, its research stops adding, or its maximum duration is up, the run ends with its final report, led by a research paper that code checks.
 
 [How the parts fit together](explanation/how-it-fits-together.md) explains each part, [Agents, lanes and the planner](explanation/agents-lanes-planner.md) a trial, [Why agents never judge](explanation/why-agents-never-judge.md) the judge, and [Supervision](explanation/supervision.md) the advisors.
-
-## Try it
-
-You need Linux or macOS, Docker or Podman, and about twenty minutes. No GPU, no paid model and no account: the first tutorials use a free model, or none.
-
-<CardGrid>
-  <LinkCard
-    title="1. Your first run"
-    description="Start Thermite on your computer and watch its judge give a dozen known changes, cheats included, their right verdicts."
-    href="tutorials/first-run/"
-  />
-  <LinkCard
-    title="2. Hand the work to agents"
-    description="Connect a free model and watch agents make a small program faster, while the judge measures every change."
-    href="tutorials/agents-with-a-free-model/"
-  />
-</CardGrid>
-
-Thermite is young and changes every day. Its agents run the code that a model writes on your computer, so read [Known limits](reference/known-limits.md) before you give it a model.
 
 ## Join the community
 

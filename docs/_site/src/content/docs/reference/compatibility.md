@@ -49,7 +49,7 @@ Installs need `sudo` without a password. See [Add a rig on a machine over SSH](.
 
 Apart from Compose v1, no minimum version of Docker, Docker Compose, Podman or podman-compose is stated or checked for the compose stack. `compose.yaml` uses secrets from files, profiles, internal networks, `extra_hosts` with `host-gateway`, dropped and added capabilities, `no-new-privileges`, restart policies, a health check (the `nats` service's), a service's `user` with a group, and `${VAR:-default}` defaults. Docker Compose 5.1 and podman-compose 1.0.6, 1.2, 1.5 and 1.6 were checked to read them. A release's compose file uses the same, images pinned by digest alone (`name@sha256:…`), and `network_mode: none` for its `init` service, which you start with `compose run --rm`.
 
-Two acceptance tests need Podman and refuse Docker: rig deploy and cluster. [Install Thermite on one machine](../how-to/install/one-machine.md) gives the commands for each tool.
+Two acceptance tests need Podman and refuse Docker: rig deploy and cluster. [The one-machine stack](../how-to/install/one-machine.md) gives the commands for each tool.
 
 ## Kubernetes
 

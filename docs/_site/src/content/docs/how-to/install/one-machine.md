@@ -1,5 +1,5 @@
 ---
-title: "Install Thermite on one machine"
+title: "The one-machine stack"
 description: "Run control and a rig on one computer with Docker or Podman, and keep them running."
 type: how-to
 sidebar:
@@ -8,7 +8,7 @@ sidebar:
 
 This guide sets Thermite up to stay on one computer: control, its message bus and one rig run as containers under Docker or Podman, your work is kept in volumes, and you sign in with a token of your own. You install it from a release: one compose file that runs Thermite's published images, so nothing is built on your computer. The guide also covers settings, updates, the ports, and what control needs before rigs on other machines can reach it.
 
-[Your first run](../../tutorials/first-run.md) walks through the first start step by step. This page assumes you know what control and a [rig](../../reference/glossary.md) are. To build the images from the source code instead, as people who work on Thermite do, see [Running Thermite locally](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md).
+[Install on one machine](../../tutorials/first-run.md) walks through the first start step by step. This page assumes you know what control and a [rig](../../reference/glossary.md) are. To build the images from the source code instead, as people who work on Thermite do, see [Running Thermite locally](https://github.com/iammrduncan/thermite/blob/main/docs/local-development.md).
 
 ## Before you start
 

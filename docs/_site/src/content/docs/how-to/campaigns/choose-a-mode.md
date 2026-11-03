@@ -60,6 +60,6 @@ On **Campaigns**, the campaign's name is followed by its mode: `hill climb`, `go
 
 To see each mode at work first:
 
-- A hill climb: [Hand the work to agents](../../tutorials/agents-with-a-free-model.md), on the sample project, and [Your own project](../../tutorials/your-own-project.md), on a project of yours.
+- A hill climb: [Run your first campaign](../../tutorials/agents-with-a-free-model.md), on the sample project, and [Your own project](../../tutorials/your-own-project.md), on a project of yours.
 - A goal campaign: [Your first goal campaign](../../tutorials/first-goal-campaign.md), with no model.
 - A research campaign: [Write a research campaign](write-a-contract.md#4-write-a-research-campaign), then start it from the dashboard or the command line.

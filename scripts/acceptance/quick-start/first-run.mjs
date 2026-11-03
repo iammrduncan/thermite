@@ -10,10 +10,10 @@ import { cd, cwd, hits, rewrites, typed } from "./processes.mjs";
 /** The tester's thermite folder, from step 1 on: step 8 and the clean-up stop the stack there. */
 export let thermiteDir = "";
 
-/** Your first run, steps 1 to 7: from the release bundle to the judge's smoke check's verdicts. */
+/** Install on one machine, steps 1 to 7: from the release bundle to the judge's smoke check's verdicts. */
 export async function firstRun() {
-  // ------------------------------------------------ Your first run
-  section("Your first run, 1: get Thermite");
+  // ------------------------------------------------ Install on one machine
+  section("Install on one machine, 1: get Thermite");
   await typed(plan.firstRun.get, "step 1");
   thermiteDir = cwd;
   const firstLine = /** @type {string} */ (
@@ -27,7 +27,7 @@ export async function firstRun() {
     { firstLine, page: plan.firstRun.firstLine },
   );
 
-  section("Your first run, 2: make your local tokens");
+  section("Install on one machine, 2: make your local tokens");
   const init = await typed(plan.firstRun.init, "step 2");
   const initDone = init
     .split("\n")
@@ -38,7 +38,7 @@ export async function firstRun() {
     page: plan.firstRun.initDone,
   });
 
-  section("Your first run, 3: start Thermite");
+  section("Install on one machine, 3: start Thermite");
   let listed = "";
   for (const [i, block] of plan.firstRun.start.entries())
     listed = await typed(block, `step 3, block ${i + 1}`);
@@ -51,7 +51,7 @@ export async function firstRun() {
     notUp,
   });
 
-  section("Your first run, 4: sign in");
+  section("Install on one machine, 4: sign in");
   setToken((await typed(plan.firstRun.token, "step 4", { secret: true })).trim());
   check("the owner's token is in .dev/secrets", token.length >= 32);
   await until(
@@ -82,7 +82,7 @@ export async function firstRun() {
     seen: (await words("/ui")).slice(0, 300),
   });
 
-  section("Your first run, 5: meet your rig");
+  section("Install on one machine, 5: meet your rig");
   const live = await until(
     "the rig is live",
     async () => ((await words(`/ui/rigs/${rig}`)).includes(plan.firstRun.live) ? true : undefined),
@@ -93,7 +93,7 @@ export async function firstRun() {
   const isolation = await checkDone("isolation", 600_000);
   check("Isolation passed by itself at the rig's start", isolation.ok === true, isolation.summary);
 
-  section("Your first run, 6: run the judge's smoke check");
+  section("Install on one machine, 6: run the judge's smoke check");
   const rigPage = await page(`/ui/rigs/${rig}`);
   check(
     "the rig's page has the Judge smoke check",
@@ -119,7 +119,7 @@ export async function firstRun() {
     { campaign: smokeRun?.body?.campaign, page: plan.firstRun.smokeCampaign },
   );
 
-  section("Your first run, 7: see what the judge decided");
+  section("Install on one machine, 7: see what the judge decided");
   const evs = await events();
   const verdicts = latestVerdicts(evs);
   const life = lifecycles(evs);
@@ -160,11 +160,11 @@ export async function firstRun() {
 }
 
 /**
- * Your first run, step 8, after Hand the work to agents: stop Thermite. Then every change the test
+ * Install on one machine, step 8, after Run your first campaign: stop Thermite. Then every change the test
  * made to the pages' commands must still be needed.
  */
 export async function stopThermite() {
-  section("Your first run, 8: stop Thermite");
+  section("Install on one machine, 8: stop Thermite");
   cd(thermiteDir);
   await typed(plan.firstRun.down, "step 8");
   for (const r of rewrites)

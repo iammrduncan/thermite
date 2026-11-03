@@ -50,8 +50,8 @@ Keep the folder: it holds your tokens. To stop Thermite, run `docker compose dow
 
 ## Next steps
 
-- [Your first run](@@REPO_URL@@/blob/@@TAG@@/docs/_site/src/content/docs/tutorials/first-run.md): the quick start. It continues from step 4.
-- [Install Thermite on one machine](@@REPO_URL@@/blob/@@TAG@@/docs/_site/src/content/docs/how-to/install/one-machine.md): settings, updates and rigs on other machines.
+- [Install on one machine](@@REPO_URL@@/blob/@@TAG@@/docs/_site/src/content/docs/tutorials/first-run.md): the quick start. It continues from step 4.
+- [The one-machine stack](@@REPO_URL@@/blob/@@TAG@@/docs/_site/src/content/docs/how-to/install/one-machine.md): settings, updates and rigs on other machines.
 
 ## What is in this release
 

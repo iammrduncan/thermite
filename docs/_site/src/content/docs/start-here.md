@@ -14,7 +14,7 @@ A **campaign** is one piece of research. Each one runs in one of three **modes**
 
 | Mode | Use it to | What decides | It ends when | See it in |
 | --- | --- | --- | --- | --- |
-| **Hill climb** | Make a number better, such as speed, size or accuracy, without breaking anything else | The judge, which times each change against the best version so far | Never on its own: you pause it, or a budget you set does | [Hand the work to agents](tutorials/agents-with-a-free-model.md) |
+| **Hill climb** | Make a number better, such as speed, size or accuracy, without breaking anything else | The judge, which times each change against the best version so far | Never on its own: you pause it, or a budget you set does | [Run your first campaign](tutorials/agents-with-a-free-model.md) |
 | **Goal** | Work until a list of checks pass: it builds, it loads the model, its answers match | Each goal's own test: the kit's check, a measured threshold, or a review panel of models | Every required goal is met, or the evidence shows that they cannot be | [Your first goal campaign](tutorials/first-goal-campaign.md) |
 | **Research** | Find out what is known about a question, with no code changes | Code that finds every quote, word for word, in a page the rig archived; a review panel of models decides each question by a majority | Every question is answered, or answered as well as sources allow; or research stops adding; or its longest time is up. It then writes its final report | [Write a research campaign](how-to/campaigns/write-a-contract.md#4-write-a-research-campaign) |
 
@@ -35,12 +35,16 @@ Before you give Thermite a model, read [Known limits](reference/known-limits.md)
 
 ### Try it on one computer
 
-You want to see what Thermite does before you commit to anything. The four tutorials build on each other, in this order:
+You want to see what Thermite does before you commit to anything. Start with the three steps of **Get started**, in this order:
 
-1. [Your first run](tutorials/first-run.md): start Thermite and watch its judge check a rig. Needs only the computer above.
-2. [Hand the work to agents](tutorials/agents-with-a-free-model.md): connect a free model, start a hill climb on the sample project in Thermite's repository, and watch agents propose changes. Needs tutorial 1 and an internet connection; no account or key.
-3. [Your first goal campaign](tutorials/first-goal-campaign.md): a goal campaign. Set a goal, submit a change yourself, and watch the campaign end when the goal is met. Needs tutorial 1; no model.
-4. [Your own project](tutorials/your-own-project.md): a hill climb on a small project of yours, started from the **New campaign** page. Needs tutorials 1 and 2, and a public repository that your computer can push to and Thermite can fetch over `https`.
+1. [Install on one machine](tutorials/first-run.md): install Thermite from its release, sign in to its dashboard and watch its judge check a rig. Needs only the computer above.
+2. [Run your first campaign](tutorials/agents-with-a-free-model.md): connect a free model, start a hill climb on the sample project in Thermite's repository, and watch agents propose changes. Needs step 1 and an internet connection; no account or key.
+3. [Add a second machine](tutorials/second-machine.md): let control set a rig up on another machine over SSH, and run the campaign there too. Needs steps 1 and 2, a second Linux machine and a name for the first that it reaches.
+
+Then two more tutorials:
+
+- [Your first goal campaign](tutorials/first-goal-campaign.md): set a goal, submit a change yourself, and watch the campaign end when the goal is met. Needs step 1; no model.
+- [Your own project](tutorials/your-own-project.md): a hill climb on a small project of yours, started from the **New campaign** page. Needs steps 1 and 2, and a public repository that your computer can push to and Thermite can fetch over `https`.
 
 [What Thermite is](explanation/what-thermite-is.md) gives the ideas behind it, in one minute.
 
@@ -48,7 +52,7 @@ You want to see what Thermite does before you commit to anything. The four tutor
 
 You have machines with GPUs and want Thermite to use them.
 
-1. [Install Thermite on one machine](how-to/install/one-machine.md), so it keeps running.
+1. [The one-machine stack](how-to/install/one-machine.md), so it keeps running.
 2. [Let rigs on other machines reach control](how-to/install/one-machine.md#let-rigs-on-other-machines-reach-control). This needs an HTTPS address for control, behind a reverse proxy you provide, and Thermite's images in a registry that the rigs can pull from without a login. A release's published images are such images, and its compose file gives them to control.
 3. [Add a rig on a machine over SSH](how-to/install/rig-on-a-machine.md) or [on a Kubernetes cluster](how-to/install/rig-on-a-cluster.md), or [run one on a RunPod GPU](how-to/install/runpod-rig.md), paid by the hour.
 4. [Give a rig several GPUs](how-to/install/several-gpus.md), and read [Sharing a device](explanation/sharing-a-device.md) to choose how.

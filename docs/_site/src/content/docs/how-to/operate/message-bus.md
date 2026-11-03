@@ -15,7 +15,7 @@ curl -fsS http://127.0.0.1:8800/v1/health   # {"ok":true,"bus":"connected","degr
 
 ## Before you start
 
-- Thermite runs from the compose file of a release, or of the source code: [Install Thermite on one machine](../install/one-machine.md).
+- Thermite runs from the compose file of a release, or of the source code: [The one-machine stack](../install/one-machine.md).
 - Your owner's token, for `GET /v1/bus`.
 
 ## Check it

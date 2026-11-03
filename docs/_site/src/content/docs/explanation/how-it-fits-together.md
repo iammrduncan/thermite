@@ -290,7 +290,7 @@ An update also carries control's address for rigs ([`THERMITE_CONTROL_PUBLIC_URL
 
 **A new size for a rig on a cluster.** When a rig's place gains room, such as another GPU and a larger quota in its slot, **Edit rig** changes the rig's GPUs, CPUs and memory, and MCP has `set_cluster_rig_resources`. Control checks the new size as it checks a new rig, reads the slot's quota again, and then moves the rig as an image update does: the same two deployments, applied again on the images the rig runs, with the same drain first and the same wait for new pods and a report. The rig never moves between none and some GPUs: that would change its harness image and its target, and its runs' timings would no longer compare with each other.Over MCP, `cluster_rig` also stops, starts or restarts such a rig, as its page does, and `rig_setup` shows each step.
 
-The how-to guides give the steps for each way: [Install Thermite on one machine](../how-to/install/one-machine.md), [Add a rig on a machine over SSH](../how-to/install/rig-on-a-machine.md), [Add a rig on a Kubernetes cluster](../how-to/install/rig-on-a-cluster.md) and [Join a rig yourself](../how-to/install/join-a-rig.md). [Stop, restart, remove or reset a rig](../how-to/operate/rig-lifecycle.md) explains what each of those keeps.
+The how-to guides give the steps for each way: [The one-machine stack](../how-to/install/one-machine.md), [Add a rig on a machine over SSH](../how-to/install/rig-on-a-machine.md), [Add a rig on a Kubernetes cluster](../how-to/install/rig-on-a-cluster.md) and [Join a rig yourself](../how-to/install/join-a-rig.md). [Stop, restart, remove or reset a rig](../how-to/operate/rig-lifecycle.md) explains what each of those keeps.
 
 ## Where to read more
 

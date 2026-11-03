@@ -23,15 +23,15 @@ import { containersHost } from "./release.mjs";
  */
 
 /**
- * Hand the work to agents, steps 1 to 11, with the command line and `thermite doctor` from
+ * Run your first campaign, steps 1 to 11, with the command line and `thermite doctor` from
  * Troubleshoot: the scripted model as the rig's model, the sample campaign to the judge's first
  * verdict on an agent's change, and a pause. It reaches the source and the model where
  * beforeTheTester serves them.
  * @param {import("./release.mjs").Served} where
  */
 export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
-  // ------------------------------------------------ Hand the work to agents
-  section("Hand the work to agents, 1: add a model provider (the scripted model)");
+  // ------------------------------------------------ Run your first campaign
+  section("Run your first campaign, 1: add a model provider (the scripted model)");
   const settings = await page("/ui/settings");
   const add = formWith(settings.html, plan.agents.addProvider);
   check(
@@ -59,7 +59,7 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
     { said: said(added.location) || said(added.location, "error") },
   );
 
-  section("Hand the work to agents, 2: give the rig the model");
+  section("Run your first campaign, 2: give the rig the model");
   const rows = await page("/ui/settings/routes");
   check(
     `the rig's row says "${plan.agents.noModel}"`,
@@ -84,7 +84,7 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
     { said: said(given.location) || said(given.location, "error") },
   );
 
-  section("Hand the work to agents, 3: check that the model works");
+  section("Run your first campaign, 3: check that the model works");
   const modelCheck = await checkDone("model", 600_000);
   check(
     "the rig's model check passed, in the page's words",
@@ -93,7 +93,7 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
     modelCheck.summary,
   );
 
-  section("Hand the work to agents, 4: get the sample and pack its kit");
+  section("Run your first campaign, 4: get the sample and pack its kit");
   await typed(plan.agents.source, "step 4");
   const sourceDir = cwd;
   check(
@@ -110,7 +110,7 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
   check("thermite doctor finds no failure", doctor.includes(plan.doctorOk));
 
   section(
-    "Hand the work to agents, 5 to 8: name the campaign, point it at the sample, upload the kit, start it",
+    "Run your first campaign, 5 to 8: name the campaign, point it at the sample, upload the kit, start it",
   );
   const form = await page("/ui/campaigns/new");
   const formWords = pageText(form.html);
@@ -248,7 +248,7 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
     created.body?.seed,
   );
 
-  section("Hand the work to agents, 9 and 10: watch the agent work and the judge decide");
+  section("Run your first campaign, 9 and 10: watch the agent work and the judge decide");
   const first = await until(
     "the judge's first verdict on an agent's change",
     async () => {
@@ -275,7 +275,7 @@ export async function handToAgents({ served, gitDir, gitPort, modelUrl }) {
     verdict: first.verdict,
   });
 
-  section("Hand the work to agents, 11: pause the campaign");
+  section("Run your first campaign, 11: pause the campaign");
   const runPath = `/ui/campaigns/${encodeURIComponent(plan.agents.campaign)}/runs/${encodeURIComponent(run)}`;
   const runPage = await page(runPath);
   const paused = await press(runPage.html, plan.agents.pause, `value="${run}"`, {

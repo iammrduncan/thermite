@@ -11,7 +11,7 @@ The kit is outside the project folder, so the agents never see it.
 
 ## Start a campaign on it
 
-The tutorial [Hand the work to agents](../../docs/_site/src/content/docs/tutorials/agents-with-a-free-model.md) does this step by step. In short:
+The tutorial [Run your first campaign](../../docs/_site/src/content/docs/tutorials/agents-with-a-free-model.md) does this step by step. In short:
 
 1. Pack the kit, in a clone of Thermite at the release you run (`git clone --branch v0.1.0 …`):
 

@@ -12,7 +12,7 @@ import { control, rig } from "./context.mjs";
 export let cookie = "";
 export let token = "";
 /**
- * The owner's token, which the tester reads from .dev/secrets (Your first run, step 4).
+ * The owner's token, which the tester reads from .dev/secrets (Install on one machine, step 4).
  * @param {string} value
  */
 export function setToken(value) {

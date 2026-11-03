@@ -1,6 +1,6 @@
 # Contributor guide: running Thermite locally
 
-This is the guide for people working on Thermite itself: the checks, the compose stack you develop against, the dashboard demo and the acceptance tests. [CONTRIBUTING.md](../CONTRIBUTING.md) has the essentials: the terms, how to send a change and the rules every change keeps. [CONVENTIONS.md](../CONVENTIONS.md) has the design rules that every review checks. To **use** Thermite, start with the documentation site: [Your first run](_site/src/content/docs/tutorials/first-run.md), then the [how-to guides](_site/src/content/docs/how-to/install/one-machine.md).
+This is the guide for people working on Thermite itself: the checks, the compose stack you develop against, the dashboard demo and the acceptance tests. [CONTRIBUTING.md](../CONTRIBUTING.md) has the essentials: the terms, how to send a change and the rules every change keeps. [CONVENTIONS.md](../CONVENTIONS.md) has the design rules that every review checks. To **use** Thermite, start with the documentation site: [Install on one machine](_site/src/content/docs/tutorials/first-run.md), then the [how-to guides](_site/src/content/docs/how-to/install/one-machine.md).
 
 Thermite runs the same images under docker-compose, podman-compose and Kubernetes. Locally, one compose stack starts the control service and one rig (a harness and a supervisor), with the CPU target.
 
@@ -24,7 +24,7 @@ The documentation site has its own build and checks: see [Writing the documentat
 
 ## The compose stack, built from source
 
-Users install Thermite from a release: its `compose.yaml` runs the published images, and nothing is built ([Install Thermite on one machine](_site/src/content/docs/how-to/install/one-machine.md)). To work on Thermite, build the images from your clone instead. The repository's own `compose.yaml` does that:
+Users install Thermite from a release: its `compose.yaml` runs the published images, and nothing is built ([The one-machine stack](_site/src/content/docs/how-to/install/one-machine.md)). To work on Thermite, build the images from your clone instead. The repository's own `compose.yaml` does that:
 
 ```sh
 git clone https://github.com/iammrduncan/thermite.git
@@ -45,7 +45,7 @@ docker compose up -d --build     # or: podman compose up -d --build
 
 The stack, its settings and how to operate it are described on the site:
 
-- what each container is, its volumes and how to keep it running: [Install Thermite on one machine](_site/src/content/docs/how-to/install/one-machine.md);
+- what each container is, its volumes and how to keep it running: [The one-machine stack](_site/src/content/docs/how-to/install/one-machine.md);
 - every setting: [Settings](_site/src/content/docs/reference/settings.md);
 - models, advisors, the results repository, keys, tokens, restarts and resets: the [how-to guides](_site/src/content/docs/how-to/operate/check-a-rig.md);
 - MCP and the REST API: [Let an agent run Thermite over MCP](_site/src/content/docs/how-to/automate/agent-over-mcp.md) and [Script Thermite with the REST API](_site/src/content/docs/how-to/automate/rest-api.md);
@@ -157,10 +157,10 @@ COMPOSE="podman compose" npm run acceptance:judge
 
 ## The quick-start test
 
-`npm run acceptance:quick-start` follows the quick start as a tester does: [Your first run](_site/src/content/docs/tutorials/first-run.md), then [Hand the work to agents](_site/src/content/docs/tutorials/agents-with-a-free-model.md) to the judge's first verdict on the sample in `examples/matmul-cpu`.
+`npm run acceptance:quick-start` follows the quick start as a tester does: [Install on one machine](_site/src/content/docs/tutorials/first-run.md), then [Run your first campaign](_site/src/content/docs/tutorials/agents-with-a-free-model.md) to the judge's first verdict on the sample in `examples/matmul-cpu`.
 
 1. **The release, from your copy.** It builds the control, harness and supervisor images, and writes the release bundle for them with `scripts/release/bundle.ts`, pinned by digest. With Podman the images stay in local storage. With Docker they go to a registry container on `127.0.0.1`, so that each one has a digest. The CUDA harnesses and the RunPod rig image are not built: the bundle names the CPU harness in their place, and no step uses them.
-2. **The pages' own steps.** `tests/helpers/quick-start.ts` reads the tutorials, the command line section of [Install Thermite on one machine](_site/src/content/docs/how-to/install/one-machine.md#the-command-line) and [Check the machine](_site/src/content/docs/how-to/operate/troubleshoot.md#check-the-machine). The test runs each shell block as written, in a new folder, with the line for your container tool. It types the values the pages give, presses the buttons they name, and checks the words they quote: the init's last line, Overview's first line, the smoke check's result and its verdict counts, the model check, the kit's summary, the campaign's start and its pause.
+2. **The pages' own steps.** `tests/helpers/quick-start.ts` reads the tutorials, the command line section of [The one-machine stack](_site/src/content/docs/how-to/install/one-machine.md#the-command-line) and [Check the machine](_site/src/content/docs/how-to/operate/troubleshoot.md#check-the-machine). The test runs each shell block as written, in a new folder, with the line for your container tool. It types the values the pages give, presses the buttons they name, and checks the words they quote: the init's last line, Overview's first line, the smoke check's result and its verdict counts, the model check, the kit's summary, the campaign's start and its pause.
 3. **Only what cannot work before a release.** The release's files come from a small server on your computer, and the source from your copy's tracked files, committed and tagged as the release and served by `git daemon`. The agents' model is the scripted model of the agents test (`scripts/acceptance/lib/scripted-model.mjs`), added as an OpenAI-compatible provider, under OpenCode v2 as the page says. **Look it up** reads only `https://` addresses, so the test looks the tag up itself. The doctor checks the scripted model's address. When a page no longer has what one of these changes is for, the test fails.
 
 It needs port 8800 free and no volumes of a compose project named `thermite`: it stops before it builds anything otherwise. It removes its stack, its volumes, its images, dangling images and its folder at the end, and writes a report to `.dev/acceptance/`. `KEEP=1` leaves the stack and the folder.

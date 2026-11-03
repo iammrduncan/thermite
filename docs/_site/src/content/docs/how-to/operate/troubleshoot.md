@@ -179,7 +179,7 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 ### The first build is slow
 
 - **You see:** in a checkout of the source code, `docker compose up -d --build` takes 20 minutes or more.
-- **Why:** it builds three images from source, and the harness image installs compilers, Python and agent programs. A GPU image's base is a large download too. A release's `compose.yaml` downloads ready-made images instead ([Install Thermite on one machine](../install/one-machine.md)).
+- **Why:** it builds three images from source, and the harness image installs compilers, Python and agent programs. A GPU image's base is a large download too. A release's `compose.yaml` downloads ready-made images instead ([The one-machine stack](../install/one-machine.md)).
 - **Do:** wait for it once. Later, start without `--build` (`docker compose up -d`) to reuse the images, and rebuild only what changed, for example `docker compose build harness`.
 
 ### The Podman VM runs out of disk or memory

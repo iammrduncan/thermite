@@ -119,7 +119,7 @@ Every agent role's fixed texts live in `src/agents/roles/`, one module for each 
 
 ## Pages a test follows
 
-A test follows the quick start as a tester would: [Your first run](_site/src/content/docs/tutorials/first-run.md), [Hand the work to agents](_site/src/content/docs/tutorials/agents-with-a-free-model.md), and the command line and Check the machine sections of the install and troubleshooting pages. It runs their shell blocks as written, types the value each step gives a field (**Campaign name**: `matmul-agents`), presses the buttons they name in bold and checks the lines they quote. So in those pages:
+A test follows the quick start as a tester would: [Install on one machine](_site/src/content/docs/tutorials/first-run.md), [Run your first campaign](_site/src/content/docs/tutorials/agents-with-a-free-model.md), and the command line and Check the machine sections of the install and troubleshooting pages. It runs their shell blocks as written, types the value each step gives a field (**Campaign name**: `matmul-agents`), presses the buttons they name in bold and checks the lines they quote. So in those pages:
 
 - keep each step's commands in its own `sh` block, and mark a line for one container tool with `# Docker` or `# Podman`, or give the other tool's line after `# or:`;
 - keep the steps numbered (`## 4. Sign in`): the test finds them by number;

@@ -1,6 +1,6 @@
 ---
-title: "Your first run"
-description: "Start Thermite on your own computer and watch its judge check a rig, in about twenty minutes."
+title: "Install on one machine"
+description: "Install Thermite on your own computer from its release, sign in to its dashboard and watch its judge check a rig, in about twenty minutes."
 type: tutorial
 sidebar:
   order: 1
@@ -94,7 +94,7 @@ Choose **Rigs** in the sidebar, then **local-1**.
 
 The page says `local-1 is live; it reported 10s ago.`, with your computer's processors, memory and disk under **What it runs on**. With Podman on a Mac, these are the virtual machine's, not the whole Mac's. Find the **Checks** block. It has three checks:
 
-- **Model route** shows **not run yet**. It checks the agents' model, which you give the rig in [Hand the work to agents](agents-with-a-free-model.md).
+- **Model route** shows **not run yet**. It checks the agents' model, which you give the rig in [Run your first campaign](agents-with-a-free-model.md).
 - **Isolation** already shows **passed**: the rig ran it by itself when it started. Each agent works as its own operating-system user, and the check made sure that those users can't reach what they must not, such as the judge's files and other agents' work. If it shows **failed**, the sentence beside it says why: see [The isolation check failed](../how-to/operate/troubleshoot.md#the-isolation-check-failed) before you go on.
 - **Judge smoke** shows **not run yet**. You run it next.
 
@@ -144,7 +144,7 @@ Open the check's run again, this time from **Campaigns**. Its table hides rig ch
 | `time the kernel from inside` | **Judging**, though it is final (see below) | rejected v0 | It adds a timer call, which the rules forbid |
 | `make the reference trivial` | **Judging**, though it is final (see below) | rejected v0 | That file is not the agents' to change |
 
-The word sums up the verdict. [Hand the work to agents](agents-with-a-free-model.md) uses these words. The **champion** is the run's best version so far. Champion #1 is the project as the run started, so the first change that beats it becomes champion #2.
+The word sums up the verdict. [Run your first campaign](agents-with-a-free-model.md) uses these words. The **champion** is the run's best version so far. Champion #1 is the project as the run started, so the first change that beats it becomes champion #2.
 
 `rejected v0` means refused by the first, static checks, before the change was built. Such a change never gets a verdict, so its row shows **Judging** for ever, with `rejected v0` under the change: a known fault ([goal 061](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/061-gaps-found-by-the-docs.goal)). The judge isn't working on it: nothing more happens to it.
 
@@ -168,7 +168,7 @@ You started control and a rig on your own computer, signed in, and watched the j
 
 ## Next
 
-- [Hand the work to agents](agents-with-a-free-model.md): connect a free model and watch agents propose changes.
+- Step 2, [Run your first campaign](agents-with-a-free-model.md): connect a free model and watch agents propose changes.
 - [Campaign modes](../explanation/campaign-modes.md): hill climbs, goal campaigns and research campaigns, and when each fits.
 - [Why agents never judge](../explanation/why-agents-never-judge.md): how the judge decides, step by step.
-- [Install Thermite on one machine](../how-to/install/one-machine.md): keep Thermite running for real work.
+- [The one-machine stack](../how-to/install/one-machine.md): GPUs, settings, ports and updates, to keep Thermite running for real work.

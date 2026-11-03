@@ -3,7 +3,7 @@ title: "Your own project"
 description: "Put a small project of your own in a public repository, start a campaign on it from the New campaign page, and take the best result home as a patch."
 type: tutorial
 sidebar:
-  order: 4
+  order: 5
 ---
 
 In this tutorial you give Thermite a project of your own. You put a small, deliberately slow C program in a repository of yours, describe on the dashboard how to build it, run it and check its answer, and let an agent make it faster. Then you approve the agent's change and apply it to your own copy of the project.
@@ -14,9 +14,9 @@ It takes half an hour to an hour, most of it waiting for the agent. New words ar
 
 ## What you need
 
-- Everything from the first two tutorials, [Your first run](first-run.md) and [Hand the work to agents](agents-with-a-free-model.md): Thermite running, the dashboard signed in, and `local-1` with a free model from OpenCode. This tutorial uses that model.
+- Everything from the first two tutorials, [Install on one machine](first-run.md) and [Run your first campaign](agents-with-a-free-model.md): Thermite running, the dashboard signed in, and `local-1` with a free model from OpenCode. This tutorial uses that model.
 
-  Free models are often busy. Before you start, open **Settings › Rigs' models**, find the row for `local-1`, and press **Check**. The row says the check was sent, then that it is running, then its result, with no refresh: usually within a minute. If the row says `Its model check FAILED`, for example with `Rate limit exceeded. Please try again later.`, choose another model whose name ends in `-free`, press **Use**, and wait until the check has `passed`, as in [step 3 of Hand the work to agents](agents-with-a-free-model.md#3-check-that-the-model-works).
+  Free models are often busy. Before you start, open **Settings › Rigs' models**, find the row for `local-1`, and press **Check**. The row says the check was sent, then that it is running, then its result, with no refresh: usually within a minute. If the row says `Its model check FAILED`, for example with `Rate limit exceeded. Please try again later.`, choose another model whose name ends in `-free`, press **Use**, and wait until the check has `passed`, as in [step 3 of Run your first campaign](agents-with-a-free-model.md#3-check-that-the-model-works).
 
   If your rig uses a paid model instead, set **Stop after (hours)** in step 7, so each run of the campaign pauses itself after that many hours.
 
@@ -183,7 +183,7 @@ The new run's page opens with a card at the top, `Starting primes-speed-1 on loc
 
 The try has stopped. To see it, press **primes-speed** in the line at the top: the campaign's page lists the try under **Earlier runs** as **Paused**, with `replaced by primes-speed-1` under **Why it stopped**. Press `primes-speed › primes-speed-1` under **At work now** to go back to the run's page.
 
-As in [Hand the work to agents](agents-with-a-free-model.md#9-watch-the-agent-work), the judge first measures the new run's starting point, as it did for the try: meanwhile the **Now** block on the run's **Overview** shows `planner` and `round 1 waits for the judge's baseline of the starting point (champion #1)`. Then the planner works, often for less than a minute. While it plans, the **Now** block on the run's **Overview** shows `planner` and `planning round 1 (1 lane)`, and **Agents**, under **The run**, says `On: they start work at the first round`. The run's page may open only after the planner is done. Then the agent starts, and **Now** shows `lane-1` with the experiment it works on: the one thing the planner gave it to try, from the run's **queue** of experiments. The run's **Experiments** tab shows that queue, and its **Journal** tab the field notes the agents keep as they work. A **lane** is one line of search, worked by one **trial** after another: each trial is one agent's session, which submits at most one change.
+As in [Run your first campaign](agents-with-a-free-model.md#9-watch-the-agent-work), the judge first measures the new run's starting point, as it did for the try: meanwhile the **Now** block on the run's **Overview** shows `planner` and `round 1 waits for the judge's baseline of the starting point (champion #1)`. Then the planner works, often for less than a minute. While it plans, the **Now** block on the run's **Overview** shows `planner` and `planning round 1 (1 lane)`, and **Agents**, under **The run**, says `On: they start work at the first round`. The run's page may open only after the planner is done. Then the agent starts, and **Now** shows `lane-1` with the experiment it works on: the one thing the planner gave it to try, from the run's **queue** of experiments. The run's **Experiments** tab shows that queue, and its **Journal** tab the field notes the agents keep as they work. A **lane** is one line of search, worked by one **trial** after another: each trial is one agent's session, which submits at most one change.
 
 To watch the agent:
 
@@ -253,7 +253,7 @@ The agent keeps looking for more speed until you stop it. At the top of the run'
 
 The menu closes, a line at the top of the page says `Sent to local-1 at`, the time, and `Waiting for the rig to take it.`, and the agent's current trial stops too. Within a minute, with no refresh, the line says `Done.`, the button says **Resume**, and the **Now** block says `This run is paused: result taken home. Nothing new starts until it is resumed.` The top line ends **Paused**, even while a change waits for you: it stays under **Needs you**.
 
-A paused run uses no model: no agent works on it until you resume it. The runs from the earlier tutorials are paused or finished too. To stop Thermite itself, see [step 8 of Your first run](first-run.md#8-stop-or-keep-thermite).
+A paused run uses no model: no agent works on it until you resume it. The runs from the earlier tutorials are paused or finished too. To stop Thermite itself, see [step 8 of Install on one machine](first-run.md#8-stop-or-keep-thermite).
 
 ## What you did
 

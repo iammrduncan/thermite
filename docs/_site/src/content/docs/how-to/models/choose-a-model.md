@@ -70,7 +70,7 @@ OpenCode runs a service with some free models. They need no key and no account. 
 - On **Settings › Providers**, add a provider of the type **OpenCode (its own models)** and leave **Base URL** and **API key** empty.
 - Give the rig one of its models whose name ends in `-free`, with the worker harness **OpenCode v2**. Those are the ones OpenCode serves without a key.
 
-OpenCode decides which of its models are free, and the list can change. Its list also names models it does not serve, and it limits free use: a check that fails with `Rate limit exceeded` may pass a few minutes later. If the model check fails, try again later or try another model ([what the failures mean](connect-a-provider.md#give-a-rig-one-of-its-models)). The tutorial [Hand the work to agents](../../tutorials/agents-with-a-free-model.md) walks through this path from start to end.
+OpenCode decides which of its models are free, and the list can change. Its list also names models it does not serve, and it limits free use: a check that fails with `Rate limit exceeded` may pass a few minutes later. If the model check fails, try again later or try another model ([what the failures mean](connect-a-provider.md#give-a-rig-one-of-its-models)). The tutorial [Run your first campaign](../../tutorials/agents-with-a-free-model.md) walks through this path from start to end.
 
 ## 2. A model server on your own computer
 

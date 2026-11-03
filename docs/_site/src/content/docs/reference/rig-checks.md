@@ -312,7 +312,7 @@ The contract measures `small` and `large`, keeps `held` for confirmation, and le
 | `the smoke kit is not in this image (<dir>)` | The image has no smoke kit at that path |
 | `the judge did not settle <names> within 180 min` | The 3-hour limit passed |
 
-The details list each candidate with its expected result, its actual result and its attempt id. A pass with the note also has `noisy_timing: true` and the `note`. The check's run stays on the dashboard, so its attempts can be read afterwards. While it runs, it shows under **At work now** on **Campaigns**. After it, its campaign shows on **Campaigns** under the **Rig checks** and **All** filters (the default filter hides rig checks), and the run is under **Earlier runs** on the campaign's page, as **Finished**. [Your first run](../tutorials/first-run.md) walks through one.
+The details list each candidate with its expected result, its actual result and its attempt id. A pass with the note also has `noisy_timing: true` and the `note`. The check's run stays on the dashboard, so its attempts can be read afterwards. While it runs, it shows under **At work now** on **Campaigns**. After it, its campaign shows on **Campaigns** under the **Rig checks** and **All** filters (the default filter hides rig checks), and the run is under **Earlier runs** on the campaign's page, as **Finished**. [Install on one machine](../tutorials/first-run.md) walks through one.
 
 ### Noisy timing
 

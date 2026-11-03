@@ -42,7 +42,7 @@ The token is only in that file, which only you can read. Keep it, for example in
 
 ## 2. Give control the hash
 
-Set the role's `_SHA256` setting to the printed hash, and restart control. On the local stack, `compose.yaml` doesn't pass these settings on, so put them in the override file `compose.tokens.yaml` next to it. [Install Thermite on one machine](../install/one-machine.md#use-an-owners-token-of-your-own) makes that file for the owner's token; if you have it, add the line to its `environment`:
+Set the role's `_SHA256` setting to the printed hash, and restart control. On the local stack, `compose.yaml` doesn't pass these settings on, so put them in the override file `compose.tokens.yaml` next to it. [The one-machine stack](../install/one-machine.md#use-an-owners-token-of-your-own) makes that file for the owner's token; if you have it, add the line to its `environment`:
 
 ```yaml title="compose.tokens.yaml"
 services:
@@ -55,7 +55,7 @@ services:
 docker compose -f compose.yaml -f compose.tokens.yaml up -d   # or: podman compose -f … -f … up -d
 ```
 
-Compose starts control again with the new setting. From now on, name every override file you use, each with its own `-f`, on every `up` (for example `-f compose.yaml -f compose.tokens.yaml -f compose.results.yaml`): a file left out drops its settings. [Install Thermite on one machine](../install/one-machine.md#settings-and-override-files) lists every override file and gives the full command. Check control's log with `docker compose logs control`: after the restart it has a `listening` line. If control keeps restarting instead, its log has a `fatal` line that says why:
+Compose starts control again with the new setting. From now on, name every override file you use, each with its own `-f`, on every `up` (for example `-f compose.yaml -f compose.tokens.yaml -f compose.results.yaml`): a file left out drops its settings. [The one-machine stack](../install/one-machine.md#settings-and-override-files) lists every override file and gives the full command. Check control's log with `docker compose logs control`: after the restart it has a `listening` line. If control keeps restarting instead, its log has a `fatal` line that says why:
 
 | Message | Cause |
 | --- | --- |

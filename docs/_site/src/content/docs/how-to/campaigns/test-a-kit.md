@@ -11,7 +11,7 @@ Before agents spend time or money, check the campaign's [kit](../../reference/gl
 ## Before you start
 
 - A kit and a contract that names it, or a campaign on the **New campaign** page. See [Write a kit for your project](write-a-kit.md).
-- To submit changes by hand: a rig whose harness, the rig's container that holds the judge, has a proposer token. The local stack from [Your first run](../../tutorials/first-run.md) has one, which the harness sees as `/run/secrets/harness-proposer-token`. Rigs that control sets up on machines or clusters, and rigs you join yourself, have none: there you can do the dry run (steps 2 and 3), but not submit changes.
+- To submit changes by hand: a rig whose harness, the rig's container that holds the judge, has a proposer token. The local stack from [Install on one machine](../../tutorials/first-run.md) has one, which the harness sees as `/run/secrets/harness-proposer-token`. Rigs that control sets up on machines or clusters, and rigs you join yourself, have none: there you can do the dry run (steps 2 and 3), but not submit changes.
 
 :::caution[GPU kits]
 A rig refuses a kit made for another target, and GPU rigs that control sets up have no proposer token. So a GPU kit can be tested with known candidates only on the local stack's rig, on a machine with NVIDIA GPUs ([Use the machine's NVIDIA GPUs](../install/one-machine.md#use-the-machines-nvidia-gpus)). On another GPU rig, do the dry run (steps 2 and 3). Then start the campaign with **ask me every time** (`--promotion owner`), so that no change becomes the champion before you have read its verdict. [Goal 042](https://github.com/iammrduncan/thermite/blob/main/docs/plan/goals/042-kit-self-test.goal) plans known bad candidates in **Try the kit first**.

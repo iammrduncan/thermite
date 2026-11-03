@@ -1,5 +1,5 @@
 ---
-title: "Hand the work to agents"
+title: "Run your first campaign"
 description: "Give your rig a free AI model, start a campaign on the sample project in Thermite's repository, and watch agents propose changes that the judge measures."
 type: tutorial
 sidebar:
@@ -14,7 +14,7 @@ It takes half an hour to an hour, most of it waiting. An agent works on one thin
 
 ## What you need
 
-- Everything from [Your first run](first-run.md): Thermite running on your computer, the dashboard signed in, and `local-1` on the **Rigs** page.
+- Everything from [Install on one machine](first-run.md): Thermite running on your computer, the dashboard signed in, and `local-1` on the **Rigs** page.
 - **git**, to get the sample from Thermite's source code (step 4).
 - An internet connection. Your rig fetches the sample from GitHub, and the free models run on OpenCode's own service. You need no account and no key. The model sees the code the agents read, which here is only the sample project.
 - A look at [Known limits](../reference/known-limits.md), if you haven't read it yet. From this tutorial on, agents run the code that a model writes, on your computer.
@@ -185,7 +185,7 @@ The card **Ideas from the lanes** holds what an agent proposes beyond its own ex
 
 The next tab, **Journal**, holds the agents' **field notes**: what they observe, the decisions they make and why, and what they learn, written as they work. Later runs can read them: see [Use past research in a new run](../how-to/campaigns/use-past-research.md).
 
-Choose **Attempts**. Each change the agent submitted is an **attempt**, with one word for how it ended. The word sums up the judge's verdict, as in [Your first run](first-run.md#7-see-what-the-judge-decided):
+Choose **Attempts**. Each change the agent submitted is an **attempt**, with one word for how it ended. The word sums up the judge's verdict, as in [Install on one machine](first-run.md#7-see-what-the-judge-decided):
 
 | You see | It means |
 | --- | --- |
@@ -229,6 +229,7 @@ You gave a rig a free model and checked it, and started a hill climb from the **
 
 ## Next
 
+- Step 3, [Add a second machine](second-machine.md): let control set a rig up on another machine, and run the campaign there too.
 - [Your first goal campaign](first-goal-campaign.md): a campaign that ends by itself when its goal is met. It needs no model.
 - [Choose a campaign mode](../how-to/campaigns/choose-a-mode.md): when to run a hill climb, a goal campaign or a research campaign.
 - [Agents, lanes and the planner](../explanation/agents-lanes-planner.md): how the planner and the workers share the work.
