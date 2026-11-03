@@ -53,7 +53,8 @@ export function codeFile(f: string): boolean {
 
 /** The pages whose whole text is read for paths. History (the changelog, the plans) is not. */
 export function pageFile(f: string): boolean {
-  if (f === "CHANGELOG.md") return false;
+  if (f === "CHANGELOG.md" || f === "docs/_site/src/content/docs/project/changelog.md")
+    return false;
   return (
     /^[A-Z]+\.md$/.test(f) ||
     /^docs\/[^/]+\.md$/.test(f) ||

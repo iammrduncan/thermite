@@ -28,6 +28,7 @@
     "docs:build": "npm --prefix docs/_site run build",
     "docs:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/docs/check.mjs",
     "docs:credits": "node scripts/docs/credits-page.mjs",
+    "docs:changelog": "node scripts/docs/changelog-page.mjs",
     "docs:agents": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/docs/agents-page.mjs",
     "check": "npm run typecheck && npm run lint && npm test && npm run check:public && npm run check:sizes && npm run check:imports && npm run check:loose-ends",
     "dev:init": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli/thermite/main.ts local init .dev",

@@ -34,6 +34,8 @@ export default defineConfig({
     // in the Markdown copies. This turns them into site addresses.
     remarkPlugins: [[remarkRelativeLinks, { base }]],
   },
+  // The roadmap page became the changelog: its old address leads there.
+  redirects: { "/project/roadmap/": "/project/changelog/" },
   integrations: [
     // astro-mermaid must come before Starlight.
     mermaid({ theme: "neutral", autoTheme: true }),

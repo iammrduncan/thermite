@@ -101,8 +101,8 @@ Before you move to a new version, make sure that what you want to keep is in you
 
 Since v0.1.1, a run is addressed by its name alone, which control uses once. Two runs that shared a name before v0.1.1, on two rigs or again after a full reset, show as one: the newest of them, on its campaign's page and at its address. The older one's events stay on control, in its rig's exports and in the knowledge base.
 
-**Removed by:** no goal yet. The [roadmap](../project/roadmap.md#later-versions) says how versions count up.
+**Removed by:** no goal yet. The [changelog](../project/changelog.md) says how versions count up.
 
 ## More that is not built yet
 
-Other pages say where a feature is not built yet, each with a link to its goal. The [roadmap](../project/roadmap.md) lists every goal. To report a security problem, follow the [security policy](https://github.com/iammrduncan/thermite/blob/main/SECURITY.md), not a public issue.
+Other pages say where a feature is not built yet, each with a link to its goal. The [roadmap](https://github.com/iammrduncan/thermite/blob/main/docs/plan/roadmap.md) lists every goal. To report a security problem, follow the [security policy](https://github.com/iammrduncan/thermite/blob/main/SECURITY.md), not a public issue.

@@ -5,15 +5,15 @@ import Default from "@astrojs/starlight/components/SiteTitle.astro";
 
 declare const __THERMITE_VERSION__: string;
 const version = __THERMITE_VERSION__;
-const roadmap = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/project/roadmap/`;
+const changelog = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/project/changelog/`;
 ---
 
 <div class="title sl-flex">
   <Default />
   <a
     class="version"
-    href={roadmap}
-    title={`These pages describe Thermite ${version}. The roadmap says what it holds.`}
+    href={changelog}
+    title={`These pages describe Thermite ${version}. The changelog says what it holds.`}
     translate="no">v{version}</a
   >
 </div>
