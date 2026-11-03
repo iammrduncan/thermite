@@ -42,8 +42,8 @@ const smoke = [
     <div class="wrap hero-grid">
       <div class="hero-text">
         <p class="lede">{lede}</p>
-        <a class="proof" href={study}>
-          <span class="delta mono">7.74 → 30.06 <small>tok/s</small></span>
+        <a class="proof-row" href={study}>
+          <span class="delta">7.74 → 30.06 <small>tok/s</small></span>
           <span class="what">LLM decoding on a $100 GPU · 131 changes judged, 28 kept</span>
           <span class="go" aria-hidden="true">Read the study</span>
         </a>
@@ -54,7 +54,7 @@ const smoke = [
         </div>
         <p class="ask">Or ask your AI agent to set it up:</p>
         <Cmd prompt="›" text="Set up Thermite on this computer for me: follow https://usethermite.com/llm-setup.txt" />
-        <p class="meta mono">Open source · Apache-2.0 · Linux or macOS · Docker or Podman · v{version}</p>
+        <p class="meta">Open source · Apache-2.0 · Linux or macOS · Docker or Podman · v{version}</p>
       </div>
       <div class="hero-art">
         <ClimbReplay />
@@ -296,7 +296,7 @@ const smoke = [
     font-size: 0.85rem;
     color: var(--muted);
   }
-  .proof {
+  .proof-row {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
@@ -310,23 +310,23 @@ const smoke = [
     font-size: 0.86rem;
     text-decoration: none;
   }
-  .proof:hover {
+  .proof-row:hover {
     border-color: var(--accent);
   }
-  .proof .delta {
+  .proof-row .delta {
     color: var(--ink);
     font-size: 1.02rem;
     font-weight: 600;
   }
-  .proof .delta small {
+  .proof-row .delta small {
     color: var(--muted);
     font-size: 0.75rem;
     font-weight: 400;
   }
-  .proof .what {
+  .proof-row .what {
     color: var(--muted);
   }
-  .proof .go {
+  .proof-row .go {
     margin-left: auto;
     color: var(--ink-2);
     font-weight: 560;
@@ -469,8 +469,6 @@ const smoke = [
     gap: 0.9rem;
   }
   .points li {
-    padding-left: 1.2rem;
-    border-left: 2px solid var(--rule-2);
     color: var(--muted);
     font-size: 0.97rem;
   }
@@ -509,9 +507,8 @@ const smoke = [
     align-self: center;
     padding: 0.2rem 0.6rem;
     border-radius: 999px;
-    font: 600 0.72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: 0.8rem;
+    font-weight: 560;
     white-space: nowrap;
   }
   .v.w {

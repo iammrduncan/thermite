@@ -15,8 +15,8 @@ const { compact = false } = Astro.props;
   <div class="console">
     <div class="top">
       <div class="title">
-        <span>Replay · decode hill climb</span>
-        <span class="sub">Qwen3.8-27B-PN3 · one Tesla P100 · 24–29 Oct 2026</span>
+        <span>Decode speed of every attempt, in tokens a second</span>
+        <span class="sub">Qwen3.8-27B-PN3 on one Tesla P100, 24–29 October 2026</span>
       </div>
       <div class="ctl">
         <button type="button" data-toggle aria-label="Pause the replay">Pause</button>
@@ -33,7 +33,7 @@ const { compact = false } = Astro.props;
         <span class="verdict" data-verdict data-v="w">+1.21% · confirmed: champion 28</span>
       </div>
       <div class="readout" aria-hidden="true">
-        <span class="k">Champion decode</span>
+        <span class="k">Champion's decode speed</span>
         <span class="v"><b data-tps>30.1</b><small>tok/s</small></span>
         <span class="k" data-x>3.89× the start</span>
       </div>
@@ -82,10 +82,7 @@ const { compact = false } = Astro.props;
     align-items: center;
     gap: 0.75rem;
     padding: 0.8rem 0.9rem 0.4rem 1.1rem;
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 0.82rem;
     color: var(--c-muted);
   }
   .title {
@@ -94,6 +91,10 @@ const { compact = false } = Astro.props;
     align-items: center;
     gap: 0.25rem 0.6rem;
     min-width: 0;
+  }
+  .title > span:first-child {
+    color: var(--c-ink);
+    font-weight: 560;
   }
   .sub {
     color: var(--c-dim);
@@ -109,8 +110,7 @@ const { compact = false } = Astro.props;
     border-radius: 7px;
     background: rgba(255, 255, 255, 0.03);
     color: var(--c-muted);
-    font: 500 0.7rem var(--mono);
-    letter-spacing: 0.04em;
+    font: 500 0.75rem var(--sans);
     cursor: pointer;
   }
   .ctl button:hover {
@@ -138,9 +138,8 @@ const { compact = false } = Astro.props;
   }
   .k {
     display: block;
-    font-size: 0.66rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-family: var(--sans);
+    font-size: 0.78rem;
     color: var(--c-dim);
   }
   .k b {

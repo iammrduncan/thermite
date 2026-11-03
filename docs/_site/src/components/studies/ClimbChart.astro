@@ -81,6 +81,7 @@ const hits = champions.map((c, i) => {
 ---
 
 <figure class="climb not-content" data-climb>
+  <p class="chart-title">Decode speed of the champion, in tokens a second</p>
   <svg
     viewBox={`0 0 ${W} ${H}`}
     role="img"
@@ -287,6 +288,12 @@ const hits = champions.map((c, i) => {
     font-size: var(--sl-text-sm);
   }
   .tip .tps {
+    color: var(--sl-color-white);
+  }
+  .chart-title {
+    margin: 0 0 0.5rem;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
     color: var(--sl-color-white);
   }
   figcaption {

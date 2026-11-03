@@ -37,7 +37,6 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
       <article class="feature">
         <div class="feature-text">
           <Partners />
-          <p class="kicker">AI and machine learning · Inference engine · 4 campaigns</p>
           <h2 class="h2"><a href={study}>Qwen3.8-27B on a $100 GPU, 3.9× faster</a></h2>
           <p class="lede">
             Four campaigns tuned an inference engine for Qwen3.8-27B on one Tesla P100: two goal campaigns made the new
@@ -48,7 +47,7 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
             {
               stats.map((st) => (
                 <div>
-                  <dt class="mono">{st.value}</dt>
+                  <dt>{st.value}</dt>
                   <dd>{st.label}</dd>
                 </div>
               ))
@@ -79,7 +78,7 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
                 <FieldIcon name={st.field} />
                 <span class="small">{fieldLabel[st.field]}</span>
               </div>
-              <p class="metric mono">{st.metric}</p>
+              <p class="metric">{st.metric}</p>
               <p class="metric-label">{st.metricLabel}</p>
               <h3 class="h3">{st.title}</h3>
               <p>{st.summary}</p>
@@ -141,13 +140,8 @@ const personaShort = Object.fromEntries(personas.map((p) => [p.key, p.short]));
       grid-template-columns: minmax(0, 1fr);
     }
   }
-  .kicker {
-    margin: 1.25rem 0 0;
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
   .feature .h2 {
-    margin-top: 0.5rem;
+    margin-top: 1rem;
     font-size: clamp(1.7rem, 3vw, 2.4rem);
   }
   .feature .h2 a {

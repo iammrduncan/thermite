@@ -1,12 +1,12 @@
 ---
-// A page of the judge's ledger for the decode hill climb: where it started, a few of its 27
-// promotions, and the tally of every verdict. The numbers are src/data/decode-climb.json's.
+// Four of the decode hill climb's 27 champions, with where it started, from the judge's ledger.
+// The numbers are src/data/decode-climb.json's.
 import data from "../../data/decode-climb.json";
 
 const start = Date.parse(data.start);
 const when = (minutes: number) =>
   new Date(start + minutes * 60000).toLocaleString("en-GB", {
-    day: "2-digit",
+    day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
@@ -15,177 +15,107 @@ const when = (minutes: number) =>
   });
 const champions = data.champions as [number, number, number, number][];
 const pick = [2, 11, 20, 28].map((seq) => champions.find((c) => c[1] === seq)!);
-const tally = { w: 0, d: 0, r: 0, n: 0, i: 0, u: 0 } as Record<string, number>;
-for (const a of data.attempts as [number, number, string][]) tally[a[2]]++;
 ---
 
 <figure class="ledger">
-  <header>
-    <span>Thermite judge · ledger</span>
-    <span>One Tesla P100-PCIE-16GB</span>
-  </header>
-  <p class="run">Decode hill climb · Qwen3.8-27B-PN3 · tok/s: the start × each confirmed gain</p>
+  <figcaption>
+    <b>Decode speed of the champion, from the judge's ledger</b>
+    <span>Qwen3.8-27B-PN3 on one Tesla P100. Each champion's speed is the start's, multiplied by every gain the judge confirmed.</span>
+  </figcaption>
   <table>
+    <thead>
+      <tr>
+        <th scope="col">Time (UTC)</th>
+        <th scope="col">Version</th>
+        <th scope="col" class="num">Gain</th>
+        <th scope="col" class="num">Tokens a second</th>
+      </tr>
+    </thead>
     <tbody>
       <tr>
         <td>{when(0)}</td>
-        <td>baseline</td>
-        <td></td>
-        <td class="v">{data.seed.toFixed(1)}</td>
+        <td>Starting point</td>
+        <td class="num"></td>
+        <td class="num">{data.seed.toFixed(1)}</td>
       </tr>
       {
         pick.map((c) => (
-          <tr class:list={{ pass: c[1] === 20 }}>
+          <tr>
             <td>{when(c[0])}</td>
-            <td>champion {c[1]}</td>
-            <td class="e">+{c[2].toFixed(2)}%</td>
-            <td class="v">{c[3].toFixed(1)}</td>
+            <td>Champion {c[1]}</td>
+            <td class="num">+{c[2].toFixed(2)}%</td>
+            <td class="num">{c[3].toFixed(1)}</td>
           </tr>
         ))
       }
     </tbody>
   </table>
-  <p class="note">Champion 20 passes Q3Floor, the best standard 3-bit file: {data.reference} tok/s.</p>
-  <dl class="tally">
-    <div><dt>judged</dt><dd>{data.attempts.length}</dd></div>
-    <div class="gold"><dt>confirmed</dt><dd>{tally.w + tally.d}</dd></div>
-    <div><dt>slower</dt><dd>{tally.r}</dd></div>
-    <div><dt>no change</dt><dd>{tally.n}</dd></div>
-    <div class="red"><dt>invalid</dt><dd>{tally.i}</dd></div>
-    <div><dt>unsure</dt><dd>{tally.u}</dd></div>
-  </dl>
-  <footer>
-    <span class="big">{(champions[champions.length - 1][3] / data.seed).toFixed(2)}× <small>the start</small></span>
-    <span class="stamp" aria-hidden="true">Confirmed</span>
-  </footer>
+  <p class="note">Champion 20 was the first to pass Q3Floor, the best standard 3-bit file, at {data.reference} tokens a second.</p>
 </figure>
 
 <style>
   .ledger {
-    position: relative;
     margin: 0;
-    padding: 1.4rem 1.5rem 1.5rem;
+    padding: 1.3rem 1.4rem 1.2rem;
     border: 1px solid var(--rule-2);
     border-radius: 16px;
     background: var(--panel);
-    font-family: var(--mono);
-    font-size: 0.78rem;
     color: var(--ink-2);
+    font-size: 0.9rem;
   }
-  header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-bottom: 0.7rem;
-    border-bottom: 1px dashed var(--rule-2);
-    font-size: 0.68rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
+  figcaption b {
+    display: block;
+    color: var(--ink);
+    font-weight: 600;
   }
-  .run {
-    margin: 0.7rem 0 0.4rem;
+  figcaption span {
+    display: block;
+    margin-top: 0.3rem;
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.84rem;
+    line-height: 1.45;
   }
   table {
     width: 100%;
+    margin-top: 1rem;
     border-collapse: collapse;
     font-variant-numeric: tabular-nums;
   }
+  th {
+    padding: 0 0 0.45rem;
+    border-bottom: 1px solid var(--rule-2);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-align: left;
+  }
   td {
-    padding: 0.42rem 0;
+    padding: 0.5rem 0;
     border-bottom: 1px solid var(--rule);
     white-space: nowrap;
   }
+  th + th,
   td + td {
-    padding-left: 0.6rem;
+    padding-left: 0.75rem;
   }
-  .e {
-    color: var(--gold);
-  }
-  .v {
+  .num {
     text-align: right;
-    color: var(--ink);
   }
-  tr.pass td {
+  td:last-child {
     color: var(--ink);
-  }
-  tr.pass .v::after {
-    content: " ▲";
-    color: var(--accent);
+    font-weight: 560;
   }
   .note {
-    margin: 0.5rem 0 0;
-    font-size: 0.7rem;
-    color: var(--dim);
-  }
-  .tally {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.4rem;
-    margin: 1rem 0 0;
-    padding-top: 0.9rem;
-    border-top: 1px dashed var(--rule-2);
-  }
-  .tally div {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.3rem 0.5rem;
-    border-radius: 6px;
-    background: var(--bg-2);
-  }
-  .tally dt {
+    margin: 0.75rem 0 0;
     color: var(--muted);
-  }
-  .tally dd {
-    margin: 0;
-    color: var(--ink);
-  }
-  .tally .gold dd {
-    color: var(--gold);
-  }
-  .tally .red dd {
-    color: var(--red);
-  }
-  footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 1rem;
-  }
-  .big {
-    font-family: var(--display);
-    font-size: 2.2rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    color: var(--ink);
-  }
-  .big small {
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    color: var(--muted);
-    letter-spacing: 0;
-  }
-  .stamp {
-    padding: 0.25rem 0.7rem;
-    border: 2px solid var(--accent);
-    border-radius: 6px;
-    color: var(--accent);
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    transform: rotate(-7deg);
-    opacity: 0.85;
+    font-size: 0.82rem;
   }
   @media (max-width: 26rem) {
-    .tally {
-      grid-template-columns: repeat(2, 1fr);
-    }
+    th:first-child,
     td:first-child {
       display: none;
     }
+    th + th,
     td + td {
       padding-left: 0;
     }

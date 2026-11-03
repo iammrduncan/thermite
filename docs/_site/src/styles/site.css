@@ -252,7 +252,7 @@ kbd {
   margin-top: 0.5rem;
 }
 .cmd .prompt {
-  color: var(--accent);
+  color: var(--dim);
   user-select: none;
 }
 .cmd code {
@@ -391,8 +391,8 @@ a.card:hover {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--panel-2);
+  color: var(--ink-2);
   font: 600 0.85rem var(--mono);
 }
 .step .h3 {
@@ -445,8 +445,7 @@ a.card:hover {
 .stat .s {
   display: block;
   margin-top: 0.3rem;
-  font-family: var(--mono);
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   color: var(--dim);
 }
 
