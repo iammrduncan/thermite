@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { issueCommand } from "../../../src/control/issue/index.ts";
+import { issueCommand, modelCheckRefusal } from "../../../src/control/issue/index.ts";
 import { researchModelRefusal } from "../../../src/control/rigs/index.ts";
 import type { ControlStore } from "../../../src/control/store/index.ts";
 import { rigView } from "../../../src/control/views/index.ts";
@@ -464,6 +464,34 @@ describe("Start a run over REST (goal 029)", () => {
       );
     const started = await s.rest("gemv-speed", { rig: "rig-b" });
     assert.equal(started.status, 201, await started.clone().text());
+  });
+
+  test("a model check while the rig takes its new model is refused, with why (goal 191)", async () => {
+    const s = await stack();
+    s.store.modelProviders.put({
+      name: "oai",
+      type: "openai",
+      base_url: "https://models.example/v1",
+      key: { sealed: "sealed-for-the-tests", hint: "…test" },
+    });
+    s.store.agentModels.assignRig("rig-b", { provider: "oai", model: "m1", harness: "pi" });
+    // rig-b still reports no model: it is taking m1.
+    assert.equal(
+      modelCheckRefusal(s.store, "rig-b", { check: "model" }),
+      "rig-b is taking m1 now: it checks the model itself once it has it, within a minute. Check it again after that.",
+    );
+    assert.equal(modelCheckRefusal(s.store, "rig-b", { check: "isolation" }), "");
+    // Once it reports it, the check goes.
+    s.store.db
+      .prepare("update rig set summary = json_set(summary, '$.model', json(?)) where id = 'rig-b'")
+      .run(JSON.stringify({ source: "control", name: "oai", model: "m1", harness: "pi" }));
+    assert.equal(modelCheckRefusal(s.store, "rig-b", { check: "model" }), "");
+    // Given back to its own settings: refused until it reports them.
+    s.store.agentModels.assignRig("rig-b", null);
+    assert.match(
+      modelCheckRefusal(s.store, "rig-b", { check: "model" }),
+      /^rig-b is going back to its own settings now/,
+    );
   });
 
   test("a research run on a Claude subscription is refused before it starts, with what to do (goal 190)", async () => {

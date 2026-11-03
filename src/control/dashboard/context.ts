@@ -132,6 +132,8 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       extra?: string;
       /** Off while what it sent waits for the rig (a check's Sent, Running…). */
       disabled?: boolean;
+      /** Why it is off, on hover. */
+      why?: string;
     },
   ) =>
     `<form class="inline" method="post" action="/ui/commands"><input type="hidden" name="csrf" value="${csrf(c)}"><input type="hidden" name="rig" value="${esc(f.rig)}"><input type="hidden" name="kind" value="${esc(f.kind)}">${Object.entries(
@@ -140,7 +142,7 @@ export function dashboardContext(store: ControlStore, opts: DashboardOptions) {
       .map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
       .join(
         "",
-      )}${f.back ? `<input type="hidden" name="back" value="${esc(f.back)}">` : ""}${f.extra ?? ""}<button class="${f.cls ?? ""}"${f.disabled ? " disabled" : ""}>${esc(f.label)}</button></form>`;
+      )}${f.back ? `<input type="hidden" name="back" value="${esc(f.back)}">` : ""}${f.extra ?? ""}<button class="${f.cls ?? ""}"${f.disabled ? " disabled" : ""}${f.disabled && f.why ? ` title="${esc(f.why)}"` : ""}>${esc(f.label)}</button></form>`;
 
   /** Pause, with an optional reason the run keeps (it shows wherever the run's state does). */
   const pauseMenu = (c: Ctx, rig: string, run: string, back: string, cls = "") =>

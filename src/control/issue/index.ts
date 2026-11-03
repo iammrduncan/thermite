@@ -24,6 +24,7 @@ import {
   keepAssignedCampaign,
   savedSettingsRefusal,
 } from "../campaigns/index.ts";
+import { takingModel } from "../command-progress.ts";
 import { controlDiskOf } from "../disk.ts";
 import { mcpRefusal } from "../mcp-servers/index.ts";
 import { usedRunRefusal } from "../run-names.ts";
@@ -169,6 +170,19 @@ export function archivedRefusal(
         : undefined;
   if (typeof campaign !== "string" || !store.archive.get(campaign)) return "";
   return `${campaign} is archived. Unarchive it first.`;
+}
+
+/**
+ * Why control refuses a model check now, or "" (goal 191, issue 44): while the rig takes the model
+ * control gave it, it has no route to check yet, and it checks the new one itself once it has it.
+ */
+export function modelCheckRefusal(store: ControlStore, rig: string, p: { check: string }): string {
+  if (p.check !== "model") return "";
+  const want = store.agentModels.byRig()[rig];
+  if (!takingModel(rigView(store, rig)?.model ?? null, want)) return "";
+  return want
+    ? `${rig} is taking ${want.model} now: it checks the model itself once it has it, within a minute. Check it again after that.`
+    : `${rig} is going back to its own settings now: it checks its model itself once it has them, within a minute. Check it again after that.`;
 }
 
 /**
@@ -474,7 +488,9 @@ export function prepareCommand(
         ? hypothesisStatusRefusal(store, rig, payload)
         : input.kind === "assign_campaign"
           ? usedRunRefusal(store, payload as { run: string })
-          : "";
+          : input.kind === "rig_check"
+            ? modelCheckRefusal(store, rig, payload as { check: string })
+            : "";
   if (ruled) throw new Error(ruled);
   const now = Date.now();
   const signed = signEnvelope(

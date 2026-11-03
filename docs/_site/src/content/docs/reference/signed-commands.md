@@ -259,7 +259,7 @@ Starts one of the rig's [checks](rig-checks.md).
 | `check` | `model`, `isolation` or `smoke` | required | Which check |
 | `force` | boolean | `false` | Run it even though the rig is busy. Isolation and smoke want an idle rig; forcing may end running trials |
 
-Result: `{"check", "id", "started": true}`. The finding arrives later as a `rig_check_finished` event. Refusals: `this rig cannot run the <check> check`, `the <check> check is still running`, `not now: <why>`.
+Result: `{"check", "id", "started": true}`. The finding arrives later as a `rig_check_finished` event. Refusals: `this rig cannot run the <check> check`, `the <check> check is still running`, `not now: <why>`. Control refuses a `model` check while the rig takes the model control gave it, before signing: `<rig> is taking <model> now: it checks the model itself once it has it, within a minute. Check it again after that.` (or `<rig> is going back to its own settings now: …`).
 
 ### `pause_run`
 

@@ -80,7 +80,7 @@ While the workers' model check fails, no trial or plan of the rig's run starts, 
 | `<model> failed the tool-call check in OpenCode: <why>` | Failed in OpenCode. `<why>` is the last error, `its tool call did not print the word`, or `no tool call; it wrote: <text>` |
 | `<model> failed the tool-call check in Claude Code: <why>` | Failed in Claude Code. `<why>` can also be `the subscription's usage window is full until <time>` |
 | `<model> failed the tool-call check in Codex: <why>` | Failed in Codex. `<why>` is the last error, `its tool call did not print the word`, or `no tool call; it wrote: <text>` |
-| `no model route: set one on control's settings page (or in the rig's settings)` | The rig has no model route. See [Connect a model provider](../how-to/models/connect-a-provider.md) |
+| `no model route yet: a rig given one by control takes it within a minute and checks it itself; else set one on control's settings page (or in the rig's settings)` | The rig has no model route. If control just gave it one, wait: the rig checks it once it has it. Else see [Connect a model provider](../how-to/models/connect-a-provider.md) |
 
 ## Isolation check
 

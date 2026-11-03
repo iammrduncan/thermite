@@ -60,7 +60,7 @@ This guide covers providers reached with an API key, or with no key for OpenCode
 
    The button turns into **Sending…**, and a line at the top of the page shows `rig-1 takes my-model from "my-litellm" under Pi within a minute, and checks it.`
 
-5. Wait a minute or two on the page: the row follows the rig by itself, with no refresh. Until the rig takes the model, its row says "taking my-model under Pi". Then its model check shows as it runs, such as "Its model check is running · 12 s."
+5. Wait a minute or two on the page: the row follows the rig by itself, with no refresh. Until the rig takes the model, its row says "taking my-model under Pi", and **Check** is off: the rig checks the model itself once it has it. Then its model check shows as it runs, such as "Its model check is running · 12 s."
 
 The rig's row now says "Its agents run under Pi with my-model from my-litellm." Below it you see the model check's result, for example "Its model check passed 1m ago: my-model answered with a correct tool call in 3.2 s". Press **Check** to run it again.
 

@@ -66,7 +66,7 @@ export function addModelCheck(
         : {
             ok: false,
             summary:
-              "no model route: set one on control's settings page (or in the rig's settings)",
+              "no model route yet: a rig given one by control takes it within a minute and checks it itself; else set one on control's settings page (or in the rig's settings)",
           };
     },
   };

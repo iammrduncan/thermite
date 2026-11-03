@@ -7,6 +7,7 @@ import {
   commandFollowUrl,
   commandProgress,
   modelFollowUrl,
+  TAKING_WHY,
   takingModel,
 } from "../../command-progress.ts";
 import { heldCommands } from "../../issue/index.ts";
@@ -297,15 +298,20 @@ export function rigPageRoutes(app: Hono, dash: Dashboard): void {
               what,
               row: rows[k] ?? checkRow(k, undefined, undefined, now),
               now,
-              button: (label, disabled) =>
-                cmdForm(c, {
+              // The model check is off while the rig takes its new model (goal 191).
+              button: (label, disabled) => {
+                const taking =
+                  k === "model" && takingModel(u.model, store.agentModels.byRig()[u.id]);
+                return cmdForm(c, {
                   rig: u.id,
                   kind: "rig_check",
                   fields: { check: k },
                   label,
                   back,
-                  disabled,
-                }),
+                  disabled: disabled || taking,
+                  ...(taking ? { why: TAKING_WHY } : {}),
+                });
+              },
             }),
           )
           .join("");
