@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -133,7 +134,6 @@ describe("backup and restore of control (goal 173)", () => {
         "state/control.db",
         "state/control-signing.key",
         "state/control-signing.pub",
-        "state/secrets.key",
         "state/bus-ca.pem",
         "state/bus-ca.key",
         "state/bus-backup.seed",
@@ -159,6 +159,11 @@ describe("backup and restore of control (goal 173)", () => {
     ]);
     assert.deepEqual(manifest.left_out, STREAMS_LEFT_OUT);
     assert.match(lines[0] ?? "", /^copied control\.db: schema \d+/);
+    // The secrets key is never in a backup, even in the state folder.
+    assert.equal(existsSync(join(folder, "state", CONTROL_STATE.secretsKey)), false);
+    assert.ok(
+      lines.includes("left out secrets.key: a backup never holds the secrets key; keep it apart"),
+    );
     assert.match(lines.at(-1) ?? "", /^took EVENTS's snapshot: 120 messages to 120$/);
     // A second backup in the same second never writes over the first.
     await assert.rejects(
@@ -252,7 +257,43 @@ describe("backup and restore of control (goal 173)", () => {
     assert.equal(existsSync(join(dir, "kits", "later")), false);
     assert.equal(readFileSync(join(dir, "notes.txt"), "utf8"), "the owner's own file\n");
     assert.equal(statSync(join(dir, CONTROL_STATE.busCaKey)).mode & 0o777, 0o600);
+    // The backup holds no secrets key: the folder's, which opens the store, stays where it is.
+    assert.equal(readFileSync(join(dir, CONTROL_STATE.secretsKey), "utf8"), "the secrets key\n");
+    assert.equal(existsSync(join(aside, CONTROL_STATE.secretsKey)), false);
     assert.equal(placeIn(dir), 60);
+  });
+
+  test("a backup from before v0.1.1 holds a secrets key: its restore moves the folder's aside, never over it", async () => {
+    const { dir, bus } = await controlState(60);
+    const { folder } = await backupControl({
+      stateDir: dir,
+      into: fresh("backups"),
+      bus: new FakeBackupBus(bus),
+      build: BUILD,
+    });
+    // As v0.1.0 wrote it: the key in the backup, named in its manifest.
+    const old = "the backup's secrets key\n";
+    writeFileSync(join(folder, "state", CONTROL_STATE.secretsKey), old, { mode: 0o600 });
+    const manifest = readManifest(folder);
+    manifest.files.push({
+      path: `state/${CONTROL_STATE.secretsKey}`,
+      bytes: Buffer.byteLength(old),
+      sha256: createHash("sha256").update(old).digest("hex"),
+    });
+    writeFileSync(join(folder, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    const r = await restoreControl({
+      from: folder,
+      stateDir: dir,
+      bus: new FakeBackupBus(bus),
+      now: new Date("2026-10-29T12:00:00.000Z"),
+    });
+    assert.ok(r.replaced);
+    assert.equal(readFileSync(join(dir, CONTROL_STATE.secretsKey), "utf8"), old);
+    assert.equal(
+      readFileSync(join(r.replaced, CONTROL_STATE.secretsKey), "utf8"),
+      "the secrets key\n",
+      "the folder's own key is kept, moved aside",
+    );
   });
 
   test("a stream that comes back short is refused, naming it, and control's state is left", async () => {

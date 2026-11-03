@@ -19,14 +19,14 @@ podman compose --profile backup run --rm backup thermite backup /backups   # Pod
 | --- | --- | --- |
 | Control's state: `control.db`, its keys, the bus's certificate authority, the backup's key on the bus, the kits control keeps, the exports rigs send it and the knowledge base's files (`kb-files/`) | Control's state folder, `/var/lib/thermite-control`: the `control-state` volume under compose | `thermite backup` |
 | Every rig's events: the bus's `EVENTS` stream, which control's records are applied from | The bus's store, `/data` in the `nats` service: the `nats-data` volume | `thermite backup`, by the server's snapshot, after the store |
-| The secrets key, when control keeps it elsewhere (`THERMITE_CONTROL_SECRETS_KEY_FILE`) | Where you mounted it | By you, with each backup: without it, the sealed keys and sign-ins in `control.db` do not open |
+| The secrets key, which opens the sealed keys and sign-ins in `control.db` | The `control-secrets` volume under compose, `/var/lib/thermite-control-secrets` (`THERMITE_CONTROL_SECRETS_KEY_FILE`) | By you, apart from the backups: [Keep the secrets key](#keep-the-secrets-key). A backup never holds it |
 | The tokens | `.dev/secrets/` next to `compose.yaml`, or only their hashes in `.env` | By you: they are files you made |
 | Each rig's ledger: everything the rig recorded | The rig's harness state | A full export: [Keep a rig's ledger](#keep-a-rigs-ledger) |
 | The champions' code | The [results repository](results-repository.md), or control's exports | Your Git host; control's exports are in its backup |
 
 A backup leaves out what control makes again as it starts: the bus's other streams (`REPORTS`, an inbox whose pages a rig sends again; `COMMANDS`, which control publishes again from its store; `LIVE`, the newest live lines; `CONFIG`, which control writes again; `KB_FILES`, the knowledge base's files on their way: a file's chunks stay only until control keeps it in `kb-files/`, which a backup holds), the files it writes for the bus's server (`nats-config`), and its public files (`control-pub`).
 
-A backup holds control's signing key, its secrets key and the bus's certificate authority: whoever has it can act as control. Keep it as you keep control's state.
+A backup holds control's signing key and the bus's certificate authority: whoever has it can act as control. Keep it as you keep control's state. It does not hold the secrets key, so it opens none of the keys and sign-ins sealed in `control.db`: `thermite backup` says `left out secrets.key: a backup never holds the secrets key; keep it apart` when control keeps the key in its state folder.
 
 ## Before you start
 
@@ -69,11 +69,33 @@ A backup holds control's signing key, its secrets key and the bus's certificate 
    tar -C .dev/backups -czf thermite-backup-2026-10-29.tgz thermite-backup-2026-10-29T10-00-00-000Z
    ```
 
+4. Keep the secrets key, once and again whenever it changes: [Keep the secrets key](#keep-the-secrets-key).
+
 To tell that it worked: the last line names the folder, and the folder's name does not end in `.partial` (a backup that stopped part way keeps that end, and no restore reads it). Its `manifest.json` lists each file with its SHA-256, and under `streams` the `EVENTS` stream's `messages` and `last_seq`; under `store.positions`, control's place in it, which is at most `last_seq`.
+
+## Keep the secrets key
+
+The secrets key opens every key and sign-in control seals in its store. Control makes it at its first start, and it stays the same, so one copy kept apart from the backups is enough. A restore onto the same machine leaves it where it is, on the `control-secrets` volume.
+
+1. Copy it off control, into a file only you can read:
+
+   ```sh
+   (umask 077; docker compose exec -T control cat /var/lib/thermite-control-secrets/secrets.key > control-secrets.key)   # or: podman compose exec -T …
+   ```
+
+2. Keep `control-secrets.key` somewhere other than the backups, such as your password manager. Whoever holds a backup and this key can open every key control stores.
+
+To put it back on a new machine, before control's first start there:
+
+```sh
+docker compose run --rm --no-deps -T --entrypoint sh control -c 'umask 077; cat > /var/lib/thermite-control-secrets/secrets.key' < control-secrets.key   # or: podman compose run …
+```
+
+Control started without it makes a new key: the keys and sign-ins of a restored store then don't open, and **Settings** asks for each again (`its key cannot be opened: enter it again`).
 
 ## Restore a backup
 
-A restore takes control back to the backup. Rigs enrolled, campaigns made and commands issued after it are not in it. The rigs' events after it come back from the bus, where it kept them, and from the rigs: each rig's supervisor sends again, from control's place, the events of its ledger that control lacks. A restore keeps what it replaces: control's files go to `replaced-<time>/` in control's state folder, and the bus's store to `replaced-<time>/` in the bus's volume. Remove those yourself once the restore is good.
+A restore takes control back to the backup. Rigs enrolled, campaigns made and commands issued after it are not in it. The rigs' events after it come back from the bus, where it kept them, and from the rigs: each rig's supervisor sends again, from control's place, the events of its ledger that control lacks. A restore keeps what it replaces: control's files go to `replaced-<time>/` in control's state folder, and the bus's store to `replaced-<time>/` in the bus's volume. Remove those yourself once the restore is good. A restore leaves the secrets key as it is. A backup made before v0.1.1 holds one: its restore puts that key in control's state folder, and control, as it starts, removes it there when the `control-secrets` volume holds the same key, moves it there when the volume holds none, and refuses to start when the two differ ([Troubleshoot](troubleshoot.md#control-stops-at-start-control-has-two-secrets-keys)).
 
 The server's restore makes a stream only where it has none of that name. So the restore first checks the stream the bus holds. It keeps a stream that holds the backup's events unchanged, with or without newer ones after them, as a bus that ran on since the backup does, and control, started on the backup's store, applies the newer events from its place. A stream a [retention policy](retention-policies.md) purged since the backup is kept too, as long as it still holds the backup's last event: one whose policy removed that event is refused in words (`a retention policy removed it since the backup`), and you restore onto an empty store instead. It refuses any other stream.
 
@@ -109,7 +131,7 @@ The server's restore makes a stream only where it has none of that name. So the 
    the backup of 2026-10-29T10:00:00.000Z is whole: 24 files and 1 streams as its manifest says
    EVENTS: restoring 48,210 messages; the bus's server needs about 176 MiB of memory for it
    EVENTS: restored and checked, 48,210 messages to 48,210
-   control's state: control.db, control-signing.key, control-signing.pub, secrets.key, bus-ca.pem, bus-ca.key, bus-backup.seed, kits, exports moved aside to /var/lib/thermite-control/replaced-2026-10-29T12-00-00-000Z, and the backup's put back
+   control's state: control.db, control-signing.key, control-signing.pub, bus-ca.pem, bus-ca.key, bus-backup.seed, kits, exports moved aside to /var/lib/thermite-control/replaced-2026-10-29T12-00-00-000Z, and the backup's put back
    restored: start control, and it applies the events from its place in the stream
    ```
 
@@ -142,7 +164,7 @@ When the bus kept its `EVENTS` stream, only control stops, and the restore check
    ```text
    the backup of 2026-10-29T10:00:00.000Z is whole: 24 files and 1 streams as its manifest says
    EVENTS on the bus holds the backup's events and 1,312 newer ones after them, to 49,522: control applies them from its place, 48,210, as it starts
-   control's state: control.db, control-signing.key, control-signing.pub, secrets.key, bus-ca.pem, bus-ca.key, bus-backup.seed, kits, exports moved aside to /var/lib/thermite-control/replaced-2026-10-29T12-00-00-000Z, and the backup's put back
+   control's state: control.db, control-signing.key, control-signing.pub, bus-ca.pem, bus-ca.key, bus-backup.seed, kits, exports moved aside to /var/lib/thermite-control/replaced-2026-10-29T12-00-00-000Z, and the backup's put back
    restored: start control, and it applies the events from its place in the stream
    ```
 

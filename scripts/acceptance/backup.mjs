@@ -15,7 +15,7 @@
 // Usage: COMPOSE="podman compose" node scripts/acceptance/backup.mjs (or "docker compose", or
 // "podman-compose"). KEEP=1 leaves the stack up.
 import { execFileSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   api,
@@ -135,6 +135,12 @@ try {
   if (!stream?.messages) throw new Error("the backup holds no EVENTS stream");
   const place = manifest.store.positions.EVENTS ?? 0;
   if (place > stream.last_seq) throw new Error(`control's place ${place} is past the stream's end`);
+  // Control keeps its secrets key on a volume of its own, and a backup never holds it.
+  if (
+    manifest.files.some((/** @type {{ path: string }} */ f) => f.path.endsWith("secrets.key")) ||
+    existsSync(join(".dev", "backups", name, "state", "secrets.key"))
+  )
+    throw new Error("the backup holds control's secrets key");
   console.log(
     `backup: EVENTS ${stream.messages} messages to ${stream.last_seq}, control at ${place}`,
   );

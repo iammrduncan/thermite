@@ -84,6 +84,18 @@ There is no single Logs page yet ([goal 027](https://github.com/iammrduncan/ther
 - **Why:** you added `compose.lifecycle.yaml` to a stack that had already run. See [Give control a deployment driver](rig-lifecycle.md#give-control-a-deployment-driver).
 - **Do:** start the stack again without that file.
 
+### Control stops at start: `control has two secrets keys`
+
+- **You see:** control keeps restarting, and its log has a `fatal` line that says `control has two secrets keys, /var/lib/thermite-control/secrets.key in its state folder and /var/lib/thermite-control-secrets/secrets.key (THERMITE_CONTROL_SECRETS_KEY_FILE), and they differ: …`.
+- **Why:** control keeps its secrets key apart from its state, on the `control-secrets` volume, and moves a key it finds in its state folder there as it starts. Here both hold one, and they differ, so control can't tell which opens the keys and sign-ins sealed in its store. A restore of a backup made before v0.1.1 puts that backup's key in the state folder.
+- **Do:** keep the key that opens the store on the volume, and remove the other. After a restore of such a backup, the state folder's key is the backup's, which opens the restored store: copy it over the volume's, from a container of control's image with both volumes, then remove it from the state folder.
+
+  ```sh
+  docker compose run --rm --no-deps --entrypoint sh control -c 'cp /var/lib/thermite-control/secrets.key /var/lib/thermite-control-secrets/secrets.key && rm /var/lib/thermite-control/secrets.key'   # or: podman compose run …
+  ```
+
+  Then start control again. A key you set aside opens nothing in this store; keep it only if a store sealed with it is still to be restored.
+
 ### Control stops at start: `control needs its message bus`
 
 - **You see:** control keeps restarting, and its log has a `fatal` line that says `control needs its message bus: set THERMITE_NATS_URL to its NATS server, such as nats://nats:4222. …`.

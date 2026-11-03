@@ -9,7 +9,7 @@ import { RECORD_STREAMS } from "./link/users.ts";
 /**
  * A backup of control (goal 173): the folder `thermite backup` writes and `thermite restore` reads
  * back. It is named for when it was made, and holds control's state folder (its store, copied
- * whole while control runs, its keys, its kits and its exports), a snapshot of each stream of the
+ * whole while control runs, its keys but the secrets key, its kits and its exports), a snapshot of each stream of the
  * message bus that is kept for good, as the server's snapshot API gives it, and a manifest: each
  * file's size and SHA-256, each stream's message count, last place and last message, control's
  * place in each stream, and the versions of Thermite and of control's store that made it.
@@ -24,7 +24,10 @@ export const CONTROL_STATE = {
   /** Signs every command to the rigs; the rigs pin its public half. */
   signingKey: "control-signing.key",
   signingPub: "control-signing.pub",
-  /** Opens every sealed value in the store; elsewhere when THERMITE_CONTROL_SECRETS_KEY_FILE says so. */
+  /**
+   * Opens every sealed value in the store; elsewhere when THERMITE_CONTROL_SECRETS_KEY_FILE says
+   * so, as under compose. A backup never holds it: whoever has both could open every sealed value.
+   */
   secretsKey: "secrets.key",
   /** The message bus's certificate authority, which every rig on the bus trusts. */
   busCaCert: "bus-ca.pem",
@@ -43,7 +46,6 @@ export const CONTROL_STATE = {
 export const STATE_FILES = [
   CONTROL_STATE.signingKey,
   CONTROL_STATE.signingPub,
-  CONTROL_STATE.secretsKey,
   CONTROL_STATE.busCaCert,
   CONTROL_STATE.busCaKey,
   CONTROL_STATE.busBackupSeed,

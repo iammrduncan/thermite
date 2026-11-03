@@ -109,6 +109,10 @@ export async function backupControl(
     const from = join(o.stateDir, name);
     if (existsSync(from)) add(name, await copyHashed(from, join(state, name)));
   }
+  if (existsSync(join(o.stateDir, CONTROL_STATE.secretsKey)))
+    say(
+      `left out ${CONTROL_STATE.secretsKey}: a backup never holds the secrets key; keep it apart`,
+    );
   for (const name of STATE_FOLDERS) {
     const from = join(o.stateDir, name);
     if (!existsSync(from)) continue;

@@ -54,7 +54,7 @@ import { controlParts } from "./parts.ts";
 import { RETENTION_LOOK_MS, retentionTick } from "./retention/index.ts";
 import { checkQuietRigs, checkRigPlace } from "./rigs/index.ts";
 import { refreshGpuClouds } from "./runpod/index.ts";
-import { SecretBox } from "./secrets.ts";
+import { moveSecretsKey, SecretBox } from "./secrets.ts";
 import { CONTROL_NUMBERS, controlPublicUrl, notReadWords } from "./settings.ts";
 import { ControlStore } from "./store/index.ts";
 
@@ -144,11 +144,20 @@ async function main(): Promise<void> {
   const caExport = env[BUS_CA_EXPORT_SETTING];
   if (caExport) writeAtomic(caExport, busTls.caCert, 0o644);
   const trust = { ca: busTls.caCert };
-  // The key that seals model routes' API keys: its own file, made on first use. Mount it
-  // from a separate secret to keep it off the database's volume.
-  const secrets = SecretBox.fromFile(
-    env.THERMITE_CONTROL_SECRETS_KEY_FILE ?? join(dir, CONTROL_STATE.secretsKey),
-  );
+  // The key that seals what the owner gives control: its own file, made on first use. Compose
+  // keeps it on a volume of its own (THERMITE_CONTROL_SECRETS_KEY_FILE); one still in the state
+  // folder, from before, moves there first.
+  const secretsKey = env.THERMITE_CONTROL_SECRETS_KEY_FILE ?? join(dir, CONTROL_STATE.secretsKey);
+  const keyMoved = moveSecretsKey(join(dir, CONTROL_STATE.secretsKey), secretsKey);
+  if (keyMoved)
+    log(
+      "control",
+      keyMoved === "moved"
+        ? "moved control's secrets key out of its state folder"
+        : "removed the copy of control's secrets key in its state folder: the same key is kept apart",
+      { to: secretsKey },
+    );
+  const secrets = SecretBox.fromFile(secretsKey);
   // Who may use the bus: control's own users and each rig's that registered its key, written to
   // the server's users file, which the server reloads on control's request (bus/users.ts).
   const busUsers = new BusUsers({

@@ -184,10 +184,11 @@ COPY containers/control/kubectl/LICENSE /usr/local/share/doc/kubectl/LICENSE
 RUN groupadd -g 10001 thermite \
  && useradd -u 10001 -g 10001 -d /var/lib/thermite-control -M -s /usr/sbin/nologin thermite
 # Mount points owned by the runtime user, so new named volumes inherit the ownership: its state,
-# its public key and the message bus's authority for the rigs, and the files it writes for the
-# message bus's server (its users, its certificate and key).
-RUN mkdir -p /var/lib/thermite-control /keys /nats-config \
- && chown 10001:10001 /var/lib/thermite-control /keys /nats-config
+# its secrets key (closed to others), its public key and the message bus's authority for the rigs,
+# and the files it writes for the message bus's server (its users, its certificate and key).
+RUN mkdir -p /var/lib/thermite-control /var/lib/thermite-control-secrets /keys /nats-config \
+ && chown 10001:10001 /var/lib/thermite-control /var/lib/thermite-control-secrets /keys /nats-config \
+ && chmod 0700 /var/lib/thermite-control-secrets
 # No set-id file anywhere (containers/build/no-set-id.sh). Last, after every package; the build
 # fails if one is left, and if pi-tui's native helpers were left (goal 169: no image holds them).
 RUN --mount=type=bind,from=build-scripts,target=/mnt sh /mnt/no-set-id.sh \

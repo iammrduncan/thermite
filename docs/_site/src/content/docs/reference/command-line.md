@@ -1209,7 +1209,7 @@ It makes a new folder in `FOLDER`, named for the time, such as `thermite-backup-
 | In the backup | What |
 | --- | --- |
 | `state/control.db` | Control's store, copied first, whole and consistent while control writes to it (`vacuum into`) |
-| `state/control-signing.key`, `control-signing.pub`, `secrets.key`, `bus-ca.pem`, `bus-ca.key`, `bus-backup.seed` | Control's keys, each as it is in the state folder, with its mode. A secrets key kept elsewhere (`THERMITE_CONTROL_SECRETS_KEY_FILE`) is not in it |
+| `state/control-signing.key`, `control-signing.pub`, `bus-ca.pem`, `bus-ca.key`, `bus-backup.seed` | Control's keys, each as it is in the state folder, with its mode. The secrets key is never in it, wherever control keeps it: `thermite backup` says `left out secrets.key` when it is in the state folder ([Keep the secrets key](../how-to/operate/backup-and-restore.md#keep-the-secrets-key)) |
 | `state/kits/`, `state/exports/`, `state/kb-files/` | The kits control keeps, the exports of rigs without a results repository and the knowledge base's files, file by file |
 | `streams/EVENTS.snapshot` | The bus's `EVENTS` stream, every rig's events, as the server's snapshot API gives it, taken after the store |
 | `manifest.json` | Each file's path, size and SHA-256; the stream's message count, first and last place, bytes, last message's SHA-256 and settings; control's place in each stream (`bus_position`), which is at or before the stream's end; the store's schema version; the Thermite version and commit that made it; and the streams left out, with why |

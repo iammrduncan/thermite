@@ -15,6 +15,9 @@ services:
     build: { context: ., dockerfile: containers/Containerfile, target: control, args: { THERMITE_COMMIT: "${THERMITE_COMMIT:-}" } }
     environment:
       THERMITE_CONTROL_DIR: /var/lib/thermite-control
+      # The key that seals what you give control, on a volume of its own: neither a copy of the
+      # state's volume nor a backup holds it. Control moves one still in its state folder here.
+      THERMITE_CONTROL_SECRETS_KEY_FILE: /var/lib/thermite-control-secrets/secrets.key
       THERMITE_CONTROL_LISTEN: 0.0.0.0:8800
       # Locally the owner's token is a file; deployed, give only its hash instead
       # (THERMITE_CONTROL_ADMIN_TOKEN_SHA256, from `thermite token new`).
@@ -60,6 +63,7 @@ services:
 
     volumes:
       - control-state:/var/lib/thermite-control
+      - control-secrets:/var/lib/thermite-control-secrets
       - control-pub:/keys
       - nats-config:/nats-config
     secrets: [control-admin-token, control-operator-token]
@@ -457,6 +461,7 @@ networks:
 
 volumes:
   control-state: {}
+  control-secrets: {}
   control-pub: {}
   harness-state: {}
   harness-scratch: {}

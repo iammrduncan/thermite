@@ -44,6 +44,16 @@ const STATE_ENTRIES = [
 ];
 
 /**
+ * What a restore replaces of control's state folder. A backup from before v0.1.1 holds the secrets
+ * key: the key in the folder is then moved aside too, never written over. A newer one holds none,
+ * and leaves the folder's key where it is, which opens the backup's store.
+ */
+const entriesFor = (manifest: BackupManifest) =>
+  manifest.files.some((f) => f.path === `${BACKUP_LAYOUT.state}/${CONTROL_STATE.secretsKey}`)
+    ? [...STATE_ENTRIES, CONTROL_STATE.secretsKey]
+    : STATE_ENTRIES;
+
+/**
  * Checks each file of a backup against its manifest: there, its size and its SHA-256. The
  * manifest; throws RestoreRefused, naming the first file that differs.
  */
@@ -202,7 +212,7 @@ export async function restoreControl(o: RestoreOptions): Promise<{ replaced: str
   }
   const owner = ownerFor(o.stateDir);
   const aside = join(o.stateDir, replacedName(now));
-  const moved = moveAside(o.stateDir, STATE_ENTRIES, aside);
+  const moved = moveAside(o.stateDir, entriesFor(manifest), aside);
   for (const f of manifest.files) {
     const rel = f.path.slice(BACKUP_LAYOUT.state.length + 1);
     await copyHashed(join(o.from, f.path), join(o.stateDir, rel));
