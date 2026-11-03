@@ -62,13 +62,29 @@ export function addModelCheck(
     run: async () => {
       const m = model();
       return m
-        ? programOf(m).modelCheck(m, once)
+        ? keyHint(m, await programOf(m).modelCheck(m, once))
         : {
             ok: false,
             summary:
               "no model route: set one on control's settings page (or in the rig's settings)",
           };
     },
+  };
+}
+
+/**
+ * A failed check of one of OpenCode's own paid models through OpenCode's own client: control sends
+ * it that way only when the provider has no key, and OpenCode then answers only that the model is
+ * unavailable. The words say what it needs (issue 26).
+ */
+export function keyHint<R extends { ok: boolean; summary: string }>(
+  m: { api?: string | undefined; model: string },
+  r: R,
+): R {
+  if (r.ok || m.api !== "opencode" || m.model.endsWith("-free")) return r;
+  return {
+    ...r,
+    summary: `${r.summary} (OpenCode serves ${m.model} only with its provider's key: add the key to the provider on control's Providers page, or choose a model whose name ends in -free)`,
   };
 }
 

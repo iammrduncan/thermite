@@ -6,6 +6,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Fixes
 
+- OpenCode's own provider with its key runs its paid models: under OpenCode v2 they go through the harness's key proxy, where control dropped the key and OpenCode answered `model unavailable`, and Pi, Codex and the planner and advisors take them too, where **Use** refused them. Its `-free` models, and every model of the provider with no key, still run in OpenCode's own client, with no key ([issue 26](https://github.com/iammrduncan/thermite/issues/26)).
 - Under Docker, a rig's supervisor reaches a model server on the same computer at `host.docker.internal`, as control and the harness do: an advisor whose model runs there got no answer through the supervisor's proxy (Podman names the host by itself).
 
 ### Checks

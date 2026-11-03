@@ -1,7 +1,7 @@
 ---
 id: "189"
 title: "OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi"
-status: PROPOSED
+status: IN_PROGRESS
 version: "0.1.3"
 depends_on: []
 created: 2026-11-03
@@ -10,7 +10,7 @@ updated: 2026-11-03
 
 # 189 · OpenCode's own provider sends its key: its paid models work in OpenCode and in Pi
 
-**Status:** `PROPOSED` · **Version:** [v0.1.3](../roadmap.md#v013)
+**Status:** `IN_PROGRESS` · **Version:** [v0.1.3](../roadmap.md#v013)
 
 ## What
 
@@ -38,6 +38,8 @@ A user paid for a model, saved the key, and Thermite dropped it. The error then 
 ## Progress
 
 - 2026-11-03: Goal written for v0.1.3's plan, from the open issues of its milestone.
+- 2026-11-03: Researched and verified. Control called OpenCode's own provider under the OpenCode harness "native" and blanked its key (control/rigs/model/routes.ts), so the rig ran `opencode/<model>` through OpenCode's own client with no key, which serves only the free models. **Use** refused a provider of OpenCode's own type in any other harness, key or not (rigs/model/request.ts opencodeOnly, rigs/model/agents.ts). OpenCode Zen's docs (opencode.ai/docs/zen) say its free models need OpenCode's client and its paid models are for other clients with a key; every text model works through each of its APIs, and `https://opencode.ai/zen/v1/chat/completions` answers "Missing API key" without one.
+- 2026-11-03: Built (no tests run on the Mac). A paid model of OpenCode's own provider with its key goes through the harness's key-adding proxy as an OpenAI-compatible route, in every harness, OpenCode's included; its `-free` models, and every model of the provider with no key, keep OpenCode's own client with no key (routes.ts, request.ts, agents.ts; the dashboard's labels say which). A failed check of a paid model through OpenCode's own client says it needs the provider's key (harness/controller/checks.ts keyHint). Tests: tests/control/dashboard/providers.test.ts (both provider kinds, each harness) and tests/harness/controller/checks.test.ts. Pages: Connect a provider, Agents with a free model; changelog.
 
 ---
 

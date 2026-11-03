@@ -30,7 +30,7 @@ A **provider** is where your agents' models come from. OpenCode is a program tha
    - **Base URL** and **API key**: leave them empty.
 3. Press **Add and list its models**.
 
-A green line says `"opencode" is saved and lists` a number of models, then `Choose one for a rig on Rigs' models.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **runs in the OpenCode harness**.
+A green line says `"opencode" is saved and lists` a number of models, then `Choose one for a rig on Rigs' models.` The new row, **opencode · OpenCode**, shows **no key: its free models** and **OpenCode's own, with no key: its free models, in the OpenCode harness**.
 
 ## 2. Give the rig a free model
 

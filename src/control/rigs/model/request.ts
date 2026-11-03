@@ -370,9 +370,12 @@ export function rigModelChanges(r: RigModelRequest): RoleChange[] {
   ];
 }
 
-/** Whether a provider's model runs only in OpenCode: OpenCode's own (free) models. */
+/**
+ * Whether a provider's model runs only in OpenCode: OpenCode's own free models, and every model of
+ * OpenCode's own provider with no key. With its key, a paid model runs anywhere (issue 26).
+ */
 export const opencodeOnly = (p: ModelProvider, model: string): boolean =>
-  isOpencodeOwn(p) && (p.type === "opencode" || !p.key_sealed || model.endsWith("-free"));
+  isOpencodeOwn(p) && (!p.key_sealed || model.endsWith("-free"));
 
 /**
  * The harness a model needs when the owner chooses none: Claude Code for a Claude subscription,

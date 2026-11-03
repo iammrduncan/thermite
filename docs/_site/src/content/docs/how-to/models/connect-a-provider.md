@@ -29,7 +29,7 @@ This guide covers providers reached with an API key, or with no key for OpenCode
    | --- | --- | --- | --- |
    | **OpenAI-compatible** | Most model servers and gateways: vLLM, LiteLLM, OpenRouter, Ollama | Required, ending in `/v1` | Required |
    | **Anthropic** | Anthropic's own API | Leave empty for `https://api.anthropic.com` | Required |
-   | **OpenCode (its own models)** | OpenCode's own service. Its models run only in OpenCode v2 | Leave empty for `https://opencode.ai/zen/v1` | Leave empty for the free models |
+   | **OpenCode (its own models)** | OpenCode's own service. Its free models run only in OpenCode v2; with its key, its paid models run in any harness, through the harness's proxy | Leave empty for `https://opencode.ai/zen/v1` | Leave empty for the free models; your OpenCode Zen key for its paid ones |
 
    The list's other groups hold subscriptions, Git access and the places where rigs run. MCP servers, such as GBrain, have a page of their own, **Settings › MCP servers**: see [Give agents MCP tools](../campaigns/give-agents-mcp-tools.md).
 
@@ -55,7 +55,7 @@ This guide covers providers reached with an API key, or with no key for OpenCode
 
 1. Open **Rigs' models** in Settings' navigation. Under **Harness and model for each rig**, find the rig's row.
 2. Choose the **worker harness**, the program the agents run in: **Pi**, **OpenCode v2**, **Claude Code** or **Codex**. Pi is the default. **Codex**, the Codex CLI, takes an OpenAI-compatible provider whose server answers OpenAI's Responses API (`/responses`), as OpenAI's own API does. [Choose a model](choose-a-model.md#where-the-agents-run) says which worker harness works with which provider.
-3. Choose the model. The list groups the models by provider. A group marked "OpenCode harness only" needs **OpenCode v2**. Without a key, OpenCode serves only the models whose names end in `-free`.
+3. Choose the model. The list groups the models by provider. A group marked "OpenCode harness only" needs **OpenCode v2**: OpenCode's own provider with no key, which serves only the models whose names end in `-free`. With its key, the group says "free models: OpenCode harness only": its `-free` models still need **OpenCode v2**, and its paid models run in any harness, the key added by the harness's proxy, never given to the agents.
 4. Press **Use**.
 
    The button turns into **Sending…**, and a line at the top of the page shows `rig-1 takes my-model from "my-litellm" under Pi within a minute, and checks it.`
@@ -76,7 +76,7 @@ An agent can do it over MCP with [`set_rig_model`](../../reference/mcp-tools.md#
 A failed check says `Its model check FAILED`, then why. With OpenCode's free models, two reasons are common:
 
 - `Rate limit exceeded. Please try again later.`: OpenCode limits free use. Press **Check** a few minutes later, or choose another model.
-- `Model unavailable: opencode/<model>`: OpenCode lists that model but does not serve it. Choose another.
+- `Model unavailable: opencode/<model>`: OpenCode lists that model but does not serve it without a key. A paid model needs the provider's key: add it on the provider's row. Otherwise choose a free one.
 
 For other reasons, see [Check a rig](../operate/check-a-rig.md#read-the-result).
 

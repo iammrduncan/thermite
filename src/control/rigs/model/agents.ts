@@ -62,9 +62,7 @@ export const opencodeOnlyModel = (
     }
   }
   if (!provider || !model || !isOpencodeOwn(provider) || harness === "opencode") return undefined;
-  return provider.type === "opencode" || !provider.key_sealed || model.endsWith("-free")
-    ? model
-    : undefined;
+  return !provider.key_sealed || model.endsWith("-free") ? model : undefined;
 };
 export const researchNeedsOpencode = (rig: string, model: string) =>
   `${model} is one of OpenCode's free models, which work only inside OpenCode, and ${rig}'s agents would run in Pi: a research run there could not work. Set the agents' harness to OpenCode, or give the rig a model Pi can use.`;
@@ -145,12 +143,9 @@ export const giveRigModel = (
       error:
         "Codex runs only with a ChatGPT subscription or an OpenAI-compatible provider: choose Pi or OpenCode v2 for this provider.",
     };
-  // OpenCode's free models (and a keyless OpenCode provider) need its own client.
-  if (
-    harness !== "opencode" &&
-    isOpencodeOwn(p) &&
-    (p.type === "opencode" || !p.key_sealed || model.endsWith("-free"))
-  )
+  // OpenCode's free models (and every model of a keyless OpenCode provider) need its own client;
+  // a paid model with the provider's key runs anywhere, through the harness's proxy (issue 26).
+  if (harness !== "opencode" && isOpencodeOwn(p) && (!p.key_sealed || model.endsWith("-free")))
     return {
       error:
         "OpenCode's free models run only in the OpenCode harness: choose OpenCode v2 for this rig.",

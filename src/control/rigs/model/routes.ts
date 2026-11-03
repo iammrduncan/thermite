@@ -127,9 +127,11 @@ async function routeOf(
       ).slice(0, 16),
       api_key: key,
     };
-  // OpenCode's own provider, under the OpenCode harness, runs through OpenCode's built-in one:
-  // it needs no key (its free models), so none is sent.
-  const native = harness === "opencode" && isOpencodeOwn(p);
+  // OpenCode's own provider, under the OpenCode harness, runs its free models (and every model
+  // when it has no key) through OpenCode's built-in one, which needs no key: none is sent. A paid
+  // model with the provider's key goes through the harness's key-adding proxy, as any
+  // OpenAI-compatible provider's does (issue 26): OpenCode Zen serves every text model there.
+  const native = harness === "opencode" && isOpencodeOwn(p) && (!key || model.endsWith("-free"));
   if (native) key = "";
   return {
     name: p.name,

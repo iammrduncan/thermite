@@ -246,7 +246,7 @@ ${
         const pName = encodeURIComponent(p.name);
         return `<details class="dq${p.models_error ? " dq-bad" : ""}" data-k="provider-${esc(p.name)}"><summary>
 <span class="dq-kind"><span class="kind m">Models</span></span>
-<span class="dq-main"><span class="dq-head">${esc(p.name)} <span class="muted" style="font-weight:400">· ${esc(TYPES[p.type])}</span></span>${status}<span class="dq-sub"><span class="dq-where">${esc(p.base_url || ANTHROPIC_BASE)}</span><span class="chip">${p.key_hint ? `key ${esc(p.key_hint)}` : "no key: its free models"}</span>${p.type === "opencode" ? `<span class="chip info">runs in the OpenCode harness</span>` : isOpencodeOwn(p) ? `<span class="chip info">OpenCode's own: its free models run in the OpenCode harness</span>` : ""}${p.base_url.startsWith("http://") ? `<span class="chip warn">not HTTPS</span>` : ""}<span class="dq-where">${rigs.length ? `used by ${rigs.map((x) => esc(x)).join(", ")}` : "no rig uses it"}</span></span></span>
+<span class="dq-main"><span class="dq-head">${esc(p.name)} <span class="muted" style="font-weight:400">· ${esc(TYPES[p.type])}</span></span>${status}<span class="dq-sub"><span class="dq-where">${esc(p.base_url || ANTHROPIC_BASE)}</span><span class="chip">${p.key_hint ? `key ${esc(p.key_hint)}` : "no key: its free models"}</span>${isOpencodeOwn(p) ? `<span class="chip info">${p.key_sealed ? "OpenCode's own: its free models run in the OpenCode harness, its paid ones anywhere" : "OpenCode's own, with no key: its free models, in the OpenCode harness"}</span>` : ""}${p.base_url.startsWith("http://") ? `<span class="chip warn">not HTTPS</span>` : ""}<span class="dq-where">${rigs.length ? `used by ${rigs.map((x) => esc(x)).join(", ")}` : "no rig uses it"}</span></span></span>
 <span class="dq-side"><span class="dq-btns"><form class="inline" method="post" action="/ui/settings/providers/${pName}/refresh"><input type="hidden" name="csrf" value="${t}"><button>Refresh models</button></form></span></span>
 </summary><div class="dq-body">${list}
 <form method="post" action="/ui/settings/providers/${pName}/models" class="form-grid"><input type="hidden" name="csrf" value="${t}"><label>${infoLabel("A model it does not list", "Some providers serve models their list leaves out. Add one by its id at the provider; it shows as yours.")}<input name="model" maxlength="200" placeholder="its id at the provider"></label><div class="form-end"><button>Add it</button></div></form>
@@ -294,7 +294,7 @@ ${
         .filter((p) => p.models.length)
         .map(
           (p) =>
-            `<optgroup label="${esc(p.name)}${p.type === "claude" ? " (Claude subscription: runs in Claude Code)" : p.type === "chatgpt" ? " (ChatGPT subscription: Pi, OpenCode or Codex)" : p.type === "opencode" ? " (OpenCode harness only)" : isOpencodeOwn(p) ? " (free models: OpenCode harness only)" : ""}">${p.models
+            `<optgroup label="${esc(p.name)}${p.type === "claude" ? " (Claude subscription: runs in Claude Code)" : p.type === "chatgpt" ? " (ChatGPT subscription: Pi, OpenCode or Codex)" : isOpencodeOwn(p) ? (p.key_sealed ? " (free models: OpenCode harness only)" : " (OpenCode harness only)") : ""}">${p.models
               .map(
                 (m) =>
                   `<option value="${esc(`${encodeURIComponent(p.name)}|${encodeURIComponent(m.id)}`)}"${want?.provider === p.name && want.model === m.id ? " selected" : ""}>${modelPrefix(p.type)}${esc(m.id)}</option>`,
