@@ -10,7 +10,7 @@ Each release of Thermite, newest first. Version numbers count up by the middle n
 
 ### Checks
 
-- CI's run on a version tag passes the checks it had never run: the secret scan skips six made-up values in tests, each by its file and exact value; the machine check builds its stand-in from its `Containerfile` under Docker; the RunPod and rig image checks pull the message bus's image first; the control check takes its view before control's restart once the judge is idle; and an advisor's schema that names no problems is said not to fit, where it stopped the call.
+- CI's run on a version tag passes the checks it had never run: the secret scan skips six made-up values in tests, each by its file and exact value; the machine check builds its stand-in from its `Containerfile` under Docker; the RunPod and rig image checks pull the message bus's image first; the control check takes its view before control's restart once the judge is idle; and an advisor's schema that names no problems is said not to fit, where it stopped the call. A test of a run past its time gives the program's killed child up to 2 s to be reaped, where it read it at once and sometimes found it still there.
 
 ## [0.1.2] 2026-11-03: every agent on Live, and long messages in a terminal
 
