@@ -66,6 +66,7 @@ export const EVENT_KINDS = [
   "goal_checks",
   "goal_complete",
   "goal_report",
+  "harness_gap",
   "held_out_checked",
   "hypothesis_added",
   "hypothesis_merged",
